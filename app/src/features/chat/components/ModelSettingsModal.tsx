@@ -96,11 +96,20 @@ export function ModelSettingsModal({
 
     const form = event.currentTarget
     const formData = new FormData(form)
-    const name = String(formData.get('name') ?? '').trim()
+    const rawName = String(formData.get('name') ?? '').trim()
     const source = String(formData.get('source') ?? '').trim()
     const command = String(formData.get('command') ?? '').trim()
+    const name = rawName || inferModelName('', getFileNameFromCommand(command))
 
-    if (!name || !command) {
+    if (!command) {
+      setStatus('Informe ou escolha o arquivo do modelo.')
+      return
+    }
+
+    const existingModel = models.find((model) => model.command === command)
+
+    if (existingModel) {
+      setStatus(`Modelo "${existingModel.name}" já está importado.`)
       return
     }
 
@@ -112,6 +121,7 @@ export function ModelSettingsModal({
     })
 
     form.reset()
+    setStatus(`Modelo "${name}" adicionado.`)
   }
 
   function createModelFromSelection(selection: ModelFileSelection): Model {
@@ -168,6 +178,14 @@ export function ModelSettingsModal({
       .filter(Boolean)
       .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
       .join(' ')
+  }
+
+  function getFileNameFromCommand(command: string) {
+    if (!command) {
+      return ''
+    }
+
+    return command.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? ''
   }
 
   return (
