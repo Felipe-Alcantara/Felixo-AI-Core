@@ -35,7 +35,7 @@ export function AppSidebar({
   onSelectAgent,
 }: AppSidebarProps) {
   return (
-    <aside className="flex w-[244px] shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 max-md:hidden">
+    <aside className="flex w-[244px] shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 max-[920px]:hidden max-xl:w-[224px]">
       <div className="flex h-12 items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full bg-[#ff605c]" />
@@ -48,7 +48,7 @@ export function AppSidebar({
         </div>
       </div>
 
-      <nav className="space-y-1 px-4 pt-2 text-[13px]">
+      <nav className="space-y-1 px-4 pt-2 text-[13px] max-xl:px-3">
         {navItems.map((item) => {
           const Icon = item.icon
           return (
@@ -65,7 +65,7 @@ export function AppSidebar({
         })}
       </nav>
 
-      <div className="mt-5 px-4">
+      <div className="mt-5 px-4 max-xl:px-3">
         <div className="mb-2 flex items-center justify-between text-[11px] text-zinc-500">
           <span>Agentes</span>
           <SlidersHorizontal size={12} aria-hidden="true" />
@@ -96,7 +96,7 @@ export function AppSidebar({
         </div>
       </div>
 
-      <div className="mt-5 min-h-0 flex-1 overflow-hidden px-4">
+      <div className="mt-5 min-h-0 flex-1 overflow-hidden px-4 max-xl:px-3">
         <div className="mb-2 text-[11px] text-zinc-500">Recentes</div>
         <div className="space-y-1 overflow-y-auto pr-1">
           {recentItems.map((item) => (
@@ -111,7 +111,7 @@ export function AppSidebar({
         </div>
       </div>
 
-      <div className="mt-auto border-t border-white/[0.08] px-4 py-3">
+      <div className="mt-auto border-t border-white/[0.08] px-4 py-3 max-xl:px-3">
         <button
           type="button"
           className="mb-1 flex h-8 w-full items-center gap-2 rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
