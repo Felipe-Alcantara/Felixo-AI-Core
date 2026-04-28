@@ -175,6 +175,7 @@ export function ChatWorkspace() {
 
       <ModelSettingsModal
         models={models}
+        selectedModel={selectedModel}
         isOpen={isModelSettingsOpen}
         onAddModel={addModel}
         onClearModels={clearModels}

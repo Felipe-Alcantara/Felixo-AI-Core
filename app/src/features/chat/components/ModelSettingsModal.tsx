@@ -6,6 +6,7 @@ import { createModelId } from '../services/model-storage'
 
 type ModelSettingsModalProps = {
   models: Model[]
+  selectedModel: Model | null
   isOpen: boolean
   onClose: () => void
   onAddModel: (model: Model) => void
@@ -15,6 +16,7 @@ type ModelSettingsModalProps = {
 
 export function ModelSettingsModal({
   models,
+  selectedModel,
   isOpen,
   onClose,
   onAddModel,
@@ -234,6 +236,16 @@ export function ModelSettingsModal({
           >
             <Upload size={16} aria-hidden="true" />
             Importar arquivo
+          </button>
+
+          <button
+            type="button"
+            disabled={!selectedModel}
+            onClick={() => selectedModel && removeModel(selectedModel)}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-red-300/20 text-sm font-medium text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:border-white/[0.08] disabled:text-zinc-600 disabled:hover:bg-transparent"
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            Remover selecionado
           </button>
 
           {status && (
