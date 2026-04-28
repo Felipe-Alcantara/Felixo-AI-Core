@@ -79,12 +79,16 @@ export function ChatWorkspace() {
     setSelectedModelId(model.id)
   }
 
-  function removeModel(modelId: ModelId) {
+  function removeModel(modelToRemove: Model) {
     setModels((currentModels) => {
-      const nextModels = currentModels.filter((model) => model.id !== modelId)
+      const nextModels = currentModels.filter(
+        (model) =>
+          model.id !== modelToRemove.id &&
+          model.command !== modelToRemove.command,
+      )
       saveModels(nextModels)
 
-      if (selectedModelId === modelId) {
+      if (!nextModels.some((model) => model.id === selectedModelId)) {
         setSelectedModelId(nextModels[0]?.id ?? '')
       }
 

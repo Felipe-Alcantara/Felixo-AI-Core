@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { FilePlus, FolderOpen, Plus, Trash2, Upload, X } from 'lucide-react'
-import type { Model, ModelFileSelection, ModelId } from '../types'
+import type { Model, ModelFileSelection } from '../types'
 import { createModelId } from '../services/model-storage'
 
 type ModelSettingsModalProps = {
@@ -9,7 +9,7 @@ type ModelSettingsModalProps = {
   isOpen: boolean
   onClose: () => void
   onAddModel: (model: Model) => void
-  onRemoveModel: (modelId: ModelId) => void
+  onRemoveModel: (model: Model) => void
 }
 
 export function ModelSettingsModal({
@@ -58,7 +58,7 @@ export function ModelSettingsModal({
   }
 
   function removeModel(model: Model) {
-    onRemoveModel(model.id)
+    onRemoveModel(model)
     setStatus(`Modelo "${model.name}" excluído.`)
   }
 
@@ -269,10 +269,10 @@ export function ModelSettingsModal({
                         type="button"
                         title="Excluir modelo"
                         onClick={() => removeModel(model)}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-red-400/10 hover:text-red-200"
+                        className="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] text-zinc-500 transition hover:bg-red-400/10 hover:text-red-200"
                       >
                         <Trash2 size={14} aria-hidden="true" />
-                        <span className="sr-only">Excluir modelo</span>
+                        Excluir
                       </button>
                     </div>
                   </div>
