@@ -1,6 +1,44 @@
 # Felixo AI Core
  Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicação desktop para controlar, organizar e orquestrar múltiplas IAs, agentes, terminais, repositórios e fluxos de trabalho.
 
+## Status Atual
+
+O projeto foi iniciado com uma aplicação desktop em `app/`.
+
+Stack inicial:
+
+* Electron
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+
+Primeira versão funcional:
+
+* interface simples de chatbot;
+* seletor visual de agentes/CLIs;
+* respostas locais para organizar ideias;
+* base pronta para conectar os scripts de `ai-clis/`.
+
+### Como rodar
+
+Atalho recomendado:
+
+```bash
+python3 start_app.py
+```
+
+Ou manualmente:
+
+```bash
+cd app
+nvm use
+npm install
+npm run dev
+```
+
+Requisito recomendado: Node `25.9.0`, definido em `.nvmrc`.
+
 
 # Felixo AI Core — Roadmap e Tasklist
 
