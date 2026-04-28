@@ -79,6 +79,19 @@ export function ChatWorkspace() {
     setSelectedModelId(model.id)
   }
 
+  function removeModel(modelId: ModelId) {
+    setModels((currentModels) => {
+      const nextModels = currentModels.filter((model) => model.id !== modelId)
+      saveModels(nextModels)
+
+      if (selectedModelId === modelId) {
+        setSelectedModelId(nextModels[0]?.id ?? '')
+      }
+
+      return nextModels
+    })
+  }
+
   const hasMessages = messages.length > 0
 
   return (
@@ -154,6 +167,7 @@ export function ChatWorkspace() {
         models={models}
         isOpen={isModelSettingsOpen}
         onAddModel={addModel}
+        onRemoveModel={removeModel}
         onClose={() => setIsModelSettingsOpen(false)}
       />
     </div>

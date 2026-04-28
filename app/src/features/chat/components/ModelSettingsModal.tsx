@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { FilePlus, FolderOpen, Plus, Upload, X } from 'lucide-react'
-import type { Model, ModelFileSelection } from '../types'
+import { FilePlus, FolderOpen, Plus, Trash2, Upload, X } from 'lucide-react'
+import type { Model, ModelFileSelection, ModelId } from '../types'
 import { createModelId } from '../services/model-storage'
 
 type ModelSettingsModalProps = {
@@ -9,6 +9,7 @@ type ModelSettingsModalProps = {
   isOpen: boolean
   onClose: () => void
   onAddModel: (model: Model) => void
+  onRemoveModel: (modelId: ModelId) => void
 }
 
 export function ModelSettingsModal({
@@ -16,6 +17,7 @@ export function ModelSettingsModal({
   isOpen,
   onClose,
   onAddModel,
+  onRemoveModel,
 }: ModelSettingsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const browserFileModeRef = useRef<'import' | 'fill'>('import')
@@ -53,6 +55,11 @@ export function ModelSettingsModal({
 
     onAddModel(createModelFromSelection(selection))
     setStatus(`Modelo "${selection.name}" importado.`)
+  }
+
+  function removeModel(model: Model) {
+    onRemoveModel(model.id)
+    setStatus(`Modelo "${model.name}" excluído.`)
   }
 
   async function importModelFile() {
@@ -226,15 +233,30 @@ export function ModelSettingsModal({
                     key={model.id}
                     className="rounded-xl px-3 py-2 text-xs text-zinc-300"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium text-zinc-100">
-                        {model.name}
-                      </span>
-                      <span className="text-zinc-500">{model.source}</span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-medium text-zinc-100">
+                            {model.name}
+                          </span>
+                          <span className="shrink-0 text-zinc-500">
+                            {model.source}
+                          </span>
+                        </div>
+                        <code className="mt-1 block truncate font-mono text-[11px] text-zinc-500">
+                          {model.command}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        title="Excluir modelo"
+                        onClick={() => removeModel(model)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-red-400/10 hover:text-red-200"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                        <span className="sr-only">Excluir modelo</span>
+                      </button>
                     </div>
-                    <code className="mt-1 block truncate font-mono text-[11px] text-zinc-500">
-                      {model.command}
-                    </code>
                   </div>
                 ))
               )}
