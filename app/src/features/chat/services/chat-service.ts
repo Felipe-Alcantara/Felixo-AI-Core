@@ -1,4 +1,4 @@
-import type { Agent, ChatMessage } from '../types'
+import type { ChatMessage, Model } from '../types'
 
 export const initialMessages: ChatMessage[] = []
 
@@ -18,21 +18,25 @@ export function createUserMessage(content: string): ChatMessage {
   }
 }
 
-export function createAssistantMessage(prompt: string, agent: Agent): ChatMessage {
+export function createAssistantMessage(
+  prompt: string,
+  model: Model | null,
+): ChatMessage {
   return {
     id: Date.now() + 1,
     role: 'assistant',
-    content: createLocalReply(prompt, agent),
-    agent: agent.id,
+    content: createLocalReply(prompt, model),
+    model: model?.id,
     createdAt: formatTime(),
   }
 }
 
-function createLocalReply(prompt: string, agent: Agent) {
+function createLocalReply(prompt: string, model: Model | null) {
   const idea = compactIdea(prompt)
+  const modelName = model?.name ?? 'Felixo Core'
 
   return [
-    `${agent.name}: "${idea}"`,
+    `${modelName}: "${idea}"`,
     '',
     'Objetivo',
     'Encontrar a menor versão que já possa ser testada.',

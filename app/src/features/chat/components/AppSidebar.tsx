@@ -10,14 +10,15 @@ import {
   Sparkles,
   User,
 } from 'lucide-react'
-import type { Agent, AgentId } from '../types'
+import type { Model, ModelId } from '../types'
 
 type AppSidebarProps = {
-  agents: Agent[]
+  models: Model[]
   recentItems: string[]
-  selectedAgent: Agent
+  selectedModel: Model | null
   onNewIdea: () => void
-  onSelectAgent: (agentId: AgentId) => void
+  onOpenModelSettings: () => void
+  onSelectModel: (modelId: ModelId) => void
 }
 
 const navItems = [
@@ -28,11 +29,12 @@ const navItems = [
 ]
 
 export function AppSidebar({
-  agents,
+  models,
   recentItems,
-  selectedAgent,
+  selectedModel,
   onNewIdea,
-  onSelectAgent,
+  onOpenModelSettings,
+  onSelectModel,
 }: AppSidebarProps) {
   return (
     <aside className="flex w-[244px] shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 max-[920px]:hidden max-xl:w-[224px]">
@@ -67,18 +69,26 @@ export function AppSidebar({
 
       <div className="mt-5 px-4 max-xl:px-3">
         <div className="mb-2 flex items-center justify-between text-[11px] text-zinc-500">
-          <span>Agentes</span>
-          <SlidersHorizontal size={12} aria-hidden="true" />
+          <span>Modelos</span>
+          <button
+            type="button"
+            title="Configurar modelos"
+            onClick={onOpenModelSettings}
+            className="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-white/[0.06] hover:text-zinc-200"
+          >
+            <SlidersHorizontal size={12} aria-hidden="true" />
+            <span className="sr-only">Configurar modelos</span>
+          </button>
         </div>
         <div className="space-y-1">
-          {agents.map((agent) => {
-            const isSelected = agent.id === selectedAgent.id
+          {models.map((model) => {
+            const isSelected = model.id === selectedModel?.id
 
             return (
               <button
-                key={agent.id}
+                key={model.id}
                 type="button"
-                onClick={() => onSelectAgent(agent.id)}
+                onClick={() => onSelectModel(model.id)}
                 className={`flex h-8 w-full items-center justify-between rounded-lg px-2 text-left text-[12px] transition ${
                   isSelected
                     ? 'bg-white/10 text-white'
@@ -87,9 +97,9 @@ export function AppSidebar({
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <Bot size={13} aria-hidden="true" />
-                  <span className="truncate">{agent.name}</span>
+                  <span className="truncate">{model.name}</span>
                 </span>
-                <span className="text-[10px] text-zinc-500">{agent.tone}</span>
+                <span className="text-[10px] text-zinc-500">{model.source}</span>
               </button>
             )
           })}
@@ -121,6 +131,7 @@ export function AppSidebar({
         </button>
         <button
           type="button"
+          onClick={onOpenModelSettings}
           className="flex h-8 w-full items-center justify-between rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <span className="flex items-center gap-2">

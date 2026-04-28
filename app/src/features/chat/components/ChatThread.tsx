@@ -1,17 +1,17 @@
 import { Bot, User } from 'lucide-react'
-import type { Agent, ChatMessage } from '../types'
+import type { ChatMessage, Model } from '../types'
 
 type ChatThreadProps = {
-  agents: Agent[]
+  models: Model[]
   messages: ChatMessage[]
 }
 
-export function ChatThread({ agents, messages }: ChatThreadProps) {
+export function ChatThread({ models, messages }: ChatThreadProps) {
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-8 py-7 max-sm:px-4 max-sm:py-4 [@media(max-height:620px)]:py-3">
       <div className="mx-auto flex max-w-[720px] flex-col gap-4">
         {messages.map((message) => {
-          const agent = agents.find((item) => item.id === message.agent)
+          const model = models.find((item) => item.id === message.model)
           const isUser = message.role === 'user'
 
           return (
@@ -34,7 +34,7 @@ export function ChatThread({ agents, messages }: ChatThreadProps) {
               >
                 <div className="mb-1.5 flex items-center justify-between gap-4">
                   <span className="text-[11px] font-medium text-zinc-400">
-                    {isUser ? 'Você' : agent?.name ?? 'Felixo'}
+                    {isUser ? 'Você' : model?.name ?? 'Felixo'}
                   </span>
                   <span className="text-[10px] text-zinc-600">
                     {message.createdAt}

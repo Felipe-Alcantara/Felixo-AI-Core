@@ -1,4 +1,4 @@
-const { contextBridge } = require('electron')
+const { contextBridge, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('felixo', {
   platform: process.platform,
@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('felixo', {
     electron: process.versions.electron,
     node: process.versions.node,
   },
+  getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
 })
