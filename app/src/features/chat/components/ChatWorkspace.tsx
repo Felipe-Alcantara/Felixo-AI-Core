@@ -112,6 +112,7 @@ export function ChatWorkspace() {
         selectedModel={selectedModel}
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+        onRemoveModel={removeModel}
         onSelectModel={setSelectedModelId}
       />
 

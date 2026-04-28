@@ -8,6 +8,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   User,
 } from 'lucide-react'
 import type { Model, ModelId } from '../types'
@@ -18,6 +19,7 @@ type AppSidebarProps = {
   selectedModel: Model | null
   onNewIdea: () => void
   onOpenModelSettings: () => void
+  onRemoveModel: (model: Model) => void
   onSelectModel: (modelId: ModelId) => void
 }
 
@@ -34,6 +36,7 @@ export function AppSidebar({
   selectedModel,
   onNewIdea,
   onOpenModelSettings,
+  onRemoveModel,
   onSelectModel,
 }: AppSidebarProps) {
   return (
@@ -85,22 +88,37 @@ export function AppSidebar({
             const isSelected = model.id === selectedModel?.id
 
             return (
-              <button
+              <div
                 key={model.id}
-                type="button"
-                onClick={() => onSelectModel(model.id)}
-                className={`flex h-8 w-full items-center justify-between rounded-lg px-2 text-left text-[12px] transition ${
+                className={`grid min-h-8 w-full grid-cols-[minmax(0,1fr)_2rem] items-center rounded-lg text-[12px] transition ${
                   isSelected
                     ? 'bg-white/10 text-white'
                     : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200'
                 }`}
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onSelectModel(model.id)}
+                  className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-left"
+                >
                   <Bot size={13} aria-hidden="true" />
-                  <span className="truncate">{model.name}</span>
-                </span>
-                <span className="text-[10px] text-zinc-500">{model.source}</span>
-              </button>
+                  <span className="min-w-0">
+                    <span className="block truncate">{model.name}</span>
+                    <span className="block truncate text-[10px] text-zinc-500">
+                      {model.source}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  title="Remover modelo"
+                  onClick={() => onRemoveModel(model)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-red-200 transition hover:bg-red-400/10"
+                >
+                  <Trash2 size={13} aria-hidden="true" />
+                  <span className="sr-only">Remover modelo</span>
+                </button>
+              </div>
             )
           })}
         </div>
