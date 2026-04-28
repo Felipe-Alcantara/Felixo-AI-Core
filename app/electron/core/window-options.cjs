@@ -3,8 +3,8 @@ const { preloadPath } = require('./paths.cjs')
 const mainWindowOptions = {
   width: 1320,
   height: 760,
-  minWidth: 960,
-  minHeight: 600,
+  minWidth: 720,
+  minHeight: 500,
   backgroundColor: '#09090b',
   title: 'Felixo AI Core',
   webPreferences: {

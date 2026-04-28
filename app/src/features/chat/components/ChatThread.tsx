@@ -8,7 +8,7 @@ type ChatThreadProps = {
 
 export function ChatThread({ agents, messages }: ChatThreadProps) {
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
+    <section className="min-h-0 flex-1 overflow-y-auto px-8 py-7 max-sm:px-4 max-sm:py-4 [@media(max-height:620px)]:py-3">
       <div className="mx-auto flex max-w-[720px] flex-col gap-4">
         {messages.map((message) => {
           const agent = agents.find((item) => item.id === message.agent)
