@@ -1,26 +1,26 @@
 import type { FormEvent, KeyboardEvent } from 'react'
 import { ChevronDown, Mic, Plus, Send } from 'lucide-react'
-import type { Agent, AgentId } from '../types'
+import type { Model, ModelId } from '../types'
 
 type ComposerProps = {
   input: string
   starters: string[]
-  agents: Agent[]
-  selectedAgent: Agent
+  models: Model[]
+  selectedModel: Model | null
   variant?: 'home' | 'dock'
   onInputChange: (value: string) => void
-  onSelectAgent: (agentId: AgentId) => void
+  onSelectModel: (modelId: ModelId) => void
   onSubmit: () => void
 }
 
 export function Composer({
   input,
   starters,
-  agents,
-  selectedAgent,
+  models,
+  selectedModel,
   variant = 'dock',
   onInputChange,
-  onSelectAgent,
+  onSelectModel,
   onSubmit,
 }: ComposerProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -75,20 +75,23 @@ export function Composer({
               </button>
 
               <select
-                value={selectedAgent.id}
-                onChange={(event) => onSelectAgent(event.target.value as AgentId)}
+                value={selectedModel?.id ?? ''}
+                onChange={(event) => onSelectModel(event.target.value as ModelId)}
                 className="max-w-36 appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 py-1.5 text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 max-sm:max-w-28"
-                aria-label="Selecionar agente"
+                aria-label="Selecionar modelo"
               >
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
+                {models.length === 0 && (
+                  <option value="">Nenhum modelo</option>
+                )}
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
                   </option>
                 ))}
               </select>
 
               <span className="flex items-center gap-1 rounded-full border border-white/[0.08] px-3 py-1.5 text-[12px] text-zinc-400 max-[420px]:hidden">
-                {selectedAgent.tone}
+                {selectedModel?.source ?? 'sem modelo'}
                 <ChevronDown size={12} aria-hidden="true" />
               </span>
             </div>

@@ -1,17 +1,18 @@
-export type AgentId = 'codex' | 'claude' | 'gemini' | 'openclaude'
+export type ModelId = string
 
-export type Agent = {
-  id: AgentId
+export type Model = {
+  id: ModelId
   name: string
   command: string
-  tone: string
-  accentClass: string
+  source: string
 }
+
+export type ModelFileSelection = Omit<Model, 'id'>
 
 export type ChatMessage = {
   id: number
   role: 'assistant' | 'user'
   content: string
-  agent?: AgentId
+  model?: ModelId
   createdAt: string
 }

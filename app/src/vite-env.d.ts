@@ -1,12 +1,17 @@
 /// <reference types="vite/client" />
 
-interface Window {
-  felixo?: {
-    platform: string
-    versions: {
-      chrome?: string
-      electron?: string
-      node?: string
+declare global {
+  interface Window {
+    felixo?: {
+      platform: string
+      versions: {
+        chrome?: string
+        electron?: string
+        node?: string
+      }
+      getFilePath?: (file: File) => string
     }
   }
 }
+
+export {}

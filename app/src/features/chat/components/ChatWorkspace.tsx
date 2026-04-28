@@ -1,23 +1,37 @@
 import { useMemo, useState } from 'react'
-import { agents, ideaStarters, quickPrompts, recentItems } from '../data/agents'
+import {
+  initialModels,
+  ideaStarters,
+  quickPrompts,
+  recentItems,
+} from '../data/models'
 import {
   createAssistantMessage,
   createUserMessage,
   initialMessages,
 } from '../services/chat-service'
-import type { AgentId, ChatMessage } from '../types'
+import { loadModels, saveModels } from '../services/model-storage'
+import type { ChatMessage, Model, ModelId } from '../types'
+import { ModelSettingsModal } from './ModelSettingsModal'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
 
 export function ChatWorkspace() {
-  const [selectedAgentId, setSelectedAgentId] = useState<AgentId>('codex')
+  const [models, setModels] = useState<Model[]>(() => loadModels(initialModels))
+  const [selectedModelId, setSelectedModelId] = useState<ModelId>(
+    initialModels[0]?.id ?? '',
+  )
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [input, setInput] = useState('')
+  const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
 
-  const selectedAgent = useMemo(
-    () => agents.find((agent) => agent.id === selectedAgentId) ?? agents[0],
-    [selectedAgentId],
+  const selectedModel = useMemo(
+    () =>
+      models.find((model) => model.id === selectedModelId) ??
+      models[0] ??
+      null,
+    [models, selectedModelId],
   )
 
   const runtimeLabel = window.felixo?.versions.electron
@@ -31,10 +45,15 @@ export function ChatWorkspace() {
       return
     }
 
+    if (!selectedModel) {
+      setIsModelSettingsOpen(true)
+      return
+    }
+
     setMessages((currentMessages) => [
       ...currentMessages,
       createUserMessage(content),
-      createAssistantMessage(content, selectedAgent),
+      createAssistantMessage(content, selectedModel),
     ])
     setInput('')
   }
@@ -44,16 +63,33 @@ export function ChatWorkspace() {
     setMessages(initialMessages)
   }
 
+  function addModel(model: Model) {
+    const existingModel = models.find((item) => item.command === model.command)
+
+    if (existingModel) {
+      setSelectedModelId(existingModel.id)
+      return
+    }
+
+    setModels((currentModels) => {
+      const nextModels = [...currentModels, model]
+      saveModels(nextModels)
+      return nextModels
+    })
+    setSelectedModelId(model.id)
+  }
+
   const hasMessages = messages.length > 0
 
   return (
     <div className="flex h-full min-h-0 bg-[#191918] text-zinc-100">
       <AppSidebar
-        agents={agents}
+        models={models}
         recentItems={recentItems}
-        selectedAgent={selectedAgent}
+        selectedModel={selectedModel}
         onNewIdea={resetChat}
-        onSelectAgent={setSelectedAgentId}
+        onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+        onSelectModel={setSelectedModelId}
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col bg-[#171716]">
@@ -65,14 +101,14 @@ export function ChatWorkspace() {
 
         {hasMessages ? (
           <>
-            <ChatThread agents={agents} messages={messages} />
+            <ChatThread models={models} messages={messages} />
             <Composer
               input={input}
               starters={ideaStarters}
-              agents={agents}
-              selectedAgent={selectedAgent}
+              models={models}
+              selectedModel={selectedModel}
               onInputChange={setInput}
-              onSelectAgent={setSelectedAgentId}
+              onSelectModel={setSelectedModelId}
               onSubmit={sendMessage}
             />
           </>
@@ -89,11 +125,11 @@ export function ChatWorkspace() {
               <Composer
                 input={input}
                 starters={ideaStarters}
-                agents={agents}
-                selectedAgent={selectedAgent}
+                models={models}
+                selectedModel={selectedModel}
                 variant="home"
                 onInputChange={setInput}
-                onSelectAgent={setSelectedAgentId}
+                onSelectModel={setSelectedModelId}
                 onSubmit={sendMessage}
               />
 
@@ -113,6 +149,13 @@ export function ChatWorkspace() {
           </section>
         )}
       </main>
+
+      <ModelSettingsModal
+        models={models}
+        isOpen={isModelSettingsOpen}
+        onAddModel={addModel}
+        onClose={() => setIsModelSettingsOpen(false)}
+      />
     </div>
   )
 }
