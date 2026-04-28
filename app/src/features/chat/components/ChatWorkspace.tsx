@@ -1,16 +1,14 @@
 import { useMemo, useState } from 'react'
-import { agents, ideaStarters } from '../data/agents'
+import { agents, ideaStarters, quickPrompts, recentItems } from '../data/agents'
 import {
   createAssistantMessage,
   createUserMessage,
   initialMessages,
 } from '../services/chat-service'
 import type { AgentId, ChatMessage } from '../types'
-import { AgentRail } from './AgentRail'
-import { ChatHeader } from './ChatHeader'
+import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
-import { ContextPanel } from './ContextPanel'
 
 export function ChatWorkspace() {
   const [selectedAgentId, setSelectedAgentId] = useState<AgentId>('codex')
@@ -46,31 +44,75 @@ export function ChatWorkspace() {
     setMessages(initialMessages)
   }
 
+  const hasMessages = messages.length > 0
+
   return (
-    <div className="flex h-full min-h-0 bg-zinc-950 max-sm:flex-col">
-      <AgentRail
+    <div className="flex h-full min-h-0 bg-[#191918] text-zinc-100">
+      <AppSidebar
         agents={agents}
+        recentItems={recentItems}
         selectedAgent={selectedAgent}
-        onSelectAgent={setSelectedAgentId}
         onNewIdea={resetChat}
+        onSelectAgent={setSelectedAgentId}
       />
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <ChatHeader
-          selectedAgent={selectedAgent}
-          runtimeLabel={runtimeLabel}
-          onClear={resetChat}
-        />
-        <ChatThread agents={agents} messages={messages} />
-        <Composer
-          input={input}
-          starters={ideaStarters}
-          onInputChange={setInput}
-          onSubmit={sendMessage}
-        />
-      </main>
+      <main className="relative flex min-w-0 flex-1 flex-col bg-[#171716]">
+        <div className="absolute right-5 top-4 flex items-center gap-2 text-zinc-500">
+          <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px]">
+            {runtimeLabel}
+          </span>
+        </div>
 
-      <ContextPanel selectedAgent={selectedAgent} messageCount={messages.length} />
+        {hasMessages ? (
+          <>
+            <ChatThread agents={agents} messages={messages} />
+            <Composer
+              input={input}
+              starters={ideaStarters}
+              agents={agents}
+              selectedAgent={selectedAgent}
+              onInputChange={setInput}
+              onSelectAgent={setSelectedAgentId}
+              onSubmit={sendMessage}
+            />
+          </>
+        ) : (
+          <section className="flex min-h-0 flex-1 items-center justify-center px-8">
+            <div className="w-full -translate-y-8">
+              <div className="mb-7 text-center">
+                <div className="mx-auto mb-4 h-8 w-8 rounded-full bg-[conic-gradient(from_0deg,#f59e0b,#f97316,#fb7185,#f59e0b)] opacity-80" />
+                <h1 className="text-[30px] font-semibold tracking-[-0.02em] text-zinc-200">
+                  De volta ao trabalho, Felixo?
+                </h1>
+              </div>
+
+              <Composer
+                input={input}
+                starters={ideaStarters}
+                agents={agents}
+                selectedAgent={selectedAgent}
+                variant="home"
+                onInputChange={setInput}
+                onSelectAgent={setSelectedAgentId}
+                onSubmit={sendMessage}
+              />
+
+              <div className="mx-auto mt-7 max-w-[560px] divide-y divide-white/[0.07]">
+                {quickPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setInput(prompt)}
+                    className="block w-full px-3 py-3 text-left text-[12px] text-zinc-500 transition hover:text-zinc-300"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
     </div>
   )
 }
