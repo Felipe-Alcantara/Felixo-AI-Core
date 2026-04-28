@@ -1,17 +1,26 @@
 import type { FormEvent, KeyboardEvent } from 'react'
-import { Send } from 'lucide-react'
+import { ChevronDown, Mic, Plus, Send } from 'lucide-react'
+import type { Agent, AgentId } from '../types'
 
 type ComposerProps = {
   input: string
   starters: string[]
+  agents: Agent[]
+  selectedAgent: Agent
+  variant?: 'home' | 'dock'
   onInputChange: (value: string) => void
+  onSelectAgent: (agentId: AgentId) => void
   onSubmit: () => void
 }
 
 export function Composer({
   input,
   starters,
+  agents,
+  selectedAgent,
+  variant = 'dock',
   onInputChange,
+  onSelectAgent,
   onSubmit,
 }: ComposerProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -26,42 +35,86 @@ export function Composer({
     }
   }
 
+  const isHome = variant === 'home'
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="shrink-0 border-t border-white/10 bg-black/20 px-5 py-4"
+      className={isHome ? '' : 'shrink-0 border-t border-white/[0.08] bg-[#171717] px-5 py-4'}
     >
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-          {starters.map((starter) => (
-            <button
-              key={starter}
-              type="button"
-              onClick={() => onInputChange(starter)}
-              className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-violet-200/50"
-            >
-              {starter}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-end gap-3 rounded-[1.65rem] border border-white/10 bg-zinc-900/85 p-3 shadow-soft">
+      <div className={isHome ? 'mx-auto w-full max-w-[600px]' : 'mx-auto w-full max-w-[680px]'}>
+        <div className="rounded-[1.45rem] border border-white/[0.08] bg-[#2b2b2a] shadow-soft">
           <textarea
             value={input}
             onChange={(event) => onInputChange(event.target.value)}
             onKeyDown={handleKeyDown}
-            rows={2}
-            placeholder="Joga a ideia aqui..."
-            className="max-h-32 min-h-14 flex-1 resize-none bg-transparent px-1 py-1 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600"
+            rows={isHome ? 3 : 2}
+            placeholder="Como posso ajudar você hoje?"
+            className="max-h-36 min-h-16 w-full resize-none bg-transparent px-5 py-4 text-[13px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-500"
           />
-          <button
-            type="submit"
-            title="Enviar"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-200 text-zinc-950 transition hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-100 focus:ring-offset-2 focus:ring-offset-zinc-900"
-          >
-            <Send size={18} aria-hidden="true" />
-            <span className="sr-only">Enviar</span>
-          </button>
+
+          <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                title="Adicionar contexto"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+              >
+                <Plus size={17} aria-hidden="true" />
+                <span className="sr-only">Adicionar contexto</span>
+              </button>
+
+              <select
+                value={selectedAgent.id}
+                onChange={(event) => onSelectAgent(event.target.value as AgentId)}
+                className="max-w-36 appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 py-1.5 text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40"
+                aria-label="Selecionar agente"
+              >
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+
+              <span className="flex items-center gap-1 rounded-full border border-white/[0.08] px-3 py-1.5 text-[12px] text-zinc-400">
+                {selectedAgent.tone}
+                <ChevronDown size={12} aria-hidden="true" />
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                title="Voz"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+              >
+                <Mic size={15} aria-hidden="true" />
+                <span className="sr-only">Voz</span>
+              </button>
+              <button
+                type="submit"
+                title="Enviar"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#2b2b2a]"
+              >
+                <Send size={15} aria-hidden="true" />
+                <span className="sr-only">Enviar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          {starters.map((starter) => (
+            <button
+              key={starter}
+              type="button"
+              onClick={() => onInputChange(`${starter}: `)}
+              className="shrink-0 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-200/40"
+            >
+              {starter}
+            </button>
+          ))}
         </div>
       </div>
     </form>

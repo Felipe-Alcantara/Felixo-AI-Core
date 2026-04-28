@@ -1,15 +1,6 @@
 import type { Agent, ChatMessage } from '../types'
 
-export const initialMessages: ChatMessage[] = [
-  {
-    id: 1,
-    role: 'assistant',
-    content:
-      'Me dá a ideia crua. Eu devolvo uma primeira forma para ela começar a existir.',
-    agent: 'codex',
-    createdAt: 'agora',
-  },
-]
+export const initialMessages: ChatMessage[] = []
 
 export function formatTime() {
   return new Intl.DateTimeFormat('pt-BR', {
