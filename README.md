@@ -17,7 +17,7 @@ Primeira versão funcional:
 
 * interface simples de chatbot;
 * layout desktop com sidebar fixa e prompt central;
-* seletor visual de agentes/CLIs;
+* seletor visual de modelos/CLIs;
 * respostas locais para organizar ideias;
 * front-end separado por feature em `app/src/features/chat/`;
 * processo Electron modularizado como backend local;

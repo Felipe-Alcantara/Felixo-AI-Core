@@ -10,7 +10,7 @@
 
 [2026-04-28] Concluído — Scaffold inicial em `app/` com Electron, React, TypeScript, Vite e Tailwind.
 
-[2026-04-28] Concluído — Primeira tela útil: chat local de ideação com seletor visual de agentes.
+[2026-04-28] Concluído — Primeira tela útil: chat local de ideação com seletor visual de modelos.
 
 [2026-04-28] Concluído — Criado `start_app.py` para iniciar o app pela raiz usando Python.
 
