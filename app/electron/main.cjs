@@ -1,43 +1,12 @@
-const { app, BrowserWindow, shell } = require('electron')
-const path = require('node:path')
-
-const devServerUrl = process.env.VITE_DEV_SERVER_URL
-
-function createWindow() {
-  const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 840,
-    minWidth: 960,
-    minHeight: 640,
-    backgroundColor: '#09090b',
-    title: 'Felixo AI Core',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  })
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl)
-    return
-  }
-
-  mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
-}
+const { app, BrowserWindow } = require('electron')
+const { createMainWindow } = require('./windows/main-window.cjs')
 
 app.whenReady().then(() => {
-  createWindow()
+  createMainWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      createMainWindow()
     }
   })
 })

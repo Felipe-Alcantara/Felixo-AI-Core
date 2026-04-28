@@ -5,7 +5,7 @@
 :root {
   color: #f4f4f5;
   background: #09090b;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -26,11 +26,35 @@ body {
   min-width: 320px;
   margin: 0;
   overflow: hidden;
+  background: #09090b;
 }
 
 button,
 textarea {
   font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+textarea {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+textarea::-webkit-scrollbar,
+section::-webkit-scrollbar,
+div::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+textarea::-webkit-scrollbar-thumb,
+section::-webkit-scrollbar-thumb,
+div::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 ::selection {
