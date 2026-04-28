@@ -14,6 +14,12 @@
 
 [2026-04-28] Concluído — Criado `start_app.py` para iniciar o app pela raiz usando Python.
 
+[2026-04-28] Concluído — Interface compactada e arredondada para uma experiência mais leve e menos parecida com dashboard genérico de IA.
+
+[2026-04-28] Concluído — Frontend reorganizado em `src/features/chat/` com componentes, dados, tipos e serviço local separados.
+
+[2026-04-28] Concluído — Processo Electron modularizado em `core/`, `services/` e `windows/`, seguindo separação de responsabilidades do padrão backend Felixo.
+
 [2026-04-28] Pendente — Conectar os scripts de `ai-clis/` ao Electron via processo controlado.
 
 [2026-04-28] Pendente — Salvar histórico local de conversas e ideias.
@@ -37,6 +43,12 @@
 [2026-04-28] A primeira resposta do chatbot é local e determinística; isso permite validar layout e fluxo antes de conectar CLIs reais.
 
 [2026-04-28] Electron usa `contextIsolation: true`, `nodeIntegration: false` e preload dedicado para preservar uma base segura.
+
+[2026-04-28] Layout padrão da janela reduzido para `980x680`, com shell interno limitado e cantos mais arredondados para manter a sensação de ferramenta pessoal.
+
+[2026-04-28] `App.tsx` deve permanecer como composição de alto nível; regras e estado do chat ficam em `features/chat`.
+
+[2026-04-28] O processo principal do Electron deve continuar fino, delegando criação de janela e serviços auxiliares para módulos dedicados.
 
 ## Comandos Importantes
 

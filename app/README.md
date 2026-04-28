@@ -44,6 +44,25 @@ npm run start    # abre Electron usando o build em dist/
 
 ## Estado Atual
 
-A interface já funciona como um chatbot local para ideação. A resposta ainda não chama uma IA externa; ela gera um rascunho determinístico para validar a experiência inicial.
+A interface já funciona como um chatbot local para ideação, com layout mais compacto e arredondado. A resposta ainda não chama uma IA externa; ela gera um rascunho determinístico para validar a experiência inicial.
 
 O próximo passo é conectar os scripts locais de `../ai-clis/` ao processo principal do Electron.
+
+## Estrutura
+
+```text
+electron/
+├── core/       # caminhos e configuração base
+├── services/   # integrações auxiliares do processo principal
+└── windows/    # criação das janelas Electron
+
+src/
+└── features/
+    └── chat/
+        ├── components/
+        ├── data/
+        ├── services/
+        └── types.ts
+```
+
+Essa organização segue a ideia dos padrões Felixo: componentes visuais no front, regras e dados do fluxo em serviços próprios, e processo Electron tratado como backend local com responsabilidades separadas.

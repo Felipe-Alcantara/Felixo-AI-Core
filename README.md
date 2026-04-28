@@ -16,8 +16,11 @@ Stack inicial:
 Primeira versão funcional:
 
 * interface simples de chatbot;
+* layout compacto e mais arredondado;
 * seletor visual de agentes/CLIs;
 * respostas locais para organizar ideias;
+* front-end separado por feature em `app/src/features/chat/`;
+* processo Electron modularizado como backend local;
 * base pronta para conectar os scripts de `ai-clis/`.
 
 ### Como rodar
