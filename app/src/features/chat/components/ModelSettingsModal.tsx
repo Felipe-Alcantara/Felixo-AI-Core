@@ -9,6 +9,7 @@ type ModelSettingsModalProps = {
   isOpen: boolean
   onClose: () => void
   onAddModel: (model: Model) => void
+  onClearModels: () => void
   onRemoveModel: (model: Model) => void
 }
 
@@ -17,6 +18,7 @@ export function ModelSettingsModal({
   isOpen,
   onClose,
   onAddModel,
+  onClearModels,
   onRemoveModel,
 }: ModelSettingsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -60,6 +62,11 @@ export function ModelSettingsModal({
   function removeModel(model: Model) {
     onRemoveModel(model)
     setStatus(`Modelo "${model.name}" excluído.`)
+  }
+
+  function clearModels() {
+    onClearModels()
+    setStatus('Todos os modelos foram excluídos.')
   }
 
   async function importModelFile() {
@@ -236,11 +243,22 @@ export function ModelSettingsModal({
           )}
 
           <div>
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-300">
-              <FilePlus size={14} aria-hidden="true" />
-              Modelos importados
+            <div className="mb-2 flex items-center justify-between gap-3 text-xs font-medium text-zinc-300">
+              <span className="flex items-center gap-2">
+                <FilePlus size={14} aria-hidden="true" />
+                Modelos importados
+              </span>
+              {models.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearModels}
+                  className="rounded-full border border-red-300/20 px-3 py-1 text-[11px] text-red-200 transition hover:bg-red-400/10"
+                >
+                  Limpar todos
+                </button>
+              )}
             </div>
-            <div className="max-h-32 space-y-1 overflow-y-auto rounded-2xl border border-white/[0.08] bg-black/15 p-2">
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-2xl border border-white/[0.08] bg-black/15 p-2">
               {models.length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-zinc-500">
                   Nenhum modelo importado ainda.
@@ -251,7 +269,7 @@ export function ModelSettingsModal({
                     key={model.id}
                     className="rounded-xl px-3 py-2 text-xs text-zinc-300"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
                       <div className="min-w-0">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="truncate font-medium text-zinc-100">
@@ -269,10 +287,10 @@ export function ModelSettingsModal({
                         type="button"
                         title="Excluir modelo"
                         onClick={() => removeModel(model)}
-                        className="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] text-zinc-500 transition hover:bg-red-400/10 hover:text-red-200"
+                        className="flex h-8 items-center gap-1.5 rounded-full border border-red-300/20 px-3 text-[11px] text-red-200 transition hover:bg-red-400/10"
                       >
                         <Trash2 size={14} aria-hidden="true" />
-                        Excluir
+                        Remover
                       </button>
                     </div>
                   </div>
