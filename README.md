@@ -16,7 +16,7 @@ Stack inicial:
 Primeira versão funcional:
 
 * interface simples de chatbot;
-* layout compacto e mais arredondado;
+* layout desktop com sidebar fixa e prompt central;
 * seletor visual de agentes/CLIs;
 * respostas locais para organizar ideias;
 * front-end separado por feature em `app/src/features/chat/`;

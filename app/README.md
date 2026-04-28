@@ -44,7 +44,7 @@ npm run start    # abre Electron usando o build em dist/
 
 ## Estado Atual
 
-A interface já funciona como um chatbot local para ideação, com layout mais compacto e arredondado. A resposta ainda não chama uma IA externa; ela gera um rascunho determinístico para validar a experiência inicial.
+A interface já funciona como um chatbot local para ideação, com sidebar fixa, landing central e prompt em destaque. A resposta ainda não chama uma IA externa; ela gera um rascunho determinístico para validar a experiência inicial.
 
 O próximo passo é conectar os scripts locais de `../ai-clis/` ao processo principal do Electron.
 
