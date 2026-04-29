@@ -18,10 +18,12 @@ Primeira versão funcional:
 * interface simples de chatbot;
 * layout desktop com sidebar fixa e prompt central;
 * seletor visual de modelos/CLIs;
-* respostas locais para organizar ideias;
+* backend Electron inicial para executar CLIs de IA em streaming;
+* adapters para `claude`, `codex` e `gemini`;
+* botão de parar para interromper processo em andamento;
 * front-end separado por feature em `app/src/features/chat/`;
 * processo Electron modularizado como backend local;
-* base pronta para conectar os scripts de `ai-clis/`.
+* testes unitários para adapters e leitura JSONL.
 
 ### Como rodar
 
@@ -38,6 +40,15 @@ cd app
 nvm use
 npm install
 npm run dev
+```
+
+Validação:
+
+```bash
+cd app
+npm test
+npm run lint
+npm run build
 ```
 
 Requisito recomendado: Node `25.9.0`, definido em `.nvmrc`.
