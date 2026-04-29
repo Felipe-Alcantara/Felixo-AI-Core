@@ -1,5 +1,5 @@
 function getSpawnArgs(prompt, context = {}) {
-  const args = ['exec', '--json']
+  const args = ['exec', '--json', '--skip-git-repo-check']
 
   if (context.cwd) {
     args.push('--cd', context.cwd)

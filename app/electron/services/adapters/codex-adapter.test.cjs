@@ -23,5 +23,12 @@ test('codex adapter passes ascii cwd with exec args', () => {
   const spawnArgs = adapter.getSpawnArgs('Oi', { cwd: '/home/felipe' })
 
   assert.equal(spawnArgs.command, 'codex')
-  assert.deepEqual(spawnArgs.args, ['exec', '--json', '--cd', '/home/felipe', 'Oi'])
+  assert.deepEqual(spawnArgs.args, [
+    'exec',
+    '--json',
+    '--skip-git-repo-check',
+    '--cd',
+    '/home/felipe',
+    'Oi',
+  ])
 })
