@@ -109,11 +109,8 @@ export function ChatWorkspace() {
       <AppSidebar
         models={models}
         recentItems={recentItems}
-        selectedModel={selectedModel}
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
-        onRemoveModel={removeModel}
-        onSelectModel={setSelectedModelId}
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col bg-[#171716]">

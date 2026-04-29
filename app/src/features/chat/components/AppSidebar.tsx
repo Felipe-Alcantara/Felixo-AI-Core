@@ -8,19 +8,15 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
-  Trash2,
   User,
 } from 'lucide-react'
-import type { Model, ModelId } from '../types'
+import type { Model } from '../types'
 
 type AppSidebarProps = {
   models: Model[]
   recentItems: string[]
-  selectedModel: Model | null
   onNewIdea: () => void
   onOpenModelSettings: () => void
-  onRemoveModel: (model: Model) => void
-  onSelectModel: (modelId: ModelId) => void
 }
 
 const navItems = [
@@ -33,11 +29,8 @@ const navItems = [
 export function AppSidebar({
   models,
   recentItems,
-  selectedModel,
   onNewIdea,
   onOpenModelSettings,
-  onRemoveModel,
-  onSelectModel,
 }: AppSidebarProps) {
   return (
     <aside className="flex w-[244px] shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 max-[920px]:hidden max-xl:w-[224px]">
@@ -84,43 +77,20 @@ export function AppSidebar({
           </button>
         </div>
         <div className="space-y-1">
-          {models.map((model) => {
-            const isSelected = model.id === selectedModel?.id
-
-            return (
-              <div
-                key={model.id}
-                className={`grid min-h-8 w-full grid-cols-[minmax(0,1fr)_2rem] items-center rounded-lg text-[12px] transition ${
-                  isSelected
-                    ? 'bg-white/10 text-white'
-                    : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectModel(model.id)}
-                  className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-left"
-                >
-                  <Bot size={13} aria-hidden="true" />
-                  <span className="min-w-0">
-                    <span className="block truncate">{model.name}</span>
-                    <span className="block truncate text-[10px] text-zinc-500">
-                      {model.source}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  title="Remover modelo"
-                  onClick={() => onRemoveModel(model)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-red-200 transition hover:bg-red-400/10"
-                >
-                  <Trash2 size={13} aria-hidden="true" />
-                  <span className="sr-only">Remover modelo</span>
-                </button>
-              </div>
-            )
-          })}
+          {models.map((model) => (
+            <div
+              key={model.id}
+              className="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] text-zinc-400"
+            >
+              <Bot size={13} aria-hidden="true" className="shrink-0" />
+              <span className="min-w-0">
+                <span className="block truncate">{model.name}</span>
+                <span className="block truncate text-[10px] text-zinc-500">
+                  {model.source}
+                </span>
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
