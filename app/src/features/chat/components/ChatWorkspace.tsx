@@ -18,6 +18,8 @@ import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
 import { QaLoggerPanel } from './QaLoggerPanel'
 
+const CONTEXT_MESSAGE_LIMIT = 12
+
 export function ChatWorkspace() {
   const [models, setModels] = useState<Model[]>(() => loadModels(initialModels))
   const [selectedModelId, setSelectedModelId] = useState<ModelId>(
@@ -85,6 +87,7 @@ export function ChatWorkspace() {
     }
 
     const sessionId = createSessionId()
+    const cliPrompt = createCliPrompt(messages, content)
 
     setMessages((currentMessages) => [
       ...currentMessages,
@@ -95,7 +98,7 @@ export function ChatWorkspace() {
     setActiveStreamingSession(sessionId)
 
     window.felixo.cli
-      .send({ sessionId, prompt: content, model: selectedModel })
+      .send({ sessionId, prompt: cliPrompt, model: selectedModel })
       .then((result) => {
         if (!result.ok) {
           completeAssistantMessage(
@@ -260,7 +263,11 @@ export function ChatWorkspace() {
     status: 'done' | 'error' | 'stopped',
   ) {
     if (status === 'done') {
-      return currentContent || nextContent
+      return (
+        currentContent ||
+        nextContent ||
+        'Execução concluída sem resposta textual.'
+      )
     }
 
     const prefix = status === 'error' ? 'Erro: ' : ''
@@ -367,4 +374,29 @@ export function ChatWorkspace() {
 
 function createSessionId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+}
+
+function createCliPrompt(messages: ChatMessage[], currentPrompt: string) {
+  const history = messages
+    .filter((message) => message.content.trim())
+    .slice(-CONTEXT_MESSAGE_LIMIT)
+    .map((message) => {
+      const role = message.role === 'user' ? 'Usuário' : 'Assistente'
+      return `${role}: ${message.content.trim()}`
+    })
+    .join('\n\n')
+
+  if (!history) {
+    return currentPrompt
+  }
+
+  return [
+    'Use o histórico abaixo como contexto da conversa no app. Responda apenas à mensagem atual do usuário.',
+    '',
+    'Histórico:',
+    history,
+    '',
+    'Mensagem atual do usuário:',
+    currentPrompt,
+  ].join('\n')
 }

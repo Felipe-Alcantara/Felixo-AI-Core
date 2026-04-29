@@ -30,6 +30,22 @@ test('gemini adapter parses model messages', () => {
   })
 })
 
+test('gemini adapter parses assistant delta messages', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'message',
+      role: 'assistant',
+      content: 'Olá',
+      delta: true,
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'text',
+    text: 'Olá',
+  })
+})
+
 test('gemini adapter parses result as done', () => {
   const event = adapter.parseLine(
     JSON.stringify({

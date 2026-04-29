@@ -12,6 +12,7 @@ const adapters = {
 
 const cliManager = new CliProcessManager()
 const stoppedSessions = new Set()
+const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
 
 function registerCliIpcHandlers(getMainWindow) {
   ipcMain.handle('cli:send', (event, params) => {
@@ -57,7 +58,9 @@ function registerCliIpcHandlers(getMainWindow) {
     const cwd = resolveCliCwd(cliType)
     const { command, args } = adapter.getSpawnArgs(prompt, { cwd, model })
     let didComplete = false
+    let didEmitVisibleOutput = false
     let stderrOutput = ''
+    let firstVisibleOutputTimer = null
 
     try {
       logQaEvent({
@@ -75,6 +78,31 @@ function registerCliIpcHandlers(getMainWindow) {
         },
       })
       const childProcess = cliManager.spawn(sessionId, command, args, cwd)
+      firstVisibleOutputTimer = setTimeout(() => {
+        if (didComplete || didEmitVisibleOutput) {
+          return
+        }
+
+        didComplete = true
+        logQaEvent({
+          level: 'warn',
+          scope: 'cli:timeout',
+          sessionId,
+          message: `${command} produced no visible output in time.`,
+          details: {
+            timeoutMs: FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
+          },
+        })
+        sendCliEvent(targetWebContents, {
+          type: 'error',
+          message: createNoVisibleOutputMessage(
+            command,
+            FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
+          ),
+          sessionId,
+        })
+        cliManager.kill(sessionId)
+      }, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS)
       logQaEvent({
         level: 'info',
         scope: 'cli:process',
@@ -102,6 +130,12 @@ function registerCliIpcHandlers(getMainWindow) {
 
         if (cliEvent.type === 'done') {
           didComplete = true
+          clearFirstVisibleOutputTimer()
+        }
+
+        if (cliEvent.type === 'text' && cliEvent.text.trim()) {
+          didEmitVisibleOutput = true
+          clearFirstVisibleOutputTimer()
         }
 
         sendCliEvent(targetWebContents, {
@@ -123,6 +157,7 @@ function registerCliIpcHandlers(getMainWindow) {
         },
         (output) => {
           didComplete = true
+          clearFirstVisibleOutputTimer()
           logQaEvent({
             level: 'warn',
             scope: 'cli:stdout',
@@ -157,6 +192,7 @@ function registerCliIpcHandlers(getMainWindow) {
 
       childProcess.on('error', (error) => {
         didComplete = true
+        clearFirstVisibleOutputTimer()
         logQaEvent({
           level: 'error',
           scope: 'cli:error',
@@ -174,6 +210,7 @@ function registerCliIpcHandlers(getMainWindow) {
       })
 
       childProcess.on('close', (code, signal) => {
+        clearFirstVisibleOutputTimer()
         flushStdout()
         logQaEvent({
           level: code && code !== 0 ? 'error' : 'info',
@@ -214,6 +251,7 @@ function registerCliIpcHandlers(getMainWindow) {
 
       return { ok: true }
     } catch (error) {
+      clearFirstVisibleOutputTimer()
       const message =
         error instanceof Error ? error.message : 'Falha ao iniciar processo CLI.'
       logQaEvent({
@@ -231,6 +269,15 @@ function registerCliIpcHandlers(getMainWindow) {
         sessionId,
       })
       return { ok: false, message }
+    }
+
+    function clearFirstVisibleOutputTimer() {
+      if (!firstVisibleOutputTimer) {
+        return
+      }
+
+      clearTimeout(firstVisibleOutputTimer)
+      firstVisibleOutputTimer = null
     }
   })
 
@@ -343,6 +390,12 @@ function createNonJsonStdoutMessage(command, chunk) {
   }
 
   return `${command} retornou uma saída inesperada fora do formato JSON: ${output}`
+}
+
+function createNoVisibleOutputMessage(command, timeoutMs) {
+  const timeoutSeconds = Math.round(timeoutMs / 1000)
+
+  return `${command} não gerou resposta textual em ${timeoutSeconds}s. A execução foi interrompida.`
 }
 
 function createChunkDetails(chunk) {
