@@ -74,4 +74,4 @@ npm run build
 
 ## Roadmap
 
-Ver [ROADMAP.md](./ROADMAP.md) para fases, checklists, metas e backlog completo.
+Ver [ROADMAP.md](./docs/projeto/ROADMAP.md) para fases, checklists, metas e backlog completo.
