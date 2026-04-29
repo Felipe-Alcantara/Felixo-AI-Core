@@ -28,6 +28,8 @@
 
 [2026-04-28] Pendente — Salvar histórico local de conversas e ideias.
 
+[2026-04-29] Em progresso — Integração real com CLIs iniciada pelo backend Electron: gerenciador de processos, adapters JSONL e IPC criados.
+
 ## Stack & Dependências
 
 [2026-04-28] Desktop: Electron 41.
@@ -37,6 +39,8 @@
 [2026-04-28] UI: `lucide-react` para ícones.
 
 [2026-04-28] Tooling: ESLint 10, npm, Node 25.9.0 via `.nvmrc`.
+
+[2026-04-29] Testes: `node:test` para validar adapters de streaming e leitor JSONL do backend Electron.
 
 ## Decisões de Arquitetura
 
@@ -56,6 +60,12 @@
 
 [2026-04-28] O processo principal do Electron deve continuar fino, delegando criação de janela e serviços auxiliares para módulos dedicados.
 
+[2026-04-29] Integração de CLIs segue padrão de adapters: `claude`, `codex` e `gemini` convertem formatos próprios de JSONL para um contrato único de evento de stream.
+
+[2026-04-29] `cli-process-manager.cjs` concentra ciclo de vida dos processos filhos; IPC apenas valida entrada, orquestra adapter/processo e publica eventos para o renderer.
+
+[2026-04-29] Leitura de stdout JSONL foi isolada em `jsonl-line-reader.cjs` para preservar linhas parciais entre chunks e facilitar teste unitário.
+
 ## Comandos Importantes
 
 ```bash
@@ -71,6 +81,11 @@ python3 start_app.py
 
 ```bash
 cd app
+npm test
+```
+
+```bash
+cd app
 npm run lint
 npm run build
 ```
@@ -78,3 +93,9 @@ npm run build
 ## Próximo Passo Técnico
 
 [2026-04-28] Implementar uma camada Electron IPC para executar comandos cadastrados com controle de processo, output incremental e botão de interrupção.
+
+[2026-04-29] Próximo passo: conectar `window.felixo.cli` ao estado do chat React, adicionando `cliType` aos modelos, mensagem assistente vazia, streaming incremental e botão de parar.
+
+## Testes Importantes
+
+[2026-04-29] ✅ `npm test` — valida adapters `claude`, `codex`, `gemini` e preservação de linhas parciais no leitor JSONL.
