@@ -25,6 +25,16 @@ export type StreamEvent =
     }
   | { type: 'error'; message: string; sessionId: string }
 
+export type QaLogEntry = {
+  id: number
+  createdAt: string
+  level: 'debug' | 'info' | 'warn' | 'error'
+  scope: string
+  sessionId?: string
+  message: string
+  details: unknown
+}
+
 export type ChatMessage = {
   id: number
   role: 'assistant' | 'user'

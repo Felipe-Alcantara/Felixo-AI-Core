@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { Model, StreamEvent } from './features/chat/types'
+import type { Model, QaLogEntry, StreamEvent } from './features/chat/types'
 
 type CliInvokeResult = {
   ok: boolean
@@ -25,6 +25,12 @@ declare global {
         }) => Promise<CliInvokeResult>
         stop: (params: { sessionId: string }) => Promise<CliInvokeResult>
         onStream: (callback: (event: StreamEvent) => void) => () => void
+      }
+      qaLogger?: {
+        getEntries: () => Promise<QaLogEntry[]>
+        clear: () => Promise<CliInvokeResult>
+        onEntry: (callback: (entry: QaLogEntry) => void) => () => void
+        onCleared: (callback: () => void) => () => void
       }
     }
   }
