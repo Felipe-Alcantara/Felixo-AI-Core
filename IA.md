@@ -119,3 +119,7 @@ FIX: `codex-adapter.cjs` agora inclui `--skip-git-repo-check`; teste de args atu
 [2026-04-29] BUG: zoom out funcionava, mas zoom in não respondia em alguns teclados.
 CAUSA: Electron/Chromium recebia o atalho de zoom in como `Ctrl+=`/`Ctrl++`, sem tratamento explícito no app.
 FIX: adicionado `window-zoom-shortcuts.cjs` para capturar `Ctrl/Cmd +`, `Ctrl/Cmd =`, `Ctrl/Cmd -` e `Ctrl/Cmd 0`; testes cobrem os atalhos.
+
+[2026-04-29] BUG: Gemini podia ficar com resposta vazia no chat.
+CAUSA: Gemini CLI pode abrir prompt interativo de confiança/autenticação e emitir texto fora de JSONL; como stdout não fechava linha JSON, o chat ficava aguardando.
+FIX: `gemini-adapter.cjs` passa `--skip-trust` e `ipc-handlers.cjs` detecta stdout não-JSON para exibir erro claro e encerrar o processo.
