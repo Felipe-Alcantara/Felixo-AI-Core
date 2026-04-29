@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { FilePlus, FolderOpen, Plus, Trash2, X } from 'lucide-react'
 import type { Model, ModelFileSelection } from '../types'
-import { createModelId } from '../services/model-storage'
+import { createModelId, detectModelCliType } from '../services/model-storage'
 
 type ModelSettingsModalProps = {
   models: Model[]
@@ -85,6 +85,11 @@ export function ModelSettingsModal({
       name,
       source: source || 'CLI local',
       command,
+      cliType: detectModelCliType({
+        command,
+        name,
+        source: source || 'CLI local',
+      }),
     })
 
     setFormName('')
@@ -99,11 +104,18 @@ export function ModelSettingsModal({
   ): Promise<ModelFileSelection> {
     const content = await file.text().catch(() => '')
     const filePath = window.felixo?.getFilePath?.(file) ?? ''
+    const name = inferModelName(content, file.name)
+    const command = createCommandPath(file.name, filePath)
 
     return {
-      name: inferModelName(content, file.name),
-      command: createCommandPath(file.name, filePath),
+      name,
+      command,
       source: 'CLI local',
+      cliType: detectModelCliType({
+        command,
+        name,
+        source: 'CLI local',
+      }),
     }
   }
 
