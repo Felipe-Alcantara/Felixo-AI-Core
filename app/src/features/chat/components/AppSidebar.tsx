@@ -14,13 +14,11 @@ import type { Model } from '../types'
 
 type AppSidebarProps = {
   models: Model[]
-  recentItems: string[]
   isOpen: boolean
   onNewIdea: () => void
   onOpenModelSettings: () => void
   onToggleSidebar: () => void
   onSearch: () => void
-  onSelectRecentItem: (item: string) => void
 }
 
 const navItems = [
@@ -32,13 +30,11 @@ const navItems = [
 
 export function AppSidebar({
   models,
-  recentItems,
   isOpen,
   onNewIdea,
   onOpenModelSettings,
   onToggleSidebar,
   onSearch,
-  onSelectRecentItem,
 }: AppSidebarProps) {
   function handleNavClick(label: string) {
     if (label === 'Novo chat') onNewIdea()
@@ -123,21 +119,7 @@ export function AppSidebar({
         </div>
       </div>
 
-      <div className="mt-5 min-h-0 flex-1 overflow-hidden px-4 max-xl:px-3">
-        <div className="mb-2 text-[11px] text-zinc-500">Recentes</div>
-        <div className="space-y-1 overflow-y-auto pr-1">
-          {recentItems.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onSelectRecentItem(item)}
-              className="block h-7 w-full truncate rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      </div>
+      <div className="flex-1" />
 
       <div className="mt-auto border-t border-white/[0.08] px-4 py-3 max-xl:px-3">
         <button

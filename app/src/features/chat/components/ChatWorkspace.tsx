@@ -4,7 +4,6 @@ import {
   initialModels,
   ideaStarters,
   quickPrompts,
-  recentItems,
 } from '../data/models'
 import {
   createAssistantMessage,
@@ -125,13 +124,7 @@ export function ChatWorkspace() {
     setMessages(initialMessages)
   }
 
-  function selectRecentItem(item: string) {
-    stopStreaming()
-    setMessages(initialMessages)
-    setInput(item)
-  }
-
-  function addModel(model: Model) {
+function addModel(model: Model) {
     const existingModel = models.find((item) => item.command === model.command)
 
     if (existingModel) {
@@ -295,13 +288,11 @@ export function ChatWorkspace() {
     <div className="flex h-full min-h-0 bg-[#191918] text-zinc-100">
       <AppSidebar
         models={models}
-        recentItems={recentItems}
         isOpen={isSidebarOpen}
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
         onSearch={resetChat}
-        onSelectRecentItem={selectRecentItem}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-[#171716]">
