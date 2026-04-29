@@ -38,6 +38,7 @@ function registerCliIpcHandlers(getMainWindow) {
     const cwd = resolveCliCwd(cliType)
     const { command, args } = adapter.getSpawnArgs(prompt, { cwd, model })
     let didComplete = false
+    let didInspectStdout = false
     let stderrOutput = ''
 
     try {
@@ -61,7 +62,24 @@ function registerCliIpcHandlers(getMainWindow) {
       const flushStdout = () => stdoutReader.flush()
 
       childProcess.stdout.setEncoding('utf8')
-      childProcess.stdout.on('data', (chunk) => stdoutReader.push(chunk))
+      childProcess.stdout.on('data', (chunk) => {
+        if (!didInspectStdout) {
+          didInspectStdout = true
+
+          if (!isJsonlStdoutChunk(chunk)) {
+            didComplete = true
+            sendCliEvent(targetWebContents, {
+              type: 'error',
+              message: createNonJsonStdoutMessage(command, chunk),
+              sessionId,
+            })
+            cliManager.kill(sessionId)
+            return
+          }
+        }
+
+        stdoutReader.push(chunk)
+      })
       childProcess.stdout.on('end', flushStdout)
 
       childProcess.stderr.setEncoding('utf8')
@@ -200,6 +218,22 @@ function createExitErrorMessage(command, code, signal, stderrOutput) {
   }
 
   return `${command} encerrou com ${status}: ${detail}`
+}
+
+function isJsonlStdoutChunk(chunk) {
+  const output = String(chunk).replace(/^\uFEFF/, '').trimStart()
+
+  return !output || output.startsWith('{')
+}
+
+function createNonJsonStdoutMessage(command, chunk) {
+  const output = String(chunk).trim().slice(0, 500)
+
+  if (!output) {
+    return `${command} retornou uma saída inesperada fora do formato JSON.`
+  }
+
+  return `${command} retornou uma saída inesperada fora do formato JSON: ${output}`
 }
 
 module.exports = {

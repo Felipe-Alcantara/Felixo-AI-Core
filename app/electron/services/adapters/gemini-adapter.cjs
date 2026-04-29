@@ -1,7 +1,7 @@
 function getSpawnArgs(prompt) {
   return {
     command: 'gemini',
-    args: ['--prompt', prompt, '--output-format', 'stream-json'],
+    args: ['--prompt', prompt, '--output-format', 'stream-json', '--skip-trust'],
   }
 }
 
