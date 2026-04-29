@@ -1,12 +1,16 @@
 const { app, BrowserWindow } = require('electron')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
+const { registerQaLoggerIpcHandlers } = require('./services/qa-logger.cjs')
 
 let mainWindow = null
 
 app.whenReady().then(() => {
   mainWindow = createMainWindow()
-  registerCliIpcHandlers(() => mainWindow ?? BrowserWindow.getAllWindows()[0])
+  const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
+
+  registerQaLoggerIpcHandlers(getMainWindow)
+  registerCliIpcHandlers(getMainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

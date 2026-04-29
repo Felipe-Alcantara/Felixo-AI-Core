@@ -17,4 +17,18 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('cli:stream', handler)
     },
   },
+  qaLogger: {
+    getEntries: () => ipcRenderer.invoke('qa-logger:get'),
+    clear: () => ipcRenderer.invoke('qa-logger:clear'),
+    onEntry: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('qa-logger:entry', handler)
+      return () => ipcRenderer.removeListener('qa-logger:entry', handler)
+    },
+    onCleared: (callback) => {
+      const handler = () => callback()
+      ipcRenderer.on('qa-logger:cleared', handler)
+      return () => ipcRenderer.removeListener('qa-logger:cleared', handler)
+    },
+  },
 })

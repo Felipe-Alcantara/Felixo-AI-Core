@@ -2,6 +2,7 @@ const { app, ipcMain } = require('electron')
 const { CliProcessManager } = require('./cli-process-manager.cjs')
 const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
 const { createJsonlOutputGuard } = require('./jsonl-output-guard.cjs')
+const { logQaEvent } = require('./qa-logger.cjs')
 
 const adapters = {
   claude: require('./adapters/claude-adapter.cjs'),
@@ -22,10 +23,27 @@ function registerCliIpcHandlers(getMainWindow) {
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
 
     if (!sessionId || !prompt) {
+      logQaEvent({
+        level: 'warn',
+        scope: 'cli:send',
+        sessionId,
+        message: 'Rejected send request with invalid prompt or session.',
+      })
       return { ok: false, message: 'Prompt ou sessão inválidos.' }
     }
 
     if (!adapter) {
+      logQaEvent({
+        level: 'error',
+        scope: 'cli:send',
+        sessionId,
+        message: 'No adapter configured for model.',
+        details: {
+          cliType,
+          modelName: model?.name,
+          command: model?.command,
+        },
+      })
       sendCliEvent(targetWebContents, {
         type: 'error',
         message: 'Modelo sem CLI compatível configurada.',
@@ -42,8 +60,40 @@ function registerCliIpcHandlers(getMainWindow) {
     let stderrOutput = ''
 
     try {
+      logQaEvent({
+        level: 'info',
+        scope: 'cli:spawn',
+        sessionId,
+        message: `Starting ${command}.`,
+        details: {
+          cliType,
+          modelName: model?.name,
+          command,
+          args,
+          cwd,
+          promptPreview: createTextPreview(prompt),
+        },
+      })
       const childProcess = cliManager.spawn(sessionId, command, args, cwd)
+      logQaEvent({
+        level: 'info',
+        scope: 'cli:process',
+        sessionId,
+        message: `Spawned ${command}.`,
+        details: {
+          pid: childProcess.pid,
+        },
+      })
       const stdoutReader = createJsonlLineReader((line) => {
+        logQaEvent({
+          level: 'debug',
+          scope: 'cli:jsonl',
+          sessionId,
+          message: `Parsed JSONL line from ${command}.`,
+          details: {
+            preview: createTextPreview(line, 500),
+          },
+        })
         const cliEvent = parseAdapterLine(adapter, line)
 
         if (!cliEvent) {
@@ -61,9 +111,25 @@ function registerCliIpcHandlers(getMainWindow) {
       })
       const flushStdout = () => stdoutReader.flush()
       const stdoutGuard = createJsonlOutputGuard(
-        (chunk) => stdoutReader.push(chunk),
+        (chunk) => {
+          logQaEvent({
+            level: 'debug',
+            scope: 'cli:stdout',
+            sessionId,
+            message: `stdout from ${command}.`,
+            details: createChunkDetails(chunk),
+          })
+          stdoutReader.push(chunk)
+        },
         (output) => {
           didComplete = true
+          logQaEvent({
+            level: 'warn',
+            scope: 'cli:stdout',
+            sessionId,
+            message: `${command} produced non-JSON stdout.`,
+            details: createChunkDetails(output),
+          })
           sendCliEvent(targetWebContents, {
             type: 'error',
             message: createNonJsonStdoutMessage(command, output),
@@ -80,10 +146,26 @@ function registerCliIpcHandlers(getMainWindow) {
       childProcess.stderr.setEncoding('utf8')
       childProcess.stderr.on('data', (chunk) => {
         stderrOutput = `${stderrOutput}${chunk}`.slice(-4000)
+        logQaEvent({
+          level: 'warn',
+          scope: 'cli:stderr',
+          sessionId,
+          message: `stderr from ${command}.`,
+          details: createChunkDetails(chunk),
+        })
       })
 
       childProcess.on('error', (error) => {
         didComplete = true
+        logQaEvent({
+          level: 'error',
+          scope: 'cli:error',
+          sessionId,
+          message: `${command} process error.`,
+          details: {
+            message: error.message,
+          },
+        })
         sendCliEvent(targetWebContents, {
           type: 'error',
           message: error.message,
@@ -93,6 +175,19 @@ function registerCliIpcHandlers(getMainWindow) {
 
       childProcess.on('close', (code, signal) => {
         flushStdout()
+        logQaEvent({
+          level: code && code !== 0 ? 'error' : 'info',
+          scope: 'cli:close',
+          sessionId,
+          message: `${command} closed.`,
+          details: {
+            pid: childProcess.pid,
+            code,
+            signal,
+            didComplete,
+            stderrPreview: createTextPreview(stderrOutput),
+          },
+        })
 
         if (stoppedSessions.delete(sessionId)) {
           return
@@ -121,6 +216,15 @@ function registerCliIpcHandlers(getMainWindow) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Falha ao iniciar processo CLI.'
+      logQaEvent({
+        level: 'error',
+        scope: 'cli:spawn',
+        sessionId,
+        message: `Failed to start ${command}.`,
+        details: {
+          message,
+        },
+      })
       sendCliEvent(targetWebContents, {
         type: 'error',
         message,
@@ -134,12 +238,23 @@ function registerCliIpcHandlers(getMainWindow) {
     const sessionId = getRequiredString(params?.sessionId)
 
     if (!sessionId) {
+      logQaEvent({
+        level: 'warn',
+        scope: 'cli:stop',
+        message: 'Rejected stop request with invalid session.',
+      })
       return { ok: false, message: 'Sessão inválida.' }
     }
 
     stoppedSessions.add(sessionId)
     const killed = cliManager.kill(sessionId)
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
+    logQaEvent({
+      level: killed ? 'info' : 'warn',
+      scope: 'cli:stop',
+      sessionId,
+      message: killed ? 'Stop signal sent.' : 'No process found to stop.',
+    })
 
     if (killed) {
       sendCliEvent(targetWebContents, {
@@ -155,6 +270,11 @@ function registerCliIpcHandlers(getMainWindow) {
   })
 
   app.once('before-quit', () => {
+    logQaEvent({
+      level: 'info',
+      scope: 'app',
+      message: 'before-quit: killing all CLI processes.',
+    })
     cliManager.killAll()
   })
 }
@@ -223,6 +343,25 @@ function createNonJsonStdoutMessage(command, chunk) {
   }
 
   return `${command} retornou uma saída inesperada fora do formato JSON: ${output}`
+}
+
+function createChunkDetails(chunk) {
+  const text = String(chunk)
+
+  return {
+    bytes: Buffer.byteLength(text),
+    preview: createTextPreview(text),
+  }
+}
+
+function createTextPreview(value, maxLength = 1000) {
+  const text = String(value ?? '')
+
+  if (text.length <= maxLength) {
+    return text
+  }
+
+  return `${text.slice(0, maxLength)}...`
 }
 
 module.exports = {

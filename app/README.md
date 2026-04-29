@@ -49,6 +49,8 @@ A interface funciona como um chatbot desktop com sidebar fixa, landing central e
 
 O chat cria uma mensagem assistente vazia, atualiza o texto incrementalmente e permite interromper a execução em andamento pelo botão de parar. Modelos importados recebem `cliType` por inferência a partir do nome, origem e comando.
 
+O workspace também inclui um painel `QA Logger` no rodapé para observar eventos do backend Electron em tempo real: comando iniciado, PID, cwd, stdout, stderr, saída fora de JSONL, encerramento e erros.
+
 ## Estrutura
 
 ```text
