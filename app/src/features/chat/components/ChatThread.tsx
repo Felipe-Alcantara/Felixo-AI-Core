@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Bot, User } from 'lucide-react'
 import type { ChatMessage, Model } from '../types'
 
@@ -7,6 +8,12 @@ type ChatThreadProps = {
 }
 
 export function ChatThread({ models, messages }: ChatThreadProps) {
+  const threadEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages])
+
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-8 py-7 max-sm:px-4 max-sm:py-4 [@media(max-height:620px)]:py-3">
       <div className="mx-auto flex max-w-[720px] flex-col gap-4">
@@ -42,6 +49,9 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                 </div>
                 <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-100">
                   {message.content}
+                  {message.isStreaming && (
+                    <span className="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-full bg-orange-200 align-middle" />
+                  )}
                 </p>
               </div>
 
@@ -53,6 +63,7 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
             </article>
           )
         })}
+        <div ref={threadEndRef} />
       </div>
     </section>
   )

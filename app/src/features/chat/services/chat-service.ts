@@ -19,37 +19,16 @@ export function createUserMessage(content: string): ChatMessage {
 }
 
 export function createAssistantMessage(
-  prompt: string,
   model: Model | null,
+  sessionId: string,
 ): ChatMessage {
   return {
     id: Date.now() + 1,
     role: 'assistant',
-    content: createLocalReply(prompt, model),
+    content: '',
     model: model?.id,
+    sessionId,
+    isStreaming: true,
     createdAt: formatTime(),
   }
-}
-
-function createLocalReply(prompt: string, model: Model | null) {
-  const idea = compactIdea(prompt)
-  const modelName = model?.name ?? 'Felixo Core'
-
-  return [
-    `${modelName}: "${idea}"`,
-    '',
-    'Objetivo',
-    'Encontrar a menor versão que já possa ser testada.',
-    '',
-    'Começo',
-    'Descrever uma tela, uma ação principal e o resultado esperado.',
-    '',
-    'Pergunta',
-    'O que precisa existir hoje para essa ideia sair do abstrato?',
-  ].join('\n')
-}
-
-function compactIdea(value: string) {
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized
 }
