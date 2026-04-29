@@ -115,3 +115,7 @@ npm run build
 [2026-04-29] BUG: Codex encerrava com código 1 ao enviar prompt pelo app.
 CAUSA: adapter executava `codex exec` em um diretório sem git confiável e não passava `--skip-git-repo-check`.
 FIX: `codex-adapter.cjs` agora inclui `--skip-git-repo-check`; teste de args atualizado para evitar regressão.
+
+[2026-04-29] BUG: zoom out funcionava, mas zoom in não respondia em alguns teclados.
+CAUSA: Electron/Chromium recebia o atalho de zoom in como `Ctrl+=`/`Ctrl++`, sem tratamento explícito no app.
+FIX: adicionado `window-zoom-shortcuts.cjs` para capturar `Ctrl/Cmd +`, `Ctrl/Cmd =`, `Ctrl/Cmd -` e `Ctrl/Cmd 0`; testes cobrem os atalhos.
