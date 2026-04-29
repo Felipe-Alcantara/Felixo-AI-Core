@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Bot,
   Code2,
@@ -11,6 +12,10 @@ import {
   User,
 } from 'lucide-react'
 import type { Model } from '../types'
+
+const MIN_WIDTH = 160
+const MAX_WIDTH = 480
+const DEFAULT_WIDTH = 244
 
 type AppSidebarProps = {
   models: Model[]
@@ -36,6 +41,44 @@ export function AppSidebar({
   onToggleSidebar,
   onSearch,
 }: AppSidebarProps) {
+  const [width, setWidth] = useState(DEFAULT_WIDTH)
+  const [dragging, setDragging] = useState(false)
+  const isDragging = useRef(false)
+  const startX = useRef(0)
+  const startWidth = useRef(0)
+
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging.current) return
+    const delta = e.clientX - startX.current
+    const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta))
+    setWidth(next)
+  }, [])
+
+  const onMouseUp = useCallback(() => {
+    isDragging.current = false
+    setDragging(false)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }, [])
+
+  useEffect(() => {
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [onMouseMove, onMouseUp])
+
+  function handleDragStart(e: React.MouseEvent) {
+    isDragging.current = true
+    setDragging(true)
+    startX.current = e.clientX
+    startWidth.current = width
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+
   function handleNavClick(label: string) {
     if (label === 'Novo chat') onNewIdea()
     else if (label === 'Pesquisar') onSearch()
@@ -43,11 +86,12 @@ export function AppSidebar({
 
   return (
     <aside
+      style={isOpen ? { width } : undefined}
       className={[
-        'flex shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 overflow-hidden',
-        'transition-[width] duration-300 ease-in-out',
+        'relative flex shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300',
+        dragging ? '' : 'transition-[width] duration-300 ease-in-out',
         'max-[920px]:hidden',
-        isOpen ? 'w-[244px] max-xl:w-[224px]' : 'w-0 border-r-0',
+        isOpen ? '' : 'w-0 border-r-0',
       ].join(' ')}
     >
       <div className="flex h-12 items-center justify-end px-4">
@@ -142,6 +186,12 @@ export function AppSidebar({
           <Settings size={13} aria-hidden="true" />
         </button>
       </div>
+
+      {/* Drag handle */}
+      <div
+        onMouseDown={handleDragStart}
+        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-white/10 active:bg-white/20"
+      />
     </aside>
   )
 }
