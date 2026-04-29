@@ -87,7 +87,7 @@ export function ChatWorkspace() {
     }
 
     const sessionId = createSessionId()
-    const cliPrompt = createCliPrompt(messages, content)
+    const cliPrompt = createCliPrompt(messages, content, models, selectedModel)
 
     setMessages((currentMessages) => [
       ...currentMessages,
@@ -376,27 +376,66 @@ function createSessionId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 }
 
-function createCliPrompt(messages: ChatMessage[], currentPrompt: string) {
-  const history = messages
+function createCliPrompt(
+  messages: ChatMessage[],
+  currentPrompt: string,
+  models: Model[],
+  selectedModel: Model,
+) {
+  const historyMessages = messages
     .filter((message) => message.content.trim())
     .slice(-CONTEXT_MESSAGE_LIMIT)
-    .map((message) => {
-      const role = message.role === 'user' ? 'Usuário' : 'Assistente'
-      return `${role}: ${message.content.trim()}`
-    })
-    .join('\n\n')
 
-  if (!history) {
+  if (historyMessages.length === 0) {
     return currentPrompt
   }
 
   return [
     'Use o histórico abaixo como contexto da conversa no app. Responda apenas à mensagem atual do usuário.',
+    `Modelo que responderá agora: ${formatModelLabel(selectedModel)}`,
     '',
-    'Histórico:',
-    history,
+    'Histórico da conversa:',
+    ...historyMessages.map((message, index) =>
+      formatHistoryMessage(message, index, models),
+    ),
     '',
     'Mensagem atual do usuário:',
+    '--- Mensagem atual ---',
+    'Autor: Usuário',
+    'Conteúdo:',
     currentPrompt,
   ].join('\n')
+}
+
+function formatHistoryMessage(
+  message: ChatMessage,
+  index: number,
+  models: Model[],
+) {
+  const lines = [
+    `--- Mensagem ${index + 1} ---`,
+    `Autor: ${message.role === 'user' ? 'Usuário' : 'Assistente'}`,
+  ]
+
+  if (message.role === 'assistant') {
+    lines.push(`Modelo: ${resolveMessageModelLabel(message, models)}`)
+  }
+
+  lines.push('Conteúdo:', message.content.trim())
+
+  return lines.join('\n')
+}
+
+function resolveMessageModelLabel(message: ChatMessage, models: Model[]) {
+  if (!message.model) {
+    return 'Não registrado'
+  }
+
+  const model = models.find((item) => item.id === message.model)
+
+  return model ? formatModelLabel(model) : message.model
+}
+
+function formatModelLabel(model: Model) {
+  return `${model.name} (${model.source})`
 }
