@@ -1,6 +1,7 @@
 const { app, ipcMain } = require('electron')
 const { CliProcessManager } = require('./cli-process-manager.cjs')
 const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
+const { createJsonlOutputGuard } = require('./jsonl-output-guard.cjs')
 
 const adapters = {
   claude: require('./adapters/claude-adapter.cjs'),
@@ -38,7 +39,6 @@ function registerCliIpcHandlers(getMainWindow) {
     const cwd = resolveCliCwd(cliType)
     const { command, args } = adapter.getSpawnArgs(prompt, { cwd, model })
     let didComplete = false
-    let didInspectStdout = false
     let stderrOutput = ''
 
     try {
@@ -60,26 +60,21 @@ function registerCliIpcHandlers(getMainWindow) {
         })
       })
       const flushStdout = () => stdoutReader.flush()
+      const stdoutGuard = createJsonlOutputGuard(
+        (chunk) => stdoutReader.push(chunk),
+        (output) => {
+          didComplete = true
+          sendCliEvent(targetWebContents, {
+            type: 'error',
+            message: createNonJsonStdoutMessage(command, output),
+            sessionId,
+          })
+          cliManager.kill(sessionId)
+        },
+      )
 
       childProcess.stdout.setEncoding('utf8')
-      childProcess.stdout.on('data', (chunk) => {
-        if (!didInspectStdout) {
-          didInspectStdout = true
-
-          if (!isJsonlStdoutChunk(chunk)) {
-            didComplete = true
-            sendCliEvent(targetWebContents, {
-              type: 'error',
-              message: createNonJsonStdoutMessage(command, chunk),
-              sessionId,
-            })
-            cliManager.kill(sessionId)
-            return
-          }
-        }
-
-        stdoutReader.push(chunk)
-      })
+      childProcess.stdout.on('data', (chunk) => stdoutGuard.push(chunk))
       childProcess.stdout.on('end', flushStdout)
 
       childProcess.stderr.setEncoding('utf8')
@@ -218,12 +213,6 @@ function createExitErrorMessage(command, code, signal, stderrOutput) {
   }
 
   return `${command} encerrou com ${status}: ${detail}`
-}
-
-function isJsonlStdoutChunk(chunk) {
-  const output = String(chunk).replace(/^\uFEFF/, '').trimStart()
-
-  return !output || output.startsWith('{')
 }
 
 function createNonJsonStdoutMessage(command, chunk) {
