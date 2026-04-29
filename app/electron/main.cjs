@@ -1,12 +1,16 @@
 const { app, BrowserWindow } = require('electron')
 const { createMainWindow } = require('./windows/main-window.cjs')
+const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
+
+let mainWindow = null
 
 app.whenReady().then(() => {
-  createMainWindow()
+  mainWindow = createMainWindow()
+  registerCliIpcHandlers(() => mainWindow ?? BrowserWindow.getAllWindows()[0])
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow()
+      mainWindow = createMainWindow()
     }
   })
 })

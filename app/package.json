@@ -12,6 +12,7 @@
     "dev:web": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --test electron/services/*.test.cjs electron/services/adapters/*.test.cjs",
     "preview": "vite preview --host 127.0.0.1",
     "start": "env -u ELECTRON_RUN_AS_NODE -u ELECTRON_NO_ATTACH_CONSOLE electron ."
   },
