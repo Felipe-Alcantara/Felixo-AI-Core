@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   initialModels,
   ideaStarters,
@@ -11,7 +11,7 @@ import {
   initialMessages,
 } from '../services/chat-service'
 import { loadModels, saveModels } from '../services/model-storage'
-import type { ChatMessage, Model, ModelId } from '../types'
+import type { ChatMessage, Model, ModelId, StreamEvent } from '../types'
 import { ModelSettingsModal } from './ModelSettingsModal'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
@@ -25,6 +25,9 @@ export function ChatWorkspace() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [input, setInput] = useState('')
   const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const activeSessionIdRef = useRef<string | null>(null)
+  const streamHandlerRef = useRef(handleStreamEvent)
 
   const selectedModel = useMemo(
     () =>
@@ -38,10 +41,20 @@ export function ChatWorkspace() {
     ? `Electron ${window.felixo.versions.electron}`
     : 'Web'
 
+  useEffect(() => {
+    streamHandlerRef.current = handleStreamEvent
+  })
+
+  useEffect(() => {
+    return window.felixo?.cli?.onStream?.((event) => {
+      streamHandlerRef.current(event)
+    })
+  }, [])
+
   function sendMessage() {
     const content = input.trim()
 
-    if (!content) {
+    if (!content || activeSessionIdRef.current) {
       return
     }
 
@@ -50,16 +63,59 @@ export function ChatWorkspace() {
       return
     }
 
+    if (selectedModel.cliType === 'unknown') {
+      appendImmediateError(
+        content,
+        selectedModel,
+        'Este modelo não tem um tipo de CLI reconhecido.',
+      )
+      setInput('')
+      return
+    }
+
+    if (!window.felixo?.cli) {
+      appendImmediateError(
+        content,
+        selectedModel,
+        'Bridge Electron indisponível para executar CLIs.',
+      )
+      setInput('')
+      return
+    }
+
+    const sessionId = createSessionId()
+
     setMessages((currentMessages) => [
       ...currentMessages,
       createUserMessage(content),
-      createAssistantMessage(content, selectedModel),
+      createAssistantMessage(selectedModel, sessionId),
     ])
     setInput('')
+    setActiveStreamingSession(sessionId)
+
+    window.felixo.cli
+      .send({ sessionId, prompt: content, model: selectedModel })
+      .then((result) => {
+        if (!result.ok) {
+          completeAssistantMessage(
+            sessionId,
+            result.message ?? 'Falha ao iniciar a CLI.',
+            'error',
+          )
+        }
+      })
+      .catch((error: unknown) => {
+        completeAssistantMessage(
+          sessionId,
+          error instanceof Error ? error.message : 'Falha ao iniciar a CLI.',
+          'error',
+        )
+      })
   }
 
   function resetChat() {
     setInput('')
+    stopStreaming()
     setMessages(initialMessages)
   }
 
@@ -102,7 +158,122 @@ export function ChatWorkspace() {
     setSelectedModelId('')
   }
 
+  function stopStreaming() {
+    const sessionId = activeSessionIdRef.current
+
+    if (!sessionId) {
+      return
+    }
+
+    window.felixo?.cli?.stop({ sessionId }).catch(() => {
+      completeAssistantMessage(sessionId, 'Falha ao interromper a CLI.', 'error')
+    })
+  }
+
+  function handleStreamEvent(event: StreamEvent) {
+    if (event.type === 'text') {
+      appendAssistantText(event.sessionId, event.text)
+      return
+    }
+
+    if (event.type === 'error') {
+      completeAssistantMessage(event.sessionId, event.message, 'error')
+      return
+    }
+
+    if (event.type === 'done') {
+      completeAssistantMessage(
+        event.sessionId,
+        event.stopped ? 'Execução interrompida.' : '',
+        event.stopped ? 'stopped' : 'done',
+      )
+    }
+  }
+
+  function appendAssistantText(sessionId: string, text: string) {
+    setMessages((currentMessages) =>
+      currentMessages.map((message) =>
+        message.sessionId === sessionId
+          ? {
+              ...message,
+              content: `${message.content}${text}`,
+              isStreaming: true,
+            }
+          : message,
+      ),
+    )
+  }
+
+  function completeAssistantMessage(
+    sessionId: string,
+    content: string,
+    status: 'done' | 'error' | 'stopped',
+  ) {
+    setMessages((currentMessages) =>
+      currentMessages.map((message) => {
+        if (message.sessionId !== sessionId) {
+          return message
+        }
+
+        const nextContent = createCompletedContent(message.content, content, status)
+
+        return {
+          ...message,
+          content: nextContent,
+          isStreaming: false,
+        }
+      }),
+    )
+
+    if (activeSessionIdRef.current === sessionId) {
+      setActiveStreamingSession(null)
+    }
+  }
+
+  function appendImmediateError(
+    prompt: string,
+    model: Model,
+    message: string,
+  ) {
+    const sessionId = createSessionId()
+
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      createUserMessage(prompt),
+      {
+        ...createAssistantMessage(model, sessionId),
+        content: `Erro: ${message}`,
+        isStreaming: false,
+      },
+    ])
+  }
+
+  function setActiveStreamingSession(sessionId: string | null) {
+    activeSessionIdRef.current = sessionId
+    setActiveSessionId(sessionId)
+  }
+
+  function createCompletedContent(
+    currentContent: string,
+    nextContent: string,
+    status: 'done' | 'error' | 'stopped',
+  ) {
+    if (status === 'done') {
+      return currentContent || nextContent
+    }
+
+    const prefix = status === 'error' ? 'Erro: ' : ''
+    const formattedContent = `${prefix}${nextContent}`
+
+    if (!currentContent) {
+      return formattedContent
+    }
+
+    return `${currentContent}\n\n${formattedContent}`
+  }
+
   const hasMessages = messages.length > 0
+  const isStreaming = activeSessionId !== null
 
   return (
     <div className="flex h-full min-h-0 bg-[#191918] text-zinc-100">
@@ -131,6 +302,8 @@ export function ChatWorkspace() {
               onInputChange={setInput}
               onSelectModel={setSelectedModelId}
               onSubmit={sendMessage}
+              onStop={stopStreaming}
+              isStreaming={isStreaming}
             />
           </>
         ) : (
@@ -152,6 +325,8 @@ export function ChatWorkspace() {
                 onInputChange={setInput}
                 onSelectModel={setSelectedModelId}
                 onSubmit={sendMessage}
+                onStop={stopStreaming}
+                isStreaming={isStreaming}
               />
 
               <div className="mx-auto mt-7 max-w-[560px] divide-y divide-white/[0.07] [@media(max-height:620px)]:mt-4">
@@ -159,8 +334,9 @@ export function ChatWorkspace() {
                   <button
                     key={prompt}
                     type="button"
+                    disabled={isStreaming}
                     onClick={() => setInput(prompt)}
-                    className="block w-full px-3 py-3 text-left text-[12px] text-zinc-500 transition hover:text-zinc-300 [@media(max-height:620px)]:py-2"
+                    className="block w-full px-3 py-3 text-left text-[12px] text-zinc-500 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:text-zinc-700 [@media(max-height:620px)]:py-2"
                   >
                     {prompt}
                   </button>
@@ -182,4 +358,8 @@ export function ChatWorkspace() {
       />
     </div>
   )
+}
+
+function createSessionId() {
+  return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 }

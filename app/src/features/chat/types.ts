@@ -30,5 +30,7 @@ export type ChatMessage = {
   role: 'assistant' | 'user'
   content: string
   model?: ModelId
+  sessionId?: string
+  isStreaming?: boolean
   createdAt: string
 }
