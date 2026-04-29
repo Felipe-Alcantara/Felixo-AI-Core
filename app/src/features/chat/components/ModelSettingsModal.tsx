@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { FilePlus, FolderOpen, Plus, Trash2, Upload, X } from 'lucide-react'
+import { FilePlus, FolderOpen, Plus, Trash2, X } from 'lucide-react'
 import type { Model, ModelFileSelection } from '../types'
 import { createModelId } from '../services/model-storage'
 
@@ -24,24 +24,17 @@ export function ModelSettingsModal({
   onRemoveModel,
 }: ModelSettingsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const browserFileModeRef = useRef<'import' | 'fill'>('import')
-  const browserFileFormRef = useRef<HTMLFormElement | null>(null)
+  const commandInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [formName, setFormName] = useState('')
+  const [formSource, setFormSource] = useState('')
+  const [formCommand, setFormCommand] = useState('')
 
   if (!isOpen) {
     return null
   }
 
-  function openBrowserFilePicker(
-    mode: 'import' | 'fill',
-    form: HTMLFormElement | null = null,
-  ) {
-    browserFileModeRef.current = mode
-    browserFileFormRef.current = form
-    fileInputRef.current?.click()
-  }
-
-  async function handleBrowserFileChange(event: ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
 
@@ -50,15 +43,10 @@ export function ModelSettingsModal({
     }
 
     const selection = await createSelectionFromBrowserFile(file)
-
-    if (browserFileModeRef.current === 'fill' && browserFileFormRef.current) {
-      fillFormFromSelection(browserFileFormRef.current, selection)
-      setStatus('Arquivo selecionado pelo navegador.')
-      return
-    }
-
-    onAddModel(createModelFromSelection(selection))
-    setStatus(`Modelo "${selection.name}" importado.`)
+    setFormCommand(selection.command)
+    if (!formName.trim()) setFormName(selection.name)
+    if (!formSource.trim()) setFormSource(selection.source)
+    setStatus('Arquivo selecionado — confira os campos e clique em "Adicionar modelo".')
   }
 
   function removeModel(model: Model) {
@@ -71,47 +59,17 @@ export function ModelSettingsModal({
     setStatus('Todos os modelos foram excluídos.')
   }
 
-  async function importModelFile() {
-    openBrowserFilePicker('import')
-  }
-
-  async function chooseModelFile(form: HTMLFormElement) {
-    openBrowserFilePicker('fill', form)
-  }
-
-  function fillFormFromSelection(
-    form: HTMLFormElement,
-    selection: ModelFileSelection,
-  ) {
-    const commandInput = form.elements.namedItem('command')
-    const nameInput = form.elements.namedItem('name')
-    const sourceInput = form.elements.namedItem('source')
-
-    if (commandInput instanceof HTMLInputElement) {
-      commandInput.value = selection.command
-    }
-
-    if (nameInput instanceof HTMLInputElement && !nameInput.value.trim()) {
-      nameInput.value = selection.name
-    }
-
-    if (sourceInput instanceof HTMLInputElement && !sourceInput.value.trim()) {
-      sourceInput.value = selection.source
-    }
-  }
-
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    const form = event.currentTarget
-    const formData = new FormData(form)
-    const rawName = String(formData.get('name') ?? '').trim()
-    const source = String(formData.get('source') ?? '').trim()
-    const command = String(formData.get('command') ?? '').trim()
+    const command = formCommand.trim()
+    const source = formSource.trim()
+    const rawName = formName.trim()
     const name = rawName || inferModelName('', getFileNameFromCommand(command))
 
     if (!command) {
       setStatus('Informe ou escolha o arquivo do modelo.')
+      commandInputRef.current?.focus()
       return
     }
 
@@ -129,15 +87,11 @@ export function ModelSettingsModal({
       command,
     })
 
-    form.reset()
-    setStatus(`Modelo "${name}" adicionado.`)
-  }
-
-  function createModelFromSelection(selection: ModelFileSelection): Model {
-    return {
-      id: createModelId(selection.name),
-      ...selection,
-    }
+    setFormName('')
+    setFormSource('')
+    setFormCommand('')
+    setStatus(null)
+    onClose()
   }
 
   async function createSelectionFromBrowserFile(
@@ -198,8 +152,14 @@ export function ModelSettingsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
-      <section className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-[#242423] shadow-shell">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <section
+        className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">
@@ -226,17 +186,8 @@ export function ModelSettingsModal({
             ref={fileInputRef}
             type="file"
             className="hidden"
-            onChange={handleBrowserFileChange}
+            onChange={handleFileChange}
           />
-
-          <button
-            type="button"
-            onClick={importModelFile}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
-          >
-            <Upload size={16} aria-hidden="true" />
-            Importar arquivo
-          </button>
 
           <button
             type="button"
@@ -247,12 +198,6 @@ export function ModelSettingsModal({
             <Trash2 size={16} aria-hidden="true" />
             Remover selecionado
           </button>
-
-          {status && (
-            <p className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-zinc-400">
-              {status}
-            </p>
-          )}
 
           <div>
             <div className="mb-2 flex items-center justify-between gap-3 text-xs font-medium text-zinc-300">
@@ -313,10 +258,33 @@ export function ModelSettingsModal({
 
           <form className="space-y-3" onSubmit={handleSubmit}>
             <label className="block text-xs text-zinc-400">
+              Arquivo do modelo
+              <div className="mt-1 flex gap-2">
+                <input
+                  ref={commandInputRef}
+                  placeholder="Selecione ou digite o caminho"
+                  value={formCommand}
+                  onChange={(e) => setFormCommand(e.target.value)}
+                  className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30"
+                />
+                <button
+                  type="button"
+                  title="Escolher arquivo"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                >
+                  <FolderOpen size={16} aria-hidden="true" />
+                  <span className="sr-only">Escolher arquivo</span>
+                </button>
+              </div>
+            </label>
+
+            <label className="block text-xs text-zinc-400">
               Nome
               <input
-                name="name"
                 placeholder="Codex CLI"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
                 className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30"
               />
             </label>
@@ -324,30 +292,11 @@ export function ModelSettingsModal({
             <label className="block text-xs text-zinc-400">
               Tipo
               <input
-                name="source"
                 placeholder="CLI local"
+                value={formSource}
+                onChange={(e) => setFormSource(e.target.value)}
                 className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30"
               />
-            </label>
-
-            <label className="block text-xs text-zinc-400">
-              Arquivo do modelo
-              <div className="mt-1 flex gap-2">
-                <input
-                  name="command"
-                  placeholder="./ai-clis/codex.sh"
-                  className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30"
-                />
-                <button
-                  type="button"
-                  title="Escolher arquivo"
-                  onClick={(event) => chooseModelFile(event.currentTarget.form!)}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
-                >
-                  <FolderOpen size={16} aria-hidden="true" />
-                  <span className="sr-only">Escolher arquivo</span>
-                </button>
-              </div>
             </label>
 
             <button
@@ -357,6 +306,12 @@ export function ModelSettingsModal({
               <Plus size={16} aria-hidden="true" />
               Adicionar modelo
             </button>
+
+            {status && (
+              <p className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-zinc-400">
+                {status}
+              </p>
+            )}
           </form>
         </div>
       </section>
