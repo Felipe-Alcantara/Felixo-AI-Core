@@ -1,4 +1,4 @@
-import type { Model } from '../types'
+import type { CliType, Model } from '../types'
 
 const MODELS_STORAGE_KEY = 'felixo-ai-core.models'
 
@@ -42,6 +42,16 @@ export function createModelId(name: string) {
   return `${base || 'model'}-${Date.now()}`
 }
 
+export function detectModelCliType(
+  model: Pick<Model, 'command' | 'name' | 'source'>,
+): CliType {
+  return detectCliType([model.command, model.name, model.source].join(' '))
+}
+
+export function normalizeCliType(value: unknown): CliType {
+  return isCliType(value) ? value : 'unknown'
+}
+
 function normalizeModel(value: unknown): Model | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -55,13 +65,49 @@ function normalizeModel(value: unknown): Model | null {
     typeof model.command === 'string' &&
     typeof model.source === 'string'
   ) {
+    const restoredModel = {
+      command: model.command,
+      name: model.name,
+      source: model.source,
+    }
+
     return {
       id: model.id,
       name: model.name,
       command: model.command,
       source: model.source,
+      cliType: isCliType(model.cliType)
+        ? model.cliType
+        : detectModelCliType(restoredModel),
     }
   }
 
   return null
+}
+
+function detectCliType(value: string): CliType {
+  const normalizedValue = value.toLowerCase()
+
+  if (normalizedValue.includes('claude')) {
+    return 'claude'
+  }
+
+  if (normalizedValue.includes('codex') || normalizedValue.includes('openai')) {
+    return 'codex'
+  }
+
+  if (normalizedValue.includes('gemini')) {
+    return 'gemini'
+  }
+
+  return 'unknown'
+}
+
+function isCliType(value: unknown): value is CliType {
+  return (
+    value === 'claude' ||
+    value === 'codex' ||
+    value === 'gemini' ||
+    value === 'unknown'
+  )
 }

@@ -1,5 +1,12 @@
 /// <reference types="vite/client" />
 
+import type { Model, StreamEvent } from './features/chat/types'
+
+type CliInvokeResult = {
+  ok: boolean
+  message?: string
+}
+
 declare global {
   interface Window {
     felixo?: {
@@ -10,6 +17,15 @@ declare global {
         node?: string
       }
       getFilePath?: (file: File) => string
+      cli?: {
+        send: (params: {
+          sessionId: string
+          prompt: string
+          model: Model
+        }) => Promise<CliInvokeResult>
+        stop: (params: { sessionId: string }) => Promise<CliInvokeResult>
+        onStream: (callback: (event: StreamEvent) => void) => () => void
+      }
     }
   }
 }
