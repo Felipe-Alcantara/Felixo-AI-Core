@@ -8,11 +8,7 @@ function getSpawnArgs(prompt) {
 function parseLine(line) {
   const payload = JSON.parse(line)
 
-  if (
-    payload.type === 'message' &&
-    payload.role === 'model' &&
-    typeof payload.content === 'string'
-  ) {
+  if (isAssistantMessage(payload)) {
     return {
       type: 'text',
       text: payload.content,
@@ -33,6 +29,14 @@ function parseLine(line) {
   }
 
   return null
+}
+
+function isAssistantMessage(payload) {
+  return (
+    payload.type === 'message' &&
+    (payload.role === 'model' || payload.role === 'assistant') &&
+    typeof payload.content === 'string'
+  )
 }
 
 module.exports = {
