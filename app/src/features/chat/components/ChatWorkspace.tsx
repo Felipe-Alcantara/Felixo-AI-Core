@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { PanelLeft } from 'lucide-react'
 import {
   initialModels,
   ideaStarters,
@@ -29,6 +30,7 @@ export function ChatWorkspace() {
   const [input, setInput] = useState('')
   const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
   const streamHandlerRef = useRef(handleStreamEvent)
 
@@ -121,6 +123,12 @@ export function ChatWorkspace() {
     setInput('')
     stopStreaming()
     setMessages(initialMessages)
+  }
+
+  function selectRecentItem(item: string) {
+    stopStreaming()
+    setMessages(initialMessages)
+    setInput(item)
   }
 
   function addModel(model: Model) {
@@ -288,12 +296,32 @@ export function ChatWorkspace() {
       <AppSidebar
         models={models}
         recentItems={recentItems}
+        isOpen={isSidebarOpen}
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+        onToggleSidebar={() => setIsSidebarOpen(false)}
+        onSearch={resetChat}
+        onSelectRecentItem={selectRecentItem}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-[#171716]">
         <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            className={[
+              'absolute left-4 top-4 text-zinc-500 max-sm:hidden',
+              'transition-opacity duration-300',
+              isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
+            ].join(' ')}
+          >
+            <button
+              type="button"
+              title="Abrir sidebar"
+              onClick={() => setIsSidebarOpen(true)}
+              className="rounded p-0.5 transition hover:text-zinc-300"
+            >
+              <PanelLeft size={13} />
+            </button>
+          </div>
           <div className="absolute right-5 top-4 flex items-center gap-2 text-zinc-500 max-[920px]:right-4 max-sm:hidden">
             <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px]">
               {runtimeLabel}

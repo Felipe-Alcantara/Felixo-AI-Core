@@ -15,8 +15,12 @@ import type { Model } from '../types'
 type AppSidebarProps = {
   models: Model[]
   recentItems: string[]
+  isOpen: boolean
   onNewIdea: () => void
   onOpenModelSettings: () => void
+  onToggleSidebar: () => void
+  onSearch: () => void
+  onSelectRecentItem: (item: string) => void
 }
 
 const navItems = [
@@ -29,20 +33,45 @@ const navItems = [
 export function AppSidebar({
   models,
   recentItems,
+  isOpen,
   onNewIdea,
   onOpenModelSettings,
+  onToggleSidebar,
+  onSearch,
+  onSelectRecentItem,
 }: AppSidebarProps) {
+  function handleNavClick(label: string) {
+    if (label === 'Novo chat') onNewIdea()
+    else if (label === 'Pesquisar') onSearch()
+  }
+
   return (
-    <aside className="flex w-[244px] shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 max-[920px]:hidden max-xl:w-[224px]">
-      <div className="flex h-12 items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-[#ff605c]" />
-          <span className="h-3 w-3 rounded-full bg-[#ffbd44]" />
-          <span className="h-3 w-3 rounded-full bg-[#00ca4e]" />
-        </div>
+    <aside
+      className={[
+        'flex shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 overflow-hidden',
+        'transition-[width] duration-300 ease-in-out',
+        'max-[920px]:hidden',
+        isOpen ? 'w-[244px] max-xl:w-[224px]' : 'w-0 border-r-0',
+      ].join(' ')}
+    >
+      <div className="flex h-12 items-center justify-end px-4">
         <div className="flex items-center gap-2 text-zinc-500">
-          <PanelLeft size={13} aria-hidden="true" />
-          <Search size={13} aria-hidden="true" />
+          <button
+            type="button"
+            title="Recolher sidebar"
+            onClick={onToggleSidebar}
+            className="rounded p-0.5 transition hover:text-zinc-300"
+          >
+            <PanelLeft size={13} />
+          </button>
+          <button
+            type="button"
+            title="Pesquisar"
+            onClick={onSearch}
+            className="rounded p-0.5 transition hover:text-zinc-300"
+          >
+            <Search size={13} />
+          </button>
         </div>
       </div>
 
@@ -53,7 +82,7 @@ export function AppSidebar({
             <button
               key={item.label}
               type="button"
-              onClick={item.label === 'Novo chat' ? onNewIdea : undefined}
+              onClick={() => handleNavClick(item.label)}
               className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
             >
               <Icon size={14} aria-hidden="true" />
@@ -101,6 +130,7 @@ export function AppSidebar({
             <button
               key={item}
               type="button"
+              onClick={() => onSelectRecentItem(item)}
               className="block h-7 w-full truncate rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
             >
               {item}
@@ -112,6 +142,7 @@ export function AppSidebar({
       <div className="mt-auto border-t border-white/[0.08] px-4 py-3 max-xl:px-3">
         <button
           type="button"
+          onClick={onNewIdea}
           className="mb-1 flex h-8 w-full items-center gap-2 rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <Code2 size={13} aria-hidden="true" />
