@@ -13,24 +13,6 @@ function getSpawnArgs(prompt, context = {}) {
   }
 }
 
-function getResumeArgs(prompt, context = {}) {
-  if (!context.providerSessionId) {
-    return getSpawnArgs(prompt, context)
-  }
-
-  return {
-    command: 'codex',
-    args: [
-      'exec',
-      'resume',
-      '--json',
-      '--skip-git-repo-check',
-      context.providerSessionId,
-      prompt,
-    ],
-  }
-}
-
 function parseLine(line) {
   const payload = JSON.parse(line)
   const providerSessionId = extractProviderSessionId(payload)
@@ -121,6 +103,5 @@ function extractProviderSessionId(payload) {
 
 module.exports = {
   getSpawnArgs,
-  getResumeArgs,
   parseLine,
 }

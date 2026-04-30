@@ -570,9 +570,13 @@ function createCliPrompt(
   activeProjects: Project[],
   projectDiff: ProjectDiff,
 ) {
-  const historyMessages = messages
-    .filter((message) => message.content.trim())
-    .slice(-CONTEXT_MESSAGE_LIMIT)
+  const allHistoryMessages = messages.filter((message) => message.content.trim())
+  const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
+  const historyOffset = allHistoryMessages.length - historyMessages.length
+  const previousUserMessageCount = allHistoryMessages.filter(
+    (message) => message.role === 'user',
+  ).length
+  const currentUserMessageNumber = previousUserMessageCount + 1
 
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
   const hasContext = historyMessages.length > 0 || activeProjects.length > 0 || hasDiff
@@ -584,6 +588,12 @@ function createCliPrompt(
   const lines = [
     'Use o contexto abaixo para responder à mensagem atual do usuário.',
     `Modelo que responderá agora: ${formatModelLabel(selectedModel)}`,
+    '',
+    'Contagem da conversa:',
+    `  - Mensagens do usuário antes da mensagem atual: ${previousUserMessageCount}`,
+    `  - Mensagens do usuário incluindo a mensagem atual: ${currentUserMessageNumber}`,
+    `  - A mensagem atual é a mensagem do usuário número ${currentUserMessageNumber}.`,
+    '  - Se o usuário perguntar quantas mensagens ele mandou, use o total incluindo a mensagem atual, salvo se ele pedir explicitamente outra regra.',
   ]
 
   if (activeProjects.length > 0) {
@@ -607,7 +617,9 @@ function createCliPrompt(
     lines.push(
       '',
       'Histórico da conversa:',
-      ...historyMessages.map((message, index) => formatHistoryMessage(message, index, models)),
+      ...historyMessages.map((message, index) =>
+        formatHistoryMessage(message, historyOffset + index, models),
+      ),
     )
   }
 

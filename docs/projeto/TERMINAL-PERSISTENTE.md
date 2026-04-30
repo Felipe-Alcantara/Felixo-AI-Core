@@ -47,14 +47,14 @@ Primeiro recorte implementado: o frontend agora separa `threadId` de conversa e 
 - O painel de terminal passa a acumular várias mensagens da mesma conversa na mesma thread.
 - Claude usa `--session-id` no primeiro envio e `--resume` nas continuações.
 - Gemini captura `init.session_id` no `stream-json` e usa `--resume` nas continuações.
-- Codex usa retomada nativa em modo best-effort quando o JSONL expõe `thread_id`/`threadId`/`session_id`; sem esse metadado, mantém fallback one-shot com a thread do Felixo estável.
+- Codex expõe `thread.started`, mas `codex exec resume <thread_id>` gerou erro interno `thread not found` nos testes manuais; por isso a retomada nativa foi desativada até validação de persistência. A continuidade segue pelo contexto explícito do Felixo e pelo `threadId` estável no painel.
 
 ### Desafios por CLI
 
 | CLI | Modo interativo | Estratégia |
 |-----|----------------|------------|
 | `claude` | `--print --output-format stream-json` suporta `--session-id` e `--resume`; `--input-format stream-json` ainda fica para o modo processo vivo | Retomada nativa por sessão no recorte atual; stdin contínuo fica como próximo passo |
-| `codex` | `codex exec resume` existe; o adapter captura metadados comuns de sessão/thread quando aparecem no JSONL | Usar `codex exec resume` em best-effort; fallback one-shot quando o id interno não vier no stream |
+| `codex` | `codex exec resume` existe, mas o `thread_id` emitido por `exec --json` não ficou persistido de forma confiável no teste manual | Manter execução one-shot com `threadId` Felixo estável e contexto explícito; retomar investigação antes de reativar `exec resume` |
 | `gemini` | `stream-json` emite `init.session_id`; `--resume <session_id>` retoma sessão | Retomada nativa por `session_id`; processo vivo depende de investigação do modo interativo/headless |
 
 ### O que entregar
@@ -66,8 +66,8 @@ Primeiro recorte implementado: o frontend agora separa `threadId` de conversa e 
 - [x] Adapters de Claude/Gemini expõem `getResumeArgs()` além de `getSpawnArgs()`
 - [x] Processo/thread atual é resetado ao trocar modelo, iniciar novo chat ou carregar outro chat
 - [x] Painel de terminal continua funcionando com output acumulado da thread da conversa
-- [x] Codex: suporte best-effort para capturar id interno e ligar `codex exec resume`
-- [ ] Codex: validar em execução real qual evento JSONL sempre carrega o id interno
+- [x] Codex: capturar metadados comuns de thread/sessão quando aparecem no JSONL
+- [ ] Codex: validar em execução real qual evento JSONL sempre carrega um id interno persistível antes de reativar `codex exec resume`
 - [ ] Processo CLI realmente vivo via stdin entre mensagens quando o adapter suportar protocolo confiável
 
 ### Decisão de arquitetura
@@ -104,5 +104,5 @@ Threads simultâneas dependem da sessão persistente: cada thread é um processo
 | Etapa | Status |
 |-------|--------|
 | Painel de terminal em tempo real | Implementado |
-| Sessão CLI persistente | Em implementação — thread persistente + retomada Claude/Gemini/Codex best-effort; processo vivo por stdin pendente |
+| Sessão CLI persistente | Em implementação — thread persistente + retomada Claude/Gemini; Codex one-shot com contexto explícito; processo vivo por stdin pendente |
 | Múltiplas threads simultâneas | Planejado — depende da Etapa 2 |
