@@ -63,6 +63,14 @@ export type StreamEvent =
       type: 'error'
       message: string
     })
+  | (StreamEventBase & {
+      type: 'approval_request'
+      threadId: string
+      approvalId: string
+      approvalType: 'command' | 'file' | 'permission'
+      description: string
+      canDeny: boolean
+    })
 
 export type QaLogEntry = {
   id: number
