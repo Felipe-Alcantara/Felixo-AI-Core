@@ -24,28 +24,28 @@ type AppSidebarProps = {
   models: Model[]
   sessions: ChatSession[]
   projects: Project[]
-  activeProject: Project | null
+  activeProjectIds: Set<string>
   isOpen: boolean
   onNewIdea: () => void
   onOpenModelSettings: () => void
   onOpenProjects: () => void
   onToggleSidebar: () => void
   onSelectSession: (session: ChatSession) => void
-  onSelectProject: (project: Project) => void
+  onToggleProject: (project: Project) => void
 }
 
 export function AppSidebar({
   models,
   sessions,
   projects,
-  activeProject,
+  activeProjectIds,
   isOpen,
   onNewIdea,
   onOpenModelSettings,
   onOpenProjects,
   onToggleSidebar,
   onSelectSession,
-  onSelectProject,
+  onToggleProject,
 }: AppSidebarProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [dragging, setDragging] = useState(false)
@@ -171,18 +171,21 @@ export function AppSidebar({
             </button>
           </div>
 
-          {/* Projeto ativo visível mesmo colapsado */}
-          {!isProjectsExpanded && activeProject && (
-            <div className="ml-3 mt-0.5 border-l border-white/[0.06] pl-3">
-              <button
-                type="button"
-                onClick={() => onSelectProject(activeProject)}
-                title={activeProject.path}
-                className="flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] bg-amber-500/15 text-amber-300"
-              >
-                <GitBranch size={11} className="shrink-0" aria-hidden="true" />
-                <span className="truncate">{activeProject.name}</span>
-              </button>
+          {/* Projetos ativos visíveis mesmo colapsado */}
+          {!isProjectsExpanded && activeProjectIds.size > 0 && (
+            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3">
+              {projects.filter((p) => activeProjectIds.has(p.id)).map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => onToggleProject(project)}
+                  title={project.path}
+                  className="flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] bg-amber-500/15 text-amber-300"
+                >
+                  <GitBranch size={11} className="shrink-0" aria-hidden="true" />
+                  <span className="truncate">{project.name}</span>
+                </button>
+              ))}
             </div>
           )}
 
@@ -198,11 +201,11 @@ export function AppSidebar({
                   <button
                     key={project.id}
                     type="button"
-                    onClick={() => onSelectProject(project)}
+                    onClick={() => onToggleProject(project)}
                     title={project.path}
                     className={[
                       'flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] transition',
-                      activeProject?.id === project.id
+                      activeProjectIds.has(project.id)
                         ? 'bg-amber-500/15 text-amber-300'
                         : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
                     ].join(' ')}
