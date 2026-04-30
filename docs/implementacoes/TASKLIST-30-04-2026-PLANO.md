@@ -132,7 +132,11 @@ Status em 30/04/2026:
 - O botão "+" do composer adiciona arquivos como contexto; textos pequenos entram como preview no prompt.
 - Selects nativos receberam `color-scheme: dark` e `option` com fundo/texto escuros.
 - A tela inicial usa `/brand/felixo-logo.png`, copiado do repositório `Felipe-Portifolio`.
-- Criada a estrutura `docs/relatorios/2026/04/30.md` para relatório diário.
+- Criada a estrutura `docs/relatorios/` e relatórios para todos os dias com atividade no Git:
+  - `docs/relatorios/2026/04/28.md`
+  - `docs/relatorios/2026/04/29.md`
+  - `docs/relatorios/2026/04/30.md`
+  - `docs/relatorios/README.md`
 
 ## Validacao
 
