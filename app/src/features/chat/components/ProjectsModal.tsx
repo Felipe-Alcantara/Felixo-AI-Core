@@ -64,12 +64,17 @@ export function ProjectsModal({
     setLoading(true)
     try {
       const folderPath = await window.felixo.projects.pickFolder()
-      if (!folderPath) return
+      if (!folderPath) {
+        setLoading(false)
+        return
+      }
       const repos = await window.felixo.projects.detectRepos(folderPath)
       const existingPaths = new Set(projects.map((p) => p.path))
       const fresh = repos.filter((r) => !existingPaths.has(r.path))
       setDetected(fresh)
       setSelected(new Set(fresh.map((r) => r.path)))
+    } catch (err) {
+      console.error('[projects] pickWorkspace error:', err)
     } finally {
       setLoading(false)
     }
