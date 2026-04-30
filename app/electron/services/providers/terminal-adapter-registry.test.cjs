@@ -10,10 +10,12 @@ test('terminal adapter registry exposes supported CLI adapters', () => {
     'claude',
     'codex',
     'gemini',
+    'gemini-acp',
   ])
   assert.equal(getTerminalAdapter('claude').getSpawnArgs('Oi').command, 'claude')
   assert.equal(getTerminalAdapter('codex').getSpawnArgs('Oi').command, 'codex')
   assert.equal(getTerminalAdapter('gemini').getSpawnArgs('Oi').command, 'gemini')
+  assert.equal(getTerminalAdapter('gemini-acp').getSpawnArgs('Oi').command, 'gemini')
 })
 
 test('terminal adapter registry rejects unknown CLI types', () => {
