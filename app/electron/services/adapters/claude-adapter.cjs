@@ -61,8 +61,6 @@ function getPersistentSpawnArgs(context = {}) {
 
   if (context.providerSessionId) {
     args.push('--resume', context.providerSessionId)
-  } else if (context.threadId) {
-    args.push('--session-id', context.threadId)
   }
 
   return {
