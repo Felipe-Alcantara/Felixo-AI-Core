@@ -83,6 +83,56 @@ Esse e o candidato para processo literalmente aberto.
 
 Esse contrato nao cabe diretamente no `CliProcessManager` atual, porque ele nao e stdin/stdout JSONL: exige um cliente WebSocket persistente, framing de JSON-RPC e mapeamento do metodo `exec` antes de trocar a execucao atual. Ate esse mapeamento estar validado, Codex deve continuar em retomada nativa para nao perder delimitacao confiavel de resposta.
 
+## Fake agents para teste
+
+Dois scripts standalone simulam os protocolos persistentes para teste sem
+depender de CLI real, login, internet ou quota.
+
+### fake-stream-json-agent.cjs
+
+Simula o protocolo Claude stream-json:
+
+- Le JSONL do stdin, emite `system`, `stream_event` (text_delta) e `result`.
+- Fica vivo entre prompts na mesma sessao.
+- Caminho: `app/electron/services/adapters/testing/fake-stream-json-agent.cjs`.
+
+### fake-acp-agent.cjs
+
+Simula o protocolo Gemini ACP (JSON-RPC 2.0):
+
+- Aceita `initialize`, `newSession`, `prompt` e `cancel`.
+- Emite notifications `textChunk` durante prompt.
+- Caminho: `app/electron/services/adapters/testing/fake-acp-agent.cjs`.
+
+## AgentEvent padrao
+
+O modulo `app/electron/services/protocols/agent-events.cjs` define factories
+para os tipos de evento que qualquer adapter deve produzir:
+
+- `textDelta(text)` — chunk de texto
+- `toolCall(tool, input)` — chamada de ferramenta
+- `session(providerSessionId)` — sessao capturada
+- `status(message)` — lifecycle
+- `done(opts?)` — fim com custo/duracao opcionais
+- `error(message)` — erro
+
+Adapters atuais ainda retornam objetos literais compativeis. A migracao para
+factories e incremental.
+
+## Gemini ACP adapter
+
+O adapter `gemini-acp-adapter.cjs` implementa o protocolo multi-fase:
+
+1. `initial` → envia `initialize` (JSON-RPC)
+2. `session` → envia `newSession` (apos receber capabilities)
+3. `prompt` → envia `prompt` (apos receber sessionId)
+
+O IPC persistente ja suporta essas fases via `readyForSession` e
+`readyForPrompt` nos eventos parseados.
+
+Quando o processo ja esta vivo (reuse), o adapter pula handshake e envia
+`prompt` direto.
+
 ## Decisao de implementacao
 
 1. Manter Claude como processo persistente real.

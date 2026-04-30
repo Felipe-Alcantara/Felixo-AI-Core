@@ -35,6 +35,16 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - `VISAO-GERAL.md`, `ELECTRON.md`, `ROADMAP.md`, `STATUS-ATUAL.md` e `README.md` foram alinhados com essa decisão.
 - Ficou registrado que MCP não substitui CLIs nem API keys; MCP padroniza ferramentas, contexto, Git, memória e skills.
 
+### Fake persistent agents + Gemini ACP adapter + AgentEvent
+
+- `protocols/agent-events.cjs` define factories para eventos padrao (`textDelta`, `toolCall`, `session`, `status`, `done`, `error`) e JSDoc da interface `AgentSession`.
+- `adapters/testing/fake-stream-json-agent.cjs` simula protocolo Claude stream-json sem CLI real.
+- `adapters/testing/fake-acp-agent.cjs` simula protocolo Gemini ACP (JSON-RPC 2.0) sem CLI real.
+- `adapters/gemini-acp-adapter.cjs` implementa handshake multi-fase (initialize → newSession → prompt) compativel com o fluxo persistente do IPC.
+- `providers/terminal-adapter-registry.cjs` agora inclui `gemini-acp`.
+- `npm test` passou a cobrir `protocols/` e `adapters/testing/`.
+- Plano documentado em `docs/backend/PLANO-FAKE-PERSISTENT-ACP.md`.
+
 ## O que já foi concluído
 
 ### Backend Electron
