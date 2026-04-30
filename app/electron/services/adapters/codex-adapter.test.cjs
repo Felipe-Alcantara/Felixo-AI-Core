@@ -33,6 +33,27 @@ test('codex adapter passes ascii cwd with exec args', () => {
   ])
 })
 
+test('codex adapter passes provider model and reasoning effort', () => {
+  const spawnArgs = adapter.getSpawnArgs('Oi', {
+    model: {
+      providerModel: 'gpt-5.5',
+      reasoningEffort: 'xhigh',
+    },
+  })
+
+  assert.equal(spawnArgs.command, 'codex')
+  assert.deepEqual(spawnArgs.args, [
+    'exec',
+    '--json',
+    '--skip-git-repo-check',
+    '--model',
+    'gpt-5.5',
+    '--config',
+    'model_reasoning_effort="xhigh"',
+    'Oi',
+  ])
+})
+
 test('codex adapter resumes an existing provider session', () => {
   const spawnArgs = adapter.getResumeArgs('Continua', {
     providerSessionId: '019ddc27-bc3d-7280-b5c0-61dff03b08cd',

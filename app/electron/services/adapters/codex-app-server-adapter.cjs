@@ -20,12 +20,17 @@
  * item/fileChange/requestApproval) are auto-approved in this first version.
  */
 
+const {
+  createCodexConfigOptionArgs,
+  createCodexExecOptionArgs,
+} = require('./model-options.cjs')
+
 let nextRequestId = 1
 
-function getPersistentSpawnArgs() {
+function getPersistentSpawnArgs(context = {}) {
   return {
     command: 'codex',
-    args: ['app-server'],
+    args: ['app-server', ...createCodexConfigOptionArgs(context)],
   }
 }
 
@@ -194,6 +199,8 @@ function canResume() {
 function getSpawnArgs(prompt, context = {}) {
   const args = ['exec', '--json', '--skip-git-repo-check']
 
+  args.push(...createCodexExecOptionArgs(context))
+
   if (context.cwd) {
     args.push('--cd', context.cwd)
   }
@@ -218,6 +225,7 @@ function getResumeArgs(prompt, context = {}) {
       'resume',
       '--json',
       '--skip-git-repo-check',
+      ...createCodexExecOptionArgs(context),
       context.providerSessionId,
       prompt,
     ],

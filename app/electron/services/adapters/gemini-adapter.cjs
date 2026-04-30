@@ -1,7 +1,16 @@
-function getSpawnArgs(prompt) {
+const { createModelOptionArgs } = require('./model-options.cjs')
+
+function getSpawnArgs(prompt, context = {}) {
   return {
     command: 'gemini',
-    args: ['--prompt', prompt, '--output-format', 'stream-json', '--skip-trust'],
+    args: [
+      ...createModelOptionArgs(context),
+      '--prompt',
+      prompt,
+      '--output-format',
+      'stream-json',
+      '--skip-trust',
+    ],
   }
 }
 
@@ -15,6 +24,7 @@ function getResumeArgs(prompt, context = {}) {
     args: [
       '--resume',
       context.providerSessionId,
+      ...createModelOptionArgs(context),
       '--prompt',
       prompt,
       '--output-format',

@@ -9,6 +9,22 @@ test('gemini-acp adapter returns persistent spawn args', () => {
   assert.deepEqual(spawnArgs.args, ['--acp'])
 })
 
+test('gemini-acp adapter passes provider model to persistent process', () => {
+  const spawnArgs = adapter.getPersistentSpawnArgs({
+    model: {
+      providerModel: 'gemini-3-pro-preview',
+      reasoningEffort: 'high',
+    },
+  })
+
+  assert.equal(spawnArgs.command, 'gemini')
+  assert.deepEqual(spawnArgs.args, [
+    '--acp',
+    '--model',
+    'gemini-3-pro-preview',
+  ])
+})
+
 test('gemini-acp adapter sends initialize on initial phase', () => {
   adapter.resetRequestId()
   const result = adapter.createPersistentInput('Oi', { persistentPhase: 'initial' })

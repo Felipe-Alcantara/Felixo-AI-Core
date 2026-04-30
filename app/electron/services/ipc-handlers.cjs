@@ -123,6 +123,8 @@ function registerCliIpcHandlers(getMainWindow) {
           streamSessionId,
           cliType,
           modelName: model?.name,
+          providerModel: model?.providerModel,
+          reasoningEffort: model?.reasoningEffort,
           command,
           args,
           cwd,
@@ -577,6 +579,8 @@ function sendPersistentCliRequest({
         streamSessionId,
         cliType,
         modelName: model?.name,
+        providerModel: model?.providerModel,
+        reasoningEffort: model?.reasoningEffort,
         command,
         args: persistentSession.args,
         cwd,
@@ -1207,6 +1211,8 @@ function createModelSessionKey(model) {
     model?.cliType ?? 'unknown',
     model?.command ?? '',
     model?.id ?? '',
+    model?.providerModel ?? '',
+    model?.reasoningEffort ?? '',
   ].join(':')
 }
 

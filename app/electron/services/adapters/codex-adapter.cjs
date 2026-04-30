@@ -1,5 +1,9 @@
+const { createCodexExecOptionArgs } = require('./model-options.cjs')
+
 function getSpawnArgs(prompt, context = {}) {
   const args = ['exec', '--json', '--skip-git-repo-check']
+
+  args.push(...createCodexExecOptionArgs(context))
 
   if (context.cwd) {
     args.push('--cd', context.cwd)
@@ -25,6 +29,7 @@ function getResumeArgs(prompt, context = {}) {
       'resume',
       '--json',
       '--skip-git-repo-check',
+      ...createCodexExecOptionArgs(context),
       context.providerSessionId,
       prompt,
     ],

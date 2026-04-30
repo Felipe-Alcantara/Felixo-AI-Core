@@ -17,12 +17,14 @@
  * initialize/newSession and sends the prompt directly.
  */
 
+const { createModelOptionArgs } = require('./model-options.cjs')
+
 let nextRequestId = 1
 
-function getPersistentSpawnArgs() {
+function getPersistentSpawnArgs(context = {}) {
   return {
     command: 'gemini',
-    args: ['--acp'],
+    args: ['--acp', ...createModelOptionArgs(context)],
   }
 }
 
@@ -135,16 +137,23 @@ function canResume() {
   return false
 }
 
-function getSpawnArgs(prompt) {
+function getSpawnArgs(prompt, context = {}) {
   return {
     command: 'gemini',
-    args: ['--prompt', prompt, '--output-format', 'stream-json', '--skip-trust'],
+    args: [
+      ...createModelOptionArgs(context),
+      '--prompt',
+      prompt,
+      '--output-format',
+      'stream-json',
+      '--skip-trust',
+    ],
   }
 }
 
 function getResumeArgs(prompt, context = {}) {
   if (!context.providerSessionId) {
-    return getSpawnArgs(prompt)
+    return getSpawnArgs(prompt, context)
   }
 
   return {
@@ -152,6 +161,7 @@ function getResumeArgs(prompt, context = {}) {
     args: [
       '--resume',
       context.providerSessionId,
+      ...createModelOptionArgs(context),
       '--prompt',
       prompt,
       '--output-format',
