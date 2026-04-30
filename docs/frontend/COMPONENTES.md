@@ -331,3 +331,81 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 Eventos de QA vêm do backend com `scope`, `level`, `sessionId`, `message` e `details`. Escopos comuns:
 
 `cli:spawn`, `cli:persistent-spawn`, `cli:persistent-write`, `cli:process`, `cli:jsonl`, `cli:stdout`, `cli:stderr`, `cli:timeout`, `cli:close`, `cli:stop`, `cli:error`.
+
+---
+
+## Atualização 30/04/2026
+
+### ChatWorkspace
+
+- Mantém `customAutomations` e `contextAttachments`.
+- Abre modais separados para Automações, Code e Felixo.
+- "Novo chat" chama `cli:reset-thread`, limpa terminal local, input e anexos antes de gerar uma nova thread.
+- `createCliPrompt(...)` inclui anexos de contexto com nome, tipo, tamanho, caminho local e preview textual quando disponível.
+
+### AppSidebar
+
+- Projetos continuam visíveis quando ativos, mesmo com a seção colapsada.
+- Clicar em um modelo chama `onOpenModelSettingsFor(modelId)`, seleciona o modelo e abre suas configurações.
+- Botões de rodapé foram separados:
+  - `Code` abre `CodePanel`.
+  - `Felixo` abre `FelixoSettingsModal`.
+
+### Composer
+
+- O botão `+` abre seletor de arquivos.
+- Arquivos pequenos de texto entram no prompt com preview truncado.
+- Arquivos binários entram como metadados de contexto.
+- Selects de modelo, modelo do provedor e effort usam tema escuro para evitar fundo branco com texto branco.
+
+### ModelSettingsModal
+
+- Mostra capacidades por `cliType`.
+- Permite editar `providerModel` e `reasoningEffort` do modelo selecionado.
+- Continua permitindo importar/remover CLIs locais.
+
+### AutomationsModal
+
+**Arquivo:** `components/AutomationsModal.tsx`
+
+Responsabilidade:
+
+- listar automações padrão;
+- criar automações personalizadas;
+- remover automações personalizadas;
+- aplicar o prompt da automação no composer.
+
+Escopos suportados: `planning`, `code`, `docs`, `git`, `chat`.
+
+### CodePanel
+
+**Arquivo:** `components/CodePanel.tsx`
+
+Responsabilidade:
+
+- exibir resumo Git read-only dos projetos ativos;
+- priorizar projetos ativos e, se não houver nenhum ativo, listar todos;
+- consultar `window.felixo.git.getSummary({ projectPath })`;
+- renderizar branch, status, diff stat e commits recentes.
+
+### FelixoSettingsModal
+
+**Arquivo:** `components/FelixoSettingsModal.tsx`
+
+Responsabilidade:
+
+- manter configurações/estado do app separados do modal de Modelos;
+- exibir runtime, quantidade de projetos, projetos ativos e automações.
+
+### TerminalPanel
+
+- Pode ser recolhido para barra lateral compacta.
+- Pode ser redimensionado horizontalmente.
+- Alterna entre visão `Threads` e `Orquestrador`.
+
+### QaLoggerPanel
+
+- Recebe `isOpen` e `onToggleOpen`.
+- Pode ser recolhido para barra inferior compacta.
+- Pode ser redimensionado verticalmente.
+- Continua escutando eventos quando recolhido para preservar a contagem.
