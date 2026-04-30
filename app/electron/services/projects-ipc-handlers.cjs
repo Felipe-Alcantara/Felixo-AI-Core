@@ -3,9 +3,10 @@ const fs = require('fs')
 const path = require('path')
 
 function registerProjectsIpcHandlers(getMainWindow) {
-  ipcMain.handle('projects:pick-folder', async () => {
-    const mainWindow = typeof getMainWindow === 'function' ? getMainWindow() : getMainWindow
-    const result = await dialog.showOpenDialog(mainWindow, {
+  ipcMain.handle('projects:pick-folder', async (_event) => {
+    const { BrowserWindow } = require('electron')
+    const win = BrowserWindow.getFocusedWindow() ?? (typeof getMainWindow === 'function' ? getMainWindow() : getMainWindow)
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory'],
     })
     if (result.canceled || result.filePaths.length === 0) return null
