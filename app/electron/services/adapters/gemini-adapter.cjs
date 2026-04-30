@@ -24,6 +24,10 @@ function getResumeArgs(prompt, context = {}) {
   }
 }
 
+function canResume(context = {}) {
+  return false
+}
+
 function parseLine(line) {
   const payload = JSON.parse(line)
 
@@ -58,6 +62,10 @@ function parseLine(line) {
 }
 
 function classifyStderr(chunk) {
+  if (isFatalStderr(chunk)) {
+    return 'error'
+  }
+
   const lines = createStderrLines(chunk)
 
   if (lines.length > 0 && lines.every(isNonFatalStderrLine)) {
@@ -73,6 +81,20 @@ function shouldSuppressStderr(chunk) {
   return lines.length > 0 && lines.every(isVisualStderrNotice)
 }
 
+function shouldAbortOnStderr(chunk) {
+  return isFatalStderr(chunk)
+}
+
+function formatStderr(chunk) {
+  const text = String(chunk)
+
+  if (isCapacityExhaustedStderr(text)) {
+    return 'Gemini está sem capacidade no servidor agora (429 / MODEL_CAPACITY_EXHAUSTED). Tente novamente mais tarde ou use outro modelo.'
+  }
+
+  return text
+}
+
 function createStderrLines(chunk) {
   return String(chunk)
     .split(/\r?\n/)
@@ -85,11 +107,29 @@ function isNonFatalStderrLine(line) {
 }
 
 function isVisualStderrNotice(line) {
-  return line.includes('256-color support not detected')
+  return (
+    line.includes('256-color support not detected') ||
+    line.includes('Basic terminal detected') ||
+    line.includes('Visual rendering will be limited')
+  )
 }
 
 function isRipgrepFallbackNotice(line) {
   return line.includes('Ripgrep is not available. Falling back to GrepTool.')
+}
+
+function isFatalStderr(chunk) {
+  return isCapacityExhaustedStderr(chunk)
+}
+
+function isCapacityExhaustedStderr(chunk) {
+  const text = String(chunk)
+
+  return (
+    text.includes('MODEL_CAPACITY_EXHAUSTED') ||
+    text.includes('No capacity available for model') ||
+    (text.includes('status 429') && text.includes('RESOURCE_EXHAUSTED'))
+  )
 }
 
 function isAssistantMessage(payload) {
@@ -101,9 +141,12 @@ function isAssistantMessage(payload) {
 }
 
 module.exports = {
+  canResume,
   classifyStderr,
+  formatStderr,
   getSpawnArgs,
   getResumeArgs,
   parseLine,
+  shouldAbortOnStderr,
   shouldSuppressStderr,
 }

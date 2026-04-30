@@ -15,7 +15,7 @@ test('gemini adapter skips workspace trust prompt', () => {
   ])
 })
 
-test('gemini adapter resumes existing session when provider id is known', () => {
+test('gemini adapter can build resume args for future validation', () => {
   const spawnArgs = adapter.getResumeArgs('Continua', {
     providerSessionId: '00000000-0000-4000-8000-000000000001',
   })
@@ -30,6 +30,22 @@ test('gemini adapter resumes existing session when provider id is known', () => 
     'stream-json',
     '--skip-trust',
   ])
+})
+
+test('gemini adapter keeps native resume disabled until stream-json resume is stable', () => {
+  assert.equal(
+    adapter.canResume({
+      providerSessionId: '00000000-0000-4000-8000-000000000001',
+    }),
+    false,
+  )
+  assert.equal(
+    adapter.canResume({
+      threadId: '00000000-0000-4000-8000-000000000002',
+    }),
+    false,
+  )
+  assert.equal(adapter.canResume({}), false)
 })
 
 test('gemini adapter parses init session metadata', () => {
@@ -93,11 +109,27 @@ test('gemini adapter parses result as done', () => {
 test('gemini adapter classifies known non-fatal stderr notices', () => {
   const colorNotice =
     'Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.\n'
+  const basicTerminalNotice =
+    'Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.\n'
   const ripgrepNotice = 'Ripgrep is not available. Falling back to GrepTool.\n'
 
   assert.equal(adapter.classifyStderr(colorNotice), 'info')
+  assert.equal(adapter.classifyStderr(basicTerminalNotice), 'info')
   assert.equal(adapter.classifyStderr(ripgrepNotice), 'info')
   assert.equal(adapter.shouldSuppressStderr(colorNotice), true)
+  assert.equal(adapter.shouldSuppressStderr(basicTerminalNotice), true)
   assert.equal(adapter.shouldSuppressStderr(ripgrepNotice), false)
   assert.equal(adapter.classifyStderr(`${ripgrepNotice}real error\n`), 'warn')
+})
+
+test('gemini adapter treats model capacity exhaustion as fatal stderr', () => {
+  const capacityError =
+    'Attempt 1 failed with status 429. Retrying with backoff... _GaxiosError: [{"error":{"code":429,"message":"No capacity available for model gemini-3-flash-preview on the server","status":"RESOURCE_EXHAUSTED","details":[{"reason":"MODEL_CAPACITY_EXHAUSTED"}]}}]\n'
+
+  assert.equal(adapter.classifyStderr(capacityError), 'error')
+  assert.equal(adapter.shouldAbortOnStderr(capacityError), true)
+  assert.equal(
+    adapter.formatStderr(capacityError),
+    'Gemini está sem capacidade no servidor agora (429 / MODEL_CAPACITY_EXHAUSTED). Tente novamente mais tarde ou use outro modelo.',
+  )
 })
