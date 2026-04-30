@@ -75,7 +75,7 @@ site; esse asset deve ser copiado para `app/public/brand/`.
 ### Documentacao diaria
 
 Nao existe pasta dedicada a relatorios diarios. Sera criada a estrutura
-`docs/relatorios/2026/04/30.md`, com titulo no formato solicitado.
+`docs/relatorios/2026-04-30.md`, usando hifen no nome do arquivo para evitar pastas por data.
 
 ## Plano de implementacao
 
@@ -133,9 +133,9 @@ Status em 30/04/2026:
 - Selects nativos receberam `color-scheme: dark` e `option` com fundo/texto escuros.
 - A tela inicial usa `/brand/felixo-logo.png`, copiado do repositório `Felipe-Portifolio`.
 - Criada a estrutura `docs/relatorios/` e relatórios para todos os dias com atividade no Git:
-  - `docs/relatorios/2026/04/28.md`
-  - `docs/relatorios/2026/04/29.md`
-  - `docs/relatorios/2026/04/30.md`
+  - `docs/relatorios/2026-04-28.md`
+  - `docs/relatorios/2026-04-29.md`
+  - `docs/relatorios/2026-04-30.md`
   - `docs/relatorios/README.md`
 
 ## Validacao
