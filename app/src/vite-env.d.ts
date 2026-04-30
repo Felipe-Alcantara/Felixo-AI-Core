@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type {
+  GitProjectSummary,
   Model,
   QaLogEntry,
   StreamEvent,
@@ -37,6 +38,9 @@ declare global {
           sessionId: string
           threadId?: string
         }) => Promise<CliInvokeResult>
+        resetThread: (params: {
+          threadId: string
+        }) => Promise<CliInvokeResult & { killed?: boolean }>
         onStream: (callback: (event: StreamEvent) => void) => () => void
         onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
         onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
@@ -44,6 +48,15 @@ declare global {
       projects?: {
         pickFolder: () => Promise<string | null>
         detectRepos: (folderPath: string) => Promise<DetectedRepo[]>
+      }
+      git?: {
+        getSummary: (params: {
+          projectPath: string
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          summary?: GitProjectSummary
+        }>
       }
       qaLogger?: {
         getEntries: () => Promise<QaLogEntry[]>

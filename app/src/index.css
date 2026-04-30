@@ -30,6 +30,7 @@ body {
 }
 
 button,
+select,
 textarea {
   font: inherit;
 }
@@ -41,6 +42,16 @@ button {
 textarea {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+select {
+  color: #f4f4f5;
+  color-scheme: dark;
+}
+
+select option {
+  color: #f4f4f5;
+  background: #1a1a19;
 }
 
 textarea::-webkit-scrollbar,

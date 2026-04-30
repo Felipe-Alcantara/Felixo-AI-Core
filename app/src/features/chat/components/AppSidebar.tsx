@@ -29,9 +29,13 @@ type AppSidebarProps = {
   onNewIdea: () => void
   onOpenModelSettings: () => void
   onOpenProjects: () => void
+  onOpenAutomations: () => void
+  onOpenCode: () => void
+  onOpenFelixoSettings: () => void
   onToggleSidebar: () => void
   onSelectSession: (session: ChatSession) => void
   onToggleProject: (project: Project) => void
+  onOpenModelSettingsFor: (modelId: string) => void
 }
 
 export function AppSidebar({
@@ -43,9 +47,13 @@ export function AppSidebar({
   onNewIdea,
   onOpenModelSettings,
   onOpenProjects,
+  onOpenAutomations,
+  onOpenCode,
+  onOpenFelixoSettings,
   onToggleSidebar,
   onSelectSession,
   onToggleProject,
+  onOpenModelSettingsFor,
 }: AppSidebarProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [dragging, setDragging] = useState(false)
@@ -91,6 +99,7 @@ export function AppSidebar({
     if (label === 'Novo chat') onNewIdea()
     else if (label === 'Pesquisar') setIsSearchOpen(true)
     else if (label === 'Projetos') setIsProjectsExpanded((v) => !v)
+    else if (label === 'Automações') onOpenAutomations()
   }
 
   return (
@@ -244,9 +253,11 @@ export function AppSidebar({
         </div>
         <div className="space-y-1">
           {models.map((model) => (
-            <div
+            <button
               key={model.id}
-              className="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] text-zinc-400"
+              type="button"
+              onClick={() => onOpenModelSettingsFor(model.id)}
+              className="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-100"
             >
               <Bot size={13} aria-hidden="true" className="shrink-0" />
               <span className="min-w-0">
@@ -255,7 +266,7 @@ export function AppSidebar({
                   {model.source}
                 </span>
               </span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -265,7 +276,7 @@ export function AppSidebar({
       <div className="mt-auto border-t border-white/[0.08] px-4 py-3 max-xl:px-3">
         <button
           type="button"
-          onClick={onNewIdea}
+          onClick={onOpenCode}
           className="mb-1 flex h-8 w-full items-center gap-2 rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <Code2 size={13} aria-hidden="true" />
@@ -273,7 +284,7 @@ export function AppSidebar({
         </button>
         <button
           type="button"
-          onClick={onOpenModelSettings}
+          onClick={onOpenFelixoSettings}
           className="flex h-8 w-full items-center justify-between rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <span className="flex items-center gap-2">
