@@ -65,6 +65,75 @@
 }
 ```
 
+---
+
+## Atualização 30/04/2026
+
+### project-storage.ts
+
+**Arquivo:** `app/src/features/chat/services/project-storage.ts`
+
+Responsabilidade:
+
+- carregar projetos do `localStorage`;
+- salvar projetos cadastrados;
+- carregar IDs de projetos ativos;
+- descartar IDs ativos que não existem mais na lista de projetos.
+
+Chaves:
+
+- `felixo-ai-core.projects`
+- `felixo-ai-core.activeProjectIds`
+
+### automation-storage.ts
+
+**Arquivo:** `app/src/features/chat/services/automation-storage.ts`
+
+Responsabilidade:
+
+- carregar automações personalizadas válidas;
+- salvar automações personalizadas;
+- gerar IDs por slug + timestamp.
+
+Chave:
+
+- `felixo-ai-core.customAutomations`
+
+### data/automations.ts
+
+**Arquivo:** `app/src/features/chat/data/automations.ts`
+
+Automações padrão:
+
+| ID | Escopo | Uso |
+|----|--------|-----|
+| `default-plan-feature` | `planning` | Planejar feature antes de codar |
+| `default-code-review` | `code` | Revisar bugs, riscos e testes |
+| `default-daily-report` | `docs` | Gerar relatório diário |
+| `default-git-prep` | `git` | Preparar diff e commits |
+| `default-doc-sync` | `docs` | Atualizar documentação viva |
+
+### Tipos adicionados
+
+- `ContextAttachment`: arquivo anexado como contexto da próxima mensagem.
+- `AutomationScope`: escopos de automação (`chat`, `code`, `docs`, `git`, `planning`).
+- `AutomationDefinition`: contrato de automações padrão/customizadas.
+- `GitProjectSummary`: resumo read-only usado pelo painel Code.
+
+### Bridge `window.felixo`
+
+Novos contratos expostos ao renderer:
+
+```ts
+cli.resetThread(params: { threadId: string }): Promise<CliInvokeResult & { killed?: boolean }>
+
+git.getSummary(params: { projectPath: string }): Promise<{
+  ok: boolean
+  message?: string
+  summary?: GitProjectSummary
+}>
+```
+
 #### `ModelFileSelection`
 `Omit<Model, 'id'>` — usado ao importar antes de gerar ID.
 

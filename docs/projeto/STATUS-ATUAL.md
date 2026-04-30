@@ -56,6 +56,20 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - Schema do protocolo gerado localmente via `codex app-server generate-json-schema` (codex-cli 0.125.0).
 - Plano documentado em `docs/backend/PLANO-CODEX-APP-SERVER.md`.
 
+### Tasklist 30/04/2026 — UX de workspace e preparação Code/Git
+
+- "Novo chat" solicita `cli:reset-thread`, limpa terminal local, anexos e estado efêmero para não reutilizar thread anterior.
+- Projetos e seleção ativa persistem via `localStorage`.
+- Automações padrão e customizadas foram adicionadas com modal dedicado e storage local.
+- Modelos clicáveis na sidebar abrem o modal de configuração com capacidades por CLI e campos `providerModel`/`reasoningEffort`.
+- "Code" ganhou painel Git inicial com IPC read-only allowlisted.
+- "Felixo" ganhou modal próprio separado de "Modelos".
+- Terminal e QA Logger podem ser recolhidos; Terminal redimensiona horizontalmente e QA Logger verticalmente.
+- Composer aceita anexos de contexto pelo botão `+`.
+- Selects nativos foram corrigidos para tema escuro.
+- A tela inicial usa a logo do portfólio em `/brand/felixo-logo.png`.
+- Relatório diário criado em `docs/relatorios/2026/04/30.md`.
+
 ## O que já foi concluído
 
 ### Backend Electron
@@ -65,6 +79,8 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - `orchestrator/cli-execution-planner.cjs` concentra a decisão entre processo persistente, retomada nativa e one-shot.
 - `mcp/felixo-tool-catalog.cjs` define o catálogo inicial das tools MCP planejadas.
 - IPC `cli:stop` interrompe a execução em andamento por `threadId`.
+- IPC `cli:reset-thread` encerra thread persistente ao iniciar novo chat.
+- IPC Git read-only fornece status, diff stat, branch e commits recentes ao painel Code.
 - `CliProcessManager` mantém processos por chave lógica, permite abrir `stdin`, escrever prompts e matar grupo de processo.
 - O backend separa:
   - `threadId`: identidade da conversa/terminal/processo.
@@ -110,16 +126,21 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Frontend
 
 - `ChatWorkspace` mantém um `threadId` por conversa/modelo e gera um `sessionId` por mensagem.
+- "Novo chat" limpa estado local e solicita reset explícito da thread no backend.
 - O prompt enviado para CLIs one-shot inclui histórico recente e contexto dos projetos ativos.
 - O prompt de continuação (`resumePrompt`) não inclui histórico inteiro quando o adapter consegue manter contexto nativo por processo persistente ou retomada nativa.
 - Trocar modelo, iniciar novo chat ou carregar outra sessão reinicia a thread lógica.
 - O painel Terminal agrupa eventos por `threadId`, não por mensagem individual.
 - O painel Terminal mostra status (`running`, `completed`, `error`, `stopped`), contagem de eventos e tamanho acumulado.
 - `useTerminalOutput` escuta `onTerminalOutput`, mantendo `onRawOutput` como compatibilidade.
+- `CodePanel`, `AutomationsModal` e `FelixoSettingsModal` separam experiências de Git, automação e perfil.
+- `QaLoggerPanel` pode ser ocultado e redimensionado.
+- `Composer` injeta anexos de contexto no prompt da próxima mensagem.
 
 ### Projetos e contexto
 
 - A seleção de projetos ativos entra no prompt.
+- Projetos e seleção ativa persistem no `localStorage`.
 - O app calcula diff de projetos adicionados/removidos entre mensagens.
 - Trocar de modelo não zera a base de diff de projetos ativos, para não gerar ruído.
 
@@ -140,6 +161,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - O painel Terminal é observável e humanizado, mas ainda não é um terminal interativo manual.
 - Histórico de chat ainda é basicamente em memória, salvo ao iniciar novo chat/carregar sessão dentro da execução atual.
 - O `QA Logger` é voltado para debug local, não para auditoria persistente.
+- O painel Code é read-only; ações Git com escrita ainda dependem de uma política de confirmação.
 
 ## O que falta
 
@@ -158,7 +180,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Frontend e produto
 
 - Persistir histórico de sessões em disco.
-- Persistir modelos importados, projetos e estado de conversas de forma mais robusta.
+- Migrar persistências locais importantes de `localStorage` para armazenamento Electron versionado, se a necessidade crescer.
 - Adicionar UI para múltiplas threads simultâneas.
 - Permitir escolher a thread de destino do próximo prompt.
 - Encerrar uma thread individual sem resetar a conversa inteira.

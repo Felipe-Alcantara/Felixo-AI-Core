@@ -265,3 +265,86 @@ Regras do catálogo atual:
 - Persistir logs relevantes do QA Logger quando necessário.
 - Definir contrato formal versionado para adapters.
 - Implementar processos vivos em Codex/Gemini apenas depois de validar protocolo confiável; por enquanto eles usam retomada nativa da conversa.
+
+---
+
+## Atualização 30/04/2026
+
+### IPC `cli:reset-thread`
+
+Entrada:
+
+```ts
+{
+  threadId: string
+}
+```
+
+Uso:
+
+- chamado pelo frontend ao iniciar novo chat;
+- remove a sessão lógica da thread;
+- encerra processo persistente associado quando existir;
+- emite evento de terminal informando que a thread anterior não será reutilizada.
+
+Retorno:
+
+```ts
+{
+  ok: boolean
+  killed?: boolean
+  message?: string
+}
+```
+
+### IPC `git:get-summary`
+
+Entrada:
+
+```ts
+{
+  projectPath: string
+}
+```
+
+Retorno de sucesso:
+
+```ts
+{
+  ok: true
+  summary: {
+    projectPath: string
+    branch: string | null
+    statusLines: string[]
+    diffStat: string
+    recentCommits: string[]
+    isClean: boolean
+  }
+}
+```
+
+Arquivos:
+
+- `app/electron/services/git-ipc-handlers.cjs`
+- `app/electron/services/git-service.cjs`
+
+Comandos permitidos:
+
+- `git status --short --branch`
+- `git diff --stat`
+- `git log -5 --oneline --decorate=short`
+- `git branch --show-current`
+
+A camada Git inicial é read-only. Operações com escrita devem nascer em outro recorte, com confirmação explícita de permissão.
+
+### Janela principal
+
+`app/electron/core/window-options.cjs` define a janela principal com:
+
+- `resizable: true`
+- `maximizable: true`
+- `fullscreenable: true`
+- `minWidth`
+- `minHeight`
+
+Esse contrato é coberto por `window-options.test.cjs`.
