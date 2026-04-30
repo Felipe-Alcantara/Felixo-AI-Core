@@ -69,19 +69,35 @@ Hoje e o caminho seguro:
 - Processo: one-shot por prompt.
 - Conversa: continua no provedor quando o `providerSessionId` foi capturado.
 
-### `codex exec-server`
+### `codex app-server` (persistente)
 
-Esse e o candidato para processo literalmente aberto.
+Esse e o caminho persistente correto para Codex.
 
-- Comando: `codex exec-server --listen ws://127.0.0.1:0`.
-- Transporte: WebSocket com JSON-RPC.
-- Inicializacao validada localmente:
-  - request `initialize` exige `clientName` e `clientVersion`;
-  - response inclui `sessionId`.
-- Metodos vistos no binario local: `initialize`, `exec`, `auth`, `cancel`, `prompts/list`, `prompts/get`.
-- Observacao: metodos como `thread/start` e `turn/start` pertencem ao app-server, nao ao `exec-server`.
+- Comando: `codex app-server` (transporte default `stdio://`).
+- Transporte: JSON-RPC 2.0 sobre stdin/stdout JSONL.
+- Schema gerado localmente via `codex app-server generate-json-schema`.
+- Handshake:
+  - `initialize` (clientInfo: {name, version}) → capabilities response
+  - `initialized` (client notification)
+  - `thread/start` (cwd, model?) → `thread/started` notification com threadId
+- Prompt:
+  - `turn/start` (threadId, input: [{type: "text", text}])
+  - → `turn/started` notification
+  - → `item/agentMessage/delta` notifications (N vezes, com delta de texto)
+  - → `turn/completed` notification
+- Cancelamento: `turn/interrupt`
+- Aprovacoes: o servidor pode enviar `item/commandExecution/requestApproval`
+  e `item/fileChange/requestApproval` antes de executar acoes. O adapter
+  auto-aprova na primeira versao.
 
-Esse contrato nao cabe diretamente no `CliProcessManager` atual, porque ele nao e stdin/stdout JSONL: exige um cliente WebSocket persistente, framing de JSON-RPC e mapeamento do metodo `exec` antes de trocar a execucao atual. Ate esse mapeamento estar validado, Codex deve continuar em retomada nativa para nao perder delimitacao confiavel de resposta.
+Esse contrato cabe no `CliProcessManager` atual porque usa stdin/stdout JSONL,
+igual ao Claude stream-json e Gemini ACP.
+
+### `codex exec-server` (WebSocket, nao usado)
+
+Alternativa via WebSocket com JSON-RPC. Nao e utilizado no Felixo porque
+exige cliente WebSocket persistente e framing separado. O `app-server` via
+stdio e preferido.
 
 ## Fake agents para teste
 
@@ -103,6 +119,15 @@ Simula o protocolo Gemini ACP (JSON-RPC 2.0):
 - Aceita `initialize`, `newSession`, `prompt` e `cancel`.
 - Emite notifications `textChunk` durante prompt.
 - Caminho: `app/electron/services/adapters/testing/fake-acp-agent.cjs`.
+
+### fake-codex-app-server-agent.cjs
+
+Simula o protocolo Codex app-server (JSON-RPC 2.0):
+
+- Aceita `initialize`, `thread/start`, `turn/start` e `turn/interrupt`.
+- Emite notifications `thread/started`, `item/agentMessage/delta` e `turn/completed`.
+- Suporta multiplos turns na mesma thread.
+- Caminho: `app/electron/services/adapters/testing/fake-codex-app-server-agent.cjs`.
 
 ## AgentEvent padrao
 
@@ -133,10 +158,27 @@ O IPC persistente ja suporta essas fases via `readyForSession` e
 Quando o processo ja esta vivo (reuse), o adapter pula handshake e envia
 `prompt` direto.
 
+## Codex app-server adapter
+
+O adapter `codex-app-server-adapter.cjs` implementa o protocolo multi-fase:
+
+1. `initial` → envia `initialize` + notification `initialized`
+2. `session` → envia `thread/start` (apos receber capabilities)
+3. `prompt` → envia `turn/start` (apos receber threadId via `thread/started`)
+
+O texto chega via notifications `item/agentMessage/delta` e o fim via
+`turn/completed`.
+
+Aprovacoes de comandos e arquivos (`item/commandExecution/requestApproval`,
+`item/fileChange/requestApproval`) sao auto-aprovadas na primeira versao.
+O evento retornado inclui `responseInput` que o IPC escreve no stdin.
+
+Quando o processo ja esta vivo (reuse), o adapter envia `turn/start` direto.
+
 ## Decisao de implementacao
 
-1. Manter Claude como processo persistente real.
-2. Implementar Gemini persistente via ACP primeiro, porque o protocolo e estruturado e compativel com stdin/stdout NDJSON.
-3. Manter Codex em retomada nativa por enquanto e isolar a proxima etapa em um transporte WebSocket para `exec-server`.
+1. Manter Claude como processo persistente real (stream-json).
+2. Gemini persistente via ACP — adapter implementado, aguardando teste com `gemini --acp` real.
+3. Codex persistente via app-server — adapter implementado com auto-aprovacao, aguardando teste com `codex app-server` real.
 4. Nao usar TUI interativa como backend de chat enquanto nao houver delimitador confiavel de inicio/fim de resposta.
 

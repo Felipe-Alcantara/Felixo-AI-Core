@@ -3,6 +3,7 @@ const terminalAdapters = Object.freeze({
   codex: require('../adapters/codex-adapter.cjs'),
   gemini: require('../adapters/gemini-adapter.cjs'),
   'gemini-acp': require('../adapters/gemini-acp-adapter.cjs'),
+  'codex-app-server': require('../adapters/codex-app-server-adapter.cjs'),
 })
 
 function getTerminalAdapter(cliType) {
