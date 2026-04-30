@@ -44,47 +44,11 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 
 ## Frente Atual — Terminal Persistente e Painel de Output
 
-### Contexto
+Detalhamento completo em [TERMINAL-PERSISTENTE.md](./TERMINAL-PERSISTENTE.md).
 
-Hoje cada mensagem spawna um processo CLI novo que encerra ao responder. O objetivo é tornar a sessão persistente e dar visibilidade ao que acontece dentro do terminal em tempo real.
-
-### Etapa 1 — Painel de terminal em tempo real *(próxima)*
-
-Barra lateral direita que exibe o output bruto (stdout/stderr) de cada processo CLI enquanto roda. Não requer interação direta — é observação.
-
-- [ ] Painel recolhível à direita do chat
-- [ ] Output bruto acumulado por `sessionId` (stdout + stderr)
-- [ ] Atualização em tempo real via eventos IPC já existentes
-- [ ] Indicador visual: rodando (pulsando), concluído, erro
-- [ ] Scroll automático para o final, com lock quando o usuário rolar para cima
-- [ ] IPC: novo evento `cli:raw-output` emitido a cada chunk de stdout/stderr
-
-### Etapa 2 — Sessão CLI persistente
-
-Manter o processo da CLI vivo entre mensagens da mesma conversa, enviando novos prompts via stdin sem spawnar um novo processo.
-
-**Desafios por CLI:**
-
-| CLI | Modo interativo | Estratégia |
-|-----|----------------|------------|
-| `claude` | `claude` (sem `--print`) aceita stdin contínuo | Enviar prompt via stdin, aguardar `result` no stdout |
-| `codex` | Investigar suporte a stdin ou `--session` | A definir |
-| `gemini` | Investigar | A definir |
-
-- [ ] Investigar modo interativo de cada adapter
-- [ ] Novo método `CliProcessManager.write(sessionId, prompt)` para stdin
-- [ ] Adapter expõe `getInteractiveArgs()` além de `getSpawnArgs()`
-- [ ] Reutilizar processo existente se `sessionId` de conversa estiver vivo
-- [ ] Encerrar processo ao trocar modelo ou iniciar nova conversa
-
-### Etapa 3 — Múltiplas threads simultâneas
-
-Spawn de mais de uma CLI em paralelo na mesma conversa, cada uma com sua própria thread visível no painel direito.
-
-- [ ] UI para criar nova thread manualmente
-- [ ] Painel direito lista todas as threads com status individual
-- [ ] Composer permite escolher em qual thread enviar o próximo prompt
-- [ ] Threads podem ter modelos diferentes
+- [ ] Painel de terminal em tempo real (stdout/stderr bruto por thread)
+- [ ] Sessão CLI persistente entre mensagens da mesma conversa
+- [ ] Múltiplas threads simultâneas na mesma conversa
 
 ---
 
