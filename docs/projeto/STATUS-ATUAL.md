@@ -10,6 +10,31 @@ A arquitetura foi alinhada para o modelo híbrido: Terminal Adapters controlam C
 
 Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENTES.md](../backend/PROTOCOLOS-PERSISTENTES.md).
 
+## Últimos blocos registrados
+
+### `66c0f21` — Terminal Adapters e Orchestrator Core
+
+- `ipc-handlers.cjs` deixou de manter um mapa local de adapters.
+- `providers/terminal-adapter-registry.cjs` passou a resolver adapter por `cliType`.
+- `orchestrator/cli-execution-planner.cjs` passou a decidir entre:
+  - `persistent-process`;
+  - `native-resume`;
+  - `one-shot`.
+- A normalização de entrada persistente agora aceita adapters simples e adapters multi-etapa, preparando protocolos como Gemini ACP.
+
+### `1bd0c7b` — Catálogo MCP inicial
+
+- `mcp/felixo-tool-catalog.cjs` define as tools planejadas do Felixo.
+- Tools de escrita já ficam marcadas com `requiresConfirmation`.
+- A primeira versão da MCP Layer fica como contrato de ferramentas/contexto, não como servidor MCP completo.
+- `npm test` passou a cobrir `mcp/`, `orchestrator/` e `providers/`.
+
+### `22e2af5` — Documentação da arquitetura híbrida
+
+- A arquitetura foi documentada como Terminal Adapters + Orchestrator Core + MCP Layer.
+- `VISAO-GERAL.md`, `ELECTRON.md`, `ROADMAP.md`, `STATUS-ATUAL.md` e `README.md` foram alinhados com essa decisão.
+- Ficou registrado que MCP não substitui CLIs nem API keys; MCP padroniza ferramentas, contexto, Git, memória e skills.
+
 ## O que já foi concluído
 
 ### Backend Electron
