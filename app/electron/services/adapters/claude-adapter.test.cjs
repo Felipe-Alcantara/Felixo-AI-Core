@@ -64,7 +64,7 @@ test('claude adapter resumes an existing provider session', () => {
   ])
 })
 
-test('claude adapter starts a persistent stream-json process', () => {
+test('claude adapter starts a persistent stream-json process without pinning session id', () => {
   const spawnArgs = adapter.getPersistentSpawnArgs({
     threadId: '00000000-0000-4000-8000-000000000001',
   })
@@ -78,8 +78,26 @@ test('claude adapter starts a persistent stream-json process', () => {
     'stream-json',
     '--verbose',
     '--include-partial-messages',
-    '--session-id',
-    '00000000-0000-4000-8000-000000000001',
+  ])
+})
+
+test('claude adapter resumes a persistent process when providerSessionId is set', () => {
+  const spawnArgs = adapter.getPersistentSpawnArgs({
+    threadId: '00000000-0000-4000-8000-000000000001',
+    providerSessionId: '00000000-0000-4000-8000-000000000002',
+  })
+
+  assert.equal(spawnArgs.command, 'claude')
+  assert.deepEqual(spawnArgs.args, [
+    '--print',
+    '--input-format',
+    'stream-json',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--resume',
+    '00000000-0000-4000-8000-000000000002',
   ])
 })
 
