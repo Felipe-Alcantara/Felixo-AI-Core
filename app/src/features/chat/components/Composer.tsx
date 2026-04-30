@@ -1,6 +1,12 @@
-import type { FormEvent, KeyboardEvent } from 'react'
-import { Mic, Plus, Send, Square } from 'lucide-react'
-import type { Model, ModelId, ReasoningEffort } from '../types'
+import { useRef } from 'react'
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import { Mic, Plus, Send, Square, X } from 'lucide-react'
+import type {
+  ContextAttachment,
+  Model,
+  ModelId,
+  ReasoningEffort,
+} from '../types'
 
 type RuntimeSelectOption = {
   value: string
@@ -91,11 +97,14 @@ type ComposerProps = {
   starters: string[]
   models: Model[]
   selectedModel: Model | null
+  attachments: ContextAttachment[]
   variant?: 'home' | 'dock'
   isStreaming?: boolean
   onInputChange: (value: string) => void
   onSelectModel: (modelId: ModelId) => void
   onChangeModelConfig: (patch: ModelRuntimeConfigPatch) => void
+  onAddAttachments: (attachments: ContextAttachment[]) => void
+  onRemoveAttachment: (attachmentId: string) => void
   onSubmit: () => void
   onStop?: () => void
 }
@@ -105,14 +114,19 @@ export function Composer({
   starters,
   models,
   selectedModel,
+  attachments,
   variant = 'dock',
   isStreaming = false,
   onInputChange,
   onSelectModel,
   onChangeModelConfig,
+  onAddAttachments,
+  onRemoveAttachment,
   onSubmit,
   onStop,
 }: ComposerProps) {
+  const attachmentInputRef = useRef<HTMLInputElement>(null)
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -152,6 +166,18 @@ export function Composer({
     onChangeModelConfig({ reasoningEffort: value || undefined })
   }
 
+  async function handleAttachmentChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+
+    if (files.length === 0) {
+      return
+    }
+
+    const nextAttachments = await Promise.all(files.map(createAttachment))
+    onAddAttachments(nextAttachments)
+  }
+
   const isHome = variant === 'home'
   const providerModelOptions = getProviderModelOptions(selectedModel)
   const reasoningEffortOptions = getReasoningEffortOptions(selectedModel)
@@ -180,6 +206,14 @@ export function Composer({
         }
       >
         <div className="rounded-[1.45rem] border border-white/[0.08] bg-[#2b2b2a] shadow-soft">
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleAttachmentChange}
+          />
+
           <textarea
             value={input}
             onChange={(event) => onInputChange(event.target.value)}
@@ -195,6 +229,7 @@ export function Composer({
               <button
                 type="button"
                 title="Adicionar contexto"
+                onClick={() => attachmentInputRef.current?.click()}
                 disabled={isStreaming}
                 className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
@@ -281,6 +316,33 @@ export function Composer({
               </button>
             </div>
           </div>
+
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-t border-white/[0.06] px-4 py-2.5 max-sm:px-3">
+              {attachments.map((attachment) => (
+                <span
+                  key={attachment.id}
+                  title={attachment.path || attachment.name}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/[0.08] bg-black/15 px-2.5 py-1 text-[11px] text-zinc-300"
+                >
+                  <span className="max-w-40 truncate">{attachment.name}</span>
+                  <span className="shrink-0 font-mono text-zinc-600">
+                    {formatFileSize(attachment.size)}
+                  </span>
+                  <button
+                    type="button"
+                    title="Remover anexo"
+                    onClick={() => onRemoveAttachment(attachment.id)}
+                    disabled={isStreaming}
+                    className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+                  >
+                    <X size={11} aria-hidden="true" />
+                    <span className="sr-only">Remover anexo</span>
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap justify-center gap-2 [@media(max-height:620px)]:hidden">
@@ -299,6 +361,60 @@ export function Composer({
       </div>
     </form>
   )
+}
+
+async function createAttachment(file: File): Promise<ContextAttachment> {
+  const path = window.felixo?.getFilePath?.(file) ?? undefined
+  const contentPreview = await createContentPreview(file)
+
+  return {
+    id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    name: file.name,
+    path,
+    type: file.type || 'application/octet-stream',
+    size: file.size,
+    contentPreview,
+  }
+}
+
+async function createContentPreview(file: File) {
+  if (!shouldReadTextPreview(file)) {
+    return undefined
+  }
+
+  const text = await file.text().catch(() => '')
+  const trimmedText = text.trim()
+
+  if (!trimmedText) {
+    return undefined
+  }
+
+  return trimmedText.length > 6000
+    ? `${trimmedText.slice(0, 6000)}\n[preview truncado]`
+    : trimmedText
+}
+
+function shouldReadTextPreview(file: File) {
+  if (file.size > 64 * 1024) {
+    return false
+  }
+
+  return (
+    file.type.startsWith('text/') ||
+    /\.(cjs|css|html|js|json|jsx|md|py|ts|tsx|txt|xml|yaml|yml)$/i.test(file.name)
+  )
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 function getProviderModelOptions(model: Model | null) {

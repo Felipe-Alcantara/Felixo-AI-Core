@@ -54,6 +54,7 @@ export function ModelSettingsModal({
     selectedConfigDraft?.providerModel ?? selectedModel?.providerModel ?? ''
   const configReasoningEffort =
     selectedConfigDraft?.reasoningEffort ?? selectedModel?.reasoningEffort ?? ''
+  const selectedCapabilities = getModelCapabilities(selectedModel)
 
   if (!isOpen) {
     return null
@@ -357,6 +358,28 @@ export function ModelSettingsModal({
               Execução do selecionado
             </div>
 
+            <div className="rounded-2xl border border-white/[0.06] bg-black/15 p-3 text-xs text-zinc-400">
+              {selectedModel ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-zinc-200">
+                      {selectedModel.name}
+                    </span>
+                    <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+                      {selectedModel.cliType}
+                    </span>
+                  </div>
+                  <ul className="mt-2 space-y-1 leading-relaxed">
+                    {selectedCapabilities.map((capability) => (
+                      <li key={capability}>{capability}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p>Selecione um modelo para ver capacidades e campos.</p>
+              )}
+            </div>
+
             <label className="block text-xs text-zinc-400">
               Modelo
               <input
@@ -461,4 +484,39 @@ export function ModelSettingsModal({
       </section>
     </div>
   )
+}
+
+function getModelCapabilities(model: Model | null) {
+  if (!model) {
+    return []
+  }
+
+  if (model.cliType === 'claude') {
+    return [
+      'Processo persistente real por thread quando a CLI suporta stream-json.',
+      'Configura modelo do provedor e effort no prompt/adapter.',
+      'Usa retomada de sessão quando providerSessionId está disponível.',
+    ]
+  }
+
+  if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
+    return [
+      'Executa com JSON estruturado e eventos de terminal humanizados.',
+      'Configura modelo OpenAI e effort quando suportado pelo adapter.',
+      'Prepara continuidade por thread e retomada nativa quando há sessão.',
+    ]
+  }
+
+  if (model.cliType === 'gemini' || model.cliType === 'gemini-acp') {
+    return [
+      'Executa Gemini CLI com saída estruturada e parsing de eventos.',
+      'Configura modelo do provedor quando o adapter aceita override.',
+      'Prepara retomada nativa ou ACP conforme o tipo cadastrado.',
+    ]
+  }
+
+  return [
+    'Tipo de CLI ainda não reconhecido.',
+    'Configure comando, nome e origem para o app detectar o adapter correto.',
+  ]
 }

@@ -90,10 +90,42 @@ export type Project = {
   path: string
 }
 
+export type ContextAttachment = {
+  id: string
+  name: string
+  path?: string
+  type: string
+  size: number
+  contentPreview?: string
+}
+
 export type ChatSession = {
   id: string
   title: string
   messages: ChatMessage[]
   createdAt: string
   updatedAt: string
+}
+
+export type AutomationScope = 'chat' | 'code' | 'docs' | 'git' | 'planning'
+
+export type AutomationDefinition = {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  scope: AutomationScope
+  isDefault?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type GitProjectSummary = {
+  projectPath: string
+  branch: string | null
+  statusLines: string[]
+  diffStat: string
+  recentCommits: string[]
+  isClean: boolean
+  error?: string
 }

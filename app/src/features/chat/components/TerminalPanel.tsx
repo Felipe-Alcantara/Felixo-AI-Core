@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ChevronRight, Terminal, Trash2 } from 'lucide-react'
 import type {
   TerminalOutputChunk,
@@ -13,16 +13,28 @@ type TerminalPanelProps = {
   onClear: () => void
 }
 
+const MIN_WIDTH = 280
+const MAX_WIDTH = 640
+const DEFAULT_WIDTH = 360
+
 export function TerminalPanel({
   sessions,
   isOpen,
   onToggleOpen,
   onClear,
 }: TerminalPanelProps) {
+  const [width, setWidth] = useState(DEFAULT_WIDTH)
+  const [dragging, setDragging] = useState(false)
+  const [viewMode, setViewMode] = useState<'orchestrator' | 'threads'>(
+    'threads',
+  )
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true)
   const outputRef = useRef<HTMLDivElement>(null)
   const outputEndRef = useRef<HTMLDivElement>(null)
+  const isDragging = useRef(false)
+  const startX = useRef(0)
+  const startWidth = useRef(0)
 
   const effectiveSelectedSessionId =
     sessions.some((session) => session.sessionId === selectedSessionId)
@@ -37,6 +49,51 @@ export function TerminalPanel({
       null,
     [effectiveSelectedSessionId, sessions],
   )
+  const orchestratorEntries = useMemo(
+    () =>
+      sessions
+        .flatMap((session) =>
+          session.chunks.map((chunk) => ({
+            chunk,
+            sessionId: session.sessionId,
+          })),
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.chunk.createdAt).getTime() -
+            new Date(b.chunk.createdAt).getTime(),
+        ),
+    [sessions],
+  )
+
+  const onMouseMove = useCallback((event: MouseEvent) => {
+    if (!isDragging.current) {
+      return
+    }
+
+    const delta = startX.current - event.clientX
+    const nextWidth = Math.min(
+      MAX_WIDTH,
+      Math.max(MIN_WIDTH, startWidth.current + delta),
+    )
+    setWidth(nextWidth)
+  }, [])
+
+  const onMouseUp = useCallback(() => {
+    isDragging.current = false
+    setDragging(false)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }, [])
+
+  useEffect(() => {
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [onMouseMove, onMouseUp])
 
   useEffect(() => {
     if (!isOpen || !isPinnedToBottom) {
@@ -48,7 +105,9 @@ export function TerminalPanel({
     effectiveSelectedSessionId,
     isOpen,
     isPinnedToBottom,
+    orchestratorEntries.length,
     selectedSession?.chunks.length,
+    viewMode,
   ])
 
   function handleOutputScroll() {
@@ -70,7 +129,17 @@ export function TerminalPanel({
 
   function selectSession(sessionId: string) {
     setSelectedSessionId(sessionId)
+    setViewMode('threads')
     setIsPinnedToBottom(true)
+  }
+
+  function handleDragStart(event: React.MouseEvent) {
+    isDragging.current = true
+    setDragging(true)
+    startX.current = event.clientX
+    startWidth.current = width
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
   }
 
   if (!isOpen) {
@@ -93,7 +162,13 @@ export function TerminalPanel({
   }
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-white/[0.08] bg-[#111110] text-zinc-300 max-[1020px]:hidden">
+    <aside
+      style={{ width }}
+      className={[
+        'relative flex shrink-0 flex-col border-l border-white/[0.08] bg-[#111110] text-zinc-300 max-[1020px]:hidden',
+        dragging ? '' : 'transition-[width] duration-300 ease-in-out',
+      ].join(' ')}
+    >
       <header className="flex h-12 items-center justify-between border-b border-white/[0.07] px-3">
         <div className="flex min-w-0 items-center gap-2 text-[12px] font-medium text-zinc-300">
           <Terminal size={15} aria-hidden="true" />
@@ -125,6 +200,33 @@ export function TerminalPanel({
           </button>
         </div>
       </header>
+
+      <div className="flex shrink-0 gap-1 border-b border-white/[0.07] px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setViewMode('threads')}
+          className={[
+            'h-7 flex-1 rounded-lg text-[11px] transition',
+            viewMode === 'threads'
+              ? 'bg-white/[0.08] text-zinc-100'
+              : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
+          ].join(' ')}
+        >
+          Threads
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('orchestrator')}
+          className={[
+            'h-7 flex-1 rounded-lg text-[11px] transition',
+            viewMode === 'orchestrator'
+              ? 'bg-white/[0.08] text-zinc-100'
+              : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
+          ].join(' ')}
+        >
+          Orquestrador
+        </button>
+      </div>
 
       <div className="max-h-40 shrink-0 overflow-y-auto border-b border-white/[0.07] p-2">
         {sessions.length === 0 ? (
@@ -173,7 +275,9 @@ export function TerminalPanel({
               ? `${selectedSession.sessionId.slice(0, 8)} · ${formatTime(
                   selectedSession.updatedAt,
                 )}`
-              : 'sem sessão'}
+              : viewMode === 'orchestrator'
+                ? 'orquestrador'
+                : 'sem sessão'}
           </span>
           {selectedSession && (
             <span
@@ -193,7 +297,25 @@ export function TerminalPanel({
             onScroll={handleOutputScroll}
             className="h-full overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed"
           >
-            {!selectedSession || selectedSession.chunks.length === 0 ? (
+            {viewMode === 'orchestrator' ? (
+              orchestratorEntries.length === 0 ? (
+                <p className="text-zinc-600">Aguardando eventos da CLI.</p>
+              ) : (
+                <div className="space-y-2">
+                  {orchestratorEntries.map((entry) => (
+                    <div
+                      key={`${entry.sessionId}-${entry.chunk.id}`}
+                      className="rounded-lg border border-white/[0.04] bg-black/10 p-2"
+                    >
+                      <div className="mb-1 font-mono text-[10px] text-zinc-600">
+                        Thread {entry.sessionId.slice(0, 8)}
+                      </div>
+                      <TerminalChunk chunk={entry.chunk} />
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : !selectedSession || selectedSession.chunks.length === 0 ? (
               <p className="text-zinc-600">Aguardando eventos da CLI.</p>
             ) : (
               <div className="space-y-2">
@@ -218,6 +340,11 @@ export function TerminalPanel({
           )}
         </div>
       </div>
+
+      <div
+        onMouseDown={handleDragStart}
+        className="absolute left-0 top-0 h-full w-1 cursor-col-resize hover:bg-white/10 active:bg-white/20"
+      />
     </aside>
   )
 }

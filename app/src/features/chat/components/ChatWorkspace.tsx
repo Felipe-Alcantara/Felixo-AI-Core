@@ -5,14 +5,38 @@ import {
   ideaStarters,
   quickPrompts,
 } from '../data/models'
+import { defaultAutomations } from '../data/automations'
 import {
   createAssistantMessage,
   createUserMessage,
   initialMessages,
 } from '../services/chat-service'
+import {
+  createAutomationId,
+  loadCustomAutomations,
+  saveCustomAutomations,
+} from '../services/automation-storage'
 import { loadModels, saveModels } from '../services/model-storage'
-import type { ChatMessage, ChatSession, Model, ModelId, Project, StreamEvent } from '../types'
+import {
+  loadActiveProjectIds,
+  loadProjects,
+  saveActiveProjectIds,
+  saveProjects,
+} from '../services/project-storage'
+import type {
+  AutomationDefinition,
+  ChatMessage,
+  ChatSession,
+  ContextAttachment,
+  Model,
+  ModelId,
+  Project,
+  StreamEvent,
+} from '../types'
 import { useTerminalOutput } from '../hooks/useTerminalOutput'
+import { AutomationsModal } from './AutomationsModal'
+import { CodePanel } from './CodePanel'
+import { FelixoSettingsModal } from './FelixoSettingsModal'
 import { ModelSettingsModal } from './ModelSettingsModal'
 import { ProjectsModal } from './ProjectsModal'
 import { AppSidebar } from './AppSidebar'
@@ -30,14 +54,24 @@ export function ChatWorkspace() {
   )
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [activeProjectIds, setActiveProjectIds] = useState<Set<string>>(new Set())
+  const [projects, setProjects] = useState<Project[]>(() => loadProjects())
+  const [activeProjectIds, setActiveProjectIds] = useState<Set<string>>(() =>
+    loadActiveProjectIds(loadProjects()),
+  )
+  const [customAutomations, setCustomAutomations] = useState<AutomationDefinition[]>(
+    () => loadCustomAutomations(),
+  )
+  const [contextAttachments, setContextAttachments] = useState<ContextAttachment[]>([])
   const [input, setInput] = useState('')
   const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
   const [isProjectsOpen, setIsProjectsOpen] = useState(false)
+  const [isAutomationsOpen, setIsAutomationsOpen] = useState(false)
+  const [isCodePanelOpen, setIsCodePanelOpen] = useState(false)
+  const [isFelixoSettingsOpen, setIsFelixoSettingsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
+  const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
   const activeThreadIdRef = useRef<string | null>(null)
   const conversationThreadIdRef = useRef<string | null>(null)
@@ -60,6 +94,11 @@ export function ChatWorkspace() {
     [models, selectedModelId],
   )
 
+  const automations = useMemo(
+    () => [...defaultAutomations, ...customAutomations],
+    [customAutomations],
+  )
+
   const runtimeLabel = window.felixo?.versions.electron
     ? `Electron ${window.felixo.versions.electron}`
     : 'Web'
@@ -73,6 +112,18 @@ export function ChatWorkspace() {
       streamHandlerRef.current(event)
     })
   }, [])
+
+  useEffect(() => {
+    saveProjects(projects)
+  }, [projects])
+
+  useEffect(() => {
+    saveActiveProjectIds(activeProjectIds)
+  }, [activeProjectIds])
+
+  useEffect(() => {
+    saveCustomAutomations(customAutomations)
+  }, [customAutomations])
 
   function sendMessage() {
     const content = input.trim()
@@ -122,6 +173,7 @@ export function ChatWorkspace() {
       selectedModel,
       activeProjects,
       projectDiff,
+      contextAttachments,
     )
     const resumePrompt = createCliPrompt(
       messages,
@@ -130,6 +182,7 @@ export function ChatWorkspace() {
       selectedModel,
       activeProjects,
       projectDiff,
+      contextAttachments,
       { includeHistory: false },
     )
 
@@ -139,6 +192,7 @@ export function ChatWorkspace() {
       createAssistantMessage(selectedModel, sessionId),
     ])
     setInput('')
+    setContextAttachments([])
     messageThreadIdsRef.current.set(sessionId, threadId)
     startTerminalSession(threadId)
     setActiveStreamingSession(sessionId, threadId)
@@ -172,10 +226,15 @@ export function ChatWorkspace() {
   }
 
   function resetChat() {
+    const threadId = conversationThreadIdRef.current
+
     saveCurrentSession()
     setInput('')
+    setContextAttachments([])
     stopStreaming()
+    resetBackendThread(threadId)
     setMessages(initialMessages)
+    clearTerminalSessions()
     resetConversationThread()
   }
 
@@ -203,6 +262,7 @@ export function ChatWorkspace() {
   function loadSession(session: ChatSession) {
     saveCurrentSession()
     setInput('')
+    setContextAttachments([])
     stopStreaming()
     resetConversationThread()
     setMessages(session.messages)
@@ -234,6 +294,59 @@ export function ChatWorkspace() {
       }
       return next
     })
+  }
+
+  function addContextAttachments(attachments: ContextAttachment[]) {
+    setContextAttachments((currentAttachments) => [
+      ...currentAttachments,
+      ...attachments.filter(
+        (attachment) =>
+          !currentAttachments.some(
+            (currentAttachment) =>
+              currentAttachment.path &&
+              attachment.path &&
+              currentAttachment.path === attachment.path,
+          ),
+      ),
+    ])
+  }
+
+  function removeContextAttachment(attachmentId: string) {
+    setContextAttachments((currentAttachments) =>
+      currentAttachments.filter((attachment) => attachment.id !== attachmentId),
+    )
+  }
+
+  function addCustomAutomation(
+    automation: Pick<
+      AutomationDefinition,
+      'description' | 'name' | 'prompt' | 'scope'
+    >,
+  ) {
+    const now = new Date().toISOString()
+    setCustomAutomations((currentAutomations) => [
+      {
+        ...automation,
+        id: createAutomationId(automation.name),
+        createdAt: now,
+        updatedAt: now,
+      },
+      ...currentAutomations,
+    ])
+  }
+
+  function removeCustomAutomation(automationId: string) {
+    setCustomAutomations((currentAutomations) =>
+      currentAutomations.filter((automation) => automation.id !== automationId),
+    )
+  }
+
+  function applyAutomation(automation: AutomationDefinition) {
+    setInput((currentInput) => {
+      const separator = currentInput.trim() ? '\n\n' : ''
+      return `${currentInput}${separator}${automation.prompt} `
+    })
+    setIsAutomationsOpen(false)
   }
 
   function addModel(model: Model) {
@@ -327,6 +440,19 @@ export function ChatWorkspace() {
     setSelectedModelId(modelId)
     stopStreaming()
     resetConversationThread({ resetProjectDiff: false })
+  }
+
+  function openModelSettingsFor(modelId: ModelId) {
+    selectModel(modelId)
+    setIsModelSettingsOpen(true)
+  }
+
+  function resetBackendThread(threadId: string | null) {
+    if (!threadId) {
+      return
+    }
+
+    window.felixo?.cli?.resetThread?.({ threadId })
   }
 
   function stopStreaming() {
@@ -520,9 +646,13 @@ export function ChatWorkspace() {
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
         onOpenProjects={() => setIsProjectsOpen(true)}
+        onOpenAutomations={() => setIsAutomationsOpen(true)}
+        onOpenCode={() => setIsCodePanelOpen(true)}
+        onOpenFelixoSettings={() => setIsFelixoSettingsOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
         onSelectSession={loadSession}
         onToggleProject={toggleProject}
+        onOpenModelSettingsFor={openModelSettingsFor}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-[#171716]">
@@ -557,9 +687,12 @@ export function ChatWorkspace() {
                 starters={ideaStarters}
                 models={models}
                 selectedModel={selectedModel}
+                attachments={contextAttachments}
                 onInputChange={setInput}
                 onSelectModel={selectModel}
                 onChangeModelConfig={updateSelectedModelConfig}
+                onAddAttachments={addContextAttachments}
+                onRemoveAttachment={removeContextAttachment}
                 onSubmit={sendMessage}
                 onStop={stopStreaming}
                 isStreaming={isStreaming}
@@ -569,7 +702,11 @@ export function ChatWorkspace() {
             <section className="min-h-0 flex-1 overflow-y-auto px-8 py-12 max-sm:px-4 max-sm:py-8 [@media(max-height:620px)]:py-6">
               <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center">
                 <div className="mb-7 text-center [@media(max-height:620px)]:mb-4">
-                  <div className="mx-auto mb-4 h-8 w-8 rounded-full bg-[conic-gradient(from_0deg,#f59e0b,#f97316,#fb7185,#f59e0b)] opacity-80 [@media(max-height:620px)]:mb-2 [@media(max-height:620px)]:h-6 [@media(max-height:620px)]:w-6" />
+                  <img
+                    src="/brand/felixo-logo.png"
+                    alt="Felixo"
+                    className="mx-auto mb-4 h-9 w-9 object-contain [@media(max-height:620px)]:mb-2 [@media(max-height:620px)]:h-7 [@media(max-height:620px)]:w-7"
+                  />
                   <h1 className="text-[30px] font-semibold tracking-[-0.02em] text-zinc-200 max-sm:text-2xl [@media(max-height:620px)]:text-2xl">
                     De volta ao trabalho, Felixo?
                   </h1>
@@ -580,10 +717,13 @@ export function ChatWorkspace() {
                   starters={ideaStarters}
                   models={models}
                   selectedModel={selectedModel}
+                  attachments={contextAttachments}
                   variant="home"
                   onInputChange={setInput}
                   onSelectModel={selectModel}
                   onChangeModelConfig={updateSelectedModelConfig}
+                  onAddAttachments={addContextAttachments}
+                  onRemoveAttachment={removeContextAttachment}
                   onSubmit={sendMessage}
                   onStop={stopStreaming}
                   isStreaming={isStreaming}
@@ -607,7 +747,10 @@ export function ChatWorkspace() {
           )}
         </div>
 
-        <QaLoggerPanel />
+        <QaLoggerPanel
+          isOpen={isQaLoggerOpen}
+          onToggleOpen={() => setIsQaLoggerOpen((value) => !value)}
+        />
       </main>
 
       <TerminalPanel
@@ -615,6 +758,32 @@ export function ChatWorkspace() {
         isOpen={isTerminalPanelOpen}
         onToggleOpen={() => setIsTerminalPanelOpen((value) => !value)}
         onClear={clearTerminalSessions}
+      />
+
+      <AutomationsModal
+        isOpen={isAutomationsOpen}
+        automations={automations}
+        customAutomations={customAutomations}
+        onClose={() => setIsAutomationsOpen(false)}
+        onApplyAutomation={applyAutomation}
+        onAddAutomation={addCustomAutomation}
+        onRemoveAutomation={removeCustomAutomation}
+      />
+
+      <CodePanel
+        isOpen={isCodePanelOpen}
+        projects={projects}
+        activeProjectIds={activeProjectIds}
+        onClose={() => setIsCodePanelOpen(false)}
+      />
+
+      <FelixoSettingsModal
+        isOpen={isFelixoSettingsOpen}
+        runtimeLabel={runtimeLabel}
+        projectsCount={projects.length}
+        activeProjectsCount={activeProjectIds.size}
+        automationsCount={automations.length}
+        onClose={() => setIsFelixoSettingsOpen(false)}
       />
 
       <ModelSettingsModal
@@ -654,6 +823,7 @@ function createCliPrompt(
   selectedModel: Model,
   activeProjects: Project[],
   projectDiff: ProjectDiff,
+  attachments: ContextAttachment[],
   options: CliPromptOptions = {},
 ) {
   const { includeHistory = true } = options
@@ -668,8 +838,13 @@ function createCliPrompt(
   const hasCountContext = allHistoryMessages.length > 0
   const hasHistory = includeHistory && historyMessages.length > 0
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
+  const hasAttachments = attachments.length > 0
   const hasContext =
-    hasCountContext || hasHistory || activeProjects.length > 0 || hasDiff
+    hasCountContext ||
+    hasHistory ||
+    activeProjects.length > 0 ||
+    hasDiff ||
+    hasAttachments
 
   if (!hasContext) {
     return currentPrompt
@@ -700,6 +875,25 @@ function createCliPrompt(
     }
     for (const p of projectDiff.removed) {
       lines.push(`  - Removido: ${p.name} — não interaja mais com este repositório`)
+    }
+  }
+
+  if (hasAttachments) {
+    lines.push('', 'Anexos de contexto adicionados pelo usuario:')
+    for (const attachment of attachments) {
+      lines.push(
+        `  - ${attachment.name}`,
+        `    Tipo: ${attachment.type}`,
+        `    Tamanho: ${formatBytes(attachment.size)}`,
+      )
+
+      if (attachment.path) {
+        lines.push(`    Caminho local: ${attachment.path}`)
+      }
+
+      if (attachment.contentPreview) {
+        lines.push('    Preview textual:', indentBlock(attachment.contentPreview, 6))
+      }
     }
   }
 
@@ -766,4 +960,24 @@ function formatModelLabel(model: Model) {
   }
 
   return `${model.name} (${details.join(', ')})`
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function indentBlock(value: string, spaces: number) {
+  const indent = ' '.repeat(spaces)
+  return value
+    .split('\n')
+    .map((line) => `${indent}${line}`)
+    .join('\n')
 }
