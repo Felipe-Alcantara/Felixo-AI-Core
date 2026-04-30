@@ -17,31 +17,46 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `selectedModelId` | `string \| null` | Modelo ativo |
 | `messages` | `ChatMessage[]` | Mensagens da conversa atual |
 | `sessions` | `ChatSession[]` | Histórico de chats anteriores (em memória) |
+| `projects` | `Project[]` | Projetos Git importados |
+| `activeProjectIds` | `Set<string>` | Projetos ativos no contexto do prompt |
 | `input` | `string` | Texto do campo de entrada |
 | `isModelSettingsOpen` | `boolean` | Visibilidade do modal de modelos |
+| `isProjectsOpen` | `boolean` | Visibilidade do modal de projetos |
 | `activeSessionId` | `string \| null` | Sessão CLI em andamento |
 | `isSidebarOpen` | `boolean` | Estado da sidebar |
+| `isTerminalPanelOpen` | `boolean` | Estado do painel Terminal |
 
 ### Funções
 
 | Função | Descrição |
 |--------|-----------|
-| `sendMessage()` | Valida input, cria sessionId, chama `window.felixo.cli.send()` |
+| `sendMessage()` | Valida input, cria `sessionId`, resolve `threadId`, monta prompt e chama `window.felixo.cli.send()` |
 | `handleStreamEvent(event)` | Roteador de eventos: text → append, done → complete, error → error |
 | `appendAssistantText(sessionId, text)` | Acumula texto incrementalmente na mensagem ativa |
 | `completeAssistantMessage(sessionId, content, status)` | Finaliza resposta, remove `isStreaming` |
 | `appendImmediateError(prompt, model, message)` | Cria par user+error sem streaming |
-| `stopStreaming()` | Chama `window.felixo.cli.stop()` e marca sessão como parada |
+| `stopStreaming()` | Chama `window.felixo.cli.stop({ sessionId, threadId })` e marca sessão como parada |
 | `resetChat()` | Salva sessão atual no histórico e limpa messages para o estado inicial |
 | `saveCurrentSession()` | Serializa a conversa ativa como `ChatSession` e adiciona ao topo de `sessions` |
 | `loadSession(session)` | Salva sessão atual e restaura as mensagens de uma sessão do histórico |
+| `getConversationThreadId(model)` | Mantém um `threadId` estável enquanto a conversa usa o mesmo modelo |
+| `resetConversationThread(options)` | Reseta thread lógica em novo chat, troca de modelo ou sessão carregada |
+| `resolveEventThreadId(event)` | Resolve qual thread do Terminal deve receber status |
+| `addProjects(projects)` | Adiciona projetos sem duplicar caminho |
+| `toggleProject(project)` | Ativa/desativa projeto no contexto |
 | `addModel(model)` | Adiciona ou substitui modelo, salva no localStorage |
 | `removeModel(model)` | Remove modelo e salva |
 | `clearModels()` | Remove todos e salva |
-| `createCliPrompt(input, messages, models)` | Formata prompt com histórico (últimas 12 mensagens) |
+| `createCliPrompt(...)` | Formata prompt com histórico recente, contagem de mensagens, projetos ativos e diff de projetos |
 | `formatHistoryMessage(message, index, models)` | Serializa mensagem histórica como `[User]` ou `[Modelo]` |
 | `resolveMessageModelLabel(message, models)` | Resolve nome do modelo da mensagem |
 | `createSessionId()` | Gera UUID v4 simples |
+
+### Identidades de execução
+
+- `threadId`: fica estável na conversa enquanto o modelo não muda; alimenta o painel Terminal e o processo persistente quando existe.
+- `sessionId`: é criado por mensagem; identifica qual mensagem assistente recebe os chunks do streaming.
+- `resumePrompt`: versão curta do prompt, sem histórico completo, usada quando o backend consegue reaproveitar contexto nativo ou processo persistente.
 
 ---
 
@@ -62,9 +77,9 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `onToggleSidebar` | `() => void` | Recolhe a sidebar |
 | `onOpenProjects` | `() => void` | Abre o ProjectsModal |
 | `onSelectSession` | `(session: ChatSession) => void` | Carrega uma sessão do histórico |
-| `onSelectProject` | `(project: Project) => void` | Ativa/desativa um projeto (toggle) |
+| `onToggleProject` | `(project: Project) => void` | Ativa/desativa um projeto (toggle) |
 | `projects` | `Project[]` | Lista de projetos para exibir na subseção |
-| `activeProject` | `Project \| null` | Projeto atualmente ativo |
+| `activeProjectIds` | `Set<string>` | Projetos atualmente ativos |
 
 ### Constantes
 
@@ -203,10 +218,10 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `starters` | `string[]` | Sugestões de início rápido |
 | `models` | `Model[]` | Lista de modelos disponíveis |
 | `selectedModel` | `Model \| null` | Modelo selecionado |
-| `variant` | `'landing' \| 'chat'` | Layout da landing ou do chat ativo |
+| `variant` | `'home' \| 'dock'` | Layout da tela inicial ou do chat ativo |
 | `isStreaming` | `boolean` | Bloqueia envio durante streaming |
 | `onInputChange` | `(v: string) => void` | Atualiza input |
-| `onSelectModel` | `(m: Model) => void` | Troca modelo ativo |
+| `onSelectModel` | `(id: ModelId) => void` | Troca modelo ativo |
 | `onSubmit` | `() => void` | Envia mensagem |
 | `onStop` | `() => void` | Para streaming |
 
@@ -229,9 +244,10 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | Prop | Tipo | Descrição |
 |------|------|-----------|
 | `models` | `Model[]` | Lista atual de modelos |
+| `selectedModel` | `Model \| null` | Modelo selecionado atualmente |
 | `isOpen` | `boolean` | Visibilidade do modal |
 | `onClose` | `() => void` | Fecha modal |
-| `onAddModel` | `(m: ModelFileSelection) => void` | Adiciona modelo |
+| `onAddModel` | `(m: Model) => void` | Adiciona modelo |
 | `onRemoveModel` | `(m: Model) => void` | Remove modelo |
 | `onClearModels` | `() => void` | Remove todos |
 
@@ -247,6 +263,43 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `createCommandPath(fileName, filePath)` | Normaliza caminho relativo a `ai-clis/` |
 | `inferModelName(content, fileName)` | Extrai nome de comentário `#` no topo do arquivo |
 | `getFileNameFromCommand(command)` | Extrai nome do arquivo do comando |
+
+---
+
+## TerminalPanel
+
+**Arquivo:** `components/TerminalPanel.tsx`
+**Responsabilidade:** Painel lateral direito que mostra eventos legíveis da thread CLI ativa ou de threads anteriores.
+
+### Props
+
+| Prop | Tipo | Descrição |
+|------|------|-----------|
+| `sessions` | `TerminalOutputSession[]` | Threads de terminal acumuladas pelo hook |
+| `isOpen` | `boolean` | Painel aberto ou recolhido |
+| `onToggleOpen` | `() => void` | Abre/recolhe painel |
+| `onClear` | `() => void` | Limpa eventos locais do terminal |
+
+### Comportamento
+
+- Lista threads por `sessionId` do Terminal, que corresponde ao `threadId` da conversa.
+- Exibe status `running`, `completed`, `error` ou `stopped`.
+- Mostra quantidade de eventos e bytes acumulados por thread.
+- Faz scroll automático enquanto o usuário está no fim da saída.
+- Pausa o autoscroll quando o usuário rola para cima.
+- Mescla chunks consecutivos de resposta do assistente para reduzir ruído visual.
+- Mostra metadados como tokens, custo, duração, modo de execução e id de provedor quando disponíveis.
+
+### Tipos de evento exibidos
+
+| kind | Origem |
+|------|--------|
+| `lifecycle` | Início, retomada, prompt recebido, processamento |
+| `assistant` | Texto de resposta |
+| `tool` | Uso ou resultado de ferramenta |
+| `metrics` | Duração, custo e tokens |
+| `stderr` | Avisos ou erros vindos de stderr |
+| `error` | Falhas controladas do backend/adapter |
 
 ---
 
@@ -275,4 +328,6 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 
 ### Eventos capturados
 
-`spawn`, `stdout`, `stderr`, `non-json-output`, `close`, `stop`, `error`
+Eventos de QA vêm do backend com `scope`, `level`, `sessionId`, `message` e `details`. Escopos comuns:
+
+`cli:spawn`, `cli:persistent-spawn`, `cli:persistent-write`, `cli:process`, `cli:jsonl`, `cli:stdout`, `cli:stderr`, `cli:timeout`, `cli:close`, `cli:stop`, `cli:error`.

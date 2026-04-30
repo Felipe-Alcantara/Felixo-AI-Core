@@ -69,33 +69,51 @@
 `Omit<Model, 'id'>` — usado ao importar antes de gerar ID.
 
 #### `StreamEvent`
-Union de 5 tipos:
+Union de eventos do chat. Todos carregam `sessionId`; a maioria também pode carregar `threadId`.
 
 | type | Campos extras | Descrição |
 |------|--------------|-----------|
-| `'text'` | `text, sessionId` | Chunk de texto do assistente |
-| `'tool_use'` | `tool, input, sessionId` | Uso de ferramenta |
-| `'tool_result'` | `output, sessionId` | Resultado de ferramenta |
-| `'done'` | `cost?, duration?, stopped?, sessionId` | Fim da resposta |
-| `'error'` | `message, sessionId` | Erro durante execução |
+| `'text'` | `text, sessionId, threadId?` | Chunk de texto do assistente |
+| `'tool_use'` | `tool, input, sessionId, threadId?` | Uso de ferramenta |
+| `'tool_result'` | `output, sessionId, threadId?` | Resultado de ferramenta |
+| `'done'` | `cost?, duration?, stopped?, sessionId, threadId?` | Fim da resposta |
+| `'error'` | `message, sessionId, threadId?` | Erro durante execução |
+
+#### `TerminalOutputEvent`
+
+Evento legível usado pelo painel Terminal.
+
+```ts
+{
+  sessionId: string
+  source: 'stdout' | 'stderr' | 'system'
+  chunk: string
+  severity?: 'debug' | 'info' | 'warn' | 'error'
+  kind?: 'assistant' | 'error' | 'lifecycle' | 'metrics' | 'stderr' | 'tool'
+  title?: string
+  metadata?: Record<string, string | number | boolean | null | undefined>
+}
+```
+
+No Terminal, `sessionId` representa a thread do terminal (`threadId` no fluxo do chat).
 
 #### `QaLogEntry`
 ```ts
 {
-  id: string
+  id: number
   createdAt: string        // ISO 8601
   level: 'debug' | 'info' | 'warn' | 'error'
   scope: string
   sessionId?: string
   message: string
-  details?: unknown
+  details: unknown
 }
 ```
 
 #### `ChatMessage`
 ```ts
 {
-  id: string
+  id: number
   role: 'user' | 'assistant'
   content: string
   model?: string
@@ -156,14 +174,28 @@ Union de 5 tipos:
   getFilePath(file: File): string
 
   cli: {
-    send(params: { prompt: string; cliType: CliType; sessionId: string; modelCommand: string }): Promise<CliInvokeResult>
-    stop(params: { sessionId: string }): Promise<void>
+    send(params: {
+      sessionId: string
+      threadId?: string
+      prompt: string
+      resumePrompt?: string
+      model: Model
+      cwd?: string
+    }): Promise<CliInvokeResult>
+    stop(params: { sessionId: string; threadId?: string }): Promise<CliInvokeResult>
     onStream(callback: (event: StreamEvent) => void): () => void
+    onRawOutput(callback: (event: TerminalOutputEvent) => void): () => void
+    onTerminalOutput(callback: (event: TerminalOutputEvent) => void): () => void
+  }
+
+  projects: {
+    pickFolder(): Promise<string | null>
+    detectRepos(folderPath: string): Promise<{ name: string; path: string }[]>
   }
 
   qaLogger: {
     getEntries(): Promise<QaLogEntry[]>
-    clear(): Promise<void>
+    clear(): Promise<CliInvokeResult>
     onEntry(callback: (entry: QaLogEntry) => void): () => void
     onCleared(callback: () => void): () => void
   }

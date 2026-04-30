@@ -34,8 +34,10 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 - [x] Busca em tempo real no histórico de sessões
 - [x] Gerenciamento de projetos Git (repositório único e workspace)
 - [x] Contexto de projetos ativos injetado no prompt com diff entre mensagens
-- [x] Painel de terminal em tempo real (stdout/stderr bruto por thread)
-- [ ] Sessão CLI persistente entre mensagens da mesma conversa
+- [x] Painel de terminal em tempo real com eventos humanizados por thread
+- [x] Separação entre `threadId` lógico da conversa e `sessionId` da resposta
+- [x] Sessão/processo persistente real para Claude
+- [ ] Sessão/processo persistente real para Codex e Gemini
 - [ ] Múltiplas threads simultâneas na mesma conversa
 - [ ] Cadastrar e editar comandos locais manualmente
 - [ ] Estrutura inicial de contas/perfis (mesmo que mockada)
@@ -45,9 +47,13 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 ## Frente Atual — Terminal Persistente e Painel de Output
 
 Detalhamento completo em [TERMINAL-PERSISTENTE.md](./TERMINAL-PERSISTENTE.md).
+Resumo operacional em [STATUS-ATUAL.md](./STATUS-ATUAL.md).
 
-- [x] Painel de terminal em tempo real (stdout/stderr bruto por thread)
-- [ ] Sessão CLI persistente entre mensagens da mesma conversa
+- [x] Painel de terminal em tempo real com lifecycle, resposta, ferramentas, métricas, stderr e erros
+- [x] `threadId` fixo por conversa/modelo e `sessionId` por mensagem
+- [x] Claude com processo persistente real via `--input-format stream-json`
+- [x] Codex/Gemini com continuidade por contexto explícito e `threadId` visual estável
+- [ ] Codex/Gemini com processo persistente real ou retomada nativa validada
 - [ ] Múltiplas threads simultâneas na mesma conversa
 
 ---
@@ -334,8 +340,9 @@ Adicionar uma camada de IDE leve e integrada, permitindo editar arquivos, navega
 - [x] Histórico básico de sessão
 - [x] Busca em tempo real no histórico
 - [x] Gerenciamento de projetos Git com contexto no prompt
-- [ ] Painel de terminal em tempo real (ver stdout/stderr bruto por thread)
-- [ ] Sessão CLI persistente (manter processo vivo entre mensagens)
+- [x] Painel de terminal em tempo real com eventos humanizados por thread
+- [x] Sessão CLI persistente no Claude
+- [ ] Sessão CLI persistente no Codex/Gemini
 - [ ] Múltiplas threads simultâneas na mesma conversa
 
 ### Bloco 2 — Organização
