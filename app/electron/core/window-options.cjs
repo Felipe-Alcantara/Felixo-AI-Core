@@ -5,6 +5,10 @@ const mainWindowOptions = {
   height: 760,
   minWidth: 720,
   minHeight: 500,
+  resizable: true,
+  maximizable: true,
+  fullscreenable: true,
+  useContentSize: false,
   backgroundColor: '#09090b',
   title: 'Felixo AI Core',
   webPreferences: {
