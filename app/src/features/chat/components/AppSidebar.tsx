@@ -140,8 +140,13 @@ export function AppSidebar({
                 {label}
               </button>
 
-              {isProjects && projects.length > 0 && (
+              {isProjects && (
                 <div className="ml-3 mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3">
+                  {projects.length === 0 && (
+                    <span className="block px-1.5 py-1 text-[11px] text-zinc-600">
+                      Nenhum projeto selecionado
+                    </span>
+                  )}
                   {projects.map((project) => (
                     <button
                       key={project.id}

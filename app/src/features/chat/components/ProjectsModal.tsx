@@ -136,7 +136,7 @@ export function ProjectsModal({
               </p>
               <button
                 type="button"
-                disabled={loading || !window.felixo?.projects}
+                disabled={loading}
                 onClick={pickRepo}
                 className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -153,7 +153,7 @@ export function ProjectsModal({
               </p>
               <button
                 type="button"
-                disabled={loading || !window.felixo?.projects}
+                disabled={loading}
                 onClick={pickWorkspace}
                 className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
               >

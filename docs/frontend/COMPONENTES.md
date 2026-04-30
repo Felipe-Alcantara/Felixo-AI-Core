@@ -60,7 +60,11 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `onNewIdea` | `() => void` | Callback para novo chat |
 | `onOpenModelSettings` | `() => void` | Abre modal de modelos |
 | `onToggleSidebar` | `() => void` | Recolhe a sidebar |
+| `onOpenProjects` | `() => void` | Abre o ProjectsModal |
 | `onSelectSession` | `(session: ChatSession) => void` | Carrega uma sessão do histórico |
+| `onSelectProject` | `(project: Project) => void` | Ativa/desativa um projeto (toggle) |
+| `projects` | `Project[]` | Lista de projetos para exibir na subseção |
+| `activeProject` | `Project \| null` | Projeto atualmente ativo |
 
 ### Estado interno
 
@@ -88,6 +92,49 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 ### Itens de navegação
 
 `Novo chat`, `Pesquisar`, `Projetos`, `Automações`
+
+Abaixo de "Projetos" é sempre renderizada uma subseção com a lista de projetos adicionados (ou o texto "Nenhum projeto selecionado" quando vazia). O projeto ativo é destacado em âmbar; clicar nele faz toggle (ativa/desativa).
+
+---
+
+## ProjectsModal
+
+**Arquivo:** `components/ProjectsModal.tsx`
+**Responsabilidade:** Modal para adicionar e remover projetos Git. Suporta importação de repositório único ou workspace com detecção automática de repos.
+
+### Props
+
+| Prop | Tipo | Descrição |
+|------|------|-----------|
+| `isOpen` | `boolean` | Visibilidade do modal |
+| `projects` | `Project[]` | Lista atual de projetos |
+| `onClose` | `() => void` | Fecha o modal |
+| `onAddProjects` | `(projects: Project[]) => void` | Adiciona um ou mais projetos |
+| `onRemoveProject` | `(project: Project) => void` | Remove um projeto |
+
+### Abas
+
+| Aba | Descrição |
+|-----|-----------|
+| `Repositório` | Seleciona uma pasta única via dialog nativo do Electron |
+| `Workspace` | Seleciona uma pasta-pai; detecta subpastas com `.git` e exibe checklist para importação em lote |
+
+### Funções
+
+| Função | Descrição |
+|--------|-----------|
+| `pickRepo()` | Chama `window.felixo.projects.pickFolder()` e adiciona o repo diretamente |
+| `pickWorkspace()` | Chama `pickFolder()` e depois `detectRepos()` para popular a lista de detecção |
+| `toggleSelected(path)` | Marca/desmarca repo no checklist do workspace |
+| `confirmWorkspace()` | Chama `onAddProjects` com os repos selecionados e limpa a detecção |
+
+### Comportamento
+
+- Fecha com `Escape`
+- Fecha ao clicar no overlay externo
+- Botões ficam desabilitados durante loading
+- Repos já existentes em `projects` são filtrados da detecção de workspace
+- Lista de projetos adicionados exibida na parte inferior do modal com botão de remoção individual
 
 ---
 
