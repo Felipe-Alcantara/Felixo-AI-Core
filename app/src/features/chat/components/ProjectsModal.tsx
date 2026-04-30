@@ -95,8 +95,14 @@ export function ProjectsModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/[0.08] bg-[#1e1e1d] shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/[0.08] bg-[#1e1e1d] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <h2 className="text-[14px] font-semibold text-zinc-200">Projetos</h2>
