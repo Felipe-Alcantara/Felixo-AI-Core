@@ -66,12 +66,6 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `projects` | `Project[]` | Lista de projetos para exibir na subseção |
 | `activeProject` | `Project \| null` | Projeto atualmente ativo |
 
-### Estado interno
-
-| Estado | Tipo | Descrição |
-|--------|------|-----------|
-| `isSearchOpen` | `boolean` | Controla visibilidade do SearchPanel |
-
 ### Constantes
 
 | Constante | Valor | Descrição |
@@ -85,7 +79,7 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | Função | Descrição |
 |--------|-----------|
 | `handleDragStart(e)` | Inicia drag, registra posição inicial e desativa transição CSS |
-| `handleNavClick(label)` | Mapeia label do item de nav para callback correto; "Pesquisar" abre o SearchPanel |
+| `handleNavClick(label)` | "Novo chat" → reset; "Pesquisar" → abre SearchPanel; "Projetos" → toggle expansão |
 | `onMouseMove` | Calcula nova largura com clamp entre MIN e MAX |
 | `onMouseUp` | Encerra drag, restaura cursor e transição |
 
@@ -93,7 +87,20 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 
 `Novo chat`, `Pesquisar`, `Projetos`, `Automações`
 
-Abaixo de "Projetos" é sempre renderizada uma subseção com a lista de projetos adicionados (ou o texto "Nenhum projeto selecionado" quando vazia). O projeto ativo é destacado em âmbar; clicar nele faz toggle (ativa/desativa).
+#### Comportamento de Projetos
+
+- Clique no item "Projetos" expande/colapsa a lista (seta indica o estado)
+- Colapsado por padrão; quando há projeto ativo, ele aparece abaixo mesmo com a lista colapsada
+- Botão `+` ao lado do título abre o `ProjectsModal` sem expandir a lista
+- Expandido mostra todos os projetos ou "Nenhum projeto selecionado"
+- Projeto ativo destacado em âmbar; clicar faz toggle (ativa/desativa)
+
+### Estado interno
+
+| Estado | Tipo | Descrição |
+|--------|------|-----------|
+| `isSearchOpen` | `boolean` | Controla visibilidade do SearchPanel |
+| `isProjectsExpanded` | `boolean` | Controla expansão da lista de projetos |
 
 ---
 
