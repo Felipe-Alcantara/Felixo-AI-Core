@@ -196,6 +196,8 @@ def main() -> int:
     if install_code != 0:
         return install_code
 
+    cleanup_app_processes()
+
     if args.web:
         print(f"[felixo] Opening web preview at {DEFAULT_URL}")
         return run_command(["npm", "run", "dev:web"], env)
