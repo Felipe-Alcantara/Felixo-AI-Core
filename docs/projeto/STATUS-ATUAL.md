@@ -6,6 +6,8 @@ O app já executa CLIs reais (`claude`, `codex`, `gemini`) a partir do backend E
 
 A persistência real de processo já está ativa para Claude, porque o CLI oferece um contrato compatível com `--input-format stream-json`. Codex e Gemini continuam em execução one-shot por mensagem, mas agora retomam a conversa nativa do provedor quando já existe `providerSessionId`; antes da primeira sessão capturada, a continuidade vem pelo contexto explícito.
 
+A arquitetura foi alinhada para o modelo híbrido: Terminal Adapters controlam CLIs, Orchestrator Core decide a estratégia de execução e a MCP Layer começa como catálogo de ferramentas/contexto, não como API universal de modelos.
+
 Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENTES.md](../backend/PROTOCOLOS-PERSISTENTES.md).
 
 ## O que já foi concluído
@@ -13,6 +15,9 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Backend Electron
 
 - IPC `cli:send` executa adapters por `cliType` (`claude`, `codex`, `gemini`).
+- `providers/terminal-adapter-registry.cjs` centraliza o registro dos Terminal Adapters.
+- `orchestrator/cli-execution-planner.cjs` concentra a decisão entre processo persistente, retomada nativa e one-shot.
+- `mcp/felixo-tool-catalog.cjs` define o catálogo inicial das tools MCP planejadas.
 - IPC `cli:stop` interrompe a execução em andamento por `threadId`.
 - `CliProcessManager` mantém processos por chave lógica, permite abrir `stdin`, escrever prompts e matar grupo de processo.
 - O backend separa:
@@ -75,6 +80,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Testes e validação
 
 - Testes unitários cobrem adapters, leitor JSONL, guard de JSONL, QA logger, formatador de terminal, atalhos de zoom, IPC helper e gerenciador de processos.
+- Testes unitários cobrem registry de providers, planner do orquestrador e catálogo MCP.
 - Verificações executadas com sucesso:
   - `npm test`
   - `npm run lint`
@@ -116,6 +122,8 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Arquitetura
 
 - Extrair a orquestração de processo persistente de `ipc-handlers.cjs` para serviço próprio se a complexidade continuar crescendo.
+- Implementar servidor MCP read-only a partir do catálogo inicial.
+- Implementar cliente MCP para servidores externos quando a UI já tiver política de permissões.
 - Criar contrato formal por adapter:
   - spawn one-shot.
   - spawn persistente.
