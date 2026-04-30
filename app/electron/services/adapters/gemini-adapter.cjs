@@ -5,8 +5,34 @@ function getSpawnArgs(prompt) {
   }
 }
 
+function getResumeArgs(prompt, context = {}) {
+  if (!context.providerSessionId) {
+    return getSpawnArgs(prompt, context)
+  }
+
+  return {
+    command: 'gemini',
+    args: [
+      '--resume',
+      context.providerSessionId,
+      '--prompt',
+      prompt,
+      '--output-format',
+      'stream-json',
+      '--skip-trust',
+    ],
+  }
+}
+
 function parseLine(line) {
   const payload = JSON.parse(line)
+
+  if (payload.type === 'init' && typeof payload.session_id === 'string') {
+    return {
+      type: 'session',
+      providerSessionId: payload.session_id,
+    }
+  }
 
   if (isAssistantMessage(payload)) {
     return {
@@ -41,5 +67,6 @@ function isAssistantMessage(payload) {
 
 module.exports = {
   getSpawnArgs,
+  getResumeArgs,
   parseLine,
 }

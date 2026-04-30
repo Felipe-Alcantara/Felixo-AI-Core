@@ -12,11 +12,13 @@ const adapters = {
 
 const cliManager = new CliProcessManager()
 const stoppedSessions = new Set()
+const cliThreadSessions = new Map()
 const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
 
 function registerCliIpcHandlers(getMainWindow) {
   ipcMain.handle('cli:send', (event, params) => {
-    const sessionId = getRequiredString(params?.sessionId)
+    const streamSessionId = getRequiredString(params?.sessionId)
+    const threadId = getRequiredString(params?.threadId) || streamSessionId
     const prompt = getRequiredString(params?.prompt)
     const model = params?.model
     const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
@@ -24,11 +26,11 @@ function registerCliIpcHandlers(getMainWindow) {
     const adapter = adapters[cliType]
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
 
-    if (!sessionId || !prompt) {
+    if (!streamSessionId || !threadId || !prompt) {
       logQaEvent({
         level: 'warn',
         scope: 'cli:send',
-        sessionId,
+        sessionId: threadId || streamSessionId,
         message: 'Rejected send request with invalid prompt or session.',
       })
       return { ok: false, message: 'Prompt ou sessão inválidos.' }
@@ -38,7 +40,7 @@ function registerCliIpcHandlers(getMainWindow) {
       logQaEvent({
         level: 'error',
         scope: 'cli:send',
-        sessionId,
+        sessionId: threadId,
         message: 'No adapter configured for model.',
         details: {
           cliType,
@@ -49,15 +51,23 @@ function registerCliIpcHandlers(getMainWindow) {
       sendCliEvent(targetWebContents, {
         type: 'error',
         message: 'Modelo sem CLI compatível configurada.',
-        sessionId,
+        sessionId: streamSessionId,
       })
       return { ok: false, message: 'Modelo sem CLI compatível configurada.' }
     }
 
-    stoppedSessions.delete(sessionId)
+    stoppedSessions.delete(threadId)
 
     const cwd = projectCwd ?? resolveCliCwd(cliType)
-    const { command, args } = adapter.getSpawnArgs(prompt, { cwd, model })
+    const threadSession = getCliThreadSession(threadId, model)
+    const spawnContext = {
+      cwd,
+      model,
+      threadId,
+      providerSessionId: threadSession.providerSessionId,
+      isContinuation: threadSession.hasStarted,
+    }
+    const { command, args } = getAdapterSpawnArgs(adapter, prompt, spawnContext)
     let didComplete = false
     let didEmitVisibleOutput = false
     let stderrOutput = ''
@@ -67,18 +77,22 @@ function registerCliIpcHandlers(getMainWindow) {
       logQaEvent({
         level: 'info',
         scope: 'cli:spawn',
-        sessionId,
+        sessionId: threadId,
         message: `Starting ${command}.`,
         details: {
+          streamSessionId,
           cliType,
           modelName: model?.name,
           command,
           args,
           cwd,
+          isContinuation: spawnContext.isContinuation,
+          providerSessionId: spawnContext.providerSessionId,
           promptPreview: createTextPreview(prompt),
         },
       })
-      const childProcess = cliManager.spawn(sessionId, command, args, cwd)
+      const childProcess = cliManager.spawn(threadId, command, args, cwd)
+      threadSession.hasStarted = true
       firstVisibleOutputTimer = setTimeout(() => {
         if (didComplete || didEmitVisibleOutput) {
           return
@@ -88,9 +102,10 @@ function registerCliIpcHandlers(getMainWindow) {
         logQaEvent({
           level: 'warn',
           scope: 'cli:timeout',
-          sessionId,
+          sessionId: threadId,
           message: `${command} produced no visible output in time.`,
           details: {
+            streamSessionId,
             timeoutMs: FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
           },
         })
@@ -100,16 +115,17 @@ function registerCliIpcHandlers(getMainWindow) {
             command,
             FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
           ),
-          sessionId,
+          sessionId: streamSessionId,
         })
-        cliManager.kill(sessionId)
+        cliManager.kill(threadId)
       }, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS)
       logQaEvent({
         level: 'info',
         scope: 'cli:process',
-        sessionId,
+        sessionId: threadId,
         message: `Spawned ${command}.`,
         details: {
+          streamSessionId,
           pid: childProcess.pid,
         },
       })
@@ -117,15 +133,24 @@ function registerCliIpcHandlers(getMainWindow) {
         logQaEvent({
           level: 'debug',
           scope: 'cli:jsonl',
-          sessionId,
+          sessionId: threadId,
           message: `Parsed JSONL line from ${command}.`,
           details: {
+            streamSessionId,
             preview: createTextPreview(line, 500),
           },
         })
         const cliEvent = parseAdapterLine(adapter, line)
 
         if (!cliEvent) {
+          return
+        }
+
+        if (cliEvent.providerSessionId) {
+          threadSession.providerSessionId = cliEvent.providerSessionId
+        }
+
+        if (cliEvent.type === 'session') {
           return
         }
 
@@ -141,7 +166,7 @@ function registerCliIpcHandlers(getMainWindow) {
 
         sendCliEvent(targetWebContents, {
           ...cliEvent,
-          sessionId,
+          sessionId: streamSessionId,
         })
       })
       const flushStdout = () => stdoutReader.flush()
@@ -150,9 +175,12 @@ function registerCliIpcHandlers(getMainWindow) {
           logQaEvent({
             level: 'debug',
             scope: 'cli:stdout',
-            sessionId,
+            sessionId: threadId,
             message: `stdout from ${command}.`,
-            details: createChunkDetails(chunk),
+            details: {
+              streamSessionId,
+              ...createChunkDetails(chunk),
+            },
           })
           stdoutReader.push(chunk)
         },
@@ -162,16 +190,19 @@ function registerCliIpcHandlers(getMainWindow) {
           logQaEvent({
             level: 'warn',
             scope: 'cli:stdout',
-            sessionId,
+            sessionId: threadId,
             message: `${command} produced non-JSON stdout.`,
-            details: createChunkDetails(output),
+            details: {
+              streamSessionId,
+              ...createChunkDetails(output),
+            },
           })
           sendCliEvent(targetWebContents, {
             type: 'error',
             message: createNonJsonStdoutMessage(command, output),
-            sessionId,
+            sessionId: streamSessionId,
           })
-          cliManager.kill(sessionId)
+          cliManager.kill(threadId)
         },
       )
 
@@ -179,7 +210,7 @@ function registerCliIpcHandlers(getMainWindow) {
       childProcess.stdout.on('data', (chunk) => {
         stdoutGuard.push(chunk)
         sendRawOutput(targetWebContents, {
-          sessionId,
+          sessionId: threadId,
           source: 'stdout',
           chunk: String(chunk),
         })
@@ -190,16 +221,19 @@ function registerCliIpcHandlers(getMainWindow) {
       childProcess.stderr.on('data', (chunk) => {
         stderrOutput = `${stderrOutput}${chunk}`.slice(-4000)
         sendRawOutput(targetWebContents, {
-          sessionId,
+          sessionId: threadId,
           source: 'stderr',
           chunk: String(chunk),
         })
         logQaEvent({
           level: 'warn',
           scope: 'cli:stderr',
-          sessionId,
+          sessionId: threadId,
           message: `stderr from ${command}.`,
-          details: createChunkDetails(chunk),
+          details: {
+            streamSessionId,
+            ...createChunkDetails(chunk),
+          },
         })
       })
 
@@ -209,16 +243,17 @@ function registerCliIpcHandlers(getMainWindow) {
         logQaEvent({
           level: 'error',
           scope: 'cli:error',
-          sessionId,
+          sessionId: threadId,
           message: `${command} process error.`,
           details: {
+            streamSessionId,
             message: error.message,
           },
         })
         sendCliEvent(targetWebContents, {
           type: 'error',
           message: error.message,
-          sessionId,
+          sessionId: streamSessionId,
         })
       })
 
@@ -228,9 +263,10 @@ function registerCliIpcHandlers(getMainWindow) {
         logQaEvent({
           level: code && code !== 0 ? 'error' : 'info',
           scope: 'cli:close',
-          sessionId,
+          sessionId: threadId,
           message: `${command} closed.`,
           details: {
+            streamSessionId,
             pid: childProcess.pid,
             code,
             signal,
@@ -239,7 +275,7 @@ function registerCliIpcHandlers(getMainWindow) {
           },
         })
 
-        if (stoppedSessions.delete(sessionId)) {
+        if (stoppedSessions.delete(threadId)) {
           return
         }
 
@@ -251,14 +287,14 @@ function registerCliIpcHandlers(getMainWindow) {
           sendCliEvent(targetWebContents, {
             type: 'error',
             message: createExitErrorMessage(command, code, signal, stderrOutput),
-            sessionId,
+            sessionId: streamSessionId,
           })
           return
         }
 
         sendCliEvent(targetWebContents, {
           type: 'done',
-          sessionId,
+          sessionId: streamSessionId,
         })
       })
 
@@ -270,16 +306,17 @@ function registerCliIpcHandlers(getMainWindow) {
       logQaEvent({
         level: 'error',
         scope: 'cli:spawn',
-        sessionId,
+        sessionId: threadId,
         message: `Failed to start ${command}.`,
         details: {
+          streamSessionId,
           message,
         },
       })
       sendCliEvent(targetWebContents, {
         type: 'error',
         message,
-        sessionId,
+        sessionId: streamSessionId,
       })
       return { ok: false, message }
     }
@@ -295,9 +332,10 @@ function registerCliIpcHandlers(getMainWindow) {
   })
 
   ipcMain.handle('cli:stop', (event, params) => {
-    const sessionId = getRequiredString(params?.sessionId)
+    const streamSessionId = getRequiredString(params?.sessionId)
+    const threadId = getRequiredString(params?.threadId) || streamSessionId
 
-    if (!sessionId) {
+    if (!streamSessionId || !threadId) {
       logQaEvent({
         level: 'warn',
         scope: 'cli:stop',
@@ -306,24 +344,27 @@ function registerCliIpcHandlers(getMainWindow) {
       return { ok: false, message: 'Sessão inválida.' }
     }
 
-    stoppedSessions.add(sessionId)
-    const killed = cliManager.kill(sessionId)
+    stoppedSessions.add(threadId)
+    const killed = cliManager.kill(threadId)
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
     logQaEvent({
       level: killed ? 'info' : 'warn',
       scope: 'cli:stop',
-      sessionId,
+      sessionId: threadId,
       message: killed ? 'Stop signal sent.' : 'No process found to stop.',
+      details: {
+        streamSessionId,
+      },
     })
 
     if (killed) {
       sendCliEvent(targetWebContents, {
         type: 'done',
-        sessionId,
+        sessionId: streamSessionId,
         stopped: true,
       })
     } else {
-      stoppedSessions.delete(sessionId)
+      stoppedSessions.delete(threadId)
     }
 
     return { ok: killed }
@@ -351,6 +392,34 @@ function parseAdapterLine(adapter, line) {
           : 'Falha ao interpretar saída da CLI.',
     }
   }
+}
+
+function getCliThreadSession(threadId, model) {
+  const modelKey = createModelSessionKey(model)
+  const currentSession = cliThreadSessions.get(threadId)
+
+  if (currentSession?.modelKey === modelKey) {
+    return currentSession
+  }
+
+  const nextSession = {
+    modelKey,
+    providerSessionId: null,
+    hasStarted: false,
+  }
+  cliThreadSessions.set(threadId, nextSession)
+  return nextSession
+}
+
+function getAdapterSpawnArgs(adapter, prompt, context) {
+  if (
+    context.isContinuation &&
+    typeof adapter.getResumeArgs === 'function'
+  ) {
+    return adapter.getResumeArgs(prompt, context)
+  }
+
+  return adapter.getSpawnArgs(prompt, context)
 }
 
 function sendRawOutput(webContents, event) {
@@ -390,6 +459,14 @@ function resolveCliCwd(cliType) {
 
 function getRequiredString(value) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function createModelSessionKey(model) {
+  return [
+    model?.cliType ?? 'unknown',
+    model?.command ?? '',
+    model?.id ?? '',
+  ].join(':')
 }
 
 function createExitErrorMessage(command, code, signal, stderrOutput) {

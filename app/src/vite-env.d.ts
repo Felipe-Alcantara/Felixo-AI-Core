@@ -27,11 +27,15 @@ declare global {
       cli?: {
         send: (params: {
           sessionId: string
+          threadId?: string
           prompt: string
           model: Model
           cwd?: string
         }) => Promise<CliInvokeResult>
-        stop: (params: { sessionId: string }) => Promise<CliInvokeResult>
+        stop: (params: {
+          sessionId: string
+          threadId?: string
+        }) => Promise<CliInvokeResult>
         onStream: (callback: (event: StreamEvent) => void) => () => void
         onRawOutput: (callback: (event: RawOutputEvent) => void) => () => void
       }

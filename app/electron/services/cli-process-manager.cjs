@@ -16,7 +16,7 @@ class CliProcessManager {
     const childProcess = spawnChildProcess(command, args, {
       cwd,
       env: createCliEnv(),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     })
 
@@ -31,6 +31,18 @@ class CliProcessManager {
     childProcess.once('close', () => this.cleanup(sessionId, childProcess))
 
     return childProcess
+  }
+
+  write(sessionId, input) {
+    const entry = this.processes.get(sessionId)
+    const stdin = entry?.childProcess?.stdin
+
+    if (!stdin || stdin.destroyed || stdin.writableEnded) {
+      return false
+    }
+
+    stdin.write(input)
+    return true
   }
 
   kill(sessionId) {
