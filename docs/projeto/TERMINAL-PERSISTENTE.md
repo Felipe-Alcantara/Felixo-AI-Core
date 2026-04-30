@@ -24,6 +24,7 @@ Barra lateral direita que exibe o output bruto (stdout/stderr) de cada processo 
 **Electron (ipc-handlers.cjs)**
 - A cada chunk de `stdout` e `stderr`, emitir `cli:raw-output` com `{ sessionId, source: 'stdout' | 'stderr', chunk }` para o renderer, além dos eventos já existentes
 - Ruídos conhecidos de `stderr` do Codex (`Reading additional input from stdin...` e `failed to record rollout items: thread ... not found`) são filtrados antes do QA Logger e do painel de terminal, pois a execução já entrega `turn.completed` e fecha com código `0`
+- Avisos conhecidos de `stderr` do Gemini que não quebram a execução são tratados como não fatais; o aviso visual de terminal sem 256 cores é suprimido da UI
 
 **Frontend**
 - `useTerminalOutput` hook: acumula chunks por `sessionId` via `window.felixo.cli.onRawOutput`
@@ -50,6 +51,7 @@ Primeiro recorte implementado: o frontend agora separa `threadId` de conversa e 
 - Gemini captura `init.session_id` no `stream-json` e usa `--resume` nas continuações.
 - Codex expõe `thread.started`, mas `codex exec resume <thread_id>` gerou erro interno `thread not found` nos testes manuais; por isso a retomada nativa foi desativada até validação de persistência. A continuidade segue pelo contexto explícito do Felixo e pelo `threadId` estável no painel.
 - Codex ainda pode escrever avisos internos no `stderr`; os avisos não acionáveis já identificados são suprimidos da UI para não parecerem falha quando a resposta completou normalmente.
+- Trocar de modelo reinicia a thread do provedor, mas não zera a linha de base de projetos ativos da conversa; assim o diff de projetos só mostra mudanças reais de seleção.
 
 ### Desafios por CLI
 

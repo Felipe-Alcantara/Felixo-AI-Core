@@ -57,6 +57,41 @@ function parseLine(line) {
   return null
 }
 
+function classifyStderr(chunk) {
+  const lines = createStderrLines(chunk)
+
+  if (lines.length > 0 && lines.every(isNonFatalStderrLine)) {
+    return 'info'
+  }
+
+  return 'warn'
+}
+
+function shouldSuppressStderr(chunk) {
+  const lines = createStderrLines(chunk)
+
+  return lines.length > 0 && lines.every(isVisualStderrNotice)
+}
+
+function createStderrLines(chunk) {
+  return String(chunk)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function isNonFatalStderrLine(line) {
+  return isVisualStderrNotice(line) || isRipgrepFallbackNotice(line)
+}
+
+function isVisualStderrNotice(line) {
+  return line.includes('256-color support not detected')
+}
+
+function isRipgrepFallbackNotice(line) {
+  return line.includes('Ripgrep is not available. Falling back to GrepTool.')
+}
+
 function isAssistantMessage(payload) {
   return (
     payload.type === 'message' &&
@@ -66,7 +101,9 @@ function isAssistantMessage(payload) {
 }
 
 module.exports = {
+  classifyStderr,
   getSpawnArgs,
   getResumeArgs,
   parseLine,
+  shouldSuppressStderr,
 }

@@ -219,7 +219,7 @@ export function ChatWorkspace() {
 
     if (existingModel) {
       setSelectedModelId(existingModel.id)
-      resetConversationThread()
+      resetConversationThread({ resetProjectDiff: false })
       return
     }
 
@@ -229,11 +229,11 @@ export function ChatWorkspace() {
       return nextModels
     })
     setSelectedModelId(model.id)
-    resetConversationThread()
+    resetConversationThread({ resetProjectDiff: false })
   }
 
   function removeModel(modelToRemove: Model) {
-    resetConversationThread()
+    resetConversationThread({ resetProjectDiff: false })
     setModels((currentModels) => {
       const nextModels = currentModels.filter(
         (model) =>
@@ -254,7 +254,7 @@ export function ChatWorkspace() {
     setModels([])
     saveModels([])
     setSelectedModelId('')
-    resetConversationThread()
+    resetConversationThread({ resetProjectDiff: false })
   }
 
   function selectModel(modelId: ModelId) {
@@ -263,7 +263,7 @@ export function ChatWorkspace() {
     }
 
     setSelectedModelId(modelId)
-    resetConversationThread()
+    resetConversationThread({ resetProjectDiff: false })
   }
 
   function stopStreaming() {
@@ -388,10 +388,13 @@ export function ChatWorkspace() {
     return threadId
   }
 
-  function resetConversationThread() {
+  function resetConversationThread(options: ResetConversationThreadOptions = {}) {
+    const { resetProjectDiff = true } = options
     conversationThreadIdRef.current = null
     conversationModelIdRef.current = null
-    lastSentProjectIdsRef.current = new Set()
+    if (resetProjectDiff) {
+      lastSentProjectIdsRef.current = new Set()
+    }
     messageThreadIdsRef.current.clear()
   }
 
@@ -561,6 +564,7 @@ function createSessionId() {
 }
 
 type ProjectDiff = { added: Project[]; removed: Project[] }
+type ResetConversationThreadOptions = { resetProjectDiff?: boolean }
 
 function createCliPrompt(
   messages: ChatMessage[],
