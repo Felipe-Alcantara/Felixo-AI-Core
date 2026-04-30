@@ -44,3 +44,11 @@ export type ChatMessage = {
   isStreaming?: boolean
   createdAt: string
 }
+
+export type ChatSession = {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  createdAt: string
+  updatedAt: string
+}
