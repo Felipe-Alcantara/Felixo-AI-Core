@@ -12,6 +12,12 @@ export type Model = {
 
 export type ModelFileSelection = Omit<Model, 'id'>
 
+export type RawOutputEvent = {
+  sessionId: string
+  source: 'stdout' | 'stderr'
+  chunk: string
+}
+
 export type StreamEvent =
   | { type: 'text'; text: string; sessionId: string }
   | { type: 'tool_use'; tool: string; input: string; sessionId: string }
