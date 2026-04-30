@@ -92,8 +92,22 @@ function detectCliType(value: string): CliType {
     return 'claude'
   }
 
+  if (
+    normalizedValue.includes('codex-app-server') ||
+    (normalizedValue.includes('codex') && normalizedValue.includes('app-server'))
+  ) {
+    return 'codex-app-server'
+  }
+
   if (normalizedValue.includes('codex') || normalizedValue.includes('openai')) {
     return 'codex'
+  }
+
+  if (
+    normalizedValue.includes('gemini-acp') ||
+    (normalizedValue.includes('gemini') && normalizedValue.includes('--acp'))
+  ) {
+    return 'gemini-acp'
   }
 
   if (normalizedValue.includes('gemini')) {
@@ -107,7 +121,9 @@ function isCliType(value: unknown): value is CliType {
   return (
     value === 'claude' ||
     value === 'codex' ||
+    value === 'codex-app-server' ||
     value === 'gemini' ||
+    value === 'gemini-acp' ||
     value === 'unknown'
   )
 }
