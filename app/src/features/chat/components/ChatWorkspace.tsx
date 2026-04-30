@@ -39,7 +39,11 @@ export function ChatWorkspace() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
+  const activeThreadIdRef = useRef<string | null>(null)
+  const conversationThreadIdRef = useRef<string | null>(null)
+  const conversationModelIdRef = useRef<ModelId | null>(null)
   const lastSentProjectIdsRef = useRef<Set<string>>(new Set())
+  const messageThreadIdsRef = useRef<Map<string, string>>(new Map())
   const streamHandlerRef = useRef(handleStreamEvent)
   const {
     sessions: terminalSessions,
@@ -103,6 +107,7 @@ export function ChatWorkspace() {
     }
 
     const sessionId = createSessionId()
+    const threadId = getConversationThreadId(selectedModel)
     const activeProjects = projects.filter((p) => activeProjectIds.has(p.id))
     const prevIds = lastSentProjectIdsRef.current
     const added = activeProjects.filter((p) => !prevIds.has(p.id))
@@ -118,14 +123,15 @@ export function ChatWorkspace() {
       createAssistantMessage(selectedModel, sessionId),
     ])
     setInput('')
-    startTerminalSession(sessionId)
-    setActiveStreamingSession(sessionId)
+    messageThreadIdsRef.current.set(sessionId, threadId)
+    startTerminalSession(threadId)
+    setActiveStreamingSession(sessionId, threadId)
 
     window.felixo.cli
-      .send({ sessionId, prompt: cliPrompt, model: selectedModel })
+      .send({ sessionId, threadId, prompt: cliPrompt, model: selectedModel })
       .then((result) => {
         if (!result.ok) {
-          markTerminalSessionStatus(sessionId, 'error')
+          markTerminalSessionStatus(threadId, 'error')
           completeAssistantMessage(
             sessionId,
             result.message ?? 'Falha ao iniciar a CLI.',
@@ -134,7 +140,7 @@ export function ChatWorkspace() {
         }
       })
       .catch((error: unknown) => {
-        markTerminalSessionStatus(sessionId, 'error')
+        markTerminalSessionStatus(threadId, 'error')
         completeAssistantMessage(
           sessionId,
           error instanceof Error ? error.message : 'Falha ao iniciar a CLI.',
@@ -148,6 +154,7 @@ export function ChatWorkspace() {
     setInput('')
     stopStreaming()
     setMessages(initialMessages)
+    resetConversationThread()
   }
 
   function saveCurrentSession() {
@@ -174,6 +181,8 @@ export function ChatWorkspace() {
   function loadSession(session: ChatSession) {
     saveCurrentSession()
     setInput('')
+    stopStreaming()
+    resetConversationThread()
     setMessages(session.messages)
   }
 
@@ -210,6 +219,7 @@ export function ChatWorkspace() {
 
     if (existingModel) {
       setSelectedModelId(existingModel.id)
+      resetConversationThread()
       return
     }
 
@@ -219,9 +229,11 @@ export function ChatWorkspace() {
       return nextModels
     })
     setSelectedModelId(model.id)
+    resetConversationThread()
   }
 
   function removeModel(modelToRemove: Model) {
+    resetConversationThread()
     setModels((currentModels) => {
       const nextModels = currentModels.filter(
         (model) =>
@@ -242,17 +254,28 @@ export function ChatWorkspace() {
     setModels([])
     saveModels([])
     setSelectedModelId('')
+    resetConversationThread()
+  }
+
+  function selectModel(modelId: ModelId) {
+    if (modelId === selectedModelId) {
+      return
+    }
+
+    setSelectedModelId(modelId)
+    resetConversationThread()
   }
 
   function stopStreaming() {
     const sessionId = activeSessionIdRef.current
+    const threadId = activeThreadIdRef.current
 
     if (!sessionId) {
       return
     }
 
-    window.felixo?.cli?.stop({ sessionId }).catch(() => {
-      markTerminalSessionStatus(sessionId, 'error')
+    window.felixo?.cli?.stop({ sessionId, threadId: threadId ?? undefined }).catch(() => {
+      markTerminalSessionStatus(resolveThreadId(sessionId), 'error')
       completeAssistantMessage(sessionId, 'Falha ao interromper a CLI.', 'error')
     })
   }
@@ -264,14 +287,14 @@ export function ChatWorkspace() {
     }
 
     if (event.type === 'error') {
-      markTerminalSessionStatus(event.sessionId, 'error')
+      markTerminalSessionStatus(resolveThreadId(event.sessionId), 'error')
       completeAssistantMessage(event.sessionId, event.message, 'error')
       return
     }
 
     if (event.type === 'done') {
       markTerminalSessionStatus(
-        event.sessionId,
+        resolveThreadId(event.sessionId),
         event.stopped ? 'stopped' : 'completed',
       )
       completeAssistantMessage(
@@ -320,6 +343,8 @@ export function ChatWorkspace() {
     if (activeSessionIdRef.current === sessionId) {
       setActiveStreamingSession(null)
     }
+
+    messageThreadIdsRef.current.delete(sessionId)
   }
 
   function appendImmediateError(
@@ -340,9 +365,42 @@ export function ChatWorkspace() {
     ])
   }
 
-  function setActiveStreamingSession(sessionId: string | null) {
+  function setActiveStreamingSession(
+    sessionId: string | null,
+    threadId: string | null = null,
+  ) {
     activeSessionIdRef.current = sessionId
+    activeThreadIdRef.current = threadId
     setActiveSessionId(sessionId)
+  }
+
+  function getConversationThreadId(model: Model) {
+    if (
+      conversationThreadIdRef.current &&
+      conversationModelIdRef.current === model.id
+    ) {
+      return conversationThreadIdRef.current
+    }
+
+    const threadId = createSessionId()
+    conversationThreadIdRef.current = threadId
+    conversationModelIdRef.current = model.id
+    return threadId
+  }
+
+  function resetConversationThread() {
+    conversationThreadIdRef.current = null
+    conversationModelIdRef.current = null
+    lastSentProjectIdsRef.current = new Set()
+    messageThreadIdsRef.current.clear()
+  }
+
+  function resolveThreadId(sessionId: string) {
+    if (activeSessionIdRef.current === sessionId && activeThreadIdRef.current) {
+      return activeThreadIdRef.current
+    }
+
+    return messageThreadIdsRef.current.get(sessionId) ?? sessionId
   }
 
   function createCompletedContent(
@@ -420,7 +478,7 @@ export function ChatWorkspace() {
                 models={models}
                 selectedModel={selectedModel}
                 onInputChange={setInput}
-                onSelectModel={setSelectedModelId}
+                onSelectModel={selectModel}
                 onSubmit={sendMessage}
                 onStop={stopStreaming}
                 isStreaming={isStreaming}
@@ -443,7 +501,7 @@ export function ChatWorkspace() {
                   selectedModel={selectedModel}
                   variant="home"
                   onInputChange={setInput}
-                  onSelectModel={setSelectedModelId}
+                  onSelectModel={selectModel}
                   onSubmit={sendMessage}
                   onStop={stopStreaming}
                   isStreaming={isStreaming}

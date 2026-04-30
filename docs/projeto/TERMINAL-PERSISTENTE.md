@@ -34,26 +34,40 @@ Barra lateral direita que exibe o output bruto (stdout/stderr) de cada processo 
 
 ---
 
-## Etapa 2 — Sessão CLI persistente
+## Etapa 2 — Sessão CLI persistente *(em implementação)*
 
 Manter o processo da CLI vivo entre mensagens da mesma conversa, enviando novos prompts via stdin sem spawnar um novo processo.
+
+### Status atual
+
+Primeiro recorte implementado: o frontend agora separa `threadId` de conversa e `sessionId` de resposta.
+
+- `threadId`: fixo enquanto a conversa usa o mesmo modelo; alimenta o painel de terminal e a identidade da sessão CLI.
+- `sessionId`: único por mensagem; continua correlacionando o streaming da resposta correta no chat.
+- O painel de terminal passa a acumular várias mensagens da mesma conversa na mesma thread.
+- Claude usa `--session-id` no primeiro envio e `--resume` nas continuações.
+- Gemini captura `init.session_id` no `stream-json` e usa `--resume` nas continuações.
+- Codex permanece com execução one-shot por enquanto; a thread do Felixo é estável, mas a retomada nativa depende de capturar com segurança o id interno emitido pelo Codex.
 
 ### Desafios por CLI
 
 | CLI | Modo interativo | Estratégia |
 |-----|----------------|------------|
-| `claude` | `claude` sem `--print` aceita stdin contínuo | Enviar prompt via stdin, aguardar evento `result` no stdout |
-| `codex` | A investigar — pode ter flag de sessão | A definir após testes |
-| `gemini` | A investigar | A definir após testes |
+| `claude` | `--print --output-format stream-json` suporta `--session-id` e `--resume`; `--input-format stream-json` ainda fica para o modo processo vivo | Retomada nativa por sessão no recorte atual; stdin contínuo fica como próximo passo |
+| `codex` | `codex exec resume` existe, mas o primeiro `exec --json` ainda precisa expor/capturar o id interno com segurança | Manter thread Felixo estável e investigar captura do id interno antes de ligar `exec resume` |
+| `gemini` | `stream-json` emite `init.session_id`; `--resume <session_id>` retoma sessão | Retomada nativa por `session_id`; processo vivo depende de investigação do modo interativo/headless |
 
 ### O que entregar
 
-- [ ] Investigar modo interativo de cada adapter (`claude`, `codex`, `gemini`)
-- [ ] Novo método `CliProcessManager.write(sessionId, prompt)` para escrever no stdin do processo ativo
-- [ ] Cada adapter expõe `getInteractiveArgs()` além de `getSpawnArgs()`
-- [ ] `ipc-handlers.cjs` reutiliza processo existente se a conversa ainda estiver ativa, em vez de spawnar novo
-- [ ] Processo encerrado ao trocar modelo ou iniciar nova conversa (`resetChat`)
-- [ ] Painel de terminal continua funcionando — agora com output contínuo da sessão inteira
+- [x] Investigar flags locais de sessão/retomada dos adapters (`claude`, `codex`, `gemini`)
+- [x] Novo método `CliProcessManager.write(sessionId, prompt)` para escrever no stdin do processo ativo
+- [x] `ChatWorkspace` usa `threadId` fixo por conversa + `sessionId` por resposta
+- [x] `ipc-handlers.cjs` separa thread de terminal/processo da correlação de streaming da mensagem
+- [x] Adapters de Claude/Gemini expõem `getResumeArgs()` além de `getSpawnArgs()`
+- [x] Processo/thread atual é resetado ao trocar modelo, iniciar novo chat ou carregar outro chat
+- [x] Painel de terminal continua funcionando com output acumulado da thread da conversa
+- [ ] Codex: capturar id interno do primeiro `exec --json` e ligar `codex exec resume`
+- [ ] Processo CLI realmente vivo via stdin entre mensagens quando o adapter suportar protocolo confiável
 
 ### Decisão de arquitetura
 
@@ -62,7 +76,7 @@ O `CliProcessManager` já indexa processos por `sessionId`. A mudança é que o 
 - **Opção A** — `conversationSessionId` fixo por conversa + `messageSessionId` por mensagem para correlacionar streaming
 - **Opção B** — processo único por conversa, stdin recebe prompts sequencialmente, stdout é parseado em blocos delimitados por evento `result`
 
-Opção B é mais simples se a CLI suportar — avaliar na investigação da Etapa 2.
+Decisão atual: a implementação adotou a **Opção A** como base segura. O `threadId` da conversa mantém o terminal contínuo e permite retomada nativa quando o adapter oferece um contrato estável. A **Opção B** continua como próximo recorte para CLIs que suportarem `stdin` contínuo com saída JSONL confiável.
 
 ---
 
@@ -89,5 +103,5 @@ Threads simultâneas dependem da sessão persistente: cada thread é um processo
 | Etapa | Status |
 |-------|--------|
 | Painel de terminal em tempo real | Implementado |
-| Sessão CLI persistente | Planejado — requer investigação por adapter |
+| Sessão CLI persistente | Em implementação — thread persistente + retomada Claude/Gemini; processo vivo por stdin pendente |
 | Múltiplas threads simultâneas | Planejado — depende da Etapa 2 |
