@@ -76,10 +76,12 @@ Esse e o caminho persistente correto para Codex.
 - Comando: `codex app-server` (transporte default `stdio://`).
 - Transporte: JSON-RPC 2.0 sobre stdin/stdout JSONL.
 - Schema gerado localmente via `codex app-server generate-json-schema`.
+- No `codex-cli 0.125.0`, responses/notifications reais podem omitir o campo
+  `jsonrpc`; o adapter aceita as duas formas.
 - Handshake:
   - `initialize` (clientInfo: {name, version}) → capabilities response
   - `initialized` (client notification)
-  - `thread/start` (cwd, model?) → `thread/started` notification com threadId
+  - `thread/start` (cwd, model?) → response/`thread/started` com `thread.id`
 - Prompt:
   - `turn/start` (threadId, input: [{type: "text", text}])
   - → `turn/started` notification
@@ -181,4 +183,3 @@ Quando o processo ja esta vivo (reuse), o adapter envia `turn/start` direto.
 2. Gemini persistente via ACP — adapter implementado, aguardando teste com `gemini --acp` real.
 3. Codex persistente via app-server — adapter implementado com auto-aprovacao, aguardando teste com `codex app-server` real.
 4. Nao usar TUI interativa como backend de chat enquanto nao houver delimitador confiavel de inicio/fim de resposta.
-
