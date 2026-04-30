@@ -7,7 +7,7 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 ## ChatWorkspace
 
 **Arquivo:** `components/ChatWorkspace.tsx`
-**Responsabilidade:** Orquestração central. Gerencia todo o estado da sessão de chat e integra com o backend Electron.
+**Responsabilidade:** Orquestração central. Gerencia todo o estado da sessão de chat, histórico de sessões e integra com o backend Electron.
 
 ### Estado
 
@@ -15,7 +15,8 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 |--------|------|-----------|
 | `models` | `Model[]` | Lista de modelos salvos (localStorage) |
 | `selectedModelId` | `string \| null` | Modelo ativo |
-| `messages` | `ChatMessage[]` | Histórico da conversa |
+| `messages` | `ChatMessage[]` | Mensagens da conversa atual |
+| `sessions` | `ChatSession[]` | Histórico de chats anteriores (em memória) |
 | `input` | `string` | Texto do campo de entrada |
 | `isModelSettingsOpen` | `boolean` | Visibilidade do modal de modelos |
 | `activeSessionId` | `string \| null` | Sessão CLI em andamento |
@@ -31,7 +32,9 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `completeAssistantMessage(sessionId, content, status)` | Finaliza resposta, remove `isStreaming` |
 | `appendImmediateError(prompt, model, message)` | Cria par user+error sem streaming |
 | `stopStreaming()` | Chama `window.felixo.cli.stop()` e marca sessão como parada |
-| `resetChat()` | Limpa messages para o estado inicial |
+| `resetChat()` | Salva sessão atual no histórico e limpa messages para o estado inicial |
+| `saveCurrentSession()` | Serializa a conversa ativa como `ChatSession` e adiciona ao topo de `sessions` |
+| `loadSession(session)` | Salva sessão atual e restaura as mensagens de uma sessão do histórico |
 | `addModel(model)` | Adiciona ou substitui modelo, salva no localStorage |
 | `removeModel(model)` | Remove modelo e salva |
 | `clearModels()` | Remove todos e salva |
@@ -45,18 +48,25 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 ## AppSidebar
 
 **Arquivo:** `components/AppSidebar.tsx`
-**Responsabilidade:** Navegação lateral com lista de modelos e redimensionamento por drag.
+**Responsabilidade:** Navegação lateral com lista de modelos, histórico de sessões e redimensionamento por drag. Hospeda o `SearchPanel` internamente.
 
 ### Props
 
 | Prop | Tipo | Descrição |
 |------|------|-----------|
 | `models` | `Model[]` | Lista de modelos para exibir |
+| `sessions` | `ChatSession[]` | Histórico de chats para pesquisa |
 | `isOpen` | `boolean` | Sidebar visível ou recolhida |
 | `onNewIdea` | `() => void` | Callback para novo chat |
 | `onOpenModelSettings` | `() => void` | Abre modal de modelos |
 | `onToggleSidebar` | `() => void` | Recolhe a sidebar |
-| `onSearch` | `() => void` | Ação de pesquisa |
+| `onSelectSession` | `(session: ChatSession) => void` | Carrega uma sessão do histórico |
+
+### Estado interno
+
+| Estado | Tipo | Descrição |
+|--------|------|-----------|
+| `isSearchOpen` | `boolean` | Controla visibilidade do SearchPanel |
 
 ### Constantes
 
@@ -71,13 +81,37 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | Função | Descrição |
 |--------|-----------|
 | `handleDragStart(e)` | Inicia drag, registra posição inicial e desativa transição CSS |
-| `handleNavClick(label)` | Mapeia label do item de nav para callback correto |
+| `handleNavClick(label)` | Mapeia label do item de nav para callback correto; "Pesquisar" abre o SearchPanel |
 | `onMouseMove` | Calcula nova largura com clamp entre MIN e MAX |
 | `onMouseUp` | Encerra drag, restaura cursor e transição |
 
 ### Itens de navegação
 
 `Novo chat`, `Pesquisar`, `Projetos`, `Automações`
+
+---
+
+## SearchPanel
+
+**Arquivo:** `components/SearchPanel.tsx`
+**Responsabilidade:** Painel de busca em tempo real sobreposto à sidebar. Filtra sessões por título e conteúdo das mensagens enquanto o usuário digita.
+
+### Props
+
+| Prop | Tipo | Descrição |
+|------|------|-----------|
+| `sessions` | `ChatSession[]` | Lista de sessões a pesquisar |
+| `isOpen` | `boolean` | Painel visível ou oculto |
+| `onClose` | `() => void` | Fecha o painel |
+| `onSelectSession` | `(session: ChatSession) => void` | Carrega a sessão selecionada |
+
+### Comportamento
+
+- Foca o input automaticamente ao abrir (`useEffect` + `setTimeout`)
+- Fecha com tecla `Escape`
+- Busca case-insensitive no título e no conteúdo de todas as mensagens
+- Destaca o trecho encontrado com `<mark>` via `dangerouslySetInnerHTML`
+- Exibe snippet da primeira mensagem que contém o termo buscado (truncado em 80 chars)
 
 ---
 

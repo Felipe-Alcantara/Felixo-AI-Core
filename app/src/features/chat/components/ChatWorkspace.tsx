@@ -11,7 +11,7 @@ import {
   initialMessages,
 } from '../services/chat-service'
 import { loadModels, saveModels } from '../services/model-storage'
-import type { ChatMessage, Model, ModelId, StreamEvent } from '../types'
+import type { ChatMessage, ChatSession, Model, ModelId, StreamEvent } from '../types'
 import { ModelSettingsModal } from './ModelSettingsModal'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
@@ -26,6 +26,7 @@ export function ChatWorkspace() {
     initialModels[0]?.id ?? '',
   )
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const [sessions, setSessions] = useState<ChatSession[]>([])
   const [input, setInput] = useState('')
   const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -119,9 +120,37 @@ export function ChatWorkspace() {
   }
 
   function resetChat() {
+    saveCurrentSession()
     setInput('')
     stopStreaming()
     setMessages(initialMessages)
+  }
+
+  function saveCurrentSession() {
+    const meaningful = messages.filter((m) => m.content.trim())
+    if (meaningful.length === 0) return
+
+    const firstUser = meaningful.find((m) => m.role === 'user')
+    const title = firstUser
+      ? firstUser.content.slice(0, 60) + (firstUser.content.length > 60 ? '…' : '')
+      : 'Chat sem título'
+
+    const now = new Date().toISOString()
+    const session: ChatSession = {
+      id: crypto.randomUUID?.() ?? `${Date.now()}`,
+      title,
+      messages: meaningful,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    setSessions((prev) => [session, ...prev])
+  }
+
+  function loadSession(session: ChatSession) {
+    saveCurrentSession()
+    setInput('')
+    setMessages(session.messages)
   }
 
 function addModel(model: Model) {
@@ -288,11 +317,12 @@ function addModel(model: Model) {
     <div className="flex h-full min-h-0 bg-[#191918] text-zinc-100">
       <AppSidebar
         models={models}
+        sessions={sessions}
         isOpen={isSidebarOpen}
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
-        onSearch={resetChat}
+        onSelectSession={loadSession}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-[#171716]">

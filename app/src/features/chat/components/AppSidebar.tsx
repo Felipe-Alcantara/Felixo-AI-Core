@@ -11,7 +11,8 @@ import {
   Sparkles,
   User,
 } from 'lucide-react'
-import type { Model } from '../types'
+import type { ChatSession, Model } from '../types'
+import { SearchPanel } from './SearchPanel'
 
 const MIN_WIDTH = 160
 const MAX_WIDTH = 480
@@ -19,11 +20,12 @@ const DEFAULT_WIDTH = 244
 
 type AppSidebarProps = {
   models: Model[]
+  sessions: ChatSession[]
   isOpen: boolean
   onNewIdea: () => void
   onOpenModelSettings: () => void
   onToggleSidebar: () => void
-  onSearch: () => void
+  onSelectSession: (session: ChatSession) => void
 }
 
 const navItems = [
@@ -35,14 +37,16 @@ const navItems = [
 
 export function AppSidebar({
   models,
+  sessions,
   isOpen,
   onNewIdea,
   onOpenModelSettings,
   onToggleSidebar,
-  onSearch,
+  onSelectSession,
 }: AppSidebarProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [dragging, setDragging] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
@@ -81,14 +85,14 @@ export function AppSidebar({
 
   function handleNavClick(label: string) {
     if (label === 'Novo chat') onNewIdea()
-    else if (label === 'Pesquisar') onSearch()
+    else if (label === 'Pesquisar') setIsSearchOpen(true)
   }
 
   return (
     <aside
       style={isOpen ? { width } : undefined}
       className={[
-        'relative flex shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300',
+        'relative flex shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 overflow-hidden',
         dragging ? '' : 'transition-[width] duration-300 ease-in-out',
         'max-[920px]:hidden',
         isOpen ? '' : 'w-0 border-r-0',
@@ -107,7 +111,7 @@ export function AppSidebar({
           <button
             type="button"
             title="Pesquisar"
-            onClick={onSearch}
+            onClick={() => setIsSearchOpen(true)}
             className="rounded p-0.5 transition hover:text-zinc-300"
           >
             <Search size={13} />
@@ -186,6 +190,13 @@ export function AppSidebar({
           <Settings size={13} aria-hidden="true" />
         </button>
       </div>
+
+      <SearchPanel
+        sessions={sessions}
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onSelectSession={onSelectSession}
+      />
 
       {/* Drag handle */}
       <div

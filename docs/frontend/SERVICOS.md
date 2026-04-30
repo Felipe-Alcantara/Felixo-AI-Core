@@ -105,6 +105,17 @@ Union de 5 tipos:
 }
 ```
 
+#### `ChatSession`
+```ts
+{
+  id: string
+  title: string          // primeira mensagem do usuário, truncada em 60 chars
+  messages: ChatMessage[]
+  createdAt: string      // ISO 8601
+  updatedAt: string      // ISO 8601
+}
+```
+
 ---
 
 ## data/models.ts
