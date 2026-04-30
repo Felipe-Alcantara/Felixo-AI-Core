@@ -50,3 +50,16 @@ test('codex adapter parses session metadata', () => {
     providerSessionId: '019ddc27-bc3d-7280-b5c0-61dff03b08cd',
   })
 })
+
+test('codex adapter classifies known non-fatal stderr noise', () => {
+  assert.equal(
+    adapter.classifyStderr('Reading additional input from stdin...\n'),
+    'debug',
+  )
+  assert.equal(
+    adapter.classifyStderr(
+      'ERROR codex_core::session: failed to record rollout items: thread 019ddc5a not found\n',
+    ),
+    'warn',
+  )
+})

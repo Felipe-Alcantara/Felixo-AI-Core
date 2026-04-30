@@ -219,14 +219,16 @@ function registerCliIpcHandlers(getMainWindow) {
 
       childProcess.stderr.setEncoding('utf8')
       childProcess.stderr.on('data', (chunk) => {
+        const stderrLevel = getAdapterStderrLevel(adapter, chunk)
         stderrOutput = `${stderrOutput}${chunk}`.slice(-4000)
         sendRawOutput(targetWebContents, {
           sessionId: threadId,
           source: 'stderr',
           chunk: String(chunk),
+          severity: stderrLevel,
         })
         logQaEvent({
-          level: 'warn',
+          level: stderrLevel,
           scope: 'cli:stderr',
           sessionId: threadId,
           message: `stderr from ${command}.`,
@@ -420,6 +422,16 @@ function getAdapterSpawnArgs(adapter, prompt, context) {
   }
 
   return adapter.getSpawnArgs(prompt, context)
+}
+
+function getAdapterStderrLevel(adapter, chunk) {
+  if (typeof adapter.classifyStderr !== 'function') {
+    return 'warn'
+  }
+
+  const level = adapter.classifyStderr(chunk)
+
+  return ['debug', 'info', 'warn', 'error'].includes(level) ? level : 'warn'
 }
 
 function sendRawOutput(webContents, event) {

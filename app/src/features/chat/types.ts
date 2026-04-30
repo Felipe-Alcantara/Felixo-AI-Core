@@ -16,6 +16,7 @@ export type RawOutputEvent = {
   sessionId: string
   source: 'stdout' | 'stderr'
   chunk: string
+  severity?: 'debug' | 'info' | 'warn' | 'error'
 }
 
 export type StreamEvent =
