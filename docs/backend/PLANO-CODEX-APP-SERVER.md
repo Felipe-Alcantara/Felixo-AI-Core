@@ -13,15 +13,17 @@ O schema foi gerado localmente com `codex app-server generate-json-schema`
 ## Protocolo do app-server
 
 Transporte: `stdio://` (default), JSONL linha por linha.
+No `codex-cli 0.125.0`, as mensagens reais podem omitir o campo `jsonrpc`.
 
 ### Fluxo principal
 
 ```
 Client → initialize (clientInfo: {name, version})
-Server → response (result: capabilities)
+Server → response (result: userAgent/codexHome/capabilities)
 Client → notification: initialized
 Client → thread/start (cwd, model?, baseInstructions?)
-Server → notification: thread/started (threadId, thread)
+Server → response (result: thread)
+Server → notification: thread/started (thread)
 Client → turn/start (threadId, input: [{type: "text", text}])
 Server → notification: turn/started (threadId, turn)
 Server → notification: item/agentMessage/delta (delta, threadId, turnId)  [N vezes]
@@ -54,7 +56,7 @@ o fluxo. Depois isso vira confirmacao na UI.
 
 | Notification | O que carrega |
 |--------------|--------------|
-| `thread/started` | threadId |
+| `thread/started` | thread.id |
 | `turn/started` | threadId, turn |
 | `item/agentMessage/delta` | delta (texto), threadId, turnId |
 | `item/reasoning/textDelta` | delta de raciocinio |

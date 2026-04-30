@@ -86,12 +86,60 @@ test('codex-app-server adapter parses initialize response as control', () => {
   assert.deepEqual(event, { type: 'control', readyForSession: true })
 })
 
-test('codex-app-server adapter parses thread/started as session', () => {
+test('codex-app-server adapter parses real initialize response without jsonrpc', () => {
+  const event = adapter.parseLine(JSON.stringify({
+    id: 1,
+    result: {
+      userAgent: 'felixo-ai-core/0.125.0',
+      codexHome: '/tmp/felixo-codex-home',
+      platformFamily: 'unix',
+      platformOs: 'linux',
+    },
+  }))
+
+  assert.deepEqual(event, { type: 'control', readyForSession: true })
+})
+
+test('codex-app-server adapter parses thread/start response as session', () => {
+  const event = adapter.parseLine(JSON.stringify({
+    id: 2,
+    result: {
+      thread: {
+        id: 'thread-123',
+        status: { type: 'idle' },
+      },
+      model: 'gpt-5.5',
+      cwd: '/home/felipe/projeto',
+    },
+  }))
+
+  assert.deepEqual(event, {
+    type: 'session',
+    providerSessionId: 'thread-123',
+    readyForPrompt: true,
+  })
+})
+
+test('codex-app-server adapter parses legacy threadId response as session', () => {
   const event = adapter.parseLine(JSON.stringify({
     jsonrpc: '2.0',
+    id: 2,
+    result: {
+      threadId: 'thread-123',
+    },
+  }))
+
+  assert.deepEqual(event, {
+    type: 'session',
+    providerSessionId: 'thread-123',
+    readyForPrompt: true,
+  })
+})
+
+test('codex-app-server adapter parses thread/started as session', () => {
+  const event = adapter.parseLine(JSON.stringify({
     method: 'thread/started',
     params: {
-      threadId: 'thread-123',
       thread: { id: 'thread-123', status: 'active' },
     },
   }))
@@ -146,7 +194,6 @@ test('codex-app-server adapter parses error notification', () => {
 
 test('codex-app-server adapter parses error response', () => {
   const event = adapter.parseLine(JSON.stringify({
-    jsonrpc: '2.0',
     id: 5,
     error: { code: -32601, message: 'Method not found' },
   }))

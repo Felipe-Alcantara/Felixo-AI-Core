@@ -77,7 +77,7 @@ function createPersistentInput(prompt, context = {}) {
 function parseLine(line) {
   const payload = JSON.parse(line)
 
-  if (payload.jsonrpc !== '2.0') {
+  if (payload.jsonrpc !== undefined && payload.jsonrpc !== '2.0') {
     return null
   }
 
@@ -108,7 +108,7 @@ function parseServerNotification(payload) {
     case 'thread/started':
       return {
         type: 'session',
-        providerSessionId: payload.params?.threadId,
+        providerSessionId: extractThreadId(payload.params),
         readyForPrompt: true,
       }
 
@@ -164,10 +164,23 @@ function parseServerRequest(payload) {
 function parseResponse(payload) {
   const result = payload.result
 
-  if (result?.capabilities || result?.serverInfo) {
+  if (
+    result?.capabilities ||
+    result?.serverInfo ||
+    result?.userAgent ||
+    result?.codexHome
+  ) {
     return {
       type: 'control',
       readyForSession: true,
+    }
+  }
+
+  if (result?.thread || result?.threadId) {
+    return {
+      type: 'session',
+      providerSessionId: extractThreadId(result),
+      readyForPrompt: true,
     }
   }
 
@@ -257,6 +270,10 @@ function isResponse(payload) {
 
 function isErrorResponse(payload) {
   return payload.id !== undefined && payload.error !== undefined
+}
+
+function extractThreadId(value) {
+  return value?.threadId ?? value?.thread?.id
 }
 
 function resetRequestId() {
