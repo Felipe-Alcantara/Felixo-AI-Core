@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Bot,
+  ChevronDown,
   Code2,
   Folder,
   GitBranch,
@@ -49,6 +50,7 @@ export function AppSidebar({
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [dragging, setDragging] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isProjectsExpanded, setIsProjectsExpanded] = useState(false)
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
@@ -88,7 +90,7 @@ export function AppSidebar({
   function handleNavClick(label: string) {
     if (label === 'Novo chat') onNewIdea()
     else if (label === 'Pesquisar') setIsSearchOpen(true)
-    else if (label === 'Projetos') onOpenProjects()
+    else if (label === 'Projetos') setIsProjectsExpanded((v) => !v)
   }
 
   return (
@@ -123,52 +125,105 @@ export function AppSidebar({
       </div>
 
       <nav className="space-y-0.5 px-4 pt-2 text-[13px] max-xl:px-3">
-        {['Novo chat', 'Pesquisar', 'Projetos', 'Automações'].map((label) => {
-          const Icon = label === 'Novo chat' ? Plus
-            : label === 'Pesquisar' ? Search
-            : label === 'Projetos' ? Folder
-            : Sparkles
-          const isProjects = label === 'Projetos'
-          return (
-            <div key={label}>
+        <button
+          type="button"
+          onClick={() => handleNavClick('Novo chat')}
+          className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Novo chat
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleNavClick('Pesquisar')}
+          className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          <Search size={14} aria-hidden="true" />
+          Pesquisar
+        </button>
+
+        {/* Projetos com expansão */}
+        <div>
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={() => setIsProjectsExpanded((v) => !v)}
+              className="flex h-7 flex-1 items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            >
+              <Folder size={14} aria-hidden="true" />
+              Projetos
+              <ChevronDown
+                size={11}
+                className={[
+                  'ml-auto text-zinc-600 transition-transform duration-200',
+                  isProjectsExpanded ? 'rotate-180' : '',
+                ].join(' ')}
+              />
+            </button>
+            <button
+              type="button"
+              title="Gerenciar projetos"
+              onClick={onOpenProjects}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-white/[0.06] hover:text-zinc-300"
+            >
+              <Plus size={12} aria-hidden="true" />
+            </button>
+          </div>
+
+          {/* Projeto ativo visível mesmo colapsado */}
+          {!isProjectsExpanded && activeProject && (
+            <div className="ml-3 mt-0.5 border-l border-white/[0.06] pl-3">
               <button
                 type="button"
-                onClick={() => handleNavClick(label)}
-                className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+                onClick={() => onSelectProject(activeProject)}
+                title={activeProject.path}
+                className="flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] bg-amber-500/15 text-amber-300"
               >
-                <Icon size={14} aria-hidden="true" />
-                {label}
+                <GitBranch size={11} className="shrink-0" aria-hidden="true" />
+                <span className="truncate">{activeProject.name}</span>
               </button>
+            </div>
+          )}
 
-              {isProjects && (
-                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3">
-                  {projects.length === 0 && (
-                    <span className="block px-1.5 py-1 text-[11px] text-zinc-600">
-                      Nenhum projeto selecionado
-                    </span>
-                  )}
-                  {projects.map((project) => (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => onSelectProject(project)}
-                      title={project.path}
-                      className={[
-                        'flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] transition',
-                        activeProject?.id === project.id
-                          ? 'bg-amber-500/15 text-amber-300'
-                          : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
-                      ].join(' ')}
-                    >
-                      <GitBranch size={11} className="shrink-0" aria-hidden="true" />
-                      <span className="truncate">{project.name}</span>
-                    </button>
-                  ))}
-                </div>
+          {/* Lista expandida */}
+          {isProjectsExpanded && (
+            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3">
+              {projects.length === 0 ? (
+                <span className="block px-1.5 py-1 text-[11px] text-zinc-600">
+                  Nenhum projeto selecionado
+                </span>
+              ) : (
+                projects.map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => onSelectProject(project)}
+                    title={project.path}
+                    className={[
+                      'flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] transition',
+                      activeProject?.id === project.id
+                        ? 'bg-amber-500/15 text-amber-300'
+                        : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
+                    ].join(' ')}
+                  >
+                    <GitBranch size={11} className="shrink-0" aria-hidden="true" />
+                    <span className="truncate">{project.name}</span>
+                  </button>
+                ))
               )}
             </div>
-          )
-        })}
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => handleNavClick('Automações')}
+          className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          <Sparkles size={14} aria-hidden="true" />
+          Automações
+        </button>
       </nav>
 
       <div className="mt-5 px-4 max-xl:px-3">
