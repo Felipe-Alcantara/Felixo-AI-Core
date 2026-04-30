@@ -29,13 +29,14 @@ export function ChatWorkspace() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [projects, setProjects] = useState<Project[]>([])
-  const [activeProject, setActiveProject] = useState<Project | null>(null)
+  const [activeProjectIds, setActiveProjectIds] = useState<Set<string>>(new Set())
   const [input, setInput] = useState('')
   const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
   const [isProjectsOpen, setIsProjectsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
+  const lastSentProjectIdsRef = useRef<Set<string>>(new Set())
   const streamHandlerRef = useRef(handleStreamEvent)
 
   const selectedModel = useMemo(
@@ -93,7 +94,14 @@ export function ChatWorkspace() {
     }
 
     const sessionId = createSessionId()
-    const cliPrompt = createCliPrompt(messages, content, models, selectedModel, activeProject)
+    const activeProjects = projects.filter((p) => activeProjectIds.has(p.id))
+    const prevIds = lastSentProjectIdsRef.current
+    const added = activeProjects.filter((p) => !prevIds.has(p.id))
+    const removed = [...prevIds].filter((id) => !activeProjectIds.has(id)).map((id) => projects.find((p) => p.id === id)).filter(Boolean) as Project[]
+    const projectDiff = { added, removed }
+    lastSentProjectIdsRef.current = new Set(activeProjectIds)
+
+    const cliPrompt = createCliPrompt(messages, content, models, selectedModel, activeProjects, projectDiff)
 
     setMessages((currentMessages) => [
       ...currentMessages,
@@ -104,7 +112,7 @@ export function ChatWorkspace() {
     setActiveStreamingSession(sessionId)
 
     window.felixo.cli
-      .send({ sessionId, prompt: cliPrompt, model: selectedModel, cwd: activeProject?.path })
+      .send({ sessionId, prompt: cliPrompt, model: selectedModel })
       .then((result) => {
         if (!result.ok) {
           completeAssistantMessage(
@@ -166,11 +174,19 @@ export function ChatWorkspace() {
 
   function removeProject(project: Project) {
     setProjects((prev) => prev.filter((p) => p.id !== project.id))
-    setActiveProject((prev) => (prev?.id === project.id ? null : prev))
+    setActiveProjectIds((prev) => {
+      const next = new Set(prev)
+      next.delete(project.id)
+      return next
+    })
   }
 
-  function selectProject(project: Project) {
-    setActiveProject((prev) => (prev?.id === project.id ? null : project))
+  function toggleProject(project: Project) {
+    setActiveProjectIds((prev) => {
+      const next = new Set(prev)
+      next.has(project.id) ? next.delete(project.id) : next.add(project.id)
+      return next
+    })
   }
 
 function addModel(model: Model) {
@@ -339,14 +355,14 @@ function addModel(model: Model) {
         models={models}
         sessions={sessions}
         projects={projects}
-        activeProject={activeProject}
+        activeProjectIds={activeProjectIds}
         isOpen={isSidebarOpen}
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
         onOpenProjects={() => setIsProjectsOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
         onSelectSession={loadSession}
-        onSelectProject={selectProject}
+        onToggleProject={toggleProject}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-[#171716]">
@@ -457,18 +473,22 @@ function createSessionId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 }
 
+type ProjectDiff = { added: Project[]; removed: Project[] }
+
 function createCliPrompt(
   messages: ChatMessage[],
   currentPrompt: string,
   models: Model[],
   selectedModel: Model,
-  activeProject?: Project | null,
+  activeProjects: Project[],
+  projectDiff: ProjectDiff,
 ) {
   const historyMessages = messages
     .filter((message) => message.content.trim())
     .slice(-CONTEXT_MESSAGE_LIMIT)
 
-  const hasContext = historyMessages.length > 0 || activeProject
+  const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
+  const hasContext = historyMessages.length > 0 || activeProjects.length > 0 || hasDiff
 
   if (!hasContext) {
     return currentPrompt
@@ -479,8 +499,21 @@ function createCliPrompt(
     `Modelo que responderá agora: ${formatModelLabel(selectedModel)}`,
   ]
 
-  if (activeProject) {
-    lines.push('', `Projeto ativo: ${activeProject.name}`, `Caminho: ${activeProject.path}`)
+  if (activeProjects.length > 0) {
+    lines.push('', 'Projetos com contexto ativo:')
+    for (const p of activeProjects) {
+      lines.push(`  - ${p.name}: ${p.path}`)
+    }
+  }
+
+  if (hasDiff) {
+    lines.push('', 'Mudanças nos projetos ativos nesta mensagem:')
+    for (const p of projectDiff.added) {
+      lines.push(`  + Adicionado: ${p.name} (${p.path})`)
+    }
+    for (const p of projectDiff.removed) {
+      lines.push(`  - Removido: ${p.name} — não interaja mais com este repositório`)
+    }
   }
 
   if (historyMessages.length > 0) {
