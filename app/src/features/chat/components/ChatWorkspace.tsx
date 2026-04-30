@@ -11,8 +11,9 @@ import {
   initialMessages,
 } from '../services/chat-service'
 import { loadModels, saveModels } from '../services/model-storage'
-import type { ChatMessage, ChatSession, Model, ModelId, StreamEvent } from '../types'
+import type { ChatMessage, ChatSession, Model, ModelId, Project, StreamEvent } from '../types'
 import { ModelSettingsModal } from './ModelSettingsModal'
+import { ProjectsModal } from './ProjectsModal'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
@@ -27,8 +28,11 @@ export function ChatWorkspace() {
   )
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [input, setInput] = useState('')
   const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
@@ -89,7 +93,7 @@ export function ChatWorkspace() {
     }
 
     const sessionId = createSessionId()
-    const cliPrompt = createCliPrompt(messages, content, models, selectedModel)
+    const cliPrompt = createCliPrompt(messages, content, models, selectedModel, activeProject)
 
     setMessages((currentMessages) => [
       ...currentMessages,
@@ -100,7 +104,7 @@ export function ChatWorkspace() {
     setActiveStreamingSession(sessionId)
 
     window.felixo.cli
-      .send({ sessionId, prompt: cliPrompt, model: selectedModel })
+      .send({ sessionId, prompt: cliPrompt, model: selectedModel, cwd: activeProject?.path })
       .then((result) => {
         if (!result.ok) {
           completeAssistantMessage(
@@ -151,6 +155,22 @@ export function ChatWorkspace() {
     saveCurrentSession()
     setInput('')
     setMessages(session.messages)
+  }
+
+  function addProjects(incoming: Project[]) {
+    setProjects((prev) => {
+      const existingPaths = new Set(prev.map((p) => p.path))
+      return [...prev, ...incoming.filter((p) => !existingPaths.has(p.path))]
+    })
+  }
+
+  function removeProject(project: Project) {
+    setProjects((prev) => prev.filter((p) => p.id !== project.id))
+    setActiveProject((prev) => (prev?.id === project.id ? null : prev))
+  }
+
+  function selectProject(project: Project) {
+    setActiveProject((prev) => (prev?.id === project.id ? null : project))
   }
 
 function addModel(model: Model) {
@@ -318,11 +338,15 @@ function addModel(model: Model) {
       <AppSidebar
         models={models}
         sessions={sessions}
+        projects={projects}
+        activeProject={activeProject}
         isOpen={isSidebarOpen}
         onNewIdea={resetChat}
         onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+        onOpenProjects={() => setIsProjectsOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
         onSelectSession={loadSession}
+        onSelectProject={selectProject}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-[#171716]">
@@ -417,6 +441,14 @@ function addModel(model: Model) {
         onRemoveModel={removeModel}
         onClose={() => setIsModelSettingsOpen(false)}
       />
+
+      <ProjectsModal
+        isOpen={isProjectsOpen}
+        projects={projects}
+        onClose={() => setIsProjectsOpen(false)}
+        onAddProjects={addProjects}
+        onRemoveProject={removeProject}
+      />
     </div>
   )
 }
@@ -430,30 +462,45 @@ function createCliPrompt(
   currentPrompt: string,
   models: Model[],
   selectedModel: Model,
+  activeProject?: Project | null,
 ) {
   const historyMessages = messages
     .filter((message) => message.content.trim())
     .slice(-CONTEXT_MESSAGE_LIMIT)
 
-  if (historyMessages.length === 0) {
+  const hasContext = historyMessages.length > 0 || activeProject
+
+  if (!hasContext) {
     return currentPrompt
   }
 
-  return [
-    'Use o histórico abaixo como contexto da conversa no app. Responda apenas à mensagem atual do usuário.',
+  const lines = [
+    'Use o contexto abaixo para responder à mensagem atual do usuário.',
     `Modelo que responderá agora: ${formatModelLabel(selectedModel)}`,
-    '',
-    'Histórico da conversa:',
-    ...historyMessages.map((message, index) =>
-      formatHistoryMessage(message, index, models),
-    ),
+  ]
+
+  if (activeProject) {
+    lines.push('', `Projeto ativo: ${activeProject.name}`, `Caminho: ${activeProject.path}`)
+  }
+
+  if (historyMessages.length > 0) {
+    lines.push(
+      '',
+      'Histórico da conversa:',
+      ...historyMessages.map((message, index) => formatHistoryMessage(message, index, models)),
+    )
+  }
+
+  lines.push(
     '',
     'Mensagem atual do usuário:',
     '--- Mensagem atual ---',
     'Autor: Usuário',
     'Conteúdo:',
     currentPrompt,
-  ].join('\n')
+  )
+
+  return lines.join('\n')
 }
 
 function formatHistoryMessage(

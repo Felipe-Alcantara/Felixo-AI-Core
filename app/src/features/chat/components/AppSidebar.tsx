@@ -3,6 +3,7 @@ import {
   Bot,
   Code2,
   Folder,
+  GitBranch,
   PanelLeft,
   Plus,
   Search,
@@ -11,7 +12,7 @@ import {
   Sparkles,
   User,
 } from 'lucide-react'
-import type { ChatSession, Model } from '../types'
+import type { ChatSession, Model, Project } from '../types'
 import { SearchPanel } from './SearchPanel'
 
 const MIN_WIDTH = 160
@@ -21,28 +22,29 @@ const DEFAULT_WIDTH = 244
 type AppSidebarProps = {
   models: Model[]
   sessions: ChatSession[]
+  projects: Project[]
+  activeProject: Project | null
   isOpen: boolean
   onNewIdea: () => void
   onOpenModelSettings: () => void
+  onOpenProjects: () => void
   onToggleSidebar: () => void
   onSelectSession: (session: ChatSession) => void
+  onSelectProject: (project: Project) => void
 }
-
-const navItems = [
-  { label: 'Novo chat', icon: Plus },
-  { label: 'Pesquisar', icon: Search },
-  { label: 'Projetos', icon: Folder },
-  { label: 'Automações', icon: Sparkles },
-]
 
 export function AppSidebar({
   models,
   sessions,
+  projects,
+  activeProject,
   isOpen,
   onNewIdea,
   onOpenModelSettings,
+  onOpenProjects,
   onToggleSidebar,
   onSelectSession,
+  onSelectProject,
 }: AppSidebarProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [dragging, setDragging] = useState(false)
@@ -86,6 +88,7 @@ export function AppSidebar({
   function handleNavClick(label: string) {
     if (label === 'Novo chat') onNewIdea()
     else if (label === 'Pesquisar') setIsSearchOpen(true)
+    else if (label === 'Projetos') onOpenProjects()
   }
 
   return (
@@ -119,19 +122,46 @@ export function AppSidebar({
         </div>
       </div>
 
-      <nav className="space-y-1 px-4 pt-2 text-[13px] max-xl:px-3">
-        {navItems.map((item) => {
-          const Icon = item.icon
+      <nav className="space-y-0.5 px-4 pt-2 text-[13px] max-xl:px-3">
+        {['Novo chat', 'Pesquisar', 'Projetos', 'Automações'].map((label) => {
+          const Icon = label === 'Novo chat' ? Plus
+            : label === 'Pesquisar' ? Search
+            : label === 'Projetos' ? Folder
+            : Sparkles
+          const isProjects = label === 'Projetos'
           return (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => handleNavClick(item.label)}
-              className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
-            >
-              <Icon size={14} aria-hidden="true" />
-              {item.label}
-            </button>
+            <div key={label}>
+              <button
+                type="button"
+                onClick={() => handleNavClick(label)}
+                className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                <Icon size={14} aria-hidden="true" />
+                {label}
+              </button>
+
+              {isProjects && projects.length > 0 && (
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-white/[0.06] pl-3">
+                  {projects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => onSelectProject(project)}
+                      title={project.path}
+                      className={[
+                        'flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] transition',
+                        activeProject?.id === project.id
+                          ? 'bg-amber-500/15 text-amber-300'
+                          : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
+                      ].join(' ')}
+                    >
+                      <GitBranch size={11} className="shrink-0" aria-hidden="true" />
+                      <span className="truncate">{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )
         })}
       </nav>

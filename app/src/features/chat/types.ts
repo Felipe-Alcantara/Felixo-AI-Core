@@ -45,6 +45,12 @@ export type ChatMessage = {
   createdAt: string
 }
 
+export type Project = {
+  id: string
+  name: string
+  path: string
+}
+
 export type ChatSession = {
   id: string
   title: string
