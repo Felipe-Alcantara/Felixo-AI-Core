@@ -33,20 +33,8 @@ test('codex adapter passes ascii cwd with exec args', () => {
   ])
 })
 
-test('codex adapter resumes when provider session id is known', () => {
-  const spawnArgs = adapter.getResumeArgs('Continua', {
-    providerSessionId: '019ddc27-bc3d-7280-b5c0-61dff03b08cd',
-  })
-
-  assert.equal(spawnArgs.command, 'codex')
-  assert.deepEqual(spawnArgs.args, [
-    'exec',
-    'resume',
-    '--json',
-    '--skip-git-repo-check',
-    '019ddc27-bc3d-7280-b5c0-61dff03b08cd',
-    'Continua',
-  ])
+test('codex adapter keeps native resume disabled until thread persistence is validated', () => {
+  assert.equal(typeof adapter.getResumeArgs, 'undefined')
 })
 
 test('codex adapter parses session metadata', () => {
