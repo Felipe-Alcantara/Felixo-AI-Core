@@ -3,8 +3,8 @@
 import type {
   Model,
   QaLogEntry,
-  RawOutputEvent,
   StreamEvent,
+  TerminalOutputEvent,
 } from './features/chat/types'
 
 type DetectedRepo = { name: string; path: string }
@@ -29,6 +29,7 @@ declare global {
           sessionId: string
           threadId?: string
           prompt: string
+          resumePrompt?: string
           model: Model
           cwd?: string
         }) => Promise<CliInvokeResult>
@@ -37,7 +38,8 @@ declare global {
           threadId?: string
         }) => Promise<CliInvokeResult>
         onStream: (callback: (event: StreamEvent) => void) => () => void
-        onRawOutput: (callback: (event: RawOutputEvent) => void) => () => void
+        onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
+        onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
       }
       projects?: {
         pickFolder: () => Promise<string | null>

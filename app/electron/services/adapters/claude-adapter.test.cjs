@@ -38,6 +38,60 @@ test('claude adapter resumes an existing provider session', () => {
   ])
 })
 
+test('claude adapter starts a persistent stream-json process', () => {
+  const spawnArgs = adapter.getPersistentSpawnArgs({
+    threadId: '00000000-0000-4000-8000-000000000001',
+  })
+
+  assert.equal(spawnArgs.command, 'claude')
+  assert.deepEqual(spawnArgs.args, [
+    '--print',
+    '--input-format',
+    'stream-json',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--session-id',
+    '00000000-0000-4000-8000-000000000001',
+  ])
+})
+
+test('claude adapter serializes persistent stdin messages', () => {
+  const input = adapter.createPersistentInput('Oi')
+  const payload = JSON.parse(input.trim())
+
+  assert.deepEqual(payload, {
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: 'Oi',
+        },
+      ],
+    },
+  })
+  assert.equal(input.endsWith('\n'), true)
+})
+
+test('claude adapter can resume from provider or pinned thread session id', () => {
+  assert.equal(
+    adapter.canResume({
+      providerSessionId: '00000000-0000-4000-8000-000000000001',
+    }),
+    true,
+  )
+  assert.equal(
+    adapter.canResume({
+      threadId: '00000000-0000-4000-8000-000000000002',
+    }),
+    true,
+  )
+  assert.equal(adapter.canResume({}), false)
+})
+
 test('claude adapter parses text deltas', () => {
   const event = adapter.parseLine(
     JSON.stringify({

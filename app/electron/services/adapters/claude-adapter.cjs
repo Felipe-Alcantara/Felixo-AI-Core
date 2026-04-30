@@ -41,6 +41,48 @@ function getResumeArgs(prompt, context = {}) {
   }
 }
 
+function getPersistentSpawnArgs(context = {}) {
+  const args = [
+    '--print',
+    '--input-format',
+    'stream-json',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+  ]
+
+  if (context.providerSessionId) {
+    args.push('--resume', context.providerSessionId)
+  } else if (context.threadId) {
+    args.push('--session-id', context.threadId)
+  }
+
+  return {
+    command: 'claude',
+    args,
+  }
+}
+
+function createPersistentInput(prompt) {
+  return `${JSON.stringify({
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: prompt,
+        },
+      ],
+    },
+  })}\n`
+}
+
+function canResume(context = {}) {
+  return Boolean(context.providerSessionId || context.threadId)
+}
+
 function parseLine(line) {
   const payload = JSON.parse(line)
 
@@ -112,6 +154,9 @@ function parseStreamEvent(event) {
 }
 
 module.exports = {
+  canResume,
+  createPersistentInput,
+  getPersistentSpawnArgs,
   getSpawnArgs,
   getResumeArgs,
   parseLine,

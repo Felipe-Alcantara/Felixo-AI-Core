@@ -18,8 +18,13 @@ contextBridge.exposeInMainWorld('felixo', {
     },
     onRawOutput: (callback) => {
       const handler = (_event, data) => callback(data)
-      ipcRenderer.on('cli:raw-output', handler)
-      return () => ipcRenderer.removeListener('cli:raw-output', handler)
+      ipcRenderer.on('cli:terminal-output', handler)
+      return () => ipcRenderer.removeListener('cli:terminal-output', handler)
+    },
+    onTerminalOutput: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('cli:terminal-output', handler)
+      return () => ipcRenderer.removeListener('cli:terminal-output', handler)
     },
   },
   projects: {

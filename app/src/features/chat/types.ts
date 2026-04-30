@@ -12,25 +12,47 @@ export type Model = {
 
 export type ModelFileSelection = Omit<Model, 'id'>
 
-export type RawOutputEvent = {
+export type TerminalOutputKind =
+  | 'assistant'
+  | 'error'
+  | 'lifecycle'
+  | 'metrics'
+  | 'stderr'
+  | 'tool'
+
+export type TerminalOutputEvent = {
   sessionId: string
-  source: 'stdout' | 'stderr'
+  source: 'stdout' | 'stderr' | 'system'
   chunk: string
   severity?: 'debug' | 'info' | 'warn' | 'error'
+  kind?: TerminalOutputKind
+  title?: string
+  metadata?: Record<string, string | number | boolean | null | undefined>
+}
+
+export type RawOutputEvent = TerminalOutputEvent
+
+type StreamEventBase = {
+  sessionId: string
+  threadId?: string
 }
 
 export type StreamEvent =
-  | { type: 'text'; text: string; sessionId: string }
-  | { type: 'tool_use'; tool: string; input: string; sessionId: string }
-  | { type: 'tool_result'; output: string; sessionId: string }
+  | (StreamEventBase & { type: 'text'; text: string })
+  | (StreamEventBase & { type: 'tool_use'; tool: string; input: string })
+  | (StreamEventBase & { type: 'tool_result'; output: string })
   | {
       type: 'done'
+      sessionId: string
+      threadId?: string
       cost?: number
       duration?: number
       stopped?: boolean
-      sessionId: string
     }
-  | { type: 'error'; message: string; sessionId: string }
+  | (StreamEventBase & {
+      type: 'error'
+      message: string
+    })
 
 export type QaLogEntry = {
   id: number
