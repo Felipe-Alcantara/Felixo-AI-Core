@@ -3,21 +3,62 @@
 ## Estrutura de Camadas
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  FELIXO AI CORE                      │
-├─────────────────────────────────────────────────────┤
-│  FRONTEND REACT (app/src/)                           │
-│  └─ features/chat/ → componentes, serviços, tipos   │
-├─────────────────────────────────────────────────────┤
-│  BRIDGE (app/electron/preload.cjs)                   │
-│  └─ window.felixo → cli, qaLogger, platform         │
-├─────────────────────────────────────────────────────┤
-│  BACKEND ELECTRON (app/electron/)                    │
-│  ├─ core/ → caminhos, config de janela              │
-│  ├─ windows/ → factory da janela principal          │
-│  └─ services/ → IPC, processos, adapters, logging   │
-└─────────────────────────────────────────────────────┘
+Felixo AI Core
+├── UI Desktop
+│   ├── Chat
+│   ├── Editor/Projetos
+│   ├── Terminal
+│   ├── Git
+│   └── Painel de modelos
+├── Orchestrator Core
+│   ├── decisão de modo de execução
+│   ├── seleção de prompt completo vs. prompt curto
+│   ├── estado de thread/providerSessionId
+│   └── política de continuidade por modelo
+├── Terminal Adapters
+│   ├── claude
+│   ├── codex
+│   └── gemini
+├── MCP Layer
+│   ├── catálogo Felixo de ferramentas
+│   ├── filesystem/projeto
+│   ├── Git
+│   ├── memória
+│   └── skills/prompts
+└── Backend Electron
+    ├── IPC seguro via preload
+    ├── processos locais
+    ├── streaming JSONL/NDJSON
+    └── logging/observabilidade
 ```
+
+## Decisão Arquitetural
+
+MCP não é tratado como substituto das CLIs nem como API universal de modelos.
+No Felixo AI Core, as CLIs autenticadas por assinatura continuam sendo
+controladas por **Terminal Adapters**. MCP entra como a camada de
+**ferramentas, contexto, memória, Git e skills**.
+
+Essa separação evita misturar três problemas diferentes:
+
+- chamar modelos por terminal;
+- padronizar ferramentas disponíveis para IAs;
+- orquestrar qual provedor, contexto e estratégia usar em cada tarefa.
+
+Detalhamento: [ORQUESTRADOR-HIBRIDO-MCP.md](./ORQUESTRADOR-HIBRIDO-MCP.md).
+
+## Mapeamento no Código
+
+| Camada | Arquivos principais |
+|--------|---------------------|
+| UI Desktop | `app/src/features/chat/` |
+| Bridge | `app/electron/preload.cjs` |
+| Orchestrator Core | `app/electron/services/orchestrator/cli-execution-planner.cjs` |
+| Terminal Adapters | `app/electron/services/adapters/*.cjs` |
+| Provider registry | `app/electron/services/providers/terminal-adapter-registry.cjs` |
+| MCP Layer inicial | `app/electron/services/mcp/felixo-tool-catalog.cjs` |
+| Processos locais | `app/electron/services/cli-process-manager.cjs` |
+| IPC | `app/electron/services/ipc-handlers.cjs` |
 
 ## Fluxo de Dados
 
@@ -32,11 +73,14 @@ window.felixo.cli.send({ sessionId, threadId, prompt, resumePrompt, model })
         ↓  [IPC — contextIsolation]
 ipc-handlers.cjs → cli:send
         ↓
-Seleciona adapter (claude | codex | gemini)
+Provider registry seleciona Terminal Adapter (claude | codex | gemini)
+        ↓
+Orchestrator Core cria plano de execução
         ↓
 Decide estratégia:
   - processo persistente quando o adapter suporta stdin JSONL
   - processo one-shot quando não há protocolo persistente confiável
+  - retomada nativa quando já existe providerSessionId
         ↓
 CliProcessManager.spawn(threadId, command, args, cwd)
         ↓

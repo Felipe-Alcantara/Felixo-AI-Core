@@ -12,6 +12,18 @@ Uma aplicação desktop Linux-first que centraliza, em uma única interface, as 
 
 O objetivo de longo prazo é evoluir para um sistema capaz de escolher modelos, coordenar agentes, manter memória persistente e executar pipelines inteligentes com base em custo, contexto e objetivo da tarefa.
 
+## Arquitetura alvo
+
+O projeto agora segue uma arquitetura híbrida:
+
+- **Terminal Adapters** controlam CLIs autenticadas por assinatura.
+- **Orchestrator Core** decide modo de execução, continuidade e contexto.
+- **MCP Layer** padroniza ferramentas, Git, memória, prompts, skills e contexto.
+
+MCP não substitui as CLIs nem vira uma API universal de modelos. No Felixo AI Core, MCP é a camada de ferramentas; os modelos continuam entrando por adapters de terminal, APIs futuras ou modelos locais.
+
+Ver [Orquestrador Híbrido com MCP](./docs/arquitetura/ORQUESTRADOR-HIBRIDO-MCP.md).
+
 ---
 
 ## Status atual
@@ -21,11 +33,14 @@ Primeira versão funcional entregue:
 - Interface de chat com seletor visual de modelos/CLIs
 - Backend Electron executando CLIs reais em streaming
 - Adapters para `claude`, `codex` e `gemini`
+- Registry de Terminal Adapters
+- Orchestrator Core inicial para decidir processo persistente, retomada nativa ou one-shot
+- Catálogo inicial de ferramentas MCP do Felixo
 - Append incremental de resposta com cursor de streaming
 - Botão de parar para interromper processo em andamento
 - Frontend organizado por feature em `app/src/features/chat/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
-- Testes unitários para adapters e leitura JSONL
+- Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL
 
 ---
 

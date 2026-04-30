@@ -11,6 +11,9 @@ O processo principal do Electron funciona como backend local do Felixo AI Core. 
 | `app/electron/main.cjs` | Inicialização do Electron e registro de handlers |
 | `app/electron/preload.cjs` | Bridge segura `window.felixo` para o renderer |
 | `app/electron/services/ipc-handlers.cjs` | Orquestra IPC, adapters, processos, stream e terminal |
+| `app/electron/services/providers/terminal-adapter-registry.cjs` | Resolve o adapter de terminal por `cliType` |
+| `app/electron/services/orchestrator/cli-execution-planner.cjs` | Decide modo de execução, prompt e contrato persistente |
+| `app/electron/services/mcp/felixo-tool-catalog.cjs` | Catálogo inicial de tools MCP do Felixo |
 | `app/electron/services/cli-process-manager.cjs` | Spawn, escrita em stdin, kill e cleanup de processos |
 | `app/electron/services/jsonl-line-reader.cjs` | Divide stdout JSONL por linha |
 | `app/electron/services/jsonl-output-guard.cjs` | Bloqueia stdout fora de JSONL esperado |
@@ -121,6 +124,10 @@ No Linux, processos são criados como grupo separado (`detached`) para permitir 
 
 ## Estratégias de execução
 
+As estratégias são escolhidas pelo Orchestrator Core em
+`cli-execution-planner.cjs`. O IPC apenas valida entrada, chama o planner e
+executa o plano.
+
 ### Processo persistente
 
 Usado quando o adapter implementa:
@@ -153,6 +160,29 @@ Fluxo:
 5. Processo encerra naturalmente.
 
 Hoje Codex e Gemini estão nesse modo: eles não mantêm o processo vivo, mas não precisam abrir uma conversa nova depois que a sessão do provedor foi capturada.
+
+## Camada MCP inicial
+
+MCP é tratado como camada de ferramentas e contexto, não como mecanismo para
+chamar modelos por assinatura.
+
+O arquivo `felixo-tool-catalog.cjs` define os nomes e a política inicial das
+tools que futuramente poderão ser expostas por um servidor MCP do Felixo:
+
+- `project.read_file`
+- `project.search`
+- `project.write_file`
+- `git.status`
+- `git.diff`
+- `git.commit_message`
+- `memory.save`
+- `memory.search`
+- `summary.create`
+- `terminal.run_allowlisted`
+
+Tools com escrita já nascem marcadas como `requiresConfirmation`. O app ainda
+não expõe um servidor MCP completo; o catálogo existe para fixar contrato,
+escopo e segurança antes do transporte.
 
 ## Estado por adapter
 

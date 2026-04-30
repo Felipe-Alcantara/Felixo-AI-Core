@@ -154,3 +154,7 @@ OBS: Ainda não é processo vivo via stdin para Codex/Gemini; cada prompt cria u
 
 [2026-04-30] Documentação — Criado `docs/projeto/STATUS-ATUAL.md` com resumo consolidado do que está pronto, do que ficou parcial e do que falta.
 DETALHE: Também foram atualizados `ROADMAP.md`, `TERMINAL-PERSISTENTE.md`, `docs/backend/ELECTRON.md`, `docs/arquitetura/VISAO-GERAL.md`, `docs/app/README.md`, `docs/frontend/SERVICOS.md` e `docs/frontend/COMPONENTES.md`.
+
+[2026-04-30] Arquitetura — Adaptado o modelo para orquestrador híbrido com MCP.
+DETALHE: `providers/terminal-adapter-registry.cjs` separa seleção de Terminal Adapters; `orchestrator/cli-execution-planner.cjs` decide processo persistente, retomada nativa ou one-shot; `mcp/felixo-tool-catalog.cjs` define o catálogo inicial das tools Felixo com escrita marcada para confirmação.
+TESTE: `npm test` validou adapters, registry, planner, catálogo MCP e serviços existentes.

@@ -38,6 +38,9 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 - [x] Separação entre `threadId` lógico da conversa e `sessionId` da resposta
 - [x] Sessão/processo persistente real para Claude
 - [x] Retomada nativa de conversa para Codex e Gemini
+- [x] Registry explícito de Terminal Adapters
+- [x] Orchestrator Core inicial para decidir estratégia de execução
+- [x] Catálogo inicial da MCP Layer para ferramentas Felixo
 - [ ] Sessão/processo persistente real para Codex e Gemini
 - [ ] Múltiplas threads simultâneas na mesma conversa
 - [ ] Cadastrar e editar comandos locais manualmente
@@ -107,6 +110,16 @@ Transformar o protótipo em uma ferramenta utilizável no dia a dia, com organiz
 - [ ] Salvar lista de modelos/terminais cadastrados
 - [ ] Salvar prompts personalizados
 - [ ] Salvar projetos/workspaces
+
+### Arquitetura híbrida MCP
+
+- [x] Separar a camada de Terminal Adapters da seleção por `cliType`
+- [x] Extrair decisões de execução para `Orchestrator Core`
+- [x] Definir catálogo inicial de tools MCP do Felixo
+- [ ] Implementar servidor MCP read-only para tools de projeto/Git
+- [ ] Implementar cliente MCP para conectar servidores externos
+- [ ] Criar política visual de confirmação para tools de escrita
+- [ ] Adicionar logs auditáveis para tools sensíveis
 
 ---
 

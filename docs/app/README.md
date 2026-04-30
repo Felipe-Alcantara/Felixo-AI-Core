@@ -37,7 +37,7 @@ npm run dev
 ```bash
 npm run dev      # abre Vite + Electron
 npm run dev:web  # abre somente o frontend no navegador
-npm test         # valida adapters e leitor JSONL do backend Electron
+npm test         # valida adapters, orquestrador, MCP catalog e leitor JSONL
 npm run lint     # valida ESLint
 npm run build    # valida TypeScript e gera build web
 npm run start    # abre Electron usando o build em dist/
@@ -53,6 +53,8 @@ O workspace também inclui um painel `QA Logger` no rodapé para observar evento
 
 A conversa separa `threadId` e `sessionId`: o `threadId` identifica a conversa/modelo e agrupa o terminal; o `sessionId` identifica a mensagem assistente que recebe o streaming. Claude usa processo persistente real via `--input-format stream-json`, mantendo `stdin` aberto entre mensagens da mesma conversa. Codex e Gemini mantêm a conversa do provedor por retomada nativa quando o backend já capturou o id de sessão; se esse id ainda não existir, recebem continuidade pelo contexto explícito enviado no prompt.
 
+O backend agora explicita a arquitetura híbrida: `providers/` registra os Terminal Adapters, `orchestrator/` decide a estratégia de execução e `mcp/` guarda o catálogo inicial de ferramentas/contexto que futuramente poderá virar servidor MCP do Felixo.
+
 Status detalhado do que está pronto e do que falta: [docs/projeto/STATUS-ATUAL.md](../projeto/STATUS-ATUAL.md).
 
 ## Estrutura
@@ -60,7 +62,7 @@ Status detalhado do que está pronto e do que falta: [docs/projeto/STATUS-ATUAL.
 ```text
 electron/
 ├── core/       # caminhos e configuração base
-├── services/   # adapters, IPC e processos CLI do backend local
+├── services/   # adapters, providers, orchestrator, mcp, IPC e processos CLI
 └── windows/    # criação das janelas Electron
 
 src/
