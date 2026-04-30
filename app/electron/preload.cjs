@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('cli:stream', handler)
     },
   },
+  projects: {
+    pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),
+    detectRepos: (folderPath) => ipcRenderer.invoke('projects:detect-repos', folderPath),
+  },
   qaLogger: {
     getEntries: () => ipcRenderer.invoke('qa-logger:get'),
     clear: () => ipcRenderer.invoke('qa-logger:clear'),

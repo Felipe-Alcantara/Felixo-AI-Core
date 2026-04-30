@@ -2,6 +2,8 @@
 
 import type { Model, QaLogEntry, StreamEvent } from './features/chat/types'
 
+type DetectedRepo = { name: string; path: string }
+
 type CliInvokeResult = {
   ok: boolean
   message?: string
@@ -22,9 +24,14 @@ declare global {
           sessionId: string
           prompt: string
           model: Model
+          cwd?: string
         }) => Promise<CliInvokeResult>
         stop: (params: { sessionId: string }) => Promise<CliInvokeResult>
         onStream: (callback: (event: StreamEvent) => void) => () => void
+      }
+      projects?: {
+        pickFolder: () => Promise<string | null>
+        detectRepos: (folderPath: string) => Promise<DetectedRepo[]>
       }
       qaLogger?: {
         getEntries: () => Promise<QaLogEntry[]>

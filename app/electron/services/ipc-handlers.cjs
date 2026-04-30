@@ -19,6 +19,7 @@ function registerCliIpcHandlers(getMainWindow) {
     const sessionId = getRequiredString(params?.sessionId)
     const prompt = getRequiredString(params?.prompt)
     const model = params?.model
+    const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
     const cliType = model?.cliType
     const adapter = adapters[cliType]
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
@@ -55,7 +56,7 @@ function registerCliIpcHandlers(getMainWindow) {
 
     stoppedSessions.delete(sessionId)
 
-    const cwd = resolveCliCwd(cliType)
+    const cwd = projectCwd ?? resolveCliCwd(cliType)
     const { command, args } = adapter.getSpawnArgs(prompt, { cwd, model })
     let didComplete = false
     let didEmitVisibleOutput = false
