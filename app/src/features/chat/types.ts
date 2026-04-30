@@ -1,6 +1,12 @@
 export type ModelId = string
 
-export type CliType = 'claude' | 'codex' | 'gemini' | 'unknown'
+export type CliType =
+  | 'claude'
+  | 'codex'
+  | 'codex-app-server'
+  | 'gemini'
+  | 'gemini-acp'
+  | 'unknown'
 
 export type Model = {
   id: ModelId
