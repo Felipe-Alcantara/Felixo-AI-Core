@@ -45,6 +45,15 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - `npm test` passou a cobrir `protocols/` e `adapters/testing/`.
 - Plano documentado em `docs/backend/PLANO-FAKE-PERSISTENT-ACP.md`.
 
+### Codex app-server adapter + fake agent
+
+- `adapters/codex-app-server-adapter.cjs` implementa handshake multi-fase (initialize → initialized → thread/start → turn/start) compativel com o fluxo persistente do IPC.
+- `adapters/testing/fake-codex-app-server-agent.cjs` simula protocolo Codex app-server (JSON-RPC 2.0) sem CLI real.
+- Auto-aprovacao de `commandExecution` e `fileChange` requests na primeira versao.
+- `providers/terminal-adapter-registry.cjs` agora inclui `codex-app-server`.
+- Schema do protocolo gerado localmente via `codex app-server generate-json-schema` (codex-cli 0.125.0).
+- Plano documentado em `docs/backend/PLANO-CODEX-APP-SERVER.md`.
+
 ## O que já foi concluído
 
 ### Backend Electron
