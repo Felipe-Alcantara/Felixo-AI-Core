@@ -4,7 +4,7 @@
 
 O app já executa CLIs reais (`claude`, `codex`, `gemini`) a partir do backend Electron, envia respostas em streaming para o React e mostra uma visão humanizada do terminal em tempo real. A conversa agora diferencia `threadId` lógico da conversa e `sessionId` da resposta, permitindo agrupar vários prompts no mesmo terminal visual.
 
-A persistência real de processo já está ativa para Claude, porque o CLI oferece um contrato compatível com `--input-format stream-json`. Codex e Gemini continuam em execução one-shot por mensagem, com continuidade via contexto explícito, até validação de um protocolo persistente confiável.
+A persistência real de processo já está ativa para Claude, porque o CLI oferece um contrato compatível com `--input-format stream-json`. Codex e Gemini continuam em execução one-shot por mensagem, mas agora retomam a conversa nativa do provedor quando já existe `providerSessionId`; antes da primeira sessão capturada, a continuidade vem pelo contexto explícito.
 
 ## O que já foi concluído
 
@@ -42,23 +42,23 @@ A persistência real de processo já está ativa para Claude, porque o CLI ofere
   - Parseia `system`, `stream_event`, `result` e erros.
 - `codex-adapter.cjs`
   - Executa `codex exec --json --skip-git-repo-check`.
+  - Retoma sessão com `codex exec resume --json --skip-git-repo-check <providerSessionId>`.
   - Captura metadados comuns de sessão/thread quando aparecem no JSONL.
   - Parseia resposta final em `item.completed` e conclusão em `turn.completed`.
   - Suprime ruídos conhecidos de `stderr` que não representam falha.
-  - Retomada nativa permanece desativada.
 - `gemini-adapter.cjs`
   - Executa `gemini --prompt ... --output-format stream-json --skip-trust`.
+  - Retoma sessão com `gemini --resume <session_id> --prompt ... --output-format stream-json --skip-trust`.
   - Captura `init.session_id`.
   - Parseia mensagens `role: model` ou `role: assistant`.
   - Trata `result` como conclusão.
   - Classifica avisos visuais como não fatais e erro 429/capacidade como fatal.
-  - Retomada nativa permanece desativada.
 
 ### Frontend
 
 - `ChatWorkspace` mantém um `threadId` por conversa/modelo e gera um `sessionId` por mensagem.
 - O prompt enviado para CLIs one-shot inclui histórico recente e contexto dos projetos ativos.
-- O prompt de continuação (`resumePrompt`) não inclui histórico inteiro quando o adapter consegue manter contexto nativo.
+- O prompt de continuação (`resumePrompt`) não inclui histórico inteiro quando o adapter consegue manter contexto nativo por processo persistente ou retomada nativa.
 - Trocar modelo, iniciar novo chat ou carregar outra sessão reinicia a thread lógica.
 - O painel Terminal agrupa eventos por `threadId`, não por mensagem individual.
 - O painel Terminal mostra status (`running`, `completed`, `error`, `stopped`), contagem de eventos e tamanho acumulado.
@@ -81,8 +81,8 @@ A persistência real de processo já está ativa para Claude, porque o CLI ofere
 
 ## O que ficou parcial
 
-- Terminal persistente real está implementado para Claude, mas não para todos os adapters.
-- Codex e Gemini mantêm `threadId` estável no app e recebem contexto explícito, mas cada prompt ainda abre um novo processo CLI.
+- Processo persistente real está implementado para Claude, mas não para todos os adapters.
+- Codex e Gemini mantêm `threadId` estável no app e retomam a conversa nativa quando há `providerSessionId`, mas cada prompt ainda abre um novo processo CLI.
 - O painel Terminal é observável e humanizado, mas ainda não é um terminal interativo manual.
 - Histórico de chat ainda é basicamente em memória, salvo ao iniciar novo chat/carregar sessão dentro da execução atual.
 - O `QA Logger` é voltado para debug local, não para auditoria persistente.
@@ -91,17 +91,15 @@ A persistência real de processo já está ativa para Claude, porque o CLI ofere
 
 ### Codex
 
-- Validar em execução real se existe um id persistível confiável para `codex exec resume`.
-- Confirmar se `codex exec resume <id> --json` funciona sem erro interno `thread not found`.
+- Validar em execução real longa se `codex exec resume <id> --json` segue emitindo `turn.completed` de forma confiável.
 - Investigar se `codex exec-server`, `mcp-server` ou outro modo oferece protocolo persistente melhor que processo one-shot.
-- Só reativar retomada nativa quando o retorno JSONL continuar parseável e completar com `turn.completed`.
+- Só trocar para processo vivo quando houver delimitação clara de resposta e conclusão.
 
 ### Gemini
 
-- Revalidar `gemini --resume <session_id> --output-format stream-json`.
-- Resolver o caso observado em que a retomada emite apenas `init` + eco de `user` e não produz `assistant/result`.
+- Validar em execução real longa se `gemini --resume <session_id> --output-format stream-json` segue emitindo `assistant/result` de forma confiável.
 - Investigar `--prompt-interactive`, `--acp` ou outro protocolo persistente com saída estruturada.
-- Só trocar para processo persistente quando houver delimitação clara de resposta e conclusão.
+- Só trocar para processo vivo quando houver delimitação clara de resposta e conclusão.
 
 ### Frontend e produto
 

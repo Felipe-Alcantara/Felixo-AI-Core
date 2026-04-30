@@ -82,9 +82,9 @@ Codex/Gemini
   ↓
 processo one-shot por prompt
   ↓
-continuidade via histórico/contexto explícito no prompt
+retomada nativa por providerSessionId quando disponível
   ↓
-threadId estável apenas no app e no painel Terminal
+fallback para histórico/contexto explícito antes da sessão ser capturada
 ```
 
 ## Observabilidade

@@ -148,8 +148,9 @@ DETALHE: `threadId` identifica conversa/modelo/terminal/processo; `sessionId` id
 [2026-04-30] Concluído parcial — Claude agora usa processo persistente real.
 DETALHE: `claude-adapter.cjs` expõe `getPersistentSpawnArgs()` com `--input-format stream-json` e `createPersistentInput()` para escrever novas mensagens no `stdin` aberto. `ipc-handlers.cjs` reutiliza o processo por `threadId` e fecha sessões persistentes ociosas após 30 minutos.
 
-[2026-04-30] Mantido pendente — Codex e Gemini continuam one-shot por mensagem.
-MOTIVO: `codex exec resume <thread_id>` apresentou erro interno `thread not found` nos testes manuais, e `gemini --resume` com `stream-json` pode travar emitindo apenas `init` + eco de `user`. A continuidade desses adapters segue por contexto explícito até validação de protocolo persistente confiável.
+[2026-04-30] Concluído — Codex e Gemini passaram a retomar a conversa nativa quando há sessão do provedor.
+DETALHE: `codex-adapter.cjs` expõe `getResumeArgs()` com `codex exec resume --json --skip-git-repo-check <providerSessionId>` e `canResume()` só retorna true após capturar `providerSessionId`. `gemini-adapter.cjs` reativou `canResume()` para `providerSessionId` e usa `gemini --resume <session_id> --prompt ... --output-format stream-json --skip-trust`.
+OBS: Ainda não é processo vivo via stdin para Codex/Gemini; cada prompt cria um processo CLI novo, mas ele retoma o mesmo chat do provedor em vez de iniciar uma conversa nova.
 
 [2026-04-30] Documentação — Criado `docs/projeto/STATUS-ATUAL.md` com resumo consolidado do que está pronto, do que ficou parcial e do que falta.
 DETALHE: Também foram atualizados `ROADMAP.md`, `TERMINAL-PERSISTENTE.md`, `docs/backend/ELECTRON.md`, `docs/arquitetura/VISAO-GERAL.md`, `docs/app/README.md`, `docs/frontend/SERVICOS.md` e `docs/frontend/COMPONENTES.md`.

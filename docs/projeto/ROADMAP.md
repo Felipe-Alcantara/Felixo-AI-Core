@@ -37,6 +37,7 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 - [x] Painel de terminal em tempo real com eventos humanizados por thread
 - [x] Separação entre `threadId` lógico da conversa e `sessionId` da resposta
 - [x] Sessão/processo persistente real para Claude
+- [x] Retomada nativa de conversa para Codex e Gemini
 - [ ] Sessão/processo persistente real para Codex e Gemini
 - [ ] Múltiplas threads simultâneas na mesma conversa
 - [ ] Cadastrar e editar comandos locais manualmente
@@ -53,7 +54,8 @@ Resumo operacional em [STATUS-ATUAL.md](./STATUS-ATUAL.md).
 - [x] `threadId` fixo por conversa/modelo e `sessionId` por mensagem
 - [x] Claude com processo persistente real via `--input-format stream-json`
 - [x] Codex/Gemini com continuidade por contexto explícito e `threadId` visual estável
-- [ ] Codex/Gemini com processo persistente real ou retomada nativa validada
+- [x] Codex/Gemini com retomada nativa por `providerSessionId`
+- [ ] Codex/Gemini com processo persistente real
 - [ ] Múltiplas threads simultâneas na mesma conversa
 
 ---
@@ -342,7 +344,8 @@ Adicionar uma camada de IDE leve e integrada, permitindo editar arquivos, navega
 - [x] Gerenciamento de projetos Git com contexto no prompt
 - [x] Painel de terminal em tempo real com eventos humanizados por thread
 - [x] Sessão CLI persistente no Claude
-- [ ] Sessão CLI persistente no Codex/Gemini
+- [x] Retomada nativa de sessão no Codex/Gemini
+- [ ] Processo CLI persistente no Codex/Gemini
 - [ ] Múltiplas threads simultâneas na mesma conversa
 
 ### Bloco 2 — Organização
