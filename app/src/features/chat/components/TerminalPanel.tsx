@@ -226,11 +226,27 @@ function TerminalChunk({ chunk }: { chunk: TerminalOutputChunk }) {
   return (
     <span
       title={chunk.source}
-      className={chunk.source === 'stderr' ? 'text-red-300' : 'text-zinc-300'}
+      className={getChunkClassName(chunk)}
     >
       {chunk.chunk}
     </span>
   )
+}
+
+function getChunkClassName(chunk: TerminalOutputChunk) {
+  if (chunk.source === 'stdout') {
+    return 'text-zinc-300'
+  }
+
+  if (chunk.severity === 'debug' || chunk.severity === 'info') {
+    return 'text-zinc-500'
+  }
+
+  if (chunk.severity === 'warn') {
+    return 'text-amber-300'
+  }
+
+  return 'text-red-300'
 }
 
 function getStatusDotClassName(status: TerminalSessionStatus) {

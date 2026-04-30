@@ -71,6 +71,24 @@ function parseLine(line) {
   return null
 }
 
+function classifyStderr(chunk) {
+  const text = String(chunk)
+
+  if (text.includes('Reading additional input from stdin')) {
+    return 'debug'
+  }
+
+  if (
+    text.includes('failed to record rollout items') &&
+    text.includes('thread') &&
+    text.includes('not found')
+  ) {
+    return 'warn'
+  }
+
+  return 'warn'
+}
+
 function isSessionMetadata(payload) {
   return (
     payload.type === 'session_meta' ||
@@ -102,6 +120,7 @@ function extractProviderSessionId(payload) {
 }
 
 module.exports = {
+  classifyStderr,
   getSpawnArgs,
   parseLine,
 }
