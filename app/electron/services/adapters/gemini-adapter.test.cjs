@@ -89,3 +89,15 @@ test('gemini adapter parses result as done', () => {
     type: 'done',
   })
 })
+
+test('gemini adapter classifies known non-fatal stderr notices', () => {
+  const colorNotice =
+    'Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.\n'
+  const ripgrepNotice = 'Ripgrep is not available. Falling back to GrepTool.\n'
+
+  assert.equal(adapter.classifyStderr(colorNotice), 'info')
+  assert.equal(adapter.classifyStderr(ripgrepNotice), 'info')
+  assert.equal(adapter.shouldSuppressStderr(colorNotice), true)
+  assert.equal(adapter.shouldSuppressStderr(ripgrepNotice), false)
+  assert.equal(adapter.classifyStderr(`${ripgrepNotice}real error\n`), 'warn')
+})
