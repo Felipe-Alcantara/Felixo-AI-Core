@@ -494,6 +494,55 @@ function registerCliIpcHandlers(getMainWindow) {
     return { ok: killed }
   })
 
+  ipcMain.handle('cli:reset-thread', (event, params) => {
+    const threadId = getRequiredString(params?.threadId)
+
+    if (!threadId) {
+      logQaEvent({
+        level: 'warn',
+        scope: 'cli:reset-thread',
+        message: 'Rejected reset request with invalid thread.',
+      })
+      return { ok: false, message: 'Thread invalida.' }
+    }
+
+    const hadThreadSession = cliThreadSessions.delete(threadId)
+    const hadPersistentSession = persistentCliSessions.has(threadId)
+    stoppedSessions.add(threadId)
+    const killed = closePersistentSession(threadId, { force: true })
+
+    if (!killed) {
+      stoppedSessions.delete(threadId)
+    }
+
+    const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
+    logQaEvent({
+      level: 'info',
+      scope: 'cli:reset-thread',
+      sessionId: threadId,
+      message: 'Thread reset requested.',
+      details: {
+        hadThreadSession,
+        hadPersistentSession,
+        killed,
+      },
+    })
+
+    if (hadThreadSession || hadPersistentSession || killed) {
+      sendTerminalEvents(targetWebContents, threadId, [
+        {
+          source: 'system',
+          kind: 'lifecycle',
+          severity: 'info',
+          title: 'Thread reiniciada',
+          chunk: 'A thread anterior foi encerrada e nao sera reutilizada.',
+        },
+      ])
+    }
+
+    return { ok: true, killed }
+  })
+
   app.once('before-quit', () => {
     logQaEvent({
       level: 'info',

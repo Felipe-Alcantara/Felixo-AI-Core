@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('felixo', {
   cli: {
     send: (params) => ipcRenderer.invoke('cli:send', params),
     stop: (params) => ipcRenderer.invoke('cli:stop', params),
+    resetThread: (params) => ipcRenderer.invoke('cli:reset-thread', params),
     onStream: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('cli:stream', handler)
@@ -30,6 +31,9 @@ contextBridge.exposeInMainWorld('felixo', {
   projects: {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),
     detectRepos: (folderPath) => ipcRenderer.invoke('projects:detect-repos', folderPath),
+  },
+  git: {
+    getSummary: (params) => ipcRenderer.invoke('git:get-summary', params),
   },
   qaLogger: {
     getEntries: () => ipcRenderer.invoke('qa-logger:get'),
