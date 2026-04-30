@@ -20,6 +20,32 @@ test('claude adapter pins first run to provided thread session id', () => {
   ])
 })
 
+test('claude adapter passes provider model and effort when configured', () => {
+  const spawnArgs = adapter.getSpawnArgs('Oi', {
+    model: {
+      providerModel: 'claude-sonnet-4-5',
+      reasoningEffort: 'high',
+    },
+    threadId: '00000000-0000-4000-8000-000000000001',
+  })
+
+  assert.equal(spawnArgs.command, 'claude')
+  assert.deepEqual(spawnArgs.args, [
+    '--print',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--model',
+    'claude-sonnet-4-5',
+    '--effort',
+    'high',
+    '--session-id',
+    '00000000-0000-4000-8000-000000000001',
+    'Oi',
+  ])
+})
+
 test('claude adapter resumes an existing provider session', () => {
   const spawnArgs = adapter.getResumeArgs('Continua', {
     providerSessionId: '00000000-0000-4000-8000-000000000001',

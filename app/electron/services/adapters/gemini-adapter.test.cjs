@@ -15,6 +15,26 @@ test('gemini adapter skips workspace trust prompt', () => {
   ])
 })
 
+test('gemini adapter passes provider model when configured', () => {
+  const spawnArgs = adapter.getSpawnArgs('Oi', {
+    model: {
+      providerModel: 'gemini-3-pro-preview',
+      reasoningEffort: 'high',
+    },
+  })
+
+  assert.equal(spawnArgs.command, 'gemini')
+  assert.deepEqual(spawnArgs.args, [
+    '--model',
+    'gemini-3-pro-preview',
+    '--prompt',
+    'Oi',
+    '--output-format',
+    'stream-json',
+    '--skip-trust',
+  ])
+})
+
 test('gemini adapter builds resume args for an existing provider session', () => {
   const spawnArgs = adapter.getResumeArgs('Continua', {
     providerSessionId: '00000000-0000-4000-8000-000000000001',

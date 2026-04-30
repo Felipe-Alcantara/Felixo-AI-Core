@@ -9,6 +9,24 @@ test('codex-app-server adapter returns persistent spawn args', () => {
   assert.deepEqual(spawnArgs.args, ['app-server'])
 })
 
+test('codex-app-server adapter passes model config to persistent process', () => {
+  const spawnArgs = adapter.getPersistentSpawnArgs({
+    model: {
+      providerModel: 'gpt-5.5',
+      reasoningEffort: 'high',
+    },
+  })
+
+  assert.equal(spawnArgs.command, 'codex')
+  assert.deepEqual(spawnArgs.args, [
+    'app-server',
+    '--config',
+    'model="gpt-5.5"',
+    '--config',
+    'model_reasoning_effort="high"',
+  ])
+})
+
 test('codex-app-server adapter sends initialize + initialized on initial phase', () => {
   adapter.resetRequestId()
   const result = adapter.createPersistentInput('Oi', { persistentPhase: 'initial' })

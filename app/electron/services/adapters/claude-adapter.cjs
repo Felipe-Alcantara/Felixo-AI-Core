@@ -1,3 +1,5 @@
+const { createClaudeOptionArgs } = require('./model-options.cjs')
+
 function getSpawnArgs(prompt, context = {}) {
   const args = [
     '--print',
@@ -6,6 +8,8 @@ function getSpawnArgs(prompt, context = {}) {
     '--verbose',
     '--include-partial-messages',
   ]
+
+  args.push(...createClaudeOptionArgs(context))
 
   if (context.threadId) {
     args.push('--session-id', context.threadId)
@@ -34,6 +38,7 @@ function getResumeArgs(prompt, context = {}) {
       'stream-json',
       '--verbose',
       '--include-partial-messages',
+      ...createClaudeOptionArgs(context),
       '--resume',
       providerSessionId,
       prompt,
@@ -51,6 +56,8 @@ function getPersistentSpawnArgs(context = {}) {
     '--verbose',
     '--include-partial-messages',
   ]
+
+  args.push(...createClaudeOptionArgs(context))
 
   if (context.providerSessionId) {
     args.push('--resume', context.providerSessionId)
