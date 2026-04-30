@@ -52,8 +52,8 @@ Primeiros recortes implementados: o frontend separa `threadId` de conversa e `se
 - O painel de terminal passa a acumular várias mensagens da mesma conversa na mesma thread.
 - Eventos `cli:stream` carregam `threadId` além de `sessionId`, para que troca de modelo, novo chat ou carregamento de sessão não deixe um terminal antigo preso como `Rodando` depois que o mapa local de mensagens é resetado.
 - Claude usa processo persistente real com `--print --input-format stream-json --output-format stream-json`; o backend mantém `stdin` aberto e escreve novas mensagens no mesmo processo da conversa. Se o processo cair e houver `providerSessionId`, o próximo spawn persistente pode retomar com `--resume`.
-- Gemini captura `init.session_id` no `stream-json`, mas a retomada nativa com `--resume` ficou desativada após travar emitindo só `init` + eco de `user`; a continuidade fica pelo contexto explícito do Felixo até nova validação.
-- Codex expõe `thread.started`, mas `codex exec resume <thread_id>` gerou erro interno `thread not found` nos testes manuais; por isso a retomada nativa foi desativada até validação de persistência. A continuidade segue pelo contexto explícito do Felixo e pelo `threadId` estável no painel.
+- Gemini captura `init.session_id` no `stream-json` e usa `--resume <session_id>` nas continuações quando esse id já existe.
+- Codex expõe metadados de sessão/thread no JSONL e usa `codex exec resume --json --skip-git-repo-check <providerSessionId>` nas continuações quando esse id já existe.
 - Codex ainda pode escrever avisos internos no `stderr`; os avisos não acionáveis já identificados são suprimidos da UI para não parecerem falha quando a resposta completou normalmente.
 - Processos persistentes ociosos são encerrados após 30 minutos para evitar acúmulo de CLIs abertas sem resposta ativa.
 - Trocar de modelo reinicia a thread do provedor, mas não zera a linha de base de projetos ativos da conversa; assim o diff de projetos só mostra mudanças reais de seleção.
@@ -63,8 +63,8 @@ Primeiros recortes implementados: o frontend separa `threadId` de conversa e `se
 | CLI | Modo interativo | Estratégia |
 |-----|----------------|------------|
 | `claude` | `--print --input-format stream-json --output-format stream-json` mantém stdin aberto e segue emitindo JSONL | Processo persistente por `threadId`; novas mensagens são escritas no mesmo processo |
-| `codex` | `codex exec resume` existe, mas o `thread_id` emitido por `exec --json` não ficou persistido de forma confiável no teste manual | Manter execução one-shot com `threadId` Felixo estável e contexto explícito; retomar investigação antes de reativar `exec resume` |
-| `gemini` | `stream-json` emite `init.session_id`; `--resume <session_id>` pode travar antes de emitir `assistant/result` | Manter execução one-shot com contexto explícito; revalidar `--resume` antes de reativar |
+| `codex` | `codex exec resume --json --skip-git-repo-check` retoma uma sessão capturada | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
+| `gemini` | `stream-json` emite `init.session_id` e `--resume <session_id>` retoma a sessão | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
 
 ### O que entregar
 
@@ -72,14 +72,14 @@ Primeiros recortes implementados: o frontend separa `threadId` de conversa e `se
 - [x] Novo método `CliProcessManager.write(threadId, prompt)` para escrever no stdin do processo ativo
 - [x] `ChatWorkspace` usa `threadId` fixo por conversa + `sessionId` por resposta
 - [x] `ipc-handlers.cjs` separa thread de terminal/processo da correlação de streaming da mensagem
-- [x] Adapters de Claude/Gemini expõem `getResumeArgs()` além de `getSpawnArgs()`
+- [x] Adapters de Claude/Codex/Gemini expõem `getResumeArgs()` além de `getSpawnArgs()`
 - [x] Processo/thread atual é resetado ao trocar modelo, iniciar novo chat ou carregar outro chat
 - [x] Painel de terminal continua funcionando com output acumulado da thread da conversa
 - [x] Codex: capturar metadados comuns de thread/sessão quando aparecem no JSONL
-- [ ] Gemini: revalidar `--resume` em `stream-json`; retorno só com `init` + `message role:user` deixa a UI sem resposta
-- [ ] Codex: validar em execução real qual evento JSONL sempre carrega um id interno persistível antes de reativar `codex exec resume`
+- [x] Gemini: reativar `--resume` em `stream-json` quando houver `providerSessionId`
+- [x] Codex: reativar `codex exec resume --json` quando houver `providerSessionId`
 - [x] Processo CLI realmente vivo via stdin entre mensagens quando o adapter suportar protocolo confiável: Claude
-- [ ] Codex/Gemini: integrar protocolo persistente parseável antes de trocar o one-shot por processo vivo
+- [ ] Codex/Gemini: integrar protocolo persistente parseável antes de trocar a retomada nativa one-shot por processo vivo
 
 ### Decisão de arquitetura
 
@@ -88,7 +88,7 @@ O `CliProcessManager` indexa processos por `threadId`. A mudança arquitetural f
 - **Opção A** — `conversationSessionId` fixo por conversa + `messageSessionId` por mensagem para correlacionar streaming
 - **Opção B** — processo único por conversa, stdin recebe prompts sequencialmente, stdout é parseado em blocos delimitados por evento `result`
 
-Decisão atual: a implementação adotou a **Opção A** como base geral e ativou a **Opção B** por adapter quando houver contrato confiável. Claude já usa processo persistente real; Codex/Gemini continuam one-shot com `threadId` estável e contexto explícito até validação de um protocolo persistente parseável.
+Decisão atual: a implementação adotou a **Opção A** como base geral e ativou a **Opção B** por adapter quando houver contrato confiável. Claude já usa processo persistente real; Codex/Gemini continuam one-shot como processo, mas usam retomada nativa para não criar uma conversa nova no provedor depois que `providerSessionId` foi capturado.
 
 ---
 
@@ -106,7 +106,7 @@ Spawn de mais de uma CLI em paralelo na mesma conversa, cada uma com sua própri
 
 ### Relação com Etapa 2
 
-Threads simultâneas dependem da sessão persistente: cada thread é um processo vivo com seu próprio `conversationSessionId`. Se a Etapa 2 não for viável para alguma CLI, threads nessa CLI funcionarão como hoje (one-shot por mensagem), mas ainda serão visíveis no painel.
+Threads simultâneas dependem da identidade persistente da conversa: cada thread tem seu próprio `conversationSessionId`; quando o adapter suportar processo vivo, essa identidade também aponta para o processo aberto. Em CLIs que usam retomada nativa one-shot, a thread ainda continua o chat do provedor por `providerSessionId`, mas não mantém stdin aberto entre prompts.
 
 ---
 

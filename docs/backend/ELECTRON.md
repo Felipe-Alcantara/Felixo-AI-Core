@@ -140,26 +140,27 @@ Fluxo:
 6. Ao receber `done`, libera a thread para a próxima mensagem.
 7. Se ficar ocioso por 30 minutos, encerra o processo.
 
-### One-shot
+### One-shot com retomada
 
 Usado quando o adapter não tem protocolo persistente confiável.
 
 Fluxo:
 
 1. Backend spawna um processo novo por mensagem.
-2. Envia prompt completo com histórico/contexto explícito.
-3. Parseia stdout JSONL até `done`.
-4. Processo encerra naturalmente.
+2. Se o adapter já capturou `providerSessionId`, usa a retomada nativa da CLI e envia `resumePrompt`.
+3. Se ainda não há sessão capturada, envia prompt completo com histórico/contexto explícito.
+4. Parseia stdout JSONL até `done`.
+5. Processo encerra naturalmente.
 
-Hoje Codex e Gemini estão nesse modo.
+Hoje Codex e Gemini estão nesse modo: eles não mantêm o processo vivo, mas não precisam abrir uma conversa nova depois que a sessão do provedor foi capturada.
 
 ## Estado por adapter
 
 | Adapter | Estado atual | Pendência |
 |---------|--------------|-----------|
 | Claude | Processo persistente real via `--input-format stream-json`; suporta `--session-id` e `--resume` | Teste de integração com processo fake e validação manual mais longa |
-| Codex | One-shot com `codex exec --json`; contexto explícito; captura ids quando aparecem | Validar `codex exec resume` ou protocolo alternativo persistente |
-| Gemini | One-shot com `--output-format stream-json`; contexto explícito; captura `init.session_id` | Revalidar `--resume`; investigar `--prompt-interactive`/`--acp` |
+| Codex | One-shot com `codex exec --json`; continua a conversa com `codex exec resume --json` após capturar id do provedor | Validar protocolo alternativo persistente para manter processo vivo |
+| Gemini | One-shot com `--output-format stream-json`; continua a conversa com `--resume <session_id>` após capturar `init.session_id` | Investigar `--prompt-interactive`/`--acp` para manter processo vivo |
 
 ## Tratamento de erros
 
@@ -176,4 +177,4 @@ Hoje Codex e Gemini estão nesse modo.
 - Criar testes de integração com CLI fake persistente.
 - Persistir logs relevantes do QA Logger quando necessário.
 - Definir contrato formal versionado para adapters.
-- Implementar processos persistentes em Codex/Gemini apenas depois de validar protocolo confiável.
+- Implementar processos vivos em Codex/Gemini apenas depois de validar protocolo confiável; por enquanto eles usam retomada nativa da conversa.
