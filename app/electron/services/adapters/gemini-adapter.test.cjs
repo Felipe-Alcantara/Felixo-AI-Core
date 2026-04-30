@@ -15,7 +15,7 @@ test('gemini adapter skips workspace trust prompt', () => {
   ])
 })
 
-test('gemini adapter can build resume args for future validation', () => {
+test('gemini adapter builds resume args for an existing provider session', () => {
   const spawnArgs = adapter.getResumeArgs('Continua', {
     providerSessionId: '00000000-0000-4000-8000-000000000001',
   })
@@ -32,12 +32,12 @@ test('gemini adapter can build resume args for future validation', () => {
   ])
 })
 
-test('gemini adapter keeps native resume disabled until stream-json resume is stable', () => {
+test('gemini adapter enables native resume after provider session capture', () => {
   assert.equal(
     adapter.canResume({
       providerSessionId: '00000000-0000-4000-8000-000000000001',
     }),
-    false,
+    true,
   )
   assert.equal(
     adapter.canResume({

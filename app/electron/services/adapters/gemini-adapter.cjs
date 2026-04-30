@@ -25,7 +25,7 @@ function getResumeArgs(prompt, context = {}) {
 }
 
 function canResume(context = {}) {
-  return false
+  return Boolean(context.providerSessionId)
 }
 
 function parseLine(line) {
