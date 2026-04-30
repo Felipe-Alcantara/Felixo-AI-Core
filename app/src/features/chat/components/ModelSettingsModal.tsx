@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { FilePlus, FolderOpen, Plus, Trash2, X } from 'lucide-react'
-import type { Model, ModelFileSelection } from '../types'
+import { BrainCircuit, FilePlus, FolderOpen, Plus, Save, Trash2, X } from 'lucide-react'
+import type { Model, ModelFileSelection, ReasoningEffort } from '../types'
 import { createModelId, detectModelCliType } from '../services/model-storage'
 
 type ModelSettingsModalProps = {
@@ -11,8 +11,26 @@ type ModelSettingsModalProps = {
   onClose: () => void
   onAddModel: (model: Model) => void
   onClearModels: () => void
+  onUpdateModel: (model: Model) => void
   onRemoveModel: (model: Model) => void
 }
+
+type ModelConfigDraft = {
+  providerModel: string
+  reasoningEffort: '' | ReasoningEffort
+}
+
+const reasoningEffortOptions: Array<{
+  value: '' | ReasoningEffort
+  label: string
+}> = [
+  { value: '', label: 'Padrão da CLI' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'XHigh' },
+  { value: 'max', label: 'Max' },
+]
 
 export function ModelSettingsModal({
   models,
@@ -21,6 +39,7 @@ export function ModelSettingsModal({
   onClose,
   onAddModel,
   onClearModels,
+  onUpdateModel,
   onRemoveModel,
 }: ModelSettingsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -29,6 +48,12 @@ export function ModelSettingsModal({
   const [formName, setFormName] = useState('')
   const [formSource, setFormSource] = useState('')
   const [formCommand, setFormCommand] = useState('')
+  const [configDrafts, setConfigDrafts] = useState<Record<string, ModelConfigDraft>>({})
+  const selectedConfigDraft = selectedModel ? configDrafts[selectedModel.id] : undefined
+  const configProviderModel =
+    selectedConfigDraft?.providerModel ?? selectedModel?.providerModel ?? ''
+  const configReasoningEffort =
+    selectedConfigDraft?.reasoningEffort ?? selectedModel?.reasoningEffort ?? ''
 
   if (!isOpen) {
     return null
@@ -57,6 +82,47 @@ export function ModelSettingsModal({
   function clearModels() {
     onClearModels()
     setStatus('Todos os modelos foram excluídos.')
+  }
+
+  function handleUpdateSelected(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!selectedModel) {
+      setStatus('Selecione um modelo para configurar.')
+      return
+    }
+
+    const providerModel = configProviderModel.trim()
+
+    onUpdateModel({
+      ...selectedModel,
+      providerModel: providerModel || undefined,
+      reasoningEffort: configReasoningEffort || undefined,
+    })
+    setStatus(`Configuração de "${selectedModel.name}" atualizada.`)
+  }
+
+  function updateSelectedConfigDraft(patch: Partial<ModelConfigDraft>) {
+    if (!selectedModel) {
+      return
+    }
+
+    setConfigDrafts((current) => {
+      const currentDraft = current[selectedModel.id]
+      const base = {
+        providerModel: currentDraft?.providerModel ?? selectedModel.providerModel ?? '',
+        reasoningEffort:
+          currentDraft?.reasoningEffort ?? selectedModel.reasoningEffort ?? '',
+      }
+
+      return {
+        ...current,
+        [selectedModel.id]: {
+          ...base,
+          ...patch,
+        },
+      }
+    })
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -251,6 +317,20 @@ export function ModelSettingsModal({
                         <code className="mt-1 block truncate font-mono text-[11px] text-zinc-500">
                           {model.command}
                         </code>
+                        {(model.providerModel || model.reasoningEffort) && (
+                          <div className="mt-1 flex min-w-0 flex-wrap gap-1.5 text-[10px] text-zinc-500">
+                            {model.providerModel && (
+                              <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
+                                {model.providerModel}
+                              </span>
+                            )}
+                            {model.reasoningEffort && (
+                              <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
+                                effort {model.reasoningEffort}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -267,6 +347,58 @@ export function ModelSettingsModal({
               )}
             </div>
           </div>
+
+          <form
+            className="space-y-3 rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+            onSubmit={handleUpdateSelected}
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
+              <BrainCircuit size={14} aria-hidden="true" />
+              Execução do selecionado
+            </div>
+
+            <label className="block text-xs text-zinc-400">
+              Modelo
+              <input
+                placeholder="gpt-5.5"
+                value={configProviderModel}
+                onChange={(e) =>
+                  updateSelectedConfigDraft({ providerModel: e.target.value })
+                }
+                disabled={!selectedModel}
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30 disabled:cursor-not-allowed disabled:text-zinc-600"
+              />
+            </label>
+
+            <label className="block text-xs text-zinc-400">
+              Effort
+              <select
+                value={configReasoningEffort}
+                onChange={(e) =>
+                  updateSelectedConfigDraft({
+                    reasoningEffort: e.target.value as '' | ReasoningEffort,
+                  })
+                }
+                disabled={!selectedModel}
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-violet-200/30 disabled:cursor-not-allowed disabled:text-zinc-600"
+              >
+                {reasoningEffortOptions.map((option) => (
+                  <option key={option.value || 'default'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              type="submit"
+              disabled={!selectedModel}
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.08] text-sm font-medium text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+            >
+              <Save size={16} aria-hidden="true" />
+              Salvar configuração
+            </button>
+          </form>
 
           <form className="space-y-3" onSubmit={handleSubmit}>
             <label className="block text-xs text-zinc-400">

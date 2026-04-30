@@ -8,12 +8,16 @@ export type CliType =
   | 'gemini-acp'
   | 'unknown'
 
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
 export type Model = {
   id: ModelId
   name: string
   command: string
   source: string
   cliType: CliType
+  providerModel?: string
+  reasoningEffort?: ReasoningEffort
 }
 
 export type ModelFileSelection = Omit<Model, 'id'>

@@ -1,4 +1,4 @@
-import type { CliType, Model } from '../types'
+import type { CliType, Model, ReasoningEffort } from '../types'
 
 const MODELS_STORAGE_KEY = 'felixo-ai-core.models'
 
@@ -79,10 +79,20 @@ function normalizeModel(value: unknown): Model | null {
       cliType: isCliType(model.cliType)
         ? model.cliType
         : detectModelCliType(restoredModel),
+      providerModel: getOptionalString(model.providerModel),
+      reasoningEffort: normalizeReasoningEffort(model.reasoningEffort),
     }
   }
 
   return null
+}
+
+function getOptionalString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function normalizeReasoningEffort(value: unknown): ReasoningEffort | undefined {
+  return isReasoningEffort(value) ? value : undefined
 }
 
 function detectCliType(value: string): CliType {
@@ -125,5 +135,15 @@ function isCliType(value: unknown): value is CliType {
     value === 'gemini' ||
     value === 'gemini-acp' ||
     value === 'unknown'
+  )
+}
+
+function isReasoningEffort(value: unknown): value is ReasoningEffort {
+  return (
+    value === 'low' ||
+    value === 'medium' ||
+    value === 'high' ||
+    value === 'xhigh' ||
+    value === 'max'
   )
 }

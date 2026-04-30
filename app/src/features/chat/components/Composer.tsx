@@ -1,6 +1,90 @@
 import type { FormEvent, KeyboardEvent } from 'react'
-import { ChevronDown, Mic, Plus, Send, Square } from 'lucide-react'
-import type { Model, ModelId } from '../types'
+import { Mic, Plus, Send, Square } from 'lucide-react'
+import type { Model, ModelId, ReasoningEffort } from '../types'
+
+type RuntimeSelectOption = {
+  value: string
+  label: string
+}
+
+type ReasoningEffortOption = {
+  value: '' | ReasoningEffort
+  label: string
+}
+
+const defaultProviderModelOption: RuntimeSelectOption = {
+  value: '',
+  label: 'Padrão',
+}
+
+const providerModelOptionsByCliType: Partial<
+  Record<Model['cliType'], RuntimeSelectOption[]>
+> = {
+  claude: [
+    { value: 'sonnet', label: 'Sonnet 4.6' },
+    { value: 'opus', label: 'Opus 4.6' },
+    { value: 'haiku', label: 'Haiku 4.5' },
+  ],
+  codex: [
+    { value: 'gpt-5.5', label: 'gpt-5.5' },
+    { value: 'gpt-5.4', label: 'gpt-5.4' },
+    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
+    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
+    { value: 'gpt-5.2', label: 'gpt-5.2' },
+  ],
+  'codex-app-server': [
+    { value: 'gpt-5.5', label: 'gpt-5.5' },
+    { value: 'gpt-5.4', label: 'gpt-5.4' },
+    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
+    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
+    { value: 'gpt-5.2', label: 'gpt-5.2' },
+  ],
+  gemini: [
+    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+    { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+  ],
+  'gemini-acp': [
+    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+    { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+  ],
+}
+
+const defaultReasoningEffortOption: ReasoningEffortOption = {
+  value: '',
+  label: 'Padrão',
+}
+
+const codexReasoningEffortOptions: ReasoningEffortOption[] = [
+  defaultReasoningEffortOption,
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'XHigh' },
+]
+
+const claudeReasoningEffortOptions: ReasoningEffortOption[] = [
+  defaultReasoningEffortOption,
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'max', label: 'Max' },
+]
+
+const reasoningEffortOptionsByCliType: Partial<
+  Record<Model['cliType'], ReasoningEffortOption[]>
+> = {
+  claude: claudeReasoningEffortOptions,
+  codex: codexReasoningEffortOptions,
+  'codex-app-server': codexReasoningEffortOptions,
+}
+
+type ModelRuntimeConfigPatch = Partial<
+  Pick<Model, 'providerModel' | 'reasoningEffort'>
+>
 
 type ComposerProps = {
   input: string
@@ -11,6 +95,7 @@ type ComposerProps = {
   isStreaming?: boolean
   onInputChange: (value: string) => void
   onSelectModel: (modelId: ModelId) => void
+  onChangeModelConfig: (patch: ModelRuntimeConfigPatch) => void
   onSubmit: () => void
   onStop?: () => void
 }
@@ -24,6 +109,7 @@ export function Composer({
   isStreaming = false,
   onInputChange,
   onSelectModel,
+  onChangeModelConfig,
   onSubmit,
   onStop,
 }: ComposerProps) {
@@ -44,7 +130,38 @@ export function Composer({
     }
   }
 
+  function changeProviderModel(providerModel: string) {
+    if (!selectedModel || isStreaming) {
+      return
+    }
+
+    const currentProviderModel = selectedModel.providerModel ?? ''
+
+    if (providerModel === currentProviderModel) {
+      return
+    }
+
+    onChangeModelConfig({ providerModel: providerModel || undefined })
+  }
+
+  function changeReasoningEffort(value: '' | ReasoningEffort) {
+    if (!selectedModel || isStreaming) {
+      return
+    }
+
+    onChangeModelConfig({ reasoningEffort: value || undefined })
+  }
+
   const isHome = variant === 'home'
+  const providerModelOptions = getProviderModelOptions(selectedModel)
+  const reasoningEffortOptions = getReasoningEffortOptions(selectedModel)
+  const selectedProviderModel = selectedModel?.providerModel ?? ''
+  const selectedReasoningEffort = resolveSelectedReasoningEffort(
+    selectedModel,
+    reasoningEffortOptions,
+  )
+  const isReasoningEffortDisabled =
+    !selectedModel || isStreaming || reasoningEffortOptions.length <= 1
 
   return (
     <form
@@ -89,7 +206,8 @@ export function Composer({
                 value={selectedModel?.id ?? ''}
                 onChange={(event) => onSelectModel(event.target.value as ModelId)}
                 disabled={isStreaming}
-                className="max-w-36 appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 py-1.5 text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 max-sm:max-w-28"
+                title="Selecionar CLI"
+                className="h-8 max-w-36 appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent max-sm:max-w-28"
                 aria-label="Selecionar modelo"
               >
                 {models.length === 0 && (
@@ -102,10 +220,39 @@ export function Composer({
                 ))}
               </select>
 
-              <span className="flex items-center gap-1 rounded-full border border-white/[0.08] px-3 py-1.5 text-[12px] text-zinc-400 max-[420px]:hidden">
-                {selectedModel?.source ?? 'sem modelo'}
-                <ChevronDown size={12} aria-hidden="true" />
-              </span>
+              <select
+                value={selectedProviderModel}
+                onChange={(event) => changeProviderModel(event.target.value)}
+                title="Modelo do provedor"
+                aria-label="Modelo do provedor"
+                disabled={!selectedModel || isStreaming}
+                className="h-8 w-44 min-w-0 appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 font-mono text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent max-sm:w-32"
+              >
+                {providerModelOptions.map((option) => (
+                  <option key={option.value || 'default'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedReasoningEffort}
+                onChange={(event) =>
+                  changeReasoningEffort(
+                    event.target.value as '' | ReasoningEffort,
+                  )
+                }
+                title="Effort"
+                aria-label="Effort"
+                disabled={isReasoningEffortDisabled}
+                className="h-8 w-[104px] appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+              >
+                {reasoningEffortOptions.map((option) => (
+                  <option key={option.value || 'default'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-1">
@@ -152,4 +299,46 @@ export function Composer({
       </div>
     </form>
   )
+}
+
+function getProviderModelOptions(model: Model | null) {
+  const options = [
+    defaultProviderModelOption,
+    ...(model ? providerModelOptionsByCliType[model.cliType] ?? [] : []),
+  ]
+  const currentProviderModel = model?.providerModel ?? ''
+
+  if (
+    currentProviderModel &&
+    !options.some((option) => option.value === currentProviderModel)
+  ) {
+    return [
+      ...options,
+      {
+        value: currentProviderModel,
+        label: currentProviderModel,
+      },
+    ]
+  }
+
+  return options
+}
+
+function getReasoningEffortOptions(model: Model | null) {
+  return model
+    ? reasoningEffortOptionsByCliType[model.cliType] ?? [
+        defaultReasoningEffortOption,
+      ]
+    : [defaultReasoningEffortOption]
+}
+
+function resolveSelectedReasoningEffort(
+  model: Model | null,
+  options: ReasoningEffortOption[],
+) {
+  const currentReasoningEffort = model?.reasoningEffort ?? ''
+
+  return options.some((option) => option.value === currentReasoningEffort)
+    ? currentReasoningEffort
+    : ''
 }

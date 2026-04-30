@@ -256,6 +256,42 @@ export function ChatWorkspace() {
     resetConversationThread({ resetProjectDiff: false })
   }
 
+  function updateModel(updatedModel: Model) {
+    stopStreaming()
+    setModels((currentModels) => {
+      const nextModels = currentModels.map((model) =>
+        model.id === updatedModel.id ? updatedModel : model,
+      )
+      saveModels(nextModels)
+      return nextModels
+    })
+
+    if (updatedModel.id === selectedModelId) {
+      resetConversationThread({ resetProjectDiff: false })
+    }
+  }
+
+  function updateSelectedModelConfig(
+    patch: Partial<Pick<Model, 'providerModel' | 'reasoningEffort'>>,
+  ) {
+    if (!selectedModel) {
+      return
+    }
+
+    const updatedModel = { ...selectedModel }
+
+    if ('providerModel' in patch) {
+      const providerModel = patch.providerModel?.trim() ?? ''
+      updatedModel.providerModel = providerModel || undefined
+    }
+
+    if ('reasoningEffort' in patch) {
+      updatedModel.reasoningEffort = patch.reasoningEffort
+    }
+
+    updateModel(updatedModel)
+  }
+
   function removeModel(modelToRemove: Model) {
     stopStreaming()
     resetConversationThread({ resetProjectDiff: false })
@@ -523,6 +559,7 @@ export function ChatWorkspace() {
                 selectedModel={selectedModel}
                 onInputChange={setInput}
                 onSelectModel={selectModel}
+                onChangeModelConfig={updateSelectedModelConfig}
                 onSubmit={sendMessage}
                 onStop={stopStreaming}
                 isStreaming={isStreaming}
@@ -546,6 +583,7 @@ export function ChatWorkspace() {
                   variant="home"
                   onInputChange={setInput}
                   onSelectModel={selectModel}
+                  onChangeModelConfig={updateSelectedModelConfig}
                   onSubmit={sendMessage}
                   onStop={stopStreaming}
                   isStreaming={isStreaming}
@@ -585,6 +623,7 @@ export function ChatWorkspace() {
         isOpen={isModelSettingsOpen}
         onAddModel={addModel}
         onClearModels={clearModels}
+        onUpdateModel={updateModel}
         onRemoveModel={removeModel}
         onClose={() => setIsModelSettingsOpen(false)}
       />
@@ -716,5 +755,15 @@ function resolveMessageModelLabel(message: ChatMessage, models: Model[]) {
 }
 
 function formatModelLabel(model: Model) {
-  return `${model.name} (${model.source})`
+  const details = [model.source]
+
+  if (model.providerModel) {
+    details.push(`modelo ${model.providerModel}`)
+  }
+
+  if (model.reasoningEffort) {
+    details.push(`effort ${model.reasoningEffort}`)
+  }
+
+  return `${model.name} (${details.join(', ')})`
 }
