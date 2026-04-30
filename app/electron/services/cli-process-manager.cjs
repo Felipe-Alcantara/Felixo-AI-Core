@@ -10,13 +10,13 @@ class CliProcessManager {
     this.processes = new Map()
   }
 
-  spawn(sessionId, command, args = [], cwd = process.cwd()) {
+  spawn(sessionId, command, args = [], cwd = process.cwd(), options = {}) {
     this.kill(sessionId)
 
     const childProcess = spawnChildProcess(command, args, {
       cwd,
       env: createCliEnv(),
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: [options.openStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
 
