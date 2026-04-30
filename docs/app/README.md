@@ -49,7 +49,11 @@ A interface funciona como um chatbot desktop com sidebar fixa, landing central e
 
 O chat cria uma mensagem assistente vazia, atualiza o texto incrementalmente e permite interromper a execução em andamento pelo botão de parar. Modelos importados recebem `cliType` por inferência a partir do nome, origem e comando.
 
-O workspace também inclui um painel `QA Logger` no rodapé para observar eventos do backend Electron em tempo real: comando iniciado, PID, cwd, stdout, stderr, saída fora de JSONL, encerramento e erros. Ruídos conhecidos de `stderr` do Codex e avisos visuais não fatais do Gemini que não impedem `turn.completed` são filtrados antes de chegar à UI.
+O workspace também inclui um painel `QA Logger` no rodapé para observar eventos do backend Electron em tempo real: comando iniciado, PID, cwd, stdout JSONL bruto, stderr, saída fora de JSONL, encerramento e erros. A lateral `Terminal` mostra uma visão humanizada desses eventos: início, processamento, respostas, ferramentas, tempo e tokens. Ruídos conhecidos de `stderr` do Codex e avisos visuais não fatais do Gemini que não impedem a conclusão são filtrados antes de chegar à UI.
+
+A conversa separa `threadId` e `sessionId`: o `threadId` identifica a conversa/modelo e agrupa o terminal; o `sessionId` identifica a mensagem assistente que recebe o streaming. Claude já usa processo persistente real via `--input-format stream-json`, mantendo `stdin` aberto entre mensagens da mesma conversa. Codex e Gemini ainda rodam one-shot por mensagem e recebem continuidade pelo contexto explícito enviado no prompt.
+
+Status detalhado do que está pronto e do que falta: [docs/projeto/STATUS-ATUAL.md](../projeto/STATUS-ATUAL.md).
 
 ## Estrutura
 

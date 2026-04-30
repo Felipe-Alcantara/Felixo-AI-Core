@@ -1,0 +1,179 @@
+# Backend Electron
+
+## Responsabilidade
+
+O processo principal do Electron funciona como backend local do Felixo AI Core. Ele recebe chamadas do renderer pelo preload, executa CLIs reais, interpreta JSONL em streaming e devolve eventos normalizados para a interface.
+
+## Principais arquivos
+
+| Arquivo | Responsabilidade |
+|---------|------------------|
+| `app/electron/main.cjs` | Inicialização do Electron e registro de handlers |
+| `app/electron/preload.cjs` | Bridge segura `window.felixo` para o renderer |
+| `app/electron/services/ipc-handlers.cjs` | Orquestra IPC, adapters, processos, stream e terminal |
+| `app/electron/services/cli-process-manager.cjs` | Spawn, escrita em stdin, kill e cleanup de processos |
+| `app/electron/services/jsonl-line-reader.cjs` | Divide stdout JSONL por linha |
+| `app/electron/services/jsonl-output-guard.cjs` | Bloqueia stdout fora de JSONL esperado |
+| `app/electron/services/terminal-event-formatter.cjs` | Converte eventos brutos em eventos legíveis para Terminal |
+| `app/electron/services/qa-logger.cjs` | Log de debug do backend para o painel QA Logger |
+| `app/electron/services/adapters/*.cjs` | Contratos específicos de Claude, Codex e Gemini |
+
+## IPC exposto ao frontend
+
+### `cli:send`
+
+Entrada esperada:
+
+```ts
+{
+  sessionId: string
+  threadId?: string
+  prompt: string
+  resumePrompt?: string
+  model: Model
+  cwd?: string
+}
+```
+
+Campos:
+
+- `sessionId`: id da mensagem assistente que receberá o streaming.
+- `threadId`: id lógico da conversa/modelo, usado para terminal e processo persistente.
+- `prompt`: prompt completo, com histórico e contexto explícito.
+- `resumePrompt`: prompt curto, usado quando o adapter já mantém contexto nativo ou processo persistente.
+- `model`: modelo selecionado no frontend, incluindo `cliType`.
+- `cwd`: workspace opcional.
+
+Retorno:
+
+```ts
+{
+  ok: boolean
+  message?: string
+}
+```
+
+### `cli:stop`
+
+Entrada esperada:
+
+```ts
+{
+  sessionId: string
+  threadId?: string
+}
+```
+
+O stop usa `threadId` quando disponível, porque o processo real é indexado pela thread da conversa.
+
+## Eventos enviados ao frontend
+
+### `cli:stream`
+
+Atualiza a mensagem do chat.
+
+Eventos principais:
+
+| Tipo | Uso |
+|------|-----|
+| `text` | Append de texto na mensagem assistente |
+| `tool_use` | Indica ferramenta usada pela CLI |
+| `tool_result` | Resultado de ferramenta |
+| `done` | Finaliza a resposta |
+| `error` | Finaliza com erro |
+
+Todos carregam `sessionId`; quando possível também carregam `threadId`.
+
+### `cli:terminal-output`
+
+Atualiza o painel Terminal com evento legível.
+
+Campos principais:
+
+```ts
+{
+  sessionId: string
+  source: 'stdout' | 'stderr' | 'system'
+  chunk: string
+  severity?: 'debug' | 'info' | 'warn' | 'error'
+  kind?: 'assistant' | 'error' | 'lifecycle' | 'metrics' | 'stderr' | 'tool'
+  title?: string
+  metadata?: Record<string, string | number | boolean | null | undefined>
+}
+```
+
+Neste evento, `sessionId` representa a thread do terminal, não necessariamente a mensagem do chat.
+
+## Gerenciamento de processos
+
+`CliProcessManager` mantém processos em `Map<threadId, childProcess>`.
+
+Recursos atuais:
+
+- `spawn(threadId, command, args, cwd, options)`.
+- `write(threadId, input)` para processos com `stdin` aberto.
+- `get(threadId)` e `has(threadId)` para verificar processo vivo.
+- `kill(threadId)` com `SIGTERM` e fallback para `SIGKILL`.
+- `kill(threadId, { force: true })` para encerramento imediato.
+- `killAll({ force: true })` no `before-quit`.
+
+No Linux, processos são criados como grupo separado (`detached`) para permitir matar filhos junto com a CLI principal.
+
+## Estratégias de execução
+
+### Processo persistente
+
+Usado quando o adapter implementa:
+
+- `getPersistentSpawnArgs(context)`.
+- `createPersistentInput(prompt, context)`.
+
+Hoje isso está ativo para Claude.
+
+Fluxo:
+
+1. Backend cria processo por `threadId`.
+2. Mantém `stdin` aberto.
+3. Cria uma execução ativa por `sessionId`.
+4. Escreve a mensagem no `stdin` como JSONL.
+5. Roteia `stdout` parseado para o `sessionId` da resposta atual.
+6. Ao receber `done`, libera a thread para a próxima mensagem.
+7. Se ficar ocioso por 30 minutos, encerra o processo.
+
+### One-shot
+
+Usado quando o adapter não tem protocolo persistente confiável.
+
+Fluxo:
+
+1. Backend spawna um processo novo por mensagem.
+2. Envia prompt completo com histórico/contexto explícito.
+3. Parseia stdout JSONL até `done`.
+4. Processo encerra naturalmente.
+
+Hoje Codex e Gemini estão nesse modo.
+
+## Estado por adapter
+
+| Adapter | Estado atual | Pendência |
+|---------|--------------|-----------|
+| Claude | Processo persistente real via `--input-format stream-json`; suporta `--session-id` e `--resume` | Teste de integração com processo fake e validação manual mais longa |
+| Codex | One-shot com `codex exec --json`; contexto explícito; captura ids quando aparecem | Validar `codex exec resume` ou protocolo alternativo persistente |
+| Gemini | One-shot com `--output-format stream-json`; contexto explícito; captura `init.session_id` | Revalidar `--resume`; investigar `--prompt-interactive`/`--acp` |
+
+## Tratamento de erros
+
+- Prompt/session inválidos são rejeitados antes do spawn.
+- CLI sem adapter retorna erro controlado.
+- Stdout fora de JSONL encerra a execução como erro.
+- Stderr fatal pode abortar a execução conforme adapter.
+- Sem saída textual visível dentro do timeout, o processo é interrompido.
+- Stop manual emite `done` com `stopped: true`.
+
+## O que falta
+
+- Extrair gerência de sessão persistente para serviço próprio se `ipc-handlers.cjs` continuar crescendo.
+- Criar testes de integração com CLI fake persistente.
+- Persistir logs relevantes do QA Logger quando necessário.
+- Definir contrato formal versionado para adapters.
+- Implementar processos persistentes em Codex/Gemini apenas depois de validar protocolo confiável.
