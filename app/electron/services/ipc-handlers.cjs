@@ -543,6 +543,42 @@ function registerCliIpcHandlers(getMainWindow) {
     return { ok: true, killed }
   })
 
+  ipcMain.handle('cli:respond-approval', (event, params) => {
+    const threadId = getRequiredString(params?.threadId)
+    const approvalId = getRequiredString(params?.approvalId)
+    const approved = Boolean(params?.approved)
+
+    if (!threadId || !approvalId) {
+      return { ok: false, message: 'Parâmetros inválidos.' }
+    }
+
+    const persistentSession = persistentCliSessions.get(threadId)
+    if (!persistentSession) {
+      return { ok: false, message: 'Sessão persistente não encontrada.' }
+    }
+
+    const pending = persistentSession.pendingApprovals?.[approvalId]
+    if (!pending) {
+      return { ok: false, message: 'Aprovação pendente não encontrada.' }
+    }
+
+    delete persistentSession.pendingApprovals[approvalId]
+
+    const responseInput = approved ? pending.approveInput : pending.denyInput
+    if (responseInput) {
+      cliManager.write(threadId, responseInput)
+    }
+
+    logQaEvent({
+      level: 'info',
+      scope: 'cli:respond-approval',
+      sessionId: threadId,
+      message: `Approval ${approved ? 'granted' : 'denied'} for request ${approvalId}.`,
+    })
+
+    return { ok: true }
+  })
+
   app.once('before-quit', () => {
     logQaEvent({
       level: 'info',
@@ -857,6 +893,24 @@ function handlePersistentStdoutLine(persistentSession, line) {
     return
   }
 
+  if (cliEvent.requiresApproval) {
+    persistentSession.pendingApprovals = persistentSession.pendingApprovals ?? {}
+    persistentSession.pendingApprovals[cliEvent.approvalId] = {
+      approveInput: cliEvent.approveInput,
+      denyInput: cliEvent.denyInput,
+    }
+    sendCliEvent(persistentSession.targetWebContents, {
+      type: 'approval_request',
+      threadId,
+      sessionId: activeRun?.streamSessionId ?? threadId,
+      approvalId: cliEvent.approvalId,
+      approvalType: cliEvent.approvalType,
+      description: cliEvent.description,
+      canDeny: Boolean(cliEvent.denyInput),
+    })
+    return
+  }
+
   if (cliEvent.responseInput) {
     cliManager.write(threadId, cliEvent.responseInput)
   }
@@ -886,6 +940,7 @@ function handlePersistentStdoutLine(persistentSession, line) {
   if (cliEvent.type === 'control') {
     return
   }
+
 
   if (!activeRun) {
     logQaEvent({

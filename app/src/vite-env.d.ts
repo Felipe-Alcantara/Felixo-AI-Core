@@ -41,6 +41,11 @@ declare global {
         resetThread: (params: {
           threadId: string
         }) => Promise<CliInvokeResult & { killed?: boolean }>
+        respondApproval: (params: {
+          threadId: string
+          approvalId: string
+          approved: boolean
+        }) => Promise<CliInvokeResult>
         onStream: (callback: (event: StreamEvent) => void) => () => void
         onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
         onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
