@@ -68,7 +68,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - Composer aceita anexos de contexto pelo botão `+`.
 - Selects nativos foram corrigidos para tema escuro.
 - A tela inicial usa a logo do portfólio em `/brand/felixo-logo.png`.
-- Relatório diário criado em `docs/relatorios/2026/04/30.md`.
+- Relatórios diários criados em `docs/relatorios/` com nomes no formato `aaaa-mm-dd.md`.
 
 ## O que já foi concluído
 
