@@ -5,6 +5,7 @@
 Hoje cada mensagem spawna um processo CLI novo que encerra ao responder. O objetivo desta frente é tornar a sessão persistente e dar visibilidade ao que acontece dentro do terminal em tempo real.
 
 Resumo consolidado do status atual e das pendências: [STATUS-ATUAL.md](./STATUS-ATUAL.md).
+Contrato tecnico dos protocolos persistentes por CLI: [PROTOCOLOS-PERSISTENTES.md](../backend/PROTOCOLOS-PERSISTENTES.md).
 
 ---
 
@@ -65,6 +66,12 @@ Primeiros recortes implementados: o frontend separa `threadId` de conversa e `se
 | `claude` | `--print --input-format stream-json --output-format stream-json` mantém stdin aberto e segue emitindo JSONL | Processo persistente por `threadId`; novas mensagens são escritas no mesmo processo |
 | `codex` | `codex exec resume --json --skip-git-repo-check` retoma uma sessão capturada | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
 | `gemini` | `stream-json` emite `init.session_id` e `--resume <session_id>` retoma a sessão | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
+
+Investigação persistente detalhada:
+
+- Gemini: `--acp` usa JSON-RPC por NDJSON em stdin/stdout, com `initialize`, `session/new`, `session/prompt` e notificações `session/update`; e compativel com o gerenciador persistente atual.
+- Codex: `exec-server` usa WebSocket JSON-RPC; `initialize` foi validado localmente, mas o metodo `exec` ainda precisa de transporte WebSocket proprio e mapeamento de payload antes de substituir `codex exec resume`.
+- TUI/`--prompt-interactive`: nao e base segura para backend enquanto nao houver JSONL limpo e delimitador de resposta.
 
 ### O que entregar
 
