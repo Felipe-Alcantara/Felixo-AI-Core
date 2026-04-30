@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FolderOpen, GitBranch, Loader2, Plus, Trash2, X } from 'lucide-react'
 import type { Project } from '../types'
 
@@ -25,11 +25,19 @@ export function ProjectsModal({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const dialogRef = useRef<HTMLDialogElement>(null)
 
+  const resetWorkspaceSelection = useCallback(() => {
+    setDetected([])
+    setSelected(new Set())
+  }, [])
+
+  const closeModal = useCallback(() => {
+    resetWorkspaceSelection()
+    onClose()
+  }, [onClose, resetWorkspaceSelection])
+
   useEffect(() => {
     if (isOpen) {
       dialogRef.current?.showModal()
-      setDetected([])
-      setSelected(new Set())
     } else {
       dialogRef.current?.close()
     }
@@ -37,11 +45,11 @@ export function ProjectsModal({
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') closeModal()
     }
     if (isOpen) document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [isOpen, onClose])
+  }, [closeModal, isOpen])
 
   async function pickRepo() {
     if (!window.felixo?.projects) return
@@ -83,7 +91,11 @@ export function ProjectsModal({
   function toggleSelected(path: string) {
     setSelected((prev) => {
       const next = new Set(prev)
-      next.has(path) ? next.delete(path) : next.add(path)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
       return next
     })
   }
@@ -93,8 +105,7 @@ export function ProjectsModal({
       .filter((r) => selected.has(r.path))
       .map((r) => ({ id: crypto.randomUUID(), name: r.name, path: r.path }))
     if (toAdd.length > 0) onAddProjects(toAdd)
-    setDetected([])
-    setSelected(new Set())
+    resetWorkspaceSelection()
   }
 
   if (!isOpen) return null
@@ -102,7 +113,7 @@ export function ProjectsModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={closeModal}
     >
       <div
         className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/[0.08] bg-[#1e1e1d] shadow-2xl"
@@ -113,7 +124,7 @@ export function ProjectsModal({
           <h2 className="text-[14px] font-semibold text-zinc-200">Projetos</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeModal}
             className="rounded p-1 text-zinc-500 transition hover:text-zinc-300"
           >
             <X size={14} />

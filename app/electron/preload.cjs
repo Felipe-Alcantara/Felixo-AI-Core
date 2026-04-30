@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('cli:stream', handler)
       return () => ipcRenderer.removeListener('cli:stream', handler)
     },
+    onRawOutput: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('cli:raw-output', handler)
+      return () => ipcRenderer.removeListener('cli:raw-output', handler)
+    },
   },
   projects: {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),

@@ -26,18 +26,25 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
 
   useEffect(() => {
     if (isOpen) {
-      setQuery('')
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [isOpen])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        setQuery('')
+        onClose()
+      }
     }
     if (isOpen) document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [isOpen, onClose])
+
+  function closePanel() {
+    setQuery('')
+    onClose()
+  }
 
   const filtered = query.trim()
     ? sessions.filter((s) => {
@@ -75,7 +82,7 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
         )}
         <button
           type="button"
-          onClick={onClose}
+          onClick={closePanel}
           className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-zinc-500 transition hover:text-zinc-300"
         >
           Esc
@@ -100,7 +107,10 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
               <button
                 key={session.id}
                 type="button"
-                onClick={() => { onSelectSession(session); onClose() }}
+                onClick={() => {
+                  onSelectSession(session)
+                  closePanel()
+                }}
                 className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition hover:bg-white/[0.05]"
               >
                 <span

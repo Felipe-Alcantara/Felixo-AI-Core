@@ -176,12 +176,24 @@ function registerCliIpcHandlers(getMainWindow) {
       )
 
       childProcess.stdout.setEncoding('utf8')
-      childProcess.stdout.on('data', (chunk) => stdoutGuard.push(chunk))
+      childProcess.stdout.on('data', (chunk) => {
+        stdoutGuard.push(chunk)
+        sendRawOutput(targetWebContents, {
+          sessionId,
+          source: 'stdout',
+          chunk: String(chunk),
+        })
+      })
       childProcess.stdout.on('end', flushStdout)
 
       childProcess.stderr.setEncoding('utf8')
       childProcess.stderr.on('data', (chunk) => {
         stderrOutput = `${stderrOutput}${chunk}`.slice(-4000)
+        sendRawOutput(targetWebContents, {
+          sessionId,
+          source: 'stderr',
+          chunk: String(chunk),
+        })
         logQaEvent({
           level: 'warn',
           scope: 'cli:stderr',
@@ -339,6 +351,14 @@ function parseAdapterLine(adapter, line) {
           : 'Falha ao interpretar saída da CLI.',
     }
   }
+}
+
+function sendRawOutput(webContents, event) {
+  if (!webContents || webContents.isDestroyed()) {
+    return
+  }
+
+  webContents.send('cli:raw-output', event)
 }
 
 function sendCliEvent(webContents, event) {

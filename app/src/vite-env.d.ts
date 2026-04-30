@@ -1,6 +1,11 @@
 /// <reference types="vite/client" />
 
-import type { Model, QaLogEntry, StreamEvent } from './features/chat/types'
+import type {
+  Model,
+  QaLogEntry,
+  RawOutputEvent,
+  StreamEvent,
+} from './features/chat/types'
 
 type DetectedRepo = { name: string; path: string }
 
@@ -28,6 +33,7 @@ declare global {
         }) => Promise<CliInvokeResult>
         stop: (params: { sessionId: string }) => Promise<CliInvokeResult>
         onStream: (callback: (event: StreamEvent) => void) => () => void
+        onRawOutput: (callback: (event: RawOutputEvent) => void) => () => void
       }
       projects?: {
         pickFolder: () => Promise<string | null>

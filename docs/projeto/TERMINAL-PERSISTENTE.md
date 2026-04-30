@@ -6,18 +6,18 @@ Hoje cada mensagem spawna um processo CLI novo que encerra ao responder. O objet
 
 ---
 
-## Etapa 1 — Painel de terminal em tempo real *(próxima)*
+## Etapa 1 — Painel de terminal em tempo real *(implementada)*
 
 Barra lateral direita que exibe o output bruto (stdout/stderr) de cada processo CLI enquanto roda. Não requer interação direta — é observação.
 
 ### O que entregar
 
-- [ ] Painel recolhível à direita do chat
-- [ ] Output bruto acumulado por `sessionId` (stdout + stderr)
-- [ ] Atualização em tempo real via eventos IPC já existentes
-- [ ] Indicador visual: rodando (pulsando), concluído, erro
-- [ ] Scroll automático para o final, com lock quando o usuário rolar para cima
-- [ ] IPC: novo evento `cli:raw-output` emitido a cada chunk de stdout/stderr
+- [x] Painel recolhível à direita do chat
+- [x] Output bruto acumulado por `sessionId` (stdout + stderr)
+- [x] Atualização em tempo real via eventos IPC já existentes
+- [x] Indicador visual: rodando (pulsando), concluído, erro
+- [x] Scroll automático para o final, com lock quando o usuário rolar para cima
+- [x] IPC: novo evento `cli:raw-output` emitido a cada chunk de stdout/stderr
 
 ### Como implementar
 
@@ -88,6 +88,6 @@ Threads simultâneas dependem da sessão persistente: cada thread é um processo
 
 | Etapa | Status |
 |-------|--------|
-| Painel de terminal em tempo real | Planejado |
+| Painel de terminal em tempo real | Implementado |
 | Sessão CLI persistente | Planejado — requer investigação por adapter |
 | Múltiplas threads simultâneas | Planejado — depende da Etapa 2 |

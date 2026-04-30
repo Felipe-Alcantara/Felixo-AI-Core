@@ -12,12 +12,14 @@ import {
 } from '../services/chat-service'
 import { loadModels, saveModels } from '../services/model-storage'
 import type { ChatMessage, ChatSession, Model, ModelId, Project, StreamEvent } from '../types'
+import { useTerminalOutput } from '../hooks/useTerminalOutput'
 import { ModelSettingsModal } from './ModelSettingsModal'
 import { ProjectsModal } from './ProjectsModal'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
 import { QaLoggerPanel } from './QaLoggerPanel'
+import { TerminalPanel } from './TerminalPanel'
 
 const CONTEXT_MESSAGE_LIMIT = 12
 
@@ -35,9 +37,16 @@ export function ChatWorkspace() {
   const [isProjectsOpen, setIsProjectsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
   const lastSentProjectIdsRef = useRef<Set<string>>(new Set())
   const streamHandlerRef = useRef(handleStreamEvent)
+  const {
+    sessions: terminalSessions,
+    startSession: startTerminalSession,
+    markSessionStatus: markTerminalSessionStatus,
+    clearSessions: clearTerminalSessions,
+  } = useTerminalOutput()
 
   const selectedModel = useMemo(
     () =>
@@ -109,12 +118,14 @@ export function ChatWorkspace() {
       createAssistantMessage(selectedModel, sessionId),
     ])
     setInput('')
+    startTerminalSession(sessionId)
     setActiveStreamingSession(sessionId)
 
     window.felixo.cli
       .send({ sessionId, prompt: cliPrompt, model: selectedModel })
       .then((result) => {
         if (!result.ok) {
+          markTerminalSessionStatus(sessionId, 'error')
           completeAssistantMessage(
             sessionId,
             result.message ?? 'Falha ao iniciar a CLI.',
@@ -123,6 +134,7 @@ export function ChatWorkspace() {
         }
       })
       .catch((error: unknown) => {
+        markTerminalSessionStatus(sessionId, 'error')
         completeAssistantMessage(
           sessionId,
           error instanceof Error ? error.message : 'Falha ao iniciar a CLI.',
@@ -184,12 +196,16 @@ export function ChatWorkspace() {
   function toggleProject(project: Project) {
     setActiveProjectIds((prev) => {
       const next = new Set(prev)
-      next.has(project.id) ? next.delete(project.id) : next.add(project.id)
+      if (next.has(project.id)) {
+        next.delete(project.id)
+      } else {
+        next.add(project.id)
+      }
       return next
     })
   }
 
-function addModel(model: Model) {
+  function addModel(model: Model) {
     const existingModel = models.find((item) => item.command === model.command)
 
     if (existingModel) {
@@ -236,6 +252,7 @@ function addModel(model: Model) {
     }
 
     window.felixo?.cli?.stop({ sessionId }).catch(() => {
+      markTerminalSessionStatus(sessionId, 'error')
       completeAssistantMessage(sessionId, 'Falha ao interromper a CLI.', 'error')
     })
   }
@@ -247,11 +264,16 @@ function addModel(model: Model) {
     }
 
     if (event.type === 'error') {
+      markTerminalSessionStatus(event.sessionId, 'error')
       completeAssistantMessage(event.sessionId, event.message, 'error')
       return
     }
 
     if (event.type === 'done') {
+      markTerminalSessionStatus(
+        event.sessionId,
+        event.stopped ? 'stopped' : 'completed',
+      )
       completeAssistantMessage(
         event.sessionId,
         event.stopped ? 'Execução interrompida.' : '',
@@ -447,6 +469,13 @@ function addModel(model: Model) {
 
         <QaLoggerPanel />
       </main>
+
+      <TerminalPanel
+        sessions={terminalSessions}
+        isOpen={isTerminalPanelOpen}
+        onToggleOpen={() => setIsTerminalPanelOpen((value) => !value)}
+        onClear={clearTerminalSessions}
+      />
 
       <ModelSettingsModal
         models={models}
