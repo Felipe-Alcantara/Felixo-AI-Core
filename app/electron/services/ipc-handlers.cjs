@@ -1,5 +1,14 @@
 const { app, ipcMain } = require('electron')
 const { CliProcessManager } = require('./cli-process-manager.cjs')
+const {
+  choosePersistentPrompt,
+  createCliExecutionPlan,
+  getAdapterSpawnArgs,
+  normalizePersistentInput,
+} = require('./orchestrator/cli-execution-planner.cjs')
+const {
+  getTerminalAdapter,
+} = require('./providers/terminal-adapter-registry.cjs')
 const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
 const { createJsonlOutputGuard } = require('./jsonl-output-guard.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
@@ -9,12 +18,6 @@ const {
   createStderrTerminalEvent,
   createTerminalEvents,
 } = require('./terminal-event-formatter.cjs')
-
-const adapters = {
-  claude: require('./adapters/claude-adapter.cjs'),
-  codex: require('./adapters/codex-adapter.cjs'),
-  gemini: require('./adapters/gemini-adapter.cjs'),
-}
 
 const cliManager = new CliProcessManager()
 const stoppedSessions = new Set()
@@ -32,7 +35,7 @@ function registerCliIpcHandlers(getMainWindow) {
     const model = params?.model
     const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
     const cliType = model?.cliType
-    const adapter = adapters[cliType]
+    const adapter = getTerminalAdapter(cliType)
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
 
     if (!streamSessionId || !threadId || !prompt) {
@@ -77,8 +80,14 @@ function registerCliIpcHandlers(getMainWindow) {
       providerSessionId: threadSession.providerSessionId,
       isContinuation: threadSession.hasStarted,
     }
+    const executionPlan = createCliExecutionPlan({
+      adapter,
+      context: spawnContext,
+      prompt,
+      resumePrompt,
+    })
 
-    if (shouldUsePersistentProcess(adapter)) {
+    if (executionPlan.usesPersistentProcess) {
       return sendPersistentCliRequest({
         adapter,
         targetWebContents,
@@ -94,9 +103,9 @@ function registerCliIpcHandlers(getMainWindow) {
       })
     }
 
-    const usesNativeResume = shouldUseResumePrompt(adapter, spawnContext, resumePrompt)
-    spawnContext.usesNativeResume = usesNativeResume
-    const spawnPrompt = usesNativeResume ? resumePrompt : prompt
+    spawnContext.usesNativeResume = executionPlan.usesNativeResume
+    const usesNativeResume = executionPlan.usesNativeResume
+    const spawnPrompt = executionPlan.spawnPrompt
     const { command, args } = getAdapterSpawnArgs(adapter, spawnPrompt, spawnContext)
     let didComplete = false
     let didEmitVisibleOutput = false
@@ -545,6 +554,10 @@ function sendPersistentCliRequest({
     const run = {
       streamSessionId,
       startedAt: processStartedAt,
+      prompt: spawnPrompt,
+      context,
+      didStartSession: false,
+      didSendPrompt: false,
       didComplete: false,
       didEmitVisibleOutput: false,
       firstVisibleOutputTimer: null,
@@ -607,13 +620,16 @@ function sendPersistentCliRequest({
       closePersistentSession(threadId)
     }, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS)
 
-    const input = adapter.createPersistentInput(spawnPrompt, {
+    const persistentInput = normalizePersistentInput(adapter.createPersistentInput(spawnPrompt, {
       ...context,
       isReusingProcess,
       streamSessionId,
-    })
+      persistentPhase: 'initial',
+    }))
+    run.didStartSession = persistentInput.didStartSession
+    run.didSendPrompt = persistentInput.didSendPrompt
 
-    if (!cliManager.write(threadId, input)) {
+    if (!cliManager.write(threadId, persistentInput.input)) {
       failPersistentRun(persistentSession, `${command} não aceitou entrada via stdin.`)
       closePersistentSession(threadId)
       return { ok: false, message: 'Falha ao enviar prompt para a CLI persistente.' }
@@ -788,11 +804,33 @@ function handlePersistentStdoutLine(persistentSession, line) {
     return
   }
 
+  if (cliEvent.responseInput) {
+    cliManager.write(threadId, cliEvent.responseInput)
+  }
+
+  if (cliEvent.readyForSession && activeRun && !activeRun.didStartSession) {
+    writeNextPersistentInput(persistentSession, activeRun, {
+      persistentPhase: 'session',
+    })
+    return
+  }
+
   if (cliEvent.providerSessionId) {
     threadSession.providerSessionId = cliEvent.providerSessionId
   }
 
+  if (cliEvent.readyForPrompt && activeRun && !activeRun.didSendPrompt) {
+    writeNextPersistentInput(persistentSession, activeRun, {
+      providerSessionId: threadSession.providerSessionId,
+      persistentPhase: 'prompt',
+    })
+  }
+
   if (cliEvent.type === 'session') {
+    return
+  }
+
+  if (cliEvent.type === 'control') {
     return
   }
 
@@ -840,6 +878,30 @@ function handlePersistentStdoutLine(persistentSession, line) {
     persistentSession.activeRun = null
     closePersistentSession(threadId)
   }
+}
+
+function writeNextPersistentInput(persistentSession, activeRun, contextOverrides = {}) {
+  const { adapter, command, threadId } = persistentSession
+  const nextInput = normalizePersistentInput(adapter.createPersistentInput(
+    activeRun.prompt,
+    {
+      ...activeRun.context,
+      ...contextOverrides,
+      isReusingProcess: true,
+      streamSessionId: activeRun.streamSessionId,
+    },
+  ))
+
+  activeRun.didStartSession = activeRun.didStartSession || nextInput.didStartSession
+  activeRun.didSendPrompt = activeRun.didSendPrompt || nextInput.didSendPrompt
+
+  if (cliManager.write(threadId, nextInput.input)) {
+    return true
+  }
+
+  failPersistentRun(persistentSession, `${command} não aceitou entrada via stdin.`)
+  closePersistentSession(threadId)
+  return false
 }
 
 function handlePersistentStderr(persistentSession, chunk) {
@@ -960,21 +1022,6 @@ function failPersistentRun(persistentSession, message, options = {}) {
   persistentSession.activeRun = null
 }
 
-function choosePersistentPrompt({
-  adapter,
-  isReusingProcess,
-  context,
-  prompt,
-  resumePrompt,
-}) {
-  const shouldUseShortPrompt =
-    resumePrompt &&
-    context.isContinuation &&
-    (isReusingProcess || canAdapterResume(adapter, context))
-
-  return shouldUseShortPrompt ? resumePrompt : prompt
-}
-
 function getReusablePersistentSession(threadId, model, cwd) {
   const persistentSession = persistentCliSessions.get(threadId)
 
@@ -1073,44 +1120,6 @@ function getCliThreadSession(threadId, model) {
   }
   cliThreadSessions.set(threadId, nextSession)
   return nextSession
-}
-
-function getAdapterSpawnArgs(adapter, prompt, context) {
-  if (
-    context.usesNativeResume &&
-    typeof adapter.getResumeArgs === 'function'
-  ) {
-    return adapter.getResumeArgs(prompt, context)
-  }
-
-  return adapter.getSpawnArgs(prompt, context)
-}
-
-function shouldUseResumePrompt(adapter, context, resumePrompt) {
-  if (
-    !resumePrompt ||
-    !context.isContinuation ||
-    typeof adapter.getResumeArgs !== 'function'
-  ) {
-    return false
-  }
-
-  return canAdapterResume(adapter, context)
-}
-
-function shouldUsePersistentProcess(adapter) {
-  return (
-    typeof adapter.getPersistentSpawnArgs === 'function' &&
-    typeof adapter.createPersistentInput === 'function'
-  )
-}
-
-function canAdapterResume(adapter, context) {
-  if (typeof adapter.canResume === 'function') {
-    return adapter.canResume(context)
-  }
-
-  return Boolean(context.providerSessionId)
 }
 
 function getAdapterStderrLevel(adapter, chunk) {

@@ -1,6 +1,8 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { getAdapterSpawnArgs } = require('./ipc-handlers.cjs')
+const {
+  getAdapterSpawnArgs,
+} = require('./orchestrator/cli-execution-planner.cjs')
 
 test('ipc handlers use spawn args when native resume is disabled', () => {
   const adapter = {
