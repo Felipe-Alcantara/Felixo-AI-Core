@@ -6,6 +6,8 @@ O app já executa CLIs reais (`claude`, `codex`, `gemini`) a partir do backend E
 
 A persistência real de processo já está ativa para Claude, porque o CLI oferece um contrato compatível com `--input-format stream-json`. Codex e Gemini continuam em execução one-shot por mensagem, mas agora retomam a conversa nativa do provedor quando já existe `providerSessionId`; antes da primeira sessão capturada, a continuidade vem pelo contexto explícito.
 
+Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENTES.md](../backend/PROTOCOLOS-PERSISTENTES.md).
+
 ## O que já foi concluído
 
 ### Backend Electron
