@@ -219,6 +219,10 @@ function registerCliIpcHandlers(getMainWindow) {
 
       childProcess.stderr.setEncoding('utf8')
       childProcess.stderr.on('data', (chunk) => {
+        if (shouldSuppressAdapterStderr(adapter, chunk)) {
+          return
+        }
+
         const stderrLevel = getAdapterStderrLevel(adapter, chunk)
         stderrOutput = `${stderrOutput}${chunk}`.slice(-4000)
         sendRawOutput(targetWebContents, {
@@ -432,6 +436,13 @@ function getAdapterStderrLevel(adapter, chunk) {
   const level = adapter.classifyStderr(chunk)
 
   return ['debug', 'info', 'warn', 'error'].includes(level) ? level : 'warn'
+}
+
+function shouldSuppressAdapterStderr(adapter, chunk) {
+  return (
+    typeof adapter.shouldSuppressStderr === 'function' &&
+    adapter.shouldSuppressStderr(chunk)
+  )
 }
 
 function sendRawOutput(webContents, event) {

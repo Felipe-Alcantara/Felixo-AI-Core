@@ -52,14 +52,13 @@ test('codex adapter parses session metadata', () => {
 })
 
 test('codex adapter classifies known non-fatal stderr noise', () => {
-  assert.equal(
-    adapter.classifyStderr('Reading additional input from stdin...\n'),
-    'debug',
-  )
-  assert.equal(
-    adapter.classifyStderr(
-      'ERROR codex_core::session: failed to record rollout items: thread 019ddc5a not found\n',
-    ),
-    'warn',
-  )
+  const stdinNotice = 'Reading additional input from stdin...\n'
+  const rolloutNotice =
+    'ERROR codex_core::session: failed to record rollout items: thread 019ddc5a not found\n'
+
+  assert.equal(adapter.classifyStderr(stdinNotice), 'debug')
+  assert.equal(adapter.classifyStderr(rolloutNotice), 'debug')
+  assert.equal(adapter.shouldSuppressStderr(stdinNotice), true)
+  assert.equal(adapter.shouldSuppressStderr(rolloutNotice), true)
+  assert.equal(adapter.shouldSuppressStderr(`${rolloutNotice}real error\n`), false)
 })
