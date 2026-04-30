@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { RawOutputEvent } from '../types'
+import type { TerminalOutputEvent } from '../types'
 
 export type TerminalSessionStatus = 'running' | 'completed' | 'error' | 'stopped'
 
-export type TerminalOutputChunk = RawOutputEvent & {
+export type TerminalOutputChunk = TerminalOutputEvent & {
   id: number
   createdAt: string
 }
@@ -71,17 +71,36 @@ export function useTerminalOutput() {
     setSessionsById({})
   }, [])
 
-  const appendRawOutput = useCallback((event: RawOutputEvent) => {
+  const appendTerminalOutput = useCallback((event: TerminalOutputEvent) => {
     const now = new Date().toISOString()
-    const chunk: TerminalOutputChunk = {
-      ...event,
-      id: nextChunkId.current,
-      createdAt: now,
-    }
-    nextChunkId.current += 1
 
     setSessionsById((currentSessions) => {
       const currentSession = currentSessions[event.sessionId]
+      const currentChunks = currentSession?.chunks ?? []
+      const lastChunk = currentChunks[currentChunks.length - 1]
+      const shouldMerge = shouldMergeTerminalOutput(lastChunk, event)
+      const chunk: TerminalOutputChunk = shouldMerge
+        ? {
+            ...lastChunk,
+            chunk: `${lastChunk.chunk}${event.chunk}`,
+            metadata: {
+              ...lastChunk.metadata,
+              ...event.metadata,
+            },
+          }
+        : {
+            ...event,
+            id: nextChunkId.current,
+            createdAt: now,
+          }
+      const chunks = shouldMerge
+        ? [...currentChunks.slice(0, -1), chunk]
+        : [...currentChunks, chunk]
+
+      if (!shouldMerge) {
+        nextChunkId.current += 1
+      }
+
       const status =
         currentSession?.status === 'completed' ||
         currentSession?.status === 'error' ||
@@ -93,7 +112,7 @@ export function useTerminalOutput() {
         ...currentSessions,
         [event.sessionId]: {
           sessionId: event.sessionId,
-          chunks: [...(currentSession?.chunks ?? []), chunk],
+          chunks,
           status,
           startedAt: currentSession?.startedAt ?? now,
           updatedAt: now,
@@ -106,8 +125,11 @@ export function useTerminalOutput() {
   }, [])
 
   useEffect(() => {
-    return window.felixo?.cli?.onRawOutput?.(appendRawOutput)
-  }, [appendRawOutput])
+    const subscribe =
+      window.felixo?.cli?.onTerminalOutput ?? window.felixo?.cli?.onRawOutput
+
+    return subscribe?.(appendTerminalOutput)
+  }, [appendTerminalOutput])
 
   const sessions = useMemo(
     () =>
@@ -125,4 +147,17 @@ export function useTerminalOutput() {
     markSessionStatus,
     clearSessions,
   }
+}
+
+function shouldMergeTerminalOutput(
+  lastChunk: TerminalOutputChunk | undefined,
+  event: TerminalOutputEvent,
+) {
+  return (
+    event.kind === 'assistant' &&
+    lastChunk?.kind === 'assistant' &&
+    lastChunk.sessionId === event.sessionId &&
+    lastChunk.source === event.source &&
+    lastChunk.severity === event.severity
+  )
 }

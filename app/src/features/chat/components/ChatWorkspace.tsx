@@ -115,7 +115,23 @@ export function ChatWorkspace() {
     const projectDiff = { added, removed }
     lastSentProjectIdsRef.current = new Set(activeProjectIds)
 
-    const cliPrompt = createCliPrompt(messages, content, models, selectedModel, activeProjects, projectDiff)
+    const cliPrompt = createCliPrompt(
+      messages,
+      content,
+      models,
+      selectedModel,
+      activeProjects,
+      projectDiff,
+    )
+    const resumePrompt = createCliPrompt(
+      messages,
+      content,
+      models,
+      selectedModel,
+      activeProjects,
+      projectDiff,
+      { includeHistory: false },
+    )
 
     setMessages((currentMessages) => [
       ...currentMessages,
@@ -128,7 +144,13 @@ export function ChatWorkspace() {
     setActiveStreamingSession(sessionId, threadId)
 
     window.felixo.cli
-      .send({ sessionId, threadId, prompt: cliPrompt, model: selectedModel })
+      .send({
+        sessionId,
+        threadId,
+        prompt: cliPrompt,
+        resumePrompt,
+        model: selectedModel,
+      })
       .then((result) => {
         if (!result.ok) {
           markTerminalSessionStatus(threadId, 'error')
@@ -218,11 +240,13 @@ export function ChatWorkspace() {
     const existingModel = models.find((item) => item.command === model.command)
 
     if (existingModel) {
+      stopStreaming()
       setSelectedModelId(existingModel.id)
       resetConversationThread({ resetProjectDiff: false })
       return
     }
 
+    stopStreaming()
     setModels((currentModels) => {
       const nextModels = [...currentModels, model]
       saveModels(nextModels)
@@ -233,6 +257,7 @@ export function ChatWorkspace() {
   }
 
   function removeModel(modelToRemove: Model) {
+    stopStreaming()
     resetConversationThread({ resetProjectDiff: false })
     setModels((currentModels) => {
       const nextModels = currentModels.filter(
@@ -251,6 +276,7 @@ export function ChatWorkspace() {
   }
 
   function clearModels() {
+    stopStreaming()
     setModels([])
     saveModels([])
     setSelectedModelId('')
@@ -263,6 +289,7 @@ export function ChatWorkspace() {
     }
 
     setSelectedModelId(modelId)
+    stopStreaming()
     resetConversationThread({ resetProjectDiff: false })
   }
 
@@ -274,10 +301,20 @@ export function ChatWorkspace() {
       return
     }
 
-    window.felixo?.cli?.stop({ sessionId, threadId: threadId ?? undefined }).catch(() => {
-      markTerminalSessionStatus(resolveThreadId(sessionId), 'error')
-      completeAssistantMessage(sessionId, 'Falha ao interromper a CLI.', 'error')
-    })
+    window.felixo?.cli
+      ?.stop({ sessionId, threadId: threadId ?? undefined })
+      .then((result) => {
+        if (result.ok || activeSessionIdRef.current !== sessionId) {
+          return
+        }
+
+        markTerminalSessionStatus(threadId ?? resolveThreadId(sessionId), 'stopped')
+        completeAssistantMessage(sessionId, 'Execução interrompida.', 'stopped')
+      })
+      .catch(() => {
+        markTerminalSessionStatus(threadId ?? resolveThreadId(sessionId), 'error')
+        completeAssistantMessage(sessionId, 'Falha ao interromper a CLI.', 'error')
+      })
   }
 
   function handleStreamEvent(event: StreamEvent) {
@@ -287,14 +324,14 @@ export function ChatWorkspace() {
     }
 
     if (event.type === 'error') {
-      markTerminalSessionStatus(resolveThreadId(event.sessionId), 'error')
+      markTerminalSessionStatus(resolveEventThreadId(event), 'error')
       completeAssistantMessage(event.sessionId, event.message, 'error')
       return
     }
 
     if (event.type === 'done') {
       markTerminalSessionStatus(
-        resolveThreadId(event.sessionId),
+        resolveEventThreadId(event),
         event.stopped ? 'stopped' : 'completed',
       )
       completeAssistantMessage(
@@ -404,6 +441,10 @@ export function ChatWorkspace() {
     }
 
     return messageThreadIdsRef.current.get(sessionId) ?? sessionId
+  }
+
+  function resolveEventThreadId(event: StreamEvent) {
+    return event.threadId ?? resolveThreadId(event.sessionId)
   }
 
   function createCompletedContent(
@@ -565,6 +606,7 @@ function createSessionId() {
 
 type ProjectDiff = { added: Project[]; removed: Project[] }
 type ResetConversationThreadOptions = { resetProjectDiff?: boolean }
+type CliPromptOptions = { includeHistory?: boolean }
 
 function createCliPrompt(
   messages: ChatMessage[],
@@ -573,7 +615,9 @@ function createCliPrompt(
   selectedModel: Model,
   activeProjects: Project[],
   projectDiff: ProjectDiff,
+  options: CliPromptOptions = {},
 ) {
+  const { includeHistory = true } = options
   const allHistoryMessages = messages.filter((message) => message.content.trim())
   const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
   const historyOffset = allHistoryMessages.length - historyMessages.length
@@ -582,8 +626,11 @@ function createCliPrompt(
   ).length
   const currentUserMessageNumber = previousUserMessageCount + 1
 
+  const hasCountContext = allHistoryMessages.length > 0
+  const hasHistory = includeHistory && historyMessages.length > 0
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
-  const hasContext = historyMessages.length > 0 || activeProjects.length > 0 || hasDiff
+  const hasContext =
+    hasCountContext || hasHistory || activeProjects.length > 0 || hasDiff
 
   if (!hasContext) {
     return currentPrompt
@@ -617,7 +664,7 @@ function createCliPrompt(
     }
   }
 
-  if (historyMessages.length > 0) {
+  if (hasHistory) {
     lines.push(
       '',
       'Histórico da conversa:',

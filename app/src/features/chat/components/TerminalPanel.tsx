@@ -156,7 +156,7 @@ export function TerminalPanel({
                     {session.sessionId.slice(0, 8)}
                   </span>
                   <span className="block truncate text-[10px] text-zinc-600">
-                    {formatStatus(session.status)} · {session.chunks.length} chunks ·{' '}
+                    {formatStatus(session.status)} · {session.chunks.length} eventos ·{' '}
                     {formatBytes(session.outputSize)}
                   </span>
                 </span>
@@ -194,9 +194,9 @@ export function TerminalPanel({
             className="h-full overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed"
           >
             {!selectedSession || selectedSession.chunks.length === 0 ? (
-              <p className="text-zinc-600">Sem output bruto.</p>
+              <p className="text-zinc-600">Aguardando eventos da CLI.</p>
             ) : (
-              <div className="whitespace-pre-wrap break-words">
+              <div className="space-y-2">
                 {selectedSession.chunks.map((chunk) => (
                   <TerminalChunk key={chunk.id} chunk={chunk} />
                 ))}
@@ -223,30 +223,106 @@ export function TerminalPanel({
 }
 
 function TerminalChunk({ chunk }: { chunk: TerminalOutputChunk }) {
+  const metadata = formatMetadata(chunk)
+
   return (
-    <span
+    <div
       title={chunk.source}
       className={getChunkClassName(chunk)}
     >
-      {chunk.chunk}
-    </span>
+      <div className="mb-1 flex min-w-0 items-center gap-2 text-[10px]">
+        <span className="shrink-0 text-zinc-600">{formatTime(chunk.createdAt)}</span>
+        <span className={getTitleClassName(chunk)}>
+          {chunk.title ?? formatSource(chunk.source)}
+        </span>
+      </div>
+      <div className="whitespace-pre-wrap break-words text-[11px] normal-case tracking-normal">
+        {chunk.chunk}
+      </div>
+      {metadata.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {metadata.map((item) => (
+            <span
+              key={item.label}
+              className="max-w-full truncate rounded border border-white/[0.06] px-1.5 py-0.5 text-[10px] text-zinc-500"
+            >
+              {item.label}: {item.value}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
 function getChunkClassName(chunk: TerminalOutputChunk) {
+  const base = 'border-l-2 py-1 pl-2 pr-1'
+
+  if (chunk.kind === 'assistant') {
+    return `${base} border-sky-300/50 text-zinc-200`
+  }
+
+  if (chunk.kind === 'metrics') {
+    return `${base} border-emerald-300/50 text-emerald-100`
+  }
+
+  if (chunk.kind === 'tool') {
+    return `${base} border-amber-300/50 text-zinc-200`
+  }
+
+  if (chunk.kind === 'error') {
+    return `${base} border-red-300/60 text-red-200`
+  }
+
+  if (chunk.kind === 'stderr') {
+    return `${base} border-amber-300/50 text-amber-200`
+  }
+
   if (chunk.source === 'stdout') {
-    return 'text-zinc-300'
+    return `${base} border-zinc-500/50 text-zinc-300`
   }
 
   if (chunk.severity === 'debug' || chunk.severity === 'info') {
-    return 'text-zinc-500'
+    return `${base} border-zinc-600/50 text-zinc-500`
   }
 
   if (chunk.severity === 'warn') {
-    return 'text-amber-300'
+    return `${base} border-amber-300/50 text-amber-300`
   }
 
-  return 'text-red-300'
+  return `${base} border-red-300/60 text-red-300`
+}
+
+function getTitleClassName(chunk: TerminalOutputChunk) {
+  if (chunk.kind === 'assistant') {
+    return 'min-w-0 truncate text-sky-200'
+  }
+
+  if (chunk.kind === 'metrics') {
+    return 'min-w-0 truncate text-emerald-200'
+  }
+
+  if (chunk.kind === 'tool') {
+    return 'min-w-0 truncate text-amber-200'
+  }
+
+  if (chunk.kind === 'error') {
+    return 'min-w-0 truncate text-red-200'
+  }
+
+  return 'min-w-0 truncate text-zinc-500'
+}
+
+function formatSource(source: TerminalOutputChunk['source']) {
+  if (source === 'stdout') {
+    return 'Output'
+  }
+
+  if (source === 'stderr') {
+    return 'Stderr'
+  }
+
+  return 'Sistema'
 }
 
 function getStatusDotClassName(status: TerminalSessionStatus) {
@@ -315,4 +391,61 @@ function formatTime(value: string) {
     minute: '2-digit',
     second: '2-digit',
   }).format(new Date(value))
+}
+
+function formatMetadata(chunk: TerminalOutputChunk) {
+  if (
+    !chunk.metadata ||
+    chunk.kind === 'lifecycle' ||
+    chunk.kind === 'metrics'
+  ) {
+    return []
+  }
+
+  const labels: Record<string, string> = {
+    cachedInputTokens: 'Cache',
+    cliType: 'CLI',
+    command: 'Comando',
+    costUsd: 'Custo',
+    durationMs: 'Tempo',
+    inputTokens: 'Entrada',
+    itemType: 'Tipo',
+    mode: 'Modo',
+    modelName: 'Modelo',
+    outputTokens: 'Saída',
+    providerSessionId: 'Sessão',
+    reasoningOutputTokens: 'Raciocínio',
+    tool: 'Ferramenta',
+    totalTokens: 'Total',
+  }
+
+  return Object.entries(chunk.metadata)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => ({
+      label: labels[key] ?? key,
+      value: formatMetadataValue(key, value),
+    }))
+}
+
+function formatMetadataValue(
+  key: string,
+  value: string | number | boolean | null | undefined,
+) {
+  if (value === null || value === undefined) {
+    return ''
+  }
+
+  if (key.endsWith('Tokens') && typeof value === 'number') {
+    return `${new Intl.NumberFormat('pt-BR').format(value)} tokens`
+  }
+
+  if (key === 'durationMs' && typeof value === 'number') {
+    return value < 1000 ? `${Math.round(value)} ms` : `${(value / 1000).toFixed(1)} s`
+  }
+
+  if (key === 'costUsd' && typeof value === 'number') {
+    return `US$ ${value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}`
+  }
+
+  return String(value)
 }

@@ -25,10 +25,26 @@ test('cli process manager opens stdin when requested', async () => {
   )
 
   assert.notEqual(childProcess.stdin, null)
+  assert.equal(manager.get('open-stdin'), childProcess)
+  assert.equal(manager.has('open-stdin'), true)
   assert.equal(manager.write('open-stdin', 'hello\n'), true)
   childProcess.stdin.end()
 
   await onceClose(childProcess)
+  assert.equal(manager.get('open-stdin'), null)
+  assert.equal(manager.has('open-stdin'), false)
+})
+
+test('cli process manager can force kill a process group', async () => {
+  const manager = new CliProcessManager()
+  const childProcess = manager.spawn('force-kill', process.execPath, [
+    '-e',
+    'setInterval(() => {}, 1000)',
+  ])
+
+  assert.equal(manager.kill('force-kill', { force: true }), true)
+
+  await onceCloseAny(childProcess)
 })
 
 function onceClose(childProcess) {
@@ -42,5 +58,12 @@ function onceClose(childProcess) {
 
       reject(new Error(`Process closed with code ${code}`))
     })
+  })
+}
+
+function onceCloseAny(childProcess) {
+  return new Promise((resolve, reject) => {
+    childProcess.once('error', reject)
+    childProcess.once('close', resolve)
   })
 }

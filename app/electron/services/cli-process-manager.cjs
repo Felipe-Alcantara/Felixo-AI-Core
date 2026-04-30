@@ -15,6 +15,7 @@ class CliProcessManager {
 
     const childProcess = spawnChildProcess(command, args, {
       cwd,
+      detached: process.platform !== 'win32',
       env: createCliEnv(),
       stdio: [options.openStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -33,6 +34,20 @@ class CliProcessManager {
     return childProcess
   }
 
+  get(sessionId) {
+    const childProcess = this.processes.get(sessionId)?.childProcess
+
+    if (!childProcess || childProcess.exitCode !== null) {
+      return null
+    }
+
+    return childProcess
+  }
+
+  has(sessionId) {
+    return Boolean(this.get(sessionId))
+  }
+
   write(sessionId, input) {
     const entry = this.processes.get(sessionId)
     const stdin = entry?.childProcess?.stdin
@@ -45,7 +60,7 @@ class CliProcessManager {
     return true
   }
 
-  kill(sessionId) {
+  kill(sessionId, options = {}) {
     const entry = this.processes.get(sessionId)
 
     if (!entry) {
@@ -59,14 +74,21 @@ class CliProcessManager {
       return true
     }
 
-    if (!childProcess.killed) {
-      childProcess.kill('SIGTERM')
+    const signal = options.force ? 'SIGKILL' : 'SIGTERM'
+
+    if (!childProcess.killed || options.force) {
+      signalChildProcess(childProcess, signal)
+    }
+
+    if (options.force) {
+      this.cleanup(sessionId, childProcess)
+      return true
     }
 
     if (!entry.killTimer) {
       entry.killTimer = setTimeout(() => {
         if (childProcess.exitCode === null) {
-          childProcess.kill('SIGKILL')
+          signalChildProcess(childProcess, 'SIGKILL')
         }
       }, 5000)
     }
@@ -74,9 +96,9 @@ class CliProcessManager {
     return true
   }
 
-  killAll() {
+  killAll(options = {}) {
     for (const sessionId of this.processes.keys()) {
-      this.kill(sessionId)
+      this.kill(sessionId, options)
     }
   }
 
@@ -92,6 +114,23 @@ class CliProcessManager {
     }
 
     this.processes.delete(sessionId)
+  }
+}
+
+function signalChildProcess(childProcess, signal) {
+  if (process.platform === 'win32' || !childProcess.pid) {
+    return childProcess.kill(signal)
+  }
+
+  try {
+    process.kill(-childProcess.pid, signal)
+    return true
+  } catch (error) {
+    if (error?.code === 'ESRCH') {
+      return childProcess.kill(signal)
+    }
+
+    throw error
   }
 }
 

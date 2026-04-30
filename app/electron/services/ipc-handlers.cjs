@@ -3,6 +3,12 @@ const { CliProcessManager } = require('./cli-process-manager.cjs')
 const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
 const { createJsonlOutputGuard } = require('./jsonl-output-guard.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
+const {
+  createErrorTerminalEvent,
+  createStartTerminalEvent,
+  createStderrTerminalEvent,
+  createTerminalEvents,
+} = require('./terminal-event-formatter.cjs')
 
 const adapters = {
   claude: require('./adapters/claude-adapter.cjs'),
@@ -13,13 +19,16 @@ const adapters = {
 const cliManager = new CliProcessManager()
 const stoppedSessions = new Set()
 const cliThreadSessions = new Map()
+const persistentCliSessions = new Map()
 const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
+const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 
 function registerCliIpcHandlers(getMainWindow) {
   ipcMain.handle('cli:send', (event, params) => {
     const streamSessionId = getRequiredString(params?.sessionId)
     const threadId = getRequiredString(params?.threadId) || streamSessionId
     const prompt = getRequiredString(params?.prompt)
+    const resumePrompt = getRequiredString(params?.resumePrompt)
     const model = params?.model
     const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
     const cliType = model?.cliType
@@ -52,6 +61,7 @@ function registerCliIpcHandlers(getMainWindow) {
         type: 'error',
         message: 'Modelo sem CLI compatível configurada.',
         sessionId: streamSessionId,
+        threadId,
       })
       return { ok: false, message: 'Modelo sem CLI compatível configurada.' }
     }
@@ -67,11 +77,32 @@ function registerCliIpcHandlers(getMainWindow) {
       providerSessionId: threadSession.providerSessionId,
       isContinuation: threadSession.hasStarted,
     }
-    const { command, args } = getAdapterSpawnArgs(adapter, prompt, spawnContext)
+
+    if (shouldUsePersistentProcess(adapter)) {
+      return sendPersistentCliRequest({
+        adapter,
+        targetWebContents,
+        streamSessionId,
+        threadId,
+        prompt,
+        resumePrompt,
+        context: spawnContext,
+        threadSession,
+        cliType,
+        model,
+        cwd,
+      })
+    }
+
+    const usesNativeResume = shouldUseResumePrompt(adapter, spawnContext, resumePrompt)
+    spawnContext.usesNativeResume = usesNativeResume
+    const spawnPrompt = usesNativeResume ? resumePrompt : prompt
+    const { command, args } = getAdapterSpawnArgs(adapter, spawnPrompt, spawnContext)
     let didComplete = false
     let didEmitVisibleOutput = false
     let stderrOutput = ''
     let firstVisibleOutputTimer = null
+    const processStartedAt = Date.now()
 
     try {
       logQaEvent({
@@ -87,10 +118,22 @@ function registerCliIpcHandlers(getMainWindow) {
           args,
           cwd,
           isContinuation: spawnContext.isContinuation,
+          usesNativeResume,
           providerSessionId: spawnContext.providerSessionId,
-          promptPreview: createTextPreview(prompt),
+          promptPreview: createTextPreview(spawnPrompt),
         },
       })
+      sendTerminalEvents(targetWebContents, threadId, [
+        createStartTerminalEvent({
+          command,
+          cliType,
+          modelName: model?.name,
+          cwd,
+          isContinuation: spawnContext.isContinuation,
+          usesNativeResume,
+          providerSessionId: spawnContext.providerSessionId,
+        }),
+      ])
       const childProcess = cliManager.spawn(threadId, command, args, cwd)
       threadSession.hasStarted = true
       firstVisibleOutputTimer = setTimeout(() => {
@@ -109,6 +152,11 @@ function registerCliIpcHandlers(getMainWindow) {
             timeoutMs: FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
           },
         })
+        sendTerminalEvents(targetWebContents, threadId, [
+          createErrorTerminalEvent(
+            createNoVisibleOutputMessage(command, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS),
+          ),
+        ])
         sendCliEvent(targetWebContents, {
           type: 'error',
           message: createNoVisibleOutputMessage(
@@ -116,6 +164,7 @@ function registerCliIpcHandlers(getMainWindow) {
             FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
           ),
           sessionId: streamSessionId,
+          threadId,
         })
         cliManager.kill(threadId)
       }, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS)
@@ -141,6 +190,16 @@ function registerCliIpcHandlers(getMainWindow) {
           },
         })
         const cliEvent = parseAdapterLine(adapter, line)
+        sendTerminalEvents(
+          targetWebContents,
+          threadId,
+          createTerminalEvents({
+            command,
+            line,
+            cliEvent,
+            durationMs: Date.now() - processStartedAt,
+          }),
+        )
 
         if (!cliEvent) {
           return
@@ -167,6 +226,7 @@ function registerCliIpcHandlers(getMainWindow) {
         sendCliEvent(targetWebContents, {
           ...cliEvent,
           sessionId: streamSessionId,
+          threadId,
         })
       })
       const flushStdout = () => stdoutReader.flush()
@@ -197,10 +257,14 @@ function registerCliIpcHandlers(getMainWindow) {
               ...createChunkDetails(output),
             },
           })
+          sendTerminalEvents(targetWebContents, threadId, [
+            createErrorTerminalEvent(createNonJsonStdoutMessage(command, output)),
+          ])
           sendCliEvent(targetWebContents, {
             type: 'error',
             message: createNonJsonStdoutMessage(command, output),
             sessionId: streamSessionId,
+            threadId,
           })
           cliManager.kill(threadId)
         },
@@ -209,11 +273,6 @@ function registerCliIpcHandlers(getMainWindow) {
       childProcess.stdout.setEncoding('utf8')
       childProcess.stdout.on('data', (chunk) => {
         stdoutGuard.push(chunk)
-        sendRawOutput(targetWebContents, {
-          sessionId: threadId,
-          source: 'stdout',
-          chunk: String(chunk),
-        })
       })
       childProcess.stdout.on('end', flushStdout)
 
@@ -225,12 +284,10 @@ function registerCliIpcHandlers(getMainWindow) {
 
         const stderrLevel = getAdapterStderrLevel(adapter, chunk)
         stderrOutput = `${stderrOutput}${chunk}`.slice(-4000)
-        sendRawOutput(targetWebContents, {
-          sessionId: threadId,
-          source: 'stderr',
-          chunk: String(chunk),
-          severity: stderrLevel,
-        })
+        const formattedStderr = formatAdapterStderr(adapter, chunk)
+        sendTerminalEvents(targetWebContents, threadId, [
+          createStderrTerminalEvent(formattedStderr, stderrLevel),
+        ])
         logQaEvent({
           level: stderrLevel,
           scope: 'cli:stderr',
@@ -241,6 +298,18 @@ function registerCliIpcHandlers(getMainWindow) {
             ...createChunkDetails(chunk),
           },
         })
+
+        if (shouldAbortOnAdapterStderr(adapter, chunk) && !didComplete) {
+          didComplete = true
+          clearFirstVisibleOutputTimer()
+          sendCliEvent(targetWebContents, {
+            type: 'error',
+            message: formattedStderr,
+            sessionId: streamSessionId,
+            threadId,
+          })
+          cliManager.kill(threadId)
+        }
       })
 
       childProcess.on('error', (error) => {
@@ -256,10 +325,14 @@ function registerCliIpcHandlers(getMainWindow) {
             message: error.message,
           },
         })
+        sendTerminalEvents(targetWebContents, threadId, [
+          createErrorTerminalEvent(error.message),
+        ])
         sendCliEvent(targetWebContents, {
           type: 'error',
           message: error.message,
           sessionId: streamSessionId,
+          threadId,
         })
       })
 
@@ -290,17 +363,37 @@ function registerCliIpcHandlers(getMainWindow) {
         }
 
         if (code && code !== 0) {
+          sendTerminalEvents(targetWebContents, threadId, [
+            createErrorTerminalEvent(
+              createExitErrorMessage(command, code, signal, stderrOutput),
+            ),
+          ])
           sendCliEvent(targetWebContents, {
             type: 'error',
             message: createExitErrorMessage(command, code, signal, stderrOutput),
             sessionId: streamSessionId,
+            threadId,
           })
           return
         }
 
+        const elapsedMs = Date.now() - processStartedAt
+        sendTerminalEvents(targetWebContents, threadId, [
+          {
+            source: 'system',
+            kind: 'metrics',
+            severity: 'info',
+            title: 'Concluído',
+            chunk: `Tempo: ${formatDuration(elapsedMs)}`,
+            metadata: {
+              durationMs: elapsedMs,
+            },
+          },
+        ])
         sendCliEvent(targetWebContents, {
           type: 'done',
           sessionId: streamSessionId,
+          threadId,
         })
       })
 
@@ -319,10 +412,14 @@ function registerCliIpcHandlers(getMainWindow) {
           message,
         },
       })
+      sendTerminalEvents(targetWebContents, threadId, [
+        createErrorTerminalEvent(message),
+      ])
       sendCliEvent(targetWebContents, {
         type: 'error',
         message,
         sessionId: streamSessionId,
+        threadId,
       })
       return { ok: false, message }
     }
@@ -364,9 +461,19 @@ function registerCliIpcHandlers(getMainWindow) {
     })
 
     if (killed) {
+      sendTerminalEvents(targetWebContents, threadId, [
+        {
+          source: 'system',
+          kind: 'lifecycle',
+          severity: 'warn',
+          title: 'Interrompido',
+          chunk: 'Execução interrompida pelo usuário.',
+        },
+      ])
       sendCliEvent(targetWebContents, {
         type: 'done',
         sessionId: streamSessionId,
+        threadId,
         stopped: true,
       })
     } else {
@@ -382,8 +489,559 @@ function registerCliIpcHandlers(getMainWindow) {
       scope: 'app',
       message: 'before-quit: killing all CLI processes.',
     })
-    cliManager.killAll()
+    cliManager.killAll({ force: true })
   })
+}
+
+function sendPersistentCliRequest({
+  adapter,
+  targetWebContents,
+  streamSessionId,
+  threadId,
+  prompt,
+  resumePrompt,
+  context,
+  threadSession,
+  cliType,
+  model,
+  cwd,
+}) {
+  const existingSession = getReusablePersistentSession(threadId, model, cwd)
+  const isReusingProcess = Boolean(existingSession)
+  const spawnPrompt = choosePersistentPrompt({
+    adapter,
+    isReusingProcess,
+    context,
+    prompt,
+    resumePrompt,
+  })
+  let persistentSession = existingSession
+
+  if (persistentSession?.activeRun) {
+    return { ok: false, message: 'A CLI ainda está processando esta conversa.' }
+  }
+
+  try {
+    if (!persistentSession) {
+      persistentSession = startPersistentCliSession({
+        adapter,
+        targetWebContents,
+        threadId,
+        context,
+        threadSession,
+        cliType,
+        model,
+        cwd,
+        streamSessionId,
+      })
+    } else {
+      persistentSession.targetWebContents = targetWebContents
+      persistentSession.threadSession = threadSession
+      clearPersistentIdleTimer(persistentSession)
+    }
+
+    const { command } = persistentSession
+    const processStartedAt = Date.now()
+    const run = {
+      streamSessionId,
+      startedAt: processStartedAt,
+      didComplete: false,
+      didEmitVisibleOutput: false,
+      firstVisibleOutputTimer: null,
+      stderrOutput: '',
+    }
+
+    persistentSession.activeRun = run
+
+    logQaEvent({
+      level: 'info',
+      scope: isReusingProcess ? 'cli:persistent-write' : 'cli:persistent-spawn',
+      sessionId: threadId,
+      message: isReusingProcess
+        ? `Sending prompt to persistent ${command}.`
+        : `Starting persistent ${command}.`,
+      details: {
+        streamSessionId,
+        cliType,
+        modelName: model?.name,
+        command,
+        args: persistentSession.args,
+        cwd,
+        isContinuation: context.isContinuation,
+        isReusingProcess,
+        providerSessionId: context.providerSessionId,
+        promptPreview: createTextPreview(spawnPrompt),
+      },
+    })
+
+    sendTerminalEvents(targetWebContents, threadId, [
+      createStartTerminalEvent({
+        command,
+        cliType,
+        modelName: model?.name,
+        cwd,
+        isContinuation: context.isContinuation,
+        usesPersistentProcess: true,
+        reusedProcess: isReusingProcess,
+        providerSessionId: context.providerSessionId,
+      }),
+    ])
+
+    run.firstVisibleOutputTimer = setTimeout(() => {
+      if (run.didComplete || run.didEmitVisibleOutput) {
+        return
+      }
+
+      failPersistentRun(
+        persistentSession,
+        createNoVisibleOutputMessage(command, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS),
+        {
+          logScope: 'cli:timeout',
+          level: 'warn',
+          details: {
+            streamSessionId,
+            timeoutMs: FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
+          },
+        },
+      )
+      closePersistentSession(threadId)
+    }, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS)
+
+    const input = adapter.createPersistentInput(spawnPrompt, {
+      ...context,
+      isReusingProcess,
+      streamSessionId,
+    })
+
+    if (!cliManager.write(threadId, input)) {
+      failPersistentRun(persistentSession, `${command} não aceitou entrada via stdin.`)
+      closePersistentSession(threadId)
+      return { ok: false, message: 'Falha ao enviar prompt para a CLI persistente.' }
+    }
+
+    threadSession.hasStarted = true
+    return { ok: true }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Falha ao iniciar processo CLI persistente.'
+
+    logQaEvent({
+      level: 'error',
+      scope: 'cli:persistent-spawn',
+      sessionId: threadId,
+      message: 'Failed to use persistent CLI process.',
+      details: {
+        streamSessionId,
+        message,
+      },
+    })
+    sendTerminalEvents(targetWebContents, threadId, [
+      createErrorTerminalEvent(message),
+    ])
+    sendCliEvent(targetWebContents, {
+      type: 'error',
+      message,
+      sessionId: streamSessionId,
+      threadId,
+    })
+    closePersistentSession(threadId, { force: true })
+    return { ok: false, message }
+  }
+}
+
+function startPersistentCliSession({
+  adapter,
+  targetWebContents,
+  threadId,
+  context,
+  threadSession,
+  cliType,
+  model,
+  cwd,
+  streamSessionId,
+}) {
+  const { command, args } = adapter.getPersistentSpawnArgs(context)
+  const childProcess = cliManager.spawn(threadId, command, args, cwd, {
+    openStdin: true,
+  })
+  const persistentSession = {
+    adapter,
+    args,
+    childProcess,
+    cliType,
+    command,
+    cwd,
+    idleTimer: null,
+    modelKey: createModelSessionKey(model),
+    modelName: model?.name,
+    targetWebContents,
+    threadId,
+    threadSession,
+    activeRun: null,
+  }
+
+  persistentCliSessions.set(threadId, persistentSession)
+
+  logQaEvent({
+    level: 'info',
+    scope: 'cli:process',
+    sessionId: threadId,
+    message: `Spawned persistent ${command}.`,
+    details: {
+      streamSessionId,
+      pid: childProcess.pid,
+    },
+  })
+
+  const stdoutReader = createJsonlLineReader((line) => {
+    handlePersistentStdoutLine(persistentSession, line)
+  })
+  const stdoutGuard = createJsonlOutputGuard(
+    (chunk) => {
+      logQaEvent({
+        level: 'debug',
+        scope: 'cli:stdout',
+        sessionId: threadId,
+        message: `stdout from persistent ${command}.`,
+        details: createChunkDetails(chunk),
+      })
+      stdoutReader.push(chunk)
+    },
+    (output) => {
+      failPersistentRun(
+        persistentSession,
+        createNonJsonStdoutMessage(command, output),
+        {
+          logScope: 'cli:stdout',
+          level: 'warn',
+          details: createChunkDetails(output),
+        },
+      )
+      closePersistentSession(threadId)
+    },
+  )
+
+  childProcess.stdout.setEncoding('utf8')
+  childProcess.stdout.on('data', (chunk) => {
+    stdoutGuard.push(chunk)
+  })
+  childProcess.stdout.on('end', () => stdoutReader.flush())
+
+  childProcess.stderr.setEncoding('utf8')
+  childProcess.stderr.on('data', (chunk) => {
+    handlePersistentStderr(persistentSession, chunk)
+  })
+
+  childProcess.on('error', (error) => {
+    failPersistentRun(
+      persistentSession,
+      error instanceof Error ? error.message : 'Falha no processo CLI persistente.',
+      {
+        logScope: 'cli:error',
+        level: 'error',
+        details: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+    )
+    closePersistentSession(threadId, { force: true })
+  })
+
+  childProcess.on('close', (code, signal) => {
+    stdoutReader.flush()
+    handlePersistentClose(persistentSession, code, signal)
+  })
+
+  return persistentSession
+}
+
+function handlePersistentStdoutLine(persistentSession, line) {
+  const { adapter, command, threadId, threadSession } = persistentSession
+  const activeRun = persistentSession.activeRun
+  const streamSessionId = activeRun?.streamSessionId
+  const durationMs = Date.now() - (activeRun?.startedAt ?? Date.now())
+
+  logQaEvent({
+    level: 'debug',
+    scope: 'cli:jsonl',
+    sessionId: threadId,
+    message: `Parsed JSONL line from persistent ${command}.`,
+    details: {
+      streamSessionId,
+      preview: createTextPreview(line, 500),
+    },
+  })
+
+  const cliEvent = parseAdapterLine(adapter, line)
+  sendTerminalEvents(
+    persistentSession.targetWebContents,
+    threadId,
+    createTerminalEvents({
+      command,
+      line,
+      cliEvent,
+      durationMs,
+    }),
+  )
+
+  if (!cliEvent) {
+    return
+  }
+
+  if (cliEvent.providerSessionId) {
+    threadSession.providerSessionId = cliEvent.providerSessionId
+  }
+
+  if (cliEvent.type === 'session') {
+    return
+  }
+
+  if (!activeRun) {
+    logQaEvent({
+      level: 'warn',
+      scope: 'cli:persistent-orphan-output',
+      sessionId: threadId,
+      message: `Persistent ${command} emitted output without an active request.`,
+      details: {
+        cliEventType: cliEvent.type,
+      },
+    })
+    return
+  }
+
+  if (cliEvent.type === 'text' && cliEvent.text.trim()) {
+    activeRun.didEmitVisibleOutput = true
+    clearPersistentRunTimer(activeRun)
+  }
+
+  if (cliEvent.type === 'done') {
+    activeRun.didComplete = true
+    clearPersistentRunTimer(activeRun)
+  }
+
+  if (cliEvent.type === 'error') {
+    activeRun.didComplete = true
+    clearPersistentRunTimer(activeRun)
+  }
+
+  sendCliEvent(persistentSession.targetWebContents, {
+    ...cliEvent,
+    sessionId: activeRun.streamSessionId,
+    threadId,
+  })
+
+  if (cliEvent.type === 'done') {
+    persistentSession.activeRun = null
+    schedulePersistentIdleTimer(persistentSession)
+    return
+  }
+
+  if (cliEvent.type === 'error') {
+    persistentSession.activeRun = null
+    closePersistentSession(threadId)
+  }
+}
+
+function handlePersistentStderr(persistentSession, chunk) {
+  const { adapter, command, threadId } = persistentSession
+
+  if (shouldSuppressAdapterStderr(adapter, chunk)) {
+    return
+  }
+
+  const stderrLevel = getAdapterStderrLevel(adapter, chunk)
+  const formattedStderr = formatAdapterStderr(adapter, chunk)
+  const activeRun = persistentSession.activeRun
+
+  if (activeRun) {
+    activeRun.stderrOutput = `${activeRun.stderrOutput}${chunk}`.slice(-4000)
+  }
+
+  sendTerminalEvents(persistentSession.targetWebContents, threadId, [
+    createStderrTerminalEvent(formattedStderr, stderrLevel),
+  ])
+  logQaEvent({
+    level: stderrLevel,
+    scope: 'cli:stderr',
+    sessionId: threadId,
+    message: `stderr from persistent ${command}.`,
+    details: createChunkDetails(chunk),
+  })
+
+  if (shouldAbortOnAdapterStderr(adapter, chunk) && activeRun && !activeRun.didComplete) {
+    failPersistentRun(persistentSession, formattedStderr)
+    closePersistentSession(threadId)
+  }
+}
+
+function handlePersistentClose(persistentSession, code, signal) {
+  const { command, threadId } = persistentSession
+  const activeRun = persistentSession.activeRun
+
+  clearPersistentIdleTimer(persistentSession)
+  if (persistentCliSessions.get(threadId) === persistentSession) {
+    persistentCliSessions.delete(threadId)
+  }
+  logQaEvent({
+    level: code && code !== 0 ? 'error' : 'info',
+    scope: 'cli:close',
+    sessionId: threadId,
+    message: `Persistent ${command} closed.`,
+    details: {
+      pid: persistentSession.childProcess.pid,
+      code,
+      signal,
+      didComplete: activeRun?.didComplete ?? true,
+      stderrPreview: createTextPreview(activeRun?.stderrOutput ?? ''),
+    },
+  })
+
+  if (stoppedSessions.delete(threadId)) {
+    clearPersistentRunTimer(activeRun)
+    persistentSession.activeRun = null
+    return
+  }
+
+  if (!activeRun || activeRun.didComplete) {
+    return
+  }
+
+  clearPersistentRunTimer(activeRun)
+  const message =
+    code && code !== 0
+      ? createExitErrorMessage(command, code, signal, activeRun.stderrOutput)
+      : `${command} encerrou antes de concluir a resposta.`
+
+  sendTerminalEvents(persistentSession.targetWebContents, threadId, [
+    createErrorTerminalEvent(message),
+  ])
+  sendCliEvent(persistentSession.targetWebContents, {
+    type: 'error',
+    message,
+    sessionId: activeRun.streamSessionId,
+    threadId,
+  })
+  persistentSession.activeRun = null
+}
+
+function failPersistentRun(persistentSession, message, options = {}) {
+  const { command, threadId } = persistentSession
+  const activeRun = persistentSession.activeRun
+  const streamSessionId = activeRun?.streamSessionId
+
+  if (activeRun) {
+    activeRun.didComplete = true
+    clearPersistentRunTimer(activeRun)
+  }
+
+  logQaEvent({
+    level: options.level ?? 'error',
+    scope: options.logScope ?? 'cli:persistent',
+    sessionId: threadId,
+    message: `${command} persistent request failed.`,
+    details: {
+      streamSessionId,
+      ...(options.details ?? {}),
+    },
+  })
+  sendTerminalEvents(persistentSession.targetWebContents, threadId, [
+    createErrorTerminalEvent(message),
+  ])
+
+  if (streamSessionId) {
+    sendCliEvent(persistentSession.targetWebContents, {
+      type: 'error',
+      message,
+      sessionId: streamSessionId,
+      threadId,
+    })
+  }
+
+  persistentSession.activeRun = null
+}
+
+function choosePersistentPrompt({
+  adapter,
+  isReusingProcess,
+  context,
+  prompt,
+  resumePrompt,
+}) {
+  const shouldUseShortPrompt =
+    resumePrompt &&
+    context.isContinuation &&
+    (isReusingProcess || canAdapterResume(adapter, context))
+
+  return shouldUseShortPrompt ? resumePrompt : prompt
+}
+
+function getReusablePersistentSession(threadId, model, cwd) {
+  const persistentSession = persistentCliSessions.get(threadId)
+
+  if (!persistentSession) {
+    return null
+  }
+
+  if (!cliManager.has(threadId)) {
+    persistentCliSessions.delete(threadId)
+    return null
+  }
+
+  if (
+    persistentSession.modelKey !== createModelSessionKey(model) ||
+    persistentSession.cwd !== cwd
+  ) {
+    closePersistentSession(threadId, { force: true })
+    return null
+  }
+
+  return persistentSession
+}
+
+function schedulePersistentIdleTimer(persistentSession) {
+  clearPersistentIdleTimer(persistentSession)
+  persistentSession.idleTimer = setTimeout(() => {
+    logQaEvent({
+      level: 'info',
+      scope: 'cli:persistent-idle',
+      sessionId: persistentSession.threadId,
+      message: `Closing idle persistent ${persistentSession.command}.`,
+      details: {
+        idleTimeoutMs: PERSISTENT_SESSION_IDLE_TIMEOUT_MS,
+      },
+    })
+    closePersistentSession(persistentSession.threadId)
+  }, PERSISTENT_SESSION_IDLE_TIMEOUT_MS)
+}
+
+function clearPersistentIdleTimer(persistentSession) {
+  if (!persistentSession?.idleTimer) {
+    return
+  }
+
+  clearTimeout(persistentSession.idleTimer)
+  persistentSession.idleTimer = null
+}
+
+function clearPersistentRunTimer(run) {
+  if (!run?.firstVisibleOutputTimer) {
+    return
+  }
+
+  clearTimeout(run.firstVisibleOutputTimer)
+  run.firstVisibleOutputTimer = null
+}
+
+function closePersistentSession(threadId, options = {}) {
+  const persistentSession = persistentCliSessions.get(threadId)
+
+  if (persistentSession) {
+    clearPersistentIdleTimer(persistentSession)
+    clearPersistentRunTimer(persistentSession.activeRun)
+    persistentCliSessions.delete(threadId)
+  }
+
+  return cliManager.kill(threadId, options)
 }
 
 function parseAdapterLine(adapter, line) {
@@ -419,13 +1077,40 @@ function getCliThreadSession(threadId, model) {
 
 function getAdapterSpawnArgs(adapter, prompt, context) {
   if (
-    context.isContinuation &&
+    context.usesNativeResume &&
     typeof adapter.getResumeArgs === 'function'
   ) {
     return adapter.getResumeArgs(prompt, context)
   }
 
   return adapter.getSpawnArgs(prompt, context)
+}
+
+function shouldUseResumePrompt(adapter, context, resumePrompt) {
+  if (
+    !resumePrompt ||
+    !context.isContinuation ||
+    typeof adapter.getResumeArgs !== 'function'
+  ) {
+    return false
+  }
+
+  return canAdapterResume(adapter, context)
+}
+
+function shouldUsePersistentProcess(adapter) {
+  return (
+    typeof adapter.getPersistentSpawnArgs === 'function' &&
+    typeof adapter.createPersistentInput === 'function'
+  )
+}
+
+function canAdapterResume(adapter, context) {
+  if (typeof adapter.canResume === 'function') {
+    return adapter.canResume(context)
+  }
+
+  return Boolean(context.providerSessionId)
 }
 
 function getAdapterStderrLevel(adapter, chunk) {
@@ -445,12 +1130,36 @@ function shouldSuppressAdapterStderr(adapter, chunk) {
   )
 }
 
-function sendRawOutput(webContents, event) {
+function shouldAbortOnAdapterStderr(adapter, chunk) {
+  return (
+    typeof adapter.shouldAbortOnStderr === 'function' &&
+    adapter.shouldAbortOnStderr(chunk)
+  )
+}
+
+function formatAdapterStderr(adapter, chunk) {
+  if (typeof adapter.formatStderr !== 'function') {
+    return String(chunk)
+  }
+
+  return String(adapter.formatStderr(chunk))
+}
+
+function sendTerminalEvents(webContents, sessionId, events) {
+  for (const event of events) {
+    sendTerminalOutput(webContents, {
+      sessionId,
+      ...event,
+    })
+  }
+}
+
+function sendTerminalOutput(webContents, event) {
   if (!webContents || webContents.isDestroyed()) {
     return
   }
 
-  webContents.send('cli:raw-output', event)
+  webContents.send('cli:terminal-output', event)
 }
 
 function sendCliEvent(webContents, event) {
@@ -519,6 +1228,14 @@ function createNoVisibleOutputMessage(command, timeoutMs) {
   return `${command} não gerou resposta textual em ${timeoutSeconds}s. A execução foi interrompida.`
 }
 
+function formatDuration(durationMs) {
+  if (durationMs < 1000) {
+    return `${Math.round(durationMs)} ms`
+  }
+
+  return `${(durationMs / 1000).toFixed(1)} s`
+}
+
 function createChunkDetails(chunk) {
   const text = String(chunk)
 
@@ -539,5 +1256,6 @@ function createTextPreview(value, maxLength = 1000) {
 }
 
 module.exports = {
+  getAdapterSpawnArgs,
   registerCliIpcHandlers,
 }
