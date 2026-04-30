@@ -105,6 +105,15 @@ Union de 5 tipos:
 }
 ```
 
+#### `Project`
+```ts
+{
+  id: string
+  name: string   // nome da pasta do repositório
+  path: string   // caminho absoluto no sistema de arquivos
+}
+```
+
 #### `ChatSession`
 ```ts
 {
