@@ -4,6 +4,48 @@
 
 O processo principal do Electron funciona como backend local do Felixo AI Core. Ele recebe chamadas do renderer pelo preload, executa CLIs reais, interpreta JSONL em streaming e devolve eventos normalizados para a interface.
 
+## Camadas recentes
+
+Os últimos commits separaram três responsabilidades que antes ficavam mais
+misturadas no fluxo de IPC.
+
+### Provider registry
+
+Arquivo:
+
+- `app/electron/services/providers/terminal-adapter-registry.cjs`
+
+Responsabilidade:
+
+- mapear `cliType` para adapter real;
+- retornar `null` para tipos desconhecidos;
+- manter `ipc-handlers.cjs` desacoplado da lista concreta de CLIs.
+
+### Orchestrator Core
+
+Arquivo:
+
+- `app/electron/services/orchestrator/cli-execution-planner.cjs`
+
+Responsabilidade:
+
+- escolher `persistent-process`, `native-resume` ou `one-shot`;
+- decidir entre `prompt` completo e `resumePrompt`;
+- normalizar entrada persistente de adapters simples ou multi-etapa.
+
+### MCP Layer inicial
+
+Arquivo:
+
+- `app/electron/services/mcp/felixo-tool-catalog.cjs`
+
+Responsabilidade:
+
+- registrar as tools MCP planejadas;
+- classificar acesso como `read` ou `write`;
+- marcar operações sensíveis com `requiresConfirmation`;
+- impedir que o primeiro contrato exponha comando livre.
+
 ## Principais arquivos
 
 | Arquivo | Responsabilidade |
@@ -128,6 +170,14 @@ As estratégias são escolhidas pelo Orchestrator Core em
 `cli-execution-planner.cjs`. O IPC apenas valida entrada, chama o planner e
 executa o plano.
 
+Modos do planner:
+
+| Modo | Quando usar | Processo fica vivo? |
+|------|-------------|---------------------|
+| `persistent-process` | Adapter tem `getPersistentSpawnArgs()` e `createPersistentInput()` | Sim |
+| `native-resume` | Adapter consegue retomar por `providerSessionId` | Não |
+| `one-shot` | Não há protocolo persistente ou sessão capturada | Não |
+
 ### Processo persistente
 
 Usado quando o adapter implementa:
@@ -183,6 +233,13 @@ tools que futuramente poderão ser expostas por um servidor MCP do Felixo:
 Tools com escrita já nascem marcadas como `requiresConfirmation`. O app ainda
 não expõe um servidor MCP completo; o catálogo existe para fixar contrato,
 escopo e segurança antes do transporte.
+
+Regras do catálogo atual:
+
+- `terminal.run` não existe.
+- A execução local planejada é apenas `terminal.run_allowlisted`.
+- Toda tool com `access: "write"` precisa de confirmação.
+- O primeiro servidor MCP deve nascer read-only antes de liberar escrita.
 
 ## Estado por adapter
 

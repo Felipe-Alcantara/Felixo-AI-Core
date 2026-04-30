@@ -202,3 +202,21 @@ Depois que providers, histórico, memória e ferramentas estiverem estáveis:
 - Testes cobrindo registry, planner e catálogo de tools.
 - `ipc-handlers.cjs` continua responsável por IPC e streaming, mas já delega
   decisões para as camadas novas.
+
+## Commits Implementados
+
+### `66c0f21`
+
+Separou o backend em registry de providers e planner de execução. O IPC segue
+executando o plano, mas não decide sozinho qual estratégia usar.
+
+### `1bd0c7b`
+
+Adicionou o catálogo inicial da MCP Layer, com tools nomeadas, escopo de acesso
+e confirmação obrigatória para escrita.
+
+### `22e2af5`
+
+Documentou a decisão arquitetural: MCP é infraestrutura de ferramentas; CLIs
+continuam sob Terminal Adapters; o Orchestrator Core decide estratégia,
+continuidade e contexto.
