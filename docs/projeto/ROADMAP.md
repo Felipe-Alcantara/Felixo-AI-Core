@@ -34,7 +34,7 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 - [x] Busca em tempo real no histórico de sessões
 - [x] Gerenciamento de projetos Git (repositório único e workspace)
 - [x] Contexto de projetos ativos injetado no prompt com diff entre mensagens
-- [ ] Painel de terminal em tempo real (stdout/stderr bruto por thread)
+- [x] Painel de terminal em tempo real (stdout/stderr bruto por thread)
 - [ ] Sessão CLI persistente entre mensagens da mesma conversa
 - [ ] Múltiplas threads simultâneas na mesma conversa
 - [ ] Cadastrar e editar comandos locais manualmente
@@ -46,7 +46,7 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 
 Detalhamento completo em [TERMINAL-PERSISTENTE.md](./TERMINAL-PERSISTENTE.md).
 
-- [ ] Painel de terminal em tempo real (stdout/stderr bruto por thread)
+- [x] Painel de terminal em tempo real (stdout/stderr bruto por thread)
 - [ ] Sessão CLI persistente entre mensagens da mesma conversa
 - [ ] Múltiplas threads simultâneas na mesma conversa
 

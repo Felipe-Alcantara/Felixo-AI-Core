@@ -72,21 +72,32 @@ function parseLine(line) {
 }
 
 function classifyStderr(chunk) {
-  const text = String(chunk)
-
-  if (text.includes('Reading additional input from stdin')) {
+  if (shouldSuppressStderr(chunk)) {
     return 'debug'
   }
 
-  if (
+  return 'warn'
+}
+
+function shouldSuppressStderr(chunk) {
+  const lines = String(chunk)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  return lines.length > 0 && lines.every(isNonActionableStderrLine)
+}
+
+function isNonActionableStderrLine(text) {
+  const isRolloutPersistenceNotice =
     text.includes('failed to record rollout items') &&
     text.includes('thread') &&
     text.includes('not found')
-  ) {
-    return 'warn'
-  }
 
-  return 'warn'
+  return (
+    text.includes('Reading additional input from stdin') ||
+    isRolloutPersistenceNotice
+  )
 }
 
 function isSessionMetadata(payload) {
@@ -123,4 +134,5 @@ module.exports = {
   classifyStderr,
   getSpawnArgs,
   parseLine,
+  shouldSuppressStderr,
 }
