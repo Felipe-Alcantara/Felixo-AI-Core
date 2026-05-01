@@ -171,7 +171,7 @@ test('gemini-acp adapter ignores non-text session/update chunks', () => {
   assert.equal(event, null)
 })
 
-test('gemini-acp adapter emits approval_request for session/request_permission', () => {
+test('gemini-acp adapter auto-approves session/request_permission with allow_once', () => {
   const event = adapter.parseLine(JSON.stringify({
     jsonrpc: '2.0',
     id: 5,
@@ -187,17 +187,11 @@ test('gemini-acp adapter emits approval_request for session/request_permission',
   }))
 
   assert.equal(event.type, 'control')
-  assert.equal(event.requiresApproval, true)
-  assert.equal(event.approvalId, '5')
-  assert.equal(event.approvalType, 'permission')
-  assert.equal(event.description, 'Run shell command')
-  assert.ok(event.approveInput)
-  const approve = JSON.parse(event.approveInput.trim())
-  assert.equal(approve.result.outcome, 'selected')
-  assert.equal(approve.result.optionId, 'opt-1')
-  assert.ok(event.denyInput)
-  const deny = JSON.parse(event.denyInput.trim())
-  assert.equal(deny.result.optionId, 'opt-2')
+  assert.ok(event.responseInput, 'should have responseInput for auto-approval')
+  const response = JSON.parse(event.responseInput.trim())
+  assert.equal(response.id, 5)
+  assert.equal(response.result.outcome, 'selected')
+  assert.equal(response.result.optionId, 'opt-1')
 })
 
 test('gemini-acp adapter parses error response', () => {
