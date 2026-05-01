@@ -104,10 +104,21 @@ function parseLine(line) {
     return orchestrationEvent
   }
 
-  if (payload.type === 'system' && typeof payload.session_id === 'string') {
+  if (
+    payload.type === 'system' &&
+    payload.subtype === 'init' &&
+    typeof payload.session_id === 'string'
+  ) {
     return {
       type: 'session',
       providerSessionId: payload.session_id,
+    }
+  }
+
+  if (payload.type === 'assistant' && payload.error) {
+    return {
+      type: 'error',
+      message: extractClaudeAssistantText(payload) ?? 'Claude retornou um erro.',
     }
   }
 
@@ -116,6 +127,18 @@ function parseLine(line) {
   }
 
   if (payload.type === 'result') {
+    if (payload.is_error) {
+      return {
+        type: 'error',
+        message:
+          typeof payload.result === 'string' && payload.result
+            ? payload.result
+            : 'Claude retornou um erro.',
+        providerSessionId:
+          typeof payload.session_id === 'string' ? payload.session_id : undefined,
+      }
+    }
+
     const result = {
       type: 'done',
       cost: payload.total_cost_usd,
@@ -137,6 +160,22 @@ function parseLine(line) {
   }
 
   return null
+}
+
+function extractClaudeAssistantText(payload) {
+  const content = payload?.message?.content
+
+  if (!Array.isArray(content)) {
+    return null
+  }
+
+  const text = content
+    .map((block) => (block?.type === 'text' ? block.text : ''))
+    .filter((value) => typeof value === 'string' && value.trim())
+    .join('\n')
+    .trim()
+
+  return text || null
 }
 
 function parseStreamEvent(event) {
