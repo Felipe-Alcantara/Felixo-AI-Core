@@ -10,6 +10,7 @@ O usuário precisa levar uma conversa para fora do app quando quiser continuar e
 
 - Exportação da conversa principal em JSON compacto.
 - Exportação da conversa principal em Markdown.
+- Exportação da conversa principal em texto simples (.txt).
 - Inclusão de metadados básicos:
   - data da exportação;
   - título estimado;
@@ -47,6 +48,10 @@ Formato indicado para backup, automação futura e reimportação:
 ### Markdown
 
 Formato indicado para leitura humana e para continuar a conversa em outra IA.
+
+### Texto simples
+
+Formato indicado para portabilidade máxima. Sem formatação Markdown, contém apenas rótulo de papel e conteúdo das mensagens.
 
 ## Cuidados
 
