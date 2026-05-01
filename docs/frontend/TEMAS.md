@@ -9,6 +9,7 @@ O app começou com um tema escuro fixo. A tasklist pede novos estilos e prepara�
 ## Escopo inicial
 
 - Criar tokens CSS básicos para fundo, painéis, bordas, texto e destaque.
+- Tokens adicionais: `--color-error`, `--color-success`, `--spacing-base`, `--radius-base`, `--shadow-base`.
 - Persistir preferência de tema em `localStorage`.
 - Expor seletor no modal Felixo.
 - Adicionar um tema alternativo inicial de alto contraste.
