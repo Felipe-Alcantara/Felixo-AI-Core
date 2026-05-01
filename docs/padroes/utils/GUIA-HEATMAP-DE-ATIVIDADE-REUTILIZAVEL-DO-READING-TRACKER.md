@@ -1,5 +1,7 @@
 # 📅 GUIA-HEATMAP-DE-ATIVIDADE-REUTILIZAVEL-DO-READING-TRACKER.md
 
+Status: concluido.
+
 > **O que é**: Um guia reutilizável para construir um **calendário de atividade com heatmap**, no estilo de consistência visual popularizado pelo GitHub.
 >
 > **De onde vem**: Este padrão foi extraído do componente `HeatmapView` do projeto **Reading Tracker**.

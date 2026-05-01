@@ -1,5 +1,7 @@
 # 🚀 PROMPT BASE PARA DESENVOLVIMENTO BACKEND
 
+Status: concluido.
+
 > **Objetivo**: Este arquivo é um **guia técnico para o desenvolvedor montar prompts de backend mais completos e mais úteis logo na primeira interação**.
 >
 > **Uso correto**: Ele não existe para gerar um prompt genérico do zero. Ele existe para ajudar você a descrever o sistema com decisões técnicas claras, reduzindo re-prompts, ambiguidades e retrabalho.

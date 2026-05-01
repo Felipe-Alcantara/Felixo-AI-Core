@@ -1,5 +1,7 @@
 # 🧱 DESIGN SYSTEM PARA BACKEND — PADRÕES DE QUALIDADE
 
+Status: concluido.
+
 > **Contexto**: Este documento define os padrões de arquitetura, qualidade e manutenção para projetos **back-end** do acervo.
 >
 > **Escopo**: APIs, lógica de negócio, persistência, integrações, testes, segurança, observabilidade e documentação técnica.
