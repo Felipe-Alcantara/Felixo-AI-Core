@@ -96,6 +96,19 @@ test('terminal formatter creates orchestration lifecycle events', () => {
     }).title,
     'Reinvocando orquestrador',
   )
+
+  const resultEvent = createOrchestrationTerminalEvent({
+    type: 'orchestration_agent_result',
+    runId: 'run-1',
+    parentThreadId: 'thread-codex-1',
+    agentId: 'gemini-1',
+    status: 'completed',
+    result: 'Resposta do sub-agente.',
+  })
+
+  assert.equal(resultEvent.title, 'Resultado de sub-agente')
+  assert.match(resultEvent.chunk, /Resultado visível do sub-agente/)
+  assert.match(resultEvent.chunk, /Resposta do sub-agente\./)
 })
 
 test('terminal formatter converts codex lifecycle JSONL into readable events', () => {
@@ -204,6 +217,49 @@ test('terminal formatter converts codex answer and usage into readable output', 
   })
 })
 
+test('terminal formatter renders orchestration control messages descriptively', () => {
+  const [spawnEvent] = createTerminalEvents({
+    command: 'codex',
+    line: JSON.stringify({
+      type: 'item.completed',
+      item: {
+        type: 'agent_message',
+        text: '{"type":"spawn_agent","agentId":"gemini-1","cliType":"gemini","prompt":"Pergunte sobre astronomia."}',
+      },
+    }),
+    cliEvent: {
+      type: 'spawn_agent',
+      agentId: 'gemini-1',
+      cliType: 'gemini',
+      prompt: 'Pergunte sobre astronomia.',
+    },
+    durationMs: 120,
+  })
+
+  assert.equal(spawnEvent.title, 'Decisão do orquestrador')
+  assert.match(spawnEvent.chunk, /Pergunta enviada ao sub-agente:/)
+  assert.match(spawnEvent.chunk, /Pergunte sobre astronomia\./)
+
+  const [finalEvent] = createTerminalEvents({
+    command: 'codex',
+    line: JSON.stringify({
+      type: 'item.completed',
+      item: {
+        type: 'agent_message',
+        text: '{"type":"final_answer","content":"Resposta final."}',
+      },
+    }),
+    cliEvent: {
+      type: 'final_answer',
+      content: 'Resposta final.',
+    },
+    durationMs: 120,
+  })
+
+  assert.equal(finalEvent.title, 'Pré-resposta do orquestrador')
+  assert.equal(finalEvent.chunk, 'Resposta final.')
+})
+
 test('terminal formatter converts gemini user echo and stats into readable output', () => {
   assert.deepEqual(
     createTerminalEvents({
@@ -222,7 +278,12 @@ test('terminal formatter converts gemini user echo and stats into readable outpu
         kind: 'lifecycle',
         severity: 'info',
         title: 'Prompt enviado',
-        chunk: 'A CLI recebeu a mensagem e está gerando resposta.',
+        chunk: [
+          'A CLI recebeu a mensagem e está gerando resposta.',
+          '',
+          'Prompt enviado:',
+          'Pergunta',
+        ].join('\n'),
       },
     ],
   )
@@ -248,7 +309,7 @@ test('terminal formatter converts gemini user echo and stats into readable outpu
   assert.equal(doneEvent.kind, 'metrics')
   assert.match(doneEvent.chunk, /Tempo: 58\.6 s/)
   assert.match(doneEvent.chunk, /Entrada: 9\.585 tokens/)
-  assert.match(doneEvent.chunk, /Cache: 0 tokens/)
+  assert.match(doneEvent.chunk, /Cache do provedor: 0 tokens/)
   assert.match(doneEvent.chunk, /Saída: 11 tokens/)
   assert.match(doneEvent.chunk, /Total: 9\.772 tokens/)
   assert.deepEqual(doneEvent.metadata, {
