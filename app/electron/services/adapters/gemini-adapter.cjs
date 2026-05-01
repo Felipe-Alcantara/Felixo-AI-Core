@@ -122,6 +122,10 @@ function formatStderr(chunk) {
     return 'Gemini está sem capacidade no servidor agora (429 / MODEL_CAPACITY_EXHAUSTED). Tente novamente mais tarde ou use outro modelo.'
   }
 
+  if (isUnavailableToolStderr(text)) {
+    return 'Gemini não conseguiu executar a alteração porque a CLI não disponibilizou a ferramenta necessária para editar arquivos ou executar comandos.'
+  }
+
   return text
 }
 
@@ -149,7 +153,7 @@ function isRipgrepFallbackNotice(line) {
 }
 
 function isFatalStderr(chunk) {
-  return isCapacityExhaustedStderr(chunk)
+  return isCapacityExhaustedStderr(chunk) || isUnavailableToolStderr(chunk)
 }
 
 function isCapacityExhaustedStderr(chunk) {
@@ -158,7 +162,20 @@ function isCapacityExhaustedStderr(chunk) {
   return (
     text.includes('MODEL_CAPACITY_EXHAUSTED') ||
     text.includes('No capacity available for model') ||
+    text.includes('exhausted your capacity on this model') ||
     (text.includes('status 429') && text.includes('RESOURCE_EXHAUSTED'))
+  )
+}
+
+function isUnavailableToolStderr(chunk) {
+  const text = String(chunk)
+
+  return (
+    text.includes('Tool "run_shell_command" not found') ||
+    (text.includes("Unauthorized tool call: 'run_shell_command'") &&
+      text.includes('not available')) ||
+    (text.includes("Unauthorized tool call: 'write_file'") &&
+      text.includes('not available'))
   )
 }
 
