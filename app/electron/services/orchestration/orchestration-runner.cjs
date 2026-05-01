@@ -9,6 +9,7 @@ class OrchestrationRunner {
     this.spawnAgent = options.spawnAgent ?? noopSpawnAgent
     this.invokeOrchestrator =
       options.invokeOrchestrator ?? noopInvokeOrchestrator
+    this.validateSpawnAgent = options.validateSpawnAgent ?? noopValidateSpawnAgent
     this.sendChatEvent = options.sendChatEvent ?? (() => {})
     this.emitTerminalEvent = options.emitTerminalEvent ?? (() => {})
     this.createThreadId =
@@ -44,6 +45,19 @@ class OrchestrationRunner {
 
     try {
       this.assertRunNotTimedOut(run)
+      const spawnValidation = this.validateSpawnAgent({
+        run,
+        event,
+        context: this.getRunContext(run.runId),
+      })
+
+      if (spawnValidation?.ok === false) {
+        throw new OrchestrationLimitError(
+          spawnValidation.message ?? 'Modelo indisponivel para spawn.',
+          spawnValidation.code ?? 'SPAWN_MODEL_UNAVAILABLE',
+        )
+      }
+
       run = this.store.createAgentJob(run.runId, {
         agentId: event.agentId,
         cliType: event.cliType,
@@ -548,6 +562,10 @@ async function noopSpawnAgent() {
 }
 
 async function noopInvokeOrchestrator() {
+  return { ok: true }
+}
+
+function noopValidateSpawnAgent() {
   return { ok: true }
 }
 

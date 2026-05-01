@@ -1,21 +1,26 @@
-import { MonitorCog, User, X } from 'lucide-react'
+import { MonitorCog, Palette, User, X } from 'lucide-react'
+import type { AppTheme } from '../types'
 
 type FelixoSettingsModalProps = {
   isOpen: boolean
   runtimeLabel: string
+  theme: AppTheme
   projectsCount: number
   activeProjectsCount: number
   automationsCount: number
   onClose: () => void
+  onThemeChange: (theme: AppTheme) => void
 }
 
 export function FelixoSettingsModal({
   isOpen,
   runtimeLabel,
+  theme,
   projectsCount,
   activeProjectsCount,
   automationsCount,
   onClose,
+  onThemeChange,
 }: FelixoSettingsModalProps) {
   if (!isOpen) {
     return null
@@ -71,6 +76,24 @@ export function FelixoSettingsModal({
               <Metric label="Ativos" value={`${activeProjectsCount}`} />
               <Metric label="Automações" value={`${automationsCount}`} />
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
+              <Palette size={14} aria-hidden="true" />
+              Aparência
+            </div>
+            <label className="block text-xs text-zinc-400">
+              Tema
+              <select
+                value={theme}
+                onChange={(event) => onThemeChange(event.target.value as AppTheme)}
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
+              >
+                <option value="dark">Escuro</option>
+                <option value="high_contrast">Alto contraste</option>
+              </select>
+            </label>
           </section>
 
           <p className="text-xs leading-relaxed text-zinc-600">

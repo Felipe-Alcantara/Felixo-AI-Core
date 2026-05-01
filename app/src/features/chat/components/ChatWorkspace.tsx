@@ -16,29 +16,48 @@ import {
   loadCustomAutomations,
   saveCustomAutomations,
 } from '../services/automation-storage'
+import { exportChat } from '../services/chat-export'
 import { loadModels, saveModels } from '../services/model-storage'
+import {
+  createNoteFromMessages,
+  loadNotes,
+  saveNotes,
+} from '../services/note-storage'
+import {
+  createModelCapabilityProfiles,
+  createOrchestratorContextBlock,
+  loadOrchestratorSettings,
+  saveOrchestratorSettings,
+} from '../services/orchestrator-settings-storage'
 import {
   loadActiveProjectIds,
   loadProjects,
   saveActiveProjectIds,
   saveProjects,
 } from '../services/project-storage'
+import { loadTheme, saveTheme } from '../services/theme-storage'
 import type {
   AutomationDefinition,
+  AppTheme,
   ChatMessage,
   ChatSession,
   ContextAttachment,
   Model,
   ModelId,
+  OrchestratorSettings,
   OrchestrationRun,
   Project,
+  ProjectNote,
   StreamEvent,
 } from '../types'
 import { useTerminalOutput } from '../hooks/useTerminalOutput'
 import { AutomationsModal } from './AutomationsModal'
+import { ChatExportModal } from './ChatExportModal'
 import { CodePanel } from './CodePanel'
 import { FelixoSettingsModal } from './FelixoSettingsModal'
 import { ModelSettingsModal } from './ModelSettingsModal'
+import { NotesModal } from './NotesModal'
+import { OrchestratorSettingsModal } from './OrchestratorSettingsModal'
 import { ProjectsModal } from './ProjectsModal'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
@@ -70,9 +89,13 @@ export function ChatWorkspace() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [projects, setProjects] = useState<Project[]>(() => loadProjects())
+  const [theme, setTheme] = useState<AppTheme>(() => loadTheme())
   const [activeProjectIds, setActiveProjectIds] = useState<Set<string>>(() =>
     loadActiveProjectIds(loadProjects()),
   )
+  const [notes, setNotes] = useState<ProjectNote[]>(() => loadNotes())
+  const [orchestratorSettings, setOrchestratorSettings] =
+    useState<OrchestratorSettings>(() => loadOrchestratorSettings())
   const [customAutomations, setCustomAutomations] = useState<AutomationDefinition[]>(
     () => loadCustomAutomations(),
   )
@@ -82,7 +105,11 @@ export function ChatWorkspace() {
   const [isProjectsOpen, setIsProjectsOpen] = useState(false)
   const [isAutomationsOpen, setIsAutomationsOpen] = useState(false)
   const [isCodePanelOpen, setIsCodePanelOpen] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
   const [isFelixoSettingsOpen, setIsFelixoSettingsOpen] = useState(false)
+  const [isNotesOpen, setIsNotesOpen] = useState(false)
+  const [isOrchestratorSettingsOpen, setIsOrchestratorSettingsOpen] =
+    useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [activeOrchestrationRunId, setActiveOrchestrationRunId] = useState<string | null>(null)
   const [orchestrationStatusText, setOrchestrationStatusText] = useState<string | null>(null)
@@ -114,6 +141,16 @@ export function ChatWorkspace() {
   const automations = useMemo(
     () => [...defaultAutomations, ...customAutomations],
     [customAutomations],
+  )
+
+  const activeProjects = useMemo(
+    () => projects.filter((project) => activeProjectIds.has(project.id)),
+    [activeProjectIds, projects],
+  )
+
+  const meaningfulMessagesCount = useMemo(
+    () => messages.filter((message) => message.content.trim()).length,
+    [messages],
   )
 
   const runtimeLabel = window.felixo?.versions.electron
@@ -170,6 +207,19 @@ export function ChatWorkspace() {
     saveCustomAutomations(customAutomations)
   }, [customAutomations])
 
+  useEffect(() => {
+    saveNotes(notes)
+  }, [notes])
+
+  useEffect(() => {
+    saveOrchestratorSettings(orchestratorSettings)
+  }, [orchestratorSettings])
+
+  useEffect(() => {
+    saveTheme(theme)
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
   function sendMessage() {
     const content = input.trim()
 
@@ -204,13 +254,23 @@ export function ChatWorkspace() {
 
     const sessionId = createSessionId()
     const threadId = getConversationThreadId(selectedModel)
-    const activeProjects = projects.filter((p) => activeProjectIds.has(p.id))
     const prevIds = lastSentProjectIdsRef.current
     const added = activeProjects.filter((p) => !prevIds.has(p.id))
-    const removed = [...prevIds].filter((id) => !activeProjectIds.has(id)).map((id) => projects.find((p) => p.id === id)).filter(Boolean) as Project[]
+    const removed = [...prevIds]
+      .filter((id) => !activeProjectIds.has(id))
+      .map((id) => projects.find((p) => p.id === id))
+      .filter(Boolean) as Project[]
     const projectDiff = { added, removed }
     lastSentProjectIdsRef.current = new Set(activeProjectIds)
     const orchestrationHint = createOrchestrationPromptHint(content, sessionId)
+    const modelCapabilities = createModelCapabilityProfiles(
+      models,
+      orchestratorSettings,
+    )
+    const orchestrationContextBlock = createOrchestratorContextBlock(
+      modelCapabilities,
+      orchestratorSettings,
+    )
 
     const cliPrompt = createCliPrompt(
       messages,
@@ -220,7 +280,7 @@ export function ChatWorkspace() {
       activeProjects,
       projectDiff,
       contextAttachments,
-      { orchestrationHint },
+      { orchestrationHint, orchestrationContextBlock },
     )
     const resumePrompt = createCliPrompt(
       messages,
@@ -230,7 +290,7 @@ export function ChatWorkspace() {
       activeProjects,
       projectDiff,
       contextAttachments,
-      { includeHistory: false, orchestrationHint },
+      { includeHistory: false, orchestrationHint, orchestrationContextBlock },
     )
 
     setMessages((currentMessages) => [
@@ -251,6 +311,8 @@ export function ChatWorkspace() {
         prompt: cliPrompt,
         resumePrompt,
         model: selectedModel,
+        availableModels: models,
+        orchestratorSettings,
       })
       .then((result) => {
         if (!result.ok) {
@@ -402,6 +464,61 @@ export function ChatWorkspace() {
       return `${currentInput}${separator}${automation.prompt} `
     })
     setIsAutomationsOpen(false)
+  }
+
+  function updateOrchestratorSettings(settings: OrchestratorSettings) {
+    setOrchestratorSettings(settings)
+  }
+
+  function updateTheme(themeValue: AppTheme) {
+    setTheme(themeValue)
+  }
+
+  function saveNote(note: ProjectNote) {
+    setNotes((currentNotes) => {
+      const exists = currentNotes.some((item) => item.id === note.id)
+
+      return exists
+        ? currentNotes.map((item) => (item.id === note.id ? note : item))
+        : [note, ...currentNotes]
+    })
+  }
+
+  function deleteNote(noteId: string) {
+    setNotes((currentNotes) => currentNotes.filter((note) => note.id !== noteId))
+  }
+
+  function useNoteAsContext(note: ProjectNote) {
+    addContextAttachments([
+      {
+        id: `note-${note.id}-${Date.now()}`,
+        name: `Nota: ${note.title}`,
+        type: 'text/markdown',
+        size: new TextEncoder().encode(note.content).length,
+        contentPreview: note.content,
+      },
+    ])
+    setIsNotesOpen(false)
+  }
+
+  function createNoteFromCurrentChat() {
+    if (meaningfulMessagesCount === 0) {
+      return
+    }
+
+    saveNote(createNoteFromMessages(messages, models))
+  }
+
+  function exportCurrentChat(format: 'json' | 'markdown') {
+    exportChat({
+      format,
+      messages,
+      models,
+      activeProjects,
+      attachments: contextAttachments,
+      terminalSessions,
+    })
+    setIsExportOpen(false)
   }
 
   function addModel(model: Model) {
@@ -744,7 +861,10 @@ export function ChatWorkspace() {
   const isStreaming = activeSessionId !== null
 
   return (
-    <div className="flex h-full min-h-0 bg-[#191918] text-zinc-100">
+    <div
+      data-theme={theme}
+      className="felixo-shell flex h-full min-h-0 bg-[var(--color-app-bg)] text-zinc-100"
+    >
       <AppSidebar
         models={models}
         sessions={sessions}
@@ -756,14 +876,17 @@ export function ChatWorkspace() {
         onOpenProjects={() => setIsProjectsOpen(true)}
         onOpenAutomations={() => setIsAutomationsOpen(true)}
         onOpenCode={() => setIsCodePanelOpen(true)}
+        onOpenExport={() => setIsExportOpen(true)}
         onOpenFelixoSettings={() => setIsFelixoSettingsOpen(true)}
+        onOpenNotes={() => setIsNotesOpen(true)}
+        onOpenOrchestratorSettings={() => setIsOrchestratorSettingsOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
         onSelectSession={loadSession}
         onToggleProject={toggleProject}
         onOpenModelSettingsFor={openModelSettingsFor}
       />
 
-      <main className="flex min-w-0 flex-1 flex-col bg-[#171716]">
+      <main className="flex min-w-0 flex-1 flex-col bg-[var(--color-main-bg)]">
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div
             className={[
@@ -791,7 +914,7 @@ export function ChatWorkspace() {
             <>
               <ChatThread models={models} messages={messages} />
               {orchestrationStatusText && (
-                <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.07] bg-[#141413] px-5 py-2 text-[12px] text-zinc-400">
+                <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.07] bg-[var(--color-status-bg)] px-5 py-2 text-[12px] text-zinc-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
                   <span className="min-w-0 truncate">{orchestrationStatusText}</span>
                 </div>
@@ -894,11 +1017,46 @@ export function ChatWorkspace() {
       <FelixoSettingsModal
         isOpen={isFelixoSettingsOpen}
         runtimeLabel={runtimeLabel}
+        theme={theme}
         projectsCount={projects.length}
         activeProjectsCount={activeProjectIds.size}
         automationsCount={automations.length}
         onClose={() => setIsFelixoSettingsOpen(false)}
+        onThemeChange={updateTheme}
       />
+
+      {isOrchestratorSettingsOpen && (
+        <OrchestratorSettingsModal
+          isOpen={isOrchestratorSettingsOpen}
+          models={models}
+          settings={orchestratorSettings}
+          onClose={() => setIsOrchestratorSettingsOpen(false)}
+          onSave={updateOrchestratorSettings}
+        />
+      )}
+
+      {isNotesOpen && (
+        <NotesModal
+          isOpen={isNotesOpen}
+          notes={notes}
+          hasMessages={meaningfulMessagesCount > 0}
+          onClose={() => setIsNotesOpen(false)}
+          onSaveNote={saveNote}
+          onDeleteNote={deleteNote}
+          onUseAsContext={useNoteAsContext}
+          onCreateFromChat={createNoteFromCurrentChat}
+        />
+      )}
+
+      {isExportOpen && (
+        <ChatExportModal
+          isOpen={isExportOpen}
+          messagesCount={meaningfulMessagesCount}
+          onClose={() => setIsExportOpen(false)}
+          onExportJson={() => exportCurrentChat('json')}
+          onExportMarkdown={() => exportCurrentChat('markdown')}
+        />
+      )}
 
       <ModelSettingsModal
         models={models}
@@ -973,6 +1131,7 @@ type OrchestrationPromptHint = {
 type CliPromptOptions = {
   includeHistory?: boolean
   orchestrationHint?: OrchestrationPromptHint | null
+  orchestrationContextBlock?: string | null
 }
 
 function createCliPrompt(
@@ -985,7 +1144,11 @@ function createCliPrompt(
   attachments: ContextAttachment[],
   options: CliPromptOptions = {},
 ) {
-  const { includeHistory = true, orchestrationHint = null } = options
+  const {
+    includeHistory = true,
+    orchestrationHint = null,
+    orchestrationContextBlock = null,
+  } = options
   const allHistoryMessages = messages.filter((message) => message.content.trim())
   const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
   const historyOffset = allHistoryMessages.length - historyMessages.length
@@ -999,7 +1162,10 @@ function createCliPrompt(
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
   const hasAttachments = attachments.length > 0
   const orchestrationInstructions = shouldUseOrchestrationProtocol(currentPrompt)
-    ? createOrchestrationProtocolInstructions(orchestrationHint)
+    ? createOrchestrationProtocolInstructions(
+        orchestrationHint,
+        orchestrationContextBlock,
+      )
     : null
   const hasContext =
     Boolean(orchestrationInstructions) ||
@@ -1166,6 +1332,7 @@ function createOrchestrationPromptHint(
 
 function createOrchestrationProtocolInstructions(
   hint: OrchestrationPromptHint | null = null,
+  orchestrationContextBlock: string | null = null,
 ) {
   const lines = [
     'Protocolo de orquestracao multi-agente:',
@@ -1178,6 +1345,10 @@ function createOrchestrationProtocolInstructions(
     '- Se precisar de mais de um evento no mesmo turno, responda como JSONL, um objeto por linha, por exemplo `spawn_agent` seguido de `awaiting_agents`.',
     '- Depois que o Felixo retornar resultados dos sub-agentes, responda somente com `{"type":"final_answer","content":"resposta final para o usuario"}`.',
   ]
+
+  if (orchestrationContextBlock) {
+    lines.push('', orchestrationContextBlock)
+  }
 
   if (hint?.openEndedTopic) {
     lines.push(

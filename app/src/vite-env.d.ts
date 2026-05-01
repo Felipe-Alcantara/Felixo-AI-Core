@@ -3,6 +3,7 @@
 import type {
   GitProjectSummary,
   Model,
+  OrchestratorSettings,
   OrchestrationRun,
   OrchestrationStreamEvent,
   QaLogEntry,
@@ -41,6 +42,8 @@ declare global {
           resumePrompt?: string
           model: Model
           cwd?: string
+          availableModels?: Model[]
+          orchestratorSettings?: OrchestratorSettings
         }) => Promise<CliInvokeResult>
         stop: (params: {
           sessionId: string
