@@ -53,10 +53,12 @@ export function TerminalPanel({
     () =>
       sessions
         .flatMap((session) =>
-          session.chunks.map((chunk) => ({
-            chunk,
-            sessionId: session.sessionId,
-          })),
+          session.chunks
+            .filter((chunk) => chunk.kind !== 'tool')
+            .map((chunk) => ({
+              chunk,
+              sessionId: session.sessionId,
+            })),
         )
         .sort(
           (a, b) =>
@@ -64,6 +66,11 @@ export function TerminalPanel({
             new Date(b.chunk.createdAt).getTime(),
         ),
     [sessions],
+  )
+
+  const threadToolEntries = useMemo(
+    () => selectedSession?.chunks.filter((chunk) => chunk.kind === 'tool') ?? [],
+    [selectedSession],
   )
 
   const onMouseMove = useCallback((event: MouseEvent) => {
@@ -228,68 +235,68 @@ export function TerminalPanel({
         </button>
       </div>
 
-      <div className="max-h-40 shrink-0 overflow-y-auto border-b border-white/[0.07] p-2">
-        {sessions.length === 0 ? (
-          <p className="px-2 py-3 text-[12px] text-zinc-600">
-            Aguardando execução.
-          </p>
-        ) : (
-          <div className="space-y-1">
-            {sessions.map((session) => (
-              <button
-                key={session.sessionId}
-                type="button"
-                onClick={() => selectSession(session.sessionId)}
-                className={[
-                  'flex min-h-10 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition',
-                  effectiveSelectedSessionId === session.sessionId
-                    ? 'bg-white/[0.07] text-zinc-100'
-                    : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
-                ].join(' ')}
-              >
-                <span
+      {viewMode === 'threads' && (
+        <div className="max-h-40 shrink-0 overflow-y-auto border-b border-white/[0.07] p-2">
+          {sessions.length === 0 ? (
+            <p className="px-2 py-3 text-[12px] text-zinc-600">
+              Aguardando execução.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {sessions.map((session) => (
+                <button
+                  key={session.sessionId}
+                  type="button"
+                  onClick={() => selectSession(session.sessionId)}
                   className={[
-                    'h-2 w-2 shrink-0 rounded-full',
-                    getStatusDotClassName(session.status),
+                    'flex min-h-10 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition',
+                    effectiveSelectedSessionId === session.sessionId
+                      ? 'bg-white/[0.07] text-zinc-100'
+                      : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
                   ].join(' ')}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-mono text-[11px]">
-                    {session.sessionId.slice(0, 8)}
+                >
+                  <span
+                    className={[
+                      'h-2 w-2 shrink-0 rounded-full',
+                      getStatusDotClassName(session.status),
+                    ].join(' ')}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-mono text-[11px]">
+                      {session.sessionId.slice(0, 8)}
+                    </span>
+                    <span className="block truncate text-[10px] text-zinc-600">
+                      {formatStatus(session.status)} · {session.chunks.length} eventos ·{' '}
+                      {formatBytes(session.outputSize)}
+                    </span>
                   </span>
-                  <span className="block truncate text-[10px] text-zinc-600">
-                    {formatStatus(session.status)} · {session.chunks.length} eventos ·{' '}
-                    {formatBytes(session.outputSize)}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
-          <span className="font-mono text-[10px] text-zinc-500">
-            {selectedSession
-              ? `${selectedSession.sessionId.slice(0, 8)} · ${formatTime(
-                  selectedSession.updatedAt,
-                )}`
-              : viewMode === 'orchestrator'
-                ? 'orquestrador'
-                : 'sem sessão'}
-          </span>
-          {selectedSession && (
-            <span
-              className={[
-                'rounded-full border px-2 py-0.5 text-[10px]',
-                getStatusBadgeClassName(selectedSession.status),
-              ].join(' ')}
-            >
-              {formatStatus(selectedSession.status)}
-            </span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        {viewMode === 'threads' && (
+          <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
+            <span className="font-mono text-[10px] text-zinc-500">
+              {selectedSession
+                ? `${selectedSession.sessionId.slice(0, 8)} · ${formatTime(selectedSession.updatedAt)}`
+                : 'sem sessão'}
+            </span>
+            {selectedSession && (
+              <span
+                className={[
+                  'rounded-full border px-2 py-0.5 text-[10px]',
+                  getStatusBadgeClassName(selectedSession.status),
+                ].join(' ')}
+              >
+                {formatStatus(selectedSession.status)}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="relative min-h-0 flex-1">
           <div
@@ -315,11 +322,13 @@ export function TerminalPanel({
                   ))}
                 </div>
               )
-            ) : !selectedSession || selectedSession.chunks.length === 0 ? (
-              <p className="text-zinc-600">Aguardando eventos da CLI.</p>
+            ) : threadToolEntries.length === 0 ? (
+              <p className="text-zinc-600">
+                {selectedSession ? 'Nenhuma ação registrada nesta thread.' : 'Aguardando execução.'}
+              </p>
             ) : (
               <div className="space-y-2">
-                {selectedSession.chunks.map((chunk) => (
+                {threadToolEntries.map((chunk) => (
                   <TerminalChunk key={chunk.id} chunk={chunk} />
                 ))}
               </div>
