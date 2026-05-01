@@ -286,11 +286,11 @@ export function TerminalPanel({
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate font-mono text-[11px]">
-                        {session.sessionId.slice(0, 8)}
-                      </span>
                       <span className={getSessionRoleClassName(session)}>
                         {formatSessionRole(session)}
+                      </span>
+                      <span className="truncate font-mono text-[11px]" title={session.sessionId}>
+                        {extractSessionLabel(session)}
                       </span>
                     </span>
                     <span className="block truncate text-[10px] text-zinc-600">
@@ -310,7 +310,7 @@ export function TerminalPanel({
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
             <span className="font-mono text-[10px] text-zinc-500">
               {selectedSession
-                ? `${selectedSession.sessionId.slice(0, 8)} · ${formatTime(selectedSession.updatedAt)}`
+                ? `${extractSessionLabel(selectedSession)} · ${formatTime(selectedSession.updatedAt)}`
                 : 'sem sessão'}
             </span>
             {selectedSession && (
@@ -551,6 +551,33 @@ function formatSessionRole(session: TerminalOutputSession) {
   }
 
   return 'Sub'
+}
+
+function extractSessionLabel(session: TerminalOutputSession) {
+  const startChunk = session.chunks.find(
+    (chunk) => chunk.kind === 'lifecycle' && chunk.metadata,
+  )
+  const metadata = startChunk?.metadata
+
+  const modelName = metadata?.modelName
+    ? String(metadata.modelName)
+    : metadata?.cliType
+      ? String(metadata.cliType)
+      : null
+
+  const promptHint = metadata?.promptHint
+    ? String(metadata.promptHint)
+    : null
+
+  if (modelName && promptHint) {
+    return `${modelName} · ${promptHint}`
+  }
+
+  if (modelName) {
+    return modelName
+  }
+
+  return session.sessionId.slice(0, 8)
 }
 
 function getSessionRoleClassName(session: TerminalOutputSession) {
