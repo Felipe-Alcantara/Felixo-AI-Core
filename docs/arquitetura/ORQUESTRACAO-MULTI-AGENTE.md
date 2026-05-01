@@ -202,4 +202,31 @@ Sem esses limites, um orquestrador poderia criar agentes infinitamente.
 5. terminal-event-formatter.cjs (eventos visuais)
    |
 6. Frontend (types, useTerminalOutput, TerminalPanel, ChatWorkspace)
+   |
+7. Robustez (error handling, cleanup, observabilidade)
 ```
+
+## Tratamento de Erros e Cleanup
+
+### Thread Reset
+
+Quando o usuario reseta a conversa, o app coleta a familia completa de threads
+(pai + filhos recursivos) e:
+
+1. Mata processos CLI de todas as threads da familia
+2. Falha runs de orquestracao ativos associados
+3. Limpa mapas de contexto e jobs do runner
+4. Envia evento de reset ao terminal
+
+### Error Routing
+
+Eventos de erro do CLI (crash, stderr fatal, exit code != 0) passam pela
+ponte de orquestracao antes de chegar ao frontend. Se o erro pertence a um
+sub-agente de orquestracao, o runner trata como falha do job em vez de
+propagar diretamente.
+
+### Adapters
+
+- Claude: filtra eventos `system` nao-init, trata rate limits e `is_error`
+- Codex: sessoes efemeras, sem resume nativo
+- Gemini: detecta ferramentas indisponiveis e retry de capacidade

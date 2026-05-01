@@ -54,6 +54,9 @@ Detalhamento: [ORQUESTRADOR-HIBRIDO-MCP.md](./ORQUESTRADOR-HIBRIDO-MCP.md).
 | UI Desktop | `app/src/features/chat/` |
 | Bridge | `app/electron/preload.cjs` |
 | Orchestrator Core | `app/electron/services/orchestrator/cli-execution-planner.cjs` |
+| Orchestration Runner | `app/electron/services/orchestration/orchestration-runner.cjs` |
+| Orchestration Store | `app/electron/services/orchestration/orchestration-store.cjs` |
+| Orchestration Bridge | `app/electron/services/orchestration/orchestration-ipc-bridge.cjs` |
 | Terminal Adapters | `app/electron/services/adapters/*.cjs` |
 | Provider registry | `app/electron/services/providers/terminal-adapter-registry.cjs` |
 | MCP Layer inicial | `app/electron/services/mcp/felixo-tool-catalog.cjs` |
@@ -92,6 +95,10 @@ JsonlLineReader → split por \n
         ↓
 adapter.parseLine(line) → StreamEvent normalizado
         ↓
+dispatchCliEvent() → orchestration bridge intercepta spawn_agent/final_answer
+        ↓  [se evento de orquestracao]
+orchestration-runner.cjs → spawna sub-agentes ou completa run
+        ↓  [se evento normal]
 terminal-event-formatter.cjs → TerminalOutputEvent humanizado
         ↓
 ipcRenderer.send('cli:stream', event)
@@ -156,6 +163,19 @@ O app usa duas identidades diferentes:
 - `sessionId`: gerado a cada mensagem enviada. Correlaciona o streaming com a mensagem assistente correta no chat.
 
 Essa separação permite manter um terminal contínuo sem misturar chunks de resposta entre mensagens diferentes.
+
+## Orquestracao Multi-Agente
+
+Quando o usuario pede para usar outro agente, o prompt e enriquecido com o
+protocolo de orquestracao. O orquestrador (qualquer CLI) responde com eventos
+estruturados (`spawn_agent`, `awaiting_agents`, `final_answer`) em vez de
+executar sub-CLIs internamente.
+
+O app intercepta esses eventos via `orchestration-ipc-bridge` e delega ao
+`OrchestrationRunner`, que spawna sub-agentes como sessoes Felixo nativas,
+coleta resultados e re-invoca o orquestrador ate obter `final_answer`.
+
+Detalhamento: [ORQUESTRACAO-MULTI-AGENTE.md](./ORQUESTRACAO-MULTI-AGENTE.md).
 
 ## Processos concorrentes
 

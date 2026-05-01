@@ -171,3 +171,69 @@ Validacao:
 - `npm test`
 - `npm run build`
 - `npm run lint`
+
+## Fase 7 - Robustez: tratamento de erros, cleanup e observabilidade
+
+Status: concluida.
+
+Mudancas implementadas:
+
+### Adapters
+
+- **Claude adapter**: filtra eventos `system` com `subtype !== 'init'` para
+  evitar captura incorreta de session ID. Trata payloads `assistant` com erro
+  (rate limit) e resultados com `is_error: true`, surfaceando mensagem
+  user-friendly.
+- **Codex adapter**: sessoes agora sao sempre efemeras (`--ephemeral`) e
+  `canResume()` retorna `false`, alinhado ao modelo stateless de re-invocacao.
+- **Gemini adapter**: detecta erros de ferramenta indisponivel
+  (`run_shell_command`/`write_file` nao encontrados) como fatal stderr.
+  Reconhece mensagens de retry de capacidade esgotada.
+
+### Orchestration runner
+
+- `resetThread(threadId)` falha runs ativos e limpa mapas de contexto e jobs
+  quando o usuario reseta a conversa.
+- `forgetRunContext(runId)` remove entradas de `runContexts` e
+  `threadAgentJobs` apos conclusao ou falha, evitando estado orfao.
+- `final_answer` agora preserva o `sessionId` original da resposta pai e
+  inclui `parentThreadId` no evento de chat.
+- O prompt de re-invocacao inclui instrucoes detalhadas para formatar a
+  resposta final (formato estruturado, sem Markdown, com detalhes concretos).
+- Eventos `orchestration_agent_result` agora incluem `result` e `error`.
+
+### IPC handlers
+
+- Eventos de erro do CLI (`done`, `error`, crash) passam por
+  `dispatchCliEvent()`/`dispatchPersistentCliEvent()` que delegam ao bridge
+  de orquestracao antes de enviar ao frontend.
+- `cli:reset-thread` coleta a familia completa da thread (pai + filhos
+  recursivos) via `collectThreadFamily()` e reseta todas as sessoes e runs
+  associados.
+- Mensagem de reset diferencia thread individual de thread com filhas.
+
+### Terminal formatter
+
+- Eventos de orquestracao (`spawn_agent`, `awaiting_agents`, `final_answer`)
+  geram entradas descritivas no terminal mostrando decisoes do orquestrador.
+- Resultado de sub-agente exibe preview do resultado visivel ou erro.
+- Prompt enviado ao CLI e exibido para mensagens curtas e omitido para
+  contexto interno de orquestracao.
+- Label de cache renomeado para "Cache do provedor".
+
+### Frontend
+
+- `ChatWorkspace.tsx` gera hints de orquestracao para pedidos abertos
+  ("pergunte qualquer coisa"), escolhendo topico nao-tecnico via hash
+  deterministica.
+- Reset de conversa coleta todos os thread IDs conhecidos (conversa, stream,
+  sessoes de terminal) para limpeza completa do backend.
+- `TerminalPanel.tsx` merge sessoes `orchestrator-turn-*` na sessao pai para
+  uma visualizacao mais limpa. Exibe todos os tipos de evento (nao so tools).
+  Labels de papel ajustados para `Orq`/`Sub`.
+- `StreamEvent` inclui `parentThreadId` para rastreamento de orquestracao.
+
+Validacao:
+
+- `npm test` — 169 testes passando
+- Teste real via UI com Codex como orquestrador, Gemini e Claude como sub-agentes
