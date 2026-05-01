@@ -20,14 +20,14 @@ Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUE
 
 ## Fase 3 — Backend: OrchestrationRunner (loop principal)
 
-- [ ] 3.1 Criar `orchestration-runner.cjs` com funcao `handleOrchestrationEvent()`
-- [ ] 3.2 Implementar interceptacao de `spawn_agent` → criar agentJob + spawnar sub-agente
-- [ ] 3.3 Implementar interceptacao de `awaiting_agents` → marcar run como waiting
-- [ ] 3.4 Implementar interceptacao de `final_answer` → marcar run como completed, enviar resposta ao chat
-- [ ] 3.5 Implementar `onAgentJobCompleted()` → verificar se todos os jobs completaram
-- [ ] 3.6 Implementar re-invocacao do orquestrador com resultados injetados no prompt
-- [ ] 3.7 Implementar tratamento de erros (job falhou, timeout, limites atingidos)
-- [ ] 3.8 Testes unitarios para orchestration-runner
+- [x] 3.1 Criar `orchestration-runner.cjs` com funcao `handleOrchestrationEvent()`
+- [x] 3.2 Implementar interceptacao de `spawn_agent` → criar agentJob + spawnar sub-agente
+- [x] 3.3 Implementar interceptacao de `awaiting_agents` → marcar run como waiting
+- [x] 3.4 Implementar interceptacao de `final_answer` → marcar run como completed, enviar resposta ao chat
+- [x] 3.5 Implementar `onAgentJobCompleted()` → verificar se todos os jobs completaram
+- [x] 3.6 Implementar re-invocacao do orquestrador com resultados injetados no prompt
+- [x] 3.7 Implementar tratamento de erros (job falhou, timeout, limites atingidos)
+- [x] 3.8 Testes unitarios para orchestration-runner
 
 ## Fase 4 — Integracao com ipc-handlers
 

@@ -45,3 +45,29 @@ Mudancas implementadas:
 Validacao:
 
 - `node --test electron/services/orchestration/orchestration-store.test.cjs`
+
+## Fase 3 - Backend: OrchestrationRunner
+
+Status: concluida.
+
+Mudancas implementadas:
+
+- Criado `app/electron/services/orchestration/orchestration-runner.cjs`.
+- `handleOrchestrationEvent()` intercepta `spawn_agent`, `awaiting_agents` e
+  `final_answer`.
+- `spawn_agent` cria um `agentJob`, emite evento operacional e chama a
+  callback injetada `spawnAgent` para iniciar o sub-agente.
+- `awaiting_agents` marca o run como `waiting_agents` e pode re-invocar o
+  orquestrador imediatamente caso todos os jobs do turno ja estejam terminais.
+- `final_answer` completa o run e encaminha o evento final ao chat.
+- `onAgentJobCompleted()` atualiza jobs concluidos ou com erro, verifica se o
+  turno terminou e re-invoca o orquestrador com os resultados injetados no
+  prompt.
+- O runner trata falhas de spawn, erro de job, limite de turnos/agentes e
+  timeout de runtime, marcando o run como `failed` e emitindo erro para o chat.
+- As dependencias `spawnAgent`, `invokeOrchestrator`, `sendChatEvent` e
+  `emitTerminalEvent` sao injetadas para manter o runner testavel sem Electron.
+
+Validacao:
+
+- `node --test electron/services/orchestration/orchestration-runner.test.cjs electron/services/orchestration/orchestration-store.test.cjs`
