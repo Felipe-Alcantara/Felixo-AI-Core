@@ -16,7 +16,10 @@ import {
   loadCustomAutomations,
   saveCustomAutomations,
 } from '../services/automation-storage'
-import { exportChat } from '../services/chat-export'
+import {
+  createSuggestedExportFileName,
+  exportChat,
+} from '../services/chat-export'
 import { loadModels, saveModels } from '../services/model-storage'
 import {
   createNoteFromMessages,
@@ -150,6 +153,10 @@ export function ChatWorkspace() {
 
   const meaningfulMessagesCount = useMemo(
     () => messages.filter((message) => message.content.trim()).length,
+    [messages],
+  )
+  const suggestedExportFileName = useMemo(
+    () => createSuggestedExportFileName(messages, 'markdown'),
     [messages],
   )
 
@@ -510,15 +517,26 @@ export function ChatWorkspace() {
     saveNote(createNoteFromMessages(messages, models))
   }
 
-  function exportCurrentChat(format: 'json' | 'markdown') {
-    exportChat({
+  async function exportCurrentChat(
+    format: 'json' | 'markdown',
+    fileName: string,
+  ) {
+    const result = await exportChat({
       format,
+      fileName,
       messages,
       models,
       activeProjects,
       attachments: contextAttachments,
       terminalSessions,
     })
+    if (!result.ok && !result.canceled) {
+      window.alert(result.message ?? 'Nao foi possivel exportar o chat.')
+      return
+    }
+    if (result.canceled) {
+      return
+    }
     setIsExportOpen(false)
   }
 
@@ -1053,9 +1071,9 @@ export function ChatWorkspace() {
         <ChatExportModal
           isOpen={isExportOpen}
           messagesCount={meaningfulMessagesCount}
+          suggestedFileName={suggestedExportFileName}
           onClose={() => setIsExportOpen(false)}
-          onExportJson={() => exportCurrentChat('json')}
-          onExportMarkdown={() => exportCurrentChat('markdown')}
+          onExport={exportCurrentChat}
         />
       )}
 

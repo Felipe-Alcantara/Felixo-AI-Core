@@ -16,15 +16,17 @@ O usuário precisa levar uma conversa para fora do app quando quiser continuar e
   - mensagens;
   - modelo associado a respostas;
   - projetos ativos;
-  - anexos de contexto registrados na sessão.
-- Download local pelo navegador/Electron.
+  - anexos de contexto registrados na sessão;
+  - resumo das threads de terminal, sem saída bruta de subagentes.
+- Nome manual do arquivo antes de exportar.
+- Escolha manual de destino com diálogo nativo do Electron quando disponível.
+- Fallback para download local pelo navegador quando o diálogo nativo não estiver disponível.
 
 ## Fora do escopo inicial
 
 - Reimportação de conversas.
 - Exportação completa de terminal bruto.
 - Exportação completa de subagentes e runs do orquestrador.
-- Escolha de pasta por diálogo nativo.
 - Criptografia ou redaction automática.
 
 ## Formatos
@@ -58,3 +60,5 @@ Formato indicado para leitura humana e para continuar a conversa em outra IA.
 - `app/src/features/chat/components/ChatExportModal.tsx`
 - `app/src/features/chat/components/AppSidebar.tsx`
 - `app/src/features/chat/components/ChatWorkspace.tsx`
+- `app/electron/services/file-export-ipc-handlers.cjs`
+- `app/electron/preload.cjs`

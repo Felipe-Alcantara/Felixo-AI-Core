@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('felixo', {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),
     detectRepos: (folderPath) => ipcRenderer.invoke('projects:detect-repos', folderPath),
   },
+  files: {
+    saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
+  },
   git: {
     getSummary: (params) => ipcRenderer.invoke('git:get-summary', params),
   },

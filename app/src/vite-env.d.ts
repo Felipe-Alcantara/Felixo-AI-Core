@@ -65,6 +65,13 @@ declare global {
         pickFolder: () => Promise<string | null>
         detectRepos: (folderPath: string) => Promise<DetectedRepo[]>
       }
+      files?: {
+        saveTextFile: (params: {
+          defaultPath: string
+          content: string
+          filters?: Array<{ name: string; extensions: string[] }>
+        }) => Promise<CliInvokeResult & { canceled?: boolean; filePath?: string }>
+      }
       git?: {
         getSummary: (params: {
           projectPath: string
