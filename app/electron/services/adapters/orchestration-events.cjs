@@ -27,18 +27,75 @@ function parseOrchestrationEvent(payload) {
 }
 
 function parseOrchestrationEventFromText(text) {
+  const events = parseOrchestrationEventsFromText(text)
+
+  if (events.length === 1) {
+    return events[0]
+  }
+
+  if (events.length > 1) {
+    return {
+      type: 'orchestration_events',
+      events,
+    }
+  }
+
+  return null
+}
+
+function parseOrchestrationEventsFromText(text) {
   if (typeof text !== 'string') {
-    return null
+    return []
   }
 
   const payloadText = unwrapJsonText(text)
 
-  if (!payloadText.startsWith('{')) {
-    return null
+  if (!payloadText.startsWith('{') && !payloadText.startsWith('[')) {
+    return []
   }
 
+  const parsedAsSingleJson = parseJson(payloadText)
+
+  if (Array.isArray(parsedAsSingleJson)) {
+    return parsedAsSingleJson.map(parseOrchestrationEvent).filter(Boolean)
+  }
+
+  if (parsedAsSingleJson?.events && Array.isArray(parsedAsSingleJson.events)) {
+    return parsedAsSingleJson.events.map(parseOrchestrationEvent).filter(Boolean)
+  }
+
+  const event = parseOrchestrationEvent(parsedAsSingleJson)
+
+  if (event) {
+    return [event]
+  }
+
+  return parseJsonLines(payloadText)
+}
+
+function parseJsonLines(text) {
+  const events = []
+
+  for (const line of text.split(/\r?\n/)) {
+    const trimmedLine = line.trim()
+
+    if (!trimmedLine.startsWith('{')) {
+      continue
+    }
+
+    const event = parseOrchestrationEvent(parseJson(trimmedLine))
+
+    if (event) {
+      events.push(event)
+    }
+  }
+
+  return events
+}
+
+function parseJson(text) {
   try {
-    return parseOrchestrationEvent(JSON.parse(payloadText))
+    return JSON.parse(text)
   } catch {
     return null
   }
@@ -104,4 +161,5 @@ function unwrapJsonText(text) {
 module.exports = {
   parseOrchestrationEvent,
   parseOrchestrationEventFromText,
+  parseOrchestrationEventsFromText,
 }

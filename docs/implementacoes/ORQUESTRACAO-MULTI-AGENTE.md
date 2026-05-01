@@ -154,6 +154,20 @@ eventos de orquestracao quando o conteudo textual do assistente for um objeto
 JSON ou um bloco fenced `json` com `spawn_agent`, `awaiting_agents` ou
 `final_answer`.
 
+Depois do primeiro teste real via UI, o Codex chamou `gemini` por
+`command_execution`, o que deixou a execucao invisivel como sub-agente nativo
+do Felixo. Para corrigir isso, o prompt enviado ao orquestrador agora injeta
+instrucoes de protocolo quando a mensagem do usuario menciona outro
+agente/CLI/modelo ou pede explicitamente spawn. Nesses casos, o orquestrador e
+orientado a emitir `spawn_agent` em vez de executar o CLI por shell.
+
+Tambem foi adicionado suporte a eventos textuais em lote no formato JSONL, para
+que uma resposta possa conter `spawn_agent` seguido de `awaiting_agents`.
+
 Validacao:
 
 - `node --test electron/services/adapters/codex-adapter.test.cjs electron/services/adapters/claude-adapter.test.cjs electron/services/adapters/gemini-adapter.test.cjs`
+- `node --test electron/services/adapters/codex-adapter.test.cjs electron/services/orchestration/orchestration-ipc-bridge.test.cjs`
+- `npm test`
+- `npm run build`
+- `npm run lint`

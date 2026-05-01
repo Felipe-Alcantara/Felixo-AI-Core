@@ -125,7 +125,38 @@ test('orchestration IPC bridge classifies orchestration event types', () => {
   assert.equal(isOrchestrationCliEvent({ type: 'spawn_agent' }), true)
   assert.equal(isOrchestrationCliEvent({ type: 'awaiting_agents' }), true)
   assert.equal(isOrchestrationCliEvent({ type: 'final_answer' }), true)
+  assert.equal(isOrchestrationCliEvent({ type: 'orchestration_events' }), true)
   assert.equal(isOrchestrationCliEvent({ type: 'text' }), false)
+})
+
+test('orchestration IPC bridge delegates batched orchestration events', async () => {
+  const runner = createRunner()
+  const bridge = createOrchestrationIpcBridge({ runner })
+
+  const result = bridge.handleCliEvent({
+    cliEvent: {
+      type: 'orchestration_events',
+      events: [
+        {
+          type: 'spawn_agent',
+          agentId: 'reviewer-1',
+          cliType: 'claude',
+          prompt: 'Revise.',
+        },
+        {
+          type: 'awaiting_agents',
+          agentIds: ['reviewer-1'],
+        },
+      ],
+    },
+    streamSessionId: 'session-orchestrator-1',
+    threadId: 'thread-orchestrator-1',
+    context: createContext(),
+  })
+
+  assert.equal(result.handled, true)
+  await result.promise
+  assert.equal(runner.getRun('run-1').status, 'waiting_agents')
 })
 
 test('orchestration IPC bridge appends and consumes output buffers', () => {

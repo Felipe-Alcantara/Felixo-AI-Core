@@ -950,7 +950,11 @@ function createCliPrompt(
   const hasHistory = includeHistory && historyMessages.length > 0
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
   const hasAttachments = attachments.length > 0
+  const orchestrationInstructions = shouldUseOrchestrationProtocol(currentPrompt)
+    ? createOrchestrationProtocolInstructions()
+    : null
   const hasContext =
+    Boolean(orchestrationInstructions) ||
     hasCountContext ||
     hasHistory ||
     activeProjects.length > 0 ||
@@ -964,13 +968,20 @@ function createCliPrompt(
   const lines = [
     'Use o contexto abaixo para responder à mensagem atual do usuário.',
     `Modelo que responderá agora: ${formatModelLabel(selectedModel)}`,
+  ]
+
+  if (orchestrationInstructions) {
+    lines.push('', orchestrationInstructions)
+  }
+
+  lines.push(
     '',
     'Contagem da conversa:',
     `  - Mensagens do usuário antes da mensagem atual: ${previousUserMessageCount}`,
     `  - Mensagens do usuário incluindo a mensagem atual: ${currentUserMessageNumber}`,
     `  - A mensagem atual é a mensagem do usuário número ${currentUserMessageNumber}.`,
     '  - Se o usuário perguntar quantas mensagens ele mandou, use o total incluindo a mensagem atual, salvo se ele pedir explicitamente outra regra.',
-  ]
+  )
 
   if (activeProjects.length > 0) {
     lines.push('', 'Projetos com contexto ativo:')
@@ -1071,6 +1082,35 @@ function formatModelLabel(model: Model) {
   }
 
   return `${model.name} (${details.join(', ')})`
+}
+
+function shouldUseOrchestrationProtocol(prompt: string) {
+  const normalizedPrompt = prompt
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  const agentReferencePattern =
+    /\b(gemini|claude|codex|sub-?agente|agente|cli|modelo)\b/
+  const explicitSpawnPattern = /\b(spawn|spawne|spawnar|sub-?agente)\b/
+
+  return (
+    agentReferencePattern.test(normalizedPrompt) ||
+    explicitSpawnPattern.test(normalizedPrompt)
+  )
+}
+
+function createOrchestrationProtocolInstructions() {
+  return [
+    'Protocolo de orquestracao multi-agente:',
+    '- Se a mensagem atual pedir para abrir, spawnar, consultar, perguntar, chamar ou usar outro agente/CLI/modelo, nao execute esse CLI por command_execution.',
+    '- Em vez disso, responda somente com JSON para o Felixo criar uma sessao filha nativa.',
+    '- Para criar um sub-agente, use exatamente este formato, sem Markdown e sem texto extra:',
+    '{"type":"spawn_agent","agentId":"gemini-1","cliType":"gemini","prompt":"Pergunta completa para o sub-agente"}',
+    '- `cliType` deve ser um destes valores: "gemini", "claude", "codex", "gemini-acp" ou "codex-app-server".',
+    '- Se precisar de mais de um evento no mesmo turno, responda como JSONL, um objeto por linha, por exemplo `spawn_agent` seguido de `awaiting_agents`.',
+    '- Depois que o Felixo retornar resultados dos sub-agentes, responda somente com `{"type":"final_answer","content":"resposta final para o usuario"}`.',
+  ].join('\n')
 }
 
 function formatBytes(bytes: number) {

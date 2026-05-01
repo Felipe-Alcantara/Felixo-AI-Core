@@ -17,6 +17,19 @@ function createOrchestrationIpcBridge({ runner }) {
       appendOutput(outputBuffers, threadId, cliEvent.text)
     }
 
+    if (cliEvent.type === 'orchestration_events' && context.role !== 'agent') {
+      return {
+        handled: true,
+        promise: handleOrchestrationEvents({
+          runner,
+          events: cliEvent.events,
+          streamSessionId,
+          threadId,
+          context,
+        }),
+      }
+    }
+
     if (isOrchestrationCliEvent(cliEvent) && context.role !== 'agent') {
       return {
         handled: true,
@@ -72,8 +85,44 @@ function isOrchestrationCliEvent(event) {
   return (
     event?.type === 'spawn_agent' ||
     event?.type === 'awaiting_agents' ||
-    event?.type === 'final_answer'
+    event?.type === 'final_answer' ||
+    event?.type === 'orchestration_events'
   )
+}
+
+async function handleOrchestrationEvents({
+  runner,
+  events,
+  streamSessionId,
+  threadId,
+  context,
+}) {
+  if (!Array.isArray(events)) {
+    return { handled: true, ok: true }
+  }
+
+  let lastResult = { handled: true, ok: true }
+
+  for (const event of events) {
+    lastResult = await runner.handleOrchestrationEvent(
+      {
+        ...event,
+        sessionId: streamSessionId,
+        threadId,
+      },
+      {
+        ...context,
+        streamSessionId,
+        threadId,
+      },
+    )
+
+    if (lastResult.ok === false) {
+      return lastResult
+    }
+  }
+
+  return lastResult
 }
 
 function shouldSuppressOrchestratorDone(runner, threadId) {
@@ -108,6 +157,7 @@ module.exports = {
   appendOutput,
   consumeOutput,
   createOrchestrationIpcBridge,
+  handleOrchestrationEvents,
   isOrchestrationCliEvent,
   shouldSuppressOrchestratorDone,
 }

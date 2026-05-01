@@ -82,6 +82,37 @@ test('codex adapter parses orchestration events embedded as assistant JSON text'
   })
 })
 
+test('codex adapter parses batched orchestration events embedded as assistant JSONL text', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'item.completed',
+      item: {
+        type: 'agent_message',
+        text: [
+          '{"type":"spawn_agent","agentId":"gemini-1","cliType":"gemini","prompt":"Pergunte algo."}',
+          '{"type":"awaiting_agents","agentIds":["gemini-1"]}',
+        ].join('\n'),
+      },
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'orchestration_events',
+    events: [
+      {
+        type: 'spawn_agent',
+        agentId: 'gemini-1',
+        cliType: 'gemini',
+        prompt: 'Pergunte algo.',
+      },
+      {
+        type: 'awaiting_agents',
+        agentIds: ['gemini-1'],
+      },
+    ],
+  })
+})
+
 test('codex adapter passes ascii cwd with exec args', () => {
   const spawnArgs = adapter.getSpawnArgs('Oi', { cwd: '/home/felipe' })
 
