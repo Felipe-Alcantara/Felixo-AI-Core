@@ -50,7 +50,8 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
    - se há adapter compatível;
    - se os limites da run ainda permitem o spawn.
 4. O backend escolhe o modelo preferido daquele `cliType`, quando existir, ou o primeiro modelo disponível do tipo.
-5. Se não existir modelo disponível, o run falha com mensagem explícita.
+5. Reinvocações do orquestrador preservam a mesma lista de modelos, configurações e limites da run original.
+6. Se não existir modelo disponível, o run falha com mensagem explícita.
 
 ## Limitações conhecidas
 
@@ -74,6 +75,7 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - Persistência local das configurações.
 - Lista compacta de capacidades enviada ao prompt do orquestrador.
 - `availableModels` e `orchestratorSettings` enviados ao backend no `cli:send`.
+- Contexto de modelos, configurações e limites preservado entre turnos da mesma run.
 - Validação de `spawn_agent` antes de criar o job da run.
 - Escolha do modelo preferido do mesmo `cliType`, quando configurado.
 - Falha explícita quando o modelo está bloqueado ou não existe entre os modelos disponíveis.

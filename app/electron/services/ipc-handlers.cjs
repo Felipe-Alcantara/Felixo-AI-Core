@@ -60,8 +60,11 @@ function registerCliIpcHandlers(getMainWindow) {
           sessionId: threadId,
           threadId,
           prompt,
+          promptHint: run.originalPrompt,
           model: run.orchestratorModel,
           cwd: context.cwd,
+          availableModels: context.availableModels,
+          orchestratorSettings: context.orchestratorSettings,
         },
         context.targetWebContents,
         {
@@ -69,8 +72,12 @@ function registerCliIpcHandlers(getMainWindow) {
           runId: run.runId,
           parentThreadId: run.parentThreadId,
           originalPrompt: run.originalPrompt,
+          promptHint: run.originalPrompt,
           orchestratorCliType: run.orchestratorCliType,
           orchestratorModel: run.orchestratorModel,
+          availableModels: context.availableModels,
+          orchestratorSettings: context.orchestratorSettings,
+          limits: context.limits,
         },
       )
     },
@@ -94,6 +101,7 @@ function registerCliIpcHandlers(getMainWindow) {
     const threadId = getRequiredString(params?.threadId) || streamSessionId
     const prompt = getRequiredString(params?.prompt)
     const resumePrompt = getRequiredString(params?.resumePrompt)
+    const promptHint = getRequiredString(params?.promptHint)
     const model = params?.model
     const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
     const cliType = model?.cliType
@@ -149,6 +157,7 @@ function registerCliIpcHandlers(getMainWindow) {
         orchestrationContext.orchestratorCliType ?? cliType,
       orchestratorModel: orchestrationContext.orchestratorModel ?? model,
       originalPrompt: orchestrationContext.originalPrompt ?? prompt,
+      promptHint: orchestrationContext.promptHint ?? promptHint,
       availableModels,
       orchestratorSettings,
       limits:
@@ -235,7 +244,7 @@ function registerCliIpcHandlers(getMainWindow) {
           isContinuation: spawnContext.isContinuation,
           usesNativeResume,
           providerSessionId: spawnContext.providerSessionId,
-          promptHint: spawnPrompt,
+          promptHint: requestOrchestrationContext.promptHint ?? spawnPrompt,
         }),
       ])
       const childProcess = cliManager.spawn(threadId, command, args, cwd)
@@ -824,7 +833,7 @@ function sendPersistentCliRequest({
         usesPersistentProcess: true,
         reusedProcess: isReusingProcess,
         providerSessionId: context.providerSessionId,
-        promptHint: spawnPrompt,
+        promptHint: orchestrationContext.promptHint ?? spawnPrompt,
       }),
     ])
 
@@ -1520,6 +1529,7 @@ function spawnOrchestrationAgent({
       sessionId: threadId,
       threadId,
       prompt: event.prompt,
+      promptHint: event.prompt,
       model: resolvedModel.model,
       cwd: context.cwd,
     },
@@ -1530,6 +1540,7 @@ function spawnOrchestrationAgent({
       agentId: event.agentId,
       parentThreadId: run.parentThreadId,
       originalPrompt: run.originalPrompt,
+      promptHint: event.prompt,
       orchestratorCliType: run.orchestratorCliType,
       orchestratorModel: run.orchestratorModel,
       availableModels: context.availableModels,

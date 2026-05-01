@@ -310,6 +310,7 @@ export function ChatWorkspace() {
         threadId,
         prompt: cliPrompt,
         resumePrompt,
+        promptHint: content,
         model: selectedModel,
         availableModels: models,
         orchestratorSettings,
@@ -344,7 +345,7 @@ export function ChatWorkspace() {
     resetBackendThreads(backendThreadIds)
     setActiveStreamingSession(null)
     setMessages(initialMessages)
-    clearTerminalSessions()
+    clearTerminalSessions({ ignoreSessionIds: backendThreadIds })
     clearOrchestrationStatus()
     resetConversationThread()
     window.felixo?.qaLogger?.clear?.()
