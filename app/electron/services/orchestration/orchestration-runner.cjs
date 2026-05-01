@@ -143,14 +143,16 @@ class OrchestrationRunner {
     try {
       this.assertRunNotTimedOut(run)
       run = this.store.completeRun(run.runId, event.content)
+      const runContext = this.getRunContext(run.runId)
       this.sendChatEvent({
         type: 'final_answer',
         content: event.content,
-        sessionId: getResponseSessionId(run, context),
-        threadId: run.parentThreadId,
+        sessionId: getResponseSessionId(run, runContext),
+        threadId: context.threadId ?? run.parentThreadId,
+        parentThreadId: run.parentThreadId,
         runId: run.runId,
       })
-      this.runContexts.delete(run.runId)
+      this.forgetRunContext(run.runId)
 
       return { handled: true, ok: true, run }
     } catch (error) {
@@ -190,6 +192,8 @@ class OrchestrationRunner {
         parentThreadId: run.parentThreadId,
         agentId: locatedJob.agentId,
         status: params.error ? 'error' : 'completed',
+        result: params.error ? null : params.result ?? '',
+        error: params.error ?? null,
       })
 
       if (!areCurrentTurnJobsTerminal(run)) {
@@ -262,6 +266,7 @@ class OrchestrationRunner {
       )
       failedRuns.push(failedRun)
       this.sendRunError(failedRun, 'Timeout de orquestracao atingido.')
+      this.forgetRunContext(failedRun.runId)
     }
 
     return failedRuns
@@ -388,6 +393,7 @@ class OrchestrationRunner {
 
     const run = this.store.failRun(runId, message)
     this.sendRunError(run, message, context)
+    this.forgetRunContext(run.runId)
 
     return { handled: true, ok: false, run, message }
   }
@@ -400,6 +406,63 @@ class OrchestrationRunner {
       threadId: run.parentThreadId,
       runId: run.runId,
     })
+  }
+
+  resetThread(threadId) {
+    const runIds = new Set()
+
+    for (const run of this.store.list()) {
+      if (
+        run.parentThreadId === threadId ||
+        run.agentJobs.some((job) => job.threadId === threadId)
+      ) {
+        runIds.add(run.runId)
+      }
+    }
+
+    for (const context of this.runContexts.values()) {
+      if (context?.parentThreadId === threadId || context?.threadId === threadId) {
+        runIds.add(context.runId)
+      }
+    }
+
+    for (const [jobThreadId, agentJob] of this.threadAgentJobs) {
+      if (jobThreadId === threadId) {
+        runIds.add(agentJob.runId)
+      }
+    }
+
+    const failedRunIds = []
+
+    for (const runId of runIds) {
+      const run = this.store.get(runId)
+
+      if (run && run.status !== 'completed' && run.status !== 'failed') {
+        this.store.failRun(runId, 'Thread resetada pelo usuario.')
+        failedRunIds.push(runId)
+      }
+
+      this.forgetRunContext(runId)
+    }
+
+    return {
+      runIds: [...runIds],
+      failedRunIds,
+    }
+  }
+
+  forgetRunContext(runId) {
+    for (const [key, value] of this.runContexts) {
+      if (value?.runId === runId) {
+        this.runContexts.delete(key)
+      }
+    }
+
+    for (const [threadId, agentJob] of this.threadAgentJobs) {
+      if (agentJob?.runId === runId) {
+        this.threadAgentJobs.delete(threadId)
+      }
+    }
   }
 }
 
@@ -426,6 +489,16 @@ function createAgentResultsPrompt(run) {
 
   return [
     'Continue a orquestracao a partir do objetivo original.',
+    '',
+    'Instrucoes para a resposta final:',
+    '- Responda somente com JSON no formato {"type":"final_answer","content":"..."}; sem Markdown fora do JSON.',
+    '- O campo content deve ser descritivo e util para o usuario, nao uma frase curta.',
+    '- Formate o campo content como texto plano estruturado: uma abertura curta, uma linha em branco, um bloco "Resposta do sub-agente:" e um bloco "Por que importa:" com 2 a 4 bullets curtos.',
+    '- Nao entregue o content como um unico paragrafo corrido.',
+    '- Nao use marcadores de enfase Markdown como *italico* ou **negrito**, porque o chat mostra texto plano.',
+    '- Preserve os detalhes concretos trazidos pelos sub-agentes e explique brevemente por que eles importam.',
+    '- Se o sub-agente trouxe uma resposta curta, incorpore a resposta completa e acrescente contexto pratico em vez de apenas resumir.',
+    '- Se algum sub-agente falhou, diga explicitamente que ele nao conseguiu concluir a tarefa e inclua a mensagem de erro relevante. Nao afirme que a tarefa foi feita.',
     '',
     'Objetivo original:',
     run.originalPrompt,
