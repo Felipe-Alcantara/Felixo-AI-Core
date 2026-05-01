@@ -25,3 +25,23 @@ Mudancas implementadas:
 Validacao:
 
 - `npm test -- --test-reporter=spec electron/services/adapters/codex-adapter.test.cjs electron/services/adapters/claude-adapter.test.cjs electron/services/adapters/gemini-adapter.test.cjs`
+
+## Fase 2 - Backend: OrchestrationRun + Store
+
+Status: concluida.
+
+Mudancas implementadas:
+
+- Criado `app/electron/services/orchestration/orchestration-store.cjs`.
+- O store mantem `OrchestrationRun` em memoria com `create`, `get`, `update` e
+  `list`, sempre retornando clones para proteger o estado interno.
+- Jobs de agente agora tem ciclo `pending`, `running`, `completed` e `error`.
+- Foram implementados limites configuraveis de `maxTurns`,
+  `maxAgentsPerTurn`, `maxTotalAgents` e `maxRuntimeMinutes`.
+- O store expoe erros especificos para limites e validacao, preparando a
+  integracao com o runner e IPC.
+- O script `npm test` passou a incluir `electron/services/orchestration/*.test.cjs`.
+
+Validacao:
+
+- `node --test electron/services/orchestration/orchestration-store.test.cjs`
