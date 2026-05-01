@@ -76,6 +76,18 @@ class OrchestrationRunner {
         threadId,
       })
 
+      if (spawnValidation?.modelChoice) {
+        this.emitTerminalEvent({
+          type: 'orchestration_model_choice',
+          runId: run.runId,
+          parentThreadId: run.parentThreadId,
+          agentId: event.agentId,
+          requestedCliType: event.cliType,
+          threadId,
+          ...spawnValidation.modelChoice,
+        })
+      }
+
       const result = await this.spawnAgent({
         run,
         job,

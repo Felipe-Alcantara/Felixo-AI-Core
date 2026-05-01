@@ -109,6 +109,43 @@ test('terminal formatter creates orchestration lifecycle events', () => {
   assert.equal(resultEvent.title, 'Resultado de sub-agente')
   assert.match(resultEvent.chunk, /Resultado visível do sub-agente/)
   assert.match(resultEvent.chunk, /Resposta do sub-agente\./)
+
+  const modelChoiceEvent = createOrchestrationTerminalEvent({
+    type: 'orchestration_model_choice',
+    runId: 'run-1',
+    parentThreadId: 'thread-codex-1',
+    agentId: 'reviewer-1',
+    requestedCliType: 'claude',
+    selectedCliType: 'claude',
+    selectedModelId: 'claude-main',
+    selectedModelName: 'Claude Main',
+    providerModel: 'claude-sonnet',
+    reasoningEffort: 'high',
+    selectionRule: 'preferred-model',
+    reason: 'Modelo preferido pelo usuario para este cliType.',
+    candidateCount: 2,
+    blockedCount: 1,
+    threadId: 'thread-reviewer-1',
+  })
+
+  assert.equal(modelChoiceEvent.title, 'Modelo escolhido')
+  assert.match(modelChoiceEvent.chunk, /Claude Main/)
+  assert.match(modelChoiceEvent.chunk, /Modelo preferido/)
+  assert.deepEqual(modelChoiceEvent.metadata, {
+    runId: 'run-1',
+    parentThreadId: 'thread-codex-1',
+    agentId: 'reviewer-1',
+    requestedCliType: 'claude',
+    selectedCliType: 'claude',
+    selectedModelId: 'claude-main',
+    selectedModelName: 'Claude Main',
+    providerModel: 'claude-sonnet',
+    reasoningEffort: 'high',
+    selectionRule: 'preferred-model',
+    candidateCount: 2,
+    blockedCount: 1,
+    threadId: 'thread-reviewer-1',
+  })
 })
 
 test('terminal formatter converts codex lifecycle JSONL into readable events', () => {
