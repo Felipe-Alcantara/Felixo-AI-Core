@@ -214,3 +214,27 @@ test('gemini adapter treats model capacity exhaustion as fatal stderr', () => {
     'Gemini está sem capacidade no servidor agora (429 / MODEL_CAPACITY_EXHAUSTED). Tente novamente mais tarde ou use outro modelo.',
   )
 })
+
+test('gemini adapter treats retry capacity messages as fatal stderr', () => {
+  const capacityError =
+    'Attempt 1 failed: You have exhausted your capacity on this model. Your quota will reset after 6s.. Retrying after 6413ms...\n'
+
+  assert.equal(adapter.classifyStderr(capacityError), 'error')
+  assert.equal(adapter.shouldAbortOnStderr(capacityError), true)
+})
+
+test('gemini adapter treats unavailable edit tools as fatal stderr', () => {
+  const toolError =
+    'Error executing tool run_shell_command: Tool "run_shell_command" not found. Did you mean one of: "update_topic", "grep_search", "invoke_agent"?\n'
+  const unauthorizedWrite =
+    "[LocalAgentExecutor] Blocked call: Unauthorized tool call: 'write_file' is not available to this agent.\n"
+
+  assert.equal(adapter.classifyStderr(toolError), 'error')
+  assert.equal(adapter.shouldAbortOnStderr(toolError), true)
+  assert.equal(adapter.classifyStderr(unauthorizedWrite), 'error')
+  assert.equal(adapter.shouldAbortOnStderr(unauthorizedWrite), true)
+  assert.equal(
+    adapter.formatStderr(toolError),
+    'Gemini não conseguiu executar a alteração porque a CLI não disponibilizou a ferramenta necessária para editar arquivos ou executar comandos.',
+  )
+})
