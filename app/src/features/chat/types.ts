@@ -22,6 +22,8 @@ export type Model = {
 
 export type ModelFileSelection = Omit<Model, 'id'>
 
+export type OrchestrationCliType = Exclude<CliType, 'unknown'>
+
 export type TerminalOutputKind =
   | 'assistant'
   | 'error'
@@ -47,10 +49,33 @@ type StreamEventBase = {
   threadId?: string
 }
 
+export type SpawnAgentStreamEvent = StreamEventBase & {
+  type: 'spawn_agent'
+  agentId: string
+  cliType: OrchestrationCliType
+  prompt: string
+}
+
+export type AwaitingAgentsStreamEvent = StreamEventBase & {
+  type: 'awaiting_agents'
+  agentIds: string[]
+}
+
+export type FinalAnswerStreamEvent = StreamEventBase & {
+  type: 'final_answer'
+  content: string
+}
+
+export type OrchestrationStreamEvent =
+  | SpawnAgentStreamEvent
+  | AwaitingAgentsStreamEvent
+  | FinalAnswerStreamEvent
+
 export type StreamEvent =
   | (StreamEventBase & { type: 'text'; text: string })
   | (StreamEventBase & { type: 'tool_use'; tool: string; input: string })
   | (StreamEventBase & { type: 'tool_result'; output: string })
+  | OrchestrationStreamEvent
   | {
       type: 'done'
       sessionId: string

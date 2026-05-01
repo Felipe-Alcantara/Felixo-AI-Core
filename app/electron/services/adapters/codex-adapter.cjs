@@ -1,4 +1,7 @@
 const { createCodexExecOptionArgs } = require('./model-options.cjs')
+const {
+  parseOrchestrationEvent,
+} = require('./orchestration-events.cjs')
 
 function getSpawnArgs(prompt, context = {}) {
   const args = ['exec', '--json', '--skip-git-repo-check']
@@ -43,6 +46,15 @@ function canResume(context = {}) {
 function parseLine(line) {
   const payload = JSON.parse(line)
   const providerSessionId = extractProviderSessionId(payload)
+  const orchestrationEvent = parseOrchestrationEvent(payload)
+
+  if (orchestrationEvent) {
+    if (providerSessionId) {
+      orchestrationEvent.providerSessionId = providerSessionId
+    }
+
+    return orchestrationEvent
+  }
 
   if (isSessionMetadata(payload) && providerSessionId) {
     return {

@@ -4,12 +4,12 @@ Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUE
 
 ## Fase 1 — Protocolo e tipos
 
-- [ ] 1.1 Adicionar `spawn_agent`, `awaiting_agents`, `final_answer` ao `StreamEvent` em `types.ts`
-- [ ] 1.2 Adicionar tipos correspondentes em `vite-env.d.ts` (IPC)
-- [ ] 1.3 Atualizar `parseLine()` no `codex-adapter.cjs` para reconhecer os novos eventos
-- [ ] 1.4 Atualizar `parseLine()` no `claude-adapter.cjs` para reconhecer os novos eventos
-- [ ] 1.5 Atualizar `parseLine()` no `gemini-adapter.cjs` para reconhecer os novos eventos
-- [ ] 1.6 Testes unitarios para os novos tipos em cada adapter
+- [x] 1.1 Adicionar `spawn_agent`, `awaiting_agents`, `final_answer` ao `StreamEvent` em `types.ts`
+- [x] 1.2 Adicionar tipos correspondentes em `vite-env.d.ts` (IPC)
+- [x] 1.3 Atualizar `parseLine()` no `codex-adapter.cjs` para reconhecer os novos eventos
+- [x] 1.4 Atualizar `parseLine()` no `claude-adapter.cjs` para reconhecer os novos eventos
+- [x] 1.5 Atualizar `parseLine()` no `gemini-adapter.cjs` para reconhecer os novos eventos
+- [x] 1.6 Testes unitarios para os novos tipos em cada adapter
 
 ## Fase 2 — Backend: OrchestrationRun + Store
 
