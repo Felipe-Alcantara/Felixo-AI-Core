@@ -10,6 +10,7 @@ export type TerminalOutputChunk = TerminalOutputEvent & {
 
 export type TerminalOutputSession = {
   sessionId: string
+  parentThreadId?: string
   chunks: TerminalOutputChunk[]
   status: TerminalSessionStatus
   startedAt: string
@@ -24,7 +25,7 @@ export function useTerminalOutput() {
   const [sessionsById, setSessionsById] = useState<TerminalOutputSessions>({})
   const nextChunkId = useRef(1)
 
-  const startSession = useCallback((sessionId: string) => {
+  const startSession = useCallback((sessionId: string, parentThreadId?: string) => {
     const now = new Date().toISOString()
 
     setSessionsById((currentSessions) => {
@@ -34,6 +35,7 @@ export function useTerminalOutput() {
         ...currentSessions,
         [sessionId]: {
           sessionId,
+          parentThreadId: parentThreadId ?? currentSession?.parentThreadId,
           chunks: currentSession?.chunks ?? [],
           status: 'running',
           startedAt: currentSession?.startedAt ?? now,
@@ -55,6 +57,7 @@ export function useTerminalOutput() {
           ...currentSessions,
           [sessionId]: {
             sessionId,
+            parentThreadId: currentSession?.parentThreadId,
             chunks: currentSession?.chunks ?? [],
             status,
             startedAt: currentSession?.startedAt ?? now,
@@ -76,6 +79,7 @@ export function useTerminalOutput() {
 
     setSessionsById((currentSessions) => {
       const currentSession = currentSessions[event.sessionId]
+      const parentThreadId = event.parentThreadId ?? currentSession?.parentThreadId
       const currentChunks = currentSession?.chunks ?? []
       const lastChunk = currentChunks[currentChunks.length - 1]
       const shouldMerge = shouldMergeTerminalOutput(lastChunk, event)
@@ -112,6 +116,7 @@ export function useTerminalOutput() {
         ...currentSessions,
         [event.sessionId]: {
           sessionId: event.sessionId,
+          parentThreadId,
           chunks,
           status,
           startedAt: currentSession?.startedAt ?? now,

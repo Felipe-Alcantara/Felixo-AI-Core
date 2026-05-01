@@ -5,8 +5,11 @@ const {
 } = require('./orchestrator/cli-execution-planner.cjs')
 const {
   createOrchestrationModel,
-  createOrchestrationTerminalEvent,
+  createOrchestrationStatusResponse,
 } = require('./ipc-handlers.cjs')
+const {
+  createOrchestrationTerminalEvent,
+} = require('./terminal-event-formatter.cjs')
 
 test('ipc handlers use spawn args when native resume is disabled', () => {
   const adapter = {
@@ -94,4 +97,47 @@ test('ipc handlers format orchestration terminal events', () => {
     cliType: 'claude',
     threadId: 'thread-reviewer-1',
   })
+})
+
+test('ipc handlers create orchestration status responses', () => {
+  const run = {
+    runId: 'run-1',
+    status: 'waiting_agents',
+  }
+  const runner = {
+    getRun(runId) {
+      return runId === 'run-1' ? run : null
+    },
+    getRunByThreadId(threadId) {
+      return threadId === 'thread-codex-1' ? run : null
+    },
+    listRuns() {
+      return [run]
+    },
+  }
+
+  assert.deepEqual(createOrchestrationStatusResponse(runner, { runId: 'run-1' }), {
+    ok: true,
+    run,
+  })
+  assert.deepEqual(
+    createOrchestrationStatusResponse(runner, {
+      threadId: 'thread-codex-1',
+    }),
+    {
+      ok: true,
+      run,
+    },
+  )
+  assert.deepEqual(createOrchestrationStatusResponse(runner, {}), {
+    ok: true,
+    runs: [run],
+  })
+  assert.deepEqual(
+    createOrchestrationStatusResponse(runner, { runId: 'missing' }),
+    {
+      ok: false,
+      message: 'Run de orquestracao nao encontrado.',
+    },
+  )
 })

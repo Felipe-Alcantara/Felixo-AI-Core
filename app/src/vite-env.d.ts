@@ -3,6 +3,7 @@
 import type {
   GitProjectSummary,
   Model,
+  OrchestrationRun,
   OrchestrationStreamEvent,
   QaLogEntry,
   StreamEvent,
@@ -15,6 +16,11 @@ type CliStreamEvent = StreamEvent | OrchestrationStreamEvent
 type CliInvokeResult = {
   ok: boolean
   message?: string
+}
+
+type CliOrchestrationStatusResult = CliInvokeResult & {
+  run?: OrchestrationRun
+  runs?: OrchestrationRun[]
 }
 
 declare global {
@@ -43,6 +49,10 @@ declare global {
         resetThread: (params: {
           threadId: string
         }) => Promise<CliInvokeResult & { killed?: boolean }>
+        orchestrationStatus: (params?: {
+          runId?: string
+          threadId?: string
+        }) => Promise<CliOrchestrationStatusResult>
         onStream: (callback: (event: CliStreamEvent) => void) => () => void
         onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
         onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void

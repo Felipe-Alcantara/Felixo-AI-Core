@@ -39,10 +39,10 @@ Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUE
 
 ## Fase 5 — Terminal events e observabilidade
 
-- [ ] 5.1 Criar eventos de terminal para: spawn de sub-agente, resultado recebido, re-invocacao
-- [ ] 5.2 Atualizar `terminal-event-formatter.cjs` com os novos eventos
-- [ ] 5.3 Adicionar `parentThreadId` ao `useTerminalOutput.ts` para agrupar sessoes
-- [ ] 5.4 IPC handler `cli:orchestration-status` para frontend consultar estado do run
+- [x] 5.1 Criar eventos de terminal para: spawn de sub-agente, resultado recebido, re-invocacao
+- [x] 5.2 Atualizar `terminal-event-formatter.cjs` com os novos eventos
+- [x] 5.3 Adicionar `parentThreadId` ao `useTerminalOutput.ts` para agrupar sessoes
+- [x] 5.4 IPC handler `cli:orchestration-status` para frontend consultar estado do run
 
 ## Fase 6 — Frontend: UI de orquestracao
 

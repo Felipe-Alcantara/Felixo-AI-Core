@@ -86,6 +86,83 @@ function createStderrTerminalEvent(chunk, severity = 'warn') {
   }
 }
 
+function createOrchestrationTerminalEvent(event) {
+  if (event.type === 'orchestration_agent_spawn') {
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'info',
+      title: 'Sub-agente iniciado',
+      chunk: `${event.agentId} (${event.cliType}) iniciou em ${event.threadId}.`,
+      metadata: {
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        cliType: event.cliType,
+        threadId: event.threadId,
+      },
+    }
+  }
+
+  if (event.type === 'orchestration_agent_result') {
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: event.status === 'error' ? 'warn' : 'info',
+      title: 'Resultado de sub-agente',
+      chunk: `${event.agentId} finalizou com status ${event.status}.`,
+      metadata: {
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        status: event.status,
+      },
+    }
+  }
+
+  if (event.type === 'orchestration_reinvoke') {
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'info',
+      title: 'Reinvocando orquestrador',
+      chunk: `Turno ${event.turn} iniciado com resultados dos sub-agentes.`,
+      metadata: {
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        turn: event.turn,
+      },
+    }
+  }
+
+  if (event.type === 'orchestration_waiting_agents') {
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'info',
+      title: 'Aguardando sub-agentes',
+      chunk: `${event.agentIds.length} sub-agente(s) em execucao.`,
+      metadata: {
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agents: event.agentIds.length,
+      },
+    }
+  }
+
+  return {
+    source: 'system',
+    kind: 'lifecycle',
+    severity: 'info',
+    title: 'Orquestracao',
+    chunk: 'Estado de orquestracao atualizado.',
+    metadata: {
+      runId: event.runId,
+      parentThreadId: event.parentThreadId,
+    },
+  }
+}
+
 function createEventsFromCliEvent(cliEvent, payload, durationMs) {
   if (!cliEvent || typeof cliEvent !== 'object') {
     return []
@@ -602,6 +679,7 @@ function formatInteger(value) {
 
 module.exports = {
   createErrorTerminalEvent,
+  createOrchestrationTerminalEvent,
   createStartTerminalEvent,
   createStderrTerminalEvent,
   createTerminalEvents,

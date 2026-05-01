@@ -97,3 +97,26 @@ Mudancas implementadas:
 Validacao:
 
 - `node --test electron/services/ipc-handlers.test.cjs electron/services/orchestration/orchestration-ipc-bridge.test.cjs`
+
+## Fase 5 - Terminal events e observabilidade
+
+Status: concluida.
+
+Mudancas implementadas:
+
+- Eventos operacionais de orquestracao agora sao formatados por
+  `terminal-event-formatter.cjs`.
+- Foram adicionados eventos de terminal para spawn de sub-agente, resultado
+  recebido, re-invocacao do orquestrador e estado de espera por agentes.
+- Eventos de terminal carregam `parentThreadId` quando pertencem a uma thread
+  filha, permitindo agrupamento no frontend.
+- `useTerminalOutput.ts` preserva `parentThreadId` na sessao de terminal.
+- A bridge `window.felixo.cli` ganhou `orchestrationStatus()`.
+- O backend registrou o handler IPC `cli:orchestration-status`, que consulta
+  runs por `runId`, `threadId` ou lista todos os runs conhecidos.
+- Tipos frontend foram ampliados com `OrchestrationRun` e estruturas de
+  `agentJobs`.
+
+Validacao:
+
+- `node --test electron/services/terminal-event-formatter.test.cjs electron/services/ipc-handlers.test.cjs`

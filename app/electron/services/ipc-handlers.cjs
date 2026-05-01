@@ -20,6 +20,7 @@ const {
 } = require('./orchestration/orchestration-runner.cjs')
 const {
   createErrorTerminalEvent,
+  createOrchestrationTerminalEvent,
   createStartTerminalEvent,
   createStderrTerminalEvent,
   createTerminalEvents,
@@ -29,6 +30,7 @@ const cliManager = new CliProcessManager()
 const stoppedSessions = new Set()
 const cliThreadSessions = new Map()
 const persistentCliSessions = new Map()
+const terminalSessionParents = new Map()
 const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
 const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 
@@ -154,6 +156,11 @@ function registerCliIpcHandlers(getMainWindow) {
       model,
       cwd,
     }
+
+    if (requestOrchestrationContext.parentThreadId !== threadId) {
+      terminalSessionParents.set(threadId, requestOrchestrationContext.parentThreadId)
+    }
+
     const threadSession = getCliThreadSession(threadId, model)
     const spawnContext = {
       cwd,
@@ -557,6 +564,10 @@ function registerCliIpcHandlers(getMainWindow) {
       firstVisibleOutputTimer = null
     }
   }
+
+  ipcMain.handle('cli:orchestration-status', (_event, params) =>
+    createOrchestrationStatusResponse(orchestrationRunner, params),
+  )
 
   ipcMain.handle('cli:stop', (event, params) => {
     const streamSessionId = getRequiredString(params?.sessionId)
@@ -1366,9 +1377,12 @@ function formatAdapterStderr(adapter, chunk) {
 }
 
 function sendTerminalEvents(webContents, sessionId, events) {
+  const parentThreadId = terminalSessionParents.get(sessionId)
+
   for (const event of events) {
     sendTerminalOutput(webContents, {
       sessionId,
+      parentThreadId,
       ...event,
     })
   }
@@ -1419,65 +1433,27 @@ function createOrchestrationModel(cliType) {
   }
 }
 
-function createOrchestrationTerminalEvent(event) {
-  if (event.type === 'orchestration_agent_spawn') {
-    return {
-      source: 'system',
-      kind: 'lifecycle',
-      severity: 'info',
-      title: 'Sub-agente iniciado',
-      chunk: `${event.agentId} (${event.cliType}) iniciou em ${event.threadId}.`,
-      metadata: {
-        runId: event.runId,
-        parentThreadId: event.parentThreadId,
-        agentId: event.agentId,
-        cliType: event.cliType,
-        threadId: event.threadId,
-      },
-    }
+function createOrchestrationStatusResponse(orchestrationRunner, params = {}) {
+  const runId = getRequiredString(params?.runId)
+  const threadId = getRequiredString(params?.threadId)
+
+  if (runId) {
+    const run = orchestrationRunner.getRun(runId)
+    return run
+      ? { ok: true, run }
+      : { ok: false, message: 'Run de orquestracao nao encontrado.' }
   }
 
-  if (event.type === 'orchestration_agent_result') {
-    return {
-      source: 'system',
-      kind: 'lifecycle',
-      severity: event.status === 'error' ? 'warn' : 'info',
-      title: 'Resultado de sub-agente',
-      chunk: `${event.agentId} finalizou com status ${event.status}.`,
-      metadata: {
-        runId: event.runId,
-        parentThreadId: event.parentThreadId,
-        agentId: event.agentId,
-        status: event.status,
-      },
-    }
-  }
-
-  if (event.type === 'orchestration_reinvoke') {
-    return {
-      source: 'system',
-      kind: 'lifecycle',
-      severity: 'info',
-      title: 'Reinvocando orquestrador',
-      chunk: `Turno ${event.turn} iniciado com resultados dos sub-agentes.`,
-      metadata: {
-        runId: event.runId,
-        parentThreadId: event.parentThreadId,
-        turn: event.turn,
-      },
-    }
+  if (threadId) {
+    const run = orchestrationRunner.getRunByThreadId(threadId)
+    return run
+      ? { ok: true, run }
+      : { ok: false, message: 'Run de orquestracao nao encontrado.' }
   }
 
   return {
-    source: 'system',
-    kind: 'lifecycle',
-    severity: 'info',
-    title: 'Orquestracao',
-    chunk: 'Estado de orquestracao atualizado.',
-    metadata: {
-      runId: event.runId,
-      parentThreadId: event.parentThreadId,
-    },
+    ok: true,
+    runs: orchestrationRunner.listRuns(),
   }
 }
 
@@ -1551,7 +1527,7 @@ function createTextPreview(value, maxLength = 1000) {
 
 module.exports = {
   createOrchestrationModel,
-  createOrchestrationTerminalEvent,
+  createOrchestrationStatusResponse,
   getAdapterSpawnArgs,
   registerCliIpcHandlers,
 }
