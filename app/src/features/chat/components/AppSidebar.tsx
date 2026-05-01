@@ -3,14 +3,17 @@ import {
   Bot,
   ChevronDown,
   Code2,
+  Download,
   Folder,
   GitBranch,
+  Network,
   PanelLeft,
   Plus,
   Search,
   Settings,
   SlidersHorizontal,
   Sparkles,
+  StickyNote,
   User,
 } from 'lucide-react'
 import type { ChatSession, Model, Project } from '../types'
@@ -31,7 +34,10 @@ type AppSidebarProps = {
   onOpenProjects: () => void
   onOpenAutomations: () => void
   onOpenCode: () => void
+  onOpenExport: () => void
   onOpenFelixoSettings: () => void
+  onOpenNotes: () => void
+  onOpenOrchestratorSettings: () => void
   onToggleSidebar: () => void
   onSelectSession: (session: ChatSession) => void
   onToggleProject: (project: Project) => void
@@ -49,7 +55,10 @@ export function AppSidebar({
   onOpenProjects,
   onOpenAutomations,
   onOpenCode,
+  onOpenExport,
   onOpenFelixoSettings,
+  onOpenNotes,
+  onOpenOrchestratorSettings,
   onToggleSidebar,
   onSelectSession,
   onToggleProject,
@@ -100,13 +109,16 @@ export function AppSidebar({
     else if (label === 'Pesquisar') setIsSearchOpen(true)
     else if (label === 'Projetos') setIsProjectsExpanded((v) => !v)
     else if (label === 'Automações') onOpenAutomations()
+    else if (label === 'Orquestrador') onOpenOrchestratorSettings()
+    else if (label === 'Notas') onOpenNotes()
+    else if (label === 'Exportar') onOpenExport()
   }
 
   return (
     <aside
       style={isOpen ? { width } : undefined}
       className={[
-        'relative flex shrink-0 flex-col border-r border-white/[0.08] bg-[#272727] text-zinc-300 overflow-hidden',
+        'relative flex shrink-0 flex-col border-r border-white/[0.08] bg-[var(--color-sidebar)] text-zinc-300 overflow-hidden',
         dragging ? '' : 'transition-[width] duration-300 ease-in-out',
         'max-[920px]:hidden',
         isOpen ? '' : 'w-0 border-r-0',
@@ -235,6 +247,33 @@ export function AppSidebar({
         >
           <Sparkles size={14} aria-hidden="true" />
           Automações
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleNavClick('Orquestrador')}
+          className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          <Network size={14} aria-hidden="true" />
+          Orquestrador
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleNavClick('Notas')}
+          className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          <StickyNote size={14} aria-hidden="true" />
+          Notas
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleNavClick('Exportar')}
+          className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          <Download size={14} aria-hidden="true" />
+          Exportar
         </button>
       </nav>
 

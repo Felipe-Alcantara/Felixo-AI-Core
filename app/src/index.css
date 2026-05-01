@@ -3,6 +3,15 @@
 @tailwind utilities;
 
 :root {
+  --color-app-bg: #191918;
+  --color-main-bg: #171716;
+  --color-panel: #242423;
+  --color-sidebar: #272727;
+  --color-input: #1a1a19;
+  --color-composer: #2b2b2a;
+  --color-status-bg: #141413;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-accent: #a7f3d0;
   color: #f4f4f5;
   background: #09090b;
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
@@ -10,6 +19,18 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='high_contrast'] {
+  --color-app-bg: #050505;
+  --color-main-bg: #020617;
+  --color-panel: #0b1120;
+  --color-sidebar: #080808;
+  --color-input: #020617;
+  --color-composer: #0f172a;
+  --color-status-bg: #07111f;
+  --color-border: rgba(125, 211, 252, 0.24);
+  --color-accent: #67e8f9;
 }
 
 * {
@@ -26,7 +47,7 @@ body {
   min-width: 320px;
   margin: 0;
   overflow: hidden;
-  background: #09090b;
+  background: var(--color-main-bg);
 }
 
 button,
@@ -70,5 +91,5 @@ div::-webkit-scrollbar-thumb {
 
 ::selection {
   color: #09090b;
-  background: #a7f3d0;
+  background: var(--color-accent);
 }

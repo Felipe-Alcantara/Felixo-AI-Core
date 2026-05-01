@@ -24,6 +24,56 @@ export type ModelFileSelection = Omit<Model, 'id'>
 
 export type OrchestrationCliType = Exclude<CliType, 'unknown'>
 
+export type OrchestratorMode =
+  | 'manual'
+  | 'semi_auto'
+  | 'automatic'
+  | 'read_only'
+  | 'experimental'
+
+export type OrchestratorSettings = {
+  customContext: string
+  enabledSkills: string[]
+  preferredModelIds: string[]
+  blockedModelIds: string[]
+  defaultWorkflow: string
+  mode: OrchestratorMode
+  maxAgentsPerTurn: number
+  maxTurns: number
+  maxTotalAgents: number
+  maxRuntimeMinutes: number
+  requireConfirmationForSensitiveActions: boolean
+}
+
+export type ModelCapabilityProfile = {
+  id: string
+  name: string
+  cliType: OrchestrationCliType
+  providerModel?: string
+  reasoningEffort?: ReasoningEffort
+  execution: string
+  supportsTools: boolean
+  supportsMcp: boolean
+  supportsFileEdits: boolean
+  supportsLongContext: boolean
+  supportsNativeSession: boolean
+  strengths: string[]
+  limits: string
+  cost: string
+  status: 'available' | 'blocked' | 'unknown'
+}
+
+export type AppTheme = 'dark' | 'high_contrast'
+
+export type ProjectNote = {
+  id: string
+  title: string
+  content: string
+  projectIds: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export type TerminalOutputKind =
   | 'assistant'
   | 'error'

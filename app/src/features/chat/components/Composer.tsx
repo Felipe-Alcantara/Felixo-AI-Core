@@ -195,7 +195,7 @@ export function Composer({
       className={
         isHome
           ? ''
-          : 'shrink-0 border-t border-white/[0.08] bg-[#171717] px-5 py-4 max-sm:px-3 max-sm:py-3 [@media(max-height:620px)]:py-2'
+          : 'shrink-0 border-t border-white/[0.08] bg-[var(--color-main-bg)] px-5 py-4 max-sm:px-3 max-sm:py-3 [@media(max-height:620px)]:py-2'
       }
     >
       <div
@@ -205,7 +205,7 @@ export function Composer({
             : 'mx-auto w-full max-w-[680px]'
         }
       >
-        <div className="rounded-[1.45rem] border border-white/[0.08] bg-[#2b2b2a] shadow-soft">
+        <div className="rounded-[1.45rem] border border-white/[0.08] bg-[var(--color-composer)] shadow-soft">
           <input
             ref={attachmentInputRef}
             type="file"

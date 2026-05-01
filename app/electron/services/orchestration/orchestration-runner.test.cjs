@@ -271,6 +271,28 @@ test('orchestration runner fails runs when agent limits are reached', async () =
   assert.equal(chatEvents.some((event) => event.type === 'error'), true)
 })
 
+test('orchestration runner fails runs when spawn model is unavailable', async () => {
+  const chatEvents = []
+  const runner = createTestRunner({
+    validateSpawnAgent: () => ({
+      ok: false,
+      message: 'Modelo bloqueado pelo usuario.',
+      code: 'SPAWN_MODEL_UNAVAILABLE',
+    }),
+    sendChatEvent: (event) => chatEvents.push(event),
+  })
+
+  const result = await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext(),
+  )
+
+  assert.equal(result.ok, false)
+  assert.equal(result.run.status, 'failed')
+  assert.equal(result.run.error, 'Modelo bloqueado pelo usuario.')
+  assert.equal(chatEvents.some((event) => event.type === 'error'), true)
+})
+
 test('orchestration runner fails runs when maxTurns blocks reinvocation', async () => {
   const chatEvents = []
   const invokeCalls = []

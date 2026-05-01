@@ -42,26 +42,16 @@ function registerCliIpcHandlers(getMainWindow) {
   })
 
   const orchestrationRunner = createOrchestrationRunner({
+    validateSpawnAgent: ({ event, context }) =>
+      validateOrchestrationSpawnModel(event.cliType, context),
     spawnAgent: ({ run, event, threadId, context }) =>
-      sendCliRequest(
-        {
-          sessionId: threadId,
-          threadId,
-          prompt: event.prompt,
-          model: createOrchestrationModel(event.cliType),
-          cwd: context.cwd,
-        },
-        context.targetWebContents,
-        {
-          role: 'agent',
-          runId: run.runId,
-          agentId: event.agentId,
-          parentThreadId: run.parentThreadId,
-          originalPrompt: run.originalPrompt,
-          orchestratorCliType: run.orchestratorCliType,
-          orchestratorModel: run.orchestratorModel,
-        },
-      ),
+      spawnOrchestrationAgent({
+        run,
+        event,
+        threadId,
+        context,
+        sendCliRequest,
+      }),
     invokeOrchestrator: ({ run, prompt, context }) => {
       const threadId = `${run.runId}:orchestrator-turn-${run.currentTurn}`
 
@@ -108,6 +98,12 @@ function registerCliIpcHandlers(getMainWindow) {
     const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
     const cliType = model?.cliType
     const adapter = getTerminalAdapter(cliType)
+    const availableModels = normalizeAvailableModels(
+      params?.availableModels ?? orchestrationContext.availableModels,
+    )
+    const orchestratorSettings = normalizeOrchestrationSettings(
+      params?.orchestratorSettings ?? orchestrationContext.orchestratorSettings,
+    )
 
     if (!streamSessionId || !threadId || !prompt) {
       logQaEvent({
@@ -153,6 +149,11 @@ function registerCliIpcHandlers(getMainWindow) {
         orchestrationContext.orchestratorCliType ?? cliType,
       orchestratorModel: orchestrationContext.orchestratorModel ?? model,
       originalPrompt: orchestrationContext.originalPrompt ?? prompt,
+      availableModels,
+      orchestratorSettings,
+      limits:
+        orchestrationContext.limits ??
+        createOrchestrationLimits(orchestratorSettings),
       model,
       cwd,
     }
@@ -1499,6 +1500,189 @@ function createOrchestrationModel(cliType) {
     source: 'orchestration',
     cliType,
   }
+}
+
+function spawnOrchestrationAgent({
+  run,
+  event,
+  threadId,
+  context,
+  sendCliRequest,
+}) {
+  const resolvedModel = resolveOrchestrationSpawnModel(event.cliType, context)
+
+  if (resolvedModel.ok === false) {
+    return resolvedModel
+  }
+
+  return sendCliRequest(
+    {
+      sessionId: threadId,
+      threadId,
+      prompt: event.prompt,
+      model: resolvedModel.model,
+      cwd: context.cwd,
+    },
+    context.targetWebContents,
+    {
+      role: 'agent',
+      runId: run.runId,
+      agentId: event.agentId,
+      parentThreadId: run.parentThreadId,
+      originalPrompt: run.originalPrompt,
+      orchestratorCliType: run.orchestratorCliType,
+      orchestratorModel: run.orchestratorModel,
+      availableModels: context.availableModels,
+      orchestratorSettings: context.orchestratorSettings,
+      limits: context.limits,
+    },
+  )
+}
+
+function validateOrchestrationSpawnModel(cliType, context = {}) {
+  const result = resolveOrchestrationSpawnModel(cliType, context)
+
+  return result.ok === false
+    ? {
+        ok: false,
+        code: 'SPAWN_MODEL_UNAVAILABLE',
+        message: result.message,
+      }
+    : { ok: true }
+}
+
+function resolveOrchestrationSpawnModel(cliType, context = {}) {
+  const availableModels = Array.isArray(context.availableModels)
+    ? context.availableModels
+    : null
+
+  if (!availableModels) {
+    return { ok: true, model: createOrchestrationModel(cliType) }
+  }
+
+  const settings = context.orchestratorSettings ?? {}
+  const blockedModelIds = new Set(
+    Array.isArray(settings.blockedModelIds) ? settings.blockedModelIds : [],
+  )
+  const preferredModelIds = Array.isArray(settings.preferredModelIds)
+    ? settings.preferredModelIds
+    : []
+  const candidates = availableModels.filter(
+    (model) => model.cliType === cliType && !blockedModelIds.has(model.id),
+  )
+
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      message: `Nenhum modelo disponivel para spawn com cliType "${cliType}".`,
+    }
+  }
+
+  const preferredModel = preferredModelIds
+    .map((modelId) => candidates.find((model) => model.id === modelId))
+    .find(Boolean)
+  const model = preferredModel ?? candidates[0]
+
+  return {
+    ok: true,
+    model: {
+      ...createOrchestrationModel(cliType),
+      ...model,
+      cliType,
+    },
+  }
+}
+
+function normalizeAvailableModels(value) {
+  if (!Array.isArray(value)) {
+    return null
+  }
+
+  return value
+    .map(normalizeAvailableModel)
+    .filter((model) => model && model.cliType !== 'unknown')
+}
+
+function normalizeAvailableModel(value) {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const model = value
+
+  if (
+    typeof model.id !== 'string' ||
+    typeof model.name !== 'string' ||
+    typeof model.command !== 'string' ||
+    typeof model.source !== 'string' ||
+    !isValidOrchestrationCliType(model.cliType)
+  ) {
+    return null
+  }
+
+  return {
+    id: model.id,
+    name: model.name,
+    command: model.command,
+    source: model.source,
+    cliType: model.cliType,
+    providerModel:
+      typeof model.providerModel === 'string' && model.providerModel.trim()
+        ? model.providerModel.trim()
+        : undefined,
+    reasoningEffort:
+      typeof model.reasoningEffort === 'string' && model.reasoningEffort.trim()
+        ? model.reasoningEffort.trim()
+        : undefined,
+  }
+}
+
+function normalizeOrchestrationSettings(value) {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  return {
+    preferredModelIds: normalizeStringList(value.preferredModelIds),
+    blockedModelIds: normalizeStringList(value.blockedModelIds),
+    maxAgentsPerTurn: normalizePositiveInteger(value.maxAgentsPerTurn),
+    maxTurns: normalizePositiveInteger(value.maxTurns),
+    maxTotalAgents: normalizePositiveInteger(value.maxTotalAgents),
+    maxRuntimeMinutes: normalizePositiveInteger(value.maxRuntimeMinutes),
+  }
+}
+
+function createOrchestrationLimits(settings) {
+  if (!settings) {
+    return undefined
+  }
+
+  return {
+    maxAgentsPerTurn: settings.maxAgentsPerTurn,
+    maxTurns: settings.maxTurns,
+    maxTotalAgents: settings.maxTotalAgents,
+    maxRuntimeMinutes: settings.maxRuntimeMinutes,
+  }
+}
+
+function normalizeStringList(value) {
+  return Array.isArray(value)
+    ? value.filter((item) => typeof item === 'string' && item.trim())
+    : []
+}
+
+function normalizePositiveInteger(value) {
+  return Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+function isValidOrchestrationCliType(value) {
+  return (
+    value === 'claude' ||
+    value === 'codex' ||
+    value === 'codex-app-server' ||
+    value === 'gemini' ||
+    value === 'gemini-acp'
+  )
 }
 
 function createOrchestrationStatusResponse(orchestrationRunner, params = {}) {
