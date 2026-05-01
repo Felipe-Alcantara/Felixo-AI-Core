@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Download, FileJson, FileText, X } from 'lucide-react'
+import { AlignLeft, Download, FileJson, FileText, X } from 'lucide-react'
 
 type ChatExportModalProps = {
   isOpen: boolean
   messagesCount: number
   suggestedFileName: string
   onClose: () => void
-  onExport: (format: 'json' | 'markdown', fileName: string) => void
+  onExport: (format: 'json' | 'markdown' | 'text', fileName: string) => void
 }
 
 export function ChatExportModal({
@@ -89,6 +89,17 @@ export function ChatExportModal({
           >
             <FileText size={18} aria-hidden="true" />
             Markdown
+            <Download size={15} aria-hidden="true" className="ml-auto" />
+          </button>
+
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onExport('text', fileName)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
+          >
+            <AlignLeft size={18} aria-hidden="true" />
+            Texto simples
             <Download size={15} aria-hidden="true" className="ml-auto" />
           </button>
         </div>

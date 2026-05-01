@@ -6,7 +6,7 @@ import type {
 } from '../types'
 import type { TerminalOutputSession } from '../hooks/useTerminalOutput'
 
-type ExportFormat = 'json' | 'markdown'
+type ExportFormat = 'json' | 'markdown' | 'text'
 
 type ExportChatParams = {
   format: ExportFormat
@@ -31,10 +31,15 @@ export async function exportChat(params: ExportChatParams): Promise<ExportResult
   const content =
     params.format === 'json'
       ? createJsonExport(params, exportedAt, title)
-      : createMarkdownExport(params, exportedAt, title)
+      : params.format === 'text'
+        ? createTextExport(params, exportedAt, title)
+        : createMarkdownExport(params, exportedAt, title)
   const mimeType =
-    params.format === 'json' ? 'application/json' : 'text/markdown'
-  const extension = params.format === 'json' ? 'json' : 'md'
+    params.format === 'json'
+      ? 'application/json'
+      : 'text/plain'
+  const extension =
+    params.format === 'json' ? 'json' : params.format === 'text' ? 'txt' : 'md'
   const fileName = createExportFileName({
     requestedFileName: params.fileName,
     title,
@@ -61,7 +66,7 @@ export function createSuggestedExportFileName(
 ) {
   const exportedAt = new Date().toISOString()
   const title = createExportTitle(messages)
-  const extension = format === 'json' ? 'json' : 'md'
+  const extension = format === 'json' ? 'json' : format === 'text' ? 'txt' : 'md'
 
   return createExportFileName({ title, exportedAt, extension })
 }
@@ -146,6 +151,27 @@ function createMarkdownExport(
     const model = resolveModelName(message.model, params.models)
     const suffix = model ? ` — ${model}` : ''
     lines.push(`### ${role}${suffix}`, '', message.content.trim(), '')
+  }
+
+  return lines.join('\n')
+}
+
+function createTextExport(
+  params: ExportChatParams,
+  exportedAt: string,
+  title: string,
+) {
+  const lines = [
+    title || 'Felixo AI Core Chat',
+    `Exportado em: ${exportedAt}`,
+    '',
+  ]
+
+  for (const message of params.messages.filter((item) => item.content.trim())) {
+    const role = message.role === 'user' ? 'Usuario' : 'Assistente'
+    const model = resolveModelName(message.model, params.models)
+    const suffix = model ? ` (${model})` : ''
+    lines.push(`[${role}${suffix}]`, message.content.trim(), '')
   }
 
   return lines.join('\n')
@@ -250,6 +276,10 @@ function ensureFileExtension(fileName: string, extension: string) {
 function createExportFileFilter(format: ExportFormat) {
   if (format === 'json') {
     return { name: 'JSON', extensions: ['json'] }
+  }
+
+  if (format === 'text') {
+    return { name: 'Texto', extensions: ['txt'] }
   }
 
   return { name: 'Markdown', extensions: ['md', 'markdown'] }
