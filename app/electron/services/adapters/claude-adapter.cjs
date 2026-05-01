@@ -1,6 +1,7 @@
 const { createClaudeOptionArgs } = require('./model-options.cjs')
 const {
   parseOrchestrationEvent,
+  parseOrchestrationEventFromText,
 } = require('./orchestration-events.cjs')
 
 function getSpawnArgs(prompt, context = {}) {
@@ -150,6 +151,12 @@ function parseStreamEvent(event) {
     delta?.type === 'text_delta' &&
     typeof delta.text === 'string'
   ) {
+    const orchestrationEvent = parseOrchestrationEventFromText(delta.text)
+
+    if (orchestrationEvent) {
+      return orchestrationEvent
+    }
+
     return {
       type: 'text',
       text: delta.text,

@@ -1,6 +1,7 @@
 const { createModelOptionArgs } = require('./model-options.cjs')
 const {
   parseOrchestrationEvent,
+  parseOrchestrationEventFromText,
 } = require('./orchestration-events.cjs')
 
 function getSpawnArgs(prompt, context = {}) {
@@ -61,6 +62,13 @@ function parseLine(line) {
   }
 
   if (isAssistantMessage(payload)) {
+    const orchestrationEventFromText =
+      parseOrchestrationEventFromText(payload.content)
+
+    if (orchestrationEventFromText) {
+      return orchestrationEventFromText
+    }
+
     return {
       type: 'text',
       text: payload.content,

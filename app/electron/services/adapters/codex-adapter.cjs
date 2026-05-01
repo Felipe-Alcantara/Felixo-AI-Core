@@ -1,6 +1,7 @@
 const { createCodexExecOptionArgs } = require('./model-options.cjs')
 const {
   parseOrchestrationEvent,
+  parseOrchestrationEventFromText,
 } = require('./orchestration-events.cjs')
 
 function getSpawnArgs(prompt, context = {}) {
@@ -67,6 +68,17 @@ function parseLine(line) {
     const item = payload.item
 
     if (item?.type === 'agent_message' && typeof item.text === 'string') {
+      const orchestrationEventFromText =
+        parseOrchestrationEventFromText(item.text)
+
+      if (orchestrationEventFromText) {
+        if (providerSessionId) {
+          orchestrationEventFromText.providerSessionId = providerSessionId
+        }
+
+        return orchestrationEventFromText
+      }
+
       const event = {
         type: 'text',
         text: item.text,

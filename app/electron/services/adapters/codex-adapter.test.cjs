@@ -65,6 +65,23 @@ test('codex adapter parses orchestration final_answer events', () => {
   })
 })
 
+test('codex adapter parses orchestration events embedded as assistant JSON text', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'item.completed',
+      item: {
+        type: 'agent_message',
+        text: '{"type":"final_answer","content":"Fluxo concluido."}',
+      },
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'final_answer',
+    content: 'Fluxo concluido.',
+  })
+})
+
 test('codex adapter passes ascii cwd with exec args', () => {
   const spawnArgs = adapter.getSpawnArgs('Oi', { cwd: '/home/felipe' })
 

@@ -26,6 +26,24 @@ function parseOrchestrationEvent(payload) {
   return null
 }
 
+function parseOrchestrationEventFromText(text) {
+  if (typeof text !== 'string') {
+    return null
+  }
+
+  const payloadText = unwrapJsonText(text)
+
+  if (!payloadText.startsWith('{')) {
+    return null
+  }
+
+  try {
+    return parseOrchestrationEvent(JSON.parse(payloadText))
+  } catch {
+    return null
+  }
+}
+
 function parseSpawnAgentEvent(payload) {
   if (
     !isNonEmptyString(payload.agentId) ||
@@ -76,6 +94,14 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function unwrapJsonText(text) {
+  const trimmed = text.trim()
+  const fencedJsonMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+
+  return fencedJsonMatch ? fencedJsonMatch[1].trim() : trimmed
+}
+
 module.exports = {
   parseOrchestrationEvent,
+  parseOrchestrationEventFromText,
 }
