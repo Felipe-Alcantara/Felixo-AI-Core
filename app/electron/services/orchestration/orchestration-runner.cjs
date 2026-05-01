@@ -256,6 +256,12 @@ class OrchestrationRunner {
     return this.threadAgentJobs.get(threadId) ?? null
   }
 
+  getRunByThreadId(threadId) {
+    const runId = this.runContexts.get(threadId)?.runId
+
+    return runId ? this.store.get(runId) : null
+  }
+
   getOrCreateRun(event, context = {}) {
     const existingRunId =
       context.runId ??
@@ -303,6 +309,10 @@ class OrchestrationRunner {
 
     this.runContexts.set(run.runId, runContext)
     this.runContexts.set(run.parentThreadId, runContext)
+
+    if (context.threadId) {
+      this.runContexts.set(context.threadId, runContext)
+    }
   }
 
   getRunContext(runId) {
