@@ -259,6 +259,9 @@ test('orchestration runner reinvokes orchestrator after all jobs finish', async 
   assert.equal(invokeCalls[0].run.currentTurn, 2)
   assert.match(invokeCalls[0].prompt, /Objetivo original:\nObjetivo inicial/)
   assert.match(invokeCalls[0].prompt, /content deve ser descritivo/)
+  assert.match(invokeCalls[0].prompt, /Pergunta enviada ao sub-agente/)
+  assert.match(invokeCalls[0].prompt, /Revise as alteracoes\./)
+  assert.match(invokeCalls[0].prompt, /Pesquise o contexto\./)
   assert.match(invokeCalls[0].prompt, /Nao afirme que a tarefa foi feita/)
   assert.match(invokeCalls[0].prompt, /Agente reviewer-1 \(claude\)/)
   assert.match(invokeCalls[0].prompt, /Sem riscos\./)
@@ -288,6 +291,7 @@ test('orchestration runner reinvokes orchestrator with failed job results', asyn
   })
 
   assert.equal(invokeCalls.length, 1)
+  assert.match(invokeCalls[0].prompt, /Pergunta enviada ao sub-agente:\nRevise as alteracoes\./)
   assert.match(invokeCalls[0].prompt, /Status: erro/)
   assert.match(invokeCalls[0].prompt, /Mensagem:\nTimeout\./)
 })
@@ -405,6 +409,7 @@ test('createAgentResultsPrompt formats current turn results', () => {
         turn: 1,
         agentId: 'reviewer-1',
         cliType: 'claude',
+        prompt: 'Revise as alteracoes.',
         status: 'completed',
         result: 'Tudo certo.',
       },
@@ -412,6 +417,7 @@ test('createAgentResultsPrompt formats current turn results', () => {
         turn: 1,
         agentId: 'researcher-1',
         cliType: 'gemini',
+        prompt: 'Pesquise o contexto.',
         status: 'error',
         error: 'Timeout.',
       },
@@ -419,6 +425,7 @@ test('createAgentResultsPrompt formats current turn results', () => {
         turn: 2,
         agentId: 'future-1',
         cliType: 'codex',
+        prompt: 'Ignorar prompt.',
         status: 'completed',
         result: 'Ignorar.',
       },
@@ -426,6 +433,8 @@ test('createAgentResultsPrompt formats current turn results', () => {
   })
 
   assert.match(prompt, /Objetivo original:\nObjetivo inicial/)
+  assert.match(prompt, /Pergunta enviada ao sub-agente:\nRevise as alteracoes\./)
+  assert.match(prompt, /Pergunta enviada ao sub-agente:\nPesquise o contexto\./)
   assert.match(prompt, /Status: concluido/)
   assert.match(prompt, /Resultado:\nTudo certo\./)
   assert.match(prompt, /Status: erro/)
