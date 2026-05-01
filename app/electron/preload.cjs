@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('felixo', {
     send: (params) => ipcRenderer.invoke('cli:send', params),
     stop: (params) => ipcRenderer.invoke('cli:stop', params),
     resetThread: (params) => ipcRenderer.invoke('cli:reset-thread', params),
+    orchestrationStatus: (params) =>
+      ipcRenderer.invoke('cli:orchestration-status', params),
     onStream: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('cli:stream', handler)

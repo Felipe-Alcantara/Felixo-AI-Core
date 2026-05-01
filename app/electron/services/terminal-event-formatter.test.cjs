@@ -1,6 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
+  createOrchestrationTerminalEvent,
   createStartTerminalEvent,
   createTerminalEvents,
 } = require('./terminal-event-formatter.cjs')
@@ -58,6 +59,43 @@ test('terminal formatter labels persistent process reuse', () => {
   assert.equal(event.metadata.mode, 'processo-persistente')
   assert.equal(event.metadata.persistent, true)
   assert.equal(event.metadata.reusedProcess, true)
+})
+
+test('terminal formatter creates orchestration lifecycle events', () => {
+  assert.deepEqual(
+    createOrchestrationTerminalEvent({
+      type: 'orchestration_agent_spawn',
+      runId: 'run-1',
+      parentThreadId: 'thread-codex-1',
+      agentId: 'reviewer-1',
+      cliType: 'claude',
+      threadId: 'thread-reviewer-1',
+    }),
+    {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'info',
+      title: 'Sub-agente iniciado',
+      chunk: 'reviewer-1 (claude) iniciou em thread-reviewer-1.',
+      metadata: {
+        runId: 'run-1',
+        parentThreadId: 'thread-codex-1',
+        agentId: 'reviewer-1',
+        cliType: 'claude',
+        threadId: 'thread-reviewer-1',
+      },
+    },
+  )
+
+  assert.equal(
+    createOrchestrationTerminalEvent({
+      type: 'orchestration_reinvoke',
+      runId: 'run-1',
+      parentThreadId: 'thread-codex-1',
+      turn: 2,
+    }).title,
+    'Reinvocando orquestrador',
+  )
 })
 
 test('terminal formatter converts codex lifecycle JSONL into readable events', () => {
