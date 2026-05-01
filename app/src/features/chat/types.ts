@@ -48,6 +48,7 @@ export type RawOutputEvent = TerminalOutputEvent
 type StreamEventBase = {
   sessionId: string
   threadId?: string
+  parentThreadId?: string
   runId?: string
 }
 
