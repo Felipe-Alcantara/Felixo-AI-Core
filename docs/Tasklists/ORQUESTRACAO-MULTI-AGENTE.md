@@ -31,11 +31,11 @@ Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUE
 
 ## Fase 4 — Integracao com ipc-handlers
 
-- [ ] 4.1 Modificar handler de JSONL em `ipc-handlers.cjs` para detectar eventos de orquestracao
-- [ ] 4.2 Delegar eventos de orquestracao para orchestration-runner em vez de enviar direto ao frontend
-- [ ] 4.3 Spawnar sub-agentes via o mesmo mecanismo de `cli:send` (reutilizar fluxo existente)
-- [ ] 4.4 Conectar `onAgentJobCompleted` ao evento `done` dos sub-agentes
-- [ ] 4.5 Testes de integracao do fluxo completo
+- [x] 4.1 Modificar handler de JSONL em `ipc-handlers.cjs` para detectar eventos de orquestracao
+- [x] 4.2 Delegar eventos de orquestracao para orchestration-runner em vez de enviar direto ao frontend
+- [x] 4.3 Spawnar sub-agentes via o mesmo mecanismo de `cli:send` (reutilizar fluxo existente)
+- [x] 4.4 Conectar `onAgentJobCompleted` ao evento `done` dos sub-agentes
+- [x] 4.5 Testes de integracao do fluxo completo
 
 ## Fase 5 — Terminal events e observabilidade
 

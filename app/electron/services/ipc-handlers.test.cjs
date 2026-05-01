@@ -3,6 +3,10 @@ const assert = require('node:assert/strict')
 const {
   getAdapterSpawnArgs,
 } = require('./orchestrator/cli-execution-planner.cjs')
+const {
+  createOrchestrationModel,
+  createOrchestrationTerminalEvent,
+} = require('./ipc-handlers.cjs')
 
 test('ipc handlers use spawn args when native resume is disabled', () => {
   const adapter = {
@@ -58,4 +62,36 @@ test('ipc handlers use resume args when native resume is enabled', () => {
       args: ['--resume', 'provider-session-id', 'Continua'],
     },
   )
+})
+
+test('ipc handlers create lightweight models for orchestration sub-agents', () => {
+  assert.deepEqual(createOrchestrationModel('claude'), {
+    id: 'orchestration-claude',
+    name: 'Sub-agente claude',
+    command: 'claude',
+    source: 'orchestration',
+    cliType: 'claude',
+  })
+})
+
+test('ipc handlers format orchestration terminal events', () => {
+  const event = createOrchestrationTerminalEvent({
+    type: 'orchestration_agent_spawn',
+    runId: 'run-1',
+    parentThreadId: 'thread-codex-1',
+    agentId: 'reviewer-1',
+    cliType: 'claude',
+    threadId: 'thread-reviewer-1',
+  })
+
+  assert.equal(event.kind, 'lifecycle')
+  assert.equal(event.title, 'Sub-agente iniciado')
+  assert.match(event.chunk, /reviewer-1/)
+  assert.deepEqual(event.metadata, {
+    runId: 'run-1',
+    parentThreadId: 'thread-codex-1',
+    agentId: 'reviewer-1',
+    cliType: 'claude',
+    threadId: 'thread-reviewer-1',
+  })
 })

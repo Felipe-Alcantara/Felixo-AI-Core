@@ -13,6 +13,12 @@ const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
 const { createJsonlOutputGuard } = require('./jsonl-output-guard.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
 const {
+  createOrchestrationIpcBridge,
+} = require('./orchestration/orchestration-ipc-bridge.cjs')
+const {
+  createOrchestrationRunner,
+} = require('./orchestration/orchestration-runner.cjs')
+const {
   createErrorTerminalEvent,
   createStartTerminalEvent,
   createStderrTerminalEvent,
@@ -28,6 +34,70 @@ const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 
 function registerCliIpcHandlers(getMainWindow) {
   ipcMain.handle('cli:send', (event, params) => {
+    const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
+
+    return sendCliRequest(params, targetWebContents)
+  })
+
+  const orchestrationRunner = createOrchestrationRunner({
+    spawnAgent: ({ run, event, threadId, context }) =>
+      sendCliRequest(
+        {
+          sessionId: threadId,
+          threadId,
+          prompt: event.prompt,
+          model: createOrchestrationModel(event.cliType),
+          cwd: context.cwd,
+        },
+        context.targetWebContents,
+        {
+          role: 'agent',
+          runId: run.runId,
+          agentId: event.agentId,
+          parentThreadId: run.parentThreadId,
+          originalPrompt: run.originalPrompt,
+          orchestratorCliType: run.orchestratorCliType,
+          orchestratorModel: run.orchestratorModel,
+        },
+      ),
+    invokeOrchestrator: ({ run, prompt, context }) => {
+      const threadId = `${run.runId}:orchestrator-turn-${run.currentTurn}`
+
+      return sendCliRequest(
+        {
+          sessionId: threadId,
+          threadId,
+          prompt,
+          model: run.orchestratorModel,
+          cwd: context.cwd,
+        },
+        context.targetWebContents,
+        {
+          role: 'orchestrator',
+          runId: run.runId,
+          parentThreadId: run.parentThreadId,
+          originalPrompt: run.originalPrompt,
+          orchestratorCliType: run.orchestratorCliType,
+          orchestratorModel: run.orchestratorModel,
+        },
+      )
+    },
+    sendChatEvent: (event) => {
+      const context = orchestrationRunner.getRunContext(event.runId)
+      sendCliEvent(context.targetWebContents, event)
+    },
+    emitTerminalEvent: (event) => {
+      const context = orchestrationRunner.getRunContext(event.runId)
+      sendTerminalEvents(context.targetWebContents, event.parentThreadId, [
+        createOrchestrationTerminalEvent(event),
+      ])
+    },
+  })
+  const orchestrationBridge = createOrchestrationIpcBridge({
+    runner: orchestrationRunner,
+  })
+
+  function sendCliRequest(params, targetWebContents, orchestrationContext = {}) {
     const streamSessionId = getRequiredString(params?.sessionId)
     const threadId = getRequiredString(params?.threadId) || streamSessionId
     const prompt = getRequiredString(params?.prompt)
@@ -36,7 +106,6 @@ function registerCliIpcHandlers(getMainWindow) {
     const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
     const cliType = model?.cliType
     const adapter = getTerminalAdapter(cliType)
-    const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
 
     if (!streamSessionId || !threadId || !prompt) {
       logQaEvent({
@@ -72,6 +141,19 @@ function registerCliIpcHandlers(getMainWindow) {
     stoppedSessions.delete(threadId)
 
     const cwd = projectCwd ?? resolveCliCwd(cliType)
+    const requestOrchestrationContext = {
+      ...orchestrationContext,
+      targetWebContents,
+      streamSessionId,
+      threadId,
+      parentThreadId: orchestrationContext.parentThreadId ?? threadId,
+      orchestratorCliType:
+        orchestrationContext.orchestratorCliType ?? cliType,
+      orchestratorModel: orchestrationContext.orchestratorModel ?? model,
+      originalPrompt: orchestrationContext.originalPrompt ?? prompt,
+      model,
+      cwd,
+    }
     const threadSession = getCliThreadSession(threadId, model)
     const spawnContext = {
       cwd,
@@ -100,6 +182,8 @@ function registerCliIpcHandlers(getMainWindow) {
         cliType,
         model,
         cwd,
+        orchestrationBridge,
+        orchestrationContext: requestOrchestrationContext,
       })
     }
 
@@ -232,6 +316,24 @@ function registerCliIpcHandlers(getMainWindow) {
         if (cliEvent.type === 'text' && cliEvent.text.trim()) {
           didEmitVisibleOutput = true
           clearFirstVisibleOutputTimer()
+        }
+
+        const orchestrationResult = orchestrationBridge.handleCliEvent({
+          cliEvent,
+          streamSessionId,
+          threadId,
+          context: requestOrchestrationContext,
+        })
+        handleOrchestrationPromise(orchestrationResult.promise)
+
+        if (orchestrationResult.handled) {
+          if (cliEvent.type === 'awaiting_agents' || cliEvent.type === 'final_answer') {
+            didComplete = true
+          }
+
+          didEmitVisibleOutput = true
+          clearFirstVisibleOutputTimer()
+          return
         }
 
         sendCliEvent(targetWebContents, {
@@ -401,11 +503,22 @@ function registerCliIpcHandlers(getMainWindow) {
             },
           },
         ])
-        sendCliEvent(targetWebContents, {
+        const doneEvent = {
           type: 'done',
           sessionId: streamSessionId,
           threadId,
+        }
+        const orchestrationResult = orchestrationBridge.handleCliEvent({
+          cliEvent: doneEvent,
+          streamSessionId,
+          threadId,
+          context: requestOrchestrationContext,
         })
+        handleOrchestrationPromise(orchestrationResult.promise)
+
+        if (!orchestrationResult.handled) {
+          sendCliEvent(targetWebContents, doneEvent)
+        }
       })
 
       return { ok: true }
@@ -443,7 +556,7 @@ function registerCliIpcHandlers(getMainWindow) {
       clearTimeout(firstVisibleOutputTimer)
       firstVisibleOutputTimer = null
     }
-  })
+  }
 
   ipcMain.handle('cli:stop', (event, params) => {
     const streamSessionId = getRequiredString(params?.sessionId)
@@ -565,6 +678,8 @@ function sendPersistentCliRequest({
   cliType,
   model,
   cwd,
+  orchestrationBridge,
+  orchestrationContext,
 }) {
   const existingSession = getReusablePersistentSession(threadId, model, cwd)
   const isReusingProcess = Boolean(existingSession)
@@ -613,6 +728,8 @@ function sendPersistentCliRequest({
       didEmitVisibleOutput: false,
       firstVisibleOutputTimer: null,
       stderrOutput: '',
+      orchestrationContext,
+      orchestrationBridge,
     }
 
     persistentSession.activeRun = run
@@ -916,6 +1033,29 @@ function handlePersistentStdoutLine(persistentSession, line) {
     clearPersistentRunTimer(activeRun)
   }
 
+  const orchestrationResult = activeRun.orchestrationBridge?.handleCliEvent({
+    cliEvent,
+    streamSessionId: activeRun.streamSessionId,
+    threadId,
+    context: activeRun.orchestrationContext,
+  })
+  handleOrchestrationPromise(orchestrationResult?.promise)
+
+  if (orchestrationResult?.handled) {
+    if (
+      cliEvent.type === 'awaiting_agents' ||
+      cliEvent.type === 'final_answer' ||
+      cliEvent.type === 'done'
+    ) {
+      activeRun.didComplete = true
+      clearPersistentRunTimer(activeRun)
+      persistentSession.activeRun = null
+      schedulePersistentIdleTimer(persistentSession)
+    }
+
+    return
+  }
+
   sendCliEvent(persistentSession.targetWebContents, {
     ...cliEvent,
     sessionId: activeRun.streamSessionId,
@@ -1159,6 +1299,23 @@ function parseAdapterLine(adapter, line) {
   }
 }
 
+function handleOrchestrationPromise(promise) {
+  if (!promise || typeof promise.catch !== 'function') {
+    return
+  }
+
+  promise.catch((error) => {
+    logQaEvent({
+      level: 'error',
+      scope: 'cli:orchestration',
+      message: 'Unhandled orchestration error.',
+      details: {
+        message: error instanceof Error ? error.message : String(error),
+      },
+    })
+  })
+}
+
 function getCliThreadSession(threadId, model) {
   const modelKey = createModelSessionKey(model)
   const currentSession = cliThreadSessions.get(threadId)
@@ -1252,6 +1409,78 @@ function resolveCliCwd(cliType) {
   return process.env.HOME || process.cwd()
 }
 
+function createOrchestrationModel(cliType) {
+  return {
+    id: `orchestration-${cliType}`,
+    name: `Sub-agente ${cliType}`,
+    command: cliType,
+    source: 'orchestration',
+    cliType,
+  }
+}
+
+function createOrchestrationTerminalEvent(event) {
+  if (event.type === 'orchestration_agent_spawn') {
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'info',
+      title: 'Sub-agente iniciado',
+      chunk: `${event.agentId} (${event.cliType}) iniciou em ${event.threadId}.`,
+      metadata: {
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        cliType: event.cliType,
+        threadId: event.threadId,
+      },
+    }
+  }
+
+  if (event.type === 'orchestration_agent_result') {
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: event.status === 'error' ? 'warn' : 'info',
+      title: 'Resultado de sub-agente',
+      chunk: `${event.agentId} finalizou com status ${event.status}.`,
+      metadata: {
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        status: event.status,
+      },
+    }
+  }
+
+  if (event.type === 'orchestration_reinvoke') {
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'info',
+      title: 'Reinvocando orquestrador',
+      chunk: `Turno ${event.turn} iniciado com resultados dos sub-agentes.`,
+      metadata: {
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        turn: event.turn,
+      },
+    }
+  }
+
+  return {
+    source: 'system',
+    kind: 'lifecycle',
+    severity: 'info',
+    title: 'Orquestracao',
+    chunk: 'Estado de orquestracao atualizado.',
+    metadata: {
+      runId: event.runId,
+      parentThreadId: event.parentThreadId,
+    },
+  }
+}
+
 function getRequiredString(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -1321,6 +1550,8 @@ function createTextPreview(value, maxLength = 1000) {
 }
 
 module.exports = {
+  createOrchestrationModel,
+  createOrchestrationTerminalEvent,
   getAdapterSpawnArgs,
   registerCliIpcHandlers,
 }

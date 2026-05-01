@@ -71,3 +71,29 @@ Mudancas implementadas:
 Validacao:
 
 - `node --test electron/services/orchestration/orchestration-runner.test.cjs electron/services/orchestration/orchestration-store.test.cjs`
+
+## Fase 4 - Integracao com ipc-handlers
+
+Status: concluida.
+
+Mudancas implementadas:
+
+- O handler `cli:send` foi refatorado internamente para reutilizar o mesmo
+  fluxo de envio quando o runner precisa spawnar sub-agentes ou re-invocar o
+  orquestrador.
+- Criada `orchestration-ipc-bridge.cjs` para decidir quando um evento JSONL de
+  CLI deve ser delegado ao runner, suprimido ou encaminhado ao frontend.
+- Eventos `spawn_agent`, `awaiting_agents` e `final_answer` agora sao
+  interceptados no fluxo JSONL e nao seguem diretamente para o frontend.
+- Sub-agentes sao iniciados com o mesmo mecanismo de `cli:send`, usando um
+  modelo leve derivado do `cliType` recebido no evento.
+- Eventos `done` de threads filhas sao conectados a `onAgentJobCompleted()`,
+  com buffer textual do sub-agente injetado no prompt de re-invocacao.
+- O fluxo persistente tambem passa pela ponte de orquestracao para suportar
+  CLIs com processo persistente.
+- Foram adicionados testes da ponte IPC com runner real e testes auxiliares dos
+  eventos/modelos criados pelo IPC.
+
+Validacao:
+
+- `node --test electron/services/ipc-handlers.test.cjs electron/services/orchestration/orchestration-ipc-bridge.test.cjs`
