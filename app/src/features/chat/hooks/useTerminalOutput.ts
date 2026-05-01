@@ -72,6 +72,7 @@ export function useTerminalOutput() {
 
   const clearSessions = useCallback(() => {
     setSessionsById({})
+    nextChunkId.current = 1
   }, [])
 
   const appendTerminalOutput = useCallback((event: TerminalOutputEvent) => {
