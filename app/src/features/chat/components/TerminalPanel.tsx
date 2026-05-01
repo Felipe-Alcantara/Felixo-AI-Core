@@ -35,27 +35,45 @@ export function TerminalPanel({
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
+  const visibleSessions = useMemo(() => createVisibleSessions(sessions), [sessions])
+  const hiddenSessionParentId = useMemo(() => {
+    const hiddenParents = new Map<string, string>()
+
+    for (const session of sessions) {
+      if (
+        isOrchestratorTurnSession(session) &&
+        session.parentThreadId &&
+        sessions.some((item) => item.sessionId === session.parentThreadId)
+      ) {
+        hiddenParents.set(session.sessionId, session.parentThreadId)
+      }
+    }
+
+    return hiddenParents
+  }, [sessions])
 
   const effectiveSelectedSessionId =
-    sessions.some((session) => session.sessionId === selectedSessionId)
+    visibleSessions.some((session) => session.sessionId === selectedSessionId)
       ? selectedSessionId
-      : sessions[0]?.sessionId ?? null
+      : selectedSessionId && hiddenSessionParentId.has(selectedSessionId)
+        ? hiddenSessionParentId.get(selectedSessionId) ?? null
+        : visibleSessions[0]?.sessionId ?? null
 
   const selectedSession = useMemo(
     () =>
-      sessions.find(
+      visibleSessions.find(
         (session) => session.sessionId === effectiveSelectedSessionId,
       ) ??
       null,
-    [effectiveSelectedSessionId, sessions],
+    [effectiveSelectedSessionId, visibleSessions],
   )
   const groupedSessionRows = useMemo(
-    () => createGroupedSessionRows(sessions),
-    [sessions],
+    () => createGroupedSessionRows(visibleSessions),
+    [visibleSessions],
   )
   const orchestratorEntries = useMemo(
     () =>
-      sessions
+      visibleSessions
         .flatMap((session) =>
           session.chunks
             .filter((chunk) => chunk.kind !== 'tool')
@@ -69,11 +87,11 @@ export function TerminalPanel({
             new Date(a.chunk.createdAt).getTime() -
             new Date(b.chunk.createdAt).getTime(),
         ),
-    [sessions],
+    [visibleSessions],
   )
 
-  const threadToolEntries = useMemo(
-    () => selectedSession?.chunks.filter((chunk) => chunk.kind === 'tool') ?? [],
+  const selectedThreadEntries = useMemo(
+    () => selectedSession?.chunks ?? [],
     [selectedSession],
   )
 
@@ -185,7 +203,7 @@ export function TerminalPanel({
           <Terminal size={15} aria-hidden="true" />
           <span>Terminal</span>
           <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
-            {sessions.length}
+            {visibleSessions.length}
           </span>
         </div>
 
@@ -194,7 +212,7 @@ export function TerminalPanel({
             type="button"
             title="Limpar terminal"
             onClick={onClear}
-            disabled={sessions.length === 0}
+            disabled={visibleSessions.length === 0}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
           >
             <Trash2 size={13} aria-hidden="true" />
@@ -241,7 +259,7 @@ export function TerminalPanel({
 
       {viewMode === 'threads' && (
         <div className="max-h-40 shrink-0 overflow-y-auto border-b border-white/[0.07] p-2">
-          {sessions.length === 0 ? (
+          {visibleSessions.length === 0 ? (
             <p className="px-2 py-3 text-[12px] text-zinc-600">
               Aguardando execução.
             </p>
@@ -332,13 +350,13 @@ export function TerminalPanel({
                   ))}
                 </div>
               )
-            ) : threadToolEntries.length === 0 ? (
+            ) : selectedThreadEntries.length === 0 ? (
               <p className="text-zinc-600">
-                {selectedSession ? 'Nenhuma ação registrada nesta thread.' : 'Aguardando execução.'}
+                {selectedSession ? 'Nenhum evento registrado nesta thread.' : 'Aguardando execução.'}
               </p>
             ) : (
               <div className="space-y-2">
-                {threadToolEntries.map((chunk) => (
+                {selectedThreadEntries.map((chunk) => (
                   <TerminalChunk key={chunk.id} chunk={chunk} />
                 ))}
               </div>
@@ -401,6 +419,97 @@ function TerminalChunk({ chunk }: { chunk: TerminalOutputChunk }) {
   )
 }
 
+function createVisibleSessions(sessions: TerminalOutputSession[]) {
+  const sessionsById = new Map(
+    sessions.map((session) => [session.sessionId, session]),
+  )
+  const hiddenSessionIds = new Set<string>()
+  const mergedSessions = new Map<string, TerminalOutputSession>()
+
+  for (const session of sessions) {
+    if (
+      !isOrchestratorTurnSession(session) ||
+      !session.parentThreadId ||
+      !sessionsById.has(session.parentThreadId)
+    ) {
+      continue
+    }
+
+    hiddenSessionIds.add(session.sessionId)
+    const parentSession =
+      mergedSessions.get(session.parentThreadId) ??
+      cloneTerminalSession(sessionsById.get(session.parentThreadId)!)
+    mergedSessions.set(
+      session.parentThreadId,
+      mergeTerminalSessions(parentSession, session),
+    )
+  }
+
+  return sessions
+    .filter((session) => !hiddenSessionIds.has(session.sessionId))
+    .map((session) => mergedSessions.get(session.sessionId) ?? session)
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+}
+
+function cloneTerminalSession(
+  session: TerminalOutputSession,
+): TerminalOutputSession {
+  return {
+    ...session,
+    chunks: [...session.chunks],
+  }
+}
+
+function mergeTerminalSessions(
+  parentSession: TerminalOutputSession,
+  childSession: TerminalOutputSession,
+): TerminalOutputSession {
+  const chunks = [...parentSession.chunks, ...childSession.chunks].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  )
+  const startedAt =
+    new Date(parentSession.startedAt).getTime() <=
+    new Date(childSession.startedAt).getTime()
+      ? parentSession.startedAt
+      : childSession.startedAt
+  const updatedAt =
+    new Date(parentSession.updatedAt).getTime() >=
+    new Date(childSession.updatedAt).getTime()
+      ? parentSession.updatedAt
+      : childSession.updatedAt
+
+  return {
+    ...parentSession,
+    chunks,
+    status: mergeSessionStatus(parentSession.status, childSession.status),
+    startedAt,
+    updatedAt,
+    outputSize: parentSession.outputSize + childSession.outputSize,
+  }
+}
+
+function mergeSessionStatus(
+  parentStatus: TerminalSessionStatus,
+  childStatus: TerminalSessionStatus,
+): TerminalSessionStatus {
+  if (parentStatus === 'error' || childStatus === 'error') {
+    return 'error'
+  }
+
+  if (parentStatus === 'running' || childStatus === 'running') {
+    return 'running'
+  }
+
+  if (parentStatus === 'stopped' || childStatus === 'stopped') {
+    return 'stopped'
+  }
+
+  return 'completed'
+}
+
 function createGroupedSessionRows(sessions: TerminalOutputSession[]) {
   const sessionsById = new Map(
     sessions.map((session) => [session.sessionId, session]),
@@ -434,7 +543,7 @@ function createGroupedSessionRows(sessions: TerminalOutputSession[]) {
 
 function formatSessionRole(session: TerminalOutputSession) {
   if (!session.parentThreadId || session.parentThreadId === session.sessionId) {
-    return 'Pai'
+    return 'Orq'
   }
 
   if (session.sessionId.includes('orchestrator-turn')) {
@@ -449,7 +558,7 @@ function getSessionRoleClassName(session: TerminalOutputSession) {
     'shrink-0 rounded border px-1 py-px text-[9px] uppercase leading-none'
 
   if (!session.parentThreadId || session.parentThreadId === session.sessionId) {
-    return `${base} border-zinc-700 text-zinc-500`
+    return `${base} border-sky-300/20 text-sky-200`
   }
 
   if (session.sessionId.includes('orchestrator-turn')) {
@@ -457,6 +566,10 @@ function getSessionRoleClassName(session: TerminalOutputSession) {
   }
 
   return `${base} border-amber-300/20 text-amber-200`
+}
+
+function isOrchestratorTurnSession(session: TerminalOutputSession) {
+  return session.sessionId.includes('orchestrator-turn')
 }
 
 function getChunkClassName(chunk: TerminalOutputChunk) {
@@ -607,7 +720,7 @@ function formatMetadata(chunk: TerminalOutputChunk) {
   }
 
   const labels: Record<string, string> = {
-    cachedInputTokens: 'Cache',
+    cachedInputTokens: 'Cache do provedor',
     cliType: 'CLI',
     command: 'Comando',
     costUsd: 'Custo',

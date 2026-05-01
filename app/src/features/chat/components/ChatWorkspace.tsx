@@ -47,6 +47,20 @@ import { QaLoggerPanel } from './QaLoggerPanel'
 import { TerminalPanel } from './TerminalPanel'
 
 const CONTEXT_MESSAGE_LIMIT = 12
+const OPEN_ENDED_ORCHESTRATION_TOPICS = [
+  'astronomia cotidiana',
+  'historia curiosa',
+  'culinaria caseira',
+  'musica brasileira',
+  'cinema',
+  'geografia',
+  'habitos de leitura',
+  'fotografia',
+  'idiomas',
+  'jogos de tabuleiro',
+  'arquitetura urbana',
+  'cultura popular',
+]
 
 export function ChatWorkspace() {
   const [models, setModels] = useState<Model[]>(() => loadModels(initialModels))
@@ -196,6 +210,7 @@ export function ChatWorkspace() {
     const removed = [...prevIds].filter((id) => !activeProjectIds.has(id)).map((id) => projects.find((p) => p.id === id)).filter(Boolean) as Project[]
     const projectDiff = { added, removed }
     lastSentProjectIdsRef.current = new Set(activeProjectIds)
+    const orchestrationHint = createOrchestrationPromptHint(content, sessionId)
 
     const cliPrompt = createCliPrompt(
       messages,
@@ -205,6 +220,7 @@ export function ChatWorkspace() {
       activeProjects,
       projectDiff,
       contextAttachments,
+      { orchestrationHint },
     )
     const resumePrompt = createCliPrompt(
       messages,
@@ -214,7 +230,7 @@ export function ChatWorkspace() {
       activeProjects,
       projectDiff,
       contextAttachments,
-      { includeHistory: false },
+      { includeHistory: false, orchestrationHint },
     )
 
     setMessages((currentMessages) => [
@@ -257,13 +273,14 @@ export function ChatWorkspace() {
   }
 
   function resetChat() {
-    const threadId = conversationThreadIdRef.current
+    const backendThreadIds = collectKnownBackendThreadIds()
 
     saveCurrentSession()
     setInput('')
     setContextAttachments([])
     stopStreaming()
-    resetBackendThread(threadId)
+    resetBackendThreads(backendThreadIds)
+    setActiveStreamingSession(null)
     setMessages(initialMessages)
     clearTerminalSessions()
     clearOrchestrationStatus()
@@ -292,10 +309,14 @@ export function ChatWorkspace() {
   }
 
   function loadSession(session: ChatSession) {
+    const backendThreadIds = collectKnownBackendThreadIds()
+
     saveCurrentSession()
     setInput('')
     setContextAttachments([])
     stopStreaming()
+    resetBackendThreads(backendThreadIds)
+    setActiveStreamingSession(null)
     clearOrchestrationStatus()
     resetConversationThread()
     setMessages(session.messages)
@@ -480,12 +501,25 @@ export function ChatWorkspace() {
     setIsModelSettingsOpen(true)
   }
 
-  function resetBackendThread(threadId: string | null) {
-    if (!threadId) {
-      return
-    }
+  function collectKnownBackendThreadIds() {
+    return [
+      conversationThreadIdRef.current,
+      activeThreadIdRef.current,
+      ...terminalSessions.flatMap((session) => [
+        session.sessionId,
+        session.parentThreadId ?? null,
+      ]),
+    ]
+  }
 
-    window.felixo?.cli?.resetThread?.({ threadId })
+  function resetBackendThreads(threadIds: Array<string | null | undefined>) {
+    const uniqueThreadIds = new Set(
+      threadIds.filter((threadId): threadId is string => Boolean(threadId)),
+    )
+
+    for (const threadId of uniqueThreadIds) {
+      window.felixo?.cli?.resetThread?.({ threadId })
+    }
   }
 
   function stopStreaming() {
@@ -534,7 +568,13 @@ export function ChatWorkspace() {
     }
 
     if (event.type === 'final_answer') {
-      markTerminalSessionStatus(resolveEventThreadId(event), 'completed')
+      const eventThreadId = resolveEventThreadId(event)
+      const parentThreadId = event.parentThreadId ?? resolveThreadId(event.sessionId)
+
+      markTerminalSessionStatus(eventThreadId, 'completed')
+      if (parentThreadId !== eventThreadId) {
+        markTerminalSessionStatus(parentThreadId, 'completed')
+      }
       completeAssistantMessage(event.sessionId, event.content, 'done')
       clearOrchestrationStatus()
       return
@@ -925,7 +965,14 @@ function formatOrchestrationRunStatus(run: OrchestrationRun) {
 
 type ProjectDiff = { added: Project[]; removed: Project[] }
 type ResetConversationThreadOptions = { resetProjectDiff?: boolean }
-type CliPromptOptions = { includeHistory?: boolean }
+type OrchestrationPromptHint = {
+  seed: string
+  openEndedTopic?: string
+}
+type CliPromptOptions = {
+  includeHistory?: boolean
+  orchestrationHint?: OrchestrationPromptHint | null
+}
 
 function createCliPrompt(
   messages: ChatMessage[],
@@ -937,7 +984,7 @@ function createCliPrompt(
   attachments: ContextAttachment[],
   options: CliPromptOptions = {},
 ) {
-  const { includeHistory = true } = options
+  const { includeHistory = true, orchestrationHint = null } = options
   const allHistoryMessages = messages.filter((message) => message.content.trim())
   const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
   const historyOffset = allHistoryMessages.length - historyMessages.length
@@ -951,7 +998,7 @@ function createCliPrompt(
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
   const hasAttachments = attachments.length > 0
   const orchestrationInstructions = shouldUseOrchestrationProtocol(currentPrompt)
-    ? createOrchestrationProtocolInstructions()
+    ? createOrchestrationProtocolInstructions(orchestrationHint)
     : null
   const hasContext =
     Boolean(orchestrationInstructions) ||
@@ -1085,10 +1132,7 @@ function formatModelLabel(model: Model) {
 }
 
 function shouldUseOrchestrationProtocol(prompt: string) {
-  const normalizedPrompt = prompt
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
+  const normalizedPrompt = normalizePromptText(prompt)
 
   const agentReferencePattern =
     /\b(gemini|claude|codex|sub-?agente|agente|cli|modelo)\b/
@@ -1100,17 +1144,80 @@ function shouldUseOrchestrationProtocol(prompt: string) {
   )
 }
 
-function createOrchestrationProtocolInstructions() {
-  return [
+function createOrchestrationPromptHint(
+  prompt: string,
+  seed: string,
+): OrchestrationPromptHint | null {
+  const normalizedPrompt = normalizePromptText(prompt)
+
+  if (
+    !shouldUseOrchestrationProtocol(prompt) ||
+    !isOpenEndedAgentQuestionRequest(normalizedPrompt)
+  ) {
+    return null
+  }
+
+  return {
+    seed,
+    openEndedTopic: pickOpenEndedOrchestrationTopic(seed),
+  }
+}
+
+function createOrchestrationProtocolInstructions(
+  hint: OrchestrationPromptHint | null = null,
+) {
+  const lines = [
     'Protocolo de orquestracao multi-agente:',
     '- Se a mensagem atual pedir para abrir, spawnar, consultar, perguntar, chamar ou usar outro agente/CLI/modelo, nao execute esse CLI por command_execution.',
     '- Em vez disso, responda somente com JSON para o Felixo criar uma sessao filha nativa.',
     '- Para criar um sub-agente, use exatamente este formato, sem Markdown e sem texto extra:',
     '{"type":"spawn_agent","agentId":"gemini-1","cliType":"gemini","prompt":"Pergunta completa para o sub-agente"}',
     '- `cliType` deve ser um destes valores: "gemini", "claude", "codex", "gemini-acp" ou "codex-app-server".',
+    '- O campo `prompt` deve conter a tarefa completa para o sub-agente executar diretamente. Se a tarefa envolver editar arquivos, inclua o caminho alvo, diga para nao delegar para outro agente e diga para responder que nao conseguiu caso nao tenha ferramenta ou permissao para alterar o arquivo.',
     '- Se precisar de mais de um evento no mesmo turno, responda como JSONL, um objeto por linha, por exemplo `spawn_agent` seguido de `awaiting_agents`.',
     '- Depois que o Felixo retornar resultados dos sub-agentes, responda somente com `{"type":"final_answer","content":"resposta final para o usuario"}`.',
-  ].join('\n')
+  ]
+
+  if (hint?.openEndedTopic) {
+    lines.push(
+      '',
+      'Diretriz para pedido aberto:',
+      `- Seed efemera desta mensagem: ${hint.seed}.`,
+      `- O usuario pediu algo como "qualquer coisa"; pergunte ao sub-agente uma pergunta curta e concreta sobre: ${hint.openEndedTopic}.`,
+      '- Nao escolha engenharia de software, revisao de codigo, commits, modularizacao ou organizacao de projetos para esse caso aberto, salvo se o usuario pedir explicitamente esse tema.',
+    )
+  }
+
+  return lines.join('\n')
+}
+
+function normalizePromptText(prompt: string) {
+  return prompt
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function isOpenEndedAgentQuestionRequest(normalizedPrompt: string) {
+  return /\b(qualquer coisa|pergunte algo|pergunta livre|pergunta qualquer|algo aleatorio|uma coisa qualquer|anything)\b/.test(
+    normalizedPrompt,
+  )
+}
+
+function pickOpenEndedOrchestrationTopic(seed: string) {
+  const index = Math.abs(hashString(seed)) % OPEN_ENDED_ORCHESTRATION_TOPICS.length
+
+  return OPEN_ENDED_ORCHESTRATION_TOPICS[index]
+}
+
+function hashString(value: string) {
+  let hash = 0
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0
+  }
+
+  return hash
 }
 
 function formatBytes(bytes: number) {
