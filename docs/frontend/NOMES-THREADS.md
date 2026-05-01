@@ -25,7 +25,10 @@ Concluído · 6 eventos · 704 B
 O backend envia `modelName` e `promptHint` como metadados no evento de início de cada sessão terminal:
 
 - `modelName` vem de `model.name` no momento do spawn.
-- `promptHint` vem do prompt enviado à CLI, truncado para 60 caracteres.
+- `promptHint` vem da pergunta original do usuário, quando é a thread principal.
+- Para subagentes, `promptHint` vem do prompt solicitado pelo orquestrador para aquele agente.
+- Para reinvocações internas do orquestrador, `promptHint` preserva o objetivo original da run.
+- O hint é truncado para 60 caracteres antes de chegar à UI.
 - `cliType` é usado como fallback quando `modelName` não está disponível.
 
 ### Extração no frontend
@@ -45,7 +48,7 @@ O `sessionId` completo continua disponível como `title` no atributo HTML do ele
 ## Arquivos envolvidos
 
 - `app/electron/services/terminal-event-formatter.cjs` — `createStartTerminalEvent()` agora aceita e propaga `promptHint`
-- `app/electron/services/ipc-handlers.cjs` — passa `promptHint: spawnPrompt` ao criar evento de início
+- `app/electron/services/ipc-handlers.cjs` — passa `promptHint` explícito ao criar evento de início
 - `app/src/features/chat/components/TerminalPanel.tsx` — `extractSessionLabel()` e exibição atualizada
 
 ## Limitações conhecidas

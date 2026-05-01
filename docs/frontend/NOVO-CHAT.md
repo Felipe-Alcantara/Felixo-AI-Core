@@ -17,6 +17,7 @@ Ao apertar no botão **Novo Chat**, o app deve iniciar uma sessão limpa. Isso s
 | Threads do backend            | Resetadas via `cli:reset-thread` para cada thread conhecida |
 | Sessão ativa                  | Ref e state zerados                          |
 | Terminal output               | Todas as sessões limpas, chunk id resetado   |
+| Eventos atrasados do terminal | Ignorados quando pertencem a threads resetadas |
 | Orquestração                  | Run id e status text limpos                  |
 | Thread de conversa            | Refs de threadId, modelId e messageThreadIds zerados |
 | Diff de projetos              | Ref de `lastSentProjectIds` zerada           |
@@ -43,8 +44,9 @@ Antes de limpar, o app salva automaticamente a sessão atual na lista de sessõe
 
 1. `collectKnownBackendThreadIds()` coleta todos os threadIds conhecidos da conversa, terminal e orquestração.
 2. Para cada threadId único, `cli:reset-thread` é chamado no backend.
-3. O backend coleta a família de threads (parent + filhos), encerra processos, fecha sessões persistentes e marca runs de orquestração como `failed`.
-4. O QA Logger é limpo para que logs da sessão anterior não poluam a nova sessão.
+3. O hook do terminal limpa a UI e registra os threadIds antigos como ignorados para descartar eventos atrasados.
+4. O backend coleta a família de threads (parent + filhos), encerra processos, fecha sessões persistentes e marca runs de orquestração como `failed`.
+5. O QA Logger é limpo para que logs da sessão anterior não poluam a nova sessão.
 
 ## Arquivos envolvidos
 
@@ -56,5 +58,5 @@ Antes de limpar, o app salva automaticamente a sessão atual na lista de sessõe
 
 ## Possíveis problemas conhecidos
 
-- Um subagente em execução pode terminar depois do novo chat e tentar inserir resultado na sessão errada. Mitigado por: o backend marca runs como `failed` e os IDs de sessão não coincidem.
+- Um subagente em execução pode terminar depois do novo chat e tentar inserir resultado na sessão errada. Mitigado por: o backend marca runs como `failed`, os IDs de sessão não coincidem e o terminal ignora eventos de threads resetadas.
 - Limpar tudo agressivamente poderia apagar configurações. Mitigado por: apenas estado de sessão é limpo, não configurações globais.

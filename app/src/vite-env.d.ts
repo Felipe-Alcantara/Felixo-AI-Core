@@ -40,6 +40,7 @@ declare global {
           threadId?: string
           prompt: string
           resumePrompt?: string
+          promptHint?: string
           model: Model
           cwd?: string
           availableModels?: Model[]

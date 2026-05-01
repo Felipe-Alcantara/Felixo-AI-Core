@@ -19,14 +19,19 @@ export type TerminalOutputSession = {
 }
 
 type TerminalOutputSessions = Record<string, TerminalOutputSession>
+type ClearSessionsOptions = {
+  ignoreSessionIds?: Array<string | null | undefined>
+}
 const textEncoder = new TextEncoder()
 
 export function useTerminalOutput() {
   const [sessionsById, setSessionsById] = useState<TerminalOutputSessions>({})
   const nextChunkId = useRef(1)
+  const ignoredSessionIds = useRef<Set<string>>(new Set())
 
   const startSession = useCallback((sessionId: string, parentThreadId?: string) => {
     const now = new Date().toISOString()
+    ignoredSessionIds.current.delete(sessionId)
 
     setSessionsById((currentSessions) => {
       const currentSession = currentSessions[sessionId]
@@ -48,6 +53,10 @@ export function useTerminalOutput() {
 
   const markSessionStatus = useCallback(
     (sessionId: string, status: TerminalSessionStatus) => {
+      if (ignoredSessionIds.current.has(sessionId)) {
+        return
+      }
+
       const now = new Date().toISOString()
 
       setSessionsById((currentSessions) => {
@@ -70,12 +79,22 @@ export function useTerminalOutput() {
     [],
   )
 
-  const clearSessions = useCallback(() => {
+  const clearSessions = useCallback((options: ClearSessionsOptions = {}) => {
+    ignoredSessionIds.current = new Set(
+      options.ignoreSessionIds?.filter((id): id is string => Boolean(id)) ?? [],
+    )
     setSessionsById({})
     nextChunkId.current = 1
   }, [])
 
   const appendTerminalOutput = useCallback((event: TerminalOutputEvent) => {
+    if (
+      ignoredSessionIds.current.has(event.sessionId) ||
+      (event.parentThreadId && ignoredSessionIds.current.has(event.parentThreadId))
+    ) {
+      return
+    }
+
     const now = new Date().toISOString()
 
     setSessionsById((currentSessions) => {
