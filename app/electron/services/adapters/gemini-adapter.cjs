@@ -108,7 +108,7 @@ function classifyStderr(chunk) {
 function shouldSuppressStderr(chunk) {
   const lines = createStderrLines(chunk)
 
-  return lines.length > 0 && lines.every(isVisualStderrNotice)
+  return lines.length > 0 && lines.every(isNonFatalStderrLine)
 }
 
 function shouldAbortOnStderr(chunk) {

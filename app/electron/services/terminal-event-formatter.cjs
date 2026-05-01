@@ -83,9 +83,21 @@ function createStderrTerminalEvent(chunk, severity = 'warn') {
     source: 'stderr',
     kind: 'stderr',
     severity,
-    title: severity === 'error' ? 'Erro da CLI' : 'Aviso da CLI',
+    title: createStderrTitle(severity),
     chunk: String(chunk),
   }
+}
+
+function createStderrTitle(severity) {
+  if (severity === 'error') {
+    return 'Erro da CLI'
+  }
+
+  if (severity === 'info' || severity === 'debug') {
+    return 'Info da CLI'
+  }
+
+  return 'Aviso da CLI'
 }
 
 function createOrchestrationTerminalEvent(event) {

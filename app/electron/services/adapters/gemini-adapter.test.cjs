@@ -199,7 +199,7 @@ test('gemini adapter classifies known non-fatal stderr notices', () => {
   assert.equal(adapter.classifyStderr(ripgrepNotice), 'info')
   assert.equal(adapter.shouldSuppressStderr(colorNotice), true)
   assert.equal(adapter.shouldSuppressStderr(basicTerminalNotice), true)
-  assert.equal(adapter.shouldSuppressStderr(ripgrepNotice), false)
+  assert.equal(adapter.shouldSuppressStderr(ripgrepNotice), true)
   assert.equal(adapter.classifyStderr(`${ripgrepNotice}real error\n`), 'warn')
 })
 

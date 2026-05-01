@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 const {
   createOrchestrationTerminalEvent,
   createStartTerminalEvent,
+  createStderrTerminalEvent,
   createTerminalEvents,
 } = require('./terminal-event-formatter.cjs')
 
@@ -59,6 +60,12 @@ test('terminal formatter labels persistent process reuse', () => {
   assert.equal(event.metadata.mode, 'processo-persistente')
   assert.equal(event.metadata.persistent, true)
   assert.equal(event.metadata.reusedProcess, true)
+})
+
+test('terminal formatter labels stderr info without warning copy', () => {
+  assert.equal(createStderrTerminalEvent('Aviso benigno', 'info').title, 'Info da CLI')
+  assert.equal(createStderrTerminalEvent('Falha', 'error').title, 'Erro da CLI')
+  assert.equal(createStderrTerminalEvent('Atenção', 'warn').title, 'Aviso da CLI')
 })
 
 test('terminal formatter creates orchestration lifecycle events', () => {
