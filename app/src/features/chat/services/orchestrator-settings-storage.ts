@@ -1,5 +1,6 @@
 import type {
   Model,
+  ModelAvailabilityStatus,
   ModelCapabilityProfile,
   OrchestrationCliType,
   OrchestratorMode,
@@ -20,6 +21,8 @@ export const defaultOrchestratorSettings: OrchestratorSettings = {
   maxTurns: 5,
   maxTotalAgents: 10,
   maxRuntimeMinutes: 20,
+  maxCostEstimate: 0,
+  maxContextTokens: 0,
   requireConfirmationForSensitiveActions: true,
 }
 
@@ -49,6 +52,7 @@ export function saveOrchestratorSettings(settings: OrchestratorSettings) {
 export function createModelCapabilityProfiles(
   models: Model[],
   settings: OrchestratorSettings,
+  dynamicAvailability?: Record<string, ModelAvailabilityStatus>,
 ): ModelCapabilityProfile[] {
   const blockedModelIds = new Set(settings.blockedModelIds)
 
@@ -71,19 +75,39 @@ export function createModelCapabilityProfiles(
       strengths: getModelStrengths(model),
       limits: getModelLimitsLabel(model),
       cost: getModelCostLabel(model),
-      status: blockedModelIds.has(model.id) ? 'blocked' : 'available',
+      status: resolveModelStatus(model.id, blockedModelIds, dynamicAvailability),
     }))
+}
+
+function resolveModelStatus(
+  modelId: string,
+  blockedModelIds: Set<string>,
+  dynamicAvailability?: Record<string, ModelAvailabilityStatus>,
+): ModelAvailabilityStatus {
+  if (blockedModelIds.has(modelId)) {
+    return 'blocked'
+  }
+
+  const dynamic = dynamicAvailability?.[modelId]
+
+  if (dynamic && dynamic !== 'available') {
+    return dynamic
+  }
+
+  return 'available'
 }
 
 export function createOrchestratorContextBlock(
   profiles: ModelCapabilityProfile[],
   settings: OrchestratorSettings,
 ) {
-  const lines = [
+  const lines: Array<string | null> = [
     'Contexto de modelos disponiveis para orquestracao:',
     `- Modo: ${formatOrchestratorMode(settings.mode)}.`,
     `- Workflow padrao: ${settings.defaultWorkflow || 'nao configurado'}.`,
     `- Limites: max ${settings.maxAgentsPerTurn} sub-agentes por turno, ${settings.maxTotalAgents} no total, ${settings.maxTurns} turnos, ${settings.maxRuntimeMinutes} min.`,
+    settings.maxCostEstimate > 0 ? `- Limite de custo estimado: ${settings.maxCostEstimate}.` : null,
+    settings.maxContextTokens > 0 ? `- Limite de contexto: ${settings.maxContextTokens} tokens.` : null,
     `- Confirmar acoes sensiveis: ${settings.requireConfirmationForSensitiveActions ? 'sim' : 'nao'}.`,
   ]
 
@@ -125,12 +149,13 @@ export function createOrchestratorContextBlock(
     'Regras de escolha:',
     '- Escolha somente cliType existente e com status available.',
     '- Se um modelo estiver bloqueado, nao solicite spawn dele.',
+    '- Modelos com status error, no_login, limit_reached ou unavailable nao devem ser spawnados.',
     '- Para tarefas baratas ou simples, prefira modelos rapidos/menores quando disponiveis.',
     '- Para edicao de arquivos ou codigo, prefira modelos marcados como bons para codigo e edicao.',
     '- Explique a escolha no prompt do sub-agente quando isso ajudar rastreabilidade.',
   )
 
-  return lines.join('\n')
+  return lines.filter((line): line is string => line !== null).join('\n')
 }
 
 export function normalizeOrchestratorSettings(
@@ -166,6 +191,14 @@ export function normalizeOrchestratorSettings(
     maxRuntimeMinutes: normalizePositiveInteger(
       settings.maxRuntimeMinutes,
       defaultOrchestratorSettings.maxRuntimeMinutes,
+    ),
+    maxCostEstimate: normalizeNonNegativeNumber(
+      settings.maxCostEstimate,
+      defaultOrchestratorSettings.maxCostEstimate,
+    ),
+    maxContextTokens: normalizeNonNegativeNumber(
+      settings.maxContextTokens,
+      defaultOrchestratorSettings.maxContextTokens,
     ),
     requireConfirmationForSensitiveActions:
       typeof settings.requireConfirmationForSensitiveActions === 'boolean'
@@ -292,4 +325,10 @@ function getStringList(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
+}
+
+function normalizeNonNegativeNumber(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : fallback
 }

@@ -42,8 +42,19 @@ export type OrchestratorSettings = {
   maxTurns: number
   maxTotalAgents: number
   maxRuntimeMinutes: number
+  maxCostEstimate: number
+  maxContextTokens: number
   requireConfirmationForSensitiveActions: boolean
 }
+
+export type ModelAvailabilityStatus =
+  | 'available'
+  | 'blocked'
+  | 'unavailable'
+  | 'error'
+  | 'no_login'
+  | 'limit_reached'
+  | 'unknown'
 
 export type ModelCapabilityProfile = {
   id: string
@@ -60,7 +71,7 @@ export type ModelCapabilityProfile = {
   strengths: string[]
   limits: string
   cost: string
-  status: 'available' | 'blocked' | 'unknown'
+  status: ModelAvailabilityStatus
 }
 
 export type AppTheme = 'dark' | 'high_contrast'

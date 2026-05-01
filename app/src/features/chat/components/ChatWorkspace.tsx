@@ -518,7 +518,7 @@ export function ChatWorkspace() {
   }
 
   async function exportCurrentChat(
-    format: 'json' | 'markdown',
+    format: 'json' | 'markdown' | 'text',
     fileName: string,
   ) {
     const result = await exportChat({

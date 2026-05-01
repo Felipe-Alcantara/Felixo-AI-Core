@@ -26,7 +26,8 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 | `supportsLongContext` | Indicação operacional de contexto longo |
 | `strengths` | Tarefas indicadas: código, revisão, resumo, planejamento, escrita |
 | `limits` | Limites de uso conhecidos ou configurados |
-| `status` | Disponível, bloqueado, sem login, indisponível ou desconhecido |
+| `cost` | Estimativa de custo por provedor/modelo |
+| `status` | Disponível, bloqueado, indisponível, erro, sem login, limite atingido ou desconhecido |
 
 ## Configurações do orquestrador
 
@@ -38,7 +39,7 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 | Modelos bloqueados | Global/local |
 | Workflow padrão | Global/local |
 | Modo de operação | Manual, semiautomático, automático, somente leitura, experimental |
-| Limites | Máximo de subagentes, turnos e tempo |
+| Limites | Máximo de subagentes, turnos, tempo, custo estimado e contexto (tokens) |
 
 ## Regras de spawn
 
@@ -80,9 +81,14 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - Escolha do modelo preferido do mesmo `cliType`, quando configurado.
 - Falha explícita quando o modelo está bloqueado ou não existe entre os modelos disponíveis.
 - Evento de terminal `orchestration_model_choice` com `selectedModelId`, `selectedModelName`, regra de seleção, quantidade de candidatos, bloqueios ignorados e motivo textual.
+- `ModelAvailabilityStatus` estendido para: `available`, `blocked`, `unavailable`, `error`, `no_login`, `limit_reached`, `unknown`.
+- `createModelCapabilityProfiles` aceita mapa opcional de disponibilidade dinâmica por modelo.
+- Regras de escolha no prompt do orquestrador impedem spawn de modelos com status de erro, sem login ou limite atingido.
+- Campos `maxCostEstimate` e `maxContextTokens` adicionados às configurações do orquestrador.
+- Modal exibe campos de custo estimado e limite de contexto (tokens).
 
 ## Próximos passos
 
 - Persistir configurações fora de `localStorage` quando SQLite entrar.
-- Adicionar telemetria local de erros por modelo para alimentar disponibilidade.
+- Alimentar `dynamicAvailability` a partir de erros reais de spawn/execução dos adapters.
 - Permitir escolha por modelo específico, não apenas por `cliType`.

@@ -49,6 +49,8 @@ export function OrchestratorSettingsModal({
       maxTurns: clampPositiveInteger(draft.maxTurns, 1),
       maxTotalAgents: clampPositiveInteger(draft.maxTotalAgents, 1),
       maxRuntimeMinutes: clampPositiveInteger(draft.maxRuntimeMinutes, 1),
+      maxCostEstimate: clampNonNegative(draft.maxCostEstimate),
+      maxContextTokens: clampNonNegative(draft.maxContextTokens),
     })
     onClose()
   }
@@ -56,14 +58,19 @@ export function OrchestratorSettingsModal({
   function updateNumber(
     field: keyof Pick<
       OrchestratorSettings,
-      'maxAgentsPerTurn' | 'maxTurns' | 'maxTotalAgents' | 'maxRuntimeMinutes'
+      | 'maxAgentsPerTurn'
+      | 'maxTurns'
+      | 'maxTotalAgents'
+      | 'maxRuntimeMinutes'
+      | 'maxCostEstimate'
+      | 'maxContextTokens'
     >,
     event: ChangeEvent<HTMLInputElement>,
   ) {
-    const value = Number.parseInt(event.target.value, 10)
+    const value = Number.parseFloat(event.target.value)
     setDraft((current) => ({
       ...current,
-      [field]: Number.isFinite(value) ? value : 1,
+      [field]: Number.isFinite(value) ? value : 0,
     }))
   }
 
@@ -221,6 +228,20 @@ export function OrchestratorSettingsModal({
                   value={draft.maxRuntimeMinutes}
                   onChange={(event) => updateNumber('maxRuntimeMinutes', event)}
                 />
+                <NumberField
+                  label="Custo est."
+                  value={draft.maxCostEstimate}
+                  min={0}
+                  step={0.01}
+                  onChange={(event) => updateNumber('maxCostEstimate', event)}
+                />
+                <NumberField
+                  label="Contexto (tokens)"
+                  value={draft.maxContextTokens}
+                  min={0}
+                  step={1000}
+                  onChange={(event) => updateNumber('maxContextTokens', event)}
+                />
               </div>
 
               <label className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-zinc-300">
@@ -307,10 +328,14 @@ export function OrchestratorSettingsModal({
 function NumberField({
   label,
   value,
+  min = 1,
+  step,
   onChange,
 }: {
   label: string
   value: number
+  min?: number
+  step?: number
   onChange: (event: ChangeEvent<HTMLInputElement>) => void
 }) {
   return (
@@ -318,7 +343,8 @@ function NumberField({
       {label}
       <input
         type="number"
-        min={1}
+        min={min}
+        step={step}
         value={value}
         onChange={onChange}
         className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
@@ -335,4 +361,8 @@ function toggleValue(values: string[], value: string) {
 
 function clampPositiveInteger(value: number, fallback: number) {
   return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+function clampNonNegative(value: number) {
+  return Number.isFinite(value) && value >= 0 ? value : 0
 }
