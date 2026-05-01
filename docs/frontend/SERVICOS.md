@@ -1,5 +1,7 @@
 # Frontend — Serviços e Dados
 
+Status: concluido.
+
 ---
 
 ## chat-service.ts

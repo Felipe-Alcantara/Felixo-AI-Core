@@ -1,5 +1,7 @@
 # Plano: Codex App-Server Adapter Persistente
 
+Status: em desenvolvimento.
+
 ## Contexto
 
 O Codex hoje roda em native-resume (`codex exec resume`), abrindo um processo

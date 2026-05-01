@@ -1,5 +1,7 @@
 # Backend Electron
 
+Status: concluido.
+
 ## Responsabilidade
 
 O processo principal do Electron funciona como backend local do Felixo AI Core. Ele recebe chamadas do renderer pelo preload, executa CLIs reais, interpreta JSONL em streaming e devolve eventos normalizados para a interface.

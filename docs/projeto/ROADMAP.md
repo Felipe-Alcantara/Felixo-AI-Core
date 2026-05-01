@@ -1,5 +1,7 @@
 # Felixo AI Core — Roadmap e Objetivos
 
+Status: em desenvolvimento.
+
 > **Ideia central:** criar uma aplicação desktop Linux-first para orquestrar múltiplas IAs de terminal em uma única interface, evoluindo de um protótipo simples para um projeto open source, depois para um sistema inteligente e, futuramente, para uma plataforma pessoal 24/7 acessível de qualquer dispositivo.
 
 ---

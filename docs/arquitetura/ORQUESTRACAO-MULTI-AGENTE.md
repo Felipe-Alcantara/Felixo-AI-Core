@@ -1,5 +1,7 @@
 # Orquestração Multi-Agente
 
+Status: planejado.
+
 ## Problema
 
 Quando um CLI orquestrador (ex: Codex) spawna outro agente (ex: Claude Code)

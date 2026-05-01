@@ -1,5 +1,7 @@
 # Status Atual do Felixo AI Core
 
+Status: concluido.
+
 ## Resumo
 
 O app já executa CLIs reais (`claude`, `codex`, `gemini`) a partir do backend Electron, envia respostas em streaming para o React e mostra uma visão humanizada do terminal em tempo real. A conversa agora diferencia `threadId` lógico da conversa e `sessionId` da resposta, permitindo agrupar vários prompts no mesmo terminal visual.

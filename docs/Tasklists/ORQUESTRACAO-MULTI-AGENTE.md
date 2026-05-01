@@ -1,5 +1,7 @@
 # Tasklist — Orquestração Multi-Agente
 
+Status: concluido.
+
 Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUESTRACAO-MULTI-AGENTE.md)
 
 ## Fase 1 — Protocolo e tipos

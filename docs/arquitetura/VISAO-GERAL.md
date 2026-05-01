@@ -1,5 +1,7 @@
 # Arquitetura — Visão Geral
 
+Status: concluido.
+
 ## Estrutura de Camadas
 
 ```
