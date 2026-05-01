@@ -13,10 +13,10 @@ Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUE
 
 ## Fase 2 — Backend: OrchestrationRun + Store
 
-- [ ] 2.1 Criar `orchestration-store.cjs` com create/get/update/list de OrchestrationRun
-- [ ] 2.2 Implementar estado de agentJobs (pending, running, completed, error)
-- [ ] 2.3 Implementar limites (maxTurns, maxAgentsPerTurn, maxTotalAgents)
-- [ ] 2.4 Testes unitarios para orchestration-store
+- [x] 2.1 Criar `orchestration-store.cjs` com create/get/update/list de OrchestrationRun
+- [x] 2.2 Implementar estado de agentJobs (pending, running, completed, error)
+- [x] 2.3 Implementar limites (maxTurns, maxAgentsPerTurn, maxTotalAgents)
+- [x] 2.4 Testes unitarios para orchestration-store
 
 ## Fase 3 — Backend: OrchestrationRunner (loop principal)
 
