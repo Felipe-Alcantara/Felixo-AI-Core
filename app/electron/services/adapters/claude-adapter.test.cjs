@@ -237,6 +237,19 @@ test('claude adapter parses session metadata', () => {
   })
 })
 
+test('claude adapter ignores non-init system status as session metadata', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'system',
+      subtype: 'status',
+      status: 'requesting',
+      session_id: '00000000-0000-4000-8000-000000000001',
+    }),
+  )
+
+  assert.equal(event, null)
+})
+
 test('claude adapter parses result metadata', () => {
   const event = adapter.parseLine(
     JSON.stringify({
@@ -250,5 +263,47 @@ test('claude adapter parses result metadata', () => {
     type: 'done',
     cost: 0.01,
     duration: 1200,
+  })
+})
+
+test('claude adapter parses assistant rate-limit payload as error', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'assistant',
+      error: 'rate_limit',
+      message: {
+        content: [
+          {
+            type: 'text',
+            text: "You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
+          },
+        ],
+      },
+      session_id: '00000000-0000-4000-8000-000000000001',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'error',
+    message: "You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
+  })
+})
+
+test('claude adapter parses error result metadata as error', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      is_error: true,
+      api_error_status: 429,
+      result: "You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
+      session_id: '00000000-0000-4000-8000-000000000001',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'error',
+    message: "You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
+    providerSessionId: '00000000-0000-4000-8000-000000000001',
   })
 })
