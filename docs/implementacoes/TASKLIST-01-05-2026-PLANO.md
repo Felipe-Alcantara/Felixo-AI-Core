@@ -58,3 +58,7 @@ Ao fim deste ciclo, o app deve oferecer uma base melhor para trabalho diário: e
 - Planos futuros documentados para workflows visuais, painel Git, relatórios e SQLite.
 - Pesquisa inicial de modelos baratos registrada com fontes e data.
 - Todos os Markdown em `/docs` receberam linha `Status:` no corpo.
+- Correção incremental: labels de threads usam `promptHint` explícito em vez do prompt interno completo.
+- Correção incremental: novo chat bloqueia eventos atrasados de threads resetadas no terminal.
+- Correção incremental: reinvocações do orquestrador preservam modelos, configurações e limites.
+- Pendências abertas em `/docs` consolidadas em `docs/projeto/PENDENCIAS-DOCS-PRIORIZADAS.md`.
