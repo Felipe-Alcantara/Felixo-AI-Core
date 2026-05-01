@@ -156,6 +156,52 @@ test('claude adapter parses text deltas', () => {
   })
 })
 
+test('claude adapter parses orchestration spawn_agent events', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'spawn_agent',
+      agentId: 'reviewer-1',
+      cliType: 'codex',
+      prompt: 'Revise as alteracoes.',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'spawn_agent',
+    agentId: 'reviewer-1',
+    cliType: 'codex',
+    prompt: 'Revise as alteracoes.',
+  })
+})
+
+test('claude adapter parses orchestration awaiting_agents events', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'awaiting_agents',
+      agentIds: ['reviewer-1', 'researcher-2'],
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'awaiting_agents',
+    agentIds: ['reviewer-1', 'researcher-2'],
+  })
+})
+
+test('claude adapter parses orchestration final_answer events', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'final_answer',
+      content: 'Fluxo concluido.',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'final_answer',
+    content: 'Fluxo concluido.',
+  })
+})
+
 test('claude adapter parses session metadata', () => {
   const event = adapter.parseLine(
     JSON.stringify({

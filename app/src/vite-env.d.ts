@@ -3,12 +3,14 @@
 import type {
   GitProjectSummary,
   Model,
+  OrchestrationStreamEvent,
   QaLogEntry,
   StreamEvent,
   TerminalOutputEvent,
 } from './features/chat/types'
 
 type DetectedRepo = { name: string; path: string }
+type CliStreamEvent = StreamEvent | OrchestrationStreamEvent
 
 type CliInvokeResult = {
   ok: boolean
@@ -41,7 +43,7 @@ declare global {
         resetThread: (params: {
           threadId: string
         }) => Promise<CliInvokeResult & { killed?: boolean }>
-        onStream: (callback: (event: StreamEvent) => void) => () => void
+        onStream: (callback: (event: CliStreamEvent) => void) => () => void
         onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
         onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
       }

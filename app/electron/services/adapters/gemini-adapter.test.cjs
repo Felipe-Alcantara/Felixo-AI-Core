@@ -126,6 +126,52 @@ test('gemini adapter parses result as done', () => {
   })
 })
 
+test('gemini adapter parses orchestration spawn_agent events', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'spawn_agent',
+      agentId: 'reviewer-1',
+      cliType: 'gemini-acp',
+      prompt: 'Revise as alteracoes.',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'spawn_agent',
+    agentId: 'reviewer-1',
+    cliType: 'gemini-acp',
+    prompt: 'Revise as alteracoes.',
+  })
+})
+
+test('gemini adapter parses orchestration awaiting_agents events', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'awaiting_agents',
+      agentIds: ['reviewer-1', 'researcher-2'],
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'awaiting_agents',
+    agentIds: ['reviewer-1', 'researcher-2'],
+  })
+})
+
+test('gemini adapter parses orchestration final_answer events', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'final_answer',
+      content: 'Fluxo concluido.',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'final_answer',
+    content: 'Fluxo concluido.',
+  })
+})
+
 test('gemini adapter classifies known non-fatal stderr notices', () => {
   const colorNotice =
     'Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.\n'

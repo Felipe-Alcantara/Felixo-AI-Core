@@ -1,4 +1,7 @@
 const { createModelOptionArgs } = require('./model-options.cjs')
+const {
+  parseOrchestrationEvent,
+} = require('./orchestration-events.cjs')
 
 function getSpawnArgs(prompt, context = {}) {
   return {
@@ -40,6 +43,15 @@ function canResume(context = {}) {
 
 function parseLine(line) {
   const payload = JSON.parse(line)
+  const orchestrationEvent = parseOrchestrationEvent(payload)
+
+  if (orchestrationEvent) {
+    if (typeof payload.session_id === 'string') {
+      orchestrationEvent.providerSessionId = payload.session_id
+    }
+
+    return orchestrationEvent
+  }
 
   if (payload.type === 'init' && typeof payload.session_id === 'string') {
     return {
