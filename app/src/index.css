@@ -12,6 +12,11 @@
   --color-status-bg: #141413;
   --color-border: rgba(255, 255, 255, 0.08);
   --color-accent: #a7f3d0;
+  --color-error: #fca5a5;
+  --color-success: #86efac;
+  --spacing-base: 0.5rem;
+  --radius-base: 1rem;
+  --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.32);
   color: #f4f4f5;
   background: #09090b;
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
@@ -31,6 +36,11 @@
   --color-status-bg: #07111f;
   --color-border: rgba(125, 211, 252, 0.24);
   --color-accent: #67e8f9;
+  --color-error: #f87171;
+  --color-success: #4ade80;
+  --spacing-base: 0.5rem;
+  --radius-base: 0.75rem;
+  --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.48);
 }
 
 * {
