@@ -35,7 +35,6 @@ import type {
 } from '../types'
 import { useTerminalOutput } from '../hooks/useTerminalOutput'
 import { AutomationsModal } from './AutomationsModal'
-import { CliApprovalModal } from './CliApprovalModal'
 import { CodePanel } from './CodePanel'
 import { FelixoSettingsModal } from './FelixoSettingsModal'
 import { ModelSettingsModal } from './ModelSettingsModal'
@@ -69,9 +68,6 @@ export function ChatWorkspace() {
   const [isAutomationsOpen, setIsAutomationsOpen] = useState(false)
   const [isCodePanelOpen, setIsCodePanelOpen] = useState(false)
   const [isFelixoSettingsOpen, setIsFelixoSettingsOpen] = useState(false)
-  const [pendingApprovals, setPendingApprovals] = useState<
-    { threadId: string; approvalId: string; approvalType: 'command' | 'file' | 'permission'; description: string; canDeny: boolean }[]
-  >([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
@@ -484,17 +480,6 @@ export function ChatWorkspace() {
   }
 
   function handleStreamEvent(event: StreamEvent) {
-    if (event.type === 'approval_request') {
-      setPendingApprovals((prev) => [...prev, {
-        threadId: event.threadId,
-        approvalId: event.approvalId,
-        approvalType: event.approvalType,
-        description: event.description,
-        canDeny: event.canDeny,
-      }])
-      return
-    }
-
     if (event.type === 'text') {
       appendAssistantText(event.sessionId, event.text)
       return
@@ -820,21 +805,6 @@ export function ChatWorkspace() {
         onRemoveProject={removeProject}
       />
 
-      {pendingApprovals[0] && (
-        <CliApprovalModal
-          request={pendingApprovals[0]}
-          onApprove={() => {
-            const req = pendingApprovals[0]
-            window.felixo?.cli?.respondApproval?.({ threadId: req.threadId, approvalId: req.approvalId, approved: true })
-            setPendingApprovals((prev) => prev.slice(1))
-          }}
-          onDeny={() => {
-            const req = pendingApprovals[0]
-            window.felixo?.cli?.respondApproval?.({ threadId: req.threadId, approvalId: req.approvalId, approved: false })
-            setPendingApprovals((prev) => prev.slice(1))
-          }}
-        />
-      )}
     </div>
   )
 }
