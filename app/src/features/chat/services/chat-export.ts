@@ -10,6 +10,7 @@ type ExportFormat = 'json' | 'markdown'
 
 type ExportChatParams = {
   format: ExportFormat
+  fileName?: string
   messages: ChatMessage[]
   models: Model[]
   activeProjects: Project[]
@@ -17,10 +18,16 @@ type ExportChatParams = {
   terminalSessions: TerminalOutputSession[]
 }
 
-export function exportChat(params: ExportChatParams) {
+type ExportResult = {
+  ok: boolean
+  canceled?: boolean
+  filePath?: string
+  message?: string
+}
+
+export async function exportChat(params: ExportChatParams): Promise<ExportResult> {
   const exportedAt = new Date().toISOString()
   const title = createExportTitle(params.messages)
-  const fileBaseName = createSafeFileName(title || 'felixo-chat')
   const content =
     params.format === 'json'
       ? createJsonExport(params, exportedAt, title)
@@ -28,8 +35,35 @@ export function exportChat(params: ExportChatParams) {
   const mimeType =
     params.format === 'json' ? 'application/json' : 'text/markdown'
   const extension = params.format === 'json' ? 'json' : 'md'
+  const fileName = createExportFileName({
+    requestedFileName: params.fileName,
+    title,
+    exportedAt,
+    extension,
+  })
 
-  downloadTextFile(`${fileBaseName}-${formatDateForFile(exportedAt)}.${extension}`, content, mimeType)
+  if (window.felixo?.files?.saveTextFile) {
+    return window.felixo.files.saveTextFile({
+      defaultPath: fileName,
+      content,
+      filters: [createExportFileFilter(params.format)],
+    })
+  }
+
+  downloadTextFile(fileName, content, mimeType)
+
+  return { ok: true }
+}
+
+export function createSuggestedExportFileName(
+  messages: ChatMessage[],
+  format: ExportFormat,
+) {
+  const exportedAt = new Date().toISOString()
+  const title = createExportTitle(messages)
+  const extension = format === 'json' ? 'json' : 'md'
+
+  return createExportFileName({ title, exportedAt, extension })
 }
 
 function createJsonExport(
@@ -147,15 +181,76 @@ function resolveModelName(modelId: string | undefined, models: Model[]) {
 }
 
 function createSafeFileName(value: string) {
-  return value
+  const fileName = value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 72)
+
+  return fileName || 'felixo-chat'
 }
 
 function formatDateForFile(value: string) {
   return value.replace(/[:.]/g, '-')
+}
+
+function createExportFileName({
+  requestedFileName,
+  title,
+  exportedAt,
+  extension,
+}: {
+  requestedFileName?: string
+  title: string
+  exportedAt: string
+  extension: string
+}) {
+  const manualFileName = normalizeManualFileName(requestedFileName)
+
+  if (manualFileName) {
+    return ensureFileExtension(manualFileName, extension)
+  }
+
+  const fileBaseName = createSafeFileName(title || 'felixo-chat')
+
+  return `${fileBaseName}-${formatDateForFile(exportedAt)}.${extension}`
+}
+
+function normalizeManualFileName(value: string | undefined) {
+  if (!value?.trim()) {
+    return ''
+  }
+
+  return value
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .split('')
+    .map((character) => (character.charCodeAt(0) < 32 ? '-' : character))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .slice(0, 120)
+}
+
+function ensureFileExtension(fileName: string, extension: string) {
+  const normalizedExtension = extension.replace(/^\./, '')
+
+  if (fileName.toLowerCase().endsWith(`.${normalizedExtension}`)) {
+    return fileName
+  }
+
+  if (/\.(json|md|markdown)$/i.test(fileName)) {
+    return fileName.replace(/\.(json|md|markdown)$/i, `.${normalizedExtension}`)
+  }
+
+  return `${fileName}.${normalizedExtension}`
+}
+
+function createExportFileFilter(format: ExportFormat) {
+  if (format === 'json') {
+    return { name: 'JSON', extensions: ['json'] }
+  }
+
+  return { name: 'Markdown', extensions: ['md', 'markdown'] }
 }

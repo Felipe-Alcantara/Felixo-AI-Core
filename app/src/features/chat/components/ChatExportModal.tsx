@@ -1,20 +1,23 @@
+import { useState } from 'react'
 import { Download, FileJson, FileText, X } from 'lucide-react'
 
 type ChatExportModalProps = {
   isOpen: boolean
   messagesCount: number
+  suggestedFileName: string
   onClose: () => void
-  onExportJson: () => void
-  onExportMarkdown: () => void
+  onExport: (format: 'json' | 'markdown', fileName: string) => void
 }
 
 export function ChatExportModal({
   isOpen,
   messagesCount,
+  suggestedFileName,
   onClose,
-  onExportJson,
-  onExportMarkdown,
+  onExport,
 }: ChatExportModalProps) {
+  const [fileName, setFileName] = useState(suggestedFileName)
+
   if (!isOpen) {
     return null
   }
@@ -38,6 +41,9 @@ export function ChatExportModal({
             <p className="mt-1 text-xs text-zinc-500">
               {messagesCount} mensagens com conteúdo.
             </p>
+            <p className="mt-1 max-w-[340px] text-xs text-zinc-600">
+              Inclui conversa principal e resumo das threads, sem saída bruta de subagentes.
+            </p>
           </div>
 
           <button
@@ -52,10 +58,22 @@ export function ChatExportModal({
         </header>
 
         <div className="space-y-3 px-5 py-5">
+          <label className="block text-xs font-medium text-zinc-400">
+            Nome do arquivo
+            <input
+              type="text"
+              value={fileName}
+              onChange={(event) => setFileName(event.target.value)}
+              disabled={disabled}
+              className="mt-2 w-full rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-white/20 disabled:cursor-not-allowed disabled:text-zinc-600"
+              placeholder={suggestedFileName}
+            />
+          </label>
+
           <button
             type="button"
             disabled={disabled}
-            onClick={onExportJson}
+            onClick={() => onExport('json', fileName)}
             className="flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
             <FileJson size={18} aria-hidden="true" />
@@ -66,7 +84,7 @@ export function ChatExportModal({
           <button
             type="button"
             disabled={disabled}
-            onClick={onExportMarkdown}
+            onClick={() => onExport('markdown', fileName)}
             className="flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
             <FileText size={18} aria-hidden="true" />
