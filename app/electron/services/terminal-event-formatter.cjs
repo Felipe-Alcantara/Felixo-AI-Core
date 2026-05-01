@@ -105,12 +105,30 @@ function createOrchestrationTerminalEvent(event) {
   }
 
   if (event.type === 'orchestration_agent_result') {
+    const details = [
+      `${event.agentId} finalizou com status ${event.status}.`,
+    ]
+    const resultPreview = event.result
+      ? createTextPreview(event.result, 1200)
+      : ''
+    const errorPreview = event.error
+      ? createTextPreview(event.error, 1200)
+      : ''
+
+    if (resultPreview) {
+      details.push('', 'Resultado visível do sub-agente:', resultPreview)
+    }
+
+    if (errorPreview) {
+      details.push('', 'Erro do sub-agente:', errorPreview)
+    }
+
     return {
       source: 'system',
       kind: 'lifecycle',
       severity: event.status === 'error' ? 'warn' : 'info',
       title: 'Resultado de sub-agente',
-      chunk: `${event.agentId} finalizou com status ${event.status}.`,
+      chunk: details.join('\n'),
       metadata: {
         runId: event.runId,
         parentThreadId: event.parentThreadId,
@@ -166,6 +184,12 @@ function createOrchestrationTerminalEvent(event) {
 function createEventsFromCliEvent(cliEvent, payload, durationMs) {
   if (!cliEvent || typeof cliEvent !== 'object') {
     return []
+  }
+
+  const orchestrationEvents = createOrchestrationControlEvents(cliEvent)
+
+  if (orchestrationEvents.length > 0) {
+    return orchestrationEvents
   }
 
   if (cliEvent.type === 'session') {
@@ -269,7 +293,7 @@ function createEventsFromPayload(command, payload, durationMs) {
         kind: 'lifecycle',
         severity: 'info',
         title: 'Prompt enviado',
-        chunk: 'A CLI recebeu a mensagem e está gerando resposta.',
+        chunk: formatPromptSentChunk(payload.content),
       },
     ]
   }
@@ -315,6 +339,64 @@ function createEventsFromPayload(command, payload, durationMs) {
           ? `Sessão do provedor: ${providerSessionId}`
           : `${command} conectou uma sessão.`,
         metadata: compactObject({ providerSessionId }),
+      },
+    ]
+  }
+
+  return []
+}
+
+function createOrchestrationControlEvents(cliEvent) {
+  if (cliEvent.type === 'orchestration_events' && Array.isArray(cliEvent.events)) {
+    return cliEvent.events.flatMap(createOrchestrationControlEvents)
+  }
+
+  if (cliEvent.type === 'spawn_agent') {
+    return [
+      {
+        source: 'stdout',
+        kind: 'lifecycle',
+        severity: 'info',
+        title: 'Decisão do orquestrador',
+        chunk: [
+          'O orquestrador pediu um sub-agente.',
+          `Agente: ${cliEvent.agentId}`,
+          `CLI: ${cliEvent.cliType}`,
+          '',
+          'Pergunta enviada ao sub-agente:',
+          createTextPreview(cliEvent.prompt ?? '', 1200),
+        ].join('\n'),
+        metadata: compactObject({
+          agentId: cliEvent.agentId,
+          cliType: cliEvent.cliType,
+        }),
+      },
+    ]
+  }
+
+  if (cliEvent.type === 'awaiting_agents') {
+    return [
+      {
+        source: 'stdout',
+        kind: 'lifecycle',
+        severity: 'info',
+        title: 'Orquestrador aguardando',
+        chunk: `Aguardando: ${(cliEvent.agentIds ?? []).join(', ') || 'sub-agentes'}.`,
+        metadata: compactObject({
+          agents: Array.isArray(cliEvent.agentIds) ? cliEvent.agentIds.length : null,
+        }),
+      },
+    ]
+  }
+
+  if (cliEvent.type === 'final_answer') {
+    return [
+      {
+        source: 'stdout',
+        kind: 'assistant',
+        severity: 'info',
+        title: 'Pré-resposta do orquestrador',
+        chunk: cliEvent.content ?? '',
       },
     ]
   }
@@ -495,7 +577,9 @@ function formatUsageParts(usage) {
   }
 
   if (usage.cachedInputTokens !== undefined) {
-    parts.push(`Cache: ${formatInteger(usage.cachedInputTokens)} tokens`)
+    parts.push(
+      `Cache do provedor: ${formatInteger(usage.cachedInputTokens)} tokens`,
+    )
   }
 
   if (usage.outputTokens !== undefined) {
@@ -567,6 +651,28 @@ function formatContentBlockStart(event) {
   }
 
   return block?.type ? `Bloco: ${block.type}` : 'A IA iniciou um novo bloco.'
+}
+
+function formatPromptSentChunk(content) {
+  const prompt = String(content ?? '').trim()
+
+  if (!prompt) {
+    return 'A CLI recebeu a mensagem e está gerando resposta.'
+  }
+
+  if (prompt.length > 700 || prompt.includes('Use o contexto abaixo')) {
+    return [
+      'A CLI recebeu a mensagem e está gerando resposta.',
+      'Prompt detalhado omitido no terminal por tamanho/contexto interno.',
+    ].join('\n')
+  }
+
+  return [
+    'A CLI recebeu a mensagem e está gerando resposta.',
+    '',
+    'Prompt enviado:',
+    prompt,
+  ].join('\n')
 }
 
 function prettifyToolPayload(value) {
@@ -651,6 +757,16 @@ function parseJson(value) {
   } catch {
     return null
   }
+}
+
+function createTextPreview(value, maxLength = 500) {
+  const text = String(value ?? '')
+
+  if (text.length <= maxLength) {
+    return text
+  }
+
+  return `${text.slice(0, maxLength)}...`
 }
 
 function isScalar(value) {
