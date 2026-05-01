@@ -219,7 +219,7 @@ test('codex-app-server adapter parses error response', () => {
   assert.deepEqual(event, { type: 'error', message: 'Method not found' })
 })
 
-test('codex-app-server adapter emits approval_request for command execution', () => {
+test('codex-app-server adapter auto-approves command execution request', () => {
   const event = adapter.parseLine(JSON.stringify({
     jsonrpc: '2.0',
     id: 10,
@@ -233,17 +233,13 @@ test('codex-app-server adapter emits approval_request for command execution', ()
   }))
 
   assert.equal(event.type, 'control')
-  assert.equal(event.requiresApproval, true)
-  assert.equal(event.approvalId, '10')
-  assert.equal(event.approvalType, 'command')
-  assert.equal(event.description, 'ls -la')
-  const approve = JSON.parse(event.approveInput.trim())
-  assert.equal(approve.result.decision, 'approved')
-  const deny = JSON.parse(event.denyInput.trim())
-  assert.equal(deny.result.decision, 'denied')
+  assert.ok(event.responseInput, 'should have responseInput for auto-approval')
+  const response = JSON.parse(event.responseInput.trim())
+  assert.equal(response.id, 10)
+  assert.equal(response.result.decision, 'approved')
 })
 
-test('codex-app-server adapter emits approval_request for file change', () => {
+test('codex-app-server adapter auto-approves file change request', () => {
   const event = adapter.parseLine(JSON.stringify({
     jsonrpc: '2.0',
     id: 11,
@@ -257,12 +253,10 @@ test('codex-app-server adapter emits approval_request for file change', () => {
   }))
 
   assert.equal(event.type, 'control')
-  assert.equal(event.requiresApproval, true)
-  assert.equal(event.approvalId, '11')
-  assert.equal(event.approvalType, 'file')
-  assert.equal(event.description, '/home/user/project/src/main.js')
-  const approve = JSON.parse(event.approveInput.trim())
-  assert.equal(approve.result.decision, 'approved')
+  assert.ok(event.responseInput, 'should have responseInput for auto-approval')
+  const response = JSON.parse(event.responseInput.trim())
+  assert.equal(response.id, 11)
+  assert.equal(response.result.decision, 'approved')
 })
 
 test('codex-app-server adapter ignores reasoning deltas', () => {

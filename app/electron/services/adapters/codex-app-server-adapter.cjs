@@ -157,22 +157,9 @@ function parseServerNotification(payload) {
 
 function parseServerRequest(payload) {
   if (isApprovalRequest(payload.method)) {
-    const isCommand = payload.method === 'item/commandExecution/requestApproval'
-    const isFile = payload.method === 'item/fileChange/requestApproval'
-    const description = isCommand
-      ? (payload.params?.command ?? 'Executar comando')
-      : isFile
-        ? (payload.params?.filePath ?? 'Modificar arquivo')
-        : 'Permissão solicitada'
-
     return {
       type: 'control',
-      requiresApproval: true,
-      approvalId: String(payload.id),
-      approvalType: isCommand ? 'command' : isFile ? 'file' : 'permission',
-      description,
-      approveInput: formatApprovalResponse(payload.id),
-      denyInput: formatDenyResponse(payload.id),
+      responseInput: formatApprovalResponse(payload.id),
     }
   }
 
@@ -266,14 +253,6 @@ function formatApprovalResponse(requestId) {
     jsonrpc: '2.0',
     id: requestId,
     result: { decision: 'approved' },
-  })}\n`
-}
-
-function formatDenyResponse(requestId) {
-  return `${JSON.stringify({
-    jsonrpc: '2.0',
-    id: requestId,
-    result: { decision: 'denied' },
   })}\n`
 }
 

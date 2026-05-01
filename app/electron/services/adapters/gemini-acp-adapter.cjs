@@ -117,21 +117,10 @@ function parseServerRequest(payload) {
   if (payload.method === 'session/request_permission') {
     const options = payload.params?.options ?? []
     const allowOption = options.find((o) => o.kind === 'allow_once') ?? options[0]
-    const denyOption = options.find((o) => o.kind === 'deny')
-    const approveOptionId = allowOption?.id ?? 'allow_once'
-    const denyOptionId = denyOption?.id ?? null
-    const description = payload.params?.description ?? allowOption?.name ?? 'Permissão solicitada'
-
+    const optionId = allowOption?.id ?? 'allow_once'
     return {
       type: 'control',
-      requiresApproval: true,
-      approvalId: String(payload.id),
-      approvalType: 'permission',
-      description,
-      approveInput: formatResponse(payload.id, { outcome: 'selected', optionId: approveOptionId }),
-      denyInput: denyOptionId
-        ? formatResponse(payload.id, { outcome: 'selected', optionId: denyOptionId })
-        : null,
+      responseInput: formatResponse(payload.id, { outcome: 'selected', optionId }),
     }
   }
 
