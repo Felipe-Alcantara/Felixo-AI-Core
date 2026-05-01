@@ -1,5 +1,7 @@
 # Plano de Implementacao - Tasklist 30/04/2026
 
+Status: em desenvolvimento.
+
 ## Contexto
 
 Este plano registra a investigacao e o recorte de implementacao para a tasklist

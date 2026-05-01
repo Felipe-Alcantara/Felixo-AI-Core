@@ -1,5 +1,7 @@
 # Felixo AI Core App
 
+Status: concluido.
+
 Aplicação desktop inicial do Felixo AI Core.
 
 ## Stack

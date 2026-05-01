@@ -1,5 +1,7 @@
 # Terminal Persistente e Painel de Output
 
+Status: em desenvolvimento.
+
 ## Contexto
 
 Hoje cada mensagem spawna um processo CLI novo que encerra ao responder. O objetivo desta frente é tornar a sessão persistente e dar visibilidade ao que acontece dentro do terminal em tempo real.

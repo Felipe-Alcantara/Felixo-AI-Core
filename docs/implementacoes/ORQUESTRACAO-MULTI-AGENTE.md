@@ -1,5 +1,7 @@
 # Implementacao - Orquestracao Multi-Agente
 
+Status: concluido.
+
 ## Contexto
 
 A tasklist `docs/Tasklists/ORQUESTRACAO-MULTI-AGENTE.md` implementa a

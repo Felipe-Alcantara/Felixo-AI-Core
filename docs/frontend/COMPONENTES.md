@@ -1,5 +1,7 @@
 # Frontend — Componentes React
 
+Status: concluido.
+
 Todos os componentes ficam em `app/src/features/chat/components/`.
 
 ---

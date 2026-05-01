@@ -1,5 +1,7 @@
 # Orquestrador Híbrido com MCP
 
+Status: planejado.
+
 ## Tese
 
 O Felixo AI Core deve tratar MCP como infraestrutura de ferramentas, não

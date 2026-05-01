@@ -1,5 +1,7 @@
 # Plano: Confirmacoes e Permissoes para CLIs
 
+Status: planejado.
+
 ## Contexto
 
 Hoje o Felixo AI Core executa CLIs reais (`claude`, `codex`, `gemini`) e confia

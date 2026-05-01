@@ -1,5 +1,7 @@
 # Plano: Fake Persistent CLIs + AgentEvent/AgentSession + Gemini ACP
 
+Status: em desenvolvimento.
+
 ## Contexto
 
 O Felixo AI Core consegue manter Claude como processo persistente via stream-json.

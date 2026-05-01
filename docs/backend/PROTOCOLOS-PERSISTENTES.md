@@ -1,5 +1,7 @@
 # Protocolos Persistentes de CLI
 
+Status: planejado.
+
 ## Objetivo
 
 Manter a CLI do provedor literalmente aberta entre prompts da mesma conversa quando houver um protocolo estruturado que permita:

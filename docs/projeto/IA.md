@@ -1,5 +1,7 @@
 # IA.md — Contexto Operacional do Felixo AI Core
 
+Status: concluido.
+
 ## Objetivo do Projeto
 
 [2026-04-28] Felixo AI Core é uma aplicação desktop Linux-first para centralizar ideias, agentes, CLIs de IA e fluxos de trabalho em uma interface única.
