@@ -75,9 +75,97 @@ test('orchestration runner completes runs and forwards final_answer to chat', as
       content: 'Implementacao concluida.',
       sessionId: 'session-codex-1',
       threadId: 'thread-codex-1',
+      parentThreadId: 'thread-codex-1',
       runId: 'run-1',
     },
   ])
+})
+
+test('orchestration runner keeps original chat session for reinvoked final_answer', async () => {
+  const chatEvents = []
+  const runner = createTestRunner({
+    sendChatEvent: (event) => chatEvents.push(event),
+  })
+
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({
+      streamSessionId: 'session-parent-response',
+      threadId: 'thread-codex-1',
+    }),
+  )
+  chatEvents.length = 0
+
+  const result = await runner.handleOrchestrationEvent(
+    {
+      type: 'final_answer',
+      content: 'Resposta consolidada.',
+    },
+    createContext({
+      runId: 'run-1',
+      streamSessionId: 'run-1:orchestrator-turn-2',
+      threadId: 'run-1:orchestrator-turn-2',
+    }),
+  )
+
+  assert.equal(result.run.status, 'completed')
+  assert.deepEqual(chatEvents, [
+    {
+      type: 'final_answer',
+      content: 'Resposta consolidada.',
+      sessionId: 'session-parent-response',
+      threadId: 'run-1:orchestrator-turn-2',
+      parentThreadId: 'thread-codex-1',
+      runId: 'run-1',
+    },
+  ])
+})
+
+test('orchestration runner can start a new run on a completed parent thread', async () => {
+  const runIds = ['run-1', 'run-2']
+  const runner = createTestRunner({
+    idGenerator: () => runIds.shift(),
+  })
+
+  await runner.handleOrchestrationEvent(
+    {
+      type: 'final_answer',
+      content: 'Primeira resposta.',
+    },
+    createContext(),
+  )
+
+  const result = await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({ streamSessionId: 'session-codex-2' }),
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(result.run.runId, 'run-2')
+  assert.equal(result.run.status, 'running_orchestrator')
+})
+
+test('orchestration runner resetThread clears active run cache by parent thread', async () => {
+  const runIds = ['run-1', 'run-2']
+  const runner = createTestRunner({
+    idGenerator: () => runIds.shift(),
+  })
+
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  const reset = runner.resetThread('thread-codex-1')
+
+  assert.deepEqual(reset.runIds, ['run-1'])
+  assert.deepEqual(reset.failedRunIds, ['run-1'])
+  assert.equal(runner.getRun('run-1').status, 'failed')
+  assert.equal(runner.getAgentJobByThreadId('thread-reviewer-1'), null)
+
+  const result = await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({ streamSessionId: 'session-codex-2' }),
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(result.run.runId, 'run-2')
 })
 
 test('orchestration runner reinvokes orchestrator after all jobs finish', async () => {
@@ -123,6 +211,8 @@ test('orchestration runner reinvokes orchestrator after all jobs finish', async 
   assert.equal(invokeCalls.length, 1)
   assert.equal(invokeCalls[0].run.currentTurn, 2)
   assert.match(invokeCalls[0].prompt, /Objetivo original:\nObjetivo inicial/)
+  assert.match(invokeCalls[0].prompt, /content deve ser descritivo/)
+  assert.match(invokeCalls[0].prompt, /Nao afirme que a tarefa foi feita/)
   assert.match(invokeCalls[0].prompt, /Agente reviewer-1 \(claude\)/)
   assert.match(invokeCalls[0].prompt, /Sem riscos\./)
   assert.equal(runner.getRun('run-1').status, 'running_orchestrator')
@@ -275,12 +365,13 @@ test('createAgentResultsPrompt formats current turn results', () => {
 
 function createTestRunner(options = {}) {
   const now = options.now ?? (() => new Date('2026-05-01T12:00:00.000Z'))
+  const idGenerator = options.idGenerator ?? (() => 'run-1')
 
   return createOrchestrationRunner({
     ...options,
     now,
     storeOptions: {
-      idGenerator: () => 'run-1',
+      idGenerator,
       now,
     },
     createThreadId: (_run, event) => `thread-${event.agentId}`,
