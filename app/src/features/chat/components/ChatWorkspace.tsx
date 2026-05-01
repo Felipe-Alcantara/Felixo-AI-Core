@@ -285,6 +285,7 @@ export function ChatWorkspace() {
     clearTerminalSessions()
     clearOrchestrationStatus()
     resetConversationThread()
+    window.felixo?.qaLogger?.clear?.()
   }
 
   function saveCurrentSession() {
