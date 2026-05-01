@@ -5,7 +5,7 @@ const {
 } = require('./orchestration-events.cjs')
 
 function getSpawnArgs(prompt, context = {}) {
-  const args = ['exec', '--json', '--skip-git-repo-check']
+  const args = ['exec', '--json', '--skip-git-repo-check', '--ephemeral']
 
   args.push(...createCodexExecOptionArgs(context))
 
@@ -40,8 +40,8 @@ function getResumeArgs(prompt, context = {}) {
   }
 }
 
-function canResume(context = {}) {
-  return Boolean(context.providerSessionId)
+function canResume() {
+  return false
 }
 
 function parseLine(line) {

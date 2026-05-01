@@ -121,6 +121,7 @@ test('codex adapter passes ascii cwd with exec args', () => {
     'exec',
     '--json',
     '--skip-git-repo-check',
+    '--ephemeral',
     '--cd',
     '/home/felipe',
     'Oi',
@@ -140,6 +141,7 @@ test('codex adapter passes provider model and reasoning effort', () => {
     'exec',
     '--json',
     '--skip-git-repo-check',
+    '--ephemeral',
     '--model',
     'gpt-5.5',
     '--config',
@@ -164,12 +166,12 @@ test('codex adapter resumes an existing provider session', () => {
   ])
 })
 
-test('codex adapter only enables native resume after provider session capture', () => {
+test('codex adapter disables native resume for ephemeral exec sessions', () => {
   assert.equal(
     adapter.canResume({
       providerSessionId: '019ddc27-bc3d-7280-b5c0-61dff03b08cd',
     }),
-    true,
+    false,
   )
   assert.equal(
     adapter.canResume({
