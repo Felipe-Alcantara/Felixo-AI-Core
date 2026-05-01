@@ -90,6 +90,15 @@ class OrchestrationRunner {
         runId: run.runId,
         agentId: event.agentId,
       })
+      this.sendChatEvent({
+        type: 'spawn_agent',
+        agentId: event.agentId,
+        cliType: event.cliType,
+        prompt: event.prompt,
+        sessionId: getResponseSessionId(run, this.getRunContext(run.runId)),
+        threadId: run.parentThreadId,
+        runId: run.runId,
+      })
 
       return { handled: true, ok: true, run }
     } catch (error) {
@@ -109,6 +118,13 @@ class OrchestrationRunner {
         runId: run.runId,
         parentThreadId: run.parentThreadId,
         agentIds: event.agentIds,
+      })
+      this.sendChatEvent({
+        type: 'awaiting_agents',
+        agentIds: event.agentIds,
+        sessionId: getResponseSessionId(run, this.getRunContext(run.runId)),
+        threadId: run.parentThreadId,
+        runId: run.runId,
       })
 
       if (areCurrentTurnJobsTerminal(run)) {
@@ -199,6 +215,13 @@ class OrchestrationRunner {
         runId: run.runId,
         parentThreadId: run.parentThreadId,
         turn: run.currentTurn,
+      })
+      this.sendChatEvent({
+        type: 'orchestration_status',
+        status: 'running_orchestrator',
+        sessionId: getResponseSessionId(run, this.getRunContext(run.runId)),
+        threadId: run.parentThreadId,
+        runId: run.runId,
       })
 
       const result = await this.invokeOrchestrator({
@@ -306,6 +329,11 @@ class OrchestrationRunner {
       orchestratorModel: run.orchestratorModel,
       originalPrompt: run.originalPrompt,
     }
+    runContext.responseSessionId =
+      runContext.responseSessionId ??
+      context.responseSessionId ??
+      context.streamSessionId ??
+      context.sessionId
 
     this.runContexts.set(run.runId, runContext)
     this.runContexts.set(run.parentThreadId, runContext)
@@ -426,7 +454,12 @@ function findAgentJob(run, agentId) {
 }
 
 function getResponseSessionId(run, context = {}) {
-  return context.streamSessionId ?? context.sessionId ?? run.runId
+  return (
+    context.responseSessionId ??
+    context.streamSessionId ??
+    context.sessionId ??
+    run.runId
+  )
 }
 
 function getTimeMs(value) {

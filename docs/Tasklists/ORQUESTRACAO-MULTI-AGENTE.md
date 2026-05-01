@@ -46,12 +46,12 @@ Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUE
 
 ## Fase 6 — Frontend: UI de orquestracao
 
-- [ ] 6.1 Atualizar `StreamEvent` types no frontend com os novos eventos
-- [ ] 6.2 `ChatWorkspace.tsx` — tratar `final_answer` como resposta do assistente
-- [ ] 6.3 `ChatWorkspace.tsx` — mostrar estado do run (aguardando agentes, re-invocando)
-- [ ] 6.4 `TerminalPanel.tsx` — agrupar threads filhas sob o run pai
-- [ ] 6.5 `TerminalPanel.tsx` — mostrar indicador visual de sub-agente vs orquestrador
-- [ ] 6.6 `useTerminalOutput.ts` — suportar parentThreadId na criacao de sessoes
+- [x] 6.1 Atualizar `StreamEvent` types no frontend com os novos eventos
+- [x] 6.2 `ChatWorkspace.tsx` — tratar `final_answer` como resposta do assistente
+- [x] 6.3 `ChatWorkspace.tsx` — mostrar estado do run (aguardando agentes, re-invocando)
+- [x] 6.4 `TerminalPanel.tsx` — agrupar threads filhas sob o run pai
+- [x] 6.5 `TerminalPanel.tsx` — mostrar indicador visual de sub-agente vs orquestrador
+- [x] 6.6 `useTerminalOutput.ts` — suportar parentThreadId na criacao de sessoes
 
 ## Fase 7 — Testes end-to-end com CLIs reais
 

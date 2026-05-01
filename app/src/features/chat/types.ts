@@ -48,6 +48,7 @@ export type RawOutputEvent = TerminalOutputEvent
 type StreamEventBase = {
   sessionId: string
   threadId?: string
+  runId?: string
 }
 
 export type SpawnAgentStreamEvent = StreamEventBase & {
@@ -67,10 +68,17 @@ export type FinalAnswerStreamEvent = StreamEventBase & {
   content: string
 }
 
+export type OrchestrationStatusStreamEvent = StreamEventBase & {
+  type: 'orchestration_status'
+  runId?: string
+  status: OrchestrationRunStatus
+}
+
 export type OrchestrationStreamEvent =
   | SpawnAgentStreamEvent
   | AwaitingAgentsStreamEvent
   | FinalAnswerStreamEvent
+  | OrchestrationStatusStreamEvent
 
 export type OrchestrationRunStatus =
   | 'waiting_agents'
