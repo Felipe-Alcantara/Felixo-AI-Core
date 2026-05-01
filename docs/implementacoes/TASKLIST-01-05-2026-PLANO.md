@@ -62,3 +62,11 @@ Ao fim deste ciclo, o app deve oferecer uma base melhor para trabalho diário: e
 - Correção incremental: novo chat bloqueia eventos atrasados de threads resetadas no terminal.
 - Correção incremental: reinvocações do orquestrador preservam modelos, configurações e limites.
 - Pendências abertas em `/docs` consolidadas em `docs/projeto/PENDENCIAS-DOCS-PRIORIZADAS.md`.
+
+## Continuação de 2026-05-01
+
+Resultado da continuação da tasklist:
+
+- Registrado evento de terminal dedicado para informar qual modelo foi escolhido para um subagente e por qual regra.
+- Exportação de chat passou a permitir nome manual e destino manual via diálogo nativo do Electron, com fallback para download do navegador.
+- A renomeação física dos arquivos de `/docs` foi mantida fora deste recorte, porque exige atualização completa de links internos em commit isolado.
