@@ -234,6 +234,7 @@ function registerCliIpcHandlers(getMainWindow) {
           isContinuation: spawnContext.isContinuation,
           usesNativeResume,
           providerSessionId: spawnContext.providerSessionId,
+          promptHint: spawnPrompt,
         }),
       ])
       const childProcess = cliManager.spawn(threadId, command, args, cwd)
@@ -822,6 +823,7 @@ function sendPersistentCliRequest({
         usesPersistentProcess: true,
         reusedProcess: isReusingProcess,
         providerSessionId: context.providerSessionId,
+        promptHint: spawnPrompt,
       }),
     ])
 

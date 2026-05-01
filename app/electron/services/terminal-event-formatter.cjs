@@ -8,6 +8,7 @@ function createStartTerminalEvent({
   usesPersistentProcess = false,
   reusedProcess = false,
   providerSessionId,
+  promptHint,
 }) {
   const mode = createStartMode({
     isContinuation,
@@ -42,6 +43,7 @@ function createStartTerminalEvent({
       persistent: usesPersistentProcess || undefined,
       reusedProcess: reusedProcess || undefined,
       providerSessionId,
+      promptHint: promptHint ? createTextPreview(promptHint, 60) : undefined,
     }),
   }
 }
