@@ -1559,7 +1559,7 @@ function validateOrchestrationSpawnModel(cliType, context = {}) {
         code: 'SPAWN_MODEL_UNAVAILABLE',
         message: result.message,
       }
-    : { ok: true }
+    : { ok: true, modelChoice: result.modelChoice }
 }
 
 function resolveOrchestrationSpawnModel(cliType, context = {}) {
@@ -1568,7 +1568,19 @@ function resolveOrchestrationSpawnModel(cliType, context = {}) {
     : null
 
   if (!availableModels) {
-    return { ok: true, model: createOrchestrationModel(cliType) }
+    const model = createOrchestrationModel(cliType)
+
+    return {
+      ok: true,
+      model,
+      modelChoice: createOrchestrationModelChoice({
+        requestedCliType: cliType,
+        model,
+        reason:
+          'Lista de modelos indisponivel no contexto; usando modelo leve padrao do cliType solicitado.',
+        selectionRule: 'fallback-without-model-context',
+      }),
+    }
   }
 
   const settings = context.orchestratorSettings ?? {}
@@ -1578,29 +1590,78 @@ function resolveOrchestrationSpawnModel(cliType, context = {}) {
   const preferredModelIds = Array.isArray(settings.preferredModelIds)
     ? settings.preferredModelIds
     : []
-  const candidates = availableModels.filter(
-    (model) => model.cliType === cliType && !blockedModelIds.has(model.id),
-  )
+  const cliTypeModels = availableModels.filter((model) => model.cliType === cliType)
+  const candidates = cliTypeModels.filter((model) => !blockedModelIds.has(model.id))
 
   if (candidates.length === 0) {
+    const reason =
+      cliTypeModels.length === 0
+        ? `Nenhum modelo cadastrado para cliType "${cliType}".`
+        : `Todos os modelos cadastrados para cliType "${cliType}" estao bloqueados.`
+
     return {
       ok: false,
       message: `Nenhum modelo disponivel para spawn com cliType "${cliType}".`,
+      modelChoice: createOrchestrationModelChoice({
+        requestedCliType: cliType,
+        model: null,
+        reason,
+        selectionRule: 'unavailable',
+        candidateCount: 0,
+        blockedCount: cliTypeModels.length,
+      }),
     }
   }
 
   const preferredModel = preferredModelIds
     .map((modelId) => candidates.find((model) => model.id === modelId))
     .find(Boolean)
-  const model = preferredModel ?? candidates[0]
+  const selectedModel = preferredModel ?? candidates[0]
+  const model = {
+    ...createOrchestrationModel(cliType),
+    ...selectedModel,
+    cliType,
+  }
+  const selectionRule = preferredModel
+    ? 'preferred-model'
+    : 'first-available-model'
+  const reason = preferredModel
+    ? 'Modelo preferido pelo usuario para este cliType.'
+    : 'Primeiro modelo disponivel para este cliType apos aplicar bloqueios.'
 
   return {
     ok: true,
-    model: {
-      ...createOrchestrationModel(cliType),
-      ...model,
-      cliType,
-    },
+    model,
+    modelChoice: createOrchestrationModelChoice({
+      requestedCliType: cliType,
+      model,
+      reason,
+      selectionRule,
+      candidateCount: candidates.length,
+      blockedCount: cliTypeModels.length - candidates.length,
+    }),
+  }
+}
+
+function createOrchestrationModelChoice({
+  requestedCliType,
+  model,
+  reason,
+  selectionRule,
+  candidateCount,
+  blockedCount,
+}) {
+  return {
+    requestedCliType,
+    selectedModelId: model?.id,
+    selectedModelName: model?.name,
+    selectedCliType: model?.cliType ?? requestedCliType,
+    providerModel: model?.providerModel,
+    reasoningEffort: model?.reasoningEffort,
+    reason,
+    selectionRule,
+    candidateCount,
+    blockedCount,
   }
 }
 

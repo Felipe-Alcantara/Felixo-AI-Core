@@ -36,6 +36,53 @@ test('orchestration runner spawns sub-agents and marks jobs running', async () =
   })
 })
 
+test('orchestration runner emits model choice audit events', async () => {
+  const terminalEvents = []
+  const runner = createTestRunner({
+    validateSpawnAgent: () => ({
+      ok: true,
+      modelChoice: {
+        requestedCliType: 'claude',
+        selectedCliType: 'claude',
+        selectedModelId: 'claude-main',
+        selectedModelName: 'Claude Main',
+        providerModel: 'claude-sonnet',
+        reasoningEffort: 'high',
+        selectionRule: 'preferred-model',
+        reason: 'Modelo preferido pelo usuario para este cliType.',
+        candidateCount: 2,
+        blockedCount: 1,
+      },
+    }),
+    emitTerminalEvent: (event) => terminalEvents.push(event),
+  })
+
+  const result = await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext(),
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(terminalEvents[0].type, 'orchestration_agent_spawn')
+  assert.deepEqual(terminalEvents[1], {
+    type: 'orchestration_model_choice',
+    runId: 'run-1',
+    parentThreadId: 'thread-codex-1',
+    agentId: 'reviewer-1',
+    requestedCliType: 'claude',
+    threadId: 'thread-reviewer-1',
+    selectedCliType: 'claude',
+    selectedModelId: 'claude-main',
+    selectedModelName: 'Claude Main',
+    providerModel: 'claude-sonnet',
+    reasoningEffort: 'high',
+    selectionRule: 'preferred-model',
+    reason: 'Modelo preferido pelo usuario para este cliType.',
+    candidateCount: 2,
+    blockedCount: 1,
+  })
+})
+
 test('orchestration runner marks awaiting_agents runs as waiting', async () => {
   const runner = createTestRunner()
 

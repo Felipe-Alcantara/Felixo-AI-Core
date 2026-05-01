@@ -106,6 +106,54 @@ function createOrchestrationTerminalEvent(event) {
     }
   }
 
+  if (event.type === 'orchestration_model_choice') {
+    const details = [
+      `Agente: ${event.agentId}`,
+      `CLI solicitada: ${event.requestedCliType ?? event.cliType ?? event.selectedCliType}`,
+      `Modelo escolhido: ${event.selectedModelName ?? event.selectedModelId ?? event.selectedCliType}`,
+      `Regra: ${event.reason ?? 'Sem motivo informado.'}`,
+    ]
+
+    if (event.providerModel) {
+      details.push(`Provider model: ${event.providerModel}`)
+    }
+
+    if (event.reasoningEffort) {
+      details.push(`Reasoning effort: ${event.reasoningEffort}`)
+    }
+
+    if (Number.isInteger(event.candidateCount)) {
+      details.push(`Candidatos disponiveis: ${event.candidateCount}`)
+    }
+
+    if (Number.isInteger(event.blockedCount)) {
+      details.push(`Modelos bloqueados ignorados: ${event.blockedCount}`)
+    }
+
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'info',
+      title: 'Modelo escolhido',
+      chunk: details.join('\n'),
+      metadata: compactObject({
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        requestedCliType: event.requestedCliType,
+        selectedCliType: event.selectedCliType,
+        selectedModelId: event.selectedModelId,
+        selectedModelName: event.selectedModelName,
+        providerModel: event.providerModel,
+        reasoningEffort: event.reasoningEffort,
+        selectionRule: event.selectionRule,
+        candidateCount: event.candidateCount,
+        blockedCount: event.blockedCount,
+        threadId: event.threadId,
+      }),
+    }
+  }
+
   if (event.type === 'orchestration_agent_result') {
     const details = [
       `${event.agentId} finalizou com status ${event.status}.`,

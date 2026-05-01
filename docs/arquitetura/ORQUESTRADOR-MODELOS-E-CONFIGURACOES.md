@@ -59,7 +59,7 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - Custos e janelas de contexto mudam fora do app; o sistema deve tratar esses dados como contexto operacional, não como verdade permanente.
 - O primeiro recorte não calcula tokens nem custo real.
 - O usuário ainda precisa configurar modelos locais antes de usar subagentes.
-- O backend já impede spawn de `cliType` indisponível ou bloqueado, mas ainda não emite um evento dedicado explicando a escolha final do modelo.
+- Limites de assinatura, disponibilidade real e erros recentes ainda dependem de telemetria futura para ficarem totalmente automáticos.
 
 ## Arquivos esperados
 
@@ -79,10 +79,10 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - Validação de `spawn_agent` antes de criar o job da run.
 - Escolha do modelo preferido do mesmo `cliType`, quando configurado.
 - Falha explícita quando o modelo está bloqueado ou não existe entre os modelos disponíveis.
+- Evento de terminal `orchestration_model_choice` com `selectedModelId`, `selectedModelName`, regra de seleção, quantidade de candidatos, bloqueios ignorados e motivo textual.
 
 ## Próximos passos
 
 - Persistir configurações fora de `localStorage` quando SQLite entrar.
-- Registrar motivo de escolha por modelo em evento de terminal próprio.
 - Adicionar telemetria local de erros por modelo para alimentar disponibilidade.
 - Permitir escolha por modelo específico, não apenas por `cliType`.
