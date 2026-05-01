@@ -259,7 +259,7 @@ function registerCliIpcHandlers(getMainWindow) {
             createNoVisibleOutputMessage(command, FIRST_VISIBLE_OUTPUT_TIMEOUT_MS),
           ),
         ])
-        sendCliEvent(targetWebContents, {
+        dispatchCliEvent({
           type: 'error',
           message: createNoVisibleOutputMessage(
             command,
@@ -422,7 +422,7 @@ function registerCliIpcHandlers(getMainWindow) {
         if (shouldAbortOnAdapterStderr(adapter, chunk) && !didComplete) {
           didComplete = true
           clearFirstVisibleOutputTimer()
-          sendCliEvent(targetWebContents, {
+          dispatchCliEvent({
             type: 'error',
             message: formattedStderr,
             sessionId: streamSessionId,
@@ -448,7 +448,7 @@ function registerCliIpcHandlers(getMainWindow) {
         sendTerminalEvents(targetWebContents, threadId, [
           createErrorTerminalEvent(error.message),
         ])
-        sendCliEvent(targetWebContents, {
+        dispatchCliEvent({
           type: 'error',
           message: error.message,
           sessionId: streamSessionId,
@@ -488,7 +488,7 @@ function registerCliIpcHandlers(getMainWindow) {
               createExitErrorMessage(command, code, signal, stderrOutput),
             ),
           ])
-          sendCliEvent(targetWebContents, {
+          dispatchCliEvent({
             type: 'error',
             message: createExitErrorMessage(command, code, signal, stderrOutput),
             sessionId: streamSessionId,
@@ -563,6 +563,20 @@ function registerCliIpcHandlers(getMainWindow) {
       clearTimeout(firstVisibleOutputTimer)
       firstVisibleOutputTimer = null
     }
+
+    function dispatchCliEvent(cliEvent) {
+      const orchestrationResult = orchestrationBridge.handleCliEvent({
+        cliEvent,
+        streamSessionId,
+        threadId,
+        context: requestOrchestrationContext,
+      })
+      handleOrchestrationPromise(orchestrationResult.promise)
+
+      if (!orchestrationResult.handled) {
+        sendCliEvent(targetWebContents, cliEvent)
+      }
+    }
   }
 
   ipcMain.handle('cli:orchestration-status', (_event, params) =>
@@ -630,13 +644,36 @@ function registerCliIpcHandlers(getMainWindow) {
       return { ok: false, message: 'Thread invalida.' }
     }
 
-    const hadThreadSession = cliThreadSessions.delete(threadId)
-    const hadPersistentSession = persistentCliSessions.has(threadId)
-    stoppedSessions.add(threadId)
-    const killed = closePersistentSession(threadId, { force: true })
+    const threadIds = collectThreadFamily(threadId, terminalSessionParents)
+    const orchestrationReset = orchestrationRunner.resetThread(threadId)
+    let hadThreadSession = false
+    let hadPersistentSession = false
+    let killed = false
+    const killedThreadIds = []
 
-    if (!killed) {
-      stoppedSessions.delete(threadId)
+    for (const resetThreadId of threadIds) {
+      hadThreadSession = cliThreadSessions.delete(resetThreadId) || hadThreadSession
+      hadPersistentSession =
+        persistentCliSessions.has(resetThreadId) || hadPersistentSession
+      stoppedSessions.add(resetThreadId)
+      const didKill = closePersistentSession(resetThreadId, { force: true })
+
+      if (didKill) {
+        killed = true
+        killedThreadIds.push(resetThreadId)
+      } else {
+        stoppedSessions.delete(resetThreadId)
+      }
+    }
+
+    for (const resetThreadId of threadIds) {
+      terminalSessionParents.delete(resetThreadId)
+    }
+
+    for (const [childThreadId, parentThreadId] of terminalSessionParents) {
+      if (threadIds.includes(parentThreadId)) {
+        terminalSessionParents.delete(childThreadId)
+      }
     }
 
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
@@ -649,6 +686,10 @@ function registerCliIpcHandlers(getMainWindow) {
         hadThreadSession,
         hadPersistentSession,
         killed,
+        threadIds,
+        killedThreadIds,
+        orchestrationRunIds: orchestrationReset.runIds,
+        failedOrchestrationRunIds: orchestrationReset.failedRunIds,
       },
     })
 
@@ -659,12 +700,15 @@ function registerCliIpcHandlers(getMainWindow) {
           kind: 'lifecycle',
           severity: 'info',
           title: 'Thread reiniciada',
-          chunk: 'A thread anterior foi encerrada e nao sera reutilizada.',
+          chunk:
+            threadIds.length > 1
+              ? 'A thread anterior e suas sessoes filhas foram encerradas e nao serao reutilizadas.'
+              : 'A thread anterior foi encerrada e nao sera reutilizada.',
         },
       ])
     }
 
-    return { ok: true, killed }
+    return { ok: true, killed, threadIds }
   })
 
   app.once('before-quit', () => {
@@ -1182,7 +1226,7 @@ function handlePersistentClose(persistentSession, code, signal) {
   sendTerminalEvents(persistentSession.targetWebContents, threadId, [
     createErrorTerminalEvent(message),
   ])
-  sendCliEvent(persistentSession.targetWebContents, {
+  dispatchPersistentCliEvent(persistentSession, {
     type: 'error',
     message,
     sessionId: activeRun.streamSessionId,
@@ -1216,7 +1260,7 @@ function failPersistentRun(persistentSession, message, options = {}) {
   ])
 
   if (streamSessionId) {
-    sendCliEvent(persistentSession.targetWebContents, {
+    dispatchPersistentCliEvent(persistentSession, {
       type: 'error',
       message,
       sessionId: streamSessionId,
@@ -1225,6 +1269,28 @@ function failPersistentRun(persistentSession, message, options = {}) {
   }
 
   persistentSession.activeRun = null
+}
+
+function dispatchPersistentCliEvent(persistentSession, cliEvent) {
+  const { threadId } = persistentSession
+  const activeRun = persistentSession.activeRun
+
+  if (!activeRun) {
+    sendCliEvent(persistentSession.targetWebContents, cliEvent)
+    return
+  }
+
+  const orchestrationResult = activeRun.orchestrationBridge?.handleCliEvent({
+    cliEvent,
+    streamSessionId: activeRun.streamSessionId,
+    threadId,
+    context: activeRun.orchestrationContext,
+  })
+  handleOrchestrationPromise(orchestrationResult?.promise)
+
+  if (!orchestrationResult?.handled) {
+    sendCliEvent(persistentSession.targetWebContents, cliEvent)
+  }
 }
 
 function getReusablePersistentSession(threadId, model, cwd) {
@@ -1457,6 +1523,30 @@ function createOrchestrationStatusResponse(orchestrationRunner, params = {}) {
   }
 }
 
+function collectThreadFamily(rootThreadId, parentMap) {
+  const root = getRequiredString(rootThreadId)
+
+  if (!root) {
+    return []
+  }
+
+  const threadIds = new Set([root])
+  let didAddThread = true
+
+  while (didAddThread) {
+    didAddThread = false
+
+    for (const [childThreadId, parentThreadId] of parentMap) {
+      if (threadIds.has(parentThreadId) && !threadIds.has(childThreadId)) {
+        threadIds.add(childThreadId)
+        didAddThread = true
+      }
+    }
+  }
+
+  return [...threadIds]
+}
+
 function getRequiredString(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -1526,6 +1616,7 @@ function createTextPreview(value, maxLength = 1000) {
 }
 
 module.exports = {
+  collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
   getAdapterSpawnArgs,

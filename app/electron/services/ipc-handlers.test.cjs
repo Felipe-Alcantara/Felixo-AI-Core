@@ -4,6 +4,7 @@ const {
   getAdapterSpawnArgs,
 } = require('./orchestrator/cli-execution-planner.cjs')
 const {
+  collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
 } = require('./ipc-handlers.cjs')
@@ -140,4 +141,20 @@ test('ipc handlers create orchestration status responses', () => {
       message: 'Run de orquestracao nao encontrado.',
     },
   )
+})
+
+test('ipc handlers collect thread family recursively for reset', () => {
+  const parents = new Map([
+    ['run-1:orchestrator-turn-2', 'thread-parent'],
+    ['run-1:gemini-1', 'thread-parent'],
+    ['run-1:gemini-1:tool', 'run-1:gemini-1'],
+    ['other-child', 'other-parent'],
+  ])
+
+  assert.deepEqual(collectThreadFamily('thread-parent', parents), [
+    'thread-parent',
+    'run-1:orchestrator-turn-2',
+    'run-1:gemini-1',
+    'run-1:gemini-1:tool',
+  ])
 })
