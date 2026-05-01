@@ -178,7 +178,7 @@ test('orchestration runner fails runs when agent limits are reached', async () =
   assert.equal(result.ok, false)
   assert.equal(result.run.status, 'failed')
   assert.equal(result.run.error, 'Limite de agentes por turno atingido.')
-  assert.equal(chatEvents[0].type, 'error')
+  assert.equal(chatEvents.some((event) => event.type === 'error'), true)
 })
 
 test('orchestration runner fails runs when maxTurns blocks reinvocation', async () => {
@@ -212,7 +212,7 @@ test('orchestration runner fails runs when maxTurns blocks reinvocation', async 
   assert.equal(result.run.status, 'failed')
   assert.equal(result.run.error, 'Limite de turnos de orquestracao atingido.')
   assert.equal(invokeCalls.length, 0)
-  assert.equal(chatEvents[0].type, 'error')
+  assert.equal(chatEvents.some((event) => event.type === 'error'), true)
 })
 
 test('orchestration runner fails expired runs', async () => {
@@ -234,7 +234,7 @@ test('orchestration runner fails expired runs', async () => {
   assert.equal(failedRuns.length, 1)
   assert.equal(failedRuns[0].status, 'failed')
   assert.equal(failedRuns[0].error, 'Timeout de orquestracao atingido.')
-  assert.equal(chatEvents[0].type, 'error')
+  assert.equal(chatEvents.some((event) => event.type === 'error'), true)
 })
 
 test('createAgentResultsPrompt formats current turn results', () => {

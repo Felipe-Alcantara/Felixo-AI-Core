@@ -49,6 +49,10 @@ export function TerminalPanel({
       null,
     [effectiveSelectedSessionId, sessions],
   )
+  const groupedSessionRows = useMemo(
+    () => createGroupedSessionRows(sessions),
+    [sessions],
+  )
   const orchestratorEntries = useMemo(
     () =>
       sessions
@@ -243,13 +247,14 @@ export function TerminalPanel({
             </p>
           ) : (
             <div className="space-y-1">
-              {sessions.map((session) => (
+              {groupedSessionRows.map(({ session, isChild }) => (
                 <button
                   key={session.sessionId}
                   type="button"
                   onClick={() => selectSession(session.sessionId)}
                   className={[
-                    'flex min-h-10 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition',
+                    'flex min-h-10 w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left transition',
+                    isChild ? 'pl-5' : 'pl-2',
                     effectiveSelectedSessionId === session.sessionId
                       ? 'bg-white/[0.07] text-zinc-100'
                       : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
@@ -262,8 +267,13 @@ export function TerminalPanel({
                     ].join(' ')}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-[11px]">
-                      {session.sessionId.slice(0, 8)}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-mono text-[11px]">
+                        {session.sessionId.slice(0, 8)}
+                      </span>
+                      <span className={getSessionRoleClassName(session)}>
+                        {formatSessionRole(session)}
+                      </span>
                     </span>
                     <span className="block truncate text-[10px] text-zinc-600">
                       {formatStatus(session.status)} · {session.chunks.length} eventos ·{' '}
@@ -389,6 +399,64 @@ function TerminalChunk({ chunk }: { chunk: TerminalOutputChunk }) {
       )}
     </div>
   )
+}
+
+function createGroupedSessionRows(sessions: TerminalOutputSession[]) {
+  const sessionsById = new Map(
+    sessions.map((session) => [session.sessionId, session]),
+  )
+  const childrenByParent = new Map<string, TerminalOutputSession[]>()
+  const roots: TerminalOutputSession[] = []
+
+  for (const session of sessions) {
+    if (
+      session.parentThreadId &&
+      session.parentThreadId !== session.sessionId &&
+      sessionsById.has(session.parentThreadId)
+    ) {
+      const children = childrenByParent.get(session.parentThreadId) ?? []
+      children.push(session)
+      childrenByParent.set(session.parentThreadId, children)
+      continue
+    }
+
+    roots.push(session)
+  }
+
+  return roots.flatMap((session) => [
+    { session, isChild: false },
+    ...(childrenByParent.get(session.sessionId) ?? []).map((child) => ({
+      session: child,
+      isChild: true,
+    })),
+  ])
+}
+
+function formatSessionRole(session: TerminalOutputSession) {
+  if (!session.parentThreadId || session.parentThreadId === session.sessionId) {
+    return 'Pai'
+  }
+
+  if (session.sessionId.includes('orchestrator-turn')) {
+    return 'Orq'
+  }
+
+  return 'Sub'
+}
+
+function getSessionRoleClassName(session: TerminalOutputSession) {
+  const base =
+    'shrink-0 rounded border px-1 py-px text-[9px] uppercase leading-none'
+
+  if (!session.parentThreadId || session.parentThreadId === session.sessionId) {
+    return `${base} border-zinc-700 text-zinc-500`
+  }
+
+  if (session.sessionId.includes('orchestrator-turn')) {
+    return `${base} border-sky-300/20 text-sky-200`
+  }
+
+  return `${base} border-amber-300/20 text-amber-200`
 }
 
 function getChunkClassName(chunk: TerminalOutputChunk) {

@@ -120,3 +120,28 @@ Mudancas implementadas:
 Validacao:
 
 - `node --test electron/services/terminal-event-formatter.test.cjs electron/services/ipc-handlers.test.cjs`
+
+## Fase 6 - Frontend: UI de orquestracao
+
+Status: concluida.
+
+Mudancas implementadas:
+
+- `StreamEvent` recebeu suporte ao evento interno `orchestration_status` e
+  `runId` nos eventos de stream.
+- O runner preserva o `sessionId` original da resposta para que
+  `final_answer` complete a mensagem correta depois de re-invocacoes.
+- `ChatWorkspace.tsx` trata `spawn_agent`, `awaiting_agents`,
+  `orchestration_status` e `final_answer`.
+- O chat mostra uma barra compacta de estado enquanto aguarda sub-agentes ou
+  re-invoca o orquestrador.
+- `TerminalPanel.tsx` agrupa visualmente threads filhas logo abaixo da thread
+  pai e mostra indicador de papel (`Pai`, `Orq`, `Sub`).
+- `useTerminalOutput.ts` ja preserva `parentThreadId` nas sessoes, permitindo
+  o agrupamento do painel.
+
+Validacao:
+
+- `node --test electron/services/orchestration/orchestration-runner.test.cjs electron/services/orchestration/orchestration-ipc-bridge.test.cjs`
+- `npm run build`
+- `npm run lint`

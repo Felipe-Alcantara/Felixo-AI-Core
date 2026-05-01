@@ -30,6 +30,7 @@ import type {
   ContextAttachment,
   Model,
   ModelId,
+  OrchestrationRun,
   Project,
   StreamEvent,
 } from '../types'
@@ -69,6 +70,8 @@ export function ChatWorkspace() {
   const [isCodePanelOpen, setIsCodePanelOpen] = useState(false)
   const [isFelixoSettingsOpen, setIsFelixoSettingsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [activeOrchestrationRunId, setActiveOrchestrationRunId] = useState<string | null>(null)
+  const [orchestrationStatusText, setOrchestrationStatusText] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
   const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(true)
@@ -106,6 +109,34 @@ export function ChatWorkspace() {
   useEffect(() => {
     streamHandlerRef.current = handleStreamEvent
   })
+
+  useEffect(() => {
+    if (!activeOrchestrationRunId || !window.felixo?.cli?.orchestrationStatus) {
+      return
+    }
+
+    const pollStatus = () => {
+      window.felixo?.cli
+        ?.orchestrationStatus({ runId: activeOrchestrationRunId })
+        .then((result) => {
+          if (!result.ok || !result.run) {
+            return
+          }
+
+          setOrchestrationStatusText(formatOrchestrationRunStatus(result.run))
+
+          if (result.run.status === 'completed' || result.run.status === 'failed') {
+            setActiveOrchestrationRunId(null)
+          }
+        })
+        .catch(() => {})
+    }
+
+    pollStatus()
+    const intervalId = window.setInterval(pollStatus, 1500)
+
+    return () => window.clearInterval(intervalId)
+  }, [activeOrchestrationRunId])
 
   useEffect(() => {
     return window.felixo?.cli?.onStream?.((event) => {
@@ -235,6 +266,7 @@ export function ChatWorkspace() {
     resetBackendThread(threadId)
     setMessages(initialMessages)
     clearTerminalSessions()
+    clearOrchestrationStatus()
     resetConversationThread()
   }
 
@@ -264,6 +296,7 @@ export function ChatWorkspace() {
     setInput('')
     setContextAttachments([])
     stopStreaming()
+    clearOrchestrationStatus()
     resetConversationThread()
     setMessages(session.messages)
   }
@@ -480,6 +513,33 @@ export function ChatWorkspace() {
   }
 
   function handleStreamEvent(event: StreamEvent) {
+    if (event.type === 'spawn_agent') {
+      setActiveOrchestrationRunId(event.runId ?? null)
+      setOrchestrationStatusText(
+        `Sub-agente ${event.agentId} iniciado (${event.cliType}).`,
+      )
+      return
+    }
+
+    if (event.type === 'awaiting_agents') {
+      setActiveOrchestrationRunId(event.runId ?? null)
+      setOrchestrationStatusText(formatAwaitingAgentsStatus(event.agentIds.length))
+      return
+    }
+
+    if (event.type === 'orchestration_status') {
+      setActiveOrchestrationRunId(event.runId ?? null)
+      setOrchestrationStatusText(formatOrchestrationStatusLabel(event.status))
+      return
+    }
+
+    if (event.type === 'final_answer') {
+      markTerminalSessionStatus(resolveEventThreadId(event), 'completed')
+      completeAssistantMessage(event.sessionId, event.content, 'done')
+      clearOrchestrationStatus()
+      return
+    }
+
     if (event.type === 'text') {
       appendAssistantText(event.sessionId, event.text)
       return
@@ -488,6 +548,7 @@ export function ChatWorkspace() {
     if (event.type === 'error') {
       markTerminalSessionStatus(resolveEventThreadId(event), 'error')
       completeAssistantMessage(event.sessionId, event.message, 'error')
+      clearOrchestrationStatus()
       return
     }
 
@@ -501,7 +562,13 @@ export function ChatWorkspace() {
         event.stopped ? 'Execução interrompida.' : '',
         event.stopped ? 'stopped' : 'done',
       )
+      clearOrchestrationStatus()
     }
+  }
+
+  function clearOrchestrationStatus() {
+    setActiveOrchestrationRunId(null)
+    setOrchestrationStatusText(null)
   }
 
   function appendAssistantText(sessionId: string, text: string) {
@@ -682,6 +749,12 @@ export function ChatWorkspace() {
           {hasMessages ? (
             <>
               <ChatThread models={models} messages={messages} />
+              {orchestrationStatusText && (
+                <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.07] bg-[#141413] px-5 py-2 text-[12px] text-zinc-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
+                  <span className="min-w-0 truncate">{orchestrationStatusText}</span>
+                </div>
+              )}
               <Composer
                 input={input}
                 starters={ideaStarters}
@@ -811,6 +884,43 @@ export function ChatWorkspace() {
 
 function createSessionId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+}
+
+function formatAwaitingAgentsStatus(agentCount: number) {
+  return agentCount === 1
+    ? 'Aguardando 1 sub-agente.'
+    : `Aguardando ${agentCount} sub-agentes.`
+}
+
+function formatOrchestrationStatusLabel(status: OrchestrationRun['status']) {
+  if (status === 'running_orchestrator') {
+    return 'Reinvocando orquestrador.'
+  }
+
+  if (status === 'waiting_agents') {
+    return 'Aguardando sub-agentes.'
+  }
+
+  if (status === 'failed') {
+    return 'Orquestracao falhou.'
+  }
+
+  return 'Orquestracao concluida.'
+}
+
+function formatOrchestrationRunStatus(run: OrchestrationRun) {
+  if (run.status === 'waiting_agents') {
+    const activeJobs = run.agentJobs.filter(
+      (job) => job.turn === run.currentTurn && job.status === 'running',
+    )
+    return formatAwaitingAgentsStatus(activeJobs.length || run.agentJobs.length)
+  }
+
+  if (run.status === 'running_orchestrator' && run.currentTurn > 1) {
+    return `Reinvocando orquestrador (turno ${run.currentTurn}).`
+  }
+
+  return formatOrchestrationStatusLabel(run.status)
 }
 
 type ProjectDiff = { added: Project[]; removed: Project[] }
