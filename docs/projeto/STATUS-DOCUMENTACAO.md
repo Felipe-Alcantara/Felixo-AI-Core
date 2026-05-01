@@ -35,6 +35,7 @@ NOME-DO-DOCUMENTO__PLANEJADO.md
 
 - Renomear arquivos com status no nome, se esse padrão for confirmado depois.
 - Atualizar links antes de qualquer renomeação.
+- Executar a renomeação em commit isolado, porque o impacto atinge praticamente toda a árvore `/docs`.
 
 ## Auditoria de 2026-05-01
 
@@ -44,3 +45,7 @@ Resultado:
 
 - Todos os `.md` em `/docs` possuem status no corpo do documento.
 - A renomeação física dos arquivos foi adiada para evitar quebra de links e mistura com alterações pré-existentes no worktree.
+
+## Revisão de 2026-05-01
+
+A continuação da tasklist manteve a decisão de não renomear os arquivos no mesmo recorte de orquestração/exportação. A renomeação física continua viável, mas deve ser tratada como mudança própria: gerar mapa antigo/novo, aplicar `git mv`, reescrever links internos e validar referências em seguida.
