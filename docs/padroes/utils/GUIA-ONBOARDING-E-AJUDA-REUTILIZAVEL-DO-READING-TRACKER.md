@@ -1,5 +1,7 @@
 # 🧭 GUIA-ONBOARDING-E-AJUDA-REUTILIZAVEL-DO-READING-TRACKER.md
 
+Status: concluido.
+
 > **O que é**: Um guia reutilizável para estruturar **onboarding de primeira visita** e um **centro de ajuda permanente** dentro da interface.
 >
 > **De onde vem**: Este padrão foi extraído do fluxo composto por `OnboardingTooltip` e `HelpModal` no projeto **Reading Tracker**.

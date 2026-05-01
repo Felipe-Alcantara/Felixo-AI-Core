@@ -1,5 +1,7 @@
 # 🐙 GUIA-INTEGRACAO-REUTILIZAVEL-COM-API-DO-GITHUB-PARA-COLETA-DE-REPOSITORIOS-PUBLICOS-E-PRIVADOS.md
 
+Status: concluido.
+
 > **O que é**: Um guia reutilizável para construir uma camada de integração com a API do GitHub capaz de coletar repositórios **públicos e privados** com paginação, deduplicação, retry e tratamento de rate limit.
 >
 > **De onde vem**: Este padrão foi extraído do fluxo de importação do projeto **Git-Hub-Repositories**, principalmente de `src/utils/github.js`, `src/components/ImportProfileModal.jsx` e `src/components/GitHubTokenModal.jsx`.

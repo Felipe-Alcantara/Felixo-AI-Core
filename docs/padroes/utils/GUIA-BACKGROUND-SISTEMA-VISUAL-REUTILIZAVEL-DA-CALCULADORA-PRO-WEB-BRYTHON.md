@@ -1,5 +1,7 @@
 # 🌌 GUIA-BACKGROUND-SISTEMA-VISUAL-REUTILIZAVEL-DA-CALCULADORA-PRO-WEB-BRYTHON.md
 
+Status: concluido.
+
 > **O que é**: Um guia reutilizável para estruturar um **sistema de background visual em camadas**, com gradiente, símbolos animados e integração com troca de tema.
 >
 > **De onde vem**: Este padrão foi extraído da versão web da **Calculadora Científica Pro**, construída com **Brython**.

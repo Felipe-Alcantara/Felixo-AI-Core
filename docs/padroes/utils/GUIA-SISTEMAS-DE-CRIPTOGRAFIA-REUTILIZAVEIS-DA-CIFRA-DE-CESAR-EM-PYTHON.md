@@ -1,5 +1,7 @@
 # 🔐 GUIA-SISTEMAS-DE-CRIPTOGRAFIA-REUTILIZAVEIS-DA-CIFRA-DE-CESAR-EM-PYTHON.md
 
+Status: concluido.
+
 > **O que é**: Um guia reutilizável para estruturar sistemas de **cifra tradicional**, **cifra numérica**, **normalização de acentos** e **interface web interativa** baseados na Cifra de César.
 >
 > **De onde vem**: Este padrão foi extraído do projeto **Cifra de César em Python**.

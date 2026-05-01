@@ -1,5 +1,7 @@
 # 🪪 GUIA-BACKEND-REUTILIZAVEL-PARA-CPF-COM-TESTES-E-DADOS-REAIS-DO-GERADOR-DE-CPF-VALIDO-EM-PYTHON.md
 
+Status: concluido.
+
 > **O que é**: Um guia reutilizável para estruturar um backend pequeno, testável e seguro para **geração, validação e normalização de CPF**.
 >
 > **De onde vem**: Este padrão foi extraído da implementação Python do projeto **Gerador de CPF Válido em Python**.

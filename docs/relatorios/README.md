@@ -1,5 +1,7 @@
 # Relatórios Diários
 
+Status: concluido.
+
 Esta pasta registra o que foi feito em cada dia com atividade no histórico Git.
 
 Fonte usada para separar os dias:

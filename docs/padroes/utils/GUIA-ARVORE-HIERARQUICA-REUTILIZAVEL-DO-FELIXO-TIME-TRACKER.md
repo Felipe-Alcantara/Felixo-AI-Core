@@ -1,5 +1,7 @@
 # 🌳 GUIA-ARVORE-HIERARQUICA-REUTILIZAVEL-DO-FELIXO-TIME-TRACKER.md
 
+Status: concluido.
+
 > **O que é**: Um guia reutilizável para construir uma **árvore hierárquica interativa** no estilo file explorer.
 >
 > **De onde vem**: Este padrão foi extraído do componente `CategoryTree` do projeto **Felixo Time Tracker**.

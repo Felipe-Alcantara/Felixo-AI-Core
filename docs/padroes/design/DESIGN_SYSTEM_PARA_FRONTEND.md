@@ -1,5 +1,7 @@
 # DESIGN SYSTEM FRONTEND - FELIXOVERSE
 
+Status: concluido.
+
 > **Contexto**: Este documento é o guia de padronização **front-end** extraído do código-fonte do portfólio FelixoVerse. Ele cataloga todos os padrões visuais, estruturais e técnicos utilizados na interface do projeto, servindo como referência oficial para manter consistência visual e de UX em futuras implementações e novos projetos.
 >
 > **Escopo**: Exclusivamente **front-end** — identidade visual, componentes de UI, animações, layout responsivo e interações do lado do cliente.

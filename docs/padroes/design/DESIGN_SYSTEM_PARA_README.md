@@ -1,5 +1,7 @@
 # 📖 GUIA DE DOCUMENTAÇÃO — PADRÃO README
 
+Status: concluido.
+
 > **Contexto**: Este guia define o padrão de estrutura e escrita de README.md para todos os projetos, extraído do padrão estabelecido no projeto **Cifra de César**.
 >
 > **Objetivo**: Garantir consistência, clareza e profissionalismo na documentação de qualquer repositório.

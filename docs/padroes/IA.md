@@ -1,5 +1,7 @@
 # 🤖 TEMPLATE-CONTEXTO-IA-PARA-PROJETOS.md
 
+Status: concluido.
+
 > **O que é**: Este arquivo é o **template padrão de contexto operacional para projetos desenvolvidos com apoio de IA**.
 >
 > **De onde ele vem**: Ele nasce do repositório **Felixo System Design**, junto com outros artefatos-base como o `DESIGN-SYSTEM-FRONTEND.md`, o `PROMPT-BASE-BACKEND.md` e o `GUIA_DOCUMENTACAO_README.md`. Enquanto esses arquivos padronizam visual, execução e documentação, este template padroniza a **memória técnica do projeto** para uso por modelos de IA.
