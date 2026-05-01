@@ -7,6 +7,8 @@ const {
   collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
+  getPersistentCloseLogLevel,
+  shouldSuppressPersistentTrailingOutput,
 } = require('./ipc-handlers.cjs')
 const {
   createOrchestrationTerminalEvent,
@@ -157,4 +159,51 @@ test('ipc handlers collect thread family recursively for reset', () => {
     'run-1:gemini-1',
     'run-1:gemini-1:tool',
   ])
+})
+
+test('ipc handlers suppress duplicate persistent final events', () => {
+  const endedAt = 1000
+  const lastError = {
+    type: 'error',
+    message: "You're out of extra usage · resets 6:20pm (America/Sao_Paulo)",
+    endedAt,
+  }
+
+  assert.equal(
+    shouldSuppressPersistentTrailingOutput(
+      lastError,
+      {
+        type: 'error',
+        message: "You're out of extra usage · resets 6:20pm (America/Sao_Paulo)",
+      },
+      endedAt + 25,
+    ),
+    true,
+  )
+  assert.equal(
+    shouldSuppressPersistentTrailingOutput(
+      { type: 'final_answer', endedAt },
+      { type: 'done' },
+      endedAt + 25,
+    ),
+    true,
+  )
+  assert.equal(
+    shouldSuppressPersistentTrailingOutput(
+      lastError,
+      { type: 'error', message: 'Erro diferente.' },
+      endedAt + 25,
+    ),
+    false,
+  )
+  assert.equal(
+    shouldSuppressPersistentTrailingOutput(lastError, { type: 'error' }, endedAt + 6000),
+    false,
+  )
+})
+
+test('ipc handlers do not log completed persistent closes as errors', () => {
+  assert.equal(getPersistentCloseLogLevel({ code: 143, didComplete: true }), 'info')
+  assert.equal(getPersistentCloseLogLevel({ code: 143, didComplete: false }), 'error')
+  assert.equal(getPersistentCloseLogLevel({ code: 0, didComplete: false }), 'info')
 })

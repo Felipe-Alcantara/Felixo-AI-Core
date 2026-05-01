@@ -33,6 +33,7 @@ const persistentCliSessions = new Map()
 const terminalSessionParents = new Map()
 const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
 const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
+const PERSISTENT_TRAILING_OUTPUT_GRACE_MS = 5000
 
 function registerCliIpcHandlers(getMainWindow) {
   ipcMain.handle('cli:send', (event, params) => {
@@ -799,6 +800,7 @@ function sendPersistentCliRequest({
     }
 
     persistentSession.activeRun = run
+    persistentSession.lastRunFinalEvent = null
 
     logQaEvent({
       level: 'info',
@@ -931,6 +933,7 @@ function startPersistentCliSession({
     threadId,
     threadSession,
     activeRun: null,
+    lastRunFinalEvent: null,
   }
 
   persistentCliSessions.set(threadId, persistentSession)
@@ -1026,18 +1029,36 @@ function handlePersistentStdoutLine(persistentSession, line) {
   })
 
   const cliEvent = parseAdapterLine(adapter, line)
-  sendTerminalEvents(
-    persistentSession.targetWebContents,
-    threadId,
-    createTerminalEvents({
-      command,
-      line,
-      cliEvent,
-      durationMs,
-    }),
-  )
 
   if (!cliEvent) {
+    sendTerminalEvents(
+      persistentSession.targetWebContents,
+      threadId,
+      createTerminalEvents({
+        command,
+        line,
+        cliEvent,
+        durationMs,
+      }),
+    )
+    return
+  }
+
+  if (cliEvent.providerSessionId) {
+    threadSession.providerSessionId = cliEvent.providerSessionId
+  }
+
+  if (cliEvent.type === 'session') {
+    sendTerminalEvents(
+      persistentSession.targetWebContents,
+      threadId,
+      createTerminalEvents({
+        command,
+        line,
+        cliEvent,
+        durationMs,
+      }),
+    )
     return
   }
 
@@ -1052,10 +1073,6 @@ function handlePersistentStdoutLine(persistentSession, line) {
     return
   }
 
-  if (cliEvent.providerSessionId) {
-    threadSession.providerSessionId = cliEvent.providerSessionId
-  }
-
   if (cliEvent.readyForPrompt && activeRun && !activeRun.didSendPrompt) {
     writeNextPersistentInput(persistentSession, activeRun, {
       providerSessionId: threadSession.providerSessionId,
@@ -1063,16 +1080,27 @@ function handlePersistentStdoutLine(persistentSession, line) {
     })
   }
 
-  if (cliEvent.type === 'session') {
-    return
-  }
-
   if (cliEvent.type === 'control') {
     return
   }
 
-
   if (!activeRun) {
+    if (shouldSuppressPersistentTrailingOutput(
+      persistentSession.lastRunFinalEvent,
+      cliEvent,
+    )) {
+      logQaEvent({
+        level: 'debug',
+        scope: 'cli:persistent-trailing-output',
+        sessionId: threadId,
+        message: `Persistent ${command} emitted a trailing final event after request completion.`,
+        details: {
+          cliEventType: cliEvent.type,
+        },
+      })
+      return
+    }
+
     logQaEvent({
       level: 'warn',
       scope: 'cli:persistent-orphan-output',
@@ -1082,8 +1110,29 @@ function handlePersistentStdoutLine(persistentSession, line) {
         cliEventType: cliEvent.type,
       },
     })
+    sendTerminalEvents(
+      persistentSession.targetWebContents,
+      threadId,
+      createTerminalEvents({
+        command,
+        line,
+        cliEvent,
+        durationMs,
+      }),
+    )
     return
   }
+
+  sendTerminalEvents(
+    persistentSession.targetWebContents,
+    threadId,
+    createTerminalEvents({
+      command,
+      line,
+      cliEvent,
+      durationMs,
+    }),
+  )
 
   if (cliEvent.type === 'text' && cliEvent.text.trim()) {
     activeRun.didEmitVisibleOutput = true
@@ -1116,6 +1165,7 @@ function handlePersistentStdoutLine(persistentSession, line) {
     ) {
       activeRun.didComplete = true
       clearPersistentRunTimer(activeRun)
+      rememberPersistentFinalEvent(persistentSession, activeRun, cliEvent)
       persistentSession.activeRun = null
       schedulePersistentIdleTimer(persistentSession)
     }
@@ -1130,12 +1180,14 @@ function handlePersistentStdoutLine(persistentSession, line) {
   })
 
   if (cliEvent.type === 'done') {
+    rememberPersistentFinalEvent(persistentSession, activeRun, cliEvent)
     persistentSession.activeRun = null
     schedulePersistentIdleTimer(persistentSession)
     return
   }
 
   if (cliEvent.type === 'error') {
+    rememberPersistentFinalEvent(persistentSession, activeRun, cliEvent)
     persistentSession.activeRun = null
     closePersistentSession(threadId)
   }
@@ -1200,13 +1252,14 @@ function handlePersistentStderr(persistentSession, chunk) {
 function handlePersistentClose(persistentSession, code, signal) {
   const { command, threadId } = persistentSession
   const activeRun = persistentSession.activeRun
+  const didComplete = activeRun?.didComplete ?? true
 
   clearPersistentIdleTimer(persistentSession)
   if (persistentCliSessions.get(threadId) === persistentSession) {
     persistentCliSessions.delete(threadId)
   }
   logQaEvent({
-    level: code && code !== 0 ? 'error' : 'info',
+    level: getPersistentCloseLogLevel({ code, didComplete }),
     scope: 'cli:close',
     sessionId: threadId,
     message: `Persistent ${command} closed.`,
@@ -1214,7 +1267,7 @@ function handlePersistentClose(persistentSession, code, signal) {
       pid: persistentSession.childProcess.pid,
       code,
       signal,
-      didComplete: activeRun?.didComplete ?? true,
+      didComplete,
       stderrPreview: createTextPreview(activeRun?.stderrOutput ?? ''),
     },
   })
@@ -1255,6 +1308,10 @@ function failPersistentRun(persistentSession, message, options = {}) {
   if (activeRun) {
     activeRun.didComplete = true
     clearPersistentRunTimer(activeRun)
+    rememberPersistentFinalEvent(persistentSession, activeRun, {
+      type: 'error',
+      message,
+    })
   }
 
   logQaEvent({
@@ -1281,6 +1338,63 @@ function failPersistentRun(persistentSession, message, options = {}) {
   }
 
   persistentSession.activeRun = null
+}
+
+function rememberPersistentFinalEvent(persistentSession, activeRun, cliEvent) {
+  if (!persistentSession || !activeRun || !cliEvent) {
+    return
+  }
+
+  persistentSession.lastRunFinalEvent = {
+    type: cliEvent.type,
+    message: typeof cliEvent.message === 'string' ? cliEvent.message : '',
+    streamSessionId: activeRun.streamSessionId,
+    endedAt: Date.now(),
+  }
+}
+
+function shouldSuppressPersistentTrailingOutput(
+  lastRunFinalEvent,
+  cliEvent,
+  now = Date.now(),
+) {
+  if (!lastRunFinalEvent || !cliEvent || typeof cliEvent !== 'object') {
+    return false
+  }
+
+  const ageMs = now - lastRunFinalEvent.endedAt
+
+  if (ageMs < 0 || ageMs > PERSISTENT_TRAILING_OUTPUT_GRACE_MS) {
+    return false
+  }
+
+  if (
+    cliEvent.type === 'done' &&
+    ['awaiting_agents', 'done', 'final_answer'].includes(lastRunFinalEvent.type)
+  ) {
+    return true
+  }
+
+  if (cliEvent.type !== 'error' || lastRunFinalEvent.type !== 'error') {
+    return false
+  }
+
+  const previousMessage = normalizeCliEventMessage(lastRunFinalEvent.message)
+  const nextMessage = normalizeCliEventMessage(cliEvent.message)
+
+  return !previousMessage || !nextMessage || previousMessage === nextMessage
+}
+
+function normalizeCliEventMessage(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ')
+}
+
+function getPersistentCloseLogLevel({ code, didComplete }) {
+  if (didComplete) {
+    return 'info'
+  }
+
+  return code && code !== 0 ? 'error' : 'info'
 }
 
 function dispatchPersistentCliEvent(persistentSession, cliEvent) {
@@ -1878,5 +1992,7 @@ module.exports = {
   createOrchestrationModel,
   createOrchestrationStatusResponse,
   getAdapterSpawnArgs,
+  getPersistentCloseLogLevel,
   registerCliIpcHandlers,
+  shouldSuppressPersistentTrailingOutput,
 }
