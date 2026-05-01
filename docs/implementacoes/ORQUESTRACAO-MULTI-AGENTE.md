@@ -145,3 +145,15 @@ Validacao:
 - `node --test electron/services/orchestration/orchestration-runner.test.cjs electron/services/orchestration/orchestration-ipc-bridge.test.cjs`
 - `npm run build`
 - `npm run lint`
+
+## Ajuste para testes reais
+
+CLIs reais como Codex e Gemini tendem a embrulhar a resposta do modelo dentro
+do JSONL do provedor. Por isso, os adapters tambem passaram a reconhecer
+eventos de orquestracao quando o conteudo textual do assistente for um objeto
+JSON ou um bloco fenced `json` com `spawn_agent`, `awaiting_agents` ou
+`final_answer`.
+
+Validacao:
+
+- `node --test electron/services/adapters/codex-adapter.test.cjs electron/services/adapters/claude-adapter.test.cjs electron/services/adapters/gemini-adapter.test.cjs`

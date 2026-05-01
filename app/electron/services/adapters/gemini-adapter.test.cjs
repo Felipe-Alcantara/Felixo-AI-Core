@@ -172,6 +172,21 @@ test('gemini adapter parses orchestration final_answer events', () => {
   })
 })
 
+test('gemini adapter parses orchestration events embedded as assistant JSON text', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'message',
+      role: 'model',
+      content: '```json\n{"type":"awaiting_agents","agentIds":["reviewer-1"]}\n```',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'awaiting_agents',
+    agentIds: ['reviewer-1'],
+  })
+})
+
 test('gemini adapter classifies known non-fatal stderr notices', () => {
   const colorNotice =
     'Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.\n'

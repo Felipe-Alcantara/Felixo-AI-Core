@@ -202,6 +202,26 @@ test('claude adapter parses orchestration final_answer events', () => {
   })
 })
 
+test('claude adapter parses orchestration events embedded as assistant JSON text', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'stream_event',
+      event: {
+        type: 'content_block_delta',
+        delta: {
+          type: 'text_delta',
+          text: '{"type":"final_answer","content":"Fluxo concluido."}',
+        },
+      },
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'final_answer',
+    content: 'Fluxo concluido.',
+  })
+})
+
 test('claude adapter parses session metadata', () => {
   const event = adapter.parseLine(
     JSON.stringify({
