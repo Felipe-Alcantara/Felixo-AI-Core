@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-production
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    defaults:
+      run:
+        working-directory: app
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set production version
+        shell: bash
+        run: |
+          BASE_VERSION="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
+          VERSION="${BASE_VERSION}.${GITHUB_RUN_NUMBER}"
+          npm version --no-git-tag-version "$VERSION"
+          echo "FELIXO_RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Publish installers
+        run: npx electron-builder --publish always

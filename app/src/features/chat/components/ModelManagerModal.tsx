@@ -45,7 +45,7 @@ export function ModelManagerModal({
     if (!formName.trim()) setFormName(selection.name)
     if (!formSource.trim()) setFormSource(selection.source)
     setStatus(
-      'Arquivo selecionado — confira os campos e clique em "Adicionar modelo".',
+      'Script selecionado — confira os campos e clique em "Adicionar CLI".',
     )
   }
 
@@ -68,7 +68,7 @@ export function ModelManagerModal({
     const name = rawName || inferModelName('', getFileNameFromCommand(command))
 
     if (!command) {
-      setStatus('Informe ou escolha o arquivo do modelo.')
+      setStatus('Informe o comando da CLI.')
       commandInputRef.current?.focus()
       return
     }
@@ -83,12 +83,12 @@ export function ModelManagerModal({
     onAddModel({
       id: createModelId(name),
       name,
-      source: source || 'CLI local',
+      source: source || 'CLI instalada no sistema',
       command,
       cliType: detectModelCliType({
         command,
         name,
-        source: source || 'CLI local',
+        source: source || 'CLI instalada no sistema',
       }),
     })
 
@@ -113,7 +113,7 @@ export function ModelManagerModal({
               Gerenciar modelos
             </h2>
             <p className="mt-1 text-xs text-zinc-500">
-              Importe, remova ou configure scripts de CLI.
+              Configure CLIs instaladas ou scripts legados.
             </p>
           </div>
 
@@ -186,7 +186,7 @@ export function ModelManagerModal({
           <form className="space-y-3 rounded-2xl border border-white/[0.08] bg-black/10 p-3" onSubmit={handleSubmit}>
             <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
               <Plus size={14} aria-hidden="true" />
-              Adicionar modelo
+              Adicionar CLI
             </div>
 
             <input
@@ -197,23 +197,23 @@ export function ModelManagerModal({
             />
 
             <label className="block text-xs text-zinc-400">
-              Arquivo do modelo
+              Comando da CLI
               <div className="mt-1 flex gap-2">
                 <input
                   ref={commandInputRef}
-                  placeholder="Selecione ou digite o caminho"
+                  placeholder="codex, claude ou gemini"
                   value={formCommand}
                   onChange={(event) => setFormCommand(event.target.value)}
                   className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
                 />
                 <button
                   type="button"
-                  title="Escolher arquivo"
+                  title="Escolher script legado"
                   onClick={() => fileInputRef.current?.click()}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                 >
                   <FolderOpen size={16} aria-hidden="true" />
-                  <span className="sr-only">Escolher arquivo</span>
+                  <span className="sr-only">Escolher script legado</span>
                 </button>
               </div>
             </label>
@@ -229,9 +229,9 @@ export function ModelManagerModal({
             </label>
 
             <label className="block text-xs text-zinc-400">
-              Tipo
+              Origem
               <input
-                placeholder="CLI local"
+                placeholder="CLI instalada no sistema"
                 value={formSource}
                 onChange={(event) => setFormSource(event.target.value)}
                 className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
@@ -243,7 +243,7 @@ export function ModelManagerModal({
               className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[var(--color-panel)]"
             >
               <Plus size={16} aria-hidden="true" />
-              Adicionar modelo
+              Adicionar CLI
             </button>
 
             {status && (
@@ -269,11 +269,11 @@ async function createSelectionFromBrowserFile(
   return {
     name,
     command,
-    source: 'CLI local',
+    source: 'Script local',
     cliType: detectModelCliType({
       command,
       name,
-      source: 'CLI local',
+      source: 'Script local',
     }),
   }
 }

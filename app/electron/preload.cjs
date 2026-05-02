@@ -37,6 +37,16 @@ contextBridge.exposeInMainWorld('felixo', {
   files: {
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
   },
+  updates: {
+    getStatus: () => ipcRenderer.invoke('updates:get-status'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    onStatus: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('updates:status', handler)
+      return () => ipcRenderer.removeListener('updates:status', handler)
+    },
+  },
   git: {
     getSummary: (params) => ipcRenderer.invoke('git:get-summary', params),
   },

@@ -1,6 +1,30 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { CliProcessManager } = require('./cli-process-manager.cjs')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { CliProcessManager, createCliEnv } = require('./cli-process-manager.cjs')
+
+test('cli env uses configured portable cli paths', (t) => {
+  const cliDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-cli-path-'))
+
+  t.after(() => {
+    fs.rmSync(cliDir, { recursive: true, force: true })
+  })
+
+  const env = createCliEnv({
+    FELIXO_CLI_PATHS: cliDir,
+    HOME: path.join(cliDir, 'home'),
+    PATH: '/usr/bin',
+  })
+  const pathParts = env.PATH.split(path.delimiter)
+
+  assert.equal(pathParts[0], cliDir)
+  assert.equal(
+    pathParts.includes('/home/felipe/.nvm/versions/node/v25.9.0/bin'),
+    false,
+  )
+})
 
 test('cli process manager keeps stdin closed by default', async () => {
   const manager = new CliProcessManager()
