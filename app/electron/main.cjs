@@ -5,6 +5,7 @@ const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-ha
 const { registerQaLoggerIpcHandlers } = require('./services/qa-logger.cjs')
 const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handlers.cjs')
 const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
+const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
 
 let mainWindow = null
 
@@ -17,6 +18,7 @@ app.whenReady().then(() => {
   registerFileExportIpcHandlers(getMainWindow)
   registerProjectsIpcHandlers(getMainWindow)
   registerGitIpcHandlers()
+  registerAutoUpdateHandlers(getMainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

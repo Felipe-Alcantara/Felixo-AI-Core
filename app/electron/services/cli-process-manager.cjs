@@ -1,9 +1,9 @@
-const { spawn: spawnChildProcess } = require('node:child_process')
+const spawnChildProcess = require('cross-spawn')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
-const EXTRA_PATHS = [
-  '/home/felipe/.nvm/versions/node/v25.9.0/bin',
-  '/home/felipe/.npm-global/bin',
-]
+const CLI_PATHS_ENV_KEY = 'FELIXO_CLI_PATHS'
 
 class CliProcessManager {
   constructor() {
@@ -12,11 +12,12 @@ class CliProcessManager {
 
   spawn(sessionId, command, args = [], cwd = process.cwd(), options = {}) {
     this.kill(sessionId)
+    const env = createCliEnv()
 
     const childProcess = spawnChildProcess(command, args, {
       cwd,
       detached: process.platform !== 'win32',
-      env: createCliEnv(),
+      env,
       stdio: [options.openStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
@@ -134,16 +135,121 @@ function signalChildProcess(childProcess, signal) {
   }
 }
 
-function createCliEnv() {
+function createCliEnv(baseEnv = process.env) {
+  const pathKey = getPathEnvKey(baseEnv)
+  const configuredPaths = getConfiguredCliPaths(baseEnv)
+  const userPaths = getUserCliPathCandidates(baseEnv)
   const pathParts = [
-    ...EXTRA_PATHS,
-    ...(process.env.PATH ?? '').split(':').filter(Boolean),
+    ...configuredPaths,
+    ...userPaths,
+    ...(baseEnv[pathKey] ?? '').split(path.delimiter).filter(Boolean),
   ]
-  const path = [...new Set(pathParts)].join(':')
+  const nextEnv = { ...baseEnv }
+  const nextPath = uniqueExistingPathParts(pathParts).join(path.delimiter)
 
-  return {
-    ...process.env,
-    PATH: path,
+  nextEnv[pathKey] = nextPath
+
+  if (pathKey !== 'PATH' && !Object.prototype.hasOwnProperty.call(nextEnv, 'PATH')) {
+    nextEnv.PATH = nextPath
+  }
+
+  return nextEnv
+}
+
+function getPathEnvKey(env) {
+  return Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
+}
+
+function getConfiguredCliPaths(env) {
+  return splitPathList(env[CLI_PATHS_ENV_KEY])
+}
+
+function getUserCliPathCandidates(env) {
+  const home = env.HOME || env.USERPROFILE || os.homedir()
+
+  if (!home) {
+    return getSystemCliPathCandidates()
+  }
+
+  if (process.platform === 'win32') {
+    return [
+      env.APPDATA ? path.join(env.APPDATA, 'npm') : null,
+      env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Programs', 'nodejs') : null,
+      path.join(home, 'AppData', 'Roaming', 'npm'),
+      ...getSystemCliPathCandidates(),
+    ]
+  }
+
+  return [
+    path.join(home, '.local', 'bin'),
+    path.join(home, '.npm-global', 'bin'),
+    path.join(home, '.volta', 'bin'),
+    path.join(home, '.asdf', 'shims'),
+    ...getNvmNodeBinCandidates(path.join(home, '.nvm', 'versions', 'node')),
+    ...getSystemCliPathCandidates(),
+  ]
+}
+
+function getSystemCliPathCandidates() {
+  if (process.platform === 'darwin') {
+    return ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
+  }
+
+  if (process.platform === 'win32') {
+    return [
+      'C:\\Program Files\\nodejs',
+      'C:\\Program Files (x86)\\nodejs',
+    ]
+  }
+
+  return ['/usr/local/bin', '/usr/bin', '/bin']
+}
+
+function getNvmNodeBinCandidates(nodeVersionsPath) {
+  try {
+    return fs
+      .readdirSync(nodeVersionsPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(nodeVersionsPath, entry.name, 'bin'))
+      .filter((candidate) => directoryExists(candidate))
+      .sort()
+      .reverse()
+  } catch {
+    return []
+  }
+}
+
+function splitPathList(value) {
+  return String(value ?? '')
+    .split(path.delimiter)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function uniqueExistingPathParts(pathParts) {
+  const seen = new Set()
+  const uniqueParts = []
+
+  for (const pathPart of pathParts) {
+    if (!pathPart || seen.has(pathPart)) {
+      continue
+    }
+
+    seen.add(pathPart)
+
+    if (directoryExists(pathPart)) {
+      uniqueParts.push(pathPart)
+    }
+  }
+
+  return uniqueParts
+}
+
+function directoryExists(candidate) {
+  try {
+    return fs.statSync(candidate).isDirectory()
+  } catch {
+    return false
   }
 }
 

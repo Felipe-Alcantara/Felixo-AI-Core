@@ -19,6 +19,22 @@ type CliInvokeResult = {
   message?: string
 }
 
+type UpdateStatus = {
+  state:
+    | 'disabled'
+    | 'idle'
+    | 'checking'
+    | 'available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+  message: string
+  updatedAt: string
+  reason?: string
+  version?: string
+  progress?: number
+}
+
 type CliOrchestrationStatusResult = CliInvokeResult & {
   run?: OrchestrationRun
   runs?: OrchestrationRun[]
@@ -71,6 +87,14 @@ declare global {
           content: string
           filters?: Array<{ name: string; extensions: string[] }>
         }) => Promise<CliInvokeResult & { canceled?: boolean; filePath?: string }>
+      }
+      updates?: {
+        getStatus: () => Promise<CliInvokeResult & { status?: UpdateStatus }>
+        check: () => Promise<
+          CliInvokeResult & { status?: UpdateStatus; updateInfo?: unknown }
+        >
+        install: () => Promise<CliInvokeResult & { status?: UpdateStatus }>
+        onStatus: (callback: (status: UpdateStatus) => void) => () => void
       }
       git?: {
         getSummary: (params: {

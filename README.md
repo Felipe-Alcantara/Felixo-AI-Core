@@ -8,7 +8,7 @@ Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicaç
 
 ## O que é
 
-Uma aplicação desktop Linux-first que centraliza, em uma única interface, as CLIs de IA que você já usa no terminal — Claude, Codex, Gemini e outros.
+Uma aplicação desktop que centraliza, em uma única interface, as CLIs de IA que você já usa no terminal — Claude, Codex, Gemini e outros.
 
 O objetivo de longo prazo é evoluir para um sistema capaz de escolher modelos, coordenar agentes, manter memória persistente e executar pipelines inteligentes com base em custo, contexto e objetivo da tarefa.
 
@@ -33,9 +33,11 @@ Primeira versão funcional entregue:
 - Interface de chat com seletor visual de modelos/CLIs
 - Backend Electron executando CLIs reais em streaming
 - Adapters para `claude`, `codex` e `gemini`
+- Perfis padrão para CLIs instaladas no sistema, sem depender dos scripts locais em `ai-clis/`
 - Registry de Terminal Adapters
 - Orchestrator Core inicial para decidir processo persistente, retomada nativa ou one-shot
 - Catálogo inicial de ferramentas MCP do Felixo
+- Empacotamento Electron Builder e base de auto-update via GitHub Releases
 - Append incremental de resposta com cursor de streaming
 - Botão de parar para interromper processo em andamento
 - Frontend organizado por feature em `app/src/features/chat/`
@@ -73,6 +75,34 @@ nvm use
 npm install
 npm run dev
 ```
+
+Para atualizar uma cópia rodada pelo código-fonte a partir da branch de produção:
+
+```bash
+python3 start_app.py --update
+```
+
+Esse comando faz `git pull --ff-only origin production` antes de abrir o app e bloqueia a atualização se houver alterações locais não commitadas.
+
+## Como distribuir
+
+Build local:
+
+```bash
+cd app
+npm run dist
+```
+
+O workflow `.github/workflows/release.yml` publica instaladores para Linux, Windows e macOS quando houver push na branch `production`. O app empacotado verifica atualizações no início e periodicamente; quando encontra uma versão nova publicada no GitHub Releases, baixa automaticamente e instala ao fechar.
+
+Observações importantes:
+
+- Usuários precisam ter as CLIs `codex`, `claude` e/ou `gemini` instaladas e autenticadas no próprio sistema.
+- Se a CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com os diretórios extras onde os comandos estão instalados.
+- No Linux, prefira o AppImage para auto-update dentro do app; pacote `.deb` é útil para instalação tradicional, mas não segue o mesmo fluxo de atualização automática.
+- Releases públicas de macOS/Windows ainda devem receber assinatura/notarização antes de distribuição ampla.
+
+Detalhes: [Distribuição e Atualizações](./docs/projeto/DISTRIBUICAO-E-ATUALIZACOES.md).
 
 ---
 
