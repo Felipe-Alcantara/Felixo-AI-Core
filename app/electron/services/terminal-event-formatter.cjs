@@ -108,13 +108,14 @@ function createOrchestrationTerminalEvent(event) {
       severity: 'info',
       title: 'Sub-agente iniciado',
       chunk: `${event.agentId} (${event.cliType}) iniciou em ${event.threadId}.`,
-      metadata: {
+      metadata: compactObject({
         runId: event.runId,
         parentThreadId: event.parentThreadId,
         agentId: event.agentId,
         cliType: event.cliType,
+        requestedCliType: event.requestedCliType,
         threadId: event.threadId,
-      },
+      }),
     }
   }
 
@@ -142,6 +143,14 @@ function createOrchestrationTerminalEvent(event) {
       details.push(`Modelos bloqueados ignorados: ${event.blockedCount}`)
     }
 
+    if (Number.isInteger(event.unavailableCount)) {
+      details.push(`Modelos indisponiveis ignorados: ${event.unavailableCount}`)
+    }
+
+    if (event.fallbackFromCliType) {
+      details.push(`Fallback de: ${event.fallbackFromCliType}`)
+    }
+
     return {
       source: 'system',
       kind: 'lifecycle',
@@ -161,6 +170,8 @@ function createOrchestrationTerminalEvent(event) {
         selectionRule: event.selectionRule,
         candidateCount: event.candidateCount,
         blockedCount: event.blockedCount,
+        unavailableCount: event.unavailableCount,
+        fallbackFromCliType: event.fallbackFromCliType,
         threadId: event.threadId,
       }),
     }

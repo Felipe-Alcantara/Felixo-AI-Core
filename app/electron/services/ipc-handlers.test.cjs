@@ -8,8 +8,12 @@ const {
   createOrchestrationModel,
   createOrchestrationStatusResponse,
   getPersistentCloseLogLevel,
+  resolveOrchestrationSpawnModel,
   shouldSuppressPersistentTrailingOutput,
 } = require('./ipc-handlers.cjs')
+const {
+  createModelAvailabilityRegistry,
+} = require('./orchestrator/model-availability.cjs')
 const {
   createOrchestrationTerminalEvent,
 } = require('./terminal-event-formatter.cjs')
@@ -143,6 +147,80 @@ test('ipc handlers create orchestration status responses', () => {
       message: 'Run de orquestracao nao encontrado.',
     },
   )
+})
+
+test('ipc handlers route orchestration spawn away from limited providers', () => {
+  const registry = createModelAvailabilityRegistry({
+    now: () => new Date('2026-05-02T15:10:00-03:00'),
+  })
+  const claudeModel = {
+    id: 'claude-sonnet',
+    name: 'Claude Sonnet',
+    command: 'claude',
+    source: 'CLI local',
+    cliType: 'claude',
+    providerModel: 'sonnet',
+  }
+  const codexModel = {
+    id: 'codex-mini',
+    name: 'Codex Mini',
+    command: 'codex',
+    source: 'CLI local',
+    cliType: 'codex',
+    providerModel: 'gpt-5.4-mini',
+  }
+
+  registry.recordError({
+    model: claudeModel,
+    cliType: 'claude',
+    message: "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+  })
+
+  const result = resolveOrchestrationSpawnModel(
+    'claude',
+    {
+      availableModels: [claudeModel, codexModel],
+      orchestratorSettings: {},
+      modelAvailabilityRegistry: registry,
+    },
+    { prompt: 'Revise este codigo.' },
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(result.model.id, 'codex-mini')
+  assert.equal(result.modelChoice.selectionRule, 'provider-fallback')
+  assert.equal(result.modelChoice.requestedCliType, 'claude')
+  assert.equal(result.modelChoice.selectedCliType, 'codex')
+  assert.equal(result.modelChoice.unavailableCount, 1)
+})
+
+test('ipc handlers keep preferred operational model for requested cliType', () => {
+  const firstModel = {
+    id: 'claude-sonnet',
+    name: 'Claude Sonnet',
+    command: 'claude',
+    source: 'CLI local',
+    cliType: 'claude',
+  }
+  const preferredModel = {
+    id: 'claude-opus',
+    name: 'Claude Opus',
+    command: 'claude',
+    source: 'CLI local',
+    cliType: 'claude',
+  }
+
+  const result = resolveOrchestrationSpawnModel('claude', {
+    availableModels: [firstModel, preferredModel],
+    orchestratorSettings: {
+      preferredModelIds: ['claude-opus'],
+      blockedModelIds: [],
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.model.id, 'claude-opus')
+  assert.equal(result.modelChoice.selectionRule, 'preferred-model')
 })
 
 test('ipc handlers collect thread family recursively for reset', () => {
