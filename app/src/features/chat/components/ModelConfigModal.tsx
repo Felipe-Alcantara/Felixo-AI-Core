@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { BrainCircuit, Save, X } from 'lucide-react'
-import type { Model, ReasoningEffort } from '../types'
+import type { CliType, Model, ReasoningEffort } from '../types'
 
 type ModelConfigModalProps = {
   isOpen: boolean
@@ -10,17 +10,67 @@ type ModelConfigModalProps = {
   onUpdateModel: (model: Model) => void
 }
 
-const reasoningEffortOptions: Array<{
-  value: '' | ReasoningEffort
-  label: string
-}> = [
-  { value: '', label: 'Padrão da CLI' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'XHigh' },
-  { value: 'max', label: 'Max' },
-]
+type SelectOption = { value: string; label: string }
+
+const providerModelOptionsByCliType: Partial<Record<CliType, SelectOption[]>> = {
+  claude: [
+    { value: 'sonnet', label: 'Sonnet 4.6' },
+    { value: 'opus', label: 'Opus 4.6' },
+    { value: 'haiku', label: 'Haiku 4.5' },
+  ],
+  codex: [
+    { value: 'gpt-5.5', label: 'gpt-5.5' },
+    { value: 'gpt-5.4', label: 'gpt-5.4' },
+    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
+    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
+    { value: 'gpt-5.2', label: 'gpt-5.2' },
+  ],
+  'codex-app-server': [
+    { value: 'gpt-5.5', label: 'gpt-5.5' },
+    { value: 'gpt-5.4', label: 'gpt-5.4' },
+    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
+    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
+    { value: 'gpt-5.2', label: 'gpt-5.2' },
+  ],
+  gemini: [
+    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+    { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+  ],
+  'gemini-acp': [
+    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+    { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+  ],
+}
+
+const reasoningEffortOptionsByCliType: Partial<Record<CliType, SelectOption[]>> = {
+  claude: [
+    { value: '', label: 'Padrão' },
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'max', label: 'Max' },
+  ],
+  codex: [
+    { value: '', label: 'Padrão' },
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'xhigh', label: 'XHigh' },
+  ],
+  'codex-app-server': [
+    { value: '', label: 'Padrão' },
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'xhigh', label: 'XHigh' },
+  ],
+}
+
+const defaultEffortOptions: SelectOption[] = [{ value: '', label: 'Padrão' }]
 
 export function ModelConfigModal({
   isOpen,
@@ -28,6 +78,7 @@ export function ModelConfigModal({
   onClose,
   onUpdateModel,
 }: ModelConfigModalProps) {
+  const [providerModel, setProviderModel] = useState(model.providerModel ?? '')
   const [reasoningEffort, setReasoningEffort] = useState<'' | ReasoningEffort>(
     model.reasoningEffort ?? '',
   )
@@ -37,13 +88,16 @@ export function ModelConfigModal({
   }
 
   const capabilities = getModelCapabilities(model)
+  const providerOptions = getProviderModelOptions(model)
+  const effortOptions = reasoningEffortOptionsByCliType[model.cliType] ?? defaultEffortOptions
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     onUpdateModel({
       ...model,
-      reasoningEffort: reasoningEffort || undefined,
+      providerModel: providerModel || undefined,
+      reasoningEffort: (reasoningEffort as ReasoningEffort) || undefined,
     })
     onClose()
   }
@@ -88,11 +142,6 @@ export function ModelConfigModal({
               <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
                 {model.cliType}
               </span>
-              {model.providerModel && (
-                <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
-                  {model.providerModel}
-                </span>
-              )}
             </div>
             <code className="mt-1 block truncate font-mono text-[11px] text-zinc-500">
               {model.command}
@@ -110,24 +159,41 @@ export function ModelConfigModal({
               Execução
             </div>
 
-            <label className="block text-xs text-zinc-400">
-              Effort
-              <select
-                value={reasoningEffort}
-                onChange={(event) =>
-                  setReasoningEffort(
-                    event.target.value as '' | ReasoningEffort,
-                  )
-                }
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
-              >
-                {reasoningEffortOptions.map((option) => (
-                  <option key={option.value || 'default'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {providerOptions.length > 1 && (
+              <label className="block text-xs text-zinc-400">
+                Modelo do provedor
+                <select
+                  value={providerModel}
+                  onChange={(event) => setProviderModel(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
+                >
+                  {providerOptions.map((option) => (
+                    <option key={option.value || 'default'} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {effortOptions.length > 1 && (
+              <label className="block text-xs text-zinc-400">
+                Effort
+                <select
+                  value={reasoningEffort}
+                  onChange={(event) =>
+                    setReasoningEffort(event.target.value as '' | ReasoningEffort)
+                  }
+                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
+                >
+                  {effortOptions.map((option) => (
+                    <option key={option.value || 'default'} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </section>
 
           <button
@@ -141,6 +207,21 @@ export function ModelConfigModal({
       </section>
     </div>
   )
+}
+
+function getProviderModelOptions(model: Model): SelectOption[] {
+  const options: SelectOption[] = [
+    { value: '', label: 'Padrão' },
+    ...(providerModelOptionsByCliType[model.cliType] ?? []),
+  ]
+
+  const current = model.providerModel ?? ''
+
+  if (current && !options.some((o) => o.value === current)) {
+    options.push({ value: current, label: current })
+  }
+
+  return options
 }
 
 function getModelCapabilities(model: Model) {
