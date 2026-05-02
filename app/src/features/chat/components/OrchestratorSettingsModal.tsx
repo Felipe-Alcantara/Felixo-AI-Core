@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { BrainCircuit, Save, SlidersHorizontal, X } from 'lucide-react'
-import type { Model, OrchestratorMode, OrchestratorSettings } from '../types'
+import type { Model, ModelAvailabilityStatus, OrchestratorMode, OrchestratorSettings } from '../types'
 
 type OrchestratorSettingsModalProps = {
   isOpen: boolean
@@ -272,14 +272,20 @@ export function OrchestratorSettingsModal({
                   Nenhum modelo configurado para orquestração.
                 </p>
               ) : (
-                spawnableModels.map((model) => (
+                spawnableModels.map((model) => {
+                  const status = getModelStatus(model, draft)
+
+                  return (
                   <div
                     key={model.id}
                     className="grid gap-3 rounded-2xl border border-white/[0.06] bg-black/15 px-3 py-2 text-xs text-zinc-400 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-medium text-zinc-200">
-                        {model.name}
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium text-zinc-200">
+                          {model.name}
+                        </span>
+                        <ModelStatusBadge status={status} />
                       </div>
                       <div className="truncate font-mono text-[11px] text-zinc-600">
                         {model.cliType}
@@ -300,12 +306,14 @@ export function OrchestratorSettingsModal({
                         type="checkbox"
                         checked={draft.blockedModelIds.includes(model.id)}
                         onChange={() => toggleBlocked(model.id)}
-                        className="h-4 w-4 accent-red-300"
+                        className="h-4 w-4"
+                        style={{ accentColor: 'var(--color-error)' }}
                       />
                       Bloqueado
                     </label>
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           </section>
@@ -365,4 +373,61 @@ function clampPositiveInteger(value: number, fallback: number) {
 
 function clampNonNegative(value: number) {
   return Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+function getModelStatus(
+  model: Model,
+  draft: OrchestratorSettings,
+): ModelAvailabilityStatus {
+  if (draft.blockedModelIds.includes(model.id)) {
+    return 'blocked'
+  }
+
+  return 'available'
+}
+
+const statusConfig: Record<
+  ModelAvailabilityStatus,
+  { label: string; className: string }
+> = {
+  available: {
+    label: 'Disponível',
+    className: 'border-theme-success/20 bg-theme-success/10 text-theme-success',
+  },
+  blocked: {
+    label: 'Bloqueado',
+    className: 'border-theme-error/20 bg-theme-error/10 text-theme-error',
+  },
+  unavailable: {
+    label: 'Indisponível',
+    className: 'border-zinc-400/20 bg-zinc-400/10 text-zinc-400',
+  },
+  error: {
+    label: 'Erro',
+    className: 'border-theme-error/20 bg-theme-error/10 text-theme-error',
+  },
+  no_login: {
+    label: 'Sem login',
+    className: 'border-amber-300/20 bg-amber-300/10 text-amber-300',
+  },
+  limit_reached: {
+    label: 'Limite atingido',
+    className: 'border-amber-300/20 bg-amber-300/10 text-amber-300',
+  },
+  unknown: {
+    label: 'Desconhecido',
+    className: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-500',
+  },
+}
+
+function ModelStatusBadge({ status }: { status: ModelAvailabilityStatus }) {
+  const config = statusConfig[status]
+
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] leading-none ${config.className}`}
+    >
+      {config.label}
+    </span>
+  )
 }
