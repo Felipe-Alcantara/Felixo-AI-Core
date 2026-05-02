@@ -86,6 +86,7 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - Regras de escolha no prompt do orquestrador impedem spawn de modelos com status de erro, sem login ou limite atingido.
 - Campos `maxCostEstimate` e `maxContextTokens` adicionados às configurações do orquestrador.
 - Modal exibe campos de custo estimado e limite de contexto (tokens).
+- Badge visual de status de disponibilidade (`Disponível`, `Bloqueado`, `Erro`, `Sem login`, `Limite atingido`, `Indisponível`, `Desconhecido`) exibido ao lado do nome de cada modelo na lista de spawn do modal.
 
 ## Próximos passos
 
