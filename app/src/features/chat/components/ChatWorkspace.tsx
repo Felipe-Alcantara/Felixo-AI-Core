@@ -58,7 +58,8 @@ import { AutomationsModal } from './AutomationsModal'
 import { ChatExportModal } from './ChatExportModal'
 import { CodePanel } from './CodePanel'
 import { FelixoSettingsModal } from './FelixoSettingsModal'
-import { ModelSettingsModal } from './ModelSettingsModal'
+import { ModelConfigModal } from './ModelConfigModal'
+import { ModelManagerModal } from './ModelManagerModal'
 import { NotesModal } from './NotesModal'
 import { OrchestratorSettingsModal } from './OrchestratorSettingsModal'
 import { ProjectsModal } from './ProjectsModal'
@@ -104,7 +105,8 @@ export function ChatWorkspace() {
   )
   const [contextAttachments, setContextAttachments] = useState<ContextAttachment[]>([])
   const [input, setInput] = useState('')
-  const [isModelSettingsOpen, setIsModelSettingsOpen] = useState(false)
+  const [isModelManagerOpen, setIsModelManagerOpen] = useState(false)
+  const [modelConfigTargetId, setModelConfigTargetId] = useState<ModelId | null>(null)
   const [isProjectsOpen, setIsProjectsOpen] = useState(false)
   const [isAutomationsOpen, setIsAutomationsOpen] = useState(false)
   const [isCodePanelOpen, setIsCodePanelOpen] = useState(false)
@@ -634,8 +636,7 @@ export function ChatWorkspace() {
   }
 
   function openModelSettingsFor(modelId: ModelId) {
-    selectModel(modelId)
-    setIsModelSettingsOpen(true)
+    setModelConfigTargetId(modelId)
   }
 
   function collectKnownBackendThreadIds() {
@@ -891,7 +892,7 @@ export function ChatWorkspace() {
         activeProjectIds={activeProjectIds}
         isOpen={isSidebarOpen}
         onNewIdea={resetChat}
-        onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+        onOpenModelSettings={() => setIsModelManagerOpen(true)}
         onOpenProjects={() => setIsProjectsOpen(true)}
         onOpenAutomations={() => setIsAutomationsOpen(true)}
         onOpenCode={() => setIsCodePanelOpen(true)}
@@ -1077,16 +1078,23 @@ export function ChatWorkspace() {
         />
       )}
 
-      <ModelSettingsModal
+      <ModelManagerModal
+        isOpen={isModelManagerOpen}
         models={models}
-        selectedModel={selectedModel}
-        isOpen={isModelSettingsOpen}
+        onClose={() => setIsModelManagerOpen(false)}
         onAddModel={addModel}
         onClearModels={clearModels}
-        onUpdateModel={updateModel}
         onRemoveModel={removeModel}
-        onClose={() => setIsModelSettingsOpen(false)}
       />
+
+      {modelConfigTargetId && (
+        <ModelConfigModal
+          isOpen={true}
+          model={models.find((m) => m.id === modelConfigTargetId) ?? models[0]}
+          onClose={() => setModelConfigTargetId(null)}
+          onUpdateModel={updateModel}
+        />
+      )}
 
       <ProjectsModal
         isOpen={isProjectsOpen}
