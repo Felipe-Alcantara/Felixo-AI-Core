@@ -7,6 +7,9 @@ const {
   normalizePersistentInput,
 } = require('./orchestrator/cli-execution-planner.cjs')
 const {
+  createModelAvailabilityRegistry,
+} = require('./orchestrator/model-availability.cjs')
+const {
   getTerminalAdapter,
 } = require('./providers/terminal-adapter-registry.cjs')
 const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
@@ -31,6 +34,7 @@ const stoppedSessions = new Set()
 const cliThreadSessions = new Map()
 const persistentCliSessions = new Map()
 const terminalSessionParents = new Map()
+const modelAvailabilityRegistry = createModelAvailabilityRegistry()
 const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
 const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 const PERSISTENT_TRAILING_OUTPUT_GRACE_MS = 5000
@@ -44,7 +48,7 @@ function registerCliIpcHandlers(getMainWindow) {
 
   const orchestrationRunner = createOrchestrationRunner({
     validateSpawnAgent: ({ event, context }) =>
-      validateOrchestrationSpawnModel(event.cliType, context),
+      validateOrchestrationSpawnModel(event, context),
     spawnAgent: ({ run, event, threadId, context }) =>
       spawnOrchestrationAgent({
         run,
@@ -161,6 +165,7 @@ function registerCliIpcHandlers(getMainWindow) {
       promptHint: orchestrationContext.promptHint ?? promptHint,
       availableModels,
       orchestratorSettings,
+      modelAvailabilityRegistry,
       limits:
         orchestrationContext.limits ??
         createOrchestrationLimits(orchestratorSettings),
@@ -322,6 +327,14 @@ function registerCliIpcHandlers(getMainWindow) {
         if (cliEvent.providerSessionId) {
           threadSession.providerSessionId = cliEvent.providerSessionId
         }
+
+        recordModelAvailabilityEvent({
+          cliEvent,
+          cliType,
+          model,
+          targetWebContents,
+          threadId,
+        })
 
         if (cliEvent.type === 'session') {
           return
@@ -577,6 +590,14 @@ function registerCliIpcHandlers(getMainWindow) {
     }
 
     function dispatchCliEvent(cliEvent) {
+      recordModelAvailabilityEvent({
+        cliEvent,
+        cliType,
+        model,
+        targetWebContents,
+        threadId,
+      })
+
       const orchestrationResult = orchestrationBridge.handleCliEvent({
         cliEvent,
         streamSessionId,
@@ -1048,6 +1069,14 @@ function handlePersistentStdoutLine(persistentSession, line) {
     threadSession.providerSessionId = cliEvent.providerSessionId
   }
 
+  recordModelAvailabilityEvent({
+    cliEvent,
+    cliType: persistentSession.cliType,
+    model: activeRun?.context?.model,
+    targetWebContents: persistentSession.targetWebContents,
+    threadId,
+  })
+
   if (cliEvent.type === 'session') {
     sendTerminalEvents(
       persistentSession.targetWebContents,
@@ -1401,6 +1430,14 @@ function dispatchPersistentCliEvent(persistentSession, cliEvent) {
   const { threadId } = persistentSession
   const activeRun = persistentSession.activeRun
 
+  recordModelAvailabilityEvent({
+    cliEvent,
+    cliType: persistentSession.cliType,
+    model: activeRun?.context?.model,
+    targetWebContents: persistentSession.targetWebContents,
+    threadId,
+  })
+
   if (!activeRun) {
     sendCliEvent(persistentSession.targetWebContents, cliEvent)
     return
@@ -1568,6 +1605,78 @@ function formatAdapterStderr(adapter, chunk) {
   return String(adapter.formatStderr(chunk))
 }
 
+function recordModelAvailabilityEvent({
+  cliEvent,
+  cliType,
+  model,
+  targetWebContents,
+  threadId,
+}) {
+  const issue = modelAvailabilityRegistry.recordCliEvent({
+    cliEvent,
+    cliType,
+    model,
+  })
+
+  if (!issue) {
+    return null
+  }
+
+  logQaEvent({
+    level: issue.status === 'limit_reached' ? 'warn' : 'error',
+    scope: 'model:availability',
+    sessionId: threadId,
+    message: `Model availability changed: ${issue.status}.`,
+    details: {
+      cliType: issue.cliType,
+      modelId: issue.modelId,
+      modelName: issue.modelName,
+      resetLabel: issue.resetLabel,
+      expiresAt: issue.expiresAt,
+      reason: issue.reason,
+    },
+  })
+  sendTerminalEvents(targetWebContents, threadId, [
+    {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: issue.status === 'limit_reached' ? 'warn' : 'error',
+      title:
+        issue.status === 'limit_reached'
+          ? 'Limite detectado'
+          : 'Modelo indisponivel',
+      chunk: formatAvailabilityIssue(issue),
+      metadata: compactAvailabilityIssue(issue),
+    },
+  ])
+
+  return issue
+}
+
+function formatAvailabilityIssue(issue) {
+  const target = issue.modelName
+    ? `${issue.modelName} (${issue.cliType})`
+    : issue.cliType
+  const details = [`${target} marcado como ${issue.status}.`, issue.reason]
+
+  if (issue.resetLabel) {
+    details.push(`Reset informado: ${issue.resetLabel}.`)
+  }
+
+  return details.filter(Boolean).join('\n')
+}
+
+function compactAvailabilityIssue(issue) {
+  return {
+    status: issue.status,
+    cliType: issue.cliType,
+    modelId: issue.modelId,
+    modelName: issue.modelName,
+    resetLabel: issue.resetLabel,
+    expiresAt: issue.expiresAt,
+  }
+}
+
 function sendTerminalEvents(webContents, sessionId, events) {
   const parentThreadId = terminalSessionParents.get(sessionId)
 
@@ -1632,7 +1741,12 @@ function spawnOrchestrationAgent({
   context,
   sendCliRequest,
 }) {
-  const resolvedModel = resolveOrchestrationSpawnModel(event.cliType, context)
+  const resolvedModel = event.selectedModel
+    ? {
+        ok: true,
+        model: event.selectedModel,
+      }
+    : resolveOrchestrationSpawnModel(event.cliType, context, event)
 
   if (resolvedModel.ok === false) {
     return resolvedModel
@@ -1664,8 +1778,12 @@ function spawnOrchestrationAgent({
   )
 }
 
-function validateOrchestrationSpawnModel(cliType, context = {}) {
-  const result = resolveOrchestrationSpawnModel(cliType, context)
+function validateOrchestrationSpawnModel(eventOrCliType, context = {}) {
+  const event =
+    eventOrCliType && typeof eventOrCliType === 'object'
+      ? eventOrCliType
+      : { cliType: eventOrCliType }
+  const result = resolveOrchestrationSpawnModel(event.cliType, context, event)
 
   return result.ok === false
     ? {
@@ -1673,10 +1791,10 @@ function validateOrchestrationSpawnModel(cliType, context = {}) {
         code: 'SPAWN_MODEL_UNAVAILABLE',
         message: result.message,
       }
-    : { ok: true, modelChoice: result.modelChoice }
+    : { ok: true, modelChoice: result.modelChoice, selectedModel: result.model }
 }
 
-function resolveOrchestrationSpawnModel(cliType, context = {}) {
+function resolveOrchestrationSpawnModel(cliType, context = {}, event = {}) {
   const availableModels = Array.isArray(context.availableModels)
     ? context.availableModels
     : null
@@ -1705,9 +1823,89 @@ function resolveOrchestrationSpawnModel(cliType, context = {}) {
     ? settings.preferredModelIds
     : []
   const cliTypeModels = availableModels.filter((model) => model.cliType === cliType)
-  const candidates = cliTypeModels.filter((model) => !blockedModelIds.has(model.id))
+  const configuredCandidates = cliTypeModels.filter(
+    (model) => !blockedModelIds.has(model.id),
+  )
+  const candidates = configuredCandidates.filter((model) =>
+    isModelOperational(model, context.modelAvailabilityRegistry),
+  )
 
-  if (candidates.length === 0) {
+  if (candidates.length > 0) {
+    const selectedModel = selectBestSpawnModel(candidates, {
+      preferredModelIds,
+      requestedCliType: cliType,
+      prompt: event.prompt,
+    })
+    const model = {
+      ...createOrchestrationModel(cliType),
+      ...selectedModel,
+      cliType: selectedModel.cliType,
+    }
+    const selectionRule = preferredModelIds.includes(selectedModel.id)
+      ? 'preferred-model'
+      : 'best-available-model'
+    const reason = preferredModelIds.includes(selectedModel.id)
+      ? 'Modelo preferido pelo usuario para este cliType.'
+      : 'Melhor modelo operacional para este cliType apos aplicar bloqueios e limites detectados.'
+
+    return {
+      ok: true,
+      model,
+      modelChoice: createOrchestrationModelChoice({
+        requestedCliType: cliType,
+        model,
+        reason,
+        selectionRule,
+        candidateCount: candidates.length,
+        blockedCount: cliTypeModels.length - configuredCandidates.length,
+        unavailableCount: configuredCandidates.length - candidates.length,
+      }),
+    }
+  }
+
+  const fallbackCandidates = availableModels.filter(
+    (model) =>
+      !blockedModelIds.has(model.id) &&
+      model.cliType !== cliType &&
+      isModelOperational(model, context.modelAvailabilityRegistry),
+  )
+
+  if (fallbackCandidates.length > 0) {
+    const selectedModel = selectBestSpawnModel(fallbackCandidates, {
+      preferredModelIds,
+      requestedCliType: cliType,
+      prompt: event.prompt,
+    })
+    const model = {
+      ...createOrchestrationModel(selectedModel.cliType),
+      ...selectedModel,
+      cliType: selectedModel.cliType,
+    }
+    const unavailableReason = createUnavailableReason(
+      cliType,
+      cliTypeModels,
+      configuredCandidates,
+      context.modelAvailabilityRegistry,
+    )
+
+    return {
+      ok: true,
+      model,
+      modelChoice: createOrchestrationModelChoice({
+        requestedCliType: cliType,
+        model,
+        reason: `${unavailableReason} Usando fallback operacional (${model.cliType}).`,
+        selectionRule: 'provider-fallback',
+        candidateCount: fallbackCandidates.length,
+        blockedCount: cliTypeModels.length - configuredCandidates.length,
+        unavailableCount: configuredCandidates.length - candidates.length,
+        fallbackFromCliType: cliType,
+        availabilityReason: unavailableReason,
+      }),
+    }
+  }
+
+  if (configuredCandidates.length === 0) {
     const reason =
       cliTypeModels.length === 0
         ? `Nenhum modelo cadastrado para cliType "${cliType}".`
@@ -1723,38 +1921,164 @@ function resolveOrchestrationSpawnModel(cliType, context = {}) {
         selectionRule: 'unavailable',
         candidateCount: 0,
         blockedCount: cliTypeModels.length,
+        unavailableCount: 0,
       }),
     }
   }
 
-  const preferredModel = preferredModelIds
-    .map((modelId) => candidates.find((model) => model.id === modelId))
-    .find(Boolean)
-  const selectedModel = preferredModel ?? candidates[0]
-  const model = {
-    ...createOrchestrationModel(cliType),
-    ...selectedModel,
+  const reason = createUnavailableReason(
     cliType,
-  }
-  const selectionRule = preferredModel
-    ? 'preferred-model'
-    : 'first-available-model'
-  const reason = preferredModel
-    ? 'Modelo preferido pelo usuario para este cliType.'
-    : 'Primeiro modelo disponivel para este cliType apos aplicar bloqueios.'
+    cliTypeModels,
+    configuredCandidates,
+    context.modelAvailabilityRegistry,
+  )
 
   return {
-    ok: true,
-    model,
+    ok: false,
+    message: `Nenhum modelo operacional para spawn com cliType "${cliType}".`,
     modelChoice: createOrchestrationModelChoice({
       requestedCliType: cliType,
-      model,
+      model: null,
       reason,
-      selectionRule,
-      candidateCount: candidates.length,
-      blockedCount: cliTypeModels.length - candidates.length,
+      selectionRule: 'unavailable',
+      candidateCount: 0,
+      blockedCount: cliTypeModels.length - configuredCandidates.length,
+      unavailableCount: configuredCandidates.length,
     }),
   }
+}
+
+function isModelOperational(model, registry) {
+  if (!registry || typeof registry.getModelAvailability !== 'function') {
+    return true
+  }
+
+  return registry.getModelAvailability(model).status === 'available'
+}
+
+function selectBestSpawnModel(candidates, options = {}) {
+  return [...candidates].sort((left, right) => {
+    const leftScore = scoreSpawnModel(left, options)
+    const rightScore = scoreSpawnModel(right, options)
+
+    if (leftScore !== rightScore) {
+      return rightScore - leftScore
+    }
+
+    return String(left.name).localeCompare(String(right.name))
+  })[0]
+}
+
+function scoreSpawnModel(model, { preferredModelIds = [], requestedCliType, prompt } = {}) {
+  const preferredIndex = preferredModelIds.indexOf(model.id)
+  const promptKind = classifySpawnPrompt(prompt)
+  let score = 0
+
+  if (preferredIndex >= 0) {
+    score += 1000 - preferredIndex
+  }
+
+  if (model.cliType === requestedCliType) {
+    score += 500
+  }
+
+  if (promptKind === 'code') {
+    if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
+      score += 90
+    } else if (model.cliType === 'claude') {
+      score += 75
+    } else {
+      score += 25
+    }
+  } else if (promptKind === 'long-context') {
+    if (model.cliType === 'gemini' || model.cliType === 'gemini-acp') {
+      score += 90
+    } else if (model.cliType === 'claude') {
+      score += 45
+    } else {
+      score += 35
+    }
+  } else {
+    if (model.cliType === 'gemini' || model.cliType === 'gemini-acp') {
+      score += 55
+    } else if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
+      score += 50
+    } else {
+      score += 45
+    }
+  }
+
+  if (String(model.providerModel ?? '').toLowerCase().includes('lite')) {
+    score += 10
+  }
+
+  if (String(model.providerModel ?? '').toLowerCase().includes('mini')) {
+    score += 8
+  }
+
+  return score
+}
+
+function classifySpawnPrompt(prompt) {
+  const normalizedPrompt = String(prompt ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  if (
+    /\b(codigo|code|arquivo|file|editar|implementar|corrigir|bug|teste|test|refactor|commit|diff|pr)\b/.test(
+      normalizedPrompt,
+    )
+  ) {
+    return 'code'
+  }
+
+  if (
+    /\b(resum|sumari|contexto longo|long context|pesquis|analise extensa|documento grande)\b/.test(
+      normalizedPrompt,
+    )
+  ) {
+    return 'long-context'
+  }
+
+  return 'general'
+}
+
+function createUnavailableReason(
+  cliType,
+  cliTypeModels,
+  configuredCandidates,
+  registry,
+) {
+  if (cliTypeModels.length === 0) {
+    return `Nenhum modelo cadastrado para cliType "${cliType}".`
+  }
+
+  if (configuredCandidates.length === 0) {
+    return `Todos os modelos cadastrados para cliType "${cliType}" estao bloqueados.`
+  }
+
+  const availabilityReasons = configuredCandidates
+    .map((model) => {
+      const availability =
+        registry && typeof registry.getModelAvailability === 'function'
+          ? registry.getModelAvailability(model)
+          : { status: 'available' }
+
+      if (availability.status === 'available') {
+        return null
+      }
+
+      const reset = availability.resetLabel ? ` reset ${availability.resetLabel}` : ''
+      return `${model.name}: ${availability.status}${reset}`
+    })
+    .filter(Boolean)
+
+  if (availabilityReasons.length === 0) {
+    return `Nenhum modelo operacional para cliType "${cliType}".`
+  }
+
+  return `Modelos do cliType "${cliType}" indisponiveis: ${availabilityReasons.join('; ')}.`
 }
 
 function createOrchestrationModelChoice({
@@ -1764,6 +2088,9 @@ function createOrchestrationModelChoice({
   selectionRule,
   candidateCount,
   blockedCount,
+  unavailableCount,
+  fallbackFromCliType,
+  availabilityReason,
 }) {
   return {
     requestedCliType,
@@ -1776,6 +2103,9 @@ function createOrchestrationModelChoice({
     selectionRule,
     candidateCount,
     blockedCount,
+    unavailableCount,
+    fallbackFromCliType,
+    availabilityReason,
   }
 }
 
@@ -1994,5 +2324,6 @@ module.exports = {
   getAdapterSpawnArgs,
   getPersistentCloseLogLevel,
   registerCliIpcHandlers,
+  resolveOrchestrationSpawnModel,
   shouldSuppressPersistentTrailingOutput,
 }

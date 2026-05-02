@@ -58,9 +58,23 @@ class OrchestrationRunner {
         )
       }
 
+      const resolvedModel = spawnValidation?.selectedModel ?? null
+      const resolvedCliType =
+        resolvedModel?.cliType ??
+        spawnValidation?.modelChoice?.selectedCliType ??
+        event.cliType
+      const resolvedEvent = resolvedModel
+        ? {
+            ...event,
+            requestedCliType: event.cliType,
+            cliType: resolvedCliType,
+            selectedModel: resolvedModel,
+          }
+        : event
+
       run = this.store.createAgentJob(run.runId, {
         agentId: event.agentId,
-        cliType: event.cliType,
+        cliType: resolvedCliType,
         prompt: event.prompt,
       })
 
@@ -72,7 +86,8 @@ class OrchestrationRunner {
         runId: run.runId,
         parentThreadId: run.parentThreadId,
         agentId: event.agentId,
-        cliType: event.cliType,
+        cliType: resolvedCliType,
+        requestedCliType: event.cliType,
         threadId,
       })
 
@@ -92,7 +107,7 @@ class OrchestrationRunner {
         run,
         job,
         threadId,
-        event,
+        event: resolvedEvent,
         context: this.getRunContext(run.runId),
       })
 
@@ -119,7 +134,7 @@ class OrchestrationRunner {
       this.sendChatEvent({
         type: 'spawn_agent',
         agentId: event.agentId,
-        cliType: event.cliType,
+        cliType: resolvedCliType,
         prompt: event.prompt,
         sessionId: getResponseSessionId(run, this.getRunContext(run.runId)),
         threadId: run.parentThreadId,
