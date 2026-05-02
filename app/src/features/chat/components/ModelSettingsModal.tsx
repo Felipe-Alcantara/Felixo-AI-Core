@@ -272,7 +272,7 @@ export function ModelSettingsModal({
             type="button"
             disabled={!selectedModel}
             onClick={() => selectedModel && removeModel(selectedModel)}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-red-300/20 text-sm font-medium text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:border-white/[0.08] disabled:text-zinc-600 disabled:hover:bg-transparent"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-theme-error/20 text-sm font-medium text-theme-error transition hover:bg-theme-error/10 disabled:cursor-not-allowed disabled:border-white/[0.08] disabled:text-zinc-600 disabled:hover:bg-transparent"
           >
             <Trash2 size={16} aria-hidden="true" />
             Remover selecionado
@@ -288,7 +288,7 @@ export function ModelSettingsModal({
                 <button
                   type="button"
                   onClick={clearModels}
-                  className="rounded-full border border-red-300/20 px-3 py-1 text-[11px] text-red-200 transition hover:bg-red-400/10"
+                  className="rounded-full border border-theme-error/20 px-3 py-1 text-[11px] text-theme-error transition hover:bg-theme-error/10"
                 >
                   Limpar todos
                 </button>
@@ -337,7 +337,7 @@ export function ModelSettingsModal({
                         type="button"
                         title="Excluir modelo"
                         onClick={() => removeModel(model)}
-                        className="flex h-8 items-center gap-1.5 rounded-full border border-red-300/20 px-3 text-[11px] text-red-200 transition hover:bg-red-400/10"
+                        className="flex h-8 items-center gap-1.5 rounded-full border border-theme-error/20 px-3 text-[11px] text-theme-error transition hover:bg-theme-error/10"
                       >
                         <Trash2 size={14} aria-hidden="true" />
                         Remover

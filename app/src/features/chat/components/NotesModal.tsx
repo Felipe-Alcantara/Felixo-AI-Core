@@ -215,7 +215,7 @@ export function NotesModal({
                   <button
                     type="button"
                     onClick={deleteSelectedNote}
-                    className="flex h-9 items-center gap-2 rounded-2xl border border-red-300/20 px-3 text-xs text-red-200 transition hover:bg-red-400/10"
+                    className="flex h-9 items-center gap-2 rounded-2xl border border-theme-error/20 px-3 text-xs text-theme-error transition hover:bg-theme-error/10"
                   >
                     <Trash2 size={14} aria-hidden="true" />
                     Excluir

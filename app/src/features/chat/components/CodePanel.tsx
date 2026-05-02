@@ -135,7 +135,7 @@ export function CodePanel({
           </div>
 
           {error ? (
-            <p className="rounded-2xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">
+            <p className="rounded-2xl border border-theme-error/20 bg-theme-error/10 px-3 py-2 text-sm text-theme-error">
               {error}
             </p>
           ) : (
@@ -173,7 +173,7 @@ function GitSummary({
           Branch: {summary.branch ?? 'desconhecida'}
         </p>
         {summary.isClean ? (
-          <p className="mt-3 text-sm text-emerald-200">Working tree limpo.</p>
+          <p className="mt-3 text-sm text-theme-success">Working tree limpo.</p>
         ) : (
           <pre className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap rounded-xl bg-black/20 p-2 font-mono text-[11px] leading-relaxed text-zinc-300">
             {summary.statusLines.join('\n')}

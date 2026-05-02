@@ -118,7 +118,7 @@ export function AutomationsModal({
                         {formatScope(automation.scope)}
                       </span>
                       {automation.isDefault && (
-                        <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] text-emerald-200">
+                        <span className="rounded-full border border-theme-success/20 bg-theme-success/10 px-2 py-0.5 text-[10px] text-theme-success">
                           Padrão
                         </span>
                       )}
@@ -137,7 +137,7 @@ export function AutomationsModal({
                         type="button"
                         title="Remover automação"
                         onClick={() => onRemoveAutomation(automation.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-red-400/10 hover:text-red-200"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-theme-error/10 hover:text-theme-error"
                       >
                         <Trash2 size={14} aria-hidden="true" />
                         <span className="sr-only">Remover automação</span>

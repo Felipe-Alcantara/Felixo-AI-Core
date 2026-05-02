@@ -244,7 +244,7 @@ export function ProjectsModal({
                   <button
                     type="button"
                     onClick={() => onRemoveProject(project)}
-                    className="shrink-0 rounded p-1 text-zinc-600 transition hover:text-red-400"
+                    className="shrink-0 rounded p-1 text-zinc-600 transition hover:text-theme-error"
                   >
                     <Trash2 size={11} />
                   </button>
