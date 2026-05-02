@@ -28,9 +28,6 @@ export function ModelConfigModal({
   onClose,
   onUpdateModel,
 }: ModelConfigModalProps) {
-  const [providerModel, setProviderModel] = useState(
-    model.providerModel ?? '',
-  )
   const [reasoningEffort, setReasoningEffort] = useState<'' | ReasoningEffort>(
     model.reasoningEffort ?? '',
   )
@@ -46,7 +43,6 @@ export function ModelConfigModal({
 
     onUpdateModel({
       ...model,
-      providerModel: providerModel.trim() || undefined,
       reasoningEffort: reasoningEffort || undefined,
     })
     onClose()
@@ -58,7 +54,7 @@ export function ModelConfigModal({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[80vh] w-full max-w-[440px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="flex max-h-[80vh] w-full max-w-[400px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -67,7 +63,7 @@ export function ModelConfigModal({
               {model.name}
             </h2>
             <p className="mt-1 text-xs text-zinc-500">
-              Configuração de execução do modelo.
+              Detalhes e execução do modelo.
             </p>
           </div>
 
@@ -92,6 +88,11 @@ export function ModelConfigModal({
               <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
                 {model.cliType}
               </span>
+              {model.providerModel && (
+                <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+                  {model.providerModel}
+                </span>
+              )}
             </div>
             <code className="mt-1 block truncate font-mono text-[11px] text-zinc-500">
               {model.command}
@@ -108,16 +109,6 @@ export function ModelConfigModal({
               <BrainCircuit size={14} aria-hidden="true" />
               Execução
             </div>
-
-            <label className="block text-xs text-zinc-400">
-              Modelo do provedor
-              <input
-                placeholder="gpt-5.5"
-                value={providerModel}
-                onChange={(event) => setProviderModel(event.target.value)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
-              />
-            </label>
 
             <label className="block text-xs text-zinc-400">
               Effort
