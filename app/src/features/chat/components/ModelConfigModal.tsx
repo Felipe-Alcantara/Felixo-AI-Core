@@ -12,6 +12,28 @@ type ModelConfigModalProps = {
 
 type SelectOption = { value: string; label: string }
 
+type ProviderModelSpec = {
+  context: string
+  costIn: string
+  costOut: string
+  bestFor: string
+}
+
+const providerModelSpecs: Record<string, ProviderModelSpec> = {
+  sonnet: { context: '200k tokens', costIn: 'US$ 3.00/1M', costOut: 'US$ 15.00/1M', bestFor: 'Código, revisão, escrita' },
+  opus: { context: '200k tokens', costIn: 'US$ 15.00/1M', costOut: 'US$ 75.00/1M', bestFor: 'Tarefas complexas, raciocínio profundo' },
+  haiku: { context: '200k tokens', costIn: 'US$ 0.80/1M', costOut: 'US$ 4.00/1M', bestFor: 'Respostas rápidas, classificação' },
+  'gpt-5.5': { context: '~270k tokens', costIn: 'US$ 2.00/1M', costOut: 'US$ 10.00/1M', bestFor: 'Código avançado, agentes' },
+  'gpt-5.4': { context: '~270k tokens', costIn: 'US$ 2.50/1M', costOut: 'US$ 10.00/1M', bestFor: 'Código, revisão, raciocínio' },
+  'gpt-5.4-mini': { context: '~270k tokens', costIn: 'US$ 0.75/1M', costOut: 'US$ 4.50/1M', bestFor: 'Subagentes de código com custo menor' },
+  'gpt-5.3-codex': { context: '~200k tokens', costIn: 'US$ 1.50/1M', costOut: 'US$ 6.00/1M', bestFor: 'Código, edição de arquivos' },
+  'gpt-5.2': { context: '~128k tokens', costIn: 'US$ 1.25/1M', costOut: 'US$ 5.00/1M', bestFor: 'Uso geral, custo moderado' },
+  'gemini-3-flash-preview': { context: '1M tokens', costIn: 'US$ 0.30/1M', costOut: 'US$ 2.50/1M', bestFor: 'Contexto longo, automações' },
+  'gemini-3.1-flash-lite-preview': { context: '1M tokens', costIn: 'US$ 0.10/1M', costOut: 'US$ 0.40/1M', bestFor: 'Classificação, resumo barato' },
+  'gemini-2.5-flash': { context: '1M tokens', costIn: 'US$ 0.30/1M', costOut: 'US$ 2.50/1M', bestFor: 'Contexto longo, resumo' },
+  'gemini-2.5-flash-lite': { context: '1M tokens', costIn: 'US$ 0.10/1M', costOut: 'US$ 0.40/1M', bestFor: 'Tarefas pequenas, muito barato' },
+}
+
 const providerModelOptionsByCliType: Partial<Record<CliType, SelectOption[]>> = {
   claude: [
     { value: 'sonnet', label: 'Sonnet 4.6' },
@@ -90,6 +112,7 @@ export function ModelConfigModal({
   const capabilities = getModelCapabilities(model)
   const providerOptions = getProviderModelOptions(model)
   const effortOptions = reasoningEffortOptionsByCliType[model.cliType] ?? defaultEffortOptions
+  const selectedSpec = providerModel ? providerModelSpecs[providerModel] ?? null : null
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -176,6 +199,15 @@ export function ModelConfigModal({
               </label>
             )}
 
+            {selectedSpec && (
+              <div className="grid grid-cols-2 gap-2">
+                <SpecCard label="Contexto" value={selectedSpec.context} />
+                <SpecCard label="Entrada" value={selectedSpec.costIn} />
+                <SpecCard label="Saída" value={selectedSpec.costOut} />
+                <SpecCard label="Indicado para" value={selectedSpec.bestFor} />
+              </div>
+            )}
+
             {effortOptions.length > 1 && (
               <label className="block text-xs text-zinc-400">
                 Effort
@@ -205,6 +237,15 @@ export function ModelConfigModal({
           </button>
         </form>
       </section>
+    </div>
+  )
+}
+
+function SpecCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2">
+      <span className="block text-[10px] uppercase text-zinc-600">{label}</span>
+      <span className="mt-0.5 block text-[11px] text-zinc-200">{value}</span>
     </div>
   )
 }
