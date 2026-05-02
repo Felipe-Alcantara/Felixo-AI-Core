@@ -607,7 +607,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'metrics') {
-    return `${base} border-emerald-300/50 text-emerald-100`
+    return `${base} border-theme-success/50 text-theme-success`
   }
 
   if (chunk.kind === 'tool') {
@@ -615,7 +615,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'error') {
-    return `${base} border-red-300/60 text-red-200`
+    return `${base} border-theme-error/60 text-theme-error`
   }
 
   if (chunk.kind === 'stderr') {
@@ -634,7 +634,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
     return `${base} border-amber-300/50 text-amber-300`
   }
 
-  return `${base} border-red-300/60 text-red-300`
+  return `${base} border-theme-error/60 text-theme-error`
 }
 
 function getTitleClassName(chunk: TerminalOutputChunk) {
@@ -643,7 +643,7 @@ function getTitleClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'metrics') {
-    return 'min-w-0 truncate text-emerald-200'
+    return 'min-w-0 truncate text-theme-success'
   }
 
   if (chunk.kind === 'tool') {
@@ -651,7 +651,7 @@ function getTitleClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'error') {
-    return 'min-w-0 truncate text-red-200'
+    return 'min-w-0 truncate text-theme-error'
   }
 
   return 'min-w-0 truncate text-zinc-500'
@@ -675,14 +675,14 @@ function getStatusDotClassName(status: TerminalSessionStatus) {
   }
 
   if (status === 'error') {
-    return 'bg-red-400'
+    return 'bg-theme-error'
   }
 
   if (status === 'stopped') {
     return 'bg-zinc-500'
   }
 
-  return 'bg-emerald-400'
+  return 'bg-theme-success'
 }
 
 function getStatusBadgeClassName(status: TerminalSessionStatus) {
@@ -691,14 +691,14 @@ function getStatusBadgeClassName(status: TerminalSessionStatus) {
   }
 
   if (status === 'error') {
-    return 'border-red-200/20 bg-red-200/10 text-red-200'
+    return 'border-theme-error/20 bg-theme-error/10 text-theme-error'
   }
 
   if (status === 'stopped') {
     return 'border-zinc-200/10 bg-zinc-200/5 text-zinc-400'
   }
 
-  return 'border-emerald-200/20 bg-emerald-200/10 text-emerald-200'
+  return 'border-theme-success/20 bg-theme-success/10 text-theme-success'
 }
 
 function formatStatus(status: TerminalSessionStatus) {

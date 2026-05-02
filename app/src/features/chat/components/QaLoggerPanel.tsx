@@ -219,7 +219,7 @@ function formatDetails(details: unknown) {
 
 function getLevelClassName(level: QaLogEntry['level']) {
   if (level === 'error') {
-    return 'text-red-300'
+    return 'text-theme-error'
   }
 
   if (level === 'warn') {
@@ -230,5 +230,5 @@ function getLevelClassName(level: QaLogEntry['level']) {
     return 'text-sky-300'
   }
 
-  return 'text-emerald-300'
+  return 'text-theme-success'
 }

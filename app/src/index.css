@@ -103,3 +103,24 @@ div::-webkit-scrollbar-thumb {
   color: #09090b;
   background: var(--color-accent);
 }
+
+@layer utilities {
+  .text-theme-error { color: var(--color-error); }
+  .text-theme-success { color: var(--color-success); }
+  .bg-theme-error { background-color: var(--color-error); }
+  .bg-theme-success { background-color: var(--color-success); }
+  .border-theme-error { border-color: var(--color-error); }
+  .border-theme-success { border-color: var(--color-success); }
+  .bg-theme-error\/10 { background-color: color-mix(in srgb, var(--color-error) 10%, transparent); }
+  .bg-theme-error\/15 { background-color: color-mix(in srgb, var(--color-error) 15%, transparent); }
+  .bg-theme-success\/10 { background-color: color-mix(in srgb, var(--color-success) 10%, transparent); }
+  .border-theme-error\/20 { border-color: color-mix(in srgb, var(--color-error) 20%, transparent); }
+  .border-theme-error\/50 { border-color: color-mix(in srgb, var(--color-error) 50%, transparent); }
+  .border-theme-error\/60 { border-color: color-mix(in srgb, var(--color-error) 60%, transparent); }
+  .border-theme-success\/20 { border-color: color-mix(in srgb, var(--color-success) 20%, transparent); }
+  .border-theme-success\/50 { border-color: color-mix(in srgb, var(--color-success) 50%, transparent); }
+  .rounded-theme { border-radius: var(--radius-base); }
+  .shadow-theme { box-shadow: var(--shadow-base); }
+  .gap-theme { gap: var(--spacing-base); }
+  .p-theme { padding: var(--spacing-base); }
+}
