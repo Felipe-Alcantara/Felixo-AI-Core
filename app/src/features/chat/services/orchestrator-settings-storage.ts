@@ -75,7 +75,12 @@ export function createModelCapabilityProfiles(
       strengths: getModelStrengths(model),
       limits: getModelLimitsLabel(model),
       cost: getModelCostLabel(model),
-      status: resolveModelStatus(model.id, blockedModelIds, dynamicAvailability),
+      status: resolveModelStatus(
+        model.id,
+        blockedModelIds,
+        dynamicAvailability,
+        model.cliType,
+      ),
     }))
 }
 
@@ -83,12 +88,18 @@ function resolveModelStatus(
   modelId: string,
   blockedModelIds: Set<string>,
   dynamicAvailability?: Record<string, ModelAvailabilityStatus>,
+  cliType?: OrchestrationCliType,
 ): ModelAvailabilityStatus {
   if (blockedModelIds.has(modelId)) {
     return 'blocked'
   }
 
-  const dynamic = dynamicAvailability?.[modelId]
+  const dynamic =
+    dynamicAvailability?.[modelId] ??
+    dynamicAvailability?.[`model:${modelId}`] ??
+    (cliType
+      ? dynamicAvailability?.[`cli:${cliType}`] ?? dynamicAvailability?.[cliType]
+      : undefined)
 
   if (dynamic && dynamic !== 'available') {
     return dynamic

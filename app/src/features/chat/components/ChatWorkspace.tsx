@@ -46,6 +46,7 @@ import type {
   ChatSession,
   ContextAttachment,
   Model,
+  ModelAvailabilityStatus,
   ModelId,
   OrchestratorSettings,
   OrchestrationRun,
@@ -118,6 +119,9 @@ export function ChatWorkspace() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [activeOrchestrationRunId, setActiveOrchestrationRunId] = useState<string | null>(null)
   const [orchestrationStatusText, setOrchestrationStatusText] = useState<string | null>(null)
+  const [modelAvailability, setModelAvailability] = useState<
+    Record<string, ModelAvailabilityStatus>
+  >({})
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
   const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(true)
@@ -237,7 +241,7 @@ export function ChatWorkspace() {
     }
 
     if (!selectedModel) {
-      setIsModelSettingsOpen(true)
+      setIsModelManagerOpen(true)
       return
     }
 
@@ -275,6 +279,7 @@ export function ChatWorkspace() {
     const modelCapabilities = createModelCapabilityProfiles(
       models,
       orchestratorSettings,
+      modelAvailability,
     )
     const orchestrationContextBlock = createOrchestratorContextBlock(
       modelCapabilities,
@@ -724,6 +729,7 @@ export function ChatWorkspace() {
     }
 
     if (event.type === 'error') {
+      updateModelAvailabilityFromError(event)
       markTerminalSessionStatus(resolveEventThreadId(event), 'error')
       completeAssistantMessage(event.sessionId, event.message, 'error')
       clearOrchestrationStatus()
@@ -747,6 +753,31 @@ export function ChatWorkspace() {
   function clearOrchestrationStatus() {
     setActiveOrchestrationRunId(null)
     setOrchestrationStatusText(null)
+  }
+
+  function updateModelAvailabilityFromError(
+    event: Extract<StreamEvent, { type: 'error' }>,
+  ) {
+    const status = inferAvailabilityStatus(event.message)
+
+    if (!status) {
+      return
+    }
+
+    const eventThreadId = resolveEventThreadId(event)
+    const fallbackModel =
+      eventThreadId === activeThreadIdRef.current ? selectedModel : null
+    const cliType = inferAvailabilityCliType(event.message, fallbackModel)
+
+    if (!cliType || cliType === 'unknown') {
+      return
+    }
+
+    setModelAvailability((current) => ({
+      ...current,
+      [`cli:${cliType}`]: status,
+      [cliType]: status,
+    }))
   }
 
   function appendAssistantText(sessionId: string, text: string) {
@@ -1147,6 +1178,72 @@ function formatOrchestrationRunStatus(run: OrchestrationRun) {
   }
 
   return formatOrchestrationStatusLabel(run.status)
+}
+
+function inferAvailabilityStatus(
+  message: string,
+): ModelAvailabilityStatus | null {
+  const normalizedMessage = normalizePromptText(message)
+
+  if (
+    normalizedMessage.includes('out of extra usage') ||
+    normalizedMessage.includes('usage limit') ||
+    normalizedMessage.includes('rate limit') ||
+    normalizedMessage.includes('too many requests') ||
+    normalizedMessage.includes('quota exceeded') ||
+    normalizedMessage.includes('exceeded your current quota') ||
+    normalizedMessage.includes('resource exhausted') ||
+    /\b429\b/.test(normalizedMessage)
+  ) {
+    return 'limit_reached'
+  }
+
+  if (
+    normalizedMessage.includes('not logged in') ||
+    normalizedMessage.includes('please login') ||
+    normalizedMessage.includes('please log in') ||
+    normalizedMessage.includes('authentication failed') ||
+    normalizedMessage.includes('unauthorized') ||
+    normalizedMessage.includes('invalid api key') ||
+    /\b401\b/.test(normalizedMessage)
+  ) {
+    return 'no_login'
+  }
+
+  return null
+}
+
+function inferAvailabilityCliType(
+  message: string,
+  selectedModel: Model | null,
+) {
+  const normalizedMessage = normalizePromptText(message)
+
+  if (
+    normalizedMessage.includes('claude') ||
+    normalizedMessage.includes('anthropic') ||
+    normalizedMessage.includes('extra usage')
+  ) {
+    return 'claude'
+  }
+
+  if (
+    normalizedMessage.includes('gemini') ||
+    normalizedMessage.includes('google') ||
+    normalizedMessage.includes('resource exhausted')
+  ) {
+    return 'gemini'
+  }
+
+  if (
+    normalizedMessage.includes('codex') ||
+    normalizedMessage.includes('openai') ||
+    normalizedMessage.includes('gpt-')
+  ) {
+    return 'codex'
+  }
+
+  return selectedModel?.cliType ?? 'unknown'
 }
 
 type ProjectDiff = { added: Project[]; removed: Project[] }
