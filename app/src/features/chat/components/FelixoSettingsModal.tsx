@@ -32,7 +32,7 @@ export function FelixoSettingsModal({
       onClick={onClose}
     >
       <section
-        className="w-full max-w-[560px] rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
+        className="flex max-h-[80vh] w-full max-w-[560px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -54,7 +54,7 @@ export function FelixoSettingsModal({
           </button>
         </header>
 
-        <div className="space-y-4 px-5 py-5">
+        <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-5">
           <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
               <User size={14} aria-hidden="true" />
