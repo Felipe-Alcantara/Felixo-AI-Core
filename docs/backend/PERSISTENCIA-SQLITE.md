@@ -181,6 +181,19 @@ Criar schema mínimo, migrações versionadas e camada de repositório no backen
 
 - Configurações do orquestrador persistem fora do `localStorage` em `app.getPath('userData')/config/orchestrator-settings.json`.
 - O renderer ainda lê `localStorage` apenas como migração/fallback quando a bridge Electron não está disponível.
+- Migration inicial criada com tabelas de histórico, memória, resumo, arquivos compactados, notas, settings e eventos.
+- Loader de migrations versionadas criado no backend Electron.
+- Política inicial HOT/WARM/COLD criada para classificar e decidir compactação de mensagens.
+
+## Ainda não implementado
+
+- Driver SQLite final no Electron.
+- Abertura real do banco em `app.getPath('userData')/database/felixo.sqlite`.
+- Execução de migrations contra banco real.
+- IPCs de leitura/escrita.
+- Migração dos dados atuais do `localStorage`.
+- Compactação real de mensagens COLD.
+- Busca textual/semântica.
 
 ## Plano de implementação
 

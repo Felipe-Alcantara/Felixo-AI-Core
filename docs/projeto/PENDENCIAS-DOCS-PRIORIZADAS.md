@@ -25,13 +25,14 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 | Exportação | Exportação não permitia destino/nome manual no app desktop | Modal recebe nome manual e o Electron usa `showSaveDialog`; navegador continua com fallback por download |
 | Relatórios | Gerar relatório do dia a partir de commits locais | `scripts/generate-daily-report.cjs` gera Markdown diário e atualiza o índice de `docs/relatorios/` |
 | Persistência | Configurações do orquestrador dependiam de `localStorage` | Store Electron grava em `userData/config/orchestrator-settings.json` e migra o valor legado |
+| Persistência | Base SQLite/memória sem schema versionado | Migration inicial, loader versionado e política HOT/WARM/COLD criados |
 | Documentação | Decidir se status vai no nome físico dos arquivos | Padrão consolidado: `Status:` fica no corpo do Markdown; renomeação física não será adotada agora |
 
 ## Pendências consolidadas
 
 | Prioridade | Área | Documento origem | Pendência | Dificuldade | Risco |
 |------------|------|------------------|-----------|-------------|-------|
-| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar schema mínimo, migrations e repositório Electron antes de migrar histórico, notas, modelos e projetos restantes | Média | Médio |
+| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Escolher driver SQLite, abrir banco real e executar migrations antes de migrar histórico, notas, modelos e projetos restantes | Média | Médio |
 | Alta | Terminal/providers | `docs/projeto/TERMINAL-PERSISTENTE.md` | Validar protocolo persistente real para Codex/Gemini antes de substituir retomada nativa | Alta | Alto |
 | Alta | Segurança | `docs/backend/PLANO-CONFIRMACOES-PERMISSOES-CLI.md` | Formalizar confirmações para ações de escrita, Git e ferramentas sensíveis | Média | Alto |
 | Média | Git | `docs/projeto/PAINEL-GIT-INTEGRADO.md` | Evoluir painel Code de read-only para stage/unstage/commit com confirmação | Média | Médio |
@@ -41,7 +42,7 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 ## Próximos recortes recomendados
 
-1. Implementar recorte inicial do plano SQLite/memória em `docs/implementacoes/PERSISTENCIA-SQLITE-MEMORIA-PLANO.md`.
+1. Escolher driver SQLite e executar a migration inicial em `userData/database/felixo.sqlite`.
 2. Atualizar `ROADMAP.md` marcando itens já entregues no frontend atual.
 
 ## Cuidados

@@ -37,18 +37,18 @@ SQLite é o caminho de desenvolvimento e produção desktop. PostgreSQL fica par
 
 | Tabela | Status | Observação |
 |--------|--------|------------|
-| `schema_migrations` | planejado | controle de versão do banco |
-| `projects` | planejado | workspaces locais |
-| `chats` | planejado | conversas por projeto |
-| `messages` | planejado | conteúdo, token usage agregado, score e tier |
-| `threads` | planejado | execuções de CLIs/providers |
-| `terminal_events` | planejado | eventos relevantes, com retenção |
-| `agent_results` | planejado | subagentes e orquestração |
-| `notes` | planejado | notas manuais |
-| `settings` | planejado | preferências simples |
-| `memory_items` | planejado | memórias candidatas/aprovadas |
-| `conversation_summaries` | planejado | resumos por faixa |
-| `message_archives` | planejado | blocos frios compactados |
+| `schema_migrations` | implementado no schema | controle de versão do banco |
+| `projects` | implementado no schema | workspaces locais |
+| `chats` | implementado no schema | conversas por projeto |
+| `messages` | implementado no schema | conteúdo, token usage agregado, score e tier |
+| `threads` | implementado no schema | execuções de CLIs/providers |
+| `terminal_events` | implementado no schema | eventos relevantes, com retenção |
+| `agent_results` | implementado no schema | subagentes e orquestração |
+| `notes` | implementado no schema | notas manuais |
+| `settings` | implementado no schema | preferências simples |
+| `memory_items` | implementado no schema | memórias candidatas/aprovadas |
+| `conversation_summaries` | implementado no schema | resumos por faixa |
+| `message_archives` | implementado no schema | blocos frios compactados |
 
 ## Ordem de implementação
 
@@ -65,15 +65,24 @@ SQLite é o caminho de desenvolvimento e produção desktop. PostgreSQL fica par
 
 ## Implementando agora
 
-- [ ] Migration inicial com schema das tabelas.
-- [ ] Loader de migrations versionadas.
-- [ ] Política inicial HOT/WARM/COLD para classificar mensagens.
-- [ ] Testes unitários do schema e da política.
+- [x] Migration inicial com schema das tabelas.
+- [x] Loader de migrations versionadas.
+- [x] Política inicial HOT/WARM/COLD para classificar mensagens.
+- [x] Testes unitários do schema e da política.
+
+Arquivos implementados:
+
+- `app/electron/services/storage/migrations/001_initial_persistence.sql`
+- `app/electron/services/storage/migration-loader.cjs`
+- `app/electron/services/storage/memory-tier-policy.cjs`
+- `app/electron/services/storage-persistence.test.cjs`
 
 ## Pendências
 
 - [ ] Escolher driver SQLite final para Electron.
 - [ ] Abrir banco real em `app.getPath('userData')/database/felixo.sqlite`.
+- [ ] Executar migrations contra um banco SQLite real.
+- [ ] Criar transações e helpers de consulta.
 - [ ] Criar IPCs de persistência.
 - [ ] Migrar dados existentes do `localStorage`.
 - [ ] Criar busca textual.
@@ -84,10 +93,10 @@ SQLite é o caminho de desenvolvimento e produção desktop. PostgreSQL fica par
 
 ## Critérios de aceite do primeiro recorte
 
-- Existe uma migration SQL versionada com schema inicial.
-- Existe teste impedindo migration duplicada, fora de ordem ou sem versão.
-- Existe política testada para classificar mensagem como HOT, WARM ou COLD.
-- A documentação indica claramente o que foi implementado e o que ficou pendente.
+- [x] Existe uma migration SQL versionada com schema inicial.
+- [x] Existe teste impedindo migration duplicada e cobrindo arquivos fora do padrão.
+- [x] Existe política testada para classificar mensagem como HOT, WARM ou COLD.
+- [x] A documentação indica claramente o que foi implementado e o que ficou pendente.
 
 ## Cuidados
 
