@@ -50,6 +50,14 @@ contextBridge.exposeInMainWorld('felixo', {
   git: {
     getSummary: (params) => ipcRenderer.invoke('git:get-summary', params),
   },
+  fileOpen: {
+    getPending: () => ipcRenderer.invoke('file:get-pending'),
+    onOpened: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('file:opened', handler)
+      return () => ipcRenderer.removeListener('file:opened', handler)
+    },
+  },
   qaLogger: {
     getEntries: () => ipcRenderer.invoke('qa-logger:get'),
     clear: () => ipcRenderer.invoke('qa-logger:clear'),

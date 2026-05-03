@@ -164,6 +164,50 @@ npm run dist:linux    # gera AppImage + .deb
 
 ---
 
+## Associação de arquivos (File Associations)
+
+O app registra tipos de arquivo personalizados no sistema operacional. Ao instalar o Felixo AI Core, o SO associa automaticamente esses tipos ao app, permitindo abrir arquivos com duplo clique.
+
+### Tipos registrados
+
+| Extensão | Nome | Descrição | MIME Type | Role |
+|----------|------|-----------|-----------|------|
+| `.fxai` | Felixo AI Project | Arquivo de projeto | `application/x-felixo-project` | Editor |
+| `.fxchat` | Felixo AI Chat | Chat exportado | `application/x-felixo-chat` | Viewer |
+| `.fxworkflow` | Felixo AI Workflow | Workflow visual | `application/x-felixo-workflow` | Editor |
+
+### Comportamento
+
+- **Windows**: o instalador NSIS registra as extensões automaticamente.
+- **Linux**: os MIME types são declarados no `.deb` e detectados via `xdg-mime`.
+- **macOS**: as associações são declaradas no `Info.plist` do `.app`.
+
+### Fluxo técnico
+
+1. O usuário clica em um arquivo `.fxai`, `.fxchat` ou `.fxworkflow`.
+2. O SO abre o Felixo AI Core (ou traz a janela existente para frente).
+3. O main process (`main.cjs`) captura o caminho via:
+   - `app.on('open-file')` no macOS.
+   - `process.argv` no Windows/Linux.
+4. O caminho é enviado ao renderer via IPC (`file:opened`).
+5. O renderer processa o arquivo conforme a extensão.
+
+### API IPC
+
+| Canal | Direção | Descrição |
+|-------|---------|-----------|
+| `file:get-pending` | renderer → main | Consulta arquivo pendente de abertura |
+| `file:opened` | main → renderer | Notifica abertura de arquivo associado |
+
+### Preload API
+
+```javascript
+window.felixo.fileOpen.getPending()   // retorna { filePath, ext } ou null
+window.felixo.fileOpen.onOpened(cb)   // callback ao abrir arquivo
+```
+
+---
+
 ## Ícone do app
 
 O ícone deve estar em `app/public/brand/` nos formatos:
