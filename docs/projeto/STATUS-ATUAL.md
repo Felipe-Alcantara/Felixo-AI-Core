@@ -72,6 +72,14 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - A tela inicial usa a logo do portfólio em `/brand/felixo-logo.png`.
 - Relatórios diários criados em `docs/relatorios/` com nomes no formato `aaaa-mm-dd.md`.
 
+### Tasklist 03/05/2026 — Portabilidade, Build e Releases
+
+- `core/app-paths.cjs` centraliza resolução de paths de dados do usuário (userData, config, logs, cache, database, exports, notes, reports) usando `app.getPath()` do Electron. Adapta-se a Linux, Windows e macOS.
+- `core/shell-adapter.cjs` detecta shell padrão por SO, escapa argumentos de forma segura e define estratégia de terminação de processos.
+- `core/cli-detector.cjs` detecta automaticamente CLIs externas (claude, codex, gemini, git, node, python, ollama) com verificação de versão, resolução de path e mensagens amigáveis de instalação.
+- `main.cjs` integrado: inicializa diretórios de dados do usuário no startup e roda detecção de CLIs em background, logando resultado via QA Logger.
+- CI expandida para rodar em Linux, Windows e macOS em paralelo, com verificação de docs obrigatórios e detecção de arquivos sensíveis.
+- Documentação completa de portabilidade em `/docs/projeto/`: levantamento da arquitetura, dev vs produção, estratégia de paths, camada shell, detecção de CLIs, compatibilidade por SO, empacotamento, segurança, versionamento, branch plan, guias de usuário e desenvolvedor.
 ## O que já foi concluído
 
 ### Backend Electron
