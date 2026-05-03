@@ -25,6 +25,7 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 | Exportação | Exportação não permitia destino/nome manual no app desktop | Modal recebe nome manual e o Electron usa `showSaveDialog`; navegador continua com fallback por download |
 | Relatórios | Gerar relatório do dia a partir de commits locais | `scripts/generate-daily-report.cjs` gera Markdown diário e atualiza o índice de `docs/relatorios/` |
 | Persistência | Configurações do orquestrador dependiam de `localStorage` | Store Electron grava em `userData/config/orchestrator-settings.json` e migra o valor legado |
+| Documentação | Decidir se status vai no nome físico dos arquivos | Padrão consolidado: `Status:` fica no corpo do Markdown; renomeação física não será adotada agora |
 
 ## Pendências consolidadas
 
@@ -34,7 +35,6 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 | Alta | Terminal/providers | `docs/projeto/TERMINAL-PERSISTENTE.md` | Validar protocolo persistente real para Codex/Gemini antes de substituir retomada nativa | Alta | Alto |
 | Alta | Segurança | `docs/backend/PLANO-CONFIRMACOES-PERMISSOES-CLI.md` | Formalizar confirmações para ações de escrita, Git e ferramentas sensíveis | Média | Alto |
 | Média | Git | `docs/projeto/PAINEL-GIT-INTEGRADO.md` | Evoluir painel Code de read-only para stage/unstage/commit com confirmação | Média | Médio |
-| Média | Documentação | `docs/projeto/STATUS-DOCUMENTACAO.md` | Decidir se o status deve ir no nome físico dos arquivos ou permanecer no corpo | Baixa | Médio |
 | Baixa | Workflows | `docs/projeto/WORKFLOWS-VISUAIS.md` | Criar canvas visual estilo n8n/Railway, inicialmente sem execução real | Alta | Médio |
 | Baixa | MCP | `docs/arquitetura/ORQUESTRADOR-HIBRIDO-MCP.md` | Implementar servidor MCP read-only a partir do catálogo atual | Alta | Médio |
 | Baixa | Roadmap | `docs/projeto/ROADMAP.md` | Atualizar checklists antigos que já foram parcialmente implementados | Média | Baixo |
@@ -43,7 +43,6 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 1. Planejar schema SQLite com tabelas de `projects`, `chats`, `messages`, `threads`, `terminal_events`, `notes` e `settings`.
 2. Atualizar `ROADMAP.md` marcando itens já entregues no frontend atual.
-3. Decidir e executar, em commit isolado, a renomeação física dos documentos com status no nome.
 
 ## Cuidados
 

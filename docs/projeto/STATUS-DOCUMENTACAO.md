@@ -1,12 +1,12 @@
 # Status da Documentação
 
-Status: em desenvolvimento.
+Status: concluido.
 
-## Decisão deste ciclo
+## Decisão consolidada
 
-A tasklist pede status no nome de cada arquivo Markdown. O padrão atual do projeto, porém, usa `Status:` no corpo dos documentos e muitos arquivos já estão modificados no worktree. Renomear tudo agora teria alto risco de quebrar links e de misturar alterações pré-existentes em commits de feature.
+A tasklist pediu status no nome de cada arquivo Markdown. O padrão consolidado do projeto, porém, é manter `Status:` no corpo dos documentos. Isso evita renomeação massiva, preserva links internos e mantém os nomes dos arquivos estáveis.
 
-Neste ciclo, o status será auditado em um documento central. Renomeação em massa só deve acontecer depois de:
+Renomeação física com status no nome não será feita no padrão atual. Se esse padrão voltar a ser desejado no futuro, deve ser tratado como ADR/migração própria e só acontecer depois de:
 
 1. worktree limpo ou escopo de commit combinado;
 2. atualização automática de links internos;
@@ -33,9 +33,7 @@ NOME-DO-DOCUMENTO__PLANEJADO.md
 
 ## Pendências
 
-- Renomear arquivos com status no nome, se esse padrão for confirmado depois.
-- Atualizar links antes de qualquer renomeação.
-- Executar a renomeação em commit isolado, porque o impacto atinge praticamente toda a árvore `/docs`.
+Não há pendência ativa de renomeação. A regra vigente é documentar status no corpo do arquivo.
 
 ## Auditoria de 2026-05-01
 
@@ -49,3 +47,7 @@ Resultado:
 ## Revisão de 2026-05-01
 
 A continuação da tasklist manteve a decisão de não renomear os arquivos no mesmo recorte de orquestração/exportação. A renomeação física continua viável, mas deve ser tratada como mudança própria: gerar mapa antigo/novo, aplicar `git mv`, reescrever links internos e validar referências em seguida.
+
+## Revisão de 2026-05-03
+
+Decisão fechada: o status permanece no corpo dos arquivos Markdown. A pendência de "status no nome físico" foi encerrada para evitar churn de paths e quebra de links.
