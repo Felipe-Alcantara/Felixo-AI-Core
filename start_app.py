@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent
 APP_DIR = ROOT_DIR / "app"
 DEFAULT_URL = "http://127.0.0.1:5173/"
+REQUIREMENTS_FILE_NAMES = ("requirements.txt", "requeriments.txt")
 
 
 def read_node_version() -> str | None:
@@ -170,6 +171,65 @@ def ensure_dependencies(
     return subprocess.call(["npm", "install"], cwd=APP_DIR, env=env)
 
 
+def ensure_python_requirements(env: dict[str, str], skip_install: bool) -> int:
+    if skip_install:
+        return 0
+
+    requirements_file = find_python_requirements_file()
+
+    if requirements_file is None:
+        return 0
+
+    if not has_installable_python_requirements(requirements_file):
+        print(f"[felixo] No Python packages listed in {requirements_file.name}.")
+        return 0
+
+    if not has_pip(env):
+        print(
+            "[felixo] Python requirements were found, but pip is not available for this Python.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"[felixo] Installing Python requirements from {requirements_file.name}...")
+    return subprocess.call(
+        [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
+        cwd=ROOT_DIR,
+        env=env,
+    )
+
+
+def find_python_requirements_file() -> Path | None:
+    for file_name in REQUIREMENTS_FILE_NAMES:
+        candidate = ROOT_DIR / file_name
+        if candidate.exists():
+            return candidate
+
+    return None
+
+
+def has_installable_python_requirements(requirements_file: Path) -> bool:
+    try:
+        lines = requirements_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+
+    return any(line.strip() and not line.lstrip().startswith("#") for line in lines)
+
+
+def has_pip(env: dict[str, str]) -> bool:
+    return (
+        subprocess.call(
+            [sys.executable, "-m", "pip", "--version"],
+            cwd=ROOT_DIR,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    )
+
+
 def update_source_from_branch(branch: str, env: dict[str, str]) -> tuple[int, bool]:
     if shutil.which("git") is None:
         print("[felixo] git was not found. Install Git first.", file=sys.stderr)
@@ -251,7 +311,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-install",
         action="store_true",
-        help="Do not run npm install automatically when node_modules is missing.",
+        help="Do not install Python or npm dependencies automatically.",
     )
     parser.add_argument(
         "--update",
@@ -281,6 +341,10 @@ def main() -> int:
         return 1
 
     env = build_env(node_bin)
+
+    requirements_code = ensure_python_requirements(env, args.skip_install)
+    if requirements_code != 0:
+        return requirements_code
 
     source_updated = False
     if args.update:
