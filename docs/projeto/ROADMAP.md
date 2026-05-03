@@ -74,11 +74,11 @@ Transformar o protótipo em uma ferramenta utilizável no dia a dia, com organiz
 ### Interface e experiência
 
 - [ ] Lista de sessões recentes na sidebar
-- [ ] Painel lateral de configurações rápidas
-- [ ] Sistema de temas simples
-- [ ] Atalhos de teclado básicos
-- [ ] Mensagens de status: `rodando`, `aguardando`, `erro`, `finalizado`
-- [ ] Tratamento visual de erros melhorado
+- [x] Painel lateral de configurações rápidas
+- [x] Sistema de temas simples
+- [x] Atalhos de teclado básicos
+- [x] Mensagens de status: `rodando`, `aguardando`, `erro`, `finalizado`
+- [x] Tratamento visual de erros melhorado
 
 ### Prompts e padrões
 
@@ -99,19 +99,19 @@ Transformar o protótipo em uma ferramenta utilizável no dia a dia, com organiz
 
 ### Organização por projetos
 
-- [ ] Criar conceito de workspace/projeto
-- [ ] Alternar entre projetos
+- [x] Criar conceito de workspace/projeto
+- [x] Alternar entre projetos
 - [ ] Histórico separado por projeto
 - [ ] Prompts favoritos por projeto
-- [ ] Associar pasta local a um projeto
+- [x] Associar pasta local a um projeto
 
 ### Persistência
 
-- [ ] Salvar configurações locais
+- [x] Salvar configurações locais
 - [ ] Salvar histórico de sessões
-- [ ] Salvar lista de modelos/terminais cadastrados
+- [x] Salvar lista de modelos/terminais cadastrados
 - [ ] Salvar prompts personalizados
-- [ ] Salvar projetos/workspaces
+- [x] Salvar projetos/workspaces
 
 ### Arquitetura híbrida MCP
 
@@ -134,27 +134,27 @@ Preparar o projeto para ser publicado, entendido, instalado e expandido por outr
 ### Repositório
 
 - [ ] README completo com screenshots ou mockups
-- [ ] Seção de instalação e uso básico
-- [ ] Guia de contribuição
-- [ ] Licença open source
+- [x] Seção de instalação e uso básico
+- [x] Guia de contribuição
+- [x] Licença open source
 - [ ] `.env.example` se necessário
 
 ### Qualidade do código
 
 - [ ] Padronizar nomes de arquivos e funções
-- [ ] Separar camadas: frontend, backend, execução, provedores, skills, persistência
+- [x] Separar camadas: frontend, backend, execução, provedores, skills, persistência
 - [ ] Tratamento de erros mais robusto
 
 ### Documentação técnica
 
-- [ ] Documentar arquitetura inicial
-- [ ] Documentar como adicionar uma nova IA
+- [x] Documentar arquitetura inicial
+- [x] Documentar como adicionar uma nova IA
 - [ ] Documentar como adicionar uma nova skill
-- [ ] Documentar limitações conhecidas
+- [x] Documentar limitações conhecidas
 
 ### Publicação
 
-- [ ] Criar primeira release experimental com tags de versão
+- [x] Criar primeira release experimental com tags de versão
 - [ ] Criar issues iniciais com tarefas futuras
 - [ ] Labels: `bug`, `feature`, `documentation`, `good first issue`
 
@@ -360,19 +360,19 @@ Adicionar uma camada de IDE leve e integrada, permitindo editar arquivos, navega
 - [x] Painel de terminal em tempo real com eventos humanizados por thread
 - [x] Sessão CLI persistente no Claude
 - [x] Retomada nativa de sessão no Codex/Gemini
-- [ ] Processo CLI persistente no Codex/Gemini
+- [ ] Processo CLI persistente real no Codex/Gemini
 - [ ] Múltiplas threads simultâneas na mesma conversa
 
 ### Bloco 2 — Organização
 - [ ] Histórico persistente
 - [ ] Sistema de prompts salvos
-- [ ] Projetos/workspaces
-- [ ] Salvar configurações localmente
+- [x] Projetos/workspaces
+- [x] Salvar configurações localmente
 
 ### Bloco 3 — Open Source
 - [ ] Skills simples
-- [ ] Documentação do projeto
-- [ ] Publicar no GitHub com primeira release
+- [x] Documentação do projeto
+- [x] Publicar no GitHub com primeira release
 
 ### Bloco 4 — Inteligência
 - [ ] Agentes
