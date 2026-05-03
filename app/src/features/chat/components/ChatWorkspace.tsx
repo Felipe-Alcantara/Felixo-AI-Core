@@ -23,8 +23,14 @@ import {
 import { loadModels, saveModels } from '../services/model-storage'
 import {
   createNoteFromMessages,
+  deleteNoteFromBackend,
+  hasNotesBackendMigrationRun,
   loadNotes,
+  loadNotesFromBackend,
+  markNotesBackendMigrationRun,
+  saveNoteToBackend,
   saveNotes,
+  saveNotesToBackend,
 } from '../services/note-storage'
 import {
   createModelCapabilityProfiles,
@@ -133,6 +139,8 @@ export function ChatWorkspace() {
   const orchestratorSettingsLoadedRef = useRef(false)
   const orchestratorSettingsUserEditedRef = useRef(false)
   const orchestratorSettingsRef = useRef(orchestratorSettings)
+  const notesRef = useRef(notes)
+  const notesUserEditedRef = useRef(false)
   const lastSentProjectIdsRef = useRef<Set<string>>(new Set())
   const messageThreadIdsRef = useRef<Map<string, string>>(new Map())
   const streamHandlerRef = useRef(handleStreamEvent)
@@ -181,6 +189,49 @@ export function ChatWorkspace() {
   useEffect(() => {
     orchestratorSettingsRef.current = orchestratorSettings
   }, [orchestratorSettings])
+
+  useEffect(() => {
+    notesRef.current = notes
+  }, [notes])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadNotesFromBackend()
+      .then((backendNotes) => {
+        if (cancelled || backendNotes === null) {
+          return
+        }
+
+        if (backendNotes.length > 0) {
+          if (notesUserEditedRef.current) {
+            void saveNotesToBackend(notesRef.current)
+            markNotesBackendMigrationRun()
+            return
+          }
+
+          setNotes(backendNotes)
+          markNotesBackendMigrationRun()
+          return
+        }
+
+        if (!hasNotesBackendMigrationRun() && notesRef.current.length > 0) {
+          void saveNotesToBackend(notesRef.current).then((saved) => {
+            if (saved) {
+              markNotesBackendMigrationRun()
+            }
+          })
+          return
+        }
+
+        markNotesBackendMigrationRun()
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -534,6 +585,7 @@ export function ChatWorkspace() {
   }
 
   function saveNote(note: ProjectNote) {
+    notesUserEditedRef.current = true
     setNotes((currentNotes) => {
       const exists = currentNotes.some((item) => item.id === note.id)
 
@@ -541,10 +593,13 @@ export function ChatWorkspace() {
         ? currentNotes.map((item) => (item.id === note.id ? note : item))
         : [note, ...currentNotes]
     })
+    void saveNoteToBackend(note)
   }
 
   function deleteNote(noteId: string) {
+    notesUserEditedRef.current = true
     setNotes((currentNotes) => currentNotes.filter((note) => note.id !== noteId))
+    void deleteNoteFromBackend(noteId)
   }
 
   function useNoteAsContext(note: ProjectNote) {

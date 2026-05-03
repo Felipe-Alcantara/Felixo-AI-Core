@@ -5,6 +5,7 @@ import type {
   Model,
   OrchestratorSettings,
   OrchestrationRun,
+  ProjectNote,
   OrchestrationStreamEvent,
   QaLogEntry,
   StreamEvent,
@@ -80,6 +81,11 @@ declare global {
       projects?: {
         pickFolder: () => Promise<string | null>
         detectRepos: (folderPath: string) => Promise<DetectedRepo[]>
+      }
+      notes?: {
+        list: () => Promise<CliInvokeResult & { notes?: unknown[] }>
+        save: (note: ProjectNote) => Promise<CliInvokeResult>
+        delete: (noteId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       files?: {
         saveTextFile: (params: {

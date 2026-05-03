@@ -95,7 +95,7 @@ Isso simplifica o empacotamento multiplataforma.
 |---------------|-------------------|
 | Assets internos (logo, ícone) | `app/public/brand/` |
 | Projetos Git do usuário | Selecionados via `dialog.showOpenDialog`, armazenados em `localStorage` |
-| Notas do usuário | `localStorage` no renderer |
+| Notas do usuário | SQLite no backend Electron, com migração inicial do `localStorage` |
 | Configurações do orquestrador | SQLite em `userData/database/felixo.sqlite`, com migração do JSON legado |
 | Tema e preferências visuais | `localStorage` no renderer |
 | Histórico de sessões | Memória + `localStorage` |
@@ -105,7 +105,7 @@ Isso simplifica o empacotamento multiplataforma.
 
 ## Onde o app salva configurações
 
-Persistência ainda é mista. Configurações do orquestrador já usam SQLite no backend Electron. Projetos, notas, tema, modelos e histórico ainda dependem de `localStorage`/memória e devem migrar em recortes futuros.
+Persistência ainda é mista. Configurações do orquestrador e notas já usam SQLite no backend Electron. Projetos, tema, modelos e histórico ainda dependem de `localStorage`/memória e devem migrar em recortes futuros.
 
 ---
 
@@ -162,7 +162,7 @@ Esses paths são relativos ao diretório do Electron, funcionando tanto em modo 
 
 ### Risco 1 — localStorage para persistência
 
-A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador já foram migradas para SQLite em `app.getPath('userData')/database/felixo.sqlite`; modelos, projetos, notas e histórico ainda devem migrar.
+A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador e notas já foram migradas para SQLite em `app.getPath('userData')/database/felixo.sqlite`; modelos, projetos e histórico ainda devem migrar.
 
 ### Risco 2 — CLIs externas podem não estar no PATH
 
@@ -204,7 +204,7 @@ Apps `.exe` sem assinatura de código recebem alerta do Windows SmartScreen. Usu
 | Assets | Servidos pelo Vite | Incluídos no bundle `dist/` |
 | node_modules | Presentes no filesystem | Incluídos no asar |
 | Diretórios do app | Gravável | Pode ser read-only |
-| Dados do usuário | `localStorage` | `localStorage` + `app.getPath('userData')` recomendado |
+| Dados do usuário | SQLite parcial + `localStorage` legado | `app.getPath('userData')` recomendado |
 | CLIs externas | PATH do terminal do desenvolvedor | PATH do sistema (pode ser mais restrito) |
 | Debug | DevTools abertos | DevTools fechados por padrão |
 | Atualização | `git pull` + `npm install` | Auto-update silencioso |

@@ -8,7 +8,7 @@ O bloco de notas serve para guardar tasklists, ideias, brainstorms, decisões e 
 
 ## Escopo inicial
 
-- Notas locais salvas em `localStorage`.
+- Notas locais salvas em SQLite, com fallback/migração do `localStorage`.
 - Criar nota.
 - Editar título e conteúdo.
 - Excluir nota com confirmação.
@@ -27,7 +27,7 @@ O bloco de notas serve para guardar tasklists, ideias, brainstorms, decisões e 
 
 ## Persistência
 
-O primeiro recorte usa `localStorage` para evitar introduzir SQLite antes do plano de schema. Quando a persistência SQLite entrar, notas devem migrar para tabela própria e manter vínculo opcional com projeto/workspace.
+As notas agora são salvas na tabela `notes` do SQLite pelo backend Electron. O `localStorage` continua como fallback para modo web/dev sem IPC e como fonte de migração inicial: na primeira execução com backend disponível, notas antigas são copiadas para SQLite e marcadas como migradas.
 
 ## Cuidados
 
@@ -41,3 +41,5 @@ O primeiro recorte usa `localStorage` para evitar introduzir SQLite antes do pla
 - `app/src/features/chat/components/NotesModal.tsx`
 - `app/src/features/chat/components/AppSidebar.tsx`
 - `app/src/features/chat/components/ChatWorkspace.tsx`
+- `app/electron/services/storage/notes-repository.cjs`
+- `app/electron/services/notes-ipc-handlers.cjs`

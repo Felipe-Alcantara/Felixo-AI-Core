@@ -1,6 +1,7 @@
 import type { ChatMessage, Model, ProjectNote } from '../types'
 
 const NOTES_STORAGE_KEY = 'felixo-ai-core.notes'
+const NOTES_BACKEND_MIGRATION_KEY = 'felixo-ai-core.notes.sqlite-migrated'
 
 export function loadNotes(): ProjectNote[] {
   try {
@@ -27,6 +28,84 @@ export function loadNotes(): ProjectNote[] {
 
 export function saveNotes(notes: ProjectNote[]) {
   window.localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes))
+}
+
+export async function loadNotesFromBackend(): Promise<ProjectNote[] | null> {
+  if (!window.felixo?.notes?.list) {
+    return null
+  }
+
+  try {
+    const result = await window.felixo.notes.list()
+
+    if (!result.ok || !Array.isArray(result.notes)) {
+      return null
+    }
+
+    return result.notes.flatMap((value) => {
+      const note = normalizeNote(value)
+      return note ? [note] : []
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function saveNoteToBackend(note: ProjectNote): Promise<boolean> {
+  if (!window.felixo?.notes?.save) {
+    return false
+  }
+
+  const normalizedNote = normalizeNote(note)
+
+  if (!normalizedNote) {
+    return false
+  }
+
+  try {
+    const result = await window.felixo.notes.save(normalizedNote)
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export async function saveNotesToBackend(notes: ProjectNote[]): Promise<boolean> {
+  if (!window.felixo?.notes?.save) {
+    return false
+  }
+
+  const results = await Promise.all(notes.map((note) => saveNoteToBackend(note)))
+  return results.every(Boolean)
+}
+
+export async function deleteNoteFromBackend(noteId: string): Promise<boolean> {
+  if (!window.felixo?.notes?.delete) {
+    return false
+  }
+
+  try {
+    const result = await window.felixo.notes.delete(noteId)
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export function hasNotesBackendMigrationRun() {
+  try {
+    return window.localStorage.getItem(NOTES_BACKEND_MIGRATION_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markNotesBackendMigrationRun() {
+  try {
+    window.localStorage.setItem(NOTES_BACKEND_MIGRATION_KEY, '1')
+  } catch {
+    // localStorage can be unavailable in non-browser test environments.
+  }
 }
 
 export function createEmptyNote(): ProjectNote {

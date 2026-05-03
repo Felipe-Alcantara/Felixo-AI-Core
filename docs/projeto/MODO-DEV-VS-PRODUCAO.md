@@ -83,7 +83,7 @@ Isso funciona nos dois modos porque o `__dirname` do Electron sempre aponta para
 
 | Modo | Local atual | Local recomendado |
 |------|------------|-------------------|
-| Desenvolvimento | `localStorage` para dados legados; orquestrador em SQLite (`userData/database`) | SQLite para dados que precisam sobreviver a builds |
+| Desenvolvimento | `localStorage` para dados legados; orquestrador e notas em SQLite (`userData/database`) | SQLite para dados que precisam sobreviver a builds |
 | Produção | Orquestrador em SQLite; dados legados ainda no renderer | `app.getPath('userData')` via Electron API |
 
 **Local padrão por SO (`userData`):**
@@ -137,6 +137,6 @@ Quando o app detecta problema de ambiente, deve exibir mensagem amigável:
 | DevTools | ✅ Abertos | ❌ Fechados |
 | Assets | Vite dev server | Bundle dist/ |
 | PATH de CLIs | Terminal do dev | Sistema (restrito) |
-| Dados do usuário | localStorage | localStorage → migrar para userData |
+| Dados do usuário | SQLite parcial + localStorage legado | SQLite em `userData` |
 | Atualização | `git pull` / `start_app.py --update` | Download automático |
 | Diretório do app | Gravável | Pode ser read-only |

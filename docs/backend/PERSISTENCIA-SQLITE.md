@@ -175,7 +175,7 @@ Fluxo esperado antes de chamar um modelo:
 
 ## Próximo passo
 
-Criar schema mínimo, migrações versionadas e camada de repositório no backend Electron antes de migrar histórico, notas, modelos e projetos restantes.
+Criar repositórios no backend Electron para migrar histórico, modelos e projetos restantes.
 
 ## Recorte já entregue
 
@@ -189,11 +189,13 @@ Criar schema mínimo, migrações versionadas e camada de repositório no backen
 - Migrations executadas automaticamente na inicialização do app.
 - Repositório inicial de `settings` criado sobre SQLite.
 - Configurações do orquestrador migram do JSON legado para a tabela `settings`.
+- Repositório e IPCs de `notes` criados sobre SQLite.
+- Notas do `localStorage` migram uma vez para SQLite quando o backend está disponível.
 
 ## Ainda não implementado
 
-- IPCs gerais de leitura/escrita para notas, projetos e histórico.
-- Migração dos dados atuais do `localStorage` além das configurações do orquestrador.
+- IPCs gerais de leitura/escrita para projetos e histórico.
+- Migração dos dados atuais do `localStorage` além de configurações do orquestrador e notas.
 - Compactação real de mensagens COLD.
 - Busca textual/semântica.
 - Remoção do fallback JSON legado do orquestrador em uma versão futura.
