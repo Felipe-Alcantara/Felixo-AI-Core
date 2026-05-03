@@ -57,11 +57,11 @@ Referencia: [docs/arquitetura/ORQUESTRACAO-MULTI-AGENTE.md](../arquitetura/ORQUE
 
 ## Fase 7 — Testes end-to-end com CLIs reais
 
-- [ ] 7.1 Testar loop completo com Codex como orquestrador e Claude como sub-agente
-- [ ] 7.2 Testar loop com Gemini como orquestrador
-- [ ] 7.3 Testar cenario de erro (sub-agente falha, timeout)
-- [ ] 7.4 Testar limites (maxTurns, maxAgents)
-- [ ] 7.5 Testar multiplos sub-agentes em paralelo
+- [x] 7.1 Testar loop completo com Codex como orquestrador e Claude como sub-agente
+- [x] 7.2 Testar loop com Gemini como orquestrador
+- [x] 7.3 Testar cenario de erro (sub-agente falha, timeout)
+- [x] 7.4 Testar limites (maxTurns, maxAgents)
+- [x] 7.5 Testar multiplos sub-agentes em paralelo
 
 ## Ordem de implementacao
 
