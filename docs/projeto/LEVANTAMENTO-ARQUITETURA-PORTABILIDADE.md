@@ -162,7 +162,7 @@ Esses paths são relativos ao diretório do Electron, funcionando tanto em modo 
 
 ### Risco 1 — localStorage para persistência
 
-A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. **Migrar para `electron-store` ou SQLite** é recomendado.
+A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador já foram migradas para `app.getPath('userData')/config/orchestrator-settings.json`; modelos, projetos, notas e histórico ainda devem migrar para store Electron ou SQLite.
 
 ### Risco 2 — CLIs externas podem não estar no PATH
 
@@ -182,7 +182,7 @@ O `qa-logger.cjs` precisa de um diretório de escrita. Em modo empacotado, o dir
 
 ### Risco 6 — Configurações do usuário dentro da pasta do app
 
-Atualmente as configurações ficam no renderer (`localStorage`). Se migradas para filesystem, precisam ir para `app.getPath('userData')`, não dentro da pasta de instalação.
+Configurações migradas para filesystem devem ficar em `app.getPath('userData')`, não dentro da pasta de instalação. O primeiro recorte já usa `userData/config` para as configurações do orquestrador.
 
 ### Risco 7 — macOS sandbox e notarização
 

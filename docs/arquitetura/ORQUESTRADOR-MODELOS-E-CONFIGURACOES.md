@@ -67,13 +67,15 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - `app/src/features/chat/services/orchestrator-settings-storage.ts`
 - `app/src/features/chat/components/OrchestratorSettingsModal.tsx`
 - `app/src/features/chat/components/ChatWorkspace.tsx`
+- `app/electron/services/orchestrator-settings-store.cjs`
+- `app/electron/services/orchestrator-settings-ipc-handlers.cjs`
 - `app/electron/services/ipc-handlers.cjs`
 - `app/electron/services/orchestration/orchestration-runner.cjs`
 
 ## Recorte implementado
 
 - Modal local de configurações do orquestrador.
-- Persistência local das configurações.
+- Persistência das configurações em `app.getPath('userData')/config/orchestrator-settings.json`, com migração/fallback do `localStorage`.
 - Lista compacta de capacidades enviada ao prompt do orquestrador.
 - `availableModels` e `orchestratorSettings` enviados ao backend no `cli:send`.
 - Contexto de modelos, configurações e limites preservado entre turnos da mesma run.
@@ -90,6 +92,5 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 
 ## Próximos passos
 
-- Persistir configurações fora de `localStorage` quando SQLite entrar.
 - Alimentar `dynamicAvailability` a partir de erros reais de spawn/execução dos adapters.
 - Permitir escolha por modelo específico, não apenas por `cliType`.

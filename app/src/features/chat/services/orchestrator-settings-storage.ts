@@ -26,27 +26,95 @@ export const defaultOrchestratorSettings: OrchestratorSettings = {
   requireConfirmationForSensitiveActions: true,
 }
 
-export function loadOrchestratorSettings(): OrchestratorSettings {
+export function loadInitialOrchestratorSettings(): OrchestratorSettings {
+  return loadLegacyOrchestratorSettings() ?? defaultOrchestratorSettings
+}
+
+export async function loadOrchestratorSettings(): Promise<OrchestratorSettings> {
+  const storedSettings = await loadElectronOrchestratorSettings()
+
+  if (storedSettings) {
+    clearLegacyOrchestratorSettings()
+    return storedSettings
+  }
+
+  const legacySettings = loadLegacyOrchestratorSettings()
+
+  if (legacySettings) {
+    await saveOrchestratorSettings(legacySettings)
+    return legacySettings
+  }
+
+  return defaultOrchestratorSettings
+}
+
+export async function saveOrchestratorSettings(
+  settings: OrchestratorSettings,
+) {
+  const normalizedSettings = normalizeOrchestratorSettings(settings)
+
+  if (await saveElectronOrchestratorSettings(normalizedSettings)) {
+    clearLegacyOrchestratorSettings()
+    return
+  }
+
+  saveLegacyOrchestratorSettings(normalizedSettings)
+}
+
+function loadLegacyOrchestratorSettings(): OrchestratorSettings | null {
   try {
     const rawSettings = window.localStorage.getItem(
       ORCHESTRATOR_SETTINGS_STORAGE_KEY,
     )
 
     if (!rawSettings) {
-      return defaultOrchestratorSettings
+      return null
     }
 
     return normalizeOrchestratorSettings(JSON.parse(rawSettings))
   } catch {
-    return defaultOrchestratorSettings
+    return null
   }
 }
 
-export function saveOrchestratorSettings(settings: OrchestratorSettings) {
+function saveLegacyOrchestratorSettings(settings: OrchestratorSettings) {
   window.localStorage.setItem(
     ORCHESTRATOR_SETTINGS_STORAGE_KEY,
     JSON.stringify(normalizeOrchestratorSettings(settings)),
   )
+}
+
+function clearLegacyOrchestratorSettings() {
+  try {
+    window.localStorage.removeItem(ORCHESTRATOR_SETTINGS_STORAGE_KEY)
+  } catch {
+    // Best effort only: Electron JSON storage is already the source of truth.
+  }
+}
+
+async function loadElectronOrchestratorSettings() {
+  try {
+    const result = await window.felixo?.settings?.loadOrchestrator?.()
+
+    if (!result?.ok || !result.settings) {
+      return null
+    }
+
+    return normalizeOrchestratorSettings(result.settings)
+  } catch {
+    return null
+  }
+}
+
+async function saveElectronOrchestratorSettings(
+  settings: OrchestratorSettings,
+) {
+  try {
+    const result = await window.felixo?.settings?.saveOrchestrator?.(settings)
+    return Boolean(result?.ok)
+  } catch {
+    return false
+  }
 }
 
 export function createModelCapabilityProfiles(

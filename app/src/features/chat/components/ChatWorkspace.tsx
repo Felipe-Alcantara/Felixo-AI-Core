@@ -29,6 +29,7 @@ import {
 import {
   createModelCapabilityProfiles,
   createOrchestratorContextBlock,
+  loadInitialOrchestratorSettings,
   loadOrchestratorSettings,
   saveOrchestratorSettings,
 } from '../services/orchestrator-settings-storage'
@@ -100,7 +101,7 @@ export function ChatWorkspace() {
   )
   const [notes, setNotes] = useState<ProjectNote[]>(() => loadNotes())
   const [orchestratorSettings, setOrchestratorSettings] =
-    useState<OrchestratorSettings>(() => loadOrchestratorSettings())
+    useState<OrchestratorSettings>(() => loadInitialOrchestratorSettings())
   const [customAutomations, setCustomAutomations] = useState<AutomationDefinition[]>(
     () => loadCustomAutomations(),
   )
@@ -129,6 +130,9 @@ export function ChatWorkspace() {
   const activeThreadIdRef = useRef<string | null>(null)
   const conversationThreadIdRef = useRef<string | null>(null)
   const conversationModelIdRef = useRef<ModelId | null>(null)
+  const orchestratorSettingsLoadedRef = useRef(false)
+  const orchestratorSettingsUserEditedRef = useRef(false)
+  const orchestratorSettingsRef = useRef(orchestratorSettings)
   const lastSentProjectIdsRef = useRef<Set<string>>(new Set())
   const messageThreadIdsRef = useRef<Map<string, string>>(new Map())
   const streamHandlerRef = useRef(handleStreamEvent)
@@ -173,6 +177,37 @@ export function ChatWorkspace() {
   useEffect(() => {
     streamHandlerRef.current = handleStreamEvent
   })
+
+  useEffect(() => {
+    orchestratorSettingsRef.current = orchestratorSettings
+  }, [orchestratorSettings])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadOrchestratorSettings()
+      .then((settings) => {
+        if (cancelled) {
+          return
+        }
+
+        orchestratorSettingsLoadedRef.current = true
+
+        if (orchestratorSettingsUserEditedRef.current) {
+          void saveOrchestratorSettings(orchestratorSettingsRef.current)
+          return
+        }
+
+        setOrchestratorSettings(settings)
+      })
+      .catch(() => {
+        orchestratorSettingsLoadedRef.current = true
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!activeOrchestrationRunId || !window.felixo?.cli?.orchestrationStatus) {
@@ -225,7 +260,15 @@ export function ChatWorkspace() {
   }, [notes])
 
   useEffect(() => {
-    saveOrchestratorSettings(orchestratorSettings)
+    if (!orchestratorSettingsLoadedRef.current) {
+      return
+    }
+
+    if (!orchestratorSettingsUserEditedRef.current) {
+      return
+    }
+
+    void saveOrchestratorSettings(orchestratorSettings)
   }, [orchestratorSettings])
 
   useEffect(() => {
@@ -482,6 +525,7 @@ export function ChatWorkspace() {
   }
 
   function updateOrchestratorSettings(settings: OrchestratorSettings) {
+    orchestratorSettingsUserEditedRef.current = true
     setOrchestratorSettings(settings)
   }
 

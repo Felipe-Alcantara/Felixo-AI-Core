@@ -88,6 +88,14 @@ declare global {
           filters?: Array<{ name: string; extensions: string[] }>
         }) => Promise<CliInvokeResult & { canceled?: boolean; filePath?: string }>
       }
+      settings?: {
+        loadOrchestrator: () => Promise<
+          CliInvokeResult & { settings?: unknown | null }
+        >
+        saveOrchestrator: (
+          settings: OrchestratorSettings,
+        ) => Promise<CliInvokeResult>
+      }
       updates?: {
         getStatus: () => Promise<CliInvokeResult & { status?: UpdateStatus }>
         check: () => Promise<

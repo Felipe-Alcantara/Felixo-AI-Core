@@ -83,8 +83,8 @@ Isso funciona nos dois modos porque o `__dirname` do Electron sempre aponta para
 
 | Modo | Local atual | Local recomendado |
 |------|------------|-------------------|
-| Desenvolvimento | `localStorage` (renderer) | `localStorage` (aceitável para dev) |
-| Produção | `localStorage` (renderer) | `app.getPath('userData')` via Electron API |
+| Desenvolvimento | `localStorage` para dados legados; orquestrador em `userData/config` | `userData` ou SQLite para dados que precisam sobreviver a builds |
+| Produção | Orquestrador em `userData/config`; dados legados ainda no renderer | `app.getPath('userData')` via Electron API |
 
 **Local padrão por SO (`userData`):**
 - Linux: `~/.config/felixo-ai-core/`
