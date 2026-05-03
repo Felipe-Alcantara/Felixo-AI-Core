@@ -51,12 +51,12 @@ test('codex-app-server adapter sends thread/start on session phase', () => {
   adapter.resetRequestId()
   const result = adapter.createPersistentInput('Oi', {
     persistentPhase: 'session',
-    cwd: '/home/felipe/projeto',
+    cwd: '/tmp/test-project',
   })
   const parsed = JSON.parse(result.input.trim())
 
   assert.equal(parsed.method, 'thread/start')
-  assert.equal(parsed.params.cwd, '/home/felipe/projeto')
+  assert.equal(parsed.params.cwd, '/tmp/test-project')
   assert.equal(result.didStartSession, true)
   assert.equal(result.didSendPrompt, false)
 })
@@ -127,7 +127,7 @@ test('codex-app-server adapter parses thread/start response as session', () => {
         status: { type: 'idle' },
       },
       model: 'gpt-5.5',
-      cwd: '/home/felipe/projeto',
+      cwd: '/tmp/test-project',
     },
   }))
 

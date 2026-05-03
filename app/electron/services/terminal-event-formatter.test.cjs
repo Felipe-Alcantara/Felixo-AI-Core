@@ -12,7 +12,7 @@ test('terminal formatter creates a readable start event', () => {
     command: 'codex',
     cliType: 'codex',
     modelName: 'Codex',
-    cwd: '/home/felipe',
+    cwd: '/tmp/test-project',
     isContinuation: false,
   })
 
@@ -23,7 +23,7 @@ test('terminal formatter creates a readable start event', () => {
     command: 'codex',
     cliType: 'codex',
     modelName: 'Codex',
-    cwd: '/home/felipe',
+    cwd: '/tmp/test-project',
     mode: 'nova',
   })
 })
@@ -33,7 +33,7 @@ test('terminal formatter labels continuation without native resume distinctly', 
     command: 'gemini',
     cliType: 'gemini',
     modelName: 'Gemini',
-    cwd: '/home/felipe',
+    cwd: '/tmp/test-project',
     isContinuation: true,
     usesNativeResume: false,
     providerSessionId: 'session-1',
@@ -49,7 +49,7 @@ test('terminal formatter labels persistent process reuse', () => {
     command: 'claude',
     cliType: 'claude',
     modelName: 'Claude',
-    cwd: '/home/felipe',
+    cwd: '/tmp/test-project',
     isContinuation: true,
     usesPersistentProcess: true,
     reusedProcess: true,

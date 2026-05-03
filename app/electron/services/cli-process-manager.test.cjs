@@ -21,7 +21,7 @@ test('cli env uses configured portable cli paths', (t) => {
 
   assert.equal(pathParts[0], cliDir)
   assert.equal(
-    pathParts.includes('/home/felipe/.nvm/versions/node/v25.9.0/bin'),
+    pathParts.includes(path.join(os.homedir(), '.nvm/versions/node/v25.9.0/bin')),
     false,
   )
 })
