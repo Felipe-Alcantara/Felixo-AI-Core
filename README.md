@@ -84,6 +84,41 @@ python3 start_app.py --update
 
 Esse comando faz `git pull --ff-only origin production` antes de abrir o app e bloqueia a atualização se houver alterações locais não commitadas.
 
+## Rodar em outro PC
+
+Pré-requisitos:
+
+- Git
+- Python 3
+- Node.js 22+ com npm
+- Pelo menos uma CLI de IA instalada e autenticada: `codex`, `claude` ou `gemini`
+
+Linux/macOS:
+
+```bash
+git clone -b production https://github.com/Felipe-Alcantara/Felixo-AI-Core.git
+cd Felixo-AI-Core
+python3 start_app.py
+```
+
+Windows PowerShell:
+
+```powershell
+git clone -b production https://github.com/Felipe-Alcantara/Felixo-AI-Core.git
+cd Felixo-AI-Core
+py start_app.py
+```
+
+O `start_app.py` instala dependências Python de `requirements.txt` quando houver pacotes listados e instala dependências Node com `npm install` quando necessário. Hoje o `requirements.txt` fica sem pacotes porque o launcher usa apenas a biblioteca padrão do Python.
+
+Se quiser apenas abrir sem instalar dependências automaticamente:
+
+```bash
+python3 start_app.py --skip-install
+```
+
+Se alguma CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com a pasta onde o comando está instalado.
+
 ## Como distribuir
 
 Build local:

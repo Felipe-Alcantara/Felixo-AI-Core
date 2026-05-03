@@ -1,0 +1,2 @@
+# Python dependencies used by start_app.py.
+# Keep this file even when empty so new machines can bootstrap consistently.
