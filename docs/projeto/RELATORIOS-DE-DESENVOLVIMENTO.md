@@ -1,6 +1,6 @@
 # Relatórios de Desenvolvimento
 
-Status: planejado.
+Status: em desenvolvimento.
 
 ## Objetivo
 
@@ -8,12 +8,18 @@ Criar relatórios por dia, semana, mês ou sprint a partir de commits, diffs e r
 
 ## Escopo inicial
 
-- Analisar commits do dia.
-- Agrupar commits por data.
-- Extrair mensagens.
-- Identificar arquivos alterados.
-- Gerar resumo simples.
-- Exportar/copy do relatório.
+- [x] Analisar commits do dia.
+- [x] Agrupar commits por data.
+- [x] Extrair mensagens.
+- [x] Identificar arquivos alterados.
+- [x] Gerar resumo simples.
+- [x] Exportar como Markdown em `docs/relatorios/`.
+
+Implementado em `scripts/generate-daily-report.cjs`:
+
+```bash
+node scripts/generate-daily-report.cjs --date 2026-05-03 --write
+```
 
 ## Escopo intermediário
 
