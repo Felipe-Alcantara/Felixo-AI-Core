@@ -12,6 +12,7 @@ const ORCHESTRATOR_SETTINGS_STORAGE_KEY =
 
 export const defaultOrchestratorSettings: OrchestratorSettings = {
   customContext: '',
+  globalMemories: '',
   enabledSkills: ['planejamento', 'revisao', 'resumo'],
   preferredModelIds: [],
   blockedModelIds: [],
@@ -237,6 +238,23 @@ export function createOrchestratorContextBlock(
   return lines.filter((line): line is string => line !== null).join('\n')
 }
 
+export function createGlobalMemoriesContextBlock(
+  settings: OrchestratorSettings,
+) {
+  if (!settings.globalMemories.trim()) {
+    return null
+  }
+
+  return [
+    'Memorias globais do usuario:',
+    settings.globalMemories.trim(),
+    '',
+    'Uso das memorias globais:',
+    '- Trate estas memorias como preferencias e fatos persistentes do usuario.',
+    '- Se uma memoria global conflitar com a mensagem atual, priorize a mensagem atual.',
+  ].join('\n')
+}
+
 export function normalizeOrchestratorSettings(
   value: unknown,
 ): OrchestratorSettings {
@@ -248,6 +266,7 @@ export function normalizeOrchestratorSettings(
 
   return {
     customContext: getString(settings.customContext),
+    globalMemories: getString(settings.globalMemories),
     enabledSkills: getStringList(settings.enabledSkills),
     preferredModelIds: getStringList(settings.preferredModelIds),
     blockedModelIds: getStringList(settings.blockedModelIds),

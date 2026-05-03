@@ -33,6 +33,7 @@ import {
   saveNotesToBackend,
 } from '../services/note-storage'
 import {
+  createGlobalMemoriesContextBlock,
   createModelCapabilityProfiles,
   createOrchestratorContextBlock,
   loadInitialOrchestratorSettings,
@@ -463,6 +464,9 @@ export function ChatWorkspace() {
       modelCapabilities,
       orchestratorSettings,
     )
+    const globalMemoriesContextBlock = createGlobalMemoriesContextBlock(
+      orchestratorSettings,
+    )
 
     const cliPrompt = createCliPrompt(
       messages,
@@ -472,7 +476,7 @@ export function ChatWorkspace() {
       activeProjects,
       projectDiff,
       contextAttachments,
-      { orchestrationHint, orchestrationContextBlock },
+      { orchestrationHint, orchestrationContextBlock, globalMemoriesContextBlock },
     )
     const resumePrompt = createCliPrompt(
       messages,
@@ -482,7 +486,12 @@ export function ChatWorkspace() {
       activeProjects,
       projectDiff,
       contextAttachments,
-      { includeHistory: false, orchestrationHint, orchestrationContextBlock },
+      {
+        includeHistory: false,
+        orchestrationHint,
+        orchestrationContextBlock,
+        globalMemoriesContextBlock,
+      },
     )
 
     setMessages((currentMessages) => [
@@ -1263,11 +1272,13 @@ export function ChatWorkspace() {
         isOpen={isFelixoSettingsOpen}
         runtimeLabel={runtimeLabel}
         theme={theme}
+        orchestratorSettings={orchestratorSettings}
         projectsCount={projects.length}
         activeProjectsCount={activeProjectIds.size}
         automationsCount={automations.length}
         onClose={() => setIsFelixoSettingsOpen(false)}
         onThemeChange={updateTheme}
+        onSaveOrchestratorSettings={updateOrchestratorSettings}
       />
 
       {isOrchestratorSettingsOpen && (
@@ -1450,6 +1461,7 @@ type CliPromptOptions = {
   includeHistory?: boolean
   orchestrationHint?: OrchestrationPromptHint | null
   orchestrationContextBlock?: string | null
+  globalMemoriesContextBlock?: string | null
 }
 
 function createCliPrompt(
@@ -1466,6 +1478,7 @@ function createCliPrompt(
     includeHistory = true,
     orchestrationHint = null,
     orchestrationContextBlock = null,
+    globalMemoriesContextBlock = null,
   } = options
   const allHistoryMessages = messages.filter((message) => message.content.trim())
   const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
@@ -1479,6 +1492,7 @@ function createCliPrompt(
   const hasHistory = includeHistory && historyMessages.length > 0
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
   const hasAttachments = attachments.length > 0
+  const hasGlobalMemories = Boolean(globalMemoriesContextBlock)
   const orchestrationInstructions = shouldUseOrchestrationProtocol(currentPrompt)
     ? createOrchestrationProtocolInstructions(
         orchestrationHint,
@@ -1486,6 +1500,7 @@ function createCliPrompt(
       )
     : null
   const hasContext =
+    hasGlobalMemories ||
     Boolean(orchestrationInstructions) ||
     hasCountContext ||
     hasHistory ||
@@ -1504,6 +1519,10 @@ function createCliPrompt(
 
   if (orchestrationInstructions) {
     lines.push('', orchestrationInstructions)
+  }
+
+  if (globalMemoriesContextBlock) {
+    lines.push('', globalMemoriesContextBlock)
   }
 
   lines.push(

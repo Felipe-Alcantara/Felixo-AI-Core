@@ -33,6 +33,7 @@ export type OrchestratorMode =
 
 export type OrchestratorSettings = {
   customContext: string
+  globalMemories: string
   enabledSkills: string[]
   preferredModelIds: string[]
   blockedModelIds: string[]

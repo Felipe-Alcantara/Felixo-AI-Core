@@ -1,29 +1,53 @@
-import { MonitorCog, Palette, User, X } from 'lucide-react'
-import type { AppTheme } from '../types'
+import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
+import type { AppTheme, OrchestratorSettings } from '../types'
 
 type FelixoSettingsModalProps = {
   isOpen: boolean
   runtimeLabel: string
   theme: AppTheme
+  orchestratorSettings: OrchestratorSettings
   projectsCount: number
   activeProjectsCount: number
   automationsCount: number
   onClose: () => void
   onThemeChange: (theme: AppTheme) => void
+  onSaveOrchestratorSettings: (settings: OrchestratorSettings) => void
 }
 
 export function FelixoSettingsModal({
   isOpen,
   runtimeLabel,
   theme,
+  orchestratorSettings,
   projectsCount,
   activeProjectsCount,
   automationsCount,
   onClose,
   onThemeChange,
+  onSaveOrchestratorSettings,
 }: FelixoSettingsModalProps) {
+  const [globalMemoriesDraft, setGlobalMemoriesDraft] = useState(
+    orchestratorSettings.globalMemories,
+  )
+
+  useEffect(() => {
+    if (isOpen) {
+      setGlobalMemoriesDraft(orchestratorSettings.globalMemories)
+    }
+  }, [isOpen, orchestratorSettings.globalMemories])
+
   if (!isOpen) {
     return null
+  }
+
+  function saveGlobalMemories(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    onSaveOrchestratorSettings({
+      ...orchestratorSettings,
+      globalMemories: globalMemoriesDraft,
+    })
   }
 
   return (
@@ -65,6 +89,35 @@ export function FelixoSettingsModal({
               <Metric label="Runtime" value={runtimeLabel} />
             </div>
           </section>
+
+          <form
+            className="rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+            onSubmit={saveGlobalMemories}
+          >
+            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
+              <BrainCircuit size={14} aria-hidden="true" />
+              Memórias globais
+            </div>
+            <label className="block text-xs text-zinc-400">
+              Orquestrador
+              <textarea
+                value={globalMemoriesDraft}
+                onChange={(event) => setGlobalMemoriesDraft(event.target.value)}
+                rows={7}
+                placeholder="Preferências, fatos estáveis e cuidados que o orquestrador deve lembrar."
+                className="mt-1 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+              />
+            </label>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="submit"
+                className="flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
+              >
+                <Save size={14} aria-hidden="true" />
+                Salvar memórias
+              </button>
+            </div>
+          </form>
 
           <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
