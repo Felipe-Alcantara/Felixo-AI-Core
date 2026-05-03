@@ -1,6 +1,6 @@
 # Protocolos Persistentes de CLI
 
-Status: planejado.
+Status: concluido.
 
 ## Objetivo
 

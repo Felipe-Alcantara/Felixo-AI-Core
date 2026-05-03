@@ -1,6 +1,6 @@
 # Orquestrador — Modelos, Capacidades e Configurações
 
-Status: em desenvolvimento.
+Status: concluido.
 
 ## Contexto
 
