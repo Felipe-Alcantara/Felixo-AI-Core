@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld('felixo', {
   files: {
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
   },
+  settings: {
+    loadOrchestrator: () => ipcRenderer.invoke('settings:load-orchestrator'),
+    saveOrchestrator: (settings) =>
+      ipcRenderer.invoke('settings:save-orchestrator', settings),
+  },
   updates: {
     getStatus: () => ipcRenderer.invoke('updates:get-status'),
     check: () => ipcRenderer.invoke('updates:check'),

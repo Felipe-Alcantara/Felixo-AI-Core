@@ -45,4 +45,9 @@ Planejar a persistência local com SQLite para histórico, sessões, threads, me
 
 ## Próximo passo
 
-Criar schema mínimo e camada de repositório no backend Electron antes de migrar dados do `localStorage`.
+Criar schema mínimo e camada de repositório no backend Electron antes de migrar histórico, notas, modelos e projetos restantes.
+
+## Recorte já entregue
+
+- Configurações do orquestrador persistem fora do `localStorage` em `app.getPath('userData')/config/orchestrator-settings.json`.
+- O renderer ainda lê `localStorage` apenas como migração/fallback quando a bridge Electron não está disponível.

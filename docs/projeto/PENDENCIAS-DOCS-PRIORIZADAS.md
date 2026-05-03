@@ -24,12 +24,13 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 | Orquestração | Motivo de escolha do modelo não ficava rastreável | Evento `orchestration_model_choice` registra modelo escolhido, regra, candidatos, bloqueios e motivo |
 | Exportação | Exportação não permitia destino/nome manual no app desktop | Modal recebe nome manual e o Electron usa `showSaveDialog`; navegador continua com fallback por download |
 | Relatórios | Gerar relatório do dia a partir de commits locais | `scripts/generate-daily-report.cjs` gera Markdown diário e atualiza o índice de `docs/relatorios/` |
+| Persistência | Configurações do orquestrador dependiam de `localStorage` | Store Electron grava em `userData/config/orchestrator-settings.json` e migra o valor legado |
 
 ## Pendências consolidadas
 
 | Prioridade | Área | Documento origem | Pendência | Dificuldade | Risco |
 |------------|------|------------------|-----------|-------------|-------|
-| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar schema mínimo e repositório Electron antes de migrar `localStorage` | Média | Médio |
+| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar schema mínimo e repositório Electron antes de migrar histórico, notas, modelos e projetos restantes | Média | Médio |
 | Alta | Terminal/providers | `docs/projeto/TERMINAL-PERSISTENTE.md` | Validar protocolo persistente real para Codex/Gemini antes de substituir retomada nativa | Alta | Alto |
 | Alta | Segurança | `docs/backend/PLANO-CONFIRMACOES-PERMISSOES-CLI.md` | Formalizar confirmações para ações de escrita, Git e ferramentas sensíveis | Média | Alto |
 | Média | Git | `docs/projeto/PAINEL-GIT-INTEGRADO.md` | Evoluir painel Code de read-only para stage/unstage/commit com confirmação | Média | Médio |

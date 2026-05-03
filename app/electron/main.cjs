@@ -7,6 +7,9 @@ const { registerQaLoggerIpcHandlers, logQaEvent } = require('./services/qa-logge
 const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handlers.cjs')
 const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
+const {
+  registerOrchestratorSettingsIpcHandlers,
+} = require('./services/orchestrator-settings-ipc-handlers.cjs')
 const { initAppPaths } = require('./core/app-paths.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 
@@ -51,6 +54,7 @@ app.whenReady().then(() => {
   registerProjectsIpcHandlers(getMainWindow)
   registerGitIpcHandlers()
   registerAutoUpdateHandlers(getMainWindow)
+  registerOrchestratorSettingsIpcHandlers(appPaths)
 
   ipcMain.handle('file:get-pending', () => {
     const filePath = pendingFilePath
