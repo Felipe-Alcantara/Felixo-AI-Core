@@ -191,6 +191,7 @@ function renderReport(reportDate, commits) {
     '- Relatório gerado automaticamente a partir de metadados do Git local.',
     '- O resumo evita inferir objetivos que não estejam nas mensagens de commit.',
     '- Mudanças não commitadas não entram neste relatório.',
+    '- Se o relatório for commitado, o commit que salva o próprio relatório aparecerá apenas na próxima geração.',
     '',
   ].join('\n')
 }
