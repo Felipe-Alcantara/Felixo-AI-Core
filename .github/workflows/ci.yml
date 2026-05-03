@@ -9,8 +9,15 @@ on:
 
 jobs:
   validate:
-    name: Validate app
-    runs-on: ubuntu-latest
+    name: Validate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
     defaults:
       run:
         working-directory: app
@@ -37,3 +44,38 @@ jobs:
 
       - name: Build renderer
         run: npm run build
+
+      - name: Check documentation exists
+        shell: bash
+        run: |
+          required_docs=(
+            "../docs/projeto/STATUS-ATUAL.md"
+            "../docs/projeto/ROADMAP.md"
+            "../docs/projeto/GUIA-DESENVOLVEDOR.md"
+            "../docs/projeto/GUIA-USUARIO-FINAL.md"
+          )
+          missing=0
+          for doc in "${required_docs[@]}"; do
+            if [ ! -f "$doc" ]; then
+              echo "::warning::Missing required doc: $doc"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ $missing -gt 0 ]; then
+            echo "::warning::$missing required docs are missing"
+          fi
+
+      - name: Check for sensitive files
+        shell: bash
+        run: |
+          sensitive_patterns=(".env" ".env.local" ".env.production")
+          found=0
+          for pattern in "${sensitive_patterns[@]}"; do
+            if [ -f "$pattern" ]; then
+              echo "::error::Sensitive file found: $pattern"
+              found=$((found + 1))
+            fi
+          done
+          if [ $found -gt 0 ]; then
+            exit 1
+          fi
