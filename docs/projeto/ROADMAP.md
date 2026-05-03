@@ -137,7 +137,7 @@ Preparar o projeto para ser publicado, entendido, instalado e expandido por outr
 - [x] Seção de instalação e uso básico
 - [x] Guia de contribuição
 - [x] Licença open source
-- [ ] `.env.example` se necessário
+- [x] `.env.example`
 
 ### Qualidade do código
 
@@ -175,19 +175,19 @@ Fazer o Felixo AI Core funcionar como um sistema de coordenação inteligente, n
 
 ### Comunicação entre IAs
 
-- [ ] Uma IA revisar a resposta de outra
-- [ ] Uma IA gerar tarefa para outra
+- [x] Uma IA revisar a resposta de outra (orquestração multi-agente via spawn_agent)
+- [x] Uma IA gerar tarefa para outra (spawn_agent + awaiting_agents)
 - [ ] Modo "debate entre modelos"
 - [ ] Modo "revisor + executor"
 - [ ] Modo "planejador + programador + crítico"
-- [ ] Sistema de pipeline de agentes
+- [x] Sistema de pipeline de agentes (orchestration-runner com multi-turn)
 
 ### Escolha de modelo por tarefa
 
-- [ ] Tabela de modelos com pontos fortes, custo, velocidade e limite de contexto
-- [ ] Recomendação manual de modelo por tipo de tarefa
-- [ ] Seleção automática inicial baseada em regras
-- [ ] Fallback para outro modelo quando um falhar
+- [x] Tabela de modelos com pontos fortes, custo, velocidade e limite de contexto (model capability profiles)
+- [x] Recomendação manual de modelo por tipo de tarefa (modal do orquestrador)
+- [x] Seleção automática inicial baseada em regras (cli-execution-planner)
+- [x] Fallback para outro modelo quando um falhar (model-availability com status dinâmico)
 
 ### Economia de tokens e contexto
 
@@ -339,8 +339,8 @@ Adicionar uma camada de IDE leve e integrada, permitindo editar arquivos, navega
 - [ ] Modo foco, modo estudo, modo documentação, modo pesquisa
 - [ ] Sistema visual de pipelines
 - [ ] Gráfico de custo por modelo e eficiência por tarefa
-- [ ] Histórico pesquisável
-- [ ] Exportação de conversas e relatórios
+- [x] Histórico pesquisável (SearchPanel com busca em tempo real)
+- [x] Exportação de conversas e relatórios (ChatExportModal em JSON, Markdown, texto)
 - [ ] Importação e compartilhamento de prompts/presets
 - [ ] Modo ARG/enigmas
 
