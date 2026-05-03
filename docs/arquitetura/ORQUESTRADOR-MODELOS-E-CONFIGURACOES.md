@@ -75,7 +75,7 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 ## Recorte implementado
 
 - Modal local de configurações do orquestrador.
-- Persistência das configurações em `app.getPath('userData')/config/orchestrator-settings.json`, com migração/fallback do `localStorage`.
+- Persistência das configurações na tabela `settings` do SQLite, com migração/fallback do JSON legado em `app.getPath('userData')/config/orchestrator-settings.json`.
 - Lista compacta de capacidades enviada ao prompt do orquestrador.
 - `availableModels` e `orchestratorSettings` enviados ao backend no `cli:send`.
 - Contexto de modelos, configurações e limites preservado entre turnos da mesma run.

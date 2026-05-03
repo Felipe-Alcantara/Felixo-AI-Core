@@ -3,8 +3,11 @@ const {
   createOrchestratorSettingsStore,
 } = require('./orchestrator-settings-store.cjs')
 
-function registerOrchestratorSettingsIpcHandlers(appPaths) {
-  const store = createOrchestratorSettingsStore({ configDir: appPaths.config })
+function registerOrchestratorSettingsIpcHandlers(appPaths, options = {}) {
+  const store = createOrchestratorSettingsStore({
+    configDir: appPaths.config,
+    database: options.database,
+  })
 
   ipcMain.handle('settings:load-orchestrator', async () => {
     try {

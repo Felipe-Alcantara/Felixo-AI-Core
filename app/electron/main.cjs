@@ -10,10 +10,12 @@ const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
 const {
   registerOrchestratorSettingsIpcHandlers,
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
+const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { initAppPaths } = require('./core/app-paths.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 
 let mainWindow = null
+let storageDatabase = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -44,6 +46,9 @@ if (cliArg) pendingFilePath = cliArg
 
 app.whenReady().then(() => {
   const appPaths = initAppPaths()
+  storageDatabase = createStorageDatabase({
+    databaseDir: appPaths.database,
+  })
 
   mainWindow = createMainWindow()
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
@@ -54,7 +59,7 @@ app.whenReady().then(() => {
   registerProjectsIpcHandlers(getMainWindow)
   registerGitIpcHandlers()
   registerAutoUpdateHandlers(getMainWindow)
-  registerOrchestratorSettingsIpcHandlers(appPaths)
+  registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
 
   ipcMain.handle('file:get-pending', () => {
     const filePath = pendingFilePath
@@ -80,6 +85,7 @@ app.whenReady().then(() => {
         detected: results.filter((r) => r.detected).map((r) => r.name),
         missing: results.filter((r) => !r.detected).map((r) => r.name),
         userData: appPaths.userData,
+        database: storageDatabase.path,
         isPackaged: appPaths.isPackaged,
         platform: appPaths.platform,
       },
@@ -91,6 +97,19 @@ app.whenReady().then(() => {
       mainWindow = createMainWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  const databaseToClose = storageDatabase
+  storageDatabase = null
+
+  if (databaseToClose) {
+    try {
+      databaseToClose.close()
+    } catch {
+      // Best effort during app shutdown.
+    }
+  }
 })
 
 app.on('window-all-closed', () => {

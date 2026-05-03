@@ -96,7 +96,7 @@ Isso simplifica o empacotamento multiplataforma.
 | Assets internos (logo, ícone) | `app/public/brand/` |
 | Projetos Git do usuário | Selecionados via `dialog.showOpenDialog`, armazenados em `localStorage` |
 | Notas do usuário | `localStorage` no renderer |
-| Configurações do orquestrador | `localStorage` no renderer |
+| Configurações do orquestrador | SQLite em `userData/database/felixo.sqlite`, com migração do JSON legado |
 | Tema e preferências visuais | `localStorage` no renderer |
 | Histórico de sessões | Memória + `localStorage` |
 | QA Logger | Arquivo rotativo via `qa-logger.cjs` |
@@ -105,7 +105,7 @@ Isso simplifica o empacotamento multiplataforma.
 
 ## Onde o app salva configurações
 
-**Toda a persistência de configuração está em `localStorage` do renderer.** Não há uso atual de `electron-store`, SQLite ou arquivo de config no filesystem principal.
+Persistência ainda é mista. Configurações do orquestrador já usam SQLite no backend Electron. Projetos, notas, tema, modelos e histórico ainda dependem de `localStorage`/memória e devem migrar em recortes futuros.
 
 ---
 
@@ -162,7 +162,7 @@ Esses paths são relativos ao diretório do Electron, funcionando tanto em modo 
 
 ### Risco 1 — localStorage para persistência
 
-A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador já foram migradas para `app.getPath('userData')/config/orchestrator-settings.json`; modelos, projetos, notas e histórico ainda devem migrar para store Electron ou SQLite.
+A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador já foram migradas para SQLite em `app.getPath('userData')/database/felixo.sqlite`; modelos, projetos, notas e histórico ainda devem migrar.
 
 ### Risco 2 — CLIs externas podem não estar no PATH
 
@@ -182,7 +182,7 @@ O `qa-logger.cjs` precisa de um diretório de escrita. Em modo empacotado, o dir
 
 ### Risco 6 — Configurações do usuário dentro da pasta do app
 
-Configurações migradas para filesystem devem ficar em `app.getPath('userData')`, não dentro da pasta de instalação. O primeiro recorte já usa `userData/config` para as configurações do orquestrador.
+Configurações migradas para filesystem devem ficar em `app.getPath('userData')`, não dentro da pasta de instalação. O recorte atual já usa `userData/database/felixo.sqlite` para as configurações do orquestrador.
 
 ### Risco 7 — macOS sandbox e notarização
 
