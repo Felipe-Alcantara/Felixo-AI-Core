@@ -1,5 +1,7 @@
 # Testes Manuais de Artefatos Gerados
 
+Status: concluido.
+
 Este documento define o checklist mínimo para validar se o aplicativo empacotado (gerado na release) está funcionando corretamente antes de ser considerado estável para os usuários finais. A validação manual é uma etapa crítica que complementa os testes automatizados da CI.
 
 ## Checklist Mínimo de Validação

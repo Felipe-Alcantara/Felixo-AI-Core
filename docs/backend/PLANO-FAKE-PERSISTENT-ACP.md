@@ -1,6 +1,6 @@
 # Plano: Fake Persistent CLIs + AgentEvent/AgentSession + Gemini ACP
 
-Status: em desenvolvimento.
+Status: concluido.
 
 ## Contexto
 

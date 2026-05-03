@@ -1,6 +1,6 @@
 # Plano: Codex App-Server Adapter Persistente
 
-Status: em desenvolvimento.
+Status: concluido.
 
 ## Contexto
 
