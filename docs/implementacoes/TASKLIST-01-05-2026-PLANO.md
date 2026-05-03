@@ -33,7 +33,7 @@ Nem todos os itens da tasklist devem virar implementação completa imediata. A 
 - Não sobrescrever alterações já existentes em `/docs`.
 - Não renomear documentos modificados neste ciclo para evitar capturar mudanças do usuário em commits indevidos.
 - Não implementar operações destrutivas de Git.
-- Não persistir histórico sensível em banco ainda; notas e configurações continuam em `localStorage`.
+- Não persistir histórico sensível em banco ainda; notas e configurações já migraram para SQLite, enquanto histórico permanece fora do banco.
 - Para orquestração, impedir spawn quando o modelo estiver bloqueado ou não existir entre os modelos disponíveis enviados pelo frontend.
 
 ## Validação esperada

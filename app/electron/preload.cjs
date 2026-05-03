@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld('felixo', {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),
     detectRepos: (folderPath) => ipcRenderer.invoke('projects:detect-repos', folderPath),
   },
+  notes: {
+    list: () => ipcRenderer.invoke('notes:list'),
+    save: (note) => ipcRenderer.invoke('notes:save', note),
+    delete: (noteId) => ipcRenderer.invoke('notes:delete', noteId),
+  },
   files: {
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
   },

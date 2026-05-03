@@ -17,6 +17,9 @@ const {
   createSettingsRepository,
 } = require('./storage/settings-repository.cjs')
 const {
+  createNotesRepository,
+} = require('./storage/notes-repository.cjs')
+const {
   MESSAGE_STORAGE_TIERS,
   resolveMessageStorageTier,
   shouldCompactMessage,
@@ -129,6 +132,48 @@ test(
       repository.delete('theme')
 
       assert.equal(repository.get('theme'), null)
+      database.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
+test(
+  'notes repository stores lists and soft deletes notes',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-notes-')
+    const now = '2026-05-03T12:00:00.000Z'
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+      const repository = createNotesRepository(database)
+      const note = {
+        id: 'note-1',
+        title: 'Nota de projeto',
+        content: '',
+        projectIds: ['project-a', 'project-a', 'project-b'],
+        createdAt: now,
+        updatedAt: now,
+      }
+
+      repository.save(note)
+
+      assert.deepEqual(repository.get('note-1'), {
+        ...note,
+        projectIds: ['project-a', 'project-b'],
+      })
+      assert.deepEqual(repository.list(), [
+        {
+          ...note,
+          projectIds: ['project-a', 'project-b'],
+        },
+      ])
+
+      assert.equal(repository.delete('note-1'), true)
+      assert.equal(repository.get('note-1'), null)
+      assert.deepEqual(repository.list(), [])
       database.close()
     } finally {
       removeTempDir(databaseDir)

@@ -74,6 +74,9 @@ SQLite é o caminho de desenvolvimento e produção desktop. PostgreSQL fica par
 - [x] Migrations executadas automaticamente na inicialização do app.
 - [x] Repositório inicial de `settings`.
 - [x] Configurações do orquestrador migradas do JSON legado para SQLite.
+- [x] Repositório de `notes`.
+- [x] IPCs de `notes`.
+- [x] Migração inicial das notas do `localStorage` para SQLite.
 
 Arquivos implementados:
 
@@ -82,13 +85,15 @@ Arquivos implementados:
 - `app/electron/services/storage/memory-tier-policy.cjs`
 - `app/electron/services/storage/sqlite-database.cjs`
 - `app/electron/services/storage/settings-repository.cjs`
+- `app/electron/services/storage/notes-repository.cjs`
+- `app/electron/services/notes-ipc-handlers.cjs`
 - `app/electron/services/storage-persistence.test.cjs`
 
 ## Pendências
 
 - [ ] Criar transações e helpers de consulta.
-- [ ] Criar IPCs de persistência.
-- [ ] Migrar dados existentes do `localStorage`.
+- [ ] Criar IPCs de persistência para projetos e histórico.
+- [ ] Migrar dados restantes do `localStorage`.
 - [ ] Migrar configurações do orquestrador para remover fallback JSON legado em versão futura.
 - [ ] Criar busca textual.
 - [ ] Criar compactação real de mensagens COLD.
