@@ -94,7 +94,7 @@ Isso simplifica o empacotamento multiplataforma.
 | Tipo de acesso | Localização atual |
 |---------------|-------------------|
 | Assets internos (logo, ícone) | `app/public/brand/` |
-| Projetos Git do usuário | Selecionados via `dialog.showOpenDialog`, armazenados em `localStorage` |
+| Projetos Git do usuário | Selecionados via `dialog.showOpenDialog`, armazenados em SQLite com migração inicial do `localStorage` |
 | Notas do usuário | SQLite no backend Electron, com migração inicial do `localStorage` |
 | Configurações do orquestrador | SQLite em `userData/database/felixo.sqlite`, com migração do JSON legado |
 | Tema e preferências visuais | `localStorage` no renderer |
@@ -105,7 +105,7 @@ Isso simplifica o empacotamento multiplataforma.
 
 ## Onde o app salva configurações
 
-Persistência ainda é mista. Configurações do orquestrador e notas já usam SQLite no backend Electron. Projetos, tema, modelos e histórico ainda dependem de `localStorage`/memória e devem migrar em recortes futuros.
+Persistência ainda é mista. Configurações do orquestrador, notas e projetos já usam SQLite no backend Electron. Tema, modelos e histórico ainda dependem de `localStorage`/memória e devem migrar em recortes futuros.
 
 ---
 
@@ -162,7 +162,7 @@ Esses paths são relativos ao diretório do Electron, funcionando tanto em modo 
 
 ### Risco 1 — localStorage para persistência
 
-A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador e notas já foram migradas para SQLite em `app.getPath('userData')/database/felixo.sqlite`; modelos, projetos e histórico ainda devem migrar.
+A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador, notas e projetos já foram migrados para SQLite em `app.getPath('userData')/database/felixo.sqlite`; modelos e histórico ainda devem migrar.
 
 ### Risco 2 — CLIs externas podem não estar no PATH
 

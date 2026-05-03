@@ -83,7 +83,7 @@ Isso funciona nos dois modos porque o `__dirname` do Electron sempre aponta para
 
 | Modo | Local atual | Local recomendado |
 |------|------------|-------------------|
-| Desenvolvimento | `localStorage` para dados legados; orquestrador e notas em SQLite (`userData/database`) | SQLite para dados que precisam sobreviver a builds |
+| Desenvolvimento | `localStorage` para dados legados; orquestrador, notas e projetos em SQLite (`userData/database`) | SQLite para dados que precisam sobreviver a builds |
 | Produção | Orquestrador em SQLite; dados legados ainda no renderer | `app.getPath('userData')` via Electron API |
 
 **Local padrão por SO (`userData`):**

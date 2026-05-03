@@ -175,7 +175,7 @@ Fluxo esperado antes de chamar um modelo:
 
 ## Próximo passo
 
-Criar repositórios no backend Electron para migrar histórico, modelos e projetos restantes.
+Criar repositórios no backend Electron para migrar histórico e modelos restantes.
 
 ## Recorte já entregue
 
@@ -191,11 +191,13 @@ Criar repositórios no backend Electron para migrar histórico, modelos e projet
 - Configurações do orquestrador migram do JSON legado para a tabela `settings`.
 - Repositório e IPCs de `notes` criados sobre SQLite.
 - Notas do `localStorage` migram uma vez para SQLite quando o backend está disponível.
+- Repositório e IPCs de `projects` criados sobre SQLite.
+- Projetos e seleção de projetos ativos migram uma vez do `localStorage` para SQLite.
 
 ## Ainda não implementado
 
-- IPCs gerais de leitura/escrita para projetos e histórico.
-- Migração dos dados atuais do `localStorage` além de configurações do orquestrador e notas.
+- IPCs gerais de leitura/escrita para histórico.
+- Migração dos dados atuais do `localStorage` além de configurações do orquestrador, notas e projetos.
 - Compactação real de mensagens COLD.
 - Busca textual/semântica.
 - Remoção do fallback JSON legado do orquestrador em uma versão futura.

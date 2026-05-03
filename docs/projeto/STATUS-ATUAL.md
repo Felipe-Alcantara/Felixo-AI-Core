@@ -61,7 +61,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Tasklist 30/04/2026 — UX de workspace e preparação Code/Git
 
 - "Novo chat" solicita `cli:reset-thread`, limpa terminal local, anexos e estado efêmero para não reutilizar thread anterior.
-- Projetos e seleção ativa persistem via `localStorage`.
+- Projetos e seleção ativa persistem em SQLite, com fallback/migração do `localStorage`.
 - Automações padrão e customizadas foram adicionadas com modal dedicado e storage local.
 - Modelos clicáveis na sidebar abrem o modal de configuração com capacidades por CLI e campos `providerModel`/`reasoningEffort`.
 - "Code" ganhou painel Git inicial com IPC read-only allowlisted.
@@ -150,7 +150,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Projetos e contexto
 
 - A seleção de projetos ativos entra no prompt.
-- Projetos e seleção ativa persistem no `localStorage`.
+- Projetos e seleção ativa persistem em SQLite, com fallback/migração do `localStorage`.
 - O app calcula diff de projetos adicionados/removidos entre mensagens.
 - Trocar de modelo não zera a base de diff de projetos ativos, para não gerar ruído.
 
