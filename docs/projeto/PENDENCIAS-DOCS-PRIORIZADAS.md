@@ -31,7 +31,7 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 | Prioridade | Área | Documento origem | Pendência | Dificuldade | Risco |
 |------------|------|------------------|-----------|-------------|-------|
-| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar schema mínimo e repositório Electron antes de migrar histórico, notas, modelos e projetos restantes | Média | Médio |
+| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar schema mínimo, migrations e repositório Electron antes de migrar histórico, notas, modelos e projetos restantes | Média | Médio |
 | Alta | Terminal/providers | `docs/projeto/TERMINAL-PERSISTENTE.md` | Validar protocolo persistente real para Codex/Gemini antes de substituir retomada nativa | Alta | Alto |
 | Alta | Segurança | `docs/backend/PLANO-CONFIRMACOES-PERMISSOES-CLI.md` | Formalizar confirmações para ações de escrita, Git e ferramentas sensíveis | Média | Alto |
 | Média | Git | `docs/projeto/PAINEL-GIT-INTEGRADO.md` | Evoluir painel Code de read-only para stage/unstage/commit com confirmação | Média | Médio |
@@ -41,7 +41,7 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 ## Próximos recortes recomendados
 
-1. Planejar schema SQLite com tabelas de `projects`, `chats`, `messages`, `threads`, `terminal_events`, `notes` e `settings`.
+1. Implementar recorte inicial do plano SQLite/memória em `docs/implementacoes/PERSISTENCIA-SQLITE-MEMORIA-PLANO.md`.
 2. Atualizar `ROADMAP.md` marcando itens já entregues no frontend atual.
 
 ## Cuidados
