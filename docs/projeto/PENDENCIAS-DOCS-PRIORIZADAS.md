@@ -28,13 +28,14 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 | Persistência | Base SQLite/memória sem schema versionado | Migration inicial, loader versionado e política HOT/WARM/COLD criados |
 | Persistência | SQLite ainda não abria banco real | `node:sqlite` abre `userData/database/felixo.sqlite`, aplica migrations e salva settings do orquestrador |
 | Persistência | Notas dependiam apenas de `localStorage` | Repositório, IPCs e migração inicial gravam notas na tabela `notes` do SQLite |
+| Persistência | Projetos/workspaces dependiam apenas de `localStorage` | Repositório, IPCs e migração inicial gravam projetos na tabela `projects` e ativos em `settings` |
 | Documentação | Decidir se status vai no nome físico dos arquivos | Padrão consolidado: `Status:` fica no corpo do Markdown; renomeação física não será adotada agora |
 
 ## Pendências consolidadas
 
 | Prioridade | Área | Documento origem | Pendência | Dificuldade | Risco |
 |------------|------|------------------|-----------|-------------|-------|
-| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar IPCs/repositórios de projetos e histórico antes de migrar dados restantes do `localStorage` | Média | Médio |
+| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar IPCs/repositórios de histórico antes de migrar dados restantes do `localStorage` | Média | Médio |
 | Alta | Terminal/providers | `docs/projeto/TERMINAL-PERSISTENTE.md` | Validar protocolo persistente real para Codex/Gemini antes de substituir retomada nativa | Alta | Alto |
 | Alta | Segurança | `docs/backend/PLANO-CONFIRMACOES-PERMISSOES-CLI.md` | Formalizar confirmações para ações de escrita, Git e ferramentas sensíveis | Média | Alto |
 | Média | Git | `docs/projeto/PAINEL-GIT-INTEGRADO.md` | Evoluir painel Code de read-only para stage/unstage/commit com confirmação | Média | Médio |
@@ -44,7 +45,7 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 ## Próximos recortes recomendados
 
-1. Criar repositórios e IPCs para migrar `projects` e depois `chats/messages` para SQLite.
+1. Criar repositórios e IPCs para migrar `chats/messages` para SQLite.
 2. Atualizar `ROADMAP.md` marcando itens já entregues no frontend atual.
 
 ## Cuidados

@@ -33,6 +33,12 @@ contextBridge.exposeInMainWorld('felixo', {
   projects: {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),
     detectRepos: (folderPath) => ipcRenderer.invoke('projects:detect-repos', folderPath),
+    list: () => ipcRenderer.invoke('projects:list'),
+    save: (project) => ipcRenderer.invoke('projects:save', project),
+    delete: (projectId) => ipcRenderer.invoke('projects:delete', projectId),
+    loadActiveIds: () => ipcRenderer.invoke('projects:load-active-ids'),
+    saveActiveIds: (projectIds) =>
+      ipcRenderer.invoke('projects:save-active-ids', projectIds),
   },
   notes: {
     list: () => ipcRenderer.invoke('notes:list'),

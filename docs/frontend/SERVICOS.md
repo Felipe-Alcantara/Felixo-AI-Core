@@ -77,15 +77,18 @@ Status: concluido.
 
 Responsabilidade:
 
-- carregar projetos do `localStorage`;
+- carregar projetos do SQLite via IPC, com fallback/migração do `localStorage`;
 - salvar projetos cadastrados;
 - carregar IDs de projetos ativos;
 - descartar IDs ativos que não existem mais na lista de projetos.
 
-Chaves:
+Tabelas/chaves:
 
+- SQLite: `projects`.
+- SQLite settings: `projects.activeIds`.
 - `felixo-ai-core.projects`
 - `felixo-ai-core.activeProjectIds`
+- `felixo-ai-core.projects.sqlite-migrated`
 
 ### automation-storage.ts
 

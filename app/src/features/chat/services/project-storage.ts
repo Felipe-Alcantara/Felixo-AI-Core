@@ -2,6 +2,7 @@ import type { Project } from '../types'
 
 const PROJECTS_STORAGE_KEY = 'felixo-ai-core.projects'
 const ACTIVE_PROJECT_IDS_STORAGE_KEY = 'felixo-ai-core.activeProjectIds'
+const PROJECTS_BACKEND_MIGRATION_KEY = 'felixo-ai-core.projects.sqlite-migrated'
 
 export function loadProjects() {
   try {
@@ -28,6 +29,70 @@ export function loadProjects() {
 
 export function saveProjects(projects: Project[]) {
   window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects))
+}
+
+export async function loadProjectsFromBackend(): Promise<Project[] | null> {
+  if (!window.felixo?.projects?.list) {
+    return null
+  }
+
+  try {
+    const result = await window.felixo.projects.list()
+
+    if (!result.ok || !Array.isArray(result.projects)) {
+      return null
+    }
+
+    return result.projects.flatMap((value) => {
+      const project = normalizeProject(value)
+      return project ? [project] : []
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function saveProjectToBackend(project: Project): Promise<boolean> {
+  if (!window.felixo?.projects?.save) {
+    return false
+  }
+
+  const normalizedProject = normalizeProject(project)
+
+  if (!normalizedProject) {
+    return false
+  }
+
+  try {
+    const result = await window.felixo.projects.save(normalizedProject)
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export async function saveProjectsToBackend(projects: Project[]): Promise<boolean> {
+  if (!window.felixo?.projects?.save) {
+    return false
+  }
+
+  const results = await Promise.all(
+    projects.map((project) => saveProjectToBackend(project)),
+  )
+  return results.every(Boolean)
+}
+
+export async function deleteProjectFromBackend(projectId: string): Promise<boolean> {
+  if (!window.felixo?.projects?.delete) {
+    return false
+  }
+
+  try {
+    const result = await window.felixo.projects.delete(projectId)
+    return result.ok
+  } catch {
+    return false
+  }
 }
 
 export function loadActiveProjectIds(projects: Project[]) {
@@ -59,6 +124,68 @@ export function saveActiveProjectIds(projectIds: Set<string>) {
   window.localStorage.setItem(
     ACTIVE_PROJECT_IDS_STORAGE_KEY,
     JSON.stringify([...projectIds]),
+  )
+}
+
+export async function loadActiveProjectIdsFromBackend(
+  projects: Project[],
+): Promise<Set<string> | null> {
+  if (!window.felixo?.projects?.loadActiveIds) {
+    return null
+  }
+
+  try {
+    const result = await window.felixo.projects.loadActiveIds()
+
+    if (!result.ok || !Array.isArray(result.projectIds)) {
+      return null
+    }
+
+    return normalizeActiveProjectIds(result.projectIds, projects)
+  } catch {
+    return null
+  }
+}
+
+export async function saveActiveProjectIdsToBackend(
+  projectIds: Set<string>,
+): Promise<boolean> {
+  if (!window.felixo?.projects?.saveActiveIds) {
+    return false
+  }
+
+  try {
+    const result = await window.felixo.projects.saveActiveIds([...projectIds])
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export function hasProjectsBackendMigrationRun() {
+  try {
+    return window.localStorage.getItem(PROJECTS_BACKEND_MIGRATION_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markProjectsBackendMigrationRun() {
+  try {
+    window.localStorage.setItem(PROJECTS_BACKEND_MIGRATION_KEY, '1')
+  } catch {
+    // localStorage can be unavailable in non-browser test environments.
+  }
+}
+
+function normalizeActiveProjectIds(values: unknown[], projects: Project[]) {
+  const knownIds = new Set(projects.map((project) => project.id))
+
+  return new Set(
+    values.filter(
+      (value): value is string =>
+        typeof value === 'string' && knownIds.has(value),
+    ),
   )
 }
 

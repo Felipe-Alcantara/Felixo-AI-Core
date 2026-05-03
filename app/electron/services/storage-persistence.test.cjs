@@ -20,6 +20,9 @@ const {
   createNotesRepository,
 } = require('./storage/notes-repository.cjs')
 const {
+  createProjectsRepository,
+} = require('./storage/projects-repository.cjs')
+const {
   MESSAGE_STORAGE_TIERS,
   resolveMessageStorageTier,
   shouldCompactMessage,
@@ -173,6 +176,36 @@ test(
 
       assert.equal(repository.delete('note-1'), true)
       assert.equal(repository.get('note-1'), null)
+      assert.deepEqual(repository.list(), [])
+      database.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
+test(
+  'projects repository stores lists and deletes projects',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-projects-')
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+      const repository = createProjectsRepository(database)
+      const project = {
+        id: 'project-1',
+        name: 'Felixo',
+        path: '/tmp/felixo',
+      }
+
+      repository.save(project)
+
+      assert.deepEqual(repository.get('project-1'), project)
+      assert.deepEqual(repository.list(), [project])
+
+      assert.equal(repository.delete('project-1'), true)
+      assert.equal(repository.get('project-1'), null)
       assert.deepEqual(repository.list(), [])
       database.close()
     } finally {

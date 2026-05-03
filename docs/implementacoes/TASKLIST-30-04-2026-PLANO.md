@@ -102,7 +102,7 @@ Nao existe pasta dedicada a relatorios diarios. Sera criada a estrutura
 
 ## Criterios de aceite
 
-- Projetos persistem apos restart via `localStorage`.
+- Projetos persistem apos restart. Na implementação original usavam `localStorage`; depois migraram para SQLite com fallback.
 - "Novo chat" nao reutiliza `threadId`, limpa contexto efemero e solicita reset
   de thread ao backend quando houver thread corrente.
 - Automacoes padrao aparecem no botao "Automacoes"; automacoes customizadas
@@ -123,7 +123,7 @@ Nao existe pasta dedicada a relatorios diarios. Sera criada a estrutura
 Status em 30/04/2026:
 
 - "Novo chat" agora limpa input, anexos, terminal local, estado de streaming e solicita `cli:reset-thread` ao backend quando existe thread corrente.
-- Projetos e projetos ativos persistem em `localStorage` por `project-storage.ts`.
+- Projetos e projetos ativos persistiam em `localStorage` por `project-storage.ts` nesse recorte; depois migraram para SQLite com fallback.
 - "Automações" abre modal proprio com automações padrão, criação/remoção de automações customizadas e persistência local.
 - A janela principal do Electron tem `resizable`, `maximizable`, `fullscreenable`, `minWidth` e `minHeight` explícitos.
 - Clicar em um modelo na sidebar seleciona o modelo e abre o modal de configuração com capacidades e campos configuráveis.

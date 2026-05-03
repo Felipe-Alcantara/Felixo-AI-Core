@@ -40,10 +40,18 @@ import {
   saveOrchestratorSettings,
 } from '../services/orchestrator-settings-storage'
 import {
+  deleteProjectFromBackend,
+  hasProjectsBackendMigrationRun,
   loadActiveProjectIds,
+  loadActiveProjectIdsFromBackend,
   loadProjects,
+  loadProjectsFromBackend,
+  markProjectsBackendMigrationRun,
   saveActiveProjectIds,
+  saveActiveProjectIdsToBackend,
+  saveProjectToBackend,
   saveProjects,
+  saveProjectsToBackend,
 } from '../services/project-storage'
 import { loadTheme, saveTheme } from '../services/theme-storage'
 import type {
@@ -141,6 +149,11 @@ export function ChatWorkspace() {
   const orchestratorSettingsRef = useRef(orchestratorSettings)
   const notesRef = useRef(notes)
   const notesUserEditedRef = useRef(false)
+  const projectsRef = useRef(projects)
+  const activeProjectIdsRef = useRef(activeProjectIds)
+  const projectsBackendLoadedRef = useRef(false)
+  const projectsUserEditedRef = useRef(false)
+  const activeProjectIdsUserEditedRef = useRef(false)
   const lastSentProjectIdsRef = useRef<Set<string>>(new Set())
   const messageThreadIdsRef = useRef<Map<string, string>>(new Map())
   const streamHandlerRef = useRef(handleStreamEvent)
@@ -193,6 +206,71 @@ export function ChatWorkspace() {
   useEffect(() => {
     notesRef.current = notes
   }, [notes])
+
+  useEffect(() => {
+    projectsRef.current = projects
+  }, [projects])
+
+  useEffect(() => {
+    activeProjectIdsRef.current = activeProjectIds
+  }, [activeProjectIds])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadBackendProjects() {
+      const backendProjects = await loadProjectsFromBackend()
+
+      if (cancelled || backendProjects === null) {
+        return
+      }
+
+      let currentProjects = projectsRef.current
+
+      if (backendProjects.length > 0) {
+        markProjectsBackendMigrationRun()
+
+        if (projectsUserEditedRef.current) {
+          void saveProjectsToBackend(currentProjects)
+        } else {
+          currentProjects = backendProjects
+          setProjects(backendProjects)
+        }
+      } else if (!hasProjectsBackendMigrationRun() && currentProjects.length > 0) {
+        const saved = await saveProjectsToBackend(currentProjects)
+
+        if (saved) {
+          markProjectsBackendMigrationRun()
+        }
+      } else {
+        markProjectsBackendMigrationRun()
+      }
+
+      const backendActiveIds = await loadActiveProjectIdsFromBackend(currentProjects)
+
+      if (cancelled) {
+        return
+      }
+
+      if (backendActiveIds !== null) {
+        if (activeProjectIdsUserEditedRef.current) {
+          void saveActiveProjectIdsToBackend(activeProjectIdsRef.current)
+        } else {
+          setActiveProjectIds(backendActiveIds)
+        }
+      } else if (currentProjects.length > 0) {
+        void saveActiveProjectIdsToBackend(activeProjectIdsRef.current)
+      }
+
+      projectsBackendLoadedRef.current = true
+    }
+
+    void loadBackendProjects()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -296,10 +374,16 @@ export function ChatWorkspace() {
 
   useEffect(() => {
     saveProjects(projects)
+    if (projectsBackendLoadedRef.current) {
+      void saveProjectsToBackend(projects)
+    }
   }, [projects])
 
   useEffect(() => {
     saveActiveProjectIds(activeProjectIds)
+    if (projectsBackendLoadedRef.current) {
+      void saveActiveProjectIdsToBackend(activeProjectIds)
+    }
   }, [activeProjectIds])
 
   useEffect(() => {
@@ -495,22 +579,33 @@ export function ChatWorkspace() {
   }
 
   function addProjects(incoming: Project[]) {
+    projectsUserEditedRef.current = true
     setProjects((prev) => {
       const existingPaths = new Set(prev.map((p) => p.path))
-      return [...prev, ...incoming.filter((p) => !existingPaths.has(p.path))]
+      const newProjects = incoming.filter((p) => !existingPaths.has(p.path))
+
+      for (const project of newProjects) {
+        void saveProjectToBackend(project)
+      }
+
+      return [...prev, ...newProjects]
     })
   }
 
   function removeProject(project: Project) {
+    projectsUserEditedRef.current = true
+    activeProjectIdsUserEditedRef.current = true
     setProjects((prev) => prev.filter((p) => p.id !== project.id))
     setActiveProjectIds((prev) => {
       const next = new Set(prev)
       next.delete(project.id)
       return next
     })
+    void deleteProjectFromBackend(project.id)
   }
 
   function toggleProject(project: Project) {
+    activeProjectIdsUserEditedRef.current = true
     setActiveProjectIds((prev) => {
       const next = new Set(prev)
       if (next.has(project.id)) {

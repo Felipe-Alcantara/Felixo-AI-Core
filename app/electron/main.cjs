@@ -57,7 +57,7 @@ app.whenReady().then(() => {
   registerQaLoggerIpcHandlers(getMainWindow)
   registerCliIpcHandlers(getMainWindow)
   registerFileExportIpcHandlers(getMainWindow)
-  registerProjectsIpcHandlers(getMainWindow)
+  registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
   registerNotesIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
   registerAutoUpdateHandlers(getMainWindow)
