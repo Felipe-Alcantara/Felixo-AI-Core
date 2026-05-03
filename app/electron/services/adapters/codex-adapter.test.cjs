@@ -114,7 +114,7 @@ test('codex adapter parses batched orchestration events embedded as assistant JS
 })
 
 test('codex adapter passes ascii cwd with exec args', () => {
-  const spawnArgs = adapter.getSpawnArgs('Oi', { cwd: '/home/felipe' })
+  const spawnArgs = adapter.getSpawnArgs('Oi', { cwd: '/tmp/test-cwd' })
 
   assert.equal(spawnArgs.command, 'codex')
   assert.deepEqual(spawnArgs.args, [
@@ -123,7 +123,7 @@ test('codex adapter passes ascii cwd with exec args', () => {
     '--skip-git-repo-check',
     '--ephemeral',
     '--cd',
-    '/home/felipe',
+    '/tmp/test-cwd',
     'Oi',
   ])
 })
