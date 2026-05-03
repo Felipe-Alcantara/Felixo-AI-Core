@@ -23,6 +23,7 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 | Orquestração | Reinvocações do orquestrador podiam perder lista de modelos/configurações e cair em fallback permissivo | `availableModels`, `orchestratorSettings` e limites são preservados entre turnos |
 | Orquestração | Motivo de escolha do modelo não ficava rastreável | Evento `orchestration_model_choice` registra modelo escolhido, regra, candidatos, bloqueios e motivo |
 | Exportação | Exportação não permitia destino/nome manual no app desktop | Modal recebe nome manual e o Electron usa `showSaveDialog`; navegador continua com fallback por download |
+| Relatórios | Gerar relatório do dia a partir de commits locais | `scripts/generate-daily-report.cjs` gera Markdown diário e atualiza o índice de `docs/relatorios/` |
 
 ## Pendências consolidadas
 
@@ -32,7 +33,6 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 | Alta | Terminal/providers | `docs/projeto/TERMINAL-PERSISTENTE.md` | Validar protocolo persistente real para Codex/Gemini antes de substituir retomada nativa | Alta | Alto |
 | Alta | Segurança | `docs/backend/PLANO-CONFIRMACOES-PERMISSOES-CLI.md` | Formalizar confirmações para ações de escrita, Git e ferramentas sensíveis | Média | Alto |
 | Média | Git | `docs/projeto/PAINEL-GIT-INTEGRADO.md` | Evoluir painel Code de read-only para stage/unstage/commit com confirmação | Média | Médio |
-| Média | Relatórios | `docs/projeto/RELATORIOS-DE-DESENVOLVIMENTO.md` | Gerar relatório do dia a partir de commits locais | Baixa | Baixo |
 | Média | Documentação | `docs/projeto/STATUS-DOCUMENTACAO.md` | Decidir se o status deve ir no nome físico dos arquivos ou permanecer no corpo | Baixa | Médio |
 | Baixa | Workflows | `docs/projeto/WORKFLOWS-VISUAIS.md` | Criar canvas visual estilo n8n/Railway, inicialmente sem execução real | Alta | Médio |
 | Baixa | MCP | `docs/arquitetura/ORQUESTRADOR-HIBRIDO-MCP.md` | Implementar servidor MCP read-only a partir do catálogo atual | Alta | Médio |
@@ -40,10 +40,9 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 ## Próximos recortes recomendados
 
-1. Criar gerador simples de relatório diário por commits locais.
-2. Planejar schema SQLite com tabelas de `projects`, `chats`, `messages`, `threads`, `terminal_events`, `notes` e `settings`.
-3. Atualizar `ROADMAP.md` marcando itens já entregues no frontend atual.
-4. Decidir e executar, em commit isolado, a renomeação física dos documentos com status no nome.
+1. Planejar schema SQLite com tabelas de `projects`, `chats`, `messages`, `threads`, `terminal_events`, `notes` e `settings`.
+2. Atualizar `ROADMAP.md` marcando itens já entregues no frontend atual.
+3. Decidir e executar, em commit isolado, a renomeação física dos documentos com status no nome.
 
 ## Cuidados
 
