@@ -96,6 +96,10 @@ declare global {
         install: () => Promise<CliInvokeResult & { status?: UpdateStatus }>
         onStatus: (callback: (status: UpdateStatus) => void) => () => void
       }
+      fileOpen?: {
+        getPending: () => Promise<{ filePath: string; ext: string } | null>
+        onOpened: (callback: (data: { filePath: string; ext: string }) => void) => () => void
+      }
       git?: {
         getSummary: (params: {
           projectPath: string

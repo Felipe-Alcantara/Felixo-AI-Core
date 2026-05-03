@@ -50,6 +50,29 @@
         "releaseType": "release"
       }
     ],
+    "fileAssociations": [
+      {
+        "ext": "fxai",
+        "name": "Felixo AI Project",
+        "description": "Arquivo de projeto do Felixo AI Core",
+        "mimeType": "application/x-felixo-project",
+        "role": "Editor"
+      },
+      {
+        "ext": "fxchat",
+        "name": "Felixo AI Chat",
+        "description": "Chat exportado do Felixo AI Core",
+        "mimeType": "application/x-felixo-chat",
+        "role": "Viewer"
+      },
+      {
+        "ext": "fxworkflow",
+        "name": "Felixo AI Workflow",
+        "description": "Workflow do Felixo AI Core",
+        "mimeType": "application/x-felixo-workflow",
+        "role": "Editor"
+      }
+    ],
     "linux": {
       "target": [
         {
@@ -68,6 +91,11 @@
       ],
       "category": "Development",
       "maintainer": "Felipe Alcantara",
+      "mimeTypes": [
+        "application/x-felixo-project",
+        "application/x-felixo-chat",
+        "application/x-felixo-workflow"
+      ],
       "artifactName": "Felixo-AI-Core-${version}-${os}-${arch}.${ext}"
     },
     "mac": {

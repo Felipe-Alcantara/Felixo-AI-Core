@@ -1,4 +1,5 @@
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
+const path = require('node:path')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
 const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-handlers.cjs')
@@ -10,6 +11,33 @@ const { initAppPaths } = require('./core/app-paths.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 
 let mainWindow = null
+
+const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
+let pendingFilePath = null
+
+function handleFileOpen(filePath) {
+  if (!filePath || typeof filePath !== 'string') return
+  const ext = path.extname(filePath).toLowerCase()
+  if (!SUPPORTED_EXTENSIONS.has(ext)) return
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('file:opened', { filePath, ext })
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  } else {
+    pendingFilePath = filePath
+  }
+}
+
+// macOS: file opened via Finder or drag-and-drop
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  handleFileOpen(filePath)
+})
+
+// Windows/Linux: file path passed as CLI argument
+const cliArg = process.argv.find((arg) => SUPPORTED_EXTENSIONS.has(path.extname(arg).toLowerCase()))
+if (cliArg) pendingFilePath = cliArg
 
 app.whenReady().then(() => {
   const appPaths = initAppPaths()
@@ -23,6 +51,20 @@ app.whenReady().then(() => {
   registerProjectsIpcHandlers(getMainWindow)
   registerGitIpcHandlers()
   registerAutoUpdateHandlers(getMainWindow)
+
+  ipcMain.handle('file:get-pending', () => {
+    const filePath = pendingFilePath
+    pendingFilePath = null
+    if (!filePath) return null
+    return { filePath, ext: path.extname(filePath).toLowerCase() }
+  })
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (pendingFilePath) {
+      handleFileOpen(pendingFilePath)
+      pendingFilePath = null
+    }
+  })
 
   detectAllClis().then((results) => {
     logQaEvent({
