@@ -397,7 +397,8 @@ Responsabilidade:
 Responsabilidade:
 
 - manter configurações/estado do app separados do modal de Modelos;
-- exibir runtime, quantidade de projetos, projetos ativos e automações.
+- exibir runtime, quantidade de projetos, projetos ativos e automações;
+- editar memórias globais do usuário que entram no prompt normal e no contexto do orquestrador.
 
 ### TerminalPanel
 
