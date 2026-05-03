@@ -10,10 +10,21 @@ const {
   parseMigrationFileName,
 } = require('./storage/migration-loader.cjs')
 const {
+  createStorageDatabase,
+  getAppliedStorageMigrations,
+} = require('./storage/sqlite-database.cjs')
+const {
+  createSettingsRepository,
+} = require('./storage/settings-repository.cjs')
+const {
   MESSAGE_STORAGE_TIERS,
   resolveMessageStorageTier,
   shouldCompactMessage,
 } = require('./storage/memory-tier-policy.cjs')
+const {
+  ORCHESTRATOR_SETTINGS_KEY,
+  createOrchestratorSettingsStore,
+} = require('./orchestrator-settings-store.cjs')
 
 const EXPECTED_TABLES = [
   'schema_migrations',
@@ -66,6 +77,101 @@ test('storage migration loader rejects duplicate versions', () => {
     fs.rmSync(tempDir, { recursive: true, force: true })
   }
 })
+
+test(
+  'storage database opens sqlite file and applies migrations once',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-db-')
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+
+      assert.ok(fs.existsSync(database.path))
+      assert.deepEqual(getAppliedStorageMigrations(database.connection), [1])
+      assert.equal(
+        database.connection
+          .prepare('SELECT COUNT(*) AS count FROM schema_migrations')
+          .get().count,
+        1,
+      )
+      database.close()
+
+      const reopenedDatabase = createStorageDatabase({ databaseDir })
+      assert.equal(
+        reopenedDatabase.connection
+          .prepare('SELECT COUNT(*) AS count FROM schema_migrations')
+          .get().count,
+        1,
+      )
+      reopenedDatabase.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
+test(
+  'settings repository stores json values in sqlite',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-settings-')
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+      const repository = createSettingsRepository(database)
+
+      repository.set('theme', { value: 'dark' })
+
+      assert.deepEqual(repository.get('theme'), { value: 'dark' })
+      assert.deepEqual(repository.listKeys(), ['theme'])
+
+      repository.delete('theme')
+
+      assert.equal(repository.get('theme'), null)
+      database.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
+test(
+  'orchestrator settings store migrates legacy json into sqlite settings',
+  sqliteTestOptions(),
+  async () => {
+    const configDir = createTempDir('felixo-config-')
+    const databaseDir = createTempDir('felixo-storage-orchestrator-')
+    const legacySettings = {
+      mode: 'semi_auto',
+      customContext: 'Usar memoria quente primeiro.',
+    }
+
+    try {
+      fs.writeFileSync(
+        path.join(configDir, 'orchestrator-settings.json'),
+        JSON.stringify(legacySettings),
+        'utf8',
+      )
+
+      const database = createStorageDatabase({ databaseDir })
+      const store = createOrchestratorSettingsStore({ configDir, database })
+      const repository = createSettingsRepository(database)
+
+      assert.deepEqual(await store.load(), legacySettings)
+      assert.deepEqual(repository.get(ORCHESTRATOR_SETTINGS_KEY), legacySettings)
+
+      const nextSettings = { ...legacySettings, mode: 'manual' }
+      await store.save(nextSettings)
+
+      assert.deepEqual(repository.get(ORCHESTRATOR_SETTINGS_KEY), nextSettings)
+      database.close()
+    } finally {
+      removeTempDir(configDir)
+      removeTempDir(databaseDir)
+    }
+  },
+)
 
 test('memory tier policy keeps recent messages hot', () => {
   assert.equal(
@@ -129,3 +235,26 @@ test('memory tier policy compacts only large cold messages', () => {
     false,
   )
 })
+
+function sqliteTestOptions() {
+  return {
+    skip: hasNodeSqlite() ? false : 'node:sqlite indisponivel neste runtime',
+  }
+}
+
+function hasNodeSqlite() {
+  try {
+    require('node:sqlite')
+    return true
+  } catch {
+    return false
+  }
+}
+
+function createTempDir(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+}
+
+function removeTempDir(dirPath) {
+  fs.rmSync(dirPath, { recursive: true, force: true })
+}

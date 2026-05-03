@@ -1,19 +1,50 @@
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const {
+  createSettingsRepository,
+} = require('./storage/settings-repository.cjs')
 
 const ORCHESTRATOR_SETTINGS_FILE = 'orchestrator-settings.json'
+const ORCHESTRATOR_SETTINGS_KEY = 'orchestrator.settings'
 const MAX_SETTINGS_BYTES = 64 * 1024
 
 function createOrchestratorSettingsStore(options) {
   const configDir = requireConfigDir(options?.configDir)
   const filePath = path.join(configDir, ORCHESTRATOR_SETTINGS_FILE)
+  const settingsRepository = options?.database
+    ? createSettingsRepository(options.database)
+    : null
 
   return {
     filePath,
     async load() {
+      if (settingsRepository) {
+        const settings = settingsRepository.get(ORCHESTRATOR_SETTINGS_KEY)
+
+        if (settings !== null) {
+          return normalizeSettingsPayload(settings)
+        }
+
+        const legacySettings = await loadOrchestratorSettingsFile(filePath)
+
+        if (legacySettings) {
+          settingsRepository.set(ORCHESTRATOR_SETTINGS_KEY, legacySettings)
+          return legacySettings
+        }
+
+        return null
+      }
+
       return loadOrchestratorSettingsFile(filePath)
     },
     async save(settings) {
+      if (settingsRepository) {
+        return settingsRepository.set(
+          ORCHESTRATOR_SETTINGS_KEY,
+          normalizeSettingsPayload(settings),
+        )
+      }
+
       return saveOrchestratorSettingsFile(filePath, settings)
     },
   }
@@ -83,6 +114,7 @@ function isPlainObject(value) {
 
 module.exports = {
   ORCHESTRATOR_SETTINGS_FILE,
+  ORCHESTRATOR_SETTINGS_KEY,
   createOrchestratorSettingsStore,
   loadOrchestratorSettingsFile,
   normalizeSettingsPayload,

@@ -179,21 +179,24 @@ Criar schema mínimo, migrações versionadas e camada de repositório no backen
 
 ## Recorte já entregue
 
-- Configurações do orquestrador persistem fora do `localStorage` em `app.getPath('userData')/config/orchestrator-settings.json`.
-- O renderer ainda lê `localStorage` apenas como migração/fallback quando a bridge Electron não está disponível.
+- Configurações do orquestrador persistem fora do `localStorage` e agora são salvas na tabela `settings` do SQLite.
+- O JSON legado em `app.getPath('userData')/config/orchestrator-settings.json` ainda é lido uma vez como migração/fallback.
 - Migration inicial criada com tabelas de histórico, memória, resumo, arquivos compactados, notas, settings e eventos.
 - Loader de migrations versionadas criado no backend Electron.
 - Política inicial HOT/WARM/COLD criada para classificar e decidir compactação de mensagens.
+- Driver escolhido: `node:sqlite` nativo do Node/Electron, sem dependência nativa externa.
+- Banco real aberto em `app.getPath('userData')/database/felixo.sqlite`.
+- Migrations executadas automaticamente na inicialização do app.
+- Repositório inicial de `settings` criado sobre SQLite.
+- Configurações do orquestrador migram do JSON legado para a tabela `settings`.
 
 ## Ainda não implementado
 
-- Driver SQLite final no Electron.
-- Abertura real do banco em `app.getPath('userData')/database/felixo.sqlite`.
-- Execução de migrations contra banco real.
-- IPCs de leitura/escrita.
-- Migração dos dados atuais do `localStorage`.
+- IPCs gerais de leitura/escrita para notas, projetos e histórico.
+- Migração dos dados atuais do `localStorage` além das configurações do orquestrador.
 - Compactação real de mensagens COLD.
 - Busca textual/semântica.
+- Remoção do fallback JSON legado do orquestrador em uma versão futura.
 
 ## Plano de implementação
 

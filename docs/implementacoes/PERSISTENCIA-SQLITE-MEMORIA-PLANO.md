@@ -69,22 +69,27 @@ SQLite é o caminho de desenvolvimento e produção desktop. PostgreSQL fica par
 - [x] Loader de migrations versionadas.
 - [x] Política inicial HOT/WARM/COLD para classificar mensagens.
 - [x] Testes unitários do schema e da política.
+- [x] Driver SQLite escolhido: `node:sqlite` nativo do Node/Electron.
+- [x] Banco real aberto em `app.getPath('userData')/database/felixo.sqlite`.
+- [x] Migrations executadas automaticamente na inicialização do app.
+- [x] Repositório inicial de `settings`.
+- [x] Configurações do orquestrador migradas do JSON legado para SQLite.
 
 Arquivos implementados:
 
 - `app/electron/services/storage/migrations/001_initial_persistence.sql`
 - `app/electron/services/storage/migration-loader.cjs`
 - `app/electron/services/storage/memory-tier-policy.cjs`
+- `app/electron/services/storage/sqlite-database.cjs`
+- `app/electron/services/storage/settings-repository.cjs`
 - `app/electron/services/storage-persistence.test.cjs`
 
 ## Pendências
 
-- [ ] Escolher driver SQLite final para Electron.
-- [ ] Abrir banco real em `app.getPath('userData')/database/felixo.sqlite`.
-- [ ] Executar migrations contra um banco SQLite real.
 - [ ] Criar transações e helpers de consulta.
 - [ ] Criar IPCs de persistência.
 - [ ] Migrar dados existentes do `localStorage`.
+- [ ] Migrar configurações do orquestrador para remover fallback JSON legado em versão futura.
 - [ ] Criar busca textual.
 - [ ] Criar compactação real de mensagens COLD.
 - [ ] Criar tela/controle para revisar memórias candidatas.
@@ -97,6 +102,8 @@ Arquivos implementados:
 - [x] Existe teste impedindo migration duplicada e cobrindo arquivos fora do padrão.
 - [x] Existe política testada para classificar mensagem como HOT, WARM ou COLD.
 - [x] A documentação indica claramente o que foi implementado e o que ficou pendente.
+- [x] Banco SQLite real abre em filesystem temporário e aplica migrations uma única vez.
+- [x] `settings` salva/consulta JSON pelo SQLite.
 
 ## Cuidados
 
