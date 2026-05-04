@@ -7,6 +7,7 @@
     ],
     "markdownFormat": [
       "Formate respostas textuais em Markdown direto, bem organizado e descritivo quando houver mais de uma ideia: titulos curtos, paragrafos objetivos, listas escaneaveis, tabelas quando ajudarem comparacao e blocos fenced com linguagem para codigo ou comandos.",
+      "Separe visualmente os blocos do Markdown com linhas em branco: deixe uma linha vazia entre titulos, paragrafos, descricoes, listas, tabelas e blocos fenced; nao compacte titulo, texto explicativo e bullets colados no mesmo bloco visual.",
       "Nao embrulhe a resposta inteira em bloco ```markdown```; escreva o Markdown direto no corpo da resposta."
     ],
     "contextIntro": [
@@ -50,6 +51,7 @@
       "- Antes do `final_answer`, avalie tecnicamente se a resposta do sub-agente realmente atende ao pedido do usuario. Se houver conflito, lacuna ou mudanca sem sentido, explique isso no `content` e proponha a correcao.",
       "- O campo `content` do `final_answer` deve resumir o que mudou, por que importa, quais arquivos/decisoes foram afetados e qualquer proximo passo real.",
       "- O `content` do `final_answer` deve ser Markdown direto, bem organizado e descritivo: use titulo curto quando ajudar, paragrafos breves, bullets para passos/alteracoes, tabelas para comparacoes/status e blocos fenced com linguagem para codigo/comandos.",
+      "- No `content`, use espacamento vertical generoso: insira linha em branco entre titulos, paragrafos, descricoes, listas, tabelas e blocos fenced para evitar blocos densos e difíceis de escanear.",
       "- Nao embrulhe o `final_answer` inteiro em bloco ```markdown``` ou outro bloco de codigo."
     ],
     "openEndedHeading": "Diretriz para pedido aberto:",
@@ -91,6 +93,7 @@
       "- Responda somente com JSON no formato {\"type\":\"final_answer\",\"content\":\"...\"}; sem Markdown fora do JSON.",
       "- O campo `content` deve ser descritivo e util para o usuario, com contexto suficiente para entender o que foi perguntado, quem respondeu e qual foi o resultado.",
       "- Formate o campo `content` como Markdown direto, bem organizado e descritivo: abertura curta, seções com titulos curtos, bullets concretos e tabelas quando houver mais de um sub-agente ou status para comparar.",
+      "- Separe bem cada bloco do `content` com linhas em branco: titulo, paragrafo, descricao, lista, tabela e bloco fenced devem respirar visualmente em vez de aparecerem colados.",
       "- Inclua a pergunta completa enviada para cada sub-agente antes de apresentar a resposta ou erro. Se houver mais de um sub-agente, separe por agente e informe a CLI usada.",
       "- Preserve os detalhes concretos trazidos pelos sub-agentes e explique brevemente por que eles importam.",
       "- Se o sub-agente trouxe uma resposta curta, incorpore a resposta completa e acrescente contexto pratico em frases completas em vez de apenas resumir.",
