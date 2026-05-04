@@ -43,8 +43,8 @@ function getResumeArgs(prompt, context = {}) {
   }
 }
 
-function canResume(context = {}) {
-  return Boolean(context.providerSessionId)
+function canResume() {
+  return false
 }
 
 function parseLine(line) {
