@@ -125,8 +125,9 @@ test('codex adapter passes ascii cwd with exec args', () => {
     '--dangerously-bypass-approvals-and-sandbox',
     '--cd',
     '/tmp/test-cwd',
-    'Oi',
+    '-',
   ])
+  assert.equal(spawnArgs.stdinInput, 'Oi')
 })
 
 test('codex adapter passes provider model and reasoning effort', () => {
@@ -148,8 +149,9 @@ test('codex adapter passes provider model and reasoning effort', () => {
     'gpt-5.5',
     '--config',
     'model_reasoning_effort="xhigh"',
-    'Oi',
+    '-',
   ])
+  assert.equal(spawnArgs.stdinInput, 'Oi')
 })
 
 test('codex adapter resumes an existing provider session', () => {
@@ -165,8 +167,9 @@ test('codex adapter resumes an existing provider session', () => {
     '--skip-git-repo-check',
     '--dangerously-bypass-approvals-and-sandbox',
     '019ddc27-bc3d-7280-b5c0-61dff03b08cd',
-    'Continua',
+    '-',
   ])
+  assert.equal(spawnArgs.stdinInput, 'Continua')
 })
 
 test('codex adapter allows disabling full access from environment', () => {
@@ -181,8 +184,9 @@ test('codex adapter allows disabling full access from environment', () => {
       '--json',
       '--skip-git-repo-check',
       '--ephemeral',
-      'Oi',
+      '-',
     ])
+    assert.equal(spawnArgs.stdinInput, 'Oi')
   } finally {
     if (previousValue === undefined) {
       delete process.env.FELIXO_CODEX_FULL_ACCESS

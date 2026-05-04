@@ -13,11 +13,12 @@ function getSpawnArgs(prompt, context = {}) {
     args.push('--cd', context.cwd)
   }
 
-  args.push(prompt)
+  args.push('-')
 
   return {
     command: 'codex',
     args,
+    stdinInput: prompt,
   }
 }
 
@@ -35,8 +36,9 @@ function getResumeArgs(prompt, context = {}) {
       '--skip-git-repo-check',
       ...createCodexExecOptionArgs(context),
       context.providerSessionId,
-      prompt,
+      '-',
     ],
+    stdinInput: prompt,
   }
 }
 
