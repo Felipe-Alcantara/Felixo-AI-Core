@@ -1,4 +1,7 @@
-const { createModelOptionArgs } = require('./model-options.cjs')
+const {
+  createGeminiFullAccessArgs,
+  createModelOptionArgs,
+} = require('./model-options.cjs')
 const {
   parseOrchestrationEvent,
   parseOrchestrationEventFromText,
@@ -14,6 +17,7 @@ function getSpawnArgs(prompt, context = {}) {
       '--output-format',
       'stream-json',
       '--skip-trust',
+      ...createGeminiFullAccessArgs(context),
     ],
   }
 }
@@ -34,6 +38,7 @@ function getResumeArgs(prompt, context = {}) {
       '--output-format',
       'stream-json',
       '--skip-trust',
+      ...createGeminiFullAccessArgs(context),
     ],
   }
 }

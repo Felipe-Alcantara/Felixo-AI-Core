@@ -1583,6 +1583,10 @@ function createCliPrompt(
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
   const hasAttachments = attachments.length > 0
   const hasGlobalMemories = Boolean(globalMemoriesContextBlock)
+  const providerDefaultInstructions = createProviderDefaultInstructions(
+    selectedModel,
+    currentPrompt,
+  )
   const orchestrationInstructions = shouldUseOrchestrationProtocol(currentPrompt)
     ? createOrchestrationProtocolInstructions(
         orchestrationHint,
@@ -1590,6 +1594,7 @@ function createCliPrompt(
       )
     : null
   const hasContext =
+    Boolean(providerDefaultInstructions) ||
     hasGlobalMemories ||
     Boolean(orchestrationInstructions) ||
     hasCountContext ||
@@ -1609,6 +1614,10 @@ function createCliPrompt(
 
   if (orchestrationInstructions) {
     lines.push('', orchestrationInstructions)
+  }
+
+  if (providerDefaultInstructions) {
+    lines.push('', providerDefaultInstructions)
   }
 
   if (globalMemoriesContextBlock) {
@@ -1723,6 +1732,37 @@ function formatModelLabel(model: Model) {
   }
 
   return `${model.name} (${details.join(', ')})`
+}
+
+function createProviderDefaultInstructions(model: Model, prompt: string) {
+  if (model.cliType !== 'claude') {
+    return null
+  }
+
+  const promptMentionsStack = mentionsStackOrConfig(prompt)
+  const lines = [
+    'Diretrizes de autonomia para Claude:',
+    '- Nao pergunte permissao para seguir o padrao quando a mensagem nao especificar stack, framework, banco, arquitetura ou config.',
+    '- Se estiver trabalhando em projeto existente, inferir e seguir a stack, scripts, padroes, linters e estrutura ja presentes no repositorio.',
+    '- Se for criar algo novo e o usuario nao especificar stack/config, usar o padrao Felixo: TypeScript para apps Electron/React/Node existentes; Python + Django + DRF + SQLite + pytest para backend padrao; SQLite para persistencia local simples.',
+    '- Perguntar antes apenas quando houver risco real de acao irreversivel, perda de dados, segredo/credencial, deploy/publicacao ou quando duas escolhas mudarem claramente o produto.',
+  ]
+
+  lines.push(
+    promptMentionsStack
+      ? '- A mensagem atual menciona stack/config; obedeca essa escolha explicita antes dos padroes acima.'
+      : '- A mensagem atual nao especifica stack/config; escolha o padrao aplicavel e prossiga sem perguntar.',
+  )
+
+  return lines.join('\n')
+}
+
+function mentionsStackOrConfig(prompt: string) {
+  const normalizedPrompt = normalizePromptText(prompt)
+
+  return /\b(stack|framework|biblioteca|library|lib|react|vue|svelte|angular|electron|node|typescript|javascript|python|django|flask|fastapi|php|laravel|java|spring|csharp|c#|dotnet|\.net|go|rust|sqlite|postgres|postgresql|mysql|mongodb|firebase|supabase|tailwind|vite|webpack|config|configuracao|configuracoes|arquitetura)\b/.test(
+    normalizedPrompt,
+  )
 }
 
 function shouldUseOrchestrationProtocol(prompt: string) {

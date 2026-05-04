@@ -121,7 +121,7 @@ Se quiser apenas abrir sem instalar dependências automaticamente:
 python3 start_app.py --skip-install
 ```
 
-Se alguma CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com a pasta onde o comando está instalado. O Claude Code roda por padrão com `--permission-mode acceptEdits` para funcionar em modo não interativo; se precisar ajustar, use `FELIXO_CLAUDE_PERMISSION_MODE=default|plan|auto|dontAsk|bypassPermissions|off`.
+Se alguma CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com a pasta onde o comando está instalado. Por padrão, as CLIs rodam em modo de automação com acesso total: Claude usa `--permission-mode bypassPermissions`, Codex usa `--dangerously-bypass-approvals-and-sandbox` e Gemini usa `--yolo`/`--skip-trust`. Para reduzir permissões, use `FELIXO_CLAUDE_PERMISSION_MODE=default|plan|auto|dontAsk|acceptEdits|off`, `FELIXO_CODEX_FULL_ACCESS=off` ou `FELIXO_GEMINI_FULL_ACCESS=off`.
 
 ## Como distribuir
 

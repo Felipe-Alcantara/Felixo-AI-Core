@@ -25,7 +25,7 @@ Isso é diferente de retomada nativa. Retomada nativa reutiliza a conversa do pr
 
 Claude ja usa processo persistente real.
 
-- Comando: `claude --print --input-format stream-json --output-format stream-json --permission-mode acceptEdits`.
+- Comando: `claude --print --input-format stream-json --output-format stream-json --permission-mode bypassPermissions`.
 - Transporte: stdin/stdout JSONL.
 - Inicializacao: o processo recebe mensagens JSONL pelo stdin.
 - Streaming: eventos `stream_event` e `result`.
@@ -46,7 +46,7 @@ Nao deve ser usado aqui como base persistente. A CLI local rejeita `--prompt-int
 
 Esse e o caminho persistente correto para Gemini.
 
-- Comando: `gemini --acp --skip-trust`.
+- Comando: `gemini --acp --yolo`.
 - Transporte: JSON-RPC por NDJSON em stdin/stdout.
 - Inicializacao esperada:
   - `initialize`
@@ -66,8 +66,8 @@ Codex tem retomada nativa implementada e um candidato a processo persistente.
 
 Hoje e o caminho seguro:
 
-- Comando inicial: `codex exec --json --skip-git-repo-check`.
-- Continuidade: `codex exec resume --json --skip-git-repo-check <providerSessionId>`.
+- Comando inicial: `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox`.
+- Continuidade: `codex exec resume --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <providerSessionId>`.
 - Processo: one-shot por prompt.
 - Conversa: continua no provedor quando o `providerSessionId` foi capturado.
 

@@ -20,7 +20,10 @@
  * Server-to-client requests (session/request_permission) are auto-approved.
  */
 
-const { createModelOptionArgs } = require('./model-options.cjs')
+const {
+  createGeminiFullAccessArgs,
+  createModelOptionArgs,
+} = require('./model-options.cjs')
 
 const PROTOCOL_VERSION = 1
 const DEFAULT_AUTH_METHOD = 'oauth-personal'
@@ -30,7 +33,11 @@ let nextRequestId = 1
 function getPersistentSpawnArgs(context = {}) {
   return {
     command: 'gemini',
-    args: ['--acp', ...createModelOptionArgs(context)],
+    args: [
+      '--acp',
+      ...createGeminiFullAccessArgs(context),
+      ...createModelOptionArgs(context),
+    ],
   }
 }
 

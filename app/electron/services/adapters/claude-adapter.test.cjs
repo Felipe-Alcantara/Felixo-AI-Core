@@ -15,7 +15,7 @@ test('claude adapter pins first run to provided thread session id', () => {
     '--verbose',
     '--include-partial-messages',
     '--permission-mode',
-    'acceptEdits',
+    'bypassPermissions',
     '--session-id',
     '00000000-0000-4000-8000-000000000001',
     'Oi',
@@ -39,7 +39,7 @@ test('claude adapter passes provider model and effort when configured', () => {
     '--verbose',
     '--include-partial-messages',
     '--permission-mode',
-    'acceptEdits',
+    'bypassPermissions',
     '--model',
     'claude-sonnet-4-5',
     '--effort',
@@ -63,7 +63,7 @@ test('claude adapter resumes an existing provider session', () => {
     '--verbose',
     '--include-partial-messages',
     '--permission-mode',
-    'acceptEdits',
+    'bypassPermissions',
     '--resume',
     '00000000-0000-4000-8000-000000000001',
     'Continua',
@@ -85,7 +85,7 @@ test('claude adapter starts a persistent stream-json process without pinning ses
     '--verbose',
     '--include-partial-messages',
     '--permission-mode',
-    'acceptEdits',
+    'bypassPermissions',
   ])
 })
 
@@ -105,7 +105,7 @@ test('claude adapter resumes a persistent process when providerSessionId is set'
     '--verbose',
     '--include-partial-messages',
     '--permission-mode',
-    'acceptEdits',
+    'bypassPermissions',
     '--resume',
     '00000000-0000-4000-8000-000000000002',
   ])

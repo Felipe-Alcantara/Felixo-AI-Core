@@ -123,9 +123,9 @@ Persistência ainda é mista. Configurações do orquestrador, notas, projetos e
 
 | CLI | Adapter(s) | Invocação |
 |-----|-----------|-----------|
-| `claude` | `claude-adapter.cjs` | `claude --print --input-format stream-json --output-format stream-json --verbose --permission-mode acceptEdits` |
-| `codex` | `codex-adapter.cjs`, `codex-app-server-adapter.cjs` | `codex exec --json --skip-git-repo-check` |
-| `gemini` | `gemini-adapter.cjs`, `gemini-acp-adapter.cjs` | `gemini --prompt ... --output-format stream-json --skip-trust` |
+| `claude` | `claude-adapter.cjs` | `claude --print --input-format stream-json --output-format stream-json --verbose --permission-mode bypassPermissions` |
+| `codex` | `codex-adapter.cjs`, `codex-app-server-adapter.cjs` | `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox` |
+| `gemini` | `gemini-adapter.cjs`, `gemini-acp-adapter.cjs` | `gemini --prompt ... --output-format stream-json --skip-trust --yolo` |
 | `git` | `git-service.cjs` | `git status/diff/log/branch` (read-only, allowlisted) |
 
 Todos os comandos são invocados pelo **nome do executável** (não por caminho absoluto), e o `CliProcessManager.createCliEnv()` adiciona candidatos de PATH comuns para NVM, Volta, asdf, Homebrew, npm global e diretórios do sistema.

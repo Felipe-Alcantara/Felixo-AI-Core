@@ -247,9 +247,9 @@ Regras do catálogo atual:
 
 | Adapter | Estado atual | Pendência |
 |---------|--------------|-----------|
-| Claude | Processo persistente real via `--input-format stream-json`; suporta `--session-id` e `--resume` | Teste de integração com processo fake e validação manual mais longa |
-| Codex | One-shot com `codex exec --json`; continua a conversa com `codex exec resume --json` após capturar id do provedor | Validar protocolo alternativo persistente para manter processo vivo |
-| Gemini | One-shot com `--output-format stream-json`; continua a conversa com `--resume <session_id>` após capturar `init.session_id` | Investigar `--prompt-interactive`/`--acp` para manter processo vivo |
+| Claude | Processo persistente real via `--input-format stream-json` e `--permission-mode bypassPermissions`; suporta `--session-id` e `--resume` | Teste de integração com processo fake e validação manual mais longa |
+| Codex | One-shot com `codex exec --json --dangerously-bypass-approvals-and-sandbox`; continua a conversa com `codex exec resume --json --dangerously-bypass-approvals-and-sandbox` após capturar id do provedor | Validar protocolo alternativo persistente para manter processo vivo |
+| Gemini | One-shot com `--output-format stream-json --skip-trust --yolo`; continua a conversa com `--resume <session_id>` após capturar `init.session_id` | Investigar `--prompt-interactive`/`--acp` para manter processo vivo |
 
 ## Tratamento de erros
 

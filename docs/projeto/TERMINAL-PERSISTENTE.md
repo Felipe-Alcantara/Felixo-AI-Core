@@ -54,9 +54,9 @@ Primeiros recortes implementados: o frontend separa `threadId` de conversa e `se
 - `sessionId`: único por mensagem; continua correlacionando o streaming da resposta correta no chat.
 - O painel de terminal passa a acumular várias mensagens da mesma conversa na mesma thread.
 - Eventos `cli:stream` carregam `threadId` além de `sessionId`, para que troca de modelo, novo chat ou carregamento de sessão não deixe um terminal antigo preso como `Rodando` depois que o mapa local de mensagens é resetado.
-- Claude usa processo persistente real com `--print --input-format stream-json --output-format stream-json`; o backend mantém `stdin` aberto e escreve novas mensagens no mesmo processo da conversa. Se o processo cair e houver `providerSessionId`, o próximo spawn persistente pode retomar com `--resume`.
-- Gemini captura `init.session_id` no `stream-json` e usa `--resume <session_id>` nas continuações quando esse id já existe.
-- Codex expõe metadados de sessão/thread no JSONL e usa `codex exec resume --json --skip-git-repo-check <providerSessionId>` nas continuações quando esse id já existe.
+- Claude usa processo persistente real com `--print --input-format stream-json --output-format stream-json --permission-mode bypassPermissions`; o backend mantém `stdin` aberto e escreve novas mensagens no mesmo processo da conversa. Se o processo cair e houver `providerSessionId`, o próximo spawn persistente pode retomar com `--resume`.
+- Gemini captura `init.session_id` no `stream-json` e usa `--resume <session_id>` nas continuações quando esse id já existe, com `--skip-trust --yolo`.
+- Codex expõe metadados de sessão/thread no JSONL e usa `codex exec resume --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <providerSessionId>` nas continuações quando esse id já existe.
 - Codex ainda pode escrever avisos internos no `stderr`; os avisos não acionáveis já identificados são suprimidos da UI para não parecerem falha quando a resposta completou normalmente.
 - Processos persistentes ociosos são encerrados após 30 minutos para evitar acúmulo de CLIs abertas sem resposta ativa.
 - Trocar de modelo reinicia a thread do provedor, mas não zera a linha de base de projetos ativos da conversa; assim o diff de projetos só mostra mudanças reais de seleção.
@@ -65,9 +65,9 @@ Primeiros recortes implementados: o frontend separa `threadId` de conversa e `se
 
 | CLI | Modo interativo | Estratégia |
 |-----|----------------|------------|
-| `claude` | `--print --input-format stream-json --output-format stream-json` mantém stdin aberto e segue emitindo JSONL | Processo persistente por `threadId`; novas mensagens são escritas no mesmo processo |
-| `codex` | `codex exec resume --json --skip-git-repo-check` retoma uma sessão capturada | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
-| `gemini` | `stream-json` emite `init.session_id` e `--resume <session_id>` retoma a sessão | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
+| `claude` | `--print --input-format stream-json --output-format stream-json --permission-mode bypassPermissions` mantém stdin aberto e segue emitindo JSONL | Processo persistente por `threadId`; novas mensagens são escritas no mesmo processo |
+| `codex` | `codex exec resume --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox` retoma uma sessão capturada | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
+| `gemini` | `stream-json` emite `init.session_id` e `--resume <session_id>` retoma a sessão com `--skip-trust --yolo` | Processo one-shot por prompt, mas continuação nativa da mesma conversa do provedor |
 
 Investigação persistente detalhada:
 
