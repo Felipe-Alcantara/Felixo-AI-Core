@@ -6,6 +6,7 @@ const {
   parseVersionFromOutput,
   createCliNotFoundMessage,
   formatDetectionSummary,
+  resolveCommandPath,
 } = require('./cli-detector.cjs')
 
 describe('cli-detector', () => {
@@ -77,7 +78,7 @@ describe('cli-detector', () => {
   describe('createCliNotFoundMessage()', () => {
     it('returns install URL for known CLI', () => {
       const msg = createCliNotFoundMessage('claude')
-      assert.ok(msg.includes('Claude CLI'))
+      assert.ok(msg.includes('Claude Code CLI'))
       assert.ok(msg.includes('http'))
     })
 
@@ -123,6 +124,17 @@ describe('cli-detector', () => {
       const summary = formatDetectionSummary(results)
       assert.ok(summary.includes('✅'))
       assert.ok(summary.includes('❌'))
+    })
+  })
+
+  describe('resolveCommandPath()', () => {
+    it('uses case-insensitive PATH env names for Windows-style environments', () => {
+      const result = resolveCommandPath('codex', { PATH: 'C:\\Users\\me\\npm' }, {
+        platform: 'win32',
+        exists: (candidate) => candidate === 'C:\\Users\\me\\npm\\codex.cmd',
+      })
+
+      assert.equal(result, 'C:\\Users\\me\\npm\\codex.cmd')
     })
   })
 })

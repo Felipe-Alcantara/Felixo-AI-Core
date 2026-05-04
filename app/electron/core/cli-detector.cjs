@@ -29,13 +29,13 @@ const DETECTION_TIMEOUT_MS = 5000
 /** @type {CliInfo[]} */
 const SUPPORTED_CLIS = [
   {
-    name: 'Claude CLI',
+    name: 'Claude Code CLI',
     command: 'claude',
     windowsAliases: ['claude.exe', 'claude.cmd'],
     versionFlag: '--version',
     authCheckFlag: null,
     category: 'ai-provider',
-    installUrl: 'https://docs.anthropic.com/en/docs/claude-code/overview',
+    installUrl: 'https://code.claude.com/docs/en/setup',
   },
   {
     name: 'Codex CLI',
@@ -44,7 +44,7 @@ const SUPPORTED_CLIS = [
     versionFlag: '--version',
     authCheckFlag: null,
     category: 'ai-provider',
-    installUrl: 'https://github.com/openai/codex',
+    installUrl: 'https://developers.openai.com/codex/cli',
   },
   {
     name: 'Gemini CLI',
@@ -53,7 +53,7 @@ const SUPPORTED_CLIS = [
     versionFlag: '--version',
     authCheckFlag: null,
     category: 'ai-provider',
-    installUrl: 'https://github.com/google-gemini/gemini-cli',
+    installUrl: 'https://geminicli.com/docs/get-started/installation/',
   },
   {
     name: 'Git',
@@ -226,22 +226,31 @@ function parseVersionFromOutput(output) {
  *
  * @param {string} command
  * @param {Record<string, string>} [env]
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {(candidate: string) => boolean} [options.exists]
  * @returns {string | null}
  */
-function resolveCommandPath(command, env) {
-  const pathKey = process.platform === 'win32' ? 'Path' : 'PATH'
-  const pathEnv = (env || process.env)[pathKey] || ''
-  const dirs = pathEnv.split(path.delimiter)
+function resolveCommandPath(command, env, options = {}) {
+  const currentPlatform = options.platform || process.platform
+  const exists = options.exists || fs.existsSync
+  const currentEnv = env || process.env
+  const platformPath = currentPlatform === 'win32' ? path.win32 : path
+  const pathKey =
+    Object.keys(currentEnv).find((key) => key.toLowerCase() === 'path') ??
+    (currentPlatform === 'win32' ? 'Path' : 'PATH')
+  const pathEnv = currentEnv[pathKey] || ''
+  const dirs = pathEnv.split(platformPath.delimiter)
 
-  const extensions = process.platform === 'win32'
+  const extensions = currentPlatform === 'win32'
     ? ['', '.exe', '.cmd', '.bat', '.ps1']
     : ['']
 
   for (const dir of dirs) {
     for (const ext of extensions) {
-      const fullPath = path.join(dir, command + ext)
+      const fullPath = platformPath.join(dir, command + ext)
       try {
-        if (fs.existsSync(fullPath)) {
+        if (exists(fullPath)) {
           return fullPath
         }
       } catch {
