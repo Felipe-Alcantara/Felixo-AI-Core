@@ -554,15 +554,80 @@ def ensure_dependencies(
     if skip_install:
         return 0
 
-    if not force_install and (APP_DIR / "node_modules").exists():
+    missing_dependencies = get_missing_node_dependencies()
+    if not force_install and not missing_dependencies and node_modules_is_current():
         return 0
 
     if force_install:
         print("[felixo] Source updated. Refreshing dependencies...")
-    else:
+    elif missing_dependencies:
+        preview = ", ".join(missing_dependencies[:8])
+        remaining = len(missing_dependencies) - 8
+        if remaining > 0:
+            preview = f"{preview}, ... and {remaining} more"
+        print(f"[felixo] Missing npm dependencies detected: {preview}")
+        print("[felixo] Installing dependencies...")
+    elif not (APP_DIR / "node_modules").exists():
         print("[felixo] node_modules not found. Installing dependencies...")
+    else:
+        print("[felixo] npm dependency metadata changed. Refreshing dependencies...")
 
     return call_command(["npm", "install"], cwd=APP_DIR, env=env)
+
+
+def get_missing_node_dependencies() -> list[str]:
+    package_json = APP_DIR / "package.json"
+    node_modules = APP_DIR / "node_modules"
+
+    if not node_modules.exists():
+        return ["node_modules"]
+
+    try:
+        package_data = json.loads(package_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    dependencies: list[str] = []
+    for section in ("dependencies", "devDependencies", "optionalDependencies"):
+        section_data = package_data.get(section)
+        if isinstance(section_data, dict):
+            dependencies.extend(
+                name for name in section_data if isinstance(name, str)
+            )
+
+    return [
+        dependency
+        for dependency in sorted(set(dependencies))
+        if not node_dependency_exists(node_modules, dependency)
+    ]
+
+
+def node_dependency_exists(node_modules: Path, dependency: str) -> bool:
+    parts = dependency.split("/")
+    if dependency.startswith("@") and len(parts) == 2:
+        return node_modules.joinpath(parts[0], parts[1], "package.json").exists()
+
+    return (node_modules / dependency / "package.json").exists()
+
+
+def node_modules_is_current() -> bool:
+    node_modules = APP_DIR / "node_modules"
+    if not node_modules.exists():
+        return False
+
+    try:
+        node_modules_mtime = node_modules.stat().st_mtime
+    except OSError:
+        return False
+
+    for metadata_file in (APP_DIR / "package.json", APP_DIR / "package-lock.json"):
+        try:
+            if metadata_file.exists() and metadata_file.stat().st_mtime > node_modules_mtime:
+                return False
+        except OSError:
+            return False
+
+    return True
 
 
 def ensure_python_requirements(env: dict[str, str], skip_install: bool) -> int:
