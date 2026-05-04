@@ -12,6 +12,7 @@ const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
 const {
   registerOrchestratorSettingsIpcHandlers,
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
+const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { initAppPaths } = require('./core/app-paths.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
@@ -79,7 +80,7 @@ app.whenReady().then(() => {
     }
   })
 
-  detectAllClis().then((results) => {
+  detectAllClis(createCliEnv()).then((results) => {
     logQaEvent({
       level: 'info',
       scope: 'app:startup',

@@ -1197,7 +1197,6 @@ function handlePersistentStdoutLine(persistentSession, line) {
         durationMs,
       }),
     )
-    return
   }
 
   if (cliEvent.responseInput) {
@@ -1216,9 +1215,10 @@ function handlePersistentStdoutLine(persistentSession, line) {
       providerSessionId: threadSession.providerSessionId,
       persistentPhase: 'prompt',
     })
+    return
   }
 
-  if (cliEvent.type === 'control') {
+  if (cliEvent.type === 'control' || cliEvent.type === 'session') {
     return
   }
 
