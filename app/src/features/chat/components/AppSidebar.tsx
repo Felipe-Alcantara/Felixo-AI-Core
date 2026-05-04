@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Bot,
+  BrainCircuit,
   ChevronDown,
   Code2,
   Download,
@@ -50,6 +51,7 @@ type AppSidebarProps = {
   onOpenModelSettings: () => void
   onOpenProjects: () => void
   onOpenAutomations: () => void
+  onOpenSkills: () => void
   onOpenCode: () => void
   onOpenExport: () => void
   onOpenFelixoSettings: () => void
@@ -72,6 +74,7 @@ export function AppSidebar({
   onOpenModelSettings,
   onOpenProjects,
   onOpenAutomations,
+  onOpenSkills,
   onOpenCode,
   onOpenExport,
   onOpenFelixoSettings,
@@ -128,6 +131,7 @@ export function AppSidebar({
     else if (label === 'Pesquisar') setIsSearchOpen(true)
     else if (label === 'Projetos') setIsProjectsExpanded((v) => !v)
     else if (label === 'Automações') onOpenAutomations()
+    else if (label === 'Skills') onOpenSkills()
     else if (label === 'Orquestrador') onOpenOrchestratorSettings()
     else if (label === 'Notas') onOpenNotes()
     else if (label === 'Exportar') onOpenExport()
@@ -264,6 +268,15 @@ export function AppSidebar({
           >
             <Sparkles size={14} aria-hidden="true" />
             Automações
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleNavClick('Skills')}
+            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <BrainCircuit size={14} aria-hidden="true" />
+            Skills
           </button>
 
           <button

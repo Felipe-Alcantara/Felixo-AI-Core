@@ -103,7 +103,7 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 
 ### Itens de navegação
 
-`Novo chat`, `Pesquisar`, `Projetos`, `Automações`, `Orquestrador`, `Notas`, `Exportar`
+`Novo chat`, `Pesquisar`, `Projetos`, `Automações`, `Skills`, `Orquestrador`, `Notas`, `Exportar`
 
 #### Comportamento de Projetos
 
@@ -223,6 +223,30 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 - Exibe ícone de usuário (`User`) ou bot (`Bot`) por role
 - Mostra cursor piscando quando `isStreaming: true`
 - Exibe timestamp formatado em pt-BR (HH:mm)
+
+---
+
+## SkillsModal
+
+**Arquivo:** `components/SkillsModal.tsx`
+**Responsabilidade:** Cadastro de superprompts persistentes para ferramentas, plataformas, estilos e padrões de trabalho.
+
+### Props
+
+| Prop | Tipo | Descrição |
+|------|------|-----------|
+| `isOpen` | `boolean` | Visibilidade do modal |
+| `skills` | `SkillPrompt[]` | Skills persistidas em `OrchestratorSettings` |
+| `onClose` | `() => void` | Fecha o modal |
+| `onSaveSkills` | `(skills: SkillPrompt[]) => void` | Salva a lista atualizada |
+
+### Comportamento
+
+- Cria skills com nome, descrição e superprompt.
+- Edita skills existentes sem perder `createdAt`.
+- Ativa/desativa uma skill sem removê-la.
+- Remove uma skill da lista persistida.
+- Apenas skills ativas entram em `createSkillsContextBlock()`.
 
 ---
 
@@ -423,7 +447,8 @@ Responsabilidade:
 
 - manter configurações/estado do app separados do modal de Modelos;
 - exibir runtime, quantidade de projetos, projetos ativos e automações;
-- editar memórias globais do usuário que entram no prompt normal e no contexto do orquestrador.
+- editar memórias globais do usuário que entram no prompt normal e no contexto do orquestrador;
+- editar contexto operacional, workflow, modo e limites globais do orquestrador.
 
 ### TerminalPanel
 

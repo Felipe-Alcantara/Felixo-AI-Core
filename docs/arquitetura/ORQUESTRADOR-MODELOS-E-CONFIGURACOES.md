@@ -35,7 +35,8 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 |--------------|----------------|
 | Contexto personalizado | Global/local |
 | Memórias globais | Global/local, editadas no perfil Felixo |
-| Skills habilitadas | Global/local |
+| Skills habilitadas | Global/local, editadas pelo botão Skills |
+| Superprompts | Global/local, persistidos em `settings.skills` |
 | Modelos preferidos | Global/local |
 | Modelos bloqueados | Global/local |
 | Workflow padrão | Global/local |
@@ -91,6 +92,11 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - Modal exibe campos de custo estimado e limite de contexto (tokens).
 - Badge visual de status de disponibilidade (`Disponível`, `Bloqueado`, `Erro`, `Sem login`, `Limite atingido`, `Indisponível`, `Desconhecido`) exibido ao lado do nome de cada modelo na lista de spawn do modal.
 - O botão de perfil `Felixo` permite editar memórias globais salvas nas settings do orquestrador; quando preenchidas, elas entram no prompt normal e também no contexto enviado ao orquestrador.
+- O modal `Orquestrador` foi reduzido para a seleção de modelos spawnáveis, preferidos e bloqueados.
+- Contexto operacional, workflow, modo e limites globais foram movidos para `Felixo`, junto das memórias globais.
+- `SkillsModal` adiciona superprompts persistentes com criação, edição, ativação, desativação e remoção.
+- `createSkillsContextBlock()` injeta skills ativas no prompt normal, separadas de memórias globais e de histórico.
+- O limite de payload das settings do orquestrador no backend subiu para 256 KiB para comportar superprompts maiores.
 
 ## Próximos passos
 

@@ -5,6 +5,7 @@ import type {
   OrchestrationCliType,
   OrchestratorMode,
   OrchestratorSettings,
+  SkillPrompt,
 } from '../types'
 
 const ORCHESTRATOR_SETTINGS_STORAGE_KEY =
@@ -14,6 +15,7 @@ export const defaultOrchestratorSettings: OrchestratorSettings = {
   customContext: '',
   globalMemories: '',
   enabledSkills: ['planejamento', 'revisao', 'resumo'],
+  skills: [],
   preferredModelIds: [],
   blockedModelIds: [],
   defaultWorkflow: 'planejar-executar-validar',
@@ -199,6 +201,17 @@ export function createOrchestratorContextBlock(
     lines.push('', `Skills habilitadas: ${settings.enabledSkills.join(', ')}.`)
   }
 
+  const enabledCustomSkills = getEnabledCustomSkills(settings)
+
+  if (enabledCustomSkills.length > 0) {
+    lines.push(
+      '',
+      `Superprompts habilitados: ${enabledCustomSkills
+        .map((skill) => skill.name)
+        .join(', ')}.`,
+    )
+  }
+
   if (profiles.length === 0) {
     lines.push('', '- Nenhum modelo spawnavel cadastrado no app.')
   } else {
@@ -255,6 +268,36 @@ export function createGlobalMemoriesContextBlock(
   ].join('\n')
 }
 
+export function createSkillsContextBlock(settings: OrchestratorSettings) {
+  const enabledCustomSkills = getEnabledCustomSkills(settings)
+
+  if (enabledCustomSkills.length === 0 && settings.enabledSkills.length === 0) {
+    return null
+  }
+
+  const lines = [
+    'Skills e superprompts ativos:',
+    '- Use estes blocos como instrucoes persistentes de tecnica, ferramenta, plataforma, estilo ou modo de trabalho.',
+    '- Se a mensagem atual do usuario conflitar com uma skill, priorize a mensagem atual.',
+  ]
+
+  if (settings.enabledSkills.length > 0) {
+    lines.push('', `Skills legadas: ${settings.enabledSkills.join(', ')}.`)
+  }
+
+  for (const skill of enabledCustomSkills) {
+    lines.push('', `## Skill: ${skill.name}`)
+
+    if (skill.description.trim()) {
+      lines.push(`Descricao: ${skill.description.trim()}`)
+    }
+
+    lines.push(skill.prompt.trim())
+  }
+
+  return lines.join('\n')
+}
+
 export function normalizeOrchestratorSettings(
   value: unknown,
 ): OrchestratorSettings {
@@ -268,6 +311,7 @@ export function normalizeOrchestratorSettings(
     customContext: getString(settings.customContext),
     globalMemories: getString(settings.globalMemories),
     enabledSkills: getStringList(settings.enabledSkills),
+    skills: getSkillPromptList(settings.skills),
     preferredModelIds: getStringList(settings.preferredModelIds),
     blockedModelIds: getStringList(settings.blockedModelIds),
     defaultWorkflow:
@@ -423,6 +467,55 @@ function getStringList(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
+}
+
+function getSkillPromptList(value: unknown): SkillPrompt[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') {
+      return []
+    }
+
+    const skill = item as Partial<SkillPrompt>
+    const name = getString(skill.name).trim()
+    const prompt = getString(skill.prompt).trim()
+
+    if (!name || !prompt) {
+      return []
+    }
+
+    const now = new Date().toISOString()
+
+    return [
+      {
+        id: getString(skill.id).trim() || createSkillPromptId(name),
+        name,
+        description: getString(skill.description).trim(),
+        prompt,
+        enabled: typeof skill.enabled === 'boolean' ? skill.enabled : true,
+        createdAt: getString(skill.createdAt).trim() || now,
+        updatedAt: getString(skill.updatedAt).trim() || now,
+      },
+    ]
+  })
+}
+
+function getEnabledCustomSkills(settings: OrchestratorSettings) {
+  return settings.skills.filter(
+    (skill) => skill.enabled && skill.name.trim() && skill.prompt.trim(),
+  )
+}
+
+function createSkillPromptId(name: string) {
+  return `skill-${name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')}-${Date.now()}`
 }
 
 function normalizeNonNegativeNumber(value: unknown, fallback: number) {

@@ -42,6 +42,7 @@ import {
   createGlobalMemoriesContextBlock,
   createModelCapabilityProfiles,
   createOrchestratorContextBlock,
+  createSkillsContextBlock,
   loadInitialOrchestratorSettings,
   loadOrchestratorSettings,
   saveOrchestratorSettings,
@@ -90,6 +91,7 @@ import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
 import { QaLoggerPanel } from './QaLoggerPanel'
+import { SkillsModal } from './SkillsModal'
 import { TerminalPanel } from './TerminalPanel'
 
 const CONTEXT_MESSAGE_LIMIT = 12
@@ -138,6 +140,7 @@ export function ChatWorkspace() {
   const [isNotesOpen, setIsNotesOpen] = useState(false)
   const [isOrchestratorSettingsOpen, setIsOrchestratorSettingsOpen] =
     useState(false)
+  const [isSkillsOpen, setIsSkillsOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [activeOrchestrationRunId, setActiveOrchestrationRunId] = useState<string | null>(null)
   const [orchestrationStatusText, setOrchestrationStatusText] = useState<string | null>(null)
@@ -525,6 +528,7 @@ export function ChatWorkspace() {
     const globalMemoriesContextBlock = createGlobalMemoriesContextBlock(
       orchestratorSettings,
     )
+    const skillsContextBlock = createSkillsContextBlock(orchestratorSettings)
 
     const cliPrompt = createCliPrompt(
       messages,
@@ -534,7 +538,12 @@ export function ChatWorkspace() {
       activeProjects,
       projectDiff,
       contextAttachments,
-      { orchestrationHint, orchestrationContextBlock, globalMemoriesContextBlock },
+      {
+        orchestrationHint,
+        orchestrationContextBlock,
+        globalMemoriesContextBlock,
+        skillsContextBlock,
+      },
     )
     const resumePrompt = createCliPrompt(
       messages,
@@ -549,6 +558,7 @@ export function ChatWorkspace() {
         orchestrationHint,
         orchestrationContextBlock,
         globalMemoriesContextBlock,
+        skillsContextBlock,
       },
     )
 
@@ -1231,6 +1241,7 @@ export function ChatWorkspace() {
         onOpenModelSettings={() => setIsModelManagerOpen(true)}
         onOpenProjects={() => setIsProjectsOpen(true)}
         onOpenAutomations={() => setIsAutomationsOpen(true)}
+        onOpenSkills={() => setIsSkillsOpen(true)}
         onOpenCode={() => setIsCodePanelOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
         onOpenFelixoSettings={() => setIsFelixoSettingsOpen(true)}
@@ -1362,6 +1373,18 @@ export function ChatWorkspace() {
         onApplyAutomation={applyAutomation}
         onAddAutomation={addCustomAutomation}
         onRemoveAutomation={removeCustomAutomation}
+      />
+
+      <SkillsModal
+        isOpen={isSkillsOpen}
+        skills={orchestratorSettings.skills}
+        onClose={() => setIsSkillsOpen(false)}
+        onSaveSkills={(skills) =>
+          updateOrchestratorSettings({
+            ...orchestratorSettings,
+            skills,
+          })
+        }
       />
 
       <CodePanel
@@ -1573,6 +1596,7 @@ type CliPromptOptions = {
   orchestrationHint?: OrchestrationPromptHint | null
   orchestrationContextBlock?: string | null
   globalMemoriesContextBlock?: string | null
+  skillsContextBlock?: string | null
 }
 
 function createCliPrompt(
@@ -1590,6 +1614,7 @@ function createCliPrompt(
     orchestrationHint = null,
     orchestrationContextBlock = null,
     globalMemoriesContextBlock = null,
+    skillsContextBlock = null,
   } = options
   const allHistoryMessages = messages.filter((message) => message.content.trim())
   const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
@@ -1604,6 +1629,7 @@ function createCliPrompt(
   const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
   const hasAttachments = attachments.length > 0
   const hasGlobalMemories = Boolean(globalMemoriesContextBlock)
+  const hasSkills = Boolean(skillsContextBlock)
   const providerDefaultInstructions = createProviderDefaultInstructions(
     selectedModel,
     currentPrompt,
@@ -1617,6 +1643,7 @@ function createCliPrompt(
   const hasContext =
     Boolean(providerDefaultInstructions) ||
     hasGlobalMemories ||
+    hasSkills ||
     Boolean(orchestrationInstructions) ||
     hasCountContext ||
     hasHistory ||
@@ -1654,6 +1681,10 @@ function createCliPrompt(
 
   if (globalMemoriesContextBlock) {
     lines.push('', globalMemoriesContextBlock)
+  }
+
+  if (skillsContextBlock) {
+    lines.push('', skillsContextBlock)
   }
 
   lines.push(

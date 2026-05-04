@@ -27,6 +27,17 @@ test('orchestrator settings store saves and loads settings', async () => {
     mode: 'semi_auto',
     customContext: 'Priorizar modelos baratos.',
     enabledSkills: ['planejamento', 'revisao'],
+    skills: [
+      {
+        id: 'skill-django',
+        name: 'Django REST',
+        description: 'Padrao backend',
+        prompt: 'Use Django, DRF, SQLite e pytest quando o usuario nao especificar stack.',
+        enabled: true,
+        createdAt: '2026-05-04T00:00:00.000Z',
+        updatedAt: '2026-05-04T00:00:00.000Z',
+      },
+    ],
     maxAgentsPerTurn: 2,
   }
 
