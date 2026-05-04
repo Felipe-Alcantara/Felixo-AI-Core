@@ -43,6 +43,7 @@ const persistentCliSessions = new Map()
 const terminalSessionParents = new Map()
 const modelAvailabilityRegistry = createModelAvailabilityRegistry()
 const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
+const MAX_TOOL_USES_WITHOUT_TEXT = 20
 const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 const PERSISTENT_TRAILING_OUTPUT_GRACE_MS = 5000
 
@@ -328,6 +329,7 @@ function registerCliIpcHandlers(getMainWindow) {
     let didEmitVisibleOutput = false
     let stderrOutput = ''
     let firstVisibleOutputTimer = null
+    const toolLoopProgress = createToolLoopProgressState()
     const processStartedAt = Date.now()
 
     try {
@@ -456,6 +458,11 @@ function registerCliIpcHandlers(getMainWindow) {
         if (cliEvent.type === 'done') {
           didComplete = true
           clearFirstVisibleOutputTimer()
+        }
+
+        if (shouldAbortForToolLoop(toolLoopProgress, cliEvent)) {
+          abortForToolLoopGuard()
+          return
         }
 
         if (isVisibleCliActivity(cliEvent)) {
@@ -739,6 +746,38 @@ function registerCliIpcHandlers(getMainWindow) {
         sendCliEvent(targetWebContents, cliEvent)
       }
     }
+
+    function abortForToolLoopGuard() {
+      if (didComplete) {
+        return
+      }
+
+      didComplete = true
+      clearFirstVisibleOutputTimer()
+      const message = createToolLoopLimitMessage(command, toolLoopProgress.limit)
+
+      logQaEvent({
+        level: 'warn',
+        scope: 'cli:loop_guard',
+        sessionId: threadId,
+        message: `${command} exceeded the tool loop guard.`,
+        details: {
+          streamSessionId,
+          toolUsesWithoutText: toolLoopProgress.toolUsesWithoutText,
+          maxToolUsesWithoutText: toolLoopProgress.limit,
+        },
+      })
+      sendTerminalEvents(targetWebContents, threadId, [
+        createErrorTerminalEvent(message),
+      ])
+      dispatchCliEvent({
+        type: 'error',
+        message,
+        sessionId: streamSessionId,
+        threadId,
+      })
+      cliManager.kill(threadId)
+    }
   }
 
   ipcMain.handle('cli:orchestration-status', (_event, params) =>
@@ -944,6 +983,7 @@ function sendPersistentCliRequest({
       didComplete: false,
       didEmitVisibleOutput: false,
       firstVisibleOutputTimer: null,
+      toolLoopProgress: createToolLoopProgressState(),
       stderrOutput: '',
       orchestrationContext,
       orchestrationBridge,
@@ -1307,6 +1347,24 @@ function handlePersistentStdoutLine(persistentSession, line) {
     clearPersistentRunTimer(activeRun)
   }
 
+  if (shouldAbortForToolLoop(activeRun.toolLoopProgress, cliEvent)) {
+    failPersistentRun(
+      persistentSession,
+      createToolLoopLimitMessage(command, activeRun.toolLoopProgress.limit),
+      {
+        logScope: 'cli:loop_guard',
+        level: 'warn',
+        details: {
+          streamSessionId,
+          toolUsesWithoutText: activeRun.toolLoopProgress.toolUsesWithoutText,
+          maxToolUsesWithoutText: activeRun.toolLoopProgress.limit,
+        },
+      },
+    )
+    closePersistentSession(threadId)
+    return
+  }
+
   const orchestrationResult = activeRun.orchestrationBridge?.handleCliEvent({
     cliEvent,
     streamSessionId: activeRun.streamSessionId,
@@ -1668,16 +1726,45 @@ function parseAdapterLine(adapter, line) {
   }
 }
 
+function createToolLoopProgressState(limit = MAX_TOOL_USES_WITHOUT_TEXT) {
+  return {
+    limit,
+    toolUsesWithoutText: 0,
+  }
+}
+
+function shouldAbortForToolLoop(progress, cliEvent) {
+  if (!progress || !cliEvent || typeof cliEvent !== 'object') {
+    return false
+  }
+
+  if (isTextCliEvent(cliEvent)) {
+    progress.toolUsesWithoutText = 0
+    return false
+  }
+
+  if (cliEvent.type !== 'tool_use') {
+    return false
+  }
+
+  progress.toolUsesWithoutText += 1
+  return progress.toolUsesWithoutText >= progress.limit
+}
+
 function isVisibleCliActivity(cliEvent) {
   if (!cliEvent || typeof cliEvent !== 'object') {
     return false
   }
 
-  if (cliEvent.type === 'text') {
-    return Boolean(String(cliEvent.text ?? '').trim())
+  if (isTextCliEvent(cliEvent)) {
+    return true
   }
 
   return cliEvent.type === 'tool_use' || cliEvent.type === 'tool_result'
+}
+
+function isTextCliEvent(cliEvent) {
+  return cliEvent.type === 'text' && Boolean(String(cliEvent.text ?? '').trim())
 }
 
 function handleOrchestrationPromise(promise) {
@@ -2446,6 +2533,10 @@ function createNoVisibleOutputMessage(command, timeoutMs) {
   return `${command} não gerou resposta textual em ${timeoutSeconds}s. A execução foi interrompida.`
 }
 
+function createToolLoopLimitMessage(command, maxToolUsesWithoutText) {
+  return `${command} executou ${maxToolUsesWithoutText} ferramentas sem gerar resposta textual. A execução foi interrompida para evitar loop; tente reformular com um objetivo mais específico ou divida a tarefa em passos menores.`
+}
+
 function formatDuration(durationMs) {
   if (durationMs < 1000) {
     return `${Math.round(durationMs)} ms`
@@ -2477,9 +2568,12 @@ module.exports = {
   collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
+  createToolLoopLimitMessage,
+  createToolLoopProgressState,
   getAdapterSpawnArgs,
   getPersistentCloseLogLevel,
   registerCliIpcHandlers,
   resolveOrchestrationSpawnModel,
+  shouldAbortForToolLoop,
   shouldSuppressPersistentTrailingOutput,
 }

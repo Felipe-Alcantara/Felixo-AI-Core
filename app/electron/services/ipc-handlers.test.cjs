@@ -7,8 +7,11 @@ const {
   collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
+  createToolLoopLimitMessage,
+  createToolLoopProgressState,
   getPersistentCloseLogLevel,
   resolveOrchestrationSpawnModel,
+  shouldAbortForToolLoop,
   shouldSuppressPersistentTrailingOutput,
 } = require('./ipc-handlers.cjs')
 const {
@@ -277,6 +280,68 @@ test('ipc handlers suppress duplicate persistent final events', () => {
   assert.equal(
     shouldSuppressPersistentTrailingOutput(lastError, { type: 'error' }, endedAt + 6000),
     false,
+  )
+})
+
+test('ipc handlers abort repeated tool use without text', () => {
+  const progress = createToolLoopProgressState(3)
+
+  assert.equal(
+    shouldAbortForToolLoop(progress, {
+      type: 'tool_use',
+      tool: 'grep_search',
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAbortForToolLoop(progress, {
+      type: 'tool_use',
+      tool: 'read_file',
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAbortForToolLoop(progress, {
+      type: 'text',
+      text: 'Encontrei o problema.',
+    }),
+    false,
+  )
+  assert.equal(progress.toolUsesWithoutText, 0)
+  assert.equal(
+    shouldAbortForToolLoop(progress, {
+      type: 'tool_use',
+      tool: 'grep_search',
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAbortForToolLoop(progress, {
+      type: 'tool_result',
+      output: 'ok',
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAbortForToolLoop(progress, {
+      type: 'tool_use',
+      tool: 'grep_search',
+    }),
+    false,
+  )
+  assert.equal(
+    shouldAbortForToolLoop(progress, {
+      type: 'tool_use',
+      tool: 'grep_search',
+    }),
+    true,
+  )
+})
+
+test('ipc handlers explain tool loop guard failures', () => {
+  assert.match(
+    createToolLoopLimitMessage('gemini', 20),
+    /20 ferramentas sem gerar resposta textual/,
   )
 })
 

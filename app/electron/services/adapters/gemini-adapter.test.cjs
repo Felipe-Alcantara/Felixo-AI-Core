@@ -78,12 +78,12 @@ test('gemini adapter allows disabling yolo mode from environment', () => {
   }
 })
 
-test('gemini adapter enables native resume after provider session capture', () => {
+test('gemini adapter keeps native resume disabled to avoid stale provider context', () => {
   assert.equal(
     adapter.canResume({
       providerSessionId: '00000000-0000-4000-8000-000000000001',
     }),
-    true,
+    false,
   )
   assert.equal(
     adapter.canResume({
