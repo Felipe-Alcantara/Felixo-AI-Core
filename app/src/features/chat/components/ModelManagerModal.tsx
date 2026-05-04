@@ -108,6 +108,11 @@ export function ModelManagerModal({
   }
 
   async function installOfficialCli(cli: OfficialCliCatalogItem) {
+    if (getMissingOfficialModels(cli.models, models).length === 0) {
+      setStatus(`${cli.name} já está importada. Instalação não foi iniciada.`)
+      return
+    }
+
     if (!window.felixo?.cli?.installOfficial) {
       setStatus('Instalação automática disponível apenas no app desktop.')
       return
@@ -254,14 +259,7 @@ export function ModelManagerModal({
   }
 
   function importOfficialModels(officialModels: Model[]) {
-    const missingModels = officialModels.filter(
-      (model) =>
-        !models.some(
-          (existingModel) =>
-            existingModel.id === model.id ||
-            existingModel.command === model.command,
-        ),
-    )
+    const missingModels = getMissingOfficialModels(officialModels, models)
 
     for (const model of missingModels) {
       onAddModel(model)
@@ -459,14 +457,7 @@ export function ModelManagerModal({
                 </p>
               ) : (
                 officialClis.map((cli) => {
-                  const missingModels = cli.models.filter(
-                    (model) =>
-                      !models.some(
-                        (existingModel) =>
-                          existingModel.id === model.id ||
-                          existingModel.command === model.command,
-                      ),
-                  )
+                  const missingModels = getMissingOfficialModels(cli.models, models)
                   const isImported = missingModels.length === 0
                   const isAnyOfficialCliBusy = busyOfficialCliId !== null
 
@@ -519,9 +510,13 @@ export function ModelManagerModal({
                           ) : (
                             <button
                               type="button"
-                              title={`Instalar ${cli.name}`}
+                              title={
+                                isImported
+                                  ? 'CLI já importada'
+                                  : `Instalar ${cli.name}`
+                              }
                               onClick={() => void installOfficialCli(cli)}
-                              disabled={isAnyOfficialCliBusy}
+                              disabled={isImported || isAnyOfficialCliBusy}
                               className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Download size={14} aria-hidden="true" />
@@ -719,4 +714,23 @@ function getFileNameFromCommand(command: string) {
   }
 
   return command.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? ''
+}
+
+function getMissingOfficialModels(
+  officialModels: Model[],
+  importedModels: Model[],
+) {
+  return officialModels.filter(
+    (model) =>
+      !importedModels.some(
+        (existingModel) =>
+          existingModel.id === model.id ||
+          normalizeModelCommand(existingModel.command) ===
+            normalizeModelCommand(model.command),
+      ),
+  )
+}
+
+function normalizeModelCommand(command: string) {
+  return command.trim().replace(/\s+/g, ' ').toLowerCase()
 }

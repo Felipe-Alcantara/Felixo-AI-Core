@@ -82,6 +82,7 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `onToggleProject` | `(project: Project) => void` | Ativa/desativa um projeto (toggle) |
 | `projects` | `Project[]` | Lista de projetos para exibir na subseção |
 | `activeProjectIds` | `Set<string>` | Projetos atualmente ativos |
+| `onRemoveModel` | `(model: Model) => void` | Remove modelo diretamente pela sidebar |
 
 ### Constantes
 
@@ -102,7 +103,7 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 
 ### Itens de navegação
 
-`Novo chat`, `Pesquisar`, `Projetos`, `Automações`
+`Novo chat`, `Pesquisar`, `Projetos`, `Automações`, `Orquestrador`, `Notas`, `Exportar`
 
 #### Comportamento de Projetos
 
@@ -111,6 +112,24 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 - Botão `+` ao lado do título abre o `ProjectsModal` sem expandir a lista
 - Expandido mostra todos os projetos ou "Nenhum projeto selecionado"
 - Projeto ativo destacado em âmbar; clicar faz toggle (ativa/desativa)
+
+#### Comportamento de rolagem
+
+- A área central da sidebar (`nav`, chats recentes, projetos e modelos) usa `overflow-y-auto`.
+- O rodapé com `Code` e `Felixo` permanece fixo na parte inferior.
+- Esse desenho impede que projetos, chats ou modelos saiam da tela quando a janela fica baixa.
+
+#### Chats recentes
+
+- A sidebar mostra somente os 5 chats mais recentes para reduzir ruído visual.
+- Quando existem mais de 5 sessões, o botão `Ver todos` abre o `SearchPanel`.
+- O `SearchPanel` continua sendo a experiência completa para localizar conversas antigas por título ou conteúdo.
+
+#### Modelos
+
+- Clicar no nome do modelo abre a configuração daquele modelo.
+- O botão de lixeira na linha remove o modelo diretamente, sem abrir o modal de modelos.
+- A carga e a gravação de modelos deduplicam entradas por comando normalizado para evitar repetições como `Codex CLI` duplicado.
 
 ### Estado interno
 
@@ -265,6 +284,12 @@ Todos os componentes ficam em `app/src/features/chat/components/`.
 | `createCommandPath(fileName, filePath)` | Normaliza caminho relativo a `ai-clis/` |
 | `inferModelName(content, fileName)` | Extrai nome de comentário `#` no topo do arquivo |
 | `getFileNameFromCommand(command)` | Extrai nome do arquivo do comando |
+
+### Proteção contra duplicatas
+
+- Modelos oficiais são comparados por `id` e por comando normalizado.
+- O botão de importar fica desabilitado quando todos os modelos daquela CLI já estão cadastrados.
+- O botão de instalar também fica desabilitado quando a CLI oficial já foi importada, mesmo que a detecção do sistema ainda não tenha encontrado o executável no `PATH`.
 
 ---
 
