@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld('felixo', {
     send: (params) => ipcRenderer.invoke('cli:send', params),
     stop: (params) => ipcRenderer.invoke('cli:stop', params),
     resetThread: (params) => ipcRenderer.invoke('cli:reset-thread', params),
+    listOfficial: () => ipcRenderer.invoke('cli:list-official'),
+    installOfficial: (params) => ipcRenderer.invoke('cli:install-official', params),
+    openOfficialLogin: (params) =>
+      ipcRenderer.invoke('cli:open-official-login', params),
+    getOfficialAccountStatus: (params) =>
+      ipcRenderer.invoke('cli:official-account-status', params),
+    switchOfficialAccount: (params) =>
+      ipcRenderer.invoke('cli:switch-official-account', params),
     orchestrationStatus: (params) =>
       ipcRenderer.invoke('cli:orchestration-status', params),
     onStream: (callback) => {

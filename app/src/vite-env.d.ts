@@ -42,6 +42,55 @@ type CliOrchestrationStatusResult = CliInvokeResult & {
   runs?: OrchestrationRun[]
 }
 
+type OfficialCliCatalogItem = {
+  id: string
+  name: string
+  provider: string
+  command: string
+  detected: boolean
+  version?: string | null
+  path?: string | null
+  error?: string | null
+  installCommand: string
+  loginCommand: string
+  statusCommand?: string
+  switchAccountCommand?: string
+  supportsAccountSwitch?: boolean
+  installUrl: string
+  authUrl: string
+  models: Model[]
+}
+
+type OfficialCliCatalogResult = CliInvokeResult & {
+  clis?: OfficialCliCatalogItem[]
+}
+
+type OfficialCliInstallResult = CliInvokeResult & {
+  cli?: OfficialCliCatalogItem
+  models?: Model[]
+  stdout?: string
+  stderr?: string
+}
+
+type OfficialCliLoginResult = CliInvokeResult & {
+  command?: string
+  args?: string[]
+  manualCommand?: string
+}
+
+type OfficialCliAccountStatusResult = CliInvokeResult & {
+  authStatus?: 'logged_in' | 'logged_out' | 'unknown'
+  stdout?: string
+  stderr?: string
+}
+
+type OfficialCliSwitchAccountResult = OfficialCliLoginResult & {
+  logout?: CliInvokeResult & {
+    stdout?: string
+    stderr?: string
+  }
+}
+
 declare global {
   interface Window {
     felixo?: {
@@ -71,6 +120,19 @@ declare global {
         resetThread: (params: {
           threadId: string
         }) => Promise<CliInvokeResult & { killed?: boolean }>
+        listOfficial: () => Promise<OfficialCliCatalogResult>
+        installOfficial: (params: {
+          id: string
+        }) => Promise<OfficialCliInstallResult>
+        openOfficialLogin: (params: {
+          id: string
+        }) => Promise<OfficialCliLoginResult>
+        getOfficialAccountStatus: (params: {
+          id: string
+        }) => Promise<OfficialCliAccountStatusResult>
+        switchOfficialAccount: (params: {
+          id: string
+        }) => Promise<OfficialCliSwitchAccountResult>
         orchestrationStatus: (params?: {
           runId?: string
           threadId?: string

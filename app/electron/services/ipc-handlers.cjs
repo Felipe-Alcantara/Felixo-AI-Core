@@ -28,6 +28,13 @@ const {
   createStderrTerminalEvent,
   createTerminalEvents,
 } = require('./terminal-event-formatter.cjs')
+const {
+  getOfficialCliAccountStatus,
+  installOfficialCli,
+  listOfficialCliCatalog,
+  openOfficialCliLogin,
+  switchOfficialCliAccount,
+} = require('./official-cli-service.cjs')
 
 const cliManager = new CliProcessManager()
 const stoppedSessions = new Set()
@@ -44,6 +51,108 @@ function registerCliIpcHandlers(getMainWindow) {
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
 
     return sendCliRequest(params, targetWebContents)
+  })
+
+  ipcMain.handle('cli:list-official', async () => {
+    try {
+      const clis = await listOfficialCliCatalog()
+      return { ok: true, clis }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Falha ao listar CLIs oficiais.'
+
+      logQaEvent({
+        level: 'error',
+        scope: 'cli:list-official',
+        message,
+      })
+
+      return { ok: false, message, clis: [] }
+    }
+  })
+
+  ipcMain.handle('cli:install-official', async (_event, params) => {
+    const id = getRequiredString(params?.id)
+
+    if (!id) {
+      return { ok: false, message: 'CLI oficial invalida.' }
+    }
+
+    logQaEvent({
+      level: 'info',
+      scope: 'cli:install-official',
+      message: `Installing official CLI ${id}.`,
+    })
+
+    return installOfficialCli(id)
+  })
+
+  ipcMain.handle('cli:open-official-login', (_event, params) => {
+    const id = getRequiredString(params?.id)
+
+    if (!id) {
+      return { ok: false, message: 'CLI oficial invalida.' }
+    }
+
+    const result = openOfficialCliLogin(id)
+    logQaEvent({
+      level: result.ok ? 'info' : 'warn',
+      scope: 'cli:open-official-login',
+      message: result.message ?? `Login command requested for ${id}.`,
+      details: {
+        id,
+        command: result.command,
+        args: result.args,
+        manualCommand: result.manualCommand,
+      },
+    })
+
+    return result
+  })
+
+  ipcMain.handle('cli:official-account-status', async (_event, params) => {
+    const id = getRequiredString(params?.id)
+
+    if (!id) {
+      return { ok: false, message: 'CLI oficial invalida.' }
+    }
+
+    const result = await getOfficialCliAccountStatus(id)
+    logQaEvent({
+      level: result.ok ? 'info' : 'warn',
+      scope: 'cli:official-account-status',
+      message: result.message ?? `Account status requested for ${id}.`,
+      details: {
+        id,
+        authStatus: result.authStatus,
+      },
+    })
+
+    return result
+  })
+
+  ipcMain.handle('cli:switch-official-account', async (_event, params) => {
+    const id = getRequiredString(params?.id)
+
+    if (!id) {
+      return { ok: false, message: 'CLI oficial invalida.' }
+    }
+
+    const result = await switchOfficialCliAccount(id)
+    logQaEvent({
+      level: result.ok ? 'info' : 'warn',
+      scope: 'cli:switch-official-account',
+      message: result.message ?? `Account switch requested for ${id}.`,
+      details: {
+        id,
+        command: result.command,
+        args: result.args,
+      },
+    })
+
+    return result
   })
 
   const orchestrationRunner = createOrchestrationRunner({
