@@ -99,6 +99,14 @@ import { SkillsModal } from './SkillsModal'
 import { TerminalPanel } from './TerminalPanel'
 
 const CONTEXT_MESSAGE_LIMIT = 12
+const SIMPLE_CURRENT_REQUEST_PATTERNS = [
+  /^(oi|ola|opa|e ai|salve|hello|hi|hey)$/,
+  /^(bom dia|boa tarde|boa noite)$/,
+  /^(tudo bem|como voce esta|como vc esta)$/,
+  /^(ta|esta|funcionando|funciona|rodando|online|ok)(\s+(funcionando|bem|agora|ai|aqui|mesmo|normal|ok))*$/,
+  /^(ta funcionando|esta funcionando|funciona|funcionando|ta rodando|esta rodando|rodando|online|ok)$/,
+  /^(teste|testando|ping)$/,
+]
 const OPEN_ENDED_ORCHESTRATION_TOPICS = [
   'astronomia cotidiana',
   'historia curiosa',
@@ -509,8 +517,13 @@ export function ChatWorkspace() {
 
     const sessionId = createSessionId()
     ensureActiveChatSessionId()
-    const threadId = getConversationThreadId(selectedModel)
-    const cliCwd = resolveActiveProjectCwd(activeProjects)
+    const useLeanContext = shouldUseLeanContextForCurrentPrompt(content)
+    const threadId = useLeanContext
+      ? createSessionId()
+      : getConversationThreadId(selectedModel)
+    const cliCwd = useLeanContext
+      ? undefined
+      : resolveActiveProjectCwd(activeProjects)
     const prevIds = lastSentProjectIdsRef.current
     const added = activeProjects.filter((p) => !prevIds.has(p.id))
     const removed = [...prevIds]
@@ -1620,6 +1633,12 @@ function createCliPrompt(
     globalMemoriesContextBlock = null,
     skillsContextBlock = null,
   } = options
+  const useLeanContext = shouldUseLeanContextForCurrentPrompt(currentPrompt)
+  const contextualActiveProjects = useLeanContext ? [] : activeProjects
+  const contextualProjectDiff = useLeanContext
+    ? { added: [], removed: [] }
+    : projectDiff
+  const contextualAttachments = useLeanContext ? [] : attachments
   const allHistoryMessages = messages.filter((message) => message.content.trim())
   const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
   const historyOffset = allHistoryMessages.length - historyMessages.length
@@ -1628,17 +1647,20 @@ function createCliPrompt(
   ).length
   const currentUserMessageNumber = previousUserMessageCount + 1
 
-  const hasCountContext = allHistoryMessages.length > 0
-  const hasHistory = includeHistory && historyMessages.length > 0
-  const hasDiff = projectDiff.added.length > 0 || projectDiff.removed.length > 0
-  const hasAttachments = attachments.length > 0
-  const hasGlobalMemories = Boolean(globalMemoriesContextBlock)
-  const hasSkills = Boolean(skillsContextBlock)
-  const providerDefaultInstructions = createProviderDefaultInstructions(
-    selectedModel,
-    currentPrompt,
-  )
-  const orchestrationInstructions = shouldUseOrchestrationProtocol(currentPrompt)
+  const hasCountContext = !useLeanContext && allHistoryMessages.length > 0
+  const hasHistory =
+    includeHistory && !useLeanContext && historyMessages.length > 0
+  const hasDiff =
+    contextualProjectDiff.added.length > 0 ||
+    contextualProjectDiff.removed.length > 0
+  const hasAttachments = contextualAttachments.length > 0
+  const hasGlobalMemories = !useLeanContext && Boolean(globalMemoriesContextBlock)
+  const hasSkills = !useLeanContext && Boolean(skillsContextBlock)
+  const providerDefaultInstructions = useLeanContext
+    ? null
+    : createProviderDefaultInstructions(selectedModel, currentPrompt)
+  const orchestrationInstructions =
+    !useLeanContext && shouldUseOrchestrationProtocol(currentPrompt)
     ? createOrchestrationProtocolInstructions(
         orchestrationHint,
         orchestrationContextBlock,
@@ -1651,7 +1673,7 @@ function createCliPrompt(
     Boolean(orchestrationInstructions) ||
     hasCountContext ||
     hasHistory ||
-    activeProjects.length > 0 ||
+    contextualActiveProjects.length > 0 ||
     hasDiff ||
     hasAttachments
 
@@ -1696,26 +1718,26 @@ function createCliPrompt(
     '  - Se o usuário perguntar quantas mensagens ele mandou, use o total incluindo a mensagem atual, salvo se ele pedir explicitamente outra regra.',
   )
 
-  if (activeProjects.length > 0) {
+  if (contextualActiveProjects.length > 0) {
     lines.push('', 'Projetos com contexto ativo:')
-    for (const p of activeProjects) {
+    for (const p of contextualActiveProjects) {
       lines.push(`  - ${p.name}: ${p.path}`)
     }
   }
 
   if (hasDiff) {
     lines.push('', 'Mudanças nos projetos ativos nesta mensagem:')
-    for (const p of projectDiff.added) {
+    for (const p of contextualProjectDiff.added) {
       lines.push(`  + Adicionado: ${p.name} (${p.path})`)
     }
-    for (const p of projectDiff.removed) {
+    for (const p of contextualProjectDiff.removed) {
       lines.push(`  - Removido: ${p.name} — não interaja mais com este repositório`)
     }
   }
 
   if (hasAttachments) {
     lines.push('', 'Anexos de contexto adicionados pelo usuario:')
-    for (const attachment of attachments) {
+    for (const attachment of contextualAttachments) {
       lines.push(
         `  - ${attachment.name}`,
         `    Tipo: ${attachment.type}`,
@@ -1886,6 +1908,25 @@ function normalizePromptText(prompt: string) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+}
+
+function shouldUseLeanContextForCurrentPrompt(prompt: string) {
+  const normalizedPrompt = normalizePromptText(prompt)
+    .replace(/[?!.,;:()[\]{}'"`´^~]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!normalizedPrompt) {
+    return false
+  }
+
+  if (normalizedPrompt.length > 80) {
+    return false
+  }
+
+  return SIMPLE_CURRENT_REQUEST_PATTERNS.some((pattern) =>
+    pattern.test(normalizedPrompt),
+  )
 }
 
 function normalizeModelCommand(command: string) {

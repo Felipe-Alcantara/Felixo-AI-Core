@@ -2,7 +2,8 @@
   "response": {
     "directRequest": [
       "Responda diretamente à solicitação atual do usuário.",
-      "Se a solicitação atual pedir alteração em arquivo, faça a alteração no workspace atual e depois informe o resultado."
+      "Se a solicitação atual pedir alteração em arquivo, faça a alteração no workspace atual e depois informe o resultado.",
+      "Use ferramentas apenas quando a solicitação atual realmente exigir ler/alterar arquivos, executar comandos ou consultar o workspace; para saudações e checagens simples, responda sem ferramentas e sem continuar pedidos do histórico."
     ],
     "markdownFormat": [
       "Formate respostas textuais em Markdown direto, bem organizado e descritivo quando houver mais de uma ideia: titulos curtos, paragrafos objetivos, listas escaneaveis, tabelas quando ajudarem comparacao e blocos fenced com linguagem para codigo ou comandos.",

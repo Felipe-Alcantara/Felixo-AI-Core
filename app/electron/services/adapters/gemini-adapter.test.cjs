@@ -152,6 +152,42 @@ test('gemini adapter parses result as done', () => {
   })
 })
 
+test('gemini adapter parses tool use events as visible activity', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'tool_use',
+      tool_name: 'read_file',
+      parameters: {
+        file_path: 'README.md',
+      },
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'tool_use',
+    tool: 'read_file',
+    input: JSON.stringify({
+      file_path: 'README.md',
+    }),
+  })
+})
+
+test('gemini adapter parses tool result events as visible activity', () => {
+  const event = adapter.parseLine(
+    JSON.stringify({
+      type: 'tool_result',
+      tool_id: 'read_file_1',
+      status: 'success',
+      output: 'conteudo',
+    }),
+  )
+
+  assert.deepEqual(event, {
+    type: 'tool_result',
+    output: 'conteudo',
+  })
+})
+
 test('gemini adapter parses orchestration spawn_agent events', () => {
   const event = adapter.parseLine(
     JSON.stringify({

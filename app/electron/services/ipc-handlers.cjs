@@ -458,7 +458,7 @@ function registerCliIpcHandlers(getMainWindow) {
           clearFirstVisibleOutputTimer()
         }
 
-        if (cliEvent.type === 'text' && cliEvent.text.trim()) {
+        if (isVisibleCliActivity(cliEvent)) {
           didEmitVisibleOutput = true
           clearFirstVisibleOutputTimer()
         }
@@ -1292,7 +1292,7 @@ function handlePersistentStdoutLine(persistentSession, line) {
     }),
   )
 
-  if (cliEvent.type === 'text' && cliEvent.text.trim()) {
+  if (isVisibleCliActivity(cliEvent)) {
     activeRun.didEmitVisibleOutput = true
     clearPersistentRunTimer(activeRun)
   }
@@ -1666,6 +1666,18 @@ function parseAdapterLine(adapter, line) {
           : 'Falha ao interpretar saída da CLI.',
     }
   }
+}
+
+function isVisibleCliActivity(cliEvent) {
+  if (!cliEvent || typeof cliEvent !== 'object') {
+    return false
+  }
+
+  if (cliEvent.type === 'text') {
+    return Boolean(String(cliEvent.text ?? '').trim())
+  }
+
+  return cliEvent.type === 'tool_use' || cliEvent.type === 'tool_result'
 }
 
 function handleOrchestrationPromise(promise) {

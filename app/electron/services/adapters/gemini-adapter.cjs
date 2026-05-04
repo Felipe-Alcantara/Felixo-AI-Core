@@ -80,6 +80,21 @@ function parseLine(line) {
     }
   }
 
+  if (payload.type === 'tool_use') {
+    return {
+      type: 'tool_use',
+      tool: payload.tool_name ?? payload.name ?? 'tool',
+      input: stringifyToolInput(payload.parameters ?? payload.input ?? {}),
+    }
+  }
+
+  if (payload.type === 'tool_result') {
+    return {
+      type: 'tool_result',
+      output: stringifyToolOutput(payload.output ?? payload.result ?? payload),
+    }
+  }
+
   if (payload.type === 'result') {
     return {
       type: 'done',
@@ -94,6 +109,22 @@ function parseLine(line) {
   }
 
   return null
+}
+
+function stringifyToolInput(input) {
+  if (typeof input === 'string') {
+    return input
+  }
+
+  return JSON.stringify(input ?? {})
+}
+
+function stringifyToolOutput(output) {
+  if (typeof output === 'string') {
+    return output
+  }
+
+  return JSON.stringify(output ?? {})
 }
 
 function classifyStderr(chunk) {
