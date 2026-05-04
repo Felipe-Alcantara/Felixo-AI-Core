@@ -121,7 +121,7 @@ Se quiser apenas abrir sem instalar dependências automaticamente:
 python3 start_app.py --skip-install
 ```
 
-Se alguma CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com a pasta onde o comando está instalado.
+Se alguma CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com a pasta onde o comando está instalado. O Claude Code roda por padrão com `--permission-mode acceptEdits` para funcionar em modo não interativo; se precisar ajustar, use `FELIXO_CLAUDE_PERMISSION_MODE=default|plan|auto|dontAsk|bypassPermissions|off`.
 
 ## Como distribuir
 

@@ -160,10 +160,11 @@ Mudancas planejadas:
 
 ### Claude
 
-Investigar o formato real emitido pela Claude CLI quando ha pedido de permissao.
-Se o pedido aparecer como JSONL estruturado, converter para `permission_request`.
-Se aparecer como prompt interativo de TTY, documentar limitacao e bloquear com
-mensagem clara ate existir suporte confiavel.
+O adapter inicia Claude Code com `--permission-mode acceptEdits` por padrao
+para evitar bloqueio em execucao nao interativa. `FELIXO_CLAUDE_PERMISSION_MODE`
+permite trocar para `default`, `plan`, `auto`, `dontAsk`, `bypassPermissions`
+ou `off`. Ainda falta investigar o formato real de pedidos estruturados de
+permissao para transformar aprovacao manual em `permission_request` na UI.
 
 ### Codex
 
