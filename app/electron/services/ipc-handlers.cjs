@@ -322,7 +322,8 @@ function registerCliIpcHandlers(getMainWindow) {
     spawnContext.usesNativeResume = executionPlan.usesNativeResume
     const usesNativeResume = executionPlan.usesNativeResume
     const spawnPrompt = executionPlan.spawnPrompt
-    const { command, args } = getAdapterSpawnArgs(adapter, spawnPrompt, spawnContext)
+    const { command, args, stdinInput } =
+      getAdapterSpawnArgs(adapter, spawnPrompt, spawnContext)
     let didComplete = false
     let didEmitVisibleOutput = false
     let stderrOutput = ''
@@ -343,6 +344,7 @@ function registerCliIpcHandlers(getMainWindow) {
           reasoningEffort: model?.reasoningEffort,
           command,
           args,
+          stdin: Boolean(stdinInput),
           cwd,
           isContinuation: spawnContext.isContinuation,
           usesNativeResume,
@@ -362,7 +364,9 @@ function registerCliIpcHandlers(getMainWindow) {
           promptHint: requestOrchestrationContext.promptHint ?? spawnPrompt,
         }),
       ])
-      const childProcess = cliManager.spawn(threadId, command, args, cwd)
+      const childProcess = cliManager.spawn(threadId, command, args, cwd, {
+        openStdin: Boolean(stdinInput),
+      })
       threadSession.hasStarted = true
       firstVisibleOutputTimer = setTimeout(() => {
         if (didComplete || didEmitVisibleOutput) {
@@ -661,6 +665,22 @@ function registerCliIpcHandlers(getMainWindow) {
           sendCliEvent(targetWebContents, doneEvent)
         }
       })
+
+      if (stdinInput && !writeOneShotStdin(childProcess, stdinInput)) {
+        didComplete = true
+        clearFirstVisibleOutputTimer()
+        sendTerminalEvents(targetWebContents, threadId, [
+          createErrorTerminalEvent(`${command} não aceitou entrada via stdin.`),
+        ])
+        dispatchCliEvent({
+          type: 'error',
+          message: `${command} não aceitou entrada via stdin.`,
+          sessionId: streamSessionId,
+          threadId,
+        })
+        cliManager.kill(threadId)
+        return { ok: false, message: 'Falha ao enviar prompt para a CLI.' }
+      }
 
       return { ok: true }
     } catch (error) {
@@ -1704,6 +1724,21 @@ function shouldAbortOnAdapterStderr(adapter, chunk) {
     typeof adapter.shouldAbortOnStderr === 'function' &&
     adapter.shouldAbortOnStderr(chunk)
   )
+}
+
+function writeOneShotStdin(childProcess, input) {
+  const stdin = childProcess?.stdin
+
+  if (!stdin || stdin.destroyed || stdin.writableEnded) {
+    return false
+  }
+
+  try {
+    stdin.end(input)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function formatAdapterStderr(adapter, chunk) {
