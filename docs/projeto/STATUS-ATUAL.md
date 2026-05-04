@@ -104,10 +104,11 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Sessão persistente
 
 - Claude usa processo persistente real:
-  - spawn inicial com `claude --print --input-format stream-json --output-format stream-json --verbose --include-partial-messages`.
+  - spawn inicial com `claude --print --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode acceptEdits`.
   - `stdin` fica aberto.
   - cada nova mensagem da mesma conversa é escrita no mesmo processo em JSONL.
   - se houver `providerSessionId`, o próximo processo pode retomar com `--resume`.
+  - `FELIXO_CLAUDE_PERMISSION_MODE` permite trocar o modo de permissão ou usar `off` para omitir a flag.
 - Processos persistentes ociosos são encerrados após 30 minutos.
 - O backend evita apagar uma sessão nova se um processo antigo fechar atrasado com o mesmo `threadId`.
 - Enquanto uma resposta está ativa, uma nova mensagem para a mesma thread é rejeitada para evitar interleaving de streams.

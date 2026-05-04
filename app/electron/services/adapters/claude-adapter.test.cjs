@@ -14,6 +14,8 @@ test('claude adapter pins first run to provided thread session id', () => {
     'stream-json',
     '--verbose',
     '--include-partial-messages',
+    '--permission-mode',
+    'acceptEdits',
     '--session-id',
     '00000000-0000-4000-8000-000000000001',
     'Oi',
@@ -36,6 +38,8 @@ test('claude adapter passes provider model and effort when configured', () => {
     'stream-json',
     '--verbose',
     '--include-partial-messages',
+    '--permission-mode',
+    'acceptEdits',
     '--model',
     'claude-sonnet-4-5',
     '--effort',
@@ -58,6 +62,8 @@ test('claude adapter resumes an existing provider session', () => {
     'stream-json',
     '--verbose',
     '--include-partial-messages',
+    '--permission-mode',
+    'acceptEdits',
     '--resume',
     '00000000-0000-4000-8000-000000000001',
     'Continua',
@@ -78,6 +84,8 @@ test('claude adapter starts a persistent stream-json process without pinning ses
     'stream-json',
     '--verbose',
     '--include-partial-messages',
+    '--permission-mode',
+    'acceptEdits',
   ])
 })
 
@@ -96,9 +104,54 @@ test('claude adapter resumes a persistent process when providerSessionId is set'
     'stream-json',
     '--verbose',
     '--include-partial-messages',
+    '--permission-mode',
+    'acceptEdits',
     '--resume',
     '00000000-0000-4000-8000-000000000002',
   ])
+})
+
+test('claude adapter allows permission mode override from context', () => {
+  const spawnArgs = adapter.getSpawnArgs('Planeja', {
+    claudePermissionMode: 'plan',
+  })
+
+  assert.deepEqual(spawnArgs.args, [
+    '--print',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--permission-mode',
+    'plan',
+    'Planeja',
+  ])
+})
+
+test('claude adapter allows permission mode override from environment', () => {
+  const previousValue = process.env.FELIXO_CLAUDE_PERMISSION_MODE
+  process.env.FELIXO_CLAUDE_PERMISSION_MODE = 'auto'
+
+  try {
+    const spawnArgs = adapter.getSpawnArgs('Automatiza')
+
+    assert.deepEqual(spawnArgs.args, [
+      '--print',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+      '--permission-mode',
+      'auto',
+      'Automatiza',
+    ])
+  } finally {
+    if (previousValue === undefined) {
+      delete process.env.FELIXO_CLAUDE_PERMISSION_MODE
+    } else {
+      process.env.FELIXO_CLAUDE_PERMISSION_MODE = previousValue
+    }
+  }
 })
 
 test('claude adapter serializes persistent stdin messages', () => {

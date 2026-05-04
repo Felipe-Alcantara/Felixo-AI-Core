@@ -25,7 +25,7 @@ Isso é diferente de retomada nativa. Retomada nativa reutiliza a conversa do pr
 
 Claude ja usa processo persistente real.
 
-- Comando: `claude --print --input-format stream-json --output-format stream-json`.
+- Comando: `claude --print --input-format stream-json --output-format stream-json --permission-mode acceptEdits`.
 - Transporte: stdin/stdout JSONL.
 - Inicializacao: o processo recebe mensagens JSONL pelo stdin.
 - Streaming: eventos `stream_event` e `result`.

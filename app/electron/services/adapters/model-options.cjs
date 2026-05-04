@@ -1,5 +1,15 @@
 const CODEX_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh'])
 const CLAUDE_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'max'])
+const CLAUDE_PERMISSION_MODES = new Set([
+  'default',
+  'acceptEdits',
+  'plan',
+  'auto',
+  'dontAsk',
+  'bypassPermissions',
+])
+const CLAUDE_PERMISSION_MODE_ENV = 'FELIXO_CLAUDE_PERMISSION_MODE'
+const DEFAULT_CLAUDE_PERMISSION_MODE = 'acceptEdits'
 
 function createCodexExecOptionArgs(context = {}) {
   const args = []
@@ -40,14 +50,35 @@ function createModelOptionArgs(context = {}) {
 }
 
 function createClaudeOptionArgs(context = {}) {
-  const args = createModelOptionArgs(context)
+  const args = []
   const reasoningEffort = getReasoningEffort(context, CLAUDE_REASONING_EFFORTS)
+  const permissionMode = getClaudePermissionMode(context)
+
+  if (permissionMode) {
+    args.push('--permission-mode', permissionMode)
+  }
+
+  args.push(...createModelOptionArgs(context))
 
   if (reasoningEffort) {
     args.push('--effort', reasoningEffort)
   }
 
   return args
+}
+
+function getClaudePermissionMode(context = {}) {
+  const value = getTrimmedString(
+    context.claudePermissionMode ?? process.env[CLAUDE_PERMISSION_MODE_ENV],
+  )
+
+  if (value === 'off' || value === 'none') {
+    return ''
+  }
+
+  return CLAUDE_PERMISSION_MODES.has(value)
+    ? value
+    : DEFAULT_CLAUDE_PERMISSION_MODE
 }
 
 function getProviderModel(context = {}) {
@@ -73,8 +104,10 @@ function getTrimmedString(value) {
 }
 
 module.exports = {
+  CLAUDE_PERMISSION_MODE_ENV,
   createClaudeOptionArgs,
   createCodexConfigOptionArgs,
   createCodexExecOptionArgs,
   createModelOptionArgs,
+  getClaudePermissionMode,
 }
