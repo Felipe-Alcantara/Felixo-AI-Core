@@ -124,3 +124,59 @@ div::-webkit-scrollbar-thumb {
   .gap-theme { gap: var(--spacing-base); }
   .p-theme { padding: var(--spacing-base); }
 }
+
+@layer components {
+  .markdown-content :not(pre) > code {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.375rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.125rem 0.375rem;
+    color: #cffafe;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+  }
+
+  .markdown-content li > p {
+    display: inline;
+  }
+
+  .markdown-content pre code {
+    white-space: pre;
+  }
+
+  .markdown-content .hljs-keyword,
+  .markdown-content .hljs-selector-tag,
+  .markdown-content .hljs-built_in {
+    color: #f0abfc;
+  }
+
+  .markdown-content .hljs-title,
+  .markdown-content .hljs-title.function_,
+  .markdown-content .hljs-function .hljs-title {
+    color: #93c5fd;
+  }
+
+  .markdown-content .hljs-string,
+  .markdown-content .hljs-attr,
+  .markdown-content .hljs-template-variable {
+    color: #86efac;
+  }
+
+  .markdown-content .hljs-number,
+  .markdown-content .hljs-literal,
+  .markdown-content .hljs-variable,
+  .markdown-content .hljs-property {
+    color: #fdba74;
+  }
+
+  .markdown-content .hljs-comment,
+  .markdown-content .hljs-quote {
+    color: #94a3b8;
+    font-style: italic;
+  }
+
+  .markdown-content .hljs-tag,
+  .markdown-content .hljs-name {
+    color: #67e8f9;
+  }
+}

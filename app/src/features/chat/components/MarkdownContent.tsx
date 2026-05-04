@@ -1,205 +1,532 @@
-import type { ReactNode } from 'react'
+import {
+  Children,
+  isValidElement,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
+import hljs from 'highlight.js/lib/core'
+import bashLanguage from 'highlight.js/lib/languages/bash'
+import cssLanguage from 'highlight.js/lib/languages/css'
+import javascriptLanguage from 'highlight.js/lib/languages/javascript'
+import jsonLanguage from 'highlight.js/lib/languages/json'
+import markdownLanguage from 'highlight.js/lib/languages/markdown'
+import pythonLanguage from 'highlight.js/lib/languages/python'
+import typescriptLanguage from 'highlight.js/lib/languages/typescript'
+import xmlLanguage from 'highlight.js/lib/languages/xml'
+import rehypeRaw from 'rehype-raw'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 type MarkdownContentProps = {
   content: string
 }
 
-type MarkdownBlock =
-  | { type: 'code'; content: string; language: string }
-  | { type: 'heading'; content: string; level: 1 | 2 | 3 }
-  | { type: 'list'; items: string[]; ordered: boolean }
-  | { type: 'paragraph'; content: string }
+const highlightLanguageAliases: Record<string, string> = {
+  html: 'xml',
+  js: 'javascript',
+  jsx: 'javascript',
+  md: 'markdown',
+  py: 'python',
+  sh: 'bash',
+  shell: 'bash',
+  ts: 'typescript',
+  tsx: 'typescript',
+}
 
-export function MarkdownContent({ content }: MarkdownContentProps) {
-  const blocks = parseMarkdownBlocks(content)
+hljs.registerLanguage('bash', bashLanguage)
+hljs.registerLanguage('css', cssLanguage)
+hljs.registerLanguage('javascript', javascriptLanguage)
+hljs.registerLanguage('json', jsonLanguage)
+hljs.registerLanguage('markdown', markdownLanguage)
+hljs.registerLanguage('python', pythonLanguage)
+hljs.registerLanguage('typescript', typescriptLanguage)
+hljs.registerLanguage('xml', xmlLanguage)
+
+const markdownComponents: Components = {
+  h1({ children }) {
+    return <h1 className="text-base font-semibold text-zinc-50">{children}</h1>
+  },
+  h2({ children }) {
+    return <h2 className="text-sm font-semibold text-zinc-100">{children}</h2>
+  },
+  h3({ children }) {
+    return <h3 className="text-[13px] font-semibold text-zinc-100">{children}</h3>
+  },
+  h4({ children }) {
+    return <h4 className="text-[13px] font-semibold text-zinc-100">{children}</h4>
+  },
+  h5({ children }) {
+    return <h5 className="text-[12px] font-semibold text-zinc-200">{children}</h5>
+  },
+  h6({ children }) {
+    return (
+      <h6 className="text-[11px] font-semibold uppercase text-zinc-300">
+        {children}
+      </h6>
+    )
+  },
+  p({ children }) {
+    return <p className="whitespace-pre-wrap text-zinc-100">{children}</p>
+  },
+  strong({ children }) {
+    return <strong className="font-semibold text-zinc-50">{children}</strong>
+  },
+  em({ children }) {
+    return <em className="italic text-zinc-100">{children}</em>
+  },
+  del({ children }) {
+    return <del className="text-zinc-400 line-through">{children}</del>
+  },
+  a({ children, href }) {
+    return (
+      <a
+        className="font-medium text-cyan-200 underline decoration-cyan-200/35 underline-offset-4 hover:text-cyan-100"
+        href={href}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {children}
+      </a>
+    )
+  },
+  blockquote({ children }) {
+    return (
+      <blockquote className="border-l-2 border-orange-200/35 pl-3 text-zinc-300">
+        {children}
+      </blockquote>
+    )
+  },
+  ul({ children, className }) {
+    const isTaskList = className?.includes('contains-task-list')
+
+    return (
+      <ul
+        className={joinClassNames(
+          isTaskList
+            ? 'space-y-1 pl-0 text-zinc-100'
+            : 'list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500',
+          className,
+        )}
+      >
+        {children}
+      </ul>
+    )
+  },
+  ol({ children, className }) {
+    return (
+      <ol
+        className={joinClassNames(
+          'list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500',
+          className,
+        )}
+      >
+        {children}
+      </ol>
+    )
+  },
+  li({ children, className }) {
+    const isTaskItem = className?.includes('task-list-item')
+
+    return (
+      <li
+        className={joinClassNames(
+          isTaskItem ? 'flex list-none items-start gap-2 pl-0' : 'pl-1',
+          className,
+        )}
+      >
+        {children}
+      </li>
+    )
+  },
+  hr() {
+    return <hr className="my-3 border-white/[0.08]" />
+  },
+  table({ children }) {
+    return (
+      <div className="max-w-full overflow-x-auto rounded-lg border border-white/[0.08]">
+        <table className="w-full min-w-max border-collapse text-left text-[12px]">
+          {children}
+        </table>
+      </div>
+    )
+  },
+  thead({ children }) {
+    return <thead className="bg-white/[0.05] text-zinc-200">{children}</thead>
+  },
+  tbody({ children }) {
+    return <tbody className="divide-y divide-white/[0.06]">{children}</tbody>
+  },
+  tr({ children }) {
+    return <tr>{children}</tr>
+  },
+  th({ children }) {
+    return (
+      <th className="border-r border-white/[0.06] px-3 py-2 font-semibold last:border-r-0">
+        {children}
+      </th>
+    )
+  },
+  td({ children }) {
+    return (
+      <td className="border-r border-white/[0.06] px-3 py-2 text-zinc-300 last:border-r-0">
+        {children}
+      </td>
+    )
+  },
+  img: MarkdownImage,
+  input(props) {
+    return <input {...props} className="mr-2 align-middle accent-orange-200" />
+  },
+  code({ children, className }) {
+    return <code className={className}>{children}</code>
+  },
+  pre({ children }) {
+    const language = getCodeBlockLanguage(children)
+    const codeText = getCodeBlockText(children)
+    const recoveredMarkdown = recoverMarkdownSwallowedByCodeBlock(
+      codeText,
+      language,
+    )
+
+    if (recoveredMarkdown) {
+      return (
+        <>
+          <CodeBlock code={recoveredMarkdown.code} language={language} />
+          <MarkdownContent content={recoveredMarkdown.markdown} />
+        </>
+      )
+    }
+
+    return <CodeBlock code={codeText} language={language} />
+  },
+}
+
+function MarkdownImage({ alt, src, title }: ComponentProps<'img'>) {
+  const [hasError, setHasError] = useState(!src)
+
+  if (hasError) {
+    return (
+      <span
+        className="inline-flex max-w-full items-center rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[12px] text-zinc-300"
+        title={typeof src === 'string' ? src : title}
+      >
+        {alt || 'Imagem indisponível'}
+      </span>
+    )
+  }
 
   return (
-    <div className="space-y-2 text-[13px] leading-relaxed text-zinc-100">
-      {blocks.map((block, index) => (
-        <MarkdownBlockView block={block} key={`${block.type}-${index}`} />
-      ))}
+    <img
+      alt={alt ?? ''}
+      className="max-h-64 max-w-full rounded-lg border border-white/[0.08] object-contain"
+      loading="lazy"
+      onError={() => setHasError(true)}
+      src={src}
+      title={title}
+    />
+  )
+}
+
+function CodeBlock({
+  code,
+  language,
+}: {
+  code: string
+  language: string
+}) {
+  const highlightedCode = highlightCode(code, language)
+
+  return (
+    <div className="max-w-full overflow-hidden rounded-xl border border-white/[0.08] bg-black/25">
+      <div className="flex h-7 items-center justify-between border-b border-white/[0.06] px-3 font-mono text-[10px] uppercase text-zinc-500">
+        <span>{language || 'código'}</span>
+      </div>
+      <pre className="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200">
+        {highlightedCode ? (
+          <code
+            className={joinClassNames('hljs', language ? `language-${language}` : undefined)}
+            dangerouslySetInnerHTML={{ __html: highlightedCode }}
+          />
+        ) : (
+          <code>{code}</code>
+        )}
+      </pre>
     </div>
   )
 }
 
-function MarkdownBlockView({ block }: { block: MarkdownBlock }) {
-  if (block.type === 'code') {
-    return (
-      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-black/25">
-        <div className="flex h-7 items-center justify-between border-b border-white/[0.06] px-3 font-mono text-[10px] uppercase text-zinc-500">
-          <span>{block.language || 'código'}</span>
-        </div>
-        <pre className="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200">
-          <code>{block.content}</code>
-        </pre>
-      </div>
-    )
-  }
-
-  if (block.type === 'heading') {
-    const className =
-      block.level === 1
-        ? 'text-base font-semibold text-zinc-50'
-        : block.level === 2
-          ? 'text-sm font-semibold text-zinc-100'
-          : 'text-[13px] font-semibold text-zinc-100'
-
-    return <div className={className}>{renderInlineMarkdown(block.content)}</div>
-  }
-
-  if (block.type === 'list') {
-    const ListTag = block.ordered ? 'ol' : 'ul'
-
-    return (
-      <ListTag
-        className={[
-          'space-y-1 pl-4 text-zinc-100',
-          block.ordered ? 'list-decimal' : 'list-disc',
-        ].join(' ')}
-      >
-        {block.items.map((item, index) => (
-          <li key={`${item}-${index}`}>{renderInlineMarkdown(item)}</li>
-        ))}
-      </ListTag>
-    )
-  }
+export function MarkdownContent({ content }: MarkdownContentProps) {
+  const normalizedContent = normalizeMarkdownContent(content)
 
   return (
-    <p className="whitespace-pre-wrap text-zinc-100">
-      {renderInlineMarkdown(block.content)}
-    </p>
+    <div className="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100">
+      <ReactMarkdown
+        components={markdownComponents}
+        rehypePlugins={[rehypeRaw]}
+        remarkPlugins={[remarkGfm]}
+      >
+        {normalizedContent}
+      </ReactMarkdown>
+    </div>
   )
 }
 
-function parseMarkdownBlocks(content: string): MarkdownBlock[] {
-  const lines = content.replace(/\r\n/g, '\n').split('\n')
-  const blocks: MarkdownBlock[] = []
+function normalizeMarkdownContent(content: string) {
+  return unwrapMarkdownDocumentFences(content.replace(/\r\n?/g, '\n'))
+}
+
+function unwrapMarkdownDocumentFences(content: string) {
+  const lines = content.split('\n')
+  const normalizedLines: string[] = []
   let index = 0
 
   while (index < lines.length) {
     const line = lines[index]
-    const trimmedLine = line.trim()
 
-    if (!trimmedLine) {
+    if (!isMarkdownFenceOpener(line)) {
+      normalizedLines.push(line)
       index += 1
       continue
     }
 
-    const fenceMatch = trimmedLine.match(/^```([a-zA-Z0-9_-]*)\s*$/)
+    const closingFenceIndex = findMarkdownDocumentFenceCloser(
+      lines,
+      index,
+      getFenceMarker(line),
+    )
 
-    if (fenceMatch) {
-      const language = fenceMatch[1] ?? ''
-      const codeLines: string[] = []
-      index += 1
-
-      while (index < lines.length && !lines[index].trim().startsWith('```')) {
-        codeLines.push(lines[index])
-        index += 1
-      }
-
-      if (index < lines.length) {
-        index += 1
-      }
-
-      blocks.push({
-        type: 'code',
-        content: codeLines.join('\n'),
-        language,
-      })
-      continue
+    if (closingFenceIndex === -1) {
+      normalizedLines.push(...lines.slice(index + 1))
+      break
     }
 
-    const headingMatch = trimmedLine.match(/^(#{1,3})\s+(.+)$/)
-
-    if (headingMatch) {
-      blocks.push({
-        type: 'heading',
-        level: headingMatch[1].length as 1 | 2 | 3,
-        content: headingMatch[2].trim(),
-      })
-      index += 1
-      continue
-    }
-
-    if (isUnorderedListLine(trimmedLine)) {
-      const items: string[] = []
-
-      while (index < lines.length && isUnorderedListLine(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^[-*]\s+/, ''))
-        index += 1
-      }
-
-      blocks.push({ type: 'list', items, ordered: false })
-      continue
-    }
-
-    if (isOrderedListLine(trimmedLine)) {
-      const items: string[] = []
-
-      while (index < lines.length && isOrderedListLine(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^\d+\.\s+/, ''))
-        index += 1
-      }
-
-      blocks.push({ type: 'list', items, ordered: true })
-      continue
-    }
-
-    const paragraphLines: string[] = []
-
-    while (index < lines.length && !isBlockBoundary(lines[index])) {
-      paragraphLines.push(lines[index])
-      index += 1
-    }
-
-    blocks.push({
-      type: 'paragraph',
-      content: paragraphLines.join('\n').trim(),
-    })
+    normalizedLines.push(...lines.slice(index + 1, closingFenceIndex))
+    index = closingFenceIndex + 1
   }
 
-  return blocks
+  return normalizedLines.join('\n')
 }
 
-function isBlockBoundary(line: string) {
+function findMarkdownDocumentFenceCloser(
+  lines: string[],
+  openingFenceIndex: number,
+  openingMarker: string,
+) {
+  let nestedFenceMarker = ''
+
+  for (let index = openingFenceIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index]
+
+    if (nestedFenceMarker) {
+      if (isFenceCloser(line, nestedFenceMarker)) {
+        nestedFenceMarker = ''
+      }
+
+      continue
+    }
+
+    if (isNonMarkdownFenceOpener(line)) {
+      nestedFenceMarker = getFenceMarker(line)
+      continue
+    }
+
+    if (isFenceCloser(line, openingMarker)) {
+      return index
+    }
+  }
+
+  return -1
+}
+
+function isMarkdownFenceOpener(line: string) {
+  return /^(`{3,}|~{3,})\s*(markdown|md)\s*$/i.test(line.trim())
+}
+
+function isNonMarkdownFenceOpener(line: string) {
+  return /^(`{3,}|~{3,})\s+(?!markdown\s*$|md\s*$)\S+/i.test(line.trim())
+}
+
+function isFenceCloser(line: string, openingMarker: string) {
   const trimmedLine = line.trim()
 
+  if (!openingMarker) {
+    return false
+  }
+
+  const fenceCharacter = openingMarker[0]
+  const fenceLength = openingMarker.length
+  const closingFencePattern = new RegExp(
+    `^\\${fenceCharacter}{${fenceLength},}\\s*$`,
+  )
+
+  return closingFencePattern.test(trimmedLine)
+}
+
+function getFenceMarker(line: string) {
+  return line.trim().match(/^(`{3,}|~{3,})/)?.[1] ?? ''
+}
+
+function getCodeBlockLanguage(children: ReactNode) {
+  let language = ''
+
+  Children.forEach(children, (child) => {
+    if (language || !isValidElement(child)) {
+      return
+    }
+
+    const className = getElementClassName(child.props)
+    const languageMatch = /language-([a-zA-Z0-9_-]+)/.exec(className)
+
+    if (languageMatch) {
+      language = languageMatch[1]
+    }
+  })
+
+  return language
+}
+
+function getCodeBlockText(children: ReactNode) {
+  let text = ''
+
+  Children.forEach(children, (child) => {
+    text += getPlainText(child)
+  })
+
+  return text
+}
+
+function getPlainText(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => getPlainText(child)).join('')
+  }
+
+  if (isValidElement(node)) {
+    return getPlainText((node.props as { children?: ReactNode }).children)
+  }
+
+  return ''
+}
+
+function recoverMarkdownSwallowedByCodeBlock(codeText: string, language: string) {
+  if (!language || isMarkdownLanguage(language)) {
+    return null
+  }
+
+  const lines = codeText.replace(/\r\n?/g, '\n').split('\n')
+  const boundaryIndex = findSwallowedMarkdownBoundary(lines)
+
+  if (boundaryIndex === -1) {
+    return null
+  }
+
+  const code = lines.slice(0, boundaryIndex).join('\n').trimEnd()
+  const markdown = lines.slice(boundaryIndex).join('\n').trimStart()
+
+  if (!code || !markdown) {
+    return null
+  }
+
+  return { code, markdown }
+}
+
+function highlightCode(code: string, language: string) {
+  const normalizedLanguage = normalizeHighlightLanguage(language)
+
+  if (!normalizedLanguage) {
+    return ''
+  }
+
+  try {
+    return hljs.highlight(code, {
+      ignoreIllegals: true,
+      language: normalizedLanguage,
+    }).value
+  } catch {
+    return ''
+  }
+}
+
+function normalizeHighlightLanguage(language: string) {
+  const normalizedLanguage = language.trim().toLowerCase()
+  const mappedLanguage =
+    highlightLanguageAliases[normalizedLanguage] ?? normalizedLanguage
+
+  return hljs.getLanguage(mappedLanguage) ? mappedLanguage : ''
+}
+
+function findSwallowedMarkdownBoundary(lines: string[]) {
+  for (let index = 1; index < lines.length; index += 1) {
+    const trimmedLine = lines[index].trim()
+
+    if (!trimmedLine || !hasCodeBefore(lines, index)) {
+      continue
+    }
+
+    if (isMarkdownBlockStart(trimmedLine)) {
+      return index
+    }
+
+    if (isMarkdownSectionLabel(trimmedLine) && hasMarkdownBlockSoon(lines, index)) {
+      return index
+    }
+  }
+
+  return -1
+}
+
+function hasCodeBefore(lines: string[], boundaryIndex: number) {
+  return lines
+    .slice(0, boundaryIndex)
+    .some((line) => line.trim() && !isMarkdownSectionLabel(line.trim()))
+}
+
+function hasMarkdownBlockSoon(lines: string[], index: number) {
+  const nextLines = lines.slice(index + 1, index + 7)
+
+  return nextLines.some((line) => {
+    const trimmedLine = line.trim()
+
+    return trimmedLine && isMarkdownBlockStart(trimmedLine)
+  })
+}
+
+function isMarkdownBlockStart(line: string) {
   return (
-    !trimmedLine ||
-    trimmedLine.startsWith('```') ||
-    /^(#{1,3})\s+/.test(trimmedLine) ||
-    isUnorderedListLine(trimmedLine) ||
-    isOrderedListLine(trimmedLine)
+    /^#{1,6}\s+\S/.test(line) ||
+    /^[-*_]{3,}$/.test(line) ||
+    /^>\s+\S/.test(line) ||
+    /^[-*+]\s+\S/.test(line) ||
+    /^\d+[.)]\s+\S/.test(line) ||
+    /^\|.+\|$/.test(line) ||
+    /^!\[[^\]]*]\([^)]+/.test(line) ||
+    /^\[[^\]]+]\([^)]+/.test(line) ||
+    isMarkdownFenceOpener(line)
   )
 }
 
-function isUnorderedListLine(line: string) {
-  return /^[-*]\s+/.test(line)
+function isMarkdownSectionLabel(line: string) {
+  return /^[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 "'`.,()/_-]{0,80}:\s*$/.test(line)
 }
 
-function isOrderedListLine(line: string) {
-  return /^\d+\.\s+/.test(line)
+function isMarkdownLanguage(language: string) {
+  return /^(md|markdown|mdx|text|txt)$/i.test(language)
 }
 
-function renderInlineMarkdown(text: string): ReactNode[] {
-  const segments = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean)
+function getElementClassName(props: unknown) {
+  if (!props || typeof props !== 'object' || !('className' in props)) {
+    return ''
+  }
 
-  return segments.map((segment, index) => {
-    if (segment.startsWith('`') && segment.endsWith('`')) {
-      return (
-        <code
-          key={`${segment}-${index}`}
-          className="rounded-md border border-white/[0.08] bg-black/20 px-1.5 py-0.5 font-mono text-[12px] text-cyan-100"
-        >
-          {segment.slice(1, -1)}
-        </code>
-      )
-    }
+  const { className } = props as { className?: unknown }
 
-    if (segment.startsWith('**') && segment.endsWith('**')) {
-      return <strong key={`${segment}-${index}`}>{segment.slice(2, -2)}</strong>
-    }
+  return typeof className === 'string' ? className : ''
+}
 
-    return <span key={`${segment}-${index}`}>{segment}</span>
-  })
+function joinClassNames(...classNames: Array<string | undefined>) {
+  return classNames.filter(Boolean).join(' ')
 }
