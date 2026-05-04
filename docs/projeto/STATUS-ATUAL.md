@@ -80,6 +80,19 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - `main.cjs` integrado: inicializa diretórios de dados do usuário no startup e roda detecção de CLIs em background, logando resultado via QA Logger.
 - CI expandida para rodar em Linux, Windows e macOS em paralelo, com verificação de docs obrigatórios e detecção de arquivos sensíveis.
 - Documentação completa de portabilidade em `/docs/projeto/`: levantamento da arquitetura, dev vs produção, estratégia de paths, camada shell, detecção de CLIs, compatibilidade por SO, empacotamento, segurança, versionamento, branch plan, guias de usuário e desenvolvedor.
+
+### Tasklist 04/05/2026 — UX, Skills, Markdown e Git básico
+
+- Sidebar ganhou rolagem interna, mantendo `Code` e `Felixo` fixos no rodapé.
+- Chats recentes foram reduzidos para os 5 últimos, com `Ver todos` reutilizando o painel de pesquisa.
+- Modelos agora são deduplicados por comando normalizado; a sidebar permite remover modelo direto e o modal bloqueia instalação/importação de CLI já cadastrada.
+- `SkillsModal` adiciona superprompts persistentes, editáveis e ativáveis por usuário, salvos em `OrchestratorSettings.skills`.
+- `FelixoSettingsModal` concentra memórias globais, contexto operacional, workflow, modo e limites do orquestrador.
+- `OrchestratorSettingsModal` ficou focado em modelos spawnáveis, preferidos e bloqueados.
+- Respostas do assistente usam renderização Markdown básica com títulos, listas, código inline e blocos fenced.
+- Prompt de orquestração separa processo/logs para Terminal/QA Logger e exige `final_answer` útil em Markdown no chat.
+- Anexos passaram a ter orientação explícita para subagentes: nomes, caminhos, tipos e previews devem ser propagados quando relevantes.
+- Painel Code adicionou ações Git básicas com confirmação: stage de tudo, unstage de tudo e commit staged com mensagem de uma linha.
 ## O que já foi concluído
 
 ### Backend Electron

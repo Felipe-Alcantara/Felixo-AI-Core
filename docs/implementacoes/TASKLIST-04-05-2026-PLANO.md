@@ -1,6 +1,6 @@
 # Tasklist 04-05-2026 — Plano de Execucao
 
-Status: em desenvolvimento.
+Status: concluido.
 
 ## Objetivo
 
@@ -34,4 +34,31 @@ Executar a tasklist de 04/05/2026 em recortes incrementais, documentando antes e
 
 ## Resultado deste ciclo
 
-Pendente enquanto a implementacao esta em andamento.
+- Novo chat reforcado para zerar estado efemero, `sessionId`, `threadId`, diff de projetos, terminal e QA Logger, preservando memorias globais e configuracoes explicitas.
+- Sidebar ganhou rolagem na area central; rodape `Code`/`Felixo` permanece fixo.
+- Chats recentes mostram os ultimos 5 e usam `SearchPanel` para localizar todos.
+- Modelos sao deduplicados por comando normalizado; sidebar permite remover modelo direto; instalar/importar CLI oficial ja cadastrada fica bloqueado.
+- Botao `Skills` adicionado com modal para criar, editar, ativar/desativar e remover superprompts persistentes.
+- Modal `Orquestrador` foi simplificado para modelos spawnaveis; contexto, workflow, modo e limites globais foram movidos para `Felixo`, junto das memorias globais.
+- Prompt normal injeta skills ativas em bloco separado de memorias, historico e anexos.
+- Chat passou a renderizar Markdown basico para respostas do assistente, com titulos, listas, codigo inline e blocos fenced.
+- Protocolo de orquestracao passou a exigir `final_answer` em Markdown organizado, orientar anexos para sub-agentes e manter processo/logs no Terminal/QA Logger.
+- Painel Code recebeu operacoes Git basicas com confirmacao: stage de tudo, unstage de tudo e commit staged com mensagem de uma linha.
+- Documentacao criada/atualizada em `docs/frontend/SKILLS.md`, `docs/frontend/MARKDOWN-CHAT.md`, `docs/projeto/PAINEL-GIT-INTEGRADO.md`, `docs/frontend/COMPONENTES.md`, `docs/frontend/NOVO-CHAT.md` e `docs/arquitetura/ORQUESTRADOR-MODELOS-E-CONFIGURACOES.md`.
+- Tasklist `docs/Tasklists/Tasklist - 04-05-2026.md` marcada como concluida.
+
+## Commits deste ciclo
+
+- `e92bef4` — docs: planejar tasklist 04-05-2026
+- `d16994e` — feat: ajustar sidebar e modelos
+- `51acb62` — feat: adicionar skills e simplificar orquestrador
+- `f86b46f` — docs: marcar progresso da tasklist
+- `1ee31c3` — feat: renderizar markdown no chat
+- `7a915e6` — feat: adicionar acoes git basicas
+
+## Validacao executada
+
+- `npm run lint`
+- `npm run build`
+- `npm test`
+- `git diff --check`
