@@ -32,7 +32,7 @@ Criar uma primeira versão funcional e testável, com foco em usar as IAs que j�
 - [x] Botão de parar para interromper execução em andamento
 - [x] Adapters para `claude`, `codex` e `gemini`
 - [x] Testes unitários para adapters e leitura JSONL
-- [x] Histórico básico por sessão (em memória, salvo ao iniciar novo chat)
+- [x] Histórico básico por sessão persistido em SQLite
 - [x] Busca em tempo real no histórico de sessões
 - [x] Gerenciamento de projetos Git (repositório único e workspace)
 - [x] Contexto de projetos ativos injetado no prompt com diff entre mensagens
@@ -108,7 +108,7 @@ Transformar o protótipo em uma ferramenta utilizável no dia a dia, com organiz
 ### Persistência
 
 - [x] Salvar configurações locais
-- [ ] Salvar histórico de sessões
+- [x] Salvar histórico de sessões
 - [x] Salvar lista de modelos/terminais cadastrados
 - [ ] Salvar prompts personalizados
 - [x] Salvar projetos/workspaces

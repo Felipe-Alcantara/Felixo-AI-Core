@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (note) => ipcRenderer.invoke('notes:save', note),
     delete: (noteId) => ipcRenderer.invoke('notes:delete', noteId),
   },
+  chats: {
+    list: (params) => ipcRenderer.invoke('chats:list', params),
+    get: (chatId) => ipcRenderer.invoke('chats:get', chatId),
+    save: (session) => ipcRenderer.invoke('chats:save', session),
+    delete: (chatId) => ipcRenderer.invoke('chats:delete', chatId),
+  },
   files: {
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
   },

@@ -175,7 +175,7 @@ Fluxo esperado antes de chamar um modelo:
 
 ## Próximo passo
 
-Criar repositórios no backend Electron para migrar histórico e modelos restantes.
+Evoluir busca, compactação e modelos restantes em cima da base SQLite já criada.
 
 ## Recorte já entregue
 
@@ -193,13 +193,15 @@ Criar repositórios no backend Electron para migrar histórico e modelos restant
 - Notas do `localStorage` migram uma vez para SQLite quando o backend está disponível.
 - Repositório e IPCs de `projects` criados sobre SQLite.
 - Projetos e seleção de projetos ativos migram uma vez do `localStorage` para SQLite.
+- Repositório e IPCs de histórico de chat criados sobre SQLite.
+- Conversas e mensagens são persistidas em `chats`/`messages` e reabertas pela sidebar/pesquisa.
 
 ## Ainda não implementado
 
-- IPCs gerais de leitura/escrita para histórico.
 - Migração dos dados atuais do `localStorage` além de configurações do orquestrador, notas e projetos.
 - Compactação real de mensagens COLD.
 - Busca textual/semântica.
+- Persistência de modelos/preferências visuais fora do `localStorage`.
 - Remoção do fallback JSON legado do orquestrador em uma versão futura.
 
 ## Plano de implementação

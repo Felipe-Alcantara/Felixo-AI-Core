@@ -35,7 +35,7 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 | Prioridade | Área | Documento origem | Pendência | Dificuldade | Risco |
 |------------|------|------------------|-----------|-------------|-------|
-| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Criar IPCs/repositórios de histórico antes de migrar dados restantes do `localStorage` | Média | Médio |
+| Alta | Persistência | `docs/backend/PERSISTENCIA-SQLITE.md` | Evoluir histórico persistido com busca textual/semântica e compactação COLD | Média | Médio |
 | Alta | Terminal/providers | `docs/projeto/TERMINAL-PERSISTENTE.md` | Validar protocolo persistente real para Codex/Gemini antes de substituir retomada nativa | Alta | Alto |
 | Alta | Segurança | `docs/backend/PLANO-CONFIRMACOES-PERMISSOES-CLI.md` | Formalizar confirmações para ações de escrita, Git e ferramentas sensíveis | Média | Alto |
 | Média | Git | `docs/projeto/PAINEL-GIT-INTEGRADO.md` | Evoluir painel Code de read-only para stage/unstage/commit com confirmação | Média | Médio |
@@ -45,12 +45,12 @@ Registrar a análise das pendências abertas em `/docs` e ordenar próximos reco
 
 ## Próximos recortes recomendados
 
-1. Criar repositórios e IPCs para migrar `chats/messages` para SQLite.
-2. Atualizar `ROADMAP.md` marcando itens já entregues no frontend atual.
+1. Criar busca textual/semântica para histórico persistido em SQLite.
+2. Implementar compactação COLD para mensagens antigas.
 
 ## Cuidados
 
 - Não implementar operações Git destrutivas sem política de confirmação.
-- Não migrar histórico para SQLite antes de existir migração versionada e repositórios testados.
+- Não misturar memória persistente com histórico bruto sem revisão/escopo explícito.
 - Não trocar Codex/Gemini para processo persistente real sem contrato parseável de conclusão.
 - Não renomear todos os arquivos de `/docs` sem atualizar links internos no mesmo commit.

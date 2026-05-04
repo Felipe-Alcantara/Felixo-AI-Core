@@ -6,6 +6,7 @@ import {
   Download,
   Folder,
   GitBranch,
+  MessageSquare,
   Network,
   PanelLeft,
   Plus,
@@ -22,6 +23,21 @@ import { SearchPanel } from './SearchPanel'
 const MIN_WIDTH = 160
 const MAX_WIDTH = 480
 const DEFAULT_WIDTH = 244
+
+function formatSessionDate(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
 
 type AppSidebarProps = {
   models: Model[]
@@ -276,6 +292,39 @@ export function AppSidebar({
           Exportar
         </button>
       </nav>
+
+      <div className="mt-5 px-4 max-xl:px-3">
+        <div className="mb-2 text-[11px] text-zinc-500">Chats recentes</div>
+        <div className="space-y-1">
+          {sessions.length === 0 ? (
+            <div className="px-1.5 py-1 text-[11px] text-zinc-600">
+              Nenhum histórico ainda
+            </div>
+          ) : (
+            sessions.slice(0, 8).map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                onClick={() => onSelectSession(session)}
+                title={session.title}
+                className="flex min-h-8 w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-100"
+              >
+                <MessageSquare
+                  size={13}
+                  aria-hidden="true"
+                  className="mt-0.5 shrink-0"
+                />
+                <span className="min-w-0">
+                  <span className="block truncate">{session.title}</span>
+                  <span className="block truncate text-[10px] text-zinc-600">
+                    {formatSessionDate(session.updatedAt)}
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
 
       <div className="mt-5 px-4 max-xl:px-3">
         <div className="mb-2 flex items-center justify-between text-[11px] text-zinc-500">
