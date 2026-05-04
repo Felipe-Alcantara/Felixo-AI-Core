@@ -97,6 +97,11 @@ Cada modelo enviado ao orquestrador é resumido em um bloco compacto:
 - `SkillsModal` adiciona superprompts persistentes com criação, edição, ativação, desativação e remoção.
 - `createSkillsContextBlock()` injeta skills ativas no prompt normal, separadas de memórias globais e de histórico.
 - O limite de payload das settings do orquestrador no backend subiu para 256 KiB para comportar superprompts maiores.
+- O protocolo de orquestração orienta o modelo a não despejar raciocínio, progresso bruto ou transcrições longas no chat.
+- Processo, logs e saídas intermediárias continuam visíveis no Terminal/QA Logger; o chat deve receber apenas `final_answer`.
+- `final_answer.content` deve vir em Markdown organizado, com títulos curtos, listas e blocos fenced quando houver comandos ou código.
+- Quando houver anexos, o prompt do sub-agente deve carregar nomes, caminhos, tipos e previews relevantes, deixando claro se o arquivo deve ser aberto pelo caminho local ou interpretado pelo preview textual.
+- Antes do `final_answer`, o orquestrador deve avaliar se a resposta do sub-agente realmente atende ao pedido do usuário em vez de apenas repassar o resultado.
 
 ## Próximos passos
 

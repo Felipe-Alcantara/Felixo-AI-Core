@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Bot, User } from 'lucide-react'
 import type { ChatMessage, Model } from '../types'
+import { MarkdownContent } from './MarkdownContent'
 
 type ChatThreadProps = {
   models: Model[]
@@ -47,12 +48,18 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                     {message.createdAt}
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-100">
-                  {message.content}
+                {isUser ? (
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-100">
+                    {message.content}
+                  </p>
+                ) : (
+                  <MarkdownContent content={message.content} />
+                )}
+                <span>
                   {message.isStreaming && (
                     <span className="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-full bg-orange-200 align-middle" />
                   )}
-                </p>
+                </span>
               </div>
 
               {isUser && (

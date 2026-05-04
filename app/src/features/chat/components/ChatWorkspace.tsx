@@ -1658,6 +1658,7 @@ function createCliPrompt(
   const lines = [
     'Responda diretamente à solicitação atual do usuário.',
     'Se a solicitação atual pedir alteração em arquivo, faça a alteração no workspace atual e depois informe o resultado.',
+    'Formate respostas textuais em Markdown organizado quando houver mais de uma ideia: titulos curtos, listas objetivas e blocos fenced para codigo ou comandos.',
     '',
     'Solicitação atual do usuário:',
     currentPrompt,
@@ -1866,8 +1867,14 @@ function createOrchestrationProtocolInstructions(
     '{"type":"spawn_agent","agentId":"gemini-1","cliType":"gemini","prompt":"Pergunta completa para o sub-agente"}',
     '- `cliType` deve ser um destes valores: "gemini", "claude", "codex", "gemini-acp" ou "codex-app-server".',
     '- O campo `prompt` deve conter a tarefa completa para o sub-agente executar diretamente. Se a tarefa envolver editar arquivos, inclua o caminho alvo, diga para nao delegar para outro agente e diga para responder que nao conseguiu caso nao tenha ferramenta ou permissao para alterar o arquivo.',
+    '- Se a tarefa depender de anexos inseridos pelo usuario, copie para o `prompt` do sub-agente os nomes, caminhos locais, tipos e previews relevantes. Explique se o sub-agente deve abrir o arquivo pelo caminho local ou interpretar apenas o preview textual disponivel.',
+    '- Anexos binarios sem preview textual devem ser tratados como metadados; nao invente conteudo de arquivo que nao foi fornecido.',
     '- Se precisar de mais de um evento no mesmo turno, responda como JSONL, um objeto por linha, por exemplo `spawn_agent` seguido de `awaiting_agents`.',
-    '- Depois que o Felixo retornar resultados dos sub-agentes, responda somente com `{"type":"final_answer","content":"resposta final para o usuario"}`.',
+    '- Nao envie raciocinio, planejamento interno, logs, progresso bruto ou transcricoes longas como texto comum do chat; esse processo ja aparece no Terminal/QA Logger.',
+    '- O chat deve receber somente a resposta util para o usuario via `final_answer`.',
+    '- Depois que o Felixo retornar resultados dos sub-agentes, responda somente com `{"type":"final_answer","content":"resposta final para o usuario em Markdown organizado"}`.',
+    '- Antes do `final_answer`, avalie tecnicamente se a resposta do sub-agente realmente atende ao pedido do usuario. Se houver conflito, lacuna ou mudanca sem sentido, explique isso no `content` e proponha a correcao.',
+    '- O campo `content` do `final_answer` deve resumir o que mudou, por que importa, quais arquivos/decisoes foram afetados e qualquer proximo passo real. Use Markdown com titulos curtos, bullets e blocos fenced para codigo/comandos.',
   ]
 
   if (orchestrationContextBlock) {
