@@ -1,5 +1,5 @@
 import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { AppTheme, OrchestratorSettings } from '../types'
 
@@ -18,6 +18,16 @@ type FelixoSettingsModalProps = {
 
 export function FelixoSettingsModal({
   isOpen,
+  ...dialogProps
+}: FelixoSettingsModalProps) {
+  if (!isOpen) {
+    return null
+  }
+
+  return <FelixoSettingsDialog {...dialogProps} />
+}
+
+function FelixoSettingsDialog({
   runtimeLabel,
   theme,
   orchestratorSettings,
@@ -27,20 +37,10 @@ export function FelixoSettingsModal({
   onClose,
   onThemeChange,
   onSaveOrchestratorSettings,
-}: FelixoSettingsModalProps) {
+}: Omit<FelixoSettingsModalProps, 'isOpen'>) {
   const [globalMemoriesDraft, setGlobalMemoriesDraft] = useState(
     orchestratorSettings.globalMemories,
   )
-
-  useEffect(() => {
-    if (isOpen) {
-      setGlobalMemoriesDraft(orchestratorSettings.globalMemories)
-    }
-  }, [isOpen, orchestratorSettings.globalMemories])
-
-  if (!isOpen) {
-    return null
-  }
 
   function saveGlobalMemories(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
