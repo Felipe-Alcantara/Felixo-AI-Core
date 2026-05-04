@@ -65,7 +65,7 @@ import { loadTheme, saveTheme } from '../services/theme-storage'
 import {
   ORCHESTRATOR_PROMPT_PRESETS,
   createOpenEndedOrchestrationRules,
-} from '../../../../electron/services/orchestration/orchestrator-prompt-presets.cjs'
+} from '../services/orchestrator-prompt-presets'
 import type {
   AutomationDefinition,
   AppTheme,

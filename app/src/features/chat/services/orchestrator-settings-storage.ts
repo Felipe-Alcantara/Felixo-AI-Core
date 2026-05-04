@@ -7,7 +7,7 @@ import type {
   OrchestratorSettings,
   SkillPrompt,
 } from '../types'
-import { ORCHESTRATOR_PROMPT_PRESETS } from '../../../../electron/services/orchestration/orchestrator-prompt-presets.cjs'
+import { ORCHESTRATOR_PROMPT_PRESETS } from './orchestrator-prompt-presets'
 
 const ORCHESTRATOR_SETTINGS_STORAGE_KEY =
   'felixo-ai-core.orchestrator-settings'

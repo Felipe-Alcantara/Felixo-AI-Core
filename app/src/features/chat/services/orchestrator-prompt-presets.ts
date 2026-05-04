@@ -1,8 +1,11 @@
-const promptPresets = require('./orchestrator-prompt-presets.json')
+import promptPresets from '../../../../electron/services/orchestration/orchestrator-prompt-presets.json'
 
-const ORCHESTRATOR_PROMPT_PRESETS = deepFreeze(promptPresets)
+export const ORCHESTRATOR_PROMPT_PRESETS = deepFreeze(promptPresets)
 
-function createOpenEndedOrchestrationRules(hint) {
+export function createOpenEndedOrchestrationRules(hint: {
+  seed: string
+  openEndedTopic: string
+}) {
   return [
     `- Seed efemera desta mensagem: ${hint.seed}.`,
     `- O usuario pediu algo como "qualquer coisa"; pergunte ao sub-agente uma pergunta curta e concreta sobre: ${hint.openEndedTopic}.`,
@@ -10,7 +13,7 @@ function createOpenEndedOrchestrationRules(hint) {
   ]
 }
 
-function deepFreeze(value) {
+function deepFreeze<T>(value: T): T {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
     return value
   }
@@ -22,9 +25,4 @@ function deepFreeze(value) {
   }
 
   return value
-}
-
-module.exports = {
-  ORCHESTRATOR_PROMPT_PRESETS,
-  createOpenEndedOrchestrationRules,
 }
