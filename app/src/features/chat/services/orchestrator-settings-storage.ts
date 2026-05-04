@@ -7,6 +7,7 @@ import type {
   OrchestratorSettings,
   SkillPrompt,
 } from '../types'
+import { ORCHESTRATOR_PROMPT_PRESETS } from '../../../../electron/services/orchestration/orchestrator-prompt-presets.cjs'
 
 const ORCHESTRATOR_SETTINGS_STORAGE_KEY =
   'felixo-ai-core.orchestrator-settings'
@@ -183,16 +184,15 @@ export function createOrchestratorContextBlock(
   profiles: ModelCapabilityProfile[],
   settings: OrchestratorSettings,
 ) {
+  const { orchestrationContext } = ORCHESTRATOR_PROMPT_PRESETS
   const lines: Array<string | null> = [
-    'Contexto de modelos disponiveis para orquestracao:',
+    orchestrationContext.heading,
     `- Modo: ${formatOrchestratorMode(settings.mode)}.`,
     `- Workflow padrao: ${settings.defaultWorkflow || 'nao configurado'}.`,
     `- Limites: max ${settings.maxAgentsPerTurn} sub-agentes por turno, ${settings.maxTotalAgents} no total, ${settings.maxTurns} turnos, ${settings.maxRuntimeMinutes} min.`,
     settings.maxCostEstimate > 0 ? `- Limite de custo estimado: ${settings.maxCostEstimate}.` : null,
     settings.maxContextTokens > 0 ? `- Limite de contexto: ${settings.maxContextTokens} tokens.` : null,
     `- Confirmar acoes sensiveis: ${settings.requireConfirmationForSensitiveActions ? 'sim' : 'nao'}.`,
-    '- Formato da resposta final: Markdown direto, bem organizado e descritivo; use titulos curtos, paragrafos objetivos, listas escaneaveis, tabelas quando ajudarem comparacao e blocos fenced com linguagem para codigo/comandos.',
-    '- Nao embrulhe a resposta final inteira em bloco ```markdown```.',
   ]
 
   if (settings.customContext.trim()) {
@@ -241,13 +241,8 @@ export function createOrchestratorContextBlock(
 
   lines.push(
     '',
-    'Regras de escolha:',
-    '- Escolha somente cliType existente e com status available.',
-    '- Se um modelo estiver bloqueado, nao solicite spawn dele.',
-    '- Modelos com status error, no_login, limit_reached ou unavailable nao devem ser spawnados.',
-    '- Para tarefas baratas ou simples, prefira modelos rapidos/menores quando disponiveis.',
-    '- Para edicao de arquivos ou codigo, prefira modelos marcados como bons para codigo e edicao.',
-    '- Explique a escolha no prompt do sub-agente quando isso ajudar rastreabilidade.',
+    orchestrationContext.modelSelectionHeading,
+    ...orchestrationContext.modelSelectionRules,
   )
 
   return lines.filter((line): line is string => line !== null).join('\n')
@@ -260,13 +255,14 @@ export function createGlobalMemoriesContextBlock(
     return null
   }
 
+  const { globalMemories } = ORCHESTRATOR_PROMPT_PRESETS
+
   return [
-    'Memorias globais do usuario:',
+    globalMemories.heading,
     settings.globalMemories.trim(),
     '',
-    'Uso das memorias globais:',
-    '- Trate estas memorias como preferencias e fatos persistentes do usuario.',
-    '- Se uma memoria global conflitar com a mensagem atual, priorize a mensagem atual.',
+    globalMemories.usageHeading,
+    ...globalMemories.rules,
   ].join('\n')
 }
 
@@ -277,10 +273,10 @@ export function createSkillsContextBlock(settings: OrchestratorSettings) {
     return null
   }
 
+  const { skills } = ORCHESTRATOR_PROMPT_PRESETS
   const lines = [
-    'Skills e superprompts ativos:',
-    '- Use estes blocos como instrucoes persistentes de tecnica, ferramenta, plataforma, estilo ou modo de trabalho.',
-    '- Se a mensagem atual do usuario conflitar com uma skill, priorize a mensagem atual.',
+    skills.heading,
+    ...skills.rules,
   ]
 
   if (settings.enabledSkills.length > 0) {
