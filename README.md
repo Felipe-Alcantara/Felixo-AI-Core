@@ -111,6 +111,10 @@ py start_app.py
 
 O `start_app.py` instala dependências Python de `requirements.txt` quando houver pacotes listados e instala dependências Node com `npm install` quando necessário. Hoje o `requirements.txt` fica sem pacotes porque o launcher usa apenas a biblioteca padrão do Python.
 
+No macOS, o launcher procura Node/npm em instalações comuns de Homebrew Apple Silicon, Homebrew Intel, MacPorts, NVM, fnm, Volta, asdf, mise e nodenv, mesmo quando o app é iniciado por uma GUI com `PATH` reduzido. Se precisar forçar um diretório específico, use `FELIXO_NODE_BIN=/caminho/do/bin`.
+
+No Windows, o launcher resolve `npm.cmd` automaticamente e também procura Node.js em instalações comuns do instalador oficial, NVM for Windows, Volta, Scoop e `%APPDATA%\npm`.
+
 Se quiser apenas abrir sem instalar dependências automaticamente:
 
 ```bash

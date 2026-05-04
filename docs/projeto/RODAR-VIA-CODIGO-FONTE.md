@@ -40,11 +40,13 @@ python3 start_app.py
 ```
 
 O script `start_app.py`:
-1. Detecta a versão correta de Node.js (via NVM, Volta ou PATH).
+1. Detecta uma instalação funcional de Node.js/npm.
 2. Instala dependências automaticamente (`npm install`).
 3. Instala dependências Python se houver `requirements.txt`.
 4. Inicia o app com `npm run dev`.
 5. Trata encerramento gracioso de processos.
+
+No macOS, a detecção cobre Apple Silicon e Intel, incluindo Homebrew (`/opt/homebrew/bin` e `/usr/local/bin`), MacPorts (`/opt/local/bin`), NVM, fnm, Volta, asdf, mise, nodenv, `PATH` atual e paths customizados. O launcher valida `node --version` e `npm --version` antes de instalar dependências, então instalações quebradas são puladas quando houver outro Node funcional disponível.
 
 ### Opção 2: Diretamente com npm
 
@@ -130,6 +132,7 @@ python3 start_app.py
 | `FELIXO_CLI_PATHS` | Diretórios extras para buscar CLIs | vazio |
 | `FELIXO_SHELL` | Shell override para execução de comandos | `$SHELL` ou padrão do SO |
 | `FELIXO_NODE_BIN` | Diretório do Node.js override | auto-detectado |
+| `FELIXO_NODE_SEARCH_PATHS` | Diretórios extras para buscar Node/npm | vazio |
 | `FELIXO_PRODUCTION_BRANCH` | Branch de produção para `--update` | `production` |
 | `FELIXO_DISABLE_AUTO_UPDATE` | Desabilita auto-update | `0` |
 | `FELIXO_UPDATE_PRERELEASE` | Aceita pre-releases | `0` |
@@ -151,6 +154,46 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 nvm install 22
 nvm use 22
 ```
+
+### macOS: Code Runner/VS Code não acha Node/npm
+
+Quando o app é iniciado por uma GUI no macOS, o processo pode não herdar o mesmo `PATH` do Terminal. O `start_app.py` tenta os caminhos comuns automaticamente, mas você também pode fixar o diretório do Node:
+
+```bash
+export FELIXO_NODE_BIN=/opt/homebrew/bin      # Homebrew Apple Silicon
+export FELIXO_NODE_BIN=/usr/local/bin         # Homebrew Intel ou instalador oficial
+export FELIXO_NODE_BIN="$HOME/.nvm/versions/node/v25.9.0/bin"
+python3 start_app.py
+```
+
+Se quiser adicionar mais de um local de busca:
+
+```bash
+export FELIXO_NODE_SEARCH_PATHS="/opt/homebrew/bin:$HOME/.volta/bin:$HOME/.asdf/shims"
+python3 start_app.py
+```
+
+### macOS: erro `npm-prefix.js` ou "Could not determine Node.js install directory"
+
+Esse erro costuma aparecer quando o wrapper do npm do Homebrew é executado pelo caminho interno da Cellar em vez do caminho estável (`/opt/homebrew/bin` ou `/usr/local/bin`). O launcher agora preserva o diretório encontrado no `PATH` e valida o npm antes de usar. Se ainda acontecer, reinstale o Node do Homebrew e rode de novo:
+
+```bash
+brew reinstall node
+python3 start_app.py
+```
+
+### Windows: `FileNotFoundError` ao instalar com npm
+
+No Windows, o npm geralmente é executado por `npm.cmd`. O `start_app.py` resolve o comando real antes de chamar subprocessos, então `npm install`, `npm run dev` e `npm run dev:web` funcionam mesmo quando o PowerShell não executa `npm` como arquivo direto.
+
+Se o Node não estiver no `Path`, defina o diretório manualmente:
+
+```powershell
+$env:FELIXO_NODE_BIN = "C:\Program Files\nodejs"
+py start_app.py
+```
+
+Também são considerados os caminhos comuns de Node.js oficial, NVM for Windows, Volta, Scoop e `%APPDATA%\npm`.
 
 ### "python3: command not found"
 
