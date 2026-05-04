@@ -1,6 +1,19 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { FilePlus, FolderOpen, Plus, Trash2, X } from 'lucide-react'
+import {
+  CheckCircle2,
+  Download,
+  FilePlus,
+  FolderOpen,
+  KeyRound,
+  LogIn,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Terminal,
+  Trash2,
+  X,
+} from 'lucide-react'
 import type { Model, ModelFileSelection } from '../types'
 import { createModelId, detectModelCliType } from '../services/model-storage'
 
@@ -11,6 +24,25 @@ type ModelManagerModalProps = {
   onAddModel: (model: Model) => void
   onClearModels: () => void
   onRemoveModel: (model: Model) => void
+}
+
+type OfficialCliCatalogItem = {
+  id: string
+  name: string
+  provider: string
+  command: string
+  detected: boolean
+  version?: string | null
+  path?: string | null
+  error?: string | null
+  installCommand: string
+  loginCommand: string
+  statusCommand?: string
+  switchAccountCommand?: string
+  supportsAccountSwitch?: boolean
+  installUrl: string
+  authUrl: string
+  models: Model[]
 }
 
 export function ModelManagerModal({
@@ -27,9 +59,224 @@ export function ModelManagerModal({
   const [formName, setFormName] = useState('')
   const [formSource, setFormSource] = useState('')
   const [formCommand, setFormCommand] = useState('')
+  const [officialClis, setOfficialClis] = useState<OfficialCliCatalogItem[]>([])
+  const [isLoadingOfficialClis, setIsLoadingOfficialClis] = useState(false)
+  const [busyOfficialCliId, setBusyOfficialCliId] = useState<string | null>(null)
+
+  const loadOfficialCatalog = useCallback(async () => {
+    if (!window.felixo?.cli?.listOfficial) {
+      setOfficialClis([])
+      return
+    }
+
+    setIsLoadingOfficialClis(true)
+
+    try {
+      const result = await window.felixo.cli.listOfficial()
+
+      if (!result.ok) {
+        setStatus(result.message ?? 'Falha ao detectar CLIs oficiais.')
+        return
+      }
+
+      setOfficialClis(Array.isArray(result.clis) ? result.clis : [])
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : 'Falha ao detectar CLIs oficiais.',
+      )
+    } finally {
+      setIsLoadingOfficialClis(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadOfficialCatalog()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [isOpen, loadOfficialCatalog])
 
   if (!isOpen) {
     return null
+  }
+
+  async function installOfficialCli(cli: OfficialCliCatalogItem) {
+    if (!window.felixo?.cli?.installOfficial) {
+      setStatus('Instalação automática disponível apenas no app desktop.')
+      return
+    }
+
+    setBusyOfficialCliId(cli.id)
+    setStatus(`Instalando ${cli.name}...`)
+
+    try {
+      const result = await window.felixo.cli.installOfficial({ id: cli.id })
+
+      if (!result.ok) {
+        setStatus(result.message ?? `Falha ao instalar ${cli.name}.`)
+        return
+      }
+
+      if (result.cli && !result.cli.detected) {
+        setStatus(
+          `${cli.name} instalado, mas o comando ainda não apareceu no PATH.`,
+        )
+        await loadOfficialCatalog()
+        return
+      }
+
+      importOfficialModels(result.models ?? cli.models)
+      setStatus(`${cli.name} instalado e importado.`)
+      await loadOfficialCatalog()
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : `Falha ao instalar ${cli.name}.`,
+      )
+    } finally {
+      setBusyOfficialCliId(null)
+    }
+  }
+
+  async function openOfficialLogin(cli: OfficialCliCatalogItem) {
+    if (!window.felixo?.cli?.openOfficialLogin) {
+      setStatus(`Abra ${cli.loginCommand} no terminal para autenticar.`)
+      return
+    }
+
+    setBusyOfficialCliId(cli.id)
+
+    try {
+      const result = await window.felixo.cli.openOfficialLogin({ id: cli.id })
+
+      if (!result.ok) {
+        setStatus(
+          result.manualCommand
+            ? `${result.message} Comando: ${result.manualCommand}`
+            : result.message ?? `Falha ao abrir login de ${cli.name}.`,
+        )
+        return
+      }
+
+      setStatus(result.message ?? `Login de ${cli.name} aberto no terminal.`)
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : `Falha ao abrir login de ${cli.name}.`,
+      )
+    } finally {
+      setBusyOfficialCliId(null)
+    }
+  }
+
+  async function checkOfficialAccountStatus(cli: OfficialCliCatalogItem) {
+    if (!window.felixo?.cli?.getOfficialAccountStatus) {
+      setStatus(`Rode ${cli.statusCommand ?? `${cli.command} login status`} no terminal.`)
+      return
+    }
+
+    setBusyOfficialCliId(cli.id)
+
+    try {
+      const result = await window.felixo.cli.getOfficialAccountStatus({
+        id: cli.id,
+      })
+
+      if (!result.ok) {
+        setStatus(result.message ?? `Falha ao consultar conta de ${cli.name}.`)
+        return
+      }
+
+      const label =
+        result.authStatus === 'logged_in'
+          ? 'conectado'
+          : result.authStatus === 'logged_out'
+            ? 'desconectado'
+            : 'status desconhecido'
+
+      setStatus(`${cli.name}: ${label}. ${result.message ?? ''}`.trim())
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : `Falha ao consultar conta de ${cli.name}.`,
+      )
+    } finally {
+      setBusyOfficialCliId(null)
+    }
+  }
+
+  async function switchOfficialAccount(cli: OfficialCliCatalogItem) {
+    if (!window.felixo?.cli?.switchOfficialAccount) {
+      setStatus(
+        `Rode ${cli.switchAccountCommand ?? `${cli.command} logout`} e depois ${cli.loginCommand} no terminal.`,
+      )
+      return
+    }
+
+    setBusyOfficialCliId(cli.id)
+    setStatus(`Desconectando conta atual de ${cli.name}...`)
+
+    try {
+      const result = await window.felixo.cli.switchOfficialAccount({
+        id: cli.id,
+      })
+
+      if (!result.ok) {
+        setStatus(
+          result.manualCommand
+            ? `${result.message} Comando: ${result.manualCommand}`
+            : result.message ?? `Falha ao trocar conta de ${cli.name}.`,
+        )
+        return
+      }
+
+      setStatus(
+        result.message ??
+          `Conta de ${cli.name} desconectada. Login oficial aberto no terminal.`,
+      )
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : `Falha ao trocar conta de ${cli.name}.`,
+      )
+    } finally {
+      setBusyOfficialCliId(null)
+    }
+  }
+
+  function importOfficialModels(officialModels: Model[]) {
+    const missingModels = officialModels.filter(
+      (model) =>
+        !models.some(
+          (existingModel) =>
+            existingModel.id === model.id ||
+            existingModel.command === model.command,
+        ),
+    )
+
+    for (const model of missingModels) {
+      onAddModel(model)
+    }
+
+    if (missingModels.length === 0) {
+      setStatus('Essas CLIs oficiais já estão importadas.')
+      return
+    }
+
+    setStatus(
+      missingModels.length === 1
+        ? `Modelo "${missingModels[0].name}" importado.`
+        : `${missingModels.length} modelos oficiais importados.`,
+    )
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -179,6 +426,158 @@ export function ModelManagerModal({
                     </button>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3 text-xs font-medium text-zinc-300">
+              <span className="flex items-center gap-2">
+                <Terminal size={14} aria-hidden="true" />
+                CLIs oficiais
+              </span>
+              <button
+                type="button"
+                title="Atualizar detecção"
+                onClick={() => void loadOfficialCatalog()}
+                disabled={isLoadingOfficialClis}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={14}
+                  aria-hidden="true"
+                  className={isLoadingOfficialClis ? 'animate-spin' : ''}
+                />
+                <span className="sr-only">Atualizar detecção</span>
+              </button>
+            </div>
+
+            <div className="space-y-2 rounded-2xl border border-white/[0.08] bg-black/10 p-2">
+              {officialClis.length === 0 ? (
+                <p className="px-2 py-4 text-center text-xs text-zinc-500">
+                  Nenhuma CLI oficial detectada ainda.
+                </p>
+              ) : (
+                officialClis.map((cli) => {
+                  const missingModels = cli.models.filter(
+                    (model) =>
+                      !models.some(
+                        (existingModel) =>
+                          existingModel.id === model.id ||
+                          existingModel.command === model.command,
+                      ),
+                  )
+                  const isImported = missingModels.length === 0
+                  const isAnyOfficialCliBusy = busyOfficialCliId !== null
+
+                  return (
+                    <div
+                      key={cli.id}
+                      className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-xs font-medium text-zinc-100">
+                              {cli.name}
+                            </span>
+                            {cli.detected && (
+                              <CheckCircle2
+                                size={14}
+                                aria-hidden="true"
+                                className="shrink-0 text-theme-success"
+                              />
+                            )}
+                          </div>
+                          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                            <code className="font-mono">{cli.command}</code>
+                            {cli.version && <span>v{cli.version}</span>}
+                            <span>{cli.provider}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1">
+                          {cli.detected ? (
+                            <button
+                              type="button"
+                              title={
+                                isImported
+                                  ? 'CLI já importada'
+                                  : 'Importar CLI oficial'
+                              }
+                              onClick={() => importOfficialModels(cli.models)}
+                              disabled={isImported || isAnyOfficialCliBusy}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Plus size={14} aria-hidden="true" />
+                              <span className="sr-only">
+                                {isImported
+                                  ? 'CLI já importada'
+                                  : 'Importar CLI oficial'}
+                              </span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              title={`Instalar ${cli.name}`}
+                              onClick={() => void installOfficialCli(cli)}
+                              disabled={isAnyOfficialCliBusy}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Download size={14} aria-hidden="true" />
+                              <span className="sr-only">
+                                Instalar {cli.name}
+                              </span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            title={`Login ${cli.name}`}
+                            onClick={() => void openOfficialLogin(cli)}
+                            disabled={!cli.detected || isAnyOfficialCliBusy}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <LogIn size={14} aria-hidden="true" />
+                            <span className="sr-only">Login {cli.name}</span>
+                          </button>
+
+                          {cli.supportsAccountSwitch && (
+                            <>
+                              <button
+                                type="button"
+                                title={`Status da conta ${cli.name}`}
+                                onClick={() =>
+                                  void checkOfficialAccountStatus(cli)
+                                }
+                                disabled={!cli.detected || isAnyOfficialCliBusy}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <KeyRound size={14} aria-hidden="true" />
+                                <span className="sr-only">
+                                  Status da conta {cli.name}
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                title={`Trocar conta ${cli.name}`}
+                                onClick={() => void switchOfficialAccount(cli)}
+                                disabled={!cli.detected || isAnyOfficialCliBusy}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-theme-error/10 hover:text-theme-error disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <LogOut size={14} aria-hidden="true" />
+                                <span className="sr-only">
+                                  Trocar conta {cli.name}
+                                </span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>
