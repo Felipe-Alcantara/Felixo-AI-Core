@@ -6,7 +6,7 @@ const {
 
 const ORCHESTRATOR_SETTINGS_FILE = 'orchestrator-settings.json'
 const ORCHESTRATOR_SETTINGS_KEY = 'orchestrator.settings'
-const MAX_SETTINGS_BYTES = 64 * 1024
+const MAX_SETTINGS_BYTES = 256 * 1024
 
 function createOrchestratorSettingsStore(options) {
   const configDir = requireConfigDir(options?.configDir)

@@ -31,10 +31,21 @@ export type OrchestratorMode =
   | 'read_only'
   | 'experimental'
 
+export type SkillPrompt = {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export type OrchestratorSettings = {
   customContext: string
   globalMemories: string
   enabledSkills: string[]
+  skills: SkillPrompt[]
   preferredModelIds: string[]
   blockedModelIds: string[]
   defaultWorkflow: string

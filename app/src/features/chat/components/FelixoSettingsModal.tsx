@@ -1,7 +1,7 @@
 import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
 import { useState } from 'react'
-import type { FormEvent } from 'react'
-import type { AppTheme, OrchestratorSettings } from '../types'
+import type { ChangeEvent, FormEvent } from 'react'
+import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
 
 type FelixoSettingsModalProps = {
   isOpen: boolean
@@ -15,6 +15,14 @@ type FelixoSettingsModalProps = {
   onThemeChange: (theme: AppTheme) => void
   onSaveOrchestratorSettings: (settings: OrchestratorSettings) => void
 }
+
+const modeOptions: Array<{ value: OrchestratorMode; label: string }> = [
+  { value: 'manual', label: 'Manual' },
+  { value: 'semi_auto', label: 'Semiautomático' },
+  { value: 'automatic', label: 'Automático' },
+  { value: 'read_only', label: 'Somente leitura' },
+  { value: 'experimental', label: 'Experimental' },
+]
 
 export function FelixoSettingsModal({
   isOpen,
@@ -38,16 +46,30 @@ function FelixoSettingsDialog({
   onThemeChange,
   onSaveOrchestratorSettings,
 }: Omit<FelixoSettingsModalProps, 'isOpen'>) {
-  const [globalMemoriesDraft, setGlobalMemoriesDraft] = useState(
-    orchestratorSettings.globalMemories,
-  )
+  const [settingsDraft, setSettingsDraft] = useState(orchestratorSettings)
 
-  function saveGlobalMemories(event: FormEvent<HTMLFormElement>) {
+  function saveGlobalSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    onSaveOrchestratorSettings({
-      ...orchestratorSettings,
-      globalMemories: globalMemoriesDraft,
-    })
+    onSaveOrchestratorSettings(normalizeSettingsDraft(settingsDraft))
+  }
+
+  function updateNumber(
+    field: keyof Pick<
+      OrchestratorSettings,
+      | 'maxAgentsPerTurn'
+      | 'maxTurns'
+      | 'maxTotalAgents'
+      | 'maxRuntimeMinutes'
+      | 'maxCostEstimate'
+      | 'maxContextTokens'
+    >,
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const value = Number.parseFloat(event.target.value)
+    setSettingsDraft((current) => ({
+      ...current,
+      [field]: Number.isFinite(value) ? value : 0,
+    }))
   }
 
   return (
@@ -56,7 +78,7 @@ function FelixoSettingsDialog({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[80vh] w-full max-w-[560px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="flex max-h-[86vh] w-full max-w-[620px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -92,29 +114,140 @@ function FelixoSettingsDialog({
 
           <form
             className="rounded-2xl border border-white/[0.08] bg-black/10 p-3"
-            onSubmit={saveGlobalMemories}
+            onSubmit={saveGlobalSettings}
           >
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
               <BrainCircuit size={14} aria-hidden="true" />
-              Memórias globais
+              Memórias e orquestração global
             </div>
+
             <label className="block text-xs text-zinc-400">
-              Orquestrador
+              Memórias globais
               <textarea
-                value={globalMemoriesDraft}
-                onChange={(event) => setGlobalMemoriesDraft(event.target.value)}
-                rows={7}
+                value={settingsDraft.globalMemories}
+                onChange={(event) =>
+                  setSettingsDraft((current) => ({
+                    ...current,
+                    globalMemories: event.target.value,
+                  }))
+                }
+                rows={5}
                 placeholder="Preferências, fatos estáveis e cuidados que o orquestrador deve lembrar."
                 className="mt-1 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
               />
             </label>
+
+            <label className="mt-3 block text-xs text-zinc-400">
+              Contexto operacional
+              <textarea
+                value={settingsDraft.customContext}
+                onChange={(event) =>
+                  setSettingsDraft((current) => ({
+                    ...current,
+                    customContext: event.target.value,
+                  }))
+                }
+                rows={4}
+                placeholder="Preferências de execução, restrições e cuidados recorrentes."
+                className="mt-1 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+              />
+            </label>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs text-zinc-400">
+                Workflow padrão
+                <input
+                  value={settingsDraft.defaultWorkflow}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      defaultWorkflow: event.target.value,
+                    }))
+                  }
+                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                />
+              </label>
+
+              <label className="block text-xs text-zinc-400">
+                Modo
+                <select
+                  value={settingsDraft.mode}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      mode: event.target.value as OrchestratorMode,
+                    }))
+                  }
+                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
+                >
+                  {modeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <NumberField
+                label="Por turno"
+                value={settingsDraft.maxAgentsPerTurn}
+                onChange={(event) => updateNumber('maxAgentsPerTurn', event)}
+              />
+              <NumberField
+                label="Turnos"
+                value={settingsDraft.maxTurns}
+                onChange={(event) => updateNumber('maxTurns', event)}
+              />
+              <NumberField
+                label="Total"
+                value={settingsDraft.maxTotalAgents}
+                onChange={(event) => updateNumber('maxTotalAgents', event)}
+              />
+              <NumberField
+                label="Minutos"
+                value={settingsDraft.maxRuntimeMinutes}
+                onChange={(event) => updateNumber('maxRuntimeMinutes', event)}
+              />
+              <NumberField
+                label="Custo est."
+                value={settingsDraft.maxCostEstimate}
+                min={0}
+                step={0.01}
+                onChange={(event) => updateNumber('maxCostEstimate', event)}
+              />
+              <NumberField
+                label="Contexto"
+                value={settingsDraft.maxContextTokens}
+                min={0}
+                step={1000}
+                onChange={(event) => updateNumber('maxContextTokens', event)}
+              />
+            </div>
+
+            <label className="mt-3 flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-zinc-300">
+              <input
+                type="checkbox"
+                checked={settingsDraft.requireConfirmationForSensitiveActions}
+                onChange={(event) =>
+                  setSettingsDraft((current) => ({
+                    ...current,
+                    requireConfirmationForSensitiveActions: event.target.checked,
+                  }))
+                }
+                className="h-4 w-4 accent-cyan-300"
+              />
+              Confirmar ações sensíveis
+            </label>
+
             <div className="mt-3 flex justify-end">
               <button
                 type="submit"
                 className="flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
               >
                 <Save size={14} aria-hidden="true" />
-                Salvar memórias
+                Salvar
               </button>
             </div>
           </form>
@@ -148,12 +281,6 @@ function FelixoSettingsDialog({
               </select>
             </label>
           </section>
-
-          <p className="text-xs leading-relaxed text-zinc-600">
-            As configuracoes de CLIs ficam no modal "Modelos". Esta area fica
-            separada para evitar misturar perfil do app com configuracao de
-            provedores.
-          </p>
         </div>
       </section>
     </div>
@@ -167,4 +294,52 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span className="mt-1 block truncate font-mono text-zinc-200">{value}</span>
     </div>
   )
+}
+
+function NumberField({
+  label,
+  value,
+  min = 1,
+  step,
+  onChange,
+}: {
+  label: string
+  value: number
+  min?: number
+  step?: number
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <label className="block text-xs text-zinc-400">
+      {label}
+      <input
+        type="number"
+        min={min}
+        step={step}
+        value={value}
+        onChange={onChange}
+        className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
+      />
+    </label>
+  )
+}
+
+function normalizeSettingsDraft(settings: OrchestratorSettings) {
+  return {
+    ...settings,
+    maxAgentsPerTurn: clampPositiveInteger(settings.maxAgentsPerTurn, 1),
+    maxTurns: clampPositiveInteger(settings.maxTurns, 1),
+    maxTotalAgents: clampPositiveInteger(settings.maxTotalAgents, 1),
+    maxRuntimeMinutes: clampPositiveInteger(settings.maxRuntimeMinutes, 1),
+    maxCostEstimate: clampNonNegative(settings.maxCostEstimate),
+    maxContextTokens: clampNonNegative(settings.maxContextTokens),
+  }
+}
+
+function clampPositiveInteger(value: number, fallback: number) {
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+function clampNonNegative(value: number) {
+  return Number.isFinite(value) && value >= 0 ? value : 0
 }
