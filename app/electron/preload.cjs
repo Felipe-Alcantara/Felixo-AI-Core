@@ -79,6 +79,9 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   git: {
     getSummary: (params) => ipcRenderer.invoke('git:get-summary', params),
+    stageAll: (params) => ipcRenderer.invoke('git:stage-all', params),
+    unstageAll: (params) => ipcRenderer.invoke('git:unstage-all', params),
+    commit: (params) => ipcRenderer.invoke('git:commit', params),
   },
   fileOpen: {
     getPending: () => ipcRenderer.invoke('file:get-pending'),
