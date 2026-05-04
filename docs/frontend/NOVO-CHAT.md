@@ -27,6 +27,7 @@ Ao apertar no botão **Novo Chat**, o app deve iniciar uma sessão limpa. Isso s
 
 | Estado                        | Motivo                                       |
 |-------------------------------|----------------------------------------------|
+| Memórias globais              | Preferências persistentes do usuário         |
 | Lista de modelos              | Configuração do usuário                      |
 | Modelo selecionado            | Preferência do usuário                       |
 | Lista de projetos             | Configuração do workspace                    |
@@ -39,6 +40,10 @@ Ao apertar no botão **Novo Chat**, o app deve iniciar uma sessão limpa. Isso s
 ## Sessão anterior
 
 Antes de limpar, o app salva automaticamente a sessão atual na lista de sessões do sidebar, desde que existam mensagens com conteúdo. O título é extraído da primeira mensagem do usuário (até 60 caracteres).
+
+## Garantia de isolamento
+
+Depois do reset, o próximo prompt não recebe histórico, anexos, terminal, `threadId`, `sessionId`, status de orquestração nem diff acumulado da conversa anterior. O único contexto persistente de perfil que continua entrando automaticamente no prompt é o bloco de memórias globais, além de configurações explícitas do workspace que o usuário manteve ativas, como projetos selecionados.
 
 ## Fluxo backend
 

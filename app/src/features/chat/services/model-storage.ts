@@ -7,7 +7,7 @@ export function loadModels(fallback: Model[]) {
     const rawModels = window.localStorage.getItem(MODELS_STORAGE_KEY)
 
     if (!rawModels) {
-      return fallback
+      return dedupeModels(fallback)
     }
 
     const parsedModels = JSON.parse(rawModels)
@@ -21,14 +21,29 @@ export function loadModels(fallback: Model[]) {
       return model ? [model] : []
     })
 
-    return models.length > 0 ? models : fallback
+    return models.length > 0 ? dedupeModels(models) : dedupeModels(fallback)
   } catch {
-    return fallback
+    return dedupeModels(fallback)
   }
 }
 
 export function saveModels(models: Model[]) {
-  window.localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(models))
+  window.localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(dedupeModels(models)))
+}
+
+export function dedupeModels(models: Model[]) {
+  const seen = new Set<string>()
+
+  return models.filter((model) => {
+    const key = createModelDedupeKey(model)
+
+    if (seen.has(key)) {
+      return false
+    }
+
+    seen.add(key)
+    return true
+  })
 }
 
 export function createModelId(name: string) {
@@ -125,6 +140,20 @@ function detectCliType(value: string): CliType {
   }
 
   return 'unknown'
+}
+
+function createModelDedupeKey(model: Model) {
+  const command = normalizeDedupeValue(model.command)
+
+  if (command) {
+    return `command:${command}`
+  }
+
+  return `id:${normalizeDedupeValue(model.id)}`
+}
+
+function normalizeDedupeValue(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 function isCliType(value: unknown): value is CliType {

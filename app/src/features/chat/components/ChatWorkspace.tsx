@@ -26,7 +26,7 @@ import {
   loadChatSessionsFromBackend,
   saveChatSessionToBackend,
 } from '../services/chat-history-storage'
-import { loadModels, saveModels } from '../services/model-storage'
+import { dedupeModels, loadModels, saveModels } from '../services/model-storage'
 import {
   createNoteFromMessages,
   deleteNoteFromBackend,
@@ -605,10 +605,13 @@ export function ChatWorkspace() {
     resetBackendThreads(backendThreadIds)
     setActiveStreamingSession(null)
     activeChatSessionIdRef.current = null
+    activeSessionIdRef.current = null
+    activeThreadIdRef.current = null
     setMessages(initialMessages)
     clearTerminalSessions({ ignoreSessionIds: backendThreadIds })
     clearOrchestrationStatus()
     resetConversationThread()
+    lastSentProjectIdsRef.current = new Set()
     window.felixo?.qaLogger?.clear?.()
   }
 
@@ -842,7 +845,12 @@ export function ChatWorkspace() {
   }
 
   function addModel(model: Model) {
-    const existingModel = models.find((item) => item.command === model.command)
+    const normalizedCommand = normalizeModelCommand(model.command)
+    const existingModel = models.find(
+      (item) =>
+        item.id === model.id ||
+        normalizeModelCommand(item.command) === normalizedCommand,
+    )
 
     if (existingModel) {
       stopStreaming()
@@ -853,7 +861,7 @@ export function ChatWorkspace() {
 
     stopStreaming()
     setModels((currentModels) => {
-      const nextModels = [...currentModels, model]
+      const nextModels = dedupeModels([...currentModels, model])
       saveModels(nextModels)
       return nextModels
     })
@@ -864,8 +872,10 @@ export function ChatWorkspace() {
   function updateModel(updatedModel: Model) {
     stopStreaming()
     setModels((currentModels) => {
-      const nextModels = currentModels.map((model) =>
-        model.id === updatedModel.id ? updatedModel : model,
+      const nextModels = dedupeModels(
+        currentModels.map((model) =>
+          model.id === updatedModel.id ? updatedModel : model,
+        ),
       )
       saveModels(nextModels)
       return nextModels
@@ -1230,6 +1240,7 @@ export function ChatWorkspace() {
         onSelectSession={loadSession}
         onToggleProject={toggleProject}
         onOpenModelSettingsFor={openModelSettingsFor}
+        onRemoveModel={removeModel}
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-[var(--color-main-bg)]">
@@ -1850,6 +1861,10 @@ function normalizePromptText(prompt: string) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+}
+
+function normalizeModelCommand(command: string) {
+  return command.trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 function isOpenEndedAgentQuestionRequest(normalizedPrompt: string) {
