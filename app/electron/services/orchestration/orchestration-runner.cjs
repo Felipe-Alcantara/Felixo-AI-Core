@@ -2,6 +2,9 @@ const {
   OrchestrationLimitError,
   createOrchestrationStore,
 } = require('./orchestration-store.cjs')
+const {
+  ORCHESTRATOR_PROMPT_PRESETS,
+} = require('./orchestrator-prompt-presets.cjs')
 
 class OrchestrationRunner {
   constructor(options = {}) {
@@ -512,44 +515,42 @@ function createOrchestrationRunner(options) {
 }
 
 function createAgentResultsPrompt(run) {
+  const { agentResults } = ORCHESTRATOR_PROMPT_PRESETS
   const jobs = getCurrentTurnJobs(run)
   const sections = jobs.map((job) => {
-    const status = job.status === 'completed' ? 'concluido' : 'erro'
+    const status =
+      job.status === 'completed'
+        ? agentResults.completedStatus
+        : agentResults.errorStatus
     const content =
       job.status === 'completed'
-        ? job.result || 'Sem resultado textual.'
-        : job.error || 'Erro sem mensagem.'
+        ? job.result || agentResults.missingResult
+        : job.error || agentResults.missingError
 
     return [
       `--- Agente ${job.agentId} (${job.cliType}) ---`,
-      'Pergunta enviada ao sub-agente:',
-      job.prompt || 'Pergunta nao registrada.',
+      agentResults.agentQuestionHeading,
+      job.prompt || agentResults.missingQuestion,
       `Status: ${status}`,
-      job.status === 'completed' ? 'Resultado:' : 'Mensagem:',
+      job.status === 'completed'
+        ? agentResults.completedContentHeading
+        : agentResults.errorContentHeading,
       content,
     ].join('\n')
   })
 
   return [
-    'Continue a orquestracao a partir do objetivo original.',
+    agentResults.continueFromOriginal,
     '',
-    'Instrucoes para a resposta final:',
-    '- Responda somente com JSON no formato {"type":"final_answer","content":"..."}; sem Markdown fora do JSON.',
-    '- O campo content deve ser descritivo e util para o usuario, com contexto suficiente para entender o que foi perguntado, quem respondeu e qual foi o resultado.',
-    '- Formate o campo content como texto plano estruturado: uma abertura curta, uma linha em branco, um bloco "Pergunta enviada ao sub-agente:", um bloco "Resposta do sub-agente:" e um bloco "Por que importa:" com 2 a 4 bullets concretos.',
-    '- Inclua a pergunta completa enviada para cada sub-agente antes de apresentar a resposta ou erro. Se houver mais de um sub-agente, separe por agente e informe a CLI usada.',
-    '- Nao entregue o content como um unico paragrafo corrido.',
-    '- Nao use marcadores de enfase Markdown como *italico* ou **negrito**, porque o chat mostra texto plano.',
-    '- Preserve os detalhes concretos trazidos pelos sub-agentes e explique brevemente por que eles importam.',
-    '- Se o sub-agente trouxe uma resposta curta, incorpore a resposta completa e acrescente contexto pratico em frases completas em vez de apenas resumir.',
-    '- Se algum sub-agente falhou, diga explicitamente qual pergunta ele recebeu, que ele nao conseguiu concluir a tarefa e inclua a mensagem de erro relevante. Nao afirme que a tarefa foi feita.',
+    agentResults.finalInstructionsHeading,
+    ...agentResults.finalAnswerRules,
     '',
-    'Objetivo original:',
+    agentResults.originalObjectiveHeading,
     run.originalPrompt,
     '',
-    'Resultados dos sub-agentes solicitados:',
+    agentResults.agentResultsHeading,
     '',
-    sections.join('\n\n') || 'Nenhum sub-agente retornou resultado.',
+    sections.join('\n\n') || agentResults.noAgentResults,
   ].join('\n')
 }
 
