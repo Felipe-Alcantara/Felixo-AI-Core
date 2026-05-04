@@ -33,6 +33,30 @@ async function getGitProjectSummary(projectPath) {
   }
 }
 
+async function stageAllChanges(projectPath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  await runGit(cwd, ['add', '--all'])
+  return getGitProjectSummary(cwd)
+}
+
+async function unstageAllChanges(projectPath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  await runGit(cwd, ['restore', '--staged', '--', '.'])
+  return getGitProjectSummary(cwd)
+}
+
+async function commitStagedChanges(projectPath, message) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const commitMessage = normalizeCommitMessage(message)
+  const output = await runGit(cwd, ['commit', '-m', commitMessage])
+  const summary = await getGitProjectSummary(cwd)
+
+  return {
+    output: output.trim(),
+    summary,
+  }
+}
+
 async function runGit(cwd, args) {
   assertAllowedGitArgs(args)
 
@@ -67,17 +91,61 @@ function normalizeGitProjectPath(projectPath) {
 }
 
 function assertAllowedGitArgs(args) {
+  if (!Array.isArray(args)) {
+    throw new Error('Comando Git nao permitido.')
+  }
+
   const key = args.join('\0')
   const allowed = new Set([
     ['status', '--short', '--branch'].join('\0'),
     ['diff', '--stat'].join('\0'),
     ['log', '-5', '--oneline', '--decorate=short'].join('\0'),
     ['branch', '--show-current'].join('\0'),
+    ['add', '--all'].join('\0'),
+    ['restore', '--staged', '--', '.'].join('\0'),
   ])
 
-  if (!allowed.has(key)) {
-    throw new Error('Comando Git nao permitido.')
+  if (allowed.has(key)) {
+    return
   }
+
+  if (isAllowedCommitArgs(args)) {
+    return
+  }
+
+  throw new Error('Comando Git nao permitido.')
+}
+
+function isAllowedCommitArgs(args) {
+  return (
+    args.length === 3 &&
+    args[0] === 'commit' &&
+    args[1] === '-m' &&
+    typeof args[2] === 'string' &&
+    normalizeCommitMessage(args[2]) === args[2]
+  )
+}
+
+function normalizeCommitMessage(message) {
+  if (typeof message !== 'string') {
+    throw new Error('Mensagem de commit invalida.')
+  }
+
+  const normalizedMessage = message.replace(/\s+/g, ' ').trim()
+
+  if (!normalizedMessage) {
+    throw new Error('Informe uma mensagem de commit.')
+  }
+
+  if (normalizedMessage.length > 200) {
+    throw new Error('Mensagem de commit deve ter ate 200 caracteres.')
+  }
+
+  if (/[\r\n]/.test(message)) {
+    throw new Error('Mensagem de commit deve ter apenas uma linha.')
+  }
+
+  return normalizedMessage
 }
 
 function parseGitStatusLines(output) {
@@ -103,8 +171,12 @@ function parseGitBranch(statusLines, fallbackOutput = '') {
 
 module.exports = {
   assertAllowedGitArgs,
+  commitStagedChanges,
   getGitProjectSummary,
   normalizeGitProjectPath,
+  normalizeCommitMessage,
   parseGitBranch,
   parseGitStatusLines,
+  stageAllChanges,
+  unstageAllChanges,
 }

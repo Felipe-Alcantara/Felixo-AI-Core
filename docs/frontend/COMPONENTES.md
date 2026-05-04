@@ -434,10 +434,11 @@ Escopos suportados: `planning`, `code`, `docs`, `git`, `chat`.
 
 Responsabilidade:
 
-- exibir resumo Git read-only dos projetos ativos;
+- exibir resumo Git dos projetos ativos;
 - priorizar projetos ativos e, se não houver nenhum ativo, listar todos;
 - consultar `window.felixo.git.getSummary({ projectPath })`;
-- renderizar branch, status, diff stat e commits recentes.
+- renderizar branch, status, diff stat e commits recentes;
+- executar `Stage tudo`, `Unstage` e `Commit` com confirmação antes de chamar IPC de escrita.
 
 ### FelixoSettingsModal
 

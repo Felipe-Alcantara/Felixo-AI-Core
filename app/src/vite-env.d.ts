@@ -207,6 +207,29 @@ declare global {
           message?: string
           summary?: GitProjectSummary
         }>
+        stageAll: (params: {
+          projectPath: string
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          summary?: GitProjectSummary
+        }>
+        unstageAll: (params: {
+          projectPath: string
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          summary?: GitProjectSummary
+        }>
+        commit: (params: {
+          projectPath: string
+          message: string
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          output?: string
+          summary?: GitProjectSummary
+        }>
       }
       qaLogger?: {
         getEntries: () => Promise<QaLogEntry[]>
