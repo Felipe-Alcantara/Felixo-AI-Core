@@ -23,6 +23,9 @@ const {
   createProjectsRepository,
 } = require('./storage/projects-repository.cjs')
 const {
+  createChatHistoryRepository,
+} = require('./storage/chat-history-repository.cjs')
+const {
   MESSAGE_STORAGE_TIERS,
   resolveMessageStorageTier,
   shouldCompactMessage,
@@ -207,6 +210,104 @@ test(
       assert.equal(repository.delete('project-1'), true)
       assert.equal(repository.get('project-1'), null)
       assert.deepEqual(repository.list(), [])
+      database.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
+test(
+  'chat history repository stores sessions with messages',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-chats-')
+    const now = '2026-05-03T12:00:00.000Z'
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+      const repository = createChatHistoryRepository(database)
+      const session = {
+        id: 'chat-1',
+        title: 'Resumo do projeto',
+        createdAt: now,
+        updatedAt: now,
+        messages: [
+          {
+            id: 1,
+            role: 'user',
+            content: 'O que falta no historico?',
+            createdAt: '09:00',
+          },
+          {
+            id: 2,
+            role: 'assistant',
+            content: 'Persistir chats e mensagens.',
+            model: 'codex',
+            sessionId: 'cli-session-1',
+            isStreaming: true,
+            createdAt: '09:01',
+          },
+        ],
+      }
+
+      repository.save(session)
+
+      assert.deepEqual(repository.get('chat-1'), {
+        ...session,
+        messages: [
+          {
+            ...session.messages[0],
+            model: undefined,
+            sessionId: undefined,
+            isStreaming: false,
+          },
+          {
+            ...session.messages[1],
+            isStreaming: false,
+          },
+        ],
+      })
+      assert.deepEqual(repository.list(), [repository.get('chat-1')])
+
+      database.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
+test(
+  'chat history repository archives sessions',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-chats-archive-')
+    const now = '2026-05-03T12:00:00.000Z'
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+      const repository = createChatHistoryRepository(database)
+
+      repository.save({
+        id: 'chat-archive',
+        title: 'Chat arquivado',
+        createdAt: now,
+        updatedAt: now,
+        messages: [
+          {
+            id: 1,
+            role: 'user',
+            content: 'Arquivar depois',
+            createdAt: '10:00',
+          },
+        ],
+      })
+
+      assert.equal(repository.delete('chat-archive'), true)
+      assert.equal(repository.get('chat-archive'), null)
+      assert.deepEqual(repository.list(), [])
+      assert.equal(repository.list({ includeArchived: true }).length, 1)
+
       database.close()
     } finally {
       removeTempDir(databaseDir)

@@ -98,14 +98,14 @@ Isso simplifica o empacotamento multiplataforma.
 | Notas do usuário | SQLite no backend Electron, com migração inicial do `localStorage` |
 | Configurações do orquestrador | SQLite em `userData/database/felixo.sqlite`, com migração do JSON legado |
 | Tema e preferências visuais | `localStorage` no renderer |
-| Histórico de sessões | Memória + `localStorage` |
+| Histórico de sessões | SQLite no backend Electron |
 | QA Logger | Arquivo rotativo via `qa-logger.cjs` |
 
 ---
 
 ## Onde o app salva configurações
 
-Persistência ainda é mista. Configurações do orquestrador, notas e projetos já usam SQLite no backend Electron. Tema, modelos e histórico ainda dependem de `localStorage`/memória e devem migrar em recortes futuros.
+Persistência ainda é mista. Configurações do orquestrador, notas, projetos e histórico de chats já usam SQLite no backend Electron. Tema e modelos ainda dependem de `localStorage`/memória e devem migrar em recortes futuros.
 
 ---
 
@@ -162,7 +162,7 @@ Esses paths são relativos ao diretório do Electron, funcionando tanto em modo 
 
 ### Risco 1 — localStorage para persistência
 
-A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador, notas e projetos já foram migrados para SQLite em `app.getPath('userData')/database/felixo.sqlite`; modelos e histórico ainda devem migrar.
+A persistência em `localStorage` funciona em desenvolvimento, mas em apps empacotados o armazenamento pode ser perdido em atualizações ou se o diretório de dados do Electron mudar. As configurações do orquestrador, notas, projetos e histórico de chats já foram migrados para SQLite em `app.getPath('userData')/database/felixo.sqlite`; modelos e preferências visuais ainda devem migrar.
 
 ### Risco 2 — CLIs externas podem não estar no PATH
 

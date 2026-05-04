@@ -6,6 +6,7 @@ const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-ha
 const { registerQaLoggerIpcHandlers, logQaEvent } = require('./services/qa-logger.cjs')
 const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handlers.cjs')
 const { registerNotesIpcHandlers } = require('./services/notes-ipc-handlers.cjs')
+const { registerChatHistoryIpcHandlers } = require('./services/chat-history-ipc-handlers.cjs')
 const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
 const {
@@ -59,6 +60,7 @@ app.whenReady().then(() => {
   registerFileExportIpcHandlers(getMainWindow)
   registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
   registerNotesIpcHandlers({ database: storageDatabase })
+  registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
   registerAutoUpdateHandlers(getMainWindow)
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })

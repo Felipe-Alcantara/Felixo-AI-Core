@@ -96,7 +96,7 @@ Arquivos implementados:
 ## Pendências
 
 - [ ] Criar transações e helpers de consulta.
-- [ ] Criar IPCs de persistência para histórico.
+- [x] Criar IPCs de persistência para histórico.
 - [ ] Migrar dados restantes do `localStorage`.
 - [ ] Migrar configurações do orquestrador para remover fallback JSON legado em versão futura.
 - [ ] Criar busca textual.

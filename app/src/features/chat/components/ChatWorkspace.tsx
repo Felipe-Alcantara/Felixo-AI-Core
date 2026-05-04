@@ -20,6 +20,12 @@ import {
   createSuggestedExportFileName,
   exportChat,
 } from '../services/chat-export'
+import {
+  createChatSessionFromMessages,
+  createChatSessionId,
+  loadChatSessionsFromBackend,
+  saveChatSessionToBackend,
+} from '../services/chat-history-storage'
 import { loadModels, saveModels } from '../services/model-storage'
 import {
   createNoteFromMessages,
@@ -143,8 +149,12 @@ export function ChatWorkspace() {
   const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
   const activeThreadIdRef = useRef<string | null>(null)
+  const activeChatSessionIdRef = useRef<string | null>(null)
   const conversationThreadIdRef = useRef<string | null>(null)
   const conversationModelIdRef = useRef<ModelId | null>(null)
+  const messagesRef = useRef(messages)
+  const sessionsRef = useRef(sessions)
+  const chatHistoryLoadedRef = useRef(false)
   const orchestratorSettingsLoadedRef = useRef(false)
   const orchestratorSettingsUserEditedRef = useRef(false)
   const orchestratorSettingsRef = useRef(orchestratorSettings)
@@ -199,6 +209,52 @@ export function ChatWorkspace() {
   useEffect(() => {
     streamHandlerRef.current = handleStreamEvent
   })
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
+  useEffect(() => {
+    sessionsRef.current = sessions
+  }, [sessions])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadChatSessionsFromBackend()
+      .then((backendSessions) => {
+        if (cancelled) {
+          return
+        }
+
+        chatHistoryLoadedRef.current = true
+
+        if (backendSessions !== null) {
+          setSessions(backendSessions)
+        }
+      })
+      .catch(() => {
+        chatHistoryLoadedRef.current = true
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!messages.some((message) => message.content.trim())) {
+      return
+    }
+
+    const saveTimer = window.setTimeout(() => {
+      persistCurrentSession(messages)
+    }, 500)
+
+    return () => window.clearTimeout(saveTimer)
+    // Persist only when messages change; refs keep the active session fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages])
 
   useEffect(() => {
     orchestratorSettingsRef.current = orchestratorSettings
@@ -445,6 +501,7 @@ export function ChatWorkspace() {
     }
 
     const sessionId = createSessionId()
+    ensureActiveChatSessionId()
     const threadId = getConversationThreadId(selectedModel)
     const prevIds = lastSentProjectIdsRef.current
     const added = activeProjects.filter((p) => !prevIds.has(p.id))
@@ -539,12 +596,13 @@ export function ChatWorkspace() {
   function resetChat() {
     const backendThreadIds = collectKnownBackendThreadIds()
 
-    saveCurrentSession()
+    persistCurrentSession(messagesRef.current)
     setInput('')
     setContextAttachments([])
     stopStreaming()
     resetBackendThreads(backendThreadIds)
     setActiveStreamingSession(null)
+    activeChatSessionIdRef.current = null
     setMessages(initialMessages)
     clearTerminalSessions({ ignoreSessionIds: backendThreadIds })
     clearOrchestrationStatus()
@@ -553,24 +611,54 @@ export function ChatWorkspace() {
   }
 
   function saveCurrentSession() {
-    const meaningful = messages.filter((m) => m.content.trim())
-    if (meaningful.length === 0) return
+    persistCurrentSession(messagesRef.current)
+  }
 
-    const firstUser = meaningful.find((m) => m.role === 'user')
-    const title = firstUser
-      ? firstUser.content.slice(0, 60) + (firstUser.content.length > 60 ? '…' : '')
-      : 'Chat sem título'
+  function persistCurrentSession(messagesToPersist: ChatMessage[]) {
+    const chatSessionId = ensureActiveChatSessionId()
+    const existingSession = sessionsRef.current.find(
+      (session) => session.id === chatSessionId,
+    )
+    const session = createChatSessionFromMessages(
+      chatSessionId,
+      messagesToPersist,
+      existingSession,
+    )
 
-    const now = new Date().toISOString()
-    const session: ChatSession = {
-      id: crypto.randomUUID?.() ?? `${Date.now()}`,
-      title,
-      messages: meaningful,
-      createdAt: now,
-      updatedAt: now,
+    if (!session) {
+      return
     }
 
-    setSessions((prev) => [session, ...prev])
+    upsertChatSession(session)
+
+    if (chatHistoryLoadedRef.current || window.felixo?.chats?.save) {
+      void saveChatSessionToBackend(session).then((savedSession) => {
+        if (savedSession) {
+          upsertChatSession(savedSession)
+        }
+      })
+    }
+  }
+
+  function ensureActiveChatSessionId() {
+    if (!activeChatSessionIdRef.current) {
+      activeChatSessionIdRef.current = createChatSessionId()
+    }
+
+    return activeChatSessionIdRef.current
+  }
+
+  function upsertChatSession(session: ChatSession) {
+    setSessions((currentSessions) => {
+      const nextSessions = [
+        session,
+        ...currentSessions.filter((item) => item.id !== session.id),
+      ]
+
+      return nextSessions.sort(
+        (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
+      )
+    })
   }
 
   function loadSession(session: ChatSession) {
@@ -584,7 +672,8 @@ export function ChatWorkspace() {
     setActiveStreamingSession(null)
     clearOrchestrationStatus()
     resetConversationThread()
-    setMessages(session.messages)
+    activeChatSessionIdRef.current = session.id
+    setMessages(session.messages.map((message) => ({ ...message, isStreaming: false })))
   }
 
   function addProjects(incoming: Project[]) {
@@ -1031,6 +1120,7 @@ export function ChatWorkspace() {
     message: string,
   ) {
     const sessionId = createSessionId()
+    ensureActiveChatSessionId()
 
     setMessages((currentMessages) => [
       ...currentMessages,

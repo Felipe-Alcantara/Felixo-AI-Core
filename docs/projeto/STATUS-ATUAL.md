@@ -169,7 +169,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 - Processo persistente real está implementado para Claude, mas não para todos os adapters.
 - Codex e Gemini mantêm `threadId` estável no app e retomam a conversa nativa quando há `providerSessionId`, mas cada prompt ainda abre um novo processo CLI.
 - O painel Terminal é observável e humanizado, mas ainda não é um terminal interativo manual.
-- Histórico de chat ainda é basicamente em memória, salvo ao iniciar novo chat/carregar sessão dentro da execução atual.
+- Histórico de chat persiste em SQLite e é reaberto pela sidebar/pesquisa.
 - O `QA Logger` é voltado para debug local, não para auditoria persistente.
 - O painel Code é read-only; ações Git com escrita ainda dependem de uma política de confirmação.
 
@@ -189,7 +189,7 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 
 ### Frontend e produto
 
-- Persistir histórico de sessões em disco.
+- Evoluir histórico de sessões com busca textual/semântica e compactação.
 - Migrar persistências locais importantes de `localStorage` para armazenamento Electron versionado, se a necessidade crescer.
 - Adicionar UI para múltiplas threads simultâneas.
 - Permitir escolher a thread de destino do próximo prompt.
@@ -217,4 +217,4 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 2. Extrair a lógica persistente de `ipc-handlers.cjs` para um `persistent-cli-session-manager.cjs`.
 3. Adicionar indicador visual no Terminal para `processo persistente`, `retomada nativa` e `contexto explícito`.
 4. Revalidar Codex e Gemini manualmente com logs salvos no `QA Logger`.
-5. Persistir histórico de sessões e modelos em armazenamento local do Electron.
+5. Migrar modelos/preferências restantes para armazenamento local do Electron.

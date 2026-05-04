@@ -2,6 +2,7 @@
 
 import type {
   GitProjectSummary,
+  ChatSession,
   Model,
   OrchestratorSettings,
   OrchestrationRun,
@@ -158,6 +159,18 @@ declare global {
         list: () => Promise<CliInvokeResult & { notes?: unknown[] }>
         save: (note: ProjectNote) => Promise<CliInvokeResult>
         delete: (noteId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      chats?: {
+        list: (params?: {
+          limit?: number
+        }) => Promise<CliInvokeResult & { sessions?: unknown[] }>
+        get: (chatId: string) => Promise<
+          CliInvokeResult & { session?: unknown | null }
+        >
+        save: (session: ChatSession) => Promise<
+          CliInvokeResult & { session?: unknown }
+        >
+        delete: (chatId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       files?: {
         saveTextFile: (params: {
