@@ -104,11 +104,12 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
 ### Sessão persistente
 
 - Claude usa processo persistente real:
-  - spawn inicial com `claude --print --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode acceptEdits`.
+  - spawn inicial com `claude --print --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode bypassPermissions`.
   - `stdin` fica aberto.
   - cada nova mensagem da mesma conversa é escrita no mesmo processo em JSONL.
   - se houver `providerSessionId`, o próximo processo pode retomar com `--resume`.
   - `FELIXO_CLAUDE_PERMISSION_MODE` permite trocar o modo de permissão ou usar `off` para omitir a flag.
+  - O prompt inclui diretriz para seguir a stack/config existente ou o padrão Felixo quando o usuário não especificar stack/config, reduzindo perguntas de confirmação.
 - Processos persistentes ociosos são encerrados após 30 minutos.
 - O backend evita apagar uma sessão nova se um processo antigo fechar atrasado com o mesmo `threadId`.
 - Enquanto uma resposta está ativa, uma nova mensagem para a mesma thread é rejeitada para evitar interleaving de streams.
@@ -121,14 +122,14 @@ Detalhe tecnico dos protocolos persistentes investigados: [PROTOCOLOS-PERSISTENT
   - Suporta processo persistente via `getPersistentSpawnArgs()` e `createPersistentInput()`.
   - Parseia `system`, `stream_event`, `result` e erros.
 - `codex-adapter.cjs`
-  - Executa `codex exec --json --skip-git-repo-check`.
-  - Retoma sessão com `codex exec resume --json --skip-git-repo-check <providerSessionId>`.
+  - Executa `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox`.
+  - Retoma sessão com `codex exec resume --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <providerSessionId>`.
   - Captura metadados comuns de sessão/thread quando aparecem no JSONL.
   - Parseia resposta final em `item.completed` e conclusão em `turn.completed`.
   - Suprime ruídos conhecidos de `stderr` que não representam falha.
 - `gemini-adapter.cjs`
-  - Executa `gemini --prompt ... --output-format stream-json --skip-trust`.
-  - Retoma sessão com `gemini --resume <session_id> --prompt ... --output-format stream-json --skip-trust`.
+  - Executa `gemini --prompt ... --output-format stream-json --skip-trust --yolo`.
+  - Retoma sessão com `gemini --resume <session_id> --prompt ... --output-format stream-json --skip-trust --yolo`.
   - Captura `init.session_id`.
   - Parseia mensagens `role: model` ou `role: assistant`.
   - Trata `result` como conclusão.

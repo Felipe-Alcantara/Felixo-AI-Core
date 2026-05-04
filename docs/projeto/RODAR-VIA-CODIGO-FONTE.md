@@ -130,7 +130,9 @@ python3 start_app.py
 | Variável | Descrição | Padrão |
 |----------|-----------|--------|
 | `FELIXO_CLI_PATHS` | Diretórios extras para buscar CLIs | vazio |
-| `FELIXO_CLAUDE_PERMISSION_MODE` | Modo de permissão passado ao Claude Code (`default`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions` ou `off`) | `acceptEdits` |
+| `FELIXO_CLAUDE_PERMISSION_MODE` | Modo de permissão passado ao Claude Code (`default`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions` ou `off`) | `bypassPermissions` |
+| `FELIXO_CODEX_FULL_ACCESS` | Ativa/desativa `--dangerously-bypass-approvals-and-sandbox` e config full access do Codex (`off` para desativar) | ligado |
+| `FELIXO_GEMINI_FULL_ACCESS` | Ativa/desativa `--yolo` no Gemini (`off` para desativar) | ligado |
 | `FELIXO_SHELL` | Shell override para execução de comandos | `$SHELL` ou padrão do SO |
 | `FELIXO_NODE_BIN` | Diretório do Node.js override | auto-detectado |
 | `FELIXO_NODE_SEARCH_PATHS` | Diretórios extras para buscar Node/npm | vazio |

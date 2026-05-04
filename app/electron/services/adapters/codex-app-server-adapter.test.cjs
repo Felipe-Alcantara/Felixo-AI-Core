@@ -6,7 +6,13 @@ test('codex-app-server adapter returns persistent spawn args', () => {
   const spawnArgs = adapter.getPersistentSpawnArgs()
 
   assert.equal(spawnArgs.command, 'codex')
-  assert.deepEqual(spawnArgs.args, ['app-server'])
+  assert.deepEqual(spawnArgs.args, [
+    'app-server',
+    '--config',
+    'sandbox_mode="danger-full-access"',
+    '--config',
+    'approval_policy="never"',
+  ])
 })
 
 test('codex-app-server adapter passes model config to persistent process', () => {
@@ -20,6 +26,10 @@ test('codex-app-server adapter passes model config to persistent process', () =>
   assert.equal(spawnArgs.command, 'codex')
   assert.deepEqual(spawnArgs.args, [
     'app-server',
+    '--config',
+    'sandbox_mode="danger-full-access"',
+    '--config',
+    'approval_policy="never"',
     '--config',
     'model="gpt-5.5"',
     '--config',

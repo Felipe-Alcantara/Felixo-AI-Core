@@ -123,7 +123,7 @@ ChatThread renderiza resposta
 ```
 Claude
   ↓
-claude --print --input-format stream-json --output-format stream-json --permission-mode acceptEdits
+claude --print --input-format stream-json --output-format stream-json --permission-mode bypassPermissions
   ↓
 stdin permanece aberto
   ↓

@@ -12,6 +12,7 @@ test('gemini adapter skips workspace trust prompt', () => {
     '--output-format',
     'stream-json',
     '--skip-trust',
+    '--yolo',
   ])
 })
 
@@ -32,6 +33,7 @@ test('gemini adapter passes provider model when configured', () => {
     '--output-format',
     'stream-json',
     '--skip-trust',
+    '--yolo',
   ])
 })
 
@@ -49,7 +51,31 @@ test('gemini adapter builds resume args for an existing provider session', () =>
     '--output-format',
     'stream-json',
     '--skip-trust',
+    '--yolo',
   ])
+})
+
+test('gemini adapter allows disabling yolo mode from environment', () => {
+  const previousValue = process.env.FELIXO_GEMINI_FULL_ACCESS
+  process.env.FELIXO_GEMINI_FULL_ACCESS = 'off'
+
+  try {
+    const spawnArgs = adapter.getSpawnArgs('Oi')
+
+    assert.deepEqual(spawnArgs.args, [
+      '--prompt',
+      'Oi',
+      '--output-format',
+      'stream-json',
+      '--skip-trust',
+    ])
+  } finally {
+    if (previousValue === undefined) {
+      delete process.env.FELIXO_GEMINI_FULL_ACCESS
+    } else {
+      process.env.FELIXO_GEMINI_FULL_ACCESS = previousValue
+    }
+  }
 })
 
 test('gemini adapter enables native resume after provider session capture', () => {

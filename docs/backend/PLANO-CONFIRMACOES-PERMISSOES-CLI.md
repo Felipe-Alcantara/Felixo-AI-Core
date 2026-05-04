@@ -160,10 +160,10 @@ Mudancas planejadas:
 
 ### Claude
 
-O adapter inicia Claude Code com `--permission-mode acceptEdits` por padrao
-para evitar bloqueio em execucao nao interativa. `FELIXO_CLAUDE_PERMISSION_MODE`
-permite trocar para `default`, `plan`, `auto`, `dontAsk`, `bypassPermissions`
-ou `off`. Ainda falta investigar o formato real de pedidos estruturados de
+O adapter inicia Claude Code com `--permission-mode bypassPermissions` por
+padrao para evitar bloqueio em execucao nao interativa. `FELIXO_CLAUDE_PERMISSION_MODE`
+permite trocar para `default`, `acceptEdits`, `plan`, `auto`, `dontAsk` ou
+`off`. Ainda falta investigar o formato real de pedidos estruturados de
 permissao para transformar aprovacao manual em `permission_request` na UI.
 
 ### Codex

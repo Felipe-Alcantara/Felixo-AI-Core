@@ -122,6 +122,7 @@ test('codex adapter passes ascii cwd with exec args', () => {
     '--json',
     '--skip-git-repo-check',
     '--ephemeral',
+    '--dangerously-bypass-approvals-and-sandbox',
     '--cd',
     '/tmp/test-cwd',
     'Oi',
@@ -142,6 +143,7 @@ test('codex adapter passes provider model and reasoning effort', () => {
     '--json',
     '--skip-git-repo-check',
     '--ephemeral',
+    '--dangerously-bypass-approvals-and-sandbox',
     '--model',
     'gpt-5.5',
     '--config',
@@ -161,9 +163,33 @@ test('codex adapter resumes an existing provider session', () => {
     'resume',
     '--json',
     '--skip-git-repo-check',
+    '--dangerously-bypass-approvals-and-sandbox',
     '019ddc27-bc3d-7280-b5c0-61dff03b08cd',
     'Continua',
   ])
+})
+
+test('codex adapter allows disabling full access from environment', () => {
+  const previousValue = process.env.FELIXO_CODEX_FULL_ACCESS
+  process.env.FELIXO_CODEX_FULL_ACCESS = 'off'
+
+  try {
+    const spawnArgs = adapter.getSpawnArgs('Oi')
+
+    assert.deepEqual(spawnArgs.args, [
+      'exec',
+      '--json',
+      '--skip-git-repo-check',
+      '--ephemeral',
+      'Oi',
+    ])
+  } finally {
+    if (previousValue === undefined) {
+      delete process.env.FELIXO_CODEX_FULL_ACCESS
+    } else {
+      process.env.FELIXO_CODEX_FULL_ACCESS = previousValue
+    }
+  }
 })
 
 test('codex adapter disables native resume for ephemeral exec sessions', () => {
