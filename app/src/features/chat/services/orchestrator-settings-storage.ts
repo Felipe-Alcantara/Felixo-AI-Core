@@ -191,6 +191,8 @@ export function createOrchestratorContextBlock(
     settings.maxCostEstimate > 0 ? `- Limite de custo estimado: ${settings.maxCostEstimate}.` : null,
     settings.maxContextTokens > 0 ? `- Limite de contexto: ${settings.maxContextTokens} tokens.` : null,
     `- Confirmar acoes sensiveis: ${settings.requireConfirmationForSensitiveActions ? 'sim' : 'nao'}.`,
+    '- Formato da resposta final: Markdown direto, bem organizado e descritivo; use titulos curtos, paragrafos objetivos, listas escaneaveis, tabelas quando ajudarem comparacao e blocos fenced com linguagem para codigo/comandos.',
+    '- Nao embrulhe a resposta final inteira em bloco ```markdown```.',
   ]
 
   if (settings.customContext.trim()) {

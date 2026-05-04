@@ -1658,7 +1658,8 @@ function createCliPrompt(
   const lines = [
     'Responda diretamente à solicitação atual do usuário.',
     'Se a solicitação atual pedir alteração em arquivo, faça a alteração no workspace atual e depois informe o resultado.',
-    'Formate respostas textuais em Markdown organizado quando houver mais de uma ideia: titulos curtos, listas objetivas e blocos fenced para codigo ou comandos.',
+    'Formate respostas textuais em Markdown bem organizado e descritivo quando houver mais de uma ideia: titulos curtos, paragrafos objetivos, listas escaneaveis, tabelas quando ajudarem comparacao e blocos fenced com linguagem para codigo ou comandos.',
+    'Nao embrulhe a resposta inteira em bloco ```markdown```; escreva o Markdown direto no corpo da resposta.',
     '',
     'Solicitação atual do usuário:',
     currentPrompt,
@@ -1872,9 +1873,11 @@ function createOrchestrationProtocolInstructions(
     '- Se precisar de mais de um evento no mesmo turno, responda como JSONL, um objeto por linha, por exemplo `spawn_agent` seguido de `awaiting_agents`.',
     '- Nao envie raciocinio, planejamento interno, logs, progresso bruto ou transcricoes longas como texto comum do chat; esse processo ja aparece no Terminal/QA Logger.',
     '- O chat deve receber somente a resposta util para o usuario via `final_answer`.',
-    '- Depois que o Felixo retornar resultados dos sub-agentes, responda somente com `{"type":"final_answer","content":"resposta final para o usuario em Markdown organizado"}`.',
+    '- Depois que o Felixo retornar resultados dos sub-agentes, responda somente com `{"type":"final_answer","content":"resposta final para o usuario em Markdown bem organizado e descritivo"}`.',
     '- Antes do `final_answer`, avalie tecnicamente se a resposta do sub-agente realmente atende ao pedido do usuario. Se houver conflito, lacuna ou mudanca sem sentido, explique isso no `content` e proponha a correcao.',
-    '- O campo `content` do `final_answer` deve resumir o que mudou, por que importa, quais arquivos/decisoes foram afetados e qualquer proximo passo real. Use Markdown com titulos curtos, bullets e blocos fenced para codigo/comandos.',
+    '- O campo `content` do `final_answer` deve resumir o que mudou, por que importa, quais arquivos/decisoes foram afetados e qualquer proximo passo real.',
+    '- O `content` do `final_answer` deve ser Markdown direto, bem organizado e descritivo: use titulo curto quando ajudar, paragrafos breves, bullets para passos/alteracoes, tabelas para comparacoes/status e blocos fenced com linguagem para codigo/comandos.',
+    '- Nao embrulhe o `final_answer` inteiro em bloco ```markdown``` ou outro bloco de codigo.',
   ]
 
   if (orchestrationContextBlock) {
