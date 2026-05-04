@@ -229,9 +229,21 @@ test('gemini adapter classifies known non-fatal stderr notices', () => {
   assert.equal(adapter.classifyStderr(`${ripgrepNotice}real error\n`), 'warn')
 })
 
-test('gemini adapter treats model capacity exhaustion as fatal stderr', () => {
+test('gemini adapter treats retrying model capacity exhaustion as non-fatal stderr', () => {
   const capacityError =
     'Attempt 1 failed with status 429. Retrying with backoff... _GaxiosError: [{"error":{"code":429,"message":"No capacity available for model gemini-3-flash-preview on the server","status":"RESOURCE_EXHAUSTED","details":[{"reason":"MODEL_CAPACITY_EXHAUSTED"}]}}]\n'
+
+  assert.equal(adapter.classifyStderr(capacityError), 'warn')
+  assert.equal(adapter.shouldAbortOnStderr(capacityError), false)
+  assert.equal(
+    adapter.formatStderr(capacityError),
+    'Gemini encontrou capacidade indisponivel no servidor e a propria CLI esta tentando novamente.',
+  )
+})
+
+test('gemini adapter treats final model capacity exhaustion as fatal stderr', () => {
+  const capacityError =
+    'Error: No capacity available for model gemini-3-flash-preview on the server [{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"reason":"MODEL_CAPACITY_EXHAUSTED"}]}}]\n'
 
   assert.equal(adapter.classifyStderr(capacityError), 'error')
   assert.equal(adapter.shouldAbortOnStderr(capacityError), true)
@@ -241,12 +253,12 @@ test('gemini adapter treats model capacity exhaustion as fatal stderr', () => {
   )
 })
 
-test('gemini adapter treats retry capacity messages as fatal stderr', () => {
+test('gemini adapter treats retry capacity messages as non-fatal stderr', () => {
   const capacityError =
     'Attempt 1 failed: You have exhausted your capacity on this model. Your quota will reset after 6s.. Retrying after 6413ms...\n'
 
-  assert.equal(adapter.classifyStderr(capacityError), 'error')
-  assert.equal(adapter.shouldAbortOnStderr(capacityError), true)
+  assert.equal(adapter.classifyStderr(capacityError), 'warn')
+  assert.equal(adapter.shouldAbortOnStderr(capacityError), false)
 })
 
 test('gemini adapter treats unavailable edit tools as fatal stderr', () => {

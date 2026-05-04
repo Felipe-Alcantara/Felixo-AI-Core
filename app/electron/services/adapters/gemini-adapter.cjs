@@ -97,6 +97,10 @@ function parseLine(line) {
 }
 
 function classifyStderr(chunk) {
+  if (isRetryingCapacityStderr(chunk)) {
+    return 'warn'
+  }
+
   if (isFatalStderr(chunk)) {
     return 'error'
   }
@@ -122,6 +126,10 @@ function shouldAbortOnStderr(chunk) {
 
 function formatStderr(chunk) {
   const text = String(chunk)
+
+  if (isRetryingCapacityStderr(text)) {
+    return 'Gemini encontrou capacidade indisponivel no servidor e a propria CLI esta tentando novamente.'
+  }
 
   if (isCapacityExhaustedStderr(text)) {
     return 'Gemini está sem capacidade no servidor agora (429 / MODEL_CAPACITY_EXHAUSTED). Tente novamente mais tarde ou use outro modelo.'
@@ -158,7 +166,10 @@ function isRipgrepFallbackNotice(line) {
 }
 
 function isFatalStderr(chunk) {
-  return isCapacityExhaustedStderr(chunk) || isUnavailableToolStderr(chunk)
+  return (
+    (isCapacityExhaustedStderr(chunk) && !isRetryingCapacityStderr(chunk)) ||
+    isUnavailableToolStderr(chunk)
+  )
 }
 
 function isCapacityExhaustedStderr(chunk) {
@@ -170,6 +181,12 @@ function isCapacityExhaustedStderr(chunk) {
     text.includes('exhausted your capacity on this model') ||
     (text.includes('status 429') && text.includes('RESOURCE_EXHAUSTED'))
   )
+}
+
+function isRetryingCapacityStderr(chunk) {
+  const text = String(chunk)
+
+  return isCapacityExhaustedStderr(text) && /\bretrying\b/i.test(text)
 }
 
 function isUnavailableToolStderr(chunk) {
