@@ -22,6 +22,13 @@ type CliInvokeResult = {
   message?: string
 }
 
+type SaveAttachmentResult = CliInvokeResult & {
+  filePath?: string
+  fileName?: string
+  type?: string
+  size?: number
+}
+
 type UpdateStatus = {
   state:
     | 'disabled'
@@ -173,6 +180,11 @@ declare global {
         delete: (chatId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       files?: {
+        saveAttachment: (params: {
+          name: string
+          type: string
+          data: ArrayBuffer
+        }) => Promise<SaveAttachmentResult>
         saveTextFile: (params: {
           defaultPath: string
           content: string

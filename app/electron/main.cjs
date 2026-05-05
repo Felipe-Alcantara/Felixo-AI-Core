@@ -2,6 +2,9 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
+const {
+  registerFileAttachmentIpcHandlers,
+} = require('./services/file-attachments-ipc-handlers.cjs')
 const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-handlers.cjs')
 const { registerQaLoggerIpcHandlers, logQaEvent } = require('./services/qa-logger.cjs')
 const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handlers.cjs')
@@ -58,6 +61,7 @@ app.whenReady().then(() => {
 
   registerQaLoggerIpcHandlers(getMainWindow)
   registerCliIpcHandlers(getMainWindow)
+  registerFileAttachmentIpcHandlers(appPaths)
   registerFileExportIpcHandlers(getMainWindow)
   registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
   registerNotesIpcHandlers({ database: storageDatabase })
