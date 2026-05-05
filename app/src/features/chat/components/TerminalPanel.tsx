@@ -176,12 +176,12 @@ export function TerminalPanel({
       <aside className="flex w-11 shrink-0 flex-col items-center border-l border-white/[0.08] bg-[#111110] pt-3 text-zinc-500 max-[1020px]:hidden">
         <button
           type="button"
-          title="Abrir terminal"
+          title="Abrir logs da CLI"
           onClick={onToggleOpen}
           className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <Terminal size={15} aria-hidden="true" />
-          <span className="sr-only">Abrir terminal</span>
+          <span className="sr-only">Abrir logs da CLI</span>
         </button>
         {sessions.some((session) => session.status === 'running') && (
           <span className="mt-2 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
@@ -201,7 +201,7 @@ export function TerminalPanel({
       <header className="flex h-12 items-center justify-between border-b border-white/[0.07] px-3">
         <div className="flex min-w-0 items-center gap-2 text-[12px] font-medium text-zinc-300">
           <Terminal size={15} aria-hidden="true" />
-          <span>Terminal</span>
+          <span>Logs da CLI</span>
           <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
             {visibleSessions.length}
           </span>
@@ -210,22 +210,22 @@ export function TerminalPanel({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            title="Limpar terminal"
+            title="Limpar logs da CLI"
             onClick={onClear}
             disabled={visibleSessions.length === 0}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
           >
             <Trash2 size={13} aria-hidden="true" />
-            <span className="sr-only">Limpar terminal</span>
+            <span className="sr-only">Limpar logs da CLI</span>
           </button>
           <button
             type="button"
-            title="Recolher terminal"
+            title="Recolher logs da CLI"
             onClick={onToggleOpen}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200"
           >
             <ChevronRight size={15} aria-hidden="true" />
-            <span className="sr-only">Recolher terminal</span>
+            <span className="sr-only">Recolher logs da CLI</span>
           </button>
         </div>
       </header>
@@ -241,7 +241,7 @@ export function TerminalPanel({
               : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
           ].join(' ')}
         >
-          Threads
+          Execuções
         </button>
         <button
           type="button"
@@ -253,7 +253,7 @@ export function TerminalPanel({
               : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
           ].join(' ')}
         >
-          Orquestrador
+          Orquestração
         </button>
       </div>
 
@@ -271,7 +271,7 @@ export function TerminalPanel({
                   type="button"
                   onClick={() => selectSession(session.sessionId)}
                   className={[
-                    'flex min-h-10 w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left transition',
+                    'flex min-h-14 w-full items-start gap-2 rounded-lg py-1.5 pr-2 text-left transition',
                     isChild ? 'pl-5' : 'pl-2',
                     effectiveSelectedSessionId === session.sessionId
                       ? 'bg-white/[0.07] text-zinc-100'
@@ -289,9 +289,23 @@ export function TerminalPanel({
                       <span className={getSessionRoleClassName(session)}>
                         {formatSessionRole(session)}
                       </span>
-                      <span className="truncate font-mono text-[11px]" title={session.sessionId}>
-                        {extractSessionLabel(session)}
+                      <span
+                        className="shrink-0 rounded border border-white/[0.08] px-1.5 py-px font-mono text-[9px] uppercase leading-none text-zinc-500"
+                        title={session.sessionId}
+                      >
+                        ID {formatExecutionId(session)}
                       </span>
+                      <span className="truncate text-[11px] text-zinc-400">
+                        {extractSessionModelName(session)}
+                      </span>
+                    </span>
+                    <span
+                      className="mt-0.5 block truncate text-[10px] text-zinc-500"
+                      title={extractSessionPrompt(session) ?? undefined}
+                    >
+                      {extractSessionPrompt(session)
+                        ? `Prompt: ${extractSessionPrompt(session)}`
+                        : 'Prompt não registrado'}
                     </span>
                     <span className="block truncate text-[10px] text-zinc-600">
                       {formatStatus(session.status)} · {session.chunks.length} eventos ·{' '}
@@ -310,8 +324,8 @@ export function TerminalPanel({
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
             <span className="font-mono text-[10px] text-zinc-500">
               {selectedSession
-                ? `${extractSessionLabel(selectedSession)} · ${formatTime(selectedSession.updatedAt)}`
-                : 'sem sessão'}
+                ? `Execução ID ${formatExecutionId(selectedSession)} · ${formatTime(selectedSession.updatedAt)}`
+                : 'sem execução'}
             </span>
             {selectedSession && (
               <span
@@ -343,7 +357,7 @@ export function TerminalPanel({
                       className="rounded-lg border border-white/[0.04] bg-black/10 p-2"
                     >
                       <div className="mb-1 font-mono text-[10px] text-zinc-600">
-                        Thread {entry.sessionId.slice(0, 8)}
+                        Execução {entry.sessionId.slice(0, 8)}
                       </div>
                       <TerminalChunk chunk={entry.chunk} />
                     </div>
@@ -352,7 +366,7 @@ export function TerminalPanel({
               )
             ) : selectedThreadEntries.length === 0 ? (
               <p className="text-zinc-600">
-                {selectedSession ? 'Nenhum evento registrado nesta thread.' : 'Aguardando execução.'}
+                {selectedSession ? 'Nenhum evento registrado nesta execução.' : 'Aguardando execução.'}
               </p>
             ) : (
               <div className="space-y-2">
@@ -543,41 +557,42 @@ function createGroupedSessionRows(sessions: TerminalOutputSession[]) {
 
 function formatSessionRole(session: TerminalOutputSession) {
   if (!session.parentThreadId || session.parentThreadId === session.sessionId) {
-    return 'Orq'
+    return 'Chat'
   }
 
   if (session.sessionId.includes('orchestrator-turn')) {
-    return 'Orq'
+    return 'Sistema'
   }
 
-  return 'Sub'
+  return 'Agente'
 }
 
-function extractSessionLabel(session: TerminalOutputSession) {
-  const startChunk = session.chunks.find(
-    (chunk) => chunk.kind === 'lifecycle' && chunk.metadata,
-  )
-  const metadata = startChunk?.metadata
+function formatExecutionId(session: TerminalOutputSession) {
+  return session.sessionId.slice(0, 8)
+}
 
-  const modelName = metadata?.modelName
+function extractSessionModelName(session: TerminalOutputSession) {
+  const metadata = getSessionStartMetadata(session)
+
+  return metadata?.modelName
     ? String(metadata.modelName)
     : metadata?.cliType
       ? String(metadata.cliType)
-      : null
+      : 'CLI'
+}
 
-  const promptHint = metadata?.promptHint
-    ? String(metadata.promptHint)
-    : null
+function extractSessionPrompt(session: TerminalOutputSession) {
+  const metadata = getSessionStartMetadata(session)
 
-  if (modelName && promptHint) {
-    return `${modelName} · ${promptHint}`
-  }
+  return metadata?.promptHint ? String(metadata.promptHint) : null
+}
 
-  if (modelName) {
-    return modelName
-  }
+function getSessionStartMetadata(session: TerminalOutputSession) {
+  const startChunk = session.chunks.find(
+    (chunk) => chunk.kind === 'lifecycle' && chunk.metadata,
+  )
 
-  return session.sessionId.slice(0, 8)
+  return startChunk?.metadata ?? null
 }
 
 function getSessionRoleClassName(session: TerminalOutputSession) {
