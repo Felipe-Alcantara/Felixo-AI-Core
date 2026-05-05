@@ -484,7 +484,10 @@ export function ChatWorkspace() {
   }, [theme])
 
   function sendMessage() {
-    const content = input.trim()
+    const trimmedInput = input.trim()
+    const content =
+      trimmedInput ||
+      (contextAttachments.length > 0 ? 'Analise os anexos enviados.' : '')
 
     if (!content || activeSessionIdRef.current) {
       return

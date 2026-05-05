@@ -1,5 +1,10 @@
 import { useRef } from 'react'
-import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import type {
+  ChangeEvent,
+  ClipboardEvent,
+  FormEvent,
+  KeyboardEvent,
+} from 'react'
 import { Mic, Plus, Send, Square, X } from 'lucide-react'
 import type {
   ContextAttachment,
@@ -178,6 +183,25 @@ export function Composer({
     onAddAttachments(nextAttachments)
   }
 
+  async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (isStreaming) {
+      return
+    }
+
+    const imageFiles = createClipboardImageFiles(event.clipboardData)
+
+    if (imageFiles.length === 0) {
+      return
+    }
+
+    if (!event.clipboardData.getData('text/plain')) {
+      event.preventDefault()
+    }
+
+    const nextAttachments = await Promise.all(imageFiles.map(createAttachment))
+    onAddAttachments(nextAttachments)
+  }
+
   const isHome = variant === 'home'
   const providerModelOptions = getProviderModelOptions(selectedModel)
   const reasoningEffortOptions = getReasoningEffortOptions(selectedModel)
@@ -218,6 +242,7 @@ export function Composer({
             value={input}
             onChange={(event) => onInputChange(event.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             disabled={isStreaming}
             rows={isHome ? 3 : 2}
             placeholder="Como posso ajudar você hoje?"
@@ -304,7 +329,7 @@ export function Composer({
                 type={isStreaming ? 'button' : 'submit'}
                 title={isStreaming ? 'Parar' : 'Enviar'}
                 onClick={isStreaming ? onStop : undefined}
-                disabled={!isStreaming && !input.trim()}
+                disabled={!isStreaming && !input.trim() && attachments.length === 0}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#2b2b2a] disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-400"
               >
                 {isStreaming ? (
@@ -364,17 +389,42 @@ export function Composer({
 }
 
 async function createAttachment(file: File): Promise<ContextAttachment> {
-  const path = window.felixo?.getFilePath?.(file) ?? undefined
+  const filePath = window.felixo?.getFilePath?.(file) || undefined
+  const savedImageAttachment =
+    !filePath && isImageFile(file) ? await saveImageAttachment(file) : null
+  const path = filePath ?? savedImageAttachment?.filePath
   const contentPreview = await createContentPreview(file)
 
   return {
     id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-    name: file.name,
+    name: savedImageAttachment?.fileName ?? file.name,
     path,
-    type: file.type || 'application/octet-stream',
-    size: file.size,
+    type: savedImageAttachment?.type ?? (file.type || 'application/octet-stream'),
+    size: savedImageAttachment?.size ?? file.size,
     contentPreview,
   }
+}
+
+async function saveImageAttachment(file: File) {
+  if (!window.felixo?.files?.saveAttachment) {
+    return null
+  }
+
+  const data = await file.arrayBuffer().catch(() => null)
+
+  if (!data) {
+    return null
+  }
+
+  const result = await window.felixo.files
+    .saveAttachment({
+      name: file.name,
+      type: resolveImageMimeType(file) || 'application/octet-stream',
+      data,
+    })
+    .catch(() => null)
+
+  return result?.ok && result.filePath ? result : null
 }
 
 async function createContentPreview(file: File) {
@@ -403,6 +453,85 @@ function shouldReadTextPreview(file: File) {
     file.type.startsWith('text/') ||
     /\.(cjs|css|html|js|json|jsx|md|py|ts|tsx|txt|xml|yaml|yml)$/i.test(file.name)
   )
+}
+
+function createClipboardImageFiles(clipboardData: DataTransfer) {
+  const itemFiles = Array.from(clipboardData.items ?? [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file))
+    .filter(isImageFile)
+
+  const files =
+    itemFiles.length > 0
+      ? itemFiles
+      : Array.from(clipboardData.files ?? []).filter(isImageFile)
+
+  return files.map((file, index) =>
+    createClipboardImageFile(file, index, files.length),
+  )
+}
+
+function createClipboardImageFile(file: File, index: number, total: number) {
+  const extension = getImageExtension(file)
+  const indexSuffix = total > 1 ? `-${index + 1}` : ''
+  const name = `clipboard-image-${formatClipboardTimestamp(new Date())}${indexSuffix}.${extension}`
+
+  return new File([file], name, {
+    type: file.type || getImageMimeTypeFromExtension(extension),
+    lastModified: file.lastModified || Date.now(),
+  })
+}
+
+function isImageFile(file: File) {
+  return (
+    file.type.startsWith('image/') ||
+    /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file.name)
+  )
+}
+
+function getImageExtension(file: File) {
+  const mimeExtensionByType: Record<string, string> = {
+    'image/avif': 'avif',
+    'image/bmp': 'bmp',
+    'image/gif': 'gif',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/svg+xml': 'svg',
+    'image/webp': 'webp',
+  }
+  const extensionFromMime = mimeExtensionByType[file.type.toLowerCase()]
+
+  if (extensionFromMime) {
+    return extensionFromMime
+  }
+
+  const extensionFromName = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]
+
+  return extensionFromName?.toLowerCase() ?? 'png'
+}
+
+function resolveImageMimeType(file: File) {
+  return file.type || getImageMimeTypeFromExtension(getImageExtension(file))
+}
+
+function getImageMimeTypeFromExtension(extension: string) {
+  if (extension === 'jpg' || extension === 'jpeg') {
+    return 'image/jpeg'
+  }
+
+  if (extension === 'svg') {
+    return 'image/svg+xml'
+  }
+
+  return `image/${extension}`
+}
+
+function formatClipboardTimestamp(date: Date) {
+  return date
+    .toISOString()
+    .replace(/\.\d{3}Z$/, 'Z')
+    .replace(/[-:]/g, '')
 }
 
 function formatFileSize(bytes: number) {
