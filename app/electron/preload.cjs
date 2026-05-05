@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('felixo', {
     delete: (chatId) => ipcRenderer.invoke('chats:delete', chatId),
   },
   files: {
+    saveAttachment: (params) => ipcRenderer.invoke('files:save-attachment', params),
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
   },
   settings: {
