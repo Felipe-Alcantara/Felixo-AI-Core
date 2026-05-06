@@ -206,7 +206,7 @@ export type OrchestrationRun = {
 }
 
 export type StreamEvent =
-  | (StreamEventBase & { type: 'text'; text: string })
+  | (StreamEventBase & { type: 'text'; text: string; streamItemId?: string })
   | (StreamEventBase & { type: 'tool_use'; tool: string; input: string })
   | (StreamEventBase & { type: 'tool_result'; output: string })
   | OrchestrationStreamEvent
@@ -240,6 +240,7 @@ export type ChatMessage = {
   attachments?: ContextAttachment[]
   model?: ModelId
   sessionId?: string
+  streamItemId?: string
   isStreaming?: boolean
   createdAt: string
 }
