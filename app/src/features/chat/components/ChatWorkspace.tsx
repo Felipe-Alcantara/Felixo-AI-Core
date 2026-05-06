@@ -27,7 +27,14 @@ import {
   loadChatSessionsFromBackend,
   saveChatSessionToBackend,
 } from '../services/chat-history-storage'
-import { dedupeModels, loadModels, saveModels } from '../services/model-storage'
+import {
+  areModelsEquivalent,
+  createModelDedupeKey,
+  dedupeModels,
+  loadModels,
+  preferModelForDedupe,
+  saveModels,
+} from '../services/model-storage'
 import {
   createNoteFromMessages,
   deleteNoteFromBackend,
@@ -879,16 +886,28 @@ export function ChatWorkspace() {
   }
 
   function addModel(model: Model) {
-    const normalizedCommand = normalizeModelCommand(model.command)
-    const existingModel = models.find(
-      (item) =>
-        item.id === model.id ||
-        normalizeModelCommand(item.command) === normalizedCommand,
-    )
+    const existingModel = models.find((item) => areModelsEquivalent(item, model))
 
     if (existingModel) {
+      const preferredModel = preferModelForDedupe(existingModel, model)
+
       stopStreaming()
-      setSelectedModelId(existingModel.id)
+
+      if (preferredModel !== existingModel) {
+        setModels((currentModels) => {
+          const nextModels = dedupeModels(
+            currentModels.map((currentModel) =>
+              areModelsEquivalent(currentModel, preferredModel)
+                ? preferredModel
+                : currentModel,
+            ),
+          )
+          saveModels(nextModels)
+          return nextModels
+        })
+      }
+
+      setSelectedModelId(preferredModel.id)
       resetConversationThread({ resetProjectDiff: false })
       return
     }
@@ -945,10 +964,11 @@ export function ChatWorkspace() {
     stopStreaming()
     resetConversationThread({ resetProjectDiff: false })
     setModels((currentModels) => {
+      const modelToRemoveDedupeKey = createModelDedupeKey(modelToRemove)
       const nextModels = currentModels.filter(
         (model) =>
           model.id !== modelToRemove.id &&
-          model.command !== modelToRemove.command,
+          createModelDedupeKey(model) !== modelToRemoveDedupeKey,
       )
       saveModels(nextModels)
 
@@ -2044,10 +2064,6 @@ function shouldUseLeanContextForCurrentPrompt(prompt: string) {
   return SIMPLE_CURRENT_REQUEST_PATTERNS.some((pattern) =>
     pattern.test(normalizedPrompt),
   )
-}
-
-function normalizeModelCommand(command: string) {
-  return command.trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 function isOpenEndedAgentQuestionRequest(normalizedPrompt: string) {

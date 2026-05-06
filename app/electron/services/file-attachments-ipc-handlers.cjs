@@ -23,6 +23,9 @@ function registerFileAttachmentIpcHandlers(appPaths, options = {}) {
   ipcMain.handle('files:save-attachment', async (_event, params) =>
     saveAttachment(params, attachmentDir),
   )
+  ipcMain.handle('files:read-image-attachment', async (_event, params) =>
+    readImageAttachment(params),
+  )
 }
 
 async function saveAttachment(params, attachmentDir) {
@@ -74,10 +77,82 @@ async function saveAttachment(params, attachmentDir) {
   }
 }
 
+async function readImageAttachment(params) {
+  const filePath = typeof params?.path === 'string' ? params.path : ''
+  const mimeType = resolveAttachmentMimeType(params)
+
+  if (!filePath) {
+    return { ok: false, message: 'Caminho da imagem invalido.' }
+  }
+
+  if (!mimeType || !mimeType.startsWith('image/')) {
+    return { ok: false, message: 'Tipo de anexo invalido.' }
+  }
+
+  if (!IMAGE_MIME_EXTENSIONS.has(mimeType)) {
+    return { ok: false, message: 'Formato de imagem nao suportado.' }
+  }
+
+  try {
+    const stats = await fs.stat(filePath)
+
+    if (!stats.isFile()) {
+      return { ok: false, message: 'Anexo nao e um arquivo.' }
+    }
+
+    if (stats.size > MAX_ATTACHMENT_BYTES) {
+      return {
+        ok: false,
+        message: 'Imagem maior que o limite de 25 MB.',
+      }
+    }
+
+    const buffer = await fs.readFile(filePath)
+
+    return {
+      ok: true,
+      dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+      type: mimeType,
+      size: buffer.length,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao abrir imagem anexada.',
+    }
+  }
+}
+
 function normalizeMimeType(value) {
   const mimeType = typeof value === 'string' ? value.trim().toLowerCase() : ''
 
   return mimeType === 'image/jpg' ? 'image/jpeg' : mimeType
+}
+
+function resolveAttachmentMimeType(params) {
+  const mimeType = normalizeMimeType(params?.type)
+
+  if (IMAGE_MIME_EXTENSIONS.has(mimeType)) {
+    return mimeType
+  }
+
+  const name = typeof params?.name === 'string' ? params.name : params?.path
+  const extension = path.extname(name || '').toLowerCase().replace(/^\./, '')
+
+  for (const [candidateMimeType, candidateExtension] of IMAGE_MIME_EXTENSIONS) {
+    if (extension === candidateExtension) {
+      return candidateMimeType
+    }
+  }
+
+  if (extension === 'jpeg') {
+    return 'image/jpeg'
+  }
+
+  return mimeType
 }
 
 function toBuffer(value) {
@@ -117,6 +192,7 @@ function sanitizeBaseName(value) {
 
 module.exports = {
   createAttachmentFileName,
+  readImageAttachment,
   registerFileAttachmentIpcHandlers,
   saveAttachment,
 }

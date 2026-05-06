@@ -5,6 +5,7 @@ const path = require('node:path')
 const test = require('node:test')
 const {
   createAttachmentFileName,
+  readImageAttachment,
   saveAttachment,
 } = require('./file-attachments-ipc-handlers.cjs')
 
@@ -43,6 +44,38 @@ test('saveAttachment rejects unsupported attachment types', async () => {
     },
     os.tmpdir(),
   )
+
+  assert.equal(result.ok, false)
+  assert.equal(result.message, 'Tipo de anexo invalido.')
+})
+
+test('readImageAttachment returns an image data url', async (t) => {
+  const attachmentDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'felixo-attachment-read-'),
+  )
+  t.after(() => fs.rm(attachmentDir, { recursive: true, force: true }))
+
+  const filePath = path.join(attachmentDir, 'screenshot.png')
+  await fs.writeFile(filePath, Buffer.from([1, 2, 3]))
+
+  const result = await readImageAttachment({
+    path: filePath,
+    name: 'screenshot.png',
+    type: 'image/png',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.type, 'image/png')
+  assert.equal(result.size, 3)
+  assert.equal(result.dataUrl, 'data:image/png;base64,AQID')
+})
+
+test('readImageAttachment rejects non-image attachments', async () => {
+  const result = await readImageAttachment({
+    path: path.join(os.tmpdir(), 'notes.txt'),
+    name: 'notes.txt',
+    type: 'text/plain',
+  })
 
   assert.equal(result.ok, false)
   assert.equal(result.message, 'Tipo de anexo invalido.')
