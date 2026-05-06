@@ -29,6 +29,12 @@ type SaveAttachmentResult = CliInvokeResult & {
   size?: number
 }
 
+type ReadImageAttachmentResult = CliInvokeResult & {
+  dataUrl?: string
+  type?: string
+  size?: number
+}
+
 type UpdateStatus = {
   state:
     | 'disabled'
@@ -180,6 +186,11 @@ declare global {
         delete: (chatId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       files?: {
+        readImageAttachment: (params: {
+          path: string
+          name?: string
+          type?: string
+        }) => Promise<ReadImageAttachmentResult>
         saveAttachment: (params: {
           name: string
           type: string

@@ -15,7 +15,12 @@ import {
   X,
 } from 'lucide-react'
 import type { Model, ModelFileSelection } from '../types'
-import { createModelId, detectModelCliType } from '../services/model-storage'
+import {
+  areModelsEquivalent,
+  createModelId,
+  detectModelCliType,
+  preferModelForDedupe,
+} from '../services/model-storage'
 
 type ModelManagerModalProps = {
   isOpen: boolean
@@ -318,14 +323,7 @@ export function ModelManagerModal({
       return
     }
 
-    const existingModel = models.find((model) => model.command === command)
-
-    if (existingModel) {
-      setStatus(`Modelo "${existingModel.name}" já está importado.`)
-      return
-    }
-
-    onAddModel({
+    const nextModel = {
       id: createModelId(name),
       name,
       source: source || 'CLI instalada no sistema',
@@ -335,7 +333,20 @@ export function ModelManagerModal({
         name,
         source: source || 'CLI instalada no sistema',
       }),
-    })
+    }
+    const existingModel = models.find((model) =>
+      areModelsEquivalent(model, nextModel),
+    )
+
+    if (
+      existingModel &&
+      preferModelForDedupe(existingModel, nextModel) === existingModel
+    ) {
+      setStatus(`Modelo "${existingModel.name}" já está importado.`)
+      return
+    }
+
+    onAddModel(nextModel)
 
     setFormName('')
     setFormSource('')
@@ -721,16 +732,15 @@ function getMissingOfficialModels(
   importedModels: Model[],
 ) {
   return officialModels.filter(
-    (model) =>
-      !importedModels.some(
-        (existingModel) =>
-          existingModel.id === model.id ||
-          normalizeModelCommand(existingModel.command) ===
-            normalizeModelCommand(model.command),
-      ),
-  )
-}
+    (model) => {
+      const existingModel = importedModels.find((candidate) =>
+        areModelsEquivalent(candidate, model),
+      )
 
-function normalizeModelCommand(command: string) {
-  return command.trim().replace(/\s+/g, ' ').toLowerCase()
+      return (
+        !existingModel ||
+        preferModelForDedupe(existingModel, model) !== existingModel
+      )
+    },
+  )
 }

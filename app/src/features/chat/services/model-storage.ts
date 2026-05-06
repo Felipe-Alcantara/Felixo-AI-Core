@@ -21,29 +21,58 @@ export function loadModels(fallback: Model[]) {
       return model ? [model] : []
     })
 
-    return models.length > 0 ? dedupeModels(models) : dedupeModels(fallback)
+    if (models.length > 0) {
+      const dedupedModels = dedupeModels(models)
+      persistModelsIfChanged(rawModels, dedupedModels)
+      return dedupedModels
+    }
+
+    return dedupeModels(fallback)
   } catch {
     return dedupeModels(fallback)
   }
 }
 
 export function saveModels(models: Model[]) {
-  window.localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(dedupeModels(models)))
+  window.localStorage.setItem(
+    MODELS_STORAGE_KEY,
+    JSON.stringify(dedupeModels(models)),
+  )
 }
 
 export function dedupeModels(models: Model[]) {
-  const seen = new Set<string>()
+  const keys: string[] = []
+  const dedupedModels = new Map<string, Model>()
 
-  return models.filter((model) => {
+  for (const model of models) {
     const key = createModelDedupeKey(model)
+    const currentModel = dedupedModels.get(key)
 
-    if (seen.has(key)) {
-      return false
+    if (!currentModel) {
+      keys.push(key)
+      dedupedModels.set(key, model)
+      continue
     }
 
-    seen.add(key)
-    return true
+    dedupedModels.set(key, pickPreferredDuplicate(currentModel, model))
+  }
+
+  return keys.flatMap((key) => {
+    const model = dedupedModels.get(key)
+    return model ? [model] : []
   })
+}
+
+export function areModelsEquivalent(left: Model, right: Model) {
+  return createModelDedupeKey(left) === createModelDedupeKey(right)
+}
+
+export function preferModelForDedupe(currentModel: Model, candidateModel: Model) {
+  if (!areModelsEquivalent(currentModel, candidateModel)) {
+    return currentModel
+  }
+
+  return pickPreferredDuplicate(currentModel, candidateModel)
 }
 
 export function createModelId(name: string) {
@@ -142,8 +171,14 @@ function detectCliType(value: string): CliType {
   return 'unknown'
 }
 
-function createModelDedupeKey(model: Model) {
-  const command = normalizeDedupeValue(model.command)
+export function createModelDedupeKey(model: Model) {
+  const officialCommand = getCanonicalOfficialCommand(model)
+
+  if (officialCommand) {
+    return `official:${officialCommand}`
+  }
+
+  const command = normalizeModelCommand(model.command)
 
   if (command) {
     return `command:${command}`
@@ -154,6 +189,131 @@ function createModelDedupeKey(model: Model) {
 
 function normalizeDedupeValue(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+export function normalizeModelCommand(command: string) {
+  return normalizeDedupeValue(command)
+}
+
+function persistModelsIfChanged(rawModels: string, models: Model[]) {
+  const serializedModels = JSON.stringify(models)
+
+  if (serializedModels !== rawModels) {
+    window.localStorage.setItem(MODELS_STORAGE_KEY, serializedModels)
+  }
+}
+
+function pickPreferredDuplicate(currentModel: Model, candidateModel: Model) {
+  if (scoreDedupeCandidate(candidateModel) <= scoreDedupeCandidate(currentModel)) {
+    return currentModel
+  }
+
+  return {
+    ...candidateModel,
+    providerModel: currentModel.providerModel ?? candidateModel.providerModel,
+    reasoningEffort: currentModel.reasoningEffort ?? candidateModel.reasoningEffort,
+  }
+}
+
+function scoreDedupeCandidate(model: Model) {
+  let score = 0
+
+  if (isDirectOfficialCommand(model)) {
+    score += 100
+  }
+
+  if (isOfficialSource(model.source)) {
+    score += 20
+  }
+
+  if (isSystemCliSource(model.source)) {
+    score += 10
+  }
+
+  if (isLegacyOfficialScriptCommand(model)) {
+    score -= 20
+  }
+
+  if (model.providerModel) {
+    score += 2
+  }
+
+  if (model.reasoningEffort) {
+    score += 1
+  }
+
+  return score
+}
+
+function getCanonicalOfficialCommand(model: Model) {
+  if (isDirectOfficialCommand(model)) {
+    return normalizeModelCommand(model.command)
+  }
+
+  if (!isLegacyOfficialScriptCommand(model)) {
+    return null
+  }
+
+  if (model.cliType === 'claude') {
+    return 'claude'
+  }
+
+  if (model.cliType === 'codex') {
+    return 'codex'
+  }
+
+  if (model.cliType === 'gemini') {
+    return 'gemini'
+  }
+
+  return null
+}
+
+function isDirectOfficialCommand(model: Model) {
+  const command = normalizeModelCommand(model.command)
+
+  return (
+    command === 'claude' ||
+    command === 'codex' ||
+    command === 'codex app-server' ||
+    command === 'gemini' ||
+    command === 'gemini --experimental-acp'
+  )
+}
+
+function isLegacyOfficialScriptCommand(model: Model) {
+  const executableName = getExecutableName(model.command)
+
+  return (
+    (model.cliType === 'claude' && executableName === 'claude.sh') ||
+    (model.cliType === 'codex' && executableName === 'codex.sh') ||
+    (model.cliType === 'gemini' && executableName === 'gemini.sh')
+  )
+}
+
+function getExecutableName(command: string) {
+  const executable = command.trim().split(/\s+/)[0] ?? ''
+
+  return executable
+    .replace(/^['"]|['"]$/g, '')
+    .replaceAll('\\', '/')
+    .split('/')
+    .filter(Boolean)
+    .at(-1)
+    ?.toLowerCase() ?? ''
+}
+
+function isOfficialSource(source: string) {
+  const normalizedSource = normalizeDedupeValue(source)
+
+  return (
+    normalizedSource.includes('oficial') ||
+    normalizedSource.includes('official')
+  )
+}
+
+function isSystemCliSource(source: string) {
+  return normalizeDedupeValue(source).includes('cli instalada no sistema')
 }
 
 function isCliType(value: unknown): value is CliType {
