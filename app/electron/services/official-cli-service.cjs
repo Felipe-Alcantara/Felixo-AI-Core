@@ -1,5 +1,6 @@
 const os = require('node:os')
 const spawnChildProcess = require('cross-spawn')
+const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { detectCli } = require('../core/cli-detector.cjs')
 const {
@@ -190,7 +191,7 @@ function createCatalogItem(cli, detection) {
 }
 
 function getPlatformCommand(descriptor) {
-  if (process.platform === 'win32' && descriptor.windowsCommand) {
+  if (platform.name === 'win32' && descriptor.windowsCommand) {
     return descriptor.windowsCommand
   }
 

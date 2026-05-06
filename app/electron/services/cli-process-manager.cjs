@@ -2,6 +2,8 @@ const spawnChildProcess = require('cross-spawn')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const platform = require('../core/platform/index.cjs')
+const { getNvmNodeBinCandidates } = require('../core/platform/nvm.cjs')
 
 const CLI_PATHS_ENV_KEY = 'FELIXO_CLI_PATHS'
 
@@ -16,7 +18,7 @@ class CliProcessManager {
 
     const childProcess = spawnChildProcess(command, args, {
       cwd,
-      detached: process.platform !== 'win32',
+      detached: platform.shouldDetachProcess(),
       env,
       stdio: [options.openStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -78,7 +80,7 @@ class CliProcessManager {
     const signal = options.force ? 'SIGKILL' : 'SIGTERM'
 
     if (!childProcess.killed || options.force) {
-      signalChildProcess(childProcess, signal)
+      platform.killProcess(childProcess, signal)
     }
 
     if (options.force) {
@@ -89,7 +91,7 @@ class CliProcessManager {
     if (!entry.killTimer) {
       entry.killTimer = setTimeout(() => {
         if (childProcess.exitCode === null) {
-          signalChildProcess(childProcess, 'SIGKILL')
+          platform.killProcess(childProcess, 'SIGKILL')
         }
       }, 5000)
     }
@@ -118,25 +120,8 @@ class CliProcessManager {
   }
 }
 
-function signalChildProcess(childProcess, signal) {
-  if (process.platform === 'win32' || !childProcess.pid) {
-    return childProcess.kill(signal)
-  }
-
-  try {
-    process.kill(-childProcess.pid, signal)
-    return true
-  } catch (error) {
-    if (error?.code === 'ESRCH') {
-      return childProcess.kill(signal)
-    }
-
-    throw error
-  }
-}
-
 function createCliEnv(baseEnv = process.env) {
-  const pathKey = getPathEnvKey(baseEnv)
+  const pathKey = platform.getPathEnvKey(baseEnv)
   const configuredPaths = getConfiguredCliPaths(baseEnv)
   const userPaths = getUserCliPathCandidates(baseEnv)
   const pathParts = [
@@ -156,10 +141,6 @@ function createCliEnv(baseEnv = process.env) {
   return nextEnv
 }
 
-function getPathEnvKey(env) {
-  return Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
-}
-
 function getConfiguredCliPaths(env) {
   return splitPathList(env[CLI_PATHS_ENV_KEY])
 }
@@ -168,55 +149,14 @@ function getUserCliPathCandidates(env) {
   const home = env.HOME || env.USERPROFILE || os.homedir()
 
   if (!home) {
-    return getSystemCliPathCandidates()
-  }
-
-  if (process.platform === 'win32') {
-    return [
-      env.APPDATA ? path.join(env.APPDATA, 'npm') : null,
-      env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Programs', 'nodejs') : null,
-      path.join(home, 'AppData', 'Roaming', 'npm'),
-      ...getSystemCliPathCandidates(),
-    ]
+    return platform.getSystemCliPaths()
   }
 
   return [
-    path.join(home, '.local', 'bin'),
-    path.join(home, '.npm-global', 'bin'),
-    path.join(home, '.volta', 'bin'),
-    path.join(home, '.asdf', 'shims'),
+    ...platform.getUserCliPaths(home),
     ...getNvmNodeBinCandidates(path.join(home, '.nvm', 'versions', 'node')),
-    ...getSystemCliPathCandidates(),
+    ...platform.getSystemCliPaths(),
   ]
-}
-
-function getSystemCliPathCandidates() {
-  if (process.platform === 'darwin') {
-    return ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
-  }
-
-  if (process.platform === 'win32') {
-    return [
-      'C:\\Program Files\\nodejs',
-      'C:\\Program Files (x86)\\nodejs',
-    ]
-  }
-
-  return ['/usr/local/bin', '/usr/bin', '/bin']
-}
-
-function getNvmNodeBinCandidates(nodeVersionsPath) {
-  try {
-    return fs
-      .readdirSync(nodeVersionsPath, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(nodeVersionsPath, entry.name, 'bin'))
-      .filter((candidate) => directoryExists(candidate))
-      .sort()
-      .reverse()
-  } catch {
-    return []
-  }
 }
 
 function splitPathList(value) {

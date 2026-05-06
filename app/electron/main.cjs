@@ -19,6 +19,7 @@ const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { initAppPaths } = require('./core/app-paths.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
+const platform = require('./core/platform/index.cjs')
 
 let mainWindow = null
 let storageDatabase = null
@@ -122,7 +123,7 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (platform.name !== 'darwin') {
     app.quit()
   }
 })

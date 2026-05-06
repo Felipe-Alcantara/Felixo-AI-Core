@@ -10,6 +10,7 @@ const { execFile } = require('node:child_process')
 const { promisify } = require('node:util')
 const path = require('node:path')
 const fs = require('node:fs')
+const platform = require('./platform/index.cjs')
 
 const execFileAsync = promisify(execFile)
 
@@ -123,7 +124,7 @@ async function detectCli(cliInfo, env) {
 
   const commandsToTry = [cliInfo.command]
 
-  if (process.platform === 'win32' && cliInfo.windowsAliases) {
+  if (platform.name === 'win32' && cliInfo.windowsAliases) {
     commandsToTry.push(...cliInfo.windowsAliases)
   }
 
@@ -232,19 +233,16 @@ function parseVersionFromOutput(output) {
  * @returns {string | null}
  */
 function resolveCommandPath(command, env, options = {}) {
-  const currentPlatform = options.platform || process.platform
+  const adapter = options.platform
+    ? platform.getAdapter(options.platform)
+    : platform
   const exists = options.exists || fs.existsSync
   const currentEnv = env || process.env
-  const platformPath = currentPlatform === 'win32' ? path.win32 : path
-  const pathKey =
-    Object.keys(currentEnv).find((key) => key.toLowerCase() === 'path') ??
-    (currentPlatform === 'win32' ? 'Path' : 'PATH')
+  const platformPath = adapter.name === 'win32' ? path.win32 : path
+  const pathKey = adapter.getPathEnvKey(currentEnv)
   const pathEnv = currentEnv[pathKey] || ''
   const dirs = pathEnv.split(platformPath.delimiter)
-
-  const extensions = currentPlatform === 'win32'
-    ? ['', '.exe', '.cmd', '.bat', '.ps1']
-    : ['']
+  const extensions = adapter.getExecutableExtensions()
 
   for (const dir of dirs) {
     for (const ext of extensions) {
