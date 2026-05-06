@@ -204,8 +204,16 @@ test(
 
       repository.save(project)
 
-      assert.deepEqual(repository.get('project-1'), project)
-      assert.deepEqual(repository.list(), [project])
+      const expected = {
+        id: 'project-1',
+        name: 'Felixo',
+        path: '/tmp/felixo',
+        instructions: undefined,
+        docsDirectory: undefined,
+      }
+
+      assert.deepEqual(repository.get('project-1'), expected)
+      assert.deepEqual(repository.list(), [expected])
 
       assert.equal(repository.delete('project-1'), true)
       assert.equal(repository.get('project-1'), null)
