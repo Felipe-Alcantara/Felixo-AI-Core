@@ -68,6 +68,8 @@ import {
   saveProjectToBackend,
   saveProjects,
   saveProjectsToBackend,
+  buildDocsIndexForProject,
+  type DocsIndexEntry,
 } from '../services/project-storage'
 import { loadTheme, saveTheme } from '../services/theme-storage'
 import {
@@ -215,6 +217,32 @@ export function ChatWorkspace() {
     () => projects.filter((project) => activeProjectIds.has(project.id)),
     [activeProjectIds, projects],
   )
+
+  const [projectDocsIndexes, setProjectDocsIndexes] = useState<
+    Record<string, { entries: DocsIndexEntry[]; docsPath: string }>
+  >({})
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function rebuildIndexes() {
+      const indexes: Record<string, { entries: DocsIndexEntry[]; docsPath: string }> = {}
+
+      for (const project of activeProjects) {
+        if (project.docsDirectory) {
+          const result = await buildDocsIndexForProject(project)
+          if (result && result.entries.length > 0 && !cancelled) {
+            indexes[project.id] = result
+          }
+        }
+      }
+
+      if (!cancelled) setProjectDocsIndexes(indexes)
+    }
+
+    void rebuildIndexes()
+    return () => { cancelled = true }
+  }, [activeProjects])
 
   const meaningfulMessagesCount = useMemo(
     () => messages.filter((message) => message.content.trim()).length,
@@ -574,6 +602,7 @@ export function ChatWorkspace() {
         orchestrationContextBlock,
         globalMemoriesContextBlock,
         skillsContextBlock,
+        projectDocsIndexes,
       },
     )
     const resumePrompt = createCliPrompt(
@@ -590,6 +619,7 @@ export function ChatWorkspace() {
         orchestrationContextBlock,
         globalMemoriesContextBlock,
         skillsContextBlock,
+        projectDocsIndexes,
       },
     )
 
@@ -746,6 +776,14 @@ export function ChatWorkspace() {
       return next
     })
     void deleteProjectFromBackend(project.id)
+  }
+
+  function updateProject(updated: Project) {
+    projectsUserEditedRef.current = true
+    setProjects((prev) =>
+      prev.map((p) => (p.id === updated.id ? updated : p)),
+    )
+    void saveProjectToBackend(updated)
   }
 
   function toggleProject(project: Project) {
@@ -1579,6 +1617,7 @@ export function ChatWorkspace() {
         onClose={() => setIsProjectsOpen(false)}
         onAddProjects={addProjects}
         onRemoveProject={removeProject}
+        onUpdateProject={updateProject}
       />
 
     </div>
@@ -1736,6 +1775,7 @@ type CliPromptOptions = {
   orchestrationContextBlock?: string | null
   globalMemoriesContextBlock?: string | null
   skillsContextBlock?: string | null
+  projectDocsIndexes?: Record<string, { entries: DocsIndexEntry[]; docsPath: string }>
 }
 
 function createCliPrompt(
@@ -1754,6 +1794,7 @@ function createCliPrompt(
     orchestrationContextBlock = null,
     globalMemoriesContextBlock = null,
     skillsContextBlock = null,
+    projectDocsIndexes = {},
   } = options
   const useLeanContext = shouldUseLeanContextForCurrentPrompt(currentPrompt)
   const contextualActiveProjects = useLeanContext ? [] : activeProjects
@@ -1844,6 +1885,39 @@ function createCliPrompt(
     lines.push('', 'Projetos com contexto ativo:')
     for (const p of contextualActiveProjects) {
       lines.push(`  - ${p.name}: ${p.path}`)
+    }
+  }
+
+  const projectsWithInstructions = contextualActiveProjects.filter(
+    (p) => p.instructions?.trim(),
+  )
+  if (projectsWithInstructions.length > 0) {
+    lines.push('', 'Instruções específicas por projeto:')
+    for (const p of projectsWithInstructions) {
+      lines.push(
+        '',
+        `[Instruções do projeto "${p.name}"]`,
+        p.instructions!.trim(),
+      )
+    }
+  }
+
+  const projectsWithDocs = contextualActiveProjects.filter(
+    (p) => p.docsDirectory && projectDocsIndexes[p.id]?.entries?.length,
+  )
+  if (projectsWithDocs.length > 0) {
+    lines.push(
+      '',
+      'Diretórios de instruções dos projetos:',
+      'Os diretórios abaixo contém documentos de referência. Apenas o índice está incluído aqui.',
+      'Leia o arquivo relevante do diretório quando precisar de instruções detalhadas sobre um tópico.',
+    )
+    for (const p of projectsWithDocs) {
+      const index = projectDocsIndexes[p.id]
+      lines.push('', `[Índice de docs do projeto "${p.name}" — diretório: ${index.docsPath}]`)
+      for (const entry of index.entries) {
+        lines.push(`  - ${entry.filename}: ${entry.summary}`)
+      }
     }
   }
 
