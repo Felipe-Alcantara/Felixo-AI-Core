@@ -237,6 +237,16 @@ test(
             id: 1,
             role: 'user',
             content: 'O que falta no historico?',
+            attachments: [
+              {
+                id: 'attachment-1',
+                name: 'screenshot.png',
+                path: '/tmp/screenshot.png',
+                type: 'image/png',
+                size: 3,
+                previewUrl: 'data:image/png;base64,AQID',
+              },
+            ],
             createdAt: '09:00',
           },
           {

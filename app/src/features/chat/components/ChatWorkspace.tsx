@@ -549,6 +549,9 @@ export function ChatWorkspace() {
       orchestratorSettings,
     )
     const skillsContextBlock = createSkillsContextBlock(orchestratorSettings)
+    const messageAttachments = contextAttachments.map((attachment) => ({
+      ...attachment,
+    }))
 
     const cliPrompt = createCliPrompt(
       messages,
@@ -557,7 +560,7 @@ export function ChatWorkspace() {
       selectedModel,
       activeProjects,
       projectDiff,
-      contextAttachments,
+      messageAttachments,
       {
         orchestrationHint,
         orchestrationContextBlock,
@@ -572,7 +575,7 @@ export function ChatWorkspace() {
       selectedModel,
       activeProjects,
       projectDiff,
-      contextAttachments,
+      messageAttachments,
       {
         includeHistory: false,
         orchestrationHint,
@@ -584,7 +587,7 @@ export function ChatWorkspace() {
 
     setMessages((currentMessages) => [
       ...currentMessages,
-      createUserMessage(content),
+      createUserMessage(content, messageAttachments),
       createAssistantMessage(selectedModel, sessionId),
     ])
     setInput('')
@@ -1788,6 +1791,21 @@ function formatHistoryMessage(
   }
 
   lines.push('Conteúdo:', message.content.trim())
+
+  if (message.attachments?.length) {
+    lines.push('', 'Anexos da mensagem:')
+    for (const attachment of message.attachments) {
+      lines.push(
+        `  - ${attachment.name}`,
+        `    Tipo: ${attachment.type}`,
+        `    Tamanho: ${formatBytes(attachment.size)}`,
+      )
+
+      if (attachment.path) {
+        lines.push(`    Caminho local: ${attachment.path}`)
+      }
+    }
+  }
 
   return lines.join('\n')
 }

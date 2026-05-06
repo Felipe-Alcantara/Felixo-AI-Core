@@ -1,4 +1,4 @@
-import type { ChatMessage, Model } from '../types'
+import type { ChatMessage, ContextAttachment, Model } from '../types'
 
 export const initialMessages: ChatMessage[] = []
 
@@ -9,13 +9,22 @@ export function formatTime() {
   }).format(new Date())
 }
 
-export function createUserMessage(content: string): ChatMessage {
-  return {
+export function createUserMessage(
+  content: string,
+  attachments: ContextAttachment[] = [],
+): ChatMessage {
+  const message: ChatMessage = {
     id: Date.now(),
     role: 'user',
     content,
     createdAt: formatTime(),
   }
+
+  if (attachments.length > 0) {
+    message.attachments = attachments.map((attachment) => ({ ...attachment }))
+  }
+
+  return message
 }
 
 export function createAssistantMessage(

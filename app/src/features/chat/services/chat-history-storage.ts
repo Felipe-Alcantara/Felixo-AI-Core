@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatSession } from '../types'
+import type { ChatMessage, ChatSession, ContextAttachment } from '../types'
 
 export async function loadChatSessionsFromBackend(): Promise<ChatSession[] | null> {
   if (!window.felixo?.chats?.list) {
@@ -140,7 +140,8 @@ function normalizeChatMessage(message: unknown): ChatMessage | null {
     return null
   }
 
-  return {
+  const attachments = normalizeContextAttachments(rawMessage.attachments)
+  const normalizedMessage: ChatMessage = {
     id,
     role,
     content,
@@ -149,6 +150,12 @@ function normalizeChatMessage(message: unknown): ChatMessage | null {
     isStreaming: false,
     createdAt,
   }
+
+  if (attachments.length > 0) {
+    normalizedMessage.attachments = attachments
+  }
+
+  return normalizedMessage
 }
 
 function createChatTitle(messages: ChatMessage[]) {
@@ -161,4 +168,67 @@ function createChatTitle(messages: ChatMessage[]) {
 
 function normalizeString(value: unknown) {
   return typeof value === 'string' ? value : ''
+}
+
+function normalizeContextAttachments(value: unknown): ContextAttachment[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((attachment) => {
+    const normalizedAttachment = normalizeContextAttachment(attachment)
+    return normalizedAttachment ? [normalizedAttachment] : []
+  })
+}
+
+function normalizeContextAttachment(value: unknown): ContextAttachment | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const rawAttachment = value as Record<string, unknown>
+  const id = normalizeString(rawAttachment.id) || createChatSessionId()
+  const name = normalizeString(rawAttachment.name)
+  const type = normalizeString(rawAttachment.type) || 'application/octet-stream'
+  const size =
+    typeof rawAttachment.size === 'number' && Number.isFinite(rawAttachment.size)
+      ? Math.max(0, rawAttachment.size)
+      : 0
+
+  if (!name) {
+    return null
+  }
+
+  const attachment: ContextAttachment = {
+    id,
+    name,
+    type,
+    size,
+  }
+  const path = normalizeString(rawAttachment.path)
+  const previewUrl = normalizePreviewUrl(rawAttachment.previewUrl)
+  const contentPreview = normalizeString(rawAttachment.contentPreview)
+
+  if (path) {
+    attachment.path = path
+  }
+
+  if (previewUrl) {
+    attachment.previewUrl = previewUrl
+  }
+
+  if (contentPreview) {
+    attachment.contentPreview = contentPreview
+  }
+
+  return attachment
+}
+
+function normalizePreviewUrl(value: unknown) {
+  const previewUrl = normalizeString(value)
+
+  return /^data:image\/[a-z0-9.+-]+;base64,/i.test(previewUrl) ||
+    previewUrl.startsWith('blob:')
+    ? previewUrl
+    : ''
 }
