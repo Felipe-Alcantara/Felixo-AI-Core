@@ -19,6 +19,7 @@
 const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
+const platform = require('./platform/index.cjs')
 
 const APP_NAME = 'felixo-ai-core'
 
@@ -161,15 +162,7 @@ function safeGetPath(electronApp, name, fallback) {
  * @returns {string}
  */
 function getCacheBase() {
-  if (process.platform === 'win32') {
-    return process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
-  }
-
-  if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Caches')
-  }
-
-  return process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache')
+  return platform.getCacheBase()
 }
 
 module.exports = {
