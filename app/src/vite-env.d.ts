@@ -167,6 +167,15 @@ declare global {
         saveActiveIds: (
           projectIds: string[],
         ) => Promise<CliInvokeResult & { projectIds?: unknown[] }>
+        buildDocsIndex: (params: {
+          projectPath: string
+          docsDirectory: string
+        }) => Promise<
+          CliInvokeResult & {
+            entries?: { filename: string; summary: string }[]
+            docsPath?: string
+          }
+        >
       }
       notes?: {
         list: () => Promise<CliInvokeResult & { notes?: unknown[] }>

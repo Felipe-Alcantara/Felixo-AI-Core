@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FolderOpen, GitBranch, Loader2, Plus, Trash2, X } from 'lucide-react'
+import { Check, FolderOpen, GitBranch, Loader2, Plus, Settings, Trash2, X } from 'lucide-react'
 import type { Project } from '../types'
 
 type Tab = 'repo' | 'workspace'
@@ -10,6 +10,7 @@ type ProjectsModalProps = {
   onClose: () => void
   onAddProjects: (projects: Project[]) => void
   onRemoveProject: (project: Project) => void
+  onUpdateProject: (project: Project) => void
 }
 
 export function ProjectsModal({
@@ -18,11 +19,13 @@ export function ProjectsModal({
   onClose,
   onAddProjects,
   onRemoveProject,
+  onUpdateProject,
 }: ProjectsModalProps) {
   const [tab, setTab] = useState<Tab>('repo')
   const [loading, setLoading] = useState(false)
   const [detected, setDetected] = useState<{ name: string; path: string }[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   const resetWorkspaceSelection = useCallback(() => {
@@ -32,6 +35,7 @@ export function ProjectsModal({
 
   const closeModal = useCallback(() => {
     resetWorkspaceSelection()
+    setEditingProjectId(null)
     onClose()
   }, [onClose, resetWorkspaceSelection])
 
@@ -230,30 +234,119 @@ export function ProjectsModal({
         {projects.length > 0 && (
           <div className="border-t border-white/[0.08] px-5 py-4">
             <p className="mb-2 text-[11px] text-zinc-600">Projetos adicionados</p>
-            <div className="max-h-40 space-y-1 overflow-y-auto">
+            <div className="max-h-64 space-y-1 overflow-y-auto">
               {projects.map((project) => (
-                <div
-                  key={project.id}
-                  className="flex items-center gap-2 rounded-lg px-2 py-1.5"
-                >
-                  <GitBranch size={12} className="shrink-0 text-zinc-600" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12px] text-zinc-300">{project.name}</span>
-                    <span className="block truncate text-[10px] text-zinc-600">{project.path}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveProject(project)}
-                    className="shrink-0 rounded p-1 text-zinc-600 transition hover:text-theme-error"
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                <div key={project.id}>
+                  <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                    <GitBranch size={12} className="shrink-0 text-zinc-600" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] text-zinc-300">{project.name}</span>
+                      <span className="block truncate text-[10px] text-zinc-600">{project.path}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingProjectId(
+                          editingProjectId === project.id ? null : project.id,
+                        )
+                      }
+                      className={[
+                        'shrink-0 rounded p-1 transition',
+                        editingProjectId === project.id
+                          ? 'text-amber-400'
+                          : 'text-zinc-600 hover:text-zinc-300',
+                      ].join(' ')}
+                      title="Configurar instruções"
+                    >
+                      <Settings size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveProject(project)}
+                      className="shrink-0 rounded p-1 text-zinc-600 transition hover:text-theme-error"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+
+                  {editingProjectId === project.id && (
+                    <ProjectInstructionsEditor
+                      project={project}
+                      onSave={(updated) => {
+                        onUpdateProject(updated)
+                        setEditingProjectId(null)
+                      }}
+                    />
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function ProjectInstructionsEditor({
+  project,
+  onSave,
+}: {
+  project: Project
+  onSave: (project: Project) => void
+}) {
+  const [instructions, setInstructions] = useState(project.instructions ?? '')
+  const [docsDirectory, setDocsDirectory] = useState(project.docsDirectory ?? '')
+
+  return (
+    <div className="mx-2 mb-2 flex flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-medium text-zinc-500">
+          Instruções do projeto
+        </label>
+        <textarea
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          maxLength={4000}
+          rows={4}
+          placeholder="Instruções persistentes para quando este projeto estiver ativo. Ex: 'Use TypeScript strict, siga o padrão de pastas src/features/, testes com Vitest...'"
+          className="resize-y rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-2 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-amber-400/40 focus:outline-none"
+        />
+        <span className="text-right text-[10px] text-zinc-700">
+          {instructions.length}/4000
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-medium text-zinc-500">
+          Diretório de docs
+        </label>
+        <input
+          type="text"
+          value={docsDirectory}
+          onChange={(e) => setDocsDirectory(e.target.value)}
+          placeholder="docs"
+          className="h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-amber-400/40 focus:outline-none"
+        />
+        <p className="text-[10px] text-zinc-700">
+          Caminho relativo ao projeto. Os arquivos .md deste diretório serão indexados e o agente poderá consultá-los por tópico.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() =>
+          onSave({
+            ...project,
+            instructions: instructions.trim() || undefined,
+            docsDirectory: docsDirectory.trim() || undefined,
+          })
+        }
+        className="flex h-8 items-center gap-1.5 self-end rounded-lg bg-amber-500/20 px-3 text-[11px] text-amber-300 transition hover:bg-amber-500/30"
+      >
+        <Check size={12} />
+        Salvar
+      </button>
     </div>
   )
 }

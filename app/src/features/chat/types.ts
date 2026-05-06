@@ -249,6 +249,8 @@ export type Project = {
   id: string
   name: string
   path: string
+  instructions?: string
+  docsDirectory?: string
 }
 
 export type ContextAttachment = {
