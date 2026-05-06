@@ -24,6 +24,7 @@ function createProjectsRepository(database) {
     save(project) {
       const normalizedProject = normalizeProject(project)
       const now = new Date().toISOString()
+      const metadataJson = buildMetadataJson(normalizedProject)
 
       connection
         .prepare(
@@ -36,10 +37,11 @@ function createProjectsRepository(database) {
              updated_at,
              archived_at
            )
-           VALUES (?, ?, ?, '{}', ?, ?, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, NULL)
            ON CONFLICT(id) DO UPDATE SET
              name = excluded.name,
              path = excluded.path,
+             metadata_json = excluded.metadata_json,
              updated_at = excluded.updated_at,
              archived_at = NULL`,
         )
@@ -47,6 +49,7 @@ function createProjectsRepository(database) {
           normalizedProject.id,
           normalizedProject.name,
           normalizedProject.path,
+          metadataJson,
           now,
           now,
         )
@@ -72,14 +75,28 @@ function normalizeProject(project) {
     id: requireProjectId(project.id),
     name: requireString(project.name, 'Nome de projeto invalido.'),
     path: requireString(project.path, 'Caminho de projeto invalido.'),
+    instructions: typeof project.instructions === 'string' ? project.instructions : undefined,
+    docsDirectory: typeof project.docsDirectory === 'string' ? project.docsDirectory.trim() : undefined,
   }
 }
 
 function mapProjectRow(row) {
+  const metadata = safeParseJson(row.metadata_json)
+
   return {
     id: row.id,
     name: row.name,
     path: row.path,
+    instructions: metadata.instructions || undefined,
+    docsDirectory: metadata.docsDirectory || undefined,
+  }
+}
+
+function safeParseJson(value) {
+  try {
+    return JSON.parse(value || '{}')
+  } catch {
+    return {}
   }
 }
 
@@ -93,6 +110,20 @@ function requireString(value, errorMessage) {
   }
 
   return value.trim()
+}
+
+function buildMetadataJson(project) {
+  const metadata = {}
+
+  if (project.instructions) {
+    metadata.instructions = project.instructions
+  }
+
+  if (project.docsDirectory) {
+    metadata.docsDirectory = project.docsDirectory
+  }
+
+  return JSON.stringify(metadata)
 }
 
 module.exports = {

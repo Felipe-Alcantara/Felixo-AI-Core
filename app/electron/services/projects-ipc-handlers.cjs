@@ -116,6 +116,60 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
       return toErrorResult(error, 'Nao foi possivel salvar projetos ativos.')
     }
   })
+
+  ipcMain.handle('projects:build-docs-index', (_event, params) => {
+    try {
+      if (!params || typeof params.projectPath !== 'string' || typeof params.docsDirectory !== 'string') {
+        return { ok: false, message: 'Parametros invalidos para indexar docs.' }
+      }
+
+      const docsPath = path.resolve(params.projectPath, params.docsDirectory)
+
+      if (!docsPath.startsWith(path.resolve(params.projectPath))) {
+        return { ok: false, message: 'Diretorio de docs fora do projeto.' }
+      }
+
+      if (!fs.existsSync(docsPath)) {
+        return { ok: true, entries: [], docsPath }
+      }
+
+      const MAX_FILES = 50
+      const files = fs
+        .readdirSync(docsPath)
+        .filter((f) => /\.(md|txt|markdown)$/i.test(f))
+        .sort()
+        .slice(0, MAX_FILES)
+
+      const entries = files.map((filename) => {
+        const filePath = path.join(docsPath, filename)
+        const summary = readFirstMeaningfulLine(filePath)
+        return { filename, summary }
+      })
+
+      return { ok: true, entries, docsPath }
+    } catch (error) {
+      return toErrorResult(error, 'Erro ao indexar diretorio de docs.')
+    }
+  })
+}
+
+function readFirstMeaningfulLine(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const lines = content.split('\n')
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+
+      const cleaned = trimmed.replace(/^#+\s*/, '')
+      if (cleaned) return cleaned.slice(0, 120)
+    }
+
+    return path.basename(filePath)
+  } catch {
+    return path.basename(filePath)
+  }
 }
 
 function normalizeActiveProjectIdsValue(activeIds) {
