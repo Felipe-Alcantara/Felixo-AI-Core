@@ -118,10 +118,10 @@ function parseServerNotification(payload) {
       }
 
     case 'item/agentMessage/delta':
-      return {
-        type: 'text',
-        text: payload.params?.delta ?? '',
-      }
+      return createTextEvent(
+        payload.params?.delta ?? '',
+        extractStreamItemId(payload.params),
+      )
 
     case 'item/reasoning/textDelta':
       return null
@@ -282,6 +282,31 @@ function isErrorResponse(payload) {
 
 function extractThreadId(value) {
   return value?.threadId ?? value?.thread?.id
+}
+
+function extractStreamItemId(value) {
+  const candidates = [
+    value?.itemId,
+    value?.item?.id,
+    value?.id,
+  ]
+
+  return candidates.find(
+    (candidate) => typeof candidate === 'string' && candidate,
+  ) ?? undefined
+}
+
+function createTextEvent(text, streamItemId) {
+  const event = {
+    type: 'text',
+    text,
+  }
+
+  if (streamItemId) {
+    event.streamItemId = streamItemId
+  }
+
+  return event
 }
 
 function resetRequestId() {

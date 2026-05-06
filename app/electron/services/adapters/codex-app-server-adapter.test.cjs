@@ -191,7 +191,11 @@ test('codex-app-server adapter parses agentMessage delta as text', () => {
     },
   }))
 
-  assert.deepEqual(event, { type: 'text', text: 'Hello ' })
+  assert.deepEqual(event, {
+    type: 'text',
+    text: 'Hello ',
+    streamItemId: 'item-1',
+  })
 })
 
 test('codex-app-server adapter parses turn/completed as done', () => {
