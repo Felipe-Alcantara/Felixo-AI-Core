@@ -28,6 +28,10 @@ const defaultProviderModelOption: RuntimeSelectOption = {
   label: 'Padrão',
 }
 
+const IMAGE_PREVIEW_MAX_WIDTH = 360
+const IMAGE_PREVIEW_MAX_HEIGHT = 240
+const IMAGE_PREVIEW_FALLBACK_MAX_BYTES = 256 * 1024
+
 const providerModelOptionsByCliType: Partial<
   Record<Model['cliType'], RuntimeSelectOption[]>
 > = {
@@ -345,26 +349,12 @@ export function Composer({
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 border-t border-white/[0.06] px-4 py-2.5 max-sm:px-3">
               {attachments.map((attachment) => (
-                <span
+                <AttachmentPreview
                   key={attachment.id}
-                  title={attachment.path || attachment.name}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/[0.08] bg-black/15 px-2.5 py-1 text-[11px] text-zinc-300"
-                >
-                  <span className="max-w-40 truncate">{attachment.name}</span>
-                  <span className="shrink-0 font-mono text-zinc-600">
-                    {formatFileSize(attachment.size)}
-                  </span>
-                  <button
-                    type="button"
-                    title="Remover anexo"
-                    onClick={() => onRemoveAttachment(attachment.id)}
-                    disabled={isStreaming}
-                    className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
-                  >
-                    <X size={11} aria-hidden="true" />
-                    <span className="sr-only">Remover anexo</span>
-                  </button>
-                </span>
+                  attachment={attachment}
+                  isStreaming={isStreaming}
+                  onRemove={onRemoveAttachment}
+                />
               ))}
             </div>
           )}
@@ -388,12 +378,82 @@ export function Composer({
   )
 }
 
+function AttachmentPreview({
+  attachment,
+  isStreaming,
+  onRemove,
+}: {
+  attachment: ContextAttachment
+  isStreaming: boolean
+  onRemove: (attachmentId: string) => void
+}) {
+  if (isImageAttachment(attachment) && attachment.previewUrl) {
+    return (
+      <div
+        title={attachment.path || attachment.name}
+        className="relative flex w-48 max-w-full flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-black/20 text-zinc-300"
+      >
+        <div className="flex aspect-[4/3] w-full items-center justify-center bg-black/25">
+          <img
+            src={attachment.previewUrl}
+            alt={attachment.name}
+            className="h-full w-full object-contain"
+          />
+        </div>
+        <div className="flex min-w-0 items-center gap-1.5 border-t border-white/[0.06] px-2 py-1.5">
+          <span className="min-w-0 flex-1 truncate text-[11px]">
+            {attachment.name}
+          </span>
+          <span className="shrink-0 font-mono text-[10px] text-zinc-600">
+            {formatFileSize(attachment.size)}
+          </span>
+          <button
+            type="button"
+            title="Remover anexo"
+            onClick={() => onRemove(attachment.id)}
+            disabled={isStreaming}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+          >
+            <X size={12} aria-hidden="true" />
+            <span className="sr-only">Remover anexo</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <span
+      title={attachment.path || attachment.name}
+      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/[0.08] bg-black/15 px-2.5 py-1 text-[11px] text-zinc-300"
+    >
+      <span className="max-w-40 truncate">{attachment.name}</span>
+      <span className="shrink-0 font-mono text-zinc-600">
+        {formatFileSize(attachment.size)}
+      </span>
+      <button
+        type="button"
+        title="Remover anexo"
+        onClick={() => onRemove(attachment.id)}
+        disabled={isStreaming}
+        className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+      >
+        <X size={11} aria-hidden="true" />
+        <span className="sr-only">Remover anexo</span>
+      </button>
+    </span>
+  )
+}
+
 async function createAttachment(file: File): Promise<ContextAttachment> {
   const filePath = window.felixo?.getFilePath?.(file) || undefined
-  const savedImageAttachment =
-    !filePath && isImageFile(file) ? await saveImageAttachment(file) : null
+  const isImage = isImageFile(file)
+  const [savedImageAttachment, contentPreview, previewUrl] = await Promise.all([
+    !filePath && isImage ? saveImageAttachment(file) : Promise.resolve(null),
+    createContentPreview(file),
+    isImage ? createImagePreviewUrl(file) : Promise.resolve(undefined),
+  ])
   const path = filePath ?? savedImageAttachment?.filePath
-  const contentPreview = await createContentPreview(file)
 
   return {
     id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
@@ -401,6 +461,7 @@ async function createAttachment(file: File): Promise<ContextAttachment> {
     path,
     type: savedImageAttachment?.type ?? (file.type || 'application/octet-stream'),
     size: savedImageAttachment?.size ?? file.size,
+    previewUrl,
     contentPreview,
   }
 }
@@ -442,6 +503,85 @@ async function createContentPreview(file: File) {
   return trimmedText.length > 6000
     ? `${trimmedText.slice(0, 6000)}\n[preview truncado]`
     : trimmedText
+}
+
+async function createImagePreviewUrl(file: File) {
+  const objectUrl = URL.createObjectURL(file)
+
+  try {
+    const image = await loadImage(objectUrl)
+    const { width, height } = fitImageSize(
+      image.naturalWidth || image.width,
+      image.naturalHeight || image.height,
+      IMAGE_PREVIEW_MAX_WIDTH,
+      IMAGE_PREVIEW_MAX_HEIGHT,
+    )
+
+    if (!width || !height) {
+      return undefined
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const context = canvas.getContext('2d')
+
+    if (!context) {
+      return undefined
+    }
+
+    context.drawImage(image, 0, 0, width, height)
+
+    return canvas.toDataURL('image/webp', 0.82)
+  } catch {
+    return readSmallImageDataUrl(file)
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Falha ao carregar preview da imagem.'))
+    image.src = src
+  })
+}
+
+function fitImageSize(
+  width: number,
+  height: number,
+  maxWidth: number,
+  maxHeight: number,
+) {
+  if (width <= 0 || height <= 0) {
+    return { width: 0, height: 0 }
+  }
+
+  const scale = Math.min(1, maxWidth / width, maxHeight / height)
+
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }
+}
+
+function readSmallImageDataUrl(file: File) {
+  if (file.size > IMAGE_PREVIEW_FALLBACK_MAX_BYTES) {
+    return undefined
+  }
+
+  return new Promise<string | undefined>((resolve) => {
+    const reader = new FileReader()
+
+    reader.onload = () =>
+      resolve(typeof reader.result === 'string' ? reader.result : undefined)
+    reader.onerror = () => resolve(undefined)
+    reader.readAsDataURL(file)
+  })
 }
 
 function shouldReadTextPreview(file: File) {
@@ -487,6 +627,13 @@ function isImageFile(file: File) {
   return (
     file.type.startsWith('image/') ||
     /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file.name)
+  )
+}
+
+function isImageAttachment(attachment: ContextAttachment) {
+  return (
+    attachment.type.startsWith('image/') ||
+    /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(attachment.name)
   )
 }
 

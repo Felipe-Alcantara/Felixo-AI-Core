@@ -237,6 +237,7 @@ export type ChatMessage = {
   id: number
   role: 'assistant' | 'user'
   content: string
+  attachments?: ContextAttachment[]
   model?: ModelId
   sessionId?: string
   isStreaming?: boolean
@@ -255,6 +256,7 @@ export type ContextAttachment = {
   path?: string
   type: string
   size: number
+  previewUrl?: string
   contentPreview?: string
 }
 

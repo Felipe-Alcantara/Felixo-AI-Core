@@ -1,4 +1,5 @@
 const MAX_CHAT_TITLE_LENGTH = 120
+const MAX_ATTACHMENT_PREVIEW_URL_LENGTH = 512 * 1024
 
 function createChatHistoryRepository(database) {
   const connection = database?.connection ?? database
@@ -100,6 +101,7 @@ function createChatHistoryRepository(database) {
               id: message.id,
               createdAt: message.createdAt,
               sessionId: message.sessionId ?? null,
+              attachments: message.attachments ?? [],
             }),
             createdAt,
             normalizedSession.updatedAt,
@@ -165,7 +167,8 @@ function normalizeChatMessage(message) {
     ? message.id
     : Date.now()
 
-  return {
+  const attachments = normalizeChatAttachments(message.attachments)
+  const normalizedMessage = {
     id,
     role,
     content: typeof message.content === 'string' ? message.content : '',
@@ -174,6 +177,12 @@ function normalizeChatMessage(message) {
     isStreaming: false,
     createdAt: normalizeMessageCreatedAt(message.createdAt),
   }
+
+  if (attachments.length > 0) {
+    normalizedMessage.attachments = attachments
+  }
+
+  return normalizedMessage
 }
 
 function mapChatRow(row, connection) {
@@ -202,7 +211,8 @@ function mapMessageRow(row) {
   const metadata = parseJsonObject(row.metadata_json)
   const storedId = Number(metadata.id)
 
-  return {
+  const attachments = normalizeChatAttachments(metadata.attachments)
+  const message = {
     id: Number.isFinite(storedId) ? storedId : Date.parse(row.created_at),
     role: row.role === 'assistant' ? 'assistant' : 'user',
     content: row.content,
@@ -213,6 +223,12 @@ function mapMessageRow(row) {
       ? metadata.createdAt
       : formatDisplayTime(row.created_at),
   }
+
+  if (attachments.length > 0) {
+    message.attachments = attachments
+  }
+
+  return message
 }
 
 function createMessageStorageId(chatId, message, index) {
@@ -264,6 +280,70 @@ function normalizeMessageCreatedAt(value) {
 
 function normalizeOptionalString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function normalizeChatAttachments(value) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map(normalizeChatAttachment)
+    .filter((attachment) => attachment !== null)
+}
+
+function normalizeChatAttachment(value) {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const id = normalizeOptionalString(value.id)
+  const name = normalizeOptionalString(value.name)
+  const type = normalizeOptionalString(value.type) || 'application/octet-stream'
+  const size =
+    typeof value.size === 'number' && Number.isFinite(value.size)
+      ? Math.max(0, value.size)
+      : 0
+
+  if (!name) {
+    return null
+  }
+
+  const attachment = {
+    id: id || `${Date.now()}-${Math.random()}`,
+    name,
+    type,
+    size,
+  }
+  const attachmentPath = normalizeOptionalString(value.path)
+  const previewUrl = normalizePreviewUrl(value.previewUrl)
+  const contentPreview = normalizeOptionalString(value.contentPreview)
+
+  if (attachmentPath) {
+    attachment.path = attachmentPath
+  }
+
+  if (previewUrl) {
+    attachment.previewUrl = previewUrl
+  }
+
+  if (contentPreview) {
+    attachment.contentPreview = contentPreview
+  }
+
+  return attachment
+}
+
+function normalizePreviewUrl(value) {
+  if (typeof value !== 'string' || value.length > MAX_ATTACHMENT_PREVIEW_URL_LENGTH) {
+    return undefined
+  }
+
+  const previewUrl = value.trim()
+
+  return /^data:image\/[a-z0-9.+-]+;base64,/i.test(previewUrl)
+    ? previewUrl
+    : undefined
 }
 
 function parseJsonObject(valueJson) {
