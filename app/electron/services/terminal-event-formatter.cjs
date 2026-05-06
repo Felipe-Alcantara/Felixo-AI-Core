@@ -287,15 +287,7 @@ function createEventsFromCliEvent(cliEvent, payload, durationMs) {
       return []
     }
 
-    return [
-      {
-        source: 'stdout',
-        kind: 'assistant',
-        severity: 'info',
-        title: 'Resposta',
-        chunk: cliEvent.text,
-      },
-    ]
+    return [createAssistantTextEvent(cliEvent.text, cliEvent.streamItemId)]
   }
 
   if (cliEvent.type === 'tool_use') {
@@ -475,6 +467,23 @@ function createOrchestrationControlEvents(cliEvent) {
   }
 
   return []
+}
+
+function createAssistantTextEvent(text, streamItemId) {
+  const event = {
+    source: 'stdout',
+    kind: 'assistant',
+    severity: 'info',
+    title: 'Resposta',
+    chunk: text,
+  }
+  const metadata = compactObject({ streamItemId })
+
+  if (Object.keys(metadata).length > 0) {
+    event.metadata = metadata
+  }
+
+  return event
 }
 
 function createCodexItemEvent(item, fallbackTitle) {

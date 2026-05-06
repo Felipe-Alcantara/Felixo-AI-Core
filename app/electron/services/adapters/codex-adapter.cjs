@@ -85,6 +85,11 @@ function parseLine(line) {
         type: 'text',
         text: item.text,
       }
+      const streamItemId = extractStreamItemId(item)
+
+      if (streamItemId) {
+        event.streamItemId = streamItemId
+      }
 
       if (providerSessionId) {
         event.providerSessionId = providerSessionId
@@ -181,6 +186,18 @@ function extractProviderSessionId(payload) {
   ]
 
   return candidates.find((value) => typeof value === 'string' && value) ?? null
+}
+
+function extractStreamItemId(item) {
+  const candidates = [
+    item?.id,
+    item?.itemId,
+  ]
+
+  return (
+    candidates.find((value) => typeof value === 'string' && value) ??
+    undefined
+  )
 }
 
 module.exports = {

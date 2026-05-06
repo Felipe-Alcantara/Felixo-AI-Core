@@ -261,6 +261,39 @@ test('terminal formatter converts codex answer and usage into readable output', 
   })
 })
 
+test('terminal formatter preserves assistant stream item ids', () => {
+  assert.deepEqual(
+    createTerminalEvents({
+      command: 'codex',
+      line: JSON.stringify({
+        method: 'item/agentMessage/delta',
+        params: {
+          itemId: 'item-2',
+          delta: 'Resposta segmentada.',
+        },
+      }),
+      cliEvent: {
+        type: 'text',
+        text: 'Resposta segmentada.',
+        streamItemId: 'item-2',
+      },
+      durationMs: 120,
+    }),
+    [
+      {
+        source: 'stdout',
+        kind: 'assistant',
+        severity: 'info',
+        title: 'Resposta',
+        chunk: 'Resposta segmentada.',
+        metadata: {
+          streamItemId: 'item-2',
+        },
+      },
+    ],
+  )
+})
+
 test('terminal formatter renders orchestration control messages descriptively', () => {
   const [spawnEvent] = createTerminalEvents({
     command: 'codex',

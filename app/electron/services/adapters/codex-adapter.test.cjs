@@ -7,6 +7,7 @@ test('codex adapter parses completed agent messages', () => {
     JSON.stringify({
       type: 'item.completed',
       item: {
+        id: 'item-1',
         type: 'agent_message',
         text: 'Hello',
       },
@@ -16,6 +17,7 @@ test('codex adapter parses completed agent messages', () => {
   assert.deepEqual(event, {
     type: 'text',
     text: 'Hello',
+    streamItemId: 'item-1',
   })
 })
 
