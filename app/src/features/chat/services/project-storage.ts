@@ -205,8 +205,32 @@ function normalizeProject(value: unknown): Project | null {
       id: project.id,
       name: project.name,
       path: project.path,
+      instructions: typeof project.instructions === 'string' ? project.instructions : undefined,
+      docsDirectory: typeof project.docsDirectory === 'string' ? project.docsDirectory : undefined,
     }
   }
 
   return null
+}
+
+export type DocsIndexEntry = { filename: string; summary: string }
+
+export async function buildDocsIndexForProject(
+  project: Project,
+): Promise<{ entries: DocsIndexEntry[]; docsPath: string } | null> {
+  if (!project.docsDirectory || !window.felixo?.projects?.buildDocsIndex) {
+    return null
+  }
+
+  try {
+    const result = await window.felixo.projects.buildDocsIndex({
+      projectPath: project.path,
+      docsDirectory: project.docsDirectory,
+    })
+    return result.ok && result.entries && result.docsPath
+      ? { entries: result.entries, docsPath: result.docsPath }
+      : null
+  } catch {
+    return null
+  }
 }
