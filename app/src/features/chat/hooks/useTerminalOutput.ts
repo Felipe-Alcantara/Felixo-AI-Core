@@ -183,6 +183,15 @@ function shouldMergeTerminalOutput(
     lastChunk?.kind === 'assistant' &&
     lastChunk.sessionId === event.sessionId &&
     lastChunk.source === event.source &&
-    lastChunk.severity === event.severity
+    lastChunk.severity === event.severity &&
+    getStreamItemId(lastChunk.metadata) === getStreamItemId(event.metadata)
   )
+}
+
+function getStreamItemId(
+  metadata: TerminalOutputEvent['metadata'] | undefined,
+) {
+  const value = metadata?.streamItemId
+
+  return typeof value === 'string' ? value : ''
 }

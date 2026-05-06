@@ -58,10 +58,16 @@ export function createChatSessionFromMessages(
 ): ChatSession | null {
   const meaningfulMessages = messages
     .filter((message) => message.content.trim())
-    .map((message) => ({
-      ...message,
-      isStreaming: false,
-    }))
+    .map((message) => {
+      const normalizedMessage = {
+        ...message,
+        isStreaming: false,
+      }
+
+      delete normalizedMessage.streamItemId
+
+      return normalizedMessage
+    })
 
   if (meaningfulMessages.length === 0) {
     return null

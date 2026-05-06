@@ -9,6 +9,7 @@ import { defaultAutomations } from '../data/automations'
 import {
   createAssistantMessage,
   createUserMessage,
+  formatTime,
   initialMessages,
 } from '../services/chat-service'
 import {
@@ -1061,7 +1062,7 @@ export function ChatWorkspace() {
     }
 
     if (event.type === 'text') {
-      appendAssistantText(event.sessionId, event.text)
+      appendAssistantText(event.sessionId, event.text, event.streamItemId)
       return
     }
 
@@ -1117,18 +1118,73 @@ export function ChatWorkspace() {
     }))
   }
 
-  function appendAssistantText(sessionId: string, text: string) {
-    setMessages((currentMessages) =>
-      currentMessages.map((message) =>
-        message.sessionId === sessionId
+  function appendAssistantText(
+    sessionId: string,
+    text: string,
+    streamItemId?: string,
+  ) {
+    setMessages((currentMessages) => {
+      const targetIndex = findLastAssistantMessageIndex(currentMessages, sessionId)
+
+      if (targetIndex === -1) {
+        return currentMessages
+      }
+
+      const targetMessage = currentMessages[targetIndex]
+
+      if (!text.trim() && !targetMessage.content) {
+        return currentMessages
+      }
+
+      if (
+        streamItemId &&
+        targetMessage.streamItemId &&
+        targetMessage.streamItemId !== streamItemId &&
+        text.trim()
+      ) {
+        if (!targetMessage.content.trim()) {
+          return currentMessages.map((message, index) =>
+            index === targetIndex
+              ? {
+                  ...message,
+                  content: text,
+                  streamItemId,
+                  isStreaming: true,
+                }
+              : message,
+          )
+        }
+
+        return [
+          ...currentMessages.map((message) =>
+            message.sessionId === sessionId
+              ? { ...message, isStreaming: false }
+              : message,
+          ),
+          {
+            id: createNextMessageId(currentMessages),
+            role: 'assistant',
+            content: text,
+            model: targetMessage.model,
+            sessionId,
+            streamItemId,
+            isStreaming: true,
+            createdAt: formatTime(),
+          },
+        ]
+      }
+
+      return currentMessages.map((message, index) =>
+        index === targetIndex
           ? {
               ...message,
               content: `${message.content}${text}`,
+              streamItemId: streamItemId ?? message.streamItemId,
               isStreaming: true,
             }
           : message,
-      ),
-    )
+      )
+    })
   }
 
   function completeAssistantMessage(
@@ -1136,21 +1192,37 @@ export function ChatWorkspace() {
     content: string,
     status: 'done' | 'error' | 'stopped',
   ) {
-    setMessages((currentMessages) =>
-      currentMessages.map((message) => {
-        if (message.sessionId !== sessionId) {
+    setMessages((currentMessages) => {
+      const targetIndex = findLastAssistantMessageIndex(currentMessages, sessionId)
+
+      if (targetIndex === -1) {
+        return currentMessages
+      }
+
+      const hasSessionContent = currentMessages.some(
+        (message) =>
+          message.sessionId === sessionId &&
+          message.role === 'assistant' &&
+          message.content.trim(),
+      )
+
+      return currentMessages.map((message, index) => {
+        if (message.sessionId !== sessionId || message.role !== 'assistant') {
           return message
         }
 
-        const nextContent = createCompletedContent(message.content, content, status)
+        const shouldApplyCompletionContent =
+          index === targetIndex && (status !== 'done' || content || !hasSessionContent)
 
         return {
           ...message,
-          content: nextContent,
+          content: shouldApplyCompletionContent
+            ? createCompletedContent(message.content, content, status)
+            : message.content,
           isStreaming: false,
         }
-      }),
-    )
+      })
+    })
 
     if (activeSessionIdRef.current === sessionId) {
       setActiveStreamingSession(null)
@@ -1495,6 +1567,30 @@ export function ChatWorkspace() {
 
 function createSessionId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+}
+
+function createNextMessageId(messages: ChatMessage[]) {
+  const highestId = messages.reduce(
+    (highest, message) => Math.max(highest, message.id),
+    0,
+  )
+
+  return Math.max(Date.now(), highestId + 1)
+}
+
+function findLastAssistantMessageIndex(
+  messages: ChatMessage[],
+  sessionId: string,
+) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+
+    if (message.role === 'assistant' && message.sessionId === sessionId) {
+      return index
+    }
+  }
+
+  return -1
 }
 
 function formatAwaitingAgentsStatus(agentCount: number) {
