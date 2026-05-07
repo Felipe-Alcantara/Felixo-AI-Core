@@ -11,6 +11,7 @@ const {
   createToolLoopProgressState,
   getPersistentCloseLogLevel,
   resolveOrchestrationSpawnModel,
+  spawnOrchestrationAgent,
   shouldAbortForToolLoop,
   shouldSuppressPersistentTrailingOutput,
 } = require('./ipc-handlers.cjs')
@@ -349,4 +350,55 @@ test('ipc handlers do not log completed persistent closes as errors', () => {
   assert.equal(getPersistentCloseLogLevel({ code: 143, didComplete: true }), 'info')
   assert.equal(getPersistentCloseLogLevel({ code: 143, didComplete: false }), 'error')
   assert.equal(getPersistentCloseLogLevel({ code: 0, didComplete: false }), 'info')
+})
+
+test('spawnOrchestrationAgent routes the spawn through sendCliRequest with selected model', () => {
+  const calls = []
+  const sendCliRequest = (params, _webContents, ctx) => {
+    calls.push({ params, ctx })
+    return { ok: true, threadId: params.threadId }
+  }
+
+  const claudeModel = {
+    id: 'claude-cli',
+    name: 'Claude CLI',
+    command: 'claude',
+    source: 'CLI',
+    cliType: 'claude',
+  }
+
+  const result = spawnOrchestrationAgent({
+    run: { runId: 'r1', parentThreadId: 't1', orchestratorCliType: 'claude', orchestratorModel: claudeModel, originalPrompt: 'orig' },
+    event: { agentId: 'a1', cliType: 'claude', prompt: 'analise o auth.py' },
+    threadId: 'thread-a1',
+    context: {
+      availableModels: [claudeModel],
+      orchestratorSettings: {},
+      cwd: '/tmp',
+    },
+    sendCliRequest,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].params.model.cliType, 'claude')
+  // applyVariantDefaults should have filled providerModel/effort
+  assert.equal(calls[0].params.model.providerModel, 'opus')
+  assert.equal(calls[0].params.model.reasoningEffort, 'medium')
+  assert.equal(calls[0].ctx.role, 'agent')
+  assert.equal(calls[0].ctx.agentId, 'a1')
+})
+
+test('spawnOrchestrationAgent fails fast when no model available', () => {
+  const result = spawnOrchestrationAgent({
+    run: { runId: 'r1', parentThreadId: 't1' },
+    event: { agentId: 'a1', cliType: 'claude', prompt: 'tarefa' },
+    threadId: 'thread-a1',
+    context: { availableModels: [], orchestratorSettings: {} },
+    sendCliRequest: () => {
+      throw new Error('should not be called')
+    },
+  })
+
+  assert.equal(result.ok, false)
 })
