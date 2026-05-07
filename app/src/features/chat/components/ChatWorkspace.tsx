@@ -40,9 +40,14 @@ import {
   areModelsEquivalent,
   createModelDedupeKey,
   dedupeModels,
+  deleteModelFromBackend,
+  hasModelsBackendMigrationRun,
   loadModels,
+  loadModelsFromBackend,
+  markModelsBackendMigrationRun,
   preferModelForDedupe,
   saveModels,
+  saveModelsToBackend,
 } from '../services/model-storage'
 import {
   createNoteFromMessages,
@@ -199,6 +204,9 @@ export function ChatWorkspace() {
   const automationsRef = useRef(customAutomations)
   const automationsUserEditedRef = useRef(false)
   const automationsBackendLoadedRef = useRef(false)
+  const modelsRef = useRef(models)
+  const modelsUserEditedRef = useRef(false)
+  const modelsBackendLoadedRef = useRef(false)
   const projectsRef = useRef(projects)
   const activeProjectIdsRef = useRef(activeProjectIds)
   const projectsBackendLoadedRef = useRef(false)
@@ -334,6 +342,13 @@ export function ChatWorkspace() {
   }, [customAutomations])
 
   useEffect(() => {
+    modelsRef.current = models
+    if (modelsBackendLoadedRef.current) {
+      void saveModelsToBackend(models)
+    }
+  }, [models])
+
+  useEffect(() => {
     projectsRef.current = projects
   }, [projects])
 
@@ -429,6 +444,49 @@ export function ChatWorkspace() {
         }
 
         markNotesBackendMigrationRun()
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadModelsFromBackend()
+      .then((backendModels) => {
+        if (cancelled || backendModels === null) {
+          return
+        }
+
+        modelsBackendLoadedRef.current = true
+
+        if (backendModels.length > 0) {
+          if (modelsUserEditedRef.current) {
+            void saveModelsToBackend(modelsRef.current)
+            markModelsBackendMigrationRun()
+            return
+          }
+          setModels(backendModels)
+          markModelsBackendMigrationRun()
+          return
+        }
+
+        if (
+          !hasModelsBackendMigrationRun() &&
+          modelsRef.current.length > 0
+        ) {
+          void saveModelsToBackend(modelsRef.current).then((saved) => {
+            if (saved) {
+              markModelsBackendMigrationRun()
+            }
+          })
+          return
+        }
+
+        markModelsBackendMigrationRun()
       })
       .catch(() => {})
 
@@ -1082,6 +1140,10 @@ export function ChatWorkspace() {
   function removeModel(modelToRemove: Model) {
     stopStreaming()
     resetConversationThread({ resetProjectDiff: false })
+    modelsUserEditedRef.current = true
+    if (modelsBackendLoadedRef.current) {
+      void deleteModelFromBackend(modelToRemove.id)
+    }
     setModels((currentModels) => {
       const modelToRemoveDedupeKey = createModelDedupeKey(modelToRemove)
       const nextModels = currentModels.filter(
