@@ -68,9 +68,9 @@ test('classifySpawnPrompt detects code prompts via portuguese keywords', () => {
   assert.equal(classifySpawnPrompt('Implementar refactor da feature'), 'code')
 })
 
-test('classifySpawnPrompt detects long-context prompts', () => {
-  assert.equal(classifySpawnPrompt('Resuma este documento grande'), 'long-context')
-  assert.equal(classifySpawnPrompt('Pesquisa em contexto longo'), 'long-context')
+test('classifySpawnPrompt detects long-context prompts (defaults to doc sub-kind)', () => {
+  assert.equal(classifySpawnPrompt('Resuma este documento grande'), 'long-context-doc')
+  assert.equal(classifySpawnPrompt('Pesquisa em contexto longo'), 'long-context-doc')
 })
 
 test('classifySpawnPrompt falls back to general for non-matching prompts', () => {
@@ -187,4 +187,66 @@ test('selectBestSpawnModel picks gemini for long-context prompts when no cliType
   })
 
   assert.equal(winner.cliType, 'gemini')
+})
+
+test('classifySpawnPrompt detects reasoning sub-kind in general prompts', () => {
+  assert.equal(classifySpawnPrompt('Analise os trade-offs e decida'), 'reasoning')
+  assert.equal(classifySpawnPrompt('Monte um plano de implementação'), 'reasoning')
+  assert.equal(classifySpawnPrompt('Compare as estratégias para esta feature'), 'reasoning')
+})
+
+test('classifySpawnPrompt distinguishes long-context-doc vs long-context-reasoning', () => {
+  assert.equal(
+    classifySpawnPrompt('Resuma este documento grande em formato Markdown'),
+    'long-context-doc',
+  )
+  assert.equal(
+    classifySpawnPrompt('Pesquisa extensa: analise e compare as estratégias arquiteturais'),
+    'long-context-reasoning',
+  )
+})
+
+test('scoring prefers Claude over Codex over Gemini for code prompts', () => {
+  const codePrompt = 'Corrigir bug no arquivo de auth'
+  const opts = { preferredModelIds: [], requestedCliType: 'claude', prompt: codePrompt }
+  const claude = scoreSpawnModel(claudeOpus, opts)
+  const codex = scoreSpawnModel(codexHigh, { ...opts, requestedCliType: 'codex' })
+  const gemini = scoreSpawnModel(geminiPro, { ...opts, requestedCliType: 'gemini' })
+
+  assert.ok(claude > codex, `claude(${claude}) deveria > codex(${codex})`)
+  assert.ok(codex > gemini, `codex(${codex}) deveria > gemini(${gemini})`)
+})
+
+test('scoring prefers Codex for general reasoning prompts even when gemini available', () => {
+  const reasoningPrompt = 'Analise os trade-offs e monte um plano de implementação'
+  const winner = selectBestSpawnModel([claudeOpus, codexHigh, geminiPro], {
+    preferredModelIds: [],
+    requestedCliType: 'codex',
+    prompt: reasoningPrompt,
+  })
+
+  assert.equal(winner.cliType, 'codex')
+})
+
+test('scoring prefers Gemini for documentation long-context prompts', () => {
+  const docPrompt = 'Resuma este documento grande em Markdown formatado'
+  const winner = selectBestSpawnModel([claudeOpus, codexHigh, geminiPro], {
+    preferredModelIds: [],
+    requestedCliType: 'gemini',
+    prompt: docPrompt,
+  })
+
+  assert.equal(winner.cliType, 'gemini')
+})
+
+test('default Claude preference breaks tie among same-cliType candidates', () => {
+  const claudeAlt = { ...claudeSonnet }
+  const winner = selectBestSpawnModel([claudeAlt, claudeOpus], {
+    preferredModelIds: [],
+    requestedCliType: 'claude',
+    prompt: 'Tarefa qualquer sem palavras-chave',
+  })
+
+  // Among claude variants, opus should be preferred by default
+  assert.equal(winner.id, 'claude-opus')
 })
