@@ -12,6 +12,38 @@ import { ORCHESTRATOR_PROMPT_PRESETS } from './orchestrator-prompt-presets'
 const ORCHESTRATOR_SETTINGS_STORAGE_KEY =
   'felixo-ai-core.orchestrator-settings'
 
+// Mirrors CLI_TYPE_VARIANT_DEFAULTS in
+// electron/services/orchestrator/spawn-model-selector.cjs. Keep in sync.
+// Used to show the orchestrator the providerModel/effort that will actually
+// be applied at spawn time, instead of "padrao".
+const CLI_TYPE_VARIANT_DEFAULTS: Record<
+  string,
+  { providerModel: string; reasoningEffort: string }
+> = {
+  claude: { providerModel: 'opus', reasoningEffort: 'medium' },
+  codex: { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  'codex-app-server': { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  gemini: { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
+  'gemini-acp': {
+    providerModel: 'gemini-3-pro-preview',
+    reasoningEffort: 'high',
+  },
+}
+
+function getEffectiveProviderModel(model: Model): string | undefined {
+  if (model.providerModel?.trim()) {
+    return model.providerModel.trim()
+  }
+  return CLI_TYPE_VARIANT_DEFAULTS[model.cliType ?? '']?.providerModel
+}
+
+function getEffectiveReasoningEffort(model: Model): string | undefined {
+  if (model.reasoningEffort?.trim()) {
+    return model.reasoningEffort.trim()
+  }
+  return CLI_TYPE_VARIANT_DEFAULTS[model.cliType ?? '']?.reasoningEffort
+}
+
 export const defaultOrchestratorSettings: OrchestratorSettings = {
   customContext: '',
   globalMemories: '',
@@ -136,8 +168,8 @@ export function createModelCapabilityProfiles(
       id: model.id,
       name: model.name,
       cliType: model.cliType,
-      providerModel: model.providerModel,
-      reasoningEffort: model.reasoningEffort,
+      providerModel: getEffectiveProviderModel(model),
+      reasoningEffort: getEffectiveReasoningEffort(model),
       execution: getExecutionModeLabel(model),
       supportsTools: supportsTools(model),
       supportsMcp: supportsMcp(model),
