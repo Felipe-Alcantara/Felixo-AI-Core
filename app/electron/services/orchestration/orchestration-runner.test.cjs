@@ -442,6 +442,115 @@ test('createAgentResultsPrompt formats current turn results', () => {
   assert.doesNotMatch(prompt, /Ignorar/)
 })
 
+test('orchestration runner re-spawns sub-agent on mid-task quota error', async () => {
+  const spawnCalls = []
+  const validateCalls = []
+  const terminalEvents = []
+  const runner = createTestRunner({
+    spawnAgent: async (params) => {
+      spawnCalls.push(params)
+      return { ok: true, threadId: params.threadId }
+    },
+    validateSpawnAgent: (params) => {
+      validateCalls.push(params)
+      // First call (initial spawn): keep claude. Subsequent (fallback): switch to codex.
+      if (validateCalls.length === 1) {
+        return {
+          ok: true,
+          modelChoice: { selectionRule: 'best-available-model', selectedCliType: 'claude' },
+          selectedModel: { id: 'claude-main', cliType: 'claude' },
+        }
+      }
+      return {
+        ok: true,
+        modelChoice: {
+          selectionRule: 'provider-fallback',
+          selectedCliType: 'codex',
+          fallbackFromCliType: 'claude',
+        },
+        selectedModel: { id: 'codex-main', cliType: 'codex' },
+      }
+    },
+    emitTerminalEvent: (event) => terminalEvents.push(event),
+  })
+
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  const result = await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+    partialOutput: 'Revisei até o arquivo X.',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.respawned, true)
+  assert.equal(spawnCalls.length, 2, 'agent should be re-spawned')
+  assert.equal(spawnCalls[1].event.cliType, 'codex')
+  assert.match(spawnCalls[1].event.prompt, /Tarefa original do sub-agente/)
+  assert.match(spawnCalls[1].event.prompt, /Revisei até o arquivo X\./)
+  const fallbackEvent = terminalEvents.find(
+    (event) => event.type === 'orchestration_agent_fallback',
+  )
+  assert.ok(fallbackEvent, 'should emit orchestration_agent_fallback event')
+  assert.equal(fallbackEvent.previousCliType, 'claude')
+  assert.equal(fallbackEvent.nextCliType, 'codex')
+})
+
+test('orchestration runner stops fallback after max attempts', async () => {
+  const spawnCalls = []
+  const runner = createTestRunner({
+    spawnAgent: async (params) => {
+      spawnCalls.push(params)
+      return { ok: true, threadId: params.threadId }
+    },
+    validateSpawnAgent: () => ({
+      ok: true,
+      modelChoice: { selectionRule: 'provider-fallback', fallbackFromCliType: 'claude' },
+      selectedModel: { id: 'fallback', cliType: 'codex' },
+    }),
+    maxAgentFallbackAttempts: 1,
+  })
+
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: 'rate limit exceeded',
+  })
+  // Second consecutive failure: should give up and mark job as error.
+  const result = await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: 'rate limit exceeded',
+  })
+
+  assert.equal(spawnCalls.length, 2, 'only one re-spawn allowed')
+  assert.ok(!result.respawned)
+})
+
+test('orchestration runner does not re-spawn on non-quota errors', async () => {
+  const spawnCalls = []
+  const runner = createTestRunner({
+    spawnAgent: async (params) => {
+      spawnCalls.push(params)
+      return { ok: true, threadId: params.threadId }
+    },
+  })
+
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  const result = await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: 'TypeError: cannot read property foo of undefined',
+  })
+
+  assert.equal(spawnCalls.length, 1, 'unrelated errors should not trigger fallback')
+  assert.ok(!result.respawned)
+})
+
 function createTestRunner(options = {}) {
   const now = options.now ?? (() => new Date('2026-05-01T12:00:00.000Z'))
   const idGenerator = options.idGenerator ?? (() => 'run-1')
