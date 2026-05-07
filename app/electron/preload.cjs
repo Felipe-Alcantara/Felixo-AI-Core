@@ -66,6 +66,16 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (model) => ipcRenderer.invoke('models:save', model),
     delete: (modelId) => ipcRenderer.invoke('models:delete', modelId),
   },
+  systemDesign: {
+    getConfig: () => ipcRenderer.invoke('system-design:get-config'),
+    saveConfig: (partial) =>
+      ipcRenderer.invoke('system-design:save-config', partial),
+    listDocuments: () => ipcRenderer.invoke('system-design:list-documents'),
+    getDocument: (documentPath) =>
+      ipcRenderer.invoke('system-design:get-document', documentPath),
+    sync: () => ipcRenderer.invoke('system-design:sync'),
+    resetCache: () => ipcRenderer.invoke('system-design:reset-cache'),
+  },
   chats: {
     list: (params) => ipcRenderer.invoke('chats:list', params),
     get: (chatId) => ipcRenderer.invoke('chats:get', chatId),
