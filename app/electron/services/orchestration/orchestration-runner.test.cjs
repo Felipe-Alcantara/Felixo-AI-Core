@@ -791,3 +791,68 @@ function createSpawnEvent(overrides = {}) {
     ...overrides,
   }
 }
+
+test('checkOrchestratorDoneWithoutSpawn re-invokes when orchestrator answered with free text', async () => {
+  const invokeCalls = []
+  const runner = createTestRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+
+  // Simulate the bridge: orchestrator emitted only text, no structured event,
+  // and the stream just ended.
+  const result = await runner.checkOrchestratorDoneWithoutSpawn({
+    threadId: 'thread-codex-1',
+    context: createContext({
+      originalPrompt: 'Crie um arquivo de exemplo no projeto',
+    }),
+  })
+
+  assert.equal(result?.rejected, true)
+  assert.equal(invokeCalls.length, 1)
+  assert.match(invokeCalls[0].prompt, /spawn_agent/)
+})
+
+test('checkOrchestratorDoneWithoutSpawn is a no-op for trivial prompts', async () => {
+  const invokeCalls = []
+  const runner = createTestRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+
+  const result = await runner.checkOrchestratorDoneWithoutSpawn({
+    threadId: 'thread-codex-1',
+    context: createContext({ originalPrompt: 'oi' }),
+  })
+
+  // Greeting → no rejection, no extra invoke.
+  assert.notEqual(result?.rejected, true)
+  assert.equal(invokeCalls.length, 0)
+})
+
+test('checkOrchestratorDoneWithoutSpawn skips when at least one agent already spawned', async () => {
+  const invokeCalls = []
+  const runner = createTestRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({ originalPrompt: 'Crie um arquivo' }),
+  )
+
+  const result = await runner.checkOrchestratorDoneWithoutSpawn({
+    threadId: 'thread-codex-1',
+    context: createContext({ originalPrompt: 'Crie um arquivo' }),
+  })
+
+  assert.notEqual(result?.rejected, true)
+  assert.equal(invokeCalls.length, 0, 'guard must not fire when spawn already happened')
+})
