@@ -5,6 +5,7 @@ const {
   classifySpawnPrompt,
   createOrchestrationModel,
   getFallbackOrderForCliType,
+  getPriorityOrderFor,
   resolveOrchestrationSpawnModel,
   scoreSpawnModel,
   selectBestSpawnModel,
@@ -338,6 +339,35 @@ test('resolveOrchestrationSpawnModel attaches default variant to selected model'
   assert.equal(result.ok, true)
   assert.equal(result.model.providerModel, 'opus')
   assert.equal(result.model.reasoningEffort, 'medium')
+})
+
+test('getPriorityOrderFor returns the static cliType ranking per category', () => {
+  assert.deepEqual(getPriorityOrderFor('code'), [
+    'claude',
+    'codex',
+    'codex-app-server',
+    'gemini',
+    'gemini-acp',
+  ])
+  assert.deepEqual(getPriorityOrderFor('reasoning'), [
+    'codex',
+    'codex-app-server',
+    'claude',
+    'gemini',
+    'gemini-acp',
+  ])
+  assert.deepEqual(getPriorityOrderFor('long-context-doc')[0], 'gemini')
+  assert.deepEqual(getPriorityOrderFor('long-context-reasoning')[0], 'codex')
+})
+
+test('getPriorityOrderFor falls back to general ranking for unknown category', () => {
+  assert.deepEqual(getPriorityOrderFor('unknown-category'), getPriorityOrderFor('general'))
+})
+
+test('getPriorityOrderFor returns a fresh array (callers may mutate)', () => {
+  const a = getPriorityOrderFor('code')
+  a.push('mutate')
+  assert.equal(getPriorityOrderFor('code').length, 5)
 })
 
 test('getFallbackOrderForCliType returns operational same-cliType first, then cross-provider, then last-resort', () => {
