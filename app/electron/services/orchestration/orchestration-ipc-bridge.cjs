@@ -74,6 +74,20 @@ function createOrchestrationIpcBridge({ runner }) {
       return { handled: true }
     }
 
+    // Free-text orchestrator response detection: if the orchestrator stream
+    // finishes on a non-agent thread without ever emitting a structured event
+    // (no spawn_agent, no final_answer), the LLM bypassed the delegation
+    // protocol with plain text. Let the runner decide whether to re-invoke.
+    if (cliEvent.type === 'done' && !agentJob && context.role !== 'agent') {
+      return {
+        handled: false,
+        promise: runner.checkOrchestratorDoneWithoutSpawn({
+          threadId,
+          context: { ...context, streamSessionId, threadId },
+        }),
+      }
+    }
+
     return { handled: false }
   }
 

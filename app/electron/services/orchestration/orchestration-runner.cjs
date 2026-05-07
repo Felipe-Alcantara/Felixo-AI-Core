@@ -237,6 +237,28 @@ class OrchestrationRunner {
     }
   }
 
+  async checkOrchestratorDoneWithoutSpawn({ threadId, context = {} } = {}) {
+    // Called by the bridge when the orchestrator stream finishes (cliEvent
+    // type=done) on the orchestrator thread. If no agent was spawned during
+    // this turn AND the original prompt required delegation, the orchestrator
+    // tried to answer directly with free text — re-invoke with the rejection
+    // prompt to force delegation on the next turn.
+    const run =
+      this.getRunByThreadId(threadId) ??
+      (context.originalPrompt
+        ? this.getOrCreateRun(
+            { type: 'final_answer' },
+            { ...context, threadId },
+          )
+        : null)
+
+    if (!run) {
+      return null
+    }
+
+    return this.tryDelegationGuard({ run, context })
+  }
+
   async tryDelegationGuard({ run, context }) {
     if (!run || !Array.isArray(run.agentJobs) || run.agentJobs.length > 0) {
       return null
