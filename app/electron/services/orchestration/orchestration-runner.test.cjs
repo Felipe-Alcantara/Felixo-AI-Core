@@ -551,6 +551,79 @@ test('orchestration runner does not re-spawn on non-quota errors', async () => {
   assert.ok(!result.respawned)
 })
 
+test('orchestration runner spreads simultaneous fallbacks across providers', async () => {
+  // Setup: Codex and Gemini are both candidates for fallback. After two redirects
+  // to Codex (default threshold), the third agent should be sent to Gemini.
+  const spawnCalls = []
+  const fallbackEvents = []
+  const claudeModel = {
+    id: 'claude-main', name: 'Claude Main', cliType: 'claude', command: 'claude', source: 'CLI local',
+  }
+  const codexModel = {
+    id: 'codex-main', name: 'Codex Main', cliType: 'codex', command: 'codex', source: 'CLI local',
+  }
+  const geminiModel = {
+    id: 'gemini-main', name: 'Gemini Main', cliType: 'gemini', command: 'gemini', source: 'CLI local',
+  }
+  const availableModels = [claudeModel, codexModel, geminiModel]
+
+  let validateCallCount = 0
+  const runner = createTestRunner({
+    fallbackLoadThreshold: 2,
+    spawnAgent: async (params) => {
+      spawnCalls.push(params)
+      return { ok: true, threadId: params.threadId }
+    },
+    validateSpawnAgent: () => {
+      validateCallCount += 1
+      // Initial spawn for each agent: keep claude. Mid-task fallback: redirect to codex.
+      const isFallbackCall = validateCallCount % 2 === 0
+      return isFallbackCall
+        ? {
+            ok: true,
+            modelChoice: { selectionRule: 'provider-fallback', fallbackFromCliType: 'claude' },
+            selectedModel: codexModel,
+          }
+        : {
+            ok: true,
+            modelChoice: { selectionRule: 'best-available-model', selectedCliType: 'claude' },
+            selectedModel: claudeModel,
+          }
+    },
+    emitTerminalEvent: (event) => {
+      if (event.type === 'orchestration_agent_fallback') fallbackEvents.push(event)
+    },
+  })
+
+  const ctx = createContext({
+    availableModels,
+    orchestratorSettings: {},
+  })
+
+  // Spawn 3 agents and trigger a quota error on each.
+  for (const agentId of ['a1', 'a2', 'a3']) {
+    await runner.handleOrchestrationEvent(
+      { type: 'spawn_agent', agentId, cliType: 'claude', prompt: 'tarefa' },
+      ctx,
+    )
+    await runner.onAgentJobCompleted({
+      runId: 'run-1',
+      agentId,
+      error: "You're out of extra usage · resets 4:40pm",
+    })
+  }
+
+  assert.equal(fallbackEvents.length, 3)
+  assert.equal(fallbackEvents[0].nextCliType, 'codex')
+  assert.equal(fallbackEvents[1].nextCliType, 'codex')
+  assert.equal(
+    fallbackEvents[2].nextCliType,
+    'gemini',
+    'after threshold, runner must spread to gemini',
+  )
+  assert.equal(fallbackEvents[2].spreadFromCliType, 'codex')
+})
+
 test('orchestration runner relays availability registry events to terminal', async () => {
   const terminalEvents = []
   const subscribers = []
