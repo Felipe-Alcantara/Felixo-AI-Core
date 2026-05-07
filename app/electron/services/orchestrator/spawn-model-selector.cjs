@@ -334,15 +334,41 @@ function scoreSpawnModel(model, { preferredModelIds = [], requestedCliType, prom
     score += 5
   }
 
-  const providerModelLower = String(model.providerModel ?? '').toLowerCase()
-  if (providerModelLower.includes('lite')) {
-    score += 10
-  }
-  if (providerModelLower.includes('mini')) {
-    score += 8
+  // Tier scoring within the same cliType. Higher = higher quality variant.
+  // Opus/gpt-5.5/gemini-pro lead; lite/mini/haiku get a penalty so they only win
+  // when the user explicitly preferred them or nothing else is available.
+  // Skipped when the candidate is an explicitly preferred model — user choice wins.
+  if (preferredIndex < 0) {
+    score += getProviderModelTierBonus(model.providerModel)
   }
 
   return score
+}
+
+function getProviderModelTierBonus(providerModel) {
+  const value = String(providerModel ?? '').toLowerCase()
+  if (!value) {
+    return 0
+  }
+
+  // Top tier: prefer with strong bonus.
+  if (value.includes('opus')) return 50
+  if (value === 'gpt-5.5' || /^gpt-5\.5(?!-codex)/.test(value)) return 50
+  if (value.includes('gemini-3-pro') || value === 'gemini-pro') return 50
+
+  // Mid tier: small positive bonus.
+  if (value.includes('sonnet')) return 20
+  if (value.includes('gpt-5.5-codex')) return 25
+  if (value.includes('gpt-5.4') && !value.includes('mini')) return 15
+  if (value.includes('gemini-3-flash') && !value.includes('lite')) return 15
+  if (value.includes('flash') && !value.includes('lite')) return 12
+
+  // Bottom tier: penalty so they only win when explicitly preferred.
+  if (value.includes('haiku')) return -20
+  if (value.includes('mini')) return -15
+  if (value.includes('lite')) return -20
+
+  return 0
 }
 
 function classifySpawnPrompt(prompt) {
@@ -515,6 +541,7 @@ module.exports = {
   createOrchestrationModelChoice,
   getFallbackOrderForCliType,
   getPriorityOrderFor,
+  getProviderModelTierBonus,
   resolveOrchestrationSpawnModel,
   validateOrchestrationSpawnModel,
   isModelOperational,
