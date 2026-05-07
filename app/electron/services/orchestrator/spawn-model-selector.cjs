@@ -1,5 +1,15 @@
 'use strict'
 
+// Default provider model + reasoning effort by cliType. Applied only when the
+// candidate does not already specify them, so user-configured variants always win.
+const CLI_TYPE_VARIANT_DEFAULTS = {
+  claude: { providerModel: 'opus', reasoningEffort: 'medium' },
+  codex: { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  'codex-app-server': { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  gemini: { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
+  'gemini-acp': { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
+}
+
 function createOrchestrationModel(cliType) {
   return {
     id: `orchestration-${cliType}`,
@@ -8,6 +18,28 @@ function createOrchestrationModel(cliType) {
     source: 'orchestration',
     cliType,
   }
+}
+
+function applyVariantDefaults(model) {
+  if (!model || !model.cliType) {
+    return model
+  }
+
+  const defaults = CLI_TYPE_VARIANT_DEFAULTS[model.cliType]
+  if (!defaults) {
+    return model
+  }
+
+  const providerModel =
+    typeof model.providerModel === 'string' && model.providerModel.trim()
+      ? model.providerModel
+      : defaults.providerModel
+  const reasoningEffort =
+    typeof model.reasoningEffort === 'string' && model.reasoningEffort.trim()
+      ? model.reasoningEffort
+      : defaults.reasoningEffort
+
+  return { ...model, providerModel, reasoningEffort }
 }
 
 function resolveOrchestrationSpawnModel(cliType, context = {}, event = {}) {
@@ -52,11 +84,11 @@ function resolveOrchestrationSpawnModel(cliType, context = {}, event = {}) {
       requestedCliType: cliType,
       prompt: event.prompt,
     })
-    const model = {
+    const model = applyVariantDefaults({
       ...createOrchestrationModel(cliType),
       ...selectedModel,
       cliType: selectedModel.cliType,
-    }
+    })
     const selectionRule = preferredModelIds.includes(selectedModel.id)
       ? 'preferred-model'
       : 'best-available-model'
@@ -92,11 +124,11 @@ function resolveOrchestrationSpawnModel(cliType, context = {}, event = {}) {
       requestedCliType: cliType,
       prompt: event.prompt,
     })
-    const model = {
+    const model = applyVariantDefaults({
       ...createOrchestrationModel(selectedModel.cliType),
       ...selectedModel,
       cliType: selectedModel.cliType,
-    }
+    })
     const unavailableReason = createUnavailableReason(
       cliType,
       cliTypeModels,
@@ -386,6 +418,8 @@ function createOrchestrationModelChoice({
 }
 
 module.exports = {
+  CLI_TYPE_VARIANT_DEFAULTS,
+  applyVariantDefaults,
   createOrchestrationModel,
   createOrchestrationModelChoice,
   resolveOrchestrationSpawnModel,

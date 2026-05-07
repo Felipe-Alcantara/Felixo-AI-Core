@@ -1,6 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
+  applyVariantDefaults,
   classifySpawnPrompt,
   createOrchestrationModel,
   resolveOrchestrationSpawnModel,
@@ -237,6 +238,57 @@ test('scoring prefers Gemini for documentation long-context prompts', () => {
   })
 
   assert.equal(winner.cliType, 'gemini')
+})
+
+test('applyVariantDefaults fills missing providerModel and reasoningEffort by cliType', () => {
+  assert.deepEqual(applyVariantDefaults({ cliType: 'claude', id: 'x' }), {
+    cliType: 'claude',
+    id: 'x',
+    providerModel: 'opus',
+    reasoningEffort: 'medium',
+  })
+  assert.deepEqual(applyVariantDefaults({ cliType: 'codex', id: 'y' }), {
+    cliType: 'codex',
+    id: 'y',
+    providerModel: 'gpt-5.5',
+    reasoningEffort: 'xhigh',
+  })
+  assert.deepEqual(applyVariantDefaults({ cliType: 'gemini', id: 'z' }), {
+    cliType: 'gemini',
+    id: 'z',
+    providerModel: 'gemini-3-pro-preview',
+    reasoningEffort: 'high',
+  })
+})
+
+test('applyVariantDefaults preserves user-configured providerModel/effort', () => {
+  const result = applyVariantDefaults({
+    cliType: 'codex',
+    id: 'custom',
+    providerModel: 'gpt-5.4',
+    reasoningEffort: 'medium',
+  })
+  assert.equal(result.providerModel, 'gpt-5.4')
+  assert.equal(result.reasoningEffort, 'medium')
+})
+
+test('resolveOrchestrationSpawnModel attaches default variant to selected model', () => {
+  const claudeBare = {
+    id: 'claude-default',
+    name: 'Claude Default',
+    command: 'claude',
+    source: 'CLI local',
+    cliType: 'claude',
+  }
+  const result = resolveOrchestrationSpawnModel(
+    'claude',
+    { availableModels: [claudeBare], orchestratorSettings: {} },
+    { prompt: '' },
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(result.model.providerModel, 'opus')
+  assert.equal(result.model.reasoningEffort, 'medium')
 })
 
 test('default Claude preference breaks tie among same-cliType candidates', () => {
