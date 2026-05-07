@@ -20,6 +20,43 @@ function normalize(prompt: string): string {
     .trim()
 }
 
+// Top-tier provider model + effort to force on the orchestrator-mor regardless
+// of what the user picked in the Composer. The orchestrator is the brain that
+// decides everything — it must never run on a small/fast variant. Sub-agents
+// follow the seletor's tier-pickup, this only covers the parent CLI.
+// Mirror of CLI_TYPE_VARIANT_DEFAULTS in spawn-model-selector.cjs and
+// orchestrator-settings-storage.ts. Keep in sync.
+const ORCHESTRATOR_TIER_DEFAULTS: Record<
+  string,
+  { providerModel: string; reasoningEffort: string }
+> = {
+  claude: { providerModel: 'opus', reasoningEffort: 'medium' },
+  codex: { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  'codex-app-server': { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  gemini: { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
+  'gemini-acp': {
+    providerModel: 'gemini-3-pro-preview',
+    reasoningEffort: 'high',
+  },
+}
+
+export function applyOrchestratorTierOverride<
+  T extends { cliType?: string; providerModel?: string; reasoningEffort?: string },
+>(model: T): T {
+  if (!model || !model.cliType) {
+    return model
+  }
+  const overrides = ORCHESTRATOR_TIER_DEFAULTS[model.cliType]
+  if (!overrides) {
+    return model
+  }
+  return {
+    ...model,
+    providerModel: overrides.providerModel,
+    reasoningEffort: overrides.reasoningEffort,
+  }
+}
+
 export function requiresDelegation(prompt: string): boolean {
   const normalized = normalize(prompt)
   if (!normalized) {
