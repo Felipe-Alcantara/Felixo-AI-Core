@@ -12,6 +12,10 @@ const {
   applyVariantDefaults,
   getFallbackOrderForCliType,
 } = require('../orchestrator/spawn-model-selector.cjs')
+const {
+  requiresDelegation,
+} = require('../orchestrator/delegation-policy.cjs')
+const promptPresets = require('./orchestrator-prompt-presets.json')
 
 const DEFAULT_MAX_AGENT_FALLBACK_ATTEMPTS = 2
 // When several sub-agents fall back at the same time (e.g. a whole batch hits a
@@ -41,6 +45,8 @@ class OrchestrationRunner {
       options.fallbackLoadThreshold ?? DEFAULT_FALLBACK_LOAD_THRESHOLD
     this.agentFallbackAttempts = new Map()
     this.cliTypeFallbackLoad = new Map()
+    this.delegationGuardAttempts = new Map()
+    this.maxDelegationGuardAttempts = options.maxDelegationGuardAttempts ?? 1
     this.availabilitySubscriptions = new WeakMap()
   }
 
@@ -207,6 +213,12 @@ class OrchestrationRunner {
 
     try {
       this.assertRunNotTimedOut(run)
+
+      const guardResult = await this.tryDelegationGuard({ run, context })
+      if (guardResult?.rejected) {
+        return guardResult
+      }
+
       run = this.store.completeRun(run.runId, event.content)
       const runContext = this.getRunContext(run.runId)
       this.sendChatEvent({
@@ -223,6 +235,55 @@ class OrchestrationRunner {
     } catch (error) {
       return this.failRunFromError(run?.runId, error, context)
     }
+  }
+
+  async tryDelegationGuard({ run, context }) {
+    if (!run || !Array.isArray(run.agentJobs) || run.agentJobs.length > 0) {
+      return null
+    }
+
+    const originalPrompt = run.originalPrompt ?? context.originalPrompt ?? ''
+    if (!requiresDelegation(originalPrompt)) {
+      return null
+    }
+
+    const attempts = this.delegationGuardAttempts.get(run.runId) ?? 0
+    if (attempts >= this.maxDelegationGuardAttempts) {
+      // Already nudged once; let the orchestrator's final_answer through to
+      // avoid infinite reinvoke loops if the LLM keeps refusing to delegate.
+      return null
+    }
+
+    this.delegationGuardAttempts.set(run.runId, attempts + 1)
+
+    this.emitTerminalEvent({
+      type: 'orchestration_delegation_rejected',
+      runId: run.runId,
+      parentThreadId: run.parentThreadId,
+      attempt: attempts + 1,
+      originalPrompt,
+    })
+
+    const rejectionPrompt = promptPresets?.delegationGuard?.rejectionPrompt
+    if (!rejectionPrompt) {
+      return null
+    }
+
+    const result = await this.invokeOrchestrator({
+      run,
+      prompt: rejectionPrompt,
+      context: this.getRunContext(run.runId),
+    })
+
+    if (result?.ok === false) {
+      return this.failRunFromError(
+        run.runId,
+        new Error(result.message ?? 'Falha ao re-invocar orquestrador apos guard.'),
+        this.getRunContext(run.runId),
+      )
+    }
+
+    return { handled: true, ok: true, run, rejected: true }
   }
 
   async onAgentJobCompleted(params = {}) {
@@ -746,6 +807,7 @@ class OrchestrationRunner {
     }
 
     this.cliTypeFallbackLoad.delete(runId)
+    this.delegationGuardAttempts.delete(runId)
     for (const key of this.agentFallbackAttempts.keys()) {
       if (key.startsWith(`${runId}:`)) {
         this.agentFallbackAttempts.delete(key)

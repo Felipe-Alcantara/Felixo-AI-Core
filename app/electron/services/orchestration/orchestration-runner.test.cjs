@@ -551,6 +551,99 @@ test('orchestration runner does not re-spawn on non-quota errors', async () => {
   assert.ok(!result.respawned)
 })
 
+test('orchestration runner blocks final_answer without spawn when prompt requires delegation', async () => {
+  const invokeCalls = []
+  const runner = createTestRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+
+  // Bypass spawn entirely: orchestrator goes straight for final_answer.
+  const result = await runner.handleOrchestrationEvent(
+    { type: 'final_answer', content: 'Aqui esta a resposta.' },
+    createContext({ originalPrompt: 'Crie um arquivo de exemplo no projeto' }),
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(result.rejected, true)
+  assert.equal(invokeCalls.length, 1, 'guard should re-invoke orchestrator')
+  assert.match(invokeCalls[0].prompt, /spawn_agent/)
+})
+
+test('orchestration runner allows final_answer for trivial prompts', async () => {
+  const invokeCalls = []
+  const sentChatEvents = []
+  const runner = createTestRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+    sendChatEvent: (event) => sentChatEvents.push(event),
+  })
+
+  const result = await runner.handleOrchestrationEvent(
+    { type: 'final_answer', content: 'Oi! Como posso ajudar?' },
+    createContext({ originalPrompt: 'oi' }),
+  )
+
+  assert.equal(result.ok, true)
+  assert.notEqual(result.rejected, true)
+  assert.equal(invokeCalls.length, 0)
+  assert.ok(
+    sentChatEvents.some((event) => event.type === 'final_answer'),
+    'trivial greetings should pass through',
+  )
+})
+
+test('orchestration runner allows final_answer when at least one agent was spawned', async () => {
+  const invokeCalls = []
+  const runner = createTestRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    result: 'ok',
+  })
+
+  const result = await runner.handleOrchestrationEvent(
+    { type: 'final_answer', content: 'Concluído.' },
+    createContext({ originalPrompt: 'analise o auth.py em detalhe' }),
+  )
+
+  assert.equal(result.ok, true)
+  assert.notEqual(result.rejected, true)
+})
+
+test('orchestration runner does not loop forever on guard rejection', async () => {
+  const runner = createTestRunner({
+    maxDelegationGuardAttempts: 1,
+    invokeOrchestrator: async () => ({ ok: true }),
+  })
+
+  // First final_answer triggers guard.
+  const first = await runner.handleOrchestrationEvent(
+    { type: 'final_answer', content: 'pulei a delegacao' },
+    createContext({ originalPrompt: 'crie um arquivo' }),
+  )
+  assert.equal(first.rejected, true)
+
+  // Orchestrator stubbornly insists on final_answer again. Guard should
+  // give up after maxDelegationGuardAttempts and let it through.
+  const second = await runner.handleOrchestrationEvent(
+    { type: 'final_answer', content: 'estou insistindo' },
+    createContext({ originalPrompt: 'crie um arquivo' }),
+  )
+  assert.notEqual(second.rejected, true)
+})
+
 test('orchestration runner spreads simultaneous fallbacks across providers', async () => {
   // Setup: Codex and Gemini are both candidates for fallback. After two redirects
   // to Codex (default threshold), the third agent should be sent to Gemini.
