@@ -12,6 +12,9 @@ import type {
   OrchestrationStreamEvent,
   QaLogEntry,
   StreamEvent,
+  SystemDesignConfig,
+  SystemDesignDocument,
+  SystemDesignDocumentSummary,
   TerminalOutputEvent,
 } from './features/chat/types'
 
@@ -198,6 +201,32 @@ declare global {
         list: () => Promise<CliInvokeResult & { models?: Model[] }>
         save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>
         delete: (modelId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      systemDesign?: {
+        getConfig: () => Promise<
+          CliInvokeResult & { config?: SystemDesignConfig }
+        >
+        saveConfig: (
+          partial: Partial<SystemDesignConfig>,
+        ) => Promise<CliInvokeResult & { config?: SystemDesignConfig }>
+        listDocuments: () => Promise<
+          CliInvokeResult & { documents?: SystemDesignDocumentSummary[] }
+        >
+        getDocument: (
+          path: string,
+        ) => Promise<
+          CliInvokeResult & { document?: SystemDesignDocument }
+        >
+        sync: () => Promise<
+          CliInvokeResult & {
+            config?: SystemDesignConfig
+            indexedCount?: number
+            removedCount?: number
+          }
+        >
+        resetCache: () => Promise<
+          CliInvokeResult & { cleared?: number; config?: SystemDesignConfig }
+        >
       }
       chats?: {
         list: (params?: {

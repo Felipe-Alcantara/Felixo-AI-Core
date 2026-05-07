@@ -53,6 +53,7 @@ const INITIAL_TABLES = [
 const ADDITIONAL_TABLES_BY_MIGRATION = {
   2: ['automations'],
   3: ['models'],
+  4: ['system_design_documents'],
 }
 
 test('storage migrations are versioned and include initial schema', () => {
