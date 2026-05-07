@@ -195,14 +195,46 @@ Evoluir busca, compactação e modelos restantes em cima da base SQLite já cria
 - Projetos e seleção de projetos ativos migram uma vez do `localStorage` para SQLite.
 - Repositório e IPCs de histórico de chat criados sobre SQLite.
 - Conversas e mensagens são persistidas em `chats`/`messages` e reabertas pela sidebar/pesquisa.
+- Repositório e IPCs de `automations` criados sobre SQLite (migration 002). Automations migram do `localStorage` no primeiro load com flag one-shot.
+- Repositório e IPCs de `models` criados sobre SQLite (migration 003). Catálogo de CLIs/modelos migra do `localStorage` no primeiro load. Dual-write enquanto a migração consolida.
+
+## Estado atual do schema (resumo)
+
+| Tabela | Migration | O que guarda |
+|--------|-----------|--------------|
+| `schema_migrations` | 001 | Controle de versão das migrations aplicadas |
+| `projects` | 001 | Projetos do usuário (path, metadata) |
+| `chats` | 001 | Sessões de chat (título, sumário, projeto associado) |
+| `messages` | 001 | Mensagens com tier (hot/warm/cold), tokens, custo, usefulness_score |
+| `threads` | 001 | Mapeamento conversa → CLI/modelo/sessão de provedor |
+| `terminal_events` | 001 | Eventos de terminal por thread (lifecycle, métricas, etc) |
+| `agent_results` | 001 | Resultados de sub-agentes orquestrados |
+| `notes` | 001 | Notas avulsas do usuário, vinculáveis a projetos/chats |
+| `settings` | 001 | Key/value JSON (inclui `orchestrator.settings`) |
+| `memory_items` | 001 | Memória de longo prazo com escopo (global/project/repo/chat/agent) — **ainda não populado** |
+| `conversation_summaries` | 001 | Sumários de trechos de conversa para compactação — **ainda não populado** |
+| `message_archives` | 001 | Arquivos COLD comprimidos (BLOB) — **ainda não populado** |
+| `automations` | 002 | Automations customizadas do usuário |
+| `models` | 003 | Catálogo de CLIs/modelos (effort, providerModel) |
 
 ## Ainda não implementado
 
-- Migração dos dados atuais do `localStorage` além de configurações do orquestrador, notas e projetos.
+- Tema visual (`theme-storage`) ainda em `localStorage` — decisão consciente, é preferência leve por janela/dispositivo.
+- População real de `memory_items`, `conversation_summaries`, `message_archives` (planejado).
 - Compactação real de mensagens COLD.
 - Busca textual/semântica.
-- Persistência de modelos/preferências visuais fora do `localStorage`.
 - Remoção do fallback JSON legado do orquestrador em uma versão futura.
+
+## Portabilidade Postgres
+
+A camada de repositório (`storage/*-repository.cjs`) isola o SQL do resto do app. Ao migrar para Postgres (Railway):
+
+1. Trocar driver em `sqlite-database.cjs` por `pg`.
+2. Reescrever tipos específicos onde necessário (`INTEGER` boolean → `BOOLEAN`, `TEXT` JSON → `JSONB` se quiser ganho).
+3. Manter as migrations numéricas — convertê-las para sintaxe Postgres mantendo a mesma ordem (todas as atuais usam SQL ANSI compatível).
+4. Os repositórios consumem `connection.prepare(...).all/get/run` — adaptar para `pg.Client.query` é mecânico.
+
+Nenhuma feature SQLite-específica (`AUTOINCREMENT`, `WITHOUT ROWID`, tipo dinâmico) é usada nas migrations atuais.
 
 ## Plano de implementação
 
