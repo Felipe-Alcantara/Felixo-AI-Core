@@ -10,9 +10,9 @@ test('SYSTEM_DESIGN_CONFIG_KEY is the expected settings key', () => {
   assert.equal(SYSTEM_DESIGN_CONFIG_KEY, 'system-design.config')
 })
 
-test('defaultConfig disables Felixo-System-Design and points to upstream repo', () => {
+test('defaultConfig enables Felixo-System-Design by default and points to upstream repo', () => {
   const config = defaultConfig()
-  assert.equal(config.enabled, false)
+  assert.equal(config.enabled, true)
   assert.match(config.repoUrl, /Felixo-System-Design/)
   assert.equal(config.branch, 'main')
   assert.equal(config.lastSha, null)
@@ -43,8 +43,9 @@ test('normalizeConfig preserves valid fields and accepts custom repoUrl/branch',
   assert.equal(result.lastError, 'erro de teste')
 })
 
-test('normalizeConfig rejects non-truthy enabled values', () => {
-  assert.equal(normalizeConfig({ enabled: 'sim' }).enabled, false)
-  assert.equal(normalizeConfig({ enabled: 1 }).enabled, false)
+test('normalizeConfig falls back to default enabled for invalid enabled values', () => {
+  assert.equal(normalizeConfig({ enabled: 'sim' }).enabled, true)
+  assert.equal(normalizeConfig({ enabled: 1 }).enabled, true)
+  assert.equal(normalizeConfig({ enabled: false }).enabled, false)
   assert.equal(normalizeConfig({ enabled: true }).enabled, true)
 })

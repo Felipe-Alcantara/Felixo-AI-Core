@@ -3,7 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SystemDesignConfig, SystemDesignDocumentSummary } from '../types'
 
 const DEFAULT_CONFIG: SystemDesignConfig = {
-  enabled: false,
+  // Mirror of defaultConfig() in system-design-ipc-handlers.cjs.
+  // Enabled by default so new users benefit from Felixo System Design without
+  // needing to discover the toggle.
+  enabled: true,
   repoUrl: 'https://github.com/Felipe-Alcantara/Felixo-System-Design.git',
   branch: 'main',
   lastSha: null,

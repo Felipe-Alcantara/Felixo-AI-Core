@@ -1,4 +1,4 @@
-import { BookOpen, RefreshCw, Trash2 } from 'lucide-react'
+import { BookOpen, ExternalLink, RefreshCw, Trash2 } from 'lucide-react'
 
 import { useSystemDesignSettings } from '../hooks/useSystemDesignSettings'
 
@@ -17,22 +17,29 @@ export function SystemDesignSettingsSection() {
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-100">
           <BookOpen size={14} aria-hidden="true" />
           Felixo System Design
+          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+            Recomendado
+          </span>
         </h3>
+        <a
+          href={config.repoUrl.replace(/\.git$/, '')}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/5"
+          title="Abrir o repositório no GitHub"
+        >
+          <ExternalLink size={11} aria-hidden="true" />
+          Ver repositório
+        </a>
       </header>
 
       <p className="mb-3 text-[11px] leading-relaxed text-zinc-400">
-        Importa boas práticas do repositório{' '}
-        <a
-          href={config.repoUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="text-blue-300 hover:underline"
-        >
-          Felixo-System-Design
-        </a>{' '}
-        e disponibiliza para os sub-agentes consultarem. Quando ativado, os
-        agentes recebem um índice dos documentos e devem seguir os padrões
-        descritos.
+        O Felixo System Design é um repositório aberto com boas práticas de
+        engenharia (design de backend, frontend, fluxo com IA, etc). Quando
+        ativado, os sub-agentes recebem um índice desses documentos e devem
+        seguir os padrões antes de gerar código ou tomar decisões técnicas.
+        Mantemos ligado por padrão porque ajuda agentes a tomarem decisões
+        mais consistentes; pode desligar se preferir respostas livres.
       </p>
 
       <label className="mb-3 flex items-center gap-2 text-xs text-zinc-200">
