@@ -194,6 +194,11 @@ declare global {
           automationId: string,
         ) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      models?: {
+        list: () => Promise<CliInvokeResult & { models?: Model[] }>
+        save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>
+        delete: (modelId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
       chats?: {
         list: (params?: {
           limit?: number

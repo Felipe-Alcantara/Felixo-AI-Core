@@ -1,6 +1,7 @@
 import type { CliType, Model, ReasoningEffort } from '../types'
 
 const MODELS_STORAGE_KEY = 'felixo-ai-core.models'
+const MODELS_BACKEND_MIGRATION_KEY = 'felixo-ai-core.models.sqlite-migrated'
 
 export function loadModels(fallback: Model[]) {
   try {
@@ -38,6 +39,74 @@ export function saveModels(models: Model[]) {
     MODELS_STORAGE_KEY,
     JSON.stringify(dedupeModels(models)),
   )
+}
+
+export async function loadModelsFromBackend(): Promise<Model[] | null> {
+  if (!window.felixo?.models?.list) {
+    return null
+  }
+  try {
+    const result = await window.felixo.models.list()
+    if (!result.ok || !Array.isArray(result.models)) {
+      return null
+    }
+    return dedupeModels(
+      result.models.flatMap((value) => {
+        const model = normalizeModel(value)
+        return model ? [model] : []
+      }),
+    )
+  } catch {
+    return null
+  }
+}
+
+export async function saveModelToBackend(model: Model): Promise<boolean> {
+  if (!window.felixo?.models?.save) {
+    return false
+  }
+  try {
+    const result = await window.felixo.models.save(model)
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export async function saveModelsToBackend(models: Model[]): Promise<boolean> {
+  if (!window.felixo?.models?.save) {
+    return false
+  }
+  const results = await Promise.all(models.map((model) => saveModelToBackend(model)))
+  return results.every(Boolean)
+}
+
+export async function deleteModelFromBackend(modelId: string): Promise<boolean> {
+  if (!window.felixo?.models?.delete) {
+    return false
+  }
+  try {
+    const result = await window.felixo.models.delete(modelId)
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export function hasModelsBackendMigrationRun() {
+  try {
+    return window.localStorage.getItem(MODELS_BACKEND_MIGRATION_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markModelsBackendMigrationRun() {
+  try {
+    window.localStorage.setItem(MODELS_BACKEND_MIGRATION_KEY, '1')
+  } catch {
+    // localStorage can be unavailable in non-browser test environments.
+  }
 }
 
 export function dedupeModels(models: Model[]) {

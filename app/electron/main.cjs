@@ -12,6 +12,9 @@ const { registerNotesIpcHandlers } = require('./services/notes-ipc-handlers.cjs'
 const {
   registerAutomationsIpcHandlers,
 } = require('./services/automations-ipc-handlers.cjs')
+const {
+  registerModelsIpcHandlers,
+} = require('./services/models-ipc-handlers.cjs')
 const { registerChatHistoryIpcHandlers } = require('./services/chat-history-ipc-handlers.cjs')
 const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
@@ -70,6 +73,7 @@ app.whenReady().then(() => {
   registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
   registerNotesIpcHandlers({ database: storageDatabase })
   registerAutomationsIpcHandlers({ database: storageDatabase })
+  registerModelsIpcHandlers({ database: storageDatabase })
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
   registerAutoUpdateHandlers(getMainWindow)
