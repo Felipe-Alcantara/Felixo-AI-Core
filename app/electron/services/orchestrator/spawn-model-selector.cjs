@@ -437,11 +437,66 @@ function createOrchestrationModelChoice({
   }
 }
 
+// Returns the ordered candidate list the orchestrator would consider for a
+// given cliType, in fallback priority: operational same-cliType, operational
+// cross-provider, then last-resort (rate-limited but not user-blocked). Pure
+// function — does not mutate registry or models. Useful for diagnostics and UI
+// showing "if the current model fails, the next one will be X".
+function getFallbackOrderForCliType(cliType, context = {}, options = {}) {
+  const availableModels = Array.isArray(context.availableModels)
+    ? context.availableModels
+    : []
+  const settings = context.orchestratorSettings ?? {}
+  const blockedModelIds = new Set(
+    Array.isArray(settings.blockedModelIds) ? settings.blockedModelIds : [],
+  )
+  const preferredModelIds = Array.isArray(settings.preferredModelIds)
+    ? settings.preferredModelIds
+    : []
+  const registry = context.modelAvailabilityRegistry
+  const prompt = options.prompt
+
+  const notBlocked = availableModels.filter((model) => !blockedModelIds.has(model.id))
+  const sameType = notBlocked.filter((model) => model.cliType === cliType)
+  const otherType = notBlocked.filter((model) => model.cliType !== cliType)
+
+  const operationalSame = sortByScore(
+    sameType.filter((model) => isModelOperational(model, registry)),
+    { preferredModelIds, requestedCliType: cliType, prompt },
+  )
+  const operationalOther = sortByScore(
+    otherType.filter((model) => isModelOperational(model, registry)),
+    { preferredModelIds, requestedCliType: cliType, prompt },
+  )
+  const lastResort = sortByScore(
+    notBlocked.filter((model) => !isModelOperational(model, registry)),
+    { preferredModelIds, requestedCliType: cliType, prompt },
+  )
+
+  return [
+    ...operationalSame.map((model) => ({ model, tier: 'operational' })),
+    ...operationalOther.map((model) => ({ model, tier: 'cross-provider' })),
+    ...lastResort.map((model) => ({ model, tier: 'last-resort' })),
+  ]
+}
+
+function sortByScore(models, scoringOptions) {
+  return [...models].sort((left, right) => {
+    const leftScore = scoreSpawnModel(left, scoringOptions)
+    const rightScore = scoreSpawnModel(right, scoringOptions)
+    if (leftScore !== rightScore) {
+      return rightScore - leftScore
+    }
+    return String(left.name).localeCompare(String(right.name))
+  })
+}
+
 module.exports = {
   CLI_TYPE_VARIANT_DEFAULTS,
   applyVariantDefaults,
   createOrchestrationModel,
   createOrchestrationModelChoice,
+  getFallbackOrderForCliType,
   resolveOrchestrationSpawnModel,
   validateOrchestrationSpawnModel,
   isModelOperational,

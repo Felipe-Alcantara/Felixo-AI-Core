@@ -4,6 +4,7 @@ const {
   applyVariantDefaults,
   classifySpawnPrompt,
   createOrchestrationModel,
+  getFallbackOrderForCliType,
   resolveOrchestrationSpawnModel,
   scoreSpawnModel,
   selectBestSpawnModel,
@@ -337,6 +338,49 @@ test('resolveOrchestrationSpawnModel attaches default variant to selected model'
   assert.equal(result.ok, true)
   assert.equal(result.model.providerModel, 'opus')
   assert.equal(result.model.reasoningEffort, 'medium')
+})
+
+test('getFallbackOrderForCliType returns operational same-cliType first, then cross-provider, then last-resort', () => {
+  const registry = createModelAvailabilityRegistry({
+    now: () => new Date('2026-05-07T10:00:00-03:00'),
+  })
+  registry.recordError({
+    model: claudeOpus,
+    cliType: 'claude',
+    message: "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+  })
+
+  const order = getFallbackOrderForCliType(
+    'claude',
+    {
+      availableModels: [claudeOpus, claudeSonnet, codexHigh, geminiPro],
+      orchestratorSettings: { blockedModelIds: [] },
+      modelAvailabilityRegistry: registry,
+    },
+    { prompt: 'Tarefa qualquer' },
+  )
+
+  // Claude limit is cli-wide (rate limit on claude propagates to all claude models),
+  // so all claude entries fall to last-resort and codex/gemini lead the order.
+  assert.ok(order.length === 4)
+  const tiers = order.map((entry) => entry.tier)
+  assert.equal(tiers.filter((t) => t === 'last-resort').length, 2)
+  // First entry is cross-provider (codex or gemini).
+  assert.equal(order[0].tier, 'cross-provider')
+  assert.notEqual(order[0].model.cliType, 'claude')
+})
+
+test('getFallbackOrderForCliType excludes user-blocked models entirely', () => {
+  const order = getFallbackOrderForCliType(
+    'claude',
+    {
+      availableModels: [claudeOpus, codexHigh],
+      orchestratorSettings: { blockedModelIds: ['codex-5.5'] },
+    },
+    {},
+  )
+
+  assert.ok(order.every((entry) => entry.model.id !== 'codex-5.5'))
 })
 
 test('default Claude preference breaks tie among same-cliType candidates', () => {

@@ -4,6 +4,25 @@ const CLAUDE_USAGE_LIMIT_COOLDOWN_MS = 5 * 60 * 60 * 1000
 function createModelAvailabilityRegistry(options = {}) {
   const entries = new Map()
   const now = options.now ?? (() => Date.now())
+  const listeners = new Set()
+
+  function subscribe(listener) {
+    if (typeof listener !== 'function') {
+      return () => {}
+    }
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  }
+
+  function notify(event) {
+    for (const listener of listeners) {
+      try {
+        listener(event)
+      } catch {
+        // Listener errors must not break availability bookkeeping.
+      }
+    }
+  }
 
   function recordCliEvent({ cliEvent, cliType, model } = {}) {
     if (!cliEvent || typeof cliEvent !== 'object') {
@@ -44,8 +63,25 @@ function createModelAvailabilityRegistry(options = {}) {
       updatedAt: getNowMs(now),
     }
 
-    for (const key of createAvailabilityKeys(model, cliType ?? model?.cliType, issue.scope)) {
+    const keys = createAvailabilityKeys(model, cliType ?? model?.cliType, issue.scope)
+    const wasNew = keys.some((key) => !entries.has(key))
+
+    for (const key of keys) {
       entries.set(key, entry)
+    }
+
+    if (wasNew) {
+      notify({
+        type: 'limited',
+        status: entry.status,
+        scope: entry.scope,
+        cliType: entry.cliType,
+        modelId: entry.modelId,
+        modelName: entry.modelName,
+        reason: entry.reason,
+        resetLabel: entry.resetLabel,
+        expiresAt: entry.expiresAt,
+      })
     }
 
     return entry
@@ -92,8 +128,21 @@ function createModelAvailabilityRegistry(options = {}) {
   }
 
   function clearForModel(model, cliType) {
-    for (const key of createAvailabilityKeys(model, cliType ?? model?.cliType, 'all')) {
-      entries.delete(key)
+    const resolvedCliType = cliType ?? model?.cliType
+    let cleared = false
+    for (const key of createAvailabilityKeys(model, resolvedCliType, 'all')) {
+      if (entries.delete(key)) {
+        cleared = true
+      }
+    }
+
+    if (cleared) {
+      notify({
+        type: 'available',
+        cliType: resolvedCliType,
+        modelId: model?.id,
+        modelName: model?.name,
+      })
     }
   }
 
@@ -114,6 +163,7 @@ function createModelAvailabilityRegistry(options = {}) {
     isModelAvailable,
     recordCliEvent,
     recordError,
+    subscribe,
   }
 }
 
