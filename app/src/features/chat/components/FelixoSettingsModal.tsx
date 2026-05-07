@@ -2,6 +2,7 @@ import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
+import { SystemDesignSettingsSection } from './SystemDesignSettingsSection'
 
 type FelixoSettingsModalProps = {
   isOpen: boolean
@@ -263,6 +264,8 @@ function FelixoSettingsDialog({
               <Metric label="Automações" value={`${automationsCount}`} />
             </div>
           </section>
+
+          <SystemDesignSettingsSection />
 
           <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
