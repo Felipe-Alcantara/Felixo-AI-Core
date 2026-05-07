@@ -56,6 +56,7 @@ const modelAvailabilityRegistry = createModelAvailabilityRegistry()
 const FIRST_VISIBLE_OUTPUT_TIMEOUT_MS = 120000
 const MAX_TOOL_USES_WITHOUT_TEXT = 20
 const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
+const DEFERRED_PROMPT_FALLBACK_MS = 5000
 const PERSISTENT_TRAILING_OUTPUT_GRACE_MS = 5000
 
 function registerCliIpcHandlers(getMainWindow) {
@@ -1296,11 +1297,34 @@ function handlePersistentStdoutLine(persistentSession, line) {
   }
 
   if (cliEvent.readyForPrompt && activeRun && !activeRun.didSendPrompt) {
+    clearDeferredPromptFallback(activeRun)
     writeNextPersistentInput(persistentSession, activeRun, {
       providerSessionId: threadSession.providerSessionId,
       persistentPhase: 'prompt',
     })
     return
+  }
+
+  // Fallback: if the CLI emits stdout but never sends system/init
+  // (e.g. --print mode), schedule a deferred prompt delivery so we
+  // don't deadlock waiting for an event that will never arrive.
+  if (activeRun && !activeRun.didSendPrompt && !activeRun.deferredPromptFallbackTimer) {
+    activeRun.deferredPromptFallbackTimer = setTimeout(() => {
+      activeRun.deferredPromptFallbackTimer = null
+      if (!activeRun.didSendPrompt && !activeRun.didComplete) {
+        logQaEvent({
+          level: 'info',
+          scope: 'cli:deferred-prompt-fallback',
+          sessionId: threadId,
+          message: `Sending deferred prompt via fallback (no system/init received within ${DEFERRED_PROMPT_FALLBACK_MS}ms).`,
+          details: { streamSessionId },
+        })
+        writeNextPersistentInput(persistentSession, activeRun, {
+          providerSessionId: threadSession.providerSessionId,
+          persistentPhase: 'prompt',
+        })
+      }
+    }, DEFERRED_PROMPT_FALLBACK_MS)
   }
 
   if (cliEvent.type === 'control' || cliEvent.type === 'session') {
@@ -1365,11 +1389,13 @@ function handlePersistentStdoutLine(persistentSession, line) {
   if (cliEvent.type === 'done') {
     activeRun.didComplete = true
     clearPersistentRunTimer(activeRun)
+    clearDeferredPromptFallback(activeRun)
   }
 
   if (cliEvent.type === 'error') {
     activeRun.didComplete = true
     clearPersistentRunTimer(activeRun)
+    clearDeferredPromptFallback(activeRun)
   }
 
   if (shouldAbortForToolLoop(activeRun.toolLoopProgress, cliEvent)) {
@@ -1406,6 +1432,7 @@ function handlePersistentStdoutLine(persistentSession, line) {
     ) {
       activeRun.didComplete = true
       clearPersistentRunTimer(activeRun)
+      clearDeferredPromptFallback(activeRun)
       rememberPersistentFinalEvent(persistentSession, activeRun, cliEvent)
       persistentSession.activeRun = null
       schedulePersistentIdleTimer(persistentSession)
@@ -1549,6 +1576,7 @@ function failPersistentRun(persistentSession, message, options = {}) {
   if (activeRun) {
     activeRun.didComplete = true
     clearPersistentRunTimer(activeRun)
+    clearDeferredPromptFallback(activeRun)
     rememberPersistentFinalEvent(persistentSession, activeRun, {
       type: 'error',
       message,
@@ -1723,6 +1751,15 @@ function clearPersistentRunTimer(run) {
 
   clearTimeout(run.firstVisibleOutputTimer)
   run.firstVisibleOutputTimer = null
+}
+
+function clearDeferredPromptFallback(run) {
+  if (!run?.deferredPromptFallbackTimer) {
+    return
+  }
+
+  clearTimeout(run.deferredPromptFallbackTimer)
+  run.deferredPromptFallbackTimer = null
 }
 
 function closePersistentSession(threadId, options = {}) {
