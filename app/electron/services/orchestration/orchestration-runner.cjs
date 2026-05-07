@@ -5,6 +5,11 @@ const {
 const {
   ORCHESTRATOR_PROMPT_PRESETS,
 } = require('./orchestrator-prompt-presets.cjs')
+const {
+  detectAvailabilityIssue,
+} = require('../orchestrator/model-availability.cjs')
+
+const DEFAULT_MAX_AGENT_FALLBACK_ATTEMPTS = 2
 
 class OrchestrationRunner {
   constructor(options = {}) {
@@ -21,6 +26,9 @@ class OrchestrationRunner {
     this.now = options.now ?? (() => new Date())
     this.runContexts = new Map()
     this.threadAgentJobs = new Map()
+    this.maxAgentFallbackAttempts =
+      options.maxAgentFallbackAttempts ?? DEFAULT_MAX_AGENT_FALLBACK_ATTEMPTS
+    this.agentFallbackAttempts = new Map()
   }
 
   async handleOrchestrationEvent(event, context = {}) {
@@ -222,6 +230,20 @@ class OrchestrationRunner {
 
     try {
       this.assertRunNotTimedOut(run)
+
+      if (params.error) {
+        const fallback = await this.tryMidTaskFallback({
+          run,
+          locatedJob,
+          error: params.error,
+          partialOutput: params.partialOutput ?? params.result ?? '',
+        })
+
+        if (fallback?.respawned) {
+          return { handled: true, ok: true, run: fallback.run, respawned: true }
+        }
+      }
+
       run = params.error
         ? this.store.failAgentJob(locatedJob.runId, locatedJob.agentId, {
             error: params.error,
@@ -248,6 +270,114 @@ class OrchestrationRunner {
     } catch (error) {
       return this.failRunFromError(run?.runId, error, this.getRunContext(run?.runId))
     }
+  }
+
+  async tryMidTaskFallback({ run, locatedJob, error, partialOutput }) {
+    const errorMessage = stringifyAgentError(error)
+    if (!errorMessage) {
+      return null
+    }
+
+    const issue = detectAvailabilityIssue({
+      message: errorMessage,
+      cliType: locatedJob.cliType,
+    })
+
+    if (!issue) {
+      return null
+    }
+
+    const attemptKey = `${locatedJob.runId}:${locatedJob.agentId}`
+    const attempts = this.agentFallbackAttempts.get(attemptKey) ?? 0
+    if (attempts >= this.maxAgentFallbackAttempts) {
+      return null
+    }
+
+    const runContext = this.getRunContext(locatedJob.runId)
+    const job = findAgentJob(run, locatedJob.agentId)
+    if (!job) {
+      return null
+    }
+
+    if (runContext.modelAvailabilityRegistry?.recordError) {
+      runContext.modelAvailabilityRegistry.recordError({
+        message: errorMessage,
+        cliType: job.cliType,
+      })
+    }
+
+    const continuationPrompt = buildContinuationPrompt({
+      originalPrompt: job.prompt,
+      partialOutput,
+      previousCliType: job.cliType,
+      previousModelName: null,
+    })
+
+    const continuationEvent = {
+      type: 'spawn_agent',
+      agentId: locatedJob.agentId,
+      cliType: job.cliType,
+      prompt: continuationPrompt,
+    }
+
+    const validation = this.validateSpawnAgent({
+      run,
+      event: continuationEvent,
+      context: runContext,
+    })
+
+    if (!validation || validation.ok === false) {
+      return null
+    }
+
+    const newModel = validation.selectedModel ?? null
+    const newCliType = newModel?.cliType ?? job.cliType
+    const newSelectionRule = validation.modelChoice?.selectionRule
+
+    // If the selector could only offer the same cliType that just failed AND no
+    // alternative was found via fallback rules, abort to avoid a noop respawn.
+    if (newCliType === job.cliType && newSelectionRule !== 'last-resort') {
+      const sameType = newModel?.cliType === job.cliType
+      const noAlternative = !validation.modelChoice?.fallbackFromCliType
+      if (sameType && noAlternative) {
+        return null
+      }
+    }
+
+    this.agentFallbackAttempts.set(attemptKey, attempts + 1)
+
+    this.emitTerminalEvent({
+      type: 'orchestration_agent_fallback',
+      runId: run.runId,
+      parentThreadId: run.parentThreadId,
+      agentId: locatedJob.agentId,
+      previousCliType: job.cliType,
+      nextCliType: newCliType,
+      nextModelId: newModel?.id ?? null,
+      reason: issue.reason ?? errorMessage,
+      attempt: attempts + 1,
+    })
+
+    const resolvedEvent = {
+      ...continuationEvent,
+      requestedCliType: continuationEvent.cliType,
+      cliType: newCliType,
+      selectedModel: newModel,
+    }
+
+    const spawnResult = await this.spawnAgent({
+      run,
+      job,
+      threadId: job.threadId,
+      event: resolvedEvent,
+      context: runContext,
+    })
+
+    if (spawnResult?.ok === false) {
+      return null
+    }
+
+    return { respawned: true, run }
   }
 
   async reinvokeOrchestrator(runId) {
@@ -569,6 +699,42 @@ function getCurrentTurnJobs(run) {
 
 function findAgentJob(run, agentId) {
   return run.agentJobs.find((job) => job.agentId === agentId) ?? null
+}
+
+function stringifyAgentError(error) {
+  if (!error) {
+    return ''
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  if (typeof error === 'object') {
+    return String(error.message ?? error.reason ?? '').trim()
+  }
+
+  return String(error)
+}
+
+function buildContinuationPrompt({
+  originalPrompt,
+  partialOutput,
+  previousCliType,
+  previousModelName,
+}) {
+  const previousLabel = previousModelName
+    ? `${previousModelName} (${previousCliType})`
+    : previousCliType
+  const partial = String(partialOutput ?? '').trim()
+  const partialBlock = partial
+    ? `\n\nProgresso parcial do agente anterior antes da interrupção:\n"""\n${partial}\n"""`
+    : ''
+
+  return [
+    `Tarefa original do sub-agente:\n"""\n${String(originalPrompt ?? '').trim()}\n"""`,
+    `O modelo anterior (${previousLabel}) interrompeu por limite de uso ou autenticação. Continue a tarefa a partir do ponto em que ele parou. Se o progresso parcial estiver disponível, use-o como contexto; caso contrário, recomece da etapa que entender mais segura.${partialBlock}`,
+  ].join('\n\n')
 }
 
 function getResponseSessionId(run, context = {}) {
