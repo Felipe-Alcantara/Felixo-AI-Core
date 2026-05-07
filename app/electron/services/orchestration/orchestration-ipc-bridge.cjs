@@ -59,12 +59,13 @@ function createOrchestrationIpcBridge({ runner }) {
     }
 
     if (agentJob && cliEvent.type === 'error') {
-      consumeOutput(outputBuffers, threadId)
+      const partialOutput = consumeOutput(outputBuffers, threadId)
       return {
         handled: false,
         promise: runner.onAgentJobCompleted({
           threadId,
           error: cliEvent.message ?? 'Sub-agente retornou erro.',
+          partialOutput,
         }),
       }
     }
