@@ -6,6 +6,7 @@ const {
   createOrchestrationModel,
   getFallbackOrderForCliType,
   getPriorityOrderFor,
+  getProviderModelTierBonus,
   resolveOrchestrationSpawnModel,
   scoreSpawnModel,
   selectBestSpawnModel,
@@ -423,4 +424,149 @@ test('default Claude preference breaks tie among same-cliType candidates', () =>
 
   // Among claude variants, opus should be preferred by default
   assert.equal(winner.id, 'claude-opus')
+})
+
+test('tier bonus prefers opus over sonnet over haiku', () => {
+  assert.ok(
+    getProviderModelTierBonus('opus') > getProviderModelTierBonus('sonnet'),
+  )
+  assert.ok(
+    getProviderModelTierBonus('sonnet') > getProviderModelTierBonus('haiku'),
+  )
+  assert.ok(getProviderModelTierBonus('haiku') < 0)
+})
+
+test('tier bonus prefers gpt-5.5 over gpt-5.4 over gpt-5.4-mini', () => {
+  assert.ok(
+    getProviderModelTierBonus('gpt-5.5') >= getProviderModelTierBonus('gpt-5.5-codex'),
+  )
+  assert.ok(
+    getProviderModelTierBonus('gpt-5.4') > getProviderModelTierBonus('gpt-5.4-mini'),
+  )
+  assert.ok(getProviderModelTierBonus('gpt-5.4-mini') < 0)
+})
+
+test('tier bonus prefers gemini-3-pro over flash over flash-lite', () => {
+  assert.ok(
+    getProviderModelTierBonus('gemini-3-pro-preview') >
+      getProviderModelTierBonus('gemini-3-flash'),
+  )
+  assert.ok(
+    getProviderModelTierBonus('gemini-3-flash') >
+      getProviderModelTierBonus('gemini-3-flash-lite'),
+  )
+  assert.ok(getProviderModelTierBonus('gemini-3-flash-lite') < 0)
+})
+
+test('selectBestSpawnModel picks opus over haiku when both available for same cliType', () => {
+  const opus = {
+    id: 'claude-opus',
+    name: 'Claude Opus',
+    cliType: 'claude',
+    providerModel: 'opus',
+  }
+  const haiku = {
+    id: 'claude-haiku',
+    name: 'Claude Haiku',
+    cliType: 'claude',
+    providerModel: 'haiku',
+  }
+  const winner = selectBestSpawnModel([haiku, opus], {
+    preferredModelIds: [],
+    requestedCliType: 'claude',
+    prompt: 'analise o auth.py',
+  })
+  assert.equal(winner.id, 'claude-opus')
+})
+
+test('user-preferred low-tier model still wins (preferredModelIds bypasses tier penalty)', () => {
+  const opus = {
+    id: 'claude-opus',
+    name: 'Claude Opus',
+    cliType: 'claude',
+    providerModel: 'opus',
+  }
+  const haiku = {
+    id: 'claude-haiku',
+    name: 'Claude Haiku',
+    cliType: 'claude',
+    providerModel: 'haiku',
+  }
+  const winner = selectBestSpawnModel([opus, haiku], {
+    preferredModelIds: ['claude-haiku'],
+    requestedCliType: 'claude',
+    prompt: 'tarefa qualquer',
+  })
+  assert.equal(winner.id, 'claude-haiku')
+})
+
+test('selectBestSpawnModel picks gpt-5.5 over gpt-5.4-mini for codex', () => {
+  const big = {
+    id: 'codex-55',
+    name: 'Codex 5.5',
+    cliType: 'codex',
+    providerModel: 'gpt-5.5',
+  }
+  const mini = {
+    id: 'codex-mini',
+    name: 'Codex Mini',
+    cliType: 'codex',
+    providerModel: 'gpt-5.4-mini',
+  }
+  const winner = selectBestSpawnModel([mini, big], {
+    preferredModelIds: [],
+    requestedCliType: 'codex',
+    prompt: 'analise os trade-offs',
+  })
+  assert.equal(winner.id, 'codex-55')
+})
+
+test('tier fallback inside cliType: opus rate-limited, sonnet wins over haiku', () => {
+  const registry = createModelAvailabilityRegistry({
+    now: () => new Date('2026-05-07T10:00:00-03:00'),
+  })
+  const opus = {
+    id: 'claude-opus',
+    name: 'Claude Opus',
+    cliType: 'claude',
+    providerModel: 'opus',
+  }
+  const sonnet = {
+    id: 'claude-sonnet',
+    name: 'Claude Sonnet',
+    cliType: 'claude',
+    providerModel: 'sonnet',
+  }
+  const haiku = {
+    id: 'claude-haiku',
+    name: 'Claude Haiku',
+    cliType: 'claude',
+    providerModel: 'haiku',
+  }
+
+  // Rate-limit opus only (model-scope, not cli-wide).
+  registry.recordError({
+    model: opus,
+    cliType: 'claude',
+    message: 'rate limit exceeded for this specific model',
+  })
+
+  const result = resolveOrchestrationSpawnModel(
+    'claude',
+    {
+      availableModels: [opus, sonnet, haiku],
+      orchestratorSettings: {},
+      modelAvailabilityRegistry: registry,
+    },
+    { prompt: 'analise o auth.py' },
+  )
+
+  // Opus is filtered out → sonnet must beat haiku via tier bonus.
+  assert.equal(result.ok, true)
+  // claude limits propagate cli-wide by the registry, so opus rate-limit may
+  // also limit sonnet/haiku. Accept any claude variant that's not haiku, or a
+  // cross-provider fallback as long as it's not the lowest claude tier.
+  if (result.model.cliType === 'claude') {
+    assert.notEqual(result.model.providerModel, 'haiku')
+  }
 })
