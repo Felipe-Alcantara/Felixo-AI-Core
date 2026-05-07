@@ -14,7 +14,12 @@ import {
 } from '../services/chat-service'
 import {
   createAutomationId,
+  deleteAutomationFromBackend,
+  hasAutomationsBackendMigrationRun,
+  loadAutomationsFromBackend,
   loadCustomAutomations,
+  markAutomationsBackendMigrationRun,
+  saveAutomationsToBackend,
   saveCustomAutomations,
 } from '../services/automation-storage'
 import {
@@ -191,6 +196,9 @@ export function ChatWorkspace() {
   const orchestratorSettingsRef = useRef(orchestratorSettings)
   const notesRef = useRef(notes)
   const notesUserEditedRef = useRef(false)
+  const automationsRef = useRef(customAutomations)
+  const automationsUserEditedRef = useRef(false)
+  const automationsBackendLoadedRef = useRef(false)
   const projectsRef = useRef(projects)
   const activeProjectIdsRef = useRef(activeProjectIds)
   const projectsBackendLoadedRef = useRef(false)
@@ -322,6 +330,10 @@ export function ChatWorkspace() {
   }, [notes])
 
   useEffect(() => {
+    automationsRef.current = customAutomations
+  }, [customAutomations])
+
+  useEffect(() => {
     projectsRef.current = projects
   }, [projects])
 
@@ -428,6 +440,51 @@ export function ChatWorkspace() {
   useEffect(() => {
     let cancelled = false
 
+    loadAutomationsFromBackend()
+      .then((backendAutomations) => {
+        if (cancelled || backendAutomations === null) {
+          return
+        }
+
+        automationsBackendLoadedRef.current = true
+
+        if (backendAutomations.length > 0) {
+          if (automationsUserEditedRef.current) {
+            void saveAutomationsToBackend(automationsRef.current)
+            markAutomationsBackendMigrationRun()
+            return
+          }
+          setCustomAutomations(backendAutomations)
+          markAutomationsBackendMigrationRun()
+          return
+        }
+
+        if (
+          !hasAutomationsBackendMigrationRun() &&
+          automationsRef.current.length > 0
+        ) {
+          void saveAutomationsToBackend(automationsRef.current).then(
+            (saved) => {
+              if (saved) {
+                markAutomationsBackendMigrationRun()
+              }
+            },
+          )
+          return
+        }
+
+        markAutomationsBackendMigrationRun()
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
     loadOrchestratorSettings()
       .then((settings) => {
         if (cancelled) {
@@ -502,6 +559,9 @@ export function ChatWorkspace() {
 
   useEffect(() => {
     saveCustomAutomations(customAutomations)
+    if (automationsBackendLoadedRef.current) {
+      void saveAutomationsToBackend(customAutomations)
+    }
   }, [customAutomations])
 
   useEffect(() => {
@@ -843,6 +903,7 @@ export function ChatWorkspace() {
     >,
   ) {
     const now = new Date().toISOString()
+    automationsUserEditedRef.current = true
     setCustomAutomations((currentAutomations) => [
       {
         ...automation,
@@ -855,6 +916,10 @@ export function ChatWorkspace() {
   }
 
   function removeCustomAutomation(automationId: string) {
+    automationsUserEditedRef.current = true
+    if (automationsBackendLoadedRef.current) {
+      void deleteAutomationFromBackend(automationId)
+    }
     setCustomAutomations((currentAutomations) =>
       currentAutomations.filter((automation) => automation.id !== automationId),
     )

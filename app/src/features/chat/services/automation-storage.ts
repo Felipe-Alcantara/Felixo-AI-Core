@@ -1,6 +1,8 @@
 import type { AutomationDefinition, AutomationScope } from '../types'
 
 const AUTOMATIONS_STORAGE_KEY = 'felixo-ai-core.customAutomations'
+const AUTOMATIONS_BACKEND_MIGRATION_KEY =
+  'felixo-ai-core.automations.sqlite-migrated'
 
 export function loadCustomAutomations() {
   try {
@@ -32,11 +34,94 @@ export function saveCustomAutomations(automations: AutomationDefinition[]) {
   )
 }
 
+export async function loadAutomationsFromBackend(): Promise<
+  AutomationDefinition[] | null
+> {
+  if (!window.felixo?.automations?.list) {
+    return null
+  }
+
+  try {
+    const result = await window.felixo.automations.list()
+    if (!result.ok || !Array.isArray(result.automations)) {
+      return null
+    }
+    return result.automations.flatMap((value) => {
+      const automation = normalizeAutomation(value)
+      return automation ? [automation] : []
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function saveAutomationToBackend(
+  automation: AutomationDefinition,
+): Promise<boolean> {
+  if (!window.felixo?.automations?.save) {
+    return false
+  }
+  const normalized = normalizeAutomation(automation)
+  if (!normalized) {
+    return false
+  }
+  try {
+    const result = await window.felixo.automations.save(normalized)
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export async function saveAutomationsToBackend(
+  automations: AutomationDefinition[],
+): Promise<boolean> {
+  if (!window.felixo?.automations?.save) {
+    return false
+  }
+  const results = await Promise.all(
+    automations.map((automation) => saveAutomationToBackend(automation)),
+  )
+  return results.every(Boolean)
+}
+
+export async function deleteAutomationFromBackend(
+  automationId: string,
+): Promise<boolean> {
+  if (!window.felixo?.automations?.delete) {
+    return false
+  }
+  try {
+    const result = await window.felixo.automations.delete(automationId)
+    return result.ok
+  } catch {
+    return false
+  }
+}
+
+export function hasAutomationsBackendMigrationRun() {
+  try {
+    return (
+      window.localStorage.getItem(AUTOMATIONS_BACKEND_MIGRATION_KEY) === '1'
+    )
+  } catch {
+    return false
+  }
+}
+
+export function markAutomationsBackendMigrationRun() {
+  try {
+    window.localStorage.setItem(AUTOMATIONS_BACKEND_MIGRATION_KEY, '1')
+  } catch {
+    // localStorage can be unavailable in non-browser test environments.
+  }
+}
+
 export function createAutomationId(name: string) {
   const base = name
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
@@ -63,7 +148,7 @@ function normalizeAutomation(value: unknown): AutomationDefinition | null {
       description: automation.description,
       prompt: automation.prompt,
       scope: automation.scope,
-      isDefault: false,
+      isDefault: automation.isDefault === true ? true : false,
       createdAt: getOptionalString(automation.createdAt),
       updatedAt: getOptionalString(automation.updatedAt),
     }

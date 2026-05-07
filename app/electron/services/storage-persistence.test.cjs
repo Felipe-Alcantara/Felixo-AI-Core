@@ -35,7 +35,7 @@ const {
   createOrchestratorSettingsStore,
 } = require('./orchestrator-settings-store.cjs')
 
-const EXPECTED_TABLES = [
+const INITIAL_TABLES = [
   'schema_migrations',
   'projects',
   'chats',
@@ -50,18 +50,34 @@ const EXPECTED_TABLES = [
   'message_archives',
 ]
 
+const ADDITIONAL_TABLES_BY_MIGRATION = {
+  2: ['automations'],
+}
+
 test('storage migrations are versioned and include initial schema', () => {
   const migrations = listStorageMigrations()
 
-  assert.equal(getLatestMigrationVersion(migrations), 1)
+  assert.ok(getLatestMigrationVersion(migrations) >= 1)
   assert.equal(migrations[0].name, 'initial_persistence')
 
-  for (const tableName of EXPECTED_TABLES) {
+  for (const tableName of INITIAL_TABLES) {
     assert.match(
       migrations[0].sql,
       new RegExp(`CREATE TABLE ${tableName} \\(`),
       `missing table ${tableName}`,
     )
+  }
+
+  for (const [version, tables] of Object.entries(ADDITIONAL_TABLES_BY_MIGRATION)) {
+    const migration = migrations.find((m) => m.version === Number(version))
+    assert.ok(migration, `expected migration version ${version}`)
+    for (const tableName of tables) {
+      assert.match(
+        migration.sql,
+        new RegExp(`CREATE TABLE ${tableName} \\(`),
+        `migration ${version} missing table ${tableName}`,
+      )
+    }
   }
 })
 
