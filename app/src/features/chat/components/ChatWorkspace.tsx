@@ -26,6 +26,8 @@ import {
   applyOrchestratorTierOverride,
   requiresDelegation,
 } from '../services/delegation-policy'
+import { createSystemDesignPromptBlock } from '../services/system-design-prompt'
+import { useSystemDesignSettings } from '../hooks/useSystemDesignSettings'
 import {
   createSuggestedExportFileName,
   exportChat,
@@ -221,6 +223,8 @@ export function ChatWorkspace() {
     markSessionStatus: markTerminalSessionStatus,
     clearSessions: clearTerminalSessions,
   } = useTerminalOutput()
+
+  const { state: systemDesignState } = useSystemDesignSettings()
 
   const selectedModel = useMemo(
     () =>
@@ -701,10 +705,17 @@ export function ChatWorkspace() {
       orchestratorSettings,
       modelAvailability,
     )
-    const orchestrationContextBlock = createOrchestratorContextBlock(
+    const baseContextBlock = createOrchestratorContextBlock(
       modelCapabilities,
       orchestratorSettings,
     )
+    const systemDesignBlock = createSystemDesignPromptBlock(
+      systemDesignState.config,
+      systemDesignState.documents,
+    )
+    const orchestrationContextBlock = systemDesignBlock
+      ? `${baseContextBlock}\n\n${systemDesignBlock}`
+      : baseContextBlock
     const globalMemoriesContextBlock = createGlobalMemoriesContextBlock(
       orchestratorSettings,
     )
