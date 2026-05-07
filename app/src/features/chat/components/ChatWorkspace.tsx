@@ -32,6 +32,7 @@ import {
   createSuggestedExportFileName,
   exportChat,
 } from '../services/chat-export'
+import type { ExportFormat } from '../services/chat-export'
 import {
   createChatSessionFromMessages,
   createChatSessionId,
@@ -1051,7 +1052,7 @@ export function ChatWorkspace() {
   }
 
   async function exportCurrentChat(
-    format: 'json' | 'markdown' | 'text',
+    format: ExportFormat,
     fileName: string,
   ) {
     const result = await exportChat({

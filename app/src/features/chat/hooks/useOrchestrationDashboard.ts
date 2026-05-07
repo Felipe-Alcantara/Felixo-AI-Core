@@ -60,15 +60,25 @@ export function useOrchestrationDashboard(): OrchestrationDashboardState & {
 } {
   const runsRef = useRef(new Map<string, OrchestrationRunSnapshot>())
   const limitedRef = useRef<OrchestrationLimitedModel[]>([])
-  const [tick, setTick] = useState(0)
+  const [dashboard, setDashboard] =
+    useState<OrchestrationDashboardState>(EMPTY_DASHBOARD)
 
-  const bump = useCallback(() => setTick((value) => value + 1), [])
+  const publishDashboard = useCallback(() => {
+    setDashboard({
+      runs: Array.from(runsRef.current.values()).sort(
+        (left, right) => right.updatedAt - left.updatedAt,
+      ),
+      limitedModels: [...limitedRef.current].sort(
+        (left, right) => right.at - left.at,
+      ),
+    })
+  }, [])
 
   const reset = useCallback(() => {
     runsRef.current = new Map()
     limitedRef.current = []
-    bump()
-  }, [bump])
+    setDashboard(EMPTY_DASHBOARD)
+  }, [])
 
   useEffect(() => {
     const subscribe =
@@ -209,19 +219,13 @@ export function useOrchestrationDashboard(): OrchestrationDashboardState & {
       }
 
       if (mutated) {
-        bump()
+        publishDashboard()
       }
     })
-  }, [bump])
-
-  // Touch tick to invalidate memo without recomputing maps each render.
-  void tick
+  }, [publishDashboard])
 
   return {
-    runs: Array.from(runsRef.current.values()).sort(
-      (left, right) => right.updatedAt - left.updatedAt,
-    ),
-    limitedModels: [...limitedRef.current].sort((left, right) => right.at - left.at),
+    ...dashboard,
     reset,
   }
 }

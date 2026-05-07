@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { AlignLeft, Download, FileJson, FileText, X } from 'lucide-react'
+import { AlignLeft, Bug, Download, FileJson, FileText, X } from 'lucide-react'
+import type { ExportFormat } from '../services/chat-export'
 
 type ChatExportModalProps = {
   isOpen: boolean
   messagesCount: number
   suggestedFileName: string
   onClose: () => void
-  onExport: (format: 'json' | 'markdown' | 'text', fileName: string) => void
+  onExport: (format: ExportFormat, fileName: string) => void
 }
 
 export function ChatExportModal({
@@ -22,7 +23,7 @@ export function ChatExportModal({
     return null
   }
 
-  const disabled = messagesCount === 0
+  const chatExportDisabled = messagesCount === 0
 
   return (
     <div
@@ -42,7 +43,7 @@ export function ChatExportModal({
               {messagesCount} mensagens com conteúdo.
             </p>
             <p className="mt-1 max-w-[340px] text-xs text-zinc-600">
-              Inclui conversa principal e resumo das threads, sem saída bruta de subagentes.
+              Use o pacote de analise para juntar chat, QA Logger e logs completos da CLI.
             </p>
           </div>
 
@@ -64,7 +65,6 @@ export function ChatExportModal({
               type="text"
               value={fileName}
               onChange={(event) => setFileName(event.target.value)}
-              disabled={disabled}
               className="mt-2 w-full rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-white/20 disabled:cursor-not-allowed disabled:text-zinc-600"
               placeholder={suggestedFileName}
             />
@@ -72,7 +72,17 @@ export function ChatExportModal({
 
           <button
             type="button"
-            disabled={disabled}
+            onClick={() => onExport('analysis', fileName)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-sky-300/15 bg-sky-300/5 px-4 py-3 text-left text-sm text-sky-100 transition hover:bg-sky-300/10"
+          >
+            <Bug size={18} aria-hidden="true" />
+            Markdown para analise
+            <Download size={15} aria-hidden="true" className="ml-auto" />
+          </button>
+
+          <button
+            type="button"
+            disabled={chatExportDisabled}
             onClick={() => onExport('json', fileName)}
             className="flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
@@ -83,7 +93,7 @@ export function ChatExportModal({
 
           <button
             type="button"
-            disabled={disabled}
+            disabled={chatExportDisabled}
             onClick={() => onExport('markdown', fileName)}
             className="flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
@@ -94,7 +104,7 @@ export function ChatExportModal({
 
           <button
             type="button"
-            disabled={disabled}
+            disabled={chatExportDisabled}
             onClick={() => onExport('text', fileName)}
             className="flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
