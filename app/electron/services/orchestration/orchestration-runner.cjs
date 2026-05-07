@@ -8,8 +8,17 @@ const {
 const {
   detectAvailabilityIssue,
 } = require('../orchestrator/model-availability.cjs')
+const {
+  applyVariantDefaults,
+  getFallbackOrderForCliType,
+} = require('../orchestrator/spawn-model-selector.cjs')
 
 const DEFAULT_MAX_AGENT_FALLBACK_ATTEMPTS = 2
+// When several sub-agents fall back at the same time (e.g. a whole batch hits a
+// rate-limit burst), avoid stampeding all of them onto the same provider. After
+// this many redirects per cliType in a run, prefer the next provider in the
+// fallback queue that still has spare capacity.
+const DEFAULT_FALLBACK_LOAD_THRESHOLD = 2
 
 class OrchestrationRunner {
   constructor(options = {}) {
@@ -28,7 +37,10 @@ class OrchestrationRunner {
     this.threadAgentJobs = new Map()
     this.maxAgentFallbackAttempts =
       options.maxAgentFallbackAttempts ?? DEFAULT_MAX_AGENT_FALLBACK_ATTEMPTS
+    this.fallbackLoadThreshold =
+      options.fallbackLoadThreshold ?? DEFAULT_FALLBACK_LOAD_THRESHOLD
     this.agentFallbackAttempts = new Map()
+    this.cliTypeFallbackLoad = new Map()
     this.availabilitySubscriptions = new WeakMap()
   }
 
@@ -331,19 +343,34 @@ class OrchestrationRunner {
       return null
     }
 
-    const newModel = validation.selectedModel ?? null
-    const newCliType = newModel?.cliType ?? job.cliType
+    const validatedModel = validation.selectedModel ?? null
+    const validatedCliType = validatedModel?.cliType ?? job.cliType
     const newSelectionRule = validation.modelChoice?.selectionRule
 
     // If the selector could only offer the same cliType that just failed AND no
     // alternative was found via fallback rules, abort to avoid a noop respawn.
-    if (newCliType === job.cliType && newSelectionRule !== 'last-resort') {
-      const sameType = newModel?.cliType === job.cliType
+    if (validatedCliType === job.cliType && newSelectionRule !== 'last-resort') {
+      const sameType = validatedModel?.cliType === job.cliType
       const noAlternative = !validation.modelChoice?.fallbackFromCliType
       if (sameType && noAlternative) {
         return null
       }
     }
+
+    // Distribute simultaneous fallbacks across providers when possible. If the
+    // cliType the selector picked is already saturated by recent re-spawns in
+    // this run, walk the fallback queue for a less loaded alternative.
+    const spreadChoice = this.pickSpreadFallbackModel({
+      run,
+      runContext,
+      job,
+      validatedModel,
+      validatedCliType,
+    })
+    const newModel = spreadChoice.model
+    const newCliType = newModel?.cliType ?? validatedCliType
+
+    this.bumpFallbackLoad(run.runId, newCliType)
 
     this.agentFallbackAttempts.set(attemptKey, attempts + 1)
 
@@ -357,6 +384,7 @@ class OrchestrationRunner {
       nextModelId: newModel?.id ?? null,
       reason: issue.reason ?? errorMessage,
       attempt: attempts + 1,
+      spreadFromCliType: spreadChoice.spreadFromCliType ?? null,
     })
 
     const resolvedEvent = {
@@ -379,6 +407,59 @@ class OrchestrationRunner {
     }
 
     return { respawned: true, run }
+  }
+
+  pickSpreadFallbackModel({ run, runContext, job, validatedModel, validatedCliType }) {
+    const validatedLoad = this.getFallbackLoad(run.runId, validatedCliType)
+
+    if (validatedLoad < this.fallbackLoadThreshold) {
+      return { model: applyVariantDefaults(validatedModel) }
+    }
+
+    // Selector's first choice is saturated; walk the precomputed fallback queue
+    // looking for a less-loaded alternative on the same tier. We never pick a
+    // worse tier (e.g. last-resort) just to spread load — quality stays first.
+    const order = getFallbackOrderForCliType(job.cliType, runContext, {
+      prompt: job.prompt,
+    })
+    const validatedTier = order.find(
+      (entry) => entry.model.cliType === validatedCliType,
+    )?.tier
+
+    if (!validatedTier) {
+      return { model: applyVariantDefaults(validatedModel) }
+    }
+
+    const sameTier = order.filter((entry) => entry.tier === validatedTier)
+    const ranked = sameTier
+      .map((entry) => ({
+        entry,
+        load: this.getFallbackLoad(run.runId, entry.model.cliType),
+      }))
+      .sort((left, right) => left.load - right.load)
+
+    const best = ranked[0]
+    if (!best || best.entry.model.cliType === validatedCliType) {
+      return { model: applyVariantDefaults(validatedModel) }
+    }
+
+    return {
+      model: applyVariantDefaults(best.entry.model),
+      spreadFromCliType: validatedCliType,
+    }
+  }
+
+  bumpFallbackLoad(runId, cliType) {
+    if (!cliType) {
+      return
+    }
+    const runLoads = this.cliTypeFallbackLoad.get(runId) ?? new Map()
+    runLoads.set(cliType, (runLoads.get(cliType) ?? 0) + 1)
+    this.cliTypeFallbackLoad.set(runId, runLoads)
+  }
+
+  getFallbackLoad(runId, cliType) {
+    return this.cliTypeFallbackLoad.get(runId)?.get(cliType) ?? 0
   }
 
   async reinvokeOrchestrator(runId) {
@@ -661,6 +742,13 @@ class OrchestrationRunner {
     for (const [threadId, agentJob] of this.threadAgentJobs) {
       if (agentJob?.runId === runId) {
         this.threadAgentJobs.delete(threadId)
+      }
+    }
+
+    this.cliTypeFallbackLoad.delete(runId)
+    for (const key of this.agentFallbackAttempts.keys()) {
+      if (key.startsWith(`${runId}:`)) {
+        this.agentFallbackAttempts.delete(key)
       }
     }
   }
