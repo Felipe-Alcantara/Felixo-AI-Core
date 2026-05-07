@@ -1978,6 +1978,46 @@ function resolveCliCwd(cliType) {
   return process.env.HOME || process.cwd()
 }
 
+function spawnOrchestrationAgent({
+  run,
+  event,
+  threadId,
+  context,
+  sendCliRequest,
+}) {
+  const resolvedModel = event.selectedModel
+    ? { ok: true, model: event.selectedModel }
+    : resolveOrchestrationSpawnModel(event.cliType, context, event)
+
+  if (resolvedModel.ok === false) {
+    return resolvedModel
+  }
+
+  return sendCliRequest(
+    {
+      sessionId: threadId,
+      threadId,
+      prompt: event.prompt,
+      promptHint: event.prompt,
+      model: resolvedModel.model,
+      cwd: context.cwd,
+    },
+    context.targetWebContents,
+    {
+      role: 'agent',
+      runId: run.runId,
+      agentId: event.agentId,
+      parentThreadId: run.parentThreadId,
+      originalPrompt: run.originalPrompt,
+      promptHint: event.prompt,
+      orchestratorCliType: run.orchestratorCliType,
+      orchestratorModel: run.orchestratorModel,
+      availableModels: context.availableModels,
+      orchestratorSettings: context.orchestratorSettings,
+      limits: context.limits,
+    },
+  )
+}
 
 function normalizeAvailableModels(value) {
   if (!Array.isArray(value)) {
@@ -2201,6 +2241,7 @@ module.exports = {
   getPersistentCloseLogLevel,
   registerCliIpcHandlers,
   resolveOrchestrationSpawnModel,
+  spawnOrchestrationAgent,
   shouldAbortForToolLoop,
   shouldSuppressPersistentTrailingOutput,
 }
