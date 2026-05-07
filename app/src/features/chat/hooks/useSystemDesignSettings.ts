@@ -11,6 +11,10 @@ const DEFAULT_CONFIG: SystemDesignConfig = {
   lastError: null,
 }
 
+// Module-level flag so the auto-sync runs only once per app session even
+// when the hook is mounted in multiple places (FelixoSettingsModal + ChatWorkspace).
+let autoSyncTriggered = false
+
 export type SystemDesignSettingsState = {
   config: SystemDesignConfig
   documents: SystemDesignDocumentSummary[]
@@ -28,6 +32,7 @@ export function useSystemDesignSettings() {
     error: null,
   })
   const previousEnabledRef = useRef(false)
+  const syncRef = useRef<() => Promise<void>>(async () => {})
 
   const refreshDocuments = useCallback(async () => {
     if (!window.felixo?.systemDesign?.listDocuments) {
@@ -58,6 +63,14 @@ export function useSystemDesignSettings() {
         error: result.ok ? null : result.message ?? 'Falha ao carregar config.',
       }))
       await refreshDocuments()
+
+      // Once-per-session auto-sync when the toggle is enabled. Picks up new
+      // commits without the user having to click "Sincronizar agora".
+      // Module-level flag prevents duplicate syncs from multiple mount points.
+      if (config.enabled && !autoSyncTriggered) {
+        autoSyncTriggered = true
+        void syncRef.current()
+      }
     } catch (error) {
       setState((current) => ({
         ...current,
@@ -115,6 +128,7 @@ export function useSystemDesignSettings() {
           !wasEnabled &&
           (!result.config.lastSyncedAt || !result.config.lastSha)
         ) {
+          autoSyncTriggered = true
           await sync()
         }
       }
@@ -136,6 +150,10 @@ export function useSystemDesignSettings() {
       }))
     }
   }, [])
+
+  useEffect(() => {
+    syncRef.current = sync
+  }, [sync])
 
   useEffect(() => {
     void loadConfig()
