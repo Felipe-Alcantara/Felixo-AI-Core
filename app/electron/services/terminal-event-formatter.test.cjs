@@ -397,3 +397,49 @@ test('terminal formatter converts gemini user echo and stats into readable outpu
     totalTokens: 9772,
   })
 })
+
+test("formatter renders agent fallback events", () => {
+  const event = createOrchestrationTerminalEvent({
+    type: "orchestration_agent_fallback",
+    runId: "run-1",
+    parentThreadId: "t1",
+    agentId: "rev-1",
+    previousCliType: "claude",
+    nextCliType: "codex",
+    nextModelId: "codex-main",
+    reason: "Limite detectado",
+    attempt: 1,
+    spreadFromCliType: null,
+  })
+
+  assert.equal(event.kind, "lifecycle")
+  assert.equal(event.severity, "warn")
+  assert.match(event.chunk, /claude.*codex/)
+  assert.match(event.chunk, /Tentativa 1/)
+})
+
+test("formatter renders model availability events", () => {
+  const limited = createOrchestrationTerminalEvent({
+    type: "orchestration_model_availability",
+    runId: "run-1",
+    parentThreadId: "t1",
+    cliType: "claude",
+    modelId: "claude-opus",
+    modelName: "Claude Opus",
+    status: "limit_reached",
+    availabilityType: "limited",
+    reason: "rate limit",
+    resetLabel: "4:40pm",
+  })
+  assert.equal(limited.severity, "warn")
+  assert.match(limited.chunk, /indispon/i)
+
+  const back = createOrchestrationTerminalEvent({
+    type: "orchestration_model_availability",
+    runId: "run-1",
+    parentThreadId: "t1",
+    cliType: "claude",
+    availabilityType: "available",
+  })
+  assert.equal(back.severity, "info")
+})
