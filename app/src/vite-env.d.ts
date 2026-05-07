@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type {
+  AutomationDefinition,
   GitProjectSummary,
   ChatSession,
   Model,
@@ -181,6 +182,17 @@ declare global {
         list: () => Promise<CliInvokeResult & { notes?: unknown[] }>
         save: (note: ProjectNote) => Promise<CliInvokeResult>
         delete: (noteId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      automations?: {
+        list: () => Promise<
+          CliInvokeResult & { automations?: AutomationDefinition[] }
+        >
+        save: (
+          automation: AutomationDefinition,
+        ) => Promise<CliInvokeResult & { automation?: AutomationDefinition }>
+        delete: (
+          automationId: string,
+        ) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       chats?: {
         list: (params?: {
