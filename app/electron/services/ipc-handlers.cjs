@@ -220,6 +220,20 @@ function registerCliIpcHandlers(getMainWindow) {
   })
   const orchestrationBridge = createOrchestrationIpcBridge({
     runner: orchestrationRunner,
+    abortStream: (sessionId) => {
+      try {
+        cliManager.kill(sessionId)
+      } catch (error) {
+        logQaEvent({
+          level: 'warn',
+          scope: 'cli:abort',
+          sessionId,
+          message: `Failed to abort orchestrator stream: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        })
+      }
+    },
   })
 
   function sendCliRequest(params, targetWebContents, orchestrationContext = {}) {

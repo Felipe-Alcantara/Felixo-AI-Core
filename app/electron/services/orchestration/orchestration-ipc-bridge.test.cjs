@@ -195,3 +195,79 @@ function createContext(overrides = {}) {
     ...overrides,
   }
 }
+
+test('orchestration IPC bridge fires guard early when only text arrives within timeout', async () => {
+  const aborted = []
+  const invokeCalls = []
+  const runner = createRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+  const bridge = createOrchestrationIpcBridge({
+    runner,
+    abortStream: (sid) => aborted.push(sid),
+    freeTextTimeoutMs: 30,
+  })
+
+  bridge.handleCliEvent({
+    cliEvent: { type: 'text', text: 'Vou responder direto: a prioridade...' },
+    streamSessionId: 'session-orchestrator-1',
+    threadId: 'thread-orchestrator-1',
+    context: createContext({
+      originalPrompt: 'Crie um arquivo de exemplo no projeto',
+    }),
+  })
+
+  await new Promise((resolve) => setTimeout(resolve, 80))
+
+  assert.deepEqual(aborted, ['session-orchestrator-1'])
+  assert.equal(invokeCalls.length, 1)
+  assert.match(invokeCalls[0].prompt, /spawn_agent/)
+})
+
+test('orchestration IPC bridge does NOT fire early guard if structured event arrives in time', async () => {
+  const aborted = []
+  const invokeCalls = []
+  const runner = createRunner({
+    spawnAgent: async (params) => ({ ok: true, threadId: params.threadId }),
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+  const bridge = createOrchestrationIpcBridge({
+    runner,
+    abortStream: (sid) => aborted.push(sid),
+    freeTextTimeoutMs: 50,
+  })
+
+  // Free text arrives first (preamble before JSON)
+  bridge.handleCliEvent({
+    cliEvent: { type: 'text', text: 'Vou delegar essa tarefa...' },
+    streamSessionId: 'session-orchestrator-1',
+    threadId: 'thread-orchestrator-1',
+    context: createContext({ originalPrompt: 'Crie um arquivo' }),
+  })
+
+  // Structured event arrives within the window
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  await bridge.handleCliEvent({
+    cliEvent: {
+      type: 'spawn_agent',
+      agentId: 'reviewer-1',
+      cliType: 'claude',
+      prompt: 'Crie o arquivo.',
+    },
+    streamSessionId: 'session-orchestrator-1',
+    threadId: 'thread-orchestrator-1',
+    context: createContext({ originalPrompt: 'Crie um arquivo' }),
+  }).promise
+
+  // Wait past the timeout to confirm it would have fired
+  await new Promise((resolve) => setTimeout(resolve, 80))
+
+  assert.deepEqual(aborted, [], 'must not abort when structured event arrives in time')
+  assert.equal(invokeCalls.length, 0)
+})
