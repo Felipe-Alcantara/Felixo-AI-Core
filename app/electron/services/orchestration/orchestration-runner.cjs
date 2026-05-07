@@ -259,6 +259,30 @@ class OrchestrationRunner {
     return this.tryDelegationGuard({ run, context })
   }
 
+  shouldGuardOrchestratorDoneWithoutSpawn({ threadId, context = {} } = {}) {
+    const run = this.getRunByThreadId(threadId)
+    const originalPrompt = run?.originalPrompt ?? context.originalPrompt ?? ''
+
+    if (!requiresDelegation(originalPrompt)) {
+      return false
+    }
+
+    if (run?.agentJobs?.length > 0) {
+      return false
+    }
+
+    const runId =
+      run?.runId ??
+      context.runId ??
+      this.runContexts.get(context.parentThreadId)?.runId ??
+      this.runContexts.get(context.threadId)?.runId
+    const attempts = runId
+      ? this.delegationGuardAttempts.get(runId) ?? 0
+      : 0
+
+    return attempts < this.maxDelegationGuardAttempts
+  }
+
   async tryDelegationGuard({ run, context }) {
     if (!run || !Array.isArray(run.agentJobs) || run.agentJobs.length > 0) {
       return null

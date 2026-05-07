@@ -145,10 +145,6 @@ function createOrchestrationIpcBridge({
       }
     }
 
-    if (cliEvent.type === 'done' && shouldSuppressOrchestratorDone(runner, threadId)) {
-      return { handled: true }
-    }
-
     // Free-text orchestrator response detection: if the orchestrator stream
     // finishes on a non-agent thread without ever emitting a structured event
     // (no spawn_agent, no final_answer), the LLM bypassed the delegation
@@ -162,13 +158,25 @@ function createOrchestrationIpcBridge({
         // `done` to avoid double-firing.
         return { handled: true }
       }
+      if (shouldSuppressOrchestratorDone(runner, threadId)) {
+        return { handled: true }
+      }
+      const shouldGuard = shouldGuardOrchestratorDoneWithoutSpawn({
+        runner,
+        threadId,
+        context,
+      })
       return {
-        handled: false,
+        handled: shouldGuard,
         promise: runner.checkOrchestratorDoneWithoutSpawn({
           threadId,
           context: { ...context, streamSessionId, threadId },
         }),
       }
+    }
+
+    if (cliEvent.type === 'done' && shouldSuppressOrchestratorDone(runner, threadId)) {
+      return { handled: true }
     }
 
     if (cliEvent.type === 'error' && !agentJob && context.role !== 'agent') {
@@ -233,9 +241,21 @@ function shouldSuppressOrchestratorDone(runner, threadId) {
   return Boolean(
     run &&
       (run.status === 'waiting_agents' ||
-        run.status === 'running_orchestrator' ||
-        run.status === 'completed'),
+        run.status === 'completed' ||
+        hasActiveAgentJobs(run)),
   )
+}
+
+function shouldGuardOrchestratorDoneWithoutSpawn({ runner, threadId, context }) {
+  if (typeof runner.shouldGuardOrchestratorDoneWithoutSpawn !== 'function') {
+    return false
+  }
+
+  return runner.shouldGuardOrchestratorDoneWithoutSpawn({ threadId, context })
+}
+
+function hasActiveAgentJobs(run) {
+  return run.agentJobs?.some((job) => job.status === 'pending' || job.status === 'running')
 }
 
 function appendOutput(outputBuffers, threadId, text) {
@@ -261,5 +281,6 @@ module.exports = {
   createOrchestrationIpcBridge,
   handleOrchestrationEvents,
   isOrchestrationCliEvent,
+  shouldGuardOrchestratorDoneWithoutSpawn,
   shouldSuppressOrchestratorDone,
 }
