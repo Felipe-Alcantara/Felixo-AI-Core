@@ -17,6 +17,7 @@ import {
   loadCustomAutomations,
   saveCustomAutomations,
 } from '../services/automation-storage'
+import { requiresDelegation } from '../services/delegation-policy'
 import {
   createSuggestedExportFileName,
   exportChat,
@@ -2069,9 +2070,15 @@ function shouldUseOrchestrationProtocol(prompt: string) {
     /\b(gemini|claude|codex|sub-?agente|agente|cli|modelo)\b/
   const explicitSpawnPattern = /\b(spawn|spawne|spawnar|sub-?agente)\b/
 
+  // Inject the orchestration protocol whenever the prompt mentions agents OR
+  // when delegation policy says the prompt requires real work. The second
+  // branch is what fixes the bug where action prompts ("crie um arquivo",
+  // "analise auth.py") never received the delegationOnly rules and the
+  // orchestrator answered directly.
   return (
     agentReferencePattern.test(normalizedPrompt) ||
-    explicitSpawnPattern.test(normalizedPrompt)
+    explicitSpawnPattern.test(normalizedPrompt) ||
+    requiresDelegation(prompt)
   )
 }
 
