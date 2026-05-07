@@ -437,6 +437,22 @@ function createOrchestrationModelChoice({
   }
 }
 
+// Static cliType priority per task category. Mirrors the bonuses used by
+// scoreSpawnModel — keep them in sync. Useful for UI/diagnostic surfaces that
+// need to show "preferred order for X" without iterating over actual models.
+const CATEGORY_PRIORITY_ORDER = {
+  code: ['claude', 'codex', 'codex-app-server', 'gemini', 'gemini-acp'],
+  reasoning: ['codex', 'codex-app-server', 'claude', 'gemini', 'gemini-acp'],
+  'long-context-doc': ['gemini', 'gemini-acp', 'codex', 'codex-app-server', 'claude'],
+  'long-context-reasoning': ['codex', 'codex-app-server', 'gemini', 'gemini-acp', 'claude'],
+  general: ['gemini', 'gemini-acp', 'codex', 'codex-app-server', 'claude'],
+}
+
+function getPriorityOrderFor(category) {
+  const order = CATEGORY_PRIORITY_ORDER[category]
+  return order ? [...order] : [...CATEGORY_PRIORITY_ORDER.general]
+}
+
 // Returns the ordered candidate list the orchestrator would consider for a
 // given cliType, in fallback priority: operational same-cliType, operational
 // cross-provider, then last-resort (rate-limited but not user-blocked). Pure
@@ -492,11 +508,13 @@ function sortByScore(models, scoringOptions) {
 }
 
 module.exports = {
+  CATEGORY_PRIORITY_ORDER,
   CLI_TYPE_VARIANT_DEFAULTS,
   applyVariantDefaults,
   createOrchestrationModel,
   createOrchestrationModelChoice,
   getFallbackOrderForCliType,
+  getPriorityOrderFor,
   resolveOrchestrationSpawnModel,
   validateOrchestrationSpawnModel,
   isModelOperational,
