@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Maximize2, User, X } from 'lucide-react'
+import { Bot, Check, Copy, Maximize2, User, X } from 'lucide-react'
 import type { ChatMessage, ContextAttachment, Model } from '../types'
 import { MarkdownContent } from './MarkdownContent'
 
@@ -108,9 +108,17 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                     <span className="text-[11px] font-medium text-zinc-400">
                       {isUser ? 'Você' : model?.name ?? 'Felixo'}
                     </span>
-                    <span className="text-[10px] text-zinc-600">
-                      {message.createdAt}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {!isUser && !message.isStreaming && (
+                        <CopyButton
+                          text={message.content}
+                          title="Copiar resposta em Markdown"
+                        />
+                      )}
+                      <span className="text-[10px] text-zinc-600">
+                        {message.createdAt}
+                      </span>
+                    </div>
                   </div>
                   {isUser ? (
                     <>
@@ -151,6 +159,32 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
         />
       )}
     </>
+  )
+}
+
+function CopyButton({ text, title }: { text: string; title: string }) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={handleCopy}
+      className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 transition hover:text-zinc-300"
+    >
+      {copied ? (
+        <Check size={12} className="text-emerald-400" aria-hidden="true" />
+      ) : (
+        <Copy size={12} aria-hidden="true" />
+      )}
+    </button>
   )
 }
 
