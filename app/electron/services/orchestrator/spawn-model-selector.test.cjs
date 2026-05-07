@@ -153,6 +153,54 @@ test('resolveOrchestrationSpawnModel returns ok:false when all providers blocked
   assert.equal(result.modelChoice.selectionRule, 'unavailable')
 })
 
+test('last-resort fallback spawns on rate-limited model when nothing operational', () => {
+  const registry = createModelAvailabilityRegistry({
+    now: () => new Date('2026-05-06T12:00:00-03:00'),
+  })
+  // Mark every available model as rate-limited.
+  registry.recordError({
+    model: claudeSonnet,
+    cliType: 'claude',
+    message: "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+  })
+  registry.recordError({
+    model: codexMini,
+    cliType: 'codex',
+    message: "You're out of extra usage · resets 5:00pm (America/Sao_Paulo)",
+  })
+
+  const result = resolveOrchestrationSpawnModel(
+    'claude',
+    {
+      availableModels: [claudeSonnet, codexMini],
+      orchestratorSettings: {},
+      modelAvailabilityRegistry: registry,
+    },
+    { prompt: 'tarefa qualquer' },
+  )
+
+  assert.equal(result.ok, true, 'task must always have a model to spawn on')
+  assert.equal(result.modelChoice.selectionRule, 'last-resort')
+  assert.ok(
+    result.modelChoice.reason.includes('continuidade'),
+    'reason should explain why a rate-limited model was chosen',
+  )
+})
+
+test('last-resort respects user blocks: ok:false when every model blocked', () => {
+  const result = resolveOrchestrationSpawnModel(
+    'claude',
+    {
+      availableModels: [claudeSonnet, codexMini],
+      orchestratorSettings: { blockedModelIds: ['claude-sonnet', 'codex-mini'] },
+    },
+    {},
+  )
+
+  assert.equal(result.ok, false)
+  assert.equal(result.modelChoice.selectionRule, 'unavailable')
+})
+
 test('validateOrchestrationSpawnModel wraps result with error code on failure', () => {
   const result = validateOrchestrationSpawnModel(
     { cliType: 'claude' },

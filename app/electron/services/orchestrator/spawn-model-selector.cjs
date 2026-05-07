@@ -153,45 +153,65 @@ function resolveOrchestrationSpawnModel(cliType, context = {}, event = {}) {
     }
   }
 
-  if (configuredCandidates.length === 0) {
-    const reason =
-      cliTypeModels.length === 0
-        ? `Nenhum modelo cadastrado para cliType "${cliType}".`
-        : `Todos os modelos cadastrados para cliType "${cliType}" estao bloqueados.`
+  // Last-resort: nothing operational anywhere. Still try to spawn on a non-blocked
+  // model even if rate-limited — the orchestrator's principle is that the task must
+  // complete somehow. User-blocked models are still respected.
+  const lastResortCandidates = availableModels.filter(
+    (model) => !blockedModelIds.has(model.id),
+  )
+
+  if (lastResortCandidates.length > 0) {
+    const selectedModel = selectBestSpawnModel(lastResortCandidates, {
+      preferredModelIds,
+      requestedCliType: cliType,
+      prompt: event.prompt,
+    })
+    const model = applyVariantDefaults({
+      ...createOrchestrationModel(selectedModel.cliType),
+      ...selectedModel,
+      cliType: selectedModel.cliType,
+    })
+    const availabilityReason = createUnavailableReason(
+      cliType,
+      cliTypeModels,
+      configuredCandidates,
+      context.modelAvailabilityRegistry,
+    )
 
     return {
-      ok: false,
-      message: `Nenhum modelo disponivel para spawn com cliType "${cliType}".`,
+      ok: true,
+      model,
       modelChoice: createOrchestrationModelChoice({
         requestedCliType: cliType,
-        model: null,
-        reason,
-        selectionRule: 'unavailable',
-        candidateCount: 0,
-        blockedCount: cliTypeModels.length,
-        unavailableCount: 0,
+        model,
+        reason: `${availabilityReason} Nenhum provider operacional; usando ${model.name} mesmo com limite reportado para garantir continuidade da tarefa.`,
+        selectionRule: 'last-resort',
+        candidateCount: lastResortCandidates.length,
+        blockedCount: availableModels.length - lastResortCandidates.length,
+        unavailableCount: lastResortCandidates.length,
+        fallbackFromCliType: cliType,
+        availabilityReason,
       }),
     }
   }
 
-  const reason = createUnavailableReason(
-    cliType,
-    cliTypeModels,
-    configuredCandidates,
-    context.modelAvailabilityRegistry,
-  )
+  // Genuinely no model to spawn: nothing cadastrado or every model user-blocked.
+  const reason =
+    availableModels.length === 0
+      ? `Nenhum modelo cadastrado no orquestrador.`
+      : `Todos os modelos cadastrados estao bloqueados pelo usuario.`
 
   return {
     ok: false,
-    message: `Nenhum modelo operacional para spawn com cliType "${cliType}".`,
+    message: `Nenhum modelo disponivel para spawn (cliType solicitado: "${cliType}").`,
     modelChoice: createOrchestrationModelChoice({
       requestedCliType: cliType,
       model: null,
       reason,
       selectionRule: 'unavailable',
       candidateCount: 0,
-      blockedCount: cliTypeModels.length - configuredCandidates.length,
-      unavailableCount: configuredCandidates.length,
+      blockedCount: availableModels.length,
+      unavailableCount: 0,
     }),
   }
 }
