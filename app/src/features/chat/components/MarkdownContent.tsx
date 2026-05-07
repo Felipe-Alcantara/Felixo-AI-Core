@@ -5,6 +5,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from 'react'
+import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
 import bashLanguage from 'highlight.js/lib/languages/bash'
 import cssLanguage from 'highlight.js/lib/languages/css'
@@ -237,10 +238,37 @@ function CodeBlock({
 }) {
   const highlightedCode = highlightCode(code, language)
 
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
   return (
     <div className="max-w-full overflow-hidden rounded-xl border border-white/[0.08] bg-black/25">
       <div className="flex h-7 items-center justify-between border-b border-white/[0.06] px-3 font-mono text-[10px] uppercase text-zinc-500">
         <span>{language || 'código'}</span>
+        <button
+          type="button"
+          title="Copiar código"
+          onClick={handleCopy}
+          className="flex items-center gap-1 transition hover:text-zinc-300"
+        >
+          {copied ? (
+            <>
+              <Check size={11} className="text-emerald-400" />
+              <span className="normal-case text-emerald-400">copiado</span>
+            </>
+          ) : (
+            <>
+              <Copy size={11} />
+              <span className="normal-case">copiar</span>
+            </>
+          )}
+        </button>
       </div>
       <pre className="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200">
         {highlightedCode ? (
