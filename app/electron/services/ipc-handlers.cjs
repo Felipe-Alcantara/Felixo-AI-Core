@@ -296,7 +296,7 @@ function registerCliIpcHandlers(getMainWindow) {
       orchestratorCliType:
         orchestrationContext.orchestratorCliType ?? cliType,
       orchestratorModel: orchestrationContext.orchestratorModel ?? model,
-      originalPrompt: orchestrationContext.originalPrompt ?? prompt,
+      originalPrompt: orchestrationContext.originalPrompt ?? promptHint ?? prompt,
       promptHint: orchestrationContext.promptHint ?? promptHint,
       availableModels,
       orchestratorSettings,

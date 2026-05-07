@@ -5,6 +5,7 @@ const {
   consumeOutput,
   createOrchestrationIpcBridge,
   isOrchestrationCliEvent,
+  shouldGuardOrchestratorDoneWithoutSpawn,
   shouldSuppressOrchestratorDone,
 } = require('./orchestration-ipc-bridge.cjs')
 const {
@@ -121,12 +122,82 @@ test('orchestration IPC bridge suppresses orchestrator done while run is active'
   )
 })
 
+test('orchestration IPC bridge guards direct-text done when delegation is required', async () => {
+  const invokeCalls = []
+  const runner = createRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+  const bridge = createOrchestrationIpcBridge({ runner })
+
+  const result = bridge.handleCliEvent({
+    cliEvent: { type: 'done' },
+    streamSessionId: 'session-orchestrator-1',
+    threadId: 'thread-orchestrator-1',
+    context: createContext({
+      originalPrompt: 'Crie um arquivo de exemplo no projeto',
+    }),
+  })
+
+  assert.equal(result.handled, true)
+  await result.promise
+  assert.equal(invokeCalls.length, 1)
+  assert.match(invokeCalls[0].prompt, /spawn_agent/)
+})
+
+test('orchestration IPC bridge lets trivial direct-text done complete normally', async () => {
+  const invokeCalls = []
+  const runner = createRunner({
+    invokeOrchestrator: async (params) => {
+      invokeCalls.push(params)
+      return { ok: true }
+    },
+  })
+  const bridge = createOrchestrationIpcBridge({ runner })
+
+  const result = bridge.handleCliEvent({
+    cliEvent: { type: 'done' },
+    streamSessionId: 'session-orchestrator-1',
+    threadId: 'thread-orchestrator-1',
+    context: createContext({ originalPrompt: 'oi' }),
+  })
+
+  assert.equal(result.handled, false)
+  await result.promise
+  assert.equal(invokeCalls.length, 0)
+})
+
 test('orchestration IPC bridge classifies orchestration event types', () => {
   assert.equal(isOrchestrationCliEvent({ type: 'spawn_agent' }), true)
   assert.equal(isOrchestrationCliEvent({ type: 'awaiting_agents' }), true)
   assert.equal(isOrchestrationCliEvent({ type: 'final_answer' }), true)
   assert.equal(isOrchestrationCliEvent({ type: 'orchestration_events' }), true)
   assert.equal(isOrchestrationCliEvent({ type: 'text' }), false)
+})
+
+test('orchestration IPC bridge exposes guard decision helper', () => {
+  const runner = createRunner()
+
+  assert.equal(
+    shouldGuardOrchestratorDoneWithoutSpawn({
+      runner,
+      threadId: 'thread-orchestrator-1',
+      context: createContext({
+        originalPrompt: 'Analise este projeto e corrija os problemas',
+      }),
+    }),
+    true,
+  )
+  assert.equal(
+    shouldGuardOrchestratorDoneWithoutSpawn({
+      runner,
+      threadId: 'thread-orchestrator-1',
+      context: createContext({ originalPrompt: 'oi' }),
+    }),
+    false,
+  )
 })
 
 test('orchestration IPC bridge delegates batched orchestration events', async () => {

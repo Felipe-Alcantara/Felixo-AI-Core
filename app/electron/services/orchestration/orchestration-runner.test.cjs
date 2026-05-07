@@ -815,6 +815,33 @@ test('checkOrchestratorDoneWithoutSpawn re-invokes when orchestrator answered wi
   assert.match(invokeCalls[0].prompt, /spawn_agent/)
 })
 
+test('shouldGuardOrchestratorDoneWithoutSpawn only guards pending direct work', async () => {
+  const runner = createTestRunner()
+
+  assert.equal(
+    runner.shouldGuardOrchestratorDoneWithoutSpawn({
+      threadId: 'thread-codex-1',
+      context: createContext({
+        originalPrompt: 'Crie um arquivo de exemplo no projeto',
+      }),
+    }),
+    true,
+  )
+
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({ originalPrompt: 'Crie um arquivo' }),
+  )
+
+  assert.equal(
+    runner.shouldGuardOrchestratorDoneWithoutSpawn({
+      threadId: 'thread-codex-1',
+      context: createContext({ originalPrompt: 'Crie um arquivo' }),
+    }),
+    false,
+  )
+})
+
 test('checkOrchestratorDoneWithoutSpawn is a no-op for trivial prompts', async () => {
   const invokeCalls = []
   const runner = createTestRunner({

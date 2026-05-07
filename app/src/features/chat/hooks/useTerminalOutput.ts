@@ -125,12 +125,10 @@ export function useTerminalOutput() {
         nextChunkId.current += 1
       }
 
-      const status =
-        currentSession?.status === 'completed' ||
-        currentSession?.status === 'error' ||
-        currentSession?.status === 'stopped'
-          ? currentSession.status
-          : 'running'
+      const status = inferSessionStatusFromTerminalEvent(
+        event,
+        currentSession?.status,
+      )
 
       return {
         ...currentSessions,
@@ -172,6 +170,36 @@ export function useTerminalOutput() {
     markSessionStatus,
     clearSessions,
   }
+}
+
+function inferSessionStatusFromTerminalEvent(
+  event: TerminalOutputEvent,
+  currentStatus: TerminalSessionStatus | undefined,
+): TerminalSessionStatus {
+  if (
+    currentStatus === 'completed' ||
+    currentStatus === 'error' ||
+    currentStatus === 'stopped'
+  ) {
+    return currentStatus
+  }
+
+  if (event.kind === 'error') {
+    return 'error'
+  }
+
+  if (event.kind === 'metrics' && event.title === 'Concluído') {
+    return 'completed'
+  }
+
+  if (
+    event.kind === 'lifecycle' &&
+    (event.title === 'Interrompido' || event.title === 'Thread reiniciada')
+  ) {
+    return 'stopped'
+  }
+
+  return 'running'
 }
 
 function shouldMergeTerminalOutput(
