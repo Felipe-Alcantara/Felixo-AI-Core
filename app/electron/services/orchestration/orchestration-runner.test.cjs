@@ -551,6 +551,42 @@ test('orchestration runner does not re-spawn on non-quota errors', async () => {
   assert.ok(!result.respawned)
 })
 
+test('orchestration runner relays availability registry events to terminal', async () => {
+  const terminalEvents = []
+  const subscribers = []
+  const fakeRegistry = {
+    subscribe(listener) {
+      subscribers.push(listener)
+      return () => {}
+    },
+    getModelAvailability: () => ({ status: 'available' }),
+  }
+  const runner = createTestRunner({
+    emitTerminalEvent: (event) => terminalEvents.push(event),
+  })
+
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({ modelAvailabilityRegistry: fakeRegistry }),
+  )
+
+  assert.equal(subscribers.length, 1, 'runner should subscribe once per registry')
+
+  subscribers[0]({
+    type: 'limited',
+    cliType: 'claude',
+    modelId: 'claude-sonnet',
+    status: 'limit_reached',
+  })
+
+  const availabilityEvent = terminalEvents.find(
+    (event) => event.type === 'orchestration_model_availability',
+  )
+  assert.ok(availabilityEvent)
+  assert.equal(availabilityEvent.cliType, 'claude')
+  assert.equal(availabilityEvent.modelId, 'claude-sonnet')
+})
+
 function createTestRunner(options = {}) {
   const now = options.now ?? (() => new Date('2026-05-01T12:00:00.000Z'))
   const idGenerator = options.idGenerator ?? (() => 'run-1')

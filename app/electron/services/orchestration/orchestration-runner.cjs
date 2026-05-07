@@ -29,6 +29,7 @@ class OrchestrationRunner {
     this.maxAgentFallbackAttempts =
       options.maxAgentFallbackAttempts ?? DEFAULT_MAX_AGENT_FALLBACK_ATTEMPTS
     this.agentFallbackAttempts = new Map()
+    this.availabilitySubscriptions = new WeakMap()
   }
 
   async handleOrchestrationEvent(event, context = {}) {
@@ -520,6 +521,31 @@ class OrchestrationRunner {
     if (context.threadId) {
       this.runContexts.set(context.threadId, runContext)
     }
+
+    this.subscribeAvailabilityChanges(run, runContext)
+  }
+
+  subscribeAvailabilityChanges(run, runContext) {
+    const registry = runContext.modelAvailabilityRegistry
+    if (!registry || typeof registry.subscribe !== 'function') {
+      return
+    }
+
+    if (this.availabilitySubscriptions.has(registry)) {
+      return
+    }
+
+    const unsubscribe = registry.subscribe((event) => {
+      this.emitTerminalEvent({
+        ...event,
+        type: 'orchestration_model_availability',
+        availabilityType: event.type,
+        runId: run.runId,
+        parentThreadId: run.parentThreadId,
+      })
+    })
+
+    this.availabilitySubscriptions.set(registry, unsubscribe)
   }
 
   getRunContext(runId) {
