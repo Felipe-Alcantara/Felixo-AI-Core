@@ -73,7 +73,32 @@ function getPersistentSpawnArgs(context = {}) {
   }
 }
 
-function createPersistentInput(prompt) {
+function createPersistentInput(prompt, context = {}) {
+  // When reusing an existing process or delivering the prompt after the
+  // readyForPrompt handshake, send the user message immediately.
+  if (context.isReusingProcess || context.persistentPhase === 'prompt') {
+    return {
+      input: formatPersistentUserMessage(prompt),
+      didStartSession: true,
+      didSendPrompt: true,
+    }
+  }
+
+  // Initial spawn: do NOT send the prompt yet. Claude Code CLI needs time
+  // to initialise before it can accept stdin in --input-format stream-json
+  // mode. Sending the prompt too early causes a race condition where the
+  // data sits in the pipe buffer but Claude CLI ignores it, resulting in
+  // the sub-agent starting without a user message. Instead, return an
+  // empty write and wait for the session init event (readyForPrompt) to
+  // deliver the prompt at the right time.
+  return {
+    input: '',
+    didStartSession: true,
+    didSendPrompt: false,
+  }
+}
+
+function formatPersistentUserMessage(prompt) {
   return `${JSON.stringify({
     type: 'user',
     message: {
@@ -112,6 +137,7 @@ function parseLine(line) {
     return {
       type: 'session',
       providerSessionId: payload.session_id,
+      readyForPrompt: true,
     }
   }
 

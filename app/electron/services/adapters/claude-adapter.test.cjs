@@ -154,23 +154,45 @@ test('claude adapter allows permission mode override from environment', () => {
   }
 })
 
-test('claude adapter serializes persistent stdin messages', () => {
-  const input = adapter.createPersistentInput('Oi')
-  const payload = JSON.parse(input.trim())
+test('claude adapter defers persistent input on initial spawn', () => {
+  const result = adapter.createPersistentInput('Oi')
+
+  assert.deepEqual(result, {
+    input: '',
+    didStartSession: true,
+    didSendPrompt: false,
+  })
+})
+
+test('claude adapter sends persistent input when reusing process', () => {
+  const result = adapter.createPersistentInput('Oi', { isReusingProcess: true })
+  const payload = JSON.parse(result.input.trim())
 
   assert.deepEqual(payload, {
     type: 'user',
     message: {
       role: 'user',
-      content: [
-        {
-          type: 'text',
-          text: 'Oi',
-        },
-      ],
+      content: [{ type: 'text', text: 'Oi' }],
     },
   })
-  assert.equal(input.endsWith('\n'), true)
+  assert.equal(result.input.endsWith('\n'), true)
+  assert.equal(result.didSendPrompt, true)
+  assert.equal(result.didStartSession, true)
+})
+
+test('claude adapter sends persistent input on prompt phase', () => {
+  const result = adapter.createPersistentInput('Oi', { persistentPhase: 'prompt' })
+  const payload = JSON.parse(result.input.trim())
+
+  assert.deepEqual(payload, {
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [{ type: 'text', text: 'Oi' }],
+    },
+  })
+  assert.equal(result.input.endsWith('\n'), true)
+  assert.equal(result.didSendPrompt, true)
 })
 
 test('claude adapter can resume from provider or pinned thread session id', () => {
@@ -287,6 +309,7 @@ test('claude adapter parses session metadata', () => {
   assert.deepEqual(event, {
     type: 'session',
     providerSessionId: '00000000-0000-4000-8000-000000000001',
+    readyForPrompt: true,
   })
 })
 
