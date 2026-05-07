@@ -104,6 +104,7 @@ import { ProjectsModal } from './ProjectsModal'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
+import { OrchestrationDashboardPanel } from './OrchestrationDashboardPanel'
 import { QaLoggerPanel } from './QaLoggerPanel'
 import { SkillsModal } from './SkillsModal'
 import { TerminalPanel } from './TerminalPanel'
@@ -171,6 +172,7 @@ export function ChatWorkspace() {
   >({})
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
+  const [isOrchestrationDashboardOpen, setIsOrchestrationDashboardOpen] = useState(true)
   const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(true)
   const activeSessionIdRef = useRef<string | null>(null)
   const activeThreadIdRef = useRef<string | null>(null)
@@ -1504,6 +1506,13 @@ export function ChatWorkspace() {
             </section>
           )}
         </div>
+
+        <OrchestrationDashboardPanel
+          isOpen={isOrchestrationDashboardOpen}
+          onToggleOpen={() =>
+            setIsOrchestrationDashboardOpen((value) => !value)
+          }
+        />
 
         <QaLoggerPanel
           isOpen={isQaLoggerOpen}

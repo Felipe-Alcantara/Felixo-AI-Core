@@ -226,6 +226,56 @@ function createOrchestrationTerminalEvent(event) {
     }
   }
 
+  if (event.type === 'orchestration_agent_fallback') {
+    const spread = event.spreadFromCliType
+      ? ` (espalhado de ${event.spreadFromCliType})`
+      : ''
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'warn',
+      title: 'Sub-agente migrado para outro modelo',
+      chunk: `${event.agentId}: ${event.previousCliType} → ${event.nextCliType}${spread}. Motivo: ${event.reason ?? 'limite detectado'}. Tentativa ${event.attempt}.`,
+      metadata: compactObject({
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        previousCliType: event.previousCliType,
+        nextCliType: event.nextCliType,
+        nextModelId: event.nextModelId,
+        attempt: event.attempt,
+        spreadFromCliType: event.spreadFromCliType,
+      }),
+    }
+  }
+
+  if (event.type === 'orchestration_model_availability') {
+    const isLimited = event.availabilityType === 'limited'
+    const label = isLimited
+      ? `${event.modelName ?? event.modelId ?? event.cliType} indisponível (${event.status})`
+      : `${event.modelName ?? event.modelId ?? event.cliType} voltou a ficar disponível`
+    const reset = event.resetLabel ? ` Reset previsto: ${event.resetLabel}.` : ''
+    const reason = event.reason ? ` ${event.reason}.` : ''
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: isLimited ? 'warn' : 'info',
+      title: 'Disponibilidade de modelo',
+      chunk: `${label}.${reason}${reset}`,
+      metadata: compactObject({
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        cliType: event.cliType,
+        modelId: event.modelId,
+        modelName: event.modelName,
+        status: event.status,
+        availabilityType: event.availabilityType,
+        expiresAt: event.expiresAt,
+        resetLabel: event.resetLabel,
+      }),
+    }
+  }
+
   if (event.type === 'orchestration_waiting_agents') {
     return {
       source: 'system',
