@@ -17,7 +17,10 @@ import {
   loadCustomAutomations,
   saveCustomAutomations,
 } from '../services/automation-storage'
-import { requiresDelegation } from '../services/delegation-policy'
+import {
+  applyOrchestratorTierOverride,
+  requiresDelegation,
+} from '../services/delegation-policy'
 import {
   createSuggestedExportFileName,
   exportChat,
@@ -637,6 +640,16 @@ export function ChatWorkspace() {
     startTerminalSession(threadId)
     setActiveStreamingSession(sessionId, threadId)
 
+    // When the orchestration protocol is being injected, this CLI is acting
+    // as the orchestrator-mor. Force the top-tier variant regardless of what
+    // the Composer shows: a small variant on the orchestrator breaks routing
+    // (it can't see the catalog, can't reason about delegation properly, etc).
+    const orchestratorActive =
+      !useLeanContext && shouldUseOrchestrationProtocol(content)
+    const effectiveModel = orchestratorActive
+      ? applyOrchestratorTierOverride(selectedModel)
+      : selectedModel
+
     window.felixo.cli
       .send({
         sessionId,
@@ -644,7 +657,7 @@ export function ChatWorkspace() {
         prompt: cliPrompt,
         resumePrompt,
         promptHint: content,
-        model: selectedModel,
+        model: effectiveModel,
         cwd: cliCwd,
         availableModels: models,
         orchestratorSettings,
