@@ -19,7 +19,10 @@ const SYSTEM_DESIGN_CONFIG_KEY = 'system-design.config'
 
 function defaultConfig() {
   return {
-    enabled: false,
+    // Enabled by default so users new to the app benefit from the Felixo
+    // System Design guidelines without having to know what it is. Users can
+    // turn it off in Configuracoes.
+    enabled: true,
     repoUrl: DEFAULT_REPO_URL,
     branch: DEFAULT_BRANCH,
     lastSha: null,
@@ -34,7 +37,8 @@ function normalizeConfig(value) {
     return base
   }
   return {
-    enabled: value.enabled === true,
+    enabled:
+      typeof value.enabled === 'boolean' ? value.enabled : base.enabled,
     repoUrl:
       typeof value.repoUrl === 'string' && value.repoUrl.trim()
         ? value.repoUrl.trim()

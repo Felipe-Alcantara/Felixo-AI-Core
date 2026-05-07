@@ -110,17 +110,23 @@ test(
   sqliteTestOptions(),
   () => {
     const databaseDir = createTempDir('felixo-storage-db-')
+    const expectedMigrationVersions = listStorageMigrations().map(
+      (migration) => migration.version,
+    )
 
     try {
       const database = createStorageDatabase({ databaseDir })
 
       assert.ok(fs.existsSync(database.path))
-      assert.deepEqual(getAppliedStorageMigrations(database.connection), [1])
+      assert.deepEqual(
+        getAppliedStorageMigrations(database.connection),
+        expectedMigrationVersions,
+      )
       assert.equal(
         database.connection
           .prepare('SELECT COUNT(*) AS count FROM schema_migrations')
           .get().count,
-        1,
+        expectedMigrationVersions.length,
       )
       database.close()
 
@@ -129,7 +135,7 @@ test(
         reopenedDatabase.connection
           .prepare('SELECT COUNT(*) AS count FROM schema_migrations')
           .get().count,
-        1,
+        expectedMigrationVersions.length,
       )
       reopenedDatabase.close()
     } finally {

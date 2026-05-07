@@ -5,6 +5,7 @@ import type {
   OrchestrationCliType,
   OrchestratorMode,
   OrchestratorSettings,
+  ReasoningEffort,
   SkillPrompt,
 } from '../types'
 import { ORCHESTRATOR_PROMPT_PRESETS } from './orchestrator-prompt-presets'
@@ -17,8 +18,8 @@ const ORCHESTRATOR_SETTINGS_STORAGE_KEY =
 // Used to show the orchestrator the providerModel/effort that will actually
 // be applied at spawn time, instead of "padrao".
 const CLI_TYPE_VARIANT_DEFAULTS: Record<
-  string,
-  { providerModel: string; reasoningEffort: string }
+  OrchestrationCliType,
+  { providerModel: string; reasoningEffort: ReasoningEffort }
 > = {
   claude: { providerModel: 'opus', reasoningEffort: 'medium' },
   codex: { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
@@ -34,14 +35,18 @@ function getEffectiveProviderModel(model: Model): string | undefined {
   if (model.providerModel?.trim()) {
     return model.providerModel.trim()
   }
-  return CLI_TYPE_VARIANT_DEFAULTS[model.cliType ?? '']?.providerModel
+  return getCliTypeDefaults(model.cliType)?.providerModel
 }
 
-function getEffectiveReasoningEffort(model: Model): string | undefined {
+function getEffectiveReasoningEffort(model: Model): ReasoningEffort | undefined {
   if (model.reasoningEffort?.trim()) {
-    return model.reasoningEffort.trim()
+    return model.reasoningEffort
   }
-  return CLI_TYPE_VARIANT_DEFAULTS[model.cliType ?? '']?.reasoningEffort
+  return getCliTypeDefaults(model.cliType)?.reasoningEffort
+}
+
+function getCliTypeDefaults(cliType: Model['cliType']) {
+  return cliType === 'unknown' ? undefined : CLI_TYPE_VARIANT_DEFAULTS[cliType]
 }
 
 export const defaultOrchestratorSettings: OrchestratorSettings = {
