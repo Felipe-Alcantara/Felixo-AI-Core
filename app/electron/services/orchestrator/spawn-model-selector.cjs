@@ -201,6 +201,17 @@ function selectBestSpawnModel(candidates, options = {}) {
   })[0]
 }
 
+// Prefix-style regexes: leading \b only. Trailing word boundary is intentionally
+// omitted so that prefixes like "analis" match "analise", "analisar", etc. after
+// NFD normalization strips accents.
+const CODE_PROMPT_REGEX =
+  /\b(codigo|code|arquivo|file|editar|corrigir|bug|teste|test|refactor|commit|diff|pr|merge|hotfix|patch|stacktrace)\b/
+const LONG_CONTEXT_PROMPT_REGEX =
+  /\b(resum|sumari|contexto longo|long context|pesquis|documento grande|analise extensa|relator)/
+const REASONING_PROMPT_REGEX =
+  /\b(analis|raciocin|decid|comparar?|avaliar?|estrateg|arquitet|trade.?off|plano|planejar|implementac|implementar|tasklist|task.list|feature)/
+const DOC_PROMPT_REGEX = /\b(documenta|markdown|formata|sumari|relator|escrev|redig)/
+
 function scoreSpawnModel(model, { preferredModelIds = [], requestedCliType, prompt } = {}) {
   const preferredIndex = preferredModelIds.indexOf(model.id)
   const promptKind = classifySpawnPrompt(prompt)
@@ -215,36 +226,67 @@ function scoreSpawnModel(model, { preferredModelIds = [], requestedCliType, prom
   }
 
   if (promptKind === 'code') {
-    if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
-      score += 90
-    } else if (model.cliType === 'claude') {
+    if (model.cliType === 'claude') {
+      score += 100
+    } else if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
       score += 75
     } else {
       score += 25
     }
-  } else if (promptKind === 'long-context') {
+  } else if (promptKind === 'long-context-doc') {
     if (model.cliType === 'gemini' || model.cliType === 'gemini-acp') {
+      score += 95
+    } else if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
+      score += 50
+    } else if (model.cliType === 'claude') {
+      score += 40
+    } else {
+      score += 30
+    }
+  } else if (promptKind === 'long-context-reasoning') {
+    if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
+      score += 95
+    } else if (model.cliType === 'gemini' || model.cliType === 'gemini-acp') {
+      score += 60
+    } else if (model.cliType === 'claude') {
+      score += 50
+    } else {
+      score += 30
+    }
+  } else if (promptKind === 'reasoning') {
+    if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
       score += 90
     } else if (model.cliType === 'claude') {
-      score += 45
+      score += 70
+    } else if (model.cliType === 'gemini' || model.cliType === 'gemini-acp') {
+      score += 55
     } else {
-      score += 35
+      score += 30
     }
   } else {
     if (model.cliType === 'gemini' || model.cliType === 'gemini-acp') {
       score += 55
     } else if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
       score += 50
-    } else {
+    } else if (model.cliType === 'claude') {
       score += 45
+    } else {
+      score += 30
     }
   }
 
-  if (String(model.providerModel ?? '').toLowerCase().includes('lite')) {
-    score += 10
+  // Default Claude preference: small tie-breaker bonus when user did not configure
+  // explicit preferredModelIds. Intentionally smaller than cliType match (+500) and
+  // task-kind bonuses, so it only resolves ties without overriding routing logic.
+  if (preferredModelIds.length === 0 && model.cliType === 'claude') {
+    score += 5
   }
 
-  if (String(model.providerModel ?? '').toLowerCase().includes('mini')) {
+  const providerModelLower = String(model.providerModel ?? '').toLowerCase()
+  if (providerModelLower.includes('lite')) {
+    score += 10
+  }
+  if (providerModelLower.includes('mini')) {
     score += 8
   }
 
@@ -257,20 +299,22 @@ function classifySpawnPrompt(prompt) {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
 
-  if (
-    /\b(codigo|code|arquivo|file|editar|implementar|corrigir|bug|teste|test|refactor|commit|diff|pr)\b/.test(
-      normalizedPrompt,
-    )
-  ) {
+  if (CODE_PROMPT_REGEX.test(normalizedPrompt)) {
     return 'code'
   }
 
-  if (
-    /\b(resum|sumari|contexto longo|long context|pesquis|analise extensa|documento grande)\b/.test(
-      normalizedPrompt,
-    )
-  ) {
-    return 'long-context'
+  if (LONG_CONTEXT_PROMPT_REGEX.test(normalizedPrompt)) {
+    if (REASONING_PROMPT_REGEX.test(normalizedPrompt)) {
+      return 'long-context-reasoning'
+    }
+    if (DOC_PROMPT_REGEX.test(normalizedPrompt)) {
+      return 'long-context-doc'
+    }
+    return 'long-context-doc'
+  }
+
+  if (REASONING_PROMPT_REGEX.test(normalizedPrompt)) {
+    return 'reasoning'
   }
 
   return 'general'
