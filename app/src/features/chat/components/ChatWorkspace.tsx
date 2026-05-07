@@ -2089,8 +2089,11 @@ function createOrchestrationProtocolInstructions(
   hint: OrchestrationPromptHint | null = null,
   orchestrationContextBlock: string | null = null,
 ) {
-  const { multiAgentProtocol } = ORCHESTRATOR_PROMPT_PRESETS
+  const { multiAgentProtocol, delegationOnly } = ORCHESTRATOR_PROMPT_PRESETS
   const lines = [
+    delegationOnly.heading,
+    ...delegationOnly.rules,
+    '',
     multiAgentProtocol.heading,
     ...multiAgentProtocol.rules,
     ...multiAgentProtocol.finalAnswerRules,
