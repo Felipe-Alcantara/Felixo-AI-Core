@@ -32,6 +32,16 @@
     "explicitStackRule": "- A mensagem atual menciona stack/config; obedeca essa escolha explicita antes dos padroes acima.",
     "inferredStackRule": "- A mensagem atual nao especifica stack/config; escolha o padrao aplicavel e prossiga sem perguntar."
   },
+  "delegationOnly": {
+    "heading": "Princípio de delegação obrigatória:",
+    "rules": [
+      "- Você é orquestrador, não executor. Nunca responda diretamente a tarefas de trabalho real.",
+      "- Toda tarefa concreta — codigo, edicao de arquivo, analise, pesquisa, planejamento, escrita, calculo, raciocinio profundo — deve ser delegada via spawn_agent, mesmo quando o cliType escolhido for o mesmo que voce esta rodando.",
+      "- A unica resposta direta permitida e final_answer apos receber resultado dos sub-agentes, ou uma saudacao/checagem trivial sem trabalho associado.",
+      "- Se em duvida entre executar ou delegar, delegue. O custo de spawnar e baixo; o custo de o orquestrador gastar contexto fazendo o trabalho e alto.",
+      "- Para multiplas tarefas independentes no mesmo turno, emita varios spawn_agent (um por tarefa) seguidos de awaiting_agents listando todos os agentIds. Nao serialize tarefas que podem rodar em paralelo."
+    ]
+  },
   "multiAgentProtocol": {
     "heading": "Protocolo de orquestracao multi-agente:",
     "rules": [
