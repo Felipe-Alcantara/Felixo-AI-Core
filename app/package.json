@@ -15,8 +15,10 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite --host 127.0.0.1\" \"wait-on tcp:127.0.0.1:5173 && node scripts/start-electron.cjs --dev\"",
+    "dev": "npm run rebuild:electron && concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite --host 127.0.0.1\" \"wait-on tcp:127.0.0.1:5173 && node scripts/start-electron.cjs --dev\"",
     "dev:web": "vite --host 127.0.0.1",
+    "rebuild:electron": "electron-rebuild -f -w node-pty",
+    "rebuild:node": "npm rebuild node-pty",
     "build": "tsc -b && vite build",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
@@ -25,6 +27,7 @@
     "dist:win": "npm run build && electron-builder --win",
     "publish:github": "npm run build && electron-builder --publish always",
     "lint": "eslint .",
+    "pretest": "npm run rebuild:node",
     "test": "node --test electron/core/*.test.cjs electron/services/*.test.cjs electron/services/adapters/*.test.cjs electron/services/adapters/testing/*.test.cjs electron/services/mcp/*.test.cjs electron/services/orchestration/*.test.cjs electron/services/orchestrator/*.test.cjs electron/services/protocols/*.test.cjs electron/services/providers/*.test.cjs",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node scripts/start-electron.cjs"
@@ -124,10 +127,13 @@
     }
   },
   "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "cross-spawn": "^7.0.6",
     "electron-updater": "^6.8.3",
     "highlight.js": "^11.11.1",
     "lucide-react": "^1.12.0",
+    "node-pty": "^1.1.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
@@ -135,6 +141,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
