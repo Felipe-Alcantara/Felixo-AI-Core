@@ -42,6 +42,11 @@ export function LiveTerminalPanel({
     }
 
     let disposed = false
+    // A unique PTY session id per effect run. React StrictMode mounts the
+    // effect twice in dev with the same prop; without this, the first
+    // cleanup's kill would tear down the second mount's session (they shared
+    // an id) and its exit event would leak into the live view.
+    const ptySessionId = `${sessionId}::${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
     const terminal = new Terminal({
       convertEol: false,
       cursorBlink: true,
@@ -66,13 +71,13 @@ export function LiveTerminalPanel({
 
     // PTY output → screen.
     const offData = pty.onData((event) => {
-      if (event.sessionId === sessionId) {
+      if (event.sessionId === ptySessionId) {
         terminal.write(event.data)
       }
     })
 
     const offExit = pty.onExit((event) => {
-      if (event.sessionId !== sessionId) {
+      if (event.sessionId !== ptySessionId) {
         return
       }
 
@@ -82,14 +87,14 @@ export function LiveTerminalPanel({
 
     // Keyboard → PTY.
     const onDataDisposable = terminal.onData((data) => {
-      void pty.write({ sessionId, data })
+      void pty.write({ sessionId: ptySessionId, data })
     })
 
     // View resize → PTY resize, so the CLI redraws for the real size.
     const pushResize = () => {
       safeFit()
       void pty.resize({
-        sessionId,
+        sessionId: ptySessionId,
         cols: terminal.cols,
         rows: terminal.rows,
       })
@@ -100,7 +105,7 @@ export function LiveTerminalPanel({
 
     void pty
       .spawn({
-        sessionId,
+        sessionId: ptySessionId,
         command,
         args,
         cwd,
@@ -127,7 +132,7 @@ export function LiveTerminalPanel({
       offExit()
       onDataDisposable.dispose()
       resizeObserver.disconnect()
-      void pty.kill({ sessionId, force: true })
+      void pty.kill({ sessionId: ptySessionId, force: true })
       terminal.dispose()
     }
   }, [sessionId, command, args, cwd])
