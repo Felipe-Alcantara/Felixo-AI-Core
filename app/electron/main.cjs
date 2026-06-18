@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
+const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
 const {
   registerFileAttachmentIpcHandlers,
 } = require('./services/file-attachments-ipc-handlers.cjs')
@@ -31,6 +32,7 @@ const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.c
 const platform = require('./core/platform/index.cjs')
 
 let mainWindow = null
+let ptyHandlers = null
 let storageDatabase = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
@@ -71,6 +73,7 @@ app.whenReady().then(() => {
 
   registerQaLoggerIpcHandlers(getMainWindow)
   registerCliIpcHandlers(getMainWindow)
+  ptyHandlers = registerPtyIpcHandlers(getMainWindow)
   registerFileAttachmentIpcHandlers(appPaths)
   registerFileExportIpcHandlers(getMainWindow)
   registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
@@ -122,6 +125,15 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  if (ptyHandlers) {
+    try {
+      ptyHandlers.dispose()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    ptyHandlers = null
+  }
+
   const databaseToClose = storageDatabase
   storageDatabase = null
 

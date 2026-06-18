@@ -38,6 +38,22 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('cli:terminal-output', handler)
     },
   },
+  pty: {
+    spawn: (params) => ipcRenderer.invoke('pty:spawn', params),
+    write: (params) => ipcRenderer.invoke('pty:write', params),
+    resize: (params) => ipcRenderer.invoke('pty:resize', params),
+    kill: (params) => ipcRenderer.invoke('pty:kill', params),
+    onData: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('pty:data', handler)
+      return () => ipcRenderer.removeListener('pty:data', handler)
+    },
+    onExit: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('pty:exit', handler)
+      return () => ipcRenderer.removeListener('pty:exit', handler)
+    },
+  },
   projects: {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),
     detectRepos: (folderPath) => ipcRenderer.invoke('projects:detect-repos', folderPath),
