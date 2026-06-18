@@ -19,6 +19,17 @@ import type {
 } from './features/chat/types'
 
 type DetectedRepo = { name: string; path: string }
+
+type PersistedCanvasNode = {
+  id: string
+  type: 'terminal' | 'note'
+  position: { x: number; y: number }
+  width?: number | null
+  height?: number | null
+  data: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+}
 type CliStreamEvent = StreamEvent | OrchestrationStreamEvent
 
 type CliInvokeResult = {
@@ -218,6 +229,13 @@ declare global {
         list: () => Promise<CliInvokeResult & { notes?: unknown[] }>
         save: (note: ProjectNote) => Promise<CliInvokeResult>
         delete: (noteId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      canvas?: {
+        list: () => Promise<CliInvokeResult & { nodes?: PersistedCanvasNode[] }>
+        save: (
+          node: PersistedCanvasNode,
+        ) => Promise<CliInvokeResult & { node?: PersistedCanvasNode }>
+        delete: (nodeId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       automations?: {
         list: () => Promise<

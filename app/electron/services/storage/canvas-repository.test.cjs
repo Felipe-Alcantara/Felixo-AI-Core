@@ -1,0 +1,106 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const os = require('node:os')
+
+const { createStorageDatabase } = require('./sqlite-database.cjs')
+const { createCanvasRepository, normalizeNode } = require('./canvas-repository.cjs')
+
+test('canvas repository stores, lists, updates and soft-deletes nodes', () => {
+  const databaseDir = createTempDir('felixo-canvas-')
+  const now = '2026-06-18T10:00:00.000Z'
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    const terminalNode = {
+      id: 'node-term-1',
+      type: 'terminal',
+      position: { x: 120, y: 40 },
+      width: 480,
+      height: 320,
+      data: { command: 'claude', label: 'Claude' },
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    repository.save(terminalNode)
+    assert.deepEqual(repository.list(), [
+      { ...terminalNode, width: 480, height: 320 },
+    ])
+
+    // Moving the node updates position in place (same id).
+    repository.save({
+      ...terminalNode,
+      position: { x: 200, y: 90 },
+      updatedAt: '2026-06-18T10:05:00.000Z',
+    })
+    const moved = repository.list()
+    assert.equal(moved.length, 1)
+    assert.deepEqual(moved[0].position, { x: 200, y: 90 })
+
+    assert.equal(repository.delete('node-term-1'), true)
+    assert.deepEqual(repository.list(), [])
+
+    database.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
+test('canvas repository keeps note nodes with default size as null', () => {
+  const databaseDir = createTempDir('felixo-canvas-note-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    repository.save({
+      id: 'node-note-1',
+      type: 'note',
+      position: { x: 0, y: 0 },
+      data: { text: 'lembrete' },
+    })
+
+    const [stored] = repository.list()
+    assert.equal(stored.type, 'note')
+    assert.equal(stored.width, null)
+    assert.equal(stored.height, null)
+    assert.deepEqual(stored.data, { text: 'lembrete' })
+
+    database.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
+test('normalizeNode rejects invalid type and id', () => {
+  assert.throws(
+    () => normalizeNode({ id: 'x', type: 'unknown', position: { x: 0, y: 0 } }),
+    /Tipo de no de canvas invalido/,
+  )
+  assert.throws(
+    () => normalizeNode({ id: '', type: 'note', position: { x: 0, y: 0 } }),
+    /ID de no de canvas invalido/,
+  )
+})
+
+test('normalizeNode coerces missing position and bad dimensions to safe values', () => {
+  const node = normalizeNode({ id: 'n', type: 'note', data: { a: 1 } })
+
+  assert.deepEqual(node.position, { x: 0, y: 0 })
+  assert.equal(node.width, null)
+  assert.equal(node.height, null)
+  assert.deepEqual(node.data, { a: 1 })
+  assert.ok(!Number.isNaN(Date.parse(node.createdAt)))
+})
+
+function createTempDir(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+}
+
+function removeTempDir(dirPath) {
+  fs.rmSync(dirPath, { recursive: true, force: true })
+}

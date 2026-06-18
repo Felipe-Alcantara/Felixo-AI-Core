@@ -10,6 +10,7 @@ const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-ha
 const { registerQaLoggerIpcHandlers, logQaEvent } = require('./services/qa-logger.cjs')
 const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handlers.cjs')
 const { registerNotesIpcHandlers } = require('./services/notes-ipc-handlers.cjs')
+const { registerCanvasIpcHandlers } = require('./services/canvas-ipc-handlers.cjs')
 const {
   registerAutomationsIpcHandlers,
 } = require('./services/automations-ipc-handlers.cjs')
@@ -78,6 +79,7 @@ app.whenReady().then(() => {
   registerFileExportIpcHandlers(getMainWindow)
   registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
   registerNotesIpcHandlers({ database: storageDatabase })
+  registerCanvasIpcHandlers({ database: storageDatabase })
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
