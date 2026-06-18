@@ -159,6 +159,39 @@ declare global {
         onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
         onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
       }
+      pty?: {
+        spawn: (params: {
+          sessionId: string
+          command?: string
+          args?: string[]
+          cwd?: string
+          cols?: number
+          rows?: number
+        }) => Promise<CliInvokeResult & { sessionId?: string }>
+        write: (params: {
+          sessionId: string
+          data: string
+        }) => Promise<CliInvokeResult & { delivered?: boolean }>
+        resize: (params: {
+          sessionId: string
+          cols: number
+          rows: number
+        }) => Promise<CliInvokeResult & { applied?: boolean }>
+        kill: (params: {
+          sessionId: string
+          force?: boolean
+        }) => Promise<CliInvokeResult & { killed?: boolean }>
+        onData: (
+          callback: (event: { sessionId: string; data: string }) => void,
+        ) => () => void
+        onExit: (
+          callback: (event: {
+            sessionId: string
+            exitCode: number
+            signal?: number
+          }) => void,
+        ) => () => void
+      }
       projects?: {
         pickFolder: () => Promise<string | null>
         detectRepos: (folderPath: string) => Promise<DetectedRepo[]>
