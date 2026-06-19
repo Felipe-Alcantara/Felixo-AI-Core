@@ -141,6 +141,14 @@ export class TerminalSessionStore {
       return
     }
 
+    // The drawer reuses one container across sessions; clear any previously
+    // mounted terminal element so switching cards doesn't stack terminals.
+    for (const child of Array.from(container.children)) {
+      if (child !== session.terminal.element) {
+        container.removeChild(child)
+      }
+    }
+
     if (!session.terminal.element) {
       session.terminal.open(container)
     } else if (session.terminal.element.parentElement !== container) {
