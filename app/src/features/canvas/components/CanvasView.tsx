@@ -272,7 +272,11 @@ export function CanvasView() {
           pannable
           zoomable
           position="top-right"
-          className="!mr-4 !mt-4 !bg-zinc-900"
+          className="!mr-4 !mt-4"
+          bgColor="#18181b"
+          maskColor="rgba(0, 0, 0, 0.6)"
+          nodeColor="#3f3f46"
+          nodeStrokeColor="#52525b"
         />
       </ReactFlow>
     </div>
