@@ -17,6 +17,7 @@
  * tests, so unit tests never touch the native binary.
  */
 
+const os = require('node:os')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 
@@ -76,7 +77,9 @@ class PtyProcessManager {
       name: 'xterm-color',
       cols,
       rows,
-      cwd: options.cwd || process.cwd(),
+      // No project selected → open in the user's home, like a fresh terminal,
+      // instead of inheriting the app's working directory.
+      cwd: options.cwd || os.homedir(),
       env,
     })
 
