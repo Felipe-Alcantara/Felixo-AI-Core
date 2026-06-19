@@ -19,6 +19,7 @@ import { TerminalSquare, StickyNote } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
+import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import type { CanvasNodeType } from '../types'
 
@@ -47,14 +48,21 @@ export function CanvasView() {
     [setNodes, persistNode],
   )
 
-  // Inject the note edit handler at render time so persisted data stays plain.
+  // Inject render-time concerns: the header drag handle (so only the header
+  // moves the node) and, for notes, the edit handler. Keeping these out of
+  // stored state means persisted data stays plain JSON.
   const renderedNodes = useMemo(
     () =>
-      nodes.map((node) =>
-        node.type === 'note'
-          ? { ...node, data: { ...node.data, onTextChange: updateNoteText } }
-          : node,
-      ),
+      nodes.map((node) => {
+        const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
+
+        return node.type === 'note'
+          ? {
+              ...withHandle,
+              data: { ...node.data, onTextChange: updateNoteText },
+            }
+          : withHandle
+      }),
     [nodes, updateNoteText],
   )
 
