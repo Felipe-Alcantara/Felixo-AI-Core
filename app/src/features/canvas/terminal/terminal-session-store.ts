@@ -38,7 +38,6 @@ type Session = {
   fitAddon: FitAddon
   listeners: Set<SessionListener>
   snapshot: SessionSnapshot
-  previewBuffer: string
   idleTimer: ReturnType<typeof setTimeout> | null
   offData: () => void
   offExit: () => void
@@ -79,7 +78,6 @@ export class TerminalSessionStore {
       fitAddon,
       listeners: new Set(),
       snapshot: { activity: 'starting', previewLines: [] },
-      previewBuffer: '',
       idleTimer: null,
       offData: () => {},
       offExit: () => {},
@@ -95,7 +93,7 @@ export class TerminalSessionStore {
     session.offData = pty.onData((event) => {
       if (event.sessionId === session.ptySessionId) {
         terminal.write(event.data)
-        this.onOutput(session, event.data)
+        this.onOutput(session)
       }
     })
 
@@ -208,24 +206,22 @@ export class TerminalSessionStore {
     this.sessions.delete(id)
   }
 
-  private onOutput(session: Session, data: string): void {
+  private onOutput(session: Session): void {
     this.markWorking(session)
-
-    // Maintain a trailing preview buffer (strip control sequences loosely).
-    session.previewBuffer = (session.previewBuffer + data).slice(-4000)
   }
 
   private markWorking(session: Session): void {
     this.clearIdleTimer(session)
+
+    // Only emit on the transition into 'working' to avoid a re-render per byte;
+    // the preview is refreshed once the session goes idle.
     if (session.snapshot.activity !== 'working') {
       this.update(session, { activity: 'working' })
-    } else {
-      // Still working; just refresh the preview without a re-render storm.
-      this.update(session, {})
     }
 
     session.idleTimer = setTimeout(() => {
       if (!session.disposed && session.snapshot.activity === 'working') {
+        // Refresh the preview from the now-settled buffer.
         this.update(session, { activity: 'idle' })
       }
     }, IDLE_AFTER_MS)
@@ -242,7 +238,7 @@ export class TerminalSessionStore {
     session.snapshot = {
       ...session.snapshot,
       ...patch,
-      previewLines: computePreview(session.previewBuffer),
+      previewLines: computePreview(session.terminal),
     }
     for (const listener of session.listeners) {
       listener(session.snapshot)
@@ -250,18 +246,22 @@ export class TerminalSessionStore {
   }
 }
 
-/** Strips ANSI escapes and returns the last non-empty lines for the preview. */
-function computePreview(buffer: string): string[] {
-  const plain = buffer
-    // CSI/OSC escape sequences (ESC [ ... or ESC ] ...) and stray controls.
-    // eslint-disable-next-line no-control-regex
-    .replace(/\u001b[[\]][0-9;?]*[ -/]*[@-~]?/g, '')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
-    .replace(/\r/g, '')
-  return plain
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .slice(-PREVIEW_LINES)
+/**
+ * Reads the last non-empty lines straight from xterm's rendered buffer. This
+ * is already the clean, parsed text the terminal shows — far more reliable
+ * than stripping ANSI from the raw byte stream ourselves.
+ */
+function computePreview(terminal: Terminal): string[] {
+  const buffer = terminal.buffer.active
+  const lines: string[] = []
+
+  // Walk upward from the last row, collecting non-empty lines.
+  for (let row = buffer.length - 1; row >= 0 && lines.length < PREVIEW_LINES; row -= 1) {
+    const text = buffer.getLine(row)?.translateToString(true).trimEnd() ?? ''
+    if (text.length > 0) {
+      lines.unshift(text)
+    }
+  }
+
+  return lines
 }
