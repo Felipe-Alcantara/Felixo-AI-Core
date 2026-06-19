@@ -181,7 +181,18 @@ div::-webkit-scrollbar-thumb {
   }
 }
 
-/* React Flow controls/minimap tuned for the app's dark canvas. */
+/* React Flow controls/minimap tuned for the app's dark canvas.
+   React Flow drives colors through CSS variables, so override those (not just
+   the wrapper) or the SVG keeps its light default. */
+.react-flow {
+  --xy-controls-button-background-color: #27272a;
+  --xy-controls-button-background-color-hover: #3f3f46;
+  --xy-controls-button-color: #e4e4e7;
+  --xy-controls-button-color-hover: #ffffff;
+  --xy-controls-button-border-color: rgba(255, 255, 255, 0.08);
+  --xy-minimap-background-color: #18181b;
+}
+
 .react-flow__controls-button {
   background: #27272a;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -193,10 +204,19 @@ div::-webkit-scrollbar-thumb {
   background: #3f3f46;
 }
 
+.react-flow__controls-button svg {
+  fill: #e4e4e7;
+}
+
 .react-flow__minimap {
+  background: #18181b;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.5rem;
   overflow: hidden;
+}
+
+.react-flow__minimap-svg {
+  background: #18181b;
 }
 
 .react-flow__attribution {
