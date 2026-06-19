@@ -9,8 +9,12 @@ export type TerminalNodeData = {
   label?: string
 }
 
+export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'
+
 export type NoteNodeData = {
   text?: string
+  /** Sticky-note color; defaults to amber. */
+  color?: NoteColor
 }
 
 export type CanvasNodeData = TerminalNodeData & NoteNodeData
