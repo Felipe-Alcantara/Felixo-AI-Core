@@ -180,3 +180,25 @@ div::-webkit-scrollbar-thumb {
     color: #67e8f9;
   }
 }
+
+/* React Flow controls/minimap tuned for the app's dark canvas. */
+.react-flow__controls-button {
+  background: #27272a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e4e4e7;
+  fill: #e4e4e7;
+}
+
+.react-flow__controls-button:hover {
+  background: #3f3f46;
+}
+
+.react-flow__minimap {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.react-flow__attribution {
+  display: none;
+}

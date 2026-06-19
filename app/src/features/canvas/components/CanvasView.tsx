@@ -165,8 +165,14 @@ export function CanvasView() {
         deleteKeyCode={['Delete', 'Backspace']}
       >
         <Background gap={20} color="#1e293b" />
-        <Controls />
-        <MiniMap pannable zoomable className="!bg-zinc-900" />
+        <Controls position="bottom-left" className="!mb-4 !ml-4" />
+        {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle. */}
+        <MiniMap
+          pannable
+          zoomable
+          position="top-right"
+          className="!mr-4 !mt-4 !bg-zinc-900"
+        />
       </ReactFlow>
     </div>
   )
