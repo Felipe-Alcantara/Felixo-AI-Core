@@ -6,8 +6,10 @@ import {
   useReactFlow,
   type NodeProps,
 } from '@xyflow/react'
+import { Eye, Pencil } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { NOTE_COLORS, resolveNoteTheme } from './note-colors'
+import { MarkdownContent } from '../../chat/components/MarkdownContent'
 import type { NoteColor, NoteNodeData } from '../types'
 
 /**
@@ -19,13 +21,15 @@ type NoteNodeDataWithHandler = NoteNodeData & {
 }
 
 /**
- * A free-text sticky note for the canvas — the "miro" side of the dashboard.
- * Color is pickable from the header; dragging is via the header, the body
- * stays editable.
+ * A markdown sticky note for the canvas — the "miro" side of the dashboard.
+ * Write markdown (checklists `- [ ]`, headings `#`, etc.) in edit mode and
+ * flip to preview to render it. Color is pickable from the header; dragging is
+ * via the header, the body stays editable.
  */
 function NoteNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = (data ?? {}) as NoteNodeDataWithHandler
   const [text, setText] = useState(nodeData.text ?? '')
+  const [preview, setPreview] = useState(false)
   const theme = resolveNoteTheme(nodeData.color)
   const { deleteElements } = useReactFlow()
 
@@ -35,8 +39,8 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
     >
       <NodeResizer
         isVisible={selected}
-        minWidth={160}
-        minHeight={100}
+        minWidth={180}
+        minHeight={120}
         lineClassName="!border-black/20"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-black/40"
       />
@@ -55,18 +59,40 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
               onSelect={() => nodeData.onDataChange?.(id, { color })}
             />
           ))}
+          <button
+            type="button"
+            onClick={() => setPreview((current) => !current)}
+            className="ml-1 rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+            aria-label={preview ? 'Editar nota' : 'Visualizar nota'}
+            title={preview ? 'Editar' : 'Visualizar'}
+          >
+            {preview ? <Pencil size={13} /> : <Eye size={13} />}
+          </button>
         </div>
       </NodeHeader>
-      <textarea
-        value={text}
-        onChange={(event) => {
-          const next = event.target.value
-          setText(next)
-          nodeData.onDataChange?.(id, { text: next })
-        }}
-        placeholder="Anotacao…"
-        className={`nodrag min-h-0 w-full flex-1 resize-none bg-transparent p-3 text-sm outline-none ${theme.text}`}
-      />
+
+      {preview ? (
+        <div className="nodrag min-h-0 flex-1 overflow-auto p-2">
+          <div className="markdown-content rounded bg-zinc-900/90 p-3 text-sm text-zinc-100">
+            {text.trim() ? (
+              <MarkdownContent content={text} />
+            ) : (
+              <span className="text-zinc-500">Nota vazia.</span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <textarea
+          value={text}
+          onChange={(event) => {
+            const next = event.target.value
+            setText(next)
+            nodeData.onDataChange?.(id, { text: next })
+          }}
+          placeholder="Markdown: # titulo, - [ ] tarefa, **negrito**…"
+          className={`nodrag min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm outline-none ${theme.text}`}
+        />
+      )}
       <Handle type="source" position={Position.Right} className="!bg-black/40" />
     </div>
   )
