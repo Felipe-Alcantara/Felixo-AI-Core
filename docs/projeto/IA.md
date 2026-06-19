@@ -274,4 +274,14 @@ TESTE: `canvas-repository.test.cjs` — 4 testes (CRUD + soft-delete, nota com d
 
 [2026-06-18] ✅ VALIDAÇÃO VISUAL — Fase 3 confirmada pelo usuário.
 DETALHE: Dois nós-terminal independentes lado a lado no canvas, ambos com shell vivo (status "ativo"), redimensionáveis (NodeResizer), refletidos no MiniMap. Toolbar Terminal/Nota e toggle Chat funcionando. O pivô completo (chat mascarado → dashboard n8n com terminais reais) está de pé como tela principal.
-PRÓXIMO PASSO: ideias para quem contribuir — persistir edges/conexões (hoje visuais, não salvam), nós orquestrados (ler saída estruturada), presets de prompt por nó, ligar projeto/cwd a um nó.
+PRÓXIMO PASSO: ideias para quem contribuir — persistir edges/conexões (hoje visuais, não salvam), nós orquestrados (ler saída estruturada), presets de prompt por nó.
+
+[2026-06-19] Fase 3.1 — Rodada de melhorias do canvas (feedback do usuário, commits pequenos).
+1. DRAG: nós não moviam (corpo é nodrag para poder digitar). Cada nó ganhou um `NodeHeader` que é o único drag handle (prop `dragHandle`); header também remove o nó. `GroupNode` tem seu próprio header editável.
+2. UI: minimap/controles do React Flow colidiam com o rodapé (toggle Chat) e usavam tema claro. Minimap foi para o topo-direito, controles ganharam margem, e há override de CSS para o tema escuro (`.react-flow__controls-button`, `.react-flow__minimap`).
+3. COR DA NOTA: seletor de cor no header (amber/emerald/sky/rose/zinc) via `note-colors.ts`; cor persiste. Callback do nó virou `onDataChange(id, patch)` genérico (era `onTextChange`).
+4. MARKDOWN NA NOTA: toggle editar/visualizar; preview reusa `MarkdownContent` (remark-gfm → checklists `- [ ]`) sobre painel escuro; edição em textarea monospace.
+5. PROJETO NO TERMINAL: botão Terminal virou `TerminalMenu` (split + caret) — "Local (sem projeto)" usa cwd padrão, ou escolhe um projeto e abre o terminal na pasta dele (cwd=path). Projetos vêm de `window.felixo.projects.list`.
+6. NÓS-GRUPO: tipo `group` (subflow). Migration 006 amplia o CHECK de type e adiciona `parent_id` (SQLite recria a tabela). `GroupNode` (título editável), reparenting por drag-stop (hit-test sobre limites do grupo), grupos renderizados atrás dos filhos. Persistência carrega `parentId`+`extent:'parent'`.
+TESTE: suíte 375 pass, 0 fail (novo teste de grupo+parentId). `npm run build` e `npm run lint` limpos. Cada item saiu em commit próprio (feat/fix) seguindo a política de git.
+NOTA DE DÍVIDA: reparenting só reparenta nós top-level (posição absoluta); arrastar um filho para fora ou entre grupos não foi coberto nesta rodada.
