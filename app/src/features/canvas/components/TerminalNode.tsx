@@ -79,9 +79,17 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         className="nodrag flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
       >
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
-        <pre className="min-h-0 flex-1 overflow-hidden whitespace-pre-wrap break-words font-mono text-[10px] leading-snug text-zinc-400">
-          {preview.length > 0 ? preview.join('\n') : 'Sem saida ainda…'}
-        </pre>
+        <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">
+          {preview.length > 0 ? (
+            preview.map((line, index) => (
+              <div key={index} className="overflow-hidden text-ellipsis whitespace-nowrap">
+                {line}
+              </div>
+            ))
+          ) : (
+            <span className="text-zinc-600">Sem saida ainda…</span>
+          )}
+        </div>
       </button>
 
       <Handle type="source" position={Position.Right} className="!bg-emerald-500" />
