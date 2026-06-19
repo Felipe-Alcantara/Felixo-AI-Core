@@ -32,11 +32,11 @@ export function CanvasView() {
   const { nodes, setNodes, persistNode, removeNode } = useCanvasPersistence()
   const [edges, setEdges] = useEdgesState<Edge>([])
 
-  const updateNoteText = useCallback(
-    (nodeId: string, text: string) => {
+  const updateNodeData = useCallback(
+    (nodeId: string, patch: Record<string, unknown>) => {
       setNodes((current) => {
         const next = current.map((item) =>
-          item.id === nodeId ? { ...item, data: { ...item.data, text } } : item,
+          item.id === nodeId ? { ...item, data: { ...item.data, ...patch } } : item,
         )
         const changed = next.find((item) => item.id === nodeId)
         if (changed) {
@@ -59,11 +59,11 @@ export function CanvasView() {
         return node.type === 'note'
           ? {
               ...withHandle,
-              data: { ...node.data, onTextChange: updateNoteText },
+              data: { ...node.data, onDataChange: updateNodeData },
             }
           : withHandle
       }),
-    [nodes, updateNoteText],
+    [nodes, updateNodeData],
   )
 
   const onNodesChange = useCallback(
