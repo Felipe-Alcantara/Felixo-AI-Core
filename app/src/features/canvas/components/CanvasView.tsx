@@ -295,6 +295,13 @@ function CanvasInner() {
         fitView
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={['Delete', 'Backspace']}
+        // Box-select by dragging on empty canvas; pan with Space or middle-mouse.
+        // Shift adds to the selection.
+        selectionOnDrag
+        panOnDrag={[1, 2]}
+        selectionKeyCode={null}
+        multiSelectionKeyCode={['Shift']}
+        panActivationKeyCode="Space"
       >
         <Background gap={20} color="#1e293b" />
         <Controls position="bottom-left" className="!mb-4 !ml-4" />
