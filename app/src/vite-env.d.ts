@@ -22,7 +22,8 @@ type DetectedRepo = { name: string; path: string }
 
 type PersistedCanvasNode = {
   id: string
-  type: 'terminal' | 'note'
+  type: 'terminal' | 'note' | 'group'
+  parentId?: string | null
   position: { x: number; y: number }
   width?: number | null
   height?: number | null

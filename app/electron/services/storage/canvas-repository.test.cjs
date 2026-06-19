@@ -28,7 +28,7 @@ test('canvas repository stores, lists, updates and soft-deletes nodes', () => {
 
     repository.save(terminalNode)
     assert.deepEqual(repository.list(), [
-      { ...terminalNode, width: 480, height: 320 },
+      { ...terminalNode, parentId: null, width: 480, height: 320 },
     ])
 
     // Moving the node updates position in place (same id).
@@ -69,6 +69,43 @@ test('canvas repository keeps note nodes with default size as null', () => {
     assert.equal(stored.width, null)
     assert.equal(stored.height, null)
     assert.deepEqual(stored.data, { text: 'lembrete' })
+
+    database.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
+test('canvas repository persists group nodes and child parentId', () => {
+  const databaseDir = createTempDir('felixo-canvas-group-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    repository.save({
+      id: 'group-1',
+      type: 'group',
+      position: { x: 0, y: 0 },
+      width: 600,
+      height: 400,
+      data: { label: 'Fluxo A' },
+    })
+    repository.save({
+      id: 'term-child',
+      type: 'terminal',
+      parentId: 'group-1',
+      position: { x: 20, y: 40 },
+      data: {},
+    })
+
+    const nodes = repository.list()
+    const group = nodes.find((node) => node.id === 'group-1')
+    const child = nodes.find((node) => node.id === 'term-child')
+
+    assert.equal(group?.type, 'group')
+    assert.equal(group?.parentId, null)
+    assert.equal(child?.parentId, 'group-1')
 
     database.close()
   } finally {
