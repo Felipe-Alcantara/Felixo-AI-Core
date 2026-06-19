@@ -77,6 +77,10 @@ function toFlowNode(node: PersistedCanvasNode): Node {
     type: node.type,
     position: node.position,
     data: node.data,
+    // Restore group membership; children are clamped to the group bounds.
+    ...(node.parentId
+      ? { parentId: node.parentId, extent: 'parent' as const }
+      : {}),
     ...(node.width && node.height
       ? { width: node.width, height: node.height }
       : {}),
@@ -87,6 +91,7 @@ function toPersistedNode(node: Node): PersistedCanvasNode {
   return {
     id: node.id,
     type: (node.type ?? 'note') as CanvasNodeType,
+    parentId: node.parentId ?? null,
     position: node.position,
     width: node.width ?? null,
     height: node.height ?? null,

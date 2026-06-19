@@ -15,21 +15,38 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react'
-import { StickyNote } from 'lucide-react'
+import { Group, StickyNote } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
+import { GroupNode } from './GroupNode'
 import { TerminalMenu } from './TerminalMenu'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import type { CanvasNodeType } from '../types'
 
 const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = {
+  group: { width: 480, height: 320 },
   terminal: { width: 520, height: 360 },
   note: { width: 220, height: 160 },
 }
 
 type CanvasProject = { id: string; name: string; path: string }
+
+/** True when the dragged node's top-left sits within the group's bounds. */
+function isInside(node: Node, group: Node): boolean {
+  const gx = group.position.x
+  const gy = group.position.y
+  const gw = group.width ?? group.measured?.width ?? 0
+  const gh = group.height ?? group.measured?.height ?? 0
+
+  return (
+    node.position.x >= gx &&
+    node.position.y >= gy &&
+    node.position.x <= gx + gw &&
+    node.position.y <= gy + gh
+  )
+}
 
 export function CanvasView() {
   const { nodes, setNodes, persistNode, removeNode } = useCanvasPersistence()
@@ -72,14 +89,14 @@ export function CanvasView() {
   )
 
   // Inject render-time concerns: the header drag handle (so only the header
-  // moves the node) and, for notes, the edit handler. Keeping these out of
-  // stored state means persisted data stays plain JSON.
+  // moves the node) and, for notes/groups, the edit handler. Keeping these out
+  // of stored state means persisted data stays plain JSON.
   const renderedNodes = useMemo(
     () =>
       nodes.map((node) => {
         const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
-        return node.type === 'note'
+        return node.type === 'note' || node.type === 'group'
           ? {
               ...withHandle,
               data: { ...node.data, onDataChange: updateNodeData },
@@ -88,6 +105,13 @@ export function CanvasView() {
       }),
     [nodes, updateNodeData],
   )
+
+  // Groups must render before their children so they sit behind them.
+  const orderedNodes = useMemo(() => {
+    const groups = renderedNodes.filter((node) => node.type === 'group')
+    const rest = renderedNodes.filter((node) => node.type !== 'group')
+    return [...groups, ...rest]
+  }, [renderedNodes])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -160,8 +184,50 @@ export function CanvasView() {
     [addNode],
   )
 
+  // Drop a node onto a group to make it a child; drop it out to detach. Uses
+  // absolute positions, so only top-level nodes (already absolute) are
+  // reparented — keeping the hit-test simple and predictable.
+  const onNodeDragStop = useCallback(
+    (_event: unknown, dragged: Node) => {
+      if (dragged.type === 'group' || dragged.parentId) {
+        return
+      }
+
+      setNodes((current) => {
+        const groups = current.filter((node) => node.type === 'group')
+        const target = groups.find((group) =>
+          isInside(dragged, group),
+        )
+
+        if (!target) {
+          return current
+        }
+
+        const next = current.map((node) =>
+          node.id === dragged.id
+            ? {
+                ...node,
+                parentId: target.id,
+                extent: 'parent' as const,
+                position: {
+                  x: dragged.position.x - target.position.x,
+                  y: dragged.position.y - target.position.y,
+                },
+              }
+            : node,
+        )
+        const changed = next.find((node) => node.id === dragged.id)
+        if (changed) {
+          persistNode(changed)
+        }
+        return next
+      })
+    },
+    [setNodes, persistNode],
+  )
+
   const nodeTypes = useMemo<NodeTypes>(
-    () => ({ terminal: TerminalNode, note: NoteNode }),
+    () => ({ terminal: TerminalNode, note: NoteNode, group: GroupNode }),
     [],
   )
 
@@ -177,13 +243,22 @@ export function CanvasView() {
           <StickyNote size={16} />
           Nota
         </button>
+        <button
+          type="button"
+          onClick={() => addNode('group', { label: 'Grupo' })}
+          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
+        >
+          <Group size={16} />
+          Grupo
+        </button>
       </div>
 
       <ReactFlow
-        nodes={renderedNodes}
+        nodes={orderedNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
+        onNodeDragStop={onNodeDragStop}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView

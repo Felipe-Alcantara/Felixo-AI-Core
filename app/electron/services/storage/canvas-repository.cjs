@@ -8,7 +8,7 @@
  * first-class columns so layout queries stay simple.
  */
 
-const NODE_TYPES = new Set(['terminal', 'note'])
+const NODE_TYPES = new Set(['terminal', 'note', 'group'])
 
 function createCanvasRepository(database) {
   const connection = database?.connection ?? database
@@ -34,6 +34,7 @@ function createCanvasRepository(database) {
           `INSERT INTO canvas_nodes (
              id,
              type,
+             parent_id,
              position_x,
              position_y,
              width,
@@ -43,9 +44,10 @@ function createCanvasRepository(database) {
              updated_at,
              archived_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
            ON CONFLICT(id) DO UPDATE SET
              type = excluded.type,
+             parent_id = excluded.parent_id,
              position_x = excluded.position_x,
              position_y = excluded.position_y,
              width = excluded.width,
@@ -57,6 +59,7 @@ function createCanvasRepository(database) {
         .run(
           normalizedNode.id,
           normalizedNode.type,
+          normalizedNode.parentId,
           normalizedNode.position.x,
           normalizedNode.position.y,
           normalizedNode.width,
@@ -91,6 +94,10 @@ function normalizeNode(node) {
   const rawNode = node
   const id = requireNodeId(rawNode.id)
   const type = requireNodeType(rawNode.type)
+  const parentId =
+    typeof rawNode.parentId === 'string' && rawNode.parentId.trim()
+      ? rawNode.parentId.trim()
+      : null
   const position = normalizePosition(rawNode.position)
   const width = normalizeOptionalDimension(rawNode.width)
   const height = normalizeOptionalDimension(rawNode.height)
@@ -102,13 +109,14 @@ function normalizeNode(node) {
   const createdAt = isIsoString(rawNode.createdAt) ? rawNode.createdAt : now
   const updatedAt = isIsoString(rawNode.updatedAt) ? rawNode.updatedAt : now
 
-  return { id, type, position, width, height, data, createdAt, updatedAt }
+  return { id, type, parentId, position, width, height, data, createdAt, updatedAt }
 }
 
 function mapNodeRow(row) {
   return {
     id: row.id,
     type: row.type,
+    parentId: row.parent_id ?? null,
     position: { x: row.position_x, y: row.position_y },
     width: row.width ?? null,
     height: row.height ?? null,

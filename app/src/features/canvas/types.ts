@@ -1,4 +1,8 @@
-export type CanvasNodeType = 'terminal' | 'note'
+export type CanvasNodeType = 'terminal' | 'note' | 'group'
+
+export type GroupNodeData = {
+  label?: string
+}
 
 export type TerminalNodeData = {
   /** Optional binary to launch; defaults to the shell on the backend. */
@@ -17,12 +21,14 @@ export type NoteNodeData = {
   color?: NoteColor
 }
 
-export type CanvasNodeData = TerminalNodeData & NoteNodeData
+export type CanvasNodeData = TerminalNodeData & NoteNodeData & GroupNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */
 export type PersistedCanvasNode = {
   id: string
   type: CanvasNodeType
+  /** Parent group id, when the node lives inside a group. */
+  parentId?: string | null
   position: { x: number; y: number }
   width?: number | null
   height?: number | null
