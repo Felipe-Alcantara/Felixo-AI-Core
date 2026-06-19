@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -15,10 +15,11 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react'
-import { TerminalSquare, StickyNote } from 'lucide-react'
+import { StickyNote } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
+import { TerminalMenu } from './TerminalMenu'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import type { CanvasNodeType } from '../types'
@@ -28,9 +29,31 @@ const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = 
   note: { width: 220, height: 160 },
 }
 
+type CanvasProject = { id: string; name: string; path: string }
+
 export function CanvasView() {
   const { nodes, setNodes, persistNode, removeNode } = useCanvasPersistence()
   const [edges, setEdges] = useEdgesState<Edge>([])
+  const [projects, setProjects] = useState<CanvasProject[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void window.felixo?.projects?.list().then((result) => {
+      if (cancelled || !result.ok || !Array.isArray(result.projects)) {
+        return
+      }
+
+      const loaded = (result.projects as CanvasProject[]).filter(
+        (project) => project && typeof project.path === 'string',
+      )
+      setProjects(loaded)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const updateNodeData = useCallback(
     (nodeId: string, patch: Record<string, unknown>) => {
@@ -106,7 +129,7 @@ export function CanvasView() {
   )
 
   const addNode = useCallback(
-    (type: CanvasNodeType) => {
+    (type: CanvasNodeType, data?: Record<string, unknown>) => {
       const id = `${type}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
       const size = DEFAULT_SIZE[type]
       const node: Node = {
@@ -118,13 +141,23 @@ export function CanvasView() {
         },
         width: size.width,
         height: size.height,
-        data: type === 'terminal' ? { label: 'Terminal' } : { text: '' },
+        data: data ?? (type === 'terminal' ? { label: 'Terminal' } : { text: '' }),
       }
 
       setNodes((current) => [...current, node])
       persistNode(node)
     },
     [setNodes, persistNode],
+  )
+
+  const addTerminalNode = useCallback(
+    (project?: { name: string; path: string }) => {
+      addNode('terminal', {
+        label: project ? project.name : 'Terminal',
+        ...(project ? { cwd: project.path } : {}),
+      })
+    },
+    [addNode],
   )
 
   const nodeTypes = useMemo<NodeTypes>(
@@ -135,14 +168,7 @@ export function CanvasView() {
   return (
     <div className="relative h-full w-full">
       <div className="absolute left-4 top-4 z-10 flex gap-2">
-        <button
-          type="button"
-          onClick={() => addNode('terminal')}
-          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
-        >
-          <TerminalSquare size={16} />
-          Terminal
-        </button>
+        <TerminalMenu projects={projects} onAdd={addTerminalNode} />
         <button
           type="button"
           onClick={() => addNode('note')}
