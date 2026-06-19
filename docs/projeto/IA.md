@@ -294,3 +294,13 @@ UI: `TerminalNode` virou um card compacto (ícone, título, badge de atividade, 
 LIMPEZA: `LiveTerminalPanel.tsx` removido (órfão; lógica migrou para a store).
 TESTE: build (tsc+vite) e lint limpos; suíte 375 pass, 0 fail.
 DÍVIDA/PRÓXIMO: heurística de idle é por tempo (1.5s) — pode marcar idle no meio de uma pausa do agente; persistência do tamanho do drawer e do estado expandido não foi feita; store ainda sem teste unitário próprio (depende de xterm/DOM).
+
+[2026-06-19] Fase 3.3 — Rodada de refinamentos do terminal/canvas (feedback do usuário, commits pequenos).
+6. CWD: `pty-process-manager` usava `process.cwd()` como fallback (pasta do app) — terminal 'Local' abria em .../FelixoVerse. Trocado para `os.homedir()`: sem projeto abre em ~.
+5. PREVIEW: o card lia o stream cru e removia ANSI na mão, deixando lixo ('T T T'). Agora `computePreview` lê do buffer já renderizado do xterm (`terminal.buffer.active`, `translateToString`), e `markWorking` só emite na transição working/idle (sem re-render por byte). Card renderiza cada linha truncada.
+4. NOMES: `NodeHeader` ganhou modo de título editável (input controlado pelo valor persistido). `TerminalNode` usa para renomear o bloco (persiste em `data.label`); grupos já eram nomeáveis.
+3. TROCAR DRAWER: clicar em outro card já trocava `expandedTerminalId`, mas o elemento do terminal anterior ficava no container, empilhando. `attach()` agora limpa terminais estranhos do container antes de montar.
+1. SELEÇÃO MÚLTIPLA: `<ReactFlow>` com `selectionOnDrag` + `panOnDrag={[1,2]}` + `multiSelectionKeyCode=['Shift']` + `panActivationKeyCode='Space'`. Arrastar no vazio = caixa de seleção; Espaço/botão-do-meio = pan.
+2. AGENTE+PROJETO: `TerminalMenu` virou um painel com seletor de agente (Nenhum/Claude/Gemini/Codex → comando) e de projeto (Local/projeto → cwd); abre com qualquer combinação (ou nada). Comandos reais vêm do cli-detector (`claude`/`gemini`/`codex`). Nome do bloco derivado: '<Agente> · <projeto|local>'.
+TESTE: build (tsc+vite) e lint limpos; suíte 375 pass, 0 fail. Cada item em commit próprio (feat/fix).
+PENDENTE: grupos (subflow) seguem com o reparenting limitado da Fase 3.1 — usuário deixou para depois.
