@@ -199,10 +199,11 @@ function CanvasInner() {
   )
 
   const addTerminalNode = useCallback(
-    (project?: { name: string; path: string }) => {
+    (options: { command?: string; cwd?: string; label: string }) => {
       addNode('terminal', {
-        label: project ? project.name : 'Terminal',
-        ...(project ? { cwd: project.path } : {}),
+        label: options.label,
+        ...(options.command ? { command: options.command } : {}),
+        ...(options.cwd ? { cwd: options.cwd } : {}),
       })
     },
     [addNode],
