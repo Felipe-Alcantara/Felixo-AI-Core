@@ -17,6 +17,7 @@ import type { TerminalNodeData } from '../types'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
+  onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
 }
 
 /**
@@ -50,12 +51,10 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       />
       <Handle type="target" position={Position.Left} className="!bg-emerald-500" />
       <NodeHeader
-        title={
-          <span className="flex items-center gap-1.5">
-            <TerminalIcon size={13} className="opacity-70" />
-            {nodeData.label || 'Terminal'}
-          </span>
-        }
+        icon={<TerminalIcon size={13} />}
+        editableValue={nodeData.label ?? ''}
+        placeholder="Terminal"
+        onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
         className="bg-emerald-950/60 text-emerald-100"
         onRemove={() => {
           store.remove(id)

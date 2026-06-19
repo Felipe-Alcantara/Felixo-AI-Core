@@ -117,7 +117,11 @@ function CanvasInner() {
         if (node.type === 'terminal') {
           return {
             ...withHandle,
-            data: { ...node.data, onExpand: setExpandedTerminalId },
+            data: {
+              ...node.data,
+              onExpand: setExpandedTerminalId,
+              onDataChange: updateNodeData,
+            },
           }
         }
 
