@@ -21,7 +21,9 @@ import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { GroupNode } from './GroupNode'
 import { TerminalMenu } from './TerminalMenu'
+import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
+import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import type { CanvasNodeType } from '../types'
 
@@ -49,9 +51,18 @@ function isInside(node: Node, group: Node): boolean {
 }
 
 export function CanvasView() {
+  return (
+    <TerminalSessionProvider>
+      <CanvasInner />
+    </TerminalSessionProvider>
+  )
+}
+
+function CanvasInner() {
   const { nodes, setNodes, persistNode, removeNode } = useCanvasPersistence()
   const [edges, setEdges] = useEdgesState<Edge>([])
   const [projects, setProjects] = useState<CanvasProject[]>([])
+  const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -96,12 +107,21 @@ export function CanvasView() {
       nodes.map((node) => {
         const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
-        return node.type === 'note' || node.type === 'group'
-          ? {
-              ...withHandle,
-              data: { ...node.data, onDataChange: updateNodeData },
-            }
-          : withHandle
+        if (node.type === 'note' || node.type === 'group') {
+          return {
+            ...withHandle,
+            data: { ...node.data, onDataChange: updateNodeData },
+          }
+        }
+
+        if (node.type === 'terminal') {
+          return {
+            ...withHandle,
+            data: { ...node.data, onExpand: setExpandedTerminalId },
+          }
+        }
+
+        return withHandle
       }),
     [nodes, updateNodeData],
   )
@@ -231,8 +251,15 @@ export function CanvasView() {
     [],
   )
 
+  const expandedNode = expandedTerminalId
+    ? nodes.find((node) => node.id === expandedTerminalId)
+    : undefined
+  const expandedTitle =
+    (expandedNode?.data as { label?: string } | undefined)?.label ?? 'Terminal'
+
   return (
-    <div className="relative h-full w-full">
+    <div className="flex h-full w-full">
+      <div className="relative h-full min-w-0 flex-1">
       <div className="absolute left-4 top-4 z-10 flex gap-2">
         <TerminalMenu projects={projects} onAdd={addTerminalNode} />
         <button
@@ -279,6 +306,15 @@ export function CanvasView() {
           nodeStrokeColor="#52525b"
         />
       </ReactFlow>
+      </div>
+
+      {expandedTerminalId && (
+        <TerminalDrawer
+          sessionId={expandedTerminalId}
+          title={expandedTitle}
+          onClose={() => setExpandedTerminalId(null)}
+        />
+      )}
     </div>
   )
 }
