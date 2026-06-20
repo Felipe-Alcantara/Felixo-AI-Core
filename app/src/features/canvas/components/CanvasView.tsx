@@ -27,6 +27,7 @@ import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { ProjectsPanel } from './tools/ProjectsPanel'
+import { NotesPanel } from './tools/NotesPanel'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import type { CanvasNodeType } from '../types'
 
@@ -339,6 +340,9 @@ function CanvasInner() {
           onClose={() => setActiveTool(null)}
           onProjectsChanged={reloadProjects}
         />
+      )}
+      {activeTool === 'notes' && (
+        <NotesPanel onClose={() => setActiveTool(null)} />
       )}
 
       <ReactFlow
