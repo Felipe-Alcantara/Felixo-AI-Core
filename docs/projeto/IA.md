@@ -304,3 +304,10 @@ DÍVIDA/PRÓXIMO: heurística de idle é por tempo (1.5s) — pode marcar idle n
 2. AGENTE+PROJETO: `TerminalMenu` virou um painel com seletor de agente (Nenhum/Claude/Gemini/Codex → comando) e de projeto (Local/projeto → cwd); abre com qualquer combinação (ou nada). Comandos reais vêm do cli-detector (`claude`/`gemini`/`codex`). Nome do bloco derivado: '<Agente> · <projeto|local>'.
 TESTE: build (tsc+vite) e lint limpos; suíte 375 pass, 0 fail. Cada item em commit próprio (feat/fix).
 PENDENTE: grupos (subflow) seguem com o reparenting limitado da Fase 3.1 — usuário deixou para depois.
+
+[2026-06-20] Fase 3.4 — Funções do chat trazidas para o canvas (menu retrátil de ferramentas).
+DECISÃO (do usuário): painéis PRÓPRIOS do canvas, falando direto no IPC, sem mexer no ChatWorkspace (zero risco de regressão; aceita leve duplicação visual). Menu retrátil no canto superior esquerdo.
+BASE: `components/tools/CanvasToolsMenu` (botão "Ferramentas" que expande a lista) + `CanvasPanel` (painel flutuante reutilizável). `CanvasView` guarda `activeTool` e renderiza o painel ativo. Adicionar painel novo = 1 componente + 1 entrada no menu + 1 linha no switch.
+PAINÉIS (todos direto no bridge, sem o chat): Projetos (`projects.*` — listar/adicionar via pickFolder+detectRepos/remover; ao mudar, recarrega a lista do TerminalMenu), Notas (`notes.*` — CRUD inline), Modelos (`models.*` — listar/remover; criação fica no chat), Prompts (`defaultAutomations` + `automations.list` — copia o prompt pro clipboard, já que no canvas não há chat para "aplicar"), Git (`git.getSummary/stageAll/commit` — escolhe projeto, mostra branch/status, stage all, commit).
+TESTE: build (tsc+vite) e lint limpos; suíte 375 pass, 0 fail. Um commit por painel.
+PENDENTE/PRÓXIMO: Skills, Exportar e Configurações (Felixo/orquestrador) ainda não trazidos (mais acoplados ao chat). Edição/salvamento das notas/projetos é por keystroke (sem debounce). Painéis abrem um de cada vez (activeTool único).
