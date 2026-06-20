@@ -28,6 +28,9 @@ import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { ProjectsPanel } from './tools/ProjectsPanel'
 import { NotesPanel } from './tools/NotesPanel'
+import { ModelsPanel } from './tools/ModelsPanel'
+import { PromptsPanel } from './tools/PromptsPanel'
+import { GitPanel } from './tools/GitPanel'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import type { CanvasNodeType } from '../types'
 
@@ -344,6 +347,13 @@ function CanvasInner() {
       {activeTool === 'notes' && (
         <NotesPanel onClose={() => setActiveTool(null)} />
       )}
+      {activeTool === 'models' && (
+        <ModelsPanel onClose={() => setActiveTool(null)} />
+      )}
+      {activeTool === 'prompts' && (
+        <PromptsPanel onClose={() => setActiveTool(null)} />
+      )}
+      {activeTool === 'git' && <GitPanel onClose={() => setActiveTool(null)} />}
 
       <ReactFlow
         nodes={orderedNodes}
