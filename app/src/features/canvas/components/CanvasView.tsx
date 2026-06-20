@@ -15,7 +15,7 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react'
-import { Group, StickyNote } from 'lucide-react'
+import { Group, Hand, MousePointer2, StickyNote } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
@@ -63,6 +63,8 @@ function CanvasInner() {
   const [edges, setEdges] = useEdgesState<Edge>([])
   const [projects, setProjects] = useState<CanvasProject[]>([])
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
+  // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
+  const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
 
   useEffect(() => {
     let cancelled = false
@@ -283,6 +285,31 @@ function CanvasInner() {
           <Group size={16} />
           Grupo
         </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
+          }
+          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
+          title={
+            canvasMode === 'select'
+              ? 'Modo seleção (clique para mover a tela)'
+              : 'Modo mover tela (clique para selecionar)'
+          }
+        >
+          {canvasMode === 'select' ? (
+            <>
+              <MousePointer2 size={16} />
+              Selecionar
+            </>
+          ) : (
+            <>
+              <Hand size={16} />
+              Mover tela
+            </>
+          )}
+        </button>
       </div>
 
       <ReactFlow
@@ -296,13 +323,15 @@ function CanvasInner() {
         fitView
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={['Delete', 'Backspace']}
-        // Box-select by dragging on empty canvas; pan with Space or middle-mouse.
-        // Shift adds to the selection.
-        selectionOnDrag
-        panOnDrag={[1, 2]}
+        // Select mode: drag on empty canvas draws a selection box (middle/right
+        // mouse still pans). Pan mode: left-drag grabs and moves the canvas.
+        // Shift always adds to the selection.
+        selectionOnDrag={canvasMode === 'select'}
+        panOnDrag={canvasMode === 'select' ? [1, 2] : true}
         selectionKeyCode={null}
         multiSelectionKeyCode={['Shift']}
         panActivationKeyCode="Space"
+        className={canvasMode === 'pan' ? 'cursor-grab' : ''}
       >
         <Background gap={20} color="#1e293b" />
         <Controls position="bottom-left" className="!mb-4 !ml-4" />
