@@ -25,6 +25,8 @@ import { TerminalMenu } from './TerminalMenu'
 import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
+import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
+import { ProjectsPanel } from './tools/ProjectsPanel'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import type { CanvasNodeType } from '../types'
 
@@ -66,6 +68,19 @@ function CanvasInner() {
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
+  const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
+
+  const reloadProjects = useCallback(() => {
+    void window.felixo?.projects?.list().then((result) => {
+      if (result?.ok && Array.isArray(result.projects)) {
+        setProjects(
+          (result.projects as CanvasProject[]).filter(
+            (project) => project && typeof project.path === 'string',
+          ),
+        )
+      }
+    })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -268,7 +283,13 @@ function CanvasInner() {
   return (
     <div className="flex h-full w-full">
       <div className="relative h-full min-w-0 flex-1">
-      <div className="absolute left-4 top-4 z-10 flex gap-2">
+      <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
+        <CanvasToolsMenu
+          activeTool={activeTool}
+          onSelect={(tool) =>
+            setActiveTool((current) => (current === tool ? null : tool))
+          }
+        />
         <TerminalMenu projects={projects} onAdd={addTerminalNode} />
         <button
           type="button"
@@ -312,6 +333,13 @@ function CanvasInner() {
           )}
         </button>
       </div>
+
+      {activeTool === 'projects' && (
+        <ProjectsPanel
+          onClose={() => setActiveTool(null)}
+          onProjectsChanged={reloadProjects}
+        />
+      )}
 
       <ReactFlow
         nodes={orderedNodes}
