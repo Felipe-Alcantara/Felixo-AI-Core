@@ -8,6 +8,7 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   useEdgesState,
+  SelectionMode,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -326,6 +327,9 @@ function CanvasInner() {
         // Select mode: drag on empty canvas draws a selection box (middle/right
         // mouse still pans). Pan mode: left-drag grabs and moves the canvas.
         // Shift always adds to the selection.
+        // Partial = touching/overlapping a node with the box selects it; the
+        // box doesn't need to fully contain the node.
+        selectionMode={SelectionMode.Partial}
         selectionOnDrag={canvasMode === 'select'}
         panOnDrag={canvasMode === 'select' ? [1, 2] : true}
         selectionKeyCode={null}
