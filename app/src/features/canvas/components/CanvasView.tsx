@@ -57,6 +57,22 @@ function isInside(node: Node, group: Node): boolean {
   )
 }
 
+/** True only when the keyboard event originates from the bare canvas (not a
+ *  field, terminal or panel) — so 'Q' toggles the mode only there. */
+function isCanvasFocused(target: HTMLElement | null): boolean {
+  if (!target) {
+    return true
+  }
+
+  // The React Flow pane (and document body) count as "the canvas"; anything
+  // inside an input/terminal/panel does not.
+  return (
+    target === document.body ||
+    target.classList.contains('react-flow__pane') ||
+    target.closest('.react-flow__pane') !== null
+  )
+}
+
 export function CanvasView() {
   return (
     <TerminalSessionProvider>
@@ -73,6 +89,25 @@ function CanvasInner() {
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
+
+  // 'Q' toggles select/pan, but only when the canvas itself is focused — never
+  // while typing in a field, terminal or tool panel.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'q' || event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+
+      if (!isCanvasFocused(event.target as HTMLElement | null)) {
+        return
+      }
+
+      setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const reloadProjects = useCallback(() => {
     void window.felixo?.projects?.list().then((result) => {
@@ -320,8 +355,8 @@ function CanvasInner() {
           className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
           title={
             canvasMode === 'select'
-              ? 'Modo seleção (clique para mover a tela)'
-              : 'Modo mover tela (clique para selecionar)'
+              ? 'Modo seleção — Q para mover a tela'
+              : 'Modo mover tela — Q para selecionar'
           }
         >
           {canvasMode === 'select' ? (
