@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, TerminalSquare } from 'lucide-react'
+import {
+  AGENTS,
+  buildAgentArgs,
+  describeLaunch,
+  getAgent,
+  type AgentId,
+  type EffortLevel,
+} from '../services/agent-launch-options'
 
 type TerminalMenuProject = { id: string; name: string; path: string }
 
-export type TerminalAgent = {
-  /** Command to run; undefined means a plain shell. */
-  command?: string
-  label: string
-}
-
 export type NewTerminalOptions = {
   command?: string
+  args?: string[]
   cwd?: string
   label: string
 }
@@ -24,32 +27,30 @@ type TerminalMenuProps = {
 
 /** Sentinel value in the project select that triggers the folder picker. */
 const ADD_FOLDER_VALUE = '__add_folder__'
-
-const AGENTS: TerminalAgent[] = [
-  { command: undefined, label: 'Shell' },
-  { command: 'claude', label: 'Claude' },
-  { command: 'gemini', label: 'Gemini' },
-  { command: 'codex', label: 'Codex' },
-]
+/** Sentinel agent value for a plain shell (no agent). */
+const SHELL_VALUE = '__shell__'
 
 /**
  * Toolbar control for adding a terminal node. Pick an agent (or plain shell)
- * and a project (or local), then open — both default to "none", so a single
- * click opens a local shell. The block name is derived from the selection.
+ * and a project, plus the agent's model / effort / yolo options — the fields
+ * adapt to what each agent supports. A single click opens a local shell.
  */
 export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps) {
   const [open, setOpen] = useState(false)
-  const [agentIndex, setAgentIndex] = useState(0)
+  const [agentValue, setAgentValue] = useState<string>(SHELL_VALUE)
+  const [model, setModel] = useState('')
+  const [effort, setEffort] = useState('')
+  const [yolo, setYolo] = useState(false)
   const [projectId, setProjectId] = useState<string>('')
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const agent = agentValue === SHELL_VALUE ? undefined : getAgent(agentValue as AgentId)
 
   const handleProjectChange = async (value: string) => {
     if (value !== ADD_FOLDER_VALUE) {
       setProjectId(value)
       return
     }
-
-    // Pick a folder and select the first project it produced.
     const addedIds = await onAddFolder()
     setProjectId(addedIds[0] ?? '')
   }
@@ -58,26 +59,36 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
     if (!open) {
       return
     }
-
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false)
       }
     }
-
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [open])
 
   const openTerminal = () => {
-    const agent = AGENTS[agentIndex]
     const project = projects.find((item) => item.id === projectId)
     const place = project ? project.name : 'local'
 
+    if (!agent) {
+      onAdd({ cwd: project?.path, label: `Shell · ${place}` })
+      setOpen(false)
+      return
+    }
+
+    const choices = {
+      agentId: agent.id,
+      model: model || undefined,
+      effort: (effort || undefined) as EffortLevel | undefined,
+      yolo,
+    }
     onAdd({
       command: agent.command,
+      args: buildAgentArgs(choices) ?? undefined,
       cwd: project?.path,
-      label: `${agent.label} · ${place}`,
+      label: `${describeLaunch(choices)} · ${place}`,
     })
     setOpen(false)
   }
@@ -107,16 +118,69 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
         <div className="absolute left-0 top-full mt-1 w-64 rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10">
           <label className="mb-1 block text-xs font-medium text-zinc-400">Agente</label>
           <select
-            value={agentIndex}
-            onChange={(event) => setAgentIndex(Number(event.target.value))}
+            value={agentValue}
+            onChange={(event) => {
+              setAgentValue(event.target.value)
+              setModel('')
+              setEffort('')
+            }}
             className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
           >
-            {AGENTS.map((agent, index) => (
-              <option key={agent.label} value={index}>
-                {agent.command ? agent.label : 'Nenhum (shell)'}
+            <option value={SHELL_VALUE}>Nenhum (shell)</option>
+            {AGENTS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
               </option>
             ))}
           </select>
+
+          {agent && (
+            <>
+              <label className="mb-1 block text-xs font-medium text-zinc-400">Modelo</label>
+              <select
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+                className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
+              >
+                <option value="">Padrão</option>
+                {agent.models.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+
+              {agent.effortLevels && (
+                <>
+                  <label className="mb-1 block text-xs font-medium text-zinc-400">
+                    Esforço de raciocínio
+                  </label>
+                  <select
+                    value={effort}
+                    onChange={(event) => setEffort(event.target.value)}
+                    className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
+                  >
+                    <option value="">Padrão</option>
+                    {agent.effortLevels.map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              <label className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={yolo}
+                  onChange={(event) => setYolo(event.target.checked)}
+                  className="accent-emerald-600"
+                />
+                Yolo (acesso total, sem confirmações)
+              </label>
+            </>
+          )}
 
           <label className="mb-1 block text-xs font-medium text-zinc-400">Projeto</label>
           <select
