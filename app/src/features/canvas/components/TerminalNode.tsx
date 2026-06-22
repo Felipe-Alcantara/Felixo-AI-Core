@@ -8,6 +8,7 @@ import {
 } from '@xyflow/react'
 import { Loader2, Maximize2, Terminal as TerminalIcon } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
+import { CopyButton } from './TerminalCopyButton'
 import {
   useSessionSnapshot,
   useTerminalSessions,
@@ -61,6 +62,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
           void deleteElements({ nodes: [{ id }] })
         }}
       >
+        <CopyButton onCopy={() => store.copy(id)} />
         <button
           type="button"
           className="nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
