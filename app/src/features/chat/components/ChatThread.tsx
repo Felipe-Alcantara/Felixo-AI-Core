@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Check, Copy, Maximize2, User, X } from 'lucide-react'
 import type { ChatMessage, ContextAttachment, Model } from '../types'
-import { MarkdownContent } from './MarkdownContent'
+import { MarkdownContent } from '../../shared/components/MarkdownContent'
 
 type ExpandedImage = {
   id: string

@@ -9,7 +9,7 @@ import {
 import { Eye, Pencil } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { NOTE_COLORS, resolveNoteTheme } from './note-colors'
-import { MarkdownContent } from '../../chat/components/MarkdownContent'
+import { MarkdownContent } from '../../shared/components/MarkdownContent'
 import type { NoteColor, NoteNodeData } from '../types'
 
 /**
