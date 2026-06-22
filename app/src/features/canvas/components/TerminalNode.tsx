@@ -38,10 +38,11 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   useEffect(() => {
     store.ensure(id, {
       command: nodeData.command,
+      args: nodeData.args,
       cwd: nodeData.cwd,
       initialText: nodeData.initialText,
     })
-  }, [store, id, nodeData.command, nodeData.cwd, nodeData.initialText])
+  }, [store, id, nodeData.command, nodeData.args, nodeData.cwd, nodeData.initialText])
 
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []

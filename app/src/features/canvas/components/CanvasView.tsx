@@ -441,7 +441,7 @@ function CanvasInner() {
   }, [addNode])
 
   const addTerminalNode = useCallback(
-    (options: { command?: string; cwd?: string; label: string }) => {
+    (options: { command?: string; args?: string[]; cwd?: string; label: string }) => {
       // Agent terminals get the standing quality-standard instruction (if on);
       // a plain shell does not (there's no agent to read it).
       const quality = qualityStandardRef.current
@@ -453,6 +453,7 @@ function CanvasInner() {
       addNode('terminal', {
         label: options.label,
         ...(options.command ? { command: options.command } : {}),
+        ...(options.args && options.args.length ? { args: options.args } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
         ...(initialText ? { initialText } : {}),
       })

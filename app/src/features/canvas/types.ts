@@ -13,6 +13,8 @@ export type FileNodeData = {
 export type TerminalNodeData = {
   /** Optional binary to launch; defaults to the shell on the backend. */
   command?: string
+  /** CLI arguments for the command (model/effort/yolo flags). */
+  args?: string[]
   /** Working directory to open the terminal in; defaults to the app cwd. */
   cwd?: string
   /** Human label shown on the node header. */
