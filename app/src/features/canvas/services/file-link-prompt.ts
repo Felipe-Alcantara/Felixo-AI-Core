@@ -7,19 +7,19 @@
  * updated, coordinate with other agents through it, and commit per phase.
  */
 
-export const DEFAULT_FILE_LINK_PROMPT = `Voce esta conectado a um ARQUIVO DE PLANO VIVO (markdown) compartilhado entre varios agentes. Caminho: {{path}}
+export const DEFAULT_FILE_LINK_PROMPT = `Você está conectado a um ARQUIVO DE PLANO VIVO (markdown) compartilhado entre vários agentes. Caminho: {{path}}
 
 Como trabalhar com ele:
-1. LEIA o arquivo inteiro antes de comecar. Ele e a fonte da verdade do projeto: fases, metas, decisoes, modelos e o que cada agente esta fazendo.
-2. Trabalhe seguindo as FASES descritas. Nao pule fases nem invente escopo fora do que esta planejado.
-3. MANTENHA o arquivo atualizado conforme avanca. Use marcacoes claras, por exemplo:
-   - [ ] tarefa pendente   - [x] tarefa concluida   - [~] em andamento
+1. LEIA o arquivo inteiro antes de começar. Ele é a fonte da verdade do projeto: fases, metas, decisões, modelos e o que cada agente está fazendo.
+2. Trabalhe seguindo as FASES descritas. Não pule fases nem invente escopo fora do que está planejado.
+3. MANTENHA o arquivo atualizado conforme avança. Use marcações claras, por exemplo:
+   - [ ] tarefa pendente   - [x] tarefa concluída   - [~] em andamento
    - "Fase 1 (em andamento por {{agent}})", "Fase 2 / front-end (aguardando)"
-4. SINALIZE para os outros agentes: anote bloqueios, dependencias e quando voce esta esperando uma decisao (ex.: "Claude aguardando decisao sobre X").
-5. Marque o que for GRANDE DEMAIS para o MVP e ofereca OPCOES para o usuario decidir, ao inves de decidir sozinho.
-6. Registre DECISOES e o porque delas, para outro agente nao refazer.
-7. Faca COMMITS alinhados as fases (uma fase coesa por vez), com mensagens descritivas.
-8. Voce pode LER e ESCREVER neste arquivo. Edite-o de forma incremental; nao apague o trabalho de outros agentes.
+4. SINALIZE para os outros agentes: anote bloqueios, dependências e quando você está esperando uma decisão (ex.: "{{agent}} aguardando decisão sobre X").
+5. Marque o que for GRANDE DEMAIS para o MVP e ofereça OPÇÕES para o usuário decidir, em vez de decidir sozinho.
+6. Registre as DECISÕES e o porquê delas, para outro agente não refazer.
+7. Faça COMMITS alinhados às fases (uma fase coesa por vez), com mensagens descritivas.
+8. Você pode LER e ESCREVER neste arquivo. Edite-o de forma incremental; não apague o trabalho de outros agentes.
 
 Comece lendo {{path}} e me diga em que fase vamos atuar.`
 
@@ -45,20 +45,20 @@ export function buildFileLinkPrompt(
  * repo and *write* the evolution plan itself into the file — so the living plan
  * starts from the actual codebase instead of a blank slate.
  */
-export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Voce esta em um REPOSITORIO e foi conectado a um ARQUIVO DE PLANO ainda VAZIO: {{path}}
+export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Você está em um REPOSITÓRIO e foi conectado a um ARQUIVO DE PLANO ainda VAZIO: {{path}}
 
-Sua tarefa agora e CRIAR esse plano a partir do codigo real:
-1. ANALISE o repositorio: leia a estrutura, README/docs, dependencias e o codigo principal para entender o que o projeto e, faz e em que estado esta.
-2. ESCREVA no arquivo {{path}} um PLANO DE EVOLUCAO em markdown, com FASES de melhoria, expansao e escala. Sugestao de estrutura:
-   - Visao geral: o que o projeto e hoje (resumo honesto do estado atual).
-   - Fases numeradas (Fase 1, Fase 2, ...), cada uma com objetivo, tarefas em checklist ([ ]), criterios de pronto e testes.
-   - Marque o que e MVP vs o que e grande demais para agora.
-   - Aponte riscos, decisoes em aberto e pontos onde o usuario precisa escolher.
-   - Reserve espaco para sinalizacao entre agentes (ex.: "Fase 1 em andamento por {{agent}}").
-3. Seja concreto e fundamentado no que existe no repo — nao invente features genericas.
-4. Apos escrever, faca um resumo do plano e me diga por qual fase comecamos.
+Sua tarefa agora é CRIAR esse plano a partir do código real:
+1. ANALISE o repositório: leia a estrutura, o README e a documentação, as dependências e o código principal para entender o que o projeto é, o que faz e em que estado está.
+2. ESCREVA no arquivo {{path}} um PLANO DE EVOLUÇÃO em markdown, com FASES de melhoria, expansão e escala. Sugestão de estrutura:
+   - Visão geral: o que o projeto é hoje (um resumo honesto do estado atual).
+   - Fases numeradas (Fase 1, Fase 2, ...), cada uma com objetivo, tarefas em checklist ([ ]), critérios de pronto e testes.
+   - Marque o que é MVP e o que é grande demais para agora.
+   - Aponte riscos, decisões em aberto e pontos em que o usuário precisa escolher.
+   - Reserve espaço para a sinalização entre agentes (ex.: "Fase 1 em andamento por {{agent}}").
+3. Seja concreto e fundamente tudo no que existe no repositório — não invente funcionalidades genéricas.
+4. Depois de escrever, faça um resumo do plano e me diga por qual fase começamos.
 
-Comece analisando o repositorio e depois escreva o plano em {{path}}.`
+Comece analisando o repositório e depois escreva o plano em {{path}}.`
 
 /** Builds the bootstrap prompt; same placeholders as buildFileLinkPrompt. */
 export function buildBootstrapPrompt(
