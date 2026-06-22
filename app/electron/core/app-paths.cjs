@@ -78,6 +78,8 @@ function getAppPaths(options = {}) {
   const exports = path.join(userData, 'exports')
   const notes = path.join(userData, 'notes')
   const reports = path.join(userData, 'reports')
+  // Shared markdown files that canvas file-blocks render and agents edit.
+  const canvasFiles = path.join(userData, 'canvas-files')
 
   const appRoot = path.join(__dirname, '..')
   const assets = isPackaged
@@ -94,6 +96,7 @@ function getAppPaths(options = {}) {
     exports,
     notes,
     reports,
+    canvasFiles,
     assets,
     appRoot,
     isPackaged,
@@ -134,6 +137,7 @@ function initAppPaths(options = {}) {
   ensureDir(paths.exports)
   ensureDir(paths.notes)
   ensureDir(paths.reports)
+  ensureDir(paths.canvasFiles)
 
   return paths
 }
