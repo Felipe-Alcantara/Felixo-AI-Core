@@ -24,6 +24,8 @@ type SessionListener = (snapshot: SessionSnapshot) => void
 const IDLE_AFTER_MS = 1500
 /** How many trailing lines to keep for the card preview. */
 const PREVIEW_LINES = 6
+/** A configured agent should not terminate silently immediately after launch. */
+const SILENT_EARLY_EXIT_MS = 5000
 
 type SessionOptions = {
   command?: string
@@ -44,6 +46,11 @@ type Session = {
   offData: () => void
   offExit: () => void
   disposed: boolean
+  startedAt: number
+  receivedOutput: boolean
+  pendingWrites: number
+  pendingExit?: { exitCode: number; signal?: number }
+  command?: string
 }
 
 /**
@@ -54,6 +61,7 @@ type Session = {
  */
 export class TerminalSessionStore {
   private sessions = new Map<string, Session>()
+  private listeners = new Map<string, Set<SessionListener>>()
 
   /** Returns the existing session for an id, creating it on first use. */
   ensure(id: string, options: SessionOptions = {}): void {
@@ -78,13 +86,18 @@ export class TerminalSessionStore {
       ptySessionId: `${id}::${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
       terminal,
       fitAddon,
-      listeners: new Set(),
+      listeners: this.listeners.get(id) ?? new Set(),
       snapshot: { activity: 'starting', previewLines: [] },
       idleTimer: null,
       offData: () => {},
       offExit: () => {},
       disposed: false,
+      startedAt: Date.now(),
+      receivedOutput: false,
+      pendingWrites: 0,
+      command: options.command,
     }
+    this.listeners.set(id, session.listeners)
     this.sessions.set(id, session)
 
     if (!pty) {
@@ -94,8 +107,23 @@ export class TerminalSessionStore {
 
     session.offData = pty.onData((event) => {
       if (event.sessionId === session.ptySessionId) {
-        terminal.write(event.data)
-        this.onOutput(session)
+        session.receivedOutput ||= event.data.length > 0
+        session.pendingWrites += 1
+        terminal.write(event.data, () => {
+          session.pendingWrites -= 1
+          if (session.disposed) {
+            return
+          }
+
+          if (session.pendingWrites === 0 && session.pendingExit) {
+            const pendingExit = session.pendingExit
+            session.pendingExit = undefined
+            this.finishExit(session, pendingExit)
+            return
+          }
+
+          this.onOutput(session)
+        })
       }
     })
 
@@ -104,7 +132,11 @@ export class TerminalSessionStore {
         return
       }
       this.clearIdleTimer(session)
-      this.update(session, { activity: 'exited', exitCode: event.exitCode })
+      if (session.pendingWrites > 0) {
+        session.pendingExit = event
+        return
+      }
+      this.finishExit(session, event)
     })
 
     // Keyboard → PTY.
@@ -125,7 +157,7 @@ export class TerminalSessionStore {
         if (session.disposed) {
           return
         }
-        if (result?.ok) {
+        if (result?.ok && session.snapshot.activity === 'starting') {
           this.markWorking(session)
           // Give the agent a moment to start its REPL before typing the
           // standing instruction, so it lands in the prompt and not mid-boot.
@@ -231,14 +263,23 @@ export class TerminalSessionStore {
   }
 
   subscribe(id: string, listener: SessionListener): () => void {
-    const session = this.sessions.get(id)
-    if (!session) {
-      return () => {}
+    let listeners = this.listeners.get(id)
+    if (!listeners) {
+      listeners = new Set()
+      this.listeners.set(id, listeners)
     }
 
-    session.listeners.add(listener)
-    listener(session.snapshot)
-    return () => session.listeners.delete(listener)
+    listeners.add(listener)
+    const snapshot = this.getSnapshot(id)
+    if (snapshot) {
+      listener(snapshot)
+    }
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && !this.sessions.has(id)) {
+        this.listeners.delete(id)
+      }
+    }
   }
 
   /** Permanently ends a session and frees its resources. */
@@ -255,6 +296,7 @@ export class TerminalSessionStore {
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })
     session.terminal.dispose()
     this.sessions.delete(id)
+    this.listeners.delete(id)
   }
 
   /** Permanently ends every terminal session owned by the canvas. */
@@ -266,6 +308,25 @@ export class TerminalSessionStore {
 
   private onOutput(session: Session): void {
     this.markWorking(session)
+  }
+
+  private finishExit(
+    session: Session,
+    event: { exitCode: number; signal?: number },
+  ): void {
+    const silentEarlyExit =
+      Boolean(session.command) &&
+      !session.receivedOutput &&
+      Date.now() - session.startedAt < SILENT_EARLY_EXIT_MS
+    const message = silentEarlyExit
+      ? `O comando "${session.command}" encerrou sem produzir saída. Verifique a instalação e a autenticação da CLI.`
+      : undefined
+
+    this.update(session, {
+      activity: silentEarlyExit ? 'error' : 'exited',
+      exitCode: event.exitCode,
+      message,
+    })
   }
 
   private markWorking(session: Session): void {

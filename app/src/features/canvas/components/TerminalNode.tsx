@@ -87,7 +87,9 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       >
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
         <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">
-          {preview.length > 0 ? (
+          {snapshot?.message ? (
+            <span className="text-red-400">{snapshot.message}</span>
+          ) : preview.length > 0 ? (
             preview.map((line, index) => (
               <div key={index} className="overflow-hidden text-ellipsis whitespace-nowrap">
                 {line}

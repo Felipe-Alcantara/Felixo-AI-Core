@@ -26,6 +26,40 @@ test('cli env uses configured portable cli paths', (t) => {
   )
 })
 
+test('cli env discovers fnm, mise and nodenv installations', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-version-managers-'))
+  const fnmBin = path.join(
+    root,
+    'fnm',
+    'node-versions',
+    'v22.12.0',
+    'installation',
+    'bin',
+  )
+  const miseBin = path.join(root, 'mise', 'installs', 'node', '22.12.0', 'bin')
+  const nodenvBin = path.join(root, 'nodenv', 'versions', '22.12.0', 'bin')
+  fs.mkdirSync(fnmBin, { recursive: true })
+  fs.mkdirSync(miseBin, { recursive: true })
+  fs.mkdirSync(nodenvBin, { recursive: true })
+
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+
+  const env = createCliEnv({
+    HOME: path.join(root, 'home'),
+    FNM_DIR: path.join(root, 'fnm'),
+    MISE_DATA_DIR: path.join(root, 'mise'),
+    NODENV_ROOT: path.join(root, 'nodenv'),
+    PATH: '',
+  })
+  const pathParts = env.PATH.split(path.delimiter)
+
+  assert.equal(pathParts.includes(fnmBin), true)
+  assert.equal(pathParts.includes(miseBin), true)
+  assert.equal(pathParts.includes(nodenvBin), true)
+})
+
 test('cli process manager keeps stdin closed by default', async () => {
   const manager = new CliProcessManager()
   const childProcess = manager.spawn('default-stdin', process.execPath, [
