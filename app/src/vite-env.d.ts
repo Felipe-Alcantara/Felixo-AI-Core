@@ -254,6 +254,10 @@ declare global {
           CliInvokeResult & { prompt?: string | null }
         >
         setFileLinkPrompt: (prompt: string) => Promise<CliInvokeResult>
+        getFileBootstrapPrompt: () => Promise<
+          CliInvokeResult & { prompt?: string | null }
+        >
+        setFileBootstrapPrompt: (prompt: string) => Promise<CliInvokeResult>
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>

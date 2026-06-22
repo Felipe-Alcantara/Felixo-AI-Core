@@ -38,3 +38,33 @@ export function buildFileLinkPrompt(
   // Trailing newline submits the line; \r keeps it tidy across shells/agents.
   return `${filled}\n`
 }
+
+/**
+ * Bootstrap instruction used as an EXCEPTION: when the terminal is in a project
+ * repository AND the linked .md is still empty, the agent should analyze the
+ * repo and *write* the evolution plan itself into the file — so the living plan
+ * starts from the actual codebase instead of a blank slate.
+ */
+export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Voce esta em um REPOSITORIO e foi conectado a um ARQUIVO DE PLANO ainda VAZIO: {{path}}
+
+Sua tarefa agora e CRIAR esse plano a partir do codigo real:
+1. ANALISE o repositorio: leia a estrutura, README/docs, dependencias e o codigo principal para entender o que o projeto e, faz e em que estado esta.
+2. ESCREVA no arquivo {{path}} um PLANO DE EVOLUCAO em markdown, com FASES de melhoria, expansao e escala. Sugestao de estrutura:
+   - Visao geral: o que o projeto e hoje (resumo honesto do estado atual).
+   - Fases numeradas (Fase 1, Fase 2, ...), cada uma com objetivo, tarefas em checklist ([ ]), criterios de pronto e testes.
+   - Marque o que e MVP vs o que e grande demais para agora.
+   - Aponte riscos, decisoes em aberto e pontos onde o usuario precisa escolher.
+   - Reserve espaco para sinalizacao entre agentes (ex.: "Fase 1 em andamento por {{agent}}").
+3. Seja concreto e fundamentado no que existe no repo — nao invente features genericas.
+4. Apos escrever, faca um resumo do plano e me diga por qual fase comecamos.
+
+Comece analisando o repositorio e depois escreva o plano em {{path}}.`
+
+/** Builds the bootstrap prompt; same placeholders as buildFileLinkPrompt. */
+export function buildBootstrapPrompt(
+  template: string,
+  filePath: string,
+  agentName = 'este agente',
+): string {
+  return buildFileLinkPrompt(template, filePath, agentName)
+}

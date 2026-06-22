@@ -17,6 +17,8 @@ const {
 
 /** Settings key for the instruction injected when a file links to a terminal. */
 const FILE_LINK_PROMPT_KEY = 'canvas.file-link-prompt'
+/** Settings key for the bootstrap instruction (empty .md in a repo). */
+const FILE_BOOTSTRAP_PROMPT_KEY = 'canvas.file-bootstrap-prompt'
 
 function registerCanvasIpcHandlers(options = {}) {
   const repository = createCanvasRepository(options.database)
@@ -82,6 +84,24 @@ function registerCanvasIpcHandlers(options = {}) {
   ipcMain.handle('canvas:set-file-link-prompt', (_event, prompt) => {
     try {
       settings.set(FILE_LINK_PROMPT_KEY, String(prompt ?? ''))
+      return { ok: true }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel salvar o prompt.')
+    }
+  })
+
+  ipcMain.handle('canvas:get-file-bootstrap-prompt', () => {
+    try {
+      const value = settings.get(FILE_BOOTSTRAP_PROMPT_KEY)
+      return { ok: true, prompt: typeof value === 'string' ? value : null }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel carregar o prompt.')
+    }
+  })
+
+  ipcMain.handle('canvas:set-file-bootstrap-prompt', (_event, prompt) => {
+    try {
+      settings.set(FILE_BOOTSTRAP_PROMPT_KEY, String(prompt ?? ''))
       return { ok: true }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel salvar o prompt.')

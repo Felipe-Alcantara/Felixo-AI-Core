@@ -29,7 +29,9 @@ import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useTerminalSessions } from '../terminal/terminal-session-context'
 import {
   DEFAULT_FILE_LINK_PROMPT,
+  DEFAULT_FILE_BOOTSTRAP_PROMPT,
   buildFileLinkPrompt,
+  buildBootstrapPrompt,
 } from '../services/file-link-prompt'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { ProjectsPanel } from './tools/ProjectsPanel'
@@ -80,6 +82,7 @@ async function announceFileToTerminal(
   nodes: Node[],
   store: { sendText: (id: string, text: string) => void },
   template: string,
+  bootstrapTemplate: string,
 ): Promise<void> {
   const a = nodes.find((node) => node.id === connection.source)
   const b = nodes.find((node) => node.id === connection.target)
@@ -103,12 +106,23 @@ async function announceFileToTerminal(
     return
   }
 
-  const command = (terminalNode.data as { command?: string } | undefined)?.command
-  const agentName = command ? command : 'este agente'
-  store.sendText(
-    terminalNode.id,
-    buildFileLinkPrompt(template, resolved.path, agentName),
-  )
+  const terminalData = terminalNode.data as
+    | { command?: string; cwd?: string }
+    | undefined
+  const agentName = terminalData?.command ? terminalData.command : 'este agente'
+
+  // EXCEPTION: terminal in a project repo (has cwd) + the .md is still blank →
+  // the agent should analyze the repo and write the evolution plan itself.
+  const inRepository = Boolean(terminalData?.cwd)
+  const fileRead = await window.felixo?.canvasFiles?.read({ name: fileName })
+  const isBlank = !fileRead?.ok || !(fileRead.content ?? '').trim()
+
+  const prompt =
+    inRepository && isBlank
+      ? buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentName)
+      : buildFileLinkPrompt(template, resolved.path, agentName)
+
+  store.sendText(terminalNode.id, prompt)
 }
 
 /** True only when the keyboard event originates from the bare canvas (not a
@@ -144,13 +158,20 @@ function CanvasInner() {
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
-  // Editable instruction injected when a file links to a terminal.
+  // Editable instructions injected when a file links to a terminal: the normal
+  // "living plan" prompt, and the bootstrap prompt for the empty-md-in-repo case.
   const fileLinkPromptRef = useRef(DEFAULT_FILE_LINK_PROMPT)
+  const bootstrapPromptRef = useRef(DEFAULT_FILE_BOOTSTRAP_PROMPT)
 
   useEffect(() => {
     void window.felixo?.canvas?.getFileLinkPrompt().then((result) => {
       if (result?.ok && typeof result.prompt === 'string' && result.prompt.trim()) {
         fileLinkPromptRef.current = result.prompt
+      }
+    })
+    void window.felixo?.canvas?.getFileBootstrapPrompt?.().then((result) => {
+      if (result?.ok && typeof result.prompt === 'string' && result.prompt.trim()) {
+        bootstrapPromptRef.current = result.prompt
       }
     })
   }, [])
@@ -329,7 +350,13 @@ function CanvasInner() {
 
       // When a file block connects to a terminal, tell that terminal's agent
       // about the file so it can read/edit it.
-      void announceFileToTerminal(connection, nodes, store, fileLinkPromptRef.current)
+      void announceFileToTerminal(
+        connection,
+        nodes,
+        store,
+        fileLinkPromptRef.current,
+        bootstrapPromptRef.current,
+      )
     },
     [setEdges, nodes, store],
   )
