@@ -51,6 +51,10 @@ type Session = {
   pendingWrites: number
   pendingExit?: { exitCode: number; signal?: number }
   command?: string
+  /** Buffer signature at the last idle check, to ignore in-place UI redraws. */
+  lastSignature: string
+  /** When output last changed the buffer in a meaningful way. */
+  lastMeaningfulAt: number
 }
 
 /**
@@ -96,6 +100,8 @@ export class TerminalSessionStore {
       receivedOutput: false,
       pendingWrites: 0,
       command: options.command,
+      lastSignature: '',
+      lastMeaningfulAt: Date.now(),
     }
     this.listeners.set(id, session.listeners)
     this.sessions.set(id, session)
@@ -307,7 +313,19 @@ export class TerminalSessionStore {
   }
 
   private onOutput(session: Session): void {
-    this.markWorking(session)
+    // Agent CLIs animate a spinner/timer while idle, emitting bytes every frame.
+    // Treat output as real "work" only when the buffer changes beyond that
+    // in-place animation; otherwise a waiting agent would look busy forever.
+    const signature = computeSignature(session.terminal)
+    if (signature !== session.lastSignature) {
+      session.lastSignature = signature
+      session.lastMeaningfulAt = Date.now()
+      this.markWorking(session)
+    } else {
+      // Only the animation moved — make sure an idle check is scheduled so we
+      // eventually settle even though bytes keep arriving.
+      this.scheduleIdleCheck(session)
+    }
   }
 
   private finishExit(
@@ -330,18 +348,35 @@ export class TerminalSessionStore {
   }
 
   private markWorking(session: Session): void {
-    this.clearIdleTimer(session)
-
     // Only emit on the transition into 'working' to avoid a re-render per byte;
     // the preview is refreshed once the session goes idle.
     if (session.snapshot.activity !== 'working') {
       this.update(session, { activity: 'working' })
     }
+    this.scheduleIdleCheck(session)
+  }
 
+  /**
+   * (Re)arms the idle check. The session only settles to `idle` once the buffer
+   * has gone IDLE_AFTER_MS without a *meaningful* change — animation frames
+   * (spinner/timer) bump no clock here, so a waiting agent reaches idle even
+   * while it keeps repainting its prompt.
+   */
+  private scheduleIdleCheck(session: Session): void {
+    if (session.idleTimer || session.disposed) {
+      return
+    }
     session.idleTimer = setTimeout(() => {
-      if (!session.disposed && session.snapshot.activity === 'working') {
+      session.idleTimer = null
+      if (session.disposed || session.snapshot.activity !== 'working') {
+        return
+      }
+      const quietFor = Date.now() - session.lastMeaningfulAt
+      if (quietFor >= IDLE_AFTER_MS) {
         // Refresh the preview from the now-settled buffer.
         this.update(session, { activity: 'idle' })
+      } else {
+        this.scheduleIdleCheck(session)
       }
     }, IDLE_AFTER_MS)
   }
@@ -383,6 +418,29 @@ function computePreview(terminal: Terminal): string[] {
   }
 
   return lines
+}
+
+/** Spinner frames (braille, ascii, dots, clocks) agent CLIs cycle while idle. */
+const ANIMATION_GLYPHS = /[⠀-⣿■-◿▖-▟⏰-⏿⠿|/\-\\▁▂▃▄▅▆▇█·•∙…]/g
+/** Elapsed-time counters like "12s", "1m04s", "(3.2s)" that tick every frame. */
+const ELAPSED_TIMER = /\(?\b\d+(?:[.:]\d+)?\s?(?:ms|s|m|h)\b\)?/g
+
+/**
+ * A signature of what the terminal currently shows, with spinner frames and
+ * elapsed-time counters normalized away. Two repaints of the same waiting
+ * prompt — differing only by an animated glyph — collapse to the same string,
+ * so they don't count as fresh "work".
+ */
+function computeSignature(terminal: Terminal): string {
+  const buffer = terminal.buffer.active
+  const start = Math.max(0, buffer.length - terminal.rows)
+  const lines: string[] = []
+  for (let row = start; row < buffer.length; row += 1) {
+    const text = buffer.getLine(row)?.translateToString(true) ?? ''
+    lines.push(text.replace(ELAPSED_TIMER, '').replace(ANIMATION_GLYPHS, '').trimEnd())
+  }
+  // Total line count anchors real scrolling/work even if the viewport text repeats.
+  return `${buffer.length}|${lines.join('\n').replace(/\s+/g, ' ').trim()}`
 }
 
 /** Reads the currently visible viewport text from the xterm buffer. */
