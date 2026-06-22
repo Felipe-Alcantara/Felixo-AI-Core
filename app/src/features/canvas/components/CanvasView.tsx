@@ -282,6 +282,29 @@ function toFlowEdge(edge: PersistedCanvasEdge): Edge {
   return { id: edge.id, source: edge.source, target: edge.target }
 }
 
+function getConnectedCanvasFileNames(
+  terminalId: string,
+  nodes: Node[],
+  edges: Edge[],
+): string[] {
+  const names = edges.flatMap((edge) => {
+    if (edge.source !== terminalId && edge.target !== terminalId) {
+      return []
+    }
+
+    const otherNodeId = edge.source === terminalId ? edge.target : edge.source
+    const otherNode = nodes.find((node) => node.id === otherNodeId)
+    if (otherNode?.type !== 'file') {
+      return []
+    }
+
+    const fileName = (otherNode.data as { fileName?: string }).fileName
+    return fileName ? [fileName] : []
+  })
+
+  return [...new Set(names)]
+}
+
 export function CanvasView() {
   return (
     <TerminalSessionProvider>
@@ -300,6 +323,10 @@ function CanvasInner() {
     cancelPendingSaves,
   } = useCanvasPersistence()
   const [edges, setEdges] = useEdgesState<Edge>([])
+  const [edgesHydrated, setEdgesHydrated] = useState(false)
+  const [terminalCanvasFilePaths, setTerminalCanvasFilePaths] = useState<
+    Record<string, string[]>
+  >({})
   const [isClearing, setIsClearing] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
   const [canvasRevision, setCanvasRevision] = useState(0)
@@ -367,15 +394,63 @@ function CanvasInner() {
   // Hydrate persisted connections once.
   useEffect(() => {
     let cancelled = false
-    void loadCanvasEdges().then((loaded) => {
-      if (!cancelled) {
-        setEdges(loaded)
-      }
-    })
+    void loadCanvasEdges()
+      .then((loaded) => {
+        if (!cancelled) {
+          setEdges(loaded)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setEdgesHydrated(true)
+        }
+      })
     return () => {
       cancelled = true
     }
   }, [setEdges])
+
+  useEffect(() => {
+    if (!edgesHydrated) {
+      return
+    }
+
+    let cancelled = false
+
+    async function resolveConnectedCanvasFiles() {
+      const nextPaths: Record<string, string[]> = {}
+      const terminalNodes = nodes.filter((node) => node.type === 'terminal')
+
+      await Promise.all(
+        terminalNodes.map(async (terminalNode) => {
+          const fileNames = getConnectedCanvasFileNames(terminalNode.id, nodes, edges)
+          if (fileNames.length === 0) {
+            return
+          }
+
+          const resolved = await Promise.all(
+            fileNames.map((name) => window.felixo?.canvasFiles?.resolve({ name })),
+          )
+          const paths = resolved.flatMap((result) =>
+            result?.ok && result.path ? [result.path] : [],
+          )
+          if (paths.length > 0) {
+            nextPaths[terminalNode.id] = paths
+          }
+        }),
+      )
+
+      if (!cancelled) {
+        setTerminalCanvasFilePaths(nextPaths)
+      }
+    }
+
+    void resolveConnectedCanvasFiles()
+
+    return () => {
+      cancelled = true
+    }
+  }, [edges, edgesHydrated, nodes])
 
   const reloadProjects = useCallback(() => {
     void window.felixo?.projects?.list().then((result) => {
@@ -477,11 +552,18 @@ function CanvasInner() {
 
         if (node.type === 'terminal') {
           const quality = qualityStandardRef.current
+          const connectedFileNames = getConnectedCanvasFileNames(node.id, nodes, edges)
+          const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
+          const initialTextReady =
+            edgesHydrated &&
+            (connectedFileNames.length === 0 ||
+              canvasFilePaths.length >= connectedFileNames.length)
           const fallbackInitialText =
             quality.enabled && node.data.command
               ? buildCanvasTerminalInitialText(
                   quality.prompt,
                   node.data.initialText,
+                  canvasFilePaths,
                 )
               : node.data.initialText
 
@@ -490,6 +572,7 @@ function CanvasInner() {
             data: {
               ...node.data,
               ...(fallbackInitialText ? { initialText: fallbackInitialText } : {}),
+              initialTextReady,
               onExpand: setExpandedTerminalId,
               onDataChange: updateNodeData,
             },
@@ -498,7 +581,7 @@ function CanvasInner() {
 
         return withHandle
       }),
-    [nodes, updateNodeData],
+    [edges, edgesHydrated, nodes, terminalCanvasFilePaths, updateNodeData],
   )
 
   // Groups must render before their children so they sit behind them.

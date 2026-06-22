@@ -20,12 +20,27 @@ export function buildQualityStandardMessage(template: string): string {
 export function buildCanvasTerminalInitialText(
   qualityPrompt: string,
   existingPrompt?: string,
+  canvasFilePaths: string[] = [],
 ): string {
   const basePrompt = (existingPrompt?.trim() || buildQualityStandardMessage(qualityPrompt)).trimEnd()
+  const uniquePaths = [...new Set(canvasFilePaths.map((path) => path.trim()).filter(Boolean))]
+  const pathPrompt = uniquePaths.length
+    ? [
+        'Arquivos .md do canvas ligados a este terminal:',
+        ...uniquePaths.map((path) => `- ${path}`),
+        'Use esses caminhos para ler e salvar o contexto que aparece nos blocos .md do canvas.',
+      ].join('\n')
+    : ''
 
-  if (basePrompt.includes('Contexto do canvas:')) {
-    return `${basePrompt}\n`
+  const sections = [basePrompt]
+
+  if (!basePrompt.includes('Contexto do canvas:')) {
+    sections.push(CANVAS_CONTEXT_PROMPT)
   }
 
-  return `${basePrompt}\n\n${CANVAS_CONTEXT_PROMPT}\n`
+  if (pathPrompt && uniquePaths.some((path) => !basePrompt.includes(path))) {
+    sections.push(pathPrompt)
+  }
+
+  return `${sections.join('\n\n')}\n`
 }
