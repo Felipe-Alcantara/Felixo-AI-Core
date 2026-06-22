@@ -11,7 +11,7 @@
 /** Where the agent can find the quality standard / context template. */
 const STANDARD_HINT = `Para o formato e as seções do plano, siga o padrão de contexto do projeto (o template "IA.md" / TEMPLATE-CONTEXTO-IA). Procure os guias na pasta "Padrão de qualidade - Felixo System Design/" dentro do repositório; se ela não existir, use a fonte: https://github.com/Felipe-Alcantara/Felixo-System-Design`
 
-export const DEFAULT_FILE_LINK_PROMPT = `Você está conectado a um ARQUIVO DE PLANO VIVO (markdown) compartilhado entre vários agentes. Caminho: {{path}}
+export const DEFAULT_FILE_LINK_PROMPT = `Você está conectado a um ARQUIVO DE PLANO VIVO do canvas (markdown) compartilhado entre vários agentes. Caminho: {{path}}
 
 Como trabalhar com ele:
 1. LEIA o arquivo inteiro antes de começar. Ele é a fonte da verdade do projeto: objetivo, fases, metas, decisões, testes e o que cada agente está fazendo.
@@ -19,6 +19,7 @@ Como trabalhar com ele:
 3. MANTENHA o arquivo atualizado conforme avança, preservando a estrutura/seções que ele já segue. Use marcações claras, por exemplo:
    - [ ] tarefa pendente   - [x] tarefa concluída   - [~] em andamento
    - "Fase 1 (em andamento por {{agent}})", "Fase 2 / front-end (aguardando)"
+   - Se você marcar algo como "em andamento", isso é provisório: antes de encerrar a resposta, volte ao md do canvas e feche a entrada com um estado final claro (concluído, bloqueado, aguardando decisão ou interrompido com motivo). Nunca termine o turno deixando o plano só como "em andamento".
 4. SINALIZE para os outros agentes: anote bloqueios, dependências e quando você está esperando uma decisão (ex.: "{{agent}} aguardando decisão sobre X").
 5. Marque o que for GRANDE DEMAIS para o MVP e ofereça OPÇÕES para o usuário decidir, em vez de decidir sozinho.
 6. Registre as DECISÕES e o porquê delas, para outro agente não refazer.
@@ -51,7 +52,7 @@ export function buildFileLinkPrompt(
  * repo and *write* the evolution plan itself into the file — following the
  * project's context template so the living plan starts in the standard format.
  */
-export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Você está em um REPOSITÓRIO e foi conectado a um ARQUIVO DE PLANO ainda VAZIO: {{path}}
+export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Você está em um REPOSITÓRIO e foi conectado a um ARQUIVO DE PLANO do canvas ainda VAZIO: {{path}}
 
 Sua tarefa agora é CRIAR esse plano a partir do código real, seguindo o padrão de contexto do projeto:
 1. ANALISE o repositório: leia a estrutura, o README e a documentação, as dependências e o código principal para entender o que o projeto é, o que faz e em que estado está.
@@ -61,6 +62,7 @@ Sua tarefa agora é CRIAR esse plano a partir do código real, seguindo o padrã
    - Marque o que é MVP e o que é grande demais para agora.
    - Aponte riscos, decisões em aberto e pontos em que o usuário precisa escolher.
    - Reserve espaço para a sinalização entre agentes (ex.: "Fase 1 em andamento por {{agent}}").
+   - Se uma fase precisar ficar em andamento durante a escrita, a última passada antes de encerrar deve atualizar o status para um estado final claro no md do canvas, nunca deixar o arquivo terminando apenas como "em andamento".
 3. Seja concreto e fundamente tudo no que existe no repositório — não invente funcionalidades genéricas.
 4. Depois de escrever, faça um resumo do plano e me diga por qual fase começamos.
 
