@@ -37,6 +37,12 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
     store.attach(sessionId, container)
     store.fit(sessionId)
     store.focus(sessionId)
+
+    const rafId = window.requestAnimationFrame(() => {
+      store.fit(sessionId)
+    })
+
+    return () => window.cancelAnimationFrame(rafId)
   }, [store, sessionId])
 
   // Keep the terminal fitted as the drawer width changes.
@@ -109,7 +115,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
           {snapshot.message}
         </div>
       )}
-      <div ref={mountRef} className="min-h-0 flex-1 p-1" />
+      <div ref={mountRef} className="min-h-0 flex-1 overflow-hidden px-1 pb-2 pt-1" />
     </div>
   )
 }

@@ -476,10 +476,18 @@ function CanvasInner() {
         }
 
         if (node.type === 'terminal') {
+          const quality = qualityStandardRef.current
+          const fallbackInitialText =
+            node.data.initialText ??
+            (quality.enabled && node.data.command
+              ? buildQualityStandardMessage(quality.prompt)
+              : undefined)
+
           return {
             ...withHandle,
             data: {
               ...node.data,
+              ...(fallbackInitialText ? { initialText: fallbackInitialText } : {}),
               onExpand: setExpandedTerminalId,
               onDataChange: updateNodeData,
             },
