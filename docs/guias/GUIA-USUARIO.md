@@ -145,6 +145,29 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 - **Notas:** registre notas associadas ao uso do app/projetos.
 - **Exportar:** exporte chats em JSON compacto, Markdown ou texto simples.
 
+### Canvas portátil
+
+Use **Exportar** na barra do canvas para gerar um arquivo `.fxcanvas`. Esse arquivo é
+um manifesto portátil que registra blocos, conexões e o conteúdo dos arquivos `.md`
+associados aos blocos de arquivo.
+
+Para levar o canvas a outro computador:
+
+1. Clique em **Exportar** e salve o arquivo `.fxcanvas`.
+2. Transfira esse arquivo para o outro computador.
+3. No Felixo do computador de destino, clique em **Importar** e selecione o manifesto.
+4. Confira o aviso e confirme a substituição do canvas atual.
+
+A importação valida o manifesto antes da confirmação e recria os `.md` registrados na
+pasta local do Felixo. Arquivos registrados que estavam ausentes são recriados vazios.
+Caminhos de projeto, argumentos de terminal e comandos desconhecidos não são
+transportados, pois dependem da máquina de origem ou poderiam executar instruções não
+confiáveis.
+
+O botão **Limpar** pede confirmação e exclui permanentemente todos os blocos,
+conexões e arquivos `.md` pertencentes ao canvas. Essa ação não remove outros tipos de
+arquivo que eventualmente estejam na pasta de dados.
+
 ## 5. Dados locais, banco e logs
 
 O app resolve diretórios pelo `app.getPath()` do Electron e cria subpastas para configurações, banco, exports, notas, relatórios e logs.
@@ -158,6 +181,7 @@ Locais comuns de dados do app:
 Arquivos e pastas úteis:
 
 - Banco SQLite: `database/felixo.sqlite` dentro do diretório de dados do app.
+- Arquivos Markdown do canvas: pasta `canvas-files` dentro do diretório de dados do app.
 - Logs do Electron: pasta `logs` dentro do diretório de dados/logs resolvido pelo Electron.
 - QA Logger: painel dentro do app com eventos recentes de execução, mantido em memória durante a sessão.
 
