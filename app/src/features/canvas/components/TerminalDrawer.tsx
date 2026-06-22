@@ -5,6 +5,7 @@ import {
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
+import { useExitAnimation } from '../hooks/useExitAnimation'
 
 type TerminalDrawerProps = {
   sessionId: string
@@ -26,6 +27,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
   const mountRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const draggingRef = useRef(false)
+  const { closing, close } = useExitAnimation(180, onClose)
 
   // Attach the live terminal element into the drawer and focus it.
   useEffect(() => {
@@ -42,7 +44,16 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
       store.fit(sessionId)
     })
 
-    return () => window.cancelAnimationFrame(rafId)
+    // Re-fit whenever the mount box settles (open animation ends, window
+    // resizes, drawer width changes). Without this the last row can stay
+    // clipped because the first fit ran mid-animation on a smaller box.
+    const observer = new ResizeObserver(() => store.fit(sessionId))
+    observer.observe(container)
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      observer.disconnect()
+    }
   }, [store, sessionId])
 
   // Keep the terminal fitted as the drawer width changes.
@@ -80,7 +91,9 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
 
   return (
     <div
-      className="relative flex h-full flex-col border-l border-white/10 bg-[#0b0f14]"
+      className={`relative flex h-full flex-col border-l border-white/10 bg-[#0b0f14] ${
+        closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
+      }`}
       style={{ width }}
     >
       <div
@@ -102,7 +115,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
           <CopyButton onCopy={() => store.copy(sessionId)} />
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
             aria-label="Recolher terminal"
           >

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useExitAnimation } from '../../hooks/useExitAnimation'
 
 type CanvasPanelProps = {
   title: string
@@ -11,10 +12,17 @@ type CanvasPanelProps = {
 /**
  * A consistent floating panel for canvas tools (projects, notes, models…).
  * Sits over the canvas without dimming it, so the board stays visible.
+ * Slides in on mount and plays a brief exit animation before unmounting.
  */
 export function CanvasPanel({ title, icon, onClose, children }: CanvasPanelProps) {
+  const { closing, close } = useExitAnimation(160, onClose)
+
   return (
-    <div className="absolute left-4 top-16 z-20 flex max-h-[80vh] w-80 flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl">
+    <div
+      className={`absolute left-4 top-16 z-20 flex max-h-[80vh] w-80 flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
+        closing ? 'felixo-anim-panel-out' : 'felixo-anim-panel-in'
+      }`}
+    >
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
         <span className="flex items-center gap-2 text-sm font-medium text-zinc-100">
           {icon}
@@ -22,7 +30,7 @@ export function CanvasPanel({ title, icon, onClose, children }: CanvasPanelProps
         </span>
         <button
           type="button"
-          onClick={onClose}
+          onClick={close}
           className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
           aria-label="Fechar"
         >
