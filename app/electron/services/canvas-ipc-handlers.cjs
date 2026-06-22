@@ -38,6 +38,30 @@ function registerCanvasIpcHandlers(options = {}) {
       return toErrorResult(error, 'Nao foi possivel excluir o no do canvas.')
     }
   })
+
+  ipcMain.handle('canvas:list-edges', () => {
+    try {
+      return { ok: true, edges: repository.listEdges() }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel carregar as conexoes.')
+    }
+  })
+
+  ipcMain.handle('canvas:save-edge', (_event, edge) => {
+    try {
+      return { ok: true, edge: repository.saveEdge(edge) }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel salvar a conexao.')
+    }
+  })
+
+  ipcMain.handle('canvas:delete-edge', (_event, edgeId) => {
+    try {
+      return { ok: true, deleted: repository.deleteEdge(edgeId) }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel excluir a conexao.')
+    }
+  })
 }
 
 function toErrorResult(error, fallbackMessage) {

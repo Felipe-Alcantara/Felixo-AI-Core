@@ -5,7 +5,11 @@ const path = require('node:path')
 const os = require('node:os')
 
 const { createStorageDatabase } = require('./sqlite-database.cjs')
-const { createCanvasRepository, normalizeNode } = require('./canvas-repository.cjs')
+const {
+  createCanvasRepository,
+  normalizeNode,
+  normalizeEdge,
+} = require('./canvas-repository.cjs')
 
 test('canvas repository stores, lists, updates and soft-deletes nodes', () => {
   const databaseDir = createTempDir('felixo-canvas-')
@@ -111,6 +115,36 @@ test('canvas repository persists group nodes and child parentId', () => {
   } finally {
     removeTempDir(databaseDir)
   }
+})
+
+test('canvas repository stores, lists and soft-deletes edges', () => {
+  const databaseDir = createTempDir('felixo-canvas-edges-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    repository.saveEdge({ id: 'edge-1', source: 'file-1', target: 'term-1' })
+    const edges = repository.listEdges()
+    assert.equal(edges.length, 1)
+    assert.equal(edges[0].source, 'file-1')
+    assert.equal(edges[0].target, 'term-1')
+
+    assert.equal(repository.deleteEdge('edge-1'), true)
+    assert.deepEqual(repository.listEdges(), [])
+
+    database.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
+test('normalizeEdge requires id, source and target', () => {
+  assert.throws(() => normalizeEdge({ id: 'e', source: 's' }), /invalido/)
+  assert.throws(() => normalizeEdge(null), /invalida/)
+  const edge = normalizeEdge({ id: 'e', source: 's', target: 't' })
+  assert.equal(edge.source, 's')
+  assert.ok(!Number.isNaN(Date.parse(edge.createdAt)))
 })
 
 test('normalizeNode rejects invalid type and id', () => {

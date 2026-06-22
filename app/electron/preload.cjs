@@ -75,6 +75,9 @@ contextBridge.exposeInMainWorld('felixo', {
     list: () => ipcRenderer.invoke('canvas:list'),
     save: (node) => ipcRenderer.invoke('canvas:save', node),
     delete: (nodeId) => ipcRenderer.invoke('canvas:delete', nodeId),
+    listEdges: () => ipcRenderer.invoke('canvas:list-edges'),
+    saveEdge: (edge) => ipcRenderer.invoke('canvas:save-edge', edge),
+    deleteEdge: (edgeId) => ipcRenderer.invoke('canvas:delete-edge', edgeId),
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),
