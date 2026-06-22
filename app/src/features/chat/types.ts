@@ -293,18 +293,12 @@ export type SystemDesignDocument = SystemDesignDocumentSummary & {
   content: string
 }
 
-export type AutomationScope = 'chat' | 'code' | 'docs' | 'git' | 'planning'
-
-export type AutomationDefinition = {
-  id: string
-  name: string
-  description: string
-  prompt: string
-  scope: AutomationScope
-  isDefault?: boolean
-  createdAt?: string
-  updatedAt?: string
-}
+// Automation types live in shared/ (used by chat and canvas); re-exported here
+// so existing chat imports keep working.
+export type {
+  AutomationScope,
+  AutomationDefinition,
+} from '../shared/types/automations'
 
 export type GitProjectSummary = {
   projectPath: string
