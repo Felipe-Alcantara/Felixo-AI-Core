@@ -29,6 +29,8 @@ type SessionOptions = {
   command?: string
   args?: string[]
   cwd?: string
+  /** Text typed into the PTY shortly after spawn (e.g. a standing instruction). */
+  initialText?: string
 }
 
 type Session = {
@@ -125,6 +127,19 @@ export class TerminalSessionStore {
         }
         if (result?.ok) {
           this.markWorking(session)
+          // Give the agent a moment to start its REPL before typing the
+          // standing instruction, so it lands in the prompt and not mid-boot.
+          const initialText = options.initialText
+          if (initialText) {
+            setTimeout(() => {
+              if (!session.disposed) {
+                void window.felixo?.pty?.write({
+                  sessionId: session.ptySessionId,
+                  data: initialText,
+                })
+              }
+            }, 1200)
+          }
         } else {
           this.update(session, {
             activity: 'error',
