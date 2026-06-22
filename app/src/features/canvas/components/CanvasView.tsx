@@ -51,7 +51,7 @@ import {
 } from '../services/file-link-prompt'
 import {
   DEFAULT_QUALITY_STANDARD_PROMPT,
-  buildQualityStandardMessage,
+  buildCanvasTerminalInitialText,
 } from '../services/quality-standard-prompt'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { ProjectsPanel } from './tools/ProjectsPanel'
@@ -478,10 +478,12 @@ function CanvasInner() {
         if (node.type === 'terminal') {
           const quality = qualityStandardRef.current
           const fallbackInitialText =
-            node.data.initialText ??
-            (quality.enabled && node.data.command
-              ? buildQualityStandardMessage(quality.prompt)
-              : undefined)
+            quality.enabled && node.data.command
+              ? buildCanvasTerminalInitialText(
+                  quality.prompt,
+                  node.data.initialText,
+                )
+              : node.data.initialText
 
           return {
             ...withHandle,
@@ -629,7 +631,7 @@ function CanvasInner() {
       const quality = qualityStandardRef.current
       const initialText =
         options.command && quality.enabled
-          ? buildQualityStandardMessage(quality.prompt)
+          ? buildCanvasTerminalInitialText(quality.prompt)
           : undefined
 
       addNode('terminal', {
