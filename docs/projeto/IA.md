@@ -366,6 +366,8 @@ TESTE: build (tsc+vite) e lint limpos; suíte 380 pass, 0 fail.
 
 [2026-06-22] Padrão de linguagem — Prompts e textos de UI do canvas reescritos com português acentuado/correto, seguindo o padrão de linguagem do projeto. Os prompts (plano vivo + bootstrap) passaram a instruir o agente a seguir o template de contexto (`TEMPLATE-CONTEXTO-IA` / IA.md) ao escrever o `.md`, apontando os guias na pasta `Padrão de qualidade - Felixo System Design/` do repo ou, se ausente, na fonte no GitHub (`Felixo-System-Design`).
 
+[2026-06-22] Lembrete de padrão de qualidade — Terminal aberto COM agente (Claude/Gemini/Codex) recebe, logo após o spawn, uma instrução para sempre seguir o padrão de qualidade (independente do prompt), apontando a pasta de padrões no repo ou a fonte no GitHub. `quality-standard-prompt.ts` define o texto padrão; a store injeta via `initialText` em `ensure()` (~1.2s após spawn; transiente — não persiste nem reenvia ao reabrir). Editável + toggle (default ligado) nas Configurações, persistido em `settings` (`canvas.quality-standard-prompt`/`-enabled`). Shell puro não recebe.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
