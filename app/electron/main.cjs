@@ -83,8 +83,13 @@ app.whenReady().then(() => {
   registerFileExportIpcHandlers(getMainWindow)
   registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
   registerNotesIpcHandlers({ database: storageDatabase })
-  registerCanvasIpcHandlers({ database: storageDatabase })
   canvasFilesHandlers = registerCanvasFilesIpcHandlers(getMainWindow, appPaths)
+  registerCanvasIpcHandlers({
+    database: storageDatabase,
+    clearFiles: () => canvasFilesHandlers.clear(),
+    exportFiles: () => canvasFilesHandlers.exportFiles(),
+    replaceFiles: (files) => canvasFilesHandlers.replaceFiles(files),
+  })
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })

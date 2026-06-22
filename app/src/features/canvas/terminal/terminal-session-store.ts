@@ -257,6 +257,13 @@ export class TerminalSessionStore {
     this.sessions.delete(id)
   }
 
+  /** Permanently ends every terminal session owned by the canvas. */
+  clear(): void {
+    for (const id of Array.from(this.sessions.keys())) {
+      this.remove(id)
+    }
+  }
+
   private onOutput(session: Session): void {
     this.markWorking(session)
   }

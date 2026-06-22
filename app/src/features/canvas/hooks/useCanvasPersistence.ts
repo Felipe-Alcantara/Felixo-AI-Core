@@ -68,10 +68,22 @@ export function useCanvasPersistence() {
     void deleteCanvasNode(nodeId)
   }, [])
 
-  return { nodes, setNodes, hydrated, persistNode, removeNode }
+  const cancelPendingSaves = useCallback(() => {
+    saveTimers.current.forEach((timer) => clearTimeout(timer))
+    saveTimers.current.clear()
+  }, [])
+
+  return {
+    nodes,
+    setNodes,
+    hydrated,
+    persistNode,
+    removeNode,
+    cancelPendingSaves,
+  }
 }
 
-function toFlowNode(node: PersistedCanvasNode): Node {
+export function toFlowNode(node: PersistedCanvasNode): Node {
   return {
     id: node.id,
     type: node.type,
@@ -87,7 +99,7 @@ function toFlowNode(node: PersistedCanvasNode): Node {
   }
 }
 
-function toPersistedNode(node: Node): PersistedCanvasNode {
+export function toPersistedNode(node: Node): PersistedCanvasNode {
   return {
     id: node.id,
     type: (node.type ?? 'note') as CanvasNodeType,
