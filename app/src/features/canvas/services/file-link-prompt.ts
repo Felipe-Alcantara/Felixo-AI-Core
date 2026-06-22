@@ -11,7 +11,7 @@
 /** Where the agent can find the quality standard / context template. */
 const STANDARD_HINT = `Para o formato e as seções do plano, siga o padrão de contexto do projeto (o template "IA.md" / TEMPLATE-CONTEXTO-IA). Procure os guias na pasta "Padrão de qualidade - Felixo System Design/" dentro do repositório; se ela não existir, use a fonte: https://github.com/Felipe-Alcantara/Felixo-System-Design`
 
-export const DEFAULT_FILE_LINK_PROMPT = `Você está conectado a um ARQUIVO DE PLANO VIVO do canvas (markdown) compartilhado entre vários agentes. Caminho: {{path}}
+export const DEFAULT_FILE_LINK_PROMPT = `Você está em um NÓ DO CANVAS e conectado a um ARQUIVO DE PLANO VIVO do canvas (markdown) compartilhado entre vários agentes. Caminho: {{path}}
 
 Como trabalhar com ele:
 1. LEIA o arquivo inteiro antes de começar. Ele é a fonte da verdade do projeto: objetivo, fases, metas, decisões, testes e o que cada agente está fazendo.
@@ -52,7 +52,7 @@ export function buildFileLinkPrompt(
  * repo and *write* the evolution plan itself into the file — following the
  * project's context template so the living plan starts in the standard format.
  */
-export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Você está em um REPOSITÓRIO e foi conectado a um ARQUIVO DE PLANO do canvas ainda VAZIO: {{path}}
+export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Você está em um NÓ DO CANVAS, dentro de um REPOSITÓRIO, e foi conectado a um ARQUIVO DE PLANO do canvas ainda VAZIO: {{path}}
 
 Sua tarefa agora é CRIAR esse plano a partir do código real, seguindo o padrão de contexto do projeto:
 1. ANALISE o repositório: leia a estrutura, o README e a documentação, as dependências e o código principal para entender o que o projeto é, o que faz e em que estado está.
