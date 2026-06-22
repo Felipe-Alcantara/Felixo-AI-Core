@@ -27,6 +27,10 @@ import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useTerminalSessions } from '../terminal/terminal-session-context'
+import {
+  DEFAULT_FILE_LINK_PROMPT,
+  buildFileLinkPrompt,
+} from '../services/file-link-prompt'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { ProjectsPanel } from './tools/ProjectsPanel'
 import { NotesPanel } from './tools/NotesPanel'
@@ -97,10 +101,11 @@ async function announceFileToTerminal(
     return
   }
 
-  // Sent as a comment so it's inert in a shell but visible to the user/agent.
+  const command = (terminalNode.data as { command?: string } | undefined)?.command
+  const agentName = command ? command : 'este agente'
   store.sendText(
     terminalNode.id,
-    `# Arquivo de contexto disponivel: ${resolved.path} (leia e mantenha suas anotacoes nele)\n`,
+    buildFileLinkPrompt(DEFAULT_FILE_LINK_PROMPT, resolved.path, agentName),
   )
 }
 
