@@ -26,6 +26,7 @@ import { TerminalMenu } from './TerminalMenu'
 import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
+import { useTerminalSessions } from '../terminal/terminal-session-context'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { ProjectsPanel } from './tools/ProjectsPanel'
 import { NotesPanel } from './tools/NotesPanel'
@@ -64,6 +65,45 @@ function isInside(node: Node, group: Node): boolean {
   )
 }
 
+/**
+ * If a connection links a file block and a terminal block, resolve the file's
+ * absolute path and type a short context line into the terminal so the running
+ * agent learns it can read/edit that file.
+ */
+async function announceFileToTerminal(
+  connection: Connection,
+  nodes: Node[],
+  store: { sendText: (id: string, text: string) => void },
+): Promise<void> {
+  const a = nodes.find((node) => node.id === connection.source)
+  const b = nodes.find((node) => node.id === connection.target)
+  if (!a || !b) {
+    return
+  }
+
+  const fileNode = a.type === 'file' ? a : b.type === 'file' ? b : null
+  const terminalNode = a.type === 'terminal' ? a : b.type === 'terminal' ? b : null
+  if (!fileNode || !terminalNode) {
+    return
+  }
+
+  const fileName = (fileNode.data as { fileName?: string } | undefined)?.fileName
+  if (!fileName) {
+    return
+  }
+
+  const resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
+  if (!resolved?.ok || !resolved.path) {
+    return
+  }
+
+  // Sent as a comment so it's inert in a shell but visible to the user/agent.
+  store.sendText(
+    terminalNode.id,
+    `# Arquivo de contexto disponivel: ${resolved.path} (leia e mantenha suas anotacoes nele)\n`,
+  )
+}
+
 /** True only when the keyboard event originates from the bare canvas (not a
  *  field, terminal or panel) — so 'Q' toggles the mode only there. */
 function isCanvasFocused(target: HTMLElement | null): boolean {
@@ -89,6 +129,7 @@ export function CanvasView() {
 }
 
 function CanvasInner() {
+  const store = useTerminalSessions()
   const { nodes, setNodes, persistNode, removeNode } = useCanvasPersistence()
   const [edges, setEdges] = useEdgesState<Edge>([])
   const [projects, setProjects] = useState<CanvasProject[]>([])
@@ -259,7 +300,6 @@ function CanvasInner() {
     (connection: Connection) => {
       setEdges((current) => {
         const next = addEdge(connection, current)
-        // Persist the newly added edge (the last one addEdge produced).
         const created = next.find(
           (edge) =>
             edge.source === connection.source && edge.target === connection.target,
@@ -269,8 +309,12 @@ function CanvasInner() {
         }
         return next
       })
+
+      // When a file block connects to a terminal, tell that terminal's agent
+      // about the file so it can read/edit it.
+      void announceFileToTerminal(connection, nodes, store)
     },
-    [setEdges],
+    [setEdges, nodes, store],
   )
 
   const addNode = useCallback(
