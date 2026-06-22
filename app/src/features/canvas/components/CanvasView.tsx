@@ -37,6 +37,7 @@ import { NotesPanel } from './tools/NotesPanel'
 import { ModelsPanel } from './tools/ModelsPanel'
 import { PromptsPanel } from './tools/PromptsPanel'
 import { GitPanel } from './tools/GitPanel'
+import { SettingsPanel } from './tools/SettingsPanel'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import {
   deleteCanvasEdge,
@@ -505,6 +506,14 @@ function CanvasInner() {
         <PromptsPanel onClose={() => setActiveTool(null)} />
       )}
       {activeTool === 'git' && <GitPanel onClose={() => setActiveTool(null)} />}
+      {activeTool === 'settings' && (
+        <SettingsPanel
+          onClose={() => setActiveTool(null)}
+          onPromptSaved={(prompt) => {
+            fileLinkPromptRef.current = prompt
+          }}
+        />
+      )}
 
       <ReactFlow
         nodes={orderedNodes}

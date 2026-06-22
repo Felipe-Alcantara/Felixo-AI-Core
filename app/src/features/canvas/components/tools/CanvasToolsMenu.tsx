@@ -7,11 +7,12 @@ import {
   LayoutList,
   type LucideIcon,
   Notebook,
+  Settings,
   Sparkles,
   Wrench,
 } from 'lucide-react'
 
-export type CanvasTool = 'projects' | 'notes' | 'models' | 'prompts' | 'git'
+export type CanvasTool = 'projects' | 'notes' | 'models' | 'prompts' | 'git' | 'settings'
 
 type ToolEntry = { tool: CanvasTool; label: string; icon: LucideIcon }
 
@@ -21,6 +22,7 @@ const TOOLS: ToolEntry[] = [
   { tool: 'models', label: 'Modelos', icon: LayoutList },
   { tool: 'prompts', label: 'Prompts', icon: Sparkles },
   { tool: 'git', label: 'Git', icon: GitBranch },
+  { tool: 'settings', label: 'Configuracoes', icon: Settings },
 ]
 
 type CanvasToolsMenuProps = {
