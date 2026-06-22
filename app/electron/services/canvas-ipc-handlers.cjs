@@ -19,6 +19,9 @@ const {
 const FILE_LINK_PROMPT_KEY = 'canvas.file-link-prompt'
 /** Settings key for the bootstrap instruction (empty .md in a repo). */
 const FILE_BOOTSTRAP_PROMPT_KEY = 'canvas.file-bootstrap-prompt'
+/** Settings for the standing "follow the quality standard" instruction. */
+const QUALITY_STANDARD_PROMPT_KEY = 'canvas.quality-standard-prompt'
+const QUALITY_STANDARD_ENABLED_KEY = 'canvas.quality-standard-enabled'
 
 function registerCanvasIpcHandlers(options = {}) {
   const repository = createCanvasRepository(options.database)
@@ -105,6 +108,35 @@ function registerCanvasIpcHandlers(options = {}) {
       return { ok: true }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel salvar o prompt.')
+    }
+  })
+
+  ipcMain.handle('canvas:get-quality-standard', () => {
+    try {
+      const prompt = settings.get(QUALITY_STANDARD_PROMPT_KEY)
+      const enabled = settings.get(QUALITY_STANDARD_ENABLED_KEY)
+      return {
+        ok: true,
+        prompt: typeof prompt === 'string' ? prompt : null,
+        // Default ON when never set.
+        enabled: enabled === null || enabled === undefined ? true : enabled === true,
+      }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel carregar a configuracao.')
+    }
+  })
+
+  ipcMain.handle('canvas:set-quality-standard', (_event, params = {}) => {
+    try {
+      if (typeof params.prompt === 'string') {
+        settings.set(QUALITY_STANDARD_PROMPT_KEY, params.prompt)
+      }
+      if (typeof params.enabled === 'boolean') {
+        settings.set(QUALITY_STANDARD_ENABLED_KEY, params.enabled)
+      }
+      return { ok: true }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel salvar a configuracao.')
     }
   })
 }

@@ -34,9 +34,14 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const { deleteElements } = useReactFlow()
 
   // Start (or adopt) the background session as soon as the card mounts.
+  // ensure() is idempotent, so initialText only fires on the first creation.
   useEffect(() => {
-    store.ensure(id, { command: nodeData.command, cwd: nodeData.cwd })
-  }, [store, id, nodeData.command, nodeData.cwd])
+    store.ensure(id, {
+      command: nodeData.command,
+      cwd: nodeData.cwd,
+      initialText: nodeData.initialText,
+    })
+  }, [store, id, nodeData.command, nodeData.cwd, nodeData.initialText])
 
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []

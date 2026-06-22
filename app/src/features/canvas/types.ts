@@ -17,6 +17,8 @@ export type TerminalNodeData = {
   cwd?: string
   /** Human label shown on the node header. */
   label?: string
+  /** Text typed into the agent shortly after spawn (e.g. standing instruction). */
+  initialText?: string
 }
 
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'

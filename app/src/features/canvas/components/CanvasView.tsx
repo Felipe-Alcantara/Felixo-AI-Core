@@ -33,6 +33,10 @@ import {
   buildFileLinkPrompt,
   buildBootstrapPrompt,
 } from '../services/file-link-prompt'
+import {
+  DEFAULT_QUALITY_STANDARD_PROMPT,
+  buildQualityStandardMessage,
+} from '../services/quality-standard-prompt'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { ProjectsPanel } from './tools/ProjectsPanel'
 import { NotesPanel } from './tools/NotesPanel'
@@ -162,6 +166,11 @@ function CanvasInner() {
   // "living plan" prompt, and the bootstrap prompt for the empty-md-in-repo case.
   const fileLinkPromptRef = useRef(DEFAULT_FILE_LINK_PROMPT)
   const bootstrapPromptRef = useRef(DEFAULT_FILE_BOOTSTRAP_PROMPT)
+  // Standing "follow the quality standard" instruction for agent terminals.
+  const qualityStandardRef = useRef({
+    prompt: DEFAULT_QUALITY_STANDARD_PROMPT,
+    enabled: true,
+  })
 
   useEffect(() => {
     void window.felixo?.canvas?.getFileLinkPrompt().then((result) => {
@@ -172,6 +181,17 @@ function CanvasInner() {
     void window.felixo?.canvas?.getFileBootstrapPrompt?.().then((result) => {
       if (result?.ok && typeof result.prompt === 'string' && result.prompt.trim()) {
         bootstrapPromptRef.current = result.prompt
+      }
+    })
+    void window.felixo?.canvas?.getQualityStandard?.().then((result) => {
+      if (result?.ok) {
+        qualityStandardRef.current = {
+          prompt:
+            typeof result.prompt === 'string' && result.prompt.trim()
+              ? result.prompt
+              : DEFAULT_QUALITY_STANDARD_PROMPT,
+          enabled: result.enabled !== false,
+        }
       }
     })
   }, [])
@@ -422,10 +442,19 @@ function CanvasInner() {
 
   const addTerminalNode = useCallback(
     (options: { command?: string; cwd?: string; label: string }) => {
+      // Agent terminals get the standing quality-standard instruction (if on);
+      // a plain shell does not (there's no agent to read it).
+      const quality = qualityStandardRef.current
+      const initialText =
+        options.command && quality.enabled
+          ? buildQualityStandardMessage(quality.prompt)
+          : undefined
+
       addNode('terminal', {
         label: options.label,
         ...(options.command ? { command: options.command } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
+        ...(initialText ? { initialText } : {}),
       })
     },
     [addNode],

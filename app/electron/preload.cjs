@@ -85,6 +85,9 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('canvas:get-file-bootstrap-prompt'),
     setFileBootstrapPrompt: (prompt) =>
       ipcRenderer.invoke('canvas:set-file-bootstrap-prompt', prompt),
+    getQualityStandard: () => ipcRenderer.invoke('canvas:get-quality-standard'),
+    setQualityStandard: (params) =>
+      ipcRenderer.invoke('canvas:set-quality-standard', params),
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),

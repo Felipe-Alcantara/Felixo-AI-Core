@@ -258,6 +258,13 @@ declare global {
           CliInvokeResult & { prompt?: string | null }
         >
         setFileBootstrapPrompt: (prompt: string) => Promise<CliInvokeResult>
+        getQualityStandard: () => Promise<
+          CliInvokeResult & { prompt?: string | null; enabled?: boolean }
+        >
+        setQualityStandard: (params: {
+          prompt?: string
+          enabled?: boolean
+        }) => Promise<CliInvokeResult>
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>
