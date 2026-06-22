@@ -605,6 +605,9 @@ function CanvasInner() {
           onBootstrapSaved={(prompt) => {
             bootstrapPromptRef.current = prompt
           }}
+          onQualityStandardSaved={(value) => {
+            qualityStandardRef.current = value
+          }}
         />
       )}
 
