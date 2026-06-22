@@ -33,7 +33,7 @@ describe('app-paths', () => {
       const paths = getAppPaths({ electronApp: createMockApp() })
       const expectedKeys = [
         'userData', 'config', 'logs', 'cache', 'temp',
-        'database', 'exports', 'notes', 'reports',
+        'database', 'exports', 'notes', 'reports', 'canvasFiles',
         'assets', 'appRoot', 'isPackaged', 'platform',
       ]
       for (const key of expectedKeys) {
@@ -43,7 +43,7 @@ describe('app-paths', () => {
 
     it('returns absolute paths', () => {
       const paths = getAppPaths({ electronApp: createMockApp() })
-      const pathKeys = ['userData', 'config', 'logs', 'cache', 'temp', 'database', 'exports', 'notes', 'reports', 'assets', 'appRoot']
+      const pathKeys = ['userData', 'config', 'logs', 'cache', 'temp', 'database', 'exports', 'notes', 'reports', 'canvasFiles', 'assets', 'appRoot']
       for (const key of pathKeys) {
         assert.ok(path.isAbsolute(paths[key]), `${key} is not absolute: ${paths[key]}`)
       }
@@ -115,6 +115,7 @@ describe('app-paths', () => {
       assert.ok(fs.existsSync(paths.exports))
       assert.ok(fs.existsSync(paths.notes))
       assert.ok(fs.existsSync(paths.reports))
+      assert.ok(fs.existsSync(paths.canvasFiles))
     })
   })
 
