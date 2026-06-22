@@ -83,6 +83,111 @@ const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = 
   note: { width: 220, height: 160 },
 }
 
+const NODE_PLACEMENT_GAP = 32
+const VIEWPORT_PLACEMENT_PADDING = { x: 40, top: 88, bottom: 40 }
+
+type CanvasBounds = { x: number; y: number; width: number; height: number }
+type FlowPositionMapper = {
+  screenToFlowPosition: (position: { x: number; y: number }) => {
+    x: number
+    y: number
+  }
+}
+
+/**
+ * Finds the closest free top-level position, preferring the currently visible
+ * canvas. Candidate coordinates follow existing node edges, which keeps the
+ * layout aligned while avoiding overlap between differently sized blocks.
+ */
+function findFreeNodePosition(
+  nodes: Node[],
+  size: { width: number; height: number },
+  viewport?: CanvasBounds,
+): { x: number; y: number } {
+  const origin = viewport
+    ? {
+        x: viewport.x + VIEWPORT_PLACEMENT_PADDING.x,
+        y: viewport.y + VIEWPORT_PLACEMENT_PADDING.top,
+      }
+    : { x: 120, y: 120 }
+  const topLevelNodes = nodes.filter((node) => !node.parentId)
+  const xCandidates = uniqueSortedCoordinates([
+    origin.x,
+    ...topLevelNodes.map(
+      (node) =>
+        node.position.x + getNodeSize(node).width + NODE_PLACEMENT_GAP,
+    ),
+  ]).filter((x) => x >= origin.x)
+  const yCandidates = uniqueSortedCoordinates([
+    origin.y,
+    ...topLevelNodes.map(
+      (node) =>
+        node.position.y + getNodeSize(node).height + NODE_PLACEMENT_GAP,
+    ),
+  ]).filter((y) => y >= origin.y)
+  const candidates = yCandidates.flatMap((y) =>
+    xCandidates.map((x) => ({ x, y })),
+  )
+  const visibleCandidates = viewport
+    ? candidates.filter(
+        (candidate) =>
+          candidate.x + size.width <=
+            viewport.x + viewport.width - VIEWPORT_PLACEMENT_PADDING.x &&
+          candidate.y + size.height <=
+            viewport.y + viewport.height - VIEWPORT_PLACEMENT_PADDING.bottom,
+      )
+    : candidates
+
+  return (
+    visibleCandidates.find((candidate) =>
+      isPositionFree(candidate, size, topLevelNodes),
+    ) ??
+    candidates.find((candidate) =>
+      isPositionFree(candidate, size, topLevelNodes),
+    ) ?? {
+      x: origin.x,
+      y:
+        Math.max(
+          origin.y,
+          ...topLevelNodes.map(
+            (node) =>
+              node.position.y + getNodeSize(node).height + NODE_PLACEMENT_GAP,
+          ),
+        ),
+    }
+  )
+}
+
+function isPositionFree(
+  position: { x: number; y: number },
+  size: { width: number; height: number },
+  nodes: Node[],
+): boolean {
+  return nodes.every((node) => {
+    const nodeSize = getNodeSize(node)
+    return (
+      position.x + size.width + NODE_PLACEMENT_GAP <= node.position.x ||
+      position.x >= node.position.x + nodeSize.width + NODE_PLACEMENT_GAP ||
+      position.y + size.height + NODE_PLACEMENT_GAP <= node.position.y ||
+      position.y >= node.position.y + nodeSize.height + NODE_PLACEMENT_GAP
+    )
+  })
+}
+
+function getNodeSize(node: Node): { width: number; height: number } {
+  const fallback = DEFAULT_SIZE[node.type as CanvasNodeType] ?? DEFAULT_SIZE.note
+  return {
+    width: node.width ?? node.measured?.width ?? fallback.width,
+    height: node.height ?? node.measured?.height ?? fallback.height,
+  }
+}
+
+function uniqueSortedCoordinates(values: number[]): number[] {
+  return [...new Set(values.map((value) => Math.round(value)))].sort(
+    (left, right) => left - right,
+  )
+}
+
 type CanvasProject = { id: string; name: string; path: string }
 
 /** True when the dragged node's top-left sits within the group's bounds. */
@@ -213,6 +318,8 @@ function CanvasInner() {
     enabled: true,
   })
   const importInputRef = useRef<HTMLInputElement>(null)
+  const flowContainerRef = useRef<HTMLDivElement>(null)
+  const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
 
   useEffect(() => {
     void window.felixo?.canvas?.getFileLinkPrompt().then((result) => {
@@ -463,13 +570,32 @@ function CanvasInner() {
     (type: CanvasNodeType, data?: Record<string, unknown>) => {
       const id = `${type}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
       const size = DEFAULT_SIZE[type]
+      const container = flowContainerRef.current
+      const flowInstance = flowInstanceRef.current
+      let viewport: CanvasBounds | undefined
+
+      if (container && flowInstance) {
+        const bounds = container.getBoundingClientRect()
+        const topLeft = flowInstance.screenToFlowPosition({
+          x: bounds.left,
+          y: bounds.top,
+        })
+        const bottomRight = flowInstance.screenToFlowPosition({
+          x: bounds.right,
+          y: bounds.bottom,
+        })
+        viewport = {
+          x: topLeft.x,
+          y: topLeft.y,
+          width: bottomRight.x - topLeft.x,
+          height: bottomRight.y - topLeft.y,
+        }
+      }
+
       const node: Node = {
         id,
         type,
-        position: {
-          x: 120 + Math.random() * 180,
-          y: 120 + Math.random() * 120,
-        },
+        position: findFreeNodePosition(nodes, size, viewport),
         width: size.width,
         height: size.height,
         data: data ?? (type === 'terminal' ? { label: 'Terminal' } : { text: '' }),
@@ -478,7 +604,7 @@ function CanvasInner() {
       setNodes((current) => [...current, node])
       persistNode(node)
     },
-    [setNodes, persistNode],
+    [nodes, setNodes, persistNode],
   )
 
   const addFileNode = useCallback(() => {
@@ -678,7 +804,7 @@ function CanvasInner() {
 
   return (
     <div className="flex h-full w-full">
-      <div className="relative h-full min-w-0 flex-1">
+      <div ref={flowContainerRef} className="relative h-full min-w-0 flex-1">
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
         <CanvasToolsMenu
@@ -815,45 +941,48 @@ function CanvasInner() {
         />
       )}
 
-      <ReactFlow
-        key={canvasRevision}
-        nodes={orderedNodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onNodeDragStop={onNodeDragStop}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
-        proOptions={{ hideAttribution: true }}
-        deleteKeyCode={['Delete', 'Backspace']}
-        // Select mode: drag on empty canvas draws a selection box (middle/right
-        // mouse still pans). Pan mode: left-drag grabs and moves the canvas.
-        // Shift always adds to the selection.
-        // Partial = touching/overlapping a node with the box selects it; the
-        // box doesn't need to fully contain the node.
-        selectionMode={SelectionMode.Partial}
-        selectionOnDrag={canvasMode === 'select'}
-        panOnDrag={canvasMode === 'select' ? [1, 2] : true}
-        selectionKeyCode={null}
-        multiSelectionKeyCode={['Shift']}
-        panActivationKeyCode="Space"
-        className={canvasMode === 'pan' ? 'cursor-grab' : ''}
-      >
-        <Background gap={20} color="#1e293b" />
-        <Controls position="bottom-left" className="!mb-4 !ml-4" />
-        {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle. */}
-        <MiniMap
-          pannable
-          zoomable
-          position="top-right"
-          className="!mr-4 !mt-4"
-          bgColor="#18181b"
-          maskColor="rgba(0, 0, 0, 0.6)"
-          nodeColor="#3f3f46"
-          nodeStrokeColor="#52525b"
-        />
-      </ReactFlow>
+        <ReactFlow
+          key={canvasRevision}
+          nodes={orderedNodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onInit={(instance) => {
+            flowInstanceRef.current = instance
+          }}
+          onNodesChange={onNodesChange}
+          onNodeDragStop={onNodeDragStop}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          fitView
+          proOptions={{ hideAttribution: true }}
+          deleteKeyCode={['Delete', 'Backspace']}
+          // Select mode: drag on empty canvas draws a selection box (middle/right
+          // mouse still pans). Pan mode: left-drag grabs and moves the canvas.
+          // Shift always adds to the selection.
+          // Partial = touching/overlapping a node with the box selects it; the
+          // box doesn't need to fully contain the node.
+          selectionMode={SelectionMode.Partial}
+          selectionOnDrag={canvasMode === 'select'}
+          panOnDrag={canvasMode === 'select' ? [1, 2] : true}
+          selectionKeyCode={null}
+          multiSelectionKeyCode={['Shift']}
+          panActivationKeyCode="Space"
+          className={canvasMode === 'pan' ? 'cursor-grab' : ''}
+        >
+          <Background gap={20} color="#1e293b" />
+          <Controls position="bottom-left" className="!mb-4 !ml-4" />
+          {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle. */}
+          <MiniMap
+            pannable
+            zoomable
+            position="top-right"
+            className="!mr-4 !mt-4"
+            bgColor="#18181b"
+            maskColor="rgba(0, 0, 0, 0.6)"
+            nodeColor="#3f3f46"
+            nodeStrokeColor="#52525b"
+          />
+        </ReactFlow>
       </div>
 
       {expandedTerminalId && (
