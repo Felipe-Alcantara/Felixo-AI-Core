@@ -238,6 +238,24 @@ declare global {
         ) => Promise<CliInvokeResult & { node?: PersistedCanvasNode }>
         delete: (nodeId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      canvasFiles?: {
+        list: () => Promise<CliInvokeResult & { files?: string[] }>
+        read: (params: {
+          name: string
+        }) => Promise<CliInvokeResult & { name?: string; content?: string }>
+        write: (params: {
+          name: string
+          content: string
+        }) => Promise<CliInvokeResult & { name?: string }>
+        resolve: (params: {
+          name: string
+        }) => Promise<CliInvokeResult & { name?: string; path?: string }>
+        watch: (params: { name: string }) => Promise<CliInvokeResult>
+        unwatch: (params: { name: string }) => Promise<CliInvokeResult>
+        onChanged: (
+          callback: (event: { name: string }) => void,
+        ) => () => void
+      }
       automations?: {
         list: () => Promise<
           CliInvokeResult & { automations?: AutomationDefinition[] }
