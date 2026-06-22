@@ -36,13 +36,25 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   // Start (or adopt) the background session as soon as the card mounts.
   // ensure() is idempotent, so initialText only fires on the first creation.
   useEffect(() => {
+    if (nodeData.initialTextReady === false) {
+      return
+    }
+
     store.ensure(id, {
       command: nodeData.command,
       args: nodeData.args,
       cwd: nodeData.cwd,
       initialText: nodeData.initialText,
     })
-  }, [store, id, nodeData.command, nodeData.args, nodeData.cwd, nodeData.initialText])
+  }, [
+    store,
+    id,
+    nodeData.command,
+    nodeData.args,
+    nodeData.cwd,
+    nodeData.initialText,
+    nodeData.initialTextReady,
+  ])
 
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []

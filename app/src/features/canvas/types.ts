@@ -21,6 +21,8 @@ export type TerminalNodeData = {
   label?: string
   /** Text typed into the agent shortly after spawn (e.g. standing instruction). Persisted with the node so reopen replays it. */
   initialText?: string
+  /** Render-time flag: waits for canvas connections/path resolution before spawning. */
+  initialTextReady?: boolean
 }
 
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'
