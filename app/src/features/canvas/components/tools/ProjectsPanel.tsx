@@ -56,7 +56,13 @@ export function ProjectsPanel({ onClose, onProjectsChanged }: ProjectsPanelProps
           ? repos
           : [{ name: folder.split('/').filter(Boolean).pop() ?? folder, path: folder }]
 
+      // Skip repos already registered (same path) so re-adding a parent folder
+      // doesn't create duplicates.
+      const existingPaths = new Set(projects.map((project) => project.path))
       for (const repo of picked) {
+        if (existingPaths.has(repo.path)) {
+          continue
+        }
         await bridge.save({
           id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
           name: repo.name,
@@ -69,7 +75,7 @@ export function ProjectsPanel({ onClose, onProjectsChanged }: ProjectsPanelProps
     } finally {
       setBusy(false)
     }
-  }, [reload, onProjectsChanged])
+  }, [reload, onProjectsChanged, projects])
 
   const removeProject = useCallback(
     async (projectId: string) => {
