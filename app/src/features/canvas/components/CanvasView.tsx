@@ -220,6 +220,36 @@ function CanvasInner() {
     })
   }, [])
 
+  // Pick a folder, register its repos as projects, refresh the list and return
+  // the new project ids — used by the terminal menu's "Adicionar pasta…".
+  const addProjectFolder = useCallback(async (): Promise<string[]> => {
+    const bridge = window.felixo?.projects
+    if (!bridge) {
+      return []
+    }
+
+    const folder = await bridge.pickFolder()
+    if (!folder) {
+      return []
+    }
+
+    const repos = await bridge.detectRepos(folder)
+    const picked =
+      repos.length > 0
+        ? repos
+        : [{ name: folder.split('/').filter(Boolean).pop() ?? folder, path: folder }]
+
+    const addedIds: string[] = []
+    for (const repo of picked) {
+      const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+      await bridge.save({ id, name: repo.name, path: repo.path })
+      addedIds.push(id)
+    }
+
+    reloadProjects()
+    return addedIds
+  }, [reloadProjects])
+
   useEffect(() => {
     let cancelled = false
 
@@ -464,7 +494,11 @@ function CanvasInner() {
             setActiveTool((current) => (current === tool ? null : tool))
           }
         />
-        <TerminalMenu projects={projects} onAdd={addTerminalNode} />
+        <TerminalMenu
+          projects={projects}
+          onAdd={addTerminalNode}
+          onAddFolder={addProjectFolder}
+        />
         <button
           type="button"
           onClick={() => addNode('note')}
