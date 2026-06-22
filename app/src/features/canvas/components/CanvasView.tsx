@@ -539,6 +539,9 @@ function CanvasInner() {
           onPromptSaved={(prompt) => {
             fileLinkPromptRef.current = prompt
           }}
+          onBootstrapSaved={(prompt) => {
+            bootstrapPromptRef.current = prompt
+          }}
         />
       )}
 

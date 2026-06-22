@@ -1,60 +1,122 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { RotateCcw, Save, Settings } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
-import { DEFAULT_FILE_LINK_PROMPT } from '../../services/file-link-prompt'
+import {
+  DEFAULT_FILE_LINK_PROMPT,
+  DEFAULT_FILE_BOOTSTRAP_PROMPT,
+} from '../../services/file-link-prompt'
 
 type SettingsPanelProps = {
   onClose: () => void
-  /** Lets the canvas pick up the new prompt without a reload. */
+  /** Lets the canvas pick up the new "living plan" prompt without a reload. */
   onPromptSaved?: (prompt: string) => void
+  /** Lets the canvas pick up the new bootstrap prompt without a reload. */
+  onBootstrapSaved?: (prompt: string) => void
 }
 
 /**
- * Canvas settings — currently the editable instruction injected into a terminal
- * when a file block is linked to it (the "living plan" protocol). Supports the
- * {{path}} and {{agent}} placeholders.
+ * Canvas settings — the editable instructions injected when a file block links
+ * to a terminal: the normal "living plan" prompt, and the bootstrap prompt used
+ * when a repo terminal links an empty .md. Both support {{path}} and {{agent}}.
  */
-export function SettingsPanel({ onClose, onPromptSaved }: SettingsPanelProps) {
-  const [prompt, setPrompt] = useState(DEFAULT_FILE_LINK_PROMPT)
+export function SettingsPanel({
+  onClose,
+  onPromptSaved,
+  onBootstrapSaved,
+}: SettingsPanelProps) {
+  return (
+    <CanvasPanel title="Configuracoes" icon={<Settings size={15} />} onClose={onClose}>
+      <PromptField
+        label="Instrucao ao ligar arquivo a um terminal"
+        help={
+          <>
+            Enviada ao conectar um bloco de arquivo (com conteudo) a um terminal.
+          </>
+        }
+        defaultValue={DEFAULT_FILE_LINK_PROMPT}
+        load={() => window.felixo?.canvas?.getFileLinkPrompt()}
+        persist={(value) => window.felixo?.canvas?.setFileLinkPrompt(value)}
+        onSaved={onPromptSaved}
+      />
+
+      <div className="my-3 border-t border-white/10" />
+
+      <PromptField
+        label="Instrucao de bootstrap (repo + arquivo vazio)"
+        help={
+          <>
+            Excecao: quando o terminal esta em um projeto e o .md esta vazio, o
+            agente analisa o repositorio e escreve o plano de evolucao.
+          </>
+        }
+        defaultValue={DEFAULT_FILE_BOOTSTRAP_PROMPT}
+        load={() => window.felixo?.canvas?.getFileBootstrapPrompt?.()}
+        persist={(value) => window.felixo?.canvas?.setFileBootstrapPrompt?.(value)}
+        onSaved={onBootstrapSaved}
+      />
+    </CanvasPanel>
+  )
+}
+
+type PromptFieldProps = {
+  label: string
+  help: ReactNode
+  defaultValue: string
+  load: () => Promise<{ ok: boolean; prompt?: string | null }> | undefined
+  persist: (value: string) => Promise<unknown> | undefined
+  onSaved?: (value: string) => void
+}
+
+function PromptField({
+  label,
+  help,
+  defaultValue,
+  load,
+  persist,
+  onSaved,
+}: PromptFieldProps) {
+  const [value, setValue] = useState(defaultValue)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    void window.felixo?.canvas?.getFileLinkPrompt().then((result) => {
-      if (!cancelled && result?.ok && typeof result.prompt === 'string' && result.prompt.trim()) {
-        setPrompt(result.prompt)
+    void load()?.then((result) => {
+      if (
+        !cancelled &&
+        result?.ok &&
+        typeof result.prompt === 'string' &&
+        result.prompt.trim()
+      ) {
+        setValue(result.prompt)
       }
     })
     return () => {
       cancelled = true
     }
+    // load/persist are stable inline closures over the bridge; intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const save = async () => {
-    await window.felixo?.canvas?.setFileLinkPrompt(prompt)
-    onPromptSaved?.(prompt)
+    await persist(value)
+    onSaved?.(value)
     setSaved(true)
     window.setTimeout(() => setSaved(false), 1500)
   }
 
   return (
-    <CanvasPanel title="Configuracoes" icon={<Settings size={15} />} onClose={onClose}>
-      <label className="mb-1 block text-xs font-medium text-zinc-400">
-        Instrucao ao ligar arquivo a um terminal
-      </label>
+    <div>
+      <label className="mb-1 block text-xs font-medium text-zinc-400">{label}</label>
       <p className="mb-2 text-xs text-zinc-500">
-        Enviada ao terminal quando voce conecta um bloco de arquivo. Use{' '}
-        <code className="text-zinc-300">{'{{path}}'}</code> para o caminho e{' '}
-        <code className="text-zinc-300">{'{{agent}}'}</code> para o agente.
+        {help} Use <code className="text-zinc-300">{'{{path}}'}</code> e{' '}
+        <code className="text-zinc-300">{'{{agent}}'}</code>.
       </p>
-
       <textarea
-        value={prompt}
-        onChange={(event) => setPrompt(event.target.value)}
-        rows={12}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        rows={10}
         className="mb-2 w-full resize-y rounded bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-none"
       />
-
       <div className="flex gap-2">
         <button
           type="button"
@@ -66,7 +128,7 @@ export function SettingsPanel({ onClose, onPromptSaved }: SettingsPanelProps) {
         </button>
         <button
           type="button"
-          onClick={() => setPrompt(DEFAULT_FILE_LINK_PROMPT)}
+          onClick={() => setValue(defaultValue)}
           className="flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
           title="Restaurar o texto padrao"
         >
@@ -74,6 +136,6 @@ export function SettingsPanel({ onClose, onPromptSaved }: SettingsPanelProps) {
           Padrao
         </button>
       </div>
-    </CanvasPanel>
+    </div>
   )
 }
