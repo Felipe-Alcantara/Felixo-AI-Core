@@ -33,6 +33,11 @@ import { ModelsPanel } from './tools/ModelsPanel'
 import { PromptsPanel } from './tools/PromptsPanel'
 import { GitPanel } from './tools/GitPanel'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
+import {
+  deleteCanvasEdge,
+  loadCanvasEdges,
+  saveCanvasEdge,
+} from '../services/canvas-storage'
 import type { CanvasNodeType } from '../types'
 
 const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = {
@@ -110,6 +115,19 @@ function CanvasInner() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
+
+  // Hydrate persisted connections once.
+  useEffect(() => {
+    let cancelled = false
+    void loadCanvasEdges().then((loaded) => {
+      if (!cancelled) {
+        setEdges(loaded)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setEdges])
 
   const reloadProjects = useCallback(() => {
     void window.felixo?.projects?.list().then((result) => {
@@ -226,12 +244,32 @@ function CanvasInner() {
   )
 
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((current) => applyEdgeChanges(changes, current)),
+    (changes: EdgeChange[]) => {
+      for (const change of changes) {
+        if (change.type === 'remove') {
+          void deleteCanvasEdge(change.id)
+        }
+      }
+      setEdges((current) => applyEdgeChanges(changes, current))
+    },
     [setEdges],
   )
 
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((current) => addEdge(connection, current)),
+    (connection: Connection) => {
+      setEdges((current) => {
+        const next = addEdge(connection, current)
+        // Persist the newly added edge (the last one addEdge produced).
+        const created = next.find(
+          (edge) =>
+            edge.source === connection.source && edge.target === connection.target,
+        )
+        if (created) {
+          void saveCanvasEdge(created)
+        }
+        return next
+      })
+    },
     [setEdges],
   )
 
