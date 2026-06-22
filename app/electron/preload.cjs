@@ -78,6 +78,9 @@ contextBridge.exposeInMainWorld('felixo', {
     listEdges: () => ipcRenderer.invoke('canvas:list-edges'),
     saveEdge: (edge) => ipcRenderer.invoke('canvas:save-edge', edge),
     deleteEdge: (edgeId) => ipcRenderer.invoke('canvas:delete-edge', edgeId),
+    getFileLinkPrompt: () => ipcRenderer.invoke('canvas:get-file-link-prompt'),
+    setFileLinkPrompt: (prompt) =>
+      ipcRenderer.invoke('canvas:set-file-link-prompt', prompt),
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),

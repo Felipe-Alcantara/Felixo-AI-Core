@@ -11,9 +11,16 @@ const { ipcMain } = require('electron')
 const {
   createCanvasRepository,
 } = require('./storage/canvas-repository.cjs')
+const {
+  createSettingsRepository,
+} = require('./storage/settings-repository.cjs')
+
+/** Settings key for the instruction injected when a file links to a terminal. */
+const FILE_LINK_PROMPT_KEY = 'canvas.file-link-prompt'
 
 function registerCanvasIpcHandlers(options = {}) {
   const repository = createCanvasRepository(options.database)
+  const settings = createSettingsRepository(options.database)
 
   ipcMain.handle('canvas:list', () => {
     try {
@@ -60,6 +67,24 @@ function registerCanvasIpcHandlers(options = {}) {
       return { ok: true, deleted: repository.deleteEdge(edgeId) }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel excluir a conexao.')
+    }
+  })
+
+  ipcMain.handle('canvas:get-file-link-prompt', () => {
+    try {
+      const value = settings.get(FILE_LINK_PROMPT_KEY)
+      return { ok: true, prompt: typeof value === 'string' ? value : null }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel carregar o prompt.')
+    }
+  })
+
+  ipcMain.handle('canvas:set-file-link-prompt', (_event, prompt) => {
+    try {
+      settings.set(FILE_LINK_PROMPT_KEY, String(prompt ?? ''))
+      return { ok: true }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel salvar o prompt.')
     }
   })
 }
