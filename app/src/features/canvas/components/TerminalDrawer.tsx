@@ -4,6 +4,7 @@ import {
   useSessionSnapshot,
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
+import { CopyButton } from './TerminalCopyButton'
 
 type TerminalDrawerProps = {
   sessionId: string
@@ -92,6 +93,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
                   ? 'encerrado'
                   : ''}
           </span>
+          <CopyButton onCopy={() => store.copy(sessionId)} />
           <button
             type="button"
             onClick={onClose}

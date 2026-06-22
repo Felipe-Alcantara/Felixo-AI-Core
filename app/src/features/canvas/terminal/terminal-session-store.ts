@@ -192,6 +192,25 @@ export class TerminalSessionStore {
     void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
   }
 
+  /**
+   * Copies the current mouse selection to the clipboard. Falls back to the
+   * visible viewport text when nothing is selected, so the button is never a
+   * no-op. Returns the copied text (empty string if there was nothing).
+   */
+  async copy(id: string): Promise<string> {
+    const session = this.sessions.get(id)
+    if (!session) {
+      return ''
+    }
+
+    const selection = session.terminal.getSelection()
+    const text = selection || readViewport(session.terminal)
+    if (text) {
+      await navigator.clipboard?.writeText(text)
+    }
+    return text
+  }
+
   getSnapshot(id: string): SessionSnapshot | undefined {
     return this.sessions.get(id)?.snapshot
   }
@@ -281,4 +300,18 @@ function computePreview(terminal: Terminal): string[] {
   }
 
   return lines
+}
+
+/** Reads the currently visible viewport text from the xterm buffer. */
+function readViewport(terminal: Terminal): string {
+  const buffer = terminal.buffer.active
+  const start = buffer.viewportY
+  const end = start + terminal.rows
+  const lines: string[] = []
+
+  for (let row = start; row < end; row += 1) {
+    lines.push(buffer.getLine(row)?.translateToString(true).trimEnd() ?? '')
+  }
+
+  return lines.join('\n').replace(/\n+$/, '')
 }
