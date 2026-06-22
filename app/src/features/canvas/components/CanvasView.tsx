@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -78,6 +78,7 @@ async function announceFileToTerminal(
   connection: Connection,
   nodes: Node[],
   store: { sendText: (id: string, text: string) => void },
+  template: string,
 ): Promise<void> {
   const a = nodes.find((node) => node.id === connection.source)
   const b = nodes.find((node) => node.id === connection.target)
@@ -105,7 +106,7 @@ async function announceFileToTerminal(
   const agentName = command ? command : 'este agente'
   store.sendText(
     terminalNode.id,
-    buildFileLinkPrompt(DEFAULT_FILE_LINK_PROMPT, resolved.path, agentName),
+    buildFileLinkPrompt(template, resolved.path, agentName),
   )
 }
 
@@ -142,6 +143,16 @@ function CanvasInner() {
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
+  // Editable instruction injected when a file links to a terminal.
+  const fileLinkPromptRef = useRef(DEFAULT_FILE_LINK_PROMPT)
+
+  useEffect(() => {
+    void window.felixo?.canvas?.getFileLinkPrompt().then((result) => {
+      if (result?.ok && typeof result.prompt === 'string' && result.prompt.trim()) {
+        fileLinkPromptRef.current = result.prompt
+      }
+    })
+  }, [])
 
   // 'Q' toggles select/pan, but only when the canvas itself is focused — never
   // while typing in a field, terminal or tool panel.
@@ -317,7 +328,7 @@ function CanvasInner() {
 
       // When a file block connects to a terminal, tell that terminal's agent
       // about the file so it can read/edit it.
-      void announceFileToTerminal(connection, nodes, store)
+      void announceFileToTerminal(connection, nodes, store, fileLinkPromptRef.current)
     },
     [setEdges, nodes, store],
   )

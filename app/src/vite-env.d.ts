@@ -250,6 +250,10 @@ declare global {
           edge: PersistedCanvasEdge,
         ) => Promise<CliInvokeResult & { edge?: PersistedCanvasEdge }>
         deleteEdge: (edgeId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+        getFileLinkPrompt: () => Promise<
+          CliInvokeResult & { prompt?: string | null }
+        >
+        setFileLinkPrompt: (prompt: string) => Promise<CliInvokeResult>
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>
