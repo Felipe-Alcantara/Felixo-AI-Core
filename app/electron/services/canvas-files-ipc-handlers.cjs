@@ -31,7 +31,7 @@ function registerCanvasFilesIpcHandlers(getMainWindow, appPaths) {
     try {
       const entries = await fsp.readdir(baseDir, { withFileTypes: true })
       const files = entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+        .filter((entry) => entry.isFile() && /\.md$/i.test(entry.name))
         .map((entry) => entry.name)
         .sort()
       return { ok: true, files }
@@ -113,7 +113,71 @@ function registerCanvasFilesIpcHandlers(getMainWindow, appPaths) {
     watchers.clear()
   }
 
-  return { dispose }
+  const clear = () => deleteAllMarkdownFiles(baseDir, watchers)
+  const exportFiles = () => readAllMarkdownFiles(baseDir)
+  const replaceFiles = (files) => replaceAllMarkdownFiles(baseDir, watchers, files)
+
+  return { clear, dispose, exportFiles, replaceFiles }
+}
+
+async function readAllMarkdownFiles(baseDir) {
+  let entries
+  try {
+    entries = await fsp.readdir(baseDir, { withFileTypes: true })
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+
+  const names = entries
+    .filter((entry) => entry.isFile() && /\.md$/i.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+
+  return Promise.all(
+    names.map(async (name) => ({
+      name,
+      content: await fsp.readFile(path.join(baseDir, name), 'utf8'),
+    })),
+  )
+}
+
+async function replaceAllMarkdownFiles(baseDir, watchers, files) {
+  await deleteAllMarkdownFiles(baseDir, watchers)
+  await fsp.mkdir(baseDir, { recursive: true })
+  await Promise.all(
+    files.map(({ name, content }) =>
+      fsp.writeFile(resolveSafePath(baseDir, name), content, 'utf8'),
+    ),
+  )
+  return files.length
+}
+
+/** Deletes every canvas-owned Markdown file and stops its active watcher. */
+async function deleteAllMarkdownFiles(baseDir, watchers = new Map()) {
+  let entries
+  try {
+    entries = await fsp.readdir(baseDir, { withFileTypes: true })
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return 0
+    }
+    throw error
+  }
+
+  const filePaths = entries
+    .filter((entry) => entry.isFile() && /\.md$/i.test(entry.name))
+    .map((entry) => path.join(baseDir, entry.name))
+
+  for (const filePath of watchers.keys()) {
+    fs.unwatchFile(filePath)
+    watchers.delete(filePath)
+  }
+
+  await Promise.all(filePaths.map((filePath) => fsp.rm(filePath, { force: true })))
+  return filePaths.length
 }
 
 /**
@@ -132,7 +196,7 @@ function resolveSafePath(baseDir, rawName) {
 
   // Keep only the final segment; drop any directory parts a caller may inject.
   let name = path.basename(rawName.trim())
-  if (!name.endsWith('.md')) {
+  if (!/\.md$/i.test(name)) {
     name = `${name}.md`
   }
 
@@ -153,6 +217,9 @@ function toErrorResult(error, fallbackMessage) {
 }
 
 module.exports = {
+  deleteAllMarkdownFiles,
+  readAllMarkdownFiles,
+  replaceAllMarkdownFiles,
   registerCanvasFilesIpcHandlers,
   resolveSafePath,
 }

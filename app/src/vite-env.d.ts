@@ -245,6 +245,31 @@ declare global {
           node: PersistedCanvasNode,
         ) => Promise<CliInvokeResult & { node?: PersistedCanvasNode }>
         delete: (nodeId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+        clear: () => Promise<
+          CliInvokeResult & {
+            nodesDeleted?: number
+            edgesDeleted?: number
+            filesDeleted?: number
+          }
+        >
+        exportBundle: (state: {
+          nodes: PersistedCanvasNode[]
+          edges: PersistedCanvasEdge[]
+        }) => Promise<CliInvokeResult & { bundle?: unknown }>
+        validateImport: (content: string) => Promise<
+          CliInvokeResult & {
+            nodeCount?: number
+            edgeCount?: number
+            fileCount?: number
+          }
+        >
+        importBundle: (content: string) => Promise<
+          CliInvokeResult & {
+            nodes?: PersistedCanvasNode[]
+            edges?: PersistedCanvasEdge[]
+            filesImported?: number
+          }
+        >
         listEdges: () => Promise<CliInvokeResult & { edges?: PersistedCanvasEdge[] }>
         saveEdge: (
           edge: PersistedCanvasEdge,

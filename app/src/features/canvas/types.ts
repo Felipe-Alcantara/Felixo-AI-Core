@@ -46,3 +46,20 @@ export type PersistedCanvasNode = {
   createdAt?: string
   updatedAt?: string
 }
+
+export type PersistedCanvasEdge = {
+  id: string
+  source: string
+  target: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type CanvasTransferBundle = {
+  format: 'felixo-canvas'
+  version: 1
+  exportedAt: string
+  nodes: PersistedCanvasNode[]
+  edges: PersistedCanvasEdge[]
+  files: Array<{ name: string; content: string }>
+}

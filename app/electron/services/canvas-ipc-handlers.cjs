@@ -14,6 +14,10 @@ const {
 const {
   createSettingsRepository,
 } = require('./storage/settings-repository.cjs')
+const {
+  createCanvasBundle,
+  parseCanvasBundle,
+} = require('./canvas-transfer.cjs')
 
 /** Settings key for the instruction injected when a file links to a terminal. */
 const FILE_LINK_PROMPT_KEY = 'canvas.file-link-prompt'
@@ -48,6 +52,79 @@ function registerCanvasIpcHandlers(options = {}) {
       return { ok: true, deleted: repository.delete(nodeId) }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel excluir o no do canvas.')
+    }
+  })
+
+  ipcMain.handle('canvas:clear', async () => {
+    try {
+      const filesDeleted =
+        typeof options.clearFiles === 'function' ? await options.clearFiles() : 0
+      const result = repository.clear()
+      return { ok: true, ...result, filesDeleted }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel limpar o canvas.')
+    }
+  })
+
+  ipcMain.handle('canvas:export', async (_event, state = {}) => {
+    try {
+      const files =
+        typeof options.exportFiles === 'function' ? await options.exportFiles() : []
+      const bundle = createCanvasBundle({
+        nodes: Array.isArray(state.nodes) ? state.nodes : repository.list(),
+        edges: Array.isArray(state.edges) ? state.edges : repository.listEdges(),
+        files,
+      })
+      return { ok: true, bundle }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel exportar o canvas.')
+    }
+  })
+
+  ipcMain.handle('canvas:validate-import', (_event, content) => {
+    try {
+      const bundle = parseCanvasBundle(content)
+      return {
+        ok: true,
+        nodeCount: bundle.nodes.length,
+        edgeCount: bundle.edges.length,
+        fileCount: bundle.files.length,
+      }
+    } catch (error) {
+      return toErrorResult(error, 'Arquivo .fxcanvas invalido.')
+    }
+  })
+
+  ipcMain.handle('canvas:import', async (_event, content) => {
+    try {
+      // Validate the entire package before replacing any current data.
+      const bundle = parseCanvasBundle(content)
+      const previousFiles =
+        typeof options.exportFiles === 'function' ? await options.exportFiles() : []
+      if (typeof options.replaceFiles === 'function') {
+        try {
+          await options.replaceFiles(bundle.files)
+        } catch (error) {
+          await restoreFiles(options.replaceFiles, previousFiles)
+          throw error
+        }
+      }
+
+      try {
+        repository.replace(bundle.nodes, bundle.edges)
+      } catch (error) {
+        await restoreFiles(options.replaceFiles, previousFiles)
+        throw error
+      }
+
+      return {
+        ok: true,
+        nodes: repository.list(),
+        edges: repository.listEdges(),
+        filesImported: bundle.files.length,
+      }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel importar o canvas.')
     }
   })
 
@@ -139,6 +216,17 @@ function registerCanvasIpcHandlers(options = {}) {
       return toErrorResult(error, 'Nao foi possivel salvar a configuracao.')
     }
   })
+}
+
+async function restoreFiles(replaceFiles, files) {
+  if (typeof replaceFiles !== 'function') {
+    return
+  }
+  try {
+    await replaceFiles(files)
+  } catch {
+    // Preserve the original import failure.
+  }
 }
 
 function toErrorResult(error, fallbackMessage) {

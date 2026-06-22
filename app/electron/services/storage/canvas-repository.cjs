@@ -83,6 +83,79 @@ function createCanvasRepository(database) {
 
       return result.changes > 0
     },
+    clear() {
+      try {
+        connection.exec('BEGIN IMMEDIATE')
+        const edgesDeleted = connection.prepare('DELETE FROM canvas_edges').run().changes
+        const nodesDeleted = connection.prepare('DELETE FROM canvas_nodes').run().changes
+        connection.exec('COMMIT')
+
+        return { nodesDeleted, edgesDeleted }
+      } catch (error) {
+        try {
+          connection.exec('ROLLBACK')
+        } catch {
+          // Keep the original database error.
+        }
+        throw error
+      }
+    },
+    replace(nodes, edges) {
+      const normalizedNodes = nodes.map(normalizeNode)
+      const normalizedEdges = edges.map(normalizeEdge)
+
+      try {
+        connection.exec('BEGIN IMMEDIATE')
+        connection.prepare('DELETE FROM canvas_edges').run()
+        connection.prepare('DELETE FROM canvas_nodes').run()
+
+        const insertNode = connection.prepare(
+          `INSERT INTO canvas_nodes (
+             id, type, parent_id, position_x, position_y, width, height,
+             data_json, created_at, updated_at, archived_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+        )
+        for (const node of normalizedNodes) {
+          insertNode.run(
+            node.id,
+            node.type,
+            node.parentId,
+            node.position.x,
+            node.position.y,
+            node.width,
+            node.height,
+            JSON.stringify(node.data),
+            node.createdAt,
+            node.updatedAt,
+          )
+        }
+
+        const insertEdge = connection.prepare(
+          `INSERT INTO canvas_edges (
+             id, source, target, created_at, updated_at, archived_at
+           ) VALUES (?, ?, ?, ?, ?, NULL)`,
+        )
+        for (const edge of normalizedEdges) {
+          insertEdge.run(
+            edge.id,
+            edge.source,
+            edge.target,
+            edge.createdAt,
+            edge.updatedAt,
+          )
+        }
+
+        connection.exec('COMMIT')
+        return { nodes: normalizedNodes, edges: normalizedEdges }
+      } catch (error) {
+        try {
+          connection.exec('ROLLBACK')
+        } catch {
+          // Keep the original database error.
+        }
+        throw error
+      }
+    },
     listEdges() {
       return connection
         .prepare(

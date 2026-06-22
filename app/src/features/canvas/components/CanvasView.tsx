@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react'
 import {
   ReactFlow,
   Background,
@@ -16,7 +23,16 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react'
-import { FileText, Group, Hand, MousePointer2, StickyNote } from 'lucide-react'
+import {
+  Download,
+  FileText,
+  Group,
+  Hand,
+  MousePointer2,
+  StickyNote,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
@@ -44,13 +60,21 @@ import { ModelsPanel } from './tools/ModelsPanel'
 import { PromptsPanel } from './tools/PromptsPanel'
 import { GitPanel } from './tools/GitPanel'
 import { SettingsPanel } from './tools/SettingsPanel'
-import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import {
+  toFlowNode,
+  toPersistedNode,
+  useCanvasPersistence,
+} from '../hooks/useCanvasPersistence'
+import {
+  clearCanvas,
   deleteCanvasEdge,
+  exportCanvasBundle,
+  importCanvasBundle,
   loadCanvasEdges,
   saveCanvasEdge,
+  validateCanvasBundle,
 } from '../services/canvas-storage'
-import type { CanvasNodeType } from '../types'
+import type { CanvasNodeType, PersistedCanvasEdge } from '../types'
 
 const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = {
   group: { width: 480, height: 320 },
@@ -145,6 +169,14 @@ function isCanvasFocused(target: HTMLElement | null): boolean {
   )
 }
 
+function toPersistedEdge(edge: Edge): PersistedCanvasEdge {
+  return { id: edge.id, source: edge.source, target: edge.target }
+}
+
+function toFlowEdge(edge: PersistedCanvasEdge): Edge {
+  return { id: edge.id, source: edge.source, target: edge.target }
+}
+
 export function CanvasView() {
   return (
     <TerminalSessionProvider>
@@ -155,8 +187,17 @@ export function CanvasView() {
 
 function CanvasInner() {
   const store = useTerminalSessions()
-  const { nodes, setNodes, persistNode, removeNode } = useCanvasPersistence()
+  const {
+    nodes,
+    setNodes,
+    persistNode,
+    removeNode,
+    cancelPendingSaves,
+  } = useCanvasPersistence()
   const [edges, setEdges] = useEdgesState<Edge>([])
+  const [isClearing, setIsClearing] = useState(false)
+  const [isTransferring, setIsTransferring] = useState(false)
+  const [canvasRevision, setCanvasRevision] = useState(0)
   const [projects, setProjects] = useState<CanvasProject[]>([])
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
@@ -171,6 +212,7 @@ function CanvasInner() {
     prompt: DEFAULT_QUALITY_STANDARD_PROMPT,
     enabled: true,
   })
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void window.felixo?.canvas?.getFileLinkPrompt().then((result) => {
@@ -467,6 +509,120 @@ function CanvasInner() {
     [addNode],
   )
 
+  const clearAll = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Limpar todo o canvas? Todos os blocos, conexões e arquivos .md do canvas serão excluídos permanentemente.',
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setIsClearing(true)
+    cancelPendingSaves()
+    const result = await clearCanvas()
+    setIsClearing(false)
+
+    if (!result.ok) {
+      window.alert(result.message ?? 'Não foi possível limpar o canvas.')
+      return
+    }
+
+    store.clear()
+    setExpandedTerminalId(null)
+    setActiveTool(null)
+    setNodes([])
+    setEdges([])
+  }, [cancelPendingSaves, setEdges, setNodes, store])
+
+  const exportAll = useCallback(async () => {
+    setIsTransferring(true)
+    const result = await exportCanvasBundle(
+      nodes.map(toPersistedNode),
+      edges.map(toPersistedEdge),
+    )
+
+    if (!result.ok || !result.bundle) {
+      setIsTransferring(false)
+      window.alert(result.message ?? 'Não foi possível exportar o canvas.')
+      return
+    }
+
+    let saveResult
+    try {
+      saveResult = await window.felixo?.files?.saveTextFile({
+        defaultPath: `felixo-canvas-${new Date().toISOString().slice(0, 10)}.fxcanvas`,
+        content: JSON.stringify(result.bundle, null, 2),
+        filters: [{ name: 'Canvas do Felixo', extensions: ['fxcanvas'] }],
+      })
+    } catch (error) {
+      setIsTransferring(false)
+      window.alert(error instanceof Error ? error.message : 'Não foi possível exportar.')
+      return
+    }
+    setIsTransferring(false)
+
+    if (saveResult && !saveResult.ok && !saveResult.canceled) {
+      window.alert(saveResult.message ?? 'Não foi possível salvar o canvas exportado.')
+    }
+  }, [edges, nodes])
+
+  const importFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      event.target.value = ''
+      if (!file) {
+        return
+      }
+      if (file.size > 60 * 1024 * 1024) {
+        window.alert('O arquivo .fxcanvas excede o limite de 60 MB.')
+        return
+      }
+      setIsTransferring(true)
+      let content: string
+      try {
+        content = await file.text()
+      } catch {
+        setIsTransferring(false)
+        window.alert('Não foi possível ler o arquivo selecionado.')
+        return
+      }
+
+      const validation = await validateCanvasBundle(content)
+      setIsTransferring(false)
+      if (!validation.ok) {
+        window.alert(validation.message ?? 'Arquivo .fxcanvas inválido.')
+        return
+      }
+      if (
+        !window.confirm(
+          'Importar este canvas? O canvas atual e seus arquivos .md serão substituídos permanentemente.',
+        )
+      ) {
+        return
+      }
+
+      setIsTransferring(true)
+      cancelPendingSaves()
+      const result = await importCanvasBundle(content)
+      setIsTransferring(false)
+      if (!result.ok || !result.nodes || !result.edges) {
+        nodes.forEach(persistNode)
+        window.alert(result.message ?? 'Não foi possível importar o canvas.')
+        return
+      }
+
+      store.clear()
+      setExpandedTerminalId(null)
+      setActiveTool(null)
+      setNodes(result.nodes.map(toFlowNode))
+      setEdges(result.edges.map(toFlowEdge))
+      setCanvasRevision((revision) => revision + 1)
+    },
+    [cancelPendingSaves, nodes, persistNode, setEdges, setNodes, store],
+  )
+
+  const isBusy = isClearing || isTransferring
+
   // Drop a node onto a group to make it a child; drop it out to detach. Uses
   // absolute positions, so only top-level nodes (already absolute) are
   // reparented — keeping the hit-test simple and predictable.
@@ -523,6 +679,7 @@ function CanvasInner() {
   return (
     <div className="flex h-full w-full">
       <div className="relative h-full min-w-0 flex-1">
+      {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
         <CanvasToolsMenu
           activeTool={activeTool}
@@ -585,6 +742,46 @@ function CanvasInner() {
             </>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={() => void exportAll()}
+          disabled={isBusy}
+          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-60"
+          title="Exportar canvas para um arquivo portátil"
+        >
+          <Download size={16} />
+          Exportar
+        </button>
+
+        <button
+          type="button"
+          onClick={() => importInputRef.current?.click()}
+          disabled={isBusy}
+          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-60"
+          title="Importar canvas de outro computador"
+        >
+          <Upload size={16} />
+          Importar
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".fxcanvas,application/json"
+          onChange={(event) => void importFile(event)}
+          className="hidden"
+        />
+
+        <button
+          type="button"
+          onClick={() => void clearAll()}
+          disabled={isBusy}
+          className="flex items-center gap-2 rounded-lg bg-red-950/80 px-3 py-2 text-sm text-red-100 shadow-lg ring-1 ring-red-500/20 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
+          title="Excluir todos os blocos, conexões e arquivos .md do canvas"
+        >
+          <Trash2 size={16} />
+          {isClearing ? 'Limpando...' : 'Limpar'}
+        </button>
       </div>
 
       {activeTool === 'projects' && (
@@ -619,6 +816,7 @@ function CanvasInner() {
       )}
 
       <ReactFlow
+        key={canvasRevision}
         nodes={orderedNodes}
         edges={edges}
         nodeTypes={nodeTypes}

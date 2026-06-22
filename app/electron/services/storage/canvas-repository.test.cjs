@@ -139,6 +139,66 @@ test('canvas repository stores, lists and soft-deletes edges', () => {
   }
 })
 
+test('canvas repository permanently clears nodes and edges', () => {
+  const databaseDir = createTempDir('felixo-canvas-clear-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    repository.save({ id: 'note-1', type: 'note', data: {} })
+    repository.save({ id: 'file-1', type: 'file', data: { fileName: 'plan.md' } })
+    repository.saveEdge({ id: 'edge-1', source: 'note-1', target: 'file-1' })
+    repository.delete('note-1')
+
+    assert.deepEqual(repository.clear(), { nodesDeleted: 2, edgesDeleted: 1 })
+    assert.deepEqual(repository.list({ includeArchived: true }), [])
+    assert.deepEqual(repository.listEdges(), [])
+
+    database.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
+test('canvas repository atomically replaces nodes and edges', () => {
+  const databaseDir = createTempDir('felixo-canvas-replace-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+    repository.save({ id: 'old', type: 'note', data: {} })
+
+    repository.replace(
+      [
+        { id: 'new-1', type: 'note', data: { text: 'portable' } },
+        { id: 'new-2', type: 'file', data: { fileName: 'plan.md' } },
+      ],
+      [{ id: 'new-edge', source: 'new-1', target: 'new-2' }],
+    )
+
+    assert.deepEqual(repository.list().map((node) => node.id).sort(), ['new-1', 'new-2'])
+    assert.deepEqual(repository.listEdges().map((edge) => edge.id), ['new-edge'])
+
+    assert.throws(
+      () =>
+        repository.replace(
+          [
+            { id: 'duplicate', type: 'note', data: {} },
+            { id: 'duplicate', type: 'note', data: {} },
+          ],
+          [],
+        ),
+      /UNIQUE constraint failed/,
+    )
+    assert.deepEqual(repository.list().map((node) => node.id).sort(), ['new-1', 'new-2'])
+
+    database.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
 test('normalizeEdge requires id, source and target', () => {
   assert.throws(() => normalizeEdge({ id: 'e', source: 's' }), /invalido/)
   assert.throws(() => normalizeEdge(null), /invalida/)

@@ -1,5 +1,9 @@
 import type { Edge } from '@xyflow/react'
-import type { PersistedCanvasNode } from '../types'
+import type {
+  CanvasTransferBundle,
+  PersistedCanvasEdge,
+  PersistedCanvasNode,
+} from '../types'
 
 /**
  * Thin wrapper over the `window.felixo.canvas` bridge. Each call degrades
@@ -50,6 +54,91 @@ export async function deleteCanvasNode(nodeId: string): Promise<void> {
   } catch {
     // Best effort.
   }
+}
+
+export async function clearCanvas(): Promise<{ ok: boolean; message?: string }> {
+  const bridge = window.felixo?.canvas
+
+  if (!bridge) {
+    return { ok: true }
+  }
+
+  try {
+    const result = await bridge.clear()
+    return result.ok
+      ? { ok: true }
+      : { ok: false, message: result.message ?? 'Nao foi possivel limpar o canvas.' }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'Nao foi possivel limpar o canvas.',
+    }
+  }
+}
+
+type TransferResult = {
+  ok: boolean
+  message?: string
+  bundle?: CanvasTransferBundle
+  nodes?: PersistedCanvasNode[]
+  edges?: PersistedCanvasEdge[]
+}
+
+export async function exportCanvasBundle(
+  nodes: PersistedCanvasNode[],
+  edges: PersistedCanvasEdge[],
+): Promise<TransferResult> {
+  const bridge = window.felixo?.canvas
+  if (!bridge) {
+    return { ok: false, message: 'Exportação disponível apenas no aplicativo.' }
+  }
+
+  try {
+    const result = await bridge.exportBundle({ nodes, edges })
+    if (!result.ok || !result.bundle) {
+      return { ok: false, message: result.message ?? 'Não foi possível exportar.' }
+    }
+    return { ok: true, bundle: result.bundle as CanvasTransferBundle }
+  } catch (error) {
+    return { ok: false, message: toTransferError(error, 'Não foi possível exportar.') }
+  }
+}
+
+export async function importCanvasBundle(content: string): Promise<TransferResult> {
+  const bridge = window.felixo?.canvas
+  if (!bridge) {
+    return { ok: false, message: 'Importação disponível apenas no aplicativo.' }
+  }
+
+  try {
+    const result = await bridge.importBundle(content)
+    if (!result.ok || !Array.isArray(result.nodes) || !Array.isArray(result.edges)) {
+      return { ok: false, message: result.message ?? 'Não foi possível importar.' }
+    }
+    return { ok: true, nodes: result.nodes, edges: result.edges }
+  } catch (error) {
+    return { ok: false, message: toTransferError(error, 'Não foi possível importar.') }
+  }
+}
+
+export async function validateCanvasBundle(content: string): Promise<TransferResult> {
+  const bridge = window.felixo?.canvas
+  if (!bridge) {
+    return { ok: false, message: 'Importação disponível apenas no aplicativo.' }
+  }
+
+  try {
+    const result = await bridge.validateImport(content)
+    return result.ok
+      ? { ok: true }
+      : { ok: false, message: result.message ?? 'Arquivo .fxcanvas inválido.' }
+  } catch (error) {
+    return { ok: false, message: toTransferError(error, 'Arquivo .fxcanvas inválido.') }
+  }
+}
+
+function toTransferError(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
 export async function loadCanvasEdges(): Promise<Edge[]> {
