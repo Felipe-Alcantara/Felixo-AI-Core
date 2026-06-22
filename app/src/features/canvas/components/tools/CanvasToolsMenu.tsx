@@ -52,7 +52,7 @@ export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) 
       </button>
 
       {open && (
-        <div className="flex w-44 flex-col overflow-hidden rounded-lg bg-zinc-800 shadow-xl ring-1 ring-white/10">
+        <div className="felixo-anim-menu-in flex w-44 flex-col overflow-hidden rounded-lg bg-zinc-800 shadow-xl ring-1 ring-white/10">
           {TOOLS.map(({ tool, label, icon: Icon }) => (
             <button
               key={tool}

@@ -222,3 +222,60 @@ div::-webkit-scrollbar-thumb {
 .react-flow__attribution {
   display: none;
 }
+
+/* Canvas panels / terminal drawer open + close transitions. */
+@keyframes felixo-slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes felixo-slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(16px); }
+}
+
+@keyframes felixo-panel-in {
+  from { opacity: 0; transform: translateX(-12px) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes felixo-panel-out {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to { opacity: 0; transform: translateX(-12px) scale(0.98); }
+}
+
+@keyframes felixo-menu-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.felixo-anim-drawer-in {
+  animation: felixo-slide-in-right 0.22s ease-out;
+}
+
+.felixo-anim-drawer-out {
+  animation: felixo-slide-out-right 0.18s ease-in forwards;
+}
+
+.felixo-anim-panel-in {
+  animation: felixo-panel-in 0.2s ease-out;
+}
+
+.felixo-anim-panel-out {
+  animation: felixo-panel-out 0.16s ease-in forwards;
+}
+
+.felixo-anim-menu-in {
+  animation: felixo-menu-in 0.16s ease-out;
+  transform-origin: top;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .felixo-anim-drawer-in,
+  .felixo-anim-drawer-out,
+  .felixo-anim-panel-in,
+  .felixo-anim-panel-out,
+  .felixo-anim-menu-in {
+    animation: none;
+  }
+}
