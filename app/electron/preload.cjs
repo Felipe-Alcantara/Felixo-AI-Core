@@ -81,6 +81,10 @@ contextBridge.exposeInMainWorld('felixo', {
     getFileLinkPrompt: () => ipcRenderer.invoke('canvas:get-file-link-prompt'),
     setFileLinkPrompt: (prompt) =>
       ipcRenderer.invoke('canvas:set-file-link-prompt', prompt),
+    getFileBootstrapPrompt: () =>
+      ipcRenderer.invoke('canvas:get-file-bootstrap-prompt'),
+    setFileBootstrapPrompt: (prompt) =>
+      ipcRenderer.invoke('canvas:set-file-bootstrap-prompt', prompt),
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),
