@@ -105,7 +105,7 @@ export function NotesPanel({ onClose }: NotesPanelProps) {
                 onChange={(event) =>
                   void saveNote({ ...note, content: event.target.value })
                 }
-                placeholder="Conteudo…"
+                placeholder="Conteúdo…"
                 rows={2}
                 className="w-full resize-y rounded bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-none placeholder:text-zinc-600"
               />

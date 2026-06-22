@@ -86,7 +86,7 @@ export class TerminalSessionStore {
     this.sessions.set(id, session)
 
     if (!pty) {
-      this.update(session, { activity: 'error', message: 'Bridge PTY indisponivel.' })
+      this.update(session, { activity: 'error', message: 'Bridge PTY indisponível.' })
       return
     }
 
