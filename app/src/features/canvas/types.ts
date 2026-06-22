@@ -19,7 +19,7 @@ export type TerminalNodeData = {
   cwd?: string
   /** Human label shown on the node header. */
   label?: string
-  /** Text typed into the agent shortly after spawn (e.g. standing instruction). */
+  /** Text typed into the agent shortly after spawn (e.g. standing instruction). Persisted with the node so reopen replays it. */
   initialText?: string
 }
 

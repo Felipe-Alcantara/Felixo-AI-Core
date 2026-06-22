@@ -113,7 +113,7 @@ export function toPersistedNode(node: Node): PersistedCanvasNode {
 
 /** Persisted data must be plain JSON; drop injected callbacks like onTextChange. */
 /** Data keys that are transient (computed at creation/render), never persisted. */
-const TRANSIENT_DATA_KEYS = new Set(['initialText'])
+const TRANSIENT_DATA_KEYS = new Set<string>()
 
 function stripFunctions(data: Record<string, unknown>): CanvasNodeData {
   const clean: Record<string, unknown> = {}
