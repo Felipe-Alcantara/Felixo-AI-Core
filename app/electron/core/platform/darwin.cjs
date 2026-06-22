@@ -29,7 +29,7 @@ function getPlatformInfo() {
 
 /** @returns {string[]} */
 function getSystemCliPaths() {
-  return ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
+  return ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin', '/usr/bin', '/bin']
 }
 
 /** @returns {string} */

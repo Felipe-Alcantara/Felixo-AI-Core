@@ -70,11 +70,14 @@ class PtyProcessManager {
     const env = createCliEnv()
     const command = options.command || platform.getDefaultShell(process.env)
     const args = Array.isArray(options.args) ? options.args : []
+    const launch = options.command
+      ? createPtyLaunchSpec(command, args, env)
+      : { command, args }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
 
-    const ptyProcess = spawnPty(command, args, {
-      name: 'xterm-color',
+    const ptyProcess = spawnPty(launch.command, launch.args, {
+      name: 'xterm-256color',
       cols,
       rows,
       // No project selected → open in the user's home, like a fresh terminal,
@@ -265,6 +268,33 @@ class PtyProcessManager {
 }
 
 /**
+ * GUI applications on macOS inherit a reduced environment from LaunchServices.
+ * Running explicit CLI commands through the user's login shell mirrors Terminal.app
+ * and loads version-manager setup from the user's shell configuration.
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @param {Record<string, string>} env
+ * @param {typeof platform} [adapter]
+ * @returns {{ command: string, args: string[] }}
+ */
+function createPtyLaunchSpec(command, args, env, adapter = platform) {
+  if (adapter.name !== 'darwin') {
+    return { command, args }
+  }
+
+  const shell = adapter.getDefaultShell(env)
+  const commandLine = [command, ...args]
+    .map((value) => adapter.escapeArg(String(value)))
+    .join(' ')
+
+  return {
+    command: shell,
+    args: ['-l', '-i', '-c', `exec ${commandLine}`],
+  }
+}
+
+/**
  * Clamp a terminal dimension to a sane positive integer.
  *
  * @param {unknown} value
@@ -285,4 +315,5 @@ module.exports = {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
+  createPtyLaunchSpec,
 }

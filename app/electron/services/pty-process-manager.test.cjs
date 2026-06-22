@@ -4,6 +4,7 @@ const {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
+  createPtyLaunchSpec,
 } = require('./pty-process-manager.cjs')
 
 /**
@@ -85,6 +86,26 @@ test('spawn honors an explicit command, args and dimensions', () => {
   assert.deepEqual(calls[0].args, ['--print'])
   assert.equal(calls[0].options.cols, 120)
   assert.equal(calls[0].options.rows, 40)
+})
+
+test('macOS launches explicit CLIs through the interactive login shell', () => {
+  const adapter = {
+    name: 'darwin',
+    getDefaultShell: () => '/bin/zsh',
+    escapeArg: (value) => `'${value.replaceAll("'", "'\\''")}'`,
+  }
+
+  const launch = createPtyLaunchSpec(
+    'codex',
+    ['--model', 'gpt-5.5'],
+    { SHELL: '/bin/zsh' },
+    adapter,
+  )
+
+  assert.deepEqual(launch, {
+    command: '/bin/zsh',
+    args: ['-l', '-i', '-c', "exec 'codex' '--model' 'gpt-5.5'"],
+  })
 })
 
 test('write forwards input to the active session only', () => {

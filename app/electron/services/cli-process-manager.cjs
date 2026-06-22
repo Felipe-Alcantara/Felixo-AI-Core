@@ -154,9 +154,66 @@ function getUserCliPathCandidates(env) {
 
   return [
     ...platform.getUserCliPaths(home),
-    ...getNvmNodeBinCandidates(path.join(home, '.nvm', 'versions', 'node')),
+    ...getVersionManagerCliPaths(env, home),
     ...platform.getSystemCliPaths(),
   ]
+}
+
+function getVersionManagerCliPaths(env, home) {
+  const nvmHome = env.NVM_DIR || path.join(home, '.nvm')
+  const fnmHomes = uniqueStrings([
+    env.FNM_DIR,
+    path.join(home, '.local', 'share', 'fnm'),
+    path.join(home, '.fnm'),
+  ])
+  const asdfHome = env.ASDF_DATA_DIR || path.join(home, '.asdf')
+  const miseHome = env.MISE_DATA_DIR || path.join(home, '.local', 'share', 'mise')
+  const nodenvHome = env.NODENV_ROOT || path.join(home, '.nodenv')
+  const voltaHome = env.VOLTA_HOME || path.join(home, '.volta')
+
+  return [
+    path.join(voltaHome, 'bin'),
+    path.join(asdfHome, 'shims'),
+    path.join(miseHome, 'shims'),
+    path.join(nodenvHome, 'shims'),
+    ...getNvmNodeBinCandidates(path.join(nvmHome, 'versions', 'node')),
+    ...fnmHomes.flatMap((fnmHome) => [
+      ...getInstalledVersionBinCandidates(
+        path.join(fnmHome, 'node-versions'),
+        ['installation', 'bin'],
+      ),
+      ...getInstalledVersionBinCandidates(path.join(fnmHome, 'node-versions'), [
+        'bin',
+      ]),
+    ]),
+    ...getInstalledVersionBinCandidates(
+      path.join(asdfHome, 'installs', 'nodejs'),
+      ['bin'],
+    ),
+    ...getInstalledVersionBinCandidates(
+      path.join(miseHome, 'installs', 'node'),
+      ['bin'],
+    ),
+    ...getInstalledVersionBinCandidates(path.join(nodenvHome, 'versions'), ['bin']),
+  ]
+}
+
+function getInstalledVersionBinCandidates(versionsPath, suffixParts) {
+  try {
+    return fs
+      .readdirSync(versionsPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(versionsPath, entry.name, ...suffixParts))
+      .filter((candidate) => directoryExists(candidate))
+      .sort()
+      .reverse()
+  } catch {
+    return []
+  }
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter(Boolean))]
 }
 
 function splitPathList(value) {
