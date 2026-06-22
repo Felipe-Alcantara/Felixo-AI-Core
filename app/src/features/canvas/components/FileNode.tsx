@@ -8,7 +8,7 @@ import {
 } from '@xyflow/react'
 import { Check, Copy, Eye, FileText, Pencil } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
-import { MarkdownContent } from '../../chat/components/MarkdownContent'
+import { MarkdownContent } from '../../shared/components/MarkdownContent'
 import type { FileNodeData } from '../types'
 
 type FileNodeDataWithHandlers = FileNodeData & {
