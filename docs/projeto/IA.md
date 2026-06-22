@@ -368,6 +368,8 @@ TESTE: build (tsc+vite) e lint limpos; suíte 380 pass, 0 fail.
 
 [2026-06-22] Lembrete de padrão de qualidade — Terminal aberto COM agente (Claude/Gemini/Codex) recebe, logo após o spawn, uma instrução para sempre seguir o padrão de qualidade (independente do prompt), apontando a pasta de padrões no repo ou a fonte no GitHub. `quality-standard-prompt.ts` define o texto padrão; a store injeta via `initialText` em `ensure()` (~1.2s após spawn; transiente — não persiste nem reenvia ao reabrir). Editável + toggle (default ligado) nas Configurações, persistido em `settings` (`canvas.quality-standard-prompt`/`-enabled`). Shell puro não recebe.
 
+[2026-06-22] Opções de spawn do agente (modelo/esforço/yolo) — Ao criar um terminal-agente, o menu oferece modelo, esforço e yolo por agente, montando as FLAGS REAIS de cada CLI (verificadas via `<cli> --help` na máquina, não chutadas): Claude `--model`/`--effort <low|medium|high|max>`/`--dangerously-skip-permissions`; Codex `--model`/`-c model_reasoning_effort=<low|medium|high|xhigh>`/`--dangerously-bypass-approvals-and-sandbox`; Gemini `--model`/(sem esforço)/`--yolo`. `services/agent-launch-options.ts` cataloga agentes+modelos e `buildAgentArgs` gera os args; os campos se adaptam (Gemini não mostra esforço). Os args ficam no `data` do nó (persistem ao reabrir, já fluem store→IPC→pty-process-manager→node-pty). Modelos são listas extensíveis por agente.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
