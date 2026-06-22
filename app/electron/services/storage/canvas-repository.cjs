@@ -83,6 +83,74 @@ function createCanvasRepository(database) {
 
       return result.changes > 0
     },
+    listEdges() {
+      return connection
+        .prepare(
+          'SELECT * FROM canvas_edges WHERE archived_at IS NULL ORDER BY updated_at ASC',
+        )
+        .all()
+        .map(mapEdgeRow)
+    },
+    saveEdge(edge) {
+      const normalizedEdge = normalizeEdge(edge)
+
+      connection
+        .prepare(
+          `INSERT INTO canvas_edges (id, source, target, created_at, updated_at, archived_at)
+           VALUES (?, ?, ?, ?, ?, NULL)
+           ON CONFLICT(id) DO UPDATE SET
+             source = excluded.source,
+             target = excluded.target,
+             updated_at = excluded.updated_at,
+             archived_at = NULL`,
+        )
+        .run(
+          normalizedEdge.id,
+          normalizedEdge.source,
+          normalizedEdge.target,
+          normalizedEdge.createdAt,
+          normalizedEdge.updatedAt,
+        )
+
+      return normalizedEdge
+    },
+    deleteEdge(edgeId) {
+      const now = new Date().toISOString()
+      const result = connection
+        .prepare(
+          `UPDATE canvas_edges
+           SET archived_at = ?, updated_at = ?
+           WHERE id = ? AND archived_at IS NULL`,
+        )
+        .run(now, now, requireNodeId(edgeId))
+
+      return result.changes > 0
+    },
+  }
+}
+
+function normalizeEdge(edge) {
+  if (!edge || typeof edge !== 'object') {
+    throw new Error('Aresta de canvas invalida.')
+  }
+
+  const id = requireNodeId(edge.id)
+  const source = requireNodeId(edge.source)
+  const target = requireNodeId(edge.target)
+  const now = new Date().toISOString()
+  const createdAt = isIsoString(edge.createdAt) ? edge.createdAt : now
+  const updatedAt = isIsoString(edge.updatedAt) ? edge.updatedAt : now
+
+  return { id, source, target, createdAt, updatedAt }
+}
+
+function mapEdgeRow(row) {
+  return {
+    id: row.id,
+    source: row.source,
+    target: row.target,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -175,5 +243,6 @@ function parseJsonObject(valueJson) {
 module.exports = {
   createCanvasRepository,
   normalizeNode,
+  normalizeEdge,
   NODE_TYPES,
 }

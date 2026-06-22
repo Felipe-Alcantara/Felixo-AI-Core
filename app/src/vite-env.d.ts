@@ -20,6 +20,14 @@ import type {
 
 type DetectedRepo = { name: string; path: string }
 
+type PersistedCanvasEdge = {
+  id: string
+  source: string
+  target: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 type PersistedCanvasNode = {
   id: string
   type: 'terminal' | 'note' | 'group' | 'file'
@@ -237,6 +245,11 @@ declare global {
           node: PersistedCanvasNode,
         ) => Promise<CliInvokeResult & { node?: PersistedCanvasNode }>
         delete: (nodeId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+        listEdges: () => Promise<CliInvokeResult & { edges?: PersistedCanvasEdge[] }>
+        saveEdge: (
+          edge: PersistedCanvasEdge,
+        ) => Promise<CliInvokeResult & { edge?: PersistedCanvasEdge }>
+        deleteEdge: (edgeId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>
