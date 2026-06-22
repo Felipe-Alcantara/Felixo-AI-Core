@@ -8,7 +8,7 @@
  * first-class columns so layout queries stay simple.
  */
 
-const NODE_TYPES = new Set(['terminal', 'note', 'group'])
+const NODE_TYPES = new Set(['terminal', 'note', 'group', 'file'])
 
 function createCanvasRepository(database) {
   const connection = database?.connection ?? database
