@@ -319,3 +319,10 @@ BACKEND: `app-paths` ganhou `canvasFiles` (userData/canvas-files, criada no init
 FRONTEND: `FileNode` renderiza o .md (MarkdownContent), observa mudanças (re-lê no `canvas-file:changed`), edita (grava de volta), botão "copiar caminho" (para colar no agente: "edite este arquivo"). Botão "Arquivo" na toolbar cria o .md e o bloco; `fileName` persiste no data do nó.
 TESTE: build (tsc+vite) e lint limpos; suíte 378 pass, 0 fail (+3 do resolveSafePath).
 SOBRE CONEXÕES (pergunta do usuário): ligar blocos hoje é só visual e NÃO persiste (edges não tocam o backend) — adiado de propósito; o usuário priorizou a persistência via arquivos primeiro. Ideias futuras anotadas: encadear saída→contexto, gatilho ao terminar, anexar prompt a terminal.
+
+[2026-06-21] Fase 3.6 — Conexões com significado: arquivo→terminal + edges persistidas.
+DECISÃO (usuário): ligar um bloco-arquivo a um terminal deve INFORMAR O CAMINHO ao agente (não colar conteúdo); dispara no momento da ligação (onConnect); e as conexões PERSISTEM.
+EDGES PERSISTIDAS: migration 008 cria `canvas_edges` (source/target, soft-delete). `canvas-repository` ganhou listEdges/saveEdge/deleteEdge (+normalizeEdge, com testes). IPC `canvas:list-edges/save-edge/delete-edge` + bridge + tipo `PersistedCanvasEdge`. Frontend: `canvas-storage` ganhou load/save/deleteCanvasEdge; `CanvasView` hidrata edges ao montar, salva no onConnect, remove no onEdgesChange. As linhas voltam ao reabrir.
+AÇÃO ARQUIVO→TERMINAL: `TerminalSessionStore.sendText(id, texto)` injeta texto no PTY. No onConnect, `announceFileToTerminal` detecta um par file↔terminal (qualquer direção), resolve o caminho absoluto do .md (`canvasFiles.resolve`) e digita no terminal uma linha-comentário com o caminho ("leia e mantenha suas anotacoes nele"), para o agente reconhecer/editar o arquivo. Combina com o file watcher: o agente edita → o FileNode re-renderiza ao vivo.
+TESTE: build (tsc+vite) e lint limpos; suíte 380 pass, 0 fail.
+PENDENTE/IDEIAS: a linha é enviada como comentário (inerte no shell; o agente lê). Outros tipos de conexão (terminal→terminal encadeando saída, gatilho ao terminar) seguem em aberto.
