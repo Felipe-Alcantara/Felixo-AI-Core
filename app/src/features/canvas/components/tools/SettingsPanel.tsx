@@ -25,12 +25,12 @@ export function SettingsPanel({
   onBootstrapSaved,
 }: SettingsPanelProps) {
   return (
-    <CanvasPanel title="Configuracoes" icon={<Settings size={15} />} onClose={onClose}>
+    <CanvasPanel title="Configurações" icon={<Settings size={15} />} onClose={onClose}>
       <PromptField
-        label="Instrucao ao ligar arquivo a um terminal"
+        label="Instrução ao ligar arquivo a um terminal"
         help={
           <>
-            Enviada ao conectar um bloco de arquivo (com conteudo) a um terminal.
+            Enviada ao conectar um bloco de arquivo (com conteúdo) a um terminal.
           </>
         }
         defaultValue={DEFAULT_FILE_LINK_PROMPT}
@@ -42,11 +42,11 @@ export function SettingsPanel({
       <div className="my-3 border-t border-white/10" />
 
       <PromptField
-        label="Instrucao de bootstrap (repo + arquivo vazio)"
+        label="Instrução de bootstrap (repo + arquivo vazio)"
         help={
           <>
-            Excecao: quando o terminal esta em um projeto e o .md esta vazio, o
-            agente analisa o repositorio e escreve o plano de evolucao.
+            Exceção: quando o terminal está em um projeto e o .md está vazio, o
+            agente analisa o repositório e escreve o plano de evolução.
           </>
         }
         defaultValue={DEFAULT_FILE_BOOTSTRAP_PROMPT}
@@ -130,10 +130,10 @@ function PromptField({
           type="button"
           onClick={() => setValue(defaultValue)}
           className="flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
-          title="Restaurar o texto padrao"
+          title="Restaurar o texto padrão"
         >
           <RotateCcw size={14} />
-          Padrao
+          Padrão
         </button>
       </div>
     </div>

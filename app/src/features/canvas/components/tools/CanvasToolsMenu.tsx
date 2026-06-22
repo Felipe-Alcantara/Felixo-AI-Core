@@ -22,7 +22,7 @@ const TOOLS: ToolEntry[] = [
   { tool: 'models', label: 'Modelos', icon: LayoutList },
   { tool: 'prompts', label: 'Prompts', icon: Sparkles },
   { tool: 'git', label: 'Git', icon: GitBranch },
-  { tool: 'settings', label: 'Configuracoes', icon: Settings },
+  { tool: 'settings', label: 'Configurações', icon: Settings },
 ]
 
 type CanvasToolsMenuProps = {

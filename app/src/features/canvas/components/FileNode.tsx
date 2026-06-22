@@ -121,7 +121,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         <textarea
           value={content}
           onChange={(event) => save(event.target.value)}
-          placeholder="# Conteudo do arquivo .md"
+          placeholder="# Conteúdo do arquivo .md"
           className="nodrag min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-xs text-zinc-200 outline-none"
         />
       ) : (

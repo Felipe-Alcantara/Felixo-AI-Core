@@ -26,7 +26,7 @@ export function CopyButton({ onCopy }: CopyButtonProps) {
           window.setTimeout(() => setCopied(false), 1500)
         }
       }}
-      title="Copiar selecao (ou a tela visivel)"
+      title="Copiar seleção (ou a tela visível)"
       aria-label="Copiar do terminal"
     >
       {copied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}

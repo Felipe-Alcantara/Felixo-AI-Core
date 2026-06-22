@@ -88,7 +88,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             ))
           ) : (
-            <span className="text-zinc-600">Sem saida ainda…</span>
+            <span className="text-zinc-600">Sem saída ainda…</span>
           )}
         </div>
       </button>
