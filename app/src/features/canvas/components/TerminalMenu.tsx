@@ -18,7 +18,12 @@ export type NewTerminalOptions = {
 type TerminalMenuProps = {
   projects: TerminalMenuProject[]
   onAdd: (options: NewTerminalOptions) => void
+  /** Adds a folder as a project (picker + detect repos), returns the new ids. */
+  onAddFolder: () => Promise<string[]>
 }
+
+/** Sentinel value in the project select that triggers the folder picker. */
+const ADD_FOLDER_VALUE = '__add_folder__'
 
 const AGENTS: TerminalAgent[] = [
   { command: undefined, label: 'Shell' },
@@ -32,11 +37,22 @@ const AGENTS: TerminalAgent[] = [
  * and a project (or local), then open — both default to "none", so a single
  * click opens a local shell. The block name is derived from the selection.
  */
-export function TerminalMenu({ projects, onAdd }: TerminalMenuProps) {
+export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps) {
   const [open, setOpen] = useState(false)
   const [agentIndex, setAgentIndex] = useState(0)
   const [projectId, setProjectId] = useState<string>('')
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const handleProjectChange = async (value: string) => {
+    if (value !== ADD_FOLDER_VALUE) {
+      setProjectId(value)
+      return
+    }
+
+    // Pick a folder and select the first project it produced.
+    const addedIds = await onAddFolder()
+    setProjectId(addedIds[0] ?? '')
+  }
 
   useEffect(() => {
     if (!open) {
@@ -105,7 +121,7 @@ export function TerminalMenu({ projects, onAdd }: TerminalMenuProps) {
           <label className="mb-1 block text-xs font-medium text-zinc-400">Projeto</label>
           <select
             value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
+            onChange={(event) => void handleProjectChange(event.target.value)}
             className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
           >
             <option value="">Local (sem projeto)</option>
@@ -114,6 +130,7 @@ export function TerminalMenu({ projects, onAdd }: TerminalMenuProps) {
                 {project.name}
               </option>
             ))}
+            <option value={ADD_FOLDER_VALUE}>+ Adicionar pasta…</option>
           </select>
 
           <button
