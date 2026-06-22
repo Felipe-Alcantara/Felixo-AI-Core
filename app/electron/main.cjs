@@ -12,6 +12,9 @@ const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handler
 const { registerNotesIpcHandlers } = require('./services/notes-ipc-handlers.cjs')
 const { registerCanvasIpcHandlers } = require('./services/canvas-ipc-handlers.cjs')
 const {
+  registerCanvasFilesIpcHandlers,
+} = require('./services/canvas-files-ipc-handlers.cjs')
+const {
   registerAutomationsIpcHandlers,
 } = require('./services/automations-ipc-handlers.cjs')
 const {
@@ -34,6 +37,7 @@ const platform = require('./core/platform/index.cjs')
 
 let mainWindow = null
 let ptyHandlers = null
+let canvasFilesHandlers = null
 let storageDatabase = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
@@ -80,6 +84,7 @@ app.whenReady().then(() => {
   registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
   registerNotesIpcHandlers({ database: storageDatabase })
   registerCanvasIpcHandlers({ database: storageDatabase })
+  canvasFilesHandlers = registerCanvasFilesIpcHandlers(getMainWindow, appPaths)
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
@@ -134,6 +139,15 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     ptyHandlers = null
+  }
+
+  if (canvasFilesHandlers) {
+    try {
+      canvasFilesHandlers.dispose()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    canvasFilesHandlers = null
   }
 
   const databaseToClose = storageDatabase

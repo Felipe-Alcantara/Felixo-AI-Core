@@ -76,6 +76,19 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (node) => ipcRenderer.invoke('canvas:save', node),
     delete: (nodeId) => ipcRenderer.invoke('canvas:delete', nodeId),
   },
+  canvasFiles: {
+    list: () => ipcRenderer.invoke('canvas-file:list'),
+    read: (params) => ipcRenderer.invoke('canvas-file:read', params),
+    write: (params) => ipcRenderer.invoke('canvas-file:write', params),
+    resolve: (params) => ipcRenderer.invoke('canvas-file:resolve', params),
+    watch: (params) => ipcRenderer.invoke('canvas-file:watch', params),
+    unwatch: (params) => ipcRenderer.invoke('canvas-file:unwatch', params),
+    onChanged: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('canvas-file:changed', handler)
+      return () => ipcRenderer.removeListener('canvas-file:changed', handler)
+    },
+  },
   automations: {
     list: () => ipcRenderer.invoke('automations:list'),
     save: (automation) => ipcRenderer.invoke('automations:save', automation),
