@@ -33,6 +33,16 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
   ipcMain.handle('projects:detect-repos', (_event, folderPath) => {
     if (!folderPath || typeof folderPath !== 'string') return []
     try {
+      // If the selected folder is itself a repo, it IS the project — don't
+      // descend into it (avoids picking up repos nested inside another repo,
+      // e.g. a vendored standards repo).
+      if (hasGit(folderPath)) {
+        return [{ name: path.basename(folderPath), path: folderPath }]
+      }
+
+      // Otherwise it's a parent folder: register each direct child that is a
+      // repo, one project per repo. Only the first level is scanned, so a repo
+      // nested inside one of those children is never split out.
       const entries = fs.readdirSync(folderPath, { withFileTypes: true })
       return entries
         .filter((e) => e.isDirectory() && hasGit(path.join(folderPath, e.name)))

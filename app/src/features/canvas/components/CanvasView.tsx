@@ -259,16 +259,22 @@ function CanvasInner() {
         ? repos
         : [{ name: folder.split('/').filter(Boolean).pop() ?? folder, path: folder }]
 
-    const addedIds: string[] = []
+    const existingByPath = new Map(projects.map((project) => [project.path, project.id]))
+    const ids: string[] = []
     for (const repo of picked) {
+      const existingId = existingByPath.get(repo.path)
+      if (existingId) {
+        ids.push(existingId)
+        continue
+      }
       const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
       await bridge.save({ id, name: repo.name, path: repo.path })
-      addedIds.push(id)
+      ids.push(id)
     }
 
     reloadProjects()
-    return addedIds
-  }, [reloadProjects])
+    return ids
+  }, [reloadProjects, projects])
 
   useEffect(() => {
     let cancelled = false
