@@ -5,7 +5,7 @@ import {
   ideaStarters,
   quickPrompts,
 } from '../data/models'
-import { defaultAutomations } from '../data/automations'
+import { defaultAutomations } from '../../shared/data/automations'
 import {
   createAssistantMessage,
   createUserMessage,

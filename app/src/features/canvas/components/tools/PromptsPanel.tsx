@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Check, Copy, Sparkles } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
-import { defaultAutomations } from '../../../chat/data/automations'
-import type { AutomationDefinition } from '../../../chat/types'
+import { defaultAutomations } from '../../../shared/data/automations'
+import type { AutomationDefinition } from '../../../shared/types/automations'
 
 type PromptsPanelProps = {
   onClose: () => void

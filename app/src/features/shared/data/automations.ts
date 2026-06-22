@@ -1,4 +1,4 @@
-import type { AutomationDefinition } from '../types'
+import type { AutomationDefinition } from '../types/automations'
 
 export const defaultAutomations: AutomationDefinition[] = [
   {
