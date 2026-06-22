@@ -16,11 +16,12 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react'
-import { Group, Hand, MousePointer2, StickyNote } from 'lucide-react'
+import { FileText, Group, Hand, MousePointer2, StickyNote } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { GroupNode } from './GroupNode'
+import { FileNode } from './FileNode'
 import { TerminalMenu } from './TerminalMenu'
 import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
@@ -36,6 +37,7 @@ import type { CanvasNodeType } from '../types'
 
 const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = {
   group: { width: 480, height: 320 },
+  file: { width: 320, height: 260 },
   terminal: { width: 520, height: 360 },
   note: { width: 220, height: 160 },
 }
@@ -164,7 +166,7 @@ function CanvasInner() {
       nodes.map((node) => {
         const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
-        if (node.type === 'note' || node.type === 'group') {
+        if (node.type === 'note' || node.type === 'group' || node.type === 'file') {
           return {
             ...withHandle,
             data: { ...node.data, onDataChange: updateNodeData },
@@ -255,6 +257,13 @@ function CanvasInner() {
     [setNodes, persistNode],
   )
 
+  const addFileNode = useCallback(() => {
+    const fileName = `nota-${Date.now()}.md`
+    // Create the file on disk so it exists for agents and the watcher.
+    void window.felixo?.canvasFiles?.write({ name: fileName, content: '' })
+    addNode('file', { fileName, label: fileName })
+  }, [addNode])
+
   const addTerminalNode = useCallback(
     (options: { command?: string; cwd?: string; label: string }) => {
       addNode('terminal', {
@@ -309,7 +318,7 @@ function CanvasInner() {
   )
 
   const nodeTypes = useMemo<NodeTypes>(
-    () => ({ terminal: TerminalNode, note: NoteNode, group: GroupNode }),
+    () => ({ terminal: TerminalNode, note: NoteNode, group: GroupNode, file: FileNode }),
     [],
   )
 
@@ -337,6 +346,15 @@ function CanvasInner() {
         >
           <StickyNote size={16} />
           Nota
+        </button>
+        <button
+          type="button"
+          onClick={addFileNode}
+          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
+          title="Bloco de arquivo .md compartilhado (agentes podem editar)"
+        >
+          <FileText size={16} />
+          Arquivo
         </button>
         <button
           type="button"

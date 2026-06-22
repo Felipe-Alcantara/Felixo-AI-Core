@@ -1,6 +1,12 @@
-export type CanvasNodeType = 'terminal' | 'note' | 'group'
+export type CanvasNodeType = 'terminal' | 'note' | 'group' | 'file'
 
 export type GroupNodeData = {
+  label?: string
+}
+
+export type FileNodeData = {
+  /** Filename of the .md inside the app's canvas-files directory. */
+  fileName?: string
   label?: string
 }
 
@@ -21,7 +27,7 @@ export type NoteNodeData = {
   color?: NoteColor
 }
 
-export type CanvasNodeData = TerminalNodeData & NoteNodeData & GroupNodeData
+export type CanvasNodeData = TerminalNodeData & NoteNodeData & GroupNodeData & FileNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */
 export type PersistedCanvasNode = {
