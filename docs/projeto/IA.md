@@ -370,6 +370,8 @@ TESTE: build (tsc+vite) e lint limpos; suíte 380 pass, 0 fail.
 
 [2026-06-22] Opções de spawn do agente (modelo/esforço/yolo) — Ao criar um terminal-agente, o menu oferece modelo, esforço e yolo por agente, montando as FLAGS REAIS de cada CLI (verificadas via `<cli> --help` na máquina, não chutadas): Claude `--model`/`--effort <low|medium|high|max>`/`--dangerously-skip-permissions`; Codex `--model`/`-c model_reasoning_effort=<low|medium|high|xhigh>`/`--dangerously-bypass-approvals-and-sandbox`; Gemini `--model`/(sem esforço)/`--yolo`. `services/agent-launch-options.ts` cataloga agentes+modelos e `buildAgentArgs` gera os args; os campos se adaptam (Gemini não mostra esforço). Os args ficam no `data` do nó (persistem ao reabrir, já fluem store→IPC→pty-process-manager→node-pty). Modelos são listas extensíveis por agente.
 
+[2026-06-22] Detecção de repositórios ao adicionar pasta — `projects:detect-repos` agora: se a pasta selecionada já é um repo (`.git` próprio), retorna só ela e NÃO desce (evita registrar um repo aninhado — ex.: o repo de padrões vendorizado dentro de outro projeto — como projeto à parte; cobre o aviso do usuário sobre repo-dentro-de-repo). Senão, varre as subpastas diretas (1 nível) e retorna um por repo; o frontend salva cada um. Dedupe por caminho no frontend (ProjectsPanel e addProjectFolder) — readicionar uma pasta-mãe não cria duplicatas; `addProjectFolder` retorna o id existente quando o caminho já está cadastrado. DÍVIDA: `projects-repository.save` ainda dedupa só por id (ON CONFLICT(id)); a dedupe por caminho vive no frontend.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
