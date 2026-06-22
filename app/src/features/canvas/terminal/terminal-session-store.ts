@@ -183,6 +183,15 @@ export class TerminalSessionStore {
     this.sessions.get(id)?.terminal.focus()
   }
 
+  /** Types text into the session's PTY as if the user had typed it. */
+  sendText(id: string, text: string): void {
+    const session = this.sessions.get(id)
+    if (!session) {
+      return
+    }
+    void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+  }
+
   getSnapshot(id: string): SessionSnapshot | undefined {
     return this.sessions.get(id)?.snapshot
   }
