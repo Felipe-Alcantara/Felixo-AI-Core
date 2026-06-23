@@ -380,6 +380,22 @@ TESTE: build (tsc+vite) e lint limpos; suíte 380 pass, 0 fail.
 
 [2026-06-22] Limpeza completa e portabilidade do canvas — A barra do canvas ganhou **Limpar**, **Exportar** e **Importar**. Limpar exige confirmação, cancela saves pendentes, encerra PTYs/watchers e remove fisicamente nós, conexões e `.md` do diretório dedicado. Exportar gera um manifesto `.fxcanvas` versionado (`felixo-canvas`, versão 1) com o estado vivo do React Flow e somente os Markdown registrados; arquivo registrado mas ausente entra vazio para ser recriado. Importar lê até 60 MB, valida formato, versão, limites, IDs, grupos, conexões e nomes confinados antes da confirmação; depois substitui os `.md` e troca o SQLite numa transação, com restauração dos arquivos anteriores se qualquer etapa falhar. Caminhos `cwd` e argumentos de terminal não viajam; apenas `claude`, `codex` e `gemini` são preservados como comandos conhecidos, usando opções padrão. Entradas tentam impedir traversal, arquivos duplicados, comandos arbitrários e pacotes acima dos limites. O renderer remonta o React Flow após importar para restabelecer watchers, e saves pendentes são reagendados se a importação operacional falhar. TESTE: build e lint limpos; suíte 390 pass, incluindo manifesto portátil, segurança, arquivos, transação SQLite e fluxo IPC com rollback.
 
+[2026-06-22] Correções do canvas (scroll/terminal) e animações.
+1. SCROLL NO ARQUIVO: bloco-arquivo não rolava com o mouse — o React Flow capturava o wheel para zoom/pan. `FileNode` ganhou a classe `nowheel` (do React Flow) na visualização e no textarea; agora o conteúdo rola normalmente sob o cursor.
+2. TERMINAL CORTADO + SELEÇÃO BUGADA: o CSS do xterm (`@xterm/xterm/css/xterm.css`) nunca era importado — sem ele a tela e a camada de seleção ficavam mal posicionadas, cortando a última linha e bugando a seleção de texto. Importado em `main.tsx`. O `TerminalDrawer` ganhou um `ResizeObserver` que re-ajusta (`fit`) o terminal quando a caixa estabiliza (após a animação de abertura), eliminando a linha cortada.
+3. ANIMAÇÕES: keyframes em `index.css` (slide do drawer, fade/scale dos painéis e do menu de ferramentas) + hook `useExitAnimation` (toca a saída antes de desmontar). Aplicado em `CanvasPanel` (todas as abas), `TerminalDrawer` e `CanvasToolsMenu`. Respeita `prefers-reduced-motion`.
+TESTE: tsc limpo; suíte 392 pass. DÍVIDA PRÉ-EXISTENTE: lint acusa `react-hooks/refs` em `CanvasView.tsx` (useMemo lê um ref em render) — já estava no main, fora do escopo desta rodada.
+
+[2026-06-22] Atividade do terminal — fim do "sempre trabalhando".
+BUG (usuário): o card do terminal ficava eternamente "trabalhando" mesmo com o agente parado. CAUSA: CLIs de agente animam um spinner/contador continuamente enquanto aguardam input; cada frame emitia bytes, chamava `markWorking` e reiniciava o timer de idle, que nunca disparava. FIX em `terminal-session-store.ts`: `computeSignature` lê o viewport do xterm normalizando fora glifos de animação (braille, `|/-\`, blocos, cursor) e contadores de tempo (`12s`, `1m04s`); `onOutput` só conta como trabalho real quando a assinatura muda; `scheduleIdleCheck` só marca `idle` após silêncio significativo real (sem mudança de assinatura por `IDLE_AFTER_MS`). Substitui a heurística antiga de "qualquer byte = working" (dívida anotada na Fase 3.2).
+
+[2026-06-23] Reconcepção do .md do canvas — de "plano para MVP" para SCRATCHPAD VIVO.
+VISÃO (usuário): a ideia central do projeto é servir de harness onde modelos mais baratos fiquem em loop refinando o trabalho através do arquivo do canvas. O formato "plano para MVP" (fases numeradas, MVP vs grande demais, template de contexto formal) virou complexidade desnecessária e atrapalhava esse loop. O .md deve ser leve o suficiente para um modelo barato manter preciso a cada passada, e o canal de conversa entre agentes deve ser simples.
+DECISÃO: o .md vira um SCRATCHPAD de formato livre com seções fixas curtas — Objetivo / Estado atual / Travas / Próximo passo / Sinais entre agentes. "Sinais entre agentes" (linhas datadas: agente — o quê — status) é o canal de coordenação, desacoplado de fases. O bootstrap (repo + .md vazio) deixa de gerar um plano de evolução amplo e passa a escrever um DIAGNÓSTICO concreto e observável do repo, em categorias que o agente encontra lendo o código: 🐛 problemas, 🚧 incompleto, 🔧 funções auxiliares, 📈 melhorias (pequeno e grande porte). Motivo de trocar "MVP" por categorias: "MVP" é amplo/subjetivo demais para um modelo barato; categorias observáveis viram checklist de trabalho real.
+IMPL: `file-link-prompt.ts` reescrito (`DEFAULT_FILE_LINK_PROMPT` + `DEFAULT_FILE_BOOTSTRAP_PROMPT`); `quality-standard-prompt.ts`, `CanvasView.tsx` e `SettingsPanel.tsx` tiveram a linguagem "plano vivo" alinhada para "scratchpad" (comentários, help da UI). A lógica de *quando* disparar bootstrap (repo + vazio) não mudou — só o conteúdo dos prompts. As Fases 3.7/3.8 acima descrevem o formato "plano vivo" anterior e ficam como trilha histórica.
+PENDENTE (próxima rodada, decidido com o usuário): toggle por bloco entre modo Scratchpad (padrão) e modo Plano/Diagnóstico, com a geração do diagnóstico como ação opcional (botão) em vez de automática ao ligar arquivo→terminal.
+TESTE: tsc limpo; suíte 392 pass.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
@@ -392,7 +408,7 @@ TESTE: build (tsc+vite) e lint limpos; suíte 380 pass, 0 fail.
 
 ## Bugs & Fixes Relevantes
 
-> Bugs e correções estão registrados em ordem no "Histórico de Evolução" acima (StrictMode no terminal, minimap branco, preview com lixo, troca de terminal no drawer, etc.) e na seção "Testes Importantes" (bugs do período do chat/orquestração).
+> Bugs e correções estão registrados em ordem no "Histórico de Evolução" acima (StrictMode no terminal, minimap branco, preview com lixo, troca de terminal no drawer, scroll do bloco-arquivo, CSS do xterm ausente cortando/bugando o terminal, terminal "sempre trabalhando", etc.) e na seção "Testes Importantes" (bugs do período do chat/orquestração).
 
 ## Integrações & Serviços Externos
 
