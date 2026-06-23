@@ -341,10 +341,21 @@ function CanvasInner() {
   const fileLinkPromptRef = useRef(DEFAULT_FILE_LINK_PROMPT)
   const bootstrapPromptRef = useRef(DEFAULT_FILE_BOOTSTRAP_PROMPT)
   // Standing "follow the quality standard" instruction for agent terminals.
-  const qualityStandardRef = useRef({
+  // State drives the rendered-nodes memo (so a backend load or a settings save
+  // recomputes each terminal's initialText); the ref mirrors it for callbacks
+  // that read it outside render (addTerminalNode).
+  const [qualityStandard, setQualityStandard] = useState({
     prompt: DEFAULT_QUALITY_STANDARD_PROMPT,
     enabled: true,
   })
+  const qualityStandardRef = useRef(qualityStandard)
+  const applyQualityStandard = useCallback(
+    (value: { prompt: string; enabled: boolean }) => {
+      qualityStandardRef.current = value
+      setQualityStandard(value)
+    },
+    [],
+  )
   const importInputRef = useRef<HTMLInputElement>(null)
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
@@ -362,16 +373,16 @@ function CanvasInner() {
     })
     void window.felixo?.canvas?.getQualityStandard?.().then((result) => {
       if (result?.ok) {
-        qualityStandardRef.current = {
+        applyQualityStandard({
           prompt:
             typeof result.prompt === 'string' && result.prompt.trim()
               ? result.prompt
               : DEFAULT_QUALITY_STANDARD_PROMPT,
           enabled: result.enabled !== false,
-        }
+        })
       }
     })
-  }, [])
+  }, [applyQualityStandard])
 
   // 'Q' toggles select/pan, but only when the canvas itself is focused — never
   // while typing in a field, terminal or tool panel.
@@ -552,7 +563,7 @@ function CanvasInner() {
         }
 
         if (node.type === 'terminal') {
-          const quality = qualityStandardRef.current
+          const quality = qualityStandard
           const connectedFileNames = getConnectedCanvasFileNames(node.id, nodes, edges)
           const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
           const initialTextReady =
@@ -582,7 +593,14 @@ function CanvasInner() {
 
         return withHandle
       }),
-    [edges, edgesHydrated, nodes, terminalCanvasFilePaths, updateNodeData],
+    [
+      edges,
+      edgesHydrated,
+      nodes,
+      qualityStandard,
+      terminalCanvasFilePaths,
+      updateNodeData,
+    ],
   )
 
   // Groups must render before their children so they sit behind them.
@@ -1029,9 +1047,7 @@ function CanvasInner() {
           onBootstrapSaved={(prompt) => {
             bootstrapPromptRef.current = prompt
           }}
-          onQualityStandardSaved={(value) => {
-            qualityStandardRef.current = value
-          }}
+          onQualityStandardSaved={applyQualityStandard}
         />
       )}
 
