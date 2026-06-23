@@ -54,6 +54,7 @@ import {
   buildCanvasTerminalInitialText,
 } from '../services/quality-standard-prompt'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
+import { SearchPanel } from './tools/SearchPanel'
 import { ProjectsPanel } from './tools/ProjectsPanel'
 import { NotesPanel } from './tools/NotesPanel'
 import { ModelsPanel } from './tools/ModelsPanel'
@@ -96,6 +97,11 @@ type FlowPositionMapper = {
     x: number
     y: number
   }
+  setCenter: (
+    x: number,
+    y: number,
+    options?: { zoom?: number; duration?: number },
+  ) => void
 }
 
 /**
@@ -610,6 +616,26 @@ function CanvasInner() {
     [nodes, edges, store],
   )
 
+  // Search → navigate: center+zoom the canvas on a block and select only it.
+  const focusNode = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((item) => item.id === nodeId)
+      if (!node) {
+        return
+      }
+      const size = getNodeSize(node)
+      flowInstanceRef.current?.setCenter(
+        node.position.x + size.width / 2,
+        node.position.y + size.height / 2,
+        { zoom: 1.2, duration: 400 },
+      )
+      setNodes((current) =>
+        current.map((item) => ({ ...item, selected: item.id === nodeId })),
+      )
+    },
+    [nodes, setNodes],
+  )
+
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
@@ -1095,6 +1121,13 @@ function CanvasInner() {
         <ProjectsPanel
           onClose={() => setActiveTool(null)}
           onProjectsChanged={reloadProjects}
+        />
+      )}
+      {activeTool === 'search' && (
+        <SearchPanel
+          nodes={nodes}
+          onFocusNode={focusNode}
+          onClose={() => setActiveTool(null)}
         />
       )}
       {activeTool === 'notes' && (
