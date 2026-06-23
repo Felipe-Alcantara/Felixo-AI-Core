@@ -4,11 +4,29 @@ export type GroupNodeData = {
   label?: string
 }
 
+/**
+ * How the linked .md is treated:
+ * - `scratchpad` (default): a light, free-form living log (objective, state,
+ *   blockers, next step, signals) that cheap models keep accurate in a loop.
+ * - `plan`: the block can ask a connected terminal to write a concrete repo
+ *   diagnosis (problems, incomplete, helpers, improvements) into the file.
+ */
+export type FileNodeMode = 'scratchpad' | 'plan'
+
 export type FileNodeData = {
   /** Filename of the .md inside the app's canvas-files directory. */
   fileName?: string
   label?: string
+  /** Per-block mode; defaults to `scratchpad` when absent. */
+  mode?: FileNodeMode
 }
+
+/** Outcome of an on-demand repo-diagnosis request from a file block. */
+export type DiagnosisRequestStatus =
+  | 'ok'
+  | 'no-terminal'
+  | 'no-file'
+  | 'resolve-failed'
 
 export type TerminalNodeData = {
   /** Optional binary to launch; defaults to the shell on the backend. */

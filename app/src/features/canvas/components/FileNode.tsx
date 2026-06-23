@@ -6,13 +6,26 @@ import {
   useReactFlow,
   type NodeProps,
 } from '@xyflow/react'
-import { Check, Copy, Eye, FileText, Pencil } from 'lucide-react'
+import { Check, Copy, Eye, FileText, Pencil, Stethoscope } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { MarkdownContent } from '../../shared/components/MarkdownContent'
-import type { FileNodeData } from '../types'
+import type {
+  DiagnosisRequestStatus,
+  FileNodeData,
+  FileNodeMode,
+} from '../types'
 
 type FileNodeDataWithHandlers = FileNodeData & {
   onDataChange?: (nodeId: string, patch: Partial<FileNodeData>) => void
+  onGenerateDiagnosis?: (nodeId: string) => Promise<DiagnosisRequestStatus>
+}
+
+/** Short user-facing feedback for each diagnosis request outcome. */
+const DIAGNOSIS_FEEDBACK: Record<DiagnosisRequestStatus, string> = {
+  ok: 'Diagnóstico solicitado ao terminal conectado.',
+  'no-terminal': 'Ligue este arquivo a um terminal com agente primeiro.',
+  'no-file': 'Arquivo do bloco indisponível.',
+  'resolve-failed': 'Não foi possível resolver o caminho do arquivo.',
 }
 
 /**
@@ -28,7 +41,28 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   const [editing, setEditing] = useState(false)
   const [absolutePath, setAbsolutePath] = useState('')
   const [copied, setCopied] = useState(false)
+  const [diagnosing, setDiagnosing] = useState(false)
+  const [diagnosisFeedback, setDiagnosisFeedback] = useState('')
   const { deleteElements } = useReactFlow()
+
+  const mode: FileNodeMode = nodeData.mode ?? 'scratchpad'
+
+  const setMode = (next: FileNodeMode) => {
+    setDiagnosisFeedback('')
+    nodeData.onDataChange?.(id, { mode: next })
+  }
+
+  const generateDiagnosis = async () => {
+    if (diagnosing || !nodeData.onGenerateDiagnosis) return
+    setDiagnosing(true)
+    setDiagnosisFeedback('')
+    try {
+      const status = await nodeData.onGenerateDiagnosis(id)
+      setDiagnosisFeedback(DIAGNOSIS_FEEDBACK[status])
+    } finally {
+      setDiagnosing(false)
+    }
+  }
 
   // Load, resolve absolute path, and watch the file for external changes.
   useEffect(() => {
@@ -116,6 +150,45 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           {editing ? <Eye size={13} /> : <Pencil size={13} />}
         </button>
       </NodeHeader>
+
+      <div className="nodrag flex items-center gap-1 border-b border-sky-300/10 bg-sky-950/30 px-2 py-1 text-[11px]">
+        <span className="inline-flex overflow-hidden rounded ring-1 ring-white/10">
+          <button
+            type="button"
+            onClick={() => setMode('scratchpad')}
+            className={`px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+            title="Modo scratchpad: log vivo e leve"
+          >
+            Scratchpad
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('plan')}
+            className={`px-1.5 py-0.5 ${mode === 'plan' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+            title="Modo plano: gerar diagnóstico do repositório"
+          >
+            Plano
+          </button>
+        </span>
+        {mode === 'plan' && (
+          <button
+            type="button"
+            onClick={() => void generateDiagnosis()}
+            disabled={diagnosing}
+            className="nodrag ml-auto inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60 disabled:opacity-50"
+            title="Pedir ao terminal conectado um diagnóstico do repositório"
+          >
+            <Stethoscope size={12} />
+            {diagnosing ? 'Solicitando…' : 'Gerar diagnóstico'}
+          </button>
+        )}
+      </div>
+
+      {mode === 'plan' && diagnosisFeedback && (
+        <div className="nodrag border-b border-sky-300/10 bg-sky-950/20 px-2 py-1 text-[11px] text-sky-200/80">
+          {diagnosisFeedback}
+        </div>
+      )}
 
       {editing ? (
         <textarea
