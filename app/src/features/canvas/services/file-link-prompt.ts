@@ -1,34 +1,51 @@
 /**
  * The instruction injected into a terminal when a file block is linked to it.
  *
- * The linked `.md` is not a prompt — it's a *living plan* shared by every agent
- * working on the project: phases, checklists, tests, goals, decisions, and
- * cross-agent signalling. The prompts ask the agent to follow the project's
- * context template (TEMPLATE-CONTEXTO-IA / IA.md) when writing the plan, so the
- * file stays in the project's standard instead of an ad-hoc format.
+ * The linked `.md` is not a prompt — it's a *living scratchpad* shared by every
+ * agent working through the canvas: what we're doing, where it stands, what's
+ * blocking, and what comes next. It is intentionally light so cheaper models can
+ * keep it accurate in a loop, refining the work pass after pass, instead of
+ * drowning in a heavy "MVP plan" ceremony.
+ *
+ * Two flavors live here:
+ * - the default link prompt, for a file that already has content to follow;
+ * - the bootstrap prompt (an empty file inside a repo), which asks the agent to
+ *   diagnose the repository into concrete, observable categories rather than to
+ *   invent a broad product plan.
  */
 
-/** Where the agent can find the quality standard / context template. */
-const STANDARD_HINT = `Para o formato e as seções do plano, siga o padrão de contexto do projeto (o template "IA.md" / TEMPLATE-CONTEXTO-IA). Procure os guias na pasta "Padrão de qualidade - Felixo System Design/" dentro do repositório; se ela não existir, use a fonte: https://github.com/Felipe-Alcantara/Felixo-System-Design`
+/** The four fixed sections any agent keeps current — the whole scratchpad. */
+const SCRATCHPAD_SHAPE = `O arquivo é um SCRATCHPAD VIVO, leve e de formato livre. Mantenha estas seções fixas e curtas:
 
-export const DEFAULT_FILE_LINK_PROMPT = `Você está em um NÓ DO CANVAS e conectado a um ARQUIVO DE PLANO VIVO do canvas (markdown) compartilhado entre vários agentes. Caminho: {{path}}
+## Objetivo
+O que estamos tentando fazer, em uma ou duas frases.
+
+## Estado atual
+O que já foi feito e o que está em pé agora (use checklist: [ ] pendente, [~] em andamento, [x] concluído).
+
+## Travas
+O que está bloqueado, aguardando decisão ou dependendo de outra coisa. Vazio se não houver.
+
+## Próximo passo
+A próxima ação concreta. Sempre deixe esta seção preenchida ao encerrar.
+
+## Sinais entre agentes
+Linhas curtas e datadas para coordenar com os outros agentes, uma por evento. Formato:
+- [data hora] {{agent}} — o que fez / precisa — status (ex.: feito, aguardando, bloqueado por X).`
+
+export const DEFAULT_FILE_LINK_PROMPT = `Você está em um NÓ DO CANVAS, conectado a um ARQUIVO SCRATCHPAD do canvas (markdown) compartilhado entre vários agentes. Caminho: {{path}}
+
+${SCRATCHPAD_SHAPE}
 
 Como trabalhar com ele:
-1. LEIA o arquivo inteiro antes de começar. Ele é a fonte da verdade do projeto: objetivo, fases, metas, decisões, testes e o que cada agente está fazendo.
-2. Trabalhe seguindo as FASES descritas. Não pule fases nem invente escopo fora do que está planejado.
-3. MANTENHA o arquivo atualizado conforme avança, preservando a estrutura/seções que ele já segue. Use marcações claras, por exemplo:
-   - [ ] tarefa pendente   - [x] tarefa concluída   - [~] em andamento
-   - "Fase 1 (em andamento por {{agent}})", "Fase 2 / front-end (aguardando)"
-   - Se você marcar algo como "em andamento", isso é provisório: antes de encerrar a resposta, volte ao md do canvas e feche a entrada com um estado final claro (concluído, bloqueado, aguardando decisão ou interrompido com motivo). Nunca termine o turno deixando o plano só como "em andamento".
-4. SINALIZE para os outros agentes: anote bloqueios, dependências e quando você está esperando uma decisão (ex.: "{{agent}} aguardando decisão sobre X").
-5. Marque o que for GRANDE DEMAIS para o MVP e ofereça OPÇÕES para o usuário decidir, em vez de decidir sozinho.
-6. Registre as DECISÕES e o porquê delas, para outro agente não refazer.
-7. Faça COMMITS alinhados às fases (uma fase coesa por vez), com mensagens descritivas.
-8. Você pode LER e ESCREVER neste arquivo. Edite-o de forma incremental; não apague o trabalho de outros agentes.
+1. LEIA o arquivo inteiro antes de começar — ele é a fonte da verdade do trabalho em andamento.
+2. Trabalhe a partir do que está em "Próximo passo" e do que falta em "Estado atual". Não invente escopo fora do que está registrado.
+3. MANTENHA o arquivo atualizado conforme avança, preservando as seções acima. Atualize o checklist e os "Sinais entre agentes" no mesmo passo do trabalho.
+4. Se marcar algo como [~] em andamento, isso é provisório: antes de encerrar a resposta, volte ao arquivo e feche a entrada com um estado final claro (concluído, bloqueado, aguardando decisão ou interrompido com motivo). Nunca termine o turno deixando o scratchpad preso em "em andamento".
+5. SINALIZE bloqueios e dependências em "Sinais entre agentes" para outro agente não refazer nem colidir com você.
+6. Edite de forma incremental; não apague o trabalho de outros agentes.
 
-${STANDARD_HINT}
-
-Comece lendo {{path}} e me diga em que fase vamos atuar.`
+Comece lendo {{path}} e me diga qual é o próximo passo.`
 
 /**
  * Fills the prompt template with the resolved file path (and optional agent
@@ -48,27 +65,43 @@ export function buildFileLinkPrompt(
 
 /**
  * Bootstrap instruction used as an EXCEPTION: when the terminal is in a project
- * repository AND the linked .md is still empty, the agent should analyze the
- * repo and *write* the evolution plan itself into the file — following the
- * project's context template so the living plan starts in the standard format.
+ * repository AND the linked .md is still empty, the agent first surveys the repo
+ * and *writes the scratchpad itself*, seeding "Estado atual" with a concrete,
+ * observable DIAGNOSIS of the codebase — not a broad MVP plan. The categories
+ * are things the agent can find by reading the code, so even a cheap model can
+ * produce something actionable.
  */
-export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Você está em um NÓ DO CANVAS, dentro de um REPOSITÓRIO, e foi conectado a um ARQUIVO DE PLANO do canvas ainda VAZIO: {{path}}
+export const DEFAULT_FILE_BOOTSTRAP_PROMPT = `Você está em um NÓ DO CANVAS, dentro de um REPOSITÓRIO, e foi conectado a um ARQUIVO SCRATCHPAD do canvas ainda VAZIO: {{path}}
 
-Sua tarefa agora é CRIAR esse plano a partir do código real, seguindo o padrão de contexto do projeto:
-1. ANALISE o repositório: leia a estrutura, o README e a documentação, as dependências e o código principal para entender o que o projeto é, o que faz e em que estado está.
-2. ESCREVA no arquivo {{path}} um PLANO DE EVOLUÇÃO em markdown, com FASES de melhoria, expansão e escala. Use as seções do template de contexto do projeto (objetivo, metas/milestones, stack, decisões de arquitetura, testes, etc.) e, dentro de Metas, descreva as fases numeradas:
-   - Visão geral: o que o projeto é hoje (um resumo honesto do estado atual).
-   - Fases numeradas (Fase 1, Fase 2, ...), cada uma com objetivo, tarefas em checklist ([ ]), critérios de pronto e testes.
-   - Marque o que é MVP e o que é grande demais para agora.
-   - Aponte riscos, decisões em aberto e pontos em que o usuário precisa escolher.
-   - Reserve espaço para a sinalização entre agentes (ex.: "Fase 1 em andamento por {{agent}}").
-   - Se uma fase precisar ficar em andamento durante a escrita, a última passada antes de encerrar deve atualizar o status para um estado final claro no md do canvas, nunca deixar o arquivo terminando apenas como "em andamento".
-3. Seja concreto e fundamente tudo no que existe no repositório — não invente funcionalidades genéricas.
-4. Depois de escrever, faça um resumo do plano e me diga por qual fase começamos.
+Sua tarefa agora é INICIAR esse scratchpad a partir do código real, com um DIAGNÓSTICO concreto e observável — nada de plano de produto genérico. Tudo o que você listar deve vir do que existe no repositório.
 
-${STANDARD_HINT}
+1. ANALISE o repositório: leia a estrutura, o README, a documentação, as dependências e o código principal para entender o que o projeto é, o que faz e em que estado está.
+2. ESCREVA no arquivo {{path}} um scratchpad em markdown com estas seções fixas:
 
-Comece analisando o repositório e depois escreva o plano em {{path}}.`
+## Objetivo
+O que o projeto é hoje, em uma ou duas frases honestas.
+
+## Estado atual
+Um diagnóstico do repositório dividido nestas categorias (omita uma categoria se não encontrar nada real nela):
+- 🐛 Problemas — bugs, coisas quebradas, erros visíveis no código.
+- 🚧 Incompleto — fases/funcionalidades começadas e não terminadas, TODOs, stubs.
+- 🔧 Funções auxiliares — utilitários/suporte que faltam ou estão pela metade.
+- 📈 Melhorias incrementais — separe em PEQUENO PORTE (quick wins, ajustes localizados) e GRANDE PORTE (refatorações, expansões, mudanças estruturais).
+Use checklist ([ ] pendente) em cada item para virar trabalho rastreável.
+
+## Travas
+Decisões em aberto e pontos em que o usuário precisa escolher. Vazio se não houver.
+
+## Próximo passo
+A primeira ação concreta que você recomenda, escolhida entre os itens acima.
+
+## Sinais entre agentes
+- [data hora] {{agent}} — diagnóstico inicial escrito — concluído.
+
+3. Seja concreto e fundamente cada item no que existe no repositório. Não invente funcionalidades.
+4. Depois de escrever, resuma o diagnóstico e me diga por qual item você sugere começar.
+
+Comece analisando o repositório e depois escreva o scratchpad em {{path}}.`
 
 /** Builds the bootstrap prompt; same placeholders as buildFileLinkPrompt. */
 export function buildBootstrapPrompt(

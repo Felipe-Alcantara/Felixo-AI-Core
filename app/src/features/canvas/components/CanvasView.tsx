@@ -245,7 +245,8 @@ async function announceFileToTerminal(
   const agentName = terminalData?.command ? terminalData.command : 'este agente'
 
   // EXCEPTION: terminal in a project repo (has cwd) + the .md is still blank →
-  // the agent should analyze the repo and write the evolution plan itself.
+  // the agent should analyze the repo and seed the scratchpad with a concrete
+  // diagnosis (problems, incomplete, helpers, improvements) itself.
   const inRepository = Boolean(terminalData?.cwd)
   const fileRead = await window.felixo?.canvasFiles?.read({ name: fileName })
   const isBlank = !fileRead?.ok || !(fileRead.content ?? '').trim()
@@ -336,7 +337,7 @@ function CanvasInner() {
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
   // Editable instructions injected when a file links to a terminal: the normal
-  // "living plan" prompt, and the bootstrap prompt for the empty-md-in-repo case.
+  // shared-scratchpad prompt, and the bootstrap prompt for the empty-md-in-repo case.
   const fileLinkPromptRef = useRef(DEFAULT_FILE_LINK_PROMPT)
   const bootstrapPromptRef = useRef(DEFAULT_FILE_BOOTSTRAP_PROMPT)
   // Standing "follow the quality standard" instruction for agent terminals.
