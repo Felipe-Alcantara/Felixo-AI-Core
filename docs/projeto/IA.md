@@ -403,6 +403,16 @@ FIX JUNTO (dívidas da rodada anterior): (a) `react-hooks/refs` — o quality st
 TESTE: `npm run build` (tsc -b + vite), `npm run lint` e suíte (392 pass) limpos.
 PENDENTE/IDEIAS: o modo é só por bloco e não muda o conteúdo já escrito; o diagnóstico assume 1 terminal conectado (pega o primeiro); sem teste unitário próprio do FileNode (depende de DOM/React Flow).
 
+[2026-06-23] Paridade chat→canvas — busca visual e skills; decisões de descarte.
+CONTEXTO: revisão de quais funções do antigo modo chat faltavam no canvas. Decisões do usuário sobre cada lacuna:
+- DESCARTADO POR DESIGN: exportar conversa (não faz sentido no terminal); QA Logger e painel de Código (observabilidade de backend — esta versão não dá problema o bastante para justificar). Histórico de sessões/Composer/ChatThread são intrínsecos ao chat e já têm substituto no canvas (terminais reais + scratchpads .md).
+- ADIADO: Orquestrador (Configurações + Dashboard) — não existe camada de orquestração no modo canvas ainda; fica para quando ela for construída.
+- MANTIDO COMO ESTÁ: painel Modelos do canvas (lista/remove). Pergunta em aberto registrada: ele pode ser redundante com as opções de agente/modelo/esforço do menu do terminal — decidir em rodada futura.
+- ENTREGUE nesta rodada: busca visual + skills (abaixo).
+BUSCA VISUAL: `SearchPanel` (novo item "Pesquisar" no menu de ferramentas) busca BLOCOS por título, nome do arquivo, texto da nota e comando do terminal (sem buscar o conteúdo dos .md em disco — só os campos do `data`). Clicar num resultado chama `focusNode`: `setCenter(x,y,{zoom})` na instância do React Flow capturada no `onInit` (os painéis ficam fora do `<ReactFlow>`, então não têm `useReactFlow`) e seleciona só aquele nó. `FlowPositionMapper` foi ampliado para incluir `setCenter`.
+SKILLS: design do usuário — skill = ponteiro nomeado para um arquivo (nome/descrição/caminho), não um prompt embutido. `SkillsPanel` faz CRUD; `buildSkillActivationPrompt` monta a instrução "use a skill em <caminho>, leia e siga". Ativar envia ao terminal expandido (`store.sendText`) ou copia para o clipboard se nenhum estiver aberto. Persistência na tabela `settings` via `canvas:get/set-skills` (chave `canvas.skills`), sanitizada no backend (`sanitizeSkills` descarta entradas sem id/nome/caminho) — sem migration nova, no padrão dos outros ajustes do canvas. Tipo `CanvasSkill` em `types.ts` e espelhado no `vite-env.d.ts`.
+TESTE: `npm run build` (tsc -b + vite), `npm run lint` e suíte (393 pass, +1 do round-trip/sanitização de skills) limpos.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
