@@ -9,7 +9,7 @@ import { DEFAULT_QUALITY_STANDARD_PROMPT } from '../../services/quality-standard
 
 type SettingsPanelProps = {
   onClose: () => void
-  /** Lets the canvas pick up the new "living plan" prompt without a reload. */
+  /** Lets the canvas pick up the new shared-scratchpad prompt without a reload. */
   onPromptSaved?: (prompt: string) => void
   /** Lets the canvas pick up the new bootstrap prompt without a reload. */
   onBootstrapSaved?: (prompt: string) => void
@@ -19,8 +19,9 @@ type SettingsPanelProps = {
 
 /**
  * Canvas settings — the editable instructions injected when a file block links
- * to a terminal: the normal "living plan" prompt, and the bootstrap prompt used
- * when a repo terminal links an empty .md. Both support {{path}} and {{agent}}.
+ * to a terminal: the normal shared-scratchpad prompt, and the bootstrap prompt
+ * used when a repo terminal links an empty .md (the agent then diagnoses the
+ * repo into the scratchpad). Both support {{path}} and {{agent}}.
  */
 export function SettingsPanel({
   onClose,
@@ -54,7 +55,8 @@ export function SettingsPanel({
         help={
           <>
             Exceção: quando o terminal está em um projeto e o .md está vazio, o
-            agente analisa o repositório e escreve o plano de evolução.
+            agente analisa o repositório e escreve um diagnóstico (problemas,
+            incompleto, auxiliares, melhorias) no scratchpad.
           </>
         }
         defaultValue={DEFAULT_FILE_BOOTSTRAP_PROMPT}
