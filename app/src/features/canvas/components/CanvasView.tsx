@@ -74,7 +74,11 @@ import {
   saveCanvasEdge,
   validateCanvasBundle,
 } from '../services/canvas-storage'
-import type { CanvasNodeType, PersistedCanvasEdge } from '../types'
+import type {
+  CanvasNodeType,
+  DiagnosisRequestStatus,
+  PersistedCanvasEdge,
+} from '../types'
 
 const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = {
   group: { width: 480, height: 320 },
@@ -205,31 +209,45 @@ function isInside(node: Node, group: Node): boolean {
   )
 }
 
+/** The file + terminal a connection links, in either direction (or null). */
+function filePairFromConnection(
+  connection: Connection,
+  nodes: Node[],
+): { fileNode: Node; terminalNode: Node } | null {
+  const a = nodes.find((node) => node.id === connection.source)
+  const b = nodes.find((node) => node.id === connection.target)
+  if (!a || !b) {
+    return null
+  }
+  const fileNode = a.type === 'file' ? a : b.type === 'file' ? b : null
+  const terminalNode = a.type === 'terminal' ? a : b.type === 'terminal' ? b : null
+  return fileNode && terminalNode ? { fileNode, terminalNode } : null
+}
+
+const agentNameOf = (terminalNode: Node): string => {
+  const command = (terminalNode.data as { command?: string } | undefined)?.command
+  return command ? command : 'este agente'
+}
+
 /**
  * If a connection links a file block and a terminal block, resolve the file's
- * absolute path and type a short context line into the terminal so the running
- * agent learns it can read/edit that file.
+ * absolute path and type the shared-scratchpad instruction into the terminal so
+ * the running agent learns it can read/edit that file. The repo diagnosis
+ * (bootstrap) is no longer fired here — it's an explicit, on-demand action on
+ * the file block (see requestRepoDiagnosis).
  */
 async function announceFileToTerminal(
   connection: Connection,
   nodes: Node[],
   store: { sendText: (id: string, text: string) => void },
   template: string,
-  bootstrapTemplate: string,
 ): Promise<void> {
-  const a = nodes.find((node) => node.id === connection.source)
-  const b = nodes.find((node) => node.id === connection.target)
-  if (!a || !b) {
+  const pair = filePairFromConnection(connection, nodes)
+  if (!pair) {
     return
   }
 
-  const fileNode = a.type === 'file' ? a : b.type === 'file' ? b : null
-  const terminalNode = a.type === 'terminal' ? a : b.type === 'terminal' ? b : null
-  if (!fileNode || !terminalNode) {
-    return
-  }
-
-  const fileName = (fileNode.data as { fileName?: string } | undefined)?.fileName
+  const fileName = (pair.fileNode.data as { fileName?: string } | undefined)?.fileName
   if (!fileName) {
     return
   }
@@ -239,24 +257,55 @@ async function announceFileToTerminal(
     return
   }
 
-  const terminalData = terminalNode.data as
-    | { command?: string; cwd?: string }
-    | undefined
-  const agentName = terminalData?.command ? terminalData.command : 'este agente'
+  store.sendText(
+    pair.terminalNode.id,
+    buildFileLinkPrompt(template, resolved.path, agentNameOf(pair.terminalNode)),
+  )
+}
 
-  // EXCEPTION: terminal in a project repo (has cwd) + the .md is still blank →
-  // the agent should analyze the repo and seed the scratchpad with a concrete
-  // diagnosis (problems, incomplete, helpers, improvements) itself.
-  const inRepository = Boolean(terminalData?.cwd)
-  const fileRead = await window.felixo?.canvasFiles?.read({ name: fileName })
-  const isBlank = !fileRead?.ok || !(fileRead.content ?? '').trim()
+/**
+ * Fires the repo-diagnosis (bootstrap) prompt into the terminal connected to a
+ * file block, on demand. The agent surveys the repo and writes the diagnosis
+ * (problems, incomplete, helpers, improvements) into the file. Returns a status
+ * so the UI can explain why nothing happened (e.g. no terminal linked yet).
+ */
+async function requestRepoDiagnosis(
+  fileNodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+  store: { sendText: (id: string, text: string) => void },
+  bootstrapTemplate: string,
+): Promise<DiagnosisRequestStatus> {
+  const fileNode = nodes.find((node) => node.id === fileNodeId)
+  const fileName = (fileNode?.data as { fileName?: string } | undefined)?.fileName
+  if (!fileName) {
+    return 'no-file'
+  }
 
-  const prompt =
-    inRepository && isBlank
-      ? buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentName)
-      : buildFileLinkPrompt(template, resolved.path, agentName)
+  const terminalNode = edges
+    .flatMap((edge) => {
+      if (edge.source !== fileNodeId && edge.target !== fileNodeId) {
+        return []
+      }
+      const otherId = edge.source === fileNodeId ? edge.target : edge.source
+      const other = nodes.find((node) => node.id === otherId)
+      return other?.type === 'terminal' ? [other] : []
+    })
+    .at(0)
+  if (!terminalNode) {
+    return 'no-terminal'
+  }
 
-  store.sendText(terminalNode.id, prompt)
+  const resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
+  if (!resolved?.ok || !resolved.path) {
+    return 'resolve-failed'
+  }
+
+  store.sendText(
+    terminalNode.id,
+    buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentNameOf(terminalNode)),
+  )
+  return 'ok'
 }
 
 /** True only when the keyboard event originates from the bare canvas (not a
@@ -547,6 +596,20 @@ function CanvasInner() {
     [setNodes, persistNode],
   )
 
+  // Manual repo-diagnosis: the file block (in "plan" mode) asks its connected
+  // terminal's agent to survey the repo and write the diagnosis into the file.
+  const generateDiagnosis = useCallback(
+    async (fileNodeId: string): Promise<DiagnosisRequestStatus> =>
+      requestRepoDiagnosis(
+        fileNodeId,
+        nodes,
+        edges,
+        store,
+        bootstrapPromptRef.current,
+      ),
+    [nodes, edges, store],
+  )
+
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
@@ -555,7 +618,18 @@ function CanvasInner() {
       nodes.map((node) => {
         const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
-        if (node.type === 'note' || node.type === 'group' || node.type === 'file') {
+        if (node.type === 'file') {
+          return {
+            ...withHandle,
+            data: {
+              ...node.data,
+              onDataChange: updateNodeData,
+              onGenerateDiagnosis: generateDiagnosis,
+            },
+          }
+        }
+
+        if (node.type === 'note' || node.type === 'group') {
           return {
             ...withHandle,
             data: { ...node.data, onDataChange: updateNodeData },
@@ -596,6 +670,7 @@ function CanvasInner() {
     [
       edges,
       edgesHydrated,
+      generateDiagnosis,
       nodes,
       qualityStandard,
       terminalCanvasFilePaths,
@@ -667,13 +742,7 @@ function CanvasInner() {
 
       // When a file block connects to a terminal, tell that terminal's agent
       // about the file so it can read/edit it.
-      void announceFileToTerminal(
-        connection,
-        nodes,
-        store,
-        fileLinkPromptRef.current,
-        bootstrapPromptRef.current,
-      )
+      void announceFileToTerminal(connection, nodes, store, fileLinkPromptRef.current)
     },
     [setEdges, nodes, store],
   )
