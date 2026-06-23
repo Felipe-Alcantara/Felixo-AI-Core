@@ -7,6 +7,9 @@ import {
 } from '../services/canvas-storage'
 import type { CanvasNodeData, CanvasNodeType, PersistedCanvasNode } from '../types'
 
+/** A React Flow node whose `data` is typed as the canvas' own node data. */
+export type CanvasFlowNode = Node<CanvasNodeData>
+
 const SAVE_DEBOUNCE_MS = 400
 
 /**
@@ -16,7 +19,7 @@ const SAVE_DEBOUNCE_MS = 400
  * loaded data through an effect.
  */
 export function useCanvasPersistence() {
-  const [nodes, setNodes] = useState<Node[]>([])
+  const [nodes, setNodes] = useState<CanvasFlowNode[]>([])
   const [hydrated, setHydrated] = useState(false)
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
@@ -40,7 +43,7 @@ export function useCanvasPersistence() {
     }
   }, [])
 
-  const persistNode = useCallback((node: Node) => {
+  const persistNode = useCallback((node: CanvasFlowNode) => {
     const timers = saveTimers.current
     const existing = timers.get(node.id)
 
@@ -83,7 +86,7 @@ export function useCanvasPersistence() {
   }
 }
 
-export function toFlowNode(node: PersistedCanvasNode): Node {
+export function toFlowNode(node: PersistedCanvasNode): CanvasFlowNode {
   return {
     id: node.id,
     type: node.type,
@@ -99,7 +102,7 @@ export function toFlowNode(node: PersistedCanvasNode): Node {
   }
 }
 
-export function toPersistedNode(node: Node): PersistedCanvasNode {
+export function toPersistedNode(node: CanvasFlowNode): PersistedCanvasNode {
   return {
     id: node.id,
     type: (node.type ?? 'note') as CanvasNodeType,
