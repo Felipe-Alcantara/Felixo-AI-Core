@@ -26,6 +26,24 @@ const FILE_BOOTSTRAP_PROMPT_KEY = 'canvas.file-bootstrap-prompt'
 /** Settings for the standing "follow the quality standard" instruction. */
 const QUALITY_STANDARD_PROMPT_KEY = 'canvas.quality-standard-prompt'
 const QUALITY_STANDARD_ENABLED_KEY = 'canvas.quality-standard-enabled'
+/** Settings key for the canvas skill library (array of {id,name,description,path}). */
+const SKILLS_KEY = 'canvas.skills'
+
+/** Keeps only well-formed skill entries, coercing fields to strings. */
+function sanitizeSkills(value) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .filter((skill) => skill && typeof skill === 'object')
+    .map((skill) => ({
+      id: String(skill.id ?? ''),
+      name: String(skill.name ?? ''),
+      description: String(skill.description ?? ''),
+      path: String(skill.path ?? ''),
+    }))
+    .filter((skill) => skill.id && skill.name && skill.path)
+}
 
 function registerCanvasIpcHandlers(options = {}) {
   const repository = createCanvasRepository(options.database)
@@ -214,6 +232,24 @@ function registerCanvasIpcHandlers(options = {}) {
       return { ok: true }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel salvar a configuracao.')
+    }
+  })
+
+  ipcMain.handle('canvas:get-skills', () => {
+    try {
+      return { ok: true, skills: sanitizeSkills(settings.get(SKILLS_KEY)) }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel carregar as skills.')
+    }
+  })
+
+  ipcMain.handle('canvas:set-skills', (_event, skills) => {
+    try {
+      const clean = sanitizeSkills(skills)
+      settings.set(SKILLS_KEY, clean)
+      return { ok: true, skills: clean }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel salvar as skills.')
     }
   })
 }

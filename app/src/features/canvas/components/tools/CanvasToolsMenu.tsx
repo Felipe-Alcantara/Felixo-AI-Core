@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  BrainCircuit,
   ChevronDown,
   ChevronRight,
   FolderGit2,
@@ -19,6 +20,7 @@ export type CanvasTool =
   | 'notes'
   | 'models'
   | 'prompts'
+  | 'skills'
   | 'git'
   | 'settings'
 
@@ -30,6 +32,7 @@ const TOOLS: ToolEntry[] = [
   { tool: 'notes', label: 'Notas', icon: Notebook },
   { tool: 'models', label: 'Modelos', icon: LayoutList },
   { tool: 'prompts', label: 'Prompts', icon: Sparkles },
+  { tool: 'skills', label: 'Skills', icon: BrainCircuit },
   { tool: 'git', label: 'Git', icon: GitBranch },
   { tool: 'settings', label: 'Configurações', icon: Settings },
 ]

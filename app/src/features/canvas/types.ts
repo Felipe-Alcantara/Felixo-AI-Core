@@ -21,6 +21,18 @@ export type FileNodeData = {
   mode?: FileNodeMode
 }
 
+/**
+ * A canvas skill: a named, described pointer to a file the agent should use.
+ * Activating it tells a connected terminal's agent to read/apply that file.
+ */
+export type CanvasSkill = {
+  id: string
+  name: string
+  description: string
+  /** Absolute path to the skill file the agent should read/use. */
+  path: string
+}
+
 /** Outcome of an on-demand repo-diagnosis request from a file block. */
 export type DiagnosisRequestStatus =
   | 'ok'

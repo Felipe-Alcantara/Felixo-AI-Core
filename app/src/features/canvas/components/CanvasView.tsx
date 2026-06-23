@@ -53,12 +53,14 @@ import {
   DEFAULT_QUALITY_STANDARD_PROMPT,
   buildCanvasTerminalInitialText,
 } from '../services/quality-standard-prompt'
+import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { SearchPanel } from './tools/SearchPanel'
 import { ProjectsPanel } from './tools/ProjectsPanel'
 import { NotesPanel } from './tools/NotesPanel'
 import { ModelsPanel } from './tools/ModelsPanel'
 import { PromptsPanel } from './tools/PromptsPanel'
+import { SkillsPanel, type SkillActivationResult } from './tools/SkillsPanel'
 import { GitPanel } from './tools/GitPanel'
 import { SettingsPanel } from './tools/SettingsPanel'
 import {
@@ -77,6 +79,7 @@ import {
 } from '../services/canvas-storage'
 import type {
   CanvasNodeType,
+  CanvasSkill,
   DiagnosisRequestStatus,
   PersistedCanvasEdge,
 } from '../types'
@@ -636,6 +639,21 @@ function CanvasInner() {
     [nodes, setNodes],
   )
 
+  // Activate a skill: type its "use the file at <path>" instruction into the
+  // expanded terminal if one is open; otherwise copy it for manual pasting.
+  const activateSkill = useCallback(
+    async (skill: CanvasSkill): Promise<SkillActivationResult> => {
+      const prompt = buildSkillActivationPrompt(skill)
+      if (expandedTerminalId) {
+        store.sendText(expandedTerminalId, prompt)
+        return 'sent'
+      }
+      await navigator.clipboard?.writeText(prompt)
+      return 'copied'
+    },
+    [expandedTerminalId, store],
+  )
+
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
@@ -1138,6 +1156,12 @@ function CanvasInner() {
       )}
       {activeTool === 'prompts' && (
         <PromptsPanel onClose={() => setActiveTool(null)} />
+      )}
+      {activeTool === 'skills' && (
+        <SkillsPanel
+          onActivateSkill={activateSkill}
+          onClose={() => setActiveTool(null)}
+        />
       )}
       {activeTool === 'git' && <GitPanel onClose={() => setActiveTool(null)} />}
       {activeTool === 'settings' && (

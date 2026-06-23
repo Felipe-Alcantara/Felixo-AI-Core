@@ -39,6 +39,13 @@ type PersistedCanvasNode = {
   createdAt?: string
   updatedAt?: string
 }
+type CanvasSkill = {
+  id: string
+  name: string
+  description: string
+  /** Absolute path to the skill file the agent should read/use. */
+  path: string
+}
 type CliStreamEvent = StreamEvent | OrchestrationStreamEvent
 
 type CliInvokeResult = {
@@ -290,6 +297,10 @@ declare global {
           prompt?: string
           enabled?: boolean
         }) => Promise<CliInvokeResult>
+        getSkills: () => Promise<CliInvokeResult & { skills?: CanvasSkill[] }>
+        setSkills: (
+          skills: CanvasSkill[],
+        ) => Promise<CliInvokeResult & { skills?: CanvasSkill[] }>
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>

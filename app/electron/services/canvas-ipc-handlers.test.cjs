@@ -82,3 +82,44 @@ test('canvas IPC validates imports and restores files after a failed replacement
     fs.rmSync(databaseDir, { recursive: true, force: true })
   }
 })
+
+test('canvas IPC persists skills and drops malformed entries', async () => {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-canvas-skills-'))
+  const database = createStorageDatabase({ databaseDir })
+
+  try {
+    registerCanvasIpcHandlers({ database })
+
+    // Empty before anything is saved.
+    assert.deepEqual(handlers.get('canvas:get-skills')(null), {
+      ok: true,
+      skills: [],
+    })
+
+    // Malformed entries (missing name/path, non-objects) are filtered out; the
+    // valid one is coerced to clean string fields.
+    const saved = handlers.get('canvas:set-skills')(null, [
+      { id: 'a', name: 'Revisar', description: 'guia', path: '/skills/review.md' },
+      { id: 'b', name: '', path: '/skills/no-name.md' },
+      { id: 'c', name: 'Sem caminho' },
+      'not-an-object',
+    ])
+    assert.deepEqual(saved, {
+      ok: true,
+      skills: [
+        { id: 'a', name: 'Revisar', description: 'guia', path: '/skills/review.md' },
+      ],
+    })
+
+    // Round-trips through storage.
+    assert.deepEqual(handlers.get('canvas:get-skills')(null), {
+      ok: true,
+      skills: [
+        { id: 'a', name: 'Revisar', description: 'guia', path: '/skills/review.md' },
+      ],
+    })
+  } finally {
+    database.close()
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  }
+})
