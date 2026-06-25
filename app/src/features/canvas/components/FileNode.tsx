@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useRef, useState, type RefObject } from 'react'
 import {
   Handle,
   Position,
@@ -6,7 +6,17 @@ import {
   useReactFlow,
   type NodeProps,
 } from '@xyflow/react'
-import { Check, Copy, Eye, FileText, Pencil, Stethoscope } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  Eye,
+  FileText,
+  Link2,
+  Pencil,
+  Plus,
+  Stethoscope,
+  Unlink,
+} from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { MarkdownContent } from '../../shared/components/MarkdownContent'
 import type {
@@ -15,9 +25,20 @@ import type {
   FileNodeMode,
 } from '../types'
 
+/** A terminal/agent block, summarised for the file node's link panel. */
+export type LinkableAgent = { id: string; label: string }
+
 type FileNodeDataWithHandlers = FileNodeData & {
   onDataChange?: (nodeId: string, patch: Partial<FileNodeData>) => void
   onGenerateDiagnosis?: (nodeId: string) => Promise<DiagnosisRequestStatus>
+  /** Agents currently connected to this file (any edge direction). */
+  connectedAgents?: LinkableAgent[]
+  /** Agents on the canvas not yet connected to this file. */
+  availableAgents?: LinkableAgent[]
+  /** Connect this file to an agent and tell the agent about the file. */
+  onLinkAgent?: (fileNodeId: string, agentId: string) => void
+  /** Remove every edge between this file and the given agent. */
+  onUnlinkAgent?: (fileNodeId: string, agentId: string) => void
 }
 
 /** Short user-facing feedback for each diagnosis request outcome. */
@@ -43,9 +64,30 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   const [copied, setCopied] = useState(false)
   const [diagnosing, setDiagnosing] = useState(false)
   const [diagnosisFeedback, setDiagnosisFeedback] = useState('')
+  const [linkMenuOpen, setLinkMenuOpen] = useState(false)
+  const linkMenuRef = useRef<HTMLDivElement>(null)
   const { deleteElements } = useReactFlow()
 
   const mode: FileNodeMode = nodeData.mode ?? 'scratchpad'
+  const connectedAgents = nodeData.connectedAgents ?? []
+  const availableAgents = nodeData.availableAgents ?? []
+
+  // Close the "+ Ligar agente" menu when clicking anywhere outside it.
+  useEffect(() => {
+    if (!linkMenuOpen) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (!linkMenuRef.current?.contains(event.target as Node)) {
+        setLinkMenuOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [linkMenuOpen])
+
+  const linkAgent = (agentId: string) => {
+    nodeData.onLinkAgent?.(id, agentId)
+    setLinkMenuOpen(false)
+  }
 
   const setMode = (next: FileNodeMode) => {
     setDiagnosisFeedback('')
@@ -122,7 +164,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         lineClassName="!border-sky-500/40"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-sky-500"
       />
-      <Handle type="target" position={Position.Left} className="!bg-sky-500" />
+      <FourSideHandles />
       <NodeHeader
         icon={<FileText size={13} />}
         editableValue={nodeData.label ?? fileName}
@@ -206,7 +248,161 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       )}
-      <Handle type="source" position={Position.Right} className="!bg-sky-500" />
+
+      <LinkedAgentsPanel
+        connectedAgents={connectedAgents}
+        availableAgents={availableAgents}
+        menuOpen={linkMenuOpen}
+        menuRef={linkMenuRef}
+        canLink={Boolean(nodeData.onLinkAgent)}
+        canUnlink={Boolean(nodeData.onUnlinkAgent)}
+        onToggleMenu={() => setLinkMenuOpen((open) => !open)}
+        onLink={linkAgent}
+        onUnlink={(agentId) => nodeData.onUnlinkAgent?.(id, agentId)}
+      />
+    </div>
+  )
+}
+
+/**
+ * One connection point on each side of the block. Each side carries an
+ * overlapping source + target handle, so you can drag a wire OUT from any side
+ * to an agent and also drop a wire INTO any side — and a single handle hosts as
+ * many edges as you like (React Flow's default), letting one file fan out to as
+ * many agents as you want.
+ */
+function FourSideHandles() {
+  const sides: Array<{ position: Position; id: string }> = [
+    { position: Position.Top, id: 'top' },
+    { position: Position.Right, id: 'right' },
+    { position: Position.Bottom, id: 'bottom' },
+    { position: Position.Left, id: 'left' },
+  ]
+  return (
+    <>
+      {sides.map(({ position, id }) => (
+        <span key={id}>
+          <Handle
+            type="source"
+            id={`s-${id}`}
+            position={position}
+            className="!h-2.5 !w-2.5 !bg-sky-500"
+          />
+          {/* Target sits on top of the source so either drag direction works. */}
+          <Handle
+            type="target"
+            id={`t-${id}`}
+            position={position}
+            className="!h-2.5 !w-2.5 !border-none !bg-transparent"
+          />
+        </span>
+      ))}
+    </>
+  )
+}
+
+type LinkedAgentsPanelProps = {
+  connectedAgents: LinkableAgent[]
+  availableAgents: LinkableAgent[]
+  menuOpen: boolean
+  menuRef: RefObject<HTMLDivElement | null>
+  canLink: boolean
+  canUnlink: boolean
+  onToggleMenu: () => void
+  onLink: (agentId: string) => void
+  onUnlink: (agentId: string) => void
+}
+
+/**
+ * Footer listing every agent linked to this file, with a "+ Ligar agente"
+ * picker for the agents still unconnected. This is the click-driven companion
+ * to dragging wires from the side handles — both create the same edge.
+ */
+function LinkedAgentsPanel({
+  connectedAgents,
+  availableAgents,
+  menuOpen,
+  menuRef,
+  canLink,
+  canUnlink,
+  onToggleMenu,
+  onLink,
+  onUnlink,
+}: LinkedAgentsPanelProps) {
+  return (
+    <div className="nodrag relative mt-auto border-t border-sky-300/10 bg-sky-950/30 px-2 py-1.5 text-[11px]">
+      <div className="mb-1 flex items-center gap-1 text-sky-300/70">
+        <Link2 size={11} />
+        <span>Agentes ligados</span>
+        <span className="rounded bg-sky-800/50 px-1 text-[10px] text-sky-100">
+          {connectedAgents.length}
+        </span>
+      </div>
+
+      {connectedAgents.length > 0 ? (
+        <ul className="flex flex-col gap-0.5">
+          {connectedAgents.map((agent) => (
+            <li
+              key={agent.id}
+              className="group flex items-center gap-1 rounded px-1 py-0.5 hover:bg-white/5"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+              <span className="min-w-0 flex-1 truncate text-sky-100">
+                {agent.label}
+              </span>
+              {canUnlink && (
+                <button
+                  type="button"
+                  onClick={() => onUnlink(agent.id)}
+                  className="rounded p-0.5 text-sky-300/60 opacity-0 hover:bg-black/20 hover:text-rose-300 group-hover:opacity-100"
+                  title="Desligar este agente"
+                  aria-label={`Desligar ${agent.label}`}
+                >
+                  <Unlink size={11} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sky-300/40">Nenhum agente ligado ainda.</p>
+      )}
+
+      {canLink && (
+        <div ref={menuRef} className="relative mt-1">
+          <button
+            type="button"
+            onClick={onToggleMenu}
+            className="inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60"
+            title="Ligar este arquivo a um agente do canvas"
+          >
+            <Plus size={11} />
+            Ligar agente
+          </button>
+
+          {menuOpen && (
+            <div className="nowheel absolute bottom-full left-0 z-10 mb-1 max-h-44 w-44 overflow-auto rounded-md border border-sky-300/20 bg-[#0d1420] py-1 shadow-xl">
+              {availableAgents.length > 0 ? (
+                availableAgents.map((agent) => (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    onClick={() => onLink(agent.id)}
+                    className="flex w-full items-center gap-1 px-2 py-1 text-left text-sky-100 hover:bg-sky-800/40"
+                  >
+                    <Link2 size={11} className="shrink-0 opacity-60" />
+                    <span className="min-w-0 flex-1 truncate">{agent.label}</span>
+                  </button>
+                ))
+              ) : (
+                <p className="px-2 py-1 text-sky-300/40">
+                  Nenhum agente disponível. Crie um terminal primeiro.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

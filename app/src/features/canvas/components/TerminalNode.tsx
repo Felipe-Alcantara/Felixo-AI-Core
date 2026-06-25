@@ -68,7 +68,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         lineClassName="!border-emerald-500/40"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-emerald-500"
       />
-      <Handle type="target" position={Position.Left} className="!bg-emerald-500" />
+      <TerminalSideHandles />
       <NodeHeader
         icon={<TerminalIcon size={13} />}
         editableValue={nodeData.label ?? ''}
@@ -113,8 +113,41 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </button>
 
-      <Handle type="source" position={Position.Right} className="!bg-emerald-500" />
     </div>
+  )
+}
+
+/**
+ * A connection point on each side of the terminal, each an overlapping
+ * source + target so a wire can be dragged out to (or dropped from) a file
+ * block on any side. Mirrors the file block's FourSideHandles.
+ */
+function TerminalSideHandles() {
+  const sides: Array<{ position: Position; id: string }> = [
+    { position: Position.Top, id: 'top' },
+    { position: Position.Right, id: 'right' },
+    { position: Position.Bottom, id: 'bottom' },
+    { position: Position.Left, id: 'left' },
+  ]
+  return (
+    <>
+      {sides.map(({ position, id }) => (
+        <span key={id}>
+          <Handle
+            type="source"
+            id={`s-${id}`}
+            position={position}
+            className="!h-2.5 !w-2.5 !bg-emerald-500"
+          />
+          <Handle
+            type="target"
+            id={`t-${id}`}
+            position={position}
+            className="!h-2.5 !w-2.5 !border-none !bg-transparent"
+          />
+        </span>
+      ))}
+    </>
   )
 }
 
