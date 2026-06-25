@@ -145,6 +145,19 @@ export class TerminalSessionStore {
       this.finishExit(session, event)
     })
 
+    // Shift+Enter inserts a newline instead of submitting. xterm sends plain
+    // CR ('\r') for both Enter and Shift+Enter, so the agent CLI can't tell
+    // them apart. We intercept Shift+Enter here and send ESC+CR ('\x1b\r'),
+    // which Claude Code / Codex interpret as "new line, don't send". Returning
+    // false stops xterm's default handling for this key.
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
+        void pty.write({ sessionId: session.ptySessionId, data: '\x1b\r' })
+        return false
+      }
+      return true
+    })
+
     // Keyboard → PTY.
     terminal.onData((data) => {
       void pty.write({ sessionId: session.ptySessionId, data })
