@@ -256,7 +256,21 @@ async function announceFileToTerminal(
     return
   }
 
-  const fileName = (pair.fileNode.data as { fileName?: string } | undefined)?.fileName
+  await announceFileNodeToTerminalNode(pair.fileNode, pair.terminalNode, store, template)
+}
+
+/**
+ * Resolve a file block's path and type the shared-scratchpad instruction into a
+ * terminal block, so its agent learns it can read/edit that file. Shared by the
+ * drag-to-connect flow and the explicit "+ Ligar agente" button.
+ */
+async function announceFileNodeToTerminalNode(
+  fileNode: Node,
+  terminalNode: Node,
+  store: { sendText: (id: string, text: string) => void },
+  template: string,
+): Promise<void> {
+  const fileName = (fileNode.data as { fileName?: string } | undefined)?.fileName
   if (!fileName) {
     return
   }
@@ -267,8 +281,8 @@ async function announceFileToTerminal(
   }
 
   store.sendText(
-    pair.terminalNode.id,
-    buildFileLinkPrompt(template, resolved.path, agentNameOf(pair.terminalNode)),
+    terminalNode.id,
+    buildFileLinkPrompt(template, resolved.path, agentNameOf(terminalNode)),
   )
 }
 
@@ -339,6 +353,22 @@ function toPersistedEdge(edge: Edge): PersistedCanvasEdge {
 
 function toFlowEdge(edge: PersistedCanvasEdge): Edge {
   return { id: edge.id, source: edge.source, target: edge.target }
+}
+
+/** Friendly label for a terminal block: its name, else its command. */
+function agentLabelOf(terminalNode: Node): string {
+  const data = terminalNode.data as { label?: string; command?: string } | undefined
+  return data?.label?.trim() || data?.command?.trim() || 'Terminal'
+}
+
+/** Ids of terminals linked to a file block, in any edge direction. */
+function getLinkedAgentIds(fileNodeId: string, edges: Edge[]): Set<string> {
+  const ids = new Set<string>()
+  for (const edge of edges) {
+    if (edge.source === fileNodeId) ids.add(edge.target)
+    else if (edge.target === fileNodeId) ids.add(edge.source)
+  }
+  return ids
 }
 
 function getConnectedCanvasFileNames(
@@ -619,6 +649,58 @@ function CanvasInner() {
     [nodes, edges, store],
   )
 
+  // "+ Ligar agente" on a file block: create the edge (if missing) and tell the
+  // agent about the file — the same outcome as dragging a wire between them.
+  const linkAgentToFile = useCallback(
+    (fileNodeId: string, agentId: string) => {
+      const already = edges.some(
+        (edge) =>
+          (edge.source === fileNodeId && edge.target === agentId) ||
+          (edge.source === agentId && edge.target === fileNodeId),
+      )
+      if (!already) {
+        const edge: Edge = {
+          id: `edge-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
+          source: fileNodeId,
+          target: agentId,
+        }
+        setEdges((current) => [...current, edge])
+        void saveCanvasEdge(edge)
+      }
+
+      const fileNode = nodes.find((node) => node.id === fileNodeId)
+      const terminalNode = nodes.find((node) => node.id === agentId)
+      if (fileNode && terminalNode?.type === 'terminal') {
+        void announceFileNodeToTerminalNode(
+          fileNode,
+          terminalNode,
+          store,
+          fileLinkPromptRef.current,
+        )
+      }
+    },
+    [edges, nodes, setEdges, store],
+  )
+
+  // Remove every edge between a file block and an agent (the "desligar" action).
+  const unlinkAgentFromFile = useCallback(
+    (fileNodeId: string, agentId: string) => {
+      const removed = edges.filter(
+        (edge) =>
+          (edge.source === fileNodeId && edge.target === agentId) ||
+          (edge.source === agentId && edge.target === fileNodeId),
+      )
+      if (removed.length === 0) {
+        return
+      }
+      setEdges((current) =>
+        current.filter((edge) => !removed.some((gone) => gone.id === edge.id)),
+      )
+      removed.forEach((edge) => void deleteCanvasEdge(edge.id))
+    },
+    [edges, setEdges],
+  )
+
   // Search → navigate: center+zoom the canvas on a block and select only it.
   const focusNode = useCallback(
     (nodeId: string) => {
@@ -663,12 +745,25 @@ function CanvasInner() {
         const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
         if (node.type === 'file') {
+          const linkedIds = getLinkedAgentIds(node.id, edges)
+          const terminals = nodes.filter((item) => item.type === 'terminal')
+          const connectedAgents = terminals
+            .filter((terminal) => linkedIds.has(terminal.id))
+            .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
+          const availableAgents = terminals
+            .filter((terminal) => !linkedIds.has(terminal.id))
+            .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
+
           return {
             ...withHandle,
             data: {
               ...node.data,
               onDataChange: updateNodeData,
               onGenerateDiagnosis: generateDiagnosis,
+              connectedAgents,
+              availableAgents,
+              onLinkAgent: linkAgentToFile,
+              onUnlinkAgent: unlinkAgentFromFile,
             },
           }
         }
@@ -715,9 +810,11 @@ function CanvasInner() {
       edges,
       edgesHydrated,
       generateDiagnosis,
+      linkAgentToFile,
       nodes,
       qualityStandard,
       terminalCanvasFilePaths,
+      unlinkAgentFromFile,
       updateNodeData,
     ],
   )
