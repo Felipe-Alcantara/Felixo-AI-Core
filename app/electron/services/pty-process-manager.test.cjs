@@ -82,8 +82,11 @@ test('spawn honors an explicit command, args and dimensions', () => {
     rows: 40,
   })
 
-  assert.equal(calls[0].file, 'claude')
-  assert.deepEqual(calls[0].args, ['--print'])
+  // The explicit command is launched through the current platform's spec
+  // (direct on Linux, via the shell on macOS/Windows so the CLI resolves).
+  const expected = createPtyLaunchSpec('claude', ['--print'], process.env)
+  assert.equal(calls[0].file, expected.command)
+  assert.deepEqual(calls[0].args, expected.args)
   assert.equal(calls[0].options.cols, 120)
   assert.equal(calls[0].options.rows, 40)
 })
@@ -106,6 +109,36 @@ test('macOS launches explicit CLIs through the interactive login shell', () => {
     command: '/bin/zsh',
     args: ['-l', '-i', '-c', "exec 'codex' '--model' 'gpt-5.5'"],
   })
+})
+
+test('Windows launches explicit CLIs through cmd.exe so PATHEXT resolves .cmd shims', () => {
+  const adapter = {
+    name: 'win32',
+    getDefaultShell: () => 'powershell.exe',
+    escapeArg: (value) => (/[" &|<>^%]/.test(value) ? `"${value}"` : value),
+  }
+
+  const launch = createPtyLaunchSpec(
+    'claude',
+    ['--model', 'opus'],
+    {},
+    adapter,
+  )
+
+  // Bare `claude` (installed as claude.cmd) must go through the shell, not be
+  // handed straight to CreateProcess — otherwise: "Cannot create process".
+  assert.deepEqual(launch, {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/c', 'claude --model opus'],
+  })
+})
+
+test('Linux runs explicit CLIs directly (already on PATH)', () => {
+  const adapter = { name: 'linux', getDefaultShell: () => '/bin/bash' }
+
+  const launch = createPtyLaunchSpec('gemini', ['--yolo'], {}, adapter)
+
+  assert.deepEqual(launch, { command: 'gemini', args: ['--yolo'] })
 })
 
 test('write forwards input to the active session only', () => {
