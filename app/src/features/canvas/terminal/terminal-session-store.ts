@@ -16,6 +16,8 @@ export type SessionSnapshot = {
   previewLines: string[]
   exitCode?: number
   message?: string
+  /** The most recent prompt submitted to the session (typed or programmatic). */
+  lastPrompt?: string
 }
 
 type SessionListener = (snapshot: SessionSnapshot) => void
@@ -51,6 +53,8 @@ type Session = {
   pendingWrites: number
   pendingExit?: { exitCode: number; signal?: number }
   command?: string
+  /** Printable keystrokes typed since the last submit, to capture the prompt. */
+  inputBuffer: string
   /** Buffer signature at the last idle check, to ignore in-place UI redraws. */
   lastSignature: string
   /** When output last changed the buffer in a meaningful way. */
@@ -100,6 +104,7 @@ export class TerminalSessionStore {
       receivedOutput: false,
       pendingWrites: 0,
       command: options.command,
+      inputBuffer: '',
       lastSignature: '',
       lastMeaningfulAt: Date.now(),
     }
@@ -147,20 +152,26 @@ export class TerminalSessionStore {
 
     // Shift+Enter inserts a newline instead of submitting. xterm sends plain
     // CR ('\r') for both Enter and Shift+Enter, so the agent CLI can't tell
-    // them apart. We intercept Shift+Enter here and send ESC+CR ('\x1b\r'),
-    // which Claude Code / Codex interpret as "new line, don't send". Returning
-    // false stops xterm's default handling for this key.
+    // them apart. We intercept Shift+Enter here and send a bare LF ('\n'),
+    // which Claude Code treats as "new line, don't send" (CR is "send").
+    // Returning false stops xterm's default handling so it doesn't also emit a
+    // CR via onData, which would submit.
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
-        void pty.write({ sessionId: session.ptySessionId, data: '\x1b\r' })
+        void pty.write({ sessionId: session.ptySessionId, data: '\n' })
         return false
       }
       return true
     })
 
-    // Keyboard → PTY.
+    // Keyboard → PTY. We also track what's typed so we can surface the last
+    // submitted prompt. The PTY is raw, so we reconstruct the current line:
+    // accumulate printable chars, handle backspace, and on CR (Enter = submit)
+    // commit the buffer as the last prompt. Shift+Enter sends LF via the custom
+    // handler above and never reaches here, so it correctly keeps building.
     terminal.onData((data) => {
       void pty.write({ sessionId: session.ptySessionId, data })
+      this.trackTypedInput(session, data)
     })
 
     void pty
@@ -178,8 +189,30 @@ export class TerminalSessionStore {
         }
         if (result?.ok && session.snapshot.activity === 'starting') {
           this.markWorking(session)
+
+          // Claude's `--dangerously-skip-permissions` shows a "Yes, I accept"
+          // trust screen on every fresh process start, so a yolo terminal looks
+          // like it "reverted to normal" after an app restart. Auto-accept it:
+          // the screen defaults to "No", so we send Down Arrow + Enter to pick
+          // "Yes, I accept" before typing anything else. Only for Claude yolo.
+          const needsTrustAccept =
+            options.command === 'claude' &&
+            (options.args ?? []).includes('--dangerously-skip-permissions')
+          if (needsTrustAccept) {
+            setTimeout(() => {
+              if (!session.disposed) {
+                void window.felixo?.pty?.write({
+                  sessionId: session.ptySessionId,
+                  data: '\x1b[B\r',
+                })
+              }
+            }, 800)
+          }
+
           // Give the agent a moment to start its REPL before typing the
           // standing instruction, so it lands in the prompt and not mid-boot.
+          // When we auto-accept the trust screen, wait a bit longer so the
+          // instruction lands on the real prompt and not mid-acceptance.
           const initialText = options.initialText
           if (initialText) {
             setTimeout(() => {
@@ -189,7 +222,7 @@ export class TerminalSessionStore {
                   data: initialText,
                 })
               }
-            }, 1200)
+            }, needsTrustAccept ? 1800 : 1200)
           }
         } else {
           this.update(session, {
@@ -256,6 +289,37 @@ export class TerminalSessionStore {
       return
     }
     void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+    const prompt = cleanPrompt(text)
+    if (prompt) {
+      this.update(session, { lastPrompt: prompt })
+    }
+  }
+
+  /**
+   * Reconstruct the line being typed so we can capture it on submit. xterm emits
+   * one `onData` per keystroke (or a chunk for paste): printable text appends,
+   * backspace (\x7f / \b) deletes, and CR (\r) submits — at which point we store
+   * the line as the last prompt and reset. Control sequences (arrows, etc.) are
+   * best-effort ignored; this is a convenience label, not a perfect transcript.
+   */
+  private trackTypedInput(session: Session, data: string): void {
+    for (const char of data) {
+      if (char === '\r') {
+        const prompt = cleanPrompt(session.inputBuffer)
+        session.inputBuffer = ''
+        if (prompt) {
+          this.update(session, { lastPrompt: prompt })
+        }
+      } else if (char === '\x7f' || char === '\b') {
+        session.inputBuffer = session.inputBuffer.slice(0, -1)
+      } else if (char === '\n') {
+        // Shift+Enter newline inside the prompt — keep it as a line break.
+        session.inputBuffer += '\n'
+      } else if (char >= ' ') {
+        // Printable character (skips other control/escape bytes).
+        session.inputBuffer += char
+      }
+    }
   }
 
   /**
@@ -411,6 +475,17 @@ export class TerminalSessionStore {
       listener(session.snapshot)
     }
   }
+}
+
+/** Strip ANSI escapes and collapse whitespace for a readable prompt label. */
+// eslint-disable-next-line no-control-regex
+const ANSI_ESCAPE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g
+
+function cleanPrompt(text: string): string {
+  return text
+    .replace(ANSI_ESCAPE, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /**

@@ -355,6 +355,40 @@ function toFlowEdge(edge: PersistedCanvasEdge): Edge {
   return { id: edge.id, source: edge.source, target: edge.target }
 }
 
+type Side = 'top' | 'right' | 'bottom' | 'left'
+
+/** Center point and half-extents of a node, from its current geometry. */
+function nodeCenter(node: Node): { x: number; y: number } {
+  const width = node.width ?? node.measured?.width ?? 0
+  const height = node.height ?? node.measured?.height ?? 0
+  return {
+    x: node.position.x + width / 2,
+    y: node.position.y + height / 2,
+  }
+}
+
+/**
+ * Pick the source/target sides whose handles face each other, so a connection
+ * leaves and enters by the nearest edge instead of always the top handle.
+ * Chooses horizontal sides (left/right) when the nodes are mostly side by side,
+ * vertical sides (top/bottom) when they're mostly stacked.
+ */
+function nearestSides(source: Node, target: Node): { source: Side; target: Side } {
+  const a = nodeCenter(source)
+  const b = nodeCenter(target)
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? { source: 'right', target: 'left' }
+      : { source: 'left', target: 'right' }
+  }
+  return dy >= 0
+    ? { source: 'bottom', target: 'top' }
+    : { source: 'top', target: 'bottom' }
+}
+
 /** Friendly label for a terminal block: its name, else its command. */
 function agentLabelOf(terminalNode: Node): string {
   const data = terminalNode.data as { label?: string; command?: string } | undefined
@@ -826,6 +860,27 @@ function CanvasInner() {
     return [...groups, ...rest]
   }, [renderedNodes])
 
+  // Route each edge through the handles on the facing sides of its two nodes,
+  // computed from their current positions. Handles aren't persisted, so without
+  // this every edge (button- or drag-created) falls back to the top handle.
+  // Recomputing here also re-routes wires as nodes are dragged around.
+  const edgesWithHandles = useMemo(() => {
+    const byId = new Map(nodes.map((node) => [node.id, node]))
+    return edges.map((edge) => {
+      const source = byId.get(edge.source)
+      const target = byId.get(edge.target)
+      if (!source || !target) {
+        return edge
+      }
+      const sides = nearestSides(source, target)
+      return {
+        ...edge,
+        sourceHandle: `s-${sides.source}`,
+        targetHandle: `t-${sides.target}`,
+      }
+    })
+  }, [edges, nodes])
+
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((current) => {
@@ -1277,7 +1332,7 @@ function CanvasInner() {
         <ReactFlow
           key={canvasRevision}
           nodes={orderedNodes}
-          edges={edges}
+          edges={edgesWithHandles}
           nodeTypes={nodeTypes}
           onInit={(instance) => {
             flowInstanceRef.current = instance

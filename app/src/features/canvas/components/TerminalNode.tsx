@@ -98,6 +98,15 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         className="nodrag flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
       >
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
+        {snapshot?.lastPrompt && (
+          <div
+            className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-1 text-[10px] leading-snug text-emerald-200"
+            title={snapshot.lastPrompt}
+          >
+            <span className="mr-1 font-semibold text-emerald-400">›</span>
+            <span className="line-clamp-2">{snapshot.lastPrompt}</span>
+          </div>
+        )}
         <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">
           {snapshot?.message ? (
             <span className="text-red-400">{snapshot.message}</span>
