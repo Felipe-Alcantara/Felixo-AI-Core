@@ -1299,7 +1299,10 @@ function CanvasInner() {
           panOnDrag={canvasMode === 'select' ? [1, 2] : true}
           selectionKeyCode={null}
           multiSelectionKeyCode={['Shift']}
-          panActivationKeyCode="Space"
+          // No Space-to-pan: React Flow's panActivationKeyCode fires globally,
+          // even while typing in a terminal/field, swallowing the space bar.
+          // Pan is reachable via 'Q' (toggle) and middle/right-drag instead.
+          panActivationKeyCode={null}
           className={canvasMode === 'pan' ? 'cursor-grab' : ''}
         >
           <Background gap={20} color="#1e293b" />
