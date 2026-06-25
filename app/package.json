@@ -15,7 +15,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "npm run rebuild:electron && concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite --host 127.0.0.1\" \"wait-on tcp:127.0.0.1:5173 && node scripts/start-electron.cjs --dev\"",
+    "dev": "(npm run rebuild:electron || echo \"[felixo] rebuild:electron falhou (sem toolchain C++?) — seguindo com o prebuild do node-pty\") && concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite --host 127.0.0.1\" \"wait-on tcp:127.0.0.1:5173 && node scripts/start-electron.cjs --dev\"",
     "dev:web": "vite --host 127.0.0.1",
     "rebuild:electron": "electron-rebuild -f -w node-pty",
     "rebuild:node": "npm rebuild node-pty",
