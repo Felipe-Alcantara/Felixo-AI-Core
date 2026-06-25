@@ -437,6 +437,12 @@ TESTE: `npm run build` (tsc -b + vite), `npm run lint` e suíte (393 pass, +1 do
 
 [2026-06-22] CLIs de agentes invocadas no terminal: `claude`, `gemini`, `codex` (comandos do `cli-detector.cjs`). Sem tokens no código.
 
+[2026-06-25] Catálogo MCP — registrado o contrato do servidor externo de Notion com
+`notion.list_tasks`, `notion.create_task`, `notion.move_status`,
+`notion.conclude_task` e `notion.update_project_page`. As quatro operações de escrita
+exigem `requiresConfirmation: true`; a conexão de servidores MCP externos continua no
+roadmap do cliente.
+
 ## Notas Gerais
 
 [2026-06-22] Os guias do padrão de qualidade ficam, na maioria das vezes, na pasta `Padrão de qualidade - Felixo System Design/` dentro do repositório (gitignored); se ausente, a fonte é https://github.com/Felipe-Alcantara/Felixo-System-Design

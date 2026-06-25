@@ -72,6 +72,45 @@ const FELIXO_MCP_TOOLS = Object.freeze([
     requiresConfirmation: true,
     description: 'Run only allowlisted local commands with audit logging.',
   },
+  {
+    name: 'notion.list_tasks',
+    layer: 'notion',
+    access: 'read',
+    status: 'planned',
+    description: 'List Notion tasks, optionally filtered by status.',
+  },
+  {
+    name: 'notion.create_task',
+    layer: 'notion',
+    access: 'write',
+    status: 'planned',
+    requiresConfirmation: true,
+    description: 'Create a task in Notion after confirmation.',
+  },
+  {
+    name: 'notion.move_status',
+    layer: 'notion',
+    access: 'write',
+    status: 'planned',
+    requiresConfirmation: true,
+    description: 'Move a Notion task to another status after confirmation.',
+  },
+  {
+    name: 'notion.conclude_task',
+    layer: 'notion',
+    access: 'write',
+    status: 'planned',
+    requiresConfirmation: true,
+    description: 'Conclude a Notion task after confirmation.',
+  },
+  {
+    name: 'notion.update_project_page',
+    layer: 'notion',
+    access: 'write',
+    status: 'planned',
+    requiresConfirmation: true,
+    description: 'Update a Notion project page after confirmation.',
+  },
 ])
 
 function listFelixoMcpTools() {
