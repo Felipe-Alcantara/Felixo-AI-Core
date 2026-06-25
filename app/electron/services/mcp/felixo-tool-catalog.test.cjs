@@ -23,6 +23,27 @@ test('felixo MCP tool catalog marks write operations for confirmation', () => {
   assert.ok(writeTools.every((tool) => tool.requiresConfirmation === true))
 })
 
+test('felixo MCP tool catalog includes the Notion server contract', () => {
+  const notionTools = listFelixoMcpTools().filter((tool) => tool.layer === 'notion')
+
+  assert.deepEqual(
+    notionTools.map((tool) => tool.name),
+    [
+      'notion.list_tasks',
+      'notion.create_task',
+      'notion.move_status',
+      'notion.conclude_task',
+      'notion.update_project_page',
+    ],
+  )
+  assert.equal(getFelixoMcpTool('notion.list_tasks').access, 'read')
+  assert.ok(
+    notionTools
+      .filter((tool) => tool.access === 'write')
+      .every((tool) => tool.requiresConfirmation === true),
+  )
+})
+
 test('felixo MCP tool catalog does not expose arbitrary terminal execution', () => {
   assert.equal(getFelixoMcpTool('terminal.run'), null)
   assert.ok(listFelixoMcpToolNames().includes('terminal.run_allowlisted'))
