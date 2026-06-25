@@ -268,9 +268,17 @@ class PtyProcessManager {
 }
 
 /**
- * GUI applications on macOS inherit a reduced environment from LaunchServices.
- * Running explicit CLI commands through the user's login shell mirrors Terminal.app
- * and loads version-manager setup from the user's shell configuration.
+ * Wrap an explicit CLI command so the OS can actually find and launch it.
+ *
+ * - macOS: GUI apps inherit a reduced environment from LaunchServices, so we run
+ *   through the user's interactive login shell to mirror Terminal.app and load
+ *   version-manager setup from the shell configuration.
+ * - Windows: `node-pty` spawns via `CreateProcess`, which does NOT honour
+ *   `PATHEXT` or search the way a shell does — so a bare `claude` (installed as
+ *   `claude.cmd`) fails with "Cannot create process, error code: 2". Launching
+ *   through `cmd.exe /c` lets the shell resolve the `.cmd`/`.exe`/`.ps1` shim and
+ *   the full PATH, exactly like typing the command in a real terminal.
+ * - Linux: the binary is on PATH as-is, so the command runs directly.
  *
  * @param {string} command
  * @param {string[]} args
@@ -279,19 +287,32 @@ class PtyProcessManager {
  * @returns {{ command: string, args: string[] }}
  */
 function createPtyLaunchSpec(command, args, env, adapter = platform) {
-  if (adapter.name !== 'darwin') {
-    return { command, args }
+  if (adapter.name === 'darwin') {
+    const shell = adapter.getDefaultShell(env)
+    const commandLine = [command, ...args]
+      .map((value) => adapter.escapeArg(String(value)))
+      .join(' ')
+
+    return {
+      command: shell,
+      args: ['-l', '-i', '-c', `exec ${commandLine}`],
+    }
   }
 
-  const shell = adapter.getDefaultShell(env)
-  const commandLine = [command, ...args]
-    .map((value) => adapter.escapeArg(String(value)))
-    .join(' ')
+  if (adapter.name === 'win32') {
+    const commandLine = [command, ...args]
+      .map((value) => adapter.escapeArg(String(value)))
+      .join(' ')
 
-  return {
-    command: shell,
-    args: ['-l', '-i', '-c', `exec ${commandLine}`],
+    // cmd.exe resolves PATHEXT (.cmd/.exe/.ps1) and searches PATH; `/d /s /c`
+    // skips AutoRun and runs the single command line as given.
+    return {
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', commandLine],
+    }
   }
+
+  return { command, args }
 }
 
 /**
