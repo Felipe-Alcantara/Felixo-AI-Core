@@ -28,6 +28,13 @@ const IDLE_AFTER_MS = 1500
 const PREVIEW_LINES = 6
 /** A configured agent should not terminate silently immediately after launch. */
 const SILENT_EARLY_EXIT_MS = 5000
+const DEFAULT_INITIAL_TEXT_DELAY_MS = 1200
+const CLAUDE_TRUST_ACCEPT_DELAY_MS = 800
+const CLAUDE_INITIAL_TEXT_DELAY_MS = 1800
+const CODEX_INITIAL_TEXT_DELAY_MS = 1800
+const CODEX_TRUST_ACCEPT_DELAY_MS = 150
+const CODEX_POST_TRUST_INITIAL_TEXT_DELAY_MS = 2500
+const CODEX_TRUST_BUFFER_LIMIT = 12000
 
 type SessionOptions = {
   command?: string
@@ -59,6 +66,12 @@ type Session = {
   lastSignature: string
   /** When output last changed the buffer in a meaningful way. */
   lastMeaningfulAt: number
+  args: string[]
+  initialText?: string
+  initialTextTimer: ReturnType<typeof setTimeout> | null
+  initialTextSent: boolean
+  codexTrustBuffer: string
+  codexTrustHandled: boolean
 }
 
 /**
@@ -107,6 +120,12 @@ export class TerminalSessionStore {
       inputBuffer: '',
       lastSignature: '',
       lastMeaningfulAt: Date.now(),
+      args: options.args ?? [],
+      initialText: options.initialText,
+      initialTextTimer: null,
+      initialTextSent: false,
+      codexTrustBuffer: '',
+      codexTrustHandled: false,
     }
     this.listeners.set(id, session.listeners)
     this.sessions.set(id, session)
@@ -120,6 +139,7 @@ export class TerminalSessionStore {
       if (event.sessionId === session.ptySessionId) {
         session.receivedOutput ||= event.data.length > 0
         session.pendingWrites += 1
+        this.handleCodexTrustPrompt(session, event.data)
         terminal.write(event.data, () => {
           session.pendingWrites -= 1
           if (session.disposed) {
@@ -206,24 +226,19 @@ export class TerminalSessionStore {
                   data: '\x1b[B\r',
                 })
               }
-            }, 800)
+            }, CLAUDE_TRUST_ACCEPT_DELAY_MS)
           }
 
           // Give the agent a moment to start its REPL before typing the
           // standing instruction, so it lands in the prompt and not mid-boot.
           // When we auto-accept the trust screen, wait a bit longer so the
           // instruction lands on the real prompt and not mid-acceptance.
-          const initialText = options.initialText
-          if (initialText) {
-            setTimeout(() => {
-              if (!session.disposed) {
-                void window.felixo?.pty?.write({
-                  sessionId: session.ptySessionId,
-                  data: initialText,
-                })
-              }
-            }, needsTrustAccept ? 1800 : 1200)
-          }
+          this.scheduleInitialText(
+            session,
+            needsTrustAccept
+              ? CLAUDE_INITIAL_TEXT_DELAY_MS
+              : getInitialTextDelay(session),
+          )
         } else {
           this.update(session, {
             activity: 'error',
@@ -374,6 +389,7 @@ export class TerminalSessionStore {
 
     session.disposed = true
     this.clearIdleTimer(session)
+    this.clearInitialTextTimer(session)
     session.offData()
     session.offExit()
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })
@@ -409,6 +425,7 @@ export class TerminalSessionStore {
     session: Session,
     event: { exitCode: number; signal?: number },
   ): void {
+    this.clearInitialTextTimer(session)
     const silentEarlyExit =
       Boolean(session.command) &&
       !session.receivedOutput &&
@@ -465,6 +482,73 @@ export class TerminalSessionStore {
     }
   }
 
+  private scheduleInitialText(session: Session, delayMs: number): void {
+    if (!session.initialText || session.initialTextSent || session.disposed) {
+      return
+    }
+
+    this.clearInitialTextTimer(session)
+    session.initialTextTimer = setTimeout(() => {
+      session.initialTextTimer = null
+      if (
+        session.disposed ||
+        session.initialTextSent ||
+        session.snapshot.activity === 'exited' ||
+        session.snapshot.activity === 'error'
+      ) {
+        return
+      }
+
+      session.initialTextSent = true
+      void window.felixo?.pty?.write({
+        sessionId: session.ptySessionId,
+        data: session.initialText ?? '',
+      })
+    }, delayMs)
+  }
+
+  private clearInitialTextTimer(session: Session): void {
+    if (session.initialTextTimer) {
+      clearTimeout(session.initialTextTimer)
+      session.initialTextTimer = null
+    }
+  }
+
+  private handleCodexTrustPrompt(session: Session, data: string): void {
+    if (session.command !== 'codex' || session.codexTrustHandled || !data) {
+      return
+    }
+
+    session.codexTrustBuffer = (
+      session.codexTrustBuffer + data
+    ).slice(-CODEX_TRUST_BUFFER_LIMIT)
+
+    if (!isCodexTrustPrompt(session.codexTrustBuffer)) {
+      return
+    }
+
+    session.codexTrustHandled = true
+    this.clearInitialTextTimer(session)
+
+    const canAutoAccept = session.args.includes(
+      '--dangerously-bypass-approvals-and-sandbox',
+    )
+    if (!canAutoAccept) {
+      return
+    }
+
+    setTimeout(() => {
+      if (!session.disposed) {
+        void window.felixo?.pty?.write({
+          sessionId: session.ptySessionId,
+          data: '\r',
+        })
+      }
+    }, CODEX_TRUST_ACCEPT_DELAY_MS)
+
+    this.scheduleInitialText(session, CODEX_POST_TRUST_INITIAL_TEXT_DELAY_MS)
+  }
+
   private update(session: Session, patch: Partial<SessionSnapshot>): void {
     session.snapshot = {
       ...session.snapshot,
@@ -486,6 +570,28 @@ function cleanPrompt(text: string): string {
     .replace(ANSI_ESCAPE, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function getInitialTextDelay(session: Session): number {
+  return session.command === 'codex'
+    ? CODEX_INITIAL_TEXT_DELAY_MS
+    : DEFAULT_INITIAL_TEXT_DELAY_MS
+}
+
+function isCodexTrustPrompt(text: string): boolean {
+  const compact = text
+    .replace(ANSI_ESCAPE, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+
+  return (
+    compact.includes('doyoutrustthecontentsofthisdirectory') ||
+    (
+      compact.includes('trust') &&
+      compact.includes('untrustedcontents') &&
+      compact.includes('yescontinue')
+    )
+  )
 }
 
 /**
