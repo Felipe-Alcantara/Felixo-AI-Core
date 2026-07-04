@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { GitBranch, GitCommit, Plus } from 'lucide-react'
+import { GitBranch, GitCommit, Plus, RefreshCw } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 
 type CanvasProject = { id: string; name: string; path: string }
@@ -22,6 +22,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
   const [summary, setSummary] = useState<GitSummary | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -38,10 +39,18 @@ export function GitPanel({ onClose }: GitPanelProps) {
   const refresh = useCallback(async (path: string) => {
     if (!path) {
       setSummary(null)
+      setError(null)
       return
     }
     const result = await window.felixo?.git?.getSummary({ projectPath: path })
-    setSummary(result?.ok && result.summary ? (result.summary as GitSummary) : null)
+    if (result?.ok && result.summary) {
+      const next = result.summary as GitSummary
+      setSummary(next)
+      setError(next.error ?? null)
+    } else {
+      setSummary(null)
+      setError(result?.message ?? 'Falha ao consultar o repositório Git.')
+    }
   }, [])
 
   const selectProject = useCallback(
@@ -56,7 +65,10 @@ export function GitPanel({ onClose }: GitPanelProps) {
     if (!projectPath) return
     setBusy(true)
     try {
-      await window.felixo?.git?.stageAll({ projectPath })
+      const result = await window.felixo?.git?.stageAll({ projectPath })
+      if (result && !result.ok) {
+        setError(result.message ?? 'Falha ao preparar alterações.')
+      }
       await refresh(projectPath)
     } finally {
       setBusy(false)
@@ -67,7 +79,14 @@ export function GitPanel({ onClose }: GitPanelProps) {
     if (!projectPath || !message.trim()) return
     setBusy(true)
     try {
-      await window.felixo?.git?.commit({ projectPath, message: message.trim() })
+      const result = await window.felixo?.git?.commit({
+        projectPath,
+        message: message.trim(),
+      })
+      if (result && !result.ok) {
+        setError(result.message ?? 'Falha ao criar o commit.')
+        return
+      }
       setMessage('')
       await refresh(projectPath)
     } finally {
@@ -77,18 +96,41 @@ export function GitPanel({ onClose }: GitPanelProps) {
 
   return (
     <CanvasPanel title="Git" icon={<GitBranch size={15} />} onClose={onClose}>
-      <select
-        value={projectPath}
-        onChange={(event) => selectProject(event.target.value)}
-        className="mb-3 w-full rounded bg-zinc-800 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
-      >
-        <option value="">Escolha um projeto…</option>
-        {projects.map((project) => (
-          <option key={project.id} value={project.path}>
-            {project.name}
-          </option>
-        ))}
-      </select>
+      <div className="mb-3 flex items-center gap-2">
+        <select
+          value={projectPath}
+          onChange={(event) => selectProject(event.target.value)}
+          className="min-w-0 flex-1 rounded bg-zinc-800 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
+        >
+          <option value="">Escolha um projeto…</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.path}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+        {projectPath && (
+          <button
+            type="button"
+            onClick={() => void refresh(projectPath)}
+            disabled={busy}
+            className="rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
+            title="Atualizar status"
+          >
+            <RefreshCw size={14} />
+          </button>
+        )}
+      </div>
+
+      {projects.length === 0 && (
+        <p className="text-sm text-zinc-500">
+          Nenhum projeto cadastrado. Adicione um na ferramenta Projetos.
+        </p>
+      )}
+
+      {error && (
+        <p className="mb-2 rounded bg-red-950/50 p-2 text-xs text-red-300">{error}</p>
+      )}
 
       {summary && (
         <div className="flex flex-col gap-2">
@@ -107,7 +149,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
               ))}
             </div>
           ) : (
-            <p className="text-xs text-zinc-500">Sem alteracoes pendentes.</p>
+            <p className="text-xs text-zinc-500">Sem alterações pendentes.</p>
           )}
 
           <button
