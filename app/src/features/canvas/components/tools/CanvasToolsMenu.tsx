@@ -69,7 +69,10 @@ export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) 
             <button
               key={tool}
               type="button"
-              onClick={() => onSelect(tool)}
+              onClick={() => {
+                onSelect(tool)
+                setOpen(false)
+              }}
               className={`flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
                 activeTool === tool ? 'bg-zinc-700 text-white' : 'text-zinc-200'
               }`}
