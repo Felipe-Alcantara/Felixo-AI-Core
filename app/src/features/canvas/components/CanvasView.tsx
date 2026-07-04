@@ -937,6 +937,9 @@ function CanvasInner() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           fitView
+          // React Flow's default minZoom (0.5) blocks "Ver tudo"/fitView from
+          // zooming out enough to frame a spread-out canvas on one screen.
+          minZoom={0.05}
           // Skip rendering blocks outside the viewport — with several terminal
           // blocks (xterm) mounted, this is the biggest win on modest hardware.
           onlyRenderVisibleElements
