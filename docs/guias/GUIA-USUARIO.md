@@ -145,6 +145,13 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 - **Notas:** registre notas associadas ao uso do app/projetos.
 - **Exportar:** exporte chats em JSON compacto, Markdown ou texto simples.
 
+### Navegação no canvas
+
+- **Selecionar / Mover tela:** o botão da barra (ou a tecla `Q`, com o canvas em foco) alterna entre arrastar uma caixa de seleção e arrastar a tela. Dentro do conteúdo de um bloco (nota, terminal, arquivo), o arrasto não move a tela — interaja normalmente com o bloco.
+- **Scroll:** a roda do mouse sobre o conteúdo de um bloco rola o conteúdo; sobre o fundo do canvas, controla o zoom.
+- **Ver tudo:** enquadra todos os blocos na tela de uma vez.
+- Blocos fora da área visível não são renderizados, o que mantém o canvas leve mesmo com muitos terminais abertos.
+
 ### Canvas portátil
 
 Use **Exportar** na barra do canvas para gerar um arquivo `.fxcanvas`. Esse arquivo é
