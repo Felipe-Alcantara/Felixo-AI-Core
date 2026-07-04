@@ -1,3 +1,8 @@
+// Tela principal do canvas: orquestra os blocos (terminais, notas, arquivos,
+// grupos), suas conexões e a persistência. Geometria pura vive em
+// services/node-geometry.ts, as regras de ligação arquivo↔terminal em
+// services/file-terminal-links.ts, e a UI de toolbar/painéis em
+// CanvasToolbar.tsx e CanvasToolPanels.tsx.
 import {
   useCallback,
   useEffect,
@@ -23,51 +28,34 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react'
-import {
-  Download,
-  FileText,
-  Group,
-  Hand,
-  MousePointer2,
-  StickyNote,
-  Trash2,
-  Upload,
-} from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { GroupNode } from './GroupNode'
 import { FileNode } from './FileNode'
-import { TerminalMenu } from './TerminalMenu'
 import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
+import { CanvasToolbar } from './CanvasToolbar'
+import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useTerminalSessions } from '../terminal/terminal-session-context'
 import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
-  buildFileLinkPrompt,
-  buildBootstrapPrompt,
 } from '../services/file-link-prompt'
 import {
   DEFAULT_QUALITY_STANDARD_PROMPT,
   buildCanvasTerminalInitialText,
 } from '../services/quality-standard-prompt'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
-import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
-import { SearchPanel } from './tools/SearchPanel'
-import { ProjectsPanel } from './tools/ProjectsPanel'
-import { NotesPanel } from './tools/NotesPanel'
-import { ModelsPanel } from './tools/ModelsPanel'
-import { PromptsPanel } from './tools/PromptsPanel'
-import { SkillsPanel, type SkillActivationResult } from './tools/SkillsPanel'
-import { GitPanel } from './tools/GitPanel'
-import { SettingsPanel } from './tools/SettingsPanel'
+import type { CanvasTool } from './tools/CanvasToolsMenu'
+import type { SkillActivationResult } from './tools/SkillsPanel'
 import {
   toFlowNode,
   toPersistedNode,
   useCanvasPersistence,
 } from '../hooks/useCanvasPersistence'
+import { useCanvasProjects } from '../hooks/useCanvasProjects'
 import {
   clearCanvas,
   deleteCanvasEdge,
@@ -77,6 +65,22 @@ import {
   saveCanvasEdge,
   validateCanvasBundle,
 } from '../services/canvas-storage'
+import {
+  DEFAULT_SIZE,
+  findFreeNodePosition,
+  getNodeSize,
+  isInside,
+  nearestSides,
+  type CanvasBounds,
+} from '../services/node-geometry'
+import {
+  agentLabelOf,
+  announceFileNodeToTerminalNode,
+  announceFileToTerminal,
+  getConnectedCanvasFileNames,
+  getLinkedAgentIds,
+  requestRepoDiagnosis,
+} from '../services/file-terminal-links'
 import type {
   CanvasNodeType,
   CanvasSkill,
@@ -84,17 +88,6 @@ import type {
   PersistedCanvasEdge,
 } from '../types'
 
-const DEFAULT_SIZE: Record<CanvasNodeType, { width: number; height: number }> = {
-  group: { width: 480, height: 320 },
-  file: { width: 320, height: 260 },
-  terminal: { width: 520, height: 360 },
-  note: { width: 220, height: 160 },
-}
-
-const NODE_PLACEMENT_GAP = 32
-const VIEWPORT_PLACEMENT_PADDING = { x: 40, top: 88, bottom: 40 }
-
-type CanvasBounds = { x: number; y: number; width: number; height: number }
 type FlowPositionMapper = {
   screenToFlowPosition: (position: { x: number; y: number }) => {
     x: number
@@ -105,230 +98,6 @@ type FlowPositionMapper = {
     y: number,
     options?: { zoom?: number; duration?: number },
   ) => void
-}
-
-/**
- * Finds the closest free top-level position, preferring the currently visible
- * canvas. Candidate coordinates follow existing node edges, which keeps the
- * layout aligned while avoiding overlap between differently sized blocks.
- */
-function findFreeNodePosition(
-  nodes: Node[],
-  size: { width: number; height: number },
-  viewport?: CanvasBounds,
-): { x: number; y: number } {
-  const origin = viewport
-    ? {
-        x: viewport.x + VIEWPORT_PLACEMENT_PADDING.x,
-        y: viewport.y + VIEWPORT_PLACEMENT_PADDING.top,
-      }
-    : { x: 120, y: 120 }
-  const topLevelNodes = nodes.filter((node) => !node.parentId)
-  const xCandidates = uniqueSortedCoordinates([
-    origin.x,
-    ...topLevelNodes.map(
-      (node) =>
-        node.position.x + getNodeSize(node).width + NODE_PLACEMENT_GAP,
-    ),
-  ]).filter((x) => x >= origin.x)
-  const yCandidates = uniqueSortedCoordinates([
-    origin.y,
-    ...topLevelNodes.map(
-      (node) =>
-        node.position.y + getNodeSize(node).height + NODE_PLACEMENT_GAP,
-    ),
-  ]).filter((y) => y >= origin.y)
-  const candidates = yCandidates.flatMap((y) =>
-    xCandidates.map((x) => ({ x, y })),
-  )
-  const visibleCandidates = viewport
-    ? candidates.filter(
-        (candidate) =>
-          candidate.x + size.width <=
-            viewport.x + viewport.width - VIEWPORT_PLACEMENT_PADDING.x &&
-          candidate.y + size.height <=
-            viewport.y + viewport.height - VIEWPORT_PLACEMENT_PADDING.bottom,
-      )
-    : candidates
-
-  return (
-    visibleCandidates.find((candidate) =>
-      isPositionFree(candidate, size, topLevelNodes),
-    ) ??
-    candidates.find((candidate) =>
-      isPositionFree(candidate, size, topLevelNodes),
-    ) ?? {
-      x: origin.x,
-      y:
-        Math.max(
-          origin.y,
-          ...topLevelNodes.map(
-            (node) =>
-              node.position.y + getNodeSize(node).height + NODE_PLACEMENT_GAP,
-          ),
-        ),
-    }
-  )
-}
-
-function isPositionFree(
-  position: { x: number; y: number },
-  size: { width: number; height: number },
-  nodes: Node[],
-): boolean {
-  return nodes.every((node) => {
-    const nodeSize = getNodeSize(node)
-    return (
-      position.x + size.width + NODE_PLACEMENT_GAP <= node.position.x ||
-      position.x >= node.position.x + nodeSize.width + NODE_PLACEMENT_GAP ||
-      position.y + size.height + NODE_PLACEMENT_GAP <= node.position.y ||
-      position.y >= node.position.y + nodeSize.height + NODE_PLACEMENT_GAP
-    )
-  })
-}
-
-function getNodeSize(node: Node): { width: number; height: number } {
-  const fallback = DEFAULT_SIZE[node.type as CanvasNodeType] ?? DEFAULT_SIZE.note
-  return {
-    width: node.width ?? node.measured?.width ?? fallback.width,
-    height: node.height ?? node.measured?.height ?? fallback.height,
-  }
-}
-
-function uniqueSortedCoordinates(values: number[]): number[] {
-  return [...new Set(values.map((value) => Math.round(value)))].sort(
-    (left, right) => left - right,
-  )
-}
-
-type CanvasProject = { id: string; name: string; path: string }
-
-/** True when the dragged node's top-left sits within the group's bounds. */
-function isInside(node: Node, group: Node): boolean {
-  const gx = group.position.x
-  const gy = group.position.y
-  const gw = group.width ?? group.measured?.width ?? 0
-  const gh = group.height ?? group.measured?.height ?? 0
-
-  return (
-    node.position.x >= gx &&
-    node.position.y >= gy &&
-    node.position.x <= gx + gw &&
-    node.position.y <= gy + gh
-  )
-}
-
-/** The file + terminal a connection links, in either direction (or null). */
-function filePairFromConnection(
-  connection: Connection,
-  nodes: Node[],
-): { fileNode: Node; terminalNode: Node } | null {
-  const a = nodes.find((node) => node.id === connection.source)
-  const b = nodes.find((node) => node.id === connection.target)
-  if (!a || !b) {
-    return null
-  }
-  const fileNode = a.type === 'file' ? a : b.type === 'file' ? b : null
-  const terminalNode = a.type === 'terminal' ? a : b.type === 'terminal' ? b : null
-  return fileNode && terminalNode ? { fileNode, terminalNode } : null
-}
-
-const agentNameOf = (terminalNode: Node): string => {
-  const command = (terminalNode.data as { command?: string } | undefined)?.command
-  return command ? command : 'este agente'
-}
-
-/**
- * If a connection links a file block and a terminal block, resolve the file's
- * absolute path and type the shared-scratchpad instruction into the terminal so
- * the running agent learns it can read/edit that file. The repo diagnosis
- * (bootstrap) is no longer fired here — it's an explicit, on-demand action on
- * the file block (see requestRepoDiagnosis).
- */
-async function announceFileToTerminal(
-  connection: Connection,
-  nodes: Node[],
-  store: { sendText: (id: string, text: string) => void },
-  template: string,
-): Promise<void> {
-  const pair = filePairFromConnection(connection, nodes)
-  if (!pair) {
-    return
-  }
-
-  await announceFileNodeToTerminalNode(pair.fileNode, pair.terminalNode, store, template)
-}
-
-/**
- * Resolve a file block's path and type the shared-scratchpad instruction into a
- * terminal block, so its agent learns it can read/edit that file. Shared by the
- * drag-to-connect flow and the explicit "+ Ligar agente" button.
- */
-async function announceFileNodeToTerminalNode(
-  fileNode: Node,
-  terminalNode: Node,
-  store: { sendText: (id: string, text: string) => void },
-  template: string,
-): Promise<void> {
-  const fileName = (fileNode.data as { fileName?: string } | undefined)?.fileName
-  if (!fileName) {
-    return
-  }
-
-  const resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
-  if (!resolved?.ok || !resolved.path) {
-    return
-  }
-
-  store.sendText(
-    terminalNode.id,
-    buildFileLinkPrompt(template, resolved.path, agentNameOf(terminalNode)),
-  )
-}
-
-/**
- * Fires the repo-diagnosis (bootstrap) prompt into the terminal connected to a
- * file block, on demand. The agent surveys the repo and writes the diagnosis
- * (problems, incomplete, helpers, improvements) into the file. Returns a status
- * so the UI can explain why nothing happened (e.g. no terminal linked yet).
- */
-async function requestRepoDiagnosis(
-  fileNodeId: string,
-  nodes: Node[],
-  edges: Edge[],
-  store: { sendText: (id: string, text: string) => void },
-  bootstrapTemplate: string,
-): Promise<DiagnosisRequestStatus> {
-  const fileNode = nodes.find((node) => node.id === fileNodeId)
-  const fileName = (fileNode?.data as { fileName?: string } | undefined)?.fileName
-  if (!fileName) {
-    return 'no-file'
-  }
-
-  const terminalNode = edges
-    .flatMap((edge) => {
-      if (edge.source !== fileNodeId && edge.target !== fileNodeId) {
-        return []
-      }
-      const otherId = edge.source === fileNodeId ? edge.target : edge.source
-      const other = nodes.find((node) => node.id === otherId)
-      return other?.type === 'terminal' ? [other] : []
-    })
-    .at(0)
-  if (!terminalNode) {
-    return 'no-terminal'
-  }
-
-  const resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
-  if (!resolved?.ok || !resolved.path) {
-    return 'resolve-failed'
-  }
-
-  store.sendText(
-    terminalNode.id,
-    buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentNameOf(terminalNode)),
-  )
-  return 'ok'
 }
 
 /** True only when the keyboard event originates from the bare canvas (not a
@@ -353,79 +122,6 @@ function toPersistedEdge(edge: Edge): PersistedCanvasEdge {
 
 function toFlowEdge(edge: PersistedCanvasEdge): Edge {
   return { id: edge.id, source: edge.source, target: edge.target }
-}
-
-type Side = 'top' | 'right' | 'bottom' | 'left'
-
-/** Center point and half-extents of a node, from its current geometry. */
-function nodeCenter(node: Node): { x: number; y: number } {
-  const width = node.width ?? node.measured?.width ?? 0
-  const height = node.height ?? node.measured?.height ?? 0
-  return {
-    x: node.position.x + width / 2,
-    y: node.position.y + height / 2,
-  }
-}
-
-/**
- * Pick the source/target sides whose handles face each other, so a connection
- * leaves and enters by the nearest edge instead of always the top handle.
- * Chooses horizontal sides (left/right) when the nodes are mostly side by side,
- * vertical sides (top/bottom) when they're mostly stacked.
- */
-function nearestSides(source: Node, target: Node): { source: Side; target: Side } {
-  const a = nodeCenter(source)
-  const b = nodeCenter(target)
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx >= 0
-      ? { source: 'right', target: 'left' }
-      : { source: 'left', target: 'right' }
-  }
-  return dy >= 0
-    ? { source: 'bottom', target: 'top' }
-    : { source: 'top', target: 'bottom' }
-}
-
-/** Friendly label for a terminal block: its name, else its command. */
-function agentLabelOf(terminalNode: Node): string {
-  const data = terminalNode.data as { label?: string; command?: string } | undefined
-  return data?.label?.trim() || data?.command?.trim() || 'Terminal'
-}
-
-/** Ids of terminals linked to a file block, in any edge direction. */
-function getLinkedAgentIds(fileNodeId: string, edges: Edge[]): Set<string> {
-  const ids = new Set<string>()
-  for (const edge of edges) {
-    if (edge.source === fileNodeId) ids.add(edge.target)
-    else if (edge.target === fileNodeId) ids.add(edge.source)
-  }
-  return ids
-}
-
-function getConnectedCanvasFileNames(
-  terminalId: string,
-  nodes: Node[],
-  edges: Edge[],
-): string[] {
-  const names = edges.flatMap((edge) => {
-    if (edge.source !== terminalId && edge.target !== terminalId) {
-      return []
-    }
-
-    const otherNodeId = edge.source === terminalId ? edge.target : edge.source
-    const otherNode = nodes.find((node) => node.id === otherNodeId)
-    if (otherNode?.type !== 'file') {
-      return []
-    }
-
-    const fileName = (otherNode.data as { fileName?: string }).fileName
-    return fileName ? [fileName] : []
-  })
-
-  return [...new Set(names)]
 }
 
 export function CanvasView() {
@@ -453,7 +149,7 @@ function CanvasInner() {
   const [isClearing, setIsClearing] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
   const [canvasRevision, setCanvasRevision] = useState(0)
-  const [projects, setProjects] = useState<CanvasProject[]>([])
+  const { projects, reloadProjects, addProjectFolder } = useCanvasProjects()
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
@@ -478,7 +174,6 @@ function CanvasInner() {
     },
     [],
   )
-  const importInputRef = useRef<HTMLInputElement>(null)
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
 
@@ -585,73 +280,6 @@ function CanvasInner() {
       cancelled = true
     }
   }, [edges, edgesHydrated, nodes])
-
-  const reloadProjects = useCallback(() => {
-    void window.felixo?.projects?.list().then((result) => {
-      if (result?.ok && Array.isArray(result.projects)) {
-        setProjects(
-          (result.projects as CanvasProject[]).filter(
-            (project) => project && typeof project.path === 'string',
-          ),
-        )
-      }
-    })
-  }, [])
-
-  // Pick a folder, register its repos as projects, refresh the list and return
-  // the new project ids — used by the terminal menu's "Adicionar pasta…".
-  const addProjectFolder = useCallback(async (): Promise<string[]> => {
-    const bridge = window.felixo?.projects
-    if (!bridge) {
-      return []
-    }
-
-    const folder = await bridge.pickFolder()
-    if (!folder) {
-      return []
-    }
-
-    const repos = await bridge.detectRepos(folder)
-    const picked =
-      repos.length > 0
-        ? repos
-        : [{ name: folder.split('/').filter(Boolean).pop() ?? folder, path: folder }]
-
-    const existingByPath = new Map(projects.map((project) => [project.path, project.id]))
-    const ids: string[] = []
-    for (const repo of picked) {
-      const existingId = existingByPath.get(repo.path)
-      if (existingId) {
-        ids.push(existingId)
-        continue
-      }
-      const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
-      await bridge.save({ id, name: repo.name, path: repo.path })
-      ids.push(id)
-    }
-
-    reloadProjects()
-    return ids
-  }, [reloadProjects, projects])
-
-  useEffect(() => {
-    let cancelled = false
-
-    void window.felixo?.projects?.list().then((result) => {
-      if (cancelled || !result.ok || !Array.isArray(result.projects)) {
-        return
-      }
-
-      const loaded = (result.projects as CanvasProject[]).filter(
-        (project) => project && typeof project.path === 'string',
-      )
-      setProjects(loaded)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const updateNodeData = useCallback(
     (nodeId: string, patch: Record<string, unknown>) => {
@@ -1183,151 +811,43 @@ function CanvasInner() {
     <div className="flex h-full w-full">
       <div ref={flowContainerRef} className="relative h-full min-w-0 flex-1">
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
-      <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
-        <CanvasToolsMenu
-          activeTool={activeTool}
-          onSelect={(tool) =>
-            setActiveTool((current) => (current === tool ? null : tool))
-          }
-        />
-        <TerminalMenu
-          projects={projects}
-          onAdd={addTerminalNode}
-          onAddFolder={addProjectFolder}
-        />
-        <button
-          type="button"
-          onClick={() => addNode('note')}
-          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
-        >
-          <StickyNote size={16} />
-          Nota
-        </button>
-        <button
-          type="button"
-          onClick={addFileNode}
-          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
-          title="Bloco de arquivo .md compartilhado (agentes podem editar)"
-        >
-          <FileText size={16} />
-          Arquivo
-        </button>
-        <button
-          type="button"
-          onClick={() => addNode('group', { label: 'Grupo' })}
-          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
-        >
-          <Group size={16} />
-          Grupo
-        </button>
+      <CanvasToolbar
+        activeTool={activeTool}
+        onSelectTool={(tool) =>
+          setActiveTool((current) => (current === tool ? null : tool))
+        }
+        projects={projects}
+        onAddTerminal={addTerminalNode}
+        onAddFolder={addProjectFolder}
+        onAddNote={() => addNode('note')}
+        onAddFile={addFileNode}
+        onAddGroup={() => addNode('group', { label: 'Grupo' })}
+        canvasMode={canvasMode}
+        onToggleMode={() =>
+          setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
+        }
+        onExport={() => void exportAll()}
+        onImportFile={(event) => void importFile(event)}
+        onClear={() => void clearAll()}
+        isBusy={isBusy}
+        isClearing={isClearing}
+      />
 
-        <button
-          type="button"
-          onClick={() =>
-            setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
-          }
-          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
-          title={
-            canvasMode === 'select'
-              ? 'Modo seleção — Q para mover a tela'
-              : 'Modo mover tela — Q para selecionar'
-          }
-        >
-          {canvasMode === 'select' ? (
-            <>
-              <MousePointer2 size={16} />
-              Selecionar
-            </>
-          ) : (
-            <>
-              <Hand size={16} />
-              Mover tela
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => void exportAll()}
-          disabled={isBusy}
-          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-60"
-          title="Exportar canvas para um arquivo portátil"
-        >
-          <Download size={16} />
-          Exportar
-        </button>
-
-        <button
-          type="button"
-          onClick={() => importInputRef.current?.click()}
-          disabled={isBusy}
-          className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-60"
-          title="Importar canvas de outro computador"
-        >
-          <Upload size={16} />
-          Importar
-        </button>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".fxcanvas,application/json"
-          onChange={(event) => void importFile(event)}
-          className="hidden"
-        />
-
-        <button
-          type="button"
-          onClick={() => void clearAll()}
-          disabled={isBusy}
-          className="flex items-center gap-2 rounded-lg bg-red-950/80 px-3 py-2 text-sm text-red-100 shadow-lg ring-1 ring-red-500/20 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
-          title="Excluir todos os blocos, conexões e arquivos .md do canvas"
-        >
-          <Trash2 size={16} />
-          {isClearing ? 'Limpando...' : 'Limpar'}
-        </button>
-      </div>
-
-      {activeTool === 'projects' && (
-        <ProjectsPanel
-          onClose={() => setActiveTool(null)}
-          onProjectsChanged={reloadProjects}
-        />
-      )}
-      {activeTool === 'search' && (
-        <SearchPanel
-          nodes={nodes}
-          onFocusNode={focusNode}
-          onClose={() => setActiveTool(null)}
-        />
-      )}
-      {activeTool === 'notes' && (
-        <NotesPanel onClose={() => setActiveTool(null)} />
-      )}
-      {activeTool === 'models' && (
-        <ModelsPanel onClose={() => setActiveTool(null)} />
-      )}
-      {activeTool === 'prompts' && (
-        <PromptsPanel onClose={() => setActiveTool(null)} />
-      )}
-      {activeTool === 'skills' && (
-        <SkillsPanel
-          onActivateSkill={activateSkill}
-          onClose={() => setActiveTool(null)}
-        />
-      )}
-      {activeTool === 'git' && <GitPanel onClose={() => setActiveTool(null)} />}
-      {activeTool === 'settings' && (
-        <SettingsPanel
-          onClose={() => setActiveTool(null)}
-          onPromptSaved={(prompt) => {
-            fileLinkPromptRef.current = prompt
-          }}
-          onBootstrapSaved={(prompt) => {
-            bootstrapPromptRef.current = prompt
-          }}
-          onQualityStandardSaved={applyQualityStandard}
-        />
-      )}
+      <CanvasToolPanels
+        activeTool={activeTool}
+        onClose={() => setActiveTool(null)}
+        nodes={nodes}
+        onFocusNode={focusNode}
+        onProjectsChanged={reloadProjects}
+        onActivateSkill={activateSkill}
+        onPromptSaved={(prompt) => {
+          fileLinkPromptRef.current = prompt
+        }}
+        onBootstrapSaved={(prompt) => {
+          bootstrapPromptRef.current = prompt
+        }}
+        onQualityStandardSaved={applyQualityStandard}
+      />
 
         <ReactFlow
           key={canvasRevision}
