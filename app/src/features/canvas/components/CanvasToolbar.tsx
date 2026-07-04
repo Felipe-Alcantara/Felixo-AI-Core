@@ -7,6 +7,7 @@ import {
   FileText,
   Group,
   Hand,
+  Maximize,
   MousePointer2,
   StickyNote,
   Trash2,
@@ -35,6 +36,7 @@ type CanvasToolbarProps = {
   onAddGroup: () => void
   canvasMode: 'select' | 'pan'
   onToggleMode: () => void
+  onFitView: () => void
   onExport: () => void
   onImportFile: (event: ChangeEvent<HTMLInputElement>) => void
   onClear: () => void
@@ -53,6 +55,7 @@ export function CanvasToolbar({
   onAddGroup,
   canvasMode,
   onToggleMode,
+  onFitView,
   onExport,
   onImportFile,
   onClear,
@@ -108,6 +111,16 @@ export function CanvasToolbar({
             Mover tela
           </>
         )}
+      </button>
+
+      <button
+        type="button"
+        onClick={onFitView}
+        className={TOOLBAR_BUTTON_CLASS}
+        title="Enquadrar todos os blocos na tela"
+      >
+        <Maximize size={16} />
+        Ver tudo
       </button>
 
       <button
