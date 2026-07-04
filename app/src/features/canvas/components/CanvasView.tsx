@@ -936,6 +936,7 @@ function CanvasInner() {
         onClose={() => setActiveTool(null)}
         nodes={nodes}
         onFocusNode={focusNode}
+        onAddNote={() => addNode('note', { text: '' })}
         onProjectsChanged={reloadProjects}
         onActivateSkill={activateSkill}
         onPromptSaved={(prompt) => {
