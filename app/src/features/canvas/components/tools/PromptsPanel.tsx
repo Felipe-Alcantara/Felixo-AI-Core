@@ -32,9 +32,13 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
   const prompts = [...defaultAutomations, ...custom]
 
   const copyPrompt = async (prompt: AutomationDefinition) => {
-    await navigator.clipboard?.writeText(prompt.prompt)
-    setCopiedId(prompt.id)
-    window.setTimeout(() => setCopiedId((id) => (id === prompt.id ? null : id)), 1500)
+    try {
+      await navigator.clipboard?.writeText(prompt.prompt)
+      setCopiedId(prompt.id)
+      window.setTimeout(() => setCopiedId((id) => (id === prompt.id ? null : id)), 1500)
+    } catch {
+      setCopiedId(null)
+    }
   }
 
   return (
