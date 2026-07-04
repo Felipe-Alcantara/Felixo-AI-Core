@@ -237,10 +237,10 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           value={content}
           onChange={(event) => save(event.target.value)}
           placeholder="# Conteúdo do arquivo .md"
-          className="nodrag nowheel min-h-0 w-full flex-1 resize-none overflow-auto bg-transparent p-3 font-mono text-xs text-zinc-200 outline-none"
+          className="nodrag nowheel nopan min-h-0 w-full flex-1 resize-none overflow-auto bg-transparent p-3 font-mono text-xs text-zinc-200 outline-none"
         />
       ) : (
-        <div className="nodrag nowheel markdown-content min-h-0 flex-1 overflow-auto p-3 text-sm">
+        <div className="nodrag nowheel nopan markdown-content min-h-0 flex-1 overflow-auto p-3 text-sm">
           {content.trim() ? (
             <MarkdownContent content={content} />
           ) : (

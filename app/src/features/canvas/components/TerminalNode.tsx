@@ -95,7 +95,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       <button
         type="button"
         onClick={() => nodeData.onExpand?.(id)}
-        className="nodrag flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
+        className="nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
       >
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
         {snapshot?.lastPrompt && (

@@ -72,7 +72,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
       </NodeHeader>
 
       {preview ? (
-        <div className="nodrag min-h-0 flex-1 overflow-auto p-2">
+        <div className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto p-2">
           <div className="markdown-content rounded bg-zinc-900/90 p-3 text-sm text-zinc-100">
             {text.trim() ? (
               <MarkdownContent content={text} />
@@ -90,7 +90,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
             nodeData.onDataChange?.(id, { text: next })
           }}
           placeholder="Markdown: # titulo, - [ ] tarefa, **negrito**…"
-          className={`nodrag min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm outline-none ${theme.text}`}
+          className={`nodrag nowheel nopan min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm outline-none ${theme.text}`}
         />
       )}
       <Handle type="source" position={Position.Right} className="!bg-black/40" />

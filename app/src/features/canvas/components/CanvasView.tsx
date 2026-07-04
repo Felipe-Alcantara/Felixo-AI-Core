@@ -98,6 +98,12 @@ type FlowPositionMapper = {
     y: number,
     options?: { zoom?: number; duration?: number },
   ) => void
+  fitView: (options?: { padding?: number; duration?: number }) => void
+}
+
+type NodeDataCacheEntry = {
+  deps: unknown[]
+  data: Record<string, unknown>
 }
 
 /** True only when the keyboard event originates from the bare canvas (not a
@@ -176,6 +182,28 @@ function CanvasInner() {
   )
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
+  // Mirrors of nodes/edges for callbacks injected into node data. Reading via
+  // refs keeps those callbacks referentially stable, so dragging one block
+  // doesn't invalidate the injected data of every other block (see the
+  // rendered-nodes cache below).
+  const nodesRef = useRef(nodes)
+  const edgesRef = useRef(edges)
+  // Per-node cache of injected data objects: while a node's inputs don't
+  // change, the same data object is reused, letting React.memo skip re-renders
+  // of untouched blocks during drags/pans — important on low-end hardware.
+  // Held in useState (not a ref) so it can be read inside useMemo during
+  // render; the Map instance is stable across renders.
+  const [nodeDataCache] = useState(
+    () => new Map<string, NodeDataCacheEntry>(),
+  )
+
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
+
+  useEffect(() => {
+    edgesRef.current = edges
+  }, [edges])
 
   useEffect(() => {
     void window.felixo?.canvas?.getFileLinkPrompt().then((result) => {
@@ -303,19 +331,19 @@ function CanvasInner() {
     async (fileNodeId: string): Promise<DiagnosisRequestStatus> =>
       requestRepoDiagnosis(
         fileNodeId,
-        nodes,
-        edges,
+        nodesRef.current,
+        edgesRef.current,
         store,
         bootstrapPromptRef.current,
       ),
-    [nodes, edges, store],
+    [store],
   )
 
   // "+ Ligar agente" on a file block: create the edge (if missing) and tell the
   // agent about the file — the same outcome as dragging a wire between them.
   const linkAgentToFile = useCallback(
     (fileNodeId: string, agentId: string) => {
-      const already = edges.some(
+      const already = edgesRef.current.some(
         (edge) =>
           (edge.source === fileNodeId && edge.target === agentId) ||
           (edge.source === agentId && edge.target === fileNodeId),
@@ -330,8 +358,8 @@ function CanvasInner() {
         void saveCanvasEdge(edge)
       }
 
-      const fileNode = nodes.find((node) => node.id === fileNodeId)
-      const terminalNode = nodes.find((node) => node.id === agentId)
+      const fileNode = nodesRef.current.find((node) => node.id === fileNodeId)
+      const terminalNode = nodesRef.current.find((node) => node.id === agentId)
       if (fileNode && terminalNode?.type === 'terminal') {
         void announceFileNodeToTerminalNode(
           fileNode,
@@ -341,13 +369,13 @@ function CanvasInner() {
         )
       }
     },
-    [edges, nodes, setEdges, store],
+    [setEdges, store],
   )
 
   // Remove every edge between a file block and an agent (the "desligar" action).
   const unlinkAgentFromFile = useCallback(
     (fileNodeId: string, agentId: string) => {
-      const removed = edges.filter(
+      const removed = edgesRef.current.filter(
         (edge) =>
           (edge.source === fileNodeId && edge.target === agentId) ||
           (edge.source === agentId && edge.target === fileNodeId),
@@ -360,7 +388,7 @@ function CanvasInner() {
       )
       removed.forEach((edge) => void deleteCanvasEdge(edge.id))
     },
-    [edges, setEdges],
+    [setEdges],
   )
 
   // Search → navigate: center+zoom the canvas on a block and select only it.
@@ -401,24 +429,58 @@ function CanvasInner() {
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
-  const renderedNodes = useMemo(
-    () =>
-      nodes.map((node) => {
-        const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
+  //
+  // The injected data objects are cached per node and only rebuilt when their
+  // actual inputs change. Position changes (drag/resize) recreate the outer
+  // node objects but reuse the same data reference, so React.memo keeps every
+  // untouched block from re-rendering — the main render cost on weak GPUs.
+  const renderedNodes = useMemo(() => {
+    const previousCache = new Map(nodeDataCache)
+    const nextCache = nodeDataCache
+    nextCache.clear()
+    const reuseData = (
+      id: string,
+      deps: unknown[],
+      build: () => Record<string, unknown>,
+    ) => {
+      const cached = previousCache.get(id)
+      if (
+        cached &&
+        cached.deps.length === deps.length &&
+        cached.deps.every((dep, index) => dep === deps[index])
+      ) {
+        nextCache.set(id, cached)
+        return cached.data
+      }
+      const entry = { deps, data: build() }
+      nextCache.set(id, entry)
+      return entry.data
+    }
 
-        if (node.type === 'file') {
-          const linkedIds = getLinkedAgentIds(node.id, edges)
-          const terminals = nodes.filter((item) => item.type === 'terminal')
-          const connectedAgents = terminals
-            .filter((terminal) => linkedIds.has(terminal.id))
-            .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
-          const availableAgents = terminals
-            .filter((terminal) => !linkedIds.has(terminal.id))
-            .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
+    const rendered = nodes.map((node) => {
+      const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
-          return {
-            ...withHandle,
-            data: {
+      if (node.type === 'file') {
+        const linkedIds = getLinkedAgentIds(node.id, edges)
+        const terminals = nodes.filter((item) => item.type === 'terminal')
+        const agentsSignature = terminals
+          .map(
+            (terminal) =>
+              `${linkedIds.has(terminal.id) ? '+' : '-'}${terminal.id}:${agentLabelOf(terminal)}`,
+          )
+          .join('|')
+
+        return {
+          ...withHandle,
+          data: reuseData(node.id, [node.data, agentsSignature], () => {
+            const connectedAgents = terminals
+              .filter((terminal) => linkedIds.has(terminal.id))
+              .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
+            const availableAgents = terminals
+              .filter((terminal) => !linkedIds.has(terminal.id))
+              .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
+
+            return {
               ...node.data,
               onDataChange: updateNodeData,
               onGenerateDiagnosis: generateDiagnosis,
@@ -426,60 +488,70 @@ function CanvasInner() {
               availableAgents,
               onLinkAgent: linkAgentToFile,
               onUnlinkAgent: unlinkAgentFromFile,
-            },
-          }
+            }
+          }),
         }
+      }
 
-        if (node.type === 'note' || node.type === 'group') {
-          return {
-            ...withHandle,
-            data: { ...node.data, onDataChange: updateNodeData },
-          }
+      if (node.type === 'note' || node.type === 'group') {
+        return {
+          ...withHandle,
+          data: reuseData(node.id, [node.data], () => ({
+            ...node.data,
+            onDataChange: updateNodeData,
+          })),
         }
+      }
 
-        if (node.type === 'terminal') {
-          const quality = qualityStandard
-          const connectedFileNames = getConnectedCanvasFileNames(node.id, nodes, edges)
-          const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
-          const initialTextReady =
-            edgesHydrated &&
-            (connectedFileNames.length === 0 ||
-              canvasFilePaths.length >= connectedFileNames.length)
-          const fallbackInitialText =
-            quality.enabled && node.data.command
-              ? buildCanvasTerminalInitialText(
-                  quality.prompt,
-                  node.data.initialText,
-                  canvasFilePaths,
-                )
-              : node.data.initialText
+      if (node.type === 'terminal') {
+        const quality = qualityStandard
+        const connectedFileNames = getConnectedCanvasFileNames(node.id, nodes, edges)
+        const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
+        const initialTextReady =
+          edgesHydrated &&
+          (connectedFileNames.length === 0 ||
+            canvasFilePaths.length >= connectedFileNames.length)
+        const fallbackInitialText =
+          quality.enabled && node.data.command
+            ? buildCanvasTerminalInitialText(
+                quality.prompt,
+                node.data.initialText,
+                canvasFilePaths,
+              )
+            : node.data.initialText
 
-          return {
-            ...withHandle,
-            data: {
+        return {
+          ...withHandle,
+          data: reuseData(
+            node.id,
+            [node.data, fallbackInitialText, initialTextReady],
+            () => ({
               ...node.data,
               ...(fallbackInitialText ? { initialText: fallbackInitialText } : {}),
               initialTextReady,
               onExpand: setExpandedTerminalId,
               onDataChange: updateNodeData,
-            },
-          }
+            }),
+          ),
         }
+      }
 
-        return withHandle
-      }),
-    [
-      edges,
-      edgesHydrated,
-      generateDiagnosis,
-      linkAgentToFile,
-      nodes,
-      qualityStandard,
-      terminalCanvasFilePaths,
-      unlinkAgentFromFile,
-      updateNodeData,
-    ],
-  )
+      return withHandle
+    })
+
+    return rendered
+  }, [
+    nodeDataCache,
+    edges,
+    edgesHydrated,
+    generateDiagnosis,
+    linkAgentToFile,
+    nodes,
+    qualityStandard,
+    terminalCanvasFilePaths,
+    unlinkAgentFromFile,
+    updateNodeData,
+  ])
 
   // Groups must render before their children so they sit behind them.
   const orderedNodes = useMemo(() => {
@@ -826,6 +898,9 @@ function CanvasInner() {
         onToggleMode={() =>
           setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
         }
+        onFitView={() =>
+          flowInstanceRef.current?.fitView({ padding: 0.15, duration: 400 })
+        }
         onExport={() => void exportAll()}
         onImportFile={(event) => void importFile(event)}
         onClear={() => void clearAll()}
@@ -862,6 +937,9 @@ function CanvasInner() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           fitView
+          // Skip rendering blocks outside the viewport — with several terminal
+          // blocks (xterm) mounted, this is the biggest win on modest hardware.
+          onlyRenderVisibleElements
           proOptions={{ hideAttribution: true }}
           deleteKeyCode={['Delete', 'Backspace']}
           // Select mode: drag on empty canvas draws a selection box (middle/right
