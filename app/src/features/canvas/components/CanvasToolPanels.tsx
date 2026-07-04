@@ -18,6 +18,8 @@ type CanvasToolPanelsProps = {
   onClose: () => void
   nodes: Node[]
   onFocusNode: (nodeId: string) => void
+  /** Creates a new note block on the canvas (same flow as the toolbar button). */
+  onAddNote: () => void
   onProjectsChanged: () => void
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
   onPromptSaved: (prompt: string) => void
@@ -30,6 +32,7 @@ export function CanvasToolPanels({
   onClose,
   nodes,
   onFocusNode,
+  onAddNote,
   onProjectsChanged,
   onActivateSkill,
   onPromptSaved,
@@ -42,7 +45,14 @@ export function CanvasToolPanels({
     case 'search':
       return <SearchPanel nodes={nodes} onFocusNode={onFocusNode} onClose={onClose} />
     case 'notes':
-      return <NotesPanel onClose={onClose} />
+      return (
+        <NotesPanel
+          nodes={nodes}
+          onFocusNode={onFocusNode}
+          onAddNote={onAddNote}
+          onClose={onClose}
+        />
+      )
     case 'models':
       return <ModelsPanel onClose={onClose} />
     case 'prompts':

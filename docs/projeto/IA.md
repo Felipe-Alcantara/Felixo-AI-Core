@@ -417,6 +417,13 @@ BUSCA VISUAL: `SearchPanel` (novo item "Pesquisar" no menu de ferramentas) busca
 SKILLS: design do usuário — skill = ponteiro nomeado para um arquivo (nome/descrição/caminho), não um prompt embutido. `SkillsPanel` faz CRUD; `buildSkillActivationPrompt` monta a instrução "use a skill em <caminho>, leia e siga". Ativar envia ao terminal expandido (`store.sendText`) ou copia para o clipboard se nenhum estiver aberto. Persistência na tabela `settings` via `canvas:get/set-skills` (chave `canvas.skills`), sanitizada no backend (`sanitizeSkills` descarta entradas sem id/nome/caminho) — sem migration nova, no padrão dos outros ajustes do canvas. Tipo `CanvasSkill` em `types.ts` e espelhado no `vite-env.d.ts`.
 TESTE: `npm run build` (tsc -b + vite), `npm run lint` e suíte (393 pass, +1 do round-trip/sanitização de skills) limpos.
 
+[2026-07-04] Auditoria das ferramentas do canvas — 4 correções de UX/robustez + notas do canvas no painel.
+CONTEXTO: verificação de que as 8 ferramentas do menu (Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git, Configurações) funcionam de ponta a ponta. Todas as pontes IPC existiam; os defeitos eram de painel.
+CORREÇÕES: (1) menu Ferramentas fecha ao selecionar (antes cobria o painel recém-aberto); (2) NotesPanel salvava a cada tecla via IPC e recarregava a lista inteira — agora edição local com debounce de 500 ms por nota, timers limpos no unmount; (3) GitPanel engolia erros de status/stage/commit — agora exibe a mensagem do backend, tem botão de refresh e dica quando não há projeto; (4) PromptsPanel protege a cópia contra falha do clipboard.
+NOTAS DO CANVAS: o painel Notas lia só o banco de notas do chat (`notes:list`) e dizia "Nenhuma nota ainda" com blocos de nota visíveis no quadro. Agora tem duas seções: "Notas no canvas" (nós `type: 'note'`, clicar chama `focusNode`, "Nova nota" cria bloco via `addNode`) e "Notas salvas" (persistidas via IPC). Props `nodes`/`onFocusNode`/`onAddNote` passadas por `CanvasToolPanels`.
+DESCOBERTA: a detecção de repos em Projetos varre só um nível abaixo da pasta escolhida (proposital, não desce em repo já detectado); busca recursiva com limite de profundidade ficou proposta, sem decisão.
+TESTE: `npm run build`, lint dos arquivos alterados e suíte (396 pass) limpos.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).

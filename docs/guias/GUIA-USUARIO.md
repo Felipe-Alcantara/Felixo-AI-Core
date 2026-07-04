@@ -152,6 +152,13 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 - O nome alimenta a **Pesquisa** do canvas e, em terminais com agente, é informado ao próprio agente na inicialização: ele sabe seu nome, o diretório/projeto em que está e que trabalha num ambiente multi-agente (deve se identificar nos arquivos compartilhados e não assumir que está sozinho no repositório).
 - Renomear um terminal **depois** que o agente já iniciou não reenvia a apresentação — o nome novo vale para a interface e a pesquisa.
 
+### Ferramentas do canvas
+
+O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que flutuam sobre o quadro sem escondê-lo: Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git e Configurações. Escolher uma ferramenta fecha o menu e abre o painel correspondente.
+
+- **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas compartilhadas com o modo chat, editáveis ali mesmo.
+- **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
+
 ### Navegação no canvas
 
 - **Selecionar / Mover tela:** o botão da barra (ou a tecla `Q`, com o canvas em foco) alterna entre arrastar uma caixa de seleção e arrastar a tela. Dentro do conteúdo de um bloco (nota, terminal, arquivo), o arrasto não move a tela — interaja normalmente com o bloco.
