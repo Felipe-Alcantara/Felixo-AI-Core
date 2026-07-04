@@ -122,6 +122,16 @@ function isCanvasFocused(target: HTMLElement | null): boolean {
   )
 }
 
+/** Human name → safe .md filename fragment (no accents/spaces/specials). */
+function slugifyFileName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 function toPersistedEdge(edge: Edge): PersistedCanvasEdge {
   return { id: edge.id, source: edge.source, target: edge.target }
 }
@@ -517,6 +527,7 @@ function CanvasInner() {
                 quality.prompt,
                 node.data.initialText,
                 canvasFilePaths,
+                { agentName: node.data.label, cwd: node.data.cwd },
               )
             : node.data.initialText
 
@@ -684,21 +695,31 @@ function CanvasInner() {
     [nodes, setNodes, persistNode],
   )
 
-  const addFileNode = useCallback(() => {
-    const fileName = `nota-${Date.now()}.md`
-    // Create the file on disk so it exists for agents and the watcher.
-    void window.felixo?.canvasFiles?.write({ name: fileName, content: '' })
-    addNode('file', { fileName, label: fileName })
-  }, [addNode])
+  const addFileNode = useCallback(
+    (name?: string) => {
+      // The on-disk name stays unique via timestamp; the human name goes in the
+      // label (header + search) and prefixes the slug so agents see it in paths.
+      const slug = name ? slugifyFileName(name) : ''
+      const fileName = `${slug || 'nota'}-${Date.now()}.md`
+      // Create the file on disk so it exists for agents and the watcher.
+      void window.felixo?.canvasFiles?.write({ name: fileName, content: '' })
+      addNode('file', { fileName, label: name?.trim() || fileName })
+    },
+    [addNode],
+  )
 
   const addTerminalNode = useCallback(
     (options: { command?: string; args?: string[]; cwd?: string; label: string }) => {
-      // Agent terminals get the standing quality-standard instruction (if on);
-      // a plain shell does not (there's no agent to read it).
+      // Agent terminals get the standing quality-standard instruction (if on)
+      // plus their canvas identity (name, cwd, multi-agent setting); a plain
+      // shell does not (there's no agent to read it).
       const quality = qualityStandardRef.current
       const initialText =
         options.command && quality.enabled
-          ? buildCanvasTerminalInitialText(quality.prompt)
+          ? buildCanvasTerminalInitialText(quality.prompt, undefined, [], {
+              agentName: options.label,
+              cwd: options.cwd,
+            })
           : undefined
 
       addNode('terminal', {
@@ -891,9 +912,11 @@ function CanvasInner() {
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddFolder={addProjectFolder}
-        onAddNote={() => addNode('note')}
+        onAddNote={(name) =>
+          addNode('note', { text: '', ...(name ? { label: name } : {}) })
+        }
         onAddFile={addFileNode}
-        onAddGroup={() => addNode('group', { label: 'Grupo' })}
+        onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
         canvasMode={canvasMode}
         onToggleMode={() =>
           setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
