@@ -42,6 +42,7 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
   const [effort, setEffort] = useState('')
   const [yolo, setYolo] = useState(false)
   const [projectId, setProjectId] = useState<string>('')
+  const [name, setName] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
 
   const agent = agentValue === SHELL_VALUE ? undefined : getAgent(agentValue as AgentId)
@@ -71,9 +72,13 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
   const openTerminal = () => {
     const project = projects.find((item) => item.id === projectId)
     const place = project ? project.name : 'local'
+    // A custom name wins over the generated label — it identifies the block in
+    // search and tells the agent who it is inside the canvas.
+    const customName = name.trim()
 
     if (!agent) {
-      onAdd({ cwd: project?.path, label: `Shell · ${place}` })
+      onAdd({ cwd: project?.path, label: customName || `Shell · ${place}` })
+      setName('')
       setOpen(false)
       return
     }
@@ -88,8 +93,9 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
       command: agent.command,
       args: buildAgentArgs(choices) ?? undefined,
       cwd: project?.path,
-      label: `${describeLaunch(choices)} · ${place}`,
+      label: customName || `${describeLaunch(choices)} · ${place}`,
     })
+    setName('')
     setOpen(false)
   }
 
@@ -116,6 +122,16 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
 
       {open && (
         <div className="absolute left-0 top-full mt-1 w-64 rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10">
+          <label className="mb-1 block text-xs font-medium text-zinc-400">
+            Nome (opcional)
+          </label>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Ex.: Agente de testes"
+            className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+          />
+
           <label className="mb-1 block text-xs font-medium text-zinc-400">Agente</label>
           <select
             value={agentValue}

@@ -1,7 +1,13 @@
-// Barra de ações do canvas: criar blocos, alternar seleção/pan e
-// exportar/importar/limpar o canvas. Puramente presentacional — as ações
-// chegam por props do CanvasView.
-import { useRef, type ChangeEvent } from 'react'
+// Barra de ações do canvas: criar blocos (com nome opcional), alternar
+// seleção/pan e exportar/importar/limpar o canvas. Puramente presentacional —
+// as ações chegam por props do CanvasView.
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react'
 import {
   Download,
   FileText,
@@ -31,9 +37,9 @@ type CanvasToolbarProps = {
     label: string
   }) => void
   onAddFolder: () => Promise<string[]>
-  onAddNote: () => void
-  onAddFile: () => void
-  onAddGroup: () => void
+  onAddNote: (name?: string) => void
+  onAddFile: (name?: string) => void
+  onAddGroup: (name?: string) => void
   canvasMode: 'select' | 'pan'
   onToggleMode: () => void
   onFitView: () => void
@@ -72,23 +78,25 @@ export function CanvasToolbar({
         onAdd={onAddTerminal}
         onAddFolder={onAddFolder}
       />
-      <button type="button" onClick={onAddNote} className={TOOLBAR_BUTTON_CLASS}>
-        <StickyNote size={16} />
-        Nota
-      </button>
-      <button
-        type="button"
-        onClick={onAddFile}
-        className={TOOLBAR_BUTTON_CLASS}
+      <NamedCreateButton
+        icon={<StickyNote size={16} />}
+        buttonLabel="Nota"
+        placeholder="Nome da nota (opcional)"
+        onCreate={onAddNote}
+      />
+      <NamedCreateButton
+        icon={<FileText size={16} />}
+        buttonLabel="Arquivo"
+        placeholder="Nome do arquivo (opcional)"
         title="Bloco de arquivo .md compartilhado (agentes podem editar)"
-      >
-        <FileText size={16} />
-        Arquivo
-      </button>
-      <button type="button" onClick={onAddGroup} className={TOOLBAR_BUTTON_CLASS}>
-        <Group size={16} />
-        Grupo
-      </button>
+        onCreate={onAddFile}
+      />
+      <NamedCreateButton
+        icon={<Group size={16} />}
+        buttonLabel="Grupo"
+        placeholder="Nome do grupo (opcional)"
+        onCreate={onAddGroup}
+      />
 
       <button
         type="button"
@@ -162,6 +170,92 @@ export function CanvasToolbar({
         <Trash2 size={16} />
         {isClearing ? 'Limpando...' : 'Limpar'}
       </button>
+    </div>
+  )
+}
+
+type NamedCreateButtonProps = {
+  icon: ReactNode
+  buttonLabel: string
+  placeholder: string
+  title?: string
+  /** Creates the block; `name` is undefined when the field is left empty. */
+  onCreate: (name?: string) => void
+}
+
+/**
+ * A create button that opens a small popover asking for an optional name, so
+ * every block can be named at creation (better search, agents know who they
+ * are). Enter (or "Criar") creates — with an empty field the default name is
+ * used; Escape or clicking outside cancels.
+ */
+function NamedCreateButton({
+  icon,
+  buttonLabel,
+  placeholder,
+  title,
+  onCreate,
+}: NamedCreateButtonProps) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [open])
+
+  const create = () => {
+    onCreate(name.trim() || undefined)
+    setName('')
+    setOpen(false)
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={TOOLBAR_BUTTON_CLASS}
+        title={title}
+      >
+        {icon}
+        {buttonLabel}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-56 rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10">
+          <input
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                create()
+              } else if (event.key === 'Escape') {
+                setOpen(false)
+              }
+            }}
+            placeholder={placeholder}
+            className="mb-2 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-sky-500/50"
+          />
+          <button
+            type="button"
+            onClick={create}
+            className="w-full rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600"
+          >
+            Criar
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -46,7 +46,9 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
       />
       <Handle type="target" position={Position.Left} className="!bg-black/40" />
       <NodeHeader
-        title="Nota"
+        editableValue={nodeData.label ?? ''}
+        placeholder="Nota"
+        onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
         className={theme.header}
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
       >

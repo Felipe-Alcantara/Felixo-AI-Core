@@ -8,6 +8,41 @@ export const DEFAULT_QUALITY_STANDARD_PROMPT = `Antes de qualquer tarefa: siga o
 
 const CANVAS_CONTEXT_PROMPT = `Contexto do canvas: você está em um nó do canvas do Felixo AI Core. Esse terminal faz parte do canvas, então trate o canvas como o ambiente real de trabalho. Se este terminal estiver ligado a um arquivo .md do canvas, esse arquivo é um scratchpad vivo compartilhado entre agentes e é a fonte da verdade do trabalho. Leia-o, siga-o e mantenha-o atualizado conforme o trabalho avançar.`
 
+/** Identity given to an agent terminal: its name, cwd and the multi-agent setting. */
+export type AgentIdentity = {
+  /** The block's human-given name; the agent should know and use it. */
+  agentName?: string
+  /** Working directory/project the terminal was opened in. */
+  cwd?: string
+}
+
+/**
+ * Tells the agent who it is inside the canvas: its given name, where it is
+ * working, and that other agents may be running in parallel — so it signs its
+ * notes in shared files and doesn't assume it is alone in the repo.
+ */
+export function buildAgentIdentityPrompt(identity: AgentIdentity): string {
+  const name = identity.agentName?.trim()
+  const cwd = identity.cwd?.trim()
+  const lines = ['Sua identidade no canvas:']
+
+  if (name) {
+    lines.push(
+      `- Seu nome neste canvas é "${name}". Quando escrever em arquivos compartilhados ou relatar progresso, identifique-se como "${name}".`,
+    )
+  }
+
+  if (cwd) {
+    lines.push(`- Você está trabalhando no diretório/projeto: ${cwd}`)
+  }
+
+  lines.push(
+    '- Este é um ambiente multi-agente: outros agentes podem estar rodando em paralelo em outros terminais do canvas, possivelmente no mesmo repositório. Coordene pelo(s) arquivo(s) .md compartilhados, não assuma que mudanças no repositório são só suas e evite pisar no trabalho dos outros (commits, arquivos em edição, branches).',
+  )
+
+  return lines.join('\n')
+}
+
 /** Appends a trailing newline so the line is submitted to the agent's REPL. */
 export function buildQualityStandardMessage(template: string): string {
   return `${template}\n`
@@ -15,12 +50,14 @@ export function buildQualityStandardMessage(template: string): string {
 
 /**
  * Builds the full standing instruction for a canvas terminal, combining the
- * quality standard with the canvas-specific shared-scratchpad context.
+ * quality standard with the canvas-specific shared-scratchpad context and the
+ * agent's identity (name, cwd, multi-agent setting).
  */
 export function buildCanvasTerminalInitialText(
   qualityPrompt: string,
   existingPrompt?: string,
   canvasFilePaths: string[] = [],
+  identity?: AgentIdentity,
 ): string {
   const basePrompt = (existingPrompt?.trim() || buildQualityStandardMessage(qualityPrompt)).trimEnd()
   const uniquePaths = [...new Set(canvasFilePaths.map((path) => path.trim()).filter(Boolean))]
@@ -36,6 +73,14 @@ export function buildCanvasTerminalInitialText(
 
   if (!basePrompt.includes('Contexto do canvas:')) {
     sections.push(CANVAS_CONTEXT_PROMPT)
+  }
+
+  if (
+    identity &&
+    (identity.agentName?.trim() || identity.cwd?.trim()) &&
+    !basePrompt.includes('Sua identidade no canvas:')
+  ) {
+    sections.push(buildAgentIdentityPrompt(identity))
   }
 
   if (pathPrompt && uniquePaths.some((path) => !basePrompt.includes(path))) {

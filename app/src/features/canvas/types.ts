@@ -61,6 +61,8 @@ export type NoteNodeData = {
   text?: string
   /** Sticky-note color; defaults to amber. */
   color?: NoteColor
+  /** Human label shown on the node header (searchable). */
+  label?: string
 }
 
 export type CanvasNodeData = TerminalNodeData & NoteNodeData & GroupNodeData & FileNodeData
