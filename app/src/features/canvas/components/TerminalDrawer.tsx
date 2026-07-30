@@ -13,8 +13,8 @@ type TerminalDrawerProps = {
   onClose: () => void
 }
 
-const MIN_WIDTH = 360
-const DEFAULT_WIDTH = 560
+const MIN_WIDTH = 440
+const DEFAULT_WIDTH = 720
 
 /**
  * Right-side drawer that hosts the live, interactive terminal for the expanded
@@ -25,7 +25,9 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
   const store = useTerminalSessions()
   const snapshot = useSessionSnapshot(sessionId)
   const mountRef = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(DEFAULT_WIDTH)
+  const [width, setWidth] = useState(() =>
+    Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.45))),
+  )
   const draggingRef = useRef(false)
   const { closing, close } = useExitAnimation(180, onClose)
 
@@ -94,7 +96,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
       className={`relative flex h-full flex-col border-l border-white/10 bg-[#0b0f14] ${
         closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
       }`}
-      style={{ width }}
+      style={{ width: `min(${width}px, 75vw)` }}
     >
       <div
         onMouseDown={onMouseDown}

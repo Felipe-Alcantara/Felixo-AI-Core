@@ -2,13 +2,21 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 
 /**
- * Activity derived from the output stream — no text parsing, just flow:
+ * Activity derived from the output stream:
  * - `working`: received output very recently (the agent is generating).
  * - `idle`: alive but quiet for a while (waiting for you / finished a turn).
+ * - `waiting_approval`: quiet, and the settled buffer looks like an
+ *   interactive decision prompt (approval, question, plan confirmation).
  * - `exited`: the underlying process ended.
  * - `error`: failed to start.
  */
-export type SessionActivity = 'starting' | 'working' | 'idle' | 'exited' | 'error'
+export type SessionActivity =
+  | 'starting'
+  | 'working'
+  | 'idle'
+  | 'waiting_approval'
+  | 'exited'
+  | 'error'
 
 export type SessionSnapshot = {
   activity: SessionActivity
@@ -467,8 +475,13 @@ export class TerminalSessionStore {
       }
       const quietFor = Date.now() - session.lastMeaningfulAt
       if (quietFor >= IDLE_AFTER_MS) {
-        // Refresh the preview from the now-settled buffer.
-        this.update(session, { activity: 'idle' })
+        // Refresh the preview from the now-settled buffer. A settled prompt
+        // that looks like a decision/approval screen gets its own state so
+        // it's visually distinct from "finished a turn, ready for more".
+        const activity = looksLikeApprovalPrompt(readViewport(session.terminal))
+          ? 'waiting_approval'
+          : 'idle'
+        this.update(session, { activity })
       } else {
         this.scheduleIdleCheck(session)
       }
@@ -591,6 +604,30 @@ function isCodexTrustPrompt(text: string): boolean {
       compact.includes('untrustedcontents') &&
       compact.includes('yescontinue')
     )
+  )
+}
+
+/** A selection cursor next to a yes/no-ish option, e.g. "❯ 1. Yes". */
+const APPROVAL_OPTION_LINE =
+  /[❯>●]\s*\d*\.?\s*(yes|no|sim|não|allow|deny|approve|aprovar|negar)\b/i
+/** A numbered menu of options, the general shape CLIs use for decisions. */
+const NUMBERED_OPTION_LIST = /^\s*\d\.\s+\S/m
+/** Phrasing that asks the human to confirm or decide something. */
+const CONFIRMATION_PHRASE =
+  /\b(proceed\?|continue\?|approve|aprovar|continuar\?|prosseguir\?|do you want to|would you like to|deseja)\b/i
+
+/**
+ * Best-effort, CLI-agnostic detection of an interactive decision prompt
+ * (tool approval, plan confirmation, clarifying question) sitting settled in
+ * the buffer. Mirrors `isCodexTrustPrompt` below but for the general shape of
+ * "waiting on you" screens rather than one specific CLI's trust dialog —
+ * these can appear even under auto-approve flags, since they aren't tool
+ * permission checks.
+ */
+function looksLikeApprovalPrompt(text: string): boolean {
+  return (
+    APPROVAL_OPTION_LINE.test(text) ||
+    (NUMBERED_OPTION_LIST.test(text) && CONFIRMATION_PHRASE.test(text))
   )
 }
 
