@@ -70,7 +70,19 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       />
       <TerminalSideHandles />
       <NodeHeader
-        icon={<TerminalIcon size={13} />}
+        icon={
+          <span className="flex items-center gap-1">
+            <TerminalIcon size={13} />
+            {typeof nodeData.terminalIndex === 'number' && (
+              <span
+                className="rounded bg-black/30 px-1 text-[10px] font-semibold leading-tight tabular-nums text-emerald-300"
+                title="Posição deste terminal na lista de terminais abertos"
+              >
+                #{nodeData.terminalIndex}
+              </span>
+            )}
+          </span>
+        }
         editableValue={nodeData.label ?? ''}
         placeholder="Terminal"
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}

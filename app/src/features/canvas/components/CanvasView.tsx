@@ -467,6 +467,19 @@ function CanvasInner() {
       return entry.data
     }
 
+    // 1-based position among currently open terminals, in creation order
+    // (nodes are appended, never reordered, so array order == creation
+    // order). Recomputed every render, so closing a terminal shifts the
+    // numbers of the ones after it instead of leaving a gap.
+    let terminalCount = 0
+    const terminalOrder = new Map<string, number>()
+    for (const item of nodes) {
+      if (item.type === 'terminal') {
+        terminalCount += 1
+        terminalOrder.set(item.id, terminalCount)
+      }
+    }
+
     const rendered = nodes.map((node) => {
       const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
@@ -530,16 +543,18 @@ function CanvasInner() {
                 { agentName: node.data.label, cwd: node.data.cwd },
               )
             : node.data.initialText
+        const terminalIndex = terminalOrder.get(node.id)
 
         return {
           ...withHandle,
           data: reuseData(
             node.id,
-            [node.data, fallbackInitialText, initialTextReady],
+            [node.data, fallbackInitialText, initialTextReady, terminalIndex],
             () => ({
               ...node.data,
               ...(fallbackInitialText ? { initialText: fallbackInitialText } : {}),
               initialTextReady,
+              terminalIndex,
               onExpand: setExpandedTerminalId,
               onDataChange: updateNodeData,
             }),
