@@ -869,6 +869,7 @@ function createOrchestrationRunner(options) {
 function createAgentResultsPrompt(run) {
   const { agentResults } = ORCHESTRATOR_PROMPT_PRESETS
   const jobs = getCurrentTurnJobs(run)
+  const hasFailedJob = jobs.some((job) => job.status !== 'completed')
   const sections = jobs.map((job) => {
     const status =
       job.status === 'completed'
@@ -891,11 +892,22 @@ function createAgentResultsPrompt(run) {
     ].join('\n')
   })
 
-  return [
+  const lines = [
     agentResults.continueFromOriginal,
     '',
     agentResults.finalInstructionsHeading,
     ...agentResults.finalAnswerRules,
+  ]
+
+  if (hasFailedJob) {
+    lines.push(
+      '',
+      agentResults.failureGuidanceHeading,
+      ...agentResults.failureGuidanceRules,
+    )
+  }
+
+  lines.push(
     '',
     agentResults.originalObjectiveHeading,
     run.originalPrompt,
@@ -903,7 +915,9 @@ function createAgentResultsPrompt(run) {
     agentResults.agentResultsHeading,
     '',
     sections.join('\n\n') || agentResults.noAgentResults,
-  ].join('\n')
+  )
+
+  return lines.join('\n')
 }
 
 function areCurrentTurnJobsTerminal(run) {

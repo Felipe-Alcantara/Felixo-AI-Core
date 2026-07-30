@@ -440,6 +440,26 @@ test('createAgentResultsPrompt formats current turn results', () => {
   assert.match(prompt, /Resultado:\nTudo certo\./)
   assert.match(prompt, /Status: erro/)
   assert.doesNotMatch(prompt, /Ignorar/)
+  assert.match(prompt, /Se algum agente falhou:/)
+})
+
+test('createAgentResultsPrompt omits failure guidance when every job completed', () => {
+  const prompt = createAgentResultsPrompt({
+    originalPrompt: 'Objetivo inicial',
+    currentTurn: 1,
+    agentJobs: [
+      {
+        turn: 1,
+        agentId: 'reviewer-1',
+        cliType: 'claude',
+        prompt: 'Revise as alteracoes.',
+        status: 'completed',
+        result: 'Tudo certo.',
+      },
+    ],
+  })
+
+  assert.doesNotMatch(prompt, /Se algum agente falhou:/)
 })
 
 test('orchestration runner re-spawns sub-agent on mid-task quota error', async () => {
