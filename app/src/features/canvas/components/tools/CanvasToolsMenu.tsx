@@ -11,15 +11,16 @@ import {
   Search,
   Settings,
   Sparkles,
-  Terminal,
   Wrench,
 } from 'lucide-react'
 
+// 'terminals' is not here on purpose — the terminals dock is always visible
+// (see TerminalsPanel.tsx, rendered directly by CanvasView), not a panel you
+// open/close through this menu.
 export type CanvasTool =
   | 'search'
   | 'projects'
   | 'notes'
-  | 'terminals'
   | 'models'
   | 'prompts'
   | 'skills'
@@ -32,7 +33,6 @@ const TOOLS: ToolEntry[] = [
   { tool: 'search', label: 'Pesquisar', icon: Search },
   { tool: 'projects', label: 'Projetos', icon: FolderGit2 },
   { tool: 'notes', label: 'Notas', icon: Notebook },
-  { tool: 'terminals', label: 'Terminais', icon: Terminal },
   { tool: 'models', label: 'Modelos', icon: LayoutList },
   { tool: 'prompts', label: 'Prompts', icon: Sparkles },
   { tool: 'skills', label: 'Skills', icon: BrainCircuit },
