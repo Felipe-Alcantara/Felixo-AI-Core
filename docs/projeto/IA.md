@@ -433,6 +433,13 @@ CONTEÚDO DO JSON: `orchestrator-prompt-presets.json` mantido com a mesma estrut
 TESTE: `npm run build` (tsc -b + vite), `npm test` (electron, 396 pass) e `npx vitest run` (25 pass, novo) limpos após cada commit.
 LIMITAÇÃO: dedup cobre só `deepFreeze`/`createOpenEndedOrchestrationRules` (o pedido de duplicação real de lógica). `delegation-policy.ts`/`.cjs` continuam sendo dois arquivos espelhados por design pré-existente (comentário "Keep in sync" no `.ts`) — fora do escopo pedido, mas o fix de regex foi replicado nos dois para não divergir.
 
+[2026-07-30] FIX — dedup de `orchestrator-prompt-presets-core.cjs` quebrava `npm run dev` (tela preta) na entrada acima.
+CONTEXTO: ao rodar o app após o merge da entrada anterior, a janela do Electron abriu preta (só a moldura, sem UI). O `vite build` (produção) tinha passado limpo, mas o `vite dev` nunca foi exercitado antes do merge.
+CAUSA: `orchestrator-prompt-presets.ts` (frontend) importava `createPromptPresetsRuntime` do `orchestrator-prompt-presets-core.cjs` (named e, numa segunda tentativa, default import). O dev server do Vite não faz interop confiável de CommonJS (`module.exports = {...}`) para arquivos `.cjs` fora de `node_modules` — a importação falhava em runtime com `SyntaxError: ... does not provide an export named ...`, o módulo nunca avaliava e o React não montava. O Rollup do `vite build` tolera esse padrão (analisa estaticamente), por isso só apareceu no dev.
+CORREÇÃO: revertida a parte do dedup que cruzava a fronteira Vite→CJS: `orchestrator-prompt-presets.ts` voltou a ter sua própria implementação inline de `deepFreeze`/`createOpenEndedOrchestrationRules` (7 linhas, coberta pelos testes de `cli-prompt.test.ts`). O `.cjs` compartilhado (`orchestrator-prompt-presets-core.cjs`) continua existindo e sendo a fonte única só para o lado Electron/Node (`orchestrator-prompt-presets.cjs`, via `require()`, sem esse problema). Removido o `.d.cts` que ficou órfão.
+VALIDAÇÃO: `tsc -b` limpo, `npx vitest run` 25/25, `npm run dev` sobe sem erro no log e o usuário confirmou visualmente que a janela renderiza normal.
+LIÇÃO: ao validar uma mudança que atravessa Electron (CJS) e Vite (ESM), rodar `npm run dev` além de `npm run build` — os dois bundlers toleram formatos de módulo diferentes.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
