@@ -108,6 +108,7 @@ export function createCliPrompt(
     ? createOrchestrationProtocolInstructions(
         orchestrationHint,
         orchestrationContextBlock,
+        currentPrompt,
       )
     : null
   const hasContext =
@@ -161,6 +162,11 @@ export function createCliPrompt(
     `  - A mensagem atual é a mensagem do usuário número ${currentUserMessageNumber}.`,
     '  - Se o usuário perguntar quantas mensagens ele mandou, use o total incluindo a mensagem atual, salvo se ele pedir explicitamente outra regra.',
   )
+
+  if (hasAttachments || hasHistory) {
+    const { promptInjectionGuard } = ORCHESTRATOR_PROMPT_PRESETS
+    lines.push('', promptInjectionGuard.heading, ...promptInjectionGuard.rules)
+  }
 
   if (contextualActiveProjects.length > 0) {
     lines.push('', 'Projetos com contexto ativo:')
@@ -375,8 +381,10 @@ export function createOrchestrationPromptHint(
 function createOrchestrationProtocolInstructions(
   hint: OrchestrationPromptHint | null = null,
   orchestrationContextBlock: string | null = null,
+  currentPrompt = '',
 ) {
-  const { multiAgentProtocol, delegationOnly } = ORCHESTRATOR_PROMPT_PRESETS
+  const { multiAgentProtocol, delegationOnly, gitDiscipline, codeQualityStandard } =
+    ORCHESTRATOR_PROMPT_PRESETS
   const lines = [
     delegationOnly.heading,
     ...delegationOnly.rules,
@@ -385,6 +393,17 @@ function createOrchestrationProtocolInstructions(
     ...multiAgentProtocol.rules,
     ...multiAgentProtocol.finalAnswerRules,
   ]
+
+  if (mentionsCodeEditingTask(currentPrompt)) {
+    lines.push(
+      '',
+      gitDiscipline.heading,
+      ...gitDiscipline.rules,
+      '',
+      codeQualityStandard.heading,
+      ...codeQualityStandard.rules,
+    )
+  }
 
   if (orchestrationContextBlock) {
     lines.push('', orchestrationContextBlock)
@@ -402,6 +421,17 @@ function createOrchestrationProtocolInstructions(
   }
 
   return lines.join('\n')
+}
+
+function mentionsCodeEditingTask(prompt: string) {
+  const normalizedPrompt = normalizePromptText(prompt)
+
+  const codeContextPattern =
+    /\b(codigo|arquivo|arquivos|repositorio|repo|branch|commit|pull request|\bpr\b|merge|funcao|classe|componente|endpoint|api|bug|refator\w*|teste|testes|script)\b/
+  const editVerbPattern =
+    /\b(cri[ae]|criar|edit[ae]|editar|alter[ae]|alterar|modific[ae]|modificar|corrij\w*|corrig[ae]|corrigir|refator\w*|implement[ae]|implementar|escrev[ae]|escrever|delet[ae]|deletar|remov[ae]|remover|apag[ae]|apagar)\b/
+
+  return codeContextPattern.test(normalizedPrompt) && editVerbPattern.test(normalizedPrompt)
 }
 
 export function normalizePromptText(prompt: string) {
