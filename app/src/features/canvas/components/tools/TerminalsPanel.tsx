@@ -1,6 +1,6 @@
+import { useState } from 'react'
 import type { Node } from '@xyflow/react'
 import { Loader2, Terminal as TerminalIcon } from 'lucide-react'
-import { CanvasPanel } from './CanvasPanel'
 import { useSessionSnapshot } from '../../terminal/terminal-session-context'
 import type { SessionActivity } from '../../terminal/terminal-session-store'
 import type { CanvasNodeData } from '../../types'
@@ -9,7 +9,8 @@ type TerminalsPanelProps = {
   nodes: Node<CanvasNodeData>[]
   /** Centers/zooms the canvas on a terminal block and selects it. */
   onFocusNode: (nodeId: string) => void
-  onClose: () => void
+  /** Opens the terminal's side drawer, ready to type. */
+  onExpandNode: (nodeId: string) => void
 }
 
 const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
@@ -26,42 +27,98 @@ function terminalTitle(node: Node<CanvasNodeData>) {
 }
 
 /**
- * Live list of every terminal block currently on the canvas, numbered by
- * creation order (matches the "#N" badge shown on each terminal's header).
- * Picking one centers and selects it — the way to "walk" through open agent
- * sessions without hunting for them on a crowded board.
+ * Fixed, always-on dock (not a toggleable tool panel) listing every terminal
+ * block currently on the canvas, numbered by creation order — matches the
+ * "#N" badge shown on each terminal's header. Renders nothing when the
+ * canvas has no terminals.
+ *
+ * Clicking a row centers it on the canvas AND opens its side drawer, ready
+ * to type. Arrow Up/Down (while the dock has keyboard focus) walk through
+ * the list quickly — they only move the canvas focus, not the drawer, so
+ * repeated presses keep landing on the dock instead of racing the drawer's
+ * own auto-focus-for-typing. Enter (or a click) commits to actually opening
+ * the highlighted terminal.
  */
-export function TerminalsPanel({ nodes, onFocusNode, onClose }: TerminalsPanelProps) {
+export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPanelProps) {
   const terminals = nodes.filter((node) => node.type === 'terminal')
+  const [rawActiveIndex, setActiveIndex] = useState(0)
+
+  if (terminals.length === 0) {
+    return null
+  }
+
+  // Clamped at read-time (not synced via effect) so a terminal closing
+  // never leaves the highlight pointing past the end of the list.
+  const activeIndex = Math.min(rawActiveIndex, terminals.length - 1)
+
+  const moveActive = (delta: number) => {
+    const next =
+      (activeIndex + delta + terminals.length) % terminals.length
+    setActiveIndex(next)
+    onFocusNode(terminals[next].id)
+  }
+
+  const commitActive = () => {
+    const active = terminals[activeIndex]
+    if (active) {
+      onFocusNode(active.id)
+      onExpandNode(active.id)
+    }
+  }
 
   return (
-    <CanvasPanel title="Terminais" icon={<TerminalIcon size={15} />} onClose={onClose}>
-      {terminals.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhum terminal aberto no canvas.</p>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {terminals.map((node, index) => (
-            <TerminalRow
-              key={node.id}
-              node={node}
-              index={index + 1}
-              onFocusNode={onFocusNode}
-            />
-          ))}
-        </ul>
-      )}
-    </CanvasPanel>
+    <div className="absolute bottom-4 right-4 z-20 flex max-h-[60vh] w-56 flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl">
+      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
+        <TerminalIcon size={15} />
+        Terminais
+        <span className="ml-auto text-xs font-normal text-zinc-500">
+          {terminals.length}
+        </span>
+      </div>
+      <ul
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            moveActive(1)
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            moveActive(-1)
+          } else if (event.key === 'Enter') {
+            event.preventDefault()
+            commitActive()
+          }
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-emerald-500/50"
+      >
+        {terminals.map((node, index) => (
+          <TerminalRow
+            key={node.id}
+            node={node}
+            index={index + 1}
+            active={index === activeIndex}
+            onSelect={() => {
+              setActiveIndex(index)
+              onFocusNode(node.id)
+              onExpandNode(node.id)
+            }}
+          />
+        ))}
+      </ul>
+    </div>
   )
 }
 
 function TerminalRow({
   node,
   index,
-  onFocusNode,
+  active,
+  onSelect,
 }: {
   node: Node<CanvasNodeData>
   index: number
-  onFocusNode: (nodeId: string) => void
+  active: boolean
+  onSelect: () => void
 }) {
   const snapshot = useSessionSnapshot(node.id)
   const activity = snapshot?.activity ?? 'starting'
@@ -70,8 +127,10 @@ function TerminalRow({
     <li>
       <button
         type="button"
-        onClick={() => onFocusNode(node.id)}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+        onClick={onSelect}
+        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
+          active ? 'bg-white/10' : ''
+        }`}
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-black/30 text-[10px] font-semibold tabular-nums text-emerald-300">
           {index}

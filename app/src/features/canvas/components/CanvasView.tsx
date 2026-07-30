@@ -37,6 +37,7 @@ import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasToolPanels } from './CanvasToolPanels'
+import { TerminalsPanel } from './tools/TerminalsPanel'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useTerminalSessions } from '../terminal/terminal-session-context'
 import {
@@ -962,6 +963,8 @@ function CanvasInner() {
         }}
         onQualityStandardSaved={applyQualityStandard}
       />
+
+      <TerminalsPanel nodes={nodes} onFocusNode={focusNode} onExpandNode={setExpandedTerminalId} />
 
         <ReactFlow
           key={canvasRevision}
