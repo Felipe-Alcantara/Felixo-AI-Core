@@ -1,28 +1,8 @@
 const promptPresets = require('./orchestrator-prompt-presets.json')
+const { createPromptPresetsRuntime } = require('./orchestrator-prompt-presets-core.cjs')
 
-const ORCHESTRATOR_PROMPT_PRESETS = deepFreeze(promptPresets)
-
-function createOpenEndedOrchestrationRules(hint) {
-  return [
-    `- Seed efemera desta mensagem: ${hint.seed}.`,
-    `- O usuario pediu algo como "qualquer coisa"; pergunte ao sub-agente uma pergunta curta e concreta sobre: ${hint.openEndedTopic}.`,
-    ...ORCHESTRATOR_PROMPT_PRESETS.multiAgentProtocol.openEndedRules,
-  ]
-}
-
-function deepFreeze(value) {
-  if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
-    return value
-  }
-
-  Object.freeze(value)
-
-  for (const nestedValue of Object.values(value)) {
-    deepFreeze(nestedValue)
-  }
-
-  return value
-}
+const { ORCHESTRATOR_PROMPT_PRESETS, createOpenEndedOrchestrationRules } =
+  createPromptPresetsRuntime(promptPresets)
 
 module.exports = {
   ORCHESTRATOR_PROMPT_PRESETS,
