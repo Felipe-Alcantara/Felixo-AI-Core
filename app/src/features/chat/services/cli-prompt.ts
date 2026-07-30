@@ -11,12 +11,16 @@ import type { ChatMessage, ContextAttachment, Model, Project } from '../types'
 
 const CONTEXT_MESSAGE_LIMIT = 12
 const SIMPLE_CURRENT_REQUEST_PATTERNS = [
-  /^(oi|ola|opa|e ai|salve|hello|hi|hey)$/,
+  /^(oi|ola|opa|e ai|eai|salve|hello|hi|hey|fala)$/,
   /^(bom dia|boa tarde|boa noite)$/,
   /^(tudo bem|como voce esta|como vc esta)$/,
   /^(ta|esta|funcionando|funciona|rodando|online|ok)(\s+(funcionando|bem|agora|ai|aqui|mesmo|normal|ok))*$/,
   /^(ta funcionando|esta funcionando|funciona|funcionando|ta rodando|esta rodando|rodando|online|ok)$/,
   /^(teste|testando|ping)$/,
+  // Agradecimentos e confirmações curtas isoladas — mesma intenção de
+  // "saudação simples", só que no fim da conversa em vez do início.
+  /^(valeu|obrigad[oa]s?|obg|thanks|thank you|blz|beleza|show|top|massa|legal|perfeito|otimo|excelente)(\s+(mesmo|demais|pra|para|pelo|pela|por)?\s*(ajuda|isso|tudo|a forca)?)?$/,
+  /^(sim|nao|talvez|certo|entendi|pode ser|combinado|fechado)$/,
 ]
 const OPEN_ENDED_ORCHESTRATION_TOPICS = [
   'astronomia cotidiana',

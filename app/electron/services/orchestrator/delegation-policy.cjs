@@ -13,7 +13,7 @@ const ACTION_VERBS_REGEX =
 // Trivial-prompt patterns: greetings, thanks, simple acknowledgements, scope
 // clarifications. These do NOT require delegation.
 const TRIVIAL_PROMPT_REGEX =
-  /^(oi|ola|opa|eai|fala|hello|hi|hey|bom dia|boa tarde|boa noite|tudo bem|valeu|obrigad|obg|thanks|thank you|ok|okay|beleza|certo|entendi|legal|massa|sim|nao|talvez|nao sei|pode|pode sim|claro)\b/
+  /^(oi|ola|opa|eai|fala|hello|hi|hey|bom dia|boa tarde|boa noite|tudo bem|valeu|obrigad[oa]s?|obg|thanks|thank you|ok|okay|beleza|certo|entendi|legal|massa|sim|nao|talvez|nao sei|pode|pode sim|claro)\b/
 
 const LONG_PROMPT_THRESHOLD = 120
 
