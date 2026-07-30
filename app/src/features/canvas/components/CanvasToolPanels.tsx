@@ -6,6 +6,7 @@ import type { CanvasTool } from './tools/CanvasToolsMenu'
 import { SearchPanel } from './tools/SearchPanel'
 import { ProjectsPanel } from './tools/ProjectsPanel'
 import { NotesPanel } from './tools/NotesPanel'
+import { TerminalsPanel } from './tools/TerminalsPanel'
 import { ModelsPanel } from './tools/ModelsPanel'
 import { PromptsPanel } from './tools/PromptsPanel'
 import { SkillsPanel, type SkillActivationResult } from './tools/SkillsPanel'
@@ -52,6 +53,10 @@ export function CanvasToolPanels({
           onAddNote={onAddNote}
           onClose={onClose}
         />
+      )
+    case 'terminals':
+      return (
+        <TerminalsPanel nodes={nodes} onFocusNode={onFocusNode} onClose={onClose} />
       )
     case 'models':
       return <ModelsPanel onClose={onClose} />

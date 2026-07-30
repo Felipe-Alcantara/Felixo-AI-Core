@@ -53,6 +53,13 @@ export type TerminalNodeData = {
   initialText?: string
   /** Render-time flag: waits for canvas connections/path resolution before spawning. */
   initialTextReady?: boolean
+  /**
+   * Render-time only (never persisted): this terminal's position among the
+   * currently open terminal blocks, 1-based in creation order. Recomputed on
+   * every render from the live node list, so it stays contiguous as
+   * terminals open/close — never a stored, ever-growing counter.
+   */
+  terminalIndex?: number
 }
 
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'

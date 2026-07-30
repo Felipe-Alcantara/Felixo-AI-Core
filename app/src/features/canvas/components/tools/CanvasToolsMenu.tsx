@@ -11,6 +11,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Terminal,
   Wrench,
 } from 'lucide-react'
 
@@ -18,6 +19,7 @@ export type CanvasTool =
   | 'search'
   | 'projects'
   | 'notes'
+  | 'terminals'
   | 'models'
   | 'prompts'
   | 'skills'
@@ -30,6 +32,7 @@ const TOOLS: ToolEntry[] = [
   { tool: 'search', label: 'Pesquisar', icon: Search },
   { tool: 'projects', label: 'Projetos', icon: FolderGit2 },
   { tool: 'notes', label: 'Notas', icon: Notebook },
+  { tool: 'terminals', label: 'Terminais', icon: Terminal },
   { tool: 'models', label: 'Modelos', icon: LayoutList },
   { tool: 'prompts', label: 'Prompts', icon: Sparkles },
   { tool: 'skills', label: 'Skills', icon: BrainCircuit },
