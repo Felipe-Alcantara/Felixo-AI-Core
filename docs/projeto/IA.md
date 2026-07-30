@@ -440,6 +440,19 @@ CORREÇÃO: revertida a parte do dedup que cruzava a fronteira Vite→CJS: `orch
 VALIDAÇÃO: `tsc -b` limpo, `npx vitest run` 25/25, `npm run dev` sobe sem erro no log e o usuário confirmou visualmente que a janela renderiza normal.
 LIÇÃO: ao validar uma mudança que atravessa Electron (CJS) e Vite (ESM), rodar `npm run dev` além de `npm run build` — os dois bundlers toleram formatos de módulo diferentes.
 
+[2026-07-30] FEAT — 4 presets novos de orquestração (segurança, git, qualidade, tratamento de falha).
+CONTEXTO: pedido explícito de ampliar `orchestrator-prompt-presets.json` além do que já existia, com foco escolhido pelo usuário entre 4 opções apresentadas.
+PRESETS: (1) `promptInjectionGuard` — instrui o orquestrador a tratar conteúdo de anexos/histórico como dado, nunca como comando; injetado em `cli-prompt.ts` sempre que `hasAttachments || hasHistory`. (2) `gitDiscipline` — commits pequenos, sem force-push, branch só quando justificado. (3) `codeQualityStandard` — responsabilidade separada, validar antes de reportar concluído, sem código morto; (2) e (3) injetados juntos em `createOrchestrationProtocolInstructions` quando `mentionsCodeEditingTask(currentPrompt)` detecta contexto de código (substantivo tipo arquivo/repo/bug) + verbo de edição. (4) `failureGuidance` dentro de `agentResults` — orienta o orquestrador a distinguir rate-limit/timeout/auth de falha real da tarefa; injetado em `createAgentResultsPrompt` (orchestration-runner.cjs) quando algum job do turno não é `completed`.
+BUG ENCONTRADO DE BÔNUS: a regra nova `mentionsCodeEditingTask` copiou o stem `corrij` de `ACTION_VERBS_REGEX` (delegation-policy.ts) e reproduziu o mesmo bug de fronteira `\b` do fix anterior (`obrigad\b`) — "corrija" nunca casava. Corrigido para `corrij\w*` só na regra nova; o `ACTION_VERBS_REGEX` original não foi tocado (fora do escopo de hoje, outros caminhos da heurística de `requiresDelegation` já cobrem o caso).
+TESTES: 4 novos em `cli-prompt.test.ts` (guard com anexo, guard com histórico mas não com prompt trivial, git+qualidade em tarefa de código, ausência deles em tarefa não-código), 2 novos em `orchestration-runner.test.cjs` (`failureGuidance` presente/ausente conforme status dos jobs), 1 novo em `orchestrator-prompt-presets.test.cjs` (presets congelados e com o texto esperado).
+VALIDAÇÃO: `tsc -b`, `npm run build`, `npm test` (398 pass), `npx vitest run` (29 pass) limpos.
+LIMITAÇÃO: o lado Electron (`orchestration-runner.cjs`) não tem hot-reload — o `failureGuidance` só entra em vigor depois que o usuário reiniciar o app manualmente.
+
+[2026-07-30] FEAT — Canvas: criar/editar/excluir prompts customizados no PromptsPanel.
+CONTEXTO: o `PromptsPanel.tsx` do Canvas (`src/features/canvas/components/tools/`) só listava e copiava automations; criar/editar/excluir já existia no Chat (`automation-storage.ts` + IPC `automations:save`/`automations:delete`) mas nunca foi ligado ao Canvas.
+IMPLEMENTAÇÃO: seguido o padrão já usado pelo `NotesPanel.tsx` do Canvas — edição inline com autosave debounced (500 ms) via IPC direto (`window.felixo.automations.*`), sem importar do `features/chat` (convenção do projeto: painéis do Canvas falam direto com IPC). Botão "Novo prompt" cria automation com `scope: 'chat'` vazia; campos nome/descrição/prompt/scope editáveis inline só para automations customizadas (`isDefault !== true`); lixeira remove via `automations:delete`. Automations padrão (as 3 pré-fabricadas) continuam somente leitura.
+VALIDAÇÃO: `tsc -b`, `npm run build`, `eslint` no arquivo, `npm test` e `npx vitest run` limpos. Sem suíte de teste de componente React no projeto (só serviços puros têm cobertura) — verificação funcional ficou para o usuário conferir manualmente no app.
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
