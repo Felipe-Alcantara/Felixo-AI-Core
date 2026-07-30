@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Node } from '@xyflow/react'
 import { Loader2, Terminal as TerminalIcon } from 'lucide-react'
 import { useSessionSnapshot } from '../../terminal/terminal-session-context'
@@ -16,6 +16,7 @@ type TerminalsPanelProps = {
 const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
   starting: 'bg-amber-400',
   working: 'bg-sky-400',
+  waiting_approval: 'bg-amber-400',
   idle: 'bg-emerald-400',
   exited: 'bg-zinc-600',
   error: 'bg-red-400',
@@ -42,6 +43,7 @@ function terminalTitle(node: Node<CanvasNodeData>) {
 export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPanelProps) {
   const terminals = nodes.filter((node) => node.type === 'terminal')
   const [rawActiveIndex, setActiveIndex] = useState(0)
+  const listRef = useRef<HTMLUListElement>(null)
 
   if (terminals.length === 0) {
     return null
@@ -51,11 +53,26 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
   // never leaves the highlight pointing past the end of the list.
   const activeIndex = Math.min(rawActiveIndex, terminals.length - 1)
 
+  useEffect(() => {
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('[data-terminals-dock]')) return
+      if (target?.closest('input, textarea, [contenteditable="true"], .xterm')) return
+      event.preventDefault()
+      moveActive(event.key === 'ArrowDown' ? 1 : -1)
+    }
+    window.addEventListener('keydown', onWindowKeyDown)
+    return () => window.removeEventListener('keydown', onWindowKeyDown)
+  })
+
   const moveActive = (delta: number) => {
     const next =
       (activeIndex + delta + terminals.length) % terminals.length
     setActiveIndex(next)
     onFocusNode(terminals[next].id)
+    onExpandNode(terminals[next].id)
+    window.requestAnimationFrame(() => listRef.current?.focus())
   }
 
   const commitActive = () => {
@@ -67,7 +84,7 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
   }
 
   return (
-    <div className="absolute bottom-4 right-4 z-20 flex max-h-[60vh] w-56 flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl">
+    <div data-terminals-dock className="absolute bottom-4 right-4 z-20 flex max-h-[60vh] w-72 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl">
       <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <TerminalIcon size={15} />
         Terminais
@@ -76,6 +93,7 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
         </span>
       </div>
       <ul
+        ref={listRef}
         tabIndex={0}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown') {

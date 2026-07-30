@@ -6,7 +6,12 @@ import {
   useReactFlow,
   type NodeProps,
 } from '@xyflow/react'
-import { Loader2, Maximize2, Terminal as TerminalIcon } from 'lucide-react'
+import {
+  AlertCircle,
+  Loader2,
+  Maximize2,
+  Terminal as TerminalIcon,
+} from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { CopyButton } from './TerminalCopyButton'
 import {
@@ -182,6 +187,10 @@ function ActivityBadge({
   const config: Record<SessionActivity, { label: string; className: string }> = {
     starting: { label: 'iniciando…', className: 'text-amber-400' },
     working: { label: 'trabalhando', className: 'text-sky-400' },
+    waiting_approval: {
+      label: 'aguardando aprovação',
+      className: 'text-amber-400',
+    },
     idle: { label: 'aguardando', className: 'text-emerald-400' },
     exited: {
       label: `encerrado${exitCode != null ? ` (${exitCode})` : ''}`,
@@ -194,6 +203,7 @@ function ActivityBadge({
   return (
     <span className={`flex items-center gap-1 text-[11px] font-medium ${className}`}>
       {activity === 'working' && <Loader2 size={11} className="animate-spin" />}
+      {activity === 'waiting_approval' && <AlertCircle size={11} />}
       {activity === 'idle' && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
       {label}
     </span>

@@ -520,6 +520,12 @@ roadmap do cliente.
 
 [2026-06-22] O main process do Electron não tem hot-reload: ao alterar arquivos `.cjs`, reinicie o app inteiro (o HMR só atualiza o frontend).
 
+## Registro de Trabalho — 2026-07-30
+
+Identidade: Sobre a funcao de “Terminais” do “https://github.com/Felipe-Alcantara/Felixo-AI-Core”: Apertar pra cima e pra baixo fora do terminal selecionado nao muda de terminal, a janela esta muito pequena (Cortando os textos) e o terminal a direita nao muda so de mudar o terminal na lista (tem que apertar entender ao inves de ser automatico).
+
+FIX concluído: `TerminalsPanel` agora trata setas globalmente fora de campos editáveis e do terminal, troca e abre automaticamente o drawer e devolve o foco ao dock para navegação contínua. O dock foi ampliado para `w-72`; `TerminalDrawer` inicia responsivamente até 720px, com mínimo de 440px e limite de 75vw. Lint e build passaram sem erros. Estado final: concluído, aguardando somente conferência visual.
+
 ## Resumos de Decisão
 
 [2026-06-21] CONTEXTO: Como persistir as conversas dos terminais entre sessões (o PTY morre ao fechar o app e o scrollback é efêmero).
