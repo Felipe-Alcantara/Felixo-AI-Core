@@ -9,11 +9,14 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileText,
   Group,
   Hand,
   Maximize,
+  MessageSquare,
   MousePointer2,
   StickyNote,
   Trash2,
@@ -21,6 +24,7 @@ import {
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
+import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
 const TOOLBAR_BUTTON_CLASS =
@@ -37,6 +41,8 @@ type CanvasToolbarProps = {
     label: string
   }) => void
   onAddFolder: () => Promise<string[]>
+  /** Spawns a terminal whose process IS the file running (see ProjectsMenu). */
+  onRunFile: (options: RunFileOptions) => void
   onAddNote: (name?: string) => void
   onAddFile: (name?: string) => void
   onAddGroup: (name?: string) => void
@@ -48,6 +54,9 @@ type CanvasToolbarProps = {
   onClear: () => void
   isBusy: boolean
   isClearing: boolean
+  /** Switches to the chat screen. A toolbar button, not a floating overlay —
+   * canvas content (terminals) can be panned under any fixed screen corner. */
+  onOpenChat: () => void
 }
 
 export function CanvasToolbar({
@@ -56,6 +65,7 @@ export function CanvasToolbar({
   projects,
   onAddTerminal,
   onAddFolder,
+  onRunFile,
   onAddNote,
   onAddFile,
   onAddGroup,
@@ -67,17 +77,60 @@ export function CanvasToolbar({
   onClear,
   isBusy,
   isClearing,
+  onOpenChat,
 }: CanvasToolbarProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
+  const [collapsed, setCollapsed] = useState(false)
+
+  if (collapsed) {
+    return (
+      <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className={TOOLBAR_BUTTON_CLASS}
+          title="Mostrar funções auxiliares"
+        >
+          <ChevronRight size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenChat}
+          className={TOOLBAR_BUTTON_CLASS}
+          title="Abrir chat"
+        >
+          <MessageSquare size={16} />
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
+      <button
+        type="button"
+        onClick={() => setCollapsed(true)}
+        className={TOOLBAR_BUTTON_CLASS}
+        title="Esconder funções auxiliares"
+      >
+        <ChevronLeft size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={onOpenChat}
+        className={TOOLBAR_BUTTON_CLASS}
+        title="Abrir chat"
+      >
+        <MessageSquare size={16} />
+        Chat
+      </button>
       <CanvasToolsMenu activeTool={activeTool} onSelect={onSelectTool} />
       <TerminalMenu
         projects={projects}
         onAdd={onAddTerminal}
         onAddFolder={onAddFolder}
       />
+      <ProjectsMenu projects={projects} onAddFolder={onAddFolder} onRunFile={onRunFile} />
       <NamedCreateButton
         icon={<StickyNote size={16} />}
         buttonLabel="Nota"
