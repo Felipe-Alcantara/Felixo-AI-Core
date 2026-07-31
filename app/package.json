@@ -152,7 +152,7 @@
     "autoprefixer": "^10.5.0",
     "concurrently": "^9.2.1",
     "electron": "^41.3.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
@@ -164,5 +164,13 @@
     "vite": "^8.0.10",
     "vitest": "^4.1.10",
     "wait-on": "^9.0.5"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8"
+  },
+  "allowScripts": {
+    "electron@41.3.0": true,
+    "electron-winstaller@5.4.0": true,
+    "node-pty@1.1.0": true
   }
 }
