@@ -47,8 +47,10 @@ import {
 import {
   DEFAULT_QUALITY_STANDARD_PROMPT,
   buildCanvasTerminalInitialText,
+  resolveTerminalInitialText,
 } from '../services/quality-standard-prompt'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
+import { isKnownAgentCommand } from '../services/agent-launch-options'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import type { SkillActivationResult } from './tools/SkillsPanel'
 import {
@@ -141,19 +143,27 @@ function toFlowEdge(edge: PersistedCanvasEdge): Edge {
   return { id: edge.id, source: edge.source, target: edge.target }
 }
 
-export function CanvasView() {
+type CanvasViewProps = {
+  /** Switches the app to the chat screen. Rendered as a toolbar button so it
+   * lives with the other auxiliary controls instead of floating over canvas
+   * content (terminal windows can be panned/dragged under any screen corner). */
+  onOpenChat: () => void
+}
+
+export function CanvasView({ onOpenChat }: CanvasViewProps) {
   return (
     <TerminalSessionProvider>
-      <CanvasInner />
+      <CanvasInner onOpenChat={onOpenChat} />
     </TerminalSessionProvider>
   )
 }
 
-function CanvasInner() {
+function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const store = useTerminalSessions()
   const {
     nodes,
     setNodes,
+    hydrated,
     persistNode,
     removeNode,
     cancelPendingSaves,
@@ -191,6 +201,31 @@ function CanvasInner() {
     },
     [],
   )
+  // Agent terminals that already existed on disk the moment the app booted —
+  // i.e. left open from a previous run, so whatever they were doing may not
+  // have finished. Captured once, right when hydration lands, from the raw
+  // persisted list (before any node created *this* session can join it).
+  // Used to type "/resume" instead of the usual standing instruction on
+  // their first spawn this session; never touches persisted data (read by
+  // the render-only nodes memo below, not by anything that gets saved). State
+  // (not a ref) so the memo below reactively recomputes once this lands.
+  const [restoredAgentTerminalIds, setRestoredAgentTerminalIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const restoredAgentTerminalIdsCapturedRef = useRef(false)
+  useEffect(() => {
+    if (!hydrated || restoredAgentTerminalIdsCapturedRef.current) {
+      return
+    }
+    restoredAgentTerminalIdsCapturedRef.current = true
+    setRestoredAgentTerminalIds(
+      new Set(
+        nodes
+          .filter((node) => node.type === 'terminal' && isKnownAgentCommand(node.data.command))
+          .map((node) => node.id),
+      ),
+    )
+  }, [hydrated, nodes])
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
   // Mirrors of nodes/edges for callbacks injected into node data. Reading via
@@ -535,15 +570,18 @@ function CanvasInner() {
           edgesHydrated &&
           (connectedFileNames.length === 0 ||
             canvasFilePaths.length >= connectedFileNames.length)
-        const fallbackInitialText =
-          quality.enabled && node.data.command
-            ? buildCanvasTerminalInitialText(
-                quality.prompt,
-                node.data.initialText,
-                canvasFilePaths,
-                { agentName: node.data.label, cwd: node.data.cwd },
-              )
-            : node.data.initialText
+        // Left open from a previous run: whatever it was doing may not have
+        // finished, so type "/resume" on this (re)spawn instead of the usual
+        // standing instruction — see restoredAgentTerminalIds above.
+        const fallbackInitialText = resolveTerminalInitialText({
+          isRestoredAgent: restoredAgentTerminalIds.has(node.id),
+          qualityStandardEnabled: quality.enabled,
+          qualityStandardPrompt: quality.prompt,
+          hasCommand: isKnownAgentCommand(node.data.command),
+          existingInitialText: node.data.initialText,
+          canvasFilePaths,
+          identity: { agentName: node.data.label, cwd: node.data.cwd },
+        })
         const terminalIndex = terminalOrder.get(node.id)
 
         return {
@@ -575,6 +613,7 @@ function CanvasInner() {
     linkAgentToFile,
     nodes,
     qualityStandard,
+    restoredAgentTerminalIds,
     terminalCanvasFilePaths,
     unlinkAgentFromFile,
     updateNodeData,
@@ -744,6 +783,21 @@ function CanvasInner() {
         ...(options.args && options.args.length ? { args: options.args } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
         ...(initialText ? { initialText } : {}),
+      })
+    },
+    [addNode],
+  )
+
+  // "Run this file" from the Projects panel: the terminal's process IS the
+  // file running (command = interpreter, args = [file]) — unlike agent
+  // terminals, nothing gets typed into it afterwards, so no initialText.
+  const runFileInTerminal = useCallback(
+    (options: { command: string; args: string[]; cwd: string; label: string }) => {
+      addNode('terminal', {
+        label: options.label,
+        command: options.command,
+        ...(options.args.length ? { args: options.args } : {}),
+        cwd: options.cwd,
       })
     },
     [addNode],
@@ -928,6 +982,7 @@ function CanvasInner() {
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddFolder={addProjectFolder}
+        onRunFile={runFileInTerminal}
         onAddNote={(name) =>
           addNode('note', { text: '', ...(name ? { label: name } : {}) })
         }
@@ -945,6 +1000,7 @@ function CanvasInner() {
         onClear={() => void clearAll()}
         isBusy={isBusy}
         isClearing={isClearing}
+        onOpenChat={onOpenChat}
       />
 
       <CanvasToolPanels
