@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .commands import run_command
 from .config import CONFIG_FIELDS, load_config, save_config
-from .git import get_dirty_files, update_source_from_branch
+from .git import auto_update, get_dirty_files, update_source_from_branch
 from .node import (
     build_env,
     find_command_in_bin,
@@ -135,7 +135,11 @@ def _menu_start(console: object) -> None:
             "seguindo assim mesmo, o app não precisa delas.[/yellow]"
         )
 
-    install_code = ensure_dependencies(env, skip_install=False)
+    # Before installing, so that a version pulled in here has its own
+    # dependencies installed in this same launch.
+    source_updated = auto_update(env)
+
+    install_code = ensure_dependencies(env, skip_install=False, force_install=source_updated)
     if install_code != 0:
         console.print("[red]Falha instalando dependências Node.[/red]")
         return
