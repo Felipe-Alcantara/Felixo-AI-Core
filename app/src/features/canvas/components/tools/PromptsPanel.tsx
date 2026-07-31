@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, Copy, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Check, Eye, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { PromptDetailPanel } from './PromptDetailPanel'
 import { defaultAutomations } from '../../../shared/data/automations'
+import {
+  buildOverridesById,
+  buildPresetIds,
+  resolveVisiblePrompts,
+  upsertPresetOverride,
+} from '../../services/prompt-overrides'
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
+import type { SkillActivationResult } from './SkillsPanel'
 
 type PromptsPanelProps = {
   onClose: () => void
+  /** Sends the prompt to the expanded terminal, or copies it as a fallback. */
+  onInsertPrompt: (prompt: string) => Promise<SkillActivationResult>
 }
 
 const SAVE_DEBOUNCE_MS = 500
 
-const SCOPES: AutomationScope[] = ['chat', 'code', 'docs', 'git', 'planning']
+const SCOPES: AutomationScope[] = ['chat', 'code', 'docs', 'git', 'planning', 'security']
 
 function createAutomationId() {
   return `automation-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
@@ -18,14 +28,24 @@ function createAutomationId() {
 
 /**
  * Canvas-side prompt library — the chat's pre-built prompts (automations),
- * default + custom. On the canvas there's no chat to "apply" to, so each prompt
- * is copied to the clipboard for you to paste into a terminal/agent.
+ * default + custom. Each prompt is inserted directly into the expanded
+ * terminal's agent if one is open; otherwise it falls back to the clipboard
+ * for manual pasting, same behavior as SkillsPanel's "Ativar".
+ *
  * Custom automations can be created, edited (debounced autosave) and removed
- * here directly via IPC; default automations are read-only.
+ * here directly via IPC. Default (preset) automations are read-only in this
+ * list, but clicking "Ver" swaps the list for PromptDetailPanel (same
+ * CanvasPanel frame) where the prompt text can be viewed and edited —
+ * editing a preset persists an override under the same id, so it replaces
+ * the built-in text everywhere it's read from without losing the ability to
+ * fall back to a fresh preset later (the built-in definition in
+ * defaultAutomations never changes).
  */
-export function PromptsPanel({ onClose }: PromptsPanelProps) {
+export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
   const [custom, setCustom] = useState<AutomationDefinition[]>([])
-  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [feedbackId, setFeedbackId] = useState<string | null>(null)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [detailId, setDetailId] = useState<string | null>(null)
   const saveTimers = useRef(new Map<string, number>())
 
   useEffect(() => {
@@ -43,16 +63,26 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
     }
   }, [])
 
-  const prompts = [...defaultAutomations, ...custom]
+  // `isPreset` (via presetIds) tracks a prompt's built-in origin regardless
+  // of whether it's been overridden, so the list still routes it through the
+  // detail-panel edit flow instead of the free-form custom-automation inputs.
+  const presetIds = buildPresetIds(defaultAutomations)
+  const overridesById = buildOverridesById(custom)
+  const prompts = resolveVisiblePrompts(defaultAutomations, custom)
+  const detailPrompt = detailId ? prompts.find((prompt) => prompt.id === detailId) ?? null : null
+  const detailPresetFallback = detailId
+    ? defaultAutomations.find((preset) => preset.id === detailId) ?? null
+    : null
 
-  const copyPrompt = async (prompt: AutomationDefinition) => {
-    try {
-      await navigator.clipboard?.writeText(prompt.prompt)
-      setCopiedId(prompt.id)
-      window.setTimeout(() => setCopiedId((id) => (id === prompt.id ? null : id)), 1500)
-    } catch {
-      setCopiedId(null)
-    }
+  const insertPrompt = async (prompt: AutomationDefinition) => {
+    const result = await onInsertPrompt(prompt.prompt)
+    setFeedbackId(prompt.id)
+    setFeedbackText(
+      result === 'sent'
+        ? 'Inserido no terminal aberto.'
+        : 'Sem terminal aberto — copiado para a área de transferência.',
+    )
+    window.setTimeout(() => setFeedbackId((id) => (id === prompt.id ? null : id)), 2500)
   }
 
   const persistAutomation = useCallback((automation: AutomationDefinition) => {
@@ -62,6 +92,23 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
     })
   }, [])
 
+  const schedulePersist = useCallback(
+    (automationId: string, automation: AutomationDefinition) => {
+      const pending = saveTimers.current.get(automationId)
+      if (pending) {
+        window.clearTimeout(pending)
+      }
+      saveTimers.current.set(
+        automationId,
+        window.setTimeout(() => {
+          saveTimers.current.delete(automationId)
+          persistAutomation(automation)
+        }, SAVE_DEBOUNCE_MS),
+      )
+    },
+    [persistAutomation],
+  )
+
   const editCustomAutomation = useCallback(
     (automationId: string, patch: Partial<AutomationDefinition>) => {
       setCustom((current) => {
@@ -70,22 +117,29 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
         )
         const edited = next.find((automation) => automation.id === automationId)
         if (edited) {
-          const pending = saveTimers.current.get(automationId)
-          if (pending) {
-            window.clearTimeout(pending)
-          }
-          saveTimers.current.set(
-            automationId,
-            window.setTimeout(() => {
-              saveTimers.current.delete(automationId)
-              persistAutomation(edited)
-            }, SAVE_DEBOUNCE_MS),
-          )
+          schedulePersist(automationId, edited)
         }
         return next
       })
     },
-    [persistAutomation],
+    [schedulePersist],
+  )
+
+  // Editing a preset (default automation) upserts it into `custom` under the
+  // same id, so it overrides the built-in text without mutating
+  // defaultAutomations. See prompt-overrides.ts for the merge/upsert rules.
+  const editPreset = useCallback(
+    (preset: AutomationDefinition, patch: Partial<AutomationDefinition>) => {
+      setCustom((current) => {
+        const next = upsertPresetOverride(current, preset, patch)
+        const edited = next.find((automation) => automation.id === preset.id)
+        if (edited) {
+          schedulePersist(preset.id, edited)
+        }
+        return next
+      })
+    },
+    [schedulePersist],
   )
 
   const addCustomAutomation = useCallback(async () => {
@@ -113,8 +167,38 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
     setCustom((current) => current.filter((automation) => automation.id !== automationId))
   }, [])
 
+  if (detailPrompt) {
+    return (
+      <CanvasPanel
+        title={detailPrompt.name}
+        icon={<Sparkles size={15} />}
+        onClose={onClose}
+        widthClassName="w-[36rem]"
+      >
+        <PromptDetailPanel
+          key={`${detailPrompt.id}:${overridesById.has(detailPrompt.id) ? 'override' : 'preset'}`}
+          prompt={detailPrompt}
+          canResetToPreset={Boolean(detailPresetFallback) && overridesById.has(detailPrompt.id)}
+          onBack={() => setDetailId(null)}
+          onSave={(patch) => editPreset(detailPrompt, patch)}
+          onReset={() => {
+            if (detailPresetFallback) {
+              void removeCustomAutomation(detailPrompt.id)
+            }
+          }}
+          onInsert={() => void insertPrompt(detailPrompt)}
+        />
+      </CanvasPanel>
+    )
+  }
+
   return (
-    <CanvasPanel title="Prompts" icon={<Sparkles size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Prompts"
+      icon={<Sparkles size={15} />}
+      onClose={onClose}
+      widthClassName="w-[26rem]"
+    >
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
           Prontos
@@ -131,12 +215,14 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
 
       <ul className="flex flex-col gap-2">
         {prompts.map((prompt) => {
-          const isCustom = !prompt.isDefault
+          const isPreset = presetIds.has(prompt.id)
+          const isOverridden = isPreset && overridesById.has(prompt.id)
+          const isFreeCustom = !isPreset
 
           return (
             <li key={prompt.id} className="rounded bg-zinc-800/60 p-2">
               <div className="mb-1 flex items-center gap-2">
-                {isCustom ? (
+                {isFreeCustom ? (
                   <input
                     value={prompt.name}
                     onChange={(event) =>
@@ -146,29 +232,45 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
                     className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-none"
                   />
                 ) : (
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-100">
+                  <span className="min-w-0 flex-1 break-words text-sm font-medium text-zinc-100">
                     {prompt.name}
+                    {isOverridden && (
+                      <span className="ml-1.5 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-normal text-zinc-500">
+                        editado
+                      </span>
+                    )}
                   </span>
+                )}
+                {isPreset && (
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(prompt.id)}
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
+                    title="Ver e editar o texto completo do prompt"
+                  >
+                    <Eye size={13} />
+                    Ver
+                  </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => void copyPrompt(prompt)}
+                  onClick={() => void insertPrompt(prompt)}
                   className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
-                  title="Copiar prompt"
+                  title="Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)"
                 >
-                  {copiedId === prompt.id ? (
+                  {feedbackId === prompt.id ? (
                     <>
                       <Check size={13} className="text-emerald-400" />
-                      Copiado
+                      Feito
                     </>
                   ) : (
                     <>
-                      <Copy size={13} />
-                      Copiar
+                      <SendHorizontal size={13} />
+                      Inserir
                     </>
                   )}
                 </button>
-                {isCustom && (
+                {isFreeCustom && (
                   <button
                     type="button"
                     onClick={() => void removeCustomAutomation(prompt.id)}
@@ -180,7 +282,7 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
                 )}
               </div>
 
-              {isCustom ? (
+              {isFreeCustom ? (
                 <>
                   <input
                     value={prompt.description}
@@ -219,6 +321,13 @@ export function PromptsPanel({ onClose }: PromptsPanelProps) {
                 prompt.description && (
                   <p className="text-xs text-zinc-500">{prompt.description}</p>
                 )
+              )}
+
+              {feedbackId === prompt.id && (
+                <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-300">
+                  <Check size={11} />
+                  {feedbackText}
+                </p>
               )}
             </li>
           )

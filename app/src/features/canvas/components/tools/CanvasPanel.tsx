@@ -7,6 +7,8 @@ type CanvasPanelProps = {
   icon?: ReactNode
   onClose: () => void
   children: ReactNode
+  /** Panel width as a Tailwind width class. Defaults to the standard w-80. */
+  widthClassName?: string
 }
 
 /**
@@ -14,12 +16,18 @@ type CanvasPanelProps = {
  * Sits over the canvas without dimming it, so the board stays visible.
  * Slides in on mount and plays a brief exit animation before unmounting.
  */
-export function CanvasPanel({ title, icon, onClose, children }: CanvasPanelProps) {
+export function CanvasPanel({
+  title,
+  icon,
+  onClose,
+  children,
+  widthClassName = 'w-80',
+}: CanvasPanelProps) {
   const { closing, close } = useExitAnimation(160, onClose)
 
   return (
     <div
-      className={`absolute left-4 top-16 z-20 flex max-h-[80vh] w-80 flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
+      className={`absolute left-4 top-16 z-20 flex max-h-[80vh] ${widthClassName} max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
         closing ? 'felixo-anim-panel-out' : 'felixo-anim-panel-in'
       }`}
     >
