@@ -1,6 +1,6 @@
 /** Pre-built prompt ("automation") shared by the chat and the canvas. */
 
-export type AutomationScope = 'chat' | 'code' | 'docs' | 'git' | 'planning'
+export type AutomationScope = 'chat' | 'code' | 'docs' | 'git' | 'planning' | 'security'
 
 export type AutomationDefinition = {
   id: string

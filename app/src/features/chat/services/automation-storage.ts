@@ -167,6 +167,7 @@ function isAutomationScope(value: unknown): value is AutomationScope {
     value === 'code' ||
     value === 'docs' ||
     value === 'git' ||
-    value === 'planning'
+    value === 'planning' ||
+    value === 'security'
   )
 }
