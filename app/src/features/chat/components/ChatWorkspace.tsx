@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { PanelLeft } from 'lucide-react'
+import { LayoutGrid, PanelLeft } from 'lucide-react'
 import {
   initialModels,
   ideaStarters,
@@ -137,7 +137,12 @@ import { TerminalPanel } from './TerminalPanel'
 
 type ResetConversationThreadOptions = { resetProjectDiff?: boolean }
 
-export function ChatWorkspace() {
+type ChatWorkspaceProps = {
+  /** Switches back to the canvas screen. Omitted when chat is the only screen. */
+  onBack?: () => void
+}
+
+export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   const [models, setModels] = useState<Model[]>(() => loadModels(initialModels))
   const [selectedModelId, setSelectedModelId] = useState<ModelId>(
     initialModels[0]?.id ?? '',
@@ -1568,6 +1573,17 @@ export function ChatWorkspace() {
             </button>
           </div>
           <div className="absolute right-5 top-4 flex items-center gap-2 text-zinc-500 max-[920px]:right-4 max-sm:hidden">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                title="Voltar para o canvas"
+                className="flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] transition hover:text-zinc-300"
+              >
+                <LayoutGrid size={12} />
+                Canvas
+              </button>
+            )}
             <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px]">
               {runtimeLabel}
             </span>
