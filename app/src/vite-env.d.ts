@@ -19,6 +19,7 @@ import type {
 } from './features/chat/types'
 
 type DetectedRepo = { name: string; path: string }
+type DirectoryEntry = { name: string; isDirectory: boolean; path: string }
 
 type PersistedCanvasEdge = {
   id: string
@@ -238,6 +239,16 @@ declare global {
           CliInvokeResult & {
             entries?: { filename: string; summary: string }[]
             docsPath?: string
+          }
+        >
+        listDirectory: (params: {
+          rootPath: string
+          subPath?: string
+        }) => Promise<
+          CliInvokeResult & {
+            path?: string
+            relativePath?: string
+            entries?: DirectoryEntry[]
           }
         >
       }
