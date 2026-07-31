@@ -105,7 +105,19 @@ cd Felixo-AI-Core
 py start_app.py
 ```
 
-O `start_app.py` instala dependências Python de `requirements.txt` quando houver pacotes listados e instala dependências Node com `npm install` quando necessário. Hoje o `requirements.txt` fica sem pacotes porque o launcher usa apenas a biblioteca padrão do Python.
+O `start_app.py` instala dependências Python de `requirements.txt` (hoje `questionary` e `rich`, usadas pelo menu interativo) e dependências Node com `npm install` quando necessário.
+
+### Se o Python for "externally managed" (macOS com Homebrew, Debian/Ubuntu)
+
+Nessas instalações o `pip` recusa instalar pacotes no Python do sistema e responde `error: externally-managed-environment` (PEP 668). O launcher detecta isso e tenta novamente com `--user` automaticamente.
+
+Se ainda assim falhar, use um ambiente virtual — a forma mais previsível em qualquer SO:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python3 start_app.py
+```
 
 No macOS, o launcher procura Node/npm em instalações comuns de Homebrew Apple Silicon, Homebrew Intel, MacPorts, NVM, fnm, Volta, asdf, mise e nodenv, mesmo quando o app é iniciado por uma GUI com `PATH` reduzido. Se precisar forçar um diretório específico, use `FELIXO_NODE_BIN=/caminho/do/bin`.
 
@@ -143,12 +155,41 @@ Detalhes: [Distribuição e Atualizações](./docs/projeto/DISTRIBUICAO-E-ATUALI
 
 ## Validação
 
+Aplicação:
+
 ```bash
 cd app
 npm test
 npm run lint
 npm run build
 ```
+
+Launcher (`start_app.py`) — não precisa de Node nem de dependências instaladas:
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
+
+Os testes do launcher cobrem o que costuma quebrar entre sistemas operacionais: descoberta de Node no macOS (Homebrew Apple Silicon/Intel, gerenciadores de versão, `PATH` reduzido de apps de GUI), `Path`/`npm.cmd` no Windows, instalação de pacotes em Python "externally managed" (PEP 668) e a limpeza de processos, que só pode encerrar processos iniciados pelo próprio launcher. O CI roda esses testes em Linux, Windows e macOS.
+
+### Estrutura do launcher
+
+O `start_app.py` na raiz é a porta de entrada (exigida pelo padrão de qualidade) e apenas chama o pacote `felixo_launcher/`, onde cada módulo tem uma responsabilidade:
+
+| Módulo | Responsabilidade |
+|---|---|
+| `paths` | Caminhos do repositório e configurações compartilhadas |
+| `config` | Arquivo local de configuração escrito pelo menu |
+| `node` | Encontrar Node.js/npm e montar o ambiente dele |
+| `commands` | Resolver e executar comandos filhos |
+| `process` | Parar o app e limpar processos de execuções anteriores |
+| `node_deps` | Manter `app/node_modules` em dia com o `package.json` |
+| `python_deps` | Instalar as dependências Python do próprio launcher |
+| `git` | Atualizar o checkout a partir da branch de produção |
+| `runner` | Preparo de ambiente e o caminho sem menu (flags) |
+| `menu` | O menu interativo — interface principal do launcher |
+
+Cada módulo tem seu arquivo de teste correspondente em `tests/`.
 
 ---
 
