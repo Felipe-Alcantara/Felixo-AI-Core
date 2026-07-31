@@ -45,13 +45,22 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
   const [rawActiveIndex, setActiveIndex] = useState(0)
   const listRef = useRef<HTMLUListElement>(null)
 
-  if (terminals.length === 0) {
-    return null
-  }
-
   // Clamped at read-time (not synced via effect) so a terminal closing
   // never leaves the highlight pointing past the end of the list.
   const activeIndex = Math.min(rawActiveIndex, terminals.length - 1)
+
+  const moveActive = (delta: number) => {
+    const next =
+      (activeIndex + delta + terminals.length) % terminals.length
+    setActiveIndex(next)
+    onFocusNode(terminals[next].id)
+    window.requestAnimationFrame(() => listRef.current?.focus())
+  }
+
+  // Always holds the latest moveActive so the window-level listener (mounted
+  // once, below) never closes over stale terminals/activeIndex values.
+  const moveActiveRef = useRef(moveActive)
+  moveActiveRef.current = moveActive
 
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
@@ -60,19 +69,14 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
       if (target?.closest('[data-terminals-dock]')) return
       if (target?.closest('input, textarea, [contenteditable="true"], .xterm')) return
       event.preventDefault()
-      moveActive(event.key === 'ArrowDown' ? 1 : -1)
+      moveActiveRef.current(event.key === 'ArrowDown' ? 1 : -1)
     }
     window.addEventListener('keydown', onWindowKeyDown)
     return () => window.removeEventListener('keydown', onWindowKeyDown)
-  })
+  }, [])
 
-  const moveActive = (delta: number) => {
-    const next =
-      (activeIndex + delta + terminals.length) % terminals.length
-    setActiveIndex(next)
-    onFocusNode(terminals[next].id)
-    onExpandNode(terminals[next].id)
-    window.requestAnimationFrame(() => listRef.current?.focus())
+  if (terminals.length === 0) {
+    return null
   }
 
   const commitActive = () => {
