@@ -651,6 +651,18 @@ Estado final: concluído — implementação, preservação total da lógica ant
 
 ## Registro de Trabalho — 2026-07-31 (parte 4) — biblioteca de prompts prontos do canvas (Ver/Editar + novos presets)
 
+## Registro de Trabalho — 2026-07-31 (parte 5) — auditoria de dependências e validação do padrão de qualidade
+
+PEDIDO: seguir o padrão de qualidade após a correção das dependências npm.
+
+FEITO: `app/package.json` e `app/package-lock.json` foram atualizados para `electron-builder@26.15.3`, com override explícito de `brace-expansion` para uma versão corrigida. Os scripts de instalação necessários de `electron`, `electron-winstaller` e `node-pty` foram aprovados pelo npm 11, mantendo a instalação reprodutível e sem liberar scripts arbitrários.
+
+SEGURANÇA: `npm audit` no registry oficial passou de 14 vulnerabilidades (13 altas e 1 crítica) para 0 vulnerabilidades.
+
+VALIDAÇÃO: `npm run lint`, `npm run build`, `npx vitest run` (62 pass), `npm test` (398 pass), `python3 -m unittest discover -s tests -t .` (78 pass) e `git diff --check` concluídos sem erros. O único aviso não bloqueante é o tamanho de um chunk produzido pelo Vite; não há falha de build ou teste.
+
+Estado final: concluído.
+
 Pedido do usuário: expandir os prompts prontos ("automations") do painel "Prompts" do canvas para serem mais robustos, permitir inserir direto no terminal aberto em vez de só copiar, visualizar/editar o texto completo de um preset com confirmação explícita, e adicionar dois presets novos ("Auditoria de segurança" e "Iniciar projeto").
 
 FEITO:
