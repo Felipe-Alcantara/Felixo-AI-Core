@@ -90,6 +90,8 @@ class PipInstallTests(QuietLauncherTestCase):
         ), patch(
             "felixo_launcher.python_deps.has_installable_python_requirements", return_value=True
         ), patch("felixo_launcher.python_deps.has_pip", return_value=True), patch(
+            "felixo_launcher.python_deps.tui_dependencies_importable", return_value=False
+        ), patch(
             "felixo_launcher.python_deps.run_pip_install",
             return_value=pip_result(1, EXTERNALLY_MANAGED_OUTPUT),
         ), patch("felixo_launcher.python_deps.report_pip_failure") as report:
@@ -97,6 +99,61 @@ class PipInstallTests(QuietLauncherTestCase):
 
         self.assertEqual(code, 1)
         report.assert_called_once()
+
+    def test_skips_pip_entirely_when_the_packages_are_already_importable(self) -> None:
+        """Regression: the launcher ran `pip install` unconditionally, so on a
+        distro that ships questionary/rich system-wide it printed a wall of
+        PEP 668 errors while installing packages that were already there."""
+        with patch(
+            "felixo_launcher.python_deps.find_python_requirements_file",
+            return_value=paths.ROOT_DIR / "requirements.txt",
+        ), patch(
+            "felixo_launcher.python_deps.has_installable_python_requirements", return_value=True
+        ), patch(
+            "felixo_launcher.python_deps.tui_dependencies_importable", return_value=True
+        ), patch("felixo_launcher.python_deps.run_pip_install") as run_pip:
+            code = python_deps.ensure_python_requirements({}, skip_install=False)
+
+        self.assertEqual(code, 0)
+        run_pip.assert_not_called()
+
+    def test_falls_back_to_break_system_packages_when_user_is_blocked(self) -> None:
+        """Regression: Debian/Ubuntu refuse `--user` as well, so retrying only
+        with `--user` left the install broken. `--break-system-packages` is the
+        override PEP 668 defines."""
+        results = [
+            pip_result(1, EXTERNALLY_MANAGED_OUTPUT),  # plain
+            pip_result(1, EXTERNALLY_MANAGED_OUTPUT),  # --user
+            pip_result(0, "Successfully installed"),  # --break-system-packages
+        ]
+
+        with patch(
+            "felixo_launcher.python_deps.capture_pip", side_effect=results
+        ) as capture_pip, patch(
+            "felixo_launcher.python_deps.is_running_in_virtualenv", return_value=False
+        ):
+            result = python_deps.run_pip_install(["-r", "requirements.txt"])
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            [
+                [flag for flag in call.args[0] if flag.startswith("--")]
+                for call in capture_pip.call_args_list
+            ],
+            [[], ["--user"], ["--break-system-packages"]],
+        )
+
+    def test_stops_after_user_flag_when_that_already_worked(self) -> None:
+        with patch(
+            "felixo_launcher.python_deps.capture_pip",
+            side_effect=[pip_result(1, EXTERNALLY_MANAGED_OUTPUT), pip_result(0, "ok")],
+        ) as capture_pip, patch(
+            "felixo_launcher.python_deps.is_running_in_virtualenv", return_value=False
+        ):
+            result = python_deps.run_pip_install(["rich"])
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(capture_pip.call_count, 2)
 
     def test_skip_install_never_touches_pip(self) -> None:
         with patch("felixo_launcher.python_deps.run_pip_install") as run_pip:
@@ -113,8 +170,8 @@ class PipInstallTests(QuietLauncherTestCase):
         ), patch(
             "felixo_launcher.python_deps.has_installable_python_requirements", return_value=True
         ), patch("felixo_launcher.python_deps.has_pip", return_value=False), patch(
-            "felixo_launcher.python_deps.run_pip_install"
-        ) as run_pip:
+            "felixo_launcher.python_deps.tui_dependencies_importable", return_value=False
+        ), patch("felixo_launcher.python_deps.run_pip_install") as run_pip:
             code = python_deps.ensure_python_requirements({}, skip_install=False)
 
         self.assertEqual(code, 1)

@@ -109,9 +109,13 @@ O `start_app.py` instala dependências Python de `requirements.txt` (hoje `quest
 
 ### Se o Python for "externally managed" (macOS com Homebrew, Debian/Ubuntu)
 
-Nessas instalações o `pip` recusa instalar pacotes no Python do sistema e responde `error: externally-managed-environment` (PEP 668). O launcher detecta isso e tenta novamente com `--user` automaticamente.
+Nessas instalações o `pip` recusa instalar pacotes no Python do sistema e responde `error: externally-managed-environment` (PEP 668).
 
-Se ainda assim falhar, use um ambiente virtual — a forma mais previsível em qualquer SO:
+O launcher lida com isso sozinho: primeiro verifica se os pacotes já estão disponíveis (é o caso de várias distribuições Linux, e aí nem tenta instalar); se faltarem, tenta `--user` e, se o sistema também bloquear, `--break-system-packages`.
+
+Essas dependências servem só para desenhar o menu — o app em si é Node. Se a instalação falhar mesmo assim, o launcher avisa e **segue rodando o app normalmente**.
+
+Se quiser o ambiente mais previsível em qualquer SO, use um virtualenv:
 
 ```bash
 python3 -m venv .venv

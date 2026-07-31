@@ -94,9 +94,15 @@ def run_direct(args: argparse.Namespace) -> int:
     node_bin, env = prepared
     print(f"[felixo] Using Node.js from {node_bin}")
 
-    requirements_code = ensure_python_requirements(env, args.skip_install)
-    if requirements_code != 0:
-        return requirements_code
+    # A failure here only means the menu's own packages are missing, and this
+    # path does not draw the menu at all — never let it stop the app from
+    # starting. The install already printed what went wrong.
+    if ensure_python_requirements(env, args.skip_install) != 0:
+        print(
+            "[felixo] Continuing without the launcher's Python packages; "
+            "the app does not need them.",
+            file=sys.stderr,
+        )
 
     source_updated = False
     if args.update:

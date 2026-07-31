@@ -73,12 +73,43 @@ class PythonCompatibilityTests(unittest.TestCase):
                     continue
 
                 for child in ast.walk(value):
-                    if isinstance(child, ast.BinOp) and isinstance(child.op, ast.BitOr):
-                        self.fail(
-                            f"{relative_path}:{child.lineno} evaluates a `|` union at "
-                            f"import time, which fails on Python 3.9: "
-                            f"{ast.get_source_segment(source, child)}"
-                        )
+                    if not isinstance(child, ast.BinOp):
+                        continue
+
+                    if not isinstance(child.op, ast.BitOr):
+                        continue
+
+                    if not self.is_type_union(child):
+                        continue
+
+                    self.fail(
+                        f"{relative_path}:{child.lineno} evaluates a `|` union at "
+                        f"import time, which fails on Python 3.9: "
+                        f"{ast.get_source_segment(source, child)}"
+                    )
+
+    TYPE_NAMES = frozenset(
+        {"str", "int", "float", "bool", "bytes", "None", "Path", "dict", "list",
+         "tuple", "set", "frozenset", "object", "type"}
+    )
+
+    def is_type_union(self, node: ast.BinOp) -> bool:
+        """Tells `str | None` (a PEP 604 union, 3.10+) from `re.M | re.VERBOSE`
+        (an ordinary bitwise OR, legal everywhere).
+
+        Only the former breaks on Python 3.9, so flagging every `|` would fire
+        on valid code — flag operands that name types instead."""
+        for side in (node.left, node.right):
+            if isinstance(side, ast.Constant) and side.value is None:
+                return True
+
+            if isinstance(side, ast.Name) and side.id in self.TYPE_NAMES:
+                return True
+
+            if isinstance(side, ast.BinOp) and self.is_type_union(side):
+                return True
+
+        return False
 
     def test_launcher_compiles_under_the_oldest_supported_syntax(self) -> None:
         for relative_path in self.launcher_files():
