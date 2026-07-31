@@ -472,6 +472,20 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [expandedTerminalId, store],
   )
 
+  // Insert a pre-built automation prompt into the expanded terminal if one is
+  // open; otherwise copy it for manual pasting, same fallback as skills.
+  const insertPrompt = useCallback(
+    async (prompt: string): Promise<SkillActivationResult> => {
+      if (expandedTerminalId) {
+        store.sendText(expandedTerminalId, `${prompt}\n`)
+        return 'sent'
+      }
+      await navigator.clipboard?.writeText(prompt)
+      return 'copied'
+    },
+    [expandedTerminalId, store],
+  )
+
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
@@ -1011,6 +1025,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onAddNote={() => addNode('note', { text: '' })}
         onProjectsChanged={reloadProjects}
         onActivateSkill={activateSkill}
+        onInsertPrompt={insertPrompt}
         onPromptSaved={(prompt) => {
           fileLinkPromptRef.current = prompt
         }}

@@ -22,6 +22,7 @@ type CanvasToolPanelsProps = {
   onAddNote: () => void
   onProjectsChanged: () => void
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
+  onInsertPrompt: (prompt: string) => Promise<SkillActivationResult>
   onPromptSaved: (prompt: string) => void
   onBootstrapSaved: (prompt: string) => void
   onQualityStandardSaved: (value: { prompt: string; enabled: boolean }) => void
@@ -35,6 +36,7 @@ export function CanvasToolPanels({
   onAddNote,
   onProjectsChanged,
   onActivateSkill,
+  onInsertPrompt,
   onPromptSaved,
   onBootstrapSaved,
   onQualityStandardSaved,
@@ -56,7 +58,7 @@ export function CanvasToolPanels({
     case 'models':
       return <ModelsPanel onClose={onClose} />
     case 'prompts':
-      return <PromptsPanel onClose={onClose} />
+      return <PromptsPanel onClose={onClose} onInsertPrompt={onInsertPrompt} />
     case 'skills':
       return <SkillsPanel onActivateSkill={onActivateSkill} onClose={onClose} />
     case 'git':
