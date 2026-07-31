@@ -19,7 +19,7 @@ from .node_deps import ensure_dependencies
 from .paths import APP_DIR, DEFAULT_URL
 from .process import cleanup_app_processes
 from .python_deps import ensure_python_requirements
-from .git import update_source_from_branch
+from .git import auto_update, update_source_from_branch
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,6 +48,17 @@ def parse_args() -> argparse.Namespace:
         "--branch",
         default=os.environ.get("FELIXO_PRODUCTION_BRANCH", "production"),
         help="Production branch used with --update. Defaults to production.",
+    )
+    parser.add_argument(
+        "--no-auto-update",
+        action="store_true",
+        default=os.environ.get("FELIXO_AUTO_UPDATE", "").strip().lower()
+        in {"0", "off", "false", "no"},
+        help=(
+            "Do not quietly fast-forward the current branch before starting. "
+            "Set FELIXO_AUTO_UPDATE=off for the same effect. Use this in CI, "
+            "which must build the commit it checked out."
+        ),
     )
     return parser.parse_args()
 
@@ -106,9 +117,13 @@ def run_direct(args: argparse.Namespace) -> int:
 
     source_updated = False
     if args.update:
+        # Explicit `--update` keeps its old contract: it targets the production
+        # branch and a failure is a real failure worth stopping for.
         update_code, source_updated = update_source_from_branch(args.branch, env)
         if update_code != 0:
             return update_code
+    elif not args.no_auto_update:
+        source_updated = auto_update(env)
 
     install_code = ensure_dependencies(env, args.skip_install, source_updated)
     if install_code != 0:

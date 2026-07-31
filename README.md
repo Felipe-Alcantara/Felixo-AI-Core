@@ -69,6 +69,26 @@ python3 start_app.py
 
 No menu você tem: **Iniciar/Rodar** (app desktop ou preview web), **Instalar/Setup**, **Configurar** (CLIs, permissões dos agentes, branch de produção) e **Status/Sair**.
 
+### Atualização automática
+
+Ao iniciar, o launcher verifica sozinho se há uma versão nova da branch em que você está e atualiza antes de abrir o app — você não precisa ficar rodando `git pull` para saber se saiu novidade. Quando já está em dia, não mostra nada e não custa nada perceptível.
+
+Ele só atualiza quando é seguro, e **nunca impede o app de abrir**. Pula a atualização quando:
+
+- há alterações locais não commitadas (seu trabalho sempre ganha da atualização);
+- não há rede, ou o `fetch` demora demais (é interrompido e o app abre normalmente);
+- o histórico divergiu, quando um fast-forward reescreveria commits locais;
+- o checkout está em *detached HEAD*, sem branch para atualizar.
+
+Atualiza a branch em que você **já está** — não troca de branch nem puxa de `production` quando você está em `main`.
+
+Para desligar (necessário em CI, que deve compilar exatamente o commit que baixou):
+
+```bash
+FELIXO_AUTO_UPDATE=off python3 start_app.py
+python3 start_app.py --no-auto-update --web
+```
+
 Ou manualmente:
 
 ```bash

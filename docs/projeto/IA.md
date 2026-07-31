@@ -502,6 +502,16 @@ CONTEXTO: usuário rodou `python3 start_app.py` na máquina dele (Ubuntu, `/usr/
 VALIDAÇÃO: 61 testes passando (era 56). App desktop rodado de verdade com screenshot da tela: canvas carregado, toolbar completa, terminal ativo e dock de Elementos — o launcher entregou o app funcionando. Menu real dirigido por stdin mostra "Dependências prontas" sem parede de erro, e o Iniciar sobe o Vite em vez de bloquear.
 LIMITAÇÃO: as correções (1) e (2) foram verificadas no Debian/Ubuntu real desta máquina; no macOS continuam sem execução real — a cobertura lá segue sendo o CI.
 
+[2026-07-31] FEAT — Atualização automática e silenciosa a cada início do app.
+CONTEXTO: usuário pediu que o launcher faça fetch/pull sozinho antes de abrir, para o time não precisar ficar rodando `git pull` só para descobrir se saiu versão nova.
+DECISÃO CENTRAL — ATUALIZA A BRANCH ATUAL, NÃO A DE PRODUÇÃO: o `update_source_from_branch` que já existia (menu "Atualizar" e `--update`) puxa de `origin/production`. Usar ele no início seria perigoso: o usuário estava em `main`, e um pull silencioso de `production` arrastaria o checkout para outro lugar sem pedir. O novo `auto_update` só faz fast-forward da branch em que a pessoa **já está**.
+SEGUNDA DECISÃO — NUNCA BLOQUEIA O APP: como isso roda em todo início, uma conveniência de fundo não pode ser o motivo de o app não abrir. `auto_update` retorna bool (atualizou ou não) em vez de código de erro, e toda condição adversa simplesmente pula: sem git, fora de checkout, sem rede, tree sujo, histórico divergido, detached HEAD. Isso contrasta de propósito com o `update_source_from_branch`, que é explícito e trata falha como falha — os dois convivem com contratos diferentes e o docstring do módulo registra o porquê.
+TREE SUJO É O CASO IMPORTANTE: `merge --ff-only` recusaria de qualquer jeito, mas o risco real era deixar alguém no meio de um conflito num lançamento em que ela só queria abrir o app. Trabalho não commitado sempre ganha da atualização.
+TIMEOUT: `fetch` sem rede fica pendurado. Comecei com 10s e medi — 10.1s de espera olhando terminal vazio, ruim demais para toda inicialização. Baixado para 4s, que é o custo total do recurso quando não há rede; com rede e já atualizado, 0.087s (contagem de commits via `rev-list --count` antes de qualquer coisa cara).
+DESLIGÁVEL: `FELIXO_AUTO_UPDATE=off` ou `--no-auto-update`. Necessário para CI, que precisa compilar o commit que baixou — verificado que o job atual só roda `--help`, que sai antes de qualquer update.
+ORDEM IMPORTA: o auto-update roda **antes** do `ensure_dependencies`, com `force_install` quando puxou commits novos, para que um `package.json` atualizado tenha as dependências instaladas no mesmo início.
+VALIDAÇÃO: 78 testes (era 61), sendo 17 novos em `tests/test_git.py` — incluindo 3 de integração que criam repositórios git de verdade e provam o fluxo real: puxa commit novo (v1→v2), preserva arquivo com alteração local não commitada, e não imprime nada quando já está em dia. Demonstração fim-a-fim num clone real: detectou "VERSAO 1" → atualizou → "VERSAO 2 - NOVA". Offline medido em 4.1s (cortado pelo timeout, app abre em seguida).
+
 ## Decisões de Design & Convenções
 
 [2026-04-28] Nomes de variáveis/funções em inglês; comentários e textos de UI em português (acentuado, seguindo o padrão de linguagem).
