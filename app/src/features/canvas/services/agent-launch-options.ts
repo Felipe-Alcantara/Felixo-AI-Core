@@ -51,6 +51,18 @@ export function getAgent(id: AgentId): AgentDefinition | undefined {
   return AGENTS.find((agent) => agent.id === id)
 }
 
+/**
+ * True when `command` is a known agent CLI (claude/codex/gemini) — the only
+ * terminals meant to receive a standing instruction typed after they spawn
+ * (quality standard, `/resume`). A terminal running an arbitrary command
+ * (e.g. `python file.py` from the Projects panel) has a command too, but
+ * typing text into it afterwards would go to that process' stdin instead,
+ * which is not what either feature is for.
+ */
+export function isKnownAgentCommand(command?: string): boolean {
+  return AGENTS.some((agent) => agent.command === command)
+}
+
 export type AgentLaunchChoices = {
   agentId: AgentId
   /** Empty string means "default model" — no model flag is added. */

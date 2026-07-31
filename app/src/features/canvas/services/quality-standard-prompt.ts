@@ -48,6 +48,44 @@ export function buildQualityStandardMessage(template: string): string {
   return `${template}\n`
 }
 
+/** Typed into an agent terminal restored from a previous run instead of its
+ *  usual standing instruction — see resolveTerminalInitialText. */
+export const RESUME_INITIAL_TEXT = '/resume\n'
+
+/**
+ * Decides what a canvas terminal's first-spawn text should be. A terminal
+ * that already existed on disk when the app booted (`isRestoredAgent`) may
+ * have unfinished work from a previous run, so it gets "/resume" instead of
+ * whatever standing instruction it would otherwise receive — regardless of
+ * the quality-standard toggle, since resuming takes priority over restating
+ * standing instructions the agent already saw last run.
+ */
+export function resolveTerminalInitialText(params: {
+  isRestoredAgent: boolean
+  qualityStandardEnabled: boolean
+  qualityStandardPrompt: string
+  hasCommand: boolean
+  existingInitialText?: string
+  canvasFilePaths?: string[]
+  identity?: AgentIdentity
+}): string | undefined {
+  // "/resume" is an agent CLI slash command — meaningless (and potentially
+  // confusing) typed into a plain shell, so hasCommand gates it here too,
+  // not just in how the caller builds the restored-terminal set.
+  if (params.isRestoredAgent && params.hasCommand) {
+    return RESUME_INITIAL_TEXT
+  }
+  if (params.qualityStandardEnabled && params.hasCommand) {
+    return buildCanvasTerminalInitialText(
+      params.qualityStandardPrompt,
+      params.existingInitialText,
+      params.canvasFilePaths,
+      params.identity,
+    )
+  }
+  return params.existingInitialText
+}
+
 /**
  * Builds the full standing instruction for a canvas terminal, combining the
  * quality standard with the canvas-specific shared-scratchpad context and the
