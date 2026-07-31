@@ -39,6 +39,12 @@ PIP_GENERIC_HINT = (
 TUI_PACKAGES = ("questionary>=2.0", "rich>=13.0")
 
 def ensure_python_requirements(env: dict[str, str], skip_install: bool) -> int:
+    """Makes sure the launcher's own Python packages are importable.
+
+    These packages exist only to draw the menu; the app itself is Node, so a
+    failure here must never block starting it. Returns 0 whenever the packages
+    are usable — including when they were already installed system-wide, which
+    is the common case on Linux distributions that ship them."""
     if skip_install:
         return 0
 
@@ -49,6 +55,11 @@ def ensure_python_requirements(env: dict[str, str], skip_install: bool) -> int:
 
     if not has_installable_python_requirements(requirements_file):
         print(f"[felixo] No Python packages listed in {requirements_file.name}.")
+        return 0
+
+    # Checking first avoids a pointless install — and, on an externally managed
+    # Python, a wall of pip errors for packages that are already there.
+    if tui_dependencies_importable():
         return 0
 
     if not has_pip(env):
@@ -72,14 +83,21 @@ def run_pip_install(
     pip_args: list[str],
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Installs with pip, retrying under --user when the interpreter is an
-    externally-managed environment (PEP 668).
+    """Installs with pip, working around an externally-managed Python (PEP 668).
 
-    Homebrew's Python on macOS — and the distro Python on Debian/Ubuntu — refuse
-    a plain `pip install` into the system interpreter, so the first attempt dies
-    with `externally-managed-environment`. Inside a virtualenv that never
-    happens and `--user` is actually invalid, so the retry is conditional on
-    both the error and being outside a venv."""
+    Homebrew's Python on macOS and the distro Python on Debian/Ubuntu both
+    refuse a plain `pip install`, so the first attempt dies with
+    `externally-managed-environment`. Two fallbacks are tried in order of how
+    little they disturb the system:
+
+    1. `--user`, which installs into the person's home directory. Homebrew
+       allows this; Debian/Ubuntu block it too.
+    2. `--break-system-packages`, the override PEP 668 itself defines. Despite
+       the alarming name it is the documented escape hatch, and these are two
+       pure-Python packages used only to draw this menu.
+
+    Inside a virtualenv none of this applies — there `--user` is invalid and the
+    plain install already works — so the fallbacks are skipped entirely."""
     command = [sys.executable, "-m", "pip", "install", *pip_args]
     result = capture_pip(command, env)
 
@@ -89,10 +107,14 @@ def run_pip_install(
     if not is_externally_managed_error(result):
         return result
 
-    print(
-        "[felixo] This Python is externally managed (PEP 668). Retrying with --user...",
-    )
-    return capture_pip([*command, "--user"], env)
+    print("[felixo] This Python is externally managed (PEP 668). Retrying with --user...")
+    user_result = capture_pip([*command, "--user"], env)
+
+    if user_result.returncode == 0 or not is_externally_managed_error(user_result):
+        return user_result
+
+    print("[felixo] Still blocked. Retrying with --break-system-packages...")
+    return capture_pip([*command, "--break-system-packages"], env)
 
 
 def capture_pip(

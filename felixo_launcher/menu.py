@@ -126,10 +126,14 @@ def _menu_start(console: object) -> None:
     node_bin, env = prepared
     console.print(f"[dim]Usando Node.js de {node_bin}[/dim]")
 
-    requirements_code = ensure_python_requirements(env, skip_install=False)
-    if requirements_code != 0:
-        console.print("[red]Falha instalando dependências Python.[/red]")
-        return
+    # The Python packages only draw this menu — the app is Node. If they cannot
+    # be installed the menu is already on screen anyway, so warn and carry on
+    # instead of refusing to start the app over an unrelated dependency.
+    if ensure_python_requirements(env, skip_install=False) != 0:
+        console.print(
+            "[yellow]As dependências Python do menu não puderam ser instaladas — "
+            "seguindo assim mesmo, o app não precisa delas.[/yellow]"
+        )
 
     install_code = ensure_dependencies(env, skip_install=False)
     if install_code != 0:
@@ -157,10 +161,18 @@ def _menu_install(console: object) -> None:
     requirements_code = ensure_python_requirements(env, skip_install=False)
     install_code = ensure_dependencies(env, skip_install=False)
 
-    if requirements_code == 0 and install_code == 0:
-        console.print("[green]Dependências prontas.[/green]")
+    if install_code != 0:
+        console.print("[red]Falha instalando as dependências Node — veja as mensagens acima.[/red]")
+    elif requirements_code != 0:
+        # Node is what the app needs, and it is ready; only the menu's own
+        # packages failed, which is not enough to call the setup broken.
+        console.print(
+            "[green]Dependências do app prontas.[/green] "
+            "[yellow]As dependências Python do menu não puderam ser instaladas, "
+            "mas o app não precisa delas.[/yellow]"
+        )
     else:
-        console.print("[red]Alguma instalação falhou — veja as mensagens acima.[/red]")
+        console.print("[green]Dependências prontas.[/green]")
 
 
 def _menu_configure(console: object) -> None:

@@ -188,6 +188,43 @@ class StopProcessTests(unittest.TestCase):
         )
         printed.assert_not_called()
 
+    def test_waits_far_less_after_sigkill_than_before_it(self) -> None:
+        """SIGKILL cannot be caught, so only the kernel reap takes any time.
+        Giving it the same generous budget as the graceful stop added seconds
+        to every Ctrl+C for no benefit."""
+        self.assertLess(
+            process_module.FORCED_STOP_TIMEOUT,
+            process_module.GRACEFUL_STOP_TIMEOUT,
+        )
+
+    def test_stops_a_stubborn_process_within_the_graceful_budget(self) -> None:
+        """A process that ignores SIGTERM must still be stopped, and the wait
+        is bounded by the graceful timeout rather than an open-ended hang."""
+        waits: list[float] = []
+
+        def record(_process: object, timeout: float) -> bool:
+            waits.append(timeout)
+            return len(waits) > 1  # times out on SIGTERM, succeeds after SIGKILL
+
+        process = MagicMock()
+        process.poll.return_value = None
+
+        with patch("felixo_launcher.process.wait_for_exit", side_effect=record), patch(
+            "felixo_launcher.process.signal_process_group"
+        ), patch("felixo_launcher.process.cleanup_app_processes"), patch(
+            "felixo_launcher.process.print"
+        ) as printed:
+            process_module.stop_process(process)
+
+        self.assertEqual(
+            waits,
+            [
+                process_module.GRACEFUL_STOP_TIMEOUT,
+                process_module.FORCED_STOP_TIMEOUT,
+            ],
+        )
+        printed.assert_not_called()
+
     def test_does_not_warn_when_sigterm_alone_stops_the_app(self) -> None:
         process = MagicMock()
         process.poll.return_value = None

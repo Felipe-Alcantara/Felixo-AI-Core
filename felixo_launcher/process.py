@@ -18,6 +18,15 @@ import time
 from .paths import APP_DIR
 
 
+# How long a well-behaved dev server gets to shut down on its own. Vite and
+# Electron normally exit in well under a second; the rest of the budget is for
+# a loaded machine. Anything still alive after this is not going to stop on
+# request, so waiting longer only makes Ctrl+C feel broken.
+GRACEFUL_STOP_TIMEOUT = 5.0
+
+# SIGKILL is not catchable — this only covers the kernel reaping the process.
+FORCED_STOP_TIMEOUT = 2.0
+
 APP_PROCESS_EXECUTABLES = (
     "/electron",
     "/vite",
@@ -31,9 +40,12 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
         signal_process_group(process, signal.SIGTERM)
 
-        if not wait_for_exit(process, timeout=8):
+        if not wait_for_exit(process, timeout=GRACEFUL_STOP_TIMEOUT):
             signal_process_group(process, signal.SIGKILL)
-            if not wait_for_exit(process, timeout=8):
+            # SIGKILL cannot be caught, so the process is gone almost at once —
+            # only the kernel reaping it takes any time. Waiting the full
+            # graceful timeout again just added seconds to every Ctrl+C.
+            if not wait_for_exit(process, timeout=FORCED_STOP_TIMEOUT):
                 print(
                     "[felixo] The app process did not exit; it may still be running.",
                     file=sys.stderr,
