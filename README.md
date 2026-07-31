@@ -61,11 +61,13 @@ Primeira versão funcional entregue:
 
 ## Como rodar
 
-Atalho recomendado:
+Forma mais simples — abre o menu interativo onde você instala, configura e inicia:
 
 ```bash
 python3 start_app.py
 ```
+
+No menu você tem: **Iniciar/Rodar** (app desktop ou preview web), **Instalar/Setup**, **Configurar** (CLIs, permissões dos agentes, branch de produção) e **Status/Sair**.
 
 Ou manualmente:
 
@@ -76,13 +78,7 @@ npm install
 npm run dev
 ```
 
-Para atualizar uma cópia rodada pelo código-fonte a partir da branch de produção:
-
-```bash
-python3 start_app.py --update
-```
-
-Esse comando faz `git pull --ff-only origin production` antes de abrir o app e bloqueia a atualização se houver alterações locais não commitadas.
+Scripts/CI que já chamam `start_app.py` com flags continuam funcionando sem o menu (`--web`, `--skip-install`, `--update`, `--branch`) — ver [`docs/projeto/RODAR-VIA-CODIGO-FONTE.md`](docs/projeto/RODAR-VIA-CODIGO-FONTE.md).
 
 ## Rodar em outro PC
 
