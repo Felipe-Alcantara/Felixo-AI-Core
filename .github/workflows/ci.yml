@@ -8,6 +8,44 @@ on:
       - production
 
 jobs:
+  # The launcher is what every operating system runs first, so it gets its own
+  # matrix. It has no Node/npm dependency to install, which keeps this job fast
+  # enough to catch cross-platform setup regressions before the heavier build.
+  launcher:
+    name: Launcher (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+        # 3.9 is the oldest version the launcher supports; the modern syntax it
+        # uses (`X | None`, `tuple[int, ...]`) only works there because of the
+        # `from __future__ import annotations` at the top of start_app.py.
+        python-version:
+          - "3.9"
+          - "3.13"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # `-t .` sets the top-level directory to the repository root so the test
+      # package can import `felixo_launcher` and its own `tests.support`.
+      - name: Test launcher
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Check launcher starts without a menu
+        shell: bash
+        run: python start_app.py --help
+
   validate:
     name: Validate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

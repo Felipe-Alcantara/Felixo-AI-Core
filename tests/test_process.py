@@ -1,0 +1,215 @@
+"""Tests for stopping the app and clearing leftover processes.
+
+`pgrep -f` matches whole command lines, so cleanup has to tell a stale dev
+server apart from an editor that merely has the app path open. Shutdown also
+runs from a signal handler, which constrains how the child can be reaped.
+"""
+
+from __future__ import annotations
+
+import signal
+import subprocess
+import unittest
+from unittest.mock import MagicMock, patch
+
+from felixo_launcher import paths
+from felixo_launcher import process as process_module
+
+
+class ProcessCleanupTests(unittest.TestCase):
+    """`pgrep -f` matches whole command lines, so cleanup has to distinguish a
+    stale Vite/Electron from an editor that merely has the path open."""
+
+    def test_kills_only_processes_started_by_this_launcher(self) -> None:
+        marker = str(paths.APP_DIR / "node_modules")
+        pgrep_output = "\n".join(
+            [
+                f"4001 node {marker}/vite/bin/vite.js --host 127.0.0.1",
+                f"4002 /usr/bin/vim {marker}/notes.txt",
+                f"4003 grep -r foo {marker}",
+                f"4004 node {marker}/electron/cli.js .",
+            ]
+        )
+
+        with patch(
+            "felixo_launcher.process.subprocess.check_output", return_value=pgrep_output
+        ), patch("felixo_launcher.process.own_process_tree_pids", return_value=set()):
+            self.assertEqual(process_module.find_stale_app_pids(), [4001, 4004])
+
+    def test_never_kills_the_launcher_or_its_own_process_group(self) -> None:
+        marker = str(paths.APP_DIR / "node_modules")
+        pgrep_output = f"777 node {marker}/vite/bin/vite.js\n888 node {marker}/vite/x.js"
+
+        with patch(
+            "felixo_launcher.process.subprocess.check_output", return_value=pgrep_output
+        ), patch("felixo_launcher.process.own_process_tree_pids", return_value={777}):
+            self.assertEqual(process_module.find_stale_app_pids(), [888])
+
+    def test_returns_no_pids_when_pgrep_is_unavailable(self) -> None:
+        with patch(
+            "felixo_launcher.process.subprocess.check_output", side_effect=FileNotFoundError
+        ):
+            self.assertEqual(process_module.find_stale_app_pids(), [])
+
+    def test_returns_no_pids_when_pgrep_matches_nothing(self) -> None:
+        with patch(
+            "felixo_launcher.process.subprocess.check_output",
+            side_effect=subprocess.CalledProcessError(1, "pgrep"),
+        ):
+            self.assertEqual(process_module.find_stale_app_pids(), [])
+
+    def test_ignores_malformed_pgrep_output(self) -> None:
+        with patch(
+            "felixo_launcher.process.subprocess.check_output", return_value="\nnot-a-pid line\n\n"
+        ), patch("felixo_launcher.process.own_process_tree_pids", return_value=set()):
+            self.assertEqual(process_module.find_stale_app_pids(), [])
+
+    def test_escalates_to_sigkill_only_for_survivors(self) -> None:
+        with patch("felixo_launcher.process.find_stale_app_pids", return_value=[10, 20]), patch(
+            "felixo_launcher.process.time.sleep"
+        ), patch(
+            "felixo_launcher.process.process_is_alive", side_effect=lambda pid: pid == 20
+        ), patch("felixo_launcher.process.terminate_pids") as terminate:
+            process_module.cleanup_app_processes()
+
+        self.assertEqual(terminate.call_args_list[0].args, ([10, 20], signal.SIGTERM))
+        self.assertEqual(terminate.call_args_list[1].args, ([20], signal.SIGKILL))
+
+    def test_terminate_ignores_processes_that_already_exited(self) -> None:
+        with patch(
+            "felixo_launcher.process.os.kill", side_effect=[ProcessLookupError, PermissionError, None]
+        ) as kill:
+            process_module.terminate_pids([1, 2, 3], signal.SIGTERM)
+
+        self.assertEqual(kill.call_count, 3)
+
+    def test_process_is_alive_treats_permission_denied_as_running(self) -> None:
+        with patch("felixo_launcher.process.os.kill", side_effect=PermissionError):
+            self.assertTrue(process_module.process_is_alive(1))
+
+        with patch("felixo_launcher.process.os.kill", side_effect=ProcessLookupError):
+            self.assertFalse(process_module.process_is_alive(1))
+
+
+
+
+class StopProcessTests(unittest.TestCase):
+    def test_signals_the_whole_group_so_vite_and_electron_both_exit(self) -> None:
+        process = MagicMock()
+        process.pid = 4242
+
+        with patch.object(process_module.os, "name", "posix"), patch(
+            "felixo_launcher.process.os.getpgid", return_value=4242
+        ), patch("felixo_launcher.process.os.killpg") as killpg:
+            process_module.signal_process_group(process, signal.SIGTERM)
+
+        killpg.assert_called_once_with(4242, signal.SIGTERM)
+
+    def test_falls_back_to_single_process_when_the_group_is_gone(self) -> None:
+        """Ctrl+C must not surface a raw ProcessLookupError traceback."""
+        process = MagicMock()
+        process.pid = 4242
+
+        with patch.object(process_module.os, "name", "posix"), patch(
+            "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError
+        ):
+            process_module.signal_process_group(process, signal.SIGTERM)
+
+        process.terminate.assert_called_once()
+
+    def test_swallows_errors_when_the_process_is_already_reaped(self) -> None:
+        process = MagicMock()
+        process.pid = 4242
+        process.terminate.side_effect = ProcessLookupError
+
+        with patch.object(process_module.os, "name", "posix"), patch(
+            "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError
+        ):
+            process_module.signal_process_group(process, signal.SIGTERM)
+
+    def test_reaps_child_from_a_signal_handler_without_falsely_timing_out(self) -> None:
+        """Regression: `stop_process` runs from the SIGTERM handler while the
+        main thread is blocked in `Popen.wait()`. There, `Popen.poll()` blocks on
+        the lock that outer wait holds and never reports the exit, so relying on
+        it made a clean Ctrl+C hang for ~16s and print a false failure. Only a
+        direct `os.waitpid` sees the real status."""
+        process = MagicMock()
+        process.pid = 4242
+        process.returncode = None
+        process.poll.return_value = None  # what a blocked Popen reports
+
+        with patch.object(process_module.os, "name", "posix"), patch(
+            "felixo_launcher.process.os.waitpid", return_value=(4242, 0)
+        ):
+            self.assertTrue(process_module.process_has_exited(process))
+
+    def test_treats_already_reaped_child_as_exited(self) -> None:
+        process = MagicMock()
+        process.pid = 4242
+        process.returncode = None
+
+        with patch.object(process_module.os, "name", "posix"), patch(
+            "felixo_launcher.process.os.waitpid", side_effect=ChildProcessError
+        ):
+            self.assertTrue(process_module.process_has_exited(process))
+
+    def test_reports_still_running_while_the_child_is_alive(self) -> None:
+        process = MagicMock()
+        process.pid = 4242
+        process.returncode = None
+
+        with patch.object(process_module.os, "name", "posix"), patch(
+            "felixo_launcher.process.os.waitpid", return_value=(0, 0)
+        ):
+            self.assertFalse(process_module.process_has_exited(process))
+
+    def test_wait_for_exit_gives_up_after_the_timeout(self) -> None:
+        process = MagicMock()
+
+        with patch("felixo_launcher.process.process_has_exited", return_value=False), patch(
+            "felixo_launcher.process.time.sleep"
+        ):
+            self.assertFalse(process_module.wait_for_exit(process, timeout=0))
+
+    def test_escalates_to_sigkill_only_when_sigterm_was_not_enough(self) -> None:
+        process = MagicMock()
+        process.poll.return_value = None
+
+        with patch("felixo_launcher.process.wait_for_exit", side_effect=[False, True]), patch(
+            "felixo_launcher.process.signal_process_group"
+        ) as signal_group, patch("felixo_launcher.process.cleanup_app_processes"), patch(
+            "felixo_launcher.process.print"
+        ) as printed:
+            process_module.stop_process(process)
+
+        self.assertEqual(
+            [call.args[1] for call in signal_group.call_args_list],
+            [signal.SIGTERM, signal.SIGKILL],
+        )
+        printed.assert_not_called()
+
+    def test_does_not_warn_when_sigterm_alone_stops_the_app(self) -> None:
+        process = MagicMock()
+        process.poll.return_value = None
+
+        with patch("felixo_launcher.process.wait_for_exit", return_value=True), patch(
+            "felixo_launcher.process.signal_process_group"
+        ) as signal_group, patch("felixo_launcher.process.cleanup_app_processes"), patch(
+            "felixo_launcher.process.print"
+        ) as printed:
+            process_module.stop_process(process)
+
+        self.assertEqual(len(signal_group.call_args_list), 1)
+        printed.assert_not_called()
+
+    def test_uses_plain_terminate_and_kill_on_windows(self) -> None:
+        process = MagicMock()
+
+        with patch.object(process_module.os, "name", "nt"):
+            process_module.signal_process_group(process, signal.SIGTERM)
+            process_module.signal_process_group(process, signal.SIGKILL)
+
+        process.terminate.assert_called_once()
+        process.kill.assert_called_once()
+
+

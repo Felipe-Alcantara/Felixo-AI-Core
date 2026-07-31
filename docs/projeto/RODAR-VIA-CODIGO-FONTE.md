@@ -14,7 +14,7 @@ Documentar como qualquer pessoa pode clonar o repositório e rodar o Felixo AI C
 |-----------|--------------|-------|
 | Node.js | ≥ 22.12.0 | Definido em `.nvmrc` |
 | npm | ≥ 10.x | Vem com Node.js 22+ |
-| Python | ≥ 3.8 | Apenas para `start_app.py` (opcional) |
+| Python | ≥ 3.9 | Apenas para `start_app.py` (opcional). 3.9 é o `python3` de sistema no macOS 12/13 e é a versão mínima verificada no CI |
 | Git | ≥ 2.30 | Para clonar e usar funcionalidades Git |
 | Sistema operacional | Linux, Windows 10+, macOS 12+ | |
 

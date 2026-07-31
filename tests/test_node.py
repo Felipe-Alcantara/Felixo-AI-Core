@@ -1,42 +1,20 @@
+"""Tests for Node.js/npm discovery.
+
+Discovery is what decides whether the app starts at all, and it has to work
+from a GUI-launched process whose PATH omits Homebrew, nvm, Volta and friends.
+"""
+
+from __future__ import annotations
+
 import os
-import stat
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import start_app
+from felixo_launcher import node
 
-
-NODE_ENV_KEYS = (
-    "FELIXO_NODE_BIN",
-    "FELIXO_NODE_SEARCH_PATHS",
-    "NVM_DIR",
-    "FNM_DIR",
-    "VOLTA_HOME",
-    "ASDF_DATA_DIR",
-    "MISE_DATA_DIR",
-    "NODENV_ROOT",
-)
-
-
-def write_executable(path: Path, body: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
-    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-
-
-def make_node_bin(bin_dir: Path, node_version: str = "v25.9.0") -> Path:
-    write_executable(bin_dir / "node", f"echo {node_version}")
-    write_executable(bin_dir / "npm", "echo 10.9.0")
-    return bin_dir
-
-
-def clean_node_env(home: Path, **overrides: str) -> dict[str, str]:
-    env = {"HOME": str(home), "PATH": ""}
-    env.update({key: "" for key in NODE_ENV_KEYS})
-    env.update(overrides)
-    return env
+from .support import clean_node_env, make_node_bin, write_executable
 
 
 class StartAppNodeDiscoveryTests(unittest.TestCase):
@@ -62,7 +40,7 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
                 clear=True,
             ):
                 self.assertEqual(
-                    start_app.find_node_bin(None, "22.12.0"),
+                    node.find_node_bin(None, "22.12.0"),
                     prefix_bin,
                 )
 
@@ -82,7 +60,7 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
                 clear=True,
             ):
                 self.assertEqual(
-                    start_app.find_node_bin(None, "22.12.0"),
+                    node.find_node_bin(None, "22.12.0"),
                     working_bin,
                 )
 
@@ -98,7 +76,7 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
                 clear=True,
             ):
                 self.assertEqual(
-                    start_app.find_node_bin("25.9.0", "22.12.0"),
+                    node.find_node_bin("25.9.0", "22.12.0"),
                     nvm_bin,
                 )
 
@@ -116,7 +94,7 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
                 clear=True,
             ):
                 self.assertEqual(
-                    start_app.find_node_bin(None, "22.12.0"),
+                    node.find_node_bin(None, "22.12.0"),
                     working_bin,
                 )
 
@@ -135,44 +113,34 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
                 clear=True,
             ):
                 self.assertEqual(
-                    start_app.find_node_bin(None, "22.12.0"),
+                    node.find_node_bin(None, "22.12.0"),
                     current_bin,
                 )
 
-    def test_resolves_windows_npm_cmd_for_subprocesses(self) -> None:
+    def test_macos_homebrew_dirs_are_searched_when_path_is_empty(self) -> None:
+        """A GUI-launched process on macOS inherits a minimal PATH that omits
+        /opt/homebrew/bin, which is where Apple Silicon Homebrew puts Node."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            node_bin = root / "nodejs"
-            npm_cmd = node_bin / "npm.cmd"
-            npm_cmd.parent.mkdir(parents=True)
-            npm_cmd.write_text("@echo off\r\n", encoding="utf-8")
-            env = {"Path": str(node_bin)}
+            homebrew_bin = make_node_bin(root / "opt" / "homebrew" / "bin")
 
-            with patch("start_app.is_windows_platform", return_value=True), patch(
-                "start_app.shutil.which",
-                return_value=str(npm_cmd),
-            ):
+            with patch.dict(os.environ, clean_node_env(root), clear=True), patch.object(
+                node, "MACOS_NODE_BIN_DIRS", (str(homebrew_bin),)
+            ), patch.object(node.sys, "platform", "darwin"):
                 self.assertEqual(
-                    start_app.resolve_subprocess_command(["npm", "install"], env),
-                    [str(npm_cmd), "install"],
+                    node.find_node_bin(None, "22.12.0"),
+                    homebrew_bin,
                 )
 
-    def test_build_env_preserves_windows_path_key(self) -> None:
+    def test_build_env_puts_macos_dirs_on_path_for_child_processes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            node_bin = root / "nodejs"
 
-            with patch("start_app.is_windows_platform", return_value=True), patch.dict(
-                os.environ,
-                clean_node_env(root, Path=str(root / "Windows" / "System32")),
-                clear=True,
+            with patch.dict(os.environ, clean_node_env(root), clear=True), patch.object(
+                node.sys, "platform", "darwin"
             ):
-                env = start_app.build_env(node_bin)
+                env = node.build_env(root / "node" / "bin")
 
-            self.assertIn("Path", env)
-            self.assertNotIn("PATH", env)
-            self.assertTrue(env["Path"].startswith(str(node_bin)))
+            self.assertIn("/opt/homebrew/bin", node.get_path_env(env))
 
 
-if __name__ == "__main__":
-    unittest.main()
