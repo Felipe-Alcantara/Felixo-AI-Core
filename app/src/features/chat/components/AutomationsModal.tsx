@@ -21,6 +21,7 @@ type AutomationsModalProps = {
 const scopeOptions: Array<{ value: AutomationScope; label: string }> = [
   { value: 'planning', label: 'Planejamento' },
   { value: 'code', label: 'Código' },
+  { value: 'security', label: 'Segurança' },
   { value: 'docs', label: 'Docs' },
   { value: 'git', label: 'Git' },
   { value: 'chat', label: 'Chat' },
@@ -239,6 +240,7 @@ function formatScope(scope: AutomationScope) {
     docs: 'Docs',
     git: 'Git',
     planning: 'Plano',
+    security: 'Segurança',
   }
 
   return labels[scope]
