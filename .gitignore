@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 Padrão de qualidade - Felixo System Design/
+.felixo-start-config.json

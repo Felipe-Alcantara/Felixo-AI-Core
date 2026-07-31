@@ -25,6 +25,49 @@ SOURCE_IMPORT_PATTERN = re.compile(
     r"(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?['\"]([^'\"]+)['\"]"
 )
 
+# Local, gitignored file where the interactive menu's "Configurar" persists
+# the environment-variable overrides documented in README.md (CLI paths,
+# agent permission modes, production branch) — so the person configures them
+# once via the menu instead of exporting env vars by hand every time.
+CONFIG_FILE = ROOT_DIR / ".felixo-start-config.json"
+
+CONFIG_FIELDS: tuple[dict[str, object], ...] = (
+    {
+        "key": "FELIXO_NODE_BIN",
+        "label": "Pasta do Node.js/npm (forçar um caminho específico)",
+        "kind": "text",
+    },
+    {
+        "key": "FELIXO_CLI_PATHS",
+        "label": "Pastas extras onde procurar as CLIs (claude/codex/gemini)",
+        "kind": "text",
+    },
+    {
+        "key": "FELIXO_CLAUDE_PERMISSION_MODE",
+        "label": "Modo de permissão do Claude",
+        "kind": "choice",
+        "choices": ("default", "plan", "auto", "dontAsk", "acceptEdits", "off"),
+    },
+    {
+        "key": "FELIXO_CODEX_FULL_ACCESS",
+        "label": "Codex com acesso total (sem confirmações)",
+        "kind": "choice",
+        "choices": ("on", "off"),
+    },
+    {
+        "key": "FELIXO_GEMINI_FULL_ACCESS",
+        "label": "Gemini com acesso total (sem confirmações)",
+        "kind": "choice",
+        "choices": ("on", "off"),
+    },
+    {
+        "key": "FELIXO_PRODUCTION_BRANCH",
+        "label": "Branch de produção (usada em Atualizar)",
+        "kind": "text",
+        "default": "production",
+    },
+)
+
 MACOS_NODE_BIN_DIRS = (
     "/opt/homebrew/bin",
     "/usr/local/bin",
@@ -420,6 +463,38 @@ def unique_path_entries(path_entries: list[str]) -> list[str]:
         unique_entries.append(path_entry)
 
     return unique_entries
+
+
+def load_config() -> dict[str, str]:
+    if not CONFIG_FILE.exists():
+        return {}
+
+    try:
+        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    return {
+        key: value
+        for key, value in data.items()
+        if isinstance(key, str) and isinstance(value, str) and value
+    }
+
+
+def save_config(config: dict[str, str]) -> None:
+    cleaned = {key: value for key, value in config.items() if value}
+    CONFIG_FILE.write_text(
+        json.dumps(cleaned, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
+def apply_config_to_env(env: dict[str, str], config: dict[str, str]) -> None:
+    for key, value in config.items():
+        if value:
+            env[key] = value
 
 
 def resolve_subprocess_command(command: list[str], env: dict[str, str]) -> list[str]:
@@ -855,7 +930,10 @@ def get_current_revision(env: dict[str, str]) -> str | None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Start the Felixo AI Core Electron app."
+        description=(
+            "Start the Felixo AI Core Electron app. Run with no arguments to open "
+            "the interactive menu (recommended) — these flags exist for scripts/CI."
+        )
     )
     parser.add_argument(
         "--web",
@@ -880,12 +958,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
-
+def prepare_node_env() -> tuple[Path, dict[str, str]] | None:
+    """Finds a working Node/npm and builds the subprocess env for it, applying
+    any persisted config overrides. Prints a clear error and returns None on
+    failure — callers just check for None instead of duplicating diagnostics."""
     if not APP_DIR.exists():
         print(f"[felixo] App directory not found: {APP_DIR}", file=sys.stderr)
-        return 1
+        return None
 
     node_version = read_node_version()
     minimum_node_version = read_minimum_node_version()
@@ -902,9 +981,23 @@ def main() -> int:
                 "[felixo] On macOS, install Node with Homebrew, NVM, Volta, asdf, mise, fnm, or nodejs.org.",
                 file=sys.stderr,
             )
-        return 1
+        return None
 
     env = build_env(node_bin)
+    apply_config_to_env(env, load_config())
+    return node_bin, env
+
+
+def run_direct(args: argparse.Namespace) -> int:
+    """The non-interactive path: exactly what running with flags has always
+    done. Kept for scripts/CI that already call `start_app.py --web` etc. —
+    see docs/projeto/RODAR-VIA-CODIGO-FONTE.md. The interactive menu
+    (`run_interactive_menu`) is the recommended way for a person at a
+    terminal; this path never draws it."""
+    prepared = prepare_node_env()
+    if prepared is None:
+        return 1
+    node_bin, env = prepared
     print(f"[felixo] Using Node.js from {node_bin}")
 
     requirements_code = ensure_python_requirements(env, args.skip_install)
@@ -929,6 +1022,314 @@ def main() -> int:
 
     print("[felixo] Opening Felixo AI Core desktop app...")
     return run_command(["npm", "run", "dev"], env)
+
+
+def ensure_tui_dependencies() -> bool:
+    """The interactive menu needs `questionary` + `rich` to draw itself. Both
+    are declared in requirements.txt, but a fresh clone may not have run
+    Setup yet — bootstrap them here so `python start_app.py` works standalone,
+    per GUIA-START-APP-SCRIPT.md ("o script faz um bootstrap minimo antes de
+    desenhar o menu")."""
+    try:
+        import questionary  # noqa: F401
+        import rich  # noqa: F401
+
+        return True
+    except ImportError:
+        pass
+
+    print("[felixo] Preparando dependências do menu (questionary, rich)...")
+    result = subprocess.call(
+        [sys.executable, "-m", "pip", "install", "questionary", "rich"],
+        cwd=ROOT_DIR,
+    )
+    if result != 0:
+        return False
+
+    try:
+        import questionary  # noqa: F401
+        import rich  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def run_interactive_menu() -> int:
+    import questionary
+    from rich.console import Console
+
+    console = Console()
+
+    while True:
+        console.clear()
+        _print_menu_header(console)
+
+        choice = questionary.select(
+            "O que você quer fazer?",
+            choices=[
+                questionary.Choice(
+                    "Iniciar / Rodar   — sobe o app desktop ou o preview web",
+                    value="start",
+                ),
+                questionary.Choice(
+                    "Instalar / Setup  — instala dependências Python e Node",
+                    value="install",
+                ),
+                questionary.Choice(
+                    "Configurar        — CLIs, permissões dos agentes, branch de produção",
+                    value="configure",
+                ),
+                questionary.Choice(
+                    "Atualizar         — git pull da branch de produção",
+                    value="update",
+                ),
+                questionary.Choice(
+                    "Status            — o que está instalado e pronto agora",
+                    value="status",
+                ),
+                questionary.Choice("Sair", value="exit"),
+            ],
+        ).ask()
+
+        if choice is None or choice == "exit":
+            console.print("[dim]Até mais![/dim]")
+            return 0
+
+        if choice == "start":
+            _menu_start(console)
+        elif choice == "install":
+            _menu_install(console)
+        elif choice == "configure":
+            _menu_configure(console)
+        elif choice == "update":
+            _menu_update(console)
+        elif choice == "status":
+            _menu_status(console)
+
+        questionary.press_any_key_to_continue(
+            "Pressione uma tecla para voltar ao menu..."
+        ).ask()
+
+
+def _print_menu_header(console: object) -> None:
+    from rich.panel import Panel
+
+    console.print(
+        Panel.fit(
+            "[bold cyan]Felixo AI Core[/bold cyan]\n"
+            "[dim]Centraliza ideias, agentes de IA e fluxos de trabalho num canvas único.[/dim]",
+            border_style="cyan",
+        )
+    )
+
+
+def _menu_start(console: object) -> None:
+    import questionary
+
+    target = questionary.select(
+        "O que você quer iniciar?",
+        choices=[
+            questionary.Choice(
+                "App desktop (Electron) — a experiência completa", value="desktop"
+            ),
+            questionary.Choice(
+                f"Preview web — abre em {DEFAULT_URL} num navegador", value="web"
+            ),
+            questionary.Choice("Voltar", value=None),
+        ],
+    ).ask()
+
+    if not target:
+        return
+
+    prepared = prepare_node_env()
+    if prepared is None:
+        console.print("[red]Não foi possível preparar o Node.js. Veja a mensagem acima.[/red]")
+        return
+    node_bin, env = prepared
+    console.print(f"[dim]Usando Node.js de {node_bin}[/dim]")
+
+    requirements_code = ensure_python_requirements(env, skip_install=False)
+    if requirements_code != 0:
+        console.print("[red]Falha instalando dependências Python.[/red]")
+        return
+
+    install_code = ensure_dependencies(env, skip_install=False)
+    if install_code != 0:
+        console.print("[red]Falha instalando dependências Node.[/red]")
+        return
+
+    cleanup_app_processes()
+
+    if target == "web":
+        console.print(f"[green]Abrindo o preview web em {DEFAULT_URL}...[/green]")
+        run_command(["npm", "run", "dev:web"], env)
+    else:
+        console.print("[green]Abrindo o Felixo AI Core (desktop)...[/green]")
+        run_command(["npm", "run", "dev"], env)
+
+
+def _menu_install(console: object) -> None:
+    prepared = prepare_node_env()
+    if prepared is None:
+        console.print("[red]Não foi possível preparar o Node.js. Veja a mensagem acima.[/red]")
+        return
+    node_bin, env = prepared
+    console.print(f"[dim]Usando Node.js de {node_bin}[/dim]")
+
+    requirements_code = ensure_python_requirements(env, skip_install=False)
+    install_code = ensure_dependencies(env, skip_install=False)
+
+    if requirements_code == 0 and install_code == 0:
+        console.print("[green]Dependências prontas.[/green]")
+    else:
+        console.print("[red]Alguma instalação falhou — veja as mensagens acima.[/red]")
+
+
+def _menu_configure(console: object) -> None:
+    import questionary
+
+    config = load_config()
+
+    field_by_label = {
+        f"{field['label']} [{config.get(field['key']) or 'não definido'}]": field
+        for field in CONFIG_FIELDS
+    }
+
+    label = questionary.select(
+        "O que você quer configurar? (Enter em 'Voltar' não muda nada)",
+        choices=[*field_by_label.keys(), "Limpar todas as configurações", "Voltar"],
+    ).ask()
+
+    if not label or label == "Voltar":
+        return
+
+    if label == "Limpar todas as configurações":
+        if questionary.confirm("Remover todos os valores configurados?", default=False).ask():
+            save_config({})
+            console.print("[green]Configurações limpas.[/green]")
+        return
+
+    field = field_by_label[label]
+    key = str(field["key"])
+
+    if field["kind"] == "choice":
+        choices = [*field["choices"], "(limpar)"]  # type: ignore[list-item]
+        value = questionary.select(f"{field['label']}:", choices=choices).ask()
+    else:
+        current = config.get(key, str(field.get("default", "")))
+        value = questionary.text(f"{field['label']}:", default=current).ask()
+
+    if value is None:
+        return
+
+    if value in ("(limpar)", ""):
+        config.pop(key, None)
+    else:
+        config[key] = value
+
+    save_config(config)
+    console.print("[green]Configuração salva.[/green]")
+
+
+def _menu_update(console: object) -> None:
+    config = load_config()
+    branch = config.get("FELIXO_PRODUCTION_BRANCH") or os.environ.get(
+        "FELIXO_PRODUCTION_BRANCH", "production"
+    )
+
+    prepared = prepare_node_env()
+    if prepared is None:
+        console.print("[red]Não foi possível preparar o Node.js. Veja a mensagem acima.[/red]")
+        return
+    _node_bin, env = prepared
+
+    update_code, source_updated = update_source_from_branch(branch, env)
+    if update_code != 0:
+        console.print("[red]Falha ao atualizar — veja as mensagens acima.[/red]")
+        return
+
+    if not source_updated:
+        console.print("[green]Já estava atualizado.[/green]")
+        return
+
+    console.print("[green]Código atualizado.[/green] Atualizando dependências...")
+    install_code = ensure_dependencies(env, skip_install=False, force_install=True)
+    if install_code != 0:
+        console.print("[red]Falha instalando dependências após atualizar.[/red]")
+
+
+def _menu_status(console: object) -> None:
+    from rich.table import Table
+
+    table = Table(show_header=False, border_style="dim")
+    table.add_column("Item", style="bold")
+    table.add_column("Valor")
+
+    node_version = read_node_version()
+    minimum_node_version = read_minimum_node_version()
+    node_bin = find_node_bin(node_version, minimum_node_version)
+
+    if node_bin is not None:
+        env = build_env(node_bin)
+        node_result = probe_command(
+            [str(find_command_in_bin("node", node_bin)), "--version"], env
+        )
+        table.add_row("Node.js", f"[green]{node_result.stdout.strip() if node_result else '?'}[/green] ({node_bin})")
+    else:
+        table.add_row("Node.js", "[red]não encontrado[/red]")
+
+    node_modules_exists = (APP_DIR / "node_modules").exists()
+    table.add_row(
+        "Dependências Node",
+        "[green]instaladas[/green]" if node_modules_exists else "[yellow]faltando[/yellow]",
+    )
+
+    if (ROOT_DIR / ".git").exists() and shutil.which("git"):
+        env = os.environ.copy()
+        branch_result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=ROOT_DIR,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        current_branch = branch_result.stdout.strip() or "(detached)"
+        dirty_files = get_dirty_files(env)
+        table.add_row("Branch Git", current_branch)
+        table.add_row(
+            "Alterações locais",
+            f"[yellow]{len(dirty_files)} arquivo(s)[/yellow]" if dirty_files else "[green]nenhuma[/green]",
+        )
+    else:
+        table.add_row("Git", "[dim]não é um checkout Git[/dim]")
+
+    config = load_config()
+    configured = ", ".join(config.keys()) if config else "(padrão — nada configurado)"
+    table.add_row("Configurações salvas", configured)
+
+    console.print(table)
+
+
+def main() -> int:
+    # Any explicit flag (scripts/CI already using `start_app.py --web` etc.,
+    # documented in docs/projeto/RODAR-VIA-CODIGO-FONTE.md) skips the menu and
+    # behaves exactly as before. No arguments at all → interactive menu, the
+    # recommended path per GUIA-START-APP-SCRIPT.md.
+    if len(sys.argv) > 1:
+        return run_direct(parse_args())
+
+    if not ensure_tui_dependencies():
+        print(
+            "[felixo] Não foi possível instalar as dependências do menu interativo "
+            "(questionary/rich). Rodando o app diretamente.",
+            file=sys.stderr,
+        )
+        return run_direct(parse_args())
+
+    return run_interactive_menu()
 
 
 if __name__ == "__main__":

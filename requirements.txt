@@ -1,2 +1,3 @@
 # Python dependencies used by start_app.py.
-# Keep this file even when empty so new machines can bootstrap consistently.
+questionary>=2.0
+rich>=13.0
