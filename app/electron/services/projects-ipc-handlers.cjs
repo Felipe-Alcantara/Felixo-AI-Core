@@ -127,6 +127,55 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
+  // Lists a project's own directory (or a subfolder inside it, via `subPath`)
+  // so the canvas can offer a "browse and run a file" panel without spawning
+  // a terminal first. Resolves `subPath` relative to `rootPath` and rejects
+  // anything that escapes it (defence against a stray `..` reaching outside
+  // the folder the user actually picked).
+  ipcMain.handle('projects:list-directory', (_event, params) => {
+    try {
+      if (!params || typeof params.rootPath !== 'string') {
+        return { ok: false, message: 'Caminho do projeto invalido.' }
+      }
+
+      const rootPath = path.resolve(params.rootPath)
+      const targetPath =
+        typeof params.subPath === 'string' && params.subPath
+          ? path.resolve(rootPath, params.subPath)
+          : rootPath
+
+      const withSep = (p) => (p.endsWith(path.sep) ? p : p + path.sep)
+      if (targetPath !== rootPath && !withSep(targetPath).startsWith(withSep(rootPath))) {
+        return { ok: false, message: 'Diretorio fora do projeto.' }
+      }
+
+      const entries = fs
+        .readdirSync(targetPath, { withFileTypes: true })
+        .filter((entry) => !entry.name.startsWith('.') && entry.name !== 'node_modules')
+        .map((entry) => ({
+          name: entry.name,
+          isDirectory: entry.isDirectory(),
+          path: path.join(targetPath, entry.name),
+        }))
+        .sort((a, b) =>
+          a.isDirectory !== b.isDirectory
+            ? a.isDirectory
+              ? -1
+              : 1
+            : a.name.localeCompare(b.name),
+        )
+
+      return {
+        ok: true,
+        path: targetPath,
+        relativePath: path.relative(rootPath, targetPath),
+        entries,
+      }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel listar o diretorio.')
+    }
+  })
+
   ipcMain.handle('projects:build-docs-index', (_event, params) => {
     try {
       if (!params || typeof params.projectPath !== 'string' || typeof params.docsDirectory !== 'string') {

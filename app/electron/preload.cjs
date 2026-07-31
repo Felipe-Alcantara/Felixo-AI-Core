@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('projects:save-active-ids', projectIds),
     buildDocsIndex: (params) =>
       ipcRenderer.invoke('projects:build-docs-index', params),
+    listDirectory: (params) =>
+      ipcRenderer.invoke('projects:list-directory', params),
   },
   notes: {
     list: () => ipcRenderer.invoke('notes:list'),
