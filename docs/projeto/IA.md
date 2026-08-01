@@ -680,6 +680,31 @@ Estado final: concluído.
 
 REORDENAÇÃO (pedido seguinte do usuário, mesma sessão): a ordem dos 7 presets em `defaultAutomations` seguia a ordem de criação (5 originais, depois os 2 novos no fim), sem relação com como alguém realmente usa o painel. Reordenado para seguir o ciclo de vida real de uma tarefa — Iniciar projeto → Planejar feature → Revisar código → Auditoria de segurança → Preparar commit → Atualizar docs → Gerar relatório diário — com um comentário curto no topo do array documentando o critério de ordenação. Só a ordem dos blocos mudou; nenhum texto de prompt/nome/descrição/id foi alterado. `npm run build` (`tsc -b` + `vite build`) e `npm test` (398 pass) reconfirmados depois do reorder.
 
+## Registro de Trabalho — 2026-08-01 — feature "escrever em todos e enviar simultaneamente" + auditoria de qualidade
+
+PEDIDO: tarefa do Notion "Feature: Escrever em todos e enviar simultâneamente" — (1) iniciar vários agentes de uma vez sem configurar terminal por terminal, e (2) escrever uma mensagem diferente para cada terminal e disparar cada uma separadamente. Durante a sessão o usuário pediu três ajustes extras: nome editável nos itens da fila antes de iniciar; renomear um terminal já spawnado avisar o agente no chat; e um botão "enviar para todos" no modo de mensagens em massa. Ao final, pediu para seguir o padrão de qualidade.
+
+FEITO:
+- **Fila de terminais** (`TerminalMenu.tsx`): botão "+" empilha a configuração atual (agente/modelo/esforço/yolo/projeto) numa fila local, com o nome de cada item editável antes de iniciar; "Iniciar N terminais" sobe todos de uma vez.
+- **Mensagens em massa** (`TerminalsPanel.tsx`): modo "enviar em massa" no dock de elementos — campo de texto + botão de enviar por terminal (`store.sendText`), com os rascunhos vivendo no painel (não em cada linha) para o botão "Enviar para todos" no topo do dock disparar de uma vez todas as mensagens pendentes.
+- **Renomear avisa o agente** (`NodeHeader.tsx`, `TerminalNode.tsx`, `CanvasView.tsx`): renomear um terminal já spawnado manda "A partir de agora, seu nome neste canvas é '...'" pro chat dele, disparado só no blur/Enter (não a cada tecla) e só se o valor realmente mudou desde o foco — evita spammar o terminal enquanto o usuário ainda está digitando.
+
+Nenhuma mudança de IPC/backend foi necessária: `pty:spawn`/`pty:write` já eram parametrizados por `sessionId`/nodeId.
+
+AUDITORIA DE QUALIDADE (pedido seguinte, mesma sessão): revisão contra `GUIA_MINIMO_QUALIDADE.md`, item 2 ("regra de negócio não fica misturada com view") — achados dois casos de lógica pura escondida dentro de componente React, mesmo padrão de problema já registrado na sessão anterior sobre `prompt-overrides.ts`:
+- O cálculo de posições para a fila de terminais (`addTerminalNodes`) tinha um loop de geometria inline em `CanvasView.tsx`, duplicando o cálculo de viewport que `addNode` já fazia e sem cobertura de teste — risco real: um bug de sobreposição de blocos passaria despercebido. Extraído `findFreeNodePositions` (plural) para `services/node-geometry.ts`, ao lado do `findFreeNodePosition` original que ela reusa internamente; `addNode` e `addTerminalNodes` passaram a compartilhar um único `visibleCanvasBounds()` em vez de repetir o cálculo de viewport duas vezes.
+- A seleção de "quais rascunhos estão prontos pra enviar" (`sendAllDrafts`) vivia como `Object.entries(...).filter(...)` dentro de `TerminalsPanel.tsx`. Extraído `pendingDraftNodeIds` para `components/tools/terminals-panel-drafts.ts`, no mesmo padrão do `terminals-panel-navigation.ts` já existente (lógica pura ao lado do componente, sem React).
+
+TESTE: `node-geometry.test.ts` novo (4 casos — lista vazia, batch de 1 bate com `findFreeNodePosition`, batch de 4 sem sobreposição entre si, batch evita nó já existente no canvas). `terminals-panel-drafts.test.ts` novo (3 casos — sem rascunhos, rascunhos vazios/só espaço são ignorados, ordem de inserção preservada).
+
+VALIDAÇÃO: `npx tsc -b`, `npx eslint .`, `npx vite build` e `npx vitest run` (69 pass, 7 a mais que a baseline de 62) sem erros. Sem validação ao vivo no Electron real (Playwright + xvfb sobre app com módulo nativo `node-pty` não está configurado neste repo) — mesma limitação já registrada nas sessões anteriores; risco residual é baixo porque toda a lógica nova ou é função pura testada, ou reusa primitivas já validadas (`store.sendText`, `pty:spawn`/`pty:write`).
+
+Estado final: concluído — as duas features + os três ajustes pedidos + a auditoria de qualidade (extração e teste da lógica que estava misturada em componente) completos.
+
+AUDITORIA CONTRA OS GUIAS COMPLETOS (pedido seguinte, mesma sessão): "Siga os guias do padrão de qualidade" — desta vez os documentos completos (não só o `GUIA_MINIMO_QUALIDADE.md`). `DESIGN_SYSTEM_FRONTEND.md` é majoritariamente identidade visual específica do FelixoVerse (glow roxo, partículas), que o próprio documento diz para adaptar/substituir por projeto — o Felixo AI Core já tem seu próprio tema (zinc escuro + emerald), então essas seções não se aplicam. A seção 8.3 ("Melhorias Sugeridas") lista acessibilidade — "adicionar `aria-label` em todos os botões de ícone" — e o projeto já segue essa convenção de fato (16 arquivos com `aria-label`, incluindo o próprio `TerminalMenu.tsx` antes desta sessão). Achado: os botões de ícone novos desta sessão (fila de terminais em `TerminalMenu.tsx` — "+", lixeira, remover item; alternância de "enviar em massa" e envio por terminal em `TerminalsPanel.tsx`) tinham `title` mas não `aria-label`, quebrando essa convenção local. Corrigido: `aria-label` adicionado em todos (descritivo, incluindo o nome do terminal/item quando fizer diferença — ex.: `Enviar mensagem para "<nome>"`) e `aria-pressed` no toggle de "enviar em massa" (é um botão de estado, não uma ação pontual).
+VALIDAÇÃO: `npx tsc -b`, `npx eslint .`, `npx vite build` e `npx vitest run` (69 pass) sem erros.
+Estado final: concluído.
+
 ## Resumos de Decisão
 
 [2026-06-21] CONTEXTO: Como persistir as conversas dos terminais entre sessões (o PTY morre ao fechar o app e o scrollback é efêmero).
