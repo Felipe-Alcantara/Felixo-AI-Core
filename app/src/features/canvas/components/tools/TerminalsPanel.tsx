@@ -4,13 +4,19 @@ import {
   FileText,
   Group,
   Loader2,
+  MessagesSquare,
+  Send,
   StickyNote,
   Terminal as TerminalIcon,
 } from 'lucide-react'
-import { useSessionSnapshot } from '../../terminal/terminal-session-context'
+import {
+  useSessionSnapshot,
+  useTerminalSessions,
+} from '../../terminal/terminal-session-context'
 import type { SessionActivity } from '../../terminal/terminal-session-store'
 import type { CanvasNodeData, CanvasNodeType } from '../../types'
 import { nextActiveIndex, shouldHandleGlobalShiftArrow } from './terminals-panel-navigation'
+import { pendingDraftNodeIds, type TerminalDrafts } from './terminals-panel-drafts'
 
 type TerminalsPanelProps = {
   nodes: Node<CanvasNodeData>[]
@@ -61,7 +67,33 @@ function elementTitle(node: Node<CanvasNodeData>) {
 export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPanelProps) {
   const elements = nodes.filter((node) => node.type != null)
   const [rawActiveIndex, setActiveIndex] = useState(0)
+  // "Enviar em massa": shows a text field + send button under every terminal
+  // row, so each one can get its own message fired off independently instead
+  // of opening each terminal's drawer to type into it one at a time. Drafts
+  // live here (not inside each row) so the header's "Enviar todas" button can
+  // flush every non-empty draft in one click.
+  const [composeMode, setComposeMode] = useState(false)
+  const [drafts, setDrafts] = useState<TerminalDrafts>({})
+  const store = useTerminalSessions()
   const listRef = useRef<HTMLUListElement>(null)
+
+  const setDraft = (nodeId: string, text: string) => {
+    setDrafts((current) => ({ ...current, [nodeId]: text }))
+  }
+
+  const sendDraft = (nodeId: string) => {
+    const trimmed = drafts[nodeId]?.trim()
+    if (!trimmed) {
+      return
+    }
+    store.sendText(nodeId, `${trimmed}\n`)
+    setDrafts((current) => ({ ...current, [nodeId]: '' }))
+  }
+
+  const pendingIds = pendingDraftNodeIds(drafts)
+  const sendAllDrafts = () => {
+    pendingIds.forEach(sendDraft)
+  }
 
   // Clamped at read-time (not synced via effect) so a block closing never
   // leaves the highlight pointing past the end of the list.
@@ -140,7 +172,32 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
         <span className="ml-auto text-xs font-normal text-zinc-500">
           {elements.length}
         </span>
+        <button
+          type="button"
+          onClick={() => setComposeMode((current) => !current)}
+          title="Enviar mensagens diferentes para vários terminais"
+          aria-label="Alternar modo de enviar mensagens em massa"
+          aria-pressed={composeMode}
+          className={`rounded p-1 hover:bg-white/10 ${
+            composeMode ? 'text-emerald-400' : 'text-zinc-400'
+          }`}
+        >
+          <MessagesSquare size={14} />
+        </button>
       </div>
+      {composeMode && (
+        <div className="border-b border-white/10 px-3 py-2">
+          <button
+            type="button"
+            onClick={sendAllDrafts}
+            disabled={pendingIds.length === 0}
+            className="flex w-full items-center justify-center gap-1.5 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:opacity-50"
+          >
+            <Send size={12} />
+            Enviar para todos {pendingIds.length > 0 ? `(${pendingIds.length})` : ''}
+          </button>
+        </div>
+      )}
       <ul
         ref={listRef}
         tabIndex={0}
@@ -165,6 +222,10 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
             node={node}
             index={index + 1}
             active={index === activeIndex}
+            composeMode={composeMode}
+            draft={drafts[node.id] ?? ''}
+            onDraftChange={(text) => setDraft(node.id, text)}
+            onSend={() => sendDraft(node.id)}
             onSelect={() => {
               setActiveIndex(index)
               activateNode(node)
@@ -180,11 +241,19 @@ function ElementRow({
   node,
   index,
   active,
+  composeMode,
+  draft,
+  onDraftChange,
+  onSend,
   onSelect,
 }: {
   node: Node<CanvasNodeData>
   index: number
   active: boolean
+  composeMode: boolean
+  draft: string
+  onDraftChange: (text: string) => void
+  onSend: () => void
   onSelect: () => void
 }) {
   const isTerminal = node.type === 'terminal'
@@ -219,6 +288,64 @@ function ElementRow({
             />
           ))}
       </button>
+      {composeMode && isTerminal && (
+        <RowComposer
+          terminalTitle={elementTitle(node)}
+          draft={draft}
+          onDraftChange={onDraftChange}
+          onSend={onSend}
+        />
+      )}
     </li>
+  )
+}
+
+/**
+ * One message field per terminal, sent independently: types the text and an
+ * Enter into that terminal's own PTY session, so a different message can go
+ * to each agent without opening its drawer. The draft itself lives in the
+ * panel (not here) so the header's "Enviar para todos" button can flush it.
+ */
+function RowComposer({
+  terminalTitle,
+  draft,
+  onDraftChange,
+  onSend,
+}: {
+  terminalTitle: string
+  draft: string
+  onDraftChange: (text: string) => void
+  onSend: () => void
+}) {
+  return (
+    <div className="mb-1 flex items-center gap-1 px-2 pl-9">
+      <input
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            onSend()
+          }
+        }}
+        onClick={(event) => event.stopPropagation()}
+        placeholder="Mensagem para este terminal…"
+        aria-label={`Mensagem para "${terminalTitle}"`}
+        className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+      />
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          onSend()
+        }}
+        disabled={!draft.trim()}
+        title="Enviar"
+        aria-label={`Enviar mensagem para "${terminalTitle}"`}
+        className="shrink-0 rounded bg-emerald-700 p-1 text-white hover:bg-emerald-600 disabled:opacity-40"
+      >
+        <Send size={12} />
+      </button>
+    </div>
   )
 }
