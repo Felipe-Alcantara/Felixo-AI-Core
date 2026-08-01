@@ -40,6 +40,10 @@ type CanvasToolbarProps = {
     cwd?: string
     label: string
   }) => void
+  /** Starts several terminal configs at once — a whole agent setup in one click. */
+  onAddTerminals: (
+    optionsList: { command?: string; args?: string[]; cwd?: string; label: string }[],
+  ) => void
   onAddFolder: () => Promise<string[]>
   /** Spawns a terminal whose process IS the file running (see ProjectsMenu). */
   onRunFile: (options: RunFileOptions) => void
@@ -64,6 +68,7 @@ export function CanvasToolbar({
   onSelectTool,
   projects,
   onAddTerminal,
+  onAddTerminals,
   onAddFolder,
   onRunFile,
   onAddNote,
@@ -128,6 +133,7 @@ export function CanvasToolbar({
       <TerminalMenu
         projects={projects}
         onAdd={onAddTerminal}
+        onAddMany={onAddTerminals}
         onAddFolder={onAddFolder}
       />
       <ProjectsMenu projects={projects} onAddFolder={onAddFolder} onRunFile={onRunFile} />

@@ -71,6 +71,7 @@ import {
 import {
   DEFAULT_SIZE,
   findFreeNodePosition,
+  findFreeNodePositions,
   getNodeSize,
   isInside,
   nearestSides,
@@ -723,36 +724,39 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [setEdges, nodes, store],
   )
 
+  // Flow-space bounds of what's currently visible, used to prefer placing new
+  // nodes in view. `undefined` before the flow instance/container are ready
+  // (e.g. very first render) — callers fall back to a fixed origin then.
+  const visibleCanvasBounds = useCallback((): CanvasBounds | undefined => {
+    const container = flowContainerRef.current
+    const flowInstance = flowInstanceRef.current
+    if (!container || !flowInstance) {
+      return undefined
+    }
+
+    const bounds = container.getBoundingClientRect()
+    const topLeft = flowInstance.screenToFlowPosition({ x: bounds.left, y: bounds.top })
+    const bottomRight = flowInstance.screenToFlowPosition({
+      x: bounds.right,
+      y: bounds.bottom,
+    })
+    return {
+      x: topLeft.x,
+      y: topLeft.y,
+      width: bottomRight.x - topLeft.x,
+      height: bottomRight.y - topLeft.y,
+    }
+  }, [])
+
   const addNode = useCallback(
     (type: CanvasNodeType, data?: Record<string, unknown>) => {
       const id = `${type}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
       const size = DEFAULT_SIZE[type]
-      const container = flowContainerRef.current
-      const flowInstance = flowInstanceRef.current
-      let viewport: CanvasBounds | undefined
-
-      if (container && flowInstance) {
-        const bounds = container.getBoundingClientRect()
-        const topLeft = flowInstance.screenToFlowPosition({
-          x: bounds.left,
-          y: bounds.top,
-        })
-        const bottomRight = flowInstance.screenToFlowPosition({
-          x: bounds.right,
-          y: bounds.bottom,
-        })
-        viewport = {
-          x: topLeft.x,
-          y: topLeft.y,
-          width: bottomRight.x - topLeft.x,
-          height: bottomRight.y - topLeft.y,
-        }
-      }
 
       const node: Node = {
         id,
         type,
-        position: findFreeNodePosition(nodes, size, viewport),
+        position: findFreeNodePosition(nodes, size, visibleCanvasBounds()),
         width: size.width,
         height: size.height,
         data: data ?? (type === 'terminal' ? { label: 'Terminal' } : { text: '' }),
@@ -761,7 +765,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       setNodes((current) => [...current, node])
       persistNode(node)
     },
-    [nodes, setNodes, persistNode],
+    [nodes, setNodes, persistNode, visibleCanvasBounds],
   )
 
   const addFileNode = useCallback(
@@ -777,7 +781,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [addNode],
   )
 
-  const addTerminalNode = useCallback(
+  const buildTerminalNodeData = useCallback(
     (options: { command?: string; args?: string[]; cwd?: string; label: string }) => {
       // Agent terminals get the standing quality-standard instruction (if on)
       // plus their canvas identity (name, cwd, multi-agent setting); a plain
@@ -791,15 +795,59 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             })
           : undefined
 
-      addNode('terminal', {
+      return {
         label: options.label,
         ...(options.command ? { command: options.command } : {}),
         ...(options.args && options.args.length ? { args: options.args } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
         ...(initialText ? { initialText } : {}),
-      })
+      }
     },
-    [addNode],
+    [],
+  )
+
+  const addTerminalNode = useCallback(
+    (options: { command?: string; args?: string[]; cwd?: string; label: string }) => {
+      addNode('terminal', buildTerminalNodeData(options))
+    },
+    [addNode, buildTerminalNodeData],
+  )
+
+  // Starts several terminals at once (e.g. a whole agent setup) instead of
+  // one `addNode` call per config: those go through the same `nodes` state
+  // closure, so back-to-back calls in the same tick would all place against
+  // the pre-batch list and stack on top of each other. `findFreeNodePositions`
+  // (pure, tested in node-geometry.test.ts) computes all positions together
+  // against a growing local list, then everything lands in a single
+  // `setNodes` + one `persistNode` per node.
+  const addTerminalNodes = useCallback(
+    (optionsList: { command?: string; args?: string[]; cwd?: string; label: string }[]) => {
+      if (optionsList.length === 0) {
+        return
+      }
+
+      const size = DEFAULT_SIZE.terminal
+      const positions = findFreeNodePositions(
+        nodes,
+        optionsList.length,
+        size,
+        visibleCanvasBounds(),
+      )
+      const newNodes = optionsList.map(
+        (options, index): Node => ({
+          id: `terminal-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
+          type: 'terminal',
+          position: positions[index],
+          width: size.width,
+          height: size.height,
+          data: buildTerminalNodeData(options),
+        }),
+      )
+
+      setNodes((current) => [...current, ...newNodes])
+      newNodes.forEach((node) => persistNode(node))
+    },
+    [nodes, setNodes, persistNode, buildTerminalNodeData, visibleCanvasBounds],
   )
 
   // "Run this file" from the Projects panel: the terminal's process IS the
@@ -995,6 +1043,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         }
         projects={projects}
         onAddTerminal={addTerminalNode}
+        onAddTerminals={addTerminalNodes}
         onAddFolder={addProjectFolder}
         onRunFile={runFileInTerminal}
         onAddNote={(name) =>
