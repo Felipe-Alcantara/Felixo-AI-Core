@@ -84,6 +84,41 @@ export function findFreeNodePosition(
   )
 }
 
+/**
+ * Same rule as `findFreeNodePosition`, but for placing several same-size
+ * nodes at once (e.g. a batch of terminals started together). Each position
+ * is computed against the growing set — real nodes plus the ones already
+ * placed earlier in this same call — so the block never stacks two of the
+ * new nodes on top of each other, which a caller looping `findFreeNodePosition`
+ * once per node (against the same unchanged `nodes` array) would do.
+ */
+export function findFreeNodePositions(
+  nodes: Node[],
+  count: number,
+  size: { width: number; height: number },
+  viewport?: CanvasBounds,
+): { x: number; y: number }[] {
+  const placed: Node[] = []
+  const positions: { x: number; y: number }[] = []
+
+  for (let i = 0; i < count; i += 1) {
+    const position = findFreeNodePosition([...nodes, ...placed], size, viewport)
+    positions.push(position)
+    // Minimal stand-in node: only position/width/height/parentId are read by
+    // `findFreeNodePosition`/`getNodeSize`/`isPositionFree` for placement math.
+    placed.push({
+      id: `_batch-${i}`,
+      type: 'terminal',
+      position,
+      width: size.width,
+      height: size.height,
+      data: {},
+    })
+  }
+
+  return positions
+}
+
 function isPositionFree(
   position: { x: number; y: number },
   size: { width: number; height: number },

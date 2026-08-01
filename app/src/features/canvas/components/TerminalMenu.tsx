@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, TerminalSquare } from 'lucide-react'
+import { ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
 import {
   AGENTS,
   buildAgentArgs,
@@ -21,6 +21,8 @@ export type NewTerminalOptions = {
 type TerminalMenuProps = {
   projects: TerminalMenuProject[]
   onAdd: (options: NewTerminalOptions) => void
+  /** Starts every queued config at once — see the "Fila" section below. */
+  onAddMany: (optionsList: NewTerminalOptions[]) => void
   /** Adds a folder as a project (picker + detect repos), returns the new ids. */
   onAddFolder: () => Promise<string[]>
 }
@@ -35,7 +37,7 @@ const SHELL_VALUE = '__shell__'
  * and a project, plus the agent's model / effort / yolo options — the fields
  * adapt to what each agent supports. A single click opens a local shell.
  */
-export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps) {
+export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: TerminalMenuProps) {
   const [open, setOpen] = useState(false)
   const [agentValue, setAgentValue] = useState<string>(SHELL_VALUE)
   const [model, setModel] = useState('')
@@ -43,6 +45,9 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
   const [yolo, setYolo] = useState(false)
   const [projectId, setProjectId] = useState<string>('')
   const [name, setName] = useState('')
+  // Configs queued up to start together — lets one click launch a whole
+  // agent setup instead of repeating "configure, open" once per terminal.
+  const [queue, setQueue] = useState<NewTerminalOptions[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
 
   const agent = agentValue === SHELL_VALUE ? undefined : getAgent(agentValue as AgentId)
@@ -54,6 +59,29 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
     }
     const addedIds = await onAddFolder()
     setProjectId(addedIds[0] ?? '')
+  }
+
+  const buildOptions = (): NewTerminalOptions => {
+    const project = projects.find((item) => item.id === projectId)
+    const place = project ? project.name : 'local'
+    const customName = name.trim()
+
+    if (!agent) {
+      return { cwd: project?.path, label: customName || `Shell · ${place}` }
+    }
+
+    const choices = {
+      agentId: agent.id,
+      model: model || undefined,
+      effort: (effort || undefined) as EffortLevel | undefined,
+      yolo,
+    }
+    return {
+      command: agent.command,
+      args: buildAgentArgs(choices) ?? undefined,
+      cwd: project?.path,
+      label: customName || `${describeLaunch(choices)} · ${place}`,
+    }
   }
 
   useEffect(() => {
@@ -70,33 +98,36 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
   }, [open])
 
   const openTerminal = () => {
-    const project = projects.find((item) => item.id === projectId)
-    const place = project ? project.name : 'local'
-    // A custom name wins over the generated label — it identifies the block in
-    // search and tells the agent who it is inside the canvas.
-    const customName = name.trim()
-
-    if (!agent) {
-      onAdd({ cwd: project?.path, label: customName || `Shell · ${place}` })
-      setName('')
-      setOpen(false)
-      return
-    }
-
-    const choices = {
-      agentId: agent.id,
-      model: model || undefined,
-      effort: (effort || undefined) as EffortLevel | undefined,
-      yolo,
-    }
-    onAdd({
-      command: agent.command,
-      args: buildAgentArgs(choices) ?? undefined,
-      cwd: project?.path,
-      label: customName || `${describeLaunch(choices)} · ${place}`,
-    })
+    onAdd(buildOptions())
     setName('')
     setOpen(false)
+  }
+
+  // Adds the currently configured agent to the queue instead of opening it
+  // right away, so the user can stack up several different setups (agent,
+  // model, project…) and start them all in one go.
+  const queueCurrent = () => {
+    setQueue((current) => [...current, buildOptions()])
+    setName('')
+  }
+
+  const startQueue = () => {
+    if (queue.length === 0) {
+      return
+    }
+    onAddMany(queue)
+    setQueue([])
+    setOpen(false)
+  }
+
+  const removeQueued = (index: number) => {
+    setQueue((current) => current.filter((_, i) => i !== index))
+  }
+
+  const renameQueued = (index: number, label: string) => {
+    setQueue((current) =>
+      current.map((item, i) => (i === index ? { ...item, label } : item)),
+    )
   }
 
   return (
@@ -213,13 +244,72 @@ export function TerminalMenu({ projects, onAdd, onAddFolder }: TerminalMenuProps
             <option value={ADD_FOLDER_VALUE}>+ Adicionar pasta…</option>
           </select>
 
-          <button
-            type="button"
-            onClick={openTerminal}
-            className="w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
-          >
-            Abrir terminal
-          </button>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={openTerminal}
+              className="flex-1 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+            >
+              Abrir terminal
+            </button>
+            <button
+              type="button"
+              onClick={queueCurrent}
+              title="Adicionar esta configuração à fila, para iniciar vários terminais de uma vez"
+              aria-label="Adicionar à fila de terminais"
+              className="flex items-center justify-center rounded bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+
+          {queue.length > 0 && (
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-zinc-400">
+                <span>Fila ({queue.length})</span>
+                <button
+                  type="button"
+                  onClick={() => setQueue([])}
+                  title="Esvaziar fila"
+                  aria-label="Esvaziar fila de terminais"
+                  className="text-zinc-500 hover:text-zinc-300"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              <ul className="mb-2 max-h-32 space-y-1 overflow-auto">
+                {queue.map((item, index) => (
+                  <li
+                    key={index}
+                    className="flex items-center gap-1 rounded bg-zinc-900 px-1.5 py-1"
+                  >
+                    <input
+                      value={item.label}
+                      onChange={(event) => renameQueued(index, event.target.value)}
+                      title="Renomear antes de iniciar"
+                      aria-label={`Renomear "${item.label}" antes de iniciar`}
+                      className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs text-zinc-200 outline-none ring-1 ring-transparent hover:ring-white/10 focus:bg-zinc-950 focus:ring-emerald-500/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeQueued(index)}
+                      aria-label={`Remover "${item.label}" da fila`}
+                      className="shrink-0 text-zinc-500 hover:text-zinc-300"
+                    >
+                      <X size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={startQueue}
+                className="w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+              >
+                Iniciar {queue.length} terminais
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
