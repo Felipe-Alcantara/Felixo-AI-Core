@@ -20,6 +20,11 @@ import { pendingDraftNodeIds, type TerminalDrafts } from './terminals-panel-draf
 
 type TerminalsPanelProps = {
   nodes: Node<CanvasNodeData>[]
+  /** The terminal currently open in the side drawer (`CanvasView`'s
+   * `expandedTerminalId`), however it got opened — including a direct click
+   * on the terminal's card on the canvas, which bypasses this list entirely.
+   * Keeps the highlighted row in sync with that case. */
+  activeTerminalId: string | null
   /** Centers/zooms the canvas on a block and selects it. */
   onFocusNode: (nodeId: string) => void
   /** Opens the terminal's side drawer, ready to type. No-op for other block types. */
@@ -64,7 +69,12 @@ function elementTitle(node: Node<CanvasNodeData>) {
  * the list from anywhere on screen, regardless of which window/element has
  * focus, and immediately focus + expand the newly selected block.
  */
-export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPanelProps) {
+export function TerminalsPanel({
+  nodes,
+  activeTerminalId,
+  onFocusNode,
+  onExpandNode,
+}: TerminalsPanelProps) {
   const elements = nodes.filter((node) => node.type != null)
   const [rawActiveIndex, setActiveIndex] = useState(0)
   // "Enviar em massa": shows a text field + send button under every terminal
@@ -98,6 +108,29 @@ export function TerminalsPanel({ nodes, onFocusNode, onExpandNode }: TerminalsPa
   // Clamped at read-time (not synced via effect) so a block closing never
   // leaves the highlight pointing past the end of the list.
   const activeIndex = Math.min(rawActiveIndex, elements.length - 1)
+
+  // Bug fix: clicking a terminal's card directly on the canvas opens its
+  // drawer (`CanvasView` sets `expandedTerminalId`) without going through
+  // this list at all, so the list's own `rawActiveIndex` — only ever written
+  // by this component's own click/keyboard handlers — went stale and kept
+  // highlighting whatever was last active *through the list*. Adjusted here
+  // during render, comparing against a STATE snapshot of the previous prop
+  // (not a ref — mutating a ref during render is unsafe for the React
+  // Compiler) whenever the externally-driven `activeTerminalId` changes, so
+  // both navigation paths — clicking the canvas vs. clicking/arrowing the
+  // list — agree on which row is active. This is React's documented pattern
+  // for adjusting state from a prop change without an effect (which would
+  // set state one render late and flash the wrong row first).
+  const [previousActiveTerminalId, setPreviousActiveTerminalId] = useState(activeTerminalId)
+  if (activeTerminalId !== previousActiveTerminalId) {
+    setPreviousActiveTerminalId(activeTerminalId)
+    if (activeTerminalId) {
+      const index = elements.findIndex((node) => node.id === activeTerminalId)
+      if (index !== -1) {
+        setActiveIndex(index)
+      }
+    }
+  }
 
   const activateNode = (node: Node<CanvasNodeData>) => {
     onFocusNode(node.id)

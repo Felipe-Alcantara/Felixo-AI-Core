@@ -1102,7 +1102,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onQualityStandardSaved={applyQualityStandard}
       />
 
-      <TerminalsPanel nodes={nodes} onFocusNode={focusNode} onExpandNode={setExpandedTerminalId} />
+      <TerminalsPanel
+        nodes={nodes}
+        activeTerminalId={expandedTerminalId}
+        onFocusNode={focusNode}
+        onExpandNode={setExpandedTerminalId}
+      />
 
         <ReactFlow
           key={canvasRevision}
