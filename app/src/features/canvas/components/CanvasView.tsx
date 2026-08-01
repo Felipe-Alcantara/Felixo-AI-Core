@@ -372,6 +372,22 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [setNodes, persistNode],
   )
 
+  // Renaming a terminal in the canvas only relabels the block on our side —
+  // the agent inside keeps calling itself by its old name unless told
+  // otherwise. Fired once the rename is committed (blur/Enter), not per
+  // keystroke like `updateNodeData`, so the agent isn't spammed while the
+  // user is still typing the new name.
+  const notifyTerminalRenamed = useCallback(
+    (nodeId: string, label: string) => {
+      const trimmed = label.trim()
+      if (!trimmed) {
+        return
+      }
+      store.sendText(nodeId, `A partir de agora, seu nome neste canvas é "${trimmed}".\n`)
+    },
+    [store],
+  )
+
   // Manual repo-diagnosis: the file block (in "plan" mode) asks its connected
   // terminal's agent to survey the repo and write the diagnosis into the file.
   const generateDiagnosis = useCallback(
@@ -611,6 +627,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               terminalIndex,
               onExpand: setExpandedTerminalId,
               onDataChange: updateNodeData,
+              onRenameCommit: notifyTerminalRenamed,
             }),
           ),
         }
@@ -626,6 +643,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     edgesHydrated,
     generateDiagnosis,
     linkAgentToFile,
+    notifyTerminalRenamed,
     nodes,
     qualityStandard,
     restoredAgentTerminalIds,

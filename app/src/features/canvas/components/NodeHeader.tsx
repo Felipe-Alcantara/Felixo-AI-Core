@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { GripVertical, X } from 'lucide-react'
 
 /** CSS class React Flow uses as the node's drag handle (see NODE_DRAG_HANDLE). */
@@ -13,6 +13,8 @@ type NodeHeaderProps = {
   editableValue?: string
   placeholder?: string
   onTitleChange?: (value: string) => void
+  /** Fired once editing settles (blur or Enter), not per keystroke like `onTitleChange`. */
+  onTitleCommit?: (value: string) => void
   /** Tailwind classes for the header background/text, per node type. */
   className?: string
   onRemove?: () => void
@@ -31,6 +33,7 @@ export function NodeHeader({
   editableValue,
   placeholder,
   onTitleChange,
+  onTitleCommit,
   className,
   onRemove,
   children,
@@ -48,6 +51,7 @@ export function NodeHeader({
           value={editableValue}
           placeholder={placeholder}
           onChange={onTitleChange}
+          onCommit={onTitleCommit}
         />
       ) : (
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
@@ -72,18 +76,41 @@ function TitleInput({
   value,
   placeholder,
   onChange,
+  onCommit,
 }: {
   value: string
   placeholder?: string
   onChange: (value: string) => void
+  onCommit?: (value: string) => void
 }) {
+  // Value when the field was focused, so onCommit only fires on an actual
+  // edit — not on every click-in/click-out of an untouched title.
+  const valueAtFocusRef = useRef(value)
+
   // Controlled directly by the persisted value — onChange updates it upstream,
   // which flows back as the new value, so no local draft state is needed.
   return (
     <input
       value={value}
       placeholder={placeholder}
+      onFocus={(event) => {
+        valueAtFocusRef.current = event.target.value
+      }}
       onChange={(event) => onChange(event.target.value)}
+      onBlur={(event) => {
+        if (event.target.value !== valueAtFocusRef.current) {
+          onCommit?.(event.target.value)
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          if (event.currentTarget.value !== valueAtFocusRef.current) {
+            onCommit?.(event.currentTarget.value)
+          }
+          valueAtFocusRef.current = event.currentTarget.value
+          event.currentTarget.blur()
+        }
+      }}
       // nodrag so editing the title doesn't drag the node.
       className="nodrag min-w-0 flex-1 bg-transparent font-medium outline-none placeholder:opacity-50"
     />

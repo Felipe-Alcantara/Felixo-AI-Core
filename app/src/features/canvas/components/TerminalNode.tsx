@@ -24,6 +24,8 @@ import type { TerminalNodeData } from '../types'
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
   onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
+  /** Tells the running agent its new name once a rename is committed (blur/Enter). */
+  onRenameCommit?: (nodeId: string, label: string) => void
 }
 
 /**
@@ -91,6 +93,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         editableValue={nodeData.label ?? ''}
         placeholder="Terminal"
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
+        onTitleCommit={(label) => nodeData.onRenameCommit?.(id, label)}
         className="bg-emerald-950/60 text-emerald-100"
         onRemove={() => {
           store.remove(id)
