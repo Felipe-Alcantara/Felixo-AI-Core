@@ -1,5 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
   DEFAULT_COLS,
@@ -70,6 +71,27 @@ test('spawn launches the shell by default and streams raw output', () => {
 
   fakePty.emitData('hello\r\n')
   assert.deepEqual(received, ['hello\r\n'])
+})
+
+test('Windows falls back to cmd.exe when PowerShell is not present', () => {
+  assert.equal(win32Platform.getDefaultShell({}), 'cmd.exe')
+})
+
+test('default shell resolution uses the environment passed to the PTY', () => {
+  const { calls, spawnPty } = createFakePty()
+  let shellEnvironment
+  const adapter = {
+    name: 'win32',
+    getDefaultShell: (env) => {
+      shellEnvironment = env
+      return 'cmd.exe'
+    },
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: adapter })
+
+  manager.spawn('term-shell-env', {})
+
+  assert.equal(shellEnvironment, calls[0].options.env)
 })
 
 test('spawn honors an explicit command, args and dimensions', () => {
