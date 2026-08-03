@@ -36,6 +36,7 @@ const FORCE_KILL_DELAY_MS = 5000
 // re-joining to go wrong), so a fast exit there is a real CLI outcome — e.g.
 // `--version`/`--help` — that must reach the caller as-is, not be retried away.
 const EARLY_EXIT_THRESHOLD_MS = 800
+const WINDOWS_PATH_ERROR = /(?:cannot find the path specified|sistema não pode encontrar o caminho especificado|file not found)/i
 
 /**
  * @typedef {object} PtyHandle
@@ -107,6 +108,11 @@ class PtyProcessManager {
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
       args.length > 0
+    const allowCwdFallback =
+      !isFallbackRetry &&
+      this.platform.name === 'win32' &&
+      Boolean(options.cwd)
+    let cwdFallbackRetried = false
 
     const ptyProcess = spawnPty(launch.command, launch.args, {
       name: 'xterm-256color',
@@ -129,7 +135,24 @@ class PtyProcessManager {
     this.sessions.set(sessionId, entry)
 
     if (typeof options.onData === 'function') {
-      ptyProcess.onData((data) => options.onData(data))
+      ptyProcess.onData((data) => {
+        // ConPTY can start the shell successfully and only then report an
+        // invalid working directory. In that case node-pty does not throw,
+        // so the preflight check above cannot help. Retry once at the user's
+        // home and hide only this transient shell diagnostic.
+        if (
+          allowCwdFallback &&
+          !cwdFallbackRetried &&
+          WINDOWS_PATH_ERROR.test(String(data))
+        ) {
+          cwdFallbackRetried = true
+          this.safeKill(ptyProcess, 'SIGKILL')
+          this.cleanup(sessionId, ptyProcess)
+          this.spawn(sessionId, { ...options, cwd: os.homedir() }, true)
+          return
+        }
+        options.onData(data)
+      })
     }
 
     ptyProcess.onExit((event) => {

@@ -194,6 +194,33 @@ test('missing working directory falls back to the user home', () => {
   assert.equal(resolveWorkingDirectory(home), home)
 })
 
+test('Windows retries once when ConPTY reports a path error after startup', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const received = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakeWin32Platform,
+  })
+
+  manager.spawn('term-cwd-error', {
+    cwd: 'C:\\Users\\missing-project',
+    onData: (data) => received.push(data),
+  })
+
+  first.fakePty.emitData('O sistema não pode encontrar o caminho especificado.\r\n')
+  second.fakePty.emitData('C:\\Users\\felipe>')
+
+  assert.equal(spawnCalls.length, 2)
+  assert.equal(spawnCalls[1].options.cwd, require('node:os').homedir())
+  assert.deepEqual(received, ['C:\\Users\\felipe>'])
+})
+
 test('force kill terminates immediately and drops the session', () => {
   const { fakePty, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })
