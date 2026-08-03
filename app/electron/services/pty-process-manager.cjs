@@ -18,6 +18,7 @@
  */
 
 const os = require('node:os')
+const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 
@@ -95,7 +96,7 @@ class PtyProcessManager {
       : { command, args }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
-    const cwd = options.cwd || os.homedir()
+    const cwd = resolveWorkingDirectory(options.cwd)
 
     // Only a first attempt with a real command + extra args, on the platform
     // where the argv-quoting fallback applies (see EARLY_EXIT_THRESHOLD_MS
@@ -378,9 +379,33 @@ function normalizeDimension(value, fallback) {
   return Math.floor(numeric)
 }
 
+/**
+ * A canvas project can be moved or deleted after a terminal node is saved.
+ * node-pty fails before the shell starts when cwd no longer exists, which is
+ * especially opaque on Windows (the pane only shows "path not found").
+ * Starting in the user's home keeps the terminal usable and lets the user
+ * navigate to the project again.
+ *
+ * @param {unknown} requested
+ * @returns {string}
+ */
+function resolveWorkingDirectory(requested) {
+  const fallback = os.homedir()
+  if (typeof requested !== 'string' || !requested.trim()) {
+    return fallback
+  }
+
+  try {
+    return fs.statSync(requested).isDirectory() ? requested : fallback
+  } catch {
+    return fallback
+  }
+}
+
 module.exports = {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
   createPtyLaunchSpec,
+  resolveWorkingDirectory,
 }
