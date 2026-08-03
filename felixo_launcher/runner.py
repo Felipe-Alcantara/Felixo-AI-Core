@@ -136,4 +136,4 @@ def run_direct(args: argparse.Namespace) -> int:
         return run_command(["npm", "run", "dev:web"], env)
 
     print("[felixo] Opening Felixo AI Core desktop app...")
-    return run_command(["npm", "run", "dev"], env)
+    return run_command(["npm", "run", "dev"], env, debug_terminal=True)

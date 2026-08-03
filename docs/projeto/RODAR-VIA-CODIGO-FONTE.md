@@ -151,6 +151,16 @@ python3 start_app.py
 
 ## Troubleshooting
 
+### Terminal de depuração no Windows
+
+Ao escolher **Iniciar / Rodar → App desktop (Electron)**, o `start_app.py`
+abre uma janela de terminal dedicada para o processo de desenvolvimento. Ela
+mostra a saída completa de `npm`, Vite e Electron, mantém a janela aberta após
+o encerramento e salva a mesma saída em `logs/startup/` na raiz do repositório.
+Esses arquivos são locais e ignorados pelo Git; envie o arquivo mais recente
+ao relatar um erro. A sessão preserva as permissões das CLIs configuradas no
+Felixo, mas usa os privilégios normais da conta do Windows — não solicita UAC.
+
 ### "npm was not found"
 
 O Node.js não está instalado ou não está no PATH.
