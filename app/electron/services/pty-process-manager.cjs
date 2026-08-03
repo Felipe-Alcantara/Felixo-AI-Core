@@ -58,12 +58,14 @@ class PtyProcessManager {
    * @param {PtyFactory} [dependencies.spawnPty] - Injectable PTY factory (tests).
    * @param {() => number} [dependencies.now] - Injectable clock (tests).
    * @param {typeof platform} [dependencies.platform] - Injectable platform adapter (tests).
+   * @param {{ warn?: (...args: unknown[]) => void }} [dependencies.logger] - Diagnostic logger.
    */
-  constructor({ spawnPty, now, platform: platformAdapter } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
     this.platform = platformAdapter ?? platform
+    this.logger = logger ?? console
   }
 
   /**
@@ -98,6 +100,13 @@ class PtyProcessManager {
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
     const cwd = resolveWorkingDirectory(options.cwd)
+
+    if (typeof options.cwd === 'string' && options.cwd.trim() && cwd !== options.cwd) {
+      this.warn('PTY: diretório de trabalho inválido; usando a pasta do usuário.', {
+        reason: 'invalid-cwd',
+        platform: this.platform.name,
+      })
+    }
 
     // Only a first attempt with a real command + extra args, on the platform
     // where the argv-quoting fallback applies (see EARLY_EXIT_THRESHOLD_MS
@@ -146,6 +155,10 @@ class PtyProcessManager {
           WINDOWS_PATH_ERROR.test(String(data))
         ) {
           cwdFallbackRetried = true
+          this.warn('PTY: shell reportou erro de caminho; tentando a pasta do usuário.', {
+            reason: 'shell-path-error',
+            platform: this.platform.name,
+          })
           this.safeKill(ptyProcess, 'SIGKILL')
           this.cleanup(sessionId, ptyProcess)
           this.spawn(sessionId, { ...options, cwd: os.homedir() }, true)
@@ -168,6 +181,10 @@ class PtyProcessManager {
         allowFallback &&
         this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS
       ) {
+        this.warn('PTY: CLI encerrou cedo com argumentos; tentando o comando sem argumentos.', {
+          reason: 'early-exit-args-retry',
+          platform: this.platform.name,
+        })
         this.spawn(sessionId, { ...options, args: [] }, true)
         return
       }
@@ -333,6 +350,22 @@ class PtyProcessManager {
     } catch {
       // The PTY may already be gone; treating kill as idempotent keeps the
       // lifecycle predictable for callers.
+    }
+  }
+
+  /**
+   * Keep diagnostics best-effort: logging must never prevent a terminal from
+   * starting, especially in packaged builds where console methods may be absent.
+   * Paths are intentionally omitted from the log payload.
+   *
+   * @param {string} message
+   * @param {Record<string, string>} details
+   */
+  warn(message, details) {
+    try {
+      this.logger?.warn?.(message, details)
+    } catch {
+      // Diagnostics are never part of the terminal's control flow.
     }
   }
 }
