@@ -88,7 +88,7 @@ class PtyProcessManager {
    *   Callers should never pass this themselves.
    * @returns {PtyHandle}
    */
-  spawn(sessionId, options = {}, isFallbackRetry = false) {
+  spawn(sessionId, options = {}, isFallbackRetry = false, allowEmergencyShellFallback = true) {
     if (!isFallbackRetry) {
       this.kill(sessionId, { force: true })
     }
@@ -184,12 +184,14 @@ class PtyProcessManager {
       const isCurrentAttempt = this.sessions.get(sessionId) === entry
       this.cleanup(sessionId, ptyProcess)
 
-      if (
+      const exitedEarly =
         isCurrentAttempt &&
-        (allowFallback || allowCodexPathFallback) &&
+        this.platform.name === 'win32' &&
+        event.exitCode !== 0 &&
         this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS
-      ) {
-        if (allowCodexPathFallback) {
+
+      if (exitedEarly) {
+        if (!isFallbackRetry && allowCodexPathFallback) {
           const resolvedCodexPath = this.resolveCodexPath(command, env)
           if (resolvedCodexPath && resolvedCodexPath !== command) {
             this.warn('PTY: Codex falhou cedo; executável localizado no Windows.', {
@@ -200,6 +202,7 @@ class PtyProcessManager {
               sessionId,
               { ...options, command: resolvedCodexPath },
               true,
+              allowEmergencyShellFallback,
             )
             return
           }
@@ -209,19 +212,28 @@ class PtyProcessManager {
           })
         }
 
-        if (!allowFallback) {
-          if (typeof options.onExit === 'function') {
-            options.onExit(event)
-          }
+        if (!isFallbackRetry && allowFallback) {
+          this.warn('PTY: CLI encerrou cedo com argumentos; tentando o comando sem argumentos.', {
+            reason: 'early-exit-args-retry',
+            platform: this.platform.name,
+          })
+          this.spawn(sessionId, { ...options, args: [] }, true, allowEmergencyShellFallback)
           return
         }
 
-        this.warn('PTY: CLI encerrou cedo com argumentos; tentando o comando sem argumentos.', {
-          reason: 'early-exit-args-retry',
-          platform: this.platform.name,
-        })
-        this.spawn(sessionId, { ...options, args: [] }, true)
-        return
+        if (allowEmergencyShellFallback) {
+          this.warn('PTY: fallback da CLI falhou; abrindo shell limpo do Windows.', {
+            reason: 'emergency-shell-fallback',
+            platform: this.platform.name,
+          })
+          this.spawn(
+            sessionId,
+            { cwd: os.homedir(), onData: options.onData, onExit: options.onExit },
+            true,
+            false,
+          )
+          return
+        }
       }
 
       if (typeof options.onExit === 'function') {

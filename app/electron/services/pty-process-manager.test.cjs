@@ -297,6 +297,35 @@ test('Windows retries an early Codex failure with the located executable and ori
   ])
 })
 
+test('Windows keeps the terminal usable with a clean shell after every Codex fallback fails', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const third = createFakePty()
+  const spawnCalls = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return [first, second, third][spawnCalls.length - 1].spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakeWin32Platform,
+    logger: { warn() {} },
+    resolveCodexPath: () => 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd',
+  })
+
+  manager.spawn('term-codex-emergency-shell', {
+    command: 'codex',
+    args: ['--model', 'gpt-5.6-luna'],
+  })
+  first.fakePty.emitExit({ exitCode: 1 })
+  second.fakePty.emitExit({ exitCode: 1 })
+
+  assert.equal(spawnCalls.length, 3)
+  assert.equal(spawnCalls[2].file, 'cmd.exe')
+  assert.deepEqual(spawnCalls[2].args, [])
+  assert.equal(spawnCalls[2].options.cwd, require('node:os').homedir())
+})
+
 test('force kill terminates immediately and drops the session', () => {
   const { fakePty, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })
