@@ -205,7 +205,11 @@ test('invalid dimensions fall back to safe defaults', () => {
 
 test('missing working directory falls back to the user home', () => {
   const { calls, spawnPty } = createFakePty()
-  const manager = new PtyProcessManager({ spawnPty })
+  const warnings = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    logger: { warn: (...args) => warnings.push(args) },
+  })
   const home = require('node:os').homedir()
 
   manager.spawn('term-invalid-cwd', {
@@ -214,6 +218,8 @@ test('missing working directory falls back to the user home', () => {
 
   assert.equal(calls[0].options.cwd, home)
   assert.equal(resolveWorkingDirectory(home), home)
+  assert.equal(warnings[0][0], 'PTY: diretório de trabalho inválido; usando a pasta do usuário.')
+  assert.deepEqual(warnings[0][1], { reason: 'invalid-cwd', platform: process.platform })
 })
 
 test('Windows retries once when ConPTY reports a path error after startup', () => {
