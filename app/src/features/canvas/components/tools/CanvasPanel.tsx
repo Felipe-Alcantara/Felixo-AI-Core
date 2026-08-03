@@ -39,7 +39,7 @@ export function CanvasPanel({
         <button
           type="button"
           onClick={close}
-          className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+          className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
           aria-label="Fechar"
         >
           <X size={15} />

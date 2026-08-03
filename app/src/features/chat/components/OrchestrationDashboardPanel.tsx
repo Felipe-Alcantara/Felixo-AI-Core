@@ -52,7 +52,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
         <button
           type="button"
           onClick={onToggleOpen}
-          className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5"
+          className="felixo-btn rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5"
         >
           {isOpen ? 'Recolher' : 'Expandir'}
         </button>

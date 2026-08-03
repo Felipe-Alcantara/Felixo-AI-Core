@@ -126,7 +126,7 @@ export function SkillsModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -180,7 +180,7 @@ export function SkillsModal({
                     <div className="flex shrink-0 items-center gap-1">
                       <label
                         title={skill.enabled ? 'Desativar' : 'Ativar'}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100"
                       >
                         <input
                           type="checkbox"
@@ -196,7 +196,7 @@ export function SkillsModal({
                         type="button"
                         title="Editar skill"
                         onClick={() => editSkill(skill)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100"
                       >
                         <Pencil size={14} aria-hidden="true" />
                         <span className="sr-only">Editar {skill.name}</span>
@@ -205,7 +205,7 @@ export function SkillsModal({
                         type="button"
                         title="Remover skill"
                         onClick={() => removeSkill(skill.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-theme-error/10 hover:text-theme-error"
+                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
                       >
                         <Trash2 size={14} aria-hidden="true" />
                         <span className="sr-only">Remover {skill.name}</span>
@@ -266,7 +266,7 @@ export function SkillsModal({
                 <button
                   type="button"
                   onClick={clearDraft}
-                  className="flex h-10 flex-1 items-center justify-center rounded-2xl border border-white/[0.08] text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08]"
+                  className="felixo-btn flex h-10 flex-1 items-center justify-center rounded-2xl border border-white/[0.08] text-sm font-medium text-zinc-300 hover:bg-white/[0.08]"
                 >
                   Cancelar
                 </button>
@@ -274,7 +274,7 @@ export function SkillsModal({
               <button
                 type="submit"
                 disabled={!name.trim() || !prompt.trim()}
-                className="flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+                className="felixo-btn flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
               >
                 {editingSkill ? (
                   <Save size={16} aria-hidden="true" />

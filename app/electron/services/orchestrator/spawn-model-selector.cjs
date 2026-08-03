@@ -4,8 +4,8 @@
 // candidate does not already specify them, so user-configured variants always win.
 const CLI_TYPE_VARIANT_DEFAULTS = {
   claude: { providerModel: 'opus', reasoningEffort: 'medium' },
-  codex: { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
-  'codex-app-server': { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  codex: { providerModel: 'gpt-5.6-sol', reasoningEffort: 'xhigh' },
+  'codex-app-server': { providerModel: 'gpt-5.6-sol', reasoningEffort: 'xhigh' },
   gemini: { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
   'gemini-acp': { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
 }
@@ -353,18 +353,18 @@ function getProviderModelTierBonus(providerModel) {
 
   // Top tier: prefer with strong bonus.
   if (value.includes('opus')) return 50
-  if (value === 'gpt-5.5' || /^gpt-5\.5(?!-codex)/.test(value)) return 50
+  if (value.includes('gpt-5.6-sol')) return 50
   if (value.includes('gemini-3-pro') || value === 'gemini-pro') return 50
 
   // Mid tier: small positive bonus.
   if (value.includes('sonnet')) return 20
-  if (value.includes('gpt-5.5-codex')) return 25
-  if (value.includes('gpt-5.4') && !value.includes('mini')) return 15
+  if (value.includes('gpt-5.6-terra')) return 15
   if (value.includes('gemini-3-flash') && !value.includes('lite')) return 15
   if (value.includes('flash') && !value.includes('lite')) return 12
 
   // Bottom tier: penalty so they only win when explicitly preferred.
   if (value.includes('haiku')) return -20
+  if (value.includes('gpt-5.6-luna')) return -15
   if (value.includes('mini')) return -15
   if (value.includes('lite')) return -20
 

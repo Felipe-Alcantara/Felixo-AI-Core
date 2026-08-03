@@ -83,7 +83,7 @@ export function PromptDetailPanel({
       <button
         type="button"
         onClick={back}
-        className="-mt-1 flex items-center gap-1 self-start rounded px-1 py-0.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+        className="felixo-btn -mt-1 flex items-center gap-1 self-start rounded px-1 py-0.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
       >
         <ArrowLeft size={13} />
         Voltar à lista
@@ -146,14 +146,14 @@ export function PromptDetailPanel({
           <button
             type="button"
             onClick={cancelDraft}
-            className="rounded px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-zinc-100"
+            className="felixo-btn rounded px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-zinc-100"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={saveDraft}
-            className="flex items-center gap-1 rounded bg-emerald-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
+            className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
           >
             <Check size={13} />
             Salvar
@@ -166,7 +166,7 @@ export function PromptDetailPanel({
           type="button"
           onClick={onReset}
           disabled={!canResetToPreset}
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          className="felixo-btn flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
           title="Descartar edições salvas e voltar ao texto padrão do preset"
         >
           <RotateCcw size={13} />
@@ -181,7 +181,7 @@ export function PromptDetailPanel({
               ? 'Salve ou cancele as edições pendentes antes de inserir'
               : 'Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)'
           }
-          className="flex items-center gap-1 rounded bg-emerald-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-700"
+          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-700"
         >
           {justSaved ? (
             <>

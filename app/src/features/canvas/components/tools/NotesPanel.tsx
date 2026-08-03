@@ -117,7 +117,7 @@ export function NotesPanel({ nodes, onFocusNode, onAddNote, onClose }: NotesPane
         <button
           type="button"
           onClick={onAddNote}
-          className="flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
         >
           <Plus size={13} />
           Nova nota
@@ -136,7 +136,7 @@ export function NotesPanel({ nodes, onFocusNode, onAddNote, onClose }: NotesPane
                 <button
                   type="button"
                   onClick={() => onFocusNode(node.id)}
-                  className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                  className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
                   title="Centralizar esta nota no canvas"
                 >
                   <StickyNote size={14} className="mt-0.5 shrink-0 text-amber-300/80" />
@@ -164,7 +164,7 @@ export function NotesPanel({ nodes, onFocusNode, onAddNote, onClose }: NotesPane
         <button
           type="button"
           onClick={() => void addSavedNote()}
-          className="flex items-center gap-1 rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600"
+          className="felixo-btn flex items-center gap-1 rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600"
         >
           <Plus size={13} />
           Nova
@@ -186,7 +186,7 @@ export function NotesPanel({ nodes, onFocusNode, onAddNote, onClose }: NotesPane
                 <button
                   type="button"
                   onClick={() => void removeSavedNote(note.id)}
-                  className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                  className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
                   aria-label="Remover nota"
                 >
                   <Trash2 size={14} />

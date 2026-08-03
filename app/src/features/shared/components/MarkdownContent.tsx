@@ -255,7 +255,7 @@ function CodeBlock({
           type="button"
           title="Copiar código"
           onClick={handleCopy}
-          className="flex items-center gap-1 transition hover:text-zinc-300"
+          className="felixo-btn flex items-center gap-1 hover:text-zinc-300"
         >
           {copied ? (
             <>

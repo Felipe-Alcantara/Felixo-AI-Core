@@ -64,7 +64,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
           <button
             type="button"
             onClick={() => setPreview((current) => !current)}
-            className="ml-1 rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+            className="felixo-btn-icon ml-1 rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
             aria-label={preview ? 'Editar nota' : 'Visualizar nota'}
             title={preview ? 'Editar' : 'Visualizar'}
           >
@@ -116,7 +116,7 @@ function ColorSwatch({
       type="button"
       onClick={onSelect}
       aria-label={`Cor ${color}`}
-      className={`h-3.5 w-3.5 rounded-full ring-1 ring-black/20 ${theme.swatch} ${
+      className={`felixo-btn-icon h-3.5 w-3.5 rounded-full ring-1 ring-black/20 ${theme.swatch} ${
         active ? 'ring-2 ring-black/60' : ''
       }`}
     />

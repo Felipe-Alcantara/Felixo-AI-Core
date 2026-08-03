@@ -18,7 +18,7 @@ export function CopyButton({ onCopy }: CopyButtonProps) {
     <button
       type="button"
       // nodrag so the button works inside a draggable node header.
-      className="nodrag rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+      className="felixo-btn-icon nodrag rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
       onClick={async () => {
         const text = await onCopy()
         if (text) {

@@ -94,7 +94,7 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
       <button
         type="button"
         onClick={startNew}
-        className="mb-3 flex items-center gap-1 rounded bg-sky-700/50 px-2 py-1 text-sm text-sky-50 hover:bg-sky-600/60"
+        className="felixo-btn mb-3 flex items-center gap-1 rounded bg-sky-700/50 px-2 py-1 text-sm text-sky-50 hover:bg-sky-600/60"
       >
         <Plus size={14} />
         Nova skill
@@ -129,7 +129,7 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
               type="button"
               onClick={() => void saveDraft()}
               disabled={!draft.name.trim() || !draft.path.trim()}
-              className="rounded bg-sky-700/60 px-2 py-1 text-xs text-sky-50 hover:bg-sky-600/70 disabled:opacity-50"
+              className="felixo-btn rounded bg-sky-700/60 px-2 py-1 text-xs text-sky-50 hover:bg-sky-600/70 disabled:opacity-50"
             >
               Salvar
             </button>
@@ -139,7 +139,7 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
                 setEditingId(null)
                 setDraft(emptyDraft)
               }}
-              className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10"
+              className="felixo-btn rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10"
             >
               Cancelar
             </button>
@@ -164,7 +164,7 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
               <button
                 type="button"
                 onClick={() => void activate(skill)}
-                className="flex items-center gap-1 rounded bg-emerald-700/40 px-1.5 py-0.5 text-xs text-emerald-100 hover:bg-emerald-600/50"
+                className="felixo-btn flex items-center gap-1 rounded bg-emerald-700/40 px-1.5 py-0.5 text-xs text-emerald-100 hover:bg-emerald-600/50"
                 title="Ativar: enviar ao terminal aberto (ou copiar)"
               >
                 <Zap size={12} />
@@ -173,7 +173,7 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
               <button
                 type="button"
                 onClick={() => startEdit(skill)}
-                className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
                 title="Editar"
               >
                 <Pencil size={13} />
@@ -181,7 +181,7 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
               <button
                 type="button"
                 onClick={() => void removeSkill(skill.id)}
-                className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300"
+                className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300"
                 title="Remover"
               >
                 <Trash2 size={13} />

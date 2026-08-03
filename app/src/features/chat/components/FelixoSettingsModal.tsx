@@ -94,7 +94,7 @@ function FelixoSettingsDialog({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -245,7 +245,7 @@ function FelixoSettingsDialog({
             <div className="mt-3 flex justify-end">
               <button
                 type="submit"
-                className="flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
+                className="felixo-btn flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
               >
                 <Save size={14} aria-hidden="true" />
                 Salvar

@@ -90,7 +90,7 @@ export function AutomationsModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -138,7 +138,7 @@ export function AutomationsModal({
                         type="button"
                         title="Remover automação"
                         onClick={() => onRemoveAutomation(automation.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-theme-error/10 hover:text-theme-error"
+                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
                       >
                         <Trash2 size={14} aria-hidden="true" />
                         <span className="sr-only">Remover automação</span>
@@ -148,7 +148,7 @@ export function AutomationsModal({
                       type="button"
                       title="Usar automação"
                       onClick={() => onApplyAutomation(automation)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] text-zinc-200 transition hover:bg-white/[0.08]"
+                      className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] text-zinc-200 hover:bg-white/[0.08]"
                     >
                       <Play size={14} aria-hidden="true" />
                       <span className="sr-only">Usar automação</span>
@@ -217,7 +217,7 @@ export function AutomationsModal({
             <button
               type="submit"
               disabled={!name.trim() || !prompt.trim()}
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+              className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
             >
               <Plus size={16} aria-hidden="true" />
               Criar automação

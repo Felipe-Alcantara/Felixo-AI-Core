@@ -178,7 +178,7 @@ export function TerminalPanel({
           type="button"
           title="Abrir logs da CLI"
           onClick={onToggleOpen}
-          className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-white/[0.06] hover:text-zinc-200"
+          className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <Terminal size={15} aria-hidden="true" />
           <span className="sr-only">Abrir logs da CLI</span>
@@ -213,7 +213,7 @@ export function TerminalPanel({
             title="Limpar logs da CLI"
             onClick={onClear}
             disabled={visibleSessions.length === 0}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
           >
             <Trash2 size={13} aria-hidden="true" />
             <span className="sr-only">Limpar logs da CLI</span>
@@ -222,7 +222,7 @@ export function TerminalPanel({
             type="button"
             title="Recolher logs da CLI"
             onClick={onToggleOpen}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
           >
             <ChevronRight size={15} aria-hidden="true" />
             <span className="sr-only">Recolher logs da CLI</span>
@@ -235,7 +235,7 @@ export function TerminalPanel({
           type="button"
           onClick={() => setViewMode('threads')}
           className={[
-            'h-7 flex-1 rounded-lg text-[11px] transition',
+            'felixo-btn h-7 flex-1 rounded-lg text-[11px]',
             viewMode === 'threads'
               ? 'bg-white/[0.08] text-zinc-100'
               : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
@@ -247,7 +247,7 @@ export function TerminalPanel({
           type="button"
           onClick={() => setViewMode('orchestrator')}
           className={[
-            'h-7 flex-1 rounded-lg text-[11px] transition',
+            'felixo-btn h-7 flex-1 rounded-lg text-[11px]',
             viewMode === 'orchestrator'
               ? 'bg-white/[0.08] text-zinc-100'
               : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
@@ -271,7 +271,7 @@ export function TerminalPanel({
                   type="button"
                   onClick={() => selectSession(session.sessionId)}
                   className={[
-                    'flex min-h-14 w-full items-start gap-2 rounded-lg py-1.5 pr-2 text-left transition',
+                    'felixo-btn flex min-h-14 w-full items-start gap-2 rounded-lg py-1.5 pr-2 text-left',
                     isChild ? 'pl-5' : 'pl-2',
                     effectiveSelectedSessionId === session.sessionId
                       ? 'bg-white/[0.07] text-zinc-100'
@@ -383,7 +383,7 @@ export function TerminalPanel({
               type="button"
               title="Ir para o fim"
               onClick={jumpToBottom}
-              className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-[#242423] text-zinc-300 shadow-soft transition hover:bg-[#30302f] hover:text-white"
+              className="felixo-btn-icon absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-[#242423] text-zinc-300 shadow-soft hover:bg-[#30302f] hover:text-white"
             >
               <ArrowDown size={14} aria-hidden="true" />
               <span className="sr-only">Ir para o fim</span>
