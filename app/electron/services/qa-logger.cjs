@@ -62,7 +62,12 @@ function normalizeLevel(level) {
 function sendQaLoggerEvent(channel, payload) {
   const mainWindow =
     typeof getMainWindow === 'function' ? getMainWindow() : getMainWindow
-  const webContents = mainWindow?.webContents
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+
+  const webContents = mainWindow.webContents
 
   if (!webContents || webContents.isDestroyed()) {
     return
@@ -75,4 +80,8 @@ module.exports = {
   createQaLogStore,
   logQaEvent,
   registerQaLoggerIpcHandlers,
+  __setMainWindowGetterForTests(getWindow) {
+    getMainWindow = getWindow
+  },
+  __sendQaLoggerEventForTests: sendQaLoggerEvent,
 }
