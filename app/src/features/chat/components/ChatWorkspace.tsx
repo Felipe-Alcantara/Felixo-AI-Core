@@ -5,23 +5,12 @@ import {
   ideaStarters,
   quickPrompts,
 } from '../data/models'
-import { defaultAutomations } from '../../shared/data/automations'
 import {
   createAssistantMessage,
   createUserMessage,
   formatTime,
   initialMessages,
 } from '../services/chat-service'
-import {
-  createAutomationId,
-  deleteAutomationFromBackend,
-  hasAutomationsBackendMigrationRun,
-  loadAutomationsFromBackend,
-  loadCustomAutomations,
-  markAutomationsBackendMigrationRun,
-  saveAutomationsToBackend,
-  saveCustomAutomations,
-} from '../services/automation-storage'
 import { applyOrchestratorTierOverride } from '../services/delegation-policy'
 import {
   createCliPrompt,
@@ -66,17 +55,7 @@ import {
   saveModels,
   saveModelsToBackend,
 } from '../services/model-storage'
-import {
-  createNoteFromMessages,
-  deleteNoteFromBackend,
-  hasNotesBackendMigrationRun,
-  loadNotes,
-  loadNotesFromBackend,
-  markNotesBackendMigrationRun,
-  saveNoteToBackend,
-  saveNotes,
-  saveNotesToBackend,
-} from '../services/note-storage'
+import { createNoteFromMessages } from '../services/note-storage'
 import {
   createGlobalMemoriesContextBlock,
   createModelCapabilityProfiles,
@@ -86,22 +65,7 @@ import {
   loadOrchestratorSettings,
   saveOrchestratorSettings,
 } from '../services/orchestrator-settings-storage'
-import {
-  deleteProjectFromBackend,
-  hasProjectsBackendMigrationRun,
-  loadActiveProjectIds,
-  loadActiveProjectIdsFromBackend,
-  loadProjects,
-  loadProjectsFromBackend,
-  markProjectsBackendMigrationRun,
-  saveActiveProjectIds,
-  saveActiveProjectIdsToBackend,
-  saveProjectToBackend,
-  saveProjects,
-  saveProjectsToBackend,
-  buildDocsIndexForProject,
-  type DocsIndexEntry,
-} from '../services/project-storage'
+import { buildDocsIndexForProject, type DocsIndexEntry } from '../services/project-storage'
 import { loadTheme, saveTheme } from '../services/theme-storage'
 import type {
   AutomationDefinition,
@@ -118,6 +82,9 @@ import type {
   StreamEvent,
 } from '../types'
 import { useTerminalOutput } from '../hooks/useTerminalOutput'
+import { useAutomations } from '../hooks/useAutomations'
+import { useNotes } from '../hooks/useNotes'
+import { useProjects } from '../hooks/useProjects'
 import { AutomationsModal } from './AutomationsModal'
 import { ChatExportModal } from './ChatExportModal'
 import { CodePanel } from './CodePanel'
@@ -149,17 +116,21 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   )
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [projects, setProjects] = useState<Project[]>(() => loadProjects())
   const [theme, setTheme] = useState<AppTheme>(() => loadTheme())
-  const [activeProjectIds, setActiveProjectIds] = useState<Set<string>>(() =>
-    loadActiveProjectIds(loadProjects()),
-  )
-  const [notes, setNotes] = useState<ProjectNote[]>(() => loadNotes())
+  const {
+    projects,
+    activeProjectIds,
+    activeProjects,
+    addProjects,
+    removeProject,
+    updateProject,
+    toggleProject,
+  } = useProjects()
+  const { notes, saveNote, deleteNote } = useNotes()
   const [orchestratorSettings, setOrchestratorSettings] =
     useState<OrchestratorSettings>(() => loadInitialOrchestratorSettings())
-  const [customAutomations, setCustomAutomations] = useState<AutomationDefinition[]>(
-    () => loadCustomAutomations(),
-  )
+  const { automations, customAutomations, addCustomAutomation, removeCustomAutomation } =
+    useAutomations()
   const [contextAttachments, setContextAttachments] = useState<ContextAttachment[]>([])
   const [input, setInput] = useState('')
   const [isModelManagerOpen, setIsModelManagerOpen] = useState(false)
@@ -194,19 +165,9 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   const orchestratorSettingsLoadedRef = useRef(false)
   const orchestratorSettingsUserEditedRef = useRef(false)
   const orchestratorSettingsRef = useRef(orchestratorSettings)
-  const notesRef = useRef(notes)
-  const notesUserEditedRef = useRef(false)
-  const automationsRef = useRef(customAutomations)
-  const automationsUserEditedRef = useRef(false)
-  const automationsBackendLoadedRef = useRef(false)
   const modelsRef = useRef(models)
   const modelsUserEditedRef = useRef(false)
   const modelsBackendLoadedRef = useRef(false)
-  const projectsRef = useRef(projects)
-  const activeProjectIdsRef = useRef(activeProjectIds)
-  const projectsBackendLoadedRef = useRef(false)
-  const projectsUserEditedRef = useRef(false)
-  const activeProjectIdsUserEditedRef = useRef(false)
   const lastSentProjectIdsRef = useRef<Set<string>>(new Set())
   const messageThreadIdsRef = useRef<Map<string, string>>(new Map())
   const streamHandlerRef = useRef(handleStreamEvent)
@@ -225,16 +186,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
       models[0] ??
       null,
     [models, selectedModelId],
-  )
-
-  const automations = useMemo(
-    () => [...defaultAutomations, ...customAutomations],
-    [customAutomations],
-  )
-
-  const activeProjects = useMemo(
-    () => projects.filter((project) => activeProjectIds.has(project.id)),
-    [activeProjectIds, projects],
   )
 
   const [projectDocsIndexes, setProjectDocsIndexes] = useState<
@@ -331,123 +282,11 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   }, [orchestratorSettings])
 
   useEffect(() => {
-    notesRef.current = notes
-  }, [notes])
-
-  useEffect(() => {
-    automationsRef.current = customAutomations
-  }, [customAutomations])
-
-  useEffect(() => {
     modelsRef.current = models
     if (modelsBackendLoadedRef.current) {
       void saveModelsToBackend(models)
     }
   }, [models])
-
-  useEffect(() => {
-    projectsRef.current = projects
-  }, [projects])
-
-  useEffect(() => {
-    activeProjectIdsRef.current = activeProjectIds
-  }, [activeProjectIds])
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadBackendProjects() {
-      const backendProjects = await loadProjectsFromBackend()
-
-      if (cancelled || backendProjects === null) {
-        return
-      }
-
-      let currentProjects = projectsRef.current
-
-      if (backendProjects.length > 0) {
-        markProjectsBackendMigrationRun()
-
-        if (projectsUserEditedRef.current) {
-          void saveProjectsToBackend(currentProjects)
-        } else {
-          currentProjects = backendProjects
-          setProjects(backendProjects)
-        }
-      } else if (!hasProjectsBackendMigrationRun() && currentProjects.length > 0) {
-        const saved = await saveProjectsToBackend(currentProjects)
-
-        if (saved) {
-          markProjectsBackendMigrationRun()
-        }
-      } else {
-        markProjectsBackendMigrationRun()
-      }
-
-      const backendActiveIds = await loadActiveProjectIdsFromBackend(currentProjects)
-
-      if (cancelled) {
-        return
-      }
-
-      if (backendActiveIds !== null) {
-        if (activeProjectIdsUserEditedRef.current) {
-          void saveActiveProjectIdsToBackend(activeProjectIdsRef.current)
-        } else {
-          setActiveProjectIds(backendActiveIds)
-        }
-      } else if (currentProjects.length > 0) {
-        void saveActiveProjectIdsToBackend(activeProjectIdsRef.current)
-      }
-
-      projectsBackendLoadedRef.current = true
-    }
-
-    void loadBackendProjects()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-
-    loadNotesFromBackend()
-      .then((backendNotes) => {
-        if (cancelled || backendNotes === null) {
-          return
-        }
-
-        if (backendNotes.length > 0) {
-          if (notesUserEditedRef.current) {
-            void saveNotesToBackend(notesRef.current)
-            markNotesBackendMigrationRun()
-            return
-          }
-
-          setNotes(backendNotes)
-          markNotesBackendMigrationRun()
-          return
-        }
-
-        if (!hasNotesBackendMigrationRun() && notesRef.current.length > 0) {
-          void saveNotesToBackend(notesRef.current).then((saved) => {
-            if (saved) {
-              markNotesBackendMigrationRun()
-            }
-          })
-          return
-        }
-
-        markNotesBackendMigrationRun()
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -484,51 +323,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         }
 
         markModelsBackendMigrationRun()
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-
-    loadAutomationsFromBackend()
-      .then((backendAutomations) => {
-        if (cancelled || backendAutomations === null) {
-          return
-        }
-
-        automationsBackendLoadedRef.current = true
-
-        if (backendAutomations.length > 0) {
-          if (automationsUserEditedRef.current) {
-            void saveAutomationsToBackend(automationsRef.current)
-            markAutomationsBackendMigrationRun()
-            return
-          }
-          setCustomAutomations(backendAutomations)
-          markAutomationsBackendMigrationRun()
-          return
-        }
-
-        if (
-          !hasAutomationsBackendMigrationRun() &&
-          automationsRef.current.length > 0
-        ) {
-          void saveAutomationsToBackend(automationsRef.current).then(
-            (saved) => {
-              if (saved) {
-                markAutomationsBackendMigrationRun()
-              }
-            },
-          )
-          return
-        }
-
-        markAutomationsBackendMigrationRun()
       })
       .catch(() => {})
 
@@ -597,31 +391,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
       streamHandlerRef.current(event)
     })
   }, [])
-
-  useEffect(() => {
-    saveProjects(projects)
-    if (projectsBackendLoadedRef.current) {
-      void saveProjectsToBackend(projects)
-    }
-  }, [projects])
-
-  useEffect(() => {
-    saveActiveProjectIds(activeProjectIds)
-    if (projectsBackendLoadedRef.current) {
-      void saveActiveProjectIdsToBackend(activeProjectIds)
-    }
-  }, [activeProjectIds])
-
-  useEffect(() => {
-    saveCustomAutomations(customAutomations)
-    if (automationsBackendLoadedRef.current) {
-      void saveAutomationsToBackend(customAutomations)
-    }
-  }, [customAutomations])
-
-  useEffect(() => {
-    saveNotes(notes)
-  }, [notes])
 
   useEffect(() => {
     if (!orchestratorSettingsLoadedRef.current) {
@@ -890,53 +659,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
     setMessages(session.messages.map((message) => ({ ...message, isStreaming: false })))
   }
 
-  function addProjects(incoming: Project[]) {
-    projectsUserEditedRef.current = true
-    setProjects((prev) => {
-      const existingPaths = new Set(prev.map((p) => p.path))
-      const newProjects = incoming.filter((p) => !existingPaths.has(p.path))
-
-      for (const project of newProjects) {
-        void saveProjectToBackend(project)
-      }
-
-      return [...prev, ...newProjects]
-    })
-  }
-
-  function removeProject(project: Project) {
-    projectsUserEditedRef.current = true
-    activeProjectIdsUserEditedRef.current = true
-    setProjects((prev) => prev.filter((p) => p.id !== project.id))
-    setActiveProjectIds((prev) => {
-      const next = new Set(prev)
-      next.delete(project.id)
-      return next
-    })
-    void deleteProjectFromBackend(project.id)
-  }
-
-  function updateProject(updated: Project) {
-    projectsUserEditedRef.current = true
-    setProjects((prev) =>
-      prev.map((p) => (p.id === updated.id ? updated : p)),
-    )
-    void saveProjectToBackend(updated)
-  }
-
-  function toggleProject(project: Project) {
-    activeProjectIdsUserEditedRef.current = true
-    setActiveProjectIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(project.id)) {
-        next.delete(project.id)
-      } else {
-        next.add(project.id)
-      }
-      return next
-    })
-  }
-
   function addContextAttachments(attachments: ContextAttachment[]) {
     setContextAttachments((currentAttachments) => [
       ...currentAttachments,
@@ -958,35 +680,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
     )
   }
 
-  function addCustomAutomation(
-    automation: Pick<
-      AutomationDefinition,
-      'description' | 'name' | 'prompt' | 'scope'
-    >,
-  ) {
-    const now = new Date().toISOString()
-    automationsUserEditedRef.current = true
-    setCustomAutomations((currentAutomations) => [
-      {
-        ...automation,
-        id: createAutomationId(automation.name),
-        createdAt: now,
-        updatedAt: now,
-      },
-      ...currentAutomations,
-    ])
-  }
-
-  function removeCustomAutomation(automationId: string) {
-    automationsUserEditedRef.current = true
-    if (automationsBackendLoadedRef.current) {
-      void deleteAutomationFromBackend(automationId)
-    }
-    setCustomAutomations((currentAutomations) =>
-      currentAutomations.filter((automation) => automation.id !== automationId),
-    )
-  }
-
   function applyAutomation(automation: AutomationDefinition) {
     setInput((currentInput) => {
       const separator = currentInput.trim() ? '\n\n' : ''
@@ -1002,24 +695,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
 
   function updateTheme(themeValue: AppTheme) {
     setTheme(themeValue)
-  }
-
-  function saveNote(note: ProjectNote) {
-    notesUserEditedRef.current = true
-    setNotes((currentNotes) => {
-      const exists = currentNotes.some((item) => item.id === note.id)
-
-      return exists
-        ? currentNotes.map((item) => (item.id === note.id ? note : item))
-        : [note, ...currentNotes]
-    })
-    void saveNoteToBackend(note)
-  }
-
-  function deleteNote(noteId: string) {
-    notesUserEditedRef.current = true
-    setNotes((currentNotes) => currentNotes.filter((note) => note.id !== noteId))
-    void deleteNoteFromBackend(noteId)
   }
 
   function useNoteAsContext(note: ProjectNote) {
