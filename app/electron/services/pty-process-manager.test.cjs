@@ -221,7 +221,10 @@ test('missing working directory falls back to the user home', () => {
 
   assert.equal(calls[0].options.cwd, home)
   assert.equal(resolveWorkingDirectory(home), home)
-  assert.equal(warnings[0][0], 'PTY: diretório de trabalho inválido; usando a pasta do usuário.')
+  assert.equal(
+    warnings[0][0],
+    'PTY: O caminho salvo não está disponível; usando a pasta do usuário.',
+  )
   assert.deepEqual(warnings[0][1], { reason: 'invalid-cwd', platform: process.platform })
   assert.deepEqual(received, [
     '\r\n[Felixo] Camada: diretório de trabalho. O caminho salvo não está disponível; usando a pasta do usuário.\r\n',
@@ -252,7 +255,11 @@ test('Windows retries once when ConPTY reports a path error after startup', () =
 
   assert.equal(spawnCalls.length, 2)
   assert.equal(spawnCalls[1].options.cwd, require('node:os').homedir())
-  assert.deepEqual(received, ['C:\\Users\\felipe>'])
+  assert.deepEqual(received, [
+    '\r\n[Felixo] Camada: diretório de trabalho. O caminho salvo não está disponível; usando a pasta do usuário.\r\n',
+    '\r\n[Felixo] Camada: shell do Windows. O shell reportou um erro de caminho; tentando a pasta do usuário.\r\n',
+    'C:\\Users\\felipe>',
+  ])
 })
 
 test('finds the Codex Windows shim in the npm user directory', () => {
