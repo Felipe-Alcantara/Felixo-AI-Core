@@ -129,7 +129,7 @@ export function ProjectsModal({
           <button
             type="button"
             onClick={closeModal}
-            className="rounded p-1 text-zinc-500 transition hover:text-zinc-300"
+            className="felixo-btn-icon rounded p-1 text-zinc-500 hover:text-zinc-300"
           >
             <X size={14} />
           </button>
@@ -143,7 +143,7 @@ export function ProjectsModal({
               type="button"
               onClick={() => { setTab(t); setDetected([]); setSelected(new Set()) }}
               className={[
-                'mb-[-1px] border-b-2 px-3 pb-2.5 text-[12px] transition',
+                'felixo-btn mb-[-1px] border-b-2 px-3 pb-2.5 text-[12px]',
                 tab === t
                   ? 'border-amber-400 text-zinc-200'
                   : 'border-transparent text-zinc-500 hover:text-zinc-300',
@@ -164,7 +164,7 @@ export function ProjectsModal({
                 type="button"
                 disabled={loading}
                 onClick={pickRepo}
-                className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                className="felixo-btn flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
                 Selecionar pasta
@@ -181,7 +181,7 @@ export function ProjectsModal({
                 type="button"
                 disabled={loading}
                 onClick={pickWorkspace}
-                className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                className="felixo-btn flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
                 Selecionar workspace
@@ -213,7 +213,7 @@ export function ProjectsModal({
                     type="button"
                     disabled={selected.size === 0}
                     onClick={confirmWorkspace}
-                    className="flex h-9 items-center gap-2 self-end rounded-lg bg-amber-500/20 px-4 text-[12px] text-amber-300 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="felixo-btn flex h-9 items-center gap-2 self-end rounded-lg bg-amber-500/20 px-4 text-[12px] text-amber-300 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Plus size={13} />
                     Adicionar {selected.size} {selected.size === 1 ? 'repositório' : 'repositórios'}
@@ -251,7 +251,7 @@ export function ProjectsModal({
                         )
                       }
                       className={[
-                        'shrink-0 rounded p-1 transition',
+                        'felixo-btn-icon shrink-0 rounded p-1',
                         editingProjectId === project.id
                           ? 'text-amber-400'
                           : 'text-zinc-600 hover:text-zinc-300',
@@ -263,7 +263,7 @@ export function ProjectsModal({
                     <button
                       type="button"
                       onClick={() => onRemoveProject(project)}
-                      className="shrink-0 rounded p-1 text-zinc-600 transition hover:text-theme-error"
+                      className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-600 hover:text-theme-error"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -342,7 +342,7 @@ function ProjectInstructionsEditor({
             docsDirectory: docsDirectory.trim() || undefined,
           })
         }
-        className="flex h-8 items-center gap-1.5 self-end rounded-lg bg-amber-500/20 px-3 text-[11px] text-amber-300 transition hover:bg-amber-500/30"
+        className="felixo-btn flex h-8 items-center gap-1.5 self-end rounded-lg bg-amber-500/20 px-3 text-[11px] text-amber-300 hover:bg-amber-500/30"
       >
         <Check size={12} />
         Salvar

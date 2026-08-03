@@ -377,7 +377,7 @@ export function ModelManagerModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -395,7 +395,7 @@ export function ModelManagerModal({
                 <button
                   type="button"
                   onClick={clearModels}
-                  className="rounded-full border border-theme-error/20 px-3 py-1 text-[11px] text-theme-error transition hover:bg-theme-error/10"
+                  className="felixo-btn rounded-full border border-theme-error/20 px-3 py-1 text-[11px] text-theme-error hover:bg-theme-error/10"
                 >
                   Limpar todos
                 </button>
@@ -429,7 +429,7 @@ export function ModelManagerModal({
                       type="button"
                       title="Remover"
                       onClick={() => removeModel(model)}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-theme-error/10 hover:text-theme-error"
+                      className="felixo-btn-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
                     >
                       <Trash2 size={14} aria-hidden="true" />
                     </button>
@@ -450,7 +450,7 @@ export function ModelManagerModal({
                 title="Atualizar detecção"
                 onClick={() => void loadOfficialCatalog()}
                 disabled={isLoadingOfficialClis}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
                   size={14}
@@ -509,7 +509,7 @@ export function ModelManagerModal({
                               }
                               onClick={() => importOfficialModels(cli.models)}
                               disabled={isImported || isAnyOfficialCliBusy}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Plus size={14} aria-hidden="true" />
                               <span className="sr-only">
@@ -528,7 +528,7 @@ export function ModelManagerModal({
                               }
                               onClick={() => void installOfficialCli(cli)}
                               disabled={isImported || isAnyOfficialCliBusy}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Download size={14} aria-hidden="true" />
                               <span className="sr-only">
@@ -542,7 +542,7 @@ export function ModelManagerModal({
                             title={`Login ${cli.name}`}
                             onClick={() => void openOfficialLogin(cli)}
                             disabled={!cli.detected || isAnyOfficialCliBusy}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <LogIn size={14} aria-hidden="true" />
                             <span className="sr-only">Login {cli.name}</span>
@@ -557,7 +557,7 @@ export function ModelManagerModal({
                                   void checkOfficialAccountStatus(cli)
                                 }
                                 disabled={!cli.detected || isAnyOfficialCliBusy}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 <KeyRound size={14} aria-hidden="true" />
                                 <span className="sr-only">
@@ -570,7 +570,7 @@ export function ModelManagerModal({
                                 title={`Trocar conta ${cli.name}`}
                                 onClick={() => void switchOfficialAccount(cli)}
                                 disabled={!cli.detected || isAnyOfficialCliBusy}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-theme-error/10 hover:text-theme-error disabled:cursor-not-allowed disabled:opacity-40"
+                                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-theme-error/10 hover:text-theme-error disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 <LogOut size={14} aria-hidden="true" />
                                 <span className="sr-only">
@@ -615,7 +615,7 @@ export function ModelManagerModal({
                   type="button"
                   title="Escolher script legado"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                  className="felixo-btn-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
                 >
                   <FolderOpen size={16} aria-hidden="true" />
                   <span className="sr-only">Escolher script legado</span>
@@ -645,7 +645,7 @@ export function ModelManagerModal({
 
             <button
               type="submit"
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[var(--color-panel)]"
+              className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[var(--color-panel)]"
             >
               <Plus size={16} aria-hidden="true" />
               Adicionar CLI

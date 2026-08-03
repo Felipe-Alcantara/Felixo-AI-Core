@@ -260,7 +260,7 @@ export function Composer({
                 title="Adicionar contexto"
                 onClick={() => attachmentInputRef.current?.click()}
                 disabled={isStreaming}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <Plus size={17} aria-hidden="true" />
                 <span className="sr-only">Adicionar contexto</span>
@@ -324,7 +324,7 @@ export function Composer({
                 type="button"
                 title="Voz"
                 disabled={isStreaming}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <Mic size={15} aria-hidden="true" />
                 <span className="sr-only">Voz</span>
@@ -334,7 +334,7 @@ export function Composer({
                 title={isStreaming ? 'Parar' : 'Enviar'}
                 onClick={isStreaming ? onStop : undefined}
                 disabled={!isStreaming && !input.trim() && attachments.length === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#2b2b2a] disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-400"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#2b2b2a] disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-400"
               >
                 {isStreaming ? (
                   <Square size={13} aria-hidden="true" />
@@ -367,7 +367,7 @@ export function Composer({
               type="button"
               disabled={isStreaming}
               onClick={() => onInputChange(`${starter}: `)}
-              className="shrink-0 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+              className="felixo-btn shrink-0 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-[12px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
             >
               {starter}
             </button>
@@ -412,7 +412,7 @@ function AttachmentPreview({
             title="Remover anexo"
             onClick={() => onRemove(attachment.id)}
             disabled={isStreaming}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+            className="felixo-btn-icon flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
           >
             <X size={12} aria-hidden="true" />
             <span className="sr-only">Remover anexo</span>
@@ -436,7 +436,7 @@ function AttachmentPreview({
         title="Remover anexo"
         onClick={() => onRemove(attachment.id)}
         disabled={isStreaming}
-        className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+        className="felixo-btn-icon ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
       >
         <X size={11} aria-hidden="true" />
         <span className="sr-only">Remover anexo</span>
