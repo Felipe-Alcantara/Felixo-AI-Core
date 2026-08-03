@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { Pin, PinOff, X } from 'lucide-react'
 import {
   useSessionSnapshot,
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
 import { useExitAnimation } from '../hooks/useExitAnimation'
+import {
+  readPinnedPreference,
+  shouldCloseOnOutsideClick,
+  writePinnedPreference,
+} from './terminal-drawer-pin'
 
 type TerminalDrawerProps = {
   sessionId: string
@@ -25,11 +30,32 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
   const store = useTerminalSessions()
   const snapshot = useSessionSnapshot(sessionId)
   const mountRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(() =>
     Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.45))),
   )
   const draggingRef = useRef(false)
   const { closing, close } = useExitAnimation(180, onClose)
+  const [pinned, setPinned] = useState(() => readPinnedPreference(localStorage))
+
+  const togglePinned = useCallback(() => {
+    setPinned((prev) => {
+      const next = !prev
+      writePinnedPreference(localStorage, next)
+      return next
+    })
+  }, [])
+
+  // Click outside the drawer closes it, unless pinned.
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (shouldCloseOnOutsideClick(pinned, containerRef.current, event.target as Node)) {
+        close()
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [pinned, close])
 
   // Attach the live terminal element into the drawer and focus it.
   useEffect(() => {
@@ -93,6 +119,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
 
   return (
     <div
+      ref={containerRef}
       className={`relative flex h-full flex-col border-l border-white/10 bg-[#0b0f14] ${
         closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
       }`}
@@ -115,6 +142,17 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
                   : ''}
           </span>
           <CopyButton onCopy={() => store.copy(sessionId)} />
+          <button
+            type="button"
+            onClick={togglePinned}
+            className={`rounded p-1 hover:bg-white/10 ${
+              pinned ? 'text-emerald-400 hover:text-emerald-300' : 'text-zinc-400 hover:text-zinc-100'
+            }`}
+            aria-label={pinned ? 'Desafixar terminal' : 'Fixar terminal'}
+            title={pinned ? 'Desafixar (fecha ao clicar fora)' : 'Fixar (mantém aberto ao clicar fora)'}
+          >
+            {pinned ? <Pin size={16} /> : <PinOff size={16} />}
+          </button>
           <button
             type="button"
             onClick={close}
