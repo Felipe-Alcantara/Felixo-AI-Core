@@ -5,6 +5,7 @@ const {
   DEFAULT_COLS,
   DEFAULT_ROWS,
   createPtyLaunchSpec,
+  resolveWorkingDirectory,
 } = require('./pty-process-manager.cjs')
 
 /**
@@ -178,6 +179,19 @@ test('invalid dimensions fall back to safe defaults', () => {
 
   assert.equal(calls[0].options.cols, DEFAULT_COLS)
   assert.equal(calls[0].options.rows, DEFAULT_ROWS)
+})
+
+test('missing working directory falls back to the user home', () => {
+  const { calls, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+  const home = require('node:os').homedir()
+
+  manager.spawn('term-invalid-cwd', {
+    cwd: require('node:path').join(home, 'felixo-path-that-does-not-exist'),
+  })
+
+  assert.equal(calls[0].options.cwd, home)
+  assert.equal(resolveWorkingDirectory(home), home)
 })
 
 test('force kill terminates immediately and drops the session', () => {
