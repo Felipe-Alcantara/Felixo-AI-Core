@@ -37,8 +37,8 @@ const ORCHESTRATOR_TIER_DEFAULTS: Record<
   { providerModel: string; reasoningEffort: string }
 > = {
   claude: { providerModel: 'opus', reasoningEffort: 'medium' },
-  codex: { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
-  'codex-app-server': { providerModel: 'gpt-5.5', reasoningEffort: 'xhigh' },
+  codex: { providerModel: 'gpt-5.6-sol', reasoningEffort: 'xhigh' },
+  'codex-app-server': { providerModel: 'gpt-5.6-sol', reasoningEffort: 'xhigh' },
   gemini: { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
   'gemini-acp': {
     providerModel: 'gemini-3-pro-preview',

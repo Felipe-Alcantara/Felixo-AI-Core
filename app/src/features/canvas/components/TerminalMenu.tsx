@@ -5,6 +5,8 @@ import {
   buildAgentArgs,
   describeLaunch,
   getAgent,
+  getEffortLevels,
+  isEffortValidForModel,
   type AgentId,
   type EffortLevel,
 } from '../services/agent-launch-options'
@@ -51,6 +53,14 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
   const containerRef = useRef<HTMLDivElement>(null)
 
   const agent = agentValue === SHELL_VALUE ? undefined : getAgent(agentValue as AgentId)
+  const effortLevels = agent ? getEffortLevels(agent, model) : null
+
+  const handleModelChange = (value: string) => {
+    setModel(value)
+    if (agent && !isEffortValidForModel(agent, value, effort)) {
+      setEffort('')
+    }
+  }
 
   const handleProjectChange = async (value: string) => {
     if (value !== ADD_FOLDER_VALUE) {
@@ -186,7 +196,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
               <label className="mb-1 block text-xs font-medium text-zinc-400">Modelo</label>
               <select
                 value={model}
-                onChange={(event) => setModel(event.target.value)}
+                onChange={(event) => handleModelChange(event.target.value)}
                 className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
               >
                 <option value="">Padrão</option>
@@ -197,7 +207,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
                 ))}
               </select>
 
-              {agent.effortLevels && (
+              {effortLevels && (
                 <>
                   <label className="mb-1 block text-xs font-medium text-zinc-400">
                     Esforço de raciocínio
@@ -208,7 +218,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
                     className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
                   >
                     <option value="">Padrão</option>
-                    {agent.effortLevels.map((level) => (
+                    {effortLevels.map((level) => (
                       <option key={level} value={level}>
                         {level}
                       </option>
