@@ -438,6 +438,24 @@ class PtyProcessManager {
       // Diagnostics are never part of the terminal's control flow.
     }
   }
+
+  /**
+   * Reports the recovery layer to diagnostics and the visible terminal.
+   * Paths and command arguments are intentionally omitted from the notice.
+   *
+   * @param {object} options
+   * @param {string} layer
+   * @param {string} notice
+   * @param {string} reason
+   */
+  reportLayer(options, layer, notice, reason) {
+    this.warn(`PTY: ${notice}`, { reason, platform: this.platform.name })
+    try {
+      options.onData?.(`\r\n[Felixo] Camada: ${layer}. ${notice}\r\n`)
+    } catch {
+      // A renderer listener must not alter the PTY recovery path.
+    }
+  }
 }
 
 /**
