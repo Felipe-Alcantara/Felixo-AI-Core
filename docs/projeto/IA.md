@@ -705,6 +705,21 @@ AUDITORIA CONTRA OS GUIAS COMPLETOS (pedido seguinte, mesma sessão): "Siga os g
 VALIDAÇÃO: `npx tsc -b`, `npx eslint .`, `npx vite build` e `npx vitest run` (69 pass) sem erros.
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-03 — refatoração real dos 3 maiores arquivos faz-tudo
+
+PEDIDO: aplicar o padrão de qualidade nos 3 arquivos identificados como faz-tudo — `ipc-handlers.cjs` (1284 linhas), `CanvasView.tsx` (1174 linhas) e `ChatWorkspace.tsx` (1790 linhas). Feedback explícito de sessão anterior: "padrão de qualidade" exige refatoração real de código (dividir responsabilidades), não auditoria estrutural (docs, .gitignore etc); refactor puro, sem mudar comportamento, um commit por extração.
+
+FEITO:
+- **`ipc-handlers.cjs`** misturava execução/streaming de processos CLI (spawn, stdout/stderr, orquestração) com gerenciamento de conta/catálogo das CLIs oficiais (listar, instalar, login, status, trocar conta) — dois domínios diferentes. Extraídos os 5 handlers `cli:list-official`/`install-official`/`open-official-login`/`official-account-status`/`switch-official-account` para `official-cli-account-ipc-handlers.cjs` novo, registrado separadamente em `main.cjs`. 1284 → 1177 linhas.
+- **`CanvasView.tsx`** já tinha boa parte da geometria/regras de negócio extraída em sessões anteriores (`node-geometry.ts`, `file-terminal-links.ts`, `useCanvasPersistence.ts`), mas ainda continha as operações em massa do canvas (limpar tudo, exportar `.fxcanvas`, importar `.fxcanvas`) — confirmações, diálogo de arquivo, (de)serialização do bundle e as flags de busy que as acompanham. Extraído para `hooks/useCanvasTransfer.ts` novo. 1174 → 1050 linhas.
+- **`ChatWorkspace.tsx`** (o maior e mais entrelaçado) continha três blocos de estado praticamente independentes, cada um com seu próprio ciclo local-first + migração/sincronização com backend + refs de bookkeeping: notas de projeto, automações customizadas e projetos (+ ids ativos). Extraídos para `hooks/useNotes.ts`, `hooks/useAutomations.ts` e `hooks/useProjects.ts` (este último mantém projects e activeProjectIds juntos, pois a sincronização de activeIds depende do load de projects). Modelos (`models`/`selectedModelId`) foram avaliados mas não extraídos nesta passada — 75 referências cruzadas com `stopStreaming`/`resetConversationThread`/`sendMessage` tornam a extração de baixo risco inviável sem um desenho mais cuidadoso; registrado como próximo passo. 1790 → 1465 linhas.
+
+TESTE: nenhum teste novo — refactor puro reaproveitando comportamento já coberto pela suíte existente (398 testes de backend `node:test`, 69 de frontend `vitest`).
+
+VALIDAÇÃO: a cada extração — `npx tsc -b`, `npx eslint .`, `npm run build` (backend + frontend) e a suíte de testes correspondente (backend: 398 pass; frontend: 69 pass) rodados e verificados verdes antes de prosseguir para o próximo arquivo. `qa-logger.cjs` e o pin do `TerminalDrawer.tsx` (trabalho não commitado de outra tarefa) não foram tocados.
+
+Estado final: concluído — os 3 arquivos refatorados, 3 commits incrementais na branch `refactor/quality-pass-2026-08-03`, build final do repo verde.
+
 ## Resumos de Decisão
 
 [2026-06-21] CONTEXTO: Como persistir as conversas dos terminais entre sessões (o PTY morre ao fechar o app e o scrollback é efêmero).
