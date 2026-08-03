@@ -4,13 +4,18 @@
  *
  * Flags verified against the installed CLIs (`<cli> --help`):
  * - Claude Code: --model <m> · --effort <low|medium|high|max> · --dangerously-skip-permissions
- * - Codex:       --model <m> · -c model_reasoning_effort=<low|medium|high|xhigh> · --dangerously-bypass-approvals-and-sandbox
+ * - Codex:       --model <m> · -c model_reasoning_effort=<...> · --dangerously-bypass-approvals-and-sandbox
  * - Gemini:      --model <m> · (no effort) · --yolo
+ *
+ * Codex model slugs and their supported effort levels come straight from
+ * `~/.codex/models_cache.json` (fetched by the installed CLI itself) — each
+ * model advertises a different effort set, e.g. Terra supports "ultra" but
+ * Luna doesn't, so effort options must be looked up per model, not per agent.
  */
 
 export type AgentId = 'claude' | 'codex' | 'gemini'
 
-export type EffortLevel = 'low' | 'medium' | 'high' | 'max' | 'xhigh'
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max' | 'xhigh' | 'ultra'
 
 export type AgentDefinition = {
   id: AgentId
@@ -19,8 +24,11 @@ export type AgentDefinition = {
   label: string
   /** Model options shown in the menu (extendable — adding new ones is safe). */
   models: string[]
-  /** Effort levels supported, or null when the CLI has no effort flag. */
-  effortLevels: EffortLevel[] | null
+  /**
+   * Effort levels supported, or null when the CLI has no effort flag.
+   * Either a flat list shared by every model, or a per-model lookup (Codex).
+   */
+  effortLevels: EffortLevel[] | Record<string, EffortLevel[]> | null
 }
 
 export const AGENTS: AgentDefinition[] = [
@@ -35,8 +43,12 @@ export const AGENTS: AgentDefinition[] = [
     id: 'codex',
     command: 'codex',
     label: 'Codex',
-    models: ['gpt-5.5', 'gpt-5.5-codex', 'gpt-5.4'],
-    effortLevels: ['low', 'medium', 'high', 'xhigh'],
+    models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
+    effortLevels: {
+      'gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      'gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
+    },
   },
   {
     id: 'gemini',
@@ -49,6 +61,40 @@ export const AGENTS: AgentDefinition[] = [
 
 export function getAgent(id: AgentId): AgentDefinition | undefined {
   return AGENTS.find((agent) => agent.id === id)
+}
+
+/** Default Codex effort set — used when `model` isn't a recognized slug. */
+const DEFAULT_CODEX_EFFORT_LEVELS = (AGENTS.find((a) => a.id === 'codex')
+  ?.effortLevels as Record<string, EffortLevel[]>)['gpt-5.6-sol']
+
+/** Effort levels available for `agent`, resolved against `model` when the agent's list is per-model. */
+export function getEffortLevels(
+  agent: AgentDefinition,
+  model: string,
+): EffortLevel[] | null {
+  const { effortLevels } = agent
+  if (!effortLevels) {
+    return null
+  }
+  if (Array.isArray(effortLevels)) {
+    return effortLevels
+  }
+  if (agent.id === 'codex') {
+    return effortLevels[model] ?? DEFAULT_CODEX_EFFORT_LEVELS
+  }
+  return effortLevels[model] ?? null
+}
+
+/** True when `effort` is a valid choice for `agent` + `model` (empty effort is always valid — it means "default"). */
+export function isEffortValidForModel(
+  agent: AgentDefinition,
+  model: string,
+  effort: string,
+): boolean {
+  if (!effort) {
+    return true
+  }
+  return getEffortLevels(agent, model)?.includes(effort as EffortLevel) ?? false
 }
 
 /**
@@ -87,7 +133,8 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
     args.push('--model', choices.model)
   }
 
-  if (choices.effort && agent.effortLevels?.includes(choices.effort)) {
+  const availableEffortLevels = getEffortLevels(agent, choices.model ?? '')
+  if (choices.effort && availableEffortLevels?.includes(choices.effort)) {
     if (agent.id === 'claude') {
       args.push('--effort', choices.effort)
     } else if (agent.id === 'codex') {
@@ -108,7 +155,7 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
   return args
 }
 
-/** Short human label for the block, e.g. "Claude opus" or "Codex gpt-5.5 ⚡". */
+/** Short human label for the block, e.g. "Claude opus" or "Codex sol ⚡". */
 export function describeLaunch(choices: AgentLaunchChoices): string {
   const agent = getAgent(choices.agentId)
   const parts = [agent?.label ?? choices.agentId]

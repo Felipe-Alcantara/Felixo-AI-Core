@@ -33,20 +33,20 @@ const claudeSonnet = {
   providerModel: 'sonnet',
 }
 const codexHigh = {
-  id: 'codex-5.5',
-  name: 'Codex GPT-5.5',
+  id: 'codex-sol',
+  name: 'Codex GPT-5.6 Sol',
   command: 'codex',
   source: 'CLI local',
   cliType: 'codex',
-  providerModel: 'gpt-5.5',
+  providerModel: 'gpt-5.6-sol',
 }
 const codexMini = {
-  id: 'codex-mini',
-  name: 'Codex Mini',
+  id: 'codex-luna',
+  name: 'Codex GPT-5.6 Luna',
   command: 'codex',
   source: 'CLI local',
   cliType: 'codex',
-  providerModel: 'gpt-5.4-mini',
+  providerModel: 'gpt-5.6-luna',
 }
 const geminiPro = {
   id: 'gemini-pro',
@@ -195,7 +195,7 @@ test('last-resort respects user blocks: ok:false when every model blocked', () =
     'claude',
     {
       availableModels: [claudeSonnet, codexMini],
-      orchestratorSettings: { blockedModelIds: ['claude-sonnet', 'codex-mini'] },
+      orchestratorSettings: { blockedModelIds: ['claude-sonnet', 'codex-luna'] },
     },
     {},
   )
@@ -301,7 +301,7 @@ test('applyVariantDefaults fills missing providerModel and reasoningEffort by cl
   assert.deepEqual(applyVariantDefaults({ cliType: 'codex', id: 'y' }), {
     cliType: 'codex',
     id: 'y',
-    providerModel: 'gpt-5.5',
+    providerModel: 'gpt-5.6-sol',
     reasoningEffort: 'xhigh',
   })
   assert.deepEqual(applyVariantDefaults({ cliType: 'gemini', id: 'z' }), {
@@ -316,10 +316,10 @@ test('applyVariantDefaults preserves user-configured providerModel/effort', () =
   const result = applyVariantDefaults({
     cliType: 'codex',
     id: 'custom',
-    providerModel: 'gpt-5.4',
+    providerModel: 'gpt-5.6-terra',
     reasoningEffort: 'medium',
   })
-  assert.equal(result.providerModel, 'gpt-5.4')
+  assert.equal(result.providerModel, 'gpt-5.6-terra')
   assert.equal(result.reasoningEffort, 'medium')
 })
 
@@ -406,12 +406,12 @@ test('getFallbackOrderForCliType excludes user-blocked models entirely', () => {
     'claude',
     {
       availableModels: [claudeOpus, codexHigh],
-      orchestratorSettings: { blockedModelIds: ['codex-5.5'] },
+      orchestratorSettings: { blockedModelIds: ['codex-sol'] },
     },
     {},
   )
 
-  assert.ok(order.every((entry) => entry.model.id !== 'codex-5.5'))
+  assert.ok(order.every((entry) => entry.model.id !== 'codex-sol'))
 })
 
 test('default Claude preference breaks tie among same-cliType candidates', () => {
@@ -436,14 +436,14 @@ test('tier bonus prefers opus over sonnet over haiku', () => {
   assert.ok(getProviderModelTierBonus('haiku') < 0)
 })
 
-test('tier bonus prefers gpt-5.5 over gpt-5.4 over gpt-5.4-mini', () => {
+test('tier bonus prefers gpt-5.6-sol over gpt-5.6-terra over gpt-5.6-luna', () => {
   assert.ok(
-    getProviderModelTierBonus('gpt-5.5') >= getProviderModelTierBonus('gpt-5.5-codex'),
+    getProviderModelTierBonus('gpt-5.6-sol') > getProviderModelTierBonus('gpt-5.6-terra'),
   )
   assert.ok(
-    getProviderModelTierBonus('gpt-5.4') > getProviderModelTierBonus('gpt-5.4-mini'),
+    getProviderModelTierBonus('gpt-5.6-terra') > getProviderModelTierBonus('gpt-5.6-luna'),
   )
-  assert.ok(getProviderModelTierBonus('gpt-5.4-mini') < 0)
+  assert.ok(getProviderModelTierBonus('gpt-5.6-luna') < 0)
 })
 
 test('tier bonus prefers gemini-3-pro over flash over flash-lite', () => {
@@ -500,25 +500,25 @@ test('user-preferred low-tier model still wins (preferredModelIds bypasses tier 
   assert.equal(winner.id, 'claude-haiku')
 })
 
-test('selectBestSpawnModel picks gpt-5.5 over gpt-5.4-mini for codex', () => {
+test('selectBestSpawnModel picks gpt-5.6-sol over gpt-5.6-luna for codex', () => {
   const big = {
-    id: 'codex-55',
-    name: 'Codex 5.5',
+    id: 'codex-sol',
+    name: 'Codex Sol',
     cliType: 'codex',
-    providerModel: 'gpt-5.5',
+    providerModel: 'gpt-5.6-sol',
   }
   const mini = {
-    id: 'codex-mini',
-    name: 'Codex Mini',
+    id: 'codex-luna',
+    name: 'Codex Luna',
     cliType: 'codex',
-    providerModel: 'gpt-5.4-mini',
+    providerModel: 'gpt-5.6-luna',
   }
   const winner = selectBestSpawnModel([mini, big], {
     preferredModelIds: [],
     requestedCliType: 'codex',
     prompt: 'analise os trade-offs',
   })
-  assert.equal(winner.id, 'codex-55')
+  assert.equal(winner.id, 'codex-sol')
 })
 
 test('tier fallback inside cliType: opus rate-limited, sonnet wins over haiku', () => {
