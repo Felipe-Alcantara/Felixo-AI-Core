@@ -92,7 +92,7 @@ export function ProjectsPanel({ onClose, onProjectsChanged }: ProjectsPanelProps
         type="button"
         onClick={() => void addProject()}
         disabled={busy}
-        className="mb-3 flex w-full items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+        className="felixo-btn mb-3 flex w-full items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
       >
         <FolderPlus size={15} />
         {busy ? 'Adicionando…' : 'Adicionar pasta'}
@@ -116,7 +116,7 @@ export function ProjectsPanel({ onClose, onProjectsChanged }: ProjectsPanelProps
               <button
                 type="button"
                 onClick={() => void removeProject(project.id)}
-                className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
                 aria-label={`Remover ${project.name}`}
               >
                 <Trash2 size={14} />

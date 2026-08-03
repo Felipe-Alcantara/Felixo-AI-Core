@@ -145,7 +145,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
           <button
             type="button"
             onClick={togglePinned}
-            className={`rounded p-1 hover:bg-white/10 ${
+            className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
               pinned ? 'text-emerald-400 hover:text-emerald-300' : 'text-zinc-400 hover:text-zinc-100'
             }`}
             aria-label={pinned ? 'Desafixar terminal' : 'Fixar terminal'}
@@ -156,7 +156,7 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
           <button
             type="button"
             onClick={close}
-            className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+            className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
             aria-label="Recolher terminal"
           >
             <X size={16} />

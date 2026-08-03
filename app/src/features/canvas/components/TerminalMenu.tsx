@@ -136,7 +136,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
         <button
           type="button"
           onClick={openTerminal}
-          className="flex items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700"
+          className="felixo-btn flex items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700"
         >
           <TerminalSquare size={16} />
           Terminal
@@ -144,7 +144,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
-          className="border-l border-white/10 bg-zinc-800 px-1.5 text-zinc-300 hover:bg-zinc-700"
+          className="felixo-btn-icon border-l border-white/10 bg-zinc-800 px-1.5 text-zinc-300 hover:bg-zinc-700"
           aria-label="Configurar novo terminal"
         >
           <ChevronDown size={14} />
@@ -248,7 +248,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
             <button
               type="button"
               onClick={openTerminal}
-              className="flex-1 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+              className="felixo-btn flex-1 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
             >
               Abrir terminal
             </button>
@@ -257,7 +257,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
               onClick={queueCurrent}
               title="Adicionar esta configuração à fila, para iniciar vários terminais de uma vez"
               aria-label="Adicionar à fila de terminais"
-              className="flex items-center justify-center rounded bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"
+              className="felixo-btn-icon flex items-center justify-center rounded bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"
             >
               <Plus size={14} />
             </button>
@@ -272,7 +272,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
                   onClick={() => setQueue([])}
                   title="Esvaziar fila"
                   aria-label="Esvaziar fila de terminais"
-                  className="text-zinc-500 hover:text-zinc-300"
+                  className="felixo-btn-icon text-zinc-500 hover:text-zinc-300"
                 >
                   <Trash2 size={12} />
                 </button>
@@ -294,7 +294,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
                       type="button"
                       onClick={() => removeQueued(index)}
                       aria-label={`Remover "${item.label}" da fila`}
-                      className="shrink-0 text-zinc-500 hover:text-zinc-300"
+                      className="felixo-btn-icon shrink-0 text-zinc-500 hover:text-zinc-300"
                     >
                       <X size={12} />
                     </button>
@@ -304,7 +304,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
               <button
                 type="button"
                 onClick={startQueue}
-                className="w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+                className="felixo-btn w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
               >
                 Iniciar {queue.length} terminais
               </button>

@@ -28,7 +28,7 @@ import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
 const TOOLBAR_BUTTON_CLASS =
-  'flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700'
+  'felixo-btn flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700'
 
 type CanvasToolbarProps = {
   activeTool: CanvasTool | null
@@ -93,7 +93,7 @@ export function CanvasToolbar({
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className={TOOLBAR_BUTTON_CLASS}
+          className={`felixo-btn-icon ${TOOLBAR_BUTTON_CLASS}`}
           title="Mostrar funções auxiliares"
         >
           <ChevronRight size={16} />
@@ -101,7 +101,7 @@ export function CanvasToolbar({
         <button
           type="button"
           onClick={onOpenChat}
-          className={TOOLBAR_BUTTON_CLASS}
+          className={`felixo-btn-icon ${TOOLBAR_BUTTON_CLASS}`}
           title="Abrir chat"
         >
           <MessageSquare size={16} />
@@ -115,7 +115,7 @@ export function CanvasToolbar({
       <button
         type="button"
         onClick={() => setCollapsed(true)}
-        className={TOOLBAR_BUTTON_CLASS}
+        className={`felixo-btn-icon ${TOOLBAR_BUTTON_CLASS}`}
         title="Esconder funções auxiliares"
       >
         <ChevronLeft size={16} />
@@ -223,7 +223,7 @@ export function CanvasToolbar({
         type="button"
         onClick={onClear}
         disabled={isBusy}
-        className="flex items-center gap-2 rounded-lg bg-red-950/80 px-3 py-2 text-sm text-red-100 shadow-lg ring-1 ring-red-500/20 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
+        className="felixo-btn flex items-center gap-2 rounded-lg bg-red-950/80 px-3 py-2 text-sm text-red-100 shadow-lg ring-1 ring-red-500/20 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
         title="Excluir todos os blocos, conexões e arquivos .md do canvas"
       >
         <Trash2 size={16} />
@@ -309,7 +309,7 @@ function NamedCreateButton({
           <button
             type="button"
             onClick={create}
-            className="w-full rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600"
+            className="felixo-btn w-full rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600"
           >
             Criar
           </button>

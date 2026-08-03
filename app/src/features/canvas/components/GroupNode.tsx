@@ -43,7 +43,7 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
         />
         <button
           type="button"
-          className="nodrag rounded p-0.5 text-indigo-200 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded p-0.5 text-indigo-200 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => void deleteElements({ nodes: [{ id }] })}
           aria-label="Remover grupo"
         >

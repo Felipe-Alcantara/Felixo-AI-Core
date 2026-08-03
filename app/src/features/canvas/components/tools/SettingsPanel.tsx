@@ -131,7 +131,7 @@ function PromptField({
         <button
           type="button"
           onClick={() => void save()}
-          className="flex flex-1 items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
         >
           <Save size={14} />
           {saved ? 'Salvo' : 'Salvar'}
@@ -139,7 +139,7 @@ function PromptField({
         <button
           type="button"
           onClick={() => setValue(defaultValue)}
-          className="flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
+          className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
           title="Restaurar o texto padrão"
         >
           <RotateCcw size={14} />
@@ -207,7 +207,7 @@ function QualityStandardField({
         <button
           type="button"
           onClick={() => void save()}
-          className="flex flex-1 items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
         >
           <Save size={14} />
           {saved ? 'Salvo' : 'Salvar'}
@@ -215,7 +215,7 @@ function QualityStandardField({
         <button
           type="button"
           onClick={() => setPrompt(DEFAULT_QUALITY_STANDARD_PROMPT)}
-          className="flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
+          className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
           title="Restaurar o texto padrão"
         >
           <RotateCcw size={14} />

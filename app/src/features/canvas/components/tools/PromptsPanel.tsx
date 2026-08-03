@@ -206,7 +206,7 @@ export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
         <button
           type="button"
           onClick={() => void addCustomAutomation()}
-          className="flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
         >
           <Plus size={13} />
           Novo prompt
@@ -245,7 +245,7 @@ export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
                   <button
                     type="button"
                     onClick={() => setDetailId(prompt.id)}
-                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
+                    className="felixo-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
                     title="Ver e editar o texto completo do prompt"
                   >
                     <Eye size={13} />
@@ -255,7 +255,7 @@ export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
                 <button
                   type="button"
                   onClick={() => void insertPrompt(prompt)}
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
+                  className="felixo-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
                   title="Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)"
                 >
                   {feedbackId === prompt.id ? (
@@ -274,7 +274,7 @@ export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
                   <button
                     type="button"
                     onClick={() => void removeCustomAutomation(prompt.id)}
-                    className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                    className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
                     aria-label="Remover prompt"
                   >
                     <Trash2 size={14} />

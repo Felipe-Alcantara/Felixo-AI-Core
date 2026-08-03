@@ -103,7 +103,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         <CopyButton onCopy={() => store.copy(id)} />
         <button
           type="button"
-          className="nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => nodeData.onExpand?.(id)}
           aria-label="Expandir terminal"
           title="Expandir"
@@ -115,7 +115,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       <button
         type="button"
         onClick={() => nodeData.onExpand?.(id)}
-        className="nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
+        className="felixo-btn nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
       >
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
         {snapshot?.lastPrompt && (
