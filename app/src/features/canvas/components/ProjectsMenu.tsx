@@ -134,7 +134,7 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
+        className="felixo-btn flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Abrir uma pasta e rodar arquivos dela num terminal"
       >
         <FolderOpen size={16} />
@@ -157,7 +157,7 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
                     <button
                       type="button"
                       onClick={() => openProject(project)}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
+                      className="felixo-btn flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
                     >
                       <Folder size={14} className="shrink-0 text-zinc-400" />
                       <span className="min-w-0 flex-1 truncate">{project.name}</span>
@@ -169,7 +169,7 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
               <button
                 type="button"
                 onClick={() => void onAddFolder()}
-                className="w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+                className="felixo-btn w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
               >
                 + Adicionar pasta…
               </button>
@@ -180,7 +180,7 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
                 <button
                   type="button"
                   onClick={goUp}
-                  className="rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+                  className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
                   title="Voltar"
                 >
                   <ChevronRight size={14} className="rotate-180" />
@@ -208,7 +208,7 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
                     <button
                       type="button"
                       onClick={() => (entry.isDirectory ? openSubfolder(entry) : runFile(entry))}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
+                      className="felixo-btn flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
                       title={entry.isDirectory ? undefined : `Rodar ${entry.name} num terminal`}
                     >
                       {entry.isDirectory ? (

@@ -211,7 +211,7 @@ export function TerminalsPanel({
           title="Enviar mensagens diferentes para vários terminais"
           aria-label="Alternar modo de enviar mensagens em massa"
           aria-pressed={composeMode}
-          className={`rounded p-1 hover:bg-white/10 ${
+          className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
             composeMode ? 'text-emerald-400' : 'text-zinc-400'
           }`}
         >
@@ -224,7 +224,7 @@ export function TerminalsPanel({
             type="button"
             onClick={sendAllDrafts}
             disabled={pendingIds.length === 0}
-            className="flex w-full items-center justify-center gap-1.5 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:opacity-50"
+            className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:opacity-50"
           >
             <Send size={12} />
             Enviar para todos {pendingIds.length > 0 ? `(${pendingIds.length})` : ''}
@@ -300,7 +300,7 @@ function ElementRow({
         type="button"
         onClick={onSelect}
         title={elementTitle(node)}
-        className={`flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
+        className={`felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
           active ? 'bg-white/10' : ''
         }`}
       >
@@ -375,7 +375,7 @@ function RowComposer({
         disabled={!draft.trim()}
         title="Enviar"
         aria-label={`Enviar mensagem para "${terminalTitle}"`}
-        className="shrink-0 rounded bg-emerald-700 p-1 text-white hover:bg-emerald-600 disabled:opacity-40"
+        className="felixo-btn-icon shrink-0 rounded bg-emerald-700 p-1 text-white hover:bg-emerald-600 disabled:opacity-40"
       >
         <Send size={12} />
       </button>

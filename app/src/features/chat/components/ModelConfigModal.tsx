@@ -2,6 +2,11 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { BrainCircuit, Save, X } from 'lucide-react'
 import type { CliType, Model, ReasoningEffort } from '../types'
+import {
+  getAgent,
+  getEffortLevels,
+  isEffortValidForModel,
+} from '../../canvas/services/agent-launch-options'
 
 type ModelConfigModalProps = {
   isOpen: boolean
@@ -23,11 +28,9 @@ const providerModelSpecs: Record<string, ProviderModelSpec> = {
   sonnet: { context: '200k tokens', costIn: 'US$ 3.00/1M', costOut: 'US$ 15.00/1M', bestFor: 'Código, revisão, escrita' },
   opus: { context: '200k tokens', costIn: 'US$ 15.00/1M', costOut: 'US$ 75.00/1M', bestFor: 'Tarefas complexas, raciocínio profundo' },
   haiku: { context: '200k tokens', costIn: 'US$ 0.80/1M', costOut: 'US$ 4.00/1M', bestFor: 'Respostas rápidas, classificação' },
-  'gpt-5.5': { context: '~270k tokens', costIn: 'US$ 2.00/1M', costOut: 'US$ 10.00/1M', bestFor: 'Código avançado, agentes' },
-  'gpt-5.4': { context: '~270k tokens', costIn: 'US$ 2.50/1M', costOut: 'US$ 10.00/1M', bestFor: 'Código, revisão, raciocínio' },
-  'gpt-5.4-mini': { context: '~270k tokens', costIn: 'US$ 0.75/1M', costOut: 'US$ 4.50/1M', bestFor: 'Subagentes de código com custo menor' },
-  'gpt-5.3-codex': { context: '~200k tokens', costIn: 'US$ 1.50/1M', costOut: 'US$ 6.00/1M', bestFor: 'Código, edição de arquivos' },
-  'gpt-5.2': { context: '~128k tokens', costIn: 'US$ 1.25/1M', costOut: 'US$ 5.00/1M', bestFor: 'Uso geral, custo moderado' },
+  'gpt-5.6-sol': { context: '1.05M tokens', costIn: 'US$ 5.00/1M', costOut: 'US$ 30.00/1M', bestFor: 'Código avançado, raciocínio profundo' },
+  'gpt-5.6-terra': { context: '1.05M tokens', costIn: 'US$ 2.00/1M', costOut: 'US$ 12.00/1M', bestFor: 'Código, revisão, uso geral' },
+  'gpt-5.6-luna': { context: '1.05M tokens', costIn: 'US$ 0.20/1M', costOut: 'US$ 1.20/1M', bestFor: 'Subagentes e tarefas de baixo custo' },
   'gemini-3-flash-preview': { context: '1M tokens', costIn: 'US$ 0.30/1M', costOut: 'US$ 2.50/1M', bestFor: 'Contexto longo, automações' },
   'gemini-3.1-flash-lite-preview': { context: '1M tokens', costIn: 'US$ 0.10/1M', costOut: 'US$ 0.40/1M', bestFor: 'Classificação, resumo barato' },
   'gemini-2.5-flash': { context: '1M tokens', costIn: 'US$ 0.30/1M', costOut: 'US$ 2.50/1M', bestFor: 'Contexto longo, resumo' },
@@ -41,18 +44,14 @@ const providerModelOptionsByCliType: Partial<Record<CliType, SelectOption[]>> = 
     { value: 'haiku', label: 'Haiku 4.5' },
   ],
   codex: [
-    { value: 'gpt-5.5', label: 'gpt-5.5' },
-    { value: 'gpt-5.4', label: 'gpt-5.4' },
-    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
-    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
-    { value: 'gpt-5.2', label: 'gpt-5.2' },
+    { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+    { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+    { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
   ],
   'codex-app-server': [
-    { value: 'gpt-5.5', label: 'gpt-5.5' },
-    { value: 'gpt-5.4', label: 'gpt-5.4' },
-    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
-    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
-    { value: 'gpt-5.2', label: 'gpt-5.2' },
+    { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+    { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+    { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
   ],
   gemini: [
     { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
@@ -76,23 +75,33 @@ const reasoningEffortOptionsByCliType: Partial<Record<CliType, SelectOption[]>> 
     { value: 'high', label: 'High' },
     { value: 'max', label: 'Max' },
   ],
-  codex: [
-    { value: '', label: 'Padrão' },
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'xhigh', label: 'XHigh' },
-  ],
-  'codex-app-server': [
-    { value: '', label: 'Padrão' },
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'xhigh', label: 'XHigh' },
-  ],
 }
 
 const defaultEffortOptions: SelectOption[] = [{ value: '', label: 'Padrão' }]
+
+const EFFORT_LABELS: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max',
+  ultra: 'Ultra',
+}
+
+// Codex's per-model effort set (Sol/Terra support "ultra", Luna doesn't) lives in
+// agent-launch-options.ts, the single source of truth also used by the canvas
+// terminal launcher — derive the dropdown options from it instead of duplicating the table.
+function getReasoningEffortOptions(model: Model, providerModel: string): SelectOption[] {
+  if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
+    const agent = getAgent('codex')
+    const levels = (agent && getEffortLevels(agent, providerModel)) ?? []
+    return [
+      { value: '', label: 'Padrão' },
+      ...levels.map((level) => ({ value: level, label: EFFORT_LABELS[level] ?? level })),
+    ]
+  }
+  return reasoningEffortOptionsByCliType[model.cliType] ?? defaultEffortOptions
+}
 
 export function ModelConfigModal({
   isOpen,
@@ -111,8 +120,17 @@ export function ModelConfigModal({
 
   const capabilities = getModelCapabilities(model)
   const providerOptions = getProviderModelOptions(model)
-  const effortOptions = reasoningEffortOptionsByCliType[model.cliType] ?? defaultEffortOptions
+  const effortOptions = getReasoningEffortOptions(model, providerModel)
   const selectedSpec = providerModel ? providerModelSpecs[providerModel] ?? null : null
+
+  function handleProviderModelChange(value: string) {
+    setProviderModel(value)
+    const isCodex = model.cliType === 'codex' || model.cliType === 'codex-app-server'
+    const codexAgent = isCodex ? getAgent('codex') : undefined
+    if (codexAgent && !isEffortValidForModel(codexAgent, value, reasoningEffort)) {
+      setReasoningEffort('')
+    }
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -148,7 +166,7 @@ export function ModelConfigModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -187,7 +205,7 @@ export function ModelConfigModal({
                 Modelo do provedor
                 <select
                   value={providerModel}
-                  onChange={(event) => setProviderModel(event.target.value)}
+                  onChange={(event) => handleProviderModelChange(event.target.value)}
                   className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
                 >
                   {providerOptions.map((option) => (
@@ -230,7 +248,7 @@ export function ModelConfigModal({
 
           <button
             type="submit"
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[var(--color-panel)]"
+            className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[var(--color-panel)]"
           >
             <Save size={16} aria-hidden="true" />
             Salvar

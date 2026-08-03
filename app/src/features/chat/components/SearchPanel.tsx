@@ -75,7 +75,7 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
           <button
             type="button"
             onClick={() => setQuery('')}
-            className="shrink-0 rounded p-0.5 text-zinc-500 transition hover:text-zinc-300"
+            className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:text-zinc-300"
           >
             <X size={12} />
           </button>
@@ -83,7 +83,7 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
         <button
           type="button"
           onClick={closePanel}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-zinc-500 transition hover:text-zinc-300"
+          className="felixo-btn shrink-0 rounded px-1.5 py-0.5 text-[11px] text-zinc-500 hover:text-zinc-300"
         >
           Esc
         </button>
@@ -111,7 +111,7 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
                   onSelectSession(session)
                   closePanel()
                 }}
-                className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition hover:bg-white/[0.05]"
+                className="felixo-btn flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-white/[0.05]"
               >
                 <span
                   className="text-[12px] font-medium text-zinc-300"

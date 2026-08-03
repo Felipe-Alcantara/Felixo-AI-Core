@@ -1242,7 +1242,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
               type="button"
               title="Abrir sidebar"
               onClick={() => setIsSidebarOpen(true)}
-              className="rounded p-0.5 transition hover:text-zinc-300"
+              className="felixo-btn-icon rounded p-0.5 hover:text-zinc-300"
             >
               <PanelLeft size={13} />
             </button>
@@ -1253,7 +1253,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
                 type="button"
                 onClick={onBack}
                 title="Voltar para o canvas"
-                className="flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] transition hover:text-zinc-300"
+                className="felixo-btn flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] hover:text-zinc-300"
               >
                 <LayoutGrid size={12} />
                 Canvas
@@ -1327,7 +1327,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
                       type="button"
                       disabled={isStreaming}
                       onClick={() => setInput(prompt)}
-                      className="block w-full px-3 py-3 text-left text-[12px] text-zinc-500 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:text-zinc-700 [@media(max-height:620px)]:py-2"
+                      className="felixo-btn block w-full px-3 py-3 text-left text-[12px] text-zinc-500 hover:text-zinc-300 disabled:cursor-not-allowed disabled:text-zinc-700 [@media(max-height:620px)]:py-2"
                     >
                       {prompt}
                     </button>

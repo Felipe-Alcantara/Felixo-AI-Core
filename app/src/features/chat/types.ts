@@ -8,7 +8,7 @@ export type CliType =
   | 'gemini-acp'
   | 'unknown'
 
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 
 export type Model = {
   id: ModelId

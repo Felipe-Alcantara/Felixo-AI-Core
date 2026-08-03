@@ -153,7 +153,7 @@ export function AppSidebar({
             type="button"
             title="Recolher sidebar"
             onClick={onToggleSidebar}
-            className="rounded p-0.5 transition hover:text-zinc-300"
+            className="felixo-btn-icon rounded p-0.5 hover:text-zinc-300"
           >
             <PanelLeft size={13} />
           </button>
@@ -161,7 +161,7 @@ export function AppSidebar({
             type="button"
             title="Pesquisar"
             onClick={() => setIsSearchOpen(true)}
-            className="rounded p-0.5 transition hover:text-zinc-300"
+            className="felixo-btn-icon rounded p-0.5 hover:text-zinc-300"
           >
             <Search size={13} />
           </button>
@@ -173,7 +173,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => handleNavClick('Novo chat')}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
           >
             <Plus size={14} aria-hidden="true" />
             Novo chat
@@ -182,7 +182,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => handleNavClick('Pesquisar')}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
           >
             <Search size={14} aria-hidden="true" />
             Pesquisar
@@ -193,7 +193,7 @@ export function AppSidebar({
               <button
                 type="button"
                 onClick={() => setIsProjectsExpanded((v) => !v)}
-                className="flex h-7 flex-1 items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+                className="felixo-btn flex h-7 flex-1 items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
               >
                 <Folder size={14} aria-hidden="true" />
                 Projetos
@@ -209,7 +209,7 @@ export function AppSidebar({
                 type="button"
                 title="Gerenciar projetos"
                 onClick={onOpenProjects}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-white/[0.06] hover:text-zinc-300"
+                className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-600 hover:bg-white/[0.06] hover:text-zinc-300"
               >
                 <Plus size={12} aria-hidden="true" />
               </button>
@@ -223,7 +223,7 @@ export function AppSidebar({
                     type="button"
                     onClick={() => onToggleProject(project)}
                     title={project.path}
-                    className="flex h-6 w-full items-center gap-1.5 rounded-md bg-amber-500/15 px-1.5 text-left text-[11px] text-amber-300"
+                    className="felixo-btn flex h-6 w-full items-center gap-1.5 rounded-md bg-amber-500/15 px-1.5 text-left text-[11px] text-amber-300"
                   >
                     <GitBranch size={11} className="shrink-0" aria-hidden="true" />
                     <span className="truncate">{project.name}</span>
@@ -246,7 +246,7 @@ export function AppSidebar({
                       onClick={() => onToggleProject(project)}
                       title={project.path}
                       className={[
-                        'flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] transition',
+                        'felixo-btn flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px]',
                         activeProjectIds.has(project.id)
                           ? 'bg-amber-500/15 text-amber-300'
                           : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
@@ -264,7 +264,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => handleNavClick('Automações')}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
           >
             <Sparkles size={14} aria-hidden="true" />
             Automações
@@ -273,7 +273,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => handleNavClick('Skills')}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
           >
             <BrainCircuit size={14} aria-hidden="true" />
             Skills
@@ -282,7 +282,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => handleNavClick('Orquestrador')}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
           >
             <Network size={14} aria-hidden="true" />
             Orquestrador
@@ -291,7 +291,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => handleNavClick('Notas')}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
           >
             <StickyNote size={14} aria-hidden="true" />
             Notas
@@ -300,7 +300,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => handleNavClick('Exportar')}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
           >
             <Download size={14} aria-hidden="true" />
             Exportar
@@ -314,7 +314,7 @@ export function AppSidebar({
               <button
                 type="button"
                 onClick={() => setIsSearchOpen(true)}
-                className="rounded px-1.5 py-0.5 transition hover:bg-white/[0.06] hover:text-zinc-300"
+                className="felixo-btn rounded px-1.5 py-0.5 hover:bg-white/[0.06] hover:text-zinc-300"
               >
                 Ver todos
               </button>
@@ -332,7 +332,7 @@ export function AppSidebar({
                   type="button"
                   onClick={() => onSelectSession(session)}
                   title={session.title}
-                  className="flex min-h-8 w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-100"
+                  className="felixo-btn flex min-h-8 w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-100"
                 >
                   <MessageSquare
                     size={13}
@@ -358,7 +358,7 @@ export function AppSidebar({
               type="button"
               title="Configurar modelos"
               onClick={onOpenModelSettings}
-              className="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-white/[0.06] hover:text-zinc-200"
+              className="felixo-btn-icon flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/[0.06] hover:text-zinc-200"
             >
               <SlidersHorizontal size={12} aria-hidden="true" />
               <span className="sr-only">Configurar modelos</span>
@@ -373,7 +373,7 @@ export function AppSidebar({
                 <button
                   type="button"
                   onClick={() => onOpenModelSettingsFor(model.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                  className="felixo-btn flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
                 >
                   <Bot size={13} aria-hidden="true" className="shrink-0" />
                   <span className="min-w-0">
@@ -387,7 +387,7 @@ export function AppSidebar({
                   type="button"
                   title={`Remover ${model.name}`}
                   onClick={() => onRemoveModel(model)}
-                  className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-600 opacity-0 transition hover:bg-theme-error/10 hover:text-theme-error group-hover:opacity-100 focus:opacity-100"
+                  className="felixo-btn-icon mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-600 opacity-0 hover:bg-theme-error/10 hover:text-theme-error group-hover:opacity-100 focus:opacity-100"
                 >
                   <Trash2 size={12} aria-hidden="true" />
                   <span className="sr-only">Remover {model.name}</span>
@@ -402,7 +402,7 @@ export function AppSidebar({
         <button
           type="button"
           onClick={onOpenCode}
-          className="mb-1 flex h-8 w-full items-center gap-2 rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
+          className="felixo-btn mb-1 flex h-8 w-full items-center gap-2 rounded-lg px-1.5 text-left text-[12px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <Code2 size={13} aria-hidden="true" />
           Code
@@ -410,7 +410,7 @@ export function AppSidebar({
         <button
           type="button"
           onClick={onOpenFelixoSettings}
-          className="flex h-8 w-full items-center justify-between rounded-lg px-1.5 text-left text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
+          className="felixo-btn flex h-8 w-full items-center justify-between rounded-lg px-1.5 text-left text-[12px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <span className="flex items-center gap-2">
             <User size={13} aria-hidden="true" />

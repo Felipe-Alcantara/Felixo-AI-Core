@@ -62,7 +62,7 @@ export function ModelsPanel({ onClose }: ModelsPanelProps) {
               <button
                 type="button"
                 onClick={() => void removeModel(model.id)}
-                className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
                 aria-label={`Remover ${model.name}`}
               >
                 <Trash2 size={14} />

@@ -177,7 +177,7 @@ function CopyButton({ text, title }: { text: string; title: string }) {
       type="button"
       title={title}
       onClick={handleCopy}
-      className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 transition hover:text-zinc-300"
+      className="felixo-btn-icon flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:text-zinc-300"
     >
       {copied ? (
         <Check size={12} className="text-emerald-400" aria-hidden="true" />
@@ -211,7 +211,7 @@ function MessageAttachments({
               type="button"
               title={`Expandir ${attachment.name}`}
               onClick={() => onOpenImage(attachment)}
-              className="group relative flex max-h-72 min-h-32 w-full items-center justify-center bg-black/20 outline-none focus:ring-2 focus:ring-sky-200/40"
+              className="felixo-btn-icon group relative flex max-h-72 min-h-32 w-full items-center justify-center bg-black/20 outline-none focus:ring-2 focus:ring-sky-200/40"
             >
               <img
                 src={attachment.previewUrl}
@@ -297,7 +297,7 @@ function ImageLightbox({
               type="button"
               title="Fechar imagem"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
             >
               <X size={16} aria-hidden="true" />
               <span className="sr-only">Fechar imagem</span>

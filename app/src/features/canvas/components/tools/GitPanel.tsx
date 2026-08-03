@@ -114,7 +114,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
             type="button"
             onClick={() => void refresh(projectPath)}
             disabled={busy}
-            className="rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
+            className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
             title="Atualizar status"
           >
             <RefreshCw size={14} />
@@ -156,7 +156,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
             type="button"
             onClick={() => void stageAll()}
             disabled={busy || summary.isClean}
-            className="flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
+            className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
           >
             <Plus size={14} />
             Stage all
@@ -173,7 +173,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
             type="button"
             onClick={() => void commit()}
             disabled={busy || !message.trim()}
-            className="flex items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+            className="felixo-btn flex items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
           >
             <GitCommit size={14} />
             Commit

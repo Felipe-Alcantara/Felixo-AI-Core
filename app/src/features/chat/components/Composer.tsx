@@ -12,6 +12,11 @@ import type {
   ModelId,
   ReasoningEffort,
 } from '../types'
+import {
+  getAgent,
+  getEffortLevels,
+  isEffortValidForModel,
+} from '../../canvas/services/agent-launch-options'
 
 type RuntimeSelectOption = {
   value: string
@@ -41,18 +46,14 @@ const providerModelOptionsByCliType: Partial<
     { value: 'haiku', label: 'Haiku 4.5' },
   ],
   codex: [
-    { value: 'gpt-5.5', label: 'gpt-5.5' },
-    { value: 'gpt-5.4', label: 'gpt-5.4' },
-    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
-    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
-    { value: 'gpt-5.2', label: 'gpt-5.2' },
+    { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+    { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+    { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
   ],
   'codex-app-server': [
-    { value: 'gpt-5.5', label: 'gpt-5.5' },
-    { value: 'gpt-5.4', label: 'gpt-5.4' },
-    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
-    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
-    { value: 'gpt-5.2', label: 'gpt-5.2' },
+    { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+    { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+    { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
   ],
   gemini: [
     { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
@@ -73,14 +74,6 @@ const defaultReasoningEffortOption: ReasoningEffortOption = {
   label: 'Padrão',
 }
 
-const codexReasoningEffortOptions: ReasoningEffortOption[] = [
-  defaultReasoningEffortOption,
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'XHigh' },
-]
-
 const claudeReasoningEffortOptions: ReasoningEffortOption[] = [
   defaultReasoningEffortOption,
   { value: 'low', label: 'Low' },
@@ -93,8 +86,27 @@ const reasoningEffortOptionsByCliType: Partial<
   Record<Model['cliType'], ReasoningEffortOption[]>
 > = {
   claude: claudeReasoningEffortOptions,
-  codex: codexReasoningEffortOptions,
-  'codex-app-server': codexReasoningEffortOptions,
+}
+
+const EFFORT_LABELS: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max',
+  ultra: 'Ultra',
+}
+
+// Codex's per-model effort set (Sol/Terra support "ultra", Luna doesn't) lives in
+// agent-launch-options.ts, the single source of truth also used by the canvas
+// terminal launcher — derive the dropdown options from it instead of duplicating the table.
+function getCodexReasoningEffortOptions(providerModel: string): ReasoningEffortOption[] {
+  const agent = getAgent('codex')
+  const levels = (agent && getEffortLevels(agent, providerModel)) ?? []
+  return [
+    defaultReasoningEffortOption,
+    ...levels.map((level) => ({ value: level, label: EFFORT_LABELS[level] ?? level })),
+  ]
 }
 
 type ModelRuntimeConfigPatch = Partial<
@@ -164,7 +176,16 @@ export function Composer({
       return
     }
 
-    onChangeModelConfig({ providerModel: providerModel || undefined })
+    const currentEffort = selectedModel.reasoningEffort ?? ''
+    const isCodex = selectedModel.cliType === 'codex' || selectedModel.cliType === 'codex-app-server'
+    const codexAgent = isCodex ? getAgent('codex') : undefined
+    const effortStillValid =
+      !isCodex || !codexAgent || isEffortValidForModel(codexAgent, providerModel, currentEffort)
+
+    onChangeModelConfig({
+      providerModel: providerModel || undefined,
+      ...(effortStillValid ? {} : { reasoningEffort: undefined }),
+    })
   }
 
   function changeReasoningEffort(value: '' | ReasoningEffort) {
@@ -260,7 +281,7 @@ export function Composer({
                 title="Adicionar contexto"
                 onClick={() => attachmentInputRef.current?.click()}
                 disabled={isStreaming}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <Plus size={17} aria-hidden="true" />
                 <span className="sr-only">Adicionar contexto</span>
@@ -324,7 +345,7 @@ export function Composer({
                 type="button"
                 title="Voz"
                 disabled={isStreaming}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <Mic size={15} aria-hidden="true" />
                 <span className="sr-only">Voz</span>
@@ -334,7 +355,7 @@ export function Composer({
                 title={isStreaming ? 'Parar' : 'Enviar'}
                 onClick={isStreaming ? onStop : undefined}
                 disabled={!isStreaming && !input.trim() && attachments.length === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#2b2b2a] disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-400"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#2b2b2a] disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-400"
               >
                 {isStreaming ? (
                   <Square size={13} aria-hidden="true" />
@@ -367,7 +388,7 @@ export function Composer({
               type="button"
               disabled={isStreaming}
               onClick={() => onInputChange(`${starter}: `)}
-              className="shrink-0 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-[12px] text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+              className="felixo-btn shrink-0 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-[12px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
             >
               {starter}
             </button>
@@ -412,7 +433,7 @@ function AttachmentPreview({
             title="Remover anexo"
             onClick={() => onRemove(attachment.id)}
             disabled={isStreaming}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+            className="felixo-btn-icon flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
           >
             <X size={12} aria-hidden="true" />
             <span className="sr-only">Remover anexo</span>
@@ -436,7 +457,7 @@ function AttachmentPreview({
         title="Remover anexo"
         onClick={() => onRemove(attachment.id)}
         disabled={isStreaming}
-        className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+        className="felixo-btn-icon ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
       >
         <X size={11} aria-hidden="true" />
         <span className="sr-only">Remover anexo</span>
@@ -717,11 +738,13 @@ function getProviderModelOptions(model: Model | null) {
 }
 
 function getReasoningEffortOptions(model: Model | null) {
-  return model
-    ? reasoningEffortOptionsByCliType[model.cliType] ?? [
-        defaultReasoningEffortOption,
-      ]
-    : [defaultReasoningEffortOption]
+  if (!model) {
+    return [defaultReasoningEffortOption]
+  }
+  if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
+    return getCodexReasoningEffortOptions(model.providerModel ?? '')
+  }
+  return reasoningEffortOptionsByCliType[model.cliType] ?? [defaultReasoningEffortOption]
 }
 
 function resolveSelectedReasoningEffort(

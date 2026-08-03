@@ -112,7 +112,7 @@ export function QaLoggerPanel({
             type="button"
             title="Abrir QA Logger"
             onClick={onToggleOpen}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
           >
             <ChevronUp size={14} aria-hidden="true" />
             <span className="sr-only">Abrir QA Logger</span>
@@ -145,7 +145,7 @@ export function QaLoggerPanel({
             title="Limpar logs"
             onClick={clearLogs}
             disabled={entries.length === 0}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
           >
             <Trash2 size={13} aria-hidden="true" />
             <span className="sr-only">Limpar logs</span>
@@ -154,7 +154,7 @@ export function QaLoggerPanel({
             type="button"
             title="Recolher QA Logger"
             onClick={onToggleOpen}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
           >
             <ChevronDown size={14} aria-hidden="true" />
             <span className="sr-only">Recolher QA Logger</span>

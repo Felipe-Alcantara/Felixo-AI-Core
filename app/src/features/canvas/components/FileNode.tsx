@@ -175,7 +175,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       >
         <button
           type="button"
-          className="nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => void copyPath()}
           title="Copiar caminho do arquivo (para dar ao agente)"
           aria-label="Copiar caminho"
@@ -184,7 +184,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <button
           type="button"
-          className="nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => setEditing((value) => !value)}
           title={editing ? 'Visualizar' : 'Editar'}
           aria-label={editing ? 'Visualizar' : 'Editar'}
@@ -198,7 +198,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           <button
             type="button"
             onClick={() => setMode('scratchpad')}
-            className={`px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+            className={`felixo-btn px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
             title="Modo scratchpad: log vivo e leve"
           >
             Scratchpad
@@ -206,7 +206,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           <button
             type="button"
             onClick={() => setMode('plan')}
-            className={`px-1.5 py-0.5 ${mode === 'plan' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+            className={`felixo-btn px-1.5 py-0.5 ${mode === 'plan' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
             title="Modo plano: gerar diagnóstico do repositório"
           >
             Plano
@@ -217,7 +217,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             onClick={() => void generateDiagnosis()}
             disabled={diagnosing}
-            className="nodrag ml-auto inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60 disabled:opacity-50"
+            className="felixo-btn nodrag ml-auto inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60 disabled:opacity-50"
             title="Pedir ao terminal conectado um diagnóstico do repositório"
           >
             <Stethoscope size={12} />
@@ -354,7 +354,7 @@ function LinkedAgentsPanel({
                 <button
                   type="button"
                   onClick={() => onUnlink(agent.id)}
-                  className="rounded p-0.5 text-sky-300/60 opacity-0 hover:bg-black/20 hover:text-rose-300 group-hover:opacity-100"
+                  className="felixo-btn-icon rounded p-0.5 text-sky-300/60 opacity-0 hover:bg-black/20 hover:text-rose-300 group-hover:opacity-100"
                   title="Desligar este agente"
                   aria-label={`Desligar ${agent.label}`}
                 >
@@ -373,7 +373,7 @@ function LinkedAgentsPanel({
           <button
             type="button"
             onClick={onToggleMenu}
-            className="inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60"
+            className="felixo-btn inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60"
             title="Ligar este arquivo a um agente do canvas"
           >
             <Plus size={11} />
@@ -388,7 +388,7 @@ function LinkedAgentsPanel({
                     key={agent.id}
                     type="button"
                     onClick={() => onLink(agent.id)}
-                    className="flex w-full items-center gap-1 px-2 py-1 text-left text-sky-100 hover:bg-sky-800/40"
+                    className="felixo-btn flex w-full items-center gap-1 px-2 py-1 text-left text-sky-100 hover:bg-sky-800/40"
                   >
                     <Link2 size={11} className="shrink-0 opacity-60" />
                     <span className="min-w-0 flex-1 truncate">{agent.label}</span>
