@@ -101,7 +101,7 @@ export function SearchPanel({ nodes, onFocusNode, onClose }: SearchPanelProps) {
               <button
                 type="button"
                 onClick={() => onFocusNode(hit.id)}
-                className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
               >
                 <Icon size={14} className="mt-0.5 shrink-0 text-zinc-400" />
                 <span className="min-w-0">

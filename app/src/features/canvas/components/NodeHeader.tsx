@@ -61,7 +61,7 @@ export function NodeHeader({
         <button
           type="button"
           // nodrag so clicking the close button never starts a drag.
-          className="nodrag rounded p-0.5 opacity-60 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded p-0.5 opacity-60 hover:bg-black/20 hover:opacity-100"
           onClick={onRemove}
           aria-label="Remover no"
         >

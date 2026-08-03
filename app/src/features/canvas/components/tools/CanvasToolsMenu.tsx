@@ -58,7 +58,7 @@ export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) 
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
+        className="felixo-btn flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Ferramentas"
       >
         <Wrench size={16} />
@@ -76,7 +76,7 @@ export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) 
                 onSelect(tool)
                 setOpen(false)
               }}
-              className={`flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
+              className={`felixo-btn flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
                 activeTool === tool ? 'bg-zinc-700 text-white' : 'text-zinc-200'
               }`}
             >
