@@ -99,7 +99,7 @@ class PtyProcessManager {
     const command = options.command || this.platform.getDefaultShell(env)
     const launch = options.command
       ? createPtyLaunchSpec(command, args, env, this.platform)
-      : { command, args }
+      : { command, args: getDefaultPtyShellArgs(command, this.platform) }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
     const cwd = resolveWorkingDirectory(options.cwd)
@@ -524,6 +524,27 @@ function normalizeDimension(value, fallback) {
 }
 
 /**
+ * A PTY needs a persistent shell, unlike one-shot shell command execution.
+ * On Windows start it without AutoRun/profile scripts, which can emit startup
+ * errors or immediately exit before the user has a usable terminal.
+ *
+ * @param {string} command
+ * @param {typeof platform} adapter
+ * @returns {string[]}
+ */
+function getDefaultPtyShellArgs(command, adapter) {
+  if (adapter.name !== 'win32') {
+    return []
+  }
+
+  if (typeof adapter.getShellArgs === 'function') {
+    return adapter.getShellArgs(command)
+  }
+
+  return /(?:powershell|pwsh)/i.test(command) ? ['-NoLogo', '-NoProfile'] : ['/d']
+}
+
+/**
  * A canvas project can be moved or deleted after a terminal node is saved.
  * node-pty fails before the shell starts when cwd no longer exists, which is
  * especially opaque on Windows (the pane only shows "path not found").
@@ -602,6 +623,7 @@ module.exports = {
   DEFAULT_COLS,
   DEFAULT_ROWS,
   createPtyLaunchSpec,
+  getDefaultPtyShellArgs,
   resolveWorkingDirectory,
   resolveWindowsCodexPath,
 }

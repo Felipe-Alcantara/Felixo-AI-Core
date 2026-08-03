@@ -16,10 +16,14 @@ function getDefaultShell(env) {
 function getShellArgs(shell) {
   const lower = shell.toLowerCase()
   if (lower.includes('powershell') || lower.includes('pwsh')) {
-    return ['-NoProfile', '-NonInteractive', '-Command']
+    // Keep a PTY interactive, but avoid user profiles that may contain a
+    // stale `cd` or startup script and make the terminal fail at launch.
+    return ['-NoLogo', '-NoProfile']
   }
 
-  return ['/d', '/s', '/c']
+  // Disable CMD AutoRun registry commands for the same reason. Do not add
+  // `/c`: an interactive PTY must keep the shell process alive.
+  return ['/d']
 }
 
 /** @returns {string} */

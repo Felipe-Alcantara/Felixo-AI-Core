@@ -95,6 +95,34 @@ test('default shell resolution uses the environment passed to the PTY', () => {
   assert.equal(shellEnvironment, calls[0].options.env)
 })
 
+test('Windows starts the default PowerShell without the user profile', () => {
+  const { calls, spawnPty } = createFakePty()
+  const adapter = {
+    name: 'win32',
+    getDefaultShell: () => 'powershell.exe',
+    getShellArgs: () => ['-NoLogo', '-NoProfile'],
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: adapter })
+
+  manager.spawn('term-clean-powershell', {})
+
+  assert.deepEqual(calls[0].args, ['-NoLogo', '-NoProfile'])
+})
+
+test('Windows starts the default CMD with AutoRun disabled', () => {
+  const { calls, spawnPty } = createFakePty()
+  const adapter = {
+    name: 'win32',
+    getDefaultShell: () => 'cmd.exe',
+    getShellArgs: () => ['/d'],
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: adapter })
+
+  manager.spawn('term-clean-cmd', {})
+
+  assert.deepEqual(calls[0].args, ['/d'])
+})
+
 test('spawn honors an explicit command, args and dimensions', () => {
   const { calls, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })
@@ -334,7 +362,7 @@ test('Windows keeps the terminal usable with a clean shell after every Codex fal
 
   assert.equal(spawnCalls.length, 3)
   assert.equal(spawnCalls[2].file, 'cmd.exe')
-  assert.deepEqual(spawnCalls[2].args, [])
+  assert.deepEqual(spawnCalls[2].args, ['/d'])
   assert.equal(spawnCalls[2].options.cwd, require('node:os').homedir())
 })
 
