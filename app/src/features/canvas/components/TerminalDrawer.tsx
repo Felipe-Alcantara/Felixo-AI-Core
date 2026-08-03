@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Pin, PinOff, X } from 'lucide-react'
+import { Pin, PinOff, RotateCcw, X } from 'lucide-react'
 import {
   useSessionSnapshot,
   useTerminalSessions,
@@ -15,6 +15,13 @@ import {
 type TerminalDrawerProps = {
   sessionId: string
   title: string
+  /** Launch options to relaunch with when the session has exited (see restart button). */
+  restartOptions?: {
+    command?: string
+    args?: string[]
+    cwd?: string
+    initialText?: string
+  }
   onClose: () => void
 }
 
@@ -26,9 +33,15 @@ const DEFAULT_WIDTH = 720
  * node. It attaches the session's already-running xterm element (the PTY never
  * stopped), so expanding just reveals ongoing work.
  */
-export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProps) {
+export function TerminalDrawer({
+  sessionId,
+  title,
+  restartOptions,
+  onClose,
+}: TerminalDrawerProps) {
   const store = useTerminalSessions()
   const snapshot = useSessionSnapshot(sessionId)
+  const canRestart = snapshot?.activity === 'exited' || snapshot?.activity === 'error'
   const mountRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(() =>
@@ -142,6 +155,17 @@ export function TerminalDrawer({ sessionId, title, onClose }: TerminalDrawerProp
                   : ''}
           </span>
           <CopyButton onCopy={() => store.copy(sessionId)} />
+          {canRestart && (
+            <button
+              type="button"
+              onClick={() => store.restart(sessionId, restartOptions ?? {})}
+              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              aria-label="Reiniciar terminal"
+              title="Reiniciar terminal"
+            >
+              <RotateCcw size={16} />
+            </button>
+          )}
           <button
             type="button"
             onClick={togglePinned}

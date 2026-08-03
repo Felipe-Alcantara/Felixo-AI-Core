@@ -1,10 +1,13 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
   createPtyLaunchSpec,
+  resolveWorkingDirectory,
+  resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
 
 /**
@@ -69,6 +72,27 @@ test('spawn launches the shell by default and streams raw output', () => {
 
   fakePty.emitData('hello\r\n')
   assert.deepEqual(received, ['hello\r\n'])
+})
+
+test('Windows falls back to cmd.exe when PowerShell is not present', () => {
+  assert.equal(win32Platform.getDefaultShell({}), 'cmd.exe')
+})
+
+test('default shell resolution uses the environment passed to the PTY', () => {
+  const { calls, spawnPty } = createFakePty()
+  let shellEnvironment
+  const adapter = {
+    name: 'win32',
+    getDefaultShell: (env) => {
+      shellEnvironment = env
+      return 'cmd.exe'
+    },
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: adapter })
+
+  manager.spawn('term-shell-env', {})
+
+  assert.equal(shellEnvironment, calls[0].options.env)
 })
 
 test('spawn honors an explicit command, args and dimensions', () => {
@@ -178,6 +202,99 @@ test('invalid dimensions fall back to safe defaults', () => {
 
   assert.equal(calls[0].options.cols, DEFAULT_COLS)
   assert.equal(calls[0].options.rows, DEFAULT_ROWS)
+})
+
+test('missing working directory falls back to the user home', () => {
+  const { calls, spawnPty } = createFakePty()
+  const warnings = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    logger: { warn: (...args) => warnings.push(args) },
+  })
+  const home = require('node:os').homedir()
+
+  manager.spawn('term-invalid-cwd', {
+    cwd: require('node:path').join(home, 'felixo-path-that-does-not-exist'),
+  })
+
+  assert.equal(calls[0].options.cwd, home)
+  assert.equal(resolveWorkingDirectory(home), home)
+  assert.equal(warnings[0][0], 'PTY: diretório de trabalho inválido; usando a pasta do usuário.')
+  assert.deepEqual(warnings[0][1], { reason: 'invalid-cwd', platform: process.platform })
+})
+
+test('Windows retries once when ConPTY reports a path error after startup', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const received = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakeWin32Platform,
+  })
+
+  manager.spawn('term-cwd-error', {
+    cwd: 'C:\\Users\\missing-project',
+    onData: (data) => received.push(data),
+  })
+
+  first.fakePty.emitData('O sistema não pode encontrar o caminho especificado.\r\n')
+  second.fakePty.emitData('C:\\Users\\felipe>')
+
+  assert.equal(spawnCalls.length, 2)
+  assert.equal(spawnCalls[1].options.cwd, require('node:os').homedir())
+  assert.deepEqual(received, ['C:\\Users\\felipe>'])
+})
+
+test('finds the Codex Windows shim in the npm user directory', () => {
+  const env = {
+    Path: 'C:\\Windows\\System32',
+    APPDATA: 'C:\\Users\\felipe\\AppData\\Roaming',
+  }
+  const expected = 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd'
+
+  assert.equal(
+    resolveWindowsCodexPath('codex', env, (candidate) => candidate === expected),
+    expected,
+  )
+  assert.equal(resolveWindowsCodexPath('claude', env, () => true), null)
+})
+
+test('Windows retries an early Codex failure with the located executable and original args', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const resolvedPath = 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd'
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakeWin32Platform,
+    logger: { warn() {} },
+    resolveCodexPath: () => resolvedPath,
+  })
+
+  manager.spawn('term-codex-path', {
+    command: 'codex',
+    args: ['--model', 'gpt-5.6-luna'],
+  })
+  first.fakePty.emitExit({ exitCode: 1 })
+
+  assert.equal(spawnCalls.length, 2)
+  assert.deepEqual(spawnCalls[1].args, [
+    '/d',
+    '/s',
+    '/c',
+    resolvedPath,
+    '--model',
+    'gpt-5.6-luna',
+  ])
 })
 
 test('force kill terminates immediately and drops the session', () => {

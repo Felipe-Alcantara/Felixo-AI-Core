@@ -92,6 +92,20 @@ export class TerminalSessionStore {
   private sessions = new Map<string, Session>()
   private listeners = new Map<string, Set<SessionListener>>()
 
+  /**
+   * Ends an exited/errored session and immediately re-creates it with the
+   * same launch options — e.g. after a Codex login attempt closes the CLI,
+   * so the user can retry without deleting and re-adding the terminal node.
+   */
+  restart(id: string, options: SessionOptions = {}): void {
+    const listeners = this.listeners.get(id)
+    this.remove(id)
+    if (listeners) {
+      this.listeners.set(id, listeners)
+    }
+    this.ensure(id, options)
+  }
+
   /** Returns the existing session for an id, creating it on first use. */
   ensure(id: string, options: SessionOptions = {}): void {
     if (this.sessions.has(id)) {

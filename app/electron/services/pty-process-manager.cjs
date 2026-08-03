@@ -18,6 +18,8 @@
  */
 
 const os = require('node:os')
+const path = require('node:path')
+const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 
@@ -35,6 +37,7 @@ const FORCE_KILL_DELAY_MS = 5000
 // re-joining to go wrong), so a fast exit there is a real CLI outcome — e.g.
 // `--version`/`--help` — that must reach the caller as-is, not be retried away.
 const EARLY_EXIT_THRESHOLD_MS = 800
+const WINDOWS_PATH_ERROR = /(?:cannot find the path specified|sistema não pode encontrar o caminho especificado|file not found)/i
 
 /**
  * @typedef {object} PtyHandle
@@ -56,12 +59,16 @@ class PtyProcessManager {
    * @param {PtyFactory} [dependencies.spawnPty] - Injectable PTY factory (tests).
    * @param {() => number} [dependencies.now] - Injectable clock (tests).
    * @param {typeof platform} [dependencies.platform] - Injectable platform adapter (tests).
+   * @param {{ warn?: (...args: unknown[]) => void }} [dependencies.logger] - Diagnostic logger.
+   * @param {(command: string, env: Record<string, string>) => string | null} [dependencies.resolveCodexPath] - Injectable Codex resolver.
    */
-  constructor({ spawnPty, now, platform: platformAdapter } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
     this.platform = platformAdapter ?? platform
+    this.logger = logger ?? console
+    this.resolveCodexPath = resolveCodexPath ?? resolveWindowsCodexPath
   }
 
   /**
@@ -89,13 +96,20 @@ class PtyProcessManager {
     const spawnPty = this.resolveSpawnPty()
     const env = createCliEnv()
     const args = Array.isArray(options.args) ? options.args : []
-    const command = options.command || this.platform.getDefaultShell(process.env)
+    const command = options.command || this.platform.getDefaultShell(env)
     const launch = options.command
       ? createPtyLaunchSpec(command, args, env, this.platform)
       : { command, args }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
-    const cwd = options.cwd || os.homedir()
+    const cwd = resolveWorkingDirectory(options.cwd)
+
+    if (typeof options.cwd === 'string' && options.cwd.trim() && cwd !== options.cwd) {
+      this.warn('PTY: diretório de trabalho inválido; usando a pasta do usuário.', {
+        reason: 'invalid-cwd',
+        platform: this.platform.name,
+      })
+    }
 
     // Only a first attempt with a real command + extra args, on the platform
     // where the argv-quoting fallback applies (see EARLY_EXIT_THRESHOLD_MS
@@ -106,6 +120,16 @@ class PtyProcessManager {
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
       args.length > 0
+    const allowCwdFallback =
+      !isFallbackRetry &&
+      this.platform.name === 'win32' &&
+      Boolean(options.cwd)
+    const allowCodexPathFallback =
+      !isFallbackRetry &&
+      this.platform.name === 'win32' &&
+      Boolean(options.command) &&
+      isCodexCommand(command)
+    let cwdFallbackRetried = false
 
     const ptyProcess = spawnPty(launch.command, launch.args, {
       name: 'xterm-256color',
@@ -128,7 +152,28 @@ class PtyProcessManager {
     this.sessions.set(sessionId, entry)
 
     if (typeof options.onData === 'function') {
-      ptyProcess.onData((data) => options.onData(data))
+      ptyProcess.onData((data) => {
+        // ConPTY can start the shell successfully and only then report an
+        // invalid working directory. In that case node-pty does not throw,
+        // so the preflight check above cannot help. Retry once at the user's
+        // home and hide only this transient shell diagnostic.
+        if (
+          allowCwdFallback &&
+          !cwdFallbackRetried &&
+          WINDOWS_PATH_ERROR.test(String(data))
+        ) {
+          cwdFallbackRetried = true
+          this.warn('PTY: shell reportou erro de caminho; tentando a pasta do usuário.', {
+            reason: 'shell-path-error',
+            platform: this.platform.name,
+          })
+          this.safeKill(ptyProcess, 'SIGKILL')
+          this.cleanup(sessionId, ptyProcess)
+          this.spawn(sessionId, { ...options, cwd: os.homedir() }, true)
+          return
+        }
+        options.onData(data)
+      })
     }
 
     ptyProcess.onExit((event) => {
@@ -141,9 +186,40 @@ class PtyProcessManager {
 
       if (
         isCurrentAttempt &&
-        allowFallback &&
+        (allowFallback || allowCodexPathFallback) &&
         this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS
       ) {
+        if (allowCodexPathFallback) {
+          const resolvedCodexPath = this.resolveCodexPath(command, env)
+          if (resolvedCodexPath && resolvedCodexPath !== command) {
+            this.warn('PTY: Codex falhou cedo; executável localizado no Windows.', {
+              reason: 'codex-path-resolved',
+              platform: this.platform.name,
+            })
+            this.spawn(
+              sessionId,
+              { ...options, command: resolvedCodexPath },
+              true,
+            )
+            return
+          }
+          this.warn('PTY: Codex falhou cedo e não foi localizado nos caminhos conhecidos.', {
+            reason: 'codex-path-not-found',
+            platform: this.platform.name,
+          })
+        }
+
+        if (!allowFallback) {
+          if (typeof options.onExit === 'function') {
+            options.onExit(event)
+          }
+          return
+        }
+
+        this.warn('PTY: CLI encerrou cedo com argumentos; tentando o comando sem argumentos.', {
+          reason: 'early-exit-args-retry',
+          platform: this.platform.name,
+        })
         this.spawn(sessionId, { ...options, args: [] }, true)
         return
       }
@@ -311,6 +387,22 @@ class PtyProcessManager {
       // lifecycle predictable for callers.
     }
   }
+
+  /**
+   * Keep diagnostics best-effort: logging must never prevent a terminal from
+   * starting, especially in packaged builds where console methods may be absent.
+   * Paths are intentionally omitted from the log payload.
+   *
+   * @param {string} message
+   * @param {Record<string, string>} details
+   */
+  warn(message, details) {
+    try {
+      this.logger?.warn?.(message, details)
+    } catch {
+      // Diagnostics are never part of the terminal's control flow.
+    }
+  }
 }
 
 /**
@@ -378,9 +470,85 @@ function normalizeDimension(value, fallback) {
   return Math.floor(numeric)
 }
 
+/**
+ * A canvas project can be moved or deleted after a terminal node is saved.
+ * node-pty fails before the shell starts when cwd no longer exists, which is
+ * especially opaque on Windows (the pane only shows "path not found").
+ * Starting in the user's home keeps the terminal usable and lets the user
+ * navigate to the project again.
+ *
+ * @param {unknown} requested
+ * @returns {string}
+ */
+function resolveWorkingDirectory(requested) {
+  const fallback = os.homedir()
+  if (typeof requested !== 'string' || !requested.trim()) {
+    return fallback
+  }
+
+  try {
+    return fs.statSync(requested).isDirectory() ? requested : fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Locate the Windows Codex shim without invoking a shell. This covers PATH
+ * entries plus the npm global directory used by the standard Windows install.
+ *
+ * @param {string} command
+ * @param {Record<string, string>} env
+ * @param {(candidate: string) => boolean} [exists]
+ * @returns {string | null}
+ */
+function resolveWindowsCodexPath(command, env, exists = fs.existsSync) {
+  if (!isCodexCommand(command)) {
+    return null
+  }
+
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path')
+  const pathEntries = String(pathKey ? env[pathKey] : '')
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  const home = env.USERPROFILE || env.HOME || os.homedir()
+  const knownDirectories = [
+    ...pathEntries,
+    env.APPDATA ? path.win32.join(env.APPDATA, 'npm') : null,
+    env.LOCALAPPDATA ? path.win32.join(env.LOCALAPPDATA, 'npm') : null,
+    home ? path.win32.join(home, 'AppData', 'Roaming', 'npm') : null,
+  ].filter(Boolean)
+  const commandName = path.win32.basename(command).replace(/\.(?:cmd|exe|bat|ps1)$/i, '')
+
+  for (const directory of [...new Set(knownDirectories)]) {
+    for (const extension of ['.cmd', '.exe', '.bat', '.ps1', '']) {
+      const candidate = path.win32.join(directory, `${commandName}${extension}`)
+      try {
+        if (exists(candidate)) {
+          return candidate
+        }
+      } catch {
+        continue
+      }
+    }
+  }
+
+  return null
+}
+
+function isCodexCommand(command) {
+  return path.win32
+    .basename(String(command ?? ''))
+    .replace(/\.(?:cmd|exe|bat|ps1)$/i, '')
+    .toLowerCase() === 'codex'
+}
+
 module.exports = {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
   createPtyLaunchSpec,
+  resolveWorkingDirectory,
+  resolveWindowsCodexPath,
 }
