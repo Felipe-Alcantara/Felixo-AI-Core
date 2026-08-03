@@ -91,7 +91,7 @@ class PtyProcessManager {
     const spawnPty = this.resolveSpawnPty()
     const env = createCliEnv()
     const args = Array.isArray(options.args) ? options.args : []
-    const command = options.command || this.platform.getDefaultShell(process.env)
+    const command = options.command || this.platform.getDefaultShell(env)
     const launch = options.command
       ? createPtyLaunchSpec(command, args, env, this.platform)
       : { command, args }
