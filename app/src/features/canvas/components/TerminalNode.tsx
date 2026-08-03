@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Loader2,
   Maximize2,
+  RotateCcw,
   Terminal as TerminalIcon,
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
@@ -65,6 +66,16 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
 
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
+  const canRestart = activity === 'exited' || activity === 'error'
+
+  const restart = () => {
+    store.restart(id, {
+      command: nodeData.command,
+      args: nodeData.args,
+      cwd: nodeData.cwd,
+      initialText: nodeData.initialText,
+    })
+  }
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#0b0f14] text-zinc-200 shadow-xl">
@@ -101,6 +112,17 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         }}
       >
         <CopyButton onCopy={() => store.copy(id)} />
+        {canRestart && (
+          <button
+            type="button"
+            className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+            onClick={restart}
+            aria-label="Reiniciar terminal"
+            title="Reiniciar terminal"
+          >
+            <RotateCcw size={13} />
+          </button>
+        )}
         <button
           type="button"
           className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"

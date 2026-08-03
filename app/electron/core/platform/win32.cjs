@@ -146,20 +146,24 @@ function getPathEnvKey(env) {
 // -- internal helpers --------------------------------------------------------
 
 function findPowerShell(env) {
+  const systemRoot = env.SystemRoot || env.WINDIR || 'C:\\Windows'
   const programFiles = env.ProgramFiles || 'C:\\Program Files'
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path')
+  const pathEntries = String(pathKey ? env[pathKey] : '')
+    .split(';')
+    .filter(Boolean)
   const candidates = [
     path.join(programFiles, 'PowerShell', '7', 'pwsh.exe'),
-    'pwsh.exe',
-    'powershell.exe',
+    path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    ...pathEntries.flatMap((entry) => [
+      path.join(entry, 'pwsh.exe'),
+      path.join(entry, 'powershell.exe'),
+    ]),
   ]
 
   for (const candidate of candidates) {
     try {
-      if (path.isAbsolute(candidate)) {
-        if (fs.existsSync(candidate)) return candidate
-      } else {
-        return candidate
-      }
+      if (fs.existsSync(candidate)) return candidate
     } catch {
       continue
     }
