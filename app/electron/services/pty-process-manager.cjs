@@ -37,7 +37,8 @@ const FORCE_KILL_DELAY_MS = 5000
 // re-joining to go wrong), so a fast exit there is a real CLI outcome — e.g.
 // `--version`/`--help` — that must reach the caller as-is, not be retried away.
 const EARLY_EXIT_THRESHOLD_MS = 800
-const WINDOWS_PATH_ERROR = /(?:cannot find the path specified|sistema não pode encontrar o caminho especificado|file not found)/i
+const WINDOWS_SHELL_PATH_ERROR = /(?:cannot find the path specified|sistema não pode encontrar o caminho especificado)/i
+const SHELL_STARTUP_RECOVERY_WINDOW_MS = 3000
 
 /**
  * @typedef {object} PtyHandle
@@ -61,14 +62,16 @@ class PtyProcessManager {
    * @param {typeof platform} [dependencies.platform] - Injectable platform adapter (tests).
    * @param {{ warn?: (...args: unknown[]) => void }} [dependencies.logger] - Diagnostic logger.
    * @param {(command: string, env: Record<string, string>) => string | null} [dependencies.resolveCodexPath] - Injectable Codex resolver.
+   * @param {() => boolean} [dependencies.isDebugSession] - Whether detailed local diagnostics are enabled.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
     this.platform = platformAdapter ?? platform
     this.logger = logger ?? console
     this.resolveCodexPath = resolveCodexPath ?? resolveWindowsCodexPath
+    this.isDebugSession = isDebugSession ?? (() => process.env.FELIXO_DEBUG_SESSION === '1')
   }
 
   /**
@@ -83,6 +86,7 @@ class PtyProcessManager {
    * @param {number} [options.rows]
    * @param {(data: string) => void} [options.onData] - Raw output sink.
    * @param {(event: { exitCode: number, signal?: number }) => void} [options.onExit]
+   * @param {string} [options.defaultShell] - Internal Windows fallback shell.
    * @param {boolean} [isFallbackRetry] - Internal: true when this call is the
    *   automatic bare-command retry after an early exit (see class docs above).
    *   Callers should never pass this themselves.
@@ -96,7 +100,15 @@ class PtyProcessManager {
     const spawnPty = this.resolveSpawnPty()
     const env = createCliEnv()
     const args = Array.isArray(options.args) ? options.args : []
-    const command = options.command || this.platform.getDefaultShell(env)
+    const defaultShell = options.defaultShell || this.platform.getDefaultShell(env)
+    const requestedCommand = options.command || defaultShell
+    const command = resolvePtyCommand(
+      requestedCommand,
+      Boolean(options.command),
+      env,
+      this.platform,
+      this.resolveCodexPath,
+    )
     const launch = options.command
       ? createPtyLaunchSpec(command, args, env, this.platform)
       : { command, args: getDefaultPtyShellArgs(command, this.platform) }
@@ -122,16 +134,16 @@ class PtyProcessManager {
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
       args.length > 0
-    const allowCwdFallback =
+    const allowShellStartupFallback =
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
-      Boolean(options.cwd)
+      !options.command
     const allowCodexPathFallback =
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
-      isCodexCommand(command)
-    let cwdFallbackRetried = false
+      isCodexCommand(requestedCommand)
+    let shellStartupFallbackRetried = false
 
     let ptyProcess
     try {
@@ -166,25 +178,27 @@ class PtyProcessManager {
 
     if (typeof options.onData === 'function') {
       ptyProcess.onData((data) => {
-        // ConPTY can start the shell successfully and only then report an
-        // invalid working directory. In that case node-pty does not throw,
-        // so the preflight check above cannot help. Retry once at the user's
-        // home and hide only this transient shell diagnostic.
+        // ConPTY can start a default shell successfully and only then report
+        // an invalid path. Only handle the platform's own startup text here:
+        // a CLI may legitimately print "File not found" for its work, and
+        // treating that as a shell failure used to kill Codex sessions.
         if (
-          allowCwdFallback &&
-          !cwdFallbackRetried &&
-          WINDOWS_PATH_ERROR.test(String(data))
+          allowShellStartupFallback &&
+          !shellStartupFallbackRetried &&
+          this.now() - entry.spawnedAt <= SHELL_STARTUP_RECOVERY_WINDOW_MS &&
+          WINDOWS_SHELL_PATH_ERROR.test(String(data))
         ) {
-          cwdFallbackRetried = true
+          shellStartupFallbackRetried = true
+          this.reportWindowsShellStartupDiagnostic(launch, cwd, data)
           this.reportLayer(
             options,
             'shell do Windows',
-            'O shell reportou um erro de caminho; tentando a pasta do usuário.',
+            'O shell reportou um erro de caminho; tentando CMD na pasta do usuário.',
             'shell-path-error',
           )
           this.safeKill(ptyProcess, 'SIGKILL')
           this.cleanup(sessionId, ptyProcess)
-          this.spawn(sessionId, { ...options, cwd: os.homedir() }, true)
+          this.spawn(sessionId, { ...options, cwd: os.homedir(), defaultShell: 'cmd.exe' }, true)
           return
         }
         options.onData(data)
@@ -207,7 +221,7 @@ class PtyProcessManager {
 
       if (exitedEarly) {
         if (!isFallbackRetry && allowCodexPathFallback) {
-          const resolvedCodexPath = this.resolveCodexPath(command, env)
+          const resolvedCodexPath = this.resolveCodexPath(requestedCommand, env)
           if (resolvedCodexPath && resolvedCodexPath !== command) {
             this.reportLayer(
               options,
@@ -456,6 +470,48 @@ class PtyProcessManager {
       // A renderer listener must not alter the PTY recovery path.
     }
   }
+
+  /**
+   * The dedicated launcher console is explicitly for local diagnosis, so it
+   * may contain the actual shell, cwd and startup text. Normal app launches
+   * keep the existing path-free diagnostic to avoid leaking local locations.
+   */
+  reportWindowsShellStartupDiagnostic(launch, cwd, data) {
+    if (!this.isDebugSession()) {
+      return
+    }
+
+    this.warn('PTY: Diagnóstico bruto do shell Windows.', {
+      reason: 'shell-path-error',
+      platform: this.platform.name,
+      shell: launch.command,
+      args: launch.args,
+      cwd,
+      output: String(data).replaceAll('\0', '').slice(0, 4000),
+    })
+  }
+}
+
+/**
+ * Resolve a Windows Codex shim before creating the PTY. Unlike an interactive
+ * user terminal, node-pty launches through CreateProcess and may not inherit
+ * the same PATHEXT/PATH resolution behaviour. An absolute codex.cmd removes
+ * that environmental difference while preserving the normal bare command when
+ * no known shim exists.
+ *
+ * @param {string} command
+ * @param {boolean} isExplicitCommand
+ * @param {Record<string, string>} env
+ * @param {typeof platform} adapter
+ * @param {(command: string, env: Record<string, string>) => string | null} resolveCodexPath
+ * @returns {string}
+ */
+function resolvePtyCommand(command, isExplicitCommand, env, adapter, resolveCodexPath) {
+  if (!isExplicitCommand || adapter.name !== 'win32' || !isCodexCommand(command)) {
+    return command
+  }
+
+  return resolveCodexPath(command, env) ?? command
 }
 
 /**
@@ -624,6 +680,7 @@ module.exports = {
   DEFAULT_ROWS,
   createPtyLaunchSpec,
   getDefaultPtyShellArgs,
+  resolvePtyCommand,
   resolveWorkingDirectory,
   resolveWindowsCodexPath,
 }

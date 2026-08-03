@@ -22,16 +22,19 @@ describe('official-cli-catalog', () => {
       '@openai/codex',
     ])
     assert.deepEqual(getOfficialAiCli('codex').login.args, ['login'])
+    assert.equal(getOfficialAiCli('codex').login.windowsCommand, 'codex.cmd')
     assert.deepEqual(getOfficialAiCli('claude').install.args, [
       'install',
       '-g',
       '@anthropic-ai/claude-code',
     ])
+    assert.equal(getOfficialAiCli('claude').login.windowsCommand, 'claude.cmd')
     assert.deepEqual(getOfficialAiCli('gemini').install.args, [
       'install',
       '-g',
       '@google/gemini-cli',
     ])
+    assert.equal(getOfficialAiCli('gemini').login.windowsCommand, 'gemini.cmd')
   })
 
   it('maps one installed CLI to all app adapters it unlocks', () => {

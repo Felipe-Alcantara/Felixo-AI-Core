@@ -55,7 +55,10 @@ async function installOfficialCli(id) {
   }
 }
 
-function openOfficialCliLogin(id) {
+function openOfficialCliLogin(
+  id,
+  { launchTerminal = launchCommandInTerminal, platformName = platform.name } = {},
+) {
   const cli = getOfficialAiCli(id)
 
   if (!cli) {
@@ -65,8 +68,8 @@ function openOfficialCliLogin(id) {
     }
   }
 
-  const result = launchCommandInTerminal({
-    command: cli.login.command,
+  const result = launchTerminal({
+    command: getPlatformCommand(cli.login, platformName),
     args: cli.login.args,
     cwd: os.homedir(),
     env: createCliEnv(),
@@ -190,8 +193,8 @@ function createCatalogItem(cli, detection) {
   }
 }
 
-function getPlatformCommand(descriptor) {
-  if (platform.name === 'win32' && descriptor.windowsCommand) {
+function getPlatformCommand(descriptor, platformName = platform.name) {
+  if (platformName === 'win32' && descriptor.windowsCommand) {
     return descriptor.windowsCommand
   }
 

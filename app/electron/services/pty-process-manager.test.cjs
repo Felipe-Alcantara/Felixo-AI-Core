@@ -259,18 +259,26 @@ test('missing working directory falls back to the user home', () => {
   ])
 })
 
-test('Windows retries once when ConPTY reports a path error after startup', () => {
+test('Windows replaces a failing default PowerShell with clean CMD after a startup path error', () => {
   const first = createFakePty()
   const second = createFakePty()
   const spawnCalls = []
   const received = []
+  const warnings = []
   const spawnPty = (file, args, options) => {
     spawnCalls.push({ file, args, options })
     return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
   }
   const manager = new PtyProcessManager({
     spawnPty,
-    platform: fakeWin32Platform,
+    logger: { warn: (...args) => warnings.push(args) },
+    isDebugSession: () => true,
+    platform: {
+      ...fakeWin32Platform,
+      getDefaultShell: () => 'powershell.exe',
+      getShellArgs: (shell) =>
+        shell === 'cmd.exe' ? ['/d'] : ['-NoLogo', '-NoProfile'],
+    },
   })
 
   manager.spawn('term-cwd-error', {
@@ -282,12 +290,42 @@ test('Windows retries once when ConPTY reports a path error after startup', () =
   second.fakePty.emitData('C:\\Users\\felipe>')
 
   assert.equal(spawnCalls.length, 2)
+  assert.equal(spawnCalls[0].file, 'powershell.exe')
+  assert.equal(spawnCalls[1].file, 'cmd.exe')
+  assert.deepEqual(spawnCalls[1].args, ['/d'])
   assert.equal(spawnCalls[1].options.cwd, require('node:os').homedir())
+  assert.deepEqual(warnings[1], [
+    'PTY: Diagnóstico bruto do shell Windows.',
+    {
+      reason: 'shell-path-error',
+      platform: 'win32',
+      shell: 'powershell.exe',
+      args: ['-NoLogo', '-NoProfile'],
+      cwd: require('node:os').homedir(),
+      output: 'O sistema não pode encontrar o caminho especificado.\r\n',
+    },
+  ])
   assert.deepEqual(received, [
     '\r\n[Felixo] Camada: diretório de trabalho. O caminho salvo não está disponível; usando a pasta do usuário.\r\n',
-    '\r\n[Felixo] Camada: shell do Windows. O shell reportou um erro de caminho; tentando a pasta do usuário.\r\n',
+    '\r\n[Felixo] Camada: shell do Windows. O shell reportou um erro de caminho; tentando CMD na pasta do usuário.\r\n',
     'C:\\Users\\felipe>',
   ])
+})
+
+test('Windows does not restart an explicit CLI when it prints a file-not-found message', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const received = []
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform })
+
+  manager.spawn('term-cli-file-error', {
+    command: 'codex',
+    cwd: require('node:os').homedir(),
+    onData: (data) => received.push(data),
+  })
+  fakePty.emitData('File not found: README.md\r\n')
+
+  assert.deepEqual(received, ['File not found: README.md\r\n'])
+  assert.equal(fakePty.kills.length, 0)
 })
 
 test('finds the Codex Windows shim in the npm user directory', () => {
@@ -304,14 +342,13 @@ test('finds the Codex Windows shim in the npm user directory', () => {
   assert.equal(resolveWindowsCodexPath('claude', env, () => true), null)
 })
 
-test('Windows retries an early Codex failure with the located executable and original args', () => {
+test('Windows resolves the Codex shim before the first PTY attempt', () => {
   const first = createFakePty()
-  const second = createFakePty()
   const spawnCalls = []
   const resolvedPath = 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd'
   const spawnPty = (file, args, options) => {
     spawnCalls.push({ file, args, options })
-    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+    return first.spawnPty(file, args, options)
   }
   const manager = new PtyProcessManager({
     spawnPty,
@@ -324,10 +361,9 @@ test('Windows retries an early Codex failure with the located executable and ori
     command: 'codex',
     args: ['--model', 'gpt-5.6-luna'],
   })
-  first.fakePty.emitExit({ exitCode: 1 })
 
-  assert.equal(spawnCalls.length, 2)
-  assert.deepEqual(spawnCalls[1].args, [
+  assert.equal(spawnCalls.length, 1)
+  assert.deepEqual(spawnCalls[0].args, [
     '/d',
     '/s',
     '/c',

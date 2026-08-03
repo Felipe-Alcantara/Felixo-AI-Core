@@ -45,3 +45,4 @@ class DebugConsoleTests(unittest.TestCase):
         self.assertIn("[VITE] ready", log)
         self.assertIn("[ELECTRON] started", log)
         self.assertIn("Process exited with code 7", log)
+        self.assertEqual(launched["kwargs"]["encoding"], "utf-8")  # type: ignore[index]
