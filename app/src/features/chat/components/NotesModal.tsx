@@ -108,7 +108,7 @@ export function NotesModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -121,7 +121,7 @@ export function NotesModal({
               <button
                 type="button"
                 onClick={createNote}
-                className="flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] text-xs text-zinc-200 transition hover:bg-white/[0.08]"
+                className="felixo-btn flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] text-xs text-zinc-200 hover:bg-white/[0.08]"
               >
                 <FilePlus size={14} aria-hidden="true" />
                 Nova
@@ -130,7 +130,7 @@ export function NotesModal({
                 type="button"
                 onClick={onCreateFromChat}
                 disabled={!hasMessages}
-                className="flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] text-xs text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] text-xs text-zinc-200 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <StickyNote size={14} aria-hidden="true" />
                 Chat
@@ -163,7 +163,7 @@ export function NotesModal({
                     type="button"
                     onClick={() => selectNote(note)}
                     className={[
-                      'w-full rounded-2xl px-3 py-2 text-left text-xs transition',
+                      'felixo-btn w-full rounded-2xl px-3 py-2 text-left text-xs',
                       selectedNoteId === note.id
                         ? 'bg-cyan-300/10 text-cyan-100'
                         : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200',
@@ -208,14 +208,14 @@ export function NotesModal({
                   <button
                     type="button"
                     onClick={() => onUseAsContext(selectedNote)}
-                    className="h-9 rounded-2xl border border-white/[0.08] px-3 text-xs text-zinc-200 transition hover:bg-white/[0.08]"
+                    className="felixo-btn h-9 rounded-2xl border border-white/[0.08] px-3 text-xs text-zinc-200 hover:bg-white/[0.08]"
                   >
                     Usar como contexto
                   </button>
                   <button
                     type="button"
                     onClick={deleteSelectedNote}
-                    className="flex h-9 items-center gap-2 rounded-2xl border border-theme-error/20 px-3 text-xs text-theme-error transition hover:bg-theme-error/10"
+                    className="felixo-btn flex h-9 items-center gap-2 rounded-2xl border border-theme-error/20 px-3 text-xs text-theme-error hover:bg-theme-error/10"
                   >
                     <Trash2 size={14} aria-hidden="true" />
                     Excluir
@@ -223,7 +223,7 @@ export function NotesModal({
                   <button
                     type="button"
                     onClick={saveSelectedNote}
-                    className="flex h-9 items-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 transition hover:bg-white"
+                    className="felixo-btn flex h-9 items-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white"
                   >
                     <Save size={14} aria-hidden="true" />
                     Salvar
@@ -235,7 +235,7 @@ export function NotesModal({
                 <button
                   type="button"
                   onClick={createNote}
-                  className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-4 text-sm text-zinc-200 transition hover:bg-white/[0.08]"
+                  className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-4 text-sm text-zinc-200 hover:bg-white/[0.08]"
                 >
                   <FilePlus size={16} aria-hidden="true" />
                   Criar nota

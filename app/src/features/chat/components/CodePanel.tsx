@@ -205,7 +205,7 @@ export function CodePanel({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -236,7 +236,7 @@ export function CodePanel({
               title="Atualizar Git"
               onClick={() => refreshSummary(selectedProject?.path ?? '')}
               disabled={!selectedProject || isLoading}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+              className="felixo-btn-icon flex h-10 w-10 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
             >
               <RefreshCw
                 size={16}
@@ -252,7 +252,7 @@ export function CodePanel({
               type="button"
               onClick={stageAll}
               disabled={!selectedProject || isLoading || isMutating || summary?.isClean}
-              className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-3 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-3 text-xs font-medium text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
             >
               <CheckCircle2 size={14} aria-hidden="true" />
               Stage tudo
@@ -262,7 +262,7 @@ export function CodePanel({
               type="button"
               onClick={unstageAll}
               disabled={!selectedProject || isLoading || isMutating || summary?.isClean}
-              className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-3 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-3 text-xs font-medium text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
             >
               <Undo2 size={14} aria-hidden="true" />
               Unstage
@@ -284,7 +284,7 @@ export function CodePanel({
                 isMutating ||
                 !commitMessage.trim()
               }
-              className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 text-xs font-medium text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 text-xs font-medium text-zinc-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
             >
               <GitCommit size={14} aria-hidden="true" />
               Commit

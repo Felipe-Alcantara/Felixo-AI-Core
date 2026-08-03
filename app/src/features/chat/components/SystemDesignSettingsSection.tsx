@@ -85,7 +85,7 @@ export function SystemDesignSettingsSection() {
           type="button"
           onClick={() => void sync()}
           disabled={syncing}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-100 hover:bg-white/10 disabled:opacity-50"
+          className="felixo-btn inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-100 hover:bg-white/10 disabled:opacity-50"
         >
           <RefreshCw
             size={12}
@@ -98,7 +98,7 @@ export function SystemDesignSettingsSection() {
           type="button"
           onClick={() => void resetCache()}
           disabled={syncing}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+          className="felixo-btn inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
         >
           <Trash2 size={12} aria-hidden="true" />
           Limpar cache
