@@ -105,10 +105,12 @@ class PtyProcessManager {
     const cwd = resolveWorkingDirectory(options.cwd)
 
     if (typeof options.cwd === 'string' && options.cwd.trim() && cwd !== options.cwd) {
-      this.warn('PTY: diretório de trabalho inválido; usando a pasta do usuário.', {
-        reason: 'invalid-cwd',
-        platform: this.platform.name,
-      })
+      this.reportLayer(
+        options,
+        'diretório de trabalho',
+        'O caminho salvo não está disponível; usando a pasta do usuário.',
+        'invalid-cwd',
+      )
     }
 
     // Only a first attempt with a real command + extra args, on the platform
@@ -131,15 +133,26 @@ class PtyProcessManager {
       isCodexCommand(command)
     let cwdFallbackRetried = false
 
-    const ptyProcess = spawnPty(launch.command, launch.args, {
-      name: 'xterm-256color',
-      cols,
-      rows,
-      // No project selected → open in the user's home, like a fresh terminal,
-      // instead of inheriting the app's working directory.
-      cwd,
-      env,
-    })
+    let ptyProcess
+    try {
+      ptyProcess = spawnPty(launch.command, launch.args, {
+        name: 'xterm-256color',
+        cols,
+        rows,
+        // No project selected → open in the user's home, like a fresh terminal,
+        // instead of inheriting the app's working directory.
+        cwd,
+        env,
+      })
+    } catch {
+      this.reportLayer(
+        options,
+        'inicialização do PTY',
+        'Não foi possível criar a sessão do terminal.',
+        'pty-spawn-error',
+      )
+      throw new Error('Camada de inicialização do PTY: não foi possível criar a sessão.')
+    }
 
     const entry = {
       ptyProcess,
@@ -163,10 +176,12 @@ class PtyProcessManager {
           WINDOWS_PATH_ERROR.test(String(data))
         ) {
           cwdFallbackRetried = true
-          this.warn('PTY: shell reportou erro de caminho; tentando a pasta do usuário.', {
-            reason: 'shell-path-error',
-            platform: this.platform.name,
-          })
+          this.reportLayer(
+            options,
+            'shell do Windows',
+            'O shell reportou um erro de caminho; tentando a pasta do usuário.',
+            'shell-path-error',
+          )
           this.safeKill(ptyProcess, 'SIGKILL')
           this.cleanup(sessionId, ptyProcess)
           this.spawn(sessionId, { ...options, cwd: os.homedir() }, true)
@@ -194,10 +209,12 @@ class PtyProcessManager {
         if (!isFallbackRetry && allowCodexPathFallback) {
           const resolvedCodexPath = this.resolveCodexPath(command, env)
           if (resolvedCodexPath && resolvedCodexPath !== command) {
-            this.warn('PTY: Codex falhou cedo; executável localizado no Windows.', {
-              reason: 'codex-path-resolved',
-              platform: this.platform.name,
-            })
+            this.reportLayer(
+              options,
+              'localização do Codex',
+              'O Codex falhou cedo; um executável local foi encontrado e será usado.',
+              'codex-path-resolved',
+            )
             this.spawn(
               sessionId,
               { ...options, command: resolvedCodexPath },
@@ -206,26 +223,32 @@ class PtyProcessManager {
             )
             return
           }
-          this.warn('PTY: Codex falhou cedo e não foi localizado nos caminhos conhecidos.', {
-            reason: 'codex-path-not-found',
-            platform: this.platform.name,
-          })
+          this.reportLayer(
+            options,
+            'localização do Codex',
+            'O Codex falhou cedo e não foi localizado nos caminhos conhecidos.',
+            'codex-path-not-found',
+          )
         }
 
         if (!isFallbackRetry && allowFallback) {
-          this.warn('PTY: CLI encerrou cedo com argumentos; tentando o comando sem argumentos.', {
-            reason: 'early-exit-args-retry',
-            platform: this.platform.name,
-          })
+          this.reportLayer(
+            options,
+            'argumentos da CLI',
+            'A CLI encerrou cedo; tentando iniciar sem os argumentos adicionais.',
+            'early-exit-args-retry',
+          )
           this.spawn(sessionId, { ...options, args: [] }, true, allowEmergencyShellFallback)
           return
         }
 
         if (allowEmergencyShellFallback) {
-          this.warn('PTY: fallback da CLI falhou; abrindo shell limpo do Windows.', {
-            reason: 'emergency-shell-fallback',
-            platform: this.platform.name,
-          })
+          this.reportLayer(
+            options,
+            'shell de emergência',
+            'As tentativas da CLI falharam; abrindo um shell limpo do Windows.',
+            'emergency-shell-fallback',
+          )
           this.spawn(
             sessionId,
             { cwd: os.homedir(), onData: options.onData, onExit: options.onExit },
