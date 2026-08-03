@@ -24,6 +24,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     login: {
       label: 'codex login',
       command: 'codex',
+      windowsCommand: 'codex.cmd',
       args: ['login'],
     },
     accountSwitch: {
@@ -84,6 +85,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     login: {
       label: 'claude',
       command: 'claude',
+      windowsCommand: 'claude.cmd',
       args: [],
     },
     models: [
@@ -121,6 +123,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     login: {
       label: 'gemini',
       command: 'gemini',
+      windowsCommand: 'gemini.cmd',
       args: [],
     },
     models: [
