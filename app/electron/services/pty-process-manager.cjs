@@ -25,6 +25,17 @@ const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
 const FORCE_KILL_DELAY_MS = 5000
 
+// Windows-only safety net for the argv-quoting fix in createPtyLaunchSpec below:
+// if a PTY launched there with extra args (e.g. codex --model ... -c ...) exits
+// this fast, the CLI almost certainly never started — cmd.exe/CreateProcess
+// choked on the command line rather than the CLI itself exiting. Retrying with
+// the plain command (no extra args) trades those flags for a session that
+// actually opens, instead of leaving the user with a frozen pane. Scoped to
+// win32 only: on other platforms args are passed straight through (no argv
+// re-joining to go wrong), so a fast exit there is a real CLI outcome — e.g.
+// `--version`/`--help` — that must reach the caller as-is, not be retried away.
+const EARLY_EXIT_THRESHOLD_MS = 800
+
 /**
  * @typedef {object} PtyHandle
  * @property {number} pid
@@ -43,10 +54,14 @@ class PtyProcessManager {
   /**
    * @param {object} [dependencies]
    * @param {PtyFactory} [dependencies.spawnPty] - Injectable PTY factory (tests).
+   * @param {() => number} [dependencies.now] - Injectable clock (tests).
+   * @param {typeof platform} [dependencies.platform] - Injectable platform adapter (tests).
    */
-  constructor({ spawnPty } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
+    this.now = now ?? (() => Date.now())
+    this.platform = platformAdapter ?? platform
   }
 
   /**
@@ -61,20 +76,36 @@ class PtyProcessManager {
    * @param {number} [options.rows]
    * @param {(data: string) => void} [options.onData] - Raw output sink.
    * @param {(event: { exitCode: number, signal?: number }) => void} [options.onExit]
+   * @param {boolean} [isFallbackRetry] - Internal: true when this call is the
+   *   automatic bare-command retry after an early exit (see class docs above).
+   *   Callers should never pass this themselves.
    * @returns {PtyHandle}
    */
-  spawn(sessionId, options = {}) {
-    this.kill(sessionId, { force: true })
+  spawn(sessionId, options = {}, isFallbackRetry = false) {
+    if (!isFallbackRetry) {
+      this.kill(sessionId, { force: true })
+    }
 
     const spawnPty = this.resolveSpawnPty()
     const env = createCliEnv()
-    const command = options.command || platform.getDefaultShell(process.env)
     const args = Array.isArray(options.args) ? options.args : []
+    const command = options.command || this.platform.getDefaultShell(process.env)
     const launch = options.command
-      ? createPtyLaunchSpec(command, args, env)
+      ? createPtyLaunchSpec(command, args, env, this.platform)
       : { command, args }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
+    const cwd = options.cwd || os.homedir()
+
+    // Only a first attempt with a real command + extra args, on the platform
+    // where the argv-quoting fallback applies (see EARLY_EXIT_THRESHOLD_MS
+    // above), gets a retry — a bare shell, a command with no args, or the
+    // retry itself has nothing simpler left to fall back to.
+    const allowFallback =
+      !isFallbackRetry &&
+      this.platform.name === 'win32' &&
+      Boolean(options.command) &&
+      args.length > 0
 
     const ptyProcess = spawnPty(launch.command, launch.args, {
       name: 'xterm-256color',
@@ -82,7 +113,7 @@ class PtyProcessManager {
       rows,
       // No project selected → open in the user's home, like a fresh terminal,
       // instead of inheriting the app's working directory.
-      cwd: options.cwd || os.homedir(),
+      cwd,
       env,
     })
 
@@ -91,6 +122,7 @@ class PtyProcessManager {
       cols,
       rows,
       killTimer: null,
+      spawnedAt: this.now(),
     }
 
     this.sessions.set(sessionId, entry)
@@ -100,11 +132,25 @@ class PtyProcessManager {
     }
 
     ptyProcess.onExit((event) => {
+      // A kill()/re-spawn may have already replaced this session's entry by
+      // the time this fires — only the still-current attempt gets to retry
+      // or report its exit; a superseded attempt's exit is not this session's
+      // outcome anymore.
+      const isCurrentAttempt = this.sessions.get(sessionId) === entry
+      this.cleanup(sessionId, ptyProcess)
+
+      if (
+        isCurrentAttempt &&
+        allowFallback &&
+        this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS
+      ) {
+        this.spawn(sessionId, { ...options, args: [] }, true)
+        return
+      }
+
       if (typeof options.onExit === 'function') {
         options.onExit(event)
       }
-
-      this.cleanup(sessionId, ptyProcess)
     })
 
     return ptyProcess
@@ -300,15 +346,15 @@ function createPtyLaunchSpec(command, args, env, adapter = platform) {
   }
 
   if (adapter.name === 'win32') {
-    const commandLine = [command, ...args]
-      .map((value) => adapter.escapeArg(String(value)))
-      .join(' ')
-
     // cmd.exe resolves PATHEXT (.cmd/.exe/.ps1) and searches PATH; `/d /s /c`
-    // skips AutoRun and runs the single command line as given.
+    // skips AutoRun and runs the command that follows. Passed as separate argv
+    // entries (not pre-joined into one string) so node-pty's own Windows
+    // command-line builder — which already quotes each argument correctly for
+    // CreateProcess/ConPTY — does the joining, instead of risking a second,
+    // divergent round of escaping here.
     return {
       command: 'cmd.exe',
-      args: ['/d', '/s', '/c', commandLine],
+      args: ['/d', '/s', '/c', command, ...args],
     }
   }
 

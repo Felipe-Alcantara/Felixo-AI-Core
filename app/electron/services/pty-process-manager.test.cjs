@@ -127,9 +127,11 @@ test('Windows launches explicit CLIs through cmd.exe so PATHEXT resolves .cmd sh
 
   // Bare `claude` (installed as claude.cmd) must go through the shell, not be
   // handed straight to CreateProcess — otherwise: "Cannot create process".
+  // Args stay as separate argv entries (not pre-joined into one string) so
+  // node-pty's own Windows command-line builder quotes each one correctly.
   assert.deepEqual(launch, {
     command: 'cmd.exe',
-    args: ['/d', '/s', '/c', 'claude --model opus'],
+    args: ['/d', '/s', '/c', 'claude', '--model', 'opus'],
   })
 })
 
@@ -232,6 +234,85 @@ test('re-spawning the same id replaces the previous session', () => {
 
   assert.deepEqual(first.fakePty.kills, ['SIGKILL'])
   assert.equal(manager.get('term-9'), second.fakePty)
+})
+
+const fakeWin32Platform = {
+  name: 'win32',
+  getDefaultShell: () => 'cmd.exe',
+  escapeArg: (value) => (/[" &|<>^%]/.test(value) ? `"${value}"` : value),
+}
+
+test('Windows: command with args that exits almost immediately retries with the bare command', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform })
+  const exits = []
+
+  manager.spawn('term-10', {
+    command: 'codex',
+    args: ['--model', 'gpt-5.6-sol'],
+    onExit: (event) => exits.push(event),
+  })
+
+  // Exits right away — the launch never really started.
+  first.fakePty.emitExit({ exitCode: 1 })
+
+  assert.equal(spawnCalls.length, 2)
+  assert.deepEqual(spawnCalls[1].args, ['/d', '/s', '/c', 'codex'])
+  assert.equal(manager.get('term-10'), second.fakePty)
+  // The failed first attempt's exit is swallowed — the caller only hears
+  // about the outcome of the retry, not the throwaway failed attempt.
+  assert.deepEqual(exits, [])
+
+  second.fakePty.emitExit({ exitCode: 0 })
+  assert.deepEqual(exits, [{ exitCode: 0 }])
+})
+
+test('Windows: command with args that runs for a while does not trigger a fallback retry', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  let now = 0
+  const manager = new PtyProcessManager({
+    spawnPty,
+    now: () => now,
+    platform: fakeWin32Platform,
+  })
+  const exits = []
+
+  manager.spawn('term-11', {
+    command: 'codex',
+    args: ['--model', 'gpt-5.6-sol'],
+    onExit: (event) => exits.push(event),
+  })
+
+  // Session stayed up well past the early-exit threshold before exiting.
+  now += 5000
+  fakePty.emitExit({ exitCode: 0 })
+
+  assert.deepEqual(exits, [{ exitCode: 0 }])
+})
+
+test('non-Windows: a fast exit with args is reported as-is, no fallback retry', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const linuxPlatform = { name: 'linux', getDefaultShell: () => '/bin/bash' }
+  const manager = new PtyProcessManager({ spawnPty, platform: linuxPlatform })
+  const exits = []
+
+  manager.spawn('term-12', {
+    command: 'codex',
+    args: ['--version'],
+    onExit: (event) => exits.push(event),
+  })
+
+  // A legitimately fast-exiting command (e.g. --version) must reach the
+  // caller as-is on platforms with no argv-quoting fallback to guard against.
+  fakePty.emitExit({ exitCode: 0 })
+
+  assert.deepEqual(exits, [{ exitCode: 0 }])
 })
 
 test('killAll terminates every tracked session', () => {
