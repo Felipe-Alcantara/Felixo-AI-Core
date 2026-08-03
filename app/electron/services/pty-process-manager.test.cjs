@@ -259,7 +259,7 @@ test('missing working directory falls back to the user home', () => {
   ])
 })
 
-test('Windows replaces a failing default PowerShell with clean CMD after a startup path error', () => {
+test('Windows retries a startup path error with the WinPTY backend before changing shell', () => {
   const first = createFakePty()
   const second = createFakePty()
   const spawnCalls = []
@@ -291,14 +291,16 @@ test('Windows replaces a failing default PowerShell with clean CMD after a start
 
   assert.equal(spawnCalls.length, 2)
   assert.equal(spawnCalls[0].file, 'powershell.exe')
-  assert.equal(spawnCalls[1].file, 'cmd.exe')
-  assert.deepEqual(spawnCalls[1].args, ['/d'])
+  assert.equal(spawnCalls[1].file, 'powershell.exe')
+  assert.deepEqual(spawnCalls[1].args, ['-NoLogo', '-NoProfile'])
+  assert.equal(spawnCalls[1].options.useConpty, false)
   assert.equal(spawnCalls[1].options.cwd, require('node:os').homedir())
   assert.deepEqual(warnings[1], [
     'PTY: Diagnóstico bruto do shell Windows.',
     {
       reason: 'shell-path-error',
       platform: 'win32',
+      backend: 'conpty/auto',
       shell: 'powershell.exe',
       args: ['-NoLogo', '-NoProfile'],
       cwd: require('node:os').homedir(),
@@ -307,8 +309,46 @@ test('Windows replaces a failing default PowerShell with clean CMD after a start
   ])
   assert.deepEqual(received, [
     '\r\n[Felixo] Camada: diretório de trabalho. O caminho salvo não está disponível; usando a pasta do usuário.\r\n',
-    '\r\n[Felixo] Camada: shell do Windows. O shell reportou um erro de caminho; tentando CMD na pasta do usuário.\r\n',
+    '\r\n[Felixo] Camada: backend PTY do Windows. A camada de terminal reportou um erro de caminho; tentando o backend alternativo.\r\n',
     'C:\\Users\\felipe>',
+  ])
+})
+
+test('Windows retries an explicit Codex launch with WinPTY after an early path error', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const received = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakeWin32Platform,
+    logger: { warn() {} },
+  })
+
+  manager.spawn('term-codex-conpty-error', {
+    command: 'codex',
+    args: ['--model', 'gpt-5.6-luna'],
+    cwd: require('node:os').homedir(),
+    onData: (data) => received.push(data),
+  })
+  first.fakePty.emitData('O sistema não pode encontrar o caminho especificado.\r\n')
+
+  assert.equal(spawnCalls.length, 2)
+  assert.equal(spawnCalls[1].options.useConpty, false)
+  assert.deepEqual(spawnCalls[1].args, [
+    '/d',
+    '/s',
+    '/c',
+    'codex',
+    '--model',
+    'gpt-5.6-luna',
+  ])
+  assert.deepEqual(received, [
+    '\r\n[Felixo] Camada: backend PTY do Windows. A camada de terminal reportou um erro de caminho; tentando o backend alternativo.\r\n',
   ])
 })
 
