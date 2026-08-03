@@ -18,6 +18,7 @@
  */
 
 const os = require('node:os')
+const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
@@ -59,13 +60,15 @@ class PtyProcessManager {
    * @param {() => number} [dependencies.now] - Injectable clock (tests).
    * @param {typeof platform} [dependencies.platform] - Injectable platform adapter (tests).
    * @param {{ warn?: (...args: unknown[]) => void }} [dependencies.logger] - Diagnostic logger.
+   * @param {(command: string, env: Record<string, string>) => string | null} [dependencies.resolveCodexPath] - Injectable Codex resolver.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
     this.platform = platformAdapter ?? platform
     this.logger = logger ?? console
+    this.resolveCodexPath = resolveCodexPath ?? resolveWindowsCodexPath
   }
 
   /**
@@ -121,6 +124,11 @@ class PtyProcessManager {
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
       Boolean(options.cwd)
+    const allowCodexPathFallback =
+      !isFallbackRetry &&
+      this.platform.name === 'win32' &&
+      Boolean(options.command) &&
+      isCodexCommand(command)
     let cwdFallbackRetried = false
 
     const ptyProcess = spawnPty(launch.command, launch.args, {
@@ -178,9 +186,36 @@ class PtyProcessManager {
 
       if (
         isCurrentAttempt &&
-        allowFallback &&
+        (allowFallback || allowCodexPathFallback) &&
         this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS
       ) {
+        if (allowCodexPathFallback) {
+          const resolvedCodexPath = this.resolveCodexPath(command, env)
+          if (resolvedCodexPath && resolvedCodexPath !== command) {
+            this.warn('PTY: Codex falhou cedo; executável localizado no Windows.', {
+              reason: 'codex-path-resolved',
+              platform: this.platform.name,
+            })
+            this.spawn(
+              sessionId,
+              { ...options, command: resolvedCodexPath },
+              true,
+            )
+            return
+          }
+          this.warn('PTY: Codex falhou cedo e não foi localizado nos caminhos conhecidos.', {
+            reason: 'codex-path-not-found',
+            platform: this.platform.name,
+          })
+        }
+
+        if (!allowFallback) {
+          if (typeof options.onExit === 'function') {
+            options.onExit(event)
+          }
+          return
+        }
+
         this.warn('PTY: CLI encerrou cedo com argumentos; tentando o comando sem argumentos.', {
           reason: 'early-exit-args-retry',
           platform: this.platform.name,
@@ -458,10 +493,62 @@ function resolveWorkingDirectory(requested) {
   }
 }
 
+/**
+ * Locate the Windows Codex shim without invoking a shell. This covers PATH
+ * entries plus the npm global directory used by the standard Windows install.
+ *
+ * @param {string} command
+ * @param {Record<string, string>} env
+ * @param {(candidate: string) => boolean} [exists]
+ * @returns {string | null}
+ */
+function resolveWindowsCodexPath(command, env, exists = fs.existsSync) {
+  if (!isCodexCommand(command)) {
+    return null
+  }
+
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path')
+  const pathEntries = String(pathKey ? env[pathKey] : '')
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  const home = env.USERPROFILE || env.HOME || os.homedir()
+  const knownDirectories = [
+    ...pathEntries,
+    env.APPDATA ? path.win32.join(env.APPDATA, 'npm') : null,
+    env.LOCALAPPDATA ? path.win32.join(env.LOCALAPPDATA, 'npm') : null,
+    home ? path.win32.join(home, 'AppData', 'Roaming', 'npm') : null,
+  ].filter(Boolean)
+  const commandName = path.win32.basename(command).replace(/\.(?:cmd|exe|bat|ps1)$/i, '')
+
+  for (const directory of [...new Set(knownDirectories)]) {
+    for (const extension of ['.cmd', '.exe', '.bat', '.ps1', '']) {
+      const candidate = path.win32.join(directory, `${commandName}${extension}`)
+      try {
+        if (exists(candidate)) {
+          return candidate
+        }
+      } catch {
+        continue
+      }
+    }
+  }
+
+  return null
+}
+
+function isCodexCommand(command) {
+  return path.win32
+    .basename(String(command ?? ''))
+    .replace(/\.(?:cmd|exe|bat|ps1)$/i, '')
+    .toLowerCase() === 'codex'
+}
+
 module.exports = {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
   createPtyLaunchSpec,
   resolveWorkingDirectory,
+  resolveWindowsCodexPath,
 }
