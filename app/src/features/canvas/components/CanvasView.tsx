@@ -923,8 +923,10 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const expandedNode = expandedTerminalId
     ? nodes.find((node) => node.id === expandedTerminalId)
     : undefined
-  const expandedTitle =
-    (expandedNode?.data as { label?: string } | undefined)?.label ?? 'Terminal'
+  const expandedNodeData = expandedNode?.data as
+    | { label?: string; command?: string; args?: string[]; cwd?: string; initialText?: string }
+    | undefined
+  const expandedTitle = expandedNodeData?.label ?? 'Terminal'
 
   return (
     <div className="flex h-full w-full">
@@ -1042,6 +1044,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         <TerminalDrawer
           sessionId={expandedTerminalId}
           title={expandedTitle}
+          restartOptions={{
+            command: expandedNodeData?.command,
+            args: expandedNodeData?.args,
+            cwd: expandedNodeData?.cwd,
+            initialText: expandedNodeData?.initialText,
+          }}
           onClose={() => setExpandedTerminalId(null)}
         />
       )}
