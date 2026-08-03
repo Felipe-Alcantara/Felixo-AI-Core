@@ -2,6 +2,9 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
+const {
+  registerOfficialCliAccountIpcHandlers,
+} = require('./services/official-cli-account-ipc-handlers.cjs')
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
 const {
   registerFileAttachmentIpcHandlers,
@@ -78,6 +81,7 @@ app.whenReady().then(() => {
 
   registerQaLoggerIpcHandlers(getMainWindow)
   registerCliIpcHandlers(getMainWindow)
+  registerOfficialCliAccountIpcHandlers()
   ptyHandlers = registerPtyIpcHandlers(getMainWindow)
   registerFileAttachmentIpcHandlers(appPaths)
   registerFileExportIpcHandlers(getMainWindow)
