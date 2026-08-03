@@ -27,8 +27,13 @@ import { TerminalMenu } from './TerminalMenu'
 import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
-const TOOLBAR_BUTTON_CLASS =
-  'felixo-btn flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700'
+/** Shape shared by every toolbar button; the press depth comes from the
+ *  felixo-btn / felixo-btn-icon each call site adds. */
+const TOOLBAR_BUTTON_SHAPE =
+  'flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700'
+
+const TOOLBAR_BUTTON_CLASS = `felixo-btn ${TOOLBAR_BUTTON_SHAPE}`
+const TOOLBAR_ICON_BUTTON_CLASS = `felixo-btn-icon ${TOOLBAR_BUTTON_SHAPE}`
 
 type CanvasToolbarProps = {
   activeTool: CanvasTool | null
@@ -93,7 +98,7 @@ export function CanvasToolbar({
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className={`felixo-btn-icon ${TOOLBAR_BUTTON_CLASS}`}
+          className={TOOLBAR_ICON_BUTTON_CLASS}
           title="Mostrar funções auxiliares"
         >
           <ChevronRight size={16} />
@@ -101,7 +106,7 @@ export function CanvasToolbar({
         <button
           type="button"
           onClick={onOpenChat}
-          className={`felixo-btn-icon ${TOOLBAR_BUTTON_CLASS}`}
+          className={TOOLBAR_ICON_BUTTON_CLASS}
           title="Abrir chat"
         >
           <MessageSquare size={16} />
@@ -115,7 +120,7 @@ export function CanvasToolbar({
       <button
         type="button"
         onClick={() => setCollapsed(true)}
-        className={`felixo-btn-icon ${TOOLBAR_BUTTON_CLASS}`}
+        className={TOOLBAR_ICON_BUTTON_CLASS}
         title="Esconder funções auxiliares"
       >
         <ChevronLeft size={16} />
