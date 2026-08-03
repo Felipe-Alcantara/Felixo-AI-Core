@@ -475,12 +475,18 @@ export class TerminalSessionStore {
       }
       const quietFor = Date.now() - session.lastMeaningfulAt
       if (quietFor >= IDLE_AFTER_MS) {
+        const viewport = readViewport(session.terminal)
+        if (BUSY_INDICATOR.test(viewport)) {
+          // The CLI is still showing its "working" banner — only its elapsed-time
+          // counter is ticking, which the signature check normalizes away. Stay
+          // 'working' instead of settling to idle/green while it's still busy.
+          this.scheduleIdleCheck(session)
+          return
+        }
         // Refresh the preview from the now-settled buffer. A settled prompt
         // that looks like a decision/approval screen gets its own state so
         // it's visually distinct from "finished a turn, ready for more".
-        const activity = looksLikeApprovalPrompt(readViewport(session.terminal))
-          ? 'waiting_approval'
-          : 'idle'
+        const activity = looksLikeApprovalPrompt(viewport) ? 'waiting_approval' : 'idle'
         this.update(session, { activity })
       } else {
         this.scheduleIdleCheck(session)
@@ -615,6 +621,17 @@ const NUMBERED_OPTION_LIST = /^\s*\d\.\s+\S/m
 /** Phrasing that asks the human to confirm or decide something. */
 const CONFIRMATION_PHRASE =
   /\b(proceed\?|continue\?|approve|aprovar|continuar\?|prosseguir\?|do you want to|would you like to|deseja)\b/i
+/**
+ * Agent CLIs show a persistent "still working" banner while busy, e.g.
+ * "Working (7s • esc to interrupt)" or "Aguardando... (12s)". Its digits get
+ * stripped by ELAPSED_TIMER before the idle-vs-working signature comparison,
+ * so a CLI stuck on this screen (ticking only its counter, no new lines)
+ * would otherwise read as "no meaningful change" and settle to idle/green
+ * while still actively working. Checked directly against the live viewport
+ * so it overrides that signature-based idle detection.
+ */
+const BUSY_INDICATOR =
+  /\b(working|aguardando|thinking|pensando|running|executando|processing|processando)\b.*(esc to interrupt|interrupt)|esc to interrupt/i
 
 /**
  * Best-effort, CLI-agnostic detection of an interactive decision prompt
