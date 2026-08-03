@@ -7,6 +7,7 @@ const {
   DEFAULT_ROWS,
   createPtyLaunchSpec,
   resolveWorkingDirectory,
+  resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
 
 /**
@@ -247,6 +248,53 @@ test('Windows retries once when ConPTY reports a path error after startup', () =
   assert.equal(spawnCalls.length, 2)
   assert.equal(spawnCalls[1].options.cwd, require('node:os').homedir())
   assert.deepEqual(received, ['C:\\Users\\felipe>'])
+})
+
+test('finds the Codex Windows shim in the npm user directory', () => {
+  const env = {
+    Path: 'C:\\Windows\\System32',
+    APPDATA: 'C:\\Users\\felipe\\AppData\\Roaming',
+  }
+  const expected = 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd'
+
+  assert.equal(
+    resolveWindowsCodexPath('codex', env, (candidate) => candidate === expected),
+    expected,
+  )
+  assert.equal(resolveWindowsCodexPath('claude', env, () => true), null)
+})
+
+test('Windows retries an early Codex failure with the located executable and original args', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const resolvedPath = 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd'
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakeWin32Platform,
+    logger: { warn() {} },
+    resolveCodexPath: () => resolvedPath,
+  })
+
+  manager.spawn('term-codex-path', {
+    command: 'codex',
+    args: ['--model', 'gpt-5.6-luna'],
+  })
+  first.fakePty.emitExit({ exitCode: 1 })
+
+  assert.equal(spawnCalls.length, 2)
+  assert.deepEqual(spawnCalls[1].args, [
+    '/d',
+    '/s',
+    '/c',
+    resolvedPath,
+    '--model',
+    'gpt-5.6-luna',
+  ])
 })
 
 test('force kill terminates immediately and drops the session', () => {
