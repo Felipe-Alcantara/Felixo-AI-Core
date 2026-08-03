@@ -12,11 +12,15 @@ import shutil
 import signal
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from .node import get_path_env
-from .paths import APP_DIR
+from .paths import APP_DIR, ROOT_DIR
 from .process import stop_process
+
+
+DEBUG_LOG_DIR = ROOT_DIR / "logs" / "startup"
 
 
 def resolve_subprocess_command(command: list[str], env: dict[str, str]) -> list[str]:
@@ -48,9 +52,14 @@ def call_command(command: list[str], cwd: Path, env: dict[str, str]) -> int:
         return 1
 
 
-def run_command(command: list[str], env: dict[str, str]) -> int:
+def run_command(
+    command: list[str], env: dict[str, str], *, debug_terminal: bool = False
+) -> int:
     resolved_command = resolve_subprocess_command(command, env)
     print(f"[felixo] Running: {' '.join(resolved_command)}")
+
+    if debug_terminal and os.name == "nt":
+        return run_in_dedicated_debug_terminal(resolved_command, env)
 
     try:
         process = subprocess.Popen(
@@ -80,3 +89,54 @@ def run_command(command: list[str], env: dict[str, str]) -> int:
         return 130
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
+
+
+def create_debug_log_path() -> Path:
+    """Returns a unique persistent log path for one desktop startup attempt."""
+    DEBUG_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    return DEBUG_LOG_DIR / f"felixo-desktop-{timestamp}.log"
+
+
+def run_in_dedicated_debug_terminal(command: list[str], env: dict[str, str]) -> int:
+    """Starts the desktop process in its own visible Windows console.
+
+    The worker mirrors every stdout/stderr line to that console and to a file,
+    avoiding shell quoting and profile/AutoRun side effects while preserving
+    precisely the environment the launcher prepared for Node and the CLIs.
+    """
+    log_path = create_debug_log_path()
+    debug_env = env.copy()
+    debug_env.update(
+        {
+            "FELIXO_DEBUG_SESSION": "1",
+            "ELECTRON_ENABLE_LOGGING": "1",
+            "ELECTRON_ENABLE_STACK_DUMPING": "1",
+        }
+    )
+    debug_command = [
+        sys.executable,
+        "-m",
+        "felixo_launcher.debug_console",
+        "--cwd",
+        str(APP_DIR),
+        "--log",
+        str(log_path),
+        "--keep-open",
+        "--",
+        *command,
+    ]
+    print(f"[felixo] Terminal de depuração aberto. Log: {log_path}")
+
+    try:
+        process = subprocess.Popen(
+            debug_command,
+            cwd=ROOT_DIR,
+            env=debug_env,
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010),
+        )
+    except OSError as error:
+        print(f"[felixo] Não foi possível abrir o terminal de depuração: {error}", file=sys.stderr)
+        return 1
+
+    return process.wait()

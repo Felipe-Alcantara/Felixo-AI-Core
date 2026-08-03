@@ -151,7 +151,7 @@ def _menu_start(console: object) -> None:
         run_command(["npm", "run", "dev:web"], env)
     else:
         console.print("[green]Abrindo o Felixo AI Core (desktop)...[/green]")
-        run_command(["npm", "run", "dev"], env)
+        run_command(["npm", "run", "dev"], env, debug_terminal=True)
 
 
 def _menu_install(console: object) -> None:
