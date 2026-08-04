@@ -731,6 +731,18 @@ TESTE: os testes de regressão de `pty-process-manager.test.cjs` para shell e Co
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — matriz para abertura em lote de agentes
+
+PEDIDO: ao iniciar vários agentes pela fila, organizá-los como uma matriz que cresce de modo próximo a um quadrado, em vez de uma sequência horizontal ou vertical que aparentava depender do espaço disponível.
+
+FEITO: `findFreeNodePositions` agora calcula primeiro uma área livre para o lote inteiro e distribui os terminais em uma grade determinística de `ceil(√n)` colunas. A matriz é testada como um conjunto contra os blocos existentes, preservando o espaçamento e evitando que um agente isolado seja deslocado para fora do grupo. Quando a área visível comporta toda a matriz, ela é priorizada; caso contrário, o canvas ainda encontra uma área livre sem sobreposição.
+
+TESTE: `node-geometry.test.ts` cobre matriz 2×2, crescimento para cinco agentes (3 colunas/2 linhas), prioridade para a matriz que cabe inteiramente na área visível e o deslocamento da matriz completa quando a origem já está ocupada.
+
+VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (94 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros. Como não há harness de DOM/Electron para a disposição visual, a conferência manual recomendada é montar uma fila com 4, 5 e 6 agentes e confirmar as grades 2×2, 3×2 e 3×2.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — colaboração por conexões entre agentes
 
 PEDIDO: ao ligar dois agentes no canvas, ambos precisam reconhecer que trabalham juntos no mesmo projeto ou em contextos relacionados. A conexão já era persistida, mas só a combinação arquivo→terminal recebia ação; terminal→terminal não fazia nada.

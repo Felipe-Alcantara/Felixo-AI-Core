@@ -20,6 +20,10 @@ export type CanvasBounds = { x: number; y: number; width: number; height: number
 
 export type Side = 'top' | 'right' | 'bottom' | 'left'
 
+type Position = { x: number; y: number }
+
+type NodeSize = { width: number; height: number }
+
 /**
  * Finds the closest free top-level position, preferring the currently visible
  * canvas. Candidate coordinates follow existing node edges, which keeps the
@@ -27,40 +31,14 @@ export type Side = 'top' | 'right' | 'bottom' | 'left'
  */
 export function findFreeNodePosition(
   nodes: Node[],
-  size: { width: number; height: number },
+  size: NodeSize,
   viewport?: CanvasBounds,
-): { x: number; y: number } {
-  const origin = viewport
-    ? {
-        x: viewport.x + VIEWPORT_PLACEMENT_PADDING.x,
-        y: viewport.y + VIEWPORT_PLACEMENT_PADDING.top,
-      }
-    : { x: 120, y: 120 }
-  const topLevelNodes = nodes.filter((node) => !node.parentId)
-  const xCandidates = uniqueSortedCoordinates([
-    origin.x,
-    ...topLevelNodes.map(
-      (node) =>
-        node.position.x + getNodeSize(node).width + NODE_PLACEMENT_GAP,
-    ),
-  ]).filter((x) => x >= origin.x)
-  const yCandidates = uniqueSortedCoordinates([
-    origin.y,
-    ...topLevelNodes.map(
-      (node) =>
-        node.position.y + getNodeSize(node).height + NODE_PLACEMENT_GAP,
-    ),
-  ]).filter((y) => y >= origin.y)
-  const candidates = yCandidates.flatMap((y) =>
-    xCandidates.map((x) => ({ x, y })),
-  )
+): Position {
+  const origin = placementOrigin(viewport)
+  const { topLevelNodes, candidates } = placementCandidates(nodes, origin)
   const visibleCandidates = viewport
     ? candidates.filter(
-        (candidate) =>
-          candidate.x + size.width <=
-            viewport.x + viewport.width - VIEWPORT_PLACEMENT_PADDING.x &&
-          candidate.y + size.height <=
-            viewport.y + viewport.height - VIEWPORT_PLACEMENT_PADDING.bottom,
+        (candidate) => isVisiblePlacement(candidate, size, viewport),
       )
     : candidates
 
@@ -85,43 +63,121 @@ export function findFreeNodePosition(
 }
 
 /**
- * Same rule as `findFreeNodePosition`, but for placing several same-size
- * nodes at once (e.g. a batch of terminals started together). Each position
- * is computed against the growing set — real nodes plus the ones already
- * placed earlier in this same call — so the block never stacks two of the
- * new nodes on top of each other, which a caller looping `findFreeNodePosition`
- * once per node (against the same unchanged `nodes` array) would do.
+ * Finds one free area for a whole batch, then lays it out as a near-square
+ * matrix. This keeps agents launched from the queue visually grouped rather
+ * than extending one long row or column. The matrix is tested as a whole
+ * against existing nodes, so no member is forced out of the group by a block
+ * that already occupies the canvas.
  */
 export function findFreeNodePositions(
   nodes: Node[],
   count: number,
-  size: { width: number; height: number },
+  size: NodeSize,
   viewport?: CanvasBounds,
-): { x: number; y: number }[] {
-  const placed: Node[] = []
-  const positions: { x: number; y: number }[] = []
-
-  for (let i = 0; i < count; i += 1) {
-    const position = findFreeNodePosition([...nodes, ...placed], size, viewport)
-    positions.push(position)
-    // Minimal stand-in node: only position/width/height/parentId are read by
-    // `findFreeNodePosition`/`getNodeSize`/`isPositionFree` for placement math.
-    placed.push({
-      id: `_batch-${i}`,
-      type: 'terminal',
-      position,
-      width: size.width,
-      height: size.height,
-      data: {},
-    })
+): Position[] {
+  if (count <= 0) {
+    return []
   }
 
-  return positions
+  if (count === 1) {
+    return [findFreeNodePosition(nodes, size, viewport)]
+  }
+
+  const origin = placementOrigin(viewport)
+  const { topLevelNodes, candidates } = placementCandidates(nodes, origin)
+  const matrix = matrixMetrics(count, size)
+  const matrixAt = (anchor: Position) => matrixPositions(anchor, count, size, matrix.columns)
+  const hasFreeMatrix = (anchor: Position) =>
+    matrixAt(anchor).every((position) => isPositionFree(position, size, topLevelNodes))
+  const visibleCandidates = viewport
+    ? candidates.filter((candidate) => isVisiblePlacement(candidate, matrix, viewport))
+    : candidates
+  const anchor =
+    visibleCandidates.find(hasFreeMatrix) ??
+    candidates.find(hasFreeMatrix) ?? {
+      x: origin.x,
+      y: Math.max(
+        origin.y,
+        ...topLevelNodes.map(
+          (node) => node.position.y + getNodeSize(node).height + NODE_PLACEMENT_GAP,
+        ),
+      ),
+    }
+
+  return matrixAt(anchor)
+}
+
+function placementOrigin(viewport?: CanvasBounds): Position {
+  return viewport
+    ? {
+        x: viewport.x + VIEWPORT_PLACEMENT_PADDING.x,
+        y: viewport.y + VIEWPORT_PLACEMENT_PADDING.top,
+      }
+    : { x: 120, y: 120 }
+}
+
+function placementCandidates(
+  nodes: Node[],
+  origin: Position,
+): { topLevelNodes: Node[]; candidates: Position[] } {
+  const topLevelNodes = nodes.filter((node) => !node.parentId)
+  const xCandidates = uniqueSortedCoordinates([
+    origin.x,
+    ...topLevelNodes.map(
+      (node) => node.position.x + getNodeSize(node).width + NODE_PLACEMENT_GAP,
+    ),
+  ]).filter((x) => x >= origin.x)
+  const yCandidates = uniqueSortedCoordinates([
+    origin.y,
+    ...topLevelNodes.map(
+      (node) => node.position.y + getNodeSize(node).height + NODE_PLACEMENT_GAP,
+    ),
+  ]).filter((y) => y >= origin.y)
+
+  return {
+    topLevelNodes,
+    candidates: yCandidates.flatMap((y) => xCandidates.map((x) => ({ x, y }))),
+  }
+}
+
+function matrixMetrics(count: number, size: NodeSize): NodeSize & { columns: number } {
+  const columns = Math.ceil(Math.sqrt(count))
+  const rows = Math.ceil(count / columns)
+  return {
+    columns,
+    width: columns * size.width + (columns - 1) * NODE_PLACEMENT_GAP,
+    height: rows * size.height + (rows - 1) * NODE_PLACEMENT_GAP,
+  }
+}
+
+function matrixPositions(
+  anchor: Position,
+  count: number,
+  size: NodeSize,
+  columns: number,
+): Position[] {
+  return Array.from({ length: count }, (_, index) => ({
+    x: anchor.x + (index % columns) * (size.width + NODE_PLACEMENT_GAP),
+    y: anchor.y + Math.floor(index / columns) * (size.height + NODE_PLACEMENT_GAP),
+  }))
+}
+
+function isVisiblePlacement(
+  position: Position,
+  size: NodeSize,
+  viewport: CanvasBounds,
+): boolean {
+  return (
+    position.x + size.width <=
+      viewport.x + viewport.width - VIEWPORT_PLACEMENT_PADDING.x &&
+    position.y + size.height <=
+      viewport.y + viewport.height - VIEWPORT_PLACEMENT_PADDING.bottom
+  )
 }
 
 function isPositionFree(
-  position: { x: number; y: number },
-  size: { width: number; height: number },
+  position: Position,
+  size: NodeSize,
   nodes: Node[],
 ): boolean {
   return nodes.every((node) => {
