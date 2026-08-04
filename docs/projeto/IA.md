@@ -720,6 +720,16 @@ VALIDAÇÃO: a cada extração — `npx tsc -b`, `npx eslint .`, `npm run build`
 
 Estado final: concluído — os 3 arquivos refatorados, 3 commits incrementais na branch `refactor/quality-pass-2026-08-03`, build final do repo verde.
 
+## Registro de Trabalho — 2026-08-04 — recuperação de PTY no Windows
+
+PEDIDO: tornar a recuperação de falhas de caminho do PTY previsível em sessões Windows, inclusive ao abrir uma CLI explícita.
+
+FEITO: uma mensagem de erro de caminho no início agora tenta WinPTY (`useConpty: false`) antes de trocar o fluxo de recuperação, tanto para shell quanto para CLI explícita. O diagnóstico informa a camada recuperada sem expor caminhos locais na interface.
+
+TESTE: os testes de regressão de `pty-process-manager.test.cjs` para shell e Codex explícito passaram. A suíte Electron/Node completa (417 testes) e `git diff --check` também concluíram sem erros.
+
+Estado final: concluído.
+
 ## Resumos de Decisão
 
 [2026-06-21] CONTEXTO: Como persistir as conversas dos terminais entre sessões (o PTY morre ao fechar o app e o scrollback é efêmero).
