@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { TerminalSessionStore, type SessionSnapshot } from './terminal-session-store'
 
 export const TerminalSessionContext = createContext<TerminalSessionStore | null>(null)
@@ -25,4 +32,16 @@ export function useSessionSnapshot(sessionId: string): SessionSnapshot | undefin
   }, [store, sessionId])
 
   return snapshot
+}
+
+/** Subscribes to all live sessions, used by the notifications surface. */
+export function useSessionSnapshots(): Record<string, SessionSnapshot> {
+  const store = useTerminalSessions()
+  const subscribe = useCallback(
+    (listener: () => void) => store.subscribeAll(listener),
+    [store],
+  )
+  const getSnapshot = useCallback(() => store.getSnapshots(), [store])
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }

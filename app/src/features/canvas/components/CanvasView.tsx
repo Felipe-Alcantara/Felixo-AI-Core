@@ -20,6 +20,7 @@ import {
   type Node,
   type NodeChange,
   type NodeTypes,
+  type MiniMapNodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
@@ -31,17 +32,22 @@ import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
+import { NotificationsPanel } from './NotificationsPanel'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
-import { useTerminalSessions } from '../terminal/terminal-session-context'
+import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
+import { isActionRequired } from '../terminal/session-notifications'
 import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
 } from '../services/file-link-prompt'
 import {
+  buildPlanningFileInstruction,
   DEFAULT_QUALITY_STANDARD_PROMPT,
   buildCanvasTerminalInitialText,
+  composeTerminalInitialText,
   resolveTerminalInitialText,
 } from '../services/quality-standard-prompt'
+import { toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import { isKnownAgentCommand } from '../services/agent-launch-options'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
@@ -152,6 +158,53 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const sessionSnapshots = useSessionSnapshots()
+  const notificationCount = nodes.filter(
+    (node) => node.type === 'terminal' && isActionRequired(sessionSnapshots[node.id]),
+  ).length
+  const miniMapNode = useCallback(
+    (props: MiniMapNodeProps) => {
+      const node = nodes.find((item) => item.id === props.id)
+      const isAgent = node?.type === 'terminal'
+      const label = isAgent
+        ? String(node.data.label || node.data.command || 'Agente')
+        : ''
+      const labelFontSize = Math.max(10, Math.min(props.height * 0.22, props.width * 0.08))
+
+      return (
+        <g>
+          <rect
+            x={props.x}
+            y={props.y}
+            width={props.width}
+            height={props.height}
+            rx={props.borderRadius}
+            fill={props.color || '#3f3f46'}
+            stroke={props.strokeColor || '#52525b'}
+            strokeWidth={props.strokeWidth}
+          />
+          {label && (
+            <text
+              x={props.x + 5}
+              y={props.y + props.height / 2}
+              fill="#f4f4f5"
+              fontSize={labelFontSize}
+              fontWeight="600"
+              fontFamily="sans-serif"
+              dominantBaseline="middle"
+              textLength={Math.max(1, props.width - 10)}
+              lengthAdjust="spacingAndGlyphs"
+              pointerEvents="none"
+            >
+              {label}
+            </text>
+          )}
+        </g>
+      )
+    },
+    [nodes],
+  )
   const {
     isClearing,
     isBusy,
@@ -373,7 +426,10 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       if (!trimmed) {
         return
       }
-      store.sendText(nodeId, `A partir de agora, seu nome neste canvas é "${trimmed}".\n`)
+      store.sendText(
+        nodeId,
+        toSubmittedTerminalText(`A partir de agora, seu nome neste canvas é "${trimmed}".`),
+      )
     },
     [store],
   )
@@ -484,7 +540,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const insertPrompt = useCallback(
     async (prompt: string): Promise<SkillActivationResult> => {
       if (expandedTerminalId) {
-        store.sendText(expandedTerminalId, `${prompt}\n`)
+        store.sendText(expandedTerminalId, toSubmittedTerminalText(prompt))
         return 'sent'
       }
       await navigator.clipboard?.writeText(prompt)
@@ -790,18 +846,23 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   )
 
   const buildTerminalNodeData = useCallback(
-    (options: { command?: string; args?: string[]; cwd?: string; label: string }) => {
+    (options: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }) => {
       // Agent terminals get the standing quality-standard instruction (if on)
       // plus their canvas identity (name, cwd, multi-agent setting); a plain
       // shell does not (there's no agent to read it).
       const quality = qualityStandardRef.current
-      const initialText =
-        options.command && quality.enabled
-          ? buildCanvasTerminalInitialText(quality.prompt, undefined, [], {
-              agentName: options.label,
-              cwd: options.cwd,
-            })
-          : undefined
+      const planningInstruction = buildPlanningFileInstruction(options.planningFile)
+      const initialText = options.command
+        ? composeTerminalInitialText(
+            quality.enabled
+              ? buildCanvasTerminalInitialText(quality.prompt, undefined, [], {
+                  agentName: options.label,
+                  cwd: options.cwd,
+                })
+              : undefined,
+            planningInstruction,
+          )
+        : undefined
 
       return {
         label: options.label,
@@ -815,7 +876,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   )
 
   const addTerminalNode = useCallback(
-    (options: { command?: string; args?: string[]; cwd?: string; label: string }) => {
+    (options: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }) => {
       addNode('terminal', buildTerminalNodeData(options))
     },
     [addNode, buildTerminalNodeData],
@@ -829,7 +890,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // against a growing local list, then everything lands in a single
   // `setNodes` + one `persistNode` per node.
   const addTerminalNodes = useCallback(
-    (optionsList: { command?: string; args?: string[]; cwd?: string; label: string }[]) => {
+    (optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[]) => {
       if (optionsList.length === 0) {
         return
       }
@@ -960,6 +1021,16 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         isBusy={isBusy}
         isClearing={isClearing}
         onOpenChat={onOpenChat}
+        onOpenNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationCount={notificationCount}
+      />
+
+      <NotificationsPanel
+        nodes={nodes}
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        onFocusNode={focusNode}
+        onExpandNode={setExpandedTerminalId}
       />
 
       <CanvasToolPanels
@@ -1036,6 +1107,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             maskColor="rgba(0, 0, 0, 0.6)"
             nodeColor="#3f3f46"
             nodeStrokeColor="#52525b"
+            nodeComponent={miniMapNode}
           />
         </ReactFlow>
       </div>

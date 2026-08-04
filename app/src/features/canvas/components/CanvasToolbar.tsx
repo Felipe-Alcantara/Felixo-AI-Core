@@ -9,8 +9,8 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Download,
   FileText,
   Group,
@@ -21,6 +21,7 @@ import {
   StickyNote,
   Trash2,
   Upload,
+  Bell,
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
@@ -30,7 +31,7 @@ import type { CanvasProject } from '../hooks/useCanvasProjects'
 /** Shape shared by every toolbar button; the press depth comes from the
  *  felixo-btn / felixo-btn-icon each call site adds. */
 const TOOLBAR_BUTTON_SHAPE =
-  'flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700'
+  'flex w-36 items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700'
 
 const TOOLBAR_BUTTON_CLASS = `felixo-btn ${TOOLBAR_BUTTON_SHAPE}`
 const TOOLBAR_ICON_BUTTON_CLASS = `felixo-btn-icon ${TOOLBAR_BUTTON_SHAPE}`
@@ -44,10 +45,11 @@ type CanvasToolbarProps = {
     args?: string[]
     cwd?: string
     label: string
+    planningFile?: string
   }) => void
   /** Starts several terminal configs at once — a whole agent setup in one click. */
   onAddTerminals: (
-    optionsList: { command?: string; args?: string[]; cwd?: string; label: string }[],
+    optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[],
   ) => void
   onAddFolder: () => Promise<string[]>
   /** Spawns a terminal whose process IS the file running (see ProjectsMenu). */
@@ -66,6 +68,8 @@ type CanvasToolbarProps = {
   /** Switches to the chat screen. A toolbar button, not a floating overlay —
    * canvas content (terminals) can be panned under any fixed screen corner. */
   onOpenChat: () => void
+  onOpenNotifications: () => void
+  notificationCount: number
 }
 
 export function CanvasToolbar({
@@ -88,42 +92,93 @@ export function CanvasToolbar({
   isBusy,
   isClearing,
   onOpenChat,
+  onOpenNotifications,
+  notificationCount,
 }: CanvasToolbarProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [isCollapsing, setIsCollapsing] = useState(false)
+  const [isExpanding, setIsExpanding] = useState(false)
+
+  const collapseToolbar = () => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setCollapsed(true)
+      return
+    }
+    setIsCollapsing(true)
+  }
+
+  const expandToolbar = () => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setCollapsed(false)
+      return
+    }
+    setIsExpanding(true)
+    setCollapsed(false)
+  }
 
   if (collapsed) {
     return (
       <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
         <button
           type="button"
-          onClick={() => setCollapsed(false)}
-          className={TOOLBAR_ICON_BUTTON_CLASS}
+          onClick={expandToolbar}
+          className="felixo-btn-icon flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
           title="Mostrar funções auxiliares"
+          aria-label="Expandir funções auxiliares"
+          aria-expanded={false}
         >
-          <ChevronRight size={16} />
+          <ChevronDown size={16} />
         </button>
         <button
           type="button"
-          onClick={onOpenChat}
-          className={TOOLBAR_ICON_BUTTON_CLASS}
-          title="Abrir chat"
+          onClick={onOpenNotifications}
+          className={`${TOOLBAR_BUTTON_CLASS} relative`}
+          title="Notificações dos agentes"
         >
-          <MessageSquare size={16} />
+          <Bell size={16} />
+          Notificações
+          {notificationCount > 0 && (
+            <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+              {notificationCount}
+            </span>
+          )}
         </button>
       </div>
     )
   }
 
   return (
-    <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
+    <div
+      className={`${isCollapsing ? 'felixo-toolbar-collapsing' : isExpanding ? 'felixo-toolbar-expanding' : ''} absolute left-4 top-4 z-10 flex flex-col items-start gap-2`}
+      onAnimationEnd={(event) => {
+        if (
+          isCollapsing &&
+          event.target === event.currentTarget &&
+          event.animationName === 'felixo-toolbar-collapse-root'
+        ) {
+          setCollapsed(true)
+          setIsCollapsing(false)
+        }
+        if (
+          isExpanding &&
+          event.target === event.currentTarget &&
+          event.animationName === 'felixo-toolbar-expand-root'
+        ) {
+          setIsExpanding(false)
+        }
+      }}
+    >
       <button
         type="button"
-        onClick={() => setCollapsed(true)}
+        onClick={collapseToolbar}
+        disabled={isCollapsing}
         className={TOOLBAR_ICON_BUTTON_CLASS}
         title="Esconder funções auxiliares"
+        aria-label="Recolher funções auxiliares"
+        aria-expanded={true}
       >
-        <ChevronLeft size={16} />
+        <ChevronUp size={16} />
       </button>
       <button
         type="button"
@@ -135,6 +190,20 @@ export function CanvasToolbar({
         Chat
       </button>
       <CanvasToolsMenu activeTool={activeTool} onSelect={onSelectTool} />
+      <button
+        type="button"
+        onClick={onOpenNotifications}
+        className={`${TOOLBAR_BUTTON_CLASS} relative`}
+        title="Notificações dos agentes"
+      >
+        <Bell size={16} />
+        Notificações
+        {notificationCount > 0 && (
+          <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+            {notificationCount}
+          </span>
+        )}
+      </button>
       <TerminalMenu
         projects={projects}
         onAdd={onAddTerminal}
@@ -228,7 +297,7 @@ export function CanvasToolbar({
         type="button"
         onClick={onClear}
         disabled={isBusy}
-        className="felixo-btn flex items-center gap-2 rounded-lg bg-red-950/80 px-3 py-2 text-sm text-red-100 shadow-lg ring-1 ring-red-500/20 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
+        className="felixo-btn flex w-36 items-center gap-2 rounded-lg bg-red-950/80 px-3 py-2 text-sm text-red-100 shadow-lg ring-1 ring-red-500/20 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
         title="Excluir todos os blocos, conexões e arquivos .md do canvas"
       >
         <Trash2 size={16} />
@@ -284,11 +353,11 @@ function NamedCreateButton({
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-36">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={TOOLBAR_BUTTON_CLASS}
+        className={`${TOOLBAR_BUTTON_CLASS} w-full`}
         title={title}
       >
         {icon}

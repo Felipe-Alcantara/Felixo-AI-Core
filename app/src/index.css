@@ -255,6 +255,58 @@ div::-webkit-scrollbar-thumb {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes felixo-tools-list-in {
+  from { max-height: 0; opacity: 0; }
+  to { max-height: calc(100vh - 6rem); opacity: 1; }
+}
+
+@keyframes felixo-tools-list-item-in {
+  from { opacity: 0; transform: translate(-10px, -8px); }
+  to { opacity: 1; transform: translate(0, 0); }
+}
+
+@keyframes felixo-toolbar-expand-root {
+  from { transform: translateX(0.001px); }
+  to { transform: translateX(0); }
+}
+
+@keyframes felixo-toolbar-collapse-root {
+  from { transform: translateX(0.001px); }
+  to { transform: translateX(0); }
+}
+
+@keyframes felixo-toolbar-item-expand {
+  from { opacity: 0; transform: translateY(var(--toolbar-offset)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes felixo-toolbar-item-collapse {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(var(--toolbar-offset)) scale(0.96); }
+}
+
+@keyframes felixo-toolbar-trigger-expand {
+  from { width: 2.25rem; }
+  to { width: 9rem; }
+}
+
+@keyframes felixo-toolbar-trigger-collapse {
+  from { width: 9rem; }
+  to { width: 2.25rem; }
+}
+
+@keyframes felixo-notification-to-list {
+  0% { transform: translate(44px, -132px); }
+  38% { transform: translateY(-132px); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes felixo-notification-to-compact {
+  0% { transform: translate(0, 0); }
+  62% { transform: translateY(-132px); }
+  100% { transform: translate(44px, -132px); }
+}
+
 .felixo-anim-drawer-in {
   animation: felixo-slide-in-right 0.22s ease-out;
 }
@@ -275,6 +327,85 @@ div::-webkit-scrollbar-thumb {
   animation: felixo-menu-in 0.16s ease-out;
   transform-origin: top;
 }
+
+.felixo-anim-sequential-panel {
+  animation: felixo-tools-list-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top left;
+}
+
+.felixo-anim-sequential-panel > * {
+  animation: felixo-tools-list-item-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.felixo-anim-sequential-panel > :nth-child(1) { animation-delay: 30ms; }
+.felixo-anim-sequential-panel > :nth-child(2) { animation-delay: 60ms; }
+.felixo-anim-sequential-panel > :nth-child(3) { animation-delay: 90ms; }
+.felixo-anim-sequential-panel > :nth-child(4) { animation-delay: 120ms; }
+.felixo-anim-sequential-panel > :nth-child(5) { animation-delay: 150ms; }
+.felixo-anim-sequential-panel > :nth-child(6) { animation-delay: 180ms; }
+.felixo-anim-sequential-panel > :nth-child(7) { animation-delay: 210ms; }
+.felixo-anim-sequential-panel > :nth-child(8) { animation-delay: 240ms; }
+.felixo-anim-sequential-panel > :nth-child(9) { animation-delay: 270ms; }
+.felixo-anim-sequential-panel > :nth-child(10) { animation-delay: 300ms; }
+.felixo-anim-sequential-panel > :nth-child(11) { animation-delay: 330ms; }
+.felixo-anim-sequential-panel > :nth-child(12) { animation-delay: 360ms; }
+
+.felixo-toolbar-expanding {
+  animation: felixo-toolbar-expand-root 780ms linear both;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.felixo-toolbar-expanding > :not(:first-child) {
+  animation: felixo-toolbar-item-expand 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.felixo-toolbar-expanding > :first-child {
+  animation: felixo-toolbar-trigger-expand 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.felixo-toolbar-expanding > :nth-child(2) { --toolbar-offset: -44px; animation-delay: 30ms; }
+.felixo-toolbar-expanding > :nth-child(3) { --toolbar-offset: -88px; animation-delay: 60ms; }
+.felixo-toolbar-expanding > :nth-child(4) { animation: felixo-notification-to-list 460ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both; }
+.felixo-toolbar-expanding > :nth-child(5) { --toolbar-offset: -176px; animation-delay: 120ms; }
+.felixo-toolbar-expanding > :nth-child(6) { --toolbar-offset: -220px; animation-delay: 150ms; }
+.felixo-toolbar-expanding > :nth-child(7) { --toolbar-offset: -264px; animation-delay: 180ms; }
+.felixo-toolbar-expanding > :nth-child(8) { --toolbar-offset: -308px; animation-delay: 210ms; }
+.felixo-toolbar-expanding > :nth-child(9) { --toolbar-offset: -352px; animation-delay: 240ms; }
+.felixo-toolbar-expanding > :nth-child(10) { --toolbar-offset: -396px; animation-delay: 270ms; }
+.felixo-toolbar-expanding > :nth-child(11) { --toolbar-offset: -440px; animation-delay: 300ms; }
+.felixo-toolbar-expanding > :nth-child(12) { --toolbar-offset: -484px; animation-delay: 330ms; }
+.felixo-toolbar-expanding > :nth-child(13) { --toolbar-offset: -528px; animation-delay: 360ms; }
+.felixo-toolbar-expanding > :nth-child(15) { --toolbar-offset: -572px; animation-delay: 390ms; }
+
+.felixo-toolbar-collapsing {
+  animation: felixo-toolbar-collapse-root 480ms linear both;
+  transform-origin: top left;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.felixo-toolbar-collapsing > :not(:first-child) {
+  animation: felixo-toolbar-item-collapse 360ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.felixo-toolbar-collapsing > :first-child {
+  animation: felixo-toolbar-trigger-collapse 280ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.felixo-toolbar-collapsing > :nth-child(2) { --toolbar-offset: -44px; }
+.felixo-toolbar-collapsing > :nth-child(3) { --toolbar-offset: -88px; }
+.felixo-toolbar-collapsing > :nth-child(4) { animation: felixo-notification-to-compact 460ms cubic-bezier(0.4, 0, 1, 1) both; }
+.felixo-toolbar-collapsing > :nth-child(5) { --toolbar-offset: -176px; }
+.felixo-toolbar-collapsing > :nth-child(6) { --toolbar-offset: -220px; }
+.felixo-toolbar-collapsing > :nth-child(7) { --toolbar-offset: -264px; }
+.felixo-toolbar-collapsing > :nth-child(8) { --toolbar-offset: -308px; }
+.felixo-toolbar-collapsing > :nth-child(9) { --toolbar-offset: -352px; }
+.felixo-toolbar-collapsing > :nth-child(10) { --toolbar-offset: -396px; }
+.felixo-toolbar-collapsing > :nth-child(11) { --toolbar-offset: -440px; }
+.felixo-toolbar-collapsing > :nth-child(12) { --toolbar-offset: -484px; }
+.felixo-toolbar-collapsing > :nth-child(13) { --toolbar-offset: -528px; }
+.felixo-toolbar-collapsing > :nth-child(15) { --toolbar-offset: -572px; }
 
 /* Button interaction feedback.
    Only transform/opacity/color animate: those composite on the GPU and stay
@@ -318,6 +449,18 @@ div::-webkit-scrollbar-thumb {
   .felixo-anim-panel-in,
   .felixo-anim-panel-out,
   .felixo-anim-menu-in {
+    animation: none;
+  }
+
+  .felixo-anim-sequential-panel,
+  .felixo-anim-sequential-panel > * {
+    animation: none;
+  }
+
+  .felixo-toolbar-expanding,
+  .felixo-toolbar-collapsing,
+  .felixo-toolbar-expanding > *,
+  .felixo-toolbar-collapsing > * {
     animation: none;
   }
 

@@ -1,4 +1,5 @@
 import type { CanvasSkill } from '../types'
+import { toSubmittedTerminalText } from '../terminal/terminal-input'
 
 /**
  * A canvas skill is just a pointer to a file. Activating it doesn't paste the
@@ -14,6 +15,5 @@ export function buildSkillActivationPrompt(skill: CanvasSkill): string {
   if (skill.description.trim()) {
     lines.splice(1, 0, `Resumo: ${skill.description.trim()}`)
   }
-  // Trailing newline submits the line to the agent's REPL.
-  return `${lines.join('\n')}\n`
+  return toSubmittedTerminalText(lines.join('\n'))
 }
