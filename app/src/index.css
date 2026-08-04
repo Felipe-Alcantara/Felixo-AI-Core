@@ -265,6 +265,11 @@ div::-webkit-scrollbar-thumb {
   to { opacity: 1; transform: translate(0, 0); }
 }
 
+@keyframes felixo-notifications-in {
+  from { opacity: 0; transform: translateX(-12px) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
 @keyframes felixo-toolbar-expand-root {
   from { transform: translateX(0.001px); }
   to { transform: translateX(0); }
@@ -326,6 +331,11 @@ div::-webkit-scrollbar-thumb {
 .felixo-anim-menu-in {
   animation: felixo-menu-in 0.16s ease-out;
   transform-origin: top;
+}
+
+.felixo-anim-notifications-in {
+  animation: felixo-notifications-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top left;
 }
 
 .felixo-anim-sequential-panel {
@@ -459,6 +469,10 @@ div::-webkit-scrollbar-thumb {
   .felixo-anim-panel-in,
   .felixo-anim-panel-out,
   .felixo-anim-menu-in {
+    animation: none;
+  }
+
+  .felixo-anim-notifications-in {
     animation: none;
   }
 

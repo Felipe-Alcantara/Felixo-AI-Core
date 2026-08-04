@@ -73,6 +73,7 @@ type CanvasToolbarProps = {
   onOpenChat: () => void
   onOpenNotifications: () => void
   notificationCount: number
+  notificationPanel?: ReactNode
 }
 
 export function CanvasToolbar({
@@ -99,6 +100,7 @@ export function CanvasToolbar({
   onOpenChat,
   onOpenNotifications,
   notificationCount,
+  notificationPanel,
 }: CanvasToolbarProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [collapsed, setCollapsed] = useState(false)
@@ -126,7 +128,7 @@ export function CanvasToolbar({
 
   if (collapsed) {
     const notificationAlertClass = notificationCount > 0
-      ? 'border border-red-500/80 ring-1 ring-red-500/30'
+      ? 'border border-amber-400/80 ring-1 ring-amber-400/30'
       : ''
     return (
       <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
@@ -140,21 +142,19 @@ export function CanvasToolbar({
         >
           <ChevronDown size={16} />
         </button>
-        <button
-          type="button"
-          onClick={onOpenNotifications}
-          className={`${TOOLBAR_BUTTON_CLASS} relative ${notificationAlertClass}`}
-          title="Notificações dos agentes"
-        >
-          <Bell size={16} />
-          Notificações
-          {notificationCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" aria-label="Há novas notificações" />}
-          {notificationCount > 0 && (
-            <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-              {notificationCount}
-            </span>
-          )}
-        </button>
+        <div className="relative w-36">
+          <button
+            type="button"
+            onClick={onOpenNotifications}
+            className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationAlertClass}`}
+            title="Notificações dos agentes"
+          >
+            <Bell size={16} className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
+            {notificationCount > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-label="Há novas notificações" />}
+          </button>
+          {notificationPanel}
+        </div>
       </div>
     )
   }
@@ -205,21 +205,19 @@ export function CanvasToolbar({
         onSelect={onSelectTool}
         onOpenChange={setToolsMenuOpen}
       />
-      <button
-        type="button"
-        onClick={onOpenNotifications}
-        className={`${TOOLBAR_BUTTON_CLASS} relative ${notificationCount > 0 ? 'border border-red-500/80 ring-1 ring-red-500/30' : ''}`}
-        title="Notificações dos agentes"
-      >
-        <Bell size={16} />
-        Notificações
-        {notificationCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" aria-label="Há novas notificações" />}
-        {notificationCount > 0 && (
-          <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-            {notificationCount}
-          </span>
-        )}
-      </button>
+      <div className="relative w-36">
+        <button
+          type="button"
+          onClick={onOpenNotifications}
+          className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationCount > 0 ? 'border border-amber-400/80 ring-1 ring-amber-400/30' : ''}`}
+          title="Notificações dos agentes"
+        >
+          <Bell size={16} className="shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
+          {notificationCount > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-label="Há novas notificações" />}
+        </button>
+        {notificationPanel}
+      </div>
       <TerminalMenu
         projects={projects}
         onAdd={onAddTerminal}

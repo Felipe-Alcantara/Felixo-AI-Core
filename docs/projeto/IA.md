@@ -745,6 +745,16 @@ VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 te
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — painel de notificações ancorado e legível
+
+PEDIDO: corrigir o botão de notificações deformado, o painel sobreposto sem animação, a ausência da última mensagem útil e a paleta divergente.
+
+FEITO: o painel passou a ser ancorado ao botão de Notificações, abrindo à direita com animação própria e sem cobrir a barra. O botão reserva espaço fixo para o sino e o ponto de alerta, sem contador que comprima o ícone. A paleta passou a ser âmbar, igual à lista; o preview ignora rodapés de CLI (modelo, tokens e indicadores) para preservar a última linha útil do agente.
+
+VALIDAÇÃO: ESLint, TypeScript, `vitest` (98 testes), build do Vite e `git diff --check` concluídos sem erros.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — aviso visual e consumo de notificações
 
 PEDIDO: destacar visualmente novas notificações e removê-las quando o usuário abrir o terminal correspondente.
