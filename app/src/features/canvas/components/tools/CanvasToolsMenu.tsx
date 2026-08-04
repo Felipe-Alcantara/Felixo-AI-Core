@@ -44,6 +44,7 @@ const TOOLS: ToolEntry[] = [
 type CanvasToolsMenuProps = {
   activeTool: CanvasTool | null
   onSelect: (tool: CanvasTool) => void
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -51,7 +52,7 @@ type CanvasToolsMenuProps = {
  * button; expanded it lists the extra canvas tools brought over from the chat
  * (projects, notes, models, prompts, git).
  */
-export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) {
+export function CanvasToolsMenu({ activeTool, onSelect, onOpenChange }: CanvasToolsMenuProps) {
   const [open, setOpen] = useState(false)
   const {
     panelReady: optionsReady,
@@ -64,11 +65,13 @@ export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) 
     if (open) {
       resetPanel()
       setOpen(false)
+      onOpenChange?.(false)
       return
     }
 
     preparePanel()
     setOpen(true)
+    onOpenChange?.(true)
   }
 
   return (
@@ -105,6 +108,7 @@ export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) 
                 onSelect(tool)
                 resetPanel()
                 setOpen(false)
+                onOpenChange?.(false)
               }}
               className={`felixo-btn flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
                 activeTool === tool ? 'bg-zinc-700 text-white' : 'text-zinc-200'
