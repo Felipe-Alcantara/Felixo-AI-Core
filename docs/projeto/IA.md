@@ -755,6 +755,16 @@ VALIDAÇÃO: ESLint, TypeScript, `vitest` (98 testes), build do Vite e `git diff
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — coexistência dos menus Ferramentas e Agente
+
+PEDIDO: impedir que as opções de Ferramentas cubram o formulário de configuração do Agente quando ambos estiverem abertos, sem alterar a expansão já aprovada do botão Agente.
+
+FEITO: `CanvasToolbar` passou a compartilhar o estado aberto de Ferramentas com `TerminalMenu`. Com Ferramentas fechado, o formulário de Agente conserva sua posição original; com os dois abertos, ele transita para a segunda coluna, após as opções de Ferramentas. A largura, duração e sincronização da expansão de Agente foram preservadas.
+
+VALIDAÇÃO: ESLint, TypeScript, `vitest` (98 testes), build do Vite e `git diff --check` concluídos sem erros.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — histórico de notificações durante a execução
 
 PEDIDO: manter as notificações disponíveis enquanto o app estiver aberto, limpando-as somente ao fechar o app.

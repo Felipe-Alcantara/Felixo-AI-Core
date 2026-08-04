@@ -34,6 +34,8 @@ type TerminalMenuProps = {
   onAddMany: (optionsList: NewTerminalOptions[]) => void
   /** Adds a folder as a project (picker + detect repos), returns the new ids. */
   onAddFolder: () => Promise<string[]>
+  /** Keeps this panel in a second column while the tools submenu is open. */
+  toolsMenuOpen?: boolean
 }
 
 /** Sentinel value in the project select that triggers the folder picker. */
@@ -43,7 +45,13 @@ const ADD_FOLDER_VALUE = '__add_folder__'
  * and a project, plus the agent's model / effort / yolo options — the fields
  * adapt to what each agent supports. A single click opens a local shell.
  */
-export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: TerminalMenuProps) {
+export function TerminalMenu({
+  projects,
+  onAdd,
+  onAddMany,
+  onAddFolder,
+  toolsMenuOpen = false,
+}: TerminalMenuProps) {
   const [initialPreferences] = useState(readAgentLaunchPreferences)
   const fieldIdPrefix = useId()
   const [open, setOpen] = useState(false)
@@ -220,7 +228,9 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
       </div>
 
       {open && settingsReady && (
-        <div id={`${fieldIdPrefix}-settings`} className="felixo-anim-sequential-panel absolute left-[calc(9rem+0.5rem)] top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10">
+        <div id={`${fieldIdPrefix}-settings`} className={`felixo-anim-sequential-panel absolute top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10 transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          toolsMenuOpen ? 'left-[calc(18.5rem+0.5rem)]' : 'left-[calc(9rem+0.5rem)]'
+        }`}>
           <label htmlFor={`${fieldIdPrefix}-name`} className="mb-1 block text-xs font-medium text-zinc-400">
             Nome (opcional)
           </label>

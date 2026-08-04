@@ -104,8 +104,10 @@ export function CanvasToolbar({
   const [collapsed, setCollapsed] = useState(false)
   const [isCollapsing, setIsCollapsing] = useState(false)
   const [isExpanding, setIsExpanding] = useState(false)
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
 
   const collapseToolbar = () => {
+    setToolsMenuOpen(false)
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       setCollapsed(true)
       return
@@ -198,7 +200,11 @@ export function CanvasToolbar({
         <MessageSquare size={16} />
         Chat
       </button>
-      <CanvasToolsMenu activeTool={activeTool} onSelect={onSelectTool} />
+      <CanvasToolsMenu
+        activeTool={activeTool}
+        onSelect={onSelectTool}
+        onOpenChange={setToolsMenuOpen}
+      />
       <button
         type="button"
         onClick={onOpenNotifications}
@@ -219,6 +225,7 @@ export function CanvasToolbar({
         onAdd={onAddTerminal}
         onAddMany={onAddTerminals}
         onAddFolder={onAddFolder}
+        toolsMenuOpen={toolsMenuOpen}
       />
       <button
         type="button"
