@@ -1,13 +1,8 @@
 import { AlertCircle, Bell, CheckCircle2, X } from 'lucide-react'
 import type { Node } from '@xyflow/react'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
+import type { CanvasNotification } from '../terminal/canvas-notifications'
 import type { CanvasNodeData } from '../types'
-
-export type CanvasNotification = {
-  id: string
-  nodeId: string
-  snapshot: SessionSnapshot
-}
 
 type NotificationsPanelProps = {
   nodes: Node<CanvasNodeData>[]

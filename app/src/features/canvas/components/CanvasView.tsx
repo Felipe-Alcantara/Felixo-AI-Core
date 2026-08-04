@@ -32,13 +32,18 @@ import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
-import { NotificationsPanel, type CanvasNotification } from './NotificationsPanel'
+import { NotificationsPanel } from './NotificationsPanel'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
 import {
   findNewNotificationIds,
   getActionRequiredNodeIds,
 } from '../terminal/session-notifications'
+import {
+  appendCanvasNotifications,
+  dismissCanvasNotification,
+  type CanvasNotification,
+} from '../terminal/canvas-notifications'
 import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
@@ -221,14 +226,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     const newIds = findNewNotificationIds(previousIds, actionableNotificationIds)
     if (newIds.length === 0) return
 
-    setNotificationHistory((current) => [
-      ...current,
-      ...newIds.map((nodeId) => ({
-        id: `${nodeId}:${notificationSequenceRef.current++}`,
-        nodeId,
-        snapshot: sessionSnapshots[nodeId],
-      })).filter((item): item is CanvasNotification => Boolean(item.snapshot)),
-    ])
+    const notificationBatch = appendCanvasNotifications(
+      [],
+      newIds,
+      sessionSnapshots,
+      notificationSequenceRef.current,
+    )
+    notificationSequenceRef.current = notificationBatch.nextSequence
+    setNotificationHistory((current) => [...current, ...notificationBatch.notifications])
 
     const audio = notificationAudioRef.current
     if (!audio) return
@@ -1219,7 +1224,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             onExpandNode={setExpandedTerminalId}
             onDismiss={(notificationId) => {
               setNotificationHistory((current) =>
-                current.filter((notification) => notification.id !== notificationId),
+                dismissCanvasNotification(current, notificationId),
               )
             }}
           />

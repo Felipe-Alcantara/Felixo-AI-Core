@@ -22,12 +22,11 @@ import {
   StickyNote,
   Trash2,
   Upload,
-  Bell,
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
 import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
-import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
+import { NotificationsMenu } from './NotificationsMenu'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
 /** Shape shared by every toolbar button; the press depth comes from the
@@ -110,23 +109,6 @@ export function CanvasToolbar({
   const [isCollapsing, setIsCollapsing] = useState(false)
   const [isExpanding, setIsExpanding] = useState(false)
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
-  const {
-    panelReady: notificationsReady,
-    preparePanel: prepareNotificationsPanel,
-    resetPanel: resetNotificationsPanel,
-    markPanelReady: markNotificationsPanelReady,
-  } = useDeferredExpansionPanel(notificationsOpen)
-
-  const toggleNotifications = () => {
-    if (notificationsOpen) {
-      resetNotificationsPanel()
-      onToggleNotifications()
-      return
-    }
-    prepareNotificationsPanel()
-    onToggleNotifications()
-  }
-
   const collapseToolbar = () => {
     setToolsMenuOpen(false)
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
@@ -146,9 +128,6 @@ export function CanvasToolbar({
   }
 
   if (collapsed) {
-    const notificationAlertClass = notificationCount > 0
-      ? 'border border-red-500/80 ring-1 ring-red-500/30'
-      : ''
     return (
       <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
         <button
@@ -161,32 +140,13 @@ export function CanvasToolbar({
         >
           <ChevronDown size={16} />
         </button>
-        <div
-          className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            notificationsOpen ? 'w-[18.5rem]' : 'w-36'
-          }`}
-          onTransitionEnd={(event) => {
-            if (event.target === event.currentTarget && event.propertyName === 'width' && notificationsOpen) {
-              markNotificationsPanelReady()
-            }
-          }}
+        <NotificationsMenu
+          open={notificationsOpen}
+          notificationCount={notificationCount}
+          onToggle={onToggleNotifications}
         >
-          <button
-            type="button"
-            onClick={toggleNotifications}
-            className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationAlertClass}`}
-            title="Notificações dos agentes"
-          >
-            <Bell size={16} className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
-            {notificationCount > 0 && (
-              <span className="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950" aria-label={`${notificationCount} novas notificações`}>
-                {notificationCount}
-              </span>
-            )}
-          </button>
-          {notificationPanel?.(notificationsReady)}
-        </div>
+          {notificationPanel}
+        </NotificationsMenu>
       </div>
     )
   }
@@ -237,32 +197,13 @@ export function CanvasToolbar({
         onSelect={onSelectTool}
         onOpenChange={setToolsMenuOpen}
       />
-      <div
-        className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          notificationsOpen ? 'w-[18.5rem]' : 'w-36'
-        }`}
-        onTransitionEnd={(event) => {
-          if (event.target === event.currentTarget && event.propertyName === 'width' && notificationsOpen) {
-            markNotificationsPanelReady()
-          }
-        }}
+      <NotificationsMenu
+        open={notificationsOpen}
+        notificationCount={notificationCount}
+        onToggle={onToggleNotifications}
       >
-        <button
-          type="button"
-          onClick={toggleNotifications}
-          className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationCount > 0 ? 'border border-red-500/80 ring-1 ring-red-500/30' : ''}`}
-          title="Notificações dos agentes"
-        >
-          <Bell size={16} className="shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
-          {notificationCount > 0 && (
-            <span className="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950" aria-label={`${notificationCount} novas notificações`}>
-              {notificationCount}
-            </span>
-          )}
-        </button>
-        {notificationPanel?.(notificationsReady)}
-      </div>
+        {notificationPanel}
+      </NotificationsMenu>
       <TerminalMenu
         projects={projects}
         onAdd={onAddTerminal}
