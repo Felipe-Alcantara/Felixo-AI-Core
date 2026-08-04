@@ -51,7 +51,6 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
     panelReady: settingsReady,
     preparePanel,
     resetPanel,
-    markPanelReady,
   } = useDeferredExpansionPanel(open)
   const [agentValue, setAgentValue] = useState<AgentLaunchPreferences['agentValue']>(
     initialPreferences.agentValue,
@@ -189,14 +188,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
   return (
     <div
       ref={containerRef}
-      className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        open ? 'w-[18.5rem]' : 'w-36'
-      }`}
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
-          markPanelReady()
-        }
-      }}
+      className="relative w-36"
     >
       <div className="flex w-full overflow-hidden rounded-lg shadow-lg ring-1 ring-white/10">
         <button
