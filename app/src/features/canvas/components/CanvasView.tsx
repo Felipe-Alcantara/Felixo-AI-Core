@@ -35,7 +35,10 @@ import { TerminalsPanel } from './tools/TerminalsPanel'
 import { NotificationsPanel } from './NotificationsPanel'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
-import { isActionRequired } from '../terminal/session-notifications'
+import {
+  findNewNotificationIds,
+  getActionRequiredNodeIds,
+} from '../terminal/session-notifications'
 import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
@@ -185,9 +188,44 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const sessionSnapshots = useSessionSnapshots()
-  const notificationCount = nodes.filter(
-    (node) => node.type === 'terminal' && isActionRequired(sessionSnapshots[node.id]),
-  ).length
+  const actionableNotificationIds = useMemo(
+    () => getActionRequiredNodeIds(nodes, sessionSnapshots),
+    [nodes, sessionSnapshots],
+  )
+  const notificationCount = actionableNotificationIds.size
+  const notificationAudioRef = useRef<HTMLAudioElement | null>(null)
+  const previousNotificationIdsRef = useRef<ReadonlySet<string>>(new Set())
+  const notificationIdsInitializedRef = useRef(false)
+
+  useEffect(() => {
+    const audio = new Audio('/sounds/notification.mp3')
+    audio.preload = 'auto'
+    notificationAudioRef.current = audio
+    return () => {
+      audio.pause()
+      audio.src = ''
+      notificationAudioRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+
+    const previousIds = previousNotificationIdsRef.current
+    previousNotificationIdsRef.current = actionableNotificationIds
+    if (!notificationIdsInitializedRef.current) {
+      notificationIdsInitializedRef.current = true
+      return
+    }
+    if (findNewNotificationIds(previousIds, actionableNotificationIds).length === 0) return
+
+    const audio = notificationAudioRef.current
+    if (!audio) return
+    audio.currentTime = 0
+    void audio.play().catch(() => {
+      // Browsers may block playback until the user has interacted with the app.
+    })
+  }, [actionableNotificationIds, hydrated])
   const miniMapNode = useCallback(
     (props: MiniMapNodeProps) => {
       const node = nodes.find((item) => item.id === props.id)
