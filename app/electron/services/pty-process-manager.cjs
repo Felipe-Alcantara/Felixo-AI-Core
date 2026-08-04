@@ -87,12 +87,20 @@ class PtyProcessManager {
    * @param {(data: string) => void} [options.onData] - Raw output sink.
    * @param {(event: { exitCode: number, signal?: number }) => void} [options.onExit]
    * @param {string} [options.defaultShell] - Internal Windows fallback shell.
-   * @param {boolean} [isFallbackRetry] - Internal: true when this call is the
-   *   automatic bare-command retry after an early exit (see class docs above).
-   *   Callers should never pass this themselves.
+   * @param {boolean} [isFallbackRetry] - Internal: true when this call is a
+   *   recovery retry after an early exit or Windows PTY backend error. Callers
+   *   should never pass this themselves.
+   * @param {boolean} [useConpty] - Internal Windows backend override. `false`
+   *   retries through WinPTY after a ConPTY startup-path error.
    * @returns {PtyHandle}
    */
-  spawn(sessionId, options = {}, isFallbackRetry = false, allowEmergencyShellFallback = true) {
+  spawn(
+    sessionId,
+    options = {},
+    isFallbackRetry = false,
+    allowEmergencyShellFallback = true,
+    useConpty,
+  ) {
     if (!isFallbackRetry) {
       this.kill(sessionId, { force: true })
     }
@@ -134,16 +142,16 @@ class PtyProcessManager {
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
       args.length > 0
-    const allowShellStartupFallback =
+    const allowWindowsBackendFallback =
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
-      !options.command
+      useConpty !== false
     const allowCodexPathFallback =
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
       isCodexCommand(requestedCommand)
-    let shellStartupFallbackRetried = false
+    let windowsBackendFallbackRetried = false
 
     let ptyProcess
     try {
@@ -155,6 +163,7 @@ class PtyProcessManager {
         // instead of inheriting the app's working directory.
         cwd,
         env,
+        ...(useConpty === false ? { useConpty: false } : {}),
       })
     } catch {
       this.reportLayer(
@@ -183,22 +192,28 @@ class PtyProcessManager {
         // a CLI may legitimately print "File not found" for its work, and
         // treating that as a shell failure used to kill Codex sessions.
         if (
-          allowShellStartupFallback &&
-          !shellStartupFallbackRetried &&
+          allowWindowsBackendFallback &&
+          !windowsBackendFallbackRetried &&
           this.now() - entry.spawnedAt <= SHELL_STARTUP_RECOVERY_WINDOW_MS &&
           WINDOWS_SHELL_PATH_ERROR.test(String(data))
         ) {
-          shellStartupFallbackRetried = true
-          this.reportWindowsShellStartupDiagnostic(launch, cwd, data)
+          windowsBackendFallbackRetried = true
+          this.reportWindowsShellStartupDiagnostic(launch, cwd, data, useConpty)
           this.reportLayer(
             options,
-            'shell do Windows',
-            'O shell reportou um erro de caminho; tentando CMD na pasta do usuário.',
+            'backend PTY do Windows',
+            'A camada de terminal reportou um erro de caminho; tentando o backend alternativo.',
             'shell-path-error',
           )
           this.safeKill(ptyProcess, 'SIGKILL')
           this.cleanup(sessionId, ptyProcess)
-          this.spawn(sessionId, { ...options, cwd: os.homedir(), defaultShell: 'cmd.exe' }, true)
+          this.spawn(
+            sessionId,
+            { ...options, cwd },
+            true,
+            allowEmergencyShellFallback,
+            false,
+          )
           return
         }
         options.onData(data)
@@ -476,7 +491,7 @@ class PtyProcessManager {
    * may contain the actual shell, cwd and startup text. Normal app launches
    * keep the existing path-free diagnostic to avoid leaking local locations.
    */
-  reportWindowsShellStartupDiagnostic(launch, cwd, data) {
+  reportWindowsShellStartupDiagnostic(launch, cwd, data, useConpty) {
     if (!this.isDebugSession()) {
       return
     }
@@ -484,6 +499,7 @@ class PtyProcessManager {
     this.warn('PTY: Diagnóstico bruto do shell Windows.', {
       reason: 'shell-path-error',
       platform: this.platform.name,
+      backend: useConpty === false ? 'winpty' : 'conpty/auto',
       shell: launch.command,
       args: launch.args,
       cwd,
