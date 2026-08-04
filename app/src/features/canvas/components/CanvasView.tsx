@@ -900,9 +900,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // one `addNode` call per config: those go through the same `nodes` state
   // closure, so back-to-back calls in the same tick would all place against
   // the pre-batch list and stack on top of each other. `findFreeNodePositions`
-  // (pure, tested in node-geometry.test.ts) computes all positions together
-  // against a growing local list, then everything lands in a single
-  // `setNodes` + one `persistNode` per node.
+  // (pure, tested in node-geometry.test.ts) finds free room for the whole
+  // near-square matrix before everything lands in one `setNodes` + one
+  // `persistNode` per node.
   const addTerminalNodes = useCallback(
     (optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[]) => {
       if (optionsList.length === 0) {

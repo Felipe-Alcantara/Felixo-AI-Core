@@ -16,34 +16,46 @@ describe('findFreeNodePositions', () => {
     expect(findFreeNodePositions(nodes, 1, SIZE)).toEqual([findFreeNodePosition(nodes, SIZE)])
   })
 
-  it('places every node in the batch without overlapping each other', () => {
-    const positions = findFreeNodePositions([], 4, SIZE)
-    expect(positions).toHaveLength(4)
-
-    for (let i = 0; i < positions.length; i += 1) {
-      for (let j = i + 1; j < positions.length; j += 1) {
-        const a = positions[i]
-        const b = positions[j]
-        const overlaps =
-          a.x < b.x + SIZE.width &&
-          a.x + SIZE.width > b.x &&
-          a.y < b.y + SIZE.height &&
-          a.y + SIZE.height > b.y
-        expect(overlaps).toBe(false)
-      }
-    }
+  it('places four terminals as a 2 by 2 matrix', () => {
+    expect(findFreeNodePositions([], 4, SIZE)).toEqual([
+      { x: 120, y: 120 },
+      { x: 252, y: 120 },
+      { x: 120, y: 252 },
+      { x: 252, y: 252 },
+    ])
   })
 
-  it('also avoids nodes that already existed on the canvas', () => {
+  it('grows the matrix by columns and rows instead of one long line', () => {
+    expect(findFreeNodePositions([], 5, SIZE)).toEqual([
+      { x: 120, y: 120 },
+      { x: 252, y: 120 },
+      { x: 384, y: 120 },
+      { x: 120, y: 252 },
+      { x: 252, y: 252 },
+    ])
+  })
+
+  it('prioritizes a matrix that fits entirely in the visible canvas', () => {
+    expect(
+      findFreeNodePositions([], 4, SIZE, { x: 0, y: 0, width: 400, height: 400 }),
+    ).toEqual([
+      { x: 40, y: 88 },
+      { x: 172, y: 88 },
+      { x: 40, y: 220 },
+      { x: 172, y: 220 },
+    ])
+  })
+
+  it('moves the complete matrix past blocks that already exist on the canvas', () => {
     const existing: Node[] = [
       { id: 'a', type: 'terminal', position: { x: 120, y: 120 }, width: 100, height: 100, data: {} },
     ]
-    const [position] = findFreeNodePositions(existing, 1, SIZE)
-    const overlapsExisting =
-      position.x < existing[0].position.x + 100 &&
-      position.x + SIZE.width > existing[0].position.x &&
-      position.y < existing[0].position.y + 100 &&
-      position.y + SIZE.height > existing[0].position.y
-    expect(overlapsExisting).toBe(false)
+
+    expect(findFreeNodePositions(existing, 4, SIZE)).toEqual([
+      { x: 252, y: 120 },
+      { x: 384, y: 120 },
+      { x: 252, y: 252 },
+      { x: 384, y: 252 },
+    ])
   })
 })
