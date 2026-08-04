@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildPlanningFileInstruction,
   composeTerminalInitialText,
+  isTerminalInitialTextReady,
   RESUME_INITIAL_TEXT,
   resolveTerminalInitialText,
 } from './quality-standard-prompt'
@@ -71,6 +72,39 @@ describe('resolveTerminalInitialText', () => {
       existingInitialText: 'ls -la',
     })
     expect(result).toBe('ls -la')
+  })
+})
+
+describe('terminal initial-text readiness', () => {
+  it('waits for the restored-agent capture before spawning a terminal', () => {
+    expect(
+      isTerminalInitialTextReady({
+        restoredAgentsCaptured: false,
+        edgesHydrated: true,
+        connectedCanvasFileCount: 0,
+        resolvedCanvasFileCount: 0,
+      }),
+    ).toBe(false)
+  })
+
+  it('starts only after the restored capture and linked canvas files are ready', () => {
+    expect(
+      isTerminalInitialTextReady({
+        restoredAgentsCaptured: true,
+        edgesHydrated: true,
+        connectedCanvasFileCount: 1,
+        resolvedCanvasFileCount: 0,
+      }),
+    ).toBe(false)
+
+    expect(
+      isTerminalInitialTextReady({
+        restoredAgentsCaptured: true,
+        edgesHydrated: true,
+        connectedCanvasFileCount: 1,
+        resolvedCanvasFileCount: 1,
+      }),
+    ).toBe(true)
   })
 })
 
