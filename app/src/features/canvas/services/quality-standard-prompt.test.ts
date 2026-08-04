@@ -8,6 +8,10 @@ import {
 } from './quality-standard-prompt'
 
 describe('resolveTerminalInitialText', () => {
+  it('uses Codex slash-command casing and submits it with Enter', () => {
+    expect(RESUME_INITIAL_TEXT).toBe('/resume\r')
+  })
+
   it('types "/resume" for a restored agent terminal, ignoring the quality standard entirely', () => {
     const result = resolveTerminalInitialText({
       isRestoredAgent: true,
