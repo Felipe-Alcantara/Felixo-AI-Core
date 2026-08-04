@@ -745,6 +745,18 @@ VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 te
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — padronização de qualidade do canvas
+
+PEDIDO: normalizar o conjunto recente de menus e notificações segundo o padrão de qualidade.
+
+FEITO: a revisão aplicou os princípios de responsabilidade única, simplicidade verificável e testes de comportamento. `NotificationsMenu` passou a concentrar o trigger visual, o ciclo de expansão e a animação usados nas versões expandida e recolhida da barra, removendo duplicação em `CanvasToolbar`. As regras de criar e consumir notificações foram extraídas para `terminal/canvas-notifications.ts`; `CanvasView` apenas coordena estado e efeitos de áudio. A sequência de IDs é calculada antes da atualização de estado, sem efeito colateral dentro de updater React.
+
+TESTE: `canvas-notifications.test.ts` cobre criação ordenada, ausência de snapshot e consumo individual. Validação com Node 25.9.0: ESLint, TypeScript, Vite build, `vitest` (100 testes) e `git diff --check` concluídos sem erros.
+
+RISCO RESIDUAL: a animação continua sem harness de DOM/Electron; conferir manualmente a abertura/recolhimento em ambos os estados da barra e com `prefers-reduced-motion`.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — painel de notificações ancorado e legível
 
 PEDIDO: corrigir o botão de notificações deformado, o painel sobreposto sem animação, a ausência da última mensagem útil e a paleta divergente.
