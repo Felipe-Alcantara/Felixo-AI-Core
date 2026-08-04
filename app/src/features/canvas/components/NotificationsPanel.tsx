@@ -41,9 +41,9 @@ export function NotificationsPanel({
     )
 
   return (
-    <section aria-label="Notificações dos agentes" className="felixo-anim-notifications-in absolute left-[calc(100%+0.5rem)] top-0 z-40 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-amber-400/30 bg-zinc-900 shadow-2xl">
+    <section aria-label="Notificações dos agentes" className="felixo-anim-sequential-panel absolute left-[calc(100%+0.5rem)] top-0 z-40 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl">
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
-        <Bell size={15} className="text-amber-400" />
+        <Bell size={15} className="text-red-400" />
         Notificações
         <span className="text-xs font-normal text-zinc-500">{notificationItems.length}</span>
         <button type="button" onClick={onClose} className="ml-auto rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="Fechar notificações">
@@ -70,7 +70,7 @@ export function NotificationsPanel({
               }}
               className="flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left hover:bg-white/5"
             >
-              <AlertCircle size={15} className="mt-0.5 shrink-0 text-amber-400" />
+              <AlertCircle size={15} className="mt-0.5 shrink-0 text-red-400" />
               <span className="min-w-0">
                 <span className="block truncate text-sm text-zinc-100">{node.data.label || node.data.command || node.id}</span>
                 <span className="mt-0.5 block truncate text-xs text-zinc-400">{lastNotificationMessage(notification.snapshot)}</span>
@@ -99,10 +99,16 @@ function lastNotificationMessage(snapshot: SessionSnapshot): string {
   const lastLine = [...snapshot.previewLines]
     .reverse()
     .map((line) => line.trim())
-    .find((line) => line && !isTerminalChrome(line))
+    .find((line) => line && !isTerminalChrome(line) && !isCanvasInstruction(line))
   return lastLine || notificationText(snapshot)
 }
 
 function isTerminalChrome(line: string): boolean {
   return /^(?:gpt-|claude|gemini)\S*.*[·•]|^(?:model|tokens?|contexto|esc to interrupt)\b/i.test(line)
+}
+
+function isCanvasInstruction(line: string): boolean {
+  return /(?:antes de qualquer tarefa|contexto do canvas|scratchpad vivo compartilhado|sua identidade no canvas|ambiente multi-agente)/i.test(
+    line,
+  )
 }
