@@ -78,6 +78,7 @@ import {
   getLinkedAgentIds,
   requestRepoDiagnosis,
 } from '../services/file-terminal-links'
+import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import type { CanvasNodeType, CanvasSkill, DiagnosisRequestStatus } from '../types'
 
 type FlowPositionMapper = {
@@ -792,9 +793,11 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         return next
       })
 
-      // When a file block connects to a terminal, tell that terminal's agent
-      // about the file so it can read/edit it.
+      // A file-to-terminal link grants its agent shared scratchpad context;
+      // an agent-to-agent link declares reciprocal collaboration. Other
+      // connection shapes remain visual-only for now.
       void announceFileToTerminal(connection, nodes, store, fileLinkPromptRef.current)
+      announceAgentCollaboration(connection, nodes, store)
     },
     [setEdges, nodes, store],
   )
