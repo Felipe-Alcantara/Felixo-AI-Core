@@ -52,7 +52,7 @@ export function buildQualityStandardMessage(template: string): string {
 
 /** Typed into an agent terminal restored from a previous run instead of its
  *  usual standing instruction — see resolveTerminalInitialText. */
-export const RESUME_INITIAL_TEXT = toSubmittedTerminalText('/resume')
+export const RESUME_INITIAL_TEXT = toSubmittedTerminalText('/Resume')
 
 /**
  * Creates the standing instruction for an optional external planning file.
