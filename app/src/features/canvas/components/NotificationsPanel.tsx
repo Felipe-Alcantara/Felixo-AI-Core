@@ -41,7 +41,7 @@ export function NotificationsPanel({
     )
 
   return (
-    <section aria-label="Notificações dos agentes" className="absolute left-4 top-16 z-30 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl">
+    <section aria-label="Notificações dos agentes" className="felixo-anim-notifications-in absolute left-[calc(100%+0.5rem)] top-0 z-40 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-amber-400/30 bg-zinc-900 shadow-2xl">
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-amber-400" />
         Notificações
@@ -99,6 +99,10 @@ function lastNotificationMessage(snapshot: SessionSnapshot): string {
   const lastLine = [...snapshot.previewLines]
     .reverse()
     .map((line) => line.trim())
-    .find(Boolean)
+    .find((line) => line && !isTerminalChrome(line))
   return lastLine || notificationText(snapshot)
+}
+
+function isTerminalChrome(line: string): boolean {
+  return /^(?:gpt-|claude|gemini)\S*.*[·•]|^(?:model|tokens?|contexto|esc to interrupt)\b/i.test(line)
 }

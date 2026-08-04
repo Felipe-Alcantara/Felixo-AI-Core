@@ -732,12 +732,19 @@ function computePreview(terminal: Terminal): string[] {
   // Walk upward from the last row, collecting non-empty lines.
   for (let row = buffer.length - 1; row >= 0 && lines.length < PREVIEW_LINES; row -= 1) {
     const text = buffer.getLine(row)?.translateToString(true).trimEnd() ?? ''
-    if (text.length > 0) {
+    if (text.length > 0 && !isTerminalChromeLine(text)) {
       lines.unshift(text)
     }
   }
 
   return lines
+}
+
+/** Lines from an agent CLI's persistent footer, not part of its response. */
+function isTerminalChromeLine(line: string): boolean {
+  return /^(?:gpt-|claude|gemini)\S*.*[·•]|^(?:model|tokens?|contexto|esc to interrupt)\b/i.test(
+    line.trim(),
+  )
 }
 
 /** Spinner frames (braille, ascii, dots, clocks) agent CLIs cycle while idle. */
