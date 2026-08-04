@@ -1,3 +1,5 @@
+import { toSubmittedTerminalText } from '../terminal/terminal-input'
+
 /**
  * The instruction injected into a terminal when a file block is linked to it.
  *
@@ -59,8 +61,7 @@ export function buildFileLinkPrompt(
   const filled = template
     .replaceAll('{{path}}', filePath)
     .replaceAll('{{agent}}', agentName)
-  // Trailing newline submits the line; \r keeps it tidy across shells/agents.
-  return `${filled}\n`
+  return toSubmittedTerminalText(filled)
 }
 
 /**

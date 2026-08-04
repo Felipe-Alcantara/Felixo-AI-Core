@@ -1,7 +1,7 @@
 # Guia do Usuário Final - Felixo AI Core
 
 Status: concluido.
-Última revisão: 2026-05-04.
+Última revisão: 2026-08-04.
 
 Este guia é para quem quer instalar e usar o Felixo AI Core como aplicativo desktop. O Felixo centraliza CLIs de IA instaladas no seu computador, como Claude Code, Codex e Gemini, e oferece uma interface para conversar, selecionar projetos, acompanhar execução, usar notas, exportar chats e configurar o orquestrador.
 
@@ -150,11 +150,21 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 - Todo bloco (terminal, nota, arquivo, grupo) pode ser **renomeado pelo cabeçalho** — clique no título e digite.
 - Ao **criar** um bloco, os botões da barra (Nota, Arquivo, Grupo) abrem um campo de nome opcional; o menu do Terminal também tem o campo "Nome". Deixar vazio usa o nome padrão.
 - O nome alimenta a **Pesquisa** do canvas e, em terminais com agente, é informado ao próprio agente na inicialização: ele sabe seu nome, o diretório/projeto em que está e que trabalha num ambiente multi-agente (deve se identificar nos arquivos compartilhados e não assumir que está sozinho no repositório).
-- Renomear um terminal **depois** que o agente já iniciou não reenvia a apresentação — o nome novo vale para a interface e a pesquisa.
+- Renomear um terminal **depois** que o agente já iniciou envia uma única atualização de nome ao agente quando a edição é confirmada.
+
+### Abrir agentes e seguir planos
+
+- O botão grande **Agente** abre imediatamente outro terminal com as últimas configurações reutilizáveis: CLI, modelo, esforço, permissões, projeto e arquivo de planejamento. O nome do terminal continua pontual para evitar criar vários blocos com o mesmo nome sem intenção.
+- A seta ao lado de **Agente** abre as configurações completas. Em **Arquivo de planejamento**, informe um caminho ou selecione qualquer tipo de arquivo no explorador.
+- Quando houver um arquivo de planejamento, o agente recebe no primeiro prompt a instrução para lê-lo antes de começar e seguir suas funções, etapas e decisões. O conteúdo do arquivo não é copiado para o app; o agente recebe apenas o caminho e decide como lê-lo.
+
+### Notificações dos agentes
+
+O botão **Notificações** mostra agentes que encerraram a sessão ou estão aguardando aprovação/resposta. Clique em uma notificação para centralizar e abrir o respectivo terminal.
 
 ### Ferramentas do canvas
 
-O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que flutuam sobre o quadro sem escondê-lo: Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git e Configurações. Escolher uma ferramenta fecha o menu e abre o painel correspondente.
+O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que flutuam sobre o quadro sem escondê-lo: Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git e Configurações. Escolher uma ferramenta fecha o menu e abre o painel correspondente. A barra pode ser recolhida; nesse estado, as notificações continuam acessíveis ao lado do botão de expansão.
 
 - **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas compartilhadas com o modo chat, editáveis ali mesmo.
 - **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.

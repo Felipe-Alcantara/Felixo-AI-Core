@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   BrainCircuit,
   ChevronDown,
-  ChevronRight,
+  ChevronUp,
   FolderGit2,
   GitBranch,
   LayoutList,
@@ -13,6 +13,7 @@ import {
   Sparkles,
   Wrench,
 } from 'lucide-react'
+import { useDeferredExpansionPanel } from '../../hooks/useDeferredExpansionPanel'
 
 // 'terminals' is not here on purpose — the terminals dock is always visible
 // (see TerminalsPanel.tsx, rendered directly by CanvasView), not a panel you
@@ -52,31 +53,60 @@ type CanvasToolsMenuProps = {
  */
 export function CanvasToolsMenu({ activeTool, onSelect }: CanvasToolsMenuProps) {
   const [open, setOpen] = useState(false)
+  const {
+    panelReady: optionsReady,
+    preparePanel,
+    resetPanel,
+    markPanelReady,
+  } = useDeferredExpansionPanel(open)
+
+  const toggleOpen = () => {
+    if (open) {
+      resetPanel()
+      setOpen(false)
+      return
+    }
+
+    preparePanel()
+    setOpen(true)
+  }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div
+      className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        open ? 'w-[18.5rem]' : 'w-36'
+      }`}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
+          markPanelReady()
+        }
+      }}
+    >
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="felixo-btn flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
+        onClick={toggleOpen}
+        className="felixo-btn flex w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Ferramentas"
+        aria-expanded={open}
+        aria-controls="canvas-tools-options"
       >
         <Wrench size={16} />
         Ferramentas
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {open ? <ChevronUp className="ml-auto" size={14} /> : <ChevronDown className="ml-auto" size={14} />}
       </button>
 
-      {open && (
-        <div className="felixo-anim-menu-in flex w-44 flex-col overflow-hidden rounded-lg bg-zinc-800 shadow-xl ring-1 ring-white/10">
+      {open && optionsReady && (
+        <div id="canvas-tools-options" className="felixo-anim-sequential-panel absolute left-[calc(9rem+0.5rem)] top-full z-30 mt-2 flex max-h-[calc(100vh-6rem)] w-36 flex-col overflow-y-auto rounded-lg bg-zinc-800 shadow-xl ring-1 ring-white/10">
           {TOOLS.map(({ tool, label, icon: Icon }) => (
             <button
               key={tool}
               type="button"
               onClick={() => {
                 onSelect(tool)
+                resetPanel()
                 setOpen(false)
               }}
-              className={`felixo-btn flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
+              className={`felixo-btn flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
                 activeTool === tool ? 'bg-zinc-700 text-white' : 'text-zinc-200'
               }`}
             >

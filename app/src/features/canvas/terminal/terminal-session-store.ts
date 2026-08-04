@@ -1,5 +1,6 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { toSubmittedTerminalText } from './terminal-input'
 
 /**
  * Activity derived from the output stream:
@@ -37,6 +38,10 @@ const PREVIEW_LINES = 6
 /** A configured agent should not terminate silently immediately after launch. */
 const SILENT_EARLY_EXIT_MS = 5000
 const DEFAULT_INITIAL_TEXT_DELAY_MS = 1200
+/** Minimum quiet period after the CLI starts emitting output before input. */
+const INITIAL_TEXT_READY_QUIET_MS = 500
+/** Safety fallback for CLIs that do not emit a startup banner. */
+const INITIAL_TEXT_MAX_WAIT_MS = 10000
 const CLAUDE_TRUST_ACCEPT_DELAY_MS = 800
 const CLAUDE_INITIAL_TEXT_DELAY_MS = 1800
 const CODEX_INITIAL_TEXT_DELAY_MS = 1800
@@ -48,7 +53,7 @@ type SessionOptions = {
   command?: string
   args?: string[]
   cwd?: string
-  /** Text typed into the PTY shortly after spawn (e.g. a standing instruction). */
+  /** Text submitted to the PTY shortly after spawn (e.g. a standing instruction). */
   initialText?: string
 }
 
@@ -91,6 +96,9 @@ type Session = {
 export class TerminalSessionStore {
   private sessions = new Map<string, Session>()
   private listeners = new Map<string, Set<SessionListener>>()
+  private allListeners = new Set<() => void>()
+  /** Immutable cache used by React's external-store subscription. */
+  private snapshots: Record<string, SessionSnapshot> = {}
 
   /**
    * Ends an exited/errored session and immediately re-creates it with the
@@ -151,6 +159,8 @@ export class TerminalSessionStore {
     }
     this.listeners.set(id, session.listeners)
     this.sessions.set(id, session)
+    this.snapshots = { ...this.snapshots, [id]: session.snapshot }
+    this.notifyAll()
 
     if (!pty) {
       this.update(session, { activity: 'error', message: 'Bridge PTY indisponível.' })
@@ -382,6 +392,15 @@ export class TerminalSessionStore {
     return this.sessions.get(id)?.snapshot
   }
 
+  getSnapshots(): Record<string, SessionSnapshot> {
+    return this.snapshots
+  }
+
+  subscribeAll(listener: () => void): () => void {
+    this.allListeners.add(listener)
+    return () => this.allListeners.delete(listener)
+  }
+
   subscribe(id: string, listener: SessionListener): () => void {
     let listeners = this.listeners.get(id)
     if (!listeners) {
@@ -418,6 +437,12 @@ export class TerminalSessionStore {
     session.terminal.dispose()
     this.sessions.delete(id)
     this.listeners.delete(id)
+    if (id in this.snapshots) {
+      const remainingSnapshots = { ...this.snapshots }
+      delete remainingSnapshots[id]
+      this.snapshots = remainingSnapshots
+      this.notifyAll()
+    }
   }
 
   /** Permanently ends every terminal session owned by the canvas. */
@@ -515,7 +540,11 @@ export class TerminalSessionStore {
     }
   }
 
-  private scheduleInitialText(session: Session, delayMs: number): void {
+  private scheduleInitialText(
+    session: Session,
+    delayMs: number,
+    waitStartedAt = Date.now(),
+  ): void {
     if (!session.initialText || session.initialTextSent || session.disposed) {
       return
     }
@@ -532,10 +561,31 @@ export class TerminalSessionStore {
         return
       }
 
+      const elapsed = Date.now() - waitStartedAt
+      const quietFor = Date.now() - session.lastMeaningfulAt
+      const processLooksReady =
+        session.receivedOutput && quietFor >= INITIAL_TEXT_READY_QUIET_MS
+      const fallbackReady = elapsed >= INITIAL_TEXT_MAX_WAIT_MS
+
+      // A PTY can be created successfully before the CLI has reached its
+      // interactive prompt. Wait for actual startup output to settle instead
+      // of typing into the process while it is still booting. The fallback
+      // keeps silent CLIs usable and is deliberately bounded.
+      if (!processLooksReady && !fallbackReady) {
+        this.scheduleInitialText(
+          session,
+          Math.min(250, INITIAL_TEXT_READY_QUIET_MS),
+          waitStartedAt,
+        )
+        return
+      }
+
       session.initialTextSent = true
       void window.felixo?.pty?.write({
         sessionId: session.ptySessionId,
-        data: session.initialText ?? '',
+        // Keep the submission invariant at the delivery boundary too. Imported
+        // or legacy canvas nodes may carry an older initialText without CR.
+        data: toSubmittedTerminalText(session.initialText ?? ''),
       })
     }, delayMs)
   }
@@ -588,8 +638,16 @@ export class TerminalSessionStore {
       ...patch,
       previewLines: computePreview(session.terminal),
     }
+    this.snapshots = { ...this.snapshots, [session.id]: session.snapshot }
     for (const listener of session.listeners) {
       listener(session.snapshot)
+    }
+    this.notifyAll()
+  }
+
+  private notifyAll(): void {
+    for (const listener of this.allListeners) {
+      listener()
     }
   }
 }

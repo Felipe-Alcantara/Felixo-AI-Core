@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
 import {
   AGENTS,
@@ -7,9 +7,15 @@ import {
   getAgent,
   getEffortLevels,
   isEffortValidForModel,
-  type AgentId,
   type EffortLevel,
 } from '../services/agent-launch-options'
+import {
+  readAgentLaunchPreferences,
+  saveAgentLaunchPreferences,
+  SHELL_AGENT_VALUE,
+  type AgentLaunchPreferences,
+} from '../services/agent-launch-preferences'
+import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
 
 type TerminalMenuProject = { id: string; name: string; path: string }
 
@@ -18,6 +24,7 @@ export type NewTerminalOptions = {
   args?: string[]
   cwd?: string
   label: string
+  planningFile?: string
 }
 
 type TerminalMenuProps = {
@@ -31,35 +38,70 @@ type TerminalMenuProps = {
 
 /** Sentinel value in the project select that triggers the folder picker. */
 const ADD_FOLDER_VALUE = '__add_folder__'
-/** Sentinel agent value for a plain shell (no agent). */
-const SHELL_VALUE = '__shell__'
-
 /**
  * Toolbar control for adding a terminal node. Pick an agent (or plain shell)
  * and a project, plus the agent's model / effort / yolo options — the fields
  * adapt to what each agent supports. A single click opens a local shell.
  */
 export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: TerminalMenuProps) {
+  const [initialPreferences] = useState(readAgentLaunchPreferences)
+  const fieldIdPrefix = useId()
   const [open, setOpen] = useState(false)
-  const [agentValue, setAgentValue] = useState<string>(SHELL_VALUE)
-  const [model, setModel] = useState('')
-  const [effort, setEffort] = useState('')
-  const [yolo, setYolo] = useState(false)
-  const [projectId, setProjectId] = useState<string>('')
+  const {
+    panelReady: settingsReady,
+    preparePanel,
+    resetPanel,
+    markPanelReady,
+  } = useDeferredExpansionPanel(open)
+  const [agentValue, setAgentValue] = useState<AgentLaunchPreferences['agentValue']>(
+    initialPreferences.agentValue,
+  )
+  const [model, setModel] = useState(initialPreferences.model)
+  const [effort, setEffort] = useState(initialPreferences.effort)
+  const [yolo, setYolo] = useState(initialPreferences.yolo)
+  const [projectId, setProjectId] = useState(initialPreferences.projectId)
   const [name, setName] = useState('')
+  const [planningFile, setPlanningFile] = useState(initialPreferences.planningFile)
   // Configs queued up to start together — lets one click launch a whole
   // agent setup instead of repeating "configure, open" once per terminal.
   const [queue, setQueue] = useState<NewTerminalOptions[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
+  const planningFileInputRef = useRef<HTMLInputElement>(null)
 
-  const agent = agentValue === SHELL_VALUE ? undefined : getAgent(agentValue as AgentId)
+  const agent = agentValue === SHELL_AGENT_VALUE ? undefined : getAgent(agentValue)
   const effortLevels = agent ? getEffortLevels(agent, model) : null
+
+  const closeSettings = useCallback(() => {
+    resetPanel()
+    setOpen(false)
+  }, [resetPanel])
+
+  const toggleSettings = () => {
+    if (open) {
+      closeSettings()
+      return
+    }
+
+    preparePanel()
+    setOpen(true)
+  }
 
   const handleModelChange = (value: string) => {
     setModel(value)
     if (agent && !isEffortValidForModel(agent, value, effort)) {
       setEffort('')
     }
+  }
+
+  const saveCurrentPreferences = () => {
+    saveAgentLaunchPreferences({
+      agentValue,
+      model,
+      effort,
+      yolo,
+      projectId,
+      planningFile,
+    })
   }
 
   const handleProjectChange = async (value: string) => {
@@ -91,6 +133,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
       args: buildAgentArgs(choices) ?? undefined,
       cwd: project?.path,
       label: customName || `${describeLaunch(choices)} · ${place}`,
+      planningFile: planningFile.trim() || undefined,
     }
   }
 
@@ -100,23 +143,26 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
     }
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false)
+        closeSettings()
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open])
+  }, [closeSettings, open])
 
   const openTerminal = () => {
-    onAdd(buildOptions())
+    const options = buildOptions()
+    saveCurrentPreferences()
+    onAdd(options)
     setName('')
-    setOpen(false)
+    closeSettings()
   }
 
   // Adds the currently configured agent to the queue instead of opening it
   // right away, so the user can stack up several different setups (agent,
   // model, project…) and start them all in one go.
   const queueCurrent = () => {
+    saveCurrentPreferences()
     setQueue((current) => [...current, buildOptions()])
     setName('')
   }
@@ -127,7 +173,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
     }
     onAddMany(queue)
     setQueue([])
-    setOpen(false)
+    closeSettings()
   }
 
   const removeQueued = (index: number) => {
@@ -141,49 +187,63 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
   }
 
   return (
-    <div ref={containerRef} className="relative">
-      <div className="flex overflow-hidden rounded-lg shadow-lg ring-1 ring-white/10">
+    <div
+      ref={containerRef}
+      className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        open ? 'w-[25.5rem]' : 'w-36'
+      }`}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
+          markPanelReady()
+        }
+      }}
+    >
+      <div className="flex w-full overflow-hidden rounded-lg shadow-lg ring-1 ring-white/10">
         <button
           type="button"
           onClick={openTerminal}
-          className="felixo-btn flex items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700"
+          className="felixo-btn flex flex-1 items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700"
         >
           <TerminalSquare size={16} />
-          Terminal
+          Agente
         </button>
         <button
           type="button"
-          onClick={() => setOpen((current) => !current)}
+          onClick={toggleSettings}
           className="felixo-btn-icon border-l border-white/10 bg-zinc-800 px-1.5 text-zinc-300 hover:bg-zinc-700"
-          aria-label="Configurar novo terminal"
+          aria-label="Configurar novo agente"
+          aria-controls={`${fieldIdPrefix}-settings`}
+          aria-expanded={open}
         >
           <ChevronDown size={14} />
         </button>
       </div>
 
-      {open && (
-        <div className="absolute left-0 top-full mt-1 w-64 rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10">
-          <label className="mb-1 block text-xs font-medium text-zinc-400">
+      {open && settingsReady && (
+        <div id={`${fieldIdPrefix}-settings`} className="felixo-anim-sequential-panel absolute left-[calc(9rem+0.5rem)] top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10">
+          <label htmlFor={`${fieldIdPrefix}-name`} className="mb-1 block text-xs font-medium text-zinc-400">
             Nome (opcional)
           </label>
           <input
+            id={`${fieldIdPrefix}-name`}
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Ex.: Agente de testes"
             className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
           />
 
-          <label className="mb-1 block text-xs font-medium text-zinc-400">Agente</label>
+          <label htmlFor={`${fieldIdPrefix}-agent`} className="mb-1 block text-xs font-medium text-zinc-400">Agente</label>
           <select
+            id={`${fieldIdPrefix}-agent`}
             value={agentValue}
             onChange={(event) => {
-              setAgentValue(event.target.value)
+              setAgentValue(event.target.value as AgentLaunchPreferences['agentValue'])
               setModel('')
               setEffort('')
             }}
             className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
           >
-            <option value={SHELL_VALUE}>Nenhum (shell)</option>
+            <option value={SHELL_AGENT_VALUE}>Nenhum (shell)</option>
             {AGENTS.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
@@ -193,8 +253,9 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
 
           {agent && (
             <>
-              <label className="mb-1 block text-xs font-medium text-zinc-400">Modelo</label>
+              <label htmlFor={`${fieldIdPrefix}-model`} className="mb-1 block text-xs font-medium text-zinc-400">Modelo</label>
               <select
+                id={`${fieldIdPrefix}-model`}
                 value={model}
                 onChange={(event) => handleModelChange(event.target.value)}
                 className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
@@ -209,10 +270,11 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
 
               {effortLevels && (
                 <>
-                  <label className="mb-1 block text-xs font-medium text-zinc-400">
+                  <label htmlFor={`${fieldIdPrefix}-effort`} className="mb-1 block text-xs font-medium text-zinc-400">
                     Esforço de raciocínio
                   </label>
                   <select
+                    id={`${fieldIdPrefix}-effort`}
                     value={effort}
                     onChange={(event) => setEffort(event.target.value)}
                     className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
@@ -239,8 +301,45 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
             </>
           )}
 
-          <label className="mb-1 block text-xs font-medium text-zinc-400">Projeto</label>
+          {agent && (
+            <>
+              <label htmlFor={`${fieldIdPrefix}-planning-file`} className="mb-1 block text-xs font-medium text-zinc-400">Arquivo de planejamento</label>
+              <div className="mb-3 flex gap-1.5">
+                <input
+                  id={`${fieldIdPrefix}-planning-file`}
+                  value={planningFile}
+                  onChange={(event) => setPlanningFile(event.target.value)}
+                  placeholder="Caminho para um arquivo (opcional)"
+                  className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => planningFileInputRef.current?.click()}
+                  className="rounded bg-zinc-700 px-2 text-xs text-zinc-200 hover:bg-zinc-600"
+                  title="Selecionar arquivo de planejamento"
+                  aria-label="Selecionar arquivo de planejamento"
+                >
+                  …
+                </button>
+                <input
+                  ref={planningFileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    const selectedPath = window.felixo?.getFilePath?.(file) || file.name
+                    setPlanningFile(selectedPath)
+                    event.target.value = ''
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+          <label htmlFor={`${fieldIdPrefix}-project`} className="mb-1 block text-xs font-medium text-zinc-400">Projeto</label>
           <select
+            id={`${fieldIdPrefix}-project`}
             value={projectId}
             onChange={(event) => void handleProjectChange(event.target.value)}
             className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
@@ -260,7 +359,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
               onClick={openTerminal}
               className="felixo-btn flex-1 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
             >
-              Abrir terminal
+              Abrir agente
             </button>
             <button
               type="button"

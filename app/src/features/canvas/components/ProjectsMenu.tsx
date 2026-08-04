@@ -130,11 +130,11 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
     : ''
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-36">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="felixo-btn flex items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
+        className="felixo-btn flex w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Abrir uma pasta e rodar arquivos dela num terminal"
       >
         <FolderOpen size={16} />
@@ -182,6 +182,7 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
                   onClick={goUp}
                   className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
                   title="Voltar"
+                  aria-label="Voltar para a pasta anterior"
                 >
                   <ChevronRight size={14} className="rotate-180" />
                 </button>

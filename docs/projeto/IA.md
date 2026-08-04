@@ -616,7 +616,7 @@ Pedido do usuário: "É pra fazer tudo" — implementar os dois itens da task No
 
 ### Item 3e — `/resume` automático em terminal restaurado de sessão anterior
 
-IMPLEMENTADO: `CanvasView.tsx` agora captura, uma única vez (`restoredAgentTerminalIdsCapturedRef`), assim que a hidratação do canvas termina (`hydrated` vira `true`), o conjunto de ids de terminais de AGENTE (`isKnownAgentCommand`, nova função em `agent-launch-options.ts` — só `claude`/`codex`/`gemini`, nunca shell puro nem "rodar arquivo") que já existiam no disco nesse boot — ou seja, ficaram abertos da última vez que o app foi fechado. Extraída a decisão pura para `resolveTerminalInitialText` (`quality-standard-prompt.ts`): se o terminal está nesse conjunto E tem comando de agente, o texto digitado no primeiro spawn deste boot é `/resume\n` (envio automático, mesmo mecanismo que já existia para a instrução padrão) em vez do prompt padrão de qualidade — independente do toggle de padrão de qualidade estar ligado ou não, porque retomar tem prioridade sobre reafirmar instruções que o agente já viu.
+IMPLEMENTADO: `CanvasView.tsx` agora captura, uma única vez (`restoredAgentTerminalIdsCapturedRef`), assim que a hidratação do canvas termina (`hydrated` vira `true`), o conjunto de ids de terminais de AGENTE (`isKnownAgentCommand`, nova função em `agent-launch-options.ts` — só `claude`/`codex`/`gemini`, nunca shell puro nem "rodar arquivo") que já existiam no disco nesse boot — ou seja, ficaram abertos da última vez que o app foi fechado. Extraída a decisão pura para `resolveTerminalInitialText` (`quality-standard-prompt.ts`): se o terminal está nesse conjunto E tem comando de agente, o texto digitado no primeiro spawn deste boot é `/resume` seguido de Enter (envio automático, mesmo mecanismo que já existia para a instrução padrão) em vez do prompt padrão de qualidade — independente do toggle de padrão de qualidade estar ligado ou não, porque retomar tem prioridade sobre reafirmar instruções que o agente já viu.
 DECISÃO DE ARQUITETURA: o cálculo do texto acontece só no `useMemo` de renderização (`renderedNodes`), nunca no estado bruto que `persistNode` grava — então `/resume` nunca vaza para o `.md`/sqlite persistido; a cada boot o critério é recalculado do zero a partir do que estava salvo, sem precisar de um novo campo persistido tipo "sessão não finalizada".
 TESTE: `quality-standard-prompt.test.ts` cobre `resolveTerminalInitialText` (6 casos: resume prioriza mesmo com padrão desligado, resume não dispara sem comando de agente mesmo se `isRestoredAgent` vier errado do chamador, fallback pro padrão de qualidade, fallback pro texto cru).
 
@@ -727,6 +727,24 @@ PEDIDO: tornar a recuperação de falhas de caminho do PTY previsível em sessõ
 FEITO: uma mensagem de erro de caminho no início agora tenta WinPTY (`useConpty: false`) antes de trocar o fluxo de recuperação, tanto para shell quanto para CLI explícita. O diagnóstico informa a camada recuperada sem expor caminhos locais na interface.
 
 TESTE: os testes de regressão de `pty-process-manager.test.cjs` para shell e Codex explícito passaram. A suíte Electron/Node completa (417 testes) e `git diff --check` também concluíram sem erros.
+
+Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-04 — qualidade da barra de ações e notificações do canvas
+
+PEDIDO: aplicar o padrão de qualidade ao conjunto recente de mudanças no canvas: abertura sequencial dos menus de Ferramentas e Agente, notificações de agentes e barra retrátil.
+
+FEITO:
+- A coordenação de tempo dos dois menus deixou de ser duplicada nos componentes. `menu-panel-timing.ts` concentra a duração e o cálculo do instante de preparação; `useDeferredExpansionPanel.ts` concentra o ciclo de abrir, preparar, concluir e limpar o painel. O botão mantém a transição de 420 ms já aprovada visualmente, enquanto os itens passam a iniciar no ponto correto, sem um atraso extra depois do fim da expansão.
+- A regra de negócio que define se um agente requer atenção saiu de `NotificationsPanel.tsx` para `terminal/session-notifications.ts`. Assim, `CanvasView` e o painel usam a mesma regra, sem exportar utilitário a partir de um componente React.
+- A assinatura de todas as sessões foi migrada para `useSyncExternalStore`. `TerminalSessionStore` mantém um snapshot imutável e notifica criação, atualização e remoção de sessão, evitando `setState` síncrono em efeito e deixando o contador/painel de notificações consistente.
+- Os controles de recolher/expandir receberam rótulos acessíveis explícitos.
+- `agent-launch-preferences.ts` passou a persistir e validar a configuração reutilizável completa do launcher (CLI, modelo, esforço, permissões, projeto e arquivo de planejamento), com migração segura da preferência antiga que guardava só a CLI. O nome permanece intencionalmente fora dessa preferência, pois é específico de cada bloco criado.
+- Todos os prompts programáticos do canvas agora terminam em CR (Enter), por meio de `terminal-input.ts`. Antes, alguns terminavam em LF e podiam apenas aparecer no terminal sem serem submetidos; isso incluía o arquivo de planejamento quando o padrão de qualidade estava desligado. A instrução do planejamento foi extraída para função pura e aceita qualquer extensão de arquivo.
+
+TESTE: testes unitários novos para o cálculo de sincronização do painel, estados de notificação, normalização do Enter em PTY, preferências do launcher e composição do planejamento. Validação com Node 25.9.0: ESLint, TypeScript, Vite build, `vitest` (87 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros.
+
+RISCO RESIDUAL: o repositório não possui harness de DOM/Electron para medir animações. A abertura e o recolhimento dos dois menus, inclusive com `prefers-reduced-motion`, continuam sujeitos à conferência visual manual no app. O build também mantém o aviso já existente de chunk Vite acima de 500 kB; a auditoria não introduziu code splitting fora do escopo.
 
 Estado final: concluído.
 

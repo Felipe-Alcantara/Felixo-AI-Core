@@ -13,6 +13,7 @@ import {
   useSessionSnapshot,
   useTerminalSessions,
 } from '../../terminal/terminal-session-context'
+import { toSubmittedTerminalText } from '../../terminal/terminal-input'
 import type { SessionActivity } from '../../terminal/terminal-session-store'
 import type { CanvasNodeData, CanvasNodeType } from '../../types'
 import { nextActiveIndex, shouldHandleGlobalShiftArrow } from './terminals-panel-navigation'
@@ -96,7 +97,7 @@ export function TerminalsPanel({
     if (!trimmed) {
       return
     }
-    store.sendText(nodeId, `${trimmed}\n`)
+    store.sendText(nodeId, toSubmittedTerminalText(trimmed))
     setDrafts((current) => ({ ...current, [nodeId]: '' }))
   }
 

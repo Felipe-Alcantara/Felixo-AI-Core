@@ -1,3 +1,5 @@
+import { toSubmittedTerminalText } from '../terminal/terminal-input'
+
 /**
  * Standing instruction typed into a terminal that opens WITH an agent
  * (Claude/Gemini/Codex), telling it to follow the project's quality standard
@@ -43,14 +45,48 @@ export function buildAgentIdentityPrompt(identity: AgentIdentity): string {
   return lines.join('\n')
 }
 
-/** Appends a trailing newline so the line is submitted to the agent's REPL. */
+/** Appends Enter (CR) so the instruction is submitted to the agent's REPL. */
 export function buildQualityStandardMessage(template: string): string {
-  return `${template}\n`
+  return toSubmittedTerminalText(template)
 }
 
 /** Typed into an agent terminal restored from a previous run instead of its
  *  usual standing instruction — see resolveTerminalInitialText. */
-export const RESUME_INITIAL_TEXT = '/resume\n'
+export const RESUME_INITIAL_TEXT = toSubmittedTerminalText('/resume')
+
+/**
+ * Creates the standing instruction for an optional external planning file.
+ * The file can have any extension: the agent receives its path and decides how
+ * to read it, rather than the UI imposing a file-format policy.
+ */
+export function buildPlanningFileInstruction(
+  planningFile?: string,
+): string | undefined {
+  const path = planningFile?.trim()
+  if (!path) {
+    return undefined
+  }
+
+  return [
+    'ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO',
+    'Leia o arquivo a seguir antes de começar e siga as funções, etapas e decisões indicadas nele.',
+    'Você é responsável por executar e manter esse plano atualizado quando apropriado.',
+    `Caminho: ${path}`,
+  ].join('\n')
+}
+
+/** Joins complete terminal instructions and submits the final combined prompt. */
+export function composeTerminalInitialText(
+  ...sections: Array<string | undefined>
+): string | undefined {
+  const normalized = sections
+    .map((section) => section?.trim())
+    .filter((section): section is string => Boolean(section))
+
+  return normalized.length > 0
+    ? toSubmittedTerminalText(normalized.join('\n\n'))
+    : undefined
+}
 
 /**
  * Decides what a canvas terminal's first-spawn text should be. A terminal
@@ -125,5 +161,5 @@ export function buildCanvasTerminalInitialText(
     sections.push(pathPrompt)
   }
 
-  return `${sections.join('\n\n')}\n`
+  return toSubmittedTerminalText(sections.join('\n\n'))
 }

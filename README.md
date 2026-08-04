@@ -40,6 +40,8 @@ Primeira versão funcional entregue:
 - Empacotamento Electron Builder e base de auto-update via GitHub Releases
 - Append incremental de resposta com cursor de streaming
 - Botão de parar para interromper processo em andamento
+- Canvas visual para organizar agentes, arquivos compartilhados, notas e grupos
+- Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
 - Frontend organizado por feature em `app/src/features/chat/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
 - Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL

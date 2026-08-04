@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { RESUME_INITIAL_TEXT, resolveTerminalInitialText } from './quality-standard-prompt'
+import {
+  buildPlanningFileInstruction,
+  composeTerminalInitialText,
+  RESUME_INITIAL_TEXT,
+  resolveTerminalInitialText,
+} from './quality-standard-prompt'
 
 describe('resolveTerminalInitialText', () => {
   it('types "/resume" for a restored agent terminal, ignoring the quality standard entirely', () => {
@@ -66,5 +71,24 @@ describe('resolveTerminalInitialText', () => {
       existingInitialText: 'ls -la',
     })
     expect(result).toBe('ls -la')
+  })
+})
+
+describe('planning-file initial text', () => {
+  it('accepts any file type and tells the agent to read it before starting', () => {
+    const instruction = buildPlanningFileInstruction(' /repo/plans/release-plan.pdf ')
+
+    expect(instruction).toContain('ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO')
+    expect(instruction).toContain('/repo/plans/release-plan.pdf')
+  })
+
+  it('combines the quality standard and plan into one submitted prompt', () => {
+    expect(
+      composeTerminalInitialText('Siga o padrão de qualidade.\n', 'Leia o plano.'),
+    ).toBe('Siga o padrão de qualidade.\n\nLeia o plano.\r')
+  })
+
+  it('does not create text when neither instruction is configured', () => {
+    expect(composeTerminalInitialText(undefined, undefined)).toBeUndefined()
   })
 })
