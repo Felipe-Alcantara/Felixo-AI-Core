@@ -46,7 +46,7 @@ export function NotificationsMenu({
       <button
         type="button"
         onClick={toggle}
-        className={`felixo-btn flex w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 ${
+        className={`felixo-btn flex !w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 ${
           notificationCount > 0 ? 'border border-red-500/80 ring-red-500/30' : ''
         }`}
         title="Notificações dos agentes"
