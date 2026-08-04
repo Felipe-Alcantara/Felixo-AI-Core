@@ -1216,6 +1216,11 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onClose={() => setNotificationsOpen(false)}
         onFocusNode={focusNode}
         onExpandNode={setExpandedTerminalId}
+        onDismiss={(notificationId) => {
+          setNotificationHistory((current) =>
+            current.filter((notification) => notification.id !== notificationId),
+          )
+        }}
       />
 
       <CanvasToolPanels

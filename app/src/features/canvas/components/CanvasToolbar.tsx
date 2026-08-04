@@ -123,6 +123,9 @@ export function CanvasToolbar({
   }
 
   if (collapsed) {
+    const notificationAlertClass = notificationCount > 0
+      ? 'border border-red-500/80 ring-1 ring-red-500/30'
+      : ''
     return (
       <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
         <button
@@ -138,11 +141,12 @@ export function CanvasToolbar({
         <button
           type="button"
           onClick={onOpenNotifications}
-          className={`${TOOLBAR_BUTTON_CLASS} relative`}
+          className={`${TOOLBAR_BUTTON_CLASS} relative ${notificationAlertClass}`}
           title="Notificações dos agentes"
         >
           <Bell size={16} />
           Notificações
+          {notificationCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" aria-label="Há novas notificações" />}
           {notificationCount > 0 && (
             <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
               {notificationCount}
@@ -198,11 +202,12 @@ export function CanvasToolbar({
       <button
         type="button"
         onClick={onOpenNotifications}
-        className={`${TOOLBAR_BUTTON_CLASS} relative`}
+        className={`${TOOLBAR_BUTTON_CLASS} relative ${notificationCount > 0 ? 'border border-red-500/80 ring-1 ring-red-500/30' : ''}`}
         title="Notificações dos agentes"
       >
         <Bell size={16} />
         Notificações
+        {notificationCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" aria-label="Há novas notificações" />}
         {notificationCount > 0 && (
           <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
             {notificationCount}

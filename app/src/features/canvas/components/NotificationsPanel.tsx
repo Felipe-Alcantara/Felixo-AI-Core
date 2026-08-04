@@ -16,6 +16,7 @@ type NotificationsPanelProps = {
   onClose: () => void
   onFocusNode: (nodeId: string) => void
   onExpandNode: (nodeId: string) => void
+  onDismiss: (notificationId: string) => void
 }
 
 export function NotificationsPanel({
@@ -25,6 +26,7 @@ export function NotificationsPanel({
   onClose,
   onFocusNode,
   onExpandNode,
+  onDismiss,
 }: NotificationsPanelProps) {
   if (!open) return null
 
@@ -63,6 +65,7 @@ export function NotificationsPanel({
               onClick={() => {
                 onFocusNode(node.id)
                 onExpandNode(node.id)
+                onDismiss(notification.id)
                 onClose()
               }}
               className="flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left hover:bg-white/5"
@@ -70,7 +73,7 @@ export function NotificationsPanel({
               <AlertCircle size={15} className="mt-0.5 shrink-0 text-amber-400" />
               <span className="min-w-0">
                 <span className="block truncate text-sm text-zinc-100">{node.data.label || node.data.command || node.id}</span>
-                <span className="mt-0.5 block text-xs text-zinc-400">{notificationText(notification.snapshot)}</span>
+                <span className="mt-0.5 block truncate text-xs text-zinc-400">{lastNotificationMessage(notification.snapshot)}</span>
               </span>
             </button>
           ))}
@@ -90,4 +93,12 @@ function notificationText(snapshot: SessionSnapshot): string {
       : `Sessão encerrada com código ${snapshot.exitCode ?? 'desconhecido'}. Verifique o agente.`
   }
   return 'O agente está aguardando uma aprovação ou resposta.'
+}
+
+function lastNotificationMessage(snapshot: SessionSnapshot): string {
+  const lastLine = [...snapshot.previewLines]
+    .reverse()
+    .map((line) => line.trim())
+    .find(Boolean)
+  return lastLine || notificationText(snapshot)
 }

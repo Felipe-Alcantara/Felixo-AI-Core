@@ -745,6 +745,16 @@ VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 te
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — aviso visual e consumo de notificações
+
+PEDIDO: destacar visualmente novas notificações e removê-las quando o usuário abrir o terminal correspondente.
+
+FEITO: o botão **Notificações** recebe borda vermelha, ponto vermelho e contador quando há itens. Cada entrada mostra o nome do agente e a última linha disponível do preview do terminal. Ao clicar, o canvas centraliza/expande o terminal e remove a entrada consumida; outras notificações permanecem ativas.
+
+VALIDAÇÃO: ESLint, TypeScript, `vitest` (98 testes), build do Vite e `git diff --check` concluídos sem erros.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — histórico de notificações durante a execução
 
 PEDIDO: manter as notificações disponíveis enquanto o app estiver aberto, limpando-as somente ao fechar o app.
