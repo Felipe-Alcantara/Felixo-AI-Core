@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toSubmittedTerminalText } from './terminal-input'
+import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 
 describe('toSubmittedTerminalText', () => {
   it('submits a prompt with CR instead of leaving a trailing LF in the PTY', () => {
@@ -11,5 +11,12 @@ describe('toSubmittedTerminalText', () => {
     expect(toSubmittedTerminalText('Primeira linha\nSegunda linha')).toBe(
       'Primeira linha\nSegunda linha\r',
     )
+  })
+
+  it('separates prompt text from the Enter key for delayed submission', () => {
+    expect(splitTerminalSubmission('/resume\n')).toEqual({
+      text: '/resume',
+      submit: '\r',
+    })
   })
 })

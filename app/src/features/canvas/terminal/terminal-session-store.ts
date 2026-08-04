@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { toSubmittedTerminalText } from './terminal-input'
+import { splitTerminalSubmission } from './terminal-input'
 
 /**
  * Activity derived from the output stream:
@@ -45,6 +45,8 @@ const INITIAL_TEXT_MAX_WAIT_MS = 10000
 const CLAUDE_TRUST_ACCEPT_DELAY_MS = 800
 const CLAUDE_INITIAL_TEXT_DELAY_MS = 1800
 const CODEX_INITIAL_TEXT_DELAY_MS = 1800
+/** Lets the Codex TUI process pasted text before it receives the Enter key. */
+const INITIAL_TEXT_SUBMIT_DELAY_MS = 75
 const CODEX_TRUST_ACCEPT_DELAY_MS = 150
 const CODEX_POST_TRUST_INITIAL_TEXT_DELAY_MS = 2500
 const CODEX_TRUST_BUFFER_LIMIT = 12000
@@ -563,8 +565,10 @@ export class TerminalSessionStore {
 
       const elapsed = Date.now() - waitStartedAt
       const quietFor = Date.now() - session.lastMeaningfulAt
+      const codexPromptReady =
+        session.command !== 'codex' || hasCodexInteractivePrompt(readViewport(session.terminal))
       const processLooksReady =
-        session.receivedOutput && quietFor >= INITIAL_TEXT_READY_QUIET_MS
+        session.receivedOutput && quietFor >= INITIAL_TEXT_READY_QUIET_MS && codexPromptReady
       const fallbackReady = elapsed >= INITIAL_TEXT_MAX_WAIT_MS
 
       // A PTY can be created successfully before the CLI has reached its
@@ -581,12 +585,22 @@ export class TerminalSessionStore {
       }
 
       session.initialTextSent = true
+      const submission = splitTerminalSubmission(session.initialText ?? '')
       void window.felixo?.pty?.write({
         sessionId: session.ptySessionId,
-        // Keep the submission invariant at the delivery boundary too. Imported
-        // or legacy canvas nodes may carry an older initialText without CR.
-        data: toSubmittedTerminalText(session.initialText ?? ''),
+        data: submission.text,
       })
+      // Codex occasionally treats an immediate CR appended to a programmatic
+      // paste as a line break. Delivering the key separately mirrors a real
+      // user submission after the TUI has consumed the text.
+      setTimeout(() => {
+        if (!session.disposed) {
+          void window.felixo?.pty?.write({
+            sessionId: session.ptySessionId,
+            data: submission.submit,
+          })
+        }
+      }, INITIAL_TEXT_SUBMIT_DELAY_MS)
     }, delayMs)
   }
 
@@ -683,6 +697,11 @@ function isCodexTrustPrompt(text: string): boolean {
       compact.includes('yescontinue')
     )
   )
+}
+
+/** A bare Codex composer prompt means its interactive input is ready. */
+function hasCodexInteractivePrompt(viewport: string): boolean {
+  return viewport.split('\n').some((line) => /^\s*›\s*$/.test(line))
 }
 
 /** A selection cursor next to a yes/no-ish option, e.g. "❯ 1. Yes". */
