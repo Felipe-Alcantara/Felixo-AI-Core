@@ -74,7 +74,7 @@ type CanvasToolbarProps = {
   notificationsOpen: boolean
   onToggleNotifications: () => void
   notificationCount: number
-  notificationPanel?: (ready: boolean) => ReactNode
+  notificationPanel?: (ready: boolean, toolsMenuOpen: boolean) => ReactNode
 }
 
 export function CanvasToolbar({
@@ -145,7 +145,7 @@ export function CanvasToolbar({
           notificationCount={notificationCount}
           onToggle={onToggleNotifications}
         >
-          {notificationPanel}
+          {(ready) => notificationPanel?.(ready, toolsMenuOpen)}
         </NotificationsMenu>
       </div>
     )
@@ -202,7 +202,7 @@ export function CanvasToolbar({
         notificationCount={notificationCount}
         onToggle={onToggleNotifications}
       >
-        {notificationPanel}
+        {(ready) => notificationPanel?.(ready, toolsMenuOpen)}
       </NotificationsMenu>
       <TerminalMenu
         projects={projects}

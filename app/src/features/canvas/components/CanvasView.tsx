@@ -1213,12 +1213,13 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         notificationsOpen={notificationsOpen}
         onToggleNotifications={() => setNotificationsOpen((open) => !open)}
         notificationCount={notificationCount}
-        notificationPanel={(ready) => (
+        notificationPanel={(ready, toolsMenuOpen) => (
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
             open={notificationsOpen}
             ready={ready}
+            toolsMenuOpen={toolsMenuOpen}
             onClose={() => setNotificationsOpen(false)}
             onFocusNode={focusNode}
             onExpandNode={setExpandedTerminalId}
