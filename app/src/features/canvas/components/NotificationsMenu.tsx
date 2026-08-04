@@ -56,7 +56,7 @@ export function NotificationsMenu({
         <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
         {notificationCount > 0 && (
           <span
-            className="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950"
+            className="pointer-events-none absolute -left-2 top-1/2 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950"
             aria-label={`${notificationCount} novas notificações`}
           >
             {notificationCount}
