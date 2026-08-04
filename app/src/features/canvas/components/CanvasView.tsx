@@ -1205,13 +1205,15 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         isBusy={isBusy}
         isClearing={isClearing}
         onOpenChat={onOpenChat}
-        onOpenNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationsOpen={notificationsOpen}
+        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
         notificationCount={notificationCount}
-        notificationPanel={(
+        notificationPanel={(ready) => (
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
             open={notificationsOpen}
+            ready={ready}
             onClose={() => setNotificationsOpen(false)}
             onFocusNode={focusNode}
             onExpandNode={setExpandedTerminalId}

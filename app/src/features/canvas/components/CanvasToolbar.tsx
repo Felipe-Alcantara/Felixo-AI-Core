@@ -27,6 +27,7 @@ import {
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
 import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
+import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
 /** Shape shared by every toolbar button; the press depth comes from the
@@ -71,9 +72,10 @@ type CanvasToolbarProps = {
   /** Switches to the chat screen. A toolbar button, not a floating overlay —
    * canvas content (terminals) can be panned under any fixed screen corner. */
   onOpenChat: () => void
-  onOpenNotifications: () => void
+  notificationsOpen: boolean
+  onToggleNotifications: () => void
   notificationCount: number
-  notificationPanel?: ReactNode
+  notificationPanel?: (ready: boolean) => ReactNode
 }
 
 export function CanvasToolbar({
@@ -98,7 +100,8 @@ export function CanvasToolbar({
   isBusy,
   isClearing,
   onOpenChat,
-  onOpenNotifications,
+  notificationsOpen,
+  onToggleNotifications,
   notificationCount,
   notificationPanel,
 }: CanvasToolbarProps) {
@@ -107,6 +110,22 @@ export function CanvasToolbar({
   const [isCollapsing, setIsCollapsing] = useState(false)
   const [isExpanding, setIsExpanding] = useState(false)
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
+  const {
+    panelReady: notificationsReady,
+    preparePanel: prepareNotificationsPanel,
+    resetPanel: resetNotificationsPanel,
+    markPanelReady: markNotificationsPanelReady,
+  } = useDeferredExpansionPanel(notificationsOpen)
+
+  const toggleNotifications = () => {
+    if (notificationsOpen) {
+      resetNotificationsPanel()
+      onToggleNotifications()
+      return
+    }
+    prepareNotificationsPanel()
+    onToggleNotifications()
+  }
 
   const collapseToolbar = () => {
     setToolsMenuOpen(false)
@@ -142,10 +161,19 @@ export function CanvasToolbar({
         >
           <ChevronDown size={16} />
         </button>
-        <div className="relative w-36">
+        <div
+          className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            notificationsOpen ? 'w-[18.5rem]' : 'w-36'
+          }`}
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget && event.propertyName === 'width' && notificationsOpen) {
+              markNotificationsPanelReady()
+            }
+          }}
+        >
           <button
             type="button"
-            onClick={onOpenNotifications}
+            onClick={toggleNotifications}
             className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationAlertClass}`}
             title="Notificações dos agentes"
           >
@@ -157,7 +185,7 @@ export function CanvasToolbar({
               </span>
             )}
           </button>
-          {notificationPanel}
+          {notificationPanel?.(notificationsReady)}
         </div>
       </div>
     )
@@ -209,10 +237,19 @@ export function CanvasToolbar({
         onSelect={onSelectTool}
         onOpenChange={setToolsMenuOpen}
       />
-      <div className="relative w-36">
+      <div
+        className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          notificationsOpen ? 'w-[18.5rem]' : 'w-36'
+        }`}
+        onTransitionEnd={(event) => {
+          if (event.target === event.currentTarget && event.propertyName === 'width' && notificationsOpen) {
+            markNotificationsPanelReady()
+          }
+        }}
+      >
         <button
           type="button"
-          onClick={onOpenNotifications}
+          onClick={toggleNotifications}
           className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationCount > 0 ? 'border border-red-500/80 ring-1 ring-red-500/30' : ''}`}
           title="Notificações dos agentes"
         >
@@ -224,7 +261,7 @@ export function CanvasToolbar({
             </span>
           )}
         </button>
-        {notificationPanel}
+        {notificationPanel?.(notificationsReady)}
       </div>
       <TerminalMenu
         projects={projects}
