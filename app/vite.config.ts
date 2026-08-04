@@ -1,9 +1,26 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+
+// Identifies this project's dev server so the Electron launch script can
+// tell it apart from an unrelated dev server that happens to already be
+// listening on the same port (see scripts/wait-for-felixo-vite.cjs).
+const FELIXO_DEV_MARKER = 'felixo-ai-core'
+
+function felixoDevMarkerPlugin(): Plugin {
+  return {
+    name: 'felixo-dev-marker',
+    configureServer(server) {
+      server.middlewares.use('/__felixo_dev_marker', (_req, res) => {
+        res.setHeader('Content-Type', 'text/plain')
+        res.end(FELIXO_DEV_MARKER)
+      })
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), felixoDevMarkerPlugin()],
   optimizeDeps: {
     include: [
       'highlight.js/lib/core',
