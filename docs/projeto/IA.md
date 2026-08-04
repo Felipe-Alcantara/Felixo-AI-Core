@@ -745,6 +745,16 @@ VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 te
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — prevenção de sobreposição em notificações
+
+PEDIDO: evitar que o painel de Notificações cubra a lista de Ferramentas quando ambos estiverem abertos.
+
+FEITO: o estado aberto de Ferramentas agora é encaminhado também para o painel de Notificações. Sem Ferramentas, Notificações usa sua coluna original; com Ferramentas aberto, ela transita para a segunda coluna, preservando a animação sequencial e evitando sobreposição.
+
+VALIDAÇÃO: ESLint, TypeScript, `vitest` (100 testes), build do Vite e `git diff --check` concluídos sem erros.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — padronização de qualidade do canvas
 
 PEDIDO: normalizar o conjunto recente de menus e notificações segundo o padrão de qualidade.

@@ -9,6 +9,7 @@ type NotificationsPanelProps = {
   notifications: CanvasNotification[]
   open: boolean
   ready: boolean
+  toolsMenuOpen: boolean
   onClose: () => void
   onFocusNode: (nodeId: string) => void
   onExpandNode: (nodeId: string) => void
@@ -20,6 +21,7 @@ export function NotificationsPanel({
   notifications,
   open,
   ready,
+  toolsMenuOpen,
   onClose,
   onFocusNode,
   onExpandNode,
@@ -38,7 +40,12 @@ export function NotificationsPanel({
     )
 
   return (
-    <section aria-label="Notificações dos agentes" className="felixo-anim-sequential-panel absolute left-[calc(9rem+0.5rem)] top-full z-40 mt-2 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl">
+    <section
+      aria-label="Notificações dos agentes"
+      className={`felixo-anim-sequential-panel absolute top-full z-40 mt-2 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        toolsMenuOpen ? 'left-[calc(18.5rem+0.5rem)]' : 'left-[calc(9rem+0.5rem)]'
+      }`}
+    >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-red-400" />
         Notificações
