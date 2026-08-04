@@ -12,6 +12,7 @@ import {
   Play,
 } from 'lucide-react'
 import { buildRunCommand } from '../services/run-file-command'
+import { flyoutMaxHeight, toolbarFlyoutClass } from './toolbar-flyout'
 
 type ProjectsMenuProject = { id: string; name: string; path: string }
 
@@ -28,12 +29,19 @@ type ProjectsMenuProps = {
   onAddFolder: () => Promise<string[]>
   /** Spawns a terminal whose process IS the file running — no shell typed after. */
   onRunFile: (options: RunFileOptions) => void
+  /** The tools menu widens the toolbar column; the flyout slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 type DirectoryEntry = { name: string; isDirectory: boolean; path: string }
 type Browsing = { project: ProjectsMenuProject; relativePath: string }
 
-export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuProps) {
+export function ProjectsMenu({
+  projects,
+  onAddFolder,
+  onRunFile,
+  toolsMenuOpen = false,
+}: ProjectsMenuProps) {
   const [open, setOpen] = useState(false)
   const [browsing, setBrowsing] = useState<Browsing | null>(null)
   const [entries, setEntries] = useState<DirectoryEntry[] | null>(null)
@@ -42,6 +50,8 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
   // would risk mixing '/' (used for relativePath) with the OS's separator.
   const [currentDirPath, setCurrentDirPath] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Measured when the flyout opens: how much room is left below this button.
+  const [maxHeight, setMaxHeight] = useState<number>()
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -133,7 +143,15 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
     <div ref={containerRef} className="relative w-36">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={(event) => {
+          setMaxHeight(
+            flyoutMaxHeight(
+              event.currentTarget.getBoundingClientRect().top,
+              window.innerHeight,
+            ),
+          )
+          setOpen((current) => !current)
+        }}
         className="felixo-btn flex w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Abrir uma pasta e rodar arquivos dela num terminal"
       >
@@ -142,7 +160,12 @@ export function ProjectsMenu({ projects, onAddFolder, onRunFile }: ProjectsMenuP
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-72 max-h-[60vh] overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10">
+        <div
+          // Anchored to a button partway down the toolbar, so the height cap
+          // is the room left below it, not a flat fraction of the viewport.
+          style={{ maxHeight }}
+          className={`${toolbarFlyoutClass(toolsMenuOpen)} w-72 overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+        >
           {!browsing ? (
             <>
               <div className="px-1 pb-1 text-xs font-medium text-zinc-400">Pastas</div>
