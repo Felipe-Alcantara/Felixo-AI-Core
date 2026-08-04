@@ -163,7 +163,7 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 
 ### Notificações dos agentes
 
-O botão **Notificações** mostra agentes que terminaram um trabalho, encerraram a sessão ou estão aguardando aprovação/resposta. Clique em uma notificação para centralizar e abrir o respectivo terminal.
+O botão **Notificações** registra, enquanto o app estiver aberto, agentes que terminaram um trabalho, encerraram a sessão ou estão aguardando aprovação/resposta. Clique em uma notificação para centralizar e abrir o respectivo terminal; o histórico é limpo ao fechar o app.
 Quando uma nova notificação surgir, o app reproduz um alerta sonoro curto; notificações já existentes ao iniciar não repetem o som.
 
 ### Conectar agentes

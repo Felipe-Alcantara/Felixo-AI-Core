@@ -32,7 +32,7 @@ import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
-import { NotificationsPanel } from './NotificationsPanel'
+import { NotificationsPanel, type CanvasNotification } from './NotificationsPanel'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
 import {
@@ -192,7 +192,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     () => getActionRequiredNodeIds(nodes, sessionSnapshots),
     [nodes, sessionSnapshots],
   )
-  const notificationCount = actionableNotificationIds.size
+  const [notificationHistory, setNotificationHistory] = useState<CanvasNotification[]>([])
+  const notificationSequenceRef = useRef(0)
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null)
   const previousNotificationIdsRef = useRef<ReadonlySet<string>>(new Set())
   const notificationIdsInitializedRef = useRef(false)
@@ -217,7 +218,17 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       notificationIdsInitializedRef.current = true
       return
     }
-    if (findNewNotificationIds(previousIds, actionableNotificationIds).length === 0) return
+    const newIds = findNewNotificationIds(previousIds, actionableNotificationIds)
+    if (newIds.length === 0) return
+
+    setNotificationHistory((current) => [
+      ...current,
+      ...newIds.map((nodeId) => ({
+        id: `${nodeId}:${notificationSequenceRef.current++}`,
+        nodeId,
+        snapshot: sessionSnapshots[nodeId],
+      })).filter((item): item is CanvasNotification => Boolean(item.snapshot)),
+    ])
 
     const audio = notificationAudioRef.current
     if (!audio) return
@@ -225,7 +236,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     void audio.play().catch(() => {
       // Browsers may block playback until the user has interacted with the app.
     })
-  }, [actionableNotificationIds, hydrated])
+  }, [actionableNotificationIds, hydrated, sessionSnapshots])
+
+  const notificationCount = notificationHistory.length
   const miniMapNode = useCallback(
     (props: MiniMapNodeProps) => {
       const node = nodes.find((item) => item.id === props.id)
@@ -1198,6 +1211,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
       <NotificationsPanel
         nodes={nodes}
+        notifications={notificationHistory}
         open={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
         onFocusNode={focusNode}

@@ -745,6 +745,16 @@ VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 te
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — histórico de notificações durante a execução
+
+PEDIDO: manter as notificações disponíveis enquanto o app estiver aberto, limpando-as somente ao fechar o app.
+
+FEITO: o painel deixou de derivar sua lista apenas dos snapshots atuais. `CanvasView` agora mantém um histórico em memória das transições de agentes para `idle`, `waiting_approval` ou `exited`; assim, a notificação continua visível mesmo quando o agente muda de estado depois. O estado é local ao processo e não é persistido no canvas, portanto desaparece ao fechar o app. O contador e o som usam a mesma transição registrada.
+
+VALIDAÇÃO: ESLint, TypeScript, build do Vite, `vitest` (98 testes) e `git diff --check` concluídos sem erros.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — correções pós-validação de agentes e notificações
 
 PEDIDO: corrigir sobreposição dos painéis extras, retomada incorreta de sessões restauradas e ausência de notificação quando o agente termina um trabalho.
