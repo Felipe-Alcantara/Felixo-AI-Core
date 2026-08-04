@@ -745,6 +745,16 @@ VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 te
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — alerta sonoro de notificações
+
+PEDIDO: reproduzir um áudio local quando uma nova notificação do app surgir.
+
+FEITO: o alerta recente `ui-alert-synth-beep...mp3` da pasta Downloads foi incorporado como `app/public/sounds/notification.mp3`. `CanvasView` agora compara o conjunto atual de agentes em `waiting_approval` ou `exited` com o conjunto anterior e toca o áudio uma vez quando um novo agente passa a exigir ação. Notificações já presentes durante a hidratação inicial não emitem som; falhas de autoplay são ignoradas com segurança.
+
+TESTE: `session-notifications.test.ts` ganhou cobertura para filtrar apenas terminais e detectar transições novas. ESLint, TypeScript e os 4 testes direcionados passaram.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — matriz para abertura em lote de agentes
 
 PEDIDO: ao iniciar vários agentes pela fila, organizá-los como uma matriz que cresce de modo próximo a um quadrado, em vez de uma sequência horizontal ou vertical que aparentava depender do espaço disponível.
