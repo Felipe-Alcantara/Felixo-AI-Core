@@ -11,7 +11,8 @@ function snapshot(activity: SessionSnapshot['activity']): SessionSnapshot {
 }
 
 describe('isActionRequired', () => {
-  it('signals agents waiting for approval or already exited', () => {
+  it('signals agents that finished work, wait for approval, or exited', () => {
+    expect(isActionRequired(snapshot('idle'))).toBe(true)
     expect(isActionRequired(snapshot('waiting_approval'))).toBe(true)
     expect(isActionRequired(snapshot('exited'))).toBe(true)
   })
@@ -19,7 +20,6 @@ describe('isActionRequired', () => {
   it('does not signal running, idle, or failed start states', () => {
     expect(isActionRequired(snapshot('starting'))).toBe(false)
     expect(isActionRequired(snapshot('working'))).toBe(false)
-    expect(isActionRequired(snapshot('idle'))).toBe(false)
     expect(isActionRequired(snapshot('error'))).toBe(false)
     expect(isActionRequired(undefined)).toBe(false)
   })

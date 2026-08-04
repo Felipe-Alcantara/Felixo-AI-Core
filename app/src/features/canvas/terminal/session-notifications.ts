@@ -4,7 +4,11 @@ type NotificationNode = { id: string; type?: string }
 
 /** True when a terminal needs the user's attention in the notifications panel. */
 export function isActionRequired(snapshot: SessionSnapshot | undefined): boolean {
-  return snapshot?.activity === 'exited' || snapshot?.activity === 'waiting_approval'
+  return (
+    snapshot?.activity === 'idle' ||
+    snapshot?.activity === 'exited' ||
+    snapshot?.activity === 'waiting_approval'
+  )
 }
 
 export function getActionRequiredNodeIds(

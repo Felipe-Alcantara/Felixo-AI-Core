@@ -74,6 +74,9 @@ export function NotificationsPanel({
 }
 
 function notificationText(snapshot: SessionSnapshot): string {
+  if (snapshot.activity === 'idle') {
+    return 'Terminou de trabalhar e está aguardando uma nova ação.'
+  }
   if (snapshot.activity === 'exited') {
     return snapshot.exitCode === 0
       ? 'Sessão encerrada. Revise o resultado e decida o próximo passo.'

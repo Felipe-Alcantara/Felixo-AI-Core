@@ -220,7 +220,7 @@ export function TerminalMenu({ projects, onAdd, onAddMany, onAddFolder }: Termin
       </div>
 
       {open && settingsReady && (
-        <div id={`${fieldIdPrefix}-settings`} className="felixo-anim-sequential-panel absolute left-[calc(9rem+0.5rem)] top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10">
+        <div id={`${fieldIdPrefix}-settings`} className="felixo-anim-sequential-panel absolute left-[calc(18.5rem+0.5rem)] top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10">
           <label htmlFor={`${fieldIdPrefix}-name`} className="mb-1 block text-xs font-medium text-zinc-400">
             Nome (opcional)
           </label>

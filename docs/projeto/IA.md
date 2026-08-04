@@ -745,6 +745,16 @@ VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 te
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — correções pós-validação de agentes e notificações
+
+PEDIDO: corrigir sobreposição dos painéis extras, retomada incorreta de sessões restauradas e ausência de notificação quando o agente termina um trabalho.
+
+FEITO: o painel de configuração do Agente passou a ocupar a segunda coluna, depois das opções de Ferramentas, evitando sobreposição quando os dois menus estão abertos. A retomada usa `/Resume` com Enter no primeiro spawn de agentes persistidos. O estado `idle` passou a exigir ação e aparece no painel/contador de notificações com mensagem própria, acionando também o alerta sonoro já existente.
+
+VALIDAÇÃO: ESLint, TypeScript, build do Vite, `vitest` (98 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — alerta sonoro de notificações
 
 PEDIDO: reproduzir um áudio local quando uma nova notificação do app surgir.
