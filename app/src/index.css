@@ -376,7 +376,8 @@ div::-webkit-scrollbar-thumb {
 .felixo-toolbar-expanding > :nth-child(11) { --toolbar-offset: -440px; animation-delay: 300ms; }
 .felixo-toolbar-expanding > :nth-child(12) { --toolbar-offset: -484px; animation-delay: 330ms; }
 .felixo-toolbar-expanding > :nth-child(13) { --toolbar-offset: -528px; animation-delay: 360ms; }
-.felixo-toolbar-expanding > :nth-child(15) { --toolbar-offset: -572px; animation-delay: 390ms; }
+.felixo-toolbar-expanding > :nth-child(14) { --toolbar-offset: -572px; animation-delay: 390ms; }
+.felixo-toolbar-expanding > :nth-child(16) { --toolbar-offset: -616px; animation-delay: 420ms; }
 
 .felixo-toolbar-collapsing {
   animation: felixo-toolbar-collapse-root 480ms linear both;
@@ -405,7 +406,8 @@ div::-webkit-scrollbar-thumb {
 .felixo-toolbar-collapsing > :nth-child(11) { --toolbar-offset: -440px; }
 .felixo-toolbar-collapsing > :nth-child(12) { --toolbar-offset: -484px; }
 .felixo-toolbar-collapsing > :nth-child(13) { --toolbar-offset: -528px; }
-.felixo-toolbar-collapsing > :nth-child(15) { --toolbar-offset: -572px; }
+.felixo-toolbar-collapsing > :nth-child(14) { --toolbar-offset: -572px; }
+.felixo-toolbar-collapsing > :nth-child(16) { --toolbar-offset: -616px; }
 
 /* Button interaction feedback.
    Only transform/opacity/color animate: those composite on the GPU and stay
