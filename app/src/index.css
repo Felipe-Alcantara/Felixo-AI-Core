@@ -445,6 +445,14 @@ div::-webkit-scrollbar-thumb {
   transform: none;
 }
 
+/* Applied only while the explicit agent-matrix action updates React Flow's
+   inline translate(). Keeping it scoped prevents regular drag operations from
+   gaining inertia. Duration matches AGENT_MATRIX_ANIMATION_MS in CanvasView. */
+.react-flow__node.felixo-agent-matrix-moving {
+  transition: transform 480ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .felixo-anim-drawer-in,
   .felixo-anim-drawer-out,
@@ -475,5 +483,10 @@ div::-webkit-scrollbar-thumb {
   .felixo-btn:active:not(:disabled),
   .felixo-btn-icon:active:not(:disabled) {
     transform: none;
+  }
+
+  .react-flow__node.felixo-agent-matrix-moving {
+    transition: none;
+    will-change: auto;
   }
 }
