@@ -13,6 +13,7 @@ export function appendCanvasNotifications(
   snapshots: Record<string, SessionSnapshot | undefined>,
   sequenceStart: number,
 ): { notifications: CanvasNotification[]; nextSequence: number } {
+  const notifiedNodeIds = new Set(nodeIds)
   const additions = nodeIds.flatMap((nodeId, index) => {
     const snapshot = snapshots[nodeId]
     return snapshot
@@ -21,14 +22,20 @@ export function appendCanvasNotifications(
   })
 
   return {
-    notifications: [...history, ...additions],
+    // Each agent has one actionable item. A later event from the same agent
+    // refreshes its message instead of leaving stale duplicates in the panel.
+    notifications: [
+      ...history.filter((notification) => !notifiedNodeIds.has(notification.nodeId)),
+      ...additions,
+    ],
     nextSequence: sequenceStart + nodeIds.length,
   }
 }
 
-export function dismissCanvasNotification(
+/** Consuming an agent clears every stale item it may have accumulated. */
+export function dismissCanvasNotificationsForNode(
   history: readonly CanvasNotification[],
-  notificationId: string,
+  nodeId: string,
 ): CanvasNotification[] {
-  return history.filter((notification) => notification.id !== notificationId)
+  return history.filter((notification) => notification.nodeId !== nodeId)
 }

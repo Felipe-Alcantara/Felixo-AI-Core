@@ -13,7 +13,7 @@ type NotificationsPanelProps = {
   onClose: () => void
   onFocusNode: (nodeId: string) => void
   onExpandNode: (nodeId: string) => void
-  onDismiss: (notificationId: string) => void
+  onDismiss: (nodeId: string) => void
 }
 
 export function NotificationsPanel({
@@ -69,7 +69,7 @@ export function NotificationsPanel({
               onClick={() => {
                 onFocusNode(node.id)
                 onExpandNode(node.id)
-                onDismiss(notification.id)
+                onDismiss(node.id)
                 onClose()
               }}
               className="flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left hover:bg-white/5"

@@ -41,7 +41,7 @@ import {
 } from '../terminal/session-notifications'
 import {
   appendCanvasNotifications,
-  dismissCanvasNotification,
+  dismissCanvasNotificationsForNode,
   type CanvasNotification,
 } from '../terminal/canvas-notifications'
 import {
@@ -201,6 +201,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const notificationSequenceRef = useRef(0)
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null)
   const previousNotificationIdsRef = useRef<ReadonlySet<string>>(new Set())
+  const activeNotificationNodeIdsRef = useRef(new Set<string>())
+  const acknowledgedNotificationPromptsRef = useRef(new Map<string, string | undefined>())
   const notificationIdsInitializedRef = useRef(false)
 
   useEffect(() => {
@@ -217,23 +219,40 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   useEffect(() => {
     if (!hydrated) return
 
+    const acknowledgements = acknowledgedNotificationPromptsRef.current
+    for (const [nodeId, promptAtAcknowledgement] of acknowledgements) {
+      const snapshot = sessionSnapshots[nodeId]
+      // A new submitted prompt starts a new agent turn. Terminal redraws and
+      // opening the drawer keep lastPrompt unchanged, so they cannot recreate
+      // a notification the user has already consumed.
+      if (!snapshot || snapshot.lastPrompt !== promptAtAcknowledgement) {
+        acknowledgements.delete(nodeId)
+      }
+    }
+
     const previousIds = previousNotificationIdsRef.current
     previousNotificationIdsRef.current = actionableNotificationIds
     if (!notificationIdsInitializedRef.current) {
       notificationIdsInitializedRef.current = true
       return
     }
-    const newIds = findNewNotificationIds(previousIds, actionableNotificationIds)
+    const newIds = findNewNotificationIds(previousIds, actionableNotificationIds).filter(
+      (nodeId) =>
+        !activeNotificationNodeIdsRef.current.has(nodeId) && !acknowledgements.has(nodeId),
+    )
     if (newIds.length === 0) return
 
-    const notificationBatch = appendCanvasNotifications(
-      [],
-      newIds,
-      sessionSnapshots,
-      notificationSequenceRef.current,
+    const sequenceStart = notificationSequenceRef.current
+    notificationSequenceRef.current += newIds.length
+    newIds.forEach((nodeId) => activeNotificationNodeIdsRef.current.add(nodeId))
+    setNotificationHistory((current) =>
+      appendCanvasNotifications(
+        current,
+        newIds,
+        sessionSnapshots,
+        sequenceStart,
+      ).notifications,
     )
-    notificationSequenceRef.current = notificationBatch.nextSequence
-    setNotificationHistory((current) => [...current, ...notificationBatch.notifications])
 
     const audio = notificationAudioRef.current
     if (!audio) return
@@ -1223,9 +1242,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             onClose={() => setNotificationsOpen(false)}
             onFocusNode={focusNode}
             onExpandNode={setExpandedTerminalId}
-            onDismiss={(notificationId) => {
+            onDismiss={(nodeId) => {
+              acknowledgedNotificationPromptsRef.current.set(
+                nodeId,
+                sessionSnapshots[nodeId]?.lastPrompt,
+              )
+              activeNotificationNodeIdsRef.current.delete(nodeId)
               setNotificationHistory((current) =>
-                dismissCanvasNotification(current, notificationId),
+                dismissCanvasNotificationsForNode(current, nodeId),
               )
             }}
           />
