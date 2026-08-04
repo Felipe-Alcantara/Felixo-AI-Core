@@ -72,7 +72,24 @@ export type NoteNodeData = {
   label?: string
 }
 
-export type CanvasNodeData = TerminalNodeData & NoteNodeData & GroupNodeData & FileNodeData
+/**
+ * The user's explicit ordering of the blocks, set by dragging rows in the
+ * "Elementos" dock. It decides both the dock's list order and each terminal's
+ * "#N" badge, and is persisted per node — the storage layer lists nodes by
+ * `updated_at`, so without it the order reshuffles on every save/restart.
+ * Absent on nodes created before this existed (and on freshly added blocks
+ * until the first reorder); those fall back to their position in the loaded
+ * list, which keeps them after the explicitly-ordered ones.
+ */
+export type OrderedNodeData = {
+  orderIndex?: number
+}
+
+export type CanvasNodeData = TerminalNodeData &
+  NoteNodeData &
+  GroupNodeData &
+  FileNodeData &
+  OrderedNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */
 export type PersistedCanvasNode = {

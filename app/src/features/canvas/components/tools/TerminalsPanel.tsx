@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Node } from '@xyflow/react'
 import {
   FileText,
+  GripVertical,
   Group,
   Loader2,
   MessagesSquare,
@@ -18,6 +19,12 @@ import type { SessionActivity } from '../../terminal/terminal-session-store'
 import type { CanvasNodeData, CanvasNodeType } from '../../types'
 import { nextActiveIndex, shouldHandleGlobalShiftArrow } from './terminals-panel-navigation'
 import { pendingDraftNodeIds, type TerminalDrafts } from './terminals-panel-drafts'
+import {
+  clamp,
+  draggedRowIndex,
+  previewIndex,
+  rowShift,
+} from './terminals-panel-reorder'
 
 type TerminalsPanelProps = {
   nodes: Node<CanvasNodeData>[]
@@ -30,6 +37,10 @@ type TerminalsPanelProps = {
   onFocusNode: (nodeId: string) => void
   /** Opens the terminal's side drawer, ready to type. No-op for other block types. */
   onExpandNode: (nodeId: string) => void
+  /** Moves `nodeId` so it lands immediately before/after `targetId` in the
+   * canvas node order. Ids, not indices: the dock renders a filtered view of
+   * `nodes`, so its row indices are not guaranteed to be node array indices. */
+  onReorder: (nodeId: string, targetId: string, edge: 'before' | 'after') => void
 }
 
 const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
@@ -61,7 +72,7 @@ function elementTitle(node: Node<CanvasNodeData>) {
 /**
  * Fixed, always-on dock (not a toggleable tool panel) listing every block
  * currently on the canvas — terminais, notas, arquivos e grupos —, numbered
- * by creation order — matches the "#N" badge shown on each terminal's
+ * in the user's own order — matches the "#N" badge shown on each terminal's
  * header. Renders nothing when the canvas is empty.
  *
  * Clicking a row centers it on the canvas and, for terminals, opens the side
@@ -69,12 +80,17 @@ function elementTitle(node: Node<CanvasNodeData>) {
  * on the canvas card, so focusing is enough). Shift+Arrow Up/Down navigate
  * the list from anywhere on screen, regardless of which window/element has
  * focus, and immediately focus + expand the newly selected block.
+ *
+ * Rows can be dragged (by the grip, or by Alt+Arrow from the keyboard) to
+ * pick which block is 1st, 2nd, … — the order is the canvas node order, so
+ * the terminals' "#N" badges renumber to match and the choice is persisted.
  */
 export function TerminalsPanel({
   nodes,
   activeTerminalId,
   onFocusNode,
   onExpandNode,
+  onReorder,
 }: TerminalsPanelProps) {
   const elements = nodes.filter((node) => node.type != null)
   const [rawActiveIndex, setActiveIndex] = useState(0)
@@ -85,8 +101,25 @@ export function TerminalsPanel({
   // flush every non-empty draft in one click.
   const [composeMode, setComposeMode] = useState(false)
   const [drafts, setDrafts] = useState<TerminalDrafts>({})
+  // Reorder-by-drag, driven by pointer events rather than HTML5 drag-and-drop:
+  // the row must travel INSIDE the dock, pushing its neighbours aside, instead
+  // of the browser's floating "ghost" image that detaches from the panel and
+  // can be dropped anywhere on screen.
+  //
+  // `drag` holds the row being moved, the measured row boxes (taken once, at
+  // drag start — rows only *translate* during the drag, so re-measuring would
+  // feed the moved positions back into the math), how far the pointer has
+  // travelled vertically, and where the row currently belongs.
+  const [drag, setDrag] = useState<{
+    fromIndex: number
+    toIndex: number
+    offsetY: number
+    rects: { top: number; height: number }[]
+  } | null>(null)
   const store = useTerminalSessions()
   const listRef = useRef<HTMLUListElement>(null)
+  /** Pointer Y where the current drag began, so moves are a pure delta. */
+  const dragStartYRef = useRef(0)
 
   const setDraft = (nodeId: string, text: string) => {
     setDrafts((current) => ({ ...current, [nodeId]: text }))
@@ -155,6 +188,79 @@ export function TerminalsPanel({
     if (refocusList) {
       window.requestAnimationFrame(() => listRef.current?.focus())
     }
+  }
+
+  /**
+   * Grabs a row. Measures every row once here (see `drag` above) so the move
+   * math and the neighbours' shifts both work off the pre-drag layout.
+   */
+  const startDrag = (index: number, event: ReactPointerEvent<HTMLElement>) => {
+    const list = listRef.current
+    if (!list || event.button !== 0) {
+      return
+    }
+    const rects = Array.from(list.querySelectorAll('[data-element-row]')).map((row) => {
+      const box = row.getBoundingClientRect()
+      return { top: box.top, height: box.height }
+    })
+    if (rects.length !== elements.length) {
+      return
+    }
+    // Keeps receiving move/up events even when the pointer outruns the row
+    // (fast drags) or leaves the dock entirely.
+    event.currentTarget.setPointerCapture(event.pointerId)
+    event.preventDefault()
+    setDrag({ fromIndex: index, toIndex: index, offsetY: 0, rects })
+    dragStartYRef.current = event.clientY
+  }
+
+  const updateDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    setDrag((current) => {
+      if (!current) {
+        return current
+      }
+      const { rects, fromIndex } = current
+      // The row never leaves the list: its travel is capped at the top of the
+      // first row and the bottom of the last one.
+      const first = rects[0]
+      const last = rects[rects.length - 1]
+      const own = rects[fromIndex]
+      const offsetY = clamp(
+        event.clientY - dragStartYRef.current,
+        first.top - own.top,
+        last.top + last.height - (own.top + own.height),
+      )
+      const toIndex = draggedRowIndex(own.top + own.height / 2 + offsetY, fromIndex, rects)
+      return toIndex === current.toIndex && offsetY === current.offsetY
+        ? current
+        : { ...current, offsetY, toIndex }
+    })
+  }
+
+  /** Drops the row where it currently sits, keeping the highlight (and the
+   * keyboard cursor) on the block that moved. */
+  const endDrag = () => {
+    if (drag && drag.toIndex !== drag.fromIndex) {
+      onReorder(
+        elements[drag.fromIndex].id,
+        elements[drag.toIndex].id,
+        drag.toIndex > drag.fromIndex ? 'after' : 'before',
+      )
+      setActiveIndex(drag.toIndex)
+    }
+    setDrag(null)
+  }
+
+  /** Keyboard equivalent of dragging: Alt+Arrow moves the ACTIVE row itself
+   * (Shift+Arrow moves the cursor between rows). */
+  const moveActiveRow = (delta: number) => {
+    const to = activeIndex + delta
+    if (to < 0 || to >= elements.length) {
+      return
+    }
+    // Swapping with the neighbour = landing on the far side of it.
+    onReorder(elements[activeIndex].id, elements[to].id, delta > 0 ? 'after' : 'before')
+    setActiveIndex(to)
   }
 
   // Always holds the latest moveActive so the window-level listener (mounted
@@ -236,6 +342,11 @@ export function TerminalsPanel({
         ref={listRef}
         tabIndex={0}
         onKeyDown={(event) => {
+          if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            event.preventDefault()
+            moveActiveRow(event.key === 'ArrowDown' ? 1 : -1)
+            return
+          }
           if (!event.shiftKey) return
           if (event.key === 'ArrowDown') {
             event.preventDefault()
@@ -254,8 +365,20 @@ export function TerminalsPanel({
           <ElementRow
             key={node.id}
             node={node}
-            index={index + 1}
+            // While a row is in flight the badges preview the order it would
+            // land in, so "#1" is already on the row that will be first.
+            index={(drag ? previewIndex(index, drag.fromIndex, drag.toIndex) : index) + 1}
             active={index === activeIndex}
+            dragging={drag?.fromIndex === index}
+            // The dragged row follows the pointer; the ones it passes slide
+            // out of the way by exactly one row height.
+            translateY={
+              drag
+                ? drag.fromIndex === index
+                  ? drag.offsetY
+                  : rowShift(index, drag.fromIndex, drag.toIndex, drag.rects)
+                : 0
+            }
             composeMode={composeMode}
             draft={drafts[node.id] ?? ''}
             onDraftChange={(text) => setDraft(node.id, text)}
@@ -264,6 +387,9 @@ export function TerminalsPanel({
               setActiveIndex(index)
               activateNode(node)
             }}
+            onGrabPointerDown={(event) => startDrag(index, event)}
+            onGrabPointerMove={updateDrag}
+            onGrabPointerUp={endDrag}
           />
         ))}
       </ul>
@@ -275,20 +401,33 @@ function ElementRow({
   node,
   index,
   active,
+  dragging,
+  translateY,
   composeMode,
   draft,
   onDraftChange,
   onSend,
   onSelect,
+  onGrabPointerDown,
+  onGrabPointerMove,
+  onGrabPointerUp,
 }: {
   node: Node<CanvasNodeData>
   index: number
   active: boolean
+  /** This row is the one being dragged — lifted above the others. */
+  dragging: boolean
+  /** How far this row is currently displaced, in px: the pointer delta for
+   * the dragged row, one row height for the ones making room for it. */
+  translateY: number
   composeMode: boolean
   draft: string
   onDraftChange: (text: string) => void
   onSend: () => void
   onSelect: () => void
+  onGrabPointerDown: (event: ReactPointerEvent<HTMLElement>) => void
+  onGrabPointerMove: (event: ReactPointerEvent<HTMLElement>) => void
+  onGrabPointerUp: () => void
 }) {
   const isTerminal = node.type === 'terminal'
   const snapshot = useSessionSnapshot(node.id)
@@ -296,32 +435,57 @@ function ElementRow({
   const Icon = TYPE_ICON[(node.type as CanvasNodeType) ?? 'note']
 
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        title={elementTitle(node)}
-        className={`felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
-          active ? 'bg-white/10' : ''
-        }`}
-      >
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-black/30 text-[10px] font-semibold tabular-nums text-emerald-300">
-          {index}
+    <li
+      data-element-row
+      style={{ transform: translateY ? `translateY(${translateY}px)` : undefined }}
+      className={`rounded ${
+        dragging
+          ? // No transition on the dragged row: it must track the pointer
+            // 1:1, while the rows making room animate into place.
+            'relative z-10 bg-zinc-800 shadow-lg ring-1 ring-emerald-500/40'
+          : 'transition-transform duration-150'
+      }`}
+    >
+      <div className="flex items-start">
+        <span
+          // Drag starts on the grip only, so clicking anywhere else in the row
+          // still just focuses the block.
+          onPointerDown={onGrabPointerDown}
+          onPointerMove={onGrabPointerMove}
+          onPointerUp={onGrabPointerUp}
+          onPointerCancel={onGrabPointerUp}
+          title="Arraste para reordenar (ou Alt+↑/↓)"
+          aria-hidden
+          className="mt-1.5 shrink-0 cursor-grab touch-none pl-1 text-zinc-600 hover:text-zinc-300 active:cursor-grabbing"
+        >
+          <GripVertical size={12} />
         </span>
-        <Icon size={13} className="mt-0.5 shrink-0 text-zinc-400" />
-        <span className="min-w-0 flex-1 whitespace-normal break-words text-sm text-zinc-100">
-          {elementTitle(node)}
-        </span>
-        {isTerminal &&
-          (activity === 'working' ? (
-            <Loader2 size={11} className="mt-0.5 shrink-0 animate-spin text-sky-400" />
-          ) : (
-            <span
-              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${ACTIVITY_DOT_CLASS[activity]}`}
-              title={activity}
-            />
-          ))}
-      </button>
+        <button
+          type="button"
+          onClick={onSelect}
+          title={elementTitle(node)}
+          className={`felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
+            active ? 'bg-white/10' : ''
+          }`}
+        >
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-black/30 text-[10px] font-semibold tabular-nums text-emerald-300">
+            {index}
+          </span>
+          <Icon size={13} className="mt-0.5 shrink-0 text-zinc-400" />
+          <span className="min-w-0 flex-1 whitespace-normal break-words text-sm text-zinc-100">
+            {elementTitle(node)}
+          </span>
+          {isTerminal &&
+            (activity === 'working' ? (
+              <Loader2 size={11} className="mt-0.5 shrink-0 animate-spin text-sky-400" />
+            ) : (
+              <span
+                className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${ACTIVITY_DOT_CLASS[activity]}`}
+                title={activity}
+              />
+            ))}
+        </button>
+      </div>
       {composeMode && isTerminal && (
         <RowComposer
           terminalTitle={elementTitle(node)}
@@ -352,7 +516,7 @@ function RowComposer({
   onSend: () => void
 }) {
   return (
-    <div className="mb-1 flex items-center gap-1 px-2 pl-9">
+    <div className="mb-1 flex items-center gap-1 px-2 pl-12">
       <input
         value={draft}
         onChange={(event) => onDraftChange(event.target.value)}

@@ -32,6 +32,7 @@ import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
+import { moveById } from './tools/terminals-panel-reorder'
 import { NotificationsPanel } from './NotificationsPanel'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
@@ -636,6 +637,32 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       )
     },
     [nodes, setNodes],
+  )
+
+  // Dock reorder: the node array's order IS the dock's list order and the
+  // source of each terminal's "#N" badge, so moving a row moves the node. The
+  // resulting position is stamped into every node's `data.orderIndex` and
+  // persisted, because the storage layer lists nodes by `updated_at` — without
+  // an explicit index the order would reshuffle on the next save/restart.
+  const reorderNodes = useCallback(
+    (nodeId: string, targetId: string, edge: 'before' | 'after') => {
+      setNodes((current) => {
+        const moved = moveById(current, nodeId, targetId, edge)
+        if (moved === current) {
+          return current
+        }
+
+        return moved.map((node, index) => {
+          if (node.data.orderIndex === index) {
+            return node
+          }
+          const renumbered = { ...node, data: { ...node.data, orderIndex: index } }
+          persistNode(renumbered)
+          return renumbered
+        })
+      })
+    },
+    [setNodes, persistNode],
   )
 
   // Activate a skill: type its "use the file at <path>" instruction into the
@@ -1279,6 +1306,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         activeTerminalId={expandedTerminalId}
         onFocusNode={focusNode}
         onExpandNode={setExpandedTerminalId}
+        onReorder={reorderNodes}
       />
 
         <ReactFlow
