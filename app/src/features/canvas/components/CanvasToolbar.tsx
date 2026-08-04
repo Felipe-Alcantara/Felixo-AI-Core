@@ -15,6 +15,7 @@ import {
   FileText,
   Group,
   Hand,
+  LayoutGrid,
   Maximize,
   MessageSquare,
   MousePointer2,
@@ -51,6 +52,8 @@ type CanvasToolbarProps = {
   onAddTerminals: (
     optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[],
   ) => void
+  onOrganizeAgents: () => void
+  agentCount: number
   onAddFolder: () => Promise<string[]>
   /** Spawns a terminal whose process IS the file running (see ProjectsMenu). */
   onRunFile: (options: RunFileOptions) => void
@@ -78,6 +81,8 @@ export function CanvasToolbar({
   projects,
   onAddTerminal,
   onAddTerminals,
+  onOrganizeAgents,
+  agentCount,
   onAddFolder,
   onRunFile,
   onAddNote,
@@ -210,6 +215,20 @@ export function CanvasToolbar({
         onAddMany={onAddTerminals}
         onAddFolder={onAddFolder}
       />
+      <button
+        type="button"
+        onClick={onOrganizeAgents}
+        disabled={agentCount < 2}
+        className={`${TOOLBAR_BUTTON_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
+        title={
+          agentCount < 2
+            ? 'Adicione pelo menos dois agentes para organizá-los'
+            : `Organizar ${agentCount} agentes em uma matriz`
+        }
+      >
+        <LayoutGrid size={16} />
+        Organizar
+      </button>
       <ProjectsMenu projects={projects} onAddFolder={onAddFolder} onRunFile={onRunFile} />
       <NamedCreateButton
         icon={<StickyNote size={16} />}

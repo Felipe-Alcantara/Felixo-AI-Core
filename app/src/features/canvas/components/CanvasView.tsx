@@ -79,6 +79,10 @@ import {
   requestRepoDiagnosis,
 } from '../services/file-terminal-links'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
+import {
+  arrangeTopLevelAgentsAsMatrix,
+  countTopLevelAgentNodes,
+} from '../services/agent-matrix-layout'
 import type { CanvasNodeType, CanvasSkill, DiagnosisRequestStatus } from '../types'
 
 type FlowPositionMapper = {
@@ -933,6 +937,21 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [nodes, setNodes, persistNode, buildTerminalNodeData, visibleCanvasBounds],
   )
 
+  // Explicit, opt-in layout for agents that were added at different times.
+  // Shells and group children stay exactly where the user put them.
+  const organizeAgentNodes = useCallback(() => {
+    const viewport = visibleCanvasBounds()
+    setNodes((current) => {
+      const next = arrangeTopLevelAgentsAsMatrix(current, viewport)
+      next.forEach((node, index) => {
+        if (node !== current[index]) {
+          persistNode(node)
+        }
+      })
+      return next
+    })
+  }, [setNodes, persistNode, visibleCanvasBounds])
+
   // "Run this file" from the Projects panel: the terminal's process IS the
   // file running (command = interpreter, args = [file]) — unlike agent
   // terminals, nothing gets typed into it afterwards, so no initialText.
@@ -1002,6 +1021,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     | { label?: string; command?: string; args?: string[]; cwd?: string; initialText?: string }
     | undefined
   const expandedTitle = expandedNodeData?.label ?? 'Terminal'
+  const topLevelAgentCount = countTopLevelAgentNodes(nodes)
 
   return (
     <div className="flex h-full w-full">
@@ -1015,6 +1035,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddTerminals={addTerminalNodes}
+        onOrganizeAgents={organizeAgentNodes}
+        agentCount={topLevelAgentCount}
         onAddFolder={addProjectFolder}
         onRunFile={runFileInTerminal}
         onAddNote={(name) =>

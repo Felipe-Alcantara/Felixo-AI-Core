@@ -731,6 +731,20 @@ TESTE: os testes de regressão de `pty-process-manager.test.cjs` para shell e Co
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — organização manual dos agentes existentes
+
+PEDIDO: possibilitar a matriz também para agentes adicionados em momentos diferentes, sem reposicionar automaticamente o canvas durante o trabalho.
+
+FEITO: adicionado o botão **Organizar** ao lado de **Agente**. Ele só fica ativo com pelo menos dois terminais de agentes conhecidos e reorganiza os agentes independentes em uma matriz livre, usando a mesma geometria da abertura em lote. Shells, arquivos, notas, grupos e terminais filhos de grupos não se movem; os novos posicionamentos são persistidos como qualquer arrasto manual de bloco.
+
+A sequência de animação da barra também foi ajustada para incluir o novo botão sem alterar o movimento fluido dos controles seguintes durante a abertura ou o recolhimento.
+
+TESTE: `agent-matrix-layout.test.ts` cobre a reorganização de quatro agentes, a preservação de todos os blocos não elegíveis e o no-op com menos de dois agentes independentes.
+
+VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (96 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros. Não há harness de DOM/Electron para validar a posição visual; a conferência manual recomendada é abrir agentes em momentos diferentes, clicar em **Organizar** e confirmar que apenas os agentes no nível principal se movem.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — matriz para abertura em lote de agentes
 
 PEDIDO: ao iniciar vários agentes pela fila, organizá-los como uma matriz que cresce de modo próximo a um quadrado, em vez de uma sequência horizontal ou vertical que aparentava depender do espaço disponível.
