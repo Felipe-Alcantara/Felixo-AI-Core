@@ -128,7 +128,7 @@ export function CanvasToolbar({
 
   if (collapsed) {
     const notificationAlertClass = notificationCount > 0
-      ? 'border border-amber-400/80 ring-1 ring-amber-400/30'
+      ? 'border border-red-500/80 ring-1 ring-red-500/30'
       : ''
     return (
       <div className="absolute left-4 top-4 z-10 flex items-start gap-2">
@@ -151,7 +151,11 @@ export function CanvasToolbar({
           >
             <Bell size={16} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
-            {notificationCount > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-label="Há novas notificações" />}
+            {notificationCount > 0 && (
+              <span className="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950" aria-label={`${notificationCount} novas notificações`}>
+                {notificationCount}
+              </span>
+            )}
           </button>
           {notificationPanel}
         </div>
@@ -209,12 +213,16 @@ export function CanvasToolbar({
         <button
           type="button"
           onClick={onOpenNotifications}
-          className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationCount > 0 ? 'border border-amber-400/80 ring-1 ring-amber-400/30' : ''}`}
+          className={`${TOOLBAR_BUTTON_CLASS} relative w-full ${notificationCount > 0 ? 'border border-red-500/80 ring-1 ring-red-500/30' : ''}`}
           title="Notificações dos agentes"
         >
           <Bell size={16} className="shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
-          {notificationCount > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-label="Há novas notificações" />}
+          {notificationCount > 0 && (
+            <span className="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950" aria-label={`${notificationCount} novas notificações`}>
+              {notificationCount}
+            </span>
+          )}
         </button>
         {notificationPanel}
       </div>

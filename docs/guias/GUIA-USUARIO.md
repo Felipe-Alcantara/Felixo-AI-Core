@@ -163,7 +163,7 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 
 ### Notificações dos agentes
 
-O botão **Notificações** registra, enquanto o app estiver aberto, agentes que terminaram um trabalho, encerraram a sessão ou estão aguardando aprovação/resposta. Quando há itens, ele recebe borda e ponto âmbar, na mesma paleta da lista. O painel abre ao lado do botão com animação; cada item mostra o agente e a última mensagem útil do terminal. Clique nele para abrir o terminal e remover o aviso. O histórico é limpo ao fechar o app.
+O botão **Notificações** registra, enquanto o app estiver aberto, agentes que terminaram um trabalho, encerraram a sessão ou estão aguardando aprovação/resposta. Quando há itens, ele recebe borda vermelha e um contador externo, sem cobrir o ícone ou o texto. O painel abre ao lado do botão com animação; cada item mostra o agente e a última mensagem útil do terminal. Clique nele para abrir o terminal e remover o aviso. O histórico é limpo ao fechar o app.
 Quando uma nova notificação surgir, o app reproduz um alerta sonoro curto; notificações já existentes ao iniciar não repetem o som.
 
 ### Conectar agentes
