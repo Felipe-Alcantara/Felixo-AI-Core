@@ -32,7 +32,7 @@ export function useCanvasPersistence() {
         return
       }
 
-      setNodes(persisted.map(toFlowNode))
+      setNodes(sortByOrderIndex(persisted).map(toFlowNode))
       setHydrated(true)
     })
 
@@ -84,6 +84,35 @@ export function useCanvasPersistence() {
     removeNode,
     cancelPendingSaves,
   }
+}
+
+/**
+ * Restores the user's dock ordering (see `OrderedNodeData`). The backend lists
+ * nodes by `updated_at`, so persisted order drifts every time a node is saved
+ * — the stored `data.orderIndex` is the only stable source of truth. Nodes
+ * without one (created before the feature, or never reordered) keep their
+ * relative load order and sit after the explicitly ordered ones.
+ */
+export function sortByOrderIndex(
+  nodes: readonly PersistedCanvasNode[],
+): PersistedCanvasNode[] {
+  return nodes
+    .map((node, loadedAt) => ({ node, loadedAt }))
+    .sort((left, right) => {
+      const leftOrder = left.node.data?.orderIndex
+      const rightOrder = right.node.data?.orderIndex
+      const leftHas = typeof leftOrder === 'number'
+      const rightHas = typeof rightOrder === 'number'
+
+      if (leftHas && rightHas && leftOrder !== rightOrder) {
+        return leftOrder - rightOrder
+      }
+      if (leftHas !== rightHas) {
+        return leftHas ? -1 : 1
+      }
+      return left.loadedAt - right.loadedAt
+    })
+    .map((entry) => entry.node)
 }
 
 export function toFlowNode(node: PersistedCanvasNode): CanvasFlowNode {
