@@ -879,6 +879,16 @@ TESTE: `terminal-input.test.ts` cobre a separação entre texto normalizado e a 
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — notificações sem duplicação e com consumo durável
+
+PEDIDO: em outro computador, as notificações pareciam entrar em loop e não desapareciam ao abrir o terminal do agente.
+
+FEITO: o histórico passou a manter somente um aviso pendente por agente; um evento posterior atualiza o aviso em vez de empilhá-lo. Ao abrir a notificação, todos os avisos residuais daquele agente são consumidos e o agente fica reconhecido até receber um novo prompt. Dessa forma, a atualização visual do terminal ao abrir o drawer não recria nem repete o alerta; uma nova interação real com o agente inicia um novo ciclo de aviso.
+
+TESTE: `canvas-notifications.test.ts` agora cobre a substituição de aviso do mesmo agente e o consumo de todos os itens residuais do agente. ESLint, TypeScript, testes direcionados, suíte frontend e build são executados nesta alteração.
+
+Estado final: concluído.
+
 ## Resumos de Decisão
 
 [2026-06-21] CONTEXTO: Como persistir as conversas dos terminais entre sessões (o PTY morre ao fechar o app e o scrollback é efêmero).
