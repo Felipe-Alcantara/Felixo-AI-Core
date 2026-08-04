@@ -811,7 +811,7 @@ Estado final: concluído.
 
 PEDIDO: corrigir sobreposição dos painéis extras, retomada incorreta de sessões restauradas e ausência de notificação quando o agente termina um trabalho.
 
-FEITO: o painel de configuração do Agente passou a ocupar a segunda coluna, depois das opções de Ferramentas, evitando sobreposição quando os dois menus estão abertos. A retomada usa `/Resume` com Enter no primeiro spawn de agentes persistidos. O estado `idle` passou a exigir ação e aparece no painel/contador de notificações com mensagem própria, acionando também o alerta sonoro já existente.
+FEITO: o painel de configuração do Agente passou a ocupar a segunda coluna, depois das opções de Ferramentas, evitando sobreposição quando os dois menus estão abertos. A retomada usa `/resume` com Enter no primeiro spawn de agentes persistidos. O estado `idle` passou a exigir ação e aparece no painel/contador de notificações com mensagem própria, acionando também o alerta sonoro já existente.
 
 VALIDAÇÃO: ESLint, TypeScript, build do Vite, `vitest` (98 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros.
 
@@ -866,6 +866,16 @@ FEITO:
 TESTE: testes unitários novos para o cálculo de sincronização do painel, estados de notificação, normalização do Enter em PTY, preferências do launcher e composição do planejamento. Validação com Node 25.9.0: ESLint, TypeScript, Vite build, `vitest` (92 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros.
 
 RISCO RESIDUAL: o repositório não possui harness de DOM/Electron para medir animações. A abertura e o recolhimento dos dois menus, inclusive com `prefers-reduced-motion`, continuam sujeitos à conferência visual manual no app. O build também mantém o aviso já existente de chunk Vite acima de 500 kB; a auditoria não introduziu code splitting fora do escopo.
+
+Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-04 — submissão confiável de `/resume`
+
+PEDIDO: o terminal restaurado mostrava `/resume`, mas por vezes só inseria uma quebra de linha em vez de efetivamente executar o comando.
+
+FEITO: a entrega do prompt inicial do Codex agora espera o compositor interativo vazio (`›`) estar visível. O texto e a tecla Enter são enviados em duas escritas PTY, com intervalo curto: primeiro `/resume`, depois `CR`. Isso evita que o TUI trate o Enter que chega junto de texto programático como uma nova linha.
+
+TESTE: `terminal-input.test.ts` cobre a separação entre texto normalizado e a tecla Enter. A validação estática e a suíte frontend são executadas nesta alteração.
 
 Estado final: concluído.
 
