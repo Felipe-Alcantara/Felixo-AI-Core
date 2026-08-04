@@ -731,6 +731,18 @@ TESTE: os testes de regressão de `pty-process-manager.test.cjs` para shell e Co
 
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-04 — colaboração por conexões entre agentes
+
+PEDIDO: ao ligar dois agentes no canvas, ambos precisam reconhecer que trabalham juntos no mesmo projeto ou em contextos relacionados. A conexão já era persistida, mas só a combinação arquivo→terminal recebia ação; terminal→terminal não fazia nada.
+
+FEITO: `agent-collaboration-links.ts` identifica exclusivamente pares de terminais de agentes conhecidos e envia uma instrução recíproca aos dois. Quando os diretórios de trabalho coincidem, a mensagem declara o projeto compartilhado; quando diferem, declara os contextos relacionados pelo canvas. A instrução também deixa explícito que a conexão não repassa conversa/saída automaticamente e orienta a coordenação por arquivos `.md` e notas compartilhados. Shells, comandos arbitrários, auto-conexões e outros tipos de bloco continuam sem receber prompt.
+
+TESTE: `agent-collaboration-links.test.ts` cobre parceria no mesmo projeto, contextos relacionados em diretórios diferentes e exclusão de pares que não são dois agentes.
+
+VALIDAÇÃO: com Node 25.9.0, ESLint, TypeScript, build do Vite, `vitest` (92 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros. Como o projeto não possui harness de DOM para o canvas, a checagem visual manual recomendada é ligar dois agentes e confirmar que cada terminal recebe a instrução com o nome do outro.
+
+Estado final: concluído.
+
 ## Registro de Trabalho — 2026-08-04 — qualidade da barra de ações e notificações do canvas
 
 PEDIDO: aplicar o padrão de qualidade ao conjunto recente de mudanças no canvas: abertura sequencial dos menus de Ferramentas e Agente, notificações de agentes e barra retrátil.
@@ -743,7 +755,7 @@ FEITO:
 - `agent-launch-preferences.ts` passou a persistir e validar a configuração reutilizável completa do launcher (CLI, modelo, esforço, permissões, projeto e arquivo de planejamento), com migração segura da preferência antiga que guardava só a CLI. O nome permanece intencionalmente fora dessa preferência, pois é específico de cada bloco criado.
 - Todos os prompts programáticos do canvas agora terminam em CR (Enter), por meio de `terminal-input.ts`. Antes, alguns terminavam em LF e podiam apenas aparecer no terminal sem serem submetidos; isso incluía o arquivo de planejamento quando o padrão de qualidade estava desligado. A instrução do planejamento foi extraída para função pura e aceita qualquer extensão de arquivo.
 
-TESTE: testes unitários novos para o cálculo de sincronização do painel, estados de notificação, normalização do Enter em PTY, preferências do launcher e composição do planejamento. Validação com Node 25.9.0: ESLint, TypeScript, Vite build, `vitest` (89 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros.
+TESTE: testes unitários novos para o cálculo de sincronização do painel, estados de notificação, normalização do Enter em PTY, preferências do launcher e composição do planejamento. Validação com Node 25.9.0: ESLint, TypeScript, Vite build, `vitest` (92 testes), suíte Electron/Node (417 testes) e `git diff --check` concluídos sem erros.
 
 RISCO RESIDUAL: o repositório não possui harness de DOM/Electron para medir animações. A abertura e o recolhimento dos dois menus, inclusive com `prefers-reduced-motion`, continuam sujeitos à conferência visual manual no app. O build também mantém o aviso já existente de chunk Vite acima de 500 kB; a auditoria não introduziu code splitting fora do escopo.
 

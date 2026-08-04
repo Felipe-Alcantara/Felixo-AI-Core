@@ -163,6 +163,10 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 
 O botão **Notificações** mostra agentes que encerraram a sessão ou estão aguardando aprovação/resposta. Clique em uma notificação para centralizar e abrir o respectivo terminal.
 
+### Conectar agentes
+
+Ao arrastar uma conexão entre dois blocos de agentes, ambos recebem uma instrução de colaboração. Se usam o mesmo diretório de trabalho, o app informa que atuam no mesmo projeto; caso usem diretórios diferentes, a conexão declara que os contextos são relacionados. A conexão não copia conversas entre terminais: use arquivos `.md` e notas do canvas para coordenar decisões, progresso e bloqueios.
+
 ### Ferramentas do canvas
 
 O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que flutuam sobre o quadro sem escondê-lo: Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git e Configurações. Escolher uma ferramenta fecha o menu e abre o painel correspondente. A barra pode ser recolhida; nesse estado, as notificações continuam acessíveis ao lado do botão de expansão.
