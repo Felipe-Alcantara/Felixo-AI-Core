@@ -157,6 +157,7 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 - O botão grande **Agente** abre imediatamente outro terminal com as últimas configurações reutilizáveis: CLI, modelo, esforço, permissões, projeto e arquivo de planejamento. O nome do terminal continua pontual para evitar criar vários blocos com o mesmo nome sem intenção.
 - A seta ao lado de **Agente** abre as configurações completas. Em **Arquivo de planejamento**, informe um caminho ou selecione qualquer tipo de arquivo no explorador.
 - Quando houver um arquivo de planejamento, o agente recebe no primeiro prompt a instrução para lê-lo antes de começar e seguir suas funções, etapas e decisões. O conteúdo do arquivo não é copiado para o app; o agente recebe apenas o caminho e decide como lê-lo.
+- Ao reiniciar o aplicativo, um terminal de agente que já existia recebe `/resume` seguido de Enter como primeira instrução, em vez do prompt inicial, para retomar a conversa anterior.
 
 ### Notificações dos agentes
 

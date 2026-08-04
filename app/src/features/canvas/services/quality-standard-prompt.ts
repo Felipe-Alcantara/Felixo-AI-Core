@@ -89,6 +89,25 @@ export function composeTerminalInitialText(
 }
 
 /**
+ * A terminal must wait until every source of its first instruction is known.
+ * In particular, the restored-agent capture decides whether `/resume` takes
+ * precedence over the normal initial prompt after an application restart.
+ */
+export function isTerminalInitialTextReady(params: {
+  restoredAgentsCaptured: boolean
+  edgesHydrated: boolean
+  connectedCanvasFileCount: number
+  resolvedCanvasFileCount: number
+}): boolean {
+  return (
+    params.restoredAgentsCaptured &&
+    params.edgesHydrated &&
+    (params.connectedCanvasFileCount === 0 ||
+      params.resolvedCanvasFileCount >= params.connectedCanvasFileCount)
+  )
+}
+
+/**
  * Decides what a canvas terminal's first-spawn text should be. A terminal
  * that already existed on disk when the app booted (`isRestoredAgent`) may
  * have unfinished work from a previous run, so it gets "/resume" instead of

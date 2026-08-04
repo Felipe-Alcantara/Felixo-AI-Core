@@ -45,6 +45,7 @@ import {
   DEFAULT_QUALITY_STANDARD_PROMPT,
   buildCanvasTerminalInitialText,
   composeTerminalInitialText,
+  isTerminalInitialTextReady,
   resolveTerminalInitialText,
 } from '../services/quality-standard-prompt'
 import { toSubmittedTerminalText } from '../terminal/terminal-input'
@@ -95,6 +96,11 @@ type FlowPositionMapper = {
 type NodeDataCacheEntry = {
   deps: unknown[]
   data: Record<string, unknown>
+}
+
+type RestoredAgentTerminals = {
+  captured: boolean
+  ids: ReadonlySet<string>
 }
 
 /** True only when the keyboard event originates from the bare canvas (not a
@@ -251,10 +257,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // persisted list (before any node created *this* session can join it).
   // Used to type "/resume" instead of the usual standing instruction on
   // their first spawn this session; never touches persisted data (read by
-  // the render-only nodes memo below, not by anything that gets saved). State
-  // (not a ref) so the memo below reactively recomputes once this lands.
-  const [restoredAgentTerminalIds, setRestoredAgentTerminalIds] = useState<Set<string>>(
-    () => new Set(),
+  // the render-only nodes memo below, not by anything that gets saved). The
+  // capture and its readiness live in one state update: TerminalNode must not
+  // call ensure() before this snapshot is available, otherwise its idempotent
+  // first spawn would receive the normal prompt and could never be replaced.
+  const [restoredAgentTerminals, setRestoredAgentTerminals] = useState<RestoredAgentTerminals>(
+    () => ({ captured: false, ids: new Set() }),
   )
   const restoredAgentTerminalIdsCapturedRef = useRef(false)
   useEffect(() => {
@@ -262,13 +270,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       return
     }
     restoredAgentTerminalIdsCapturedRef.current = true
-    setRestoredAgentTerminalIds(
-      new Set(
+    setRestoredAgentTerminals({
+      captured: true,
+      ids: new Set(
         nodes
           .filter((node) => node.type === 'terminal' && isKnownAgentCommand(node.data.command))
           .map((node) => node.id),
       ),
-    )
+    })
   }, [hydrated, nodes])
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
@@ -643,15 +652,17 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         const quality = qualityStandard
         const connectedFileNames = getConnectedCanvasFileNames(node.id, nodes, edges)
         const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
-        const initialTextReady =
-          edgesHydrated &&
-          (connectedFileNames.length === 0 ||
-            canvasFilePaths.length >= connectedFileNames.length)
+        const initialTextReady = isTerminalInitialTextReady({
+          restoredAgentsCaptured: restoredAgentTerminals.captured,
+          edgesHydrated,
+          connectedCanvasFileCount: connectedFileNames.length,
+          resolvedCanvasFileCount: canvasFilePaths.length,
+        })
         // Left open from a previous run: whatever it was doing may not have
         // finished, so type "/resume" on this (re)spawn instead of the usual
         // standing instruction — see restoredAgentTerminalIds above.
         const fallbackInitialText = resolveTerminalInitialText({
-          isRestoredAgent: restoredAgentTerminalIds.has(node.id),
+          isRestoredAgent: restoredAgentTerminals.ids.has(node.id),
           qualityStandardEnabled: quality.enabled,
           qualityStandardPrompt: quality.prompt,
           hasCommand: isKnownAgentCommand(node.data.command),
@@ -692,7 +703,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     notifyTerminalRenamed,
     nodes,
     qualityStandard,
-    restoredAgentTerminalIds,
+    restoredAgentTerminals,
     terminalCanvasFilePaths,
     unlinkAgentFromFile,
     updateNodeData,
