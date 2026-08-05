@@ -12,7 +12,6 @@ import {
   Play,
 } from 'lucide-react'
 import { buildRunCommand } from '../services/run-file-command'
-import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
 import {
   toolbarFlyoutClass,
   toolbarFlyoutStyle,
@@ -48,12 +47,6 @@ export function ProjectsMenu({
   toolsMenuOpen = false,
 }: ProjectsMenuProps) {
   const [open, setOpen] = useState(false)
-  const {
-    panelReady,
-    preparePanel,
-    resetPanel,
-    markPanelReady,
-  } = useDeferredExpansionPanel(open)
   const [browsing, setBrowsing] = useState<Browsing | null>(null)
   const [entries, setEntries] = useState<DirectoryEntry[] | null>(null)
   // The backend's own resolved absolute path for the folder being browsed —
@@ -64,7 +57,7 @@ export function ProjectsMenu({
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const flyoutPosition = useToolbarFlyoutPosition({
-    open: open && panelReady,
+    open,
     toolsMenuOpen,
     containerRef,
     panelRef,
@@ -77,13 +70,12 @@ export function ProjectsMenu({
     }
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
-        resetPanel()
         setOpen(false)
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open, resetPanel])
+  }, [open])
 
   useEffect(() => {
     if (!browsing) {
@@ -147,7 +139,6 @@ export function ProjectsMenu({
       cwd: currentDirPath,
       label: `${entry.name} · ${browsing.project.name}`,
     })
-    resetPanel()
     setOpen(false)
     setBrowsing(null)
     setEntries(null)
@@ -159,28 +150,10 @@ export function ProjectsMenu({
     : ''
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative transition-[width] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        open ? 'w-[27.5rem]' : 'w-36'
-      }`}
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
-          markPanelReady()
-        }
-      }}
-    >
+    <div ref={containerRef} className="relative w-36">
       <button
         type="button"
-        onClick={() => {
-          if (open) {
-            resetPanel()
-            setOpen(false)
-            return
-          }
-          preparePanel()
-          setOpen(true)
-        }}
+        onClick={() => setOpen((current) => !current)}
         className="felixo-btn flex w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Abrir uma pasta e rodar arquivos dela num terminal"
       >
@@ -188,7 +161,7 @@ export function ProjectsMenu({
         Projetos
       </button>
 
-      {open && panelReady && (
+      {open && (
         <div
           ref={panelRef}
           // Anchored to a button partway down the toolbar, so the height cap
@@ -204,7 +177,7 @@ export function ProjectsMenu({
                   Nenhuma pasta adicionada ainda.
                 </div>
               )}
-              <ul className="mb-2 flex flex-col gap-0.5">
+              <ul className="felixo-anim-stagger-list mb-2 flex flex-col gap-0.5">
                 {projects.map((project) => (
                   <li key={project.id}>
                     <button
@@ -256,7 +229,7 @@ export function ProjectsMenu({
               {entries && entries.length === 0 && (
                 <div className="px-2 py-2 text-xs text-zinc-500">Pasta vazia.</div>
               )}
-              <ul className="flex flex-col gap-0.5">
+              <ul className="felixo-anim-stagger-list flex flex-col gap-0.5">
                 {entries?.map((entry) => (
                   <li key={entry.path}>
                     <button
