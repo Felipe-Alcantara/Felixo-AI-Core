@@ -949,3 +949,17 @@ VERIFICAÇÃO MANUAL RECOMENDADA: iniciar um agente no canvas apontando para est
 RISCO RESIDUAL: o replay do processo Electron é limitado a 200 mil caracteres e o scrollback do xterm a 20 mil linhas; históricos maiores são deliberadamente truncados para não inundar o próximo agente. A escolha automática pressupõe que o próximo CLI da matriz esteja instalado e autenticado; se não estiver, o novo bloco exibirá o erro de inicialização e o usuário deverá escolher outro agente manualmente.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-05 — animação dos botões restantes
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: aplicar aos botões que ainda não tinham animação o mesmo feedback de pressão dos controles já padronizados.
+
+FEITO: os botões internos do painel de notificações, os controles de confirmação do handoff e o seletor de arquivo de planejamento passaram a usar `felixo-btn` ou `felixo-btn-icon`, preservando suas classes visuais e comportamentos existentes.
+
+TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erros. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
+
+RISCO RESIDUAL: a conferência visual de pressão, foco por teclado e `prefers-reduced-motion` ainda deve ser feita no Electron real, pois o repositório não possui harness visual de DOM/Electron.
+
+Estado final: concluído.

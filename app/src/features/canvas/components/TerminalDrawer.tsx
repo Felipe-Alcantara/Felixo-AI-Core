@@ -428,7 +428,7 @@ export function TerminalDrawer({
                 setHandoffConfirmationOpen(false)
                 setHandoffError(undefined)
               }}
-              className="rounded bg-white/10 px-2 py-1 text-zinc-200 hover:bg-white/15 disabled:opacity-50"
+              className="felixo-btn rounded bg-white/10 px-2 py-1 text-zinc-200 hover:bg-white/15 disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -436,7 +436,7 @@ export function TerminalDrawer({
               type="button"
               disabled={handoffBusy}
               onClick={() => void confirmResponsibilityHandoff()}
-              className="rounded bg-amber-500/20 px-2 py-1 font-medium text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+              className="felixo-btn rounded bg-amber-500/20 px-2 py-1 font-medium text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
             >
               {handoffBusy ? 'Iniciando…' : 'Confirmar passagem'}
             </button>

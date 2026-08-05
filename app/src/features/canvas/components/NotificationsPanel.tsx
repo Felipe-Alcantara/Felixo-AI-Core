@@ -100,7 +100,7 @@ export function NotificationsPanel({
           type="button"
           onClick={onMarkAllRead}
           disabled={unreadCount === 0}
-          className="ml-auto rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+          className="felixo-btn-icon ml-auto rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
           title="Marcar todas como lidas"
           aria-label="Marcar todas como lidas"
         >
@@ -109,7 +109,7 @@ export function NotificationsPanel({
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
+          className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
           aria-label="Fechar notificações"
         >
           <X size={14} />
@@ -131,7 +131,7 @@ export function NotificationsPanel({
           <button
             type="button"
             onClick={onClearRead}
-            className="ml-auto flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+            className="felixo-btn ml-auto flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
             title="Limpar notificações lidas"
           >
             <Trash2 size={12} />
@@ -166,7 +166,7 @@ export function NotificationsPanel({
                     onDismiss(node.id)
                     onClose()
                   }}
-                  className="flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left"
+                  className="felixo-btn flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left"
                 >
                   {unread ? (
                     <AlertCircle size={15} className="mt-0.5 shrink-0 text-red-400" />
@@ -192,7 +192,7 @@ export function NotificationsPanel({
                     <button
                       type="button"
                       onClick={() => onMarkRead(notification.id)}
-                      className="rounded bg-zinc-800 p-1 text-zinc-400 hover:text-white"
+                      className="felixo-btn-icon rounded bg-zinc-800 p-1 text-zinc-400 hover:text-white"
                       title="Marcar como lida"
                       aria-label={`Marcar como lida: ${node.data.label || node.id}`}
                     >
@@ -202,7 +202,7 @@ export function NotificationsPanel({
                   <button
                     type="button"
                     onClick={() => onRemove(notification.id)}
-                    className="rounded bg-zinc-800 p-1 text-zinc-400 hover:text-white"
+                    className="felixo-btn-icon rounded bg-zinc-800 p-1 text-zinc-400 hover:text-white"
                     title="Remover notificação"
                     aria-label={`Remover notificação: ${node.data.label || node.id}`}
                   >
@@ -232,7 +232,7 @@ function FilterTab({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded px-2 py-1 text-[11px] transition-colors ${
+      className={`felixo-btn rounded px-2 py-1 text-[11px] transition-colors ${
         active ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
       }`}
     >
