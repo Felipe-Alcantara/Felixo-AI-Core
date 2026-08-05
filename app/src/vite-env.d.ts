@@ -195,7 +195,8 @@ declare global {
           cwd?: string
           cols?: number
           rows?: number
-        }) => Promise<CliInvokeResult & { sessionId?: string }>
+          reuseExisting?: boolean
+        }) => Promise<CliInvokeResult & { sessionId?: string; reused?: boolean }>
         write: (params: {
           sessionId: string
           data: string

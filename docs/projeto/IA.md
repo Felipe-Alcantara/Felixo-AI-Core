@@ -912,3 +912,23 @@ TESTE: ESLint, TypeScript/Vite build, `npm run test:frontend` (172 testes), `npm
 RISCO RESIDUAL: o repositório ainda não possui harness de DOM/Electron para validar visualmente animações e interação de ponteiro; recomenda-se uma conferência manual em viewport reduzida, com zoom alterado, abertura simultânea de Ferramentas/Notificações e drag do drawer. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-05 — PTY reanexável e passagem de responsabilidade
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: corrigir o reset prematuro ao desenvolver o Felixo AI Core dentro do próprio canvas e permitir que um agente parado por limite de uso transfira o trabalho para outro agente com o histórico do terminal.
+
+FEITO:
+- O PTY do canvas passou a usar um identificador estável por bloco e o processo Electron mantém uma janela limitada de replay. HMR, navegação entre Canvas/Chat e remount do renderer reanexam a sessão existente, restauram a saída e não reenviam a instrução inicial; uma nova sessão só é criada quando o bloco realmente não existe mais.
+- Sessões encerradas ficam retidas até remoção explícita do bloco, permitindo restaurar também o estado final. O descarte do bloco e o encerramento do app continuam usando kill forçado para liberar o processo e o buffer.
+- Saídas explícitas de limite (`usage limit`, `out of extra usage`, `429`, equivalentes) são marcadas no snapshot. O botão “Passar responsabilidade” só aparece com limite detectado e agente parado, e abre uma confirmação que alerta sobre segredos no transcript.
+- A confirmação lê o scrollback completo disponível no xterm, aplica limite de segurança de 160 mil caracteres com marcador quando necessário, escolhe o próximo CLI nativo em ordem determinística, preserva o diretório e as conexões com arquivos `.md`, e envia o contexto como transcript não confiável. O histórico é mantido apenas em memória e `handoffText` é removido da persistência/exportação.
+
+TESTE: lint, `npm run build`, `npx vitest run` (180 testes), `npm test` (421 testes), testes direcionados do PTY (36) e `git diff --check` concluídos sem erros. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
+
+VERIFICAÇÃO MANUAL RECOMENDADA: iniciar um agente no canvas apontando para este repositório, alterar um componente para provocar HMR/navegar ao Chat e voltar; confirmar que o mesmo processo continua sem reenviar a instrução. Para o handoff, simular uma saída com limite seguida de encerramento, abrir o drawer, confirmar o aviso de transcript e verificar que o novo CLI recebe o contexto no mesmo diretório e sem gravar o transcript no canvas.
+
+RISCO RESIDUAL: o replay do processo Electron é limitado a 200 mil caracteres e o scrollback do xterm a 20 mil linhas; históricos maiores são deliberadamente truncados para não inundar o próximo agente. A escolha automática pressupõe que o próximo CLI da matriz esteja instalado e autenticado; se não estiver, o novo bloco exibirá o erro de inicialização e o usuário deverá escolher outro agente manualmente.
+
+Estado final: concluído.

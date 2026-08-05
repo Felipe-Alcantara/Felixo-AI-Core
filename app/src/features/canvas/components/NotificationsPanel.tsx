@@ -242,6 +242,11 @@ function FilterTab({
 }
 
 function notificationText(snapshot: SessionSnapshot): string {
+  if (snapshot.usageLimit) {
+    return snapshot.usageLimit.resetLabel
+      ? `Limite de uso atingido. O provedor informa reset em ${snapshot.usageLimit.resetLabel}.`
+      : 'Limite de uso atingido. Abra o terminal para passar a responsabilidade.'
+  }
   if (snapshot.activity === 'idle') {
     return 'Terminou de trabalhar e está aguardando uma nova ação.'
   }

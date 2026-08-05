@@ -51,6 +51,8 @@ export type TerminalNodeData = {
   label?: string
   /** Text typed into the agent shortly after spawn (e.g. standing instruction). Persisted with the node so reopen replays it. */
   initialText?: string
+  /** One-shot in-memory prompt used by responsibility handoff; never persisted. */
+  handoffText?: string
   /** Render-time flag: waits for canvas connections/path resolution before spawning. */
   initialTextReady?: boolean
   /**

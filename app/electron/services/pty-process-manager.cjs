@@ -39,6 +39,7 @@ const FORCE_KILL_DELAY_MS = 5000
 const EARLY_EXIT_THRESHOLD_MS = 800
 const WINDOWS_SHELL_PATH_ERROR = /(?:cannot find the path specified|sistema não pode encontrar o caminho especificado)/i
 const SHELL_STARTUP_RECOVERY_WINDOW_MS = 3000
+const MAX_REPLAY_BUFFER_CHARS = 200_000
 
 /**
  * @typedef {object} PtyHandle
@@ -86,6 +87,7 @@ class PtyProcessManager {
    * @param {number} [options.rows]
    * @param {(data: string) => void} [options.onData] - Raw output sink.
    * @param {(event: { exitCode: number, signal?: number }) => void} [options.onExit]
+   * @param {boolean} [options.reuseExisting] - Reattach to a live/completed session with this id.
    * @param {string} [options.defaultShell] - Internal Windows fallback shell.
    * @param {boolean} [isFallbackRetry] - Internal: true when this call is a
    *   recovery retry after an early exit or Windows PTY backend error. Callers
@@ -101,6 +103,14 @@ class PtyProcessManager {
     allowEmergencyShellFallback = true,
     useConpty,
   ) {
+    if (!isFallbackRetry && options.reuseExisting) {
+      const existing = this.sessions.get(sessionId)
+      if (existing) {
+        this.attach(sessionId, options)
+        return existing.ptyProcess
+      }
+    }
+
     if (!isFallbackRetry) {
       this.kill(sessionId, { force: true })
     }
@@ -181,12 +191,17 @@ class PtyProcessManager {
       rows,
       killTimer: null,
       spawnedAt: this.now(),
+      outputBuffer: '',
+      exitEvent: null,
+      onData: options.onData,
+      onExit: options.onExit,
     }
 
     this.sessions.set(sessionId, entry)
 
-    if (typeof options.onData === 'function') {
-      ptyProcess.onData((data) => {
+    ptyProcess.onData((data) => {
+      entry.outputBuffer = `${entry.outputBuffer}${String(data)}`.slice(-MAX_REPLAY_BUFFER_CHARS)
+      try {
         // ConPTY can start a default shell successfully and only then report
         // an invalid path. Only handle the platform's own startup text here:
         // a CLI may legitimately print "File not found" for its work, and
@@ -200,7 +215,7 @@ class PtyProcessManager {
           windowsBackendFallbackRetried = true
           this.reportWindowsShellStartupDiagnostic(launch, cwd, data, useConpty)
           this.reportLayer(
-            options,
+            { ...options, onData: entry.onData },
             'backend PTY do Windows',
             'A camada de terminal reportou um erro de caminho; tentando o backend alternativo.',
             'shell-path-error',
@@ -216,9 +231,11 @@ class PtyProcessManager {
           )
           return
         }
-        options.onData(data)
-      })
-    }
+        entry.onData?.(data)
+      } catch {
+        // A renderer callback must not bring down the PTY process.
+      }
+    })
 
     ptyProcess.onExit((event) => {
       // A kill()/re-spawn may have already replaced this session's entry by
@@ -226,7 +243,9 @@ class PtyProcessManager {
       // or report its exit; a superseded attempt's exit is not this session's
       // outcome anymore.
       const isCurrentAttempt = this.sessions.get(sessionId) === entry
-      this.cleanup(sessionId, ptyProcess)
+      if (!isCurrentAttempt) {
+        return
+      }
 
       const exitedEarly =
         isCurrentAttempt &&
@@ -288,9 +307,11 @@ class PtyProcessManager {
         }
       }
 
-      if (typeof options.onExit === 'function') {
-        options.onExit(event)
-      }
+      // Keep a completed entry until the renderer explicitly kills/removes the
+      // node. A renderer reload can then restore the final output and status
+      // instead of spawning a fresh agent for a task that already ended.
+      entry.exitEvent = event
+      entry.onExit?.(event)
     })
 
     return ptyProcess
@@ -312,6 +333,34 @@ class PtyProcessManager {
     return this.sessions.has(sessionId)
   }
 
+  /** Replaces renderer callbacks and replays output after an HMR/navigation reload. */
+  attach(sessionId, options = {}) {
+    const entry = this.sessions.get(sessionId)
+
+    if (!entry) {
+      return false
+    }
+
+    entry.onData = options.onData
+    entry.onExit = options.onExit
+
+    if (entry.outputBuffer) {
+      try {
+        entry.onData?.(entry.outputBuffer)
+      } catch {
+        // A renderer callback must not affect the retained PTY session.
+      }
+    }
+
+    if (entry.exitEvent) {
+      queueMicrotask(() => {
+        entry.onExit?.(entry.exitEvent)
+      })
+    }
+
+    return true
+  }
+
   /**
    * Forward user keystrokes (or programmatic input) to the PTY.
    *
@@ -322,7 +371,7 @@ class PtyProcessManager {
   write(sessionId, input) {
     const entry = this.sessions.get(sessionId)
 
-    if (!entry) {
+    if (!entry || entry.exitEvent) {
       return false
     }
 
@@ -341,7 +390,7 @@ class PtyProcessManager {
   resize(sessionId, cols, rows) {
     const entry = this.sessions.get(sessionId)
 
-    if (!entry) {
+    if (!entry || entry.exitEvent) {
       return false
     }
 

@@ -63,6 +63,7 @@ import {
   buildPlanningFileInstruction,
   DEFAULT_QUALITY_STANDARD_PROMPT,
   buildCanvasTerminalInitialText,
+  buildQualityStandardMessage,
   composeTerminalInitialText,
   isTerminalInitialTextReady,
   resolveTerminalInitialText,
@@ -98,6 +99,11 @@ import {
   requestRepoDiagnosis,
 } from '../services/file-terminal-links'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
+import {
+  buildTerminalHandoffPrompt,
+  getNextHandoffAgent,
+  prepareHandoffTranscript,
+} from '../services/terminal-handoff'
 import {
   arrangeTopLevelAgentsAsMatrix,
   countTopLevelAgentNodes,
@@ -847,7 +853,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           qualityStandardEnabled: quality.enabled,
           qualityStandardPrompt: quality.prompt,
           hasCommand: isKnownAgentCommand(node.data.command),
-          existingInitialText: node.data.initialText,
+          existingInitialText: node.data.handoffText ?? node.data.initialText,
           canvasFilePaths,
           identity: { agentName: node.data.label, cwd: node.data.cwd },
         })
@@ -1022,6 +1028,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
       setNodes((current) => [...current, node])
       persistNode(node)
+      return id
     },
     [nodes, setNodes, persistNode, visibleCanvasBounds],
   )
@@ -1040,14 +1047,28 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   )
 
   const buildTerminalNodeData = useCallback(
-    (options: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }) => {
+    (options: {
+      command?: string
+      args?: string[]
+      cwd?: string
+      label: string
+      planningFile?: string
+      handoffText?: string
+    }) => {
       // Agent terminals get the standing quality-standard instruction (if on)
       // plus their canvas identity (name, cwd, multi-agent setting); a plain
       // shell does not (there's no agent to read it).
       const quality = qualityStandardRef.current
       const planningInstruction = buildPlanningFileInstruction(options.planningFile)
-      const initialText = options.command
+      const handoffInstruction = options.handoffText
         ? composeTerminalInitialText(
+            quality.enabled ? buildQualityStandardMessage(quality.prompt) : undefined,
+            options.handoffText,
+            planningInstruction,
+          )
+        : undefined
+      const initialText = options.command
+        ? handoffInstruction ?? composeTerminalInitialText(
             quality.enabled
               ? buildCanvasTerminalInitialText(quality.prompt, undefined, [], {
                   agentName: options.label,
@@ -1063,17 +1084,90 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         ...(options.command ? { command: options.command } : {}),
         ...(options.args && options.args.length ? { args: options.args } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
-        ...(initialText ? { initialText } : {}),
+        ...(initialText && !options.handoffText ? { initialText } : {}),
+        ...(options.handoffText ? { handoffText: initialText } : {}),
       }
     },
     [],
   )
 
   const addTerminalNode = useCallback(
-    (options: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }) => {
+    (options: {
+      command?: string
+      args?: string[]
+      cwd?: string
+      label: string
+      planningFile?: string
+    }) => {
       addNode('terminal', buildTerminalNodeData(options))
     },
     [addNode, buildTerminalNodeData],
+  )
+
+  const passResponsibility = useCallback(
+    async (
+      sourceId: string,
+      request: { transcript: string; truncated: boolean },
+    ): Promise<{ ok: boolean; message?: string; targetLabel?: string }> => {
+      const source = nodesRef.current.find((node) => node.id === sourceId)
+      if (!source || source.type !== 'terminal') {
+        return { ok: false, message: 'O terminal de origem não está mais disponível.' }
+      }
+
+      const sourceData = source.data
+      const target = getNextHandoffAgent(sourceData.command)
+      if (!target) {
+        return {
+          ok: false,
+          message: 'Não há outro agente nativo disponível para assumir este terminal.',
+        }
+      }
+
+      const targetLabel = `${target.label} · continuação`
+      const prepared = prepareHandoffTranscript(request.transcript)
+      const handoffText = buildTerminalHandoffPrompt({
+        sourceLabel: sourceData.label,
+        sourceCommand: sourceData.command,
+        cwd: sourceData.cwd,
+        targetLabel,
+        transcript: prepared.text,
+        truncated: prepared.truncated || request.truncated,
+      })
+      const newId = addNode(
+        'terminal',
+        buildTerminalNodeData({
+          command: target.command,
+          cwd: sourceData.cwd,
+          label: targetLabel,
+          handoffText,
+        }),
+      )
+
+      // Carry file links to the continuation node so it inherits the same
+      // shared scratchpads and receives their absolute paths in its bootstrap.
+      const linkedFileNodes = nodesRef.current.filter(
+        (node) =>
+          node.type === 'file' &&
+          edgesRef.current.some(
+            (edge) =>
+              (edge.source === sourceId && edge.target === node.id) ||
+              (edge.target === sourceId && edge.source === node.id),
+          ),
+      )
+      const newEdges = linkedFileNodes.map((fileNode) => ({
+        id: `edge-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
+        source: fileNode.id,
+        target: newId,
+      }))
+      if (newEdges.length > 0) {
+        setEdges((current) => [...current, ...newEdges])
+        newEdges.forEach((edge) => void saveCanvasEdge(edge))
+      }
+
+      setExpandedTerminalId(newId)
+      return { ok: true, targetLabel }
+    },
+    [addNode, buildTerminalNodeData, setEdges],
   )
 
   // Starts several terminals at once (e.g. a whole agent setup) instead of
@@ -1262,9 +1356,17 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     ? nodes.find((node) => node.id === expandedTerminalId)
     : undefined
   const expandedNodeData = expandedNode?.data as
-    | { label?: string; command?: string; args?: string[]; cwd?: string; initialText?: string }
+    | {
+        label?: string
+        command?: string
+        args?: string[]
+        cwd?: string
+        initialText?: string
+        handoffText?: string
+      }
     | undefined
   const expandedTitle = expandedNodeData?.label ?? 'Terminal'
+  const handoffTarget = getNextHandoffAgent(expandedNodeData?.command)
   const topLevelAgentCount = countTopLevelAgentNodes(nodes)
 
   return (
@@ -1460,8 +1562,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             command: expandedNodeData?.command,
             args: expandedNodeData?.args,
             cwd: expandedNodeData?.cwd,
-            initialText: expandedNodeData?.initialText,
+            initialText: expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
           }}
+          handoffTargetLabel={handoffTarget?.label}
+          onPassResponsibility={(request) =>
+            passResponsibility(expandedTerminalId, request)
+          }
           onClose={() => setExpandedTerminalId(null)}
         />
       )}
