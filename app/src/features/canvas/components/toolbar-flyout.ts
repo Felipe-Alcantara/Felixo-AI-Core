@@ -20,7 +20,7 @@ const BESIDE_TOOLBAR = 'left-[calc(9rem+0.5rem)]'
 const BESIDE_OPEN_TOOLS_MENU = 'left-[calc(18.5rem+0.5rem)]'
 
 const FLYOUT_BASE =
-  'absolute top-0 z-30 transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+  'absolute top-0 z-30 transition-[left] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
 
 /** Tailwind classes placing a popover beside the toolbar column. */
 export function toolbarFlyoutClass(toolsMenuOpen: boolean): string {

@@ -506,7 +506,7 @@ function ElementRow({
           ? // No transition on the dragged row: it must track the pointer
             // 1:1, while the rows making room animate into place.
             'relative z-10 bg-zinc-800 shadow-lg ring-1 ring-emerald-500/40'
-          : 'transition-transform duration-150'
+          : 'transition-transform duration-[280ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
       }`}
     >
       <div className="flex items-start">

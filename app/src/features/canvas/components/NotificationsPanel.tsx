@@ -75,7 +75,7 @@ export function NotificationsPanel({
   return (
     <section
       aria-label="Notificações dos agentes"
-      className={`felixo-anim-sequential-panel absolute top-full z-40 mt-2 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`felixo-anim-sequential-panel absolute top-full z-40 mt-2 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl transition-[left] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
         toolsMenuOpen ? 'left-[calc(18.5rem+0.5rem)]' : 'left-[calc(9rem+0.5rem)]'
       }`}
     >
