@@ -991,3 +991,17 @@ TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erro
 RISCO RESIDUAL: a sequência exige conferência visual no Electron real, sobretudo em zoom reduzido e com `prefers-reduced-motion`, pois o repositório não possui harness visual de DOM/Electron.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-05 — correção visual da cascata de Projetos
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: a imagem mostrou que Projetos ainda não seguia o padrão visual: o painel aparecia, mas as pastas internas surgiam simultaneamente.
+
+FEITO: a lista de projetos e a lista de arquivos/diretórios passaram a usar `felixo-anim-stagger-list`, que anima cada item na mesma cascata dos menus padronizados. A tentativa anterior de expandir artificialmente o acionador foi removida para preservar a geometria compacta mostrada na barra; o painel lateral continua com a animação de entrada já existente.
+
+TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erros. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
+
+RISCO RESIDUAL: a confirmação visual final ainda requer abrir Projetos no Electron real com uma lista longa, pois não há harness visual de DOM/Electron.
+
+Estado final: concluído.

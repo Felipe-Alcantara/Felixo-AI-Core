@@ -27,7 +27,6 @@ import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
 import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
 import { NotificationsMenu } from './NotificationsMenu'
-import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
 import {
   toolbarFlyoutClass,
   toolbarFlyoutStyle,
@@ -363,16 +362,10 @@ function NamedCreateButton({
 }: NamedCreateButtonProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
-  const {
-    panelReady,
-    preparePanel,
-    resetPanel,
-    markPanelReady,
-  } = useDeferredExpansionPanel(open)
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const flyoutPosition = useToolbarFlyoutPosition({
-    open: open && panelReady,
+    open,
     toolsMenuOpen,
     containerRef,
     panelRef,
@@ -385,44 +378,24 @@ function NamedCreateButton({
     }
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
-        resetPanel()
         setOpen(false)
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open, resetPanel])
+  }, [open])
 
   const create = () => {
     onCreate(name.trim() || undefined)
     setName('')
-    resetPanel()
     setOpen(false)
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative transition-[width] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        open ? 'w-[23.5rem]' : 'w-36'
-      }`}
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
-          markPanelReady()
-        }
-      }}
-    >
+    <div ref={containerRef} className="relative w-36">
       <button
         type="button"
-        onClick={() => {
-          if (open) {
-            resetPanel()
-            setOpen(false)
-            return
-          }
-          preparePanel()
-          setOpen(true)
-        }}
+        onClick={() => setOpen((current) => !current)}
         className={`${TOOLBAR_BUTTON_CLASS} w-full`}
         title={title}
       >
@@ -430,7 +403,7 @@ function NamedCreateButton({
         {buttonLabel}
       </button>
 
-      {open && panelReady && (
+      {open && (
         <div
           ref={panelRef}
           style={toolbarFlyoutStyle(flyoutPosition)}
