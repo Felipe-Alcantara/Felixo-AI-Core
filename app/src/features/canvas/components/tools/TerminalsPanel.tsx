@@ -421,7 +421,11 @@ export function TerminalsPanel({
             commitActive()
           }
         }}
-        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-emerald-500/50"
+        className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-emerald-500/50 ${
+          // The stagger plays as the dock unfolds; while a row is being dragged
+          // it must not re-run and fight the drag's own transform.
+          collapsed || drag ? '' : 'felixo-anim-stagger-list'
+        }`}
       >
         {elements.map((node, index) => (
           <ElementRow
