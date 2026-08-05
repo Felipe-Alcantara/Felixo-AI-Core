@@ -18,9 +18,11 @@
   --radius-base: 1rem;
   --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.32);
   /* Button interaction timings. Press is snappier than release so a click
-     feels immediate; both stay short enough not to delay repeated clicks. */
+     feels immediate; both stay short enough not to delay repeated clicks.
+     These deliberately stay fast — direct manipulation must never lag the
+     pointer, however slow the surrounding panel choreography is. */
   --felixo-press-duration: 90ms;
-  --felixo-release-duration: 140ms;
+  --felixo-release-duration: 180ms;
   --felixo-press-scale: 0.96;
   --felixo-press-scale-icon: 0.9;
   color: #f4f4f5;
@@ -240,14 +242,16 @@ div::-webkit-scrollbar-thumb {
   to { opacity: 0; transform: translateX(16px); }
 }
 
+/* Tool panels unfold from their top-left anchor — the same gesture as the
+   toolbar menus, so every surface on the board opens the same way. */
 @keyframes felixo-panel-in {
-  from { opacity: 0; transform: translateX(-12px) scale(0.98); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
+  from { opacity: 0; transform: translate(-22px, -10px) scale(0.92); }
+  to { opacity: 1; transform: translate(0, 0) scale(1); }
 }
 
 @keyframes felixo-panel-out {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to { opacity: 0; transform: translateX(-12px) scale(0.98); }
+  from { opacity: 1; transform: translate(0, 0) scale(1); }
+  to { opacity: 0; transform: translate(-18px, -8px) scale(0.94); }
 }
 
 @keyframes felixo-menu-in {
@@ -307,24 +311,36 @@ div::-webkit-scrollbar-thumb {
   100% { transform: translate(44px, -132px); }
 }
 
+/* Surfaces enter slowly enough to be watched and leave faster than they
+   arrive — a slow exit reads as lag, since the user has already moved on. */
 .felixo-anim-drawer-in {
-  animation: felixo-slide-in-right 0.22s ease-out;
+  animation: felixo-slide-in-right 520ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .felixo-anim-drawer-out {
-  animation: felixo-slide-out-right 0.18s ease-in forwards;
+  animation: felixo-slide-out-right 300ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .felixo-anim-panel-in {
-  animation: felixo-panel-in 0.2s ease-out;
+  animation: felixo-panel-in 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top left;
 }
 
 .felixo-anim-panel-out {
-  animation: felixo-panel-out 0.16s ease-in forwards;
+  animation: felixo-panel-out 260ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  transform-origin: top left;
 }
 
+/* Header, then body: the panel's own two parts arrive after its frame does. */
+.felixo-anim-panel-in > * {
+  animation: felixo-tools-list-item-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.felixo-anim-panel-in > :nth-child(1) { animation-delay: 90ms; }
+.felixo-anim-panel-in > :nth-child(2) { animation-delay: 170ms; }
+
 .felixo-anim-menu-in {
-  animation: felixo-menu-in 0.16s ease-out;
+  animation: felixo-menu-in 340ms cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: top;
 }
 
@@ -336,9 +352,11 @@ div::-webkit-scrollbar-thumb {
  */
 .felixo-anim-corner-dock {
   transform-origin: bottom right;
+  /* Opacity trails the transform: the panel is still visible for most of the
+     fold, so the eye follows it into the corner instead of losing it early. */
   transition:
-    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform 620ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 480ms cubic-bezier(0.16, 1, 0.3, 1) 90ms;
   will-change: transform, opacity;
 }
 
@@ -357,9 +375,11 @@ div::-webkit-scrollbar-thumb {
 /* The puck is the same motion in reverse: it grows in as the panel folds away. */
 .felixo-anim-corner-puck {
   transform-origin: bottom right;
+  /* Delayed so the puck only starts growing once the panel has folded most of
+     the way in — the two motions read as one handoff, not a crossfade. */
   transition:
-    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform 560ms cubic-bezier(0.16, 1, 0.3, 1) 140ms,
+    opacity 400ms cubic-bezier(0.16, 1, 0.3, 1) 180ms;
 }
 
 .felixo-anim-corner-puck-hidden {
@@ -375,74 +395,106 @@ div::-webkit-scrollbar-thumb {
 }
 
 .felixo-anim-sequential-panel {
-  animation: felixo-tools-list-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-tools-list-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: top left;
 }
 
+/* Each row is slower than the step between rows, so several are in flight at
+   once — the list unrolls as one wave instead of ticking item by item. */
 .felixo-anim-sequential-panel > * {
-  animation: felixo-tools-list-item-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-tools-list-item-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.felixo-anim-sequential-panel > :nth-child(1) { animation-delay: 30ms; }
-.felixo-anim-sequential-panel > :nth-child(2) { animation-delay: 60ms; }
-.felixo-anim-sequential-panel > :nth-child(3) { animation-delay: 90ms; }
-.felixo-anim-sequential-panel > :nth-child(4) { animation-delay: 120ms; }
-.felixo-anim-sequential-panel > :nth-child(5) { animation-delay: 150ms; }
-.felixo-anim-sequential-panel > :nth-child(6) { animation-delay: 180ms; }
-.felixo-anim-sequential-panel > :nth-child(7) { animation-delay: 210ms; }
-.felixo-anim-sequential-panel > :nth-child(8) { animation-delay: 240ms; }
-.felixo-anim-sequential-panel > :nth-child(9) { animation-delay: 270ms; }
-.felixo-anim-sequential-panel > :nth-child(10) { animation-delay: 300ms; }
-.felixo-anim-sequential-panel > :nth-child(11) { animation-delay: 330ms; }
-.felixo-anim-sequential-panel > :nth-child(12) { animation-delay: 360ms; }
+/* The stagger. Enumerated rather than computed so it works in every engine;
+   past the last row listed the remaining items share the final delay, which
+   is what you want anyway — a 40-row list must not take 2s to finish. */
+.felixo-anim-sequential-panel > :nth-child(1) { animation-delay: 50ms; }
+.felixo-anim-sequential-panel > :nth-child(2) { animation-delay: 105ms; }
+.felixo-anim-sequential-panel > :nth-child(3) { animation-delay: 160ms; }
+.felixo-anim-sequential-panel > :nth-child(4) { animation-delay: 215ms; }
+.felixo-anim-sequential-panel > :nth-child(5) { animation-delay: 270ms; }
+.felixo-anim-sequential-panel > :nth-child(6) { animation-delay: 325ms; }
+.felixo-anim-sequential-panel > :nth-child(7) { animation-delay: 380ms; }
+.felixo-anim-sequential-panel > :nth-child(8) { animation-delay: 435ms; }
+.felixo-anim-sequential-panel > :nth-child(9) { animation-delay: 490ms; }
+.felixo-anim-sequential-panel > :nth-child(10) { animation-delay: 545ms; }
+.felixo-anim-sequential-panel > :nth-child(11) { animation-delay: 600ms; }
+.felixo-anim-sequential-panel > :nth-child(12) { animation-delay: 655ms; }
+.felixo-anim-sequential-panel > :nth-child(13) { animation-delay: 710ms; }
+.felixo-anim-sequential-panel > :nth-child(14) { animation-delay: 765ms; }
+.felixo-anim-sequential-panel > :nth-child(15) { animation-delay: 820ms; }
+.felixo-anim-sequential-panel > :nth-child(n + 16) { animation-delay: 875ms; }
+
+/**
+ * Same choreography for a scrollable list of rows (the elements dock, the
+ * notifications feed). Separate from the panel class above because those
+ * panels animate their own max-height, which a scroll container must not do.
+ */
+.felixo-anim-stagger-list > * {
+  animation: felixo-tools-list-item-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.felixo-anim-stagger-list > :nth-child(1) { animation-delay: 60ms; }
+.felixo-anim-stagger-list > :nth-child(2) { animation-delay: 115ms; }
+.felixo-anim-stagger-list > :nth-child(3) { animation-delay: 170ms; }
+.felixo-anim-stagger-list > :nth-child(4) { animation-delay: 225ms; }
+.felixo-anim-stagger-list > :nth-child(5) { animation-delay: 280ms; }
+.felixo-anim-stagger-list > :nth-child(6) { animation-delay: 335ms; }
+.felixo-anim-stagger-list > :nth-child(7) { animation-delay: 390ms; }
+.felixo-anim-stagger-list > :nth-child(8) { animation-delay: 445ms; }
+.felixo-anim-stagger-list > :nth-child(9) { animation-delay: 500ms; }
+.felixo-anim-stagger-list > :nth-child(10) { animation-delay: 555ms; }
+.felixo-anim-stagger-list > :nth-child(n + 11) { animation-delay: 610ms; }
 
 .felixo-toolbar-expanding {
-  animation: felixo-toolbar-expand-root 780ms linear both;
+  animation: felixo-toolbar-expand-root 1180ms linear both;
   transform-origin: top left;
   will-change: transform;
 }
 
 .felixo-toolbar-expanding > :not(:first-child) {
-  animation: felixo-toolbar-item-expand 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-toolbar-item-expand 540ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .felixo-toolbar-expanding > :first-child {
-  animation: felixo-toolbar-trigger-expand 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-toolbar-trigger-expand 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.felixo-toolbar-expanding > :nth-child(2) { --toolbar-offset: -44px; animation-delay: 30ms; }
-.felixo-toolbar-expanding > :nth-child(3) { --toolbar-offset: -88px; animation-delay: 60ms; }
-.felixo-toolbar-expanding > :nth-child(4) { animation: felixo-notification-to-list 460ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both; }
-.felixo-toolbar-expanding > :nth-child(5) { --toolbar-offset: -176px; animation-delay: 120ms; }
-.felixo-toolbar-expanding > :nth-child(6) { --toolbar-offset: -220px; animation-delay: 150ms; }
-.felixo-toolbar-expanding > :nth-child(7) { --toolbar-offset: -264px; animation-delay: 180ms; }
-.felixo-toolbar-expanding > :nth-child(8) { --toolbar-offset: -308px; animation-delay: 210ms; }
-.felixo-toolbar-expanding > :nth-child(9) { --toolbar-offset: -352px; animation-delay: 240ms; }
-.felixo-toolbar-expanding > :nth-child(10) { --toolbar-offset: -396px; animation-delay: 270ms; }
-.felixo-toolbar-expanding > :nth-child(11) { --toolbar-offset: -440px; animation-delay: 300ms; }
-.felixo-toolbar-expanding > :nth-child(12) { --toolbar-offset: -484px; animation-delay: 330ms; }
-.felixo-toolbar-expanding > :nth-child(13) { --toolbar-offset: -528px; animation-delay: 360ms; }
-.felixo-toolbar-expanding > :nth-child(14) { --toolbar-offset: -572px; animation-delay: 390ms; }
-.felixo-toolbar-expanding > :nth-child(16) { --toolbar-offset: -616px; animation-delay: 420ms; }
+.felixo-toolbar-expanding > :nth-child(2) { --toolbar-offset: -44px; animation-delay: 50ms; }
+.felixo-toolbar-expanding > :nth-child(3) { --toolbar-offset: -88px; animation-delay: 100ms; }
+.felixo-toolbar-expanding > :nth-child(4) { animation: felixo-notification-to-list 700ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both; }
+.felixo-toolbar-expanding > :nth-child(5) { --toolbar-offset: -176px; animation-delay: 200ms; }
+.felixo-toolbar-expanding > :nth-child(6) { --toolbar-offset: -220px; animation-delay: 250ms; }
+.felixo-toolbar-expanding > :nth-child(7) { --toolbar-offset: -264px; animation-delay: 300ms; }
+.felixo-toolbar-expanding > :nth-child(8) { --toolbar-offset: -308px; animation-delay: 350ms; }
+.felixo-toolbar-expanding > :nth-child(9) { --toolbar-offset: -352px; animation-delay: 400ms; }
+.felixo-toolbar-expanding > :nth-child(10) { --toolbar-offset: -396px; animation-delay: 450ms; }
+.felixo-toolbar-expanding > :nth-child(11) { --toolbar-offset: -440px; animation-delay: 500ms; }
+.felixo-toolbar-expanding > :nth-child(12) { --toolbar-offset: -484px; animation-delay: 550ms; }
+.felixo-toolbar-expanding > :nth-child(13) { --toolbar-offset: -528px; animation-delay: 600ms; }
+.felixo-toolbar-expanding > :nth-child(14) { --toolbar-offset: -572px; animation-delay: 650ms; }
+.felixo-toolbar-expanding > :nth-child(16) { --toolbar-offset: -616px; animation-delay: 700ms; }
 
+/* Collapsing stays quicker than expanding: the user has already decided to
+   dismiss it, so the same slow travel would just read as the UI dragging. */
 .felixo-toolbar-collapsing {
-  animation: felixo-toolbar-collapse-root 480ms linear both;
+  animation: felixo-toolbar-collapse-root 660ms linear both;
   transform-origin: top left;
   pointer-events: none;
   will-change: transform;
 }
 
 .felixo-toolbar-collapsing > :not(:first-child) {
-  animation: felixo-toolbar-item-collapse 360ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: felixo-toolbar-item-collapse 480ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .felixo-toolbar-collapsing > :first-child {
-  animation: felixo-toolbar-trigger-collapse 280ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: felixo-toolbar-trigger-collapse 380ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .felixo-toolbar-collapsing > :nth-child(2) { --toolbar-offset: -44px; }
 .felixo-toolbar-collapsing > :nth-child(3) { --toolbar-offset: -88px; }
-.felixo-toolbar-collapsing > :nth-child(4) { animation: felixo-notification-to-compact 460ms cubic-bezier(0.4, 0, 1, 1) both; }
+.felixo-toolbar-collapsing > :nth-child(4) { animation: felixo-notification-to-compact 620ms cubic-bezier(0.4, 0, 1, 1) both; }
 .felixo-toolbar-collapsing > :nth-child(5) { --toolbar-offset: -176px; }
 .felixo-toolbar-collapsing > :nth-child(6) { --toolbar-offset: -220px; }
 .felixo-toolbar-collapsing > :nth-child(7) { --toolbar-offset: -264px; }
@@ -495,7 +547,7 @@ div::-webkit-scrollbar-thumb {
    inline translate(). Keeping it scoped prevents regular drag operations from
    gaining inertia. Duration matches AGENT_MATRIX_ANIMATION_MS in CanvasView. */
 .react-flow__node.felixo-agent-matrix-moving {
-  transition: transform 480ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 820ms cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
 }
 
@@ -509,7 +561,9 @@ div::-webkit-scrollbar-thumb {
   }
 
   .felixo-anim-sequential-panel,
-  .felixo-anim-sequential-panel > * {
+  .felixo-anim-sequential-panel > *,
+  .felixo-anim-stagger-list > *,
+  .felixo-anim-panel-in > * {
     animation: none;
   }
 

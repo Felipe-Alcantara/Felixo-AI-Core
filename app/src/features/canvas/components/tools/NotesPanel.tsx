@@ -174,7 +174,7 @@ export function NotesPanel({ nodes, onFocusNode, onAddNote, onClose }: NotesPane
       {notes.length === 0 ? (
         <p className="text-sm text-zinc-500">Nenhuma nota salva ainda.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="felixo-anim-stagger-list flex flex-col gap-2">
           {notes.map((note) => (
             <li key={note.id} className="rounded bg-zinc-800/60 p-2">
               <div className="mb-1 flex items-center gap-2">

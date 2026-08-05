@@ -16,7 +16,7 @@ import { useLayoutEffect, useState, type CSSProperties, type RefObject } from 'r
  * `left-[calc(...)]` can place the entire panel outside the visible area.
  */
 const FLYOUT_BASE =
-  'absolute z-30 transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+  'absolute z-30 transition-[left] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
 
 const TOOLBAR_OFFSET = 9 * 16 + 8
 const OPEN_TOOLS_OFFSET = 18.5 * 16 + 8

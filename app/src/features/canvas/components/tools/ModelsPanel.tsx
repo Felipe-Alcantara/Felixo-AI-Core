@@ -47,7 +47,7 @@ export function ModelsPanel({ onClose }: ModelsPanelProps) {
       {models.length === 0 ? (
         <p className="text-sm text-zinc-500">Nenhum modelo configurado.</p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="felixo-anim-stagger-list flex flex-col gap-1">
           {models.map((model) => (
             <li
               key={model.id}
