@@ -213,7 +213,7 @@ export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
         </button>
       </div>
 
-      <ul className="flex flex-col gap-2">
+      <ul className="felixo-anim-stagger-list flex flex-col gap-2">
         {prompts.map((prompt) => {
           const isPreset = presetIds.has(prompt.id)
           const isOverridden = isPreset && overridesById.has(prompt.id)
