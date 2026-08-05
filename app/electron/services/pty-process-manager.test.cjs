@@ -466,10 +466,12 @@ test('graceful kill sends SIGTERM but keeps the session until exit', () => {
   assert.equal(manager.has('term-7'), true)
 
   fakePty.emitExit({ exitCode: 0 })
+  assert.equal(manager.has('term-7'), true)
+  manager.kill('term-7', { force: true })
   assert.equal(manager.has('term-7'), false)
 })
 
-test('exit cleans up the session and notifies the caller', () => {
+test('exit retains the replayable session and notifies the caller', () => {
   const { fakePty, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })
   const exits = []
@@ -478,7 +480,33 @@ test('exit cleans up the session and notifies the caller', () => {
   fakePty.emitExit({ exitCode: 137, signal: 9 })
 
   assert.deepEqual(exits, [{ exitCode: 137, signal: 9 }])
+  assert.equal(manager.has('term-8'), true)
+  assert.equal(manager.kill('term-8', { force: true }), true)
   assert.equal(manager.has('term-8'), false)
+})
+
+test('reuseExisting reattaches without spawning or replaying the initial process', () => {
+  const { fakePty, spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+  const firstOutput = []
+  const secondOutput = []
+
+  manager.spawn('canvas:term-reload', {
+    command: 'claude',
+    onData: (data) => firstOutput.push(data),
+  })
+  fakePty.emitData('history before HMR\r\n')
+
+  manager.spawn('canvas:term-reload', {
+    command: 'claude',
+    reuseExisting: true,
+    onData: (data) => secondOutput.push(data),
+  })
+
+  assert.equal(calls.length, 1)
+  assert.deepEqual(firstOutput, ['history before HMR\r\n'])
+  assert.deepEqual(secondOutput, ['history before HMR\r\n'])
+  assert.deepEqual(fakePty.kills, [])
 })
 
 test('re-spawning the same id replaces the previous session', () => {

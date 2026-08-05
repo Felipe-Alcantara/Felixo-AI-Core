@@ -32,6 +32,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   ipcMain.handle('pty:spawn', (_event, params = {}) => {
     try {
       const sessionId = requireSessionId(params.sessionId)
+      const reused = Boolean(params.reuseExisting && manager.has?.(sessionId))
 
       manager.spawn(sessionId, {
         command: params.command,
@@ -39,6 +40,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         cwd: params.cwd,
         cols: params.cols,
         rows: params.rows,
+        reuseExisting: Boolean(params.reuseExisting),
         onData: (data) => send('pty:data', { sessionId, data }),
         onExit: (event) =>
           send('pty:exit', {
@@ -48,7 +50,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
           }),
       })
 
-      return { ok: true, sessionId }
+      return { ok: true, sessionId, ...(reused ? { reused: true } : {}) }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel iniciar o terminal.')
     }

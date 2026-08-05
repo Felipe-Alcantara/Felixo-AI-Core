@@ -1,6 +1,10 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { splitTerminalSubmission } from './terminal-input'
+import {
+  detectTerminalUsageLimit,
+  type TerminalUsageLimit,
+} from './terminal-usage-limit'
 
 /**
  * Activity derived from the output stream:
@@ -27,6 +31,13 @@ export type SessionSnapshot = {
   message?: string
   /** The most recent prompt submitted to the session (typed or programmatic). */
   lastPrompt?: string
+  /** Explicit provider usage-limit output detected in the terminal. */
+  usageLimit?: TerminalUsageLimit
+}
+
+export type TerminalTranscript = {
+  /** Text currently available in xterm's active scrollback buffer. */
+  text: string
 }
 
 type SessionListener = (snapshot: SessionSnapshot) => void
@@ -126,6 +137,10 @@ export class TerminalSessionStore {
     const terminal = new Terminal({
       convertEol: false,
       cursorBlink: true,
+      // HMR/navigation can recreate the renderer while the Electron PTY keeps
+      // running. A generous scrollback lets the replacement renderer restore
+      // enough context for both review and responsibility handoff.
+      scrollback: 20_000,
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       fontSize: 13,
@@ -136,7 +151,10 @@ export class TerminalSessionStore {
 
     const session: Session = {
       id,
-      ptySessionId: `${id}::${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
+      // The id must survive renderer HMR, navigation to Chat and a drawer
+      // remount. The Electron process uses it to reattach instead of spawning
+      // a second CLI in the same project.
+      ptySessionId: `canvas:${id}`,
       terminal,
       fitAddon,
       listeners: this.listeners.get(id) ?? new Set(),
@@ -236,12 +254,23 @@ export class TerminalSessionStore {
         cwd: options.cwd,
         cols: terminal.cols || 80,
         rows: terminal.rows || 24,
+        reuseExisting: true,
       })
       .then((result) => {
         if (session.disposed) {
           return
         }
         if (result?.ok && session.snapshot.activity === 'starting') {
+          if (result.reused) {
+            // The PTY already contains the original agent turn. Replaying the
+            // initial instruction here would submit a duplicate task after a
+            // renderer reload, which was the development reset bug.
+            session.initialTextSent = true
+            this.clearInitialTextTimer(session)
+            this.markWorking(session)
+            return
+          }
+
           this.markWorking(session)
 
           // Claude's `--dangerously-skip-permissions` shows a "Yes, I accept"
@@ -390,6 +419,12 @@ export class TerminalSessionStore {
     return text
   }
 
+  /** Returns the complete text available in the active xterm scrollback. */
+  getTranscript(id: string): TerminalTranscript {
+    const session = this.sessions.get(id)
+    return { text: session ? readBuffer(session.terminal) : '' }
+  }
+
   getSnapshot(id: string): SessionSnapshot | undefined {
     return this.sessions.get(id)?.snapshot
   }
@@ -458,6 +493,13 @@ export class TerminalSessionStore {
     // Agent CLIs animate a spinner/timer while idle, emitting bytes every frame.
     // Treat output as real "work" only when the buffer changes beyond that
     // in-place animation; otherwise a waiting agent would look busy forever.
+    if (!session.snapshot.usageLimit) {
+      const usageLimit = detectTerminalUsageLimit(readTerminalTail(session.terminal))
+      if (usageLimit) {
+        this.update(session, { usageLimit })
+      }
+    }
+
     const signature = computeSignature(session.terminal)
     if (signature !== session.lastSignature) {
       session.lastSignature = signature
@@ -801,4 +843,31 @@ function readViewport(terminal: Terminal): string {
   }
 
   return lines.join('\n').replace(/\n+$/, '')
+}
+
+/** Reads the entire xterm active buffer, including scrollback lines. */
+function readBuffer(terminal: Terminal): string {
+  const buffer = terminal.buffer.active
+  const lines: string[] = []
+
+  for (let row = 0; row < buffer.length; row += 1) {
+    lines.push(buffer.getLine(row)?.translateToString(true).trimEnd() ?? '')
+  }
+
+  return lines.join('\n').replace(/\n+$/, '')
+}
+
+/** Avoids rescanning a large scrollback on every output callback. */
+function readTerminalTail(terminal: Terminal, maxChars = 16_000): string {
+  const buffer = terminal.buffer.active
+  const lines: string[] = []
+  let length = 0
+
+  for (let row = buffer.length - 1; row >= 0 && length < maxChars; row -= 1) {
+    const line = buffer.getLine(row)?.translateToString(true).trimEnd() ?? ''
+    lines.unshift(line)
+    length += line.length + 1
+  }
+
+  return lines.join('\n').slice(-maxChars)
 }

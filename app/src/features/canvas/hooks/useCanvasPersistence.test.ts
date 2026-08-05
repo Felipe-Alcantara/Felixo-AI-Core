@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sortByOrderIndex } from './useCanvasPersistence'
+import { sortByOrderIndex, toPersistedNode } from './useCanvasPersistence'
 import type { CanvasNodeData, PersistedCanvasNode } from '../types'
 
 function node(id: string, data: CanvasNodeData = {}): PersistedCanvasNode {
@@ -50,5 +50,23 @@ describe('sortByOrderIndex', () => {
     const loaded = [node('b', { orderIndex: 1 }), node('a', { orderIndex: 0 })]
     sortByOrderIndex(loaded)
     expect(loaded.map((item) => item.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('canvas persistence boundaries', () => {
+  it('does not persist the one-shot handoff transcript', () => {
+    const persisted = toPersistedNode({
+      id: 'handoff',
+      type: 'terminal',
+      position: { x: 0, y: 0 },
+      data: {
+        command: 'codex',
+        initialText: 'standing instruction',
+        handoffText: 'terminal output that may contain a secret',
+      },
+    })
+
+    expect(persisted.data.initialText).toBe('standing instruction')
+    expect(persisted.data.handoffText).toBeUndefined()
   })
 })
