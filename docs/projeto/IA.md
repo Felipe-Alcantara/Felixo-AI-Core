@@ -900,3 +900,15 @@ VALIDAÇÃO: usuário confirmou de ponta a ponta — Claude leu o protocolo, ent
 ALTERNATIVAS: (a) canvas + chat + `shared`; (b) chat como legado; (c) só cortar a dependência sem mover pastas.
 DECISÃO: (a) — três features irmãs, o compartilhado em `shared`, dependência num sentido só. Feito em branch `refactor/` (política), validando a cada passo.
 VALIDAÇÃO: tsc+vite+lint+test verdes em cada passo; canvas deixou de importar de `chat`. Suíte 380 pass.
+
+## Registro de Trabalho — 2026-08-05 — revisão e correções da semana
+
+PEDIDO: revisar e implementar as melhorias necessárias em todos os commits da semana de 03 a 05/08/2026.
+
+FEITO: os flyouts da barra do canvas passaram a calcular a posição e a altura disponíveis em runtime, mantendo Ferramentas, Agente, Projetos e Notificações acessíveis após resize/zoom. O dock de Elementos recolhido deixou de expor controles focáveis invisíveis e o arraste ganhou guardas contra alteração concorrente da lista. O drawer de terminal passou a usar uma faixa de largura válida em viewport estreita, com limpeza dos estilos globais durante desmontagem. Pacotes `.fxcanvas` não preservam mais `initialText`, evitando execução automática de conteúdo importado. O IPC de projetos passou a validar caminhos reais, prefixos de diretório e symlinks antes de listar ou indexar arquivos.
+
+TESTE: ESLint, TypeScript/Vite build, `npm run test:frontend` (172 testes), `npm test` (420 testes) e `git diff --check` concluídos sem erros. Foram adicionados testes para posicionamento responsivo, largura do drawer, remoção de texto autoenviado em imports e contenção de caminhos.
+
+RISCO RESIDUAL: o repositório ainda não possui harness de DOM/Electron para validar visualmente animações e interação de ponteiro; recomenda-se uma conferência manual em viewport reduzida, com zoom alterado, abertura simultânea de Ferramentas/Notificações e drag do drawer. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
+
+Estado final: concluído.

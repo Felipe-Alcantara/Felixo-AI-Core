@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  clampDrawerWidth,
+  getDrawerMaxWidth,
   readCollapsedPreference,
   readPinnedPreference,
   readWidthPreference,
@@ -55,6 +57,19 @@ describe('width preference', () => {
     const setItem = vi.fn()
     writeWidthPreference({ setItem }, 812.6)
     expect(setItem).toHaveBeenCalledWith('felixo:terminal-drawer-width', '813')
+  })
+})
+
+describe('responsive drawer width', () => {
+  it('keeps the drag range valid when the CSS viewport is narrower than the normal minimum', () => {
+    expect(getDrawerMaxWidth(576)).toBe(376)
+    expect(clampDrawerWidth(440, 576, 440)).toBe(376)
+    expect(clampDrawerWidth(320, 576, 440)).toBe(376)
+  })
+
+  it('keeps the normal minimum on a desktop-sized viewport', () => {
+    expect(clampDrawerWidth(320, 1200, 440)).toBe(440)
+    expect(clampDrawerWidth(1600, 1200, 440)).toBe(1000)
   })
 })
 

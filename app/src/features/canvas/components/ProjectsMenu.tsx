@@ -12,7 +12,11 @@ import {
   Play,
 } from 'lucide-react'
 import { buildRunCommand } from '../services/run-file-command'
-import { flyoutMaxHeight, toolbarFlyoutClass } from './toolbar-flyout'
+import {
+  toolbarFlyoutClass,
+  toolbarFlyoutStyle,
+  useToolbarFlyoutPosition,
+} from './toolbar-flyout'
 
 type ProjectsMenuProject = { id: string; name: string; path: string }
 
@@ -50,9 +54,15 @@ export function ProjectsMenu({
   // would risk mixing '/' (used for relativePath) with the OS's separator.
   const [currentDirPath, setCurrentDirPath] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  // Measured when the flyout opens: how much room is left below this button.
-  const [maxHeight, setMaxHeight] = useState<number>()
   const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const flyoutPosition = useToolbarFlyoutPosition({
+    open,
+    toolsMenuOpen,
+    containerRef,
+    panelRef,
+    panelWidth: 288,
+  })
 
   useEffect(() => {
     if (!open) {
@@ -143,15 +153,7 @@ export function ProjectsMenu({
     <div ref={containerRef} className="relative w-36">
       <button
         type="button"
-        onClick={(event) => {
-          setMaxHeight(
-            flyoutMaxHeight(
-              event.currentTarget.getBoundingClientRect().top,
-              window.innerHeight,
-            ),
-          )
-          setOpen((current) => !current)
-        }}
+        onClick={() => setOpen((current) => !current)}
         className="felixo-btn flex w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Abrir uma pasta e rodar arquivos dela num terminal"
       >
@@ -161,10 +163,11 @@ export function ProjectsMenu({
 
       {open && (
         <div
+          ref={panelRef}
           // Anchored to a button partway down the toolbar, so the height cap
           // is the room left below it, not a flat fraction of the viewport.
-          style={{ maxHeight }}
-          className={`${toolbarFlyoutClass(toolsMenuOpen)} w-72 overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+          style={toolbarFlyoutStyle(flyoutPosition)}
+          className={`${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-72 overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
         >
           {!browsing ? (
             <>

@@ -200,8 +200,12 @@ export function TerminalsPanel({
    */
   const moveActive = (delta: number, refocusList: boolean) => {
     const next = nextActiveIndex(activeIndex, delta, elements.length)
+    const nextElement = elements[next]
+    if (!nextElement) {
+      return
+    }
     setActiveIndex(next)
-    activateNode(elements[next])
+    activateNode(nextElement)
     if (refocusList) {
       window.requestAnimationFrame(() => listRef.current?.focus())
     }
@@ -257,10 +261,12 @@ export function TerminalsPanel({
   /** Drops the row where it currently sits, keeping the highlight (and the
    * keyboard cursor) on the block that moved. */
   const endDrag = () => {
-    if (drag && drag.toIndex !== drag.fromIndex) {
+    const from = drag ? elements[drag.fromIndex] : undefined
+    const to = drag ? elements[drag.toIndex] : undefined
+    if (from && to && drag && drag.toIndex !== drag.fromIndex) {
       onReorder(
-        elements[drag.fromIndex].id,
-        elements[drag.toIndex].id,
+        from.id,
+        to.id,
         drag.toIndex > drag.fromIndex ? 'after' : 'before',
       )
       setActiveIndex(drag.toIndex)
@@ -275,8 +281,13 @@ export function TerminalsPanel({
     if (to < 0 || to >= elements.length) {
       return
     }
+    const activeElement = elements[activeIndex]
+    const targetElement = elements[to]
+    if (!activeElement || !targetElement) {
+      return
+    }
     // Swapping with the neighbour = landing on the far side of it.
-    onReorder(elements[activeIndex].id, elements[to].id, delta > 0 ? 'after' : 'before')
+    onReorder(activeElement.id, targetElement.id, delta > 0 ? 'after' : 'before')
     setActiveIndex(to)
   }
 
@@ -346,6 +357,7 @@ export function TerminalsPanel({
       </button>
 
       <div
+        inert={collapsed}
         className={`felixo-anim-corner-dock flex max-h-[60vh] w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
           collapsed
             ? 'felixo-anim-corner-dock-collapsed'

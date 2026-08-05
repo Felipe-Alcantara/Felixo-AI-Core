@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   BrainCircuit,
   ChevronDown,
@@ -14,6 +14,11 @@ import {
   Wrench,
 } from 'lucide-react'
 import { useDeferredExpansionPanel } from '../../hooks/useDeferredExpansionPanel'
+import {
+  toolbarFlyoutClass,
+  toolbarFlyoutStyle,
+  useToolbarFlyoutPosition,
+} from '../toolbar-flyout'
 
 // 'terminals' is not here on purpose — the terminals dock is always visible
 // (see TerminalsPanel.tsx, rendered directly by CanvasView), not a panel you
@@ -60,6 +65,16 @@ export function CanvasToolsMenu({ activeTool, onSelect, onOpenChange }: CanvasTo
     resetPanel,
     markPanelReady,
   } = useDeferredExpansionPanel(open)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const flyoutPosition = useToolbarFlyoutPosition({
+    open: open && optionsReady,
+    toolsMenuOpen: false,
+    containerRef,
+    panelRef,
+    panelWidth: 144,
+    placement: 'below',
+  })
 
   const toggleOpen = () => {
     if (open) {
@@ -76,6 +91,7 @@ export function CanvasToolsMenu({ activeTool, onSelect, onOpenChange }: CanvasTo
 
   return (
     <div
+      ref={containerRef}
       className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
         open ? 'w-[18.5rem]' : 'w-36'
       }`}
@@ -99,7 +115,12 @@ export function CanvasToolsMenu({ activeTool, onSelect, onOpenChange }: CanvasTo
       </button>
 
       {open && optionsReady && (
-        <div id="canvas-tools-options" className="felixo-anim-sequential-panel absolute left-[calc(9rem+0.5rem)] top-full z-30 mt-2 flex max-h-[calc(100vh-6rem)] w-36 flex-col overflow-y-auto rounded-lg bg-zinc-800 shadow-xl ring-1 ring-white/10">
+        <div
+          ref={panelRef}
+          id="canvas-tools-options"
+          style={toolbarFlyoutStyle(flyoutPosition)}
+          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} flex w-36 flex-col overflow-y-auto rounded-lg bg-zinc-800 shadow-xl ring-1 ring-white/10`}
+        >
           {TOOLS.map(({ tool, label, icon: Icon }) => (
             <button
               key={tool}
