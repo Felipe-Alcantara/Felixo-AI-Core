@@ -4,7 +4,9 @@
 // functions, the same way the terminal menu already opens folders as projects.
 import { useEffect, useRef, useState } from 'react'
 import {
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   File as FileIcon,
   Folder,
   FolderOpen,
@@ -12,6 +14,7 @@ import {
   Play,
 } from 'lucide-react'
 import { buildRunCommand } from '../services/run-file-command'
+import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
 import {
   toolbarFlyoutClass,
   toolbarFlyoutStyle,
@@ -47,6 +50,12 @@ export function ProjectsMenu({
   toolsMenuOpen = false,
 }: ProjectsMenuProps) {
   const [open, setOpen] = useState(false)
+  const {
+    panelReady: optionsReady,
+    preparePanel,
+    resetPanel,
+    markPanelReady,
+  } = useDeferredExpansionPanel(open)
   const [browsing, setBrowsing] = useState<Browsing | null>(null)
   const [entries, setEntries] = useState<DirectoryEntry[] | null>(null)
   // The backend's own resolved absolute path for the folder being browsed —
@@ -57,11 +66,12 @@ export function ProjectsMenu({
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const flyoutPosition = useToolbarFlyoutPosition({
-    open,
+    open: open && optionsReady,
     toolsMenuOpen,
     containerRef,
     panelRef,
     panelWidth: 288,
+    placement: 'below',
   })
 
   useEffect(() => {
@@ -70,12 +80,13 @@ export function ProjectsMenu({
     }
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
+        resetPanel()
         setOpen(false)
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open])
+  }, [open, resetPanel])
 
   useEffect(() => {
     if (!browsing) {
@@ -139,6 +150,7 @@ export function ProjectsMenu({
       cwd: currentDirPath,
       label: `${entry.name} · ${browsing.project.name}`,
     })
+    resetPanel()
     setOpen(false)
     setBrowsing(null)
     setEntries(null)
@@ -149,25 +161,50 @@ export function ProjectsMenu({
     ? [browsing.project.name, ...browsing.relativePath.split('/').filter(Boolean)].join(' / ')
     : ''
 
+  const toggleOpen = () => {
+    if (open) {
+      resetPanel()
+      setOpen(false)
+      return
+    }
+
+    preparePanel()
+    setOpen(true)
+  }
+
   return (
-    <div ref={containerRef} className="relative w-36">
+    <div
+      ref={containerRef}
+      className={`relative transition-[width] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        open ? 'w-[18.5rem]' : 'w-36'
+      }`}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
+          markPanelReady()
+        }
+      }}
+    >
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleOpen}
         className="felixo-btn flex w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700"
         title="Abrir uma pasta e rodar arquivos dela num terminal"
+        aria-expanded={open}
+        aria-controls="canvas-projects-options"
       >
         <FolderOpen size={16} />
         Projetos
+        {open ? <ChevronUp className="ml-auto" size={14} /> : <ChevronDown className="ml-auto" size={14} />}
       </button>
 
-      {open && (
+      {open && optionsReady && (
         <div
           ref={panelRef}
+          id="canvas-projects-options"
           // Anchored to a button partway down the toolbar, so the height cap
           // is the room left below it, not a flat fraction of the viewport.
           style={toolbarFlyoutStyle(flyoutPosition)}
-          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-72 overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} w-72 overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
         >
           {!browsing ? (
             <>

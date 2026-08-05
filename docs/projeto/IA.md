@@ -1005,3 +1005,17 @@ TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erro
 RISCO RESIDUAL: a confirmação visual final ainda requer abrir Projetos no Electron real com uma lista longa, pois não há harness visual de DOM/Electron.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-05 — equivalência de Projetos com Ferramentas
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: comparar a animação completa de Ferramentas com Projetos, pois o padrão ainda não era equivalente.
+
+FEITO: validação feita no Electron em desenvolvimento. Projetos passou a usar a mesma sequência de Ferramentas: expansão de `w-36` para `w-[18.5rem]` em 620 ms, alternância do chevron, preparação adiada via `useDeferredExpansionPanel`, montagem após a expansão e flyout abaixo do acionador. A largura de conteúdo permanece em `w-72` para acomodar nomes de pastas; é a única diferença intencional. As listas internas mantêm a cascata item a item.
+
+TESTE: inspeção visual no Electron, `npm run lint`, `npm run build` e `git diff --check` concluídos sem erros. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
+
+RISCO RESIDUAL: conferir o fechamento com `prefers-reduced-motion` e uma lista extensa continua recomendado, apesar de o fluxo aberto ter sido validado visualmente.
+
+Estado final: concluído.
