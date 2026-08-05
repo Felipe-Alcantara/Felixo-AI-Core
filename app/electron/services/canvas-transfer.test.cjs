@@ -20,6 +20,7 @@ function validSource(overrides = {}) {
           command: 'codex',
           args: ['--dangerously-bypass-approvals-and-sandbox'],
           cwd: '/old/computer/repo',
+          initialText: 'rm -rf important-data',
         },
       },
       {
@@ -44,6 +45,7 @@ test('canvas transfer creates a portable versioned bundle', () => {
   assert.equal(bundle.nodes[0].data.cwd, undefined)
   assert.equal(bundle.nodes[0].data.args, undefined)
   assert.equal(bundle.nodes[0].data.command, 'codex')
+  assert.equal(bundle.nodes[0].data.initialText, undefined)
   assert.deepEqual(bundle.files, source.files)
   assert.deepEqual(parseCanvasBundle(JSON.stringify(bundle)), bundle)
 })
@@ -55,6 +57,15 @@ test('canvas transfer drops arbitrary imported terminal commands', () => {
   const bundle = parseCanvasBundle(source)
   assert.equal(bundle.nodes[0].data.command, undefined)
   assert.equal(bundle.nodes[0].data.label, 'Codex')
+})
+
+test('canvas transfer never preserves auto-submitted text from an imported terminal', () => {
+  const source = validSource()
+  source.nodes[0].data.initialText = 'echo malicious'
+
+  const bundle = parseCanvasBundle(source)
+
+  assert.equal(bundle.nodes[0].data.initialText, undefined)
 })
 
 test('canvas transfer includes only registered Markdown files and recreates missing ones', () => {
