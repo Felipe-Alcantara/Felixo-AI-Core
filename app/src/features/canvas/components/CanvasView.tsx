@@ -42,9 +42,19 @@ import {
 } from '../terminal/session-notifications'
 import {
   appendCanvasNotifications,
-  dismissCanvasNotificationsForNode,
+  clearReadCanvasNotifications,
+  countUnreadCanvasNotifications,
+  markAllCanvasNotificationsRead,
+  markCanvasNotificationRead,
+  markCanvasNotificationsReadForNode,
+  pruneCanvasNotifications,
+  removeCanvasNotification,
   type CanvasNotification,
 } from '../terminal/canvas-notifications'
+import {
+  readNotificationHistory,
+  saveNotificationHistory,
+} from '../services/notification-history-storage'
 import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
@@ -198,11 +208,28 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     () => getActionRequiredNodeIds(nodes, sessionSnapshots),
     [nodes, sessionSnapshots],
   )
-  const [notificationHistory, setNotificationHistory] = useState<CanvasNotification[]>([])
-  const notificationSequenceRef = useRef(0)
+  const [notificationHistory, setNotificationHistory] = useState<CanvasNotification[]>(
+    () => readNotificationHistory(),
+  )
+  // Restored ids carry their original sequence numbers; resume past the highest
+  // one so a new notification can never reuse an id still in the history.
+  const notificationSequenceRef = useRef(
+    notificationHistory.reduce((highest, notification) => {
+      const sequence = Number(notification.id.split(':').pop())
+      return Number.isFinite(sequence) ? Math.max(highest, sequence + 1) : highest
+    }, 0),
+  )
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null)
   const previousNotificationIdsRef = useRef<ReadonlySet<string>>(new Set())
-  const activeNotificationNodeIdsRef = useRef(new Set<string>())
+  // Seeded from the restored unread items so an agent that is still idle after a
+  // reload doesn't produce a second notification for the same turn.
+  const activeNotificationNodeIdsRef = useRef(
+    new Set(
+      notificationHistory
+        .filter((notification) => notification.readAt === null)
+        .map((notification) => notification.nodeId),
+    ),
+  )
   const acknowledgedNotificationPromptsRef = useRef(new Map<string, string | undefined>())
   const notificationIdsInitializedRef = useRef(false)
 
@@ -263,7 +290,25 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     })
   }, [actionableNotificationIds, hydrated, sessionSnapshots])
 
-  const notificationCount = notificationHistory.length
+  useEffect(() => {
+    saveNotificationHistory(notificationHistory)
+  }, [notificationHistory])
+
+  // Read items older than the retention window drop out of the history. Checked
+  // hourly so a long-lived window expires them without a reload.
+  useEffect(() => {
+    const prune = () =>
+      setNotificationHistory((current) => {
+        const pruned = pruneCanvasNotifications(current)
+        return pruned.length === current.length ? current : pruned
+      })
+
+    prune()
+    const timer = setInterval(prune, 60 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const notificationCount = countUnreadCanvasNotifications(notificationHistory)
   const miniMapNode = useCallback(
     (props: MiniMapNodeProps) => {
       const node = nodes.find((item) => item.id === props.id)
@@ -1276,9 +1321,53 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               )
               activeNotificationNodeIdsRef.current.delete(nodeId)
               setNotificationHistory((current) =>
-                dismissCanvasNotificationsForNode(current, nodeId),
+                markCanvasNotificationsReadForNode(current, nodeId),
               )
             }}
+            onMarkRead={(notificationId) => {
+              const target = notificationHistory.find(
+                (notification) => notification.id === notificationId,
+              )
+              if (target) {
+                acknowledgedNotificationPromptsRef.current.set(
+                  target.nodeId,
+                  sessionSnapshots[target.nodeId]?.lastPrompt,
+                )
+                activeNotificationNodeIdsRef.current.delete(target.nodeId)
+              }
+              setNotificationHistory((current) =>
+                markCanvasNotificationRead(current, notificationId),
+              )
+            }}
+            onMarkAllRead={() => {
+              notificationHistory.forEach((notification) => {
+                if (notification.readAt !== null) return
+                acknowledgedNotificationPromptsRef.current.set(
+                  notification.nodeId,
+                  sessionSnapshots[notification.nodeId]?.lastPrompt,
+                )
+                activeNotificationNodeIdsRef.current.delete(notification.nodeId)
+              })
+              setNotificationHistory((current) => markAllCanvasNotificationsRead(current))
+            }}
+            onRemove={(notificationId) => {
+              const target = notificationHistory.find(
+                (notification) => notification.id === notificationId,
+              )
+              if (target?.readAt === null) {
+                acknowledgedNotificationPromptsRef.current.set(
+                  target.nodeId,
+                  sessionSnapshots[target.nodeId]?.lastPrompt,
+                )
+                activeNotificationNodeIdsRef.current.delete(target.nodeId)
+              }
+              setNotificationHistory((current) =>
+                removeCanvasNotification(current, notificationId),
+              )
+            }}
+            onClearRead={() =>
+              setNotificationHistory((current) => clearReadCanvasNotifications(current))
+            }
           />
         )}
       />
