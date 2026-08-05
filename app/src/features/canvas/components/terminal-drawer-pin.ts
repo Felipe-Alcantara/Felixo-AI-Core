@@ -16,6 +16,27 @@ const WIDTH_STORAGE_KEY = 'felixo:terminal-drawer-width'
 
 /** Width of the collapsed rail: just the header buttons, no terminal. */
 export const COLLAPSED_WIDTH = 44
+const DRAWER_VIEWPORT_RESERVE = 200
+
+/** Maximum expanded width that leaves the canvas a usable sliver beside it. */
+export function getDrawerMaxWidth(
+  viewportWidth: number,
+  reserve = DRAWER_VIEWPORT_RESERVE,
+): number {
+  return Math.max(COLLAPSED_WIDTH, viewportWidth - reserve)
+}
+
+/** Clamps a width without creating an inverted range on a narrow viewport. */
+export function clampDrawerWidth(
+  width: number,
+  viewportWidth: number,
+  minWidth: number,
+  reserve = DRAWER_VIEWPORT_RESERVE,
+): number {
+  const maxWidth = getDrawerMaxWidth(viewportWidth, reserve)
+  const effectiveMin = Math.min(minWidth, maxWidth)
+  return Math.min(Math.max(width, effectiveMin), maxWidth)
+}
 
 export function readCollapsedPreference(storage: Pick<Storage, 'getItem'>): boolean {
   return storage.getItem(COLLAPSED_STORAGE_KEY) === '1'

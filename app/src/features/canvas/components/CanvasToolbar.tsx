@@ -27,7 +27,11 @@ import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
 import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
 import { NotificationsMenu } from './NotificationsMenu'
-import { toolbarFlyoutClass } from './toolbar-flyout'
+import {
+  toolbarFlyoutClass,
+  toolbarFlyoutStyle,
+  useToolbarFlyoutPosition,
+} from './toolbar-flyout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
 /** Shape shared by every toolbar button; the press depth comes from the
@@ -359,6 +363,14 @@ function NamedCreateButton({
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const flyoutPosition = useToolbarFlyoutPosition({
+    open,
+    toolsMenuOpen,
+    containerRef,
+    panelRef,
+    panelWidth: 224,
+  })
 
   useEffect(() => {
     if (!open) {
@@ -393,7 +405,9 @@ function NamedCreateButton({
 
       {open && (
         <div
-          className={`${toolbarFlyoutClass(toolsMenuOpen)} w-56 rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+          ref={panelRef}
+          style={toolbarFlyoutStyle(flyoutPosition)}
+          className={`${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-56 rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
         >
           <input
             autoFocus

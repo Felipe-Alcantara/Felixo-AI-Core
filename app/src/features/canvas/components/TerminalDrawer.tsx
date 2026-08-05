@@ -16,7 +16,9 @@ import {
 import { CopyButton } from './TerminalCopyButton'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import {
+  clampDrawerWidth,
   COLLAPSED_WIDTH,
+  getDrawerMaxWidth,
   readCollapsedPreference,
   readPinnedPreference,
   readWidthPreference,
@@ -59,12 +61,19 @@ export function TerminalDrawer({
   const mountRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(() =>
-    readWidthPreference(
-      localStorage,
-      Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.45))),
-      MIN_WIDTH,
-      Math.max(MIN_WIDTH, window.innerWidth - 200),
-    ),
+    (() => {
+      const maxWidth = getDrawerMaxWidth(window.innerWidth)
+      return readWidthPreference(
+        localStorage,
+        clampDrawerWidth(
+          Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.45))),
+          window.innerWidth,
+          MIN_WIDTH,
+        ),
+        Math.min(MIN_WIDTH, maxWidth),
+        maxWidth,
+      )
+    })(),
   )
   const draggingRef = useRef(false)
   const [resizing, setResizing] = useState(false)
@@ -98,7 +107,11 @@ export function TerminalDrawer({
     writeCollapsedPreference(localStorage, false)
   }, [])
 
-  const effectiveWidth = collapsed ? COLLAPSED_WIDTH : maximized ? window.innerWidth - 120 : width
+  const effectiveWidth = collapsed
+    ? COLLAPSED_WIDTH
+    : maximized
+      ? Math.max(COLLAPSED_WIDTH, window.innerWidth - 120)
+      : width
 
   // Click outside the drawer closes it, unless pinned.
   useEffect(() => {
@@ -158,8 +171,8 @@ export function TerminalDrawer({
       if (!draggingRef.current) {
         return
       }
-      const next = Math.max(MIN_WIDTH, window.innerWidth - event.clientX)
-      setWidth(Math.min(next, window.innerWidth - 200))
+      const next = window.innerWidth - event.clientX
+      setWidth(clampDrawerWidth(next, window.innerWidth, MIN_WIDTH))
     }
     const onMouseUp = () => {
       if (draggingRef.current) {
@@ -181,6 +194,11 @@ export function TerminalDrawer({
     return () => {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
+      if (draggingRef.current) {
+        draggingRef.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
     }
   }, [])
 
@@ -194,8 +212,8 @@ export function TerminalDrawer({
         width: collapsed
           ? `${COLLAPSED_WIDTH}px`
           : maximized
-            ? 'calc(100vw - 120px)'
-            : `min(${width}px, 75vw)`,
+            ? 'max(44px, calc(100vw - 120px))'
+            : `min(${width}px, max(${COLLAPSED_WIDTH}px, calc(100vw - 200px)))`,
         // Animate the collapse/maximize toggles, but never the resize drag —
         // the edge must track the pointer 1:1.
         transition: resizing ? undefined : 'width 320ms cubic-bezier(0.16,1,0.3,1)',

@@ -16,6 +16,11 @@ import {
   type AgentLaunchPreferences,
 } from '../services/agent-launch-preferences'
 import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
+import {
+  toolbarFlyoutClass,
+  toolbarFlyoutStyle,
+  useToolbarFlyoutPosition,
+} from './toolbar-flyout'
 
 type TerminalMenuProject = { id: string; name: string; path: string }
 
@@ -74,7 +79,16 @@ export function TerminalMenu({
   // agent setup instead of repeating "configure, open" once per terminal.
   const [queue, setQueue] = useState<NewTerminalOptions[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const planningFileInputRef = useRef<HTMLInputElement>(null)
+  const flyoutPosition = useToolbarFlyoutPosition({
+    open: open && settingsReady,
+    toolsMenuOpen,
+    containerRef,
+    panelRef,
+    panelWidth: 256,
+    placement: 'below',
+  })
 
   const agent = agentValue === SHELL_AGENT_VALUE ? undefined : getAgent(agentValue)
   const effortLevels = agent ? getEffortLevels(agent, model) : null
@@ -229,12 +243,12 @@ export function TerminalMenu({
 
       {open && settingsReady && (
         <div
+          ref={panelRef}
           id={`${fieldIdPrefix}-settings`}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          className={`felixo-anim-sequential-panel absolute top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10 transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          toolsMenuOpen ? 'left-[calc(18.5rem+0.5rem)]' : 'left-[calc(9rem+0.5rem)]'
-          }`}
+          style={toolbarFlyoutStyle(flyoutPosition)}
+          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10`}
         >
           <label htmlFor={`${fieldIdPrefix}-name`} className="mb-1 block text-xs font-medium text-zinc-400">
             Nome (opcional)

@@ -1,30 +1,34 @@
+import { useLayoutEffect, useState, type CSSProperties, type RefObject } from 'react'
+
 /**
  * Where a toolbar popover opens.
  *
  * The toolbar is a single vertical column of 9rem buttons, all in one stacking
- * context, so a popover that opens DOWNWARDS is painted under the buttons that
- * follow it in the DOM — it showed up behind "Nota"/"Arquivo"/"Grupo". Every
- * toolbar popover therefore opens to the RIGHT of the column instead (the
- * behaviour "Ferramentas" and "Agente" already had), lifted above the toolbar
- * with a z-index.
+ * context, so a side flyout needs an explicit z-index and a measured horizontal
+ * offset to remain usable while the column grows.
  *
  * The offset accounts for the tools menu, which widens the column to 18.5rem
  * while open; the popover slides over to clear it, with the same transition
  * the other flyouts use so it tracks that widening instead of jumping.
  *
- * Both class strings are written out in full (no interpolation) because
- * Tailwind generates utilities by scanning the source text — a composed
- * `left-[calc(${column}+0.5rem)]` would never be emitted.
+ * The horizontal offset is measured at runtime. The toolbar can be narrower
+ * than a CSS viewport after window resizing or browser zoom, so a fixed
+ * `left-[calc(...)]` can place the entire panel outside the visible area.
  */
-const BESIDE_TOOLBAR = 'left-[calc(9rem+0.5rem)]'
-const BESIDE_OPEN_TOOLS_MENU = 'left-[calc(18.5rem+0.5rem)]'
-
 const FLYOUT_BASE =
-  'absolute top-0 z-30 transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+  'absolute z-30 transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+
+const TOOLBAR_OFFSET = 9 * 16 + 8
+const OPEN_TOOLS_OFFSET = 18.5 * 16 + 8
+const DEFAULT_VIEWPORT_MARGIN = 16
+
+export type ToolbarFlyoutPlacement = 'beside' | 'below'
 
 /** Tailwind classes placing a popover beside the toolbar column. */
-export function toolbarFlyoutClass(toolsMenuOpen: boolean): string {
-  return `${FLYOUT_BASE} ${toolsMenuOpen ? BESIDE_OPEN_TOOLS_MENU : BESIDE_TOOLBAR}`
+export function toolbarFlyoutClass(
+  placement: ToolbarFlyoutPlacement = 'beside',
+): string {
+  return `${FLYOUT_BASE} ${placement === 'below' ? 'top-full mt-2' : 'top-0'}`
 }
 
 /** Breathing room kept between a flyout and the bottom of the window. */
@@ -42,4 +46,120 @@ export function flyoutMaxHeight(
   margin = VIEWPORT_MARGIN,
 ): number {
   return Math.max(0, viewportHeight - anchorTop - margin)
+}
+
+export type ToolbarFlyoutPosition = {
+  left: number
+  maxHeight: number
+  maxWidth: string
+}
+
+/** Returns the panel's left offset relative to its toolbar anchor. */
+export function flyoutLeft(
+  containerLeft: number,
+  desiredOffset: number,
+  viewportWidth: number,
+  panelWidth: number,
+  margin = DEFAULT_VIEWPORT_MARGIN,
+): number {
+  const availableWidth = Math.max(0, viewportWidth - margin * 2)
+  const width = Math.min(Math.max(0, panelWidth), availableWidth)
+  const desiredLeft = containerLeft + desiredOffset
+  const maxLeft = Math.max(margin, viewportWidth - margin - width)
+  const viewportLeft = Math.min(Math.max(margin, desiredLeft), maxLeft)
+  return Math.round(viewportLeft - containerLeft)
+}
+
+type UseToolbarFlyoutPositionOptions = {
+  open: boolean
+  toolsMenuOpen: boolean
+  containerRef?: RefObject<HTMLElement | null>
+  panelRef: RefObject<HTMLElement | null>
+  panelWidth: number
+  placement?: ToolbarFlyoutPlacement
+  margin?: number
+}
+
+/**
+ * Keeps a toolbar flyout inside the CSS viewport while preserving the local
+ * absolute positioning used by the toolbar animations. The panel is measured
+ * after mount and re-positioned when the toolbar, panel, or viewport changes.
+ */
+export function useToolbarFlyoutPosition({
+  open,
+  toolsMenuOpen,
+  containerRef,
+  panelRef,
+  panelWidth,
+  placement = 'beside',
+  margin = DEFAULT_VIEWPORT_MARGIN,
+}: UseToolbarFlyoutPositionOptions): ToolbarFlyoutPosition | undefined {
+  const [position, setPosition] = useState<ToolbarFlyoutPosition>()
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const container = containerRef?.current ?? panelRef.current?.parentElement
+    if (!container) {
+      return
+    }
+
+    let frameId = 0
+    const update = () => {
+      const containerRect = container.getBoundingClientRect()
+      const measuredWidth = panelRef.current?.getBoundingClientRect().width ?? panelWidth
+      const desiredOffset = toolsMenuOpen ? OPEN_TOOLS_OFFSET : TOOLBAR_OFFSET
+      const anchorTop = placement === 'below' ? containerRect.bottom : containerRect.top
+
+      setPosition({
+        left: flyoutLeft(
+          containerRect.left,
+          desiredOffset,
+          window.innerWidth,
+          measuredWidth,
+          margin,
+        ),
+        maxHeight: flyoutMaxHeight(anchorTop, window.innerHeight, margin),
+        maxWidth: `calc(100vw - ${margin * 2}px)`,
+      })
+    }
+    const requestUpdate = () => {
+      window.cancelAnimationFrame(frameId)
+      frameId = window.requestAnimationFrame(update)
+    }
+
+    requestUpdate()
+    window.addEventListener('resize', requestUpdate)
+    window.addEventListener('scroll', requestUpdate, true)
+
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(requestUpdate)
+    observer?.observe(container)
+    if (panelRef.current) {
+      observer?.observe(panelRef.current)
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.removeEventListener('resize', requestUpdate)
+      window.removeEventListener('scroll', requestUpdate, true)
+      observer?.disconnect()
+    }
+  }, [containerRef, margin, open, panelRef, panelWidth, placement, toolsMenuOpen])
+
+  return position
+}
+
+/** Converts a measured position into the inline style expected by a panel. */
+export function toolbarFlyoutStyle(position?: ToolbarFlyoutPosition): CSSProperties | undefined {
+  if (!position) {
+    return undefined
+  }
+
+  return {
+    left: `${position.left}px`,
+    maxHeight: `${position.maxHeight}px`,
+    maxWidth: position.maxWidth,
+  }
 }

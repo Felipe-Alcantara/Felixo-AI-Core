@@ -1,10 +1,15 @@
 import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Trash2, X } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Node } from '@xyflow/react'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
 import type { CanvasNotification } from '../terminal/canvas-notifications'
 import type { CanvasNodeData } from '../types'
+import {
+  toolbarFlyoutClass,
+  toolbarFlyoutStyle,
+  useToolbarFlyoutPosition,
+} from './toolbar-flyout'
 
 type NotificationsPanelProps = {
   nodes: Node<CanvasNodeData>[]
@@ -41,6 +46,14 @@ export function NotificationsPanel({
   onClearRead,
 }: NotificationsPanelProps) {
   const [filter, setFilter] = useState<HistoryFilter>('unread')
+  const panelRef = useRef<HTMLElement>(null)
+  const flyoutPosition = useToolbarFlyoutPosition({
+    open: open && ready,
+    toolsMenuOpen,
+    panelRef,
+    panelWidth: 320,
+    placement: 'below',
+  })
 
   // Reopening the panel always starts on what still needs attention. Adjusted
   // during render (React's documented pattern for deriving state from a prop
@@ -74,10 +87,10 @@ export function NotificationsPanel({
 
   return (
     <section
+      ref={panelRef}
       aria-label="Notificações dos agentes"
-      className={`felixo-anim-sequential-panel absolute top-full z-40 mt-2 w-80 max-w-[calc(100vw-12rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        toolsMenuOpen ? 'left-[calc(18.5rem+0.5rem)]' : 'left-[calc(9rem+0.5rem)]'
-      }`}
+      style={toolbarFlyoutStyle(flyoutPosition)}
+      className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} w-80 overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl`}
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-red-400" />
