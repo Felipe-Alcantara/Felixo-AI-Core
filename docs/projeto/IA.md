@@ -977,3 +977,17 @@ TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erro
 RISCO RESIDUAL: requer conferência visual no Electron real, especialmente com zoom reduzido e `prefers-reduced-motion`, pois não há harness visual de DOM/Electron.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-05 — sequência completa dos menus Projetos e criação
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: tornar a animação de Projetos realmente igual à de Ferramentas, Agente e Notificações; apenas a classe de cascata não reproduzia a expansão e o momento de montagem do painel.
+
+FEITO: Projetos, Nota, Arquivo e Grupo agora usam `useDeferredExpansionPanel`, expandem o contêiner com a mesma curva e duração dos outros menus, aguardam o ponto sincronizado da expansão e só então exibem o flyout em cascata. Fechamento por botão, clique externo e criação/execução também limpam o estado de preparação.
+
+TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erros. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
+
+RISCO RESIDUAL: a sequência exige conferência visual no Electron real, sobretudo em zoom reduzido e com `prefers-reduced-motion`, pois o repositório não possui harness visual de DOM/Electron.
+
+Estado final: concluído.
