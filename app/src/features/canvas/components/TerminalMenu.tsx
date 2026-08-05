@@ -345,7 +345,7 @@ export function TerminalMenu({
                 <button
                   type="button"
                   onClick={() => planningFileInputRef.current?.click()}
-                  className="rounded bg-zinc-700 px-2 text-xs text-zinc-200 hover:bg-zinc-600"
+                  className="felixo-btn-icon rounded bg-zinc-700 px-2 text-xs text-zinc-200 hover:bg-zinc-600"
                   title="Selecionar arquivo de planejamento"
                   aria-label="Selecionar arquivo de planejamento"
                 >
