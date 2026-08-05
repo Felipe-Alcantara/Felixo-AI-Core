@@ -167,7 +167,7 @@ export function ProjectsMenu({
           // Anchored to a button partway down the toolbar, so the height cap
           // is the room left below it, not a flat fraction of the viewport.
           style={toolbarFlyoutStyle(flyoutPosition)}
-          className={`${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-72 overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-72 overflow-auto rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
         >
           {!browsing ? (
             <>

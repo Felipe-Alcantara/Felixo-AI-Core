@@ -963,3 +963,17 @@ TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erro
 RISCO RESIDUAL: a conferência visual de pressão, foco por teclado e `prefers-reduced-motion` ainda deve ser feita no Electron real, pois o repositório não possui harness visual de DOM/Electron.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-05 — cascata nos flyouts da barra do canvas
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: completar a animação nos controles como “Projetos”, que já tinham feedback de clique, mas ainda abriam o painel sem a cascata visual dos demais menus da barra.
+
+FEITO: os flyouts de Projetos e de criação de Nota, Arquivo e Grupo agora usam `felixo-anim-sequential-panel`, igual a Ferramentas, Agente e Notificações. O posicionamento responsivo, acessibilidade e comportamento de abertura existentes foram preservados.
+
+TESTE: `npm run lint`, `npm run build` e `git diff --check` concluídos sem erros. O build mantém o aviso preexistente de chunk Vite acima de 500 kB.
+
+RISCO RESIDUAL: requer conferência visual no Electron real, especialmente com zoom reduzido e `prefers-reduced-motion`, pois não há harness visual de DOM/Electron.
+
+Estado final: concluído.
