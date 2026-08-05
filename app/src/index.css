@@ -328,6 +328,52 @@ div::-webkit-scrollbar-thumb {
   transform-origin: top;
 }
 
+/**
+ * Bottom-right dock collapse: the panel folds down and to the side, shrinking
+ * into the puck that sits in the same corner (and unfolds back out of it).
+ * Both states are always mounted and share the corner as transform-origin, so
+ * the two halves of the animation line up into one continuous motion.
+ */
+.felixo-anim-corner-dock {
+  transform-origin: bottom right;
+  transition:
+    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.felixo-anim-corner-dock-collapsed {
+  transform: translate(18px, 18px) scale(0.42);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.felixo-anim-corner-dock-expanded {
+  transform: translate(0, 0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The puck is the same motion in reverse: it grows in as the panel folds away. */
+.felixo-anim-corner-puck {
+  transform-origin: bottom right;
+  transition:
+    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.felixo-anim-corner-puck-hidden {
+  transform: scale(0.6);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.felixo-anim-corner-puck-shown {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .felixo-anim-sequential-panel {
   animation: felixo-tools-list-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: top left;
@@ -465,6 +511,17 @@ div::-webkit-scrollbar-thumb {
   .felixo-anim-sequential-panel,
   .felixo-anim-sequential-panel > * {
     animation: none;
+  }
+
+  /* Collapsing still hides/shows instantly — only the travel is dropped. */
+  .felixo-anim-corner-dock,
+  .felixo-anim-corner-puck {
+    transition: none;
+  }
+
+  .felixo-anim-corner-dock-collapsed,
+  .felixo-anim-corner-puck-hidden {
+    transform: none;
   }
 
   .felixo-toolbar-expanding,
