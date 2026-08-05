@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Node } from '@xyflow/react'
 import {
+  ChevronDown,
+  ChevronUp,
   FileText,
   GripVertical,
   Group,
@@ -25,6 +27,11 @@ import {
   previewIndex,
   rowShift,
 } from './terminals-panel-reorder'
+import {
+  browserStorage,
+  readDockCollapsed,
+  writeDockCollapsed,
+} from './terminals-panel-collapse'
 
 type TerminalsPanelProps = {
   nodes: Node<CanvasNodeData>[]
@@ -100,6 +107,9 @@ export function TerminalsPanel({
   // live here (not inside each row) so the header's "Enviar todas" button can
   // flush every non-empty draft in one click.
   const [composeMode, setComposeMode] = useState(false)
+  // Collapsed the dock is just its title bar, so the canvas' bottom-right
+  // corner stays usable. The choice is remembered across sessions.
+  const [collapsed, setCollapsed] = useState(() => readDockCollapsed(browserStorage()))
   const [drafts, setDrafts] = useState<TerminalDrafts>({})
   // Reorder-by-drag, driven by pointer events rather than HTML5 drag-and-drop:
   // the row must travel INSIDE the dock, pushing its neighbours aside, instead
@@ -120,6 +130,13 @@ export function TerminalsPanel({
   const listRef = useRef<HTMLUListElement>(null)
   /** Pointer Y where the current drag began, so moves are a pure delta. */
   const dragStartYRef = useRef(0)
+
+  const setCollapsedPreference = (next: boolean) => {
+    setCollapsed(next)
+    writeDockCollapsed(next, browserStorage())
+  }
+
+  const toggleCollapsed = () => setCollapsedPreference(!collapsed)
 
   const setDraft = (nodeId: string, text: string) => {
     setDrafts((current) => ({ ...current, [nodeId]: text }))
@@ -305,16 +322,61 @@ export function TerminalsPanel({
   }
 
   return (
-    <div data-terminals-dock className="absolute bottom-4 right-4 z-20 flex max-h-[60vh] w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl">
+    // The wrapper is only an anchor: it never eats canvas clicks, and each of
+    // the two states re-enables pointer events for itself while visible.
+    <div data-terminals-dock className="pointer-events-none absolute bottom-4 right-4 z-20">
+      {/* Collapsed, the dock shrinks away into this puck in the corner. Both
+          states share the same bottom-right anchor, so the scale animation
+          reads as the panel folding down and to the side into the button. */}
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        title="Abrir elementos"
+        aria-label="Abrir elementos"
+        aria-expanded={false}
+        aria-hidden={!collapsed}
+        tabIndex={collapsed ? 0 : -1}
+        className={`felixo-btn felixo-anim-corner-puck absolute bottom-0 right-0 flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 shadow-2xl hover:bg-zinc-800 ${
+          collapsed ? 'felixo-anim-corner-puck-shown' : 'felixo-anim-corner-puck-hidden'
+        }`}
+      >
+        <TerminalIcon size={15} className="shrink-0" />
+        <span className="text-xs tabular-nums text-zinc-400">{elements.length}</span>
+        <ChevronUp size={14} className="shrink-0 text-zinc-400" />
+      </button>
+
+      <div
+        className={`felixo-anim-corner-dock flex max-h-[60vh] w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
+          collapsed
+            ? 'felixo-anim-corner-dock-collapsed'
+            : 'felixo-anim-corner-dock-expanded'
+        }`}
+        aria-hidden={collapsed}
+      >
       <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
-        <TerminalIcon size={15} />
-        Elementos
-        <span className="ml-auto text-xs font-normal text-zinc-500">
-          {elements.length}
-        </span>
         <button
           type="button"
-          onClick={() => setComposeMode((current) => !current)}
+          onClick={toggleCollapsed}
+          title="Recolher elementos"
+          aria-label="Recolher elementos"
+          aria-expanded={!collapsed}
+          tabIndex={collapsed ? -1 : 0}
+          className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:text-white"
+        >
+          <TerminalIcon size={15} className="shrink-0" />
+          <span className="truncate">Elementos</span>
+          <span className="ml-auto text-xs font-normal text-zinc-500">
+            {elements.length}
+          </span>
+          <ChevronDown size={14} className="shrink-0 text-zinc-400" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            // Turning compose mode on from a collapsed dock must reveal the rows.
+            setComposeMode((current) => !current)
+            if (collapsed) setCollapsedPreference(false)
+          }}
           title="Enviar mensagens diferentes para vários terminais"
           aria-label="Alternar modo de enviar mensagens em massa"
           aria-pressed={composeMode}
@@ -326,7 +388,7 @@ export function TerminalsPanel({
         </button>
       </div>
       {composeMode && (
-        <div className="border-b border-white/10 px-3 py-2">
+        <div className="felixo-anim-sequential-panel border-b border-white/10 px-3 py-2">
           <button
             type="button"
             onClick={sendAllDrafts}
@@ -340,7 +402,7 @@ export function TerminalsPanel({
       )}
       <ul
         ref={listRef}
-        tabIndex={0}
+        tabIndex={collapsed ? -1 : 0}
         onKeyDown={(event) => {
           if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             event.preventDefault()
@@ -393,6 +455,7 @@ export function TerminalsPanel({
           />
         ))}
       </ul>
+      </div>
     </div>
   )
 }
