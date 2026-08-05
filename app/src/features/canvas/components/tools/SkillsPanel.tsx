@@ -154,7 +154,7 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
         </p>
       )}
 
-      <ul className="flex flex-col gap-2">
+      <ul className="felixo-anim-stagger-list flex flex-col gap-2">
         {skills.map((skill) => (
           <li key={skill.id} className="rounded bg-zinc-800/60 p-2">
             <div className="mb-1 flex items-center gap-1">

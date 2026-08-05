@@ -148,7 +148,7 @@ export function NotificationsPanel({
             : 'Nenhuma notificação nos últimos 7 dias.'}
         </div>
       ) : (
-        <div className="max-h-[50vh] overflow-auto p-1.5">
+        <div className="felixo-anim-stagger-list max-h-[50vh] overflow-auto p-1.5">
           {visibleItems.map(({ notification, node }) => {
             const unread = notification.readAt === null
             return (

@@ -101,7 +101,7 @@ export function ProjectsPanel({ onClose, onProjectsChanged }: ProjectsPanelProps
       {projects.length === 0 ? (
         <p className="text-sm text-zinc-500">Nenhum projeto ainda.</p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="felixo-anim-stagger-list flex flex-col gap-1">
           {projects.map((project) => (
             <li
               key={project.id}

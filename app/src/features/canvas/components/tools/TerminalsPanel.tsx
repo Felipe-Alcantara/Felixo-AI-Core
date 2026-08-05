@@ -433,7 +433,11 @@ export function TerminalsPanel({
             commitActive()
           }
         }}
-        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-emerald-500/50"
+        className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-emerald-500/50 ${
+          // The stagger plays as the dock unfolds; while a row is being dragged
+          // it must not re-run and fight the drag's own transform.
+          collapsed || drag ? '' : 'felixo-anim-stagger-list'
+        }`}
       >
         {elements.map((node, index) => (
           <ElementRow
@@ -518,7 +522,7 @@ function ElementRow({
           ? // No transition on the dragged row: it must track the pointer
             // 1:1, while the rows making room animate into place.
             'relative z-10 bg-zinc-800 shadow-lg ring-1 ring-emerald-500/40'
-          : 'transition-transform duration-150'
+          : 'transition-transform duration-[280ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
       }`}
     >
       <div className="flex items-start">

@@ -16,6 +16,7 @@ import {
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
 import { useExitAnimation } from '../hooks/useExitAnimation'
+import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
@@ -87,7 +88,7 @@ export function TerminalDrawer({
   )
   const draggingRef = useRef(false)
   const [resizing, setResizing] = useState(false)
-  const { closing, close } = useExitAnimation(180, onClose)
+  const { closing, close } = useExitAnimation(DRAWER_EXIT_MS, onClose)
   const [pinned, setPinned] = useState(() => readPinnedPreference(localStorage))
   // Collapsed keeps the session running and the terminal mounted — the drawer
   // just shrinks to a rail, so reopening is instant and nothing is lost.
@@ -270,7 +271,7 @@ export function TerminalDrawer({
             : `min(${width}px, max(${COLLAPSED_WIDTH}px, calc(100vw - 200px)))`,
         // Animate the collapse/maximize toggles, but never the resize drag —
         // the edge must track the pointer 1:1.
-        transition: resizing ? undefined : 'width 320ms cubic-bezier(0.16,1,0.3,1)',
+        transition: resizing ? undefined : 'width 560ms cubic-bezier(0.16,1,0.3,1)',
       }}
     >
       {!collapsed && !maximized && (
@@ -290,7 +291,7 @@ export function TerminalDrawer({
           aria-label={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
           aria-expanded={!collapsed}
           title={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
-          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 transition-transform duration-300 hover:bg-white/10 hover:text-zinc-100"
+          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 transition-transform duration-500 hover:bg-white/10 hover:text-zinc-100"
         >
           {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>

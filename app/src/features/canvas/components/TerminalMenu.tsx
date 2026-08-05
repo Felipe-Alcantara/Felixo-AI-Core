@@ -211,7 +211,7 @@ export function TerminalMenu({
   return (
     <div
       ref={containerRef}
-      className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`relative transition-[width] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
         open ? 'w-[25.5rem]' : 'w-36'
       }`}
       onTransitionEnd={(event) => {

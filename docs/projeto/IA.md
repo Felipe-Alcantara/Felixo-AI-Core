@@ -603,6 +603,23 @@ TESTE: reescrito `terminals-panel-navigation.test.ts` — o teste antigo de ".xt
 VALIDAÇÃO: `npm run lint`, `npm run build`, `npx vitest run` (39 pass) sem erros. Confirmado ao vivo no Electron real (não só unitário): abrir um terminal shell puro, focar seu textarea de verdade, apertar Shift+Seta duas vezes seguidas (down então up) — o dock avança e depois volta corretamente (wraparound incluso), com o textarea do terminal permanecendo com foco real (`defaultPrevented=true` nos dois casos). Perfis de userData de teste e o driver Playwright descartável foram removidos ao final; nada foi commitado sobre isso.
 Estado final: concluído.
 
+## Registro de Trabalho — 2026-08-05 — Resolução do conflito de integração
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: corrigir o conflito surgido ao integrar os commits remotos de animação do canvas com a correção de posicionamento responsivo e o fluxo de passagem de responsabilidade.
+
+FEITO:
+- Resolvidos os conflitos em `NotificationsPanel`, `TerminalMenu`, `toolbar-flyout` e `CanvasToolsMenu`.
+- Mantido o posicionamento medido por viewport/zoom e o limite de altura dos flyouts, junto com as animações desaceleradas e as listas em cascata recebidas dos commits remotos.
+- Removidos todos os marcadores de conflito e mantida a integração dos testes e do handoff.
+
+TESTE: lint, `npm run build`, `npx vitest run` (180 testes), `npm test` (421 testes) e `git diff --check` concluídos sem erros.
+
+RISCO RESIDUAL: permanece apenas o aviso preexistente de chunk Vite acima de 500 kB e a necessidade de conferência visual manual das animações no Electron.
+
+Estado final: concluído.
+
 BUG relatado pelo usuário na sequência: "o chat ainda está em cima de texto no terminal" — mesmo após mover o botão de `bottom-4 right-4` para `right-4 top-4` no início da sessão.
 CAUSA: mover pra outro canto fixo não resolve o problema de fundo — blocos do canvas (incluindo terminais) vivem em espaço de canvas e podem ser arrastados/panados para qualquer lugar da tela, inclusive por baixo de qualquer canto fixo. Além disso o novo canto escolhido (`top-right`) já tinha o `MiniMap` do React Flow (`CanvasView.tsx`, `position="top-right"`) — o botão de chat também sobrepunha o próprio minimapa.
 FIX definitivo (o que a task pedia desde o início — "colocar ela junto com as funções auxiliares"): o botão de Chat deixou de ser um elemento `fixed` flutuante independente em `App.tsx` e virou um botão de verdade DENTRO da `CanvasToolbar` (junto com Ferramentas/Terminal/Nota/Arquivo/Grupo/etc.), recolhendo/aparecendo junto com o resto da barra pelo toggle retrátil. `CanvasView` e `ChatWorkspace` ganharam props (`onOpenChat`, `onBack`) para trocar de tela; `ChatWorkspace` ganhou um botão "Canvas" no canto superior direito (perto do badge de runtime) para voltar. Não sobra nenhum elemento `position: fixed` na tela do canvas.
