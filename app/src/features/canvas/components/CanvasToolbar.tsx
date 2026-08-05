@@ -407,7 +407,7 @@ function NamedCreateButton({
         <div
           ref={panelRef}
           style={toolbarFlyoutStyle(flyoutPosition)}
-          className={`${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-56 rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-56 rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
         >
           <input
             autoFocus
