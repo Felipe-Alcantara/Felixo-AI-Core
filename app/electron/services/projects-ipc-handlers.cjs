@@ -138,25 +138,31 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
         return { ok: false, message: 'Caminho do projeto invalido.' }
       }
 
-      const rootPath = path.resolve(params.rootPath)
-      const targetPath =
-        typeof params.subPath === 'string' && params.subPath
-          ? path.resolve(rootPath, params.subPath)
-          : rootPath
-
-      const withSep = (p) => (p.endsWith(path.sep) ? p : p + path.sep)
-      if (targetPath !== rootPath && !withSep(targetPath).startsWith(withSep(rootPath))) {
-        return { ok: false, message: 'Diretorio fora do projeto.' }
-      }
+      const { rootPath, targetPath } = resolvePathInside(
+        params.rootPath,
+        typeof params.subPath === 'string' ? params.subPath : '',
+      )
 
       const entries = fs
         .readdirSync(targetPath, { withFileTypes: true })
         .filter((entry) => !entry.name.startsWith('.') && entry.name !== 'node_modules')
-        .map((entry) => ({
-          name: entry.name,
-          isDirectory: entry.isDirectory(),
-          path: path.join(targetPath, entry.name),
-        }))
+        .map((entry) => {
+          const entryPath = path.join(targetPath, entry.name)
+          try {
+            const realEntryPath = fs.realpathSync(entryPath)
+            if (!isPathInside(rootPath, realEntryPath)) {
+              return null
+            }
+          } catch {
+            return null
+          }
+          return {
+            name: entry.name,
+            isDirectory: entry.isDirectory(),
+            path: entryPath,
+          }
+        })
+        .filter(Boolean)
         .sort((a, b) =>
           a.isDirectory !== b.isDirectory
             ? a.isDirectory
@@ -182,20 +188,34 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
         return { ok: false, message: 'Parametros invalidos para indexar docs.' }
       }
 
-      const docsPath = path.resolve(params.projectPath, params.docsDirectory)
+      const projectPath = fs.realpathSync(path.resolve(params.projectPath))
+      const docsCandidate = path.resolve(projectPath, params.docsDirectory)
 
-      if (!docsPath.startsWith(path.resolve(params.projectPath))) {
+      if (!isPathInside(projectPath, docsCandidate)) {
         return { ok: false, message: 'Diretorio de docs fora do projeto.' }
       }
 
-      if (!fs.existsSync(docsPath)) {
-        return { ok: true, entries: [], docsPath }
+      if (!fs.existsSync(docsCandidate)) {
+        return { ok: true, entries: [], docsPath: docsCandidate }
+      }
+
+      const docsPath = fs.realpathSync(docsCandidate)
+      if (!isPathInside(projectPath, docsPath)) {
+        return { ok: false, message: 'Diretorio de docs fora do projeto.' }
       }
 
       const MAX_FILES = 50
       const files = fs
         .readdirSync(docsPath)
         .filter((f) => /\.(md|txt|markdown)$/i.test(f))
+        .filter((filename) => {
+          try {
+            const filePath = fs.realpathSync(path.join(docsPath, filename))
+            return isPathInside(docsPath, filePath) && fs.statSync(filePath).isFile()
+          } catch {
+            return false
+          }
+        })
         .sort()
         .slice(0, MAX_FILES)
 
@@ -210,6 +230,27 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
       return toErrorResult(error, 'Erro ao indexar diretorio de docs.')
     }
   })
+}
+
+/** Resolves an existing path and rejects lexical or symlink escapes. */
+function resolvePathInside(rootPath, childPath = '') {
+  const resolvedRoot = fs.realpathSync(path.resolve(rootPath))
+  const resolvedTarget = fs.realpathSync(path.resolve(resolvedRoot, childPath))
+
+  if (!isPathInside(resolvedRoot, resolvedTarget)) {
+    throw new Error('Diretorio fora do projeto.')
+  }
+
+  return { rootPath: resolvedRoot, targetPath: resolvedTarget }
+}
+
+function isPathInside(rootPath, targetPath) {
+  const normalizedRoot = path.resolve(rootPath)
+  const normalizedTarget = path.resolve(targetPath)
+  return (
+    normalizedTarget === normalizedRoot ||
+    normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+  )
 }
 
 function readFirstMeaningfulLine(filePath) {
@@ -258,5 +299,7 @@ function toErrorResult(error, fallbackMessage) {
 
 module.exports = {
   ACTIVE_PROJECT_IDS_KEY,
+  isPathInside,
   registerProjectsIpcHandlers,
+  resolvePathInside,
 }

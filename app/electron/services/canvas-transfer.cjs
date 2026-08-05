@@ -63,7 +63,17 @@ function normalizeCanvasBundle(value) {
     if (node.type === 'terminal') {
       // Paths and CLI arguments are machine-specific and could execute imported
       // instructions. Keep only known agent binaries, launched with safe defaults.
-      const { cwd: _cwd, args: _args, command, ...portableData } = node.data
+      // A terminal mounts a fresh PTY and automatically submits `initialText`.
+      // Keeping it in an imported package would turn a crafted .fxcanvas into
+      // arbitrary command/prompt execution as soon as the node is mounted.
+      // Machine-specific args/cwd are also intentionally not portable.
+      const {
+        cwd: _cwd,
+        args: _args,
+        initialText: _initialText,
+        command,
+        ...portableData
+      } = node.data
       return {
         ...node,
         data: {
