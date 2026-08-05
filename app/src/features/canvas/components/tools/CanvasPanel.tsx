@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useExitAnimation } from '../../hooks/useExitAnimation'
+import { PANEL_EXIT_MS } from '../../services/animation-timing'
 
 type CanvasPanelProps = {
   title: string
@@ -23,7 +24,7 @@ export function CanvasPanel({
   children,
   widthClassName = 'w-80',
 }: CanvasPanelProps) {
-  const { closing, close } = useExitAnimation(160, onClose)
+  const { closing, close } = useExitAnimation(PANEL_EXIT_MS, onClose)
 
   return (
     <div

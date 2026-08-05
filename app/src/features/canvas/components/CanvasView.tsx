@@ -128,7 +128,8 @@ type RestoredAgentTerminals = {
 }
 
 const AGENT_MATRIX_MOVING_CLASS = 'felixo-agent-matrix-moving'
-const AGENT_MATRIX_ANIMATION_MS = 480
+/** Must match `.felixo-agent-matrix-moving` in index.css. */
+const AGENT_MATRIX_ANIMATION_MS = 820
 
 function addCssClass(current: string | undefined, added: string): string {
   return [...new Set([...(current?.split(/\s+/) ?? []), added].filter(Boolean))].join(' ')

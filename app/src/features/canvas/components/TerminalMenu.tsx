@@ -197,7 +197,7 @@ export function TerminalMenu({
   return (
     <div
       ref={containerRef}
-      className={`relative transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`relative transition-[width] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
         open ? 'w-[25.5rem]' : 'w-36'
       }`}
       onTransitionEnd={(event) => {
@@ -232,7 +232,7 @@ export function TerminalMenu({
           id={`${fieldIdPrefix}-settings`}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          className={`felixo-anim-sequential-panel absolute top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10 transition-[left] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          className={`felixo-anim-sequential-panel absolute top-full z-30 mt-2 max-h-[calc(100vh-6rem)] w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10 transition-[left] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
           toolsMenuOpen ? 'left-[calc(18.5rem+0.5rem)]' : 'left-[calc(9rem+0.5rem)]'
           }`}
         >
