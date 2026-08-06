@@ -251,6 +251,24 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     }
   }, [])
 
+  // Reconciles history against the live canvas once on load: notifications
+  // left over from a node deleted in a previous session (or restored from
+  // storage before this node ever existed) would otherwise keep counting
+  // toward the badge forever, since the panel already hides anything whose
+  // node isn't a live terminal.
+  const historyReconciledRef = useRef(false)
+  useEffect(() => {
+    if (!hydrated || historyReconciledRef.current) return
+    historyReconciledRef.current = true
+
+    const liveTerminalIds = new Set(
+      nodes.filter((node) => node.type === 'terminal').map((node) => node.id),
+    )
+    setNotificationHistory((current) =>
+      current.filter((notification) => liveTerminalIds.has(notification.nodeId)),
+    )
+  }, [hydrated, nodes])
+
   useEffect(() => {
     if (!hydrated) return
 
@@ -948,6 +966,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       for (const change of changes) {
         if (change.type === 'remove') {
           removeNode(change.id)
+          // The node's terminal is gone, so any notification pointing at it
+          // would otherwise linger unread forever: it still counts toward the
+          // badge but the panel hides it (it only lists live terminal nodes).
+          setNotificationHistory((current) =>
+            current.filter((notification) => notification.nodeId !== change.id),
+          )
         }
       }
     },
