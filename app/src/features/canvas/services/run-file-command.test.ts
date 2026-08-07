@@ -1,9 +1,34 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildRunCommand } from './run-file-command'
 
+type WindowWithFelixoPlatform = { window?: { felixo?: { platform: string } } }
+
 describe('buildRunCommand', () => {
-  it('runs a .py file with python', () => {
-    expect(buildRunCommand('script.py')).toEqual({ command: 'python', args: ['script.py'] })
+  const globalWithWindow = globalThis as WindowWithFelixoPlatform
+  const originalWindow = globalWithWindow.window
+
+  const setPlatform = (platform: string) => {
+    globalWithWindow.window = { felixo: { platform } }
+  }
+
+  beforeEach(() => {
+    setPlatform('linux')
+  })
+
+  afterEach(() => {
+    globalWithWindow.window = originalWindow
+  })
+
+  it('runs a .py file with `env python3` on non-Windows platforms', () => {
+    expect(buildRunCommand('script.py')).toEqual({
+      command: 'env',
+      args: ['python3', 'script.py'],
+    })
+  })
+
+  it('runs a .py file with the `py` launcher on Windows', () => {
+    setPlatform('win32')
+    expect(buildRunCommand('script.py')).toEqual({ command: 'py', args: ['script.py'] })
   })
 
   it('runs a .js/.mjs/.cjs file with node', () => {
@@ -25,7 +50,7 @@ describe('buildRunCommand', () => {
   })
 
   it('is case-insensitive on the extension', () => {
-    expect(buildRunCommand('Script.PY')).toEqual({ command: 'python', args: ['Script.PY'] })
+    expect(buildRunCommand('Script.PY')).toEqual({ command: 'env', args: ['python3', 'Script.PY'] })
   })
 
   it('falls back to the bare path for an unrecognized extension', () => {

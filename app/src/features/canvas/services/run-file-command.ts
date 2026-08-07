@@ -5,7 +5,6 @@
  * associations, shebang, `.exe`/`.bat`/`.cmd`/`.ps1`, etc.).
  */
 const INTERPRETER_BY_EXTENSION: Record<string, string> = {
-  '.py': 'python',
   '.js': 'node',
   '.mjs': 'node',
   '.cjs': 'node',
@@ -22,6 +21,22 @@ const INTERPRETER_BY_EXTENSION: Record<string, string> = {
 export function buildRunCommand(fileName: string): { command: string; args: string[] } {
   const dotIndex = fileName.lastIndexOf('.')
   const extension = dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : ''
+
+  if (extension === '.py') {
+    // Most Linux distros (and some macOS setups) only ship `python3`, not a
+    // bare `python` — and the PTY spawns the interpreter directly, without a
+    // shell to resolve aliases for us (see createPtyLaunchSpec on non-Windows
+    // platforms). `env python3` is the POSIX-standard way to reach it.
+    //
+    // Windows is the one platform where `env` isn't available, but every
+    // official Windows Python install ships the `py` launcher, which is a
+    // safer bet there than a bare `python`/`python3` (neither is guaranteed
+    // on PATH even when Python is installed).
+    return window.felixo?.platform === 'win32'
+      ? { command: 'py', args: [fileName] }
+      : { command: 'env', args: ['python3', fileName] }
+  }
+
   const interpreter = INTERPRETER_BY_EXTENSION[extension]
 
   if (interpreter === 'npx') {
