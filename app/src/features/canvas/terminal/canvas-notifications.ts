@@ -103,19 +103,53 @@ export function clearReadCanvasNotifications(
  * Drops items older than the retention window. Unread items are kept, so an
  * agent waiting since last week still shows up when the user comes back.
  */
+/**
+ * Remove notificações velhas e as de blocos que já saíram do canvas.
+ *
+ * A retenção sozinha não basta: uma notificação não lida nunca expira, então o
+ * histórico de um terminal fechado ficaria guardado indefinidamente. Passar
+ * `existingNodeIds` descarta essas órfãs; omitir mantém só a poda por idade.
+ */
 export function pruneCanvasNotifications(
   history: readonly CanvasNotification[],
   now: number = Date.now(),
   retentionMs: number = NOTIFICATION_RETENTION_MS,
+  existingNodeIds?: readonly string[],
 ): CanvasNotification[] {
-  return history.filter(
-    (notification) =>
-      notification.readAt === null || now - notification.createdAt < retentionMs,
-  )
+  const existentes = existingNodeIds ? new Set(existingNodeIds) : null
+
+  return history.filter((notification) => {
+    if (existentes && !existentes.has(notification.nodeId)) {
+      return false
+    }
+
+    return notification.readAt === null || now - notification.createdAt < retentionMs
+  })
 }
 
+/**
+ * Notificações não lidas que ainda têm um bloco no canvas.
+ *
+ * `existingNodeIds` não é opcional por gosto: sem ele o badge somava
+ * notificações de terminais já fechados e ficava preso num número que o painel
+ * não reconhecia — a lista lá sempre descartou o que não tem bloco, então a
+ * tela mostrava "5" ao lado de "nenhum agente aguardando ação". Uma
+ * notificação não lida também nunca expira pela retenção de 7 dias, então esse
+ * badge não se resolvia sozinho.
+ *
+ * Omitir a lista conta o histórico inteiro, preservando o comportamento antigo
+ * para chamadores que não sabem quais blocos existem.
+ */
 export function countUnreadCanvasNotifications(
   history: readonly CanvasNotification[],
+  existingNodeIds?: readonly string[],
 ): number {
-  return history.filter((notification) => notification.readAt === null).length
+  if (!existingNodeIds) {
+    return history.filter((notification) => notification.readAt === null).length
+  }
+
+  const existentes = new Set(existingNodeIds)
+  return history.filter(
+    (notification) => notification.readAt === null && existentes.has(notification.nodeId),
+  ).length
 }

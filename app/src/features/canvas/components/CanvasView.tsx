@@ -320,21 +320,45 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     saveNotificationHistory(notificationHistory)
   }, [notificationHistory])
 
-  // Read items older than the retention window drop out of the history. Checked
-  // hourly so a long-lived window expires them without a reload.
+  // Read items older than the retention window drop out of the history, and so
+  // do notifications whose terminal no longer exists — an unread one never
+  // expires on age alone, so a closed agent's history would linger forever.
+  // Checked hourly so a long-lived window expires them without a reload.
+  //
+  // `nodesRef` em vez de `nodes` nas dependências: recriar o intervalo a cada
+  // mudança de node reiniciaria a hora de espera sem parar.
   useEffect(() => {
+    if (!hydrated) return
+
     const prune = () =>
       setNotificationHistory((current) => {
-        const pruned = pruneCanvasNotifications(current)
+        const pruned = pruneCanvasNotifications(
+          current,
+          Date.now(),
+          undefined,
+          nodesRef.current
+            .filter((node) => node.type === 'terminal')
+            .map((node) => node.id),
+        )
         return pruned.length === current.length ? current : pruned
       })
 
     prune()
     const timer = setInterval(prune, 60 * 60 * 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [hydrated])
 
-  const notificationCount = countUnreadCanvasNotifications(notificationHistory)
+  // Só os terminais existentes contam — a mesma regra que o painel usa para
+  // montar a lista. Sem isso o badge somava notificações de blocos já
+  // fechados e ficava marcando um número que o painel não reconhecia.
+  const notificationCount = useMemo(
+    () =>
+      countUnreadCanvasNotifications(
+        notificationHistory,
+        nodes.filter((node) => node.type === 'terminal').map((node) => node.id),
+      ),
+    [notificationHistory, nodes],
+  )
   const miniMapNode = useCallback(
     (props: MiniMapNodeProps) => {
       const node = nodes.find((item) => item.id === props.id)

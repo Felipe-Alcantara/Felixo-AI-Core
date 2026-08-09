@@ -129,3 +129,78 @@ describe('canvas notifications', () => {
     expect(pruneCanvasNotifications(history, now).map((item) => item.id)).toEqual(['b:1', 'c:2'])
   })
 })
+
+describe('countUnreadCanvasNotifications com blocos existentes', () => {
+  const historico = appendCanvasNotifications(
+    [],
+    ['agent-a', 'agent-b'],
+    { 'agent-a': idleSnapshot, 'agent-b': idleSnapshot },
+    1,
+    1_000,
+  ).notifications
+
+  it('conta apenas notificações de blocos que ainda existem', () => {
+    // O bug que motivou isto: o badge somava notificações de terminais já
+    // fechados, então marcava 5 enquanto o painel — que filtra pelos blocos
+    // presentes — mostrava 0 e "nenhum agente aguardando ação".
+    expect(countUnreadCanvasNotifications(historico, ['agent-a'])).toBe(1)
+  })
+
+  it('zera quando nenhum dos blocos existe mais', () => {
+    expect(countUnreadCanvasNotifications(historico, [])).toBe(0)
+  })
+
+  it('conta todas as não lidas quando todos os blocos existem', () => {
+    expect(countUnreadCanvasNotifications(historico, ['agent-a', 'agent-b'])).toBe(2)
+  })
+
+  it('ignora as já lidas mesmo com o bloco presente', () => {
+    const lidas = markAllCanvasNotificationsRead(historico, 5_000)
+
+    expect(countUnreadCanvasNotifications(lidas, ['agent-a', 'agent-b'])).toBe(0)
+  })
+
+  it('sem a lista de blocos, conta o histórico inteiro', () => {
+    // Mantém o comportamento antigo para quem não passa os blocos, para a
+    // mudança não exigir atualizar todos os chamadores de uma vez.
+    expect(countUnreadCanvasNotifications(historico)).toBe(2)
+  })
+})
+
+describe('pruneCanvasNotifications com blocos existentes', () => {
+  const historico = appendCanvasNotifications(
+    [],
+    ['agent-a', 'agent-b'],
+    { 'agent-a': idleSnapshot, 'agent-b': idleSnapshot },
+    1,
+    1_000,
+  ).notifications
+
+  it('descarta notificações de blocos que não existem mais', () => {
+    // Uma notificação não lida nunca expira pela retenção, então sem esta
+    // regra o histórico de um terminal fechado ficaria guardado para sempre.
+    const podado = pruneCanvasNotifications(historico, 2_000, NOTIFICATION_RETENTION_MS, [
+      'agent-a',
+    ])
+
+    expect(podado.map((notification) => notification.nodeId)).toEqual(['agent-a'])
+  })
+
+  it('sem a lista de blocos, poda apenas por idade', () => {
+    const podado = pruneCanvasNotifications(historico, 2_000)
+
+    expect(podado).toHaveLength(2)
+  })
+
+  it('continua removendo as lidas antigas', () => {
+    const lidas = markAllCanvasNotificationsRead(historico, 1_500)
+    const podado = pruneCanvasNotifications(
+      lidas,
+      1_500 + NOTIFICATION_RETENTION_MS + 1,
+      NOTIFICATION_RETENTION_MS,
+      ['agent-a', 'agent-b'],
+    )
+
+    expect(podado).toHaveLength(0)
+  })
+})
