@@ -157,16 +157,20 @@ normalização de entrada e formatação de evento no mesmo arquivo (ver ARQ-01)
 ### PRIV-01 — Dados pessoais em mock versionado
 
 - **Severidade**: Média · **Confiança**: Confirmado
-- **Local**: `app/src/features/chat/data/models.ts:58-71`
-- **Problema**: `recentItems` é um array de títulos de conversas reais, versionado num repositório
-  público. Inclui itens de natureza pessoal — entre outros, `'Exemplo de conversa 3'`,
-  `'Exemplo de conversa 7'`, `'Exemplo de conversa 12'`.
-- **Cenário de falha**: já materializado — o dado está público no histórico do repositório. Remover
-  o arquivo agora tira do `HEAD`, mas **não** do histórico do Git.
-- **Agravante**: o export é **código morto** (ver DEAD-01) — `ChatWorkspace.tsx:3-7` importa apenas
-  `initialModels`, `ideaStarters` e `quickPrompts`. Ou seja, o dado não serve a nada.
-- **Correção proposta**: remover o bloco. Para expurgar do histórico seria preciso reescrita
-  (`git filter-repo`), o que exige decisão sua — ver Perguntas em aberto.
+- **Local**: `app/src/features/chat/data/models.ts:58-71` (no commit auditado)
+- **Problema**: `recentItems` era um array de 12 títulos de conversas reais, versionado num
+  repositório público. Vários tratavam de assuntos pessoais — situação financeira, vida acadêmica e
+  consumo pessoal. Os valores não são reproduzidos aqui: um relatório de segurança não deve
+  recopiar o dado que aponta como exposto, ainda mais estando ele mesmo versionado.
+- **Cenário de falha**: já materializado — o dado ficou público por ~3,5 meses (desde `aee9b50`,
+  28/04/2026), em `main` e `production`, e chegou a existir em 10 arquivos de
+  `app/src/features/chat/` ao longo do histórico, não só em `models.ts`.
+- **Agravante**: o export era **código morto** (ver DEAD-01) — `ChatWorkspace.tsx:3-7` importa
+  apenas `initialModels`, `ideaStarters` e `quickPrompts`. O dado não servia a nada.
+- **Correção aplicada**: removido do `HEAD` (`ce878a1`) e, por decisão do dono do projeto,
+  **expurgado do histórico** com `git filter-repo --replace-text`, substituindo cada título por um
+  rótulo genérico em todos os commits e arquivos onde apareceu. Ver seção 7 para o procedimento e
+  as limitações do expurgo.
 
 ---
 
