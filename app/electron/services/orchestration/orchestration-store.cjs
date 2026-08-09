@@ -44,12 +44,17 @@ class OrchestrationLimitError extends OrchestrationStoreError {
   }
 }
 
+// Histórico suficiente para a UI consultar runs recentes sem reter a sessão
+// inteira em memória.
+const DEFAULT_MAX_COMPLETED_RUNS = 50
+
 class OrchestrationStore {
   constructor(options = {}) {
     this.runs = new Map()
     this.now = options.now ?? (() => new Date())
     this.idGenerator = options.idGenerator ?? (() => `run-${randomUUID()}`)
     this.defaultLimits = normalizeLimits(options.limits)
+    this.maxCompletedRuns = options.maxCompletedRuns ?? DEFAULT_MAX_COMPLETED_RUNS
   }
 
   create(params = {}) {
@@ -259,6 +264,7 @@ class OrchestrationStore {
     run.finalAnswer = requireString(finalAnswer, 'finalAnswer')
     run.error = null
     touchRun(run, now)
+    this.evictOldCompletedRuns()
     return cloneRun(run)
   }
 
@@ -269,7 +275,30 @@ class OrchestrationStore {
     run.status = 'failed'
     run.error = requireString(error, 'error')
     touchRun(run, now)
+    this.evictOldCompletedRuns()
     return cloneRun(run)
+  }
+
+  /**
+   * Mantém no máximo `maxCompletedRuns` runs terminais, descartando os mais
+   * antigos. Sem teto o Map cresce por toda a vida do processo: cada run
+   * guarda o prompt original, todos os agentJobs com prompt+resultado e a
+   * resposta final. Runs em andamento nunca são descartados — perder um
+   * significaria perder o estado de uma orquestração em execução.
+   */
+  evictOldCompletedRuns() {
+    const terminais = []
+    for (const [runId, run] of this.runs) {
+      if (run.status === 'completed' || run.status === 'failed') {
+        terminais.push(runId)
+      }
+    }
+
+    // O Map preserva ordem de inserção, então os primeiros são os mais antigos.
+    const excedente = terminais.length - this.maxCompletedRuns
+    for (let i = 0; i < excedente; i += 1) {
+      this.runs.delete(terminais[i])
+    }
   }
 
   updateAgentJob(runId, agentId, updater) {

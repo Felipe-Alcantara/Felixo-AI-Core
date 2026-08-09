@@ -508,10 +508,26 @@ class OrchestrationRunner {
       selectedModel: newModel,
     }
 
+    // Thread nova para a tentativa, em vez de reusar a do processo que acabou
+    // de falhar. O anterior recebe SIGTERM com carência, então seu `close`
+    // ainda pode emitir um erro depois — e enquanto o threadId antigo apontar
+    // para este job, esse evento atrasado é indistinguível do resultado do
+    // respawn: dispararia outro fallback ou marcaria como falho um job que a
+    // nova tentativa ainda está executando.
+    const fallbackThreadId = `${job.threadId}:fb${attempts + 1}`
+    this.threadAgentJobs.delete(job.threadId)
+    this.threadAgentJobs.set(fallbackThreadId, {
+      runId: locatedJob.runId,
+      agentId: locatedJob.agentId,
+    })
+    run = this.store.startAgentJob(locatedJob.runId, locatedJob.agentId, {
+      threadId: fallbackThreadId,
+    })
+
     const spawnResult = await this.spawnAgent({
       run,
       job,
-      threadId: job.threadId,
+      threadId: fallbackThreadId,
       event: resolvedEvent,
       context: runContext,
     })

@@ -216,3 +216,53 @@ function createClock() {
     return new Date(timestamp)
   }
 }
+
+test('runs finalizados são descartados quando passam do teto', () => {
+  // Sem teto, `runs` cresce por toda a vida do processo Electron: cada run
+  // guarda o prompt original, todos os agentJobs com prompt+resultado e a
+  // resposta final. Uma sessão longa com muitas orquestrações retinha dezenas
+  // de MB que só saíam com o restart do app.
+  const store = createOrchestrationStore({ maxCompletedRuns: 2 })
+
+  const criados = []
+  for (let i = 0; i < 4; i += 1) {
+    const run = store.create({
+      parentThreadId: `thread-${i}`,
+      originalPrompt: `objetivo ${i}`,
+      orchestratorCliType: 'claude',
+    })
+    criados.push(run.runId)
+    store.completeRun(run.runId, `resposta ${i}`)
+  }
+
+  const vivos = store.list().map((run) => run.runId)
+  assert.equal(vivos.length, 2, 'deveria manter apenas os mais recentes')
+  assert.deepEqual(vivos, criados.slice(-2))
+})
+
+test('um run em andamento nunca é descartado pelo teto', () => {
+  // O teto só pode alcançar runs terminais: descartar um run vivo perderia o
+  // estado de uma orquestração ainda em execução.
+  const store = createOrchestrationStore({ maxCompletedRuns: 1 })
+
+  const emAndamento = store.create({
+    parentThreadId: 'thread-vivo',
+    originalPrompt: 'ainda rodando',
+    orchestratorCliType: 'claude',
+  })
+
+  for (let i = 0; i < 3; i += 1) {
+    const run = store.create({
+      parentThreadId: `thread-${i}`,
+      originalPrompt: `objetivo ${i}`,
+      orchestratorCliType: 'claude',
+    })
+    store.completeRun(run.runId, 'ok')
+  }
+
+  const vivos = store.list().map((run) => run.runId)
+  assert.ok(
+    vivos.includes(emAndamento.runId),
+    'o run em andamento deveria sobreviver ao descarte',
+  )
+})

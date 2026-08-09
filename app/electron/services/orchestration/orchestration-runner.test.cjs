@@ -952,3 +952,60 @@ test('mid-task fallback propaga o cliType do agente que falhou', async () => {
   )
   assert.equal(result.ok, true)
 })
+
+test('respawn de fallback usa uma thread nova, soltando a do processo que falhou', async () => {
+  // O processo anterior recebe SIGTERM com carência, então seu `close` ainda
+  // pode emitir um erro depois do respawn. Enquanto o threadId antigo
+  // apontasse para o mesmo job, esse evento atrasado era indistinguível do
+  // resultado da nova tentativa: dispararia outro fallback, ou marcaria como
+  // falho um job que o respawn ainda estava executando.
+  const spawnCalls = []
+  const validateCalls = []
+  const runner = createTestRunner({
+    spawnAgent: async (params) => {
+      spawnCalls.push(params)
+      return { ok: true, threadId: params.threadId }
+    },
+    validateSpawnAgent: () => {
+      validateCalls.push(1)
+      return validateCalls.length === 1
+        ? {
+            ok: true,
+            modelChoice: { selectionRule: 'best-available-model', selectedCliType: 'claude' },
+            selectedModel: { id: 'claude-main', cliType: 'claude' },
+          }
+        : {
+            ok: true,
+            modelChoice: { selectionRule: 'provider-fallback', selectedCliType: 'codex' },
+            selectedModel: { id: 'codex-main', cliType: 'codex' },
+          }
+    },
+  })
+
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  const result = await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: "You're out of extra usage · resets 4:40pm",
+  })
+
+  assert.equal(result.respawned, true)
+
+  const threadNova = spawnCalls[1].threadId
+  assert.notEqual(
+    threadNova,
+    'thread-reviewer-1',
+    'a tentativa nova não pode reusar a thread do processo que falhou',
+  )
+  assert.equal(
+    runner.getAgentJobByThreadId('thread-reviewer-1'),
+    null,
+    'a thread antiga deve ser solta, para eventos atrasados não acharem o job',
+  )
+  assert.deepEqual(runner.getAgentJobByThreadId(threadNova), {
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+  })
+})
+
