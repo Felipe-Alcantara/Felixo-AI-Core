@@ -4,3 +4,10 @@ __pycache__/
 Padrão de qualidade - Felixo System Design/
 .felixo-start-config.json
 logs/startup/
+
+# Variáveis de ambiente locais. O .env.example instrui a copiar este arquivo
+# para .env, que pode acabar guardando credenciais (ex.: GH_TOKEN do
+# publish:github) — só o exemplo, sem valores, é versionado.
+.env
+.env.*
+!.env.example
