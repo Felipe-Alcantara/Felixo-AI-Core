@@ -161,5 +161,11 @@ export function toolbarFlyoutStyle(position?: ToolbarFlyoutPosition): CSSPropert
     left: `${position.left}px`,
     maxHeight: `${position.maxHeight}px`,
     maxWidth: position.maxWidth,
-  }
+    // The panel's open/close animation also drives `max-height` (see
+    // felixo-tools-list-in), and a CSS `animation` wins over an inline
+    // `style` value for the same property — without this, the panel would
+    // settle back at a flat `calc(100vh - 6rem)` after opening, ignoring
+    // the room actually available below its anchor and running off-screen.
+    '--felixo-panel-max-height': `${position.maxHeight}px`,
+  } as CSSProperties
 }

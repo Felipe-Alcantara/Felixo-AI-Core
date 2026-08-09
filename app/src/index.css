@@ -259,9 +259,13 @@ div::-webkit-scrollbar-thumb {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* `--felixo-panel-max-height` is set inline by the flyout that measures the
+   real room available below its anchor button (see toolbarFlyoutStyle) —
+   falls back to the old flat viewport cap for anything that doesn't set it,
+   so the "to" state never re-opens the panel past the screen's edge. */
 @keyframes felixo-tools-list-in {
   from { max-height: 0; opacity: 0; }
-  to { max-height: calc(100vh - 6rem); opacity: 1; }
+  to { max-height: var(--felixo-panel-max-height, calc(100vh - 6rem)); opacity: 1; }
 }
 
 @keyframes felixo-tools-list-item-in {
