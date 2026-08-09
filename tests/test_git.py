@@ -14,6 +14,8 @@ from unittest.mock import patch
 
 from felixo_launcher import git
 
+from .support import windows_base_env
+
 
 class AutoUpdateSafetyTests(unittest.TestCase):
     """Conditions under which the update must decline to run at all."""
@@ -152,7 +154,13 @@ class AutoUpdateBehaviourTests(unittest.TestCase):
 
 class AutoUpdateIntegrationTests(unittest.TestCase):
     """Drives real `git` against throwaway repositories, because the whole
-    feature is about how git actually behaves."""
+    feature is about how git actually behaves.
+
+    Diferente das outras classes deste módulo, aqui o subprocess não é
+    mockado — o env chega ao `git` de verdade, e no Windows um env sem
+    `SystemRoot`/`COMSPEC` faz o `CreateProcess` recusar a criação do
+    processo (WinError 87) antes de o git rodar. Daí `windows_base_env()`
+    no lugar do `{}` que as classes com mock podem usar à vontade."""
 
     def make_repos(self, tmpdir: str) -> tuple[Path, Path]:
         root = Path(tmpdir)
@@ -194,7 +202,7 @@ class AutoUpdateIntegrationTests(unittest.TestCase):
             with patch("felixo_launcher.git.ROOT_DIR", clone), patch(
                 "felixo_launcher.git.print"
             ):
-                updated = git.auto_update({})
+                updated = git.auto_update(windows_base_env())
 
             self.assertTrue(updated)
             self.assertEqual((clone / "app.txt").read_text(encoding="utf-8"), "v2\n")
@@ -210,7 +218,7 @@ class AutoUpdateIntegrationTests(unittest.TestCase):
             with patch("felixo_launcher.git.ROOT_DIR", clone), patch(
                 "felixo_launcher.git.print"
             ):
-                updated = git.auto_update({})
+                updated = git.auto_update(windows_base_env())
 
             self.assertFalse(updated)
             self.assertEqual(
@@ -226,7 +234,7 @@ class AutoUpdateIntegrationTests(unittest.TestCase):
             with patch("felixo_launcher.git.ROOT_DIR", clone), patch(
                 "felixo_launcher.git.print"
             ) as printed:
-                self.assertFalse(git.auto_update({}))
+                self.assertFalse(git.auto_update(windows_base_env()))
 
             printed.assert_not_called()
 

@@ -46,7 +46,7 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
         signal_process_group(process, signal.SIGTERM)
 
         if not wait_for_exit(process, timeout=GRACEFUL_STOP_TIMEOUT):
-            signal_process_group(process, signal.SIGKILL)
+            signal_process_group(process, signal.SIGTERM, force=True)
             # SIGKILL cannot be caught, so the process is gone almost at once —
             # only the kernel reaping it takes any time. Waiting the full
             # graceful timeout again just added seconds to every Ctrl+C.
@@ -104,25 +104,53 @@ def process_has_exited(process: subprocess.Popen[bytes]) -> bool:
     return pid != 0
 
 
-def signal_process_group(process: subprocess.Popen[bytes], sig: int) -> None:
+def signal_process_group(
+    process: subprocess.Popen[bytes], sig: int, force: bool = False
+) -> None:
     """Signals the whole `start_new_session` group so Vite and Electron die with
     `npm run dev`, falling back to the single process when the group is already
     gone. `os.killpg` raises if the group vanished between poll and kill — a raw
-    traceback on Ctrl+C is exactly the unclear failure the launcher must avoid."""
+    traceback on Ctrl+C is exactly the unclear failure the launcher must avoid.
+
+    `force` diz se este é o passo de parada forçada, em vez de o chamador ter
+    que expressar isso escolhendo SIGKILL: no Windows esse sinal não existe no
+    módulo `signal`, e traduzir "forçado" para o `kill()` do Popen é
+    justamente o que aquela plataforma entende. Passar o sinal como única
+    pista deixava o escalonamento indistinguível do pedido educado lá."""
     if os.name == "nt":
-        process.kill() if sig == signal.SIGKILL else process.terminate()
+        force_process(process, force)
         return
 
     try:
-        os.killpg(os.getpgid(process.pid), sig)
+        os.killpg(os.getpgid(process.pid), force_signal() if force else sig)
         return
     except (ProcessLookupError, PermissionError, OSError):
         pass
 
     try:
-        process.kill() if sig == signal.SIGKILL else process.terminate()
+        force_process(process, force)
     except (ProcessLookupError, OSError):
         pass
+
+
+def force_signal() -> int:
+    """O sinal POSIX de parada forçada.
+
+    Só é consultado no ramo POSIX — no Windows a força é expressa pelo
+    `kill()` do Popen, não por um número de sinal."""
+    return signal.SIGKILL
+
+
+def force_process(process: subprocess.Popen[bytes], force: bool) -> None:
+    """`kill()` quando é para forçar, `terminate()` para o pedido educado.
+
+    No Windows os dois viram TerminateProcess, mas `kill()` é o caminho que a
+    API do Popen expõe para "agora vai" — e `terminate()` continua sendo o
+    primeiro passo, dando ao processo a chance de sair sozinho."""
+    if force:
+        process.kill()
+    else:
+        process.terminate()
 
 
 def cleanup_app_processes() -> None:

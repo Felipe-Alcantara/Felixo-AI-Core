@@ -46,16 +46,40 @@ def write_executable(path: Path, body: str) -> Path:
     Devolve o Path REAL escrito (com a extensão no Windows), para os
     chamadores que precisam do caminho exato do arquivo.
     """
+    path.parent.mkdir(parents=True, exist_ok=True)
+
     if os.name == "nt":
         target = path.with_suffix(".cmd")
-        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f"@echo off\r\n{body}\r\n", encoding="utf-8")
         return target
 
-    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return path
+
+
+# Variáveis sem as quais o Windows recusa criar um processo. `CreateProcess`
+# falha com "[WinError 87] The parameter is incorrect" quando recebe um
+# ambiente sem elas — no POSIX um env vazio é perfeitamente válido, e é por
+# isso que um teste que monta o ambiente do zero passa no Linux/macOS e morre
+# no Windows. Em produção isso nunca acontece: o env sempre sai de
+# `os.environ.copy()`, que já traz tudo. É só o ambiente sintético dos testes
+# que precisa reincluir o mínimo.
+WINDOWS_REQUIRED_ENV_KEYS = ("SystemRoot", "SystemDrive", "COMSPEC", "TEMP", "TMP")
+
+
+def windows_base_env() -> dict[str, str]:
+    """O mínimo herdado do processo real para o Windows aceitar criar outro.
+
+    Vazio fora do Windows, onde nada disso é necessário."""
+    if os.name != "nt":
+        return {}
+
+    return {
+        key: os.environ[key]
+        for key in WINDOWS_REQUIRED_ENV_KEYS
+        if key in os.environ
+    }
 
 
 def make_node_bin(bin_dir: Path, node_version: str = "v25.9.0") -> Path:
@@ -65,7 +89,17 @@ def make_node_bin(bin_dir: Path, node_version: str = "v25.9.0") -> Path:
 
 
 def clean_node_env(home: Path, **overrides: str) -> dict[str, str]:
-    env = {"HOME": str(home), "PATH": ""}
+    """Um ambiente sem nenhum rastro de Node, para a descoberta ter que achar
+    o que os testes plantaram — e nada do que a máquina real tem instalado.
+
+    O mínimo exigido pelo Windows entra por baixo dos overrides: sem ele, os
+    subprocessos que a descoberta dispara nem chegam a rodar lá (WinError 87).
+    `USERPROFILE` acompanha `HOME` porque é ele que `Path.home()` consulta no
+    Windows."""
+    env: dict[str, str] = dict(windows_base_env())
+    env.update({"HOME": str(home), "PATH": ""})
+    if os.name == "nt":
+        env["USERPROFILE"] = str(home)
     env.update({key: "" for key in NODE_ENV_KEYS})
     env.update(overrides)
     return env

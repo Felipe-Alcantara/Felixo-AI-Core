@@ -10,10 +10,17 @@ from __future__ import annotations
 import signal
 import subprocess
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from felixo_launcher import paths
 from felixo_launcher import process as process_module
+
+# `cleanup_app_processes` é POSIX-only (sai cedo no Windows, onde não há
+# pgrep nem grupos de processo), então o SIGKILL que ela usa existe sempre que
+# aquele código roda. Fora dali o escalonamento viaja como `force=True`, e não
+# como um número de sinal — ver `signal_process_group`.
+POSIX_FORCE_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 class ProcessCleanupTests(unittest.TestCase):
@@ -65,15 +72,19 @@ class ProcessCleanupTests(unittest.TestCase):
             self.assertEqual(process_module.find_stale_app_pids(), [])
 
     def test_escalates_to_sigkill_only_for_survivors(self) -> None:
-        with patch("felixo_launcher.process.find_stale_app_pids", return_value=[10, 20]), patch(
-            "felixo_launcher.process.time.sleep"
-        ), patch(
+        # os.name="posix": a limpeza é um no-op no Windows (não há pgrep nem
+        # grupos de processo), então rodando lá esta lógica nunca executaria e
+        # o teste não veria chamada nenhuma. Fixar a plataforma mantém a regra
+        # de escalonamento coberta nos três SOs.
+        with patch.object(process_module.os, "name", "posix"), patch(
+            "felixo_launcher.process.find_stale_app_pids", return_value=[10, 20]
+        ), patch("felixo_launcher.process.time.sleep"), patch(
             "felixo_launcher.process.process_is_alive", side_effect=lambda pid: pid == 20
         ), patch("felixo_launcher.process.terminate_pids") as terminate:
             process_module.cleanup_app_processes()
 
         self.assertEqual(terminate.call_args_list[0].args, ([10, 20], signal.SIGTERM))
-        self.assertEqual(terminate.call_args_list[1].args, ([20], signal.SIGKILL))
+        self.assertEqual(terminate.call_args_list[1].args, ([20], POSIX_FORCE_SIGNAL))
 
     def test_terminate_ignores_processes_that_already_exited(self) -> None:
         with patch(
@@ -182,9 +193,12 @@ class StopProcessTests(unittest.TestCase):
         ) as printed:
             process_module.stop_process(process)
 
+        # O escalonamento é o `force=True` da segunda chamada, não um número
+        # de sinal diferente: SIGKILL não existe no Windows, então a intenção
+        # é que viaja, e cada plataforma a traduz como sabe.
         self.assertEqual(
-            [call.args[1] for call in signal_group.call_args_list],
-            [signal.SIGTERM, signal.SIGKILL],
+            [(call.args[1], call.kwargs.get("force", False)) for call in signal_group.call_args_list],
+            [(signal.SIGTERM, False), (signal.SIGTERM, True)],
         )
         printed.assert_not_called()
 
@@ -244,10 +258,72 @@ class StopProcessTests(unittest.TestCase):
 
         with patch.object(process_module.os, "name", "nt"):
             process_module.signal_process_group(process, signal.SIGTERM)
-            process_module.signal_process_group(process, signal.SIGKILL)
+            process_module.signal_process_group(process, signal.SIGTERM, force=True)
 
         process.terminate.assert_called_once()
         process.kill.assert_called_once()
+
+    def test_stop_process_nao_le_sigkill_direto_do_signal(self) -> None:
+        """`stop_process` roda em toda parada do app, Windows incluído, e
+        escalava lendo `signal.SIGKILL` — que não existe lá. O escalonamento
+        precisa continuar acontecendo sem depender desse atributo."""
+        process = MagicMock()
+        process.poll.return_value = None
+        sem_sigkill = {
+            name: value for name, value in vars(signal).items() if name != "SIGKILL"
+        }
+
+        with patch.object(
+            process_module, "signal", SimpleNamespace(**sem_sigkill)
+        ), patch(
+            "felixo_launcher.process.wait_for_exit", side_effect=[False, True]
+        ), patch("felixo_launcher.process.signal_process_group") as signal_group, patch(
+            "felixo_launcher.process.cleanup_app_processes"
+        ), patch("felixo_launcher.process.print"):
+            process_module.stop_process(process)
+
+        self.assertEqual(len(signal_group.call_args_list), 2)
+
+    def test_nao_depende_de_signal_sigkill_que_nao_existe_no_windows(self) -> None:
+        """`signal.SIGKILL` só existe no POSIX. O ramo do Windows comparava o
+        sinal recebido contra ele, então a primeira parada de processo lá
+        levantava AttributeError — um Ctrl+C viraria traceback no app
+        instalado, que é justamente o que este módulo existe para evitar."""
+        process = MagicMock()
+
+        with patch.object(process_module.os, "name", "nt"), patch.object(
+            process_module, "signal", self.signal_sem_sigkill()
+        ):
+            process_module.signal_process_group(process, signal.SIGTERM)
+
+        process.terminate.assert_called_once()
+        process.kill.assert_not_called()
+
+    def test_ainda_mata_a_forca_o_processo_teimoso_sem_sigkill(self) -> None:
+        """Sem SIGKILL na plataforma, o escalonamento não pode virar um segundo
+        pedido educado: um processo que ignorou o `terminate()` continuaria
+        ignorando o próximo. O passo forçado tem que chamar `kill()`, que no
+        Windows é o TerminateProcess de verdade."""
+        process = MagicMock()
+        process.poll.return_value = None
+
+        with patch.object(process_module.os, "name", "nt"), patch.object(
+            process_module, "signal", self.signal_sem_sigkill()
+        ), patch(
+            "felixo_launcher.process.wait_for_exit", side_effect=[False, True]
+        ), patch("felixo_launcher.process.cleanup_app_processes"), patch(
+            "felixo_launcher.process.print"
+        ):
+            process_module.stop_process(process)
+
+        process.terminate.assert_called_once()
+        process.kill.assert_called_once()
+
+    def signal_sem_sigkill(self) -> SimpleNamespace:
+        """O módulo `signal` como ele é no Windows: sem SIGKILL."""
+        return SimpleNamespace(
+            **{name: value for name, value in vars(signal).items() if name != "SIGKILL"}
+        )
 
 
 

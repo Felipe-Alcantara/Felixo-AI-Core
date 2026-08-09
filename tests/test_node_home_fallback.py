@@ -25,8 +25,13 @@ class HomeDirectoryFallbackTests(unittest.TestCase):
                 env = node.build_env(None)
 
         # Não é sobre o conteúdo do PATH aqui — é sobre a função ter
-        # devolvido algo em vez de propagar a exceção.
-        self.assertIn("PATH", {node.get_path_env.__name__: None} and env or env)
+        # devolvido algo em vez de propagar a exceção. A chave varia com a
+        # plataforma ("Path" no Windows), então a asserção olha o valor por
+        # comparação sem caixa.
+        self.assertTrue(
+            any(key.lower() == "path" for key in env),
+            f"build_env devolveu um ambiente sem variável de PATH: {sorted(env)}",
+        )
 
     def test_find_node_bin_nao_estoura_sem_home_no_ambiente(self) -> None:
         # O ponto não é o valor devolvido (Path.expanduser() cai para o home

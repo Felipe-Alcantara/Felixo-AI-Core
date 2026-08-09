@@ -67,21 +67,46 @@ class StartAppWindowsTests(unittest.TestCase):
                     [str(npm_cmd), "install"],
                 )
 
-    def test_build_env_preserves_windows_path_key(self) -> None:
+    def test_build_env_nao_duplica_a_variavel_de_path_no_windows(self) -> None:
+        """Um dict com "PATH" e "Path" ao mesmo tempo é ambíguo para o
+        subprocess no Windows — qual das duas vale fica a critério da API, e
+        a busca do Node pode acabar herdando a errada. Só pode sobrar uma."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             node_bin = root / "nodejs"
 
             with patch("felixo_launcher.node.is_windows_platform", return_value=True), patch.dict(
                 os.environ,
-                clean_node_env(root, Path=str(root / "Windows" / "System32")),
+                clean_node_env(root, PATH=str(root / "Windows" / "System32")),
                 clear=True,
             ):
                 env = node.build_env(node_bin)
 
-            self.assertIn("Path", env)
-            self.assertNotIn("PATH", env)
-            self.assertTrue(env["Path"].startswith(str(node_bin)))
+            path_keys = [key for key in env if key.lower() == "path"]
+            self.assertEqual(len(path_keys), 1, f"esperava uma única chave de PATH, veio {path_keys}")
+            self.assertTrue(env[path_keys[0]].startswith(str(node_bin)))
+
+    def test_set_path_env_preserva_a_caixa_da_chave_que_ja_existia(self) -> None:
+        """`os.environ` do CPython no Windows normaliza toda chave para
+        maiúscula (encodekey faz .upper()), então "PATH" é o que chega aqui na
+        prática. Mas `build_env` também é usado com dicts montados à mão, e aí
+        a caixa original tem que sobreviver em vez de virar uma segunda
+        entrada — daí o teste ser sobre a função pura, e não via os.environ:
+        no Windows real seria impossível injetar "Path" minúsculo ali."""
+        env = {"Path": "C:/existente"}
+
+        with patch("felixo_launcher.node.is_windows_platform", return_value=True):
+            node.set_path_env(env, "C:/novo")
+
+        self.assertEqual(env, {"Path": "C:/novo"})
+
+    def test_set_path_env_colapsa_chaves_duplicadas_de_path(self) -> None:
+        env = {"PATH": "C:/um", "Path": "C:/dois"}
+
+        with patch("felixo_launcher.node.is_windows_platform", return_value=True):
+            node.set_path_env(env, "C:/novo")
+
+        self.assertEqual(env, {"Path": "C:/novo"})
 
     def test_cleanup_is_a_noop_on_windows_where_pgrep_does_not_exist(self) -> None:
         with patch.object(process.os, "name", "nt"), patch(
