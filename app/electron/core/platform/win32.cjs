@@ -4,12 +4,16 @@
  */
 
 const os = require('node:os')
-const path = require('node:path')
+// `path.win32`, e nao `path`: este adaptador descreve o Windows, e as regras
+// de caminho tem que ser as do alvo mesmo quando o codigo roda noutro SO —
+// senao os caminhos saiam com barras trocadas ("C:\Program Files/PowerShell")
+// e o PATH era separado por ":" em vez de ";".
+const path = require('node:path').win32
 const fs = require('node:fs')
 
 /** @returns {string} */
-function getDefaultShell(env) {
-  return findPowerShell(env) || 'cmd.exe'
+function getDefaultShell(env, exists = fs.existsSync) {
+  return findPowerShell(env, exists) || 'cmd.exe'
 }
 
 /** @returns {string[]} */
@@ -149,7 +153,11 @@ function getPathEnvKey(env) {
 
 // -- internal helpers --------------------------------------------------------
 
-function findPowerShell(env) {
+// `exists` é injetável para os testes poderem descrever uma máquina sem
+// PowerShell: os candidatos caem em C:\Program Files mesmo com env vazio, e
+// checar o disco real fazia o teste do fallback depender de quem instalou o
+// quê na máquina que roda a suíte.
+function findPowerShell(env, exists = fs.existsSync) {
   const systemRoot = env.SystemRoot || env.WINDIR || 'C:\\Windows'
   const programFiles = env.ProgramFiles || 'C:\\Program Files'
   const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path')
@@ -167,7 +175,7 @@ function findPowerShell(env) {
 
   for (const candidate of candidates) {
     try {
-      if (fs.existsSync(candidate)) return candidate
+      if (exists(candidate)) return candidate
     } catch {
       continue
     }

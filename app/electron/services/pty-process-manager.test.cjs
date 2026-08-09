@@ -75,7 +75,19 @@ test('spawn launches the shell by default and streams raw output', () => {
 })
 
 test('Windows falls back to cmd.exe when PowerShell is not present', () => {
-  assert.equal(win32Platform.getDefaultShell({}), 'cmd.exe')
+  // `() => false` descreve a máquina sem PowerShell: sem isso o teste
+  // consultava o disco real e passava só onde ele não estivesse instalado —
+  // no Linux por acidente, e no Windows nunca.
+  assert.equal(win32Platform.getDefaultShell({}, () => false), 'cmd.exe')
+})
+
+test('Windows prefers PowerShell 7 when it is installed', () => {
+  const pwsh = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
+  assert.equal(
+    win32Platform.getDefaultShell({}, (candidate) => candidate === pwsh),
+    pwsh,
+  )
 })
 
 test('default shell resolution uses the environment passed to the PTY', () => {
@@ -473,7 +485,14 @@ test('graceful kill sends SIGTERM but keeps the session until exit', () => {
 
 test('exit retains the replayable session and notifies the caller', () => {
   const { fakePty, spawnPty } = createFakePty()
-  const manager = new PtyProcessManager({ spawnPty })
+  // Plataforma fixa em posix: no Windows uma saída imediata com código != 0
+  // aciona o retry de fallback da CLI, que reinicia a sessão em vez de
+  // reportar a saída — o comportamento certo lá, mas não o que este teste
+  // descreve. Sem fixar, o resultado dependia de onde a suíte roda.
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: { name: 'linux', getDefaultShell: () => '/bin/bash' },
+  })
   const exits = []
 
   manager.spawn('term-8', { onExit: (event) => exits.push(event) })

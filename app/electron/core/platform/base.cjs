@@ -202,17 +202,22 @@ function findLinuxTerminal(env, exists) {
   )
 }
 
+// `path.posix`, e nao `path`: este é o adaptador POSIX, e as regras de
+// caminho tem que ser as do alvo, nao as da maquina que roda o codigo. Com o
+// `path` do host, o mesmo plano montava "C:\usr\bin\konsole" e separava o
+// PATH por ";" quando calculado a partir do Windows — dando um plano
+// invalido para a maquina que de fato iria executa-lo.
 function commandExistsInPath(command, env, exists) {
-  if (path.isAbsolute(command)) {
+  if (path.posix.isAbsolute(command)) {
     return exists(command)
   }
 
   const pathKey = getPathEnvKey(env)
   const pathParts = String(env[pathKey] ?? '')
-    .split(path.delimiter)
+    .split(path.posix.delimiter)
     .filter(Boolean)
 
-  return pathParts.some((pathPart) => exists(path.join(pathPart, command)))
+  return pathParts.some((pathPart) => exists(path.posix.join(pathPart, command)))
 }
 
 module.exports = {
