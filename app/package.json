@@ -28,7 +28,7 @@
     "publish:github": "npm run build && electron-builder --publish always",
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",
-    "test": "node --test electron/core/*.test.cjs electron/services/*.test.cjs electron/services/adapters/*.test.cjs electron/services/adapters/testing/*.test.cjs electron/services/mcp/*.test.cjs electron/services/orchestration/*.test.cjs electron/services/orchestrator/*.test.cjs electron/services/protocols/*.test.cjs electron/services/providers/*.test.cjs electron/services/storage/*.test.cjs",
+    "test": "node --test electron/core/*.test.cjs electron/services/*.test.cjs electron/services/agent-models/*.test.cjs electron/services/adapters/*.test.cjs electron/services/adapters/testing/*.test.cjs electron/services/mcp/*.test.cjs electron/services/orchestration/*.test.cjs electron/services/orchestrator/*.test.cjs electron/services/protocols/*.test.cjs electron/services/providers/*.test.cjs electron/services/storage/*.test.cjs",
     "test:frontend": "vitest run",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node scripts/start-electron.cjs"

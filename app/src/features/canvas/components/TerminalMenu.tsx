@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
+import { ChevronDown, Plus, RotateCw, TerminalSquare, Trash2, X } from 'lucide-react'
+import { useAgentModelCatalog } from '../hooks/useAgentModelCatalog'
 import {
-  AGENTS,
   buildAgentArgs,
   describeLaunch,
   getAgent,
@@ -90,7 +90,13 @@ export function TerminalMenu({
     placement: 'below',
   })
 
-  const agent = agentValue === SHELL_AGENT_VALUE ? undefined : getAgent(agentValue)
+  // Modelos que as CLIs oferecem agora; cai na lista fixa se a descoberta
+  // não trouxer nada, para o menu nunca abrir sem opções.
+  const { agents, refreshing, refresh } = useAgentModelCatalog()
+  const agent =
+    agentValue === SHELL_AGENT_VALUE
+      ? undefined
+      : agents.find((item) => item.id === agentValue) ?? getAgent(agentValue)
   const effortLevels = agent ? getEffortLevels(agent, model) : null
 
   const closeSettings = useCallback(() => {
@@ -274,7 +280,7 @@ export function TerminalMenu({
             className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
           >
             <option value={SHELL_AGENT_VALUE}>Nenhum (shell)</option>
-            {AGENTS.map((item) => (
+            {agents.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>
@@ -283,7 +289,19 @@ export function TerminalMenu({
 
           {agent && (
             <>
-              <label htmlFor={`${fieldIdPrefix}-model`} className="mb-1 block text-xs font-medium text-zinc-400">Modelo</label>
+              <div className="mb-1 flex items-center justify-between">
+                <label htmlFor={`${fieldIdPrefix}-model`} className="block text-xs font-medium text-zinc-400">Modelo</label>
+                <button
+                  type="button"
+                  onClick={refresh}
+                  disabled={refreshing}
+                  className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
+                  title="Buscar de novo os modelos que as CLIs oferecem"
+                  aria-label="Atualizar lista de modelos"
+                >
+                  <RotateCw size={11} className={refreshing ? 'animate-spin' : undefined} />
+                </button>
+              </div>
               <select
                 id={`${fieldIdPrefix}-model`}
                 value={model}

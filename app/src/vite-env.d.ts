@@ -47,6 +47,15 @@ type CanvasSkill = {
   /** Absolute path to the skill file the agent should read/use. */
   path: string
 }
+type AgentModelCatalog = Record<
+  string,
+  {
+    models?: string[]
+    labels?: Record<string, string>
+    effortLevels?: Record<string, string[]>
+  }
+> & { discoveredAt?: string }
+
 type CliStreamEvent = StreamEvent | OrchestrationStreamEvent
 
 type CliInvokeResult = {
@@ -347,6 +356,10 @@ declare global {
         list: () => Promise<CliInvokeResult & { models?: Model[] }>
         save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>
         delete: (modelId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      agentModels?: {
+        get: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
+        refresh: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
       }
       systemDesign?: {
         getConfig: () => Promise<

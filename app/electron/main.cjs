@@ -24,6 +24,9 @@ const {
   registerModelsIpcHandlers,
 } = require('./services/models-ipc-handlers.cjs')
 const {
+  registerAgentModelsIpcHandlers,
+} = require('./services/agent-models-ipc-handlers.cjs')
+const {
   registerSystemDesignIpcHandlers,
 } = require('./services/system-design-ipc-handlers.cjs')
 const { registerChatHistoryIpcHandlers } = require('./services/chat-history-ipc-handlers.cjs')
@@ -96,6 +99,7 @@ app.whenReady().then(() => {
   })
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
+  registerAgentModelsIpcHandlers(appPaths)
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
