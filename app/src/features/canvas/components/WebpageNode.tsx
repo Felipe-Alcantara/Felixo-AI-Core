@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import {
   Handle,
   Position,
@@ -37,7 +37,7 @@ const SHARED_WEBVIEW_PARTITION = 'persist:felixo-webview'
  */
 function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = (data ?? {}) as WebpageNodeDataWithHandler
-  const webviewRef = useRef<WebviewTag>(null)
+  const webviewRef = useRef<WebviewTag | null>(null)
   // Seeded once from the persisted URL — later navigation updates state/data,
   // never this prop, so the webview is never force-reloaded from underneath
   // the user by a re-render.
@@ -59,6 +59,40 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // torn down and rebound on every navigation.
   const onDataChangeRef = useRef(nodeData.onDataChange)
   onDataChangeRef.current = nodeData.onDataChange
+
+  // O <webview> é montado à mão em vez de declarado em JSX porque
+  // `allowpopups` precisa estar no elemento ANTES de ele entrar no DOM: o
+  // Chromium decide se o guest aceita popups no momento em que o anexa, e
+  // setar o atributo depois não reverte (nem re-setar `src` força um novo
+  // attach — ambos verificados no app real). Pelo JSX isso é impossível: o
+  // React insere o elemento antes de qualquer ref rodar, e ainda por cima
+  // @types/react declara `allowpopups` como boolean, que ele não serializa
+  // para atributo em elemento desconhecido.
+  //
+  // Sem isso, `window.open` dentro da página devolve null e os logins OAuth
+  // (Google/Apple/Microsoft…) exibem "seu navegador está bloqueando pop-ups".
+  const mountWebview = useCallback((container: HTMLDivElement | null) => {
+    if (!container) {
+      webviewRef.current = null
+      return
+    }
+    if (webviewRef.current?.isConnected) {
+      return
+    }
+
+    const element = document.createElement('webview') as WebviewTag
+    element.className = 'nodrag nowheel nopan h-full w-full'
+    element.setAttribute('allowpopups', '')
+    element.setAttribute('partition', SHARED_WEBVIEW_PARTITION)
+    element.setAttribute(
+      'webpreferences',
+      'contextIsolation=yes,nodeIntegration=no,sandbox=yes',
+    )
+    element.setAttribute('src', initialUrlRef.current)
+
+    container.prepend(element)
+    webviewRef.current = element
+  }, [])
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -190,20 +224,9 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1">
-        <webview
-          ref={webviewRef}
-          src={initialUrlRef.current}
-          className="nodrag nowheel nopan h-full w-full"
-          partition={SHARED_WEBVIEW_PARTITION}
-          // OAuth logins (Google/Apple/Microsoft…) rely on a real popup window
-          // that posts a message back to this page — denying window.open
-          // breaks that handshake, so popups must be allowed here. The main
-          // process (webview-lifecycle.cjs) still keeps plain target=_blank
-          // links navigating in-place instead of opening a window.
-          allowpopups
-          webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes"
-        />
+      {/* O <webview> é criado imperativamente por `mountWebview`, não em JSX —
+          ver o comentário lá para o porquê. */}
+      <div ref={mountWebview} className="relative min-h-0 flex-1">
         {/* <webview> composites above regular DOM content and can swallow the
             mousedown that starts a resize drag on the handles overlapping its
             edges — this stays inert except while actively resizing, so it
