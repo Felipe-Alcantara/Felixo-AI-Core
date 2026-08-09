@@ -5,16 +5,21 @@
  * thing that still needs main-process logic is deciding what "open in new
  * window" attempts should do.
  *
- * Two cases, told apart by Chromium's `disposition`:
- *  - A plain link with target=_blank ('foreground-tab'/'background-tab') is
- *    just regular browsing — the product wants that to stay INSIDE the block,
- *    so it navigates the same webview instead of popping a window.
- *  - `window.open(url, name, "features...")`, e.g. an OAuth login button
- *    (Google/Apple/Microsoft…), reports as 'new-window' and expects a real
- *    popup that posts a message back to the opener when it's done — denying
- *    it (or redirecting the opener's own tab) breaks that handshake, which is
- *    exactly the bug this used to cause. Those get a real child window, with
- *    the same locked-down webPreferences as every other webview guest.
+ * Told apart by Chromium's `disposition`:
+ *  - 'foreground-tab' / 'background-tab' is a plain target=_blank link — the
+ *    product wants that to stay INSIDE the block, so it navigates the same
+ *    webview instead of popping a window.
+ *  - Everything else ('default', 'new-window', 'other') is a deliberate
+ *    `window.open(...)` call, which is how OAuth login buttons (Google/
+ *    Apple/Microsoft…) open their popup — 'default' in particular is what
+ *    Chromium reports for a *programmatic* window.open(), the common case
+ *    for a login button's onclick handler, not just the Shift+click case
+ *    'new-window' covers. That popup expects to post a message back to the
+ *    opener when it's done; denying it (or redirecting the opener's own tab)
+ *    breaks that handshake and the site reports "popup blocked" — the exact
+ *    bug this used to cause by only recognizing 'new-window'. These get a
+ *    real child window, with the same locked-down webPreferences as every
+ *    other webview guest.
  */
 
 /**
@@ -23,20 +28,20 @@
  * `webContents`.
  */
 function resolveWindowOpenAction(disposition) {
-  if (disposition === 'new-window') {
-    return {
-      action: 'allow',
-      overrideBrowserWindowOptions: {
-        webPreferences: {
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-        },
-      },
-    }
+  if (disposition === 'foreground-tab' || disposition === 'background-tab') {
+    return { action: 'deny' }
   }
 
-  return { action: 'deny' }
+  return {
+    action: 'allow',
+    overrideBrowserWindowOptions: {
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    },
+  }
 }
 
 function registerWebviewLifecycle(mainWindow) {

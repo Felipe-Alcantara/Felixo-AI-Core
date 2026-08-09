@@ -199,8 +199,8 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
           // OAuth logins (Google/Apple/Microsoft…) rely on a real popup window
           // that posts a message back to this page — denying window.open
           // breaks that handshake, so popups must be allowed here. The main
-          // process (webview-lifecycle.cjs) still tells popups apart from a
-          // plain target=_blank link: only the latter navigates in-place.
+          // process (webview-lifecycle.cjs) still keeps plain target=_blank
+          // links navigating in-place instead of opening a window.
           allowpopups
           webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes"
         />
