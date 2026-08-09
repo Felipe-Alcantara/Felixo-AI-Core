@@ -89,7 +89,12 @@ def process_has_exited(process: subprocess.Popen[bytes]) -> bool:
         return process.poll() is not None
 
     try:
-        pid, _status = os.waitpid(process.pid, os.WNOHANG)
+        # getattr, não os.WNOHANG direto: este ramo só roda de verdade em
+        # POSIX (a checagem de os.name acima garante isso), mas o atributo é
+        # lido antes de qualquer chamada, e o Windows não o tem — um teste
+        # que força os.name = "posix" para exercitar esta lógica ali
+        # estouraria AttributeError mesmo com os.waitpid mockado.
+        pid, _status = os.waitpid(process.pid, getattr(os, "WNOHANG", 0))
     except ChildProcessError:
         # Already reaped by the outer `wait()` — the process is gone.
         return True

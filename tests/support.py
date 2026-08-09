@@ -6,6 +6,7 @@ several test modules, so it lives here instead of being copied around.
 
 from __future__ import annotations
 
+import os
 import stat
 import subprocess
 import unittest
@@ -33,10 +34,28 @@ EXTERNALLY_MANAGED_OUTPUT = (
 )
 
 
-def write_executable(path: Path, body: str) -> None:
+def write_executable(path: Path, body: str) -> Path:
+    """Cria um binário fake que o SO de teste realmente executa.
+
+    `body` é uma linha de shell (`echo ...`, `exit 1`) — no Windows não existe
+    shebang nem bit executável, então o arquivo vira um `.cmd`, que o CMD
+    interpreta linha a linha da mesma forma. `shutil.which()` (usado pela
+    descoberta em produção) resolve `PATHEXT` sozinho, então o nome base
+    continua bastando para quem chama esta função.
+
+    Devolve o Path REAL escrito (com a extensão no Windows), para os
+    chamadores que precisam do caminho exato do arquivo.
+    """
+    if os.name == "nt":
+        target = path.with_suffix(".cmd")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"@echo off\r\n{body}\r\n", encoding="utf-8")
+        return target
+
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return path
 
 
 def make_node_bin(bin_dir: Path, node_version: str = "v25.9.0") -> Path:

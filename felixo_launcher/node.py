@@ -118,7 +118,16 @@ def iter_node_bin_candidates(version: str | None) -> list[Path]:
         if not path:
             return
 
-        candidate = Path(path).expanduser()
+        raw_candidate = Path(path)
+        try:
+            candidate = raw_candidate.expanduser()
+        except RuntimeError:
+            # Mesmo caso de env_path(): sem HOME/USERPROFILE resolvível,
+            # Path.expanduser() levanta em vez de devolver o caminho como
+            # veio. Um candidato com "~" literal não bate com nada real de
+            # qualquer forma, então cai como está em vez de derrubar a busca
+            # inteira.
+            candidate = raw_candidate
         if candidate.name.lower() in {"node", "node.exe", "npm", "npm.cmd"}:
             candidate = candidate.parent
 
@@ -139,9 +148,10 @@ def iter_node_bin_candidates(version: str | None) -> list[Path]:
     for path in split_path_env(get_path_env(os.environ)):
         add(path)
 
-    home = Path.home()
-    for relative_path in USER_NODE_BIN_DIRS:
-        add(home / relative_path)
+    home = home_dir()
+    if home is not None:
+        for relative_path in USER_NODE_BIN_DIRS:
+            add(home / relative_path)
 
     if sys.platform == "darwin":
         for path in MACOS_NODE_BIN_DIRS:
@@ -160,7 +170,35 @@ def split_path_env(value: str | None) -> list[str]:
 
     return [path for path in value.split(os.pathsep) if path]
 def env_path(name: str, default: str) -> Path:
-    return Path(os.environ.get(name) or default).expanduser()
+    """`Path(...).expanduser()`, mas degrada para o caminho não expandido em
+    vez de estourar.
+
+    `Path.expanduser()` do pathlib levanta `RuntimeError` quando não consegue
+    resolver `~` — diferente de `os.path.expanduser`, que devolve o texto
+    original nesse caso. No Windows sem `USERPROFILE`/`HOMEPATH` (o ambiente
+    de teste do GitHub Actions, por exemplo) isso é alcançável de verdade, e
+    cada um dos ~6 gerenciadores de versão consultados na busca do Node
+    chama esta função — um `RuntimeError` aqui derrubava a descoberta
+    inteira. Um caminho com `~` literal simplesmente não bate com nenhum
+    candidato real, o que é uma resposta aceitável; a exceção não era.
+    """
+    raw = Path(os.environ.get(name) or default)
+    return safe_expanduser(raw)
+
+
+def safe_expanduser(path: Path) -> Path:
+    """`path.expanduser()`, mas degrada para o caminho não expandido em vez
+    de propagar `RuntimeError` quando o SO não consegue resolver `~`.
+
+    Ver a nota em `env_path()` acima: qualquer um dos ~6 gerenciadores de
+    versão consultados na busca do Node passa por aqui, então um
+    `RuntimeError` não tratado em qualquer chamador derrubava a descoberta
+    inteira.
+    """
+    try:
+        return path.expanduser()
+    except RuntimeError:
+        return path
 
 
 def get_path_env(env: object) -> str:
@@ -205,7 +243,7 @@ def add_version_manager_candidates(add: NodeBinAdder, version: str | None) -> No
             add(nvm_home / "versions" / "node" / dirname / "bin")
 
         fnm_homes = [
-            Path(path).expanduser()
+            safe_expanduser(Path(path))
             for path in (os.environ.get("FNM_DIR"), "~/.local/share/fnm", "~/.fnm")
             if path
         ]
@@ -240,7 +278,7 @@ def add_version_manager_candidates(add: NodeBinAdder, version: str | None) -> No
     add_installed_version_bins(add, nvm_home / "versions" / "node", ("bin",))
 
     for fnm_home in (
-        Path(path).expanduser()
+        safe_expanduser(Path(path))
         for path in (os.environ.get("FNM_DIR"), "~/.local/share/fnm", "~/.fnm")
         if path
     ):
@@ -270,7 +308,7 @@ def iter_nvm_windows_homes() -> list[Path]:
 
     def add(path: str | Path | None) -> None:
         if path:
-            candidate = Path(path).expanduser()
+            candidate = safe_expanduser(Path(path))
             if candidate not in homes:
                 homes.append(candidate)
 
@@ -288,7 +326,7 @@ def iter_windows_node_bin_dirs() -> list[Path]:
 
     def add(path: str | None) -> None:
         if path:
-            candidates.append(Path(path).expanduser())
+            candidates.append(safe_expanduser(Path(path)))
 
     add(os.environ.get("NVM_SYMLINK"))
     add(os.environ.get("NVM_HOME"))
@@ -370,6 +408,22 @@ def probe_command(
         return None
 
 
+def home_dir() -> Path | None:
+    """`Path.home()`, mas degrada para `None` em vez de estourar.
+
+    No Windows, `Path.home()` delega a `os.path.expanduser('~')`, que procura
+    `USERPROFILE` (ou `HOMEDRIVE`+`HOMEPATH`) — nunca `HOME`. Um ambiente sem
+    nenhum dos dois faz `Path.home()` levantar `RuntimeError`, e os diretórios
+    de usuário aqui são só mais um lugar opcional de procurar o Node: sem
+    home, a busca simplesmente segue sem esses candidatos, em vez de a função
+    inteira falhar.
+    """
+    try:
+        return Path.home()
+    except RuntimeError:
+        return None
+
+
 def build_env(node_bin: Path | None) -> dict[str, str]:
     env = os.environ.copy()
     path_entries: list[str] = []
@@ -379,8 +433,9 @@ def build_env(node_bin: Path | None) -> dict[str, str]:
 
     path_entries.extend(split_path_env(env.get(NODE_SEARCH_PATHS_ENV)))
 
-    home = Path.home()
-    path_entries.extend(str(home / relative_path) for relative_path in USER_NODE_BIN_DIRS)
+    home = home_dir()
+    if home is not None:
+        path_entries.extend(str(home / relative_path) for relative_path in USER_NODE_BIN_DIRS)
 
     if sys.platform == "darwin":
         path_entries.extend(MACOS_NODE_BIN_DIRS)

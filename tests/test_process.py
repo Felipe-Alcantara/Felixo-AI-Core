@@ -99,8 +99,8 @@ class StopProcessTests(unittest.TestCase):
         process.pid = 4242
 
         with patch.object(process_module.os, "name", "posix"), patch(
-            "felixo_launcher.process.os.getpgid", return_value=4242
-        ), patch("felixo_launcher.process.os.killpg") as killpg:
+            "felixo_launcher.process.os.getpgid", return_value=4242, create=True
+        ), patch("felixo_launcher.process.os.killpg", create=True) as killpg:
             process_module.signal_process_group(process, signal.SIGTERM)
 
         killpg.assert_called_once_with(4242, signal.SIGTERM)
@@ -111,7 +111,7 @@ class StopProcessTests(unittest.TestCase):
         process.pid = 4242
 
         with patch.object(process_module.os, "name", "posix"), patch(
-            "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError
+            "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError, create=True
         ):
             process_module.signal_process_group(process, signal.SIGTERM)
 
@@ -123,7 +123,7 @@ class StopProcessTests(unittest.TestCase):
         process.terminate.side_effect = ProcessLookupError
 
         with patch.object(process_module.os, "name", "posix"), patch(
-            "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError
+            "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError, create=True
         ):
             process_module.signal_process_group(process, signal.SIGTERM)
 
@@ -139,7 +139,7 @@ class StopProcessTests(unittest.TestCase):
         process.poll.return_value = None  # what a blocked Popen reports
 
         with patch.object(process_module.os, "name", "posix"), patch(
-            "felixo_launcher.process.os.waitpid", return_value=(4242, 0)
+            "felixo_launcher.process.os.waitpid", return_value=(4242, 0), create=True
         ):
             self.assertTrue(process_module.process_has_exited(process))
 
@@ -149,7 +149,7 @@ class StopProcessTests(unittest.TestCase):
         process.returncode = None
 
         with patch.object(process_module.os, "name", "posix"), patch(
-            "felixo_launcher.process.os.waitpid", side_effect=ChildProcessError
+            "felixo_launcher.process.os.waitpid", side_effect=ChildProcessError, create=True
         ):
             self.assertTrue(process_module.process_has_exited(process))
 
@@ -159,7 +159,7 @@ class StopProcessTests(unittest.TestCase):
         process.returncode = None
 
         with patch.object(process_module.os, "name", "posix"), patch(
-            "felixo_launcher.process.os.waitpid", return_value=(0, 0)
+            "felixo_launcher.process.os.waitpid", return_value=(0, 0), create=True
         ):
             self.assertFalse(process_module.process_has_exited(process))
 
@@ -302,3 +302,42 @@ class IsAppProcessCommandArgv0Test(unittest.TestCase):
                 self.MARKER,
             )
         )
+
+
+class WnohangAttributeAccessTests(unittest.TestCase):
+    """`os.WNOHANG`, `os.getpgid` e `os.killpg` não existem como atributos do
+    módulo `os` no Windows.
+
+    Os testes de `StopProcessTests` acima forçam `os.name = "posix"` para
+    exercitar esses ramos mesmo rodando lá, mockando as três funções — mas
+    `patch()` sem `create=True` exige que o atributo já exista para poder
+    substituí-lo, e o Windows nunca teve nenhum dos três. E mesmo mockado,
+    `os.waitpid(pid, os.WNOHANG)` acessava `os.WNOHANG` como valor literal
+    antes de o mock interceptar a chamada, o que também estourava.
+
+    Essa combinação era a causa do `ERROR` na suíte inteira do launcher no
+    job windows-latest do CI: uma falha de acesso a atributo mascarando o
+    resultado dos testes de verdade.
+    """
+
+    def test_process_has_exited_usa_getattr_para_wnohang(self) -> None:
+        process = MagicMock()
+        process.pid = 4242
+        process.returncode = None
+
+        # Remove o atributo do objeto os REAL usado pelo módulo, reproduzindo
+        # o Windows de verdade — não um valor trocado, ausência mesmo.
+        had_attr = hasattr(process_module.os, "WNOHANG")
+        original = getattr(process_module.os, "WNOHANG", None)
+        if had_attr:
+            del process_module.os.WNOHANG
+
+        try:
+            with patch.object(process_module.os, "name", "posix"), patch(
+                "felixo_launcher.process.os.waitpid", return_value=(0, 0), create=True
+            ):
+                # Não pode levantar AttributeError.
+                process_module.process_has_exited(process)
+        finally:
+            if had_attr:
+                process_module.os.WNOHANG = original

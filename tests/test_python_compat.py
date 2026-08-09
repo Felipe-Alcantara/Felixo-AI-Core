@@ -22,13 +22,16 @@ class PythonCompatibilityTests(unittest.TestCase):
 
         Discovered rather than listed so a new module is covered the moment it
         is added, instead of silently escaping these checks."""
+        # .as_posix(), não str(): no Windows, str(WindowsPath) usa "\" — este
+        # módulo compara os caminhos com barra normal, então str() faria o
+        # teste falhar ali por divergência de separador, não por um bug real.
         files = ["start_app.py"]
         files.extend(
-            str(path.relative_to(paths.ROOT_DIR))
+            path.relative_to(paths.ROOT_DIR).as_posix()
             for path in sorted((paths.ROOT_DIR / "felixo_launcher").glob("*.py"))
         )
         files.extend(
-            str(path.relative_to(paths.ROOT_DIR))
+            path.relative_to(paths.ROOT_DIR).as_posix()
             for path in sorted((paths.ROOT_DIR / "tests").glob("*.py"))
         )
         return files
