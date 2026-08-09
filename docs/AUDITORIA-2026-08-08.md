@@ -88,7 +88,7 @@ normalização de entrada e formatação de evento no mesmo arquivo (ver ARQ-01)
 |---|---|---|---|---|---|
 | SEC-01 | Média | Confirmado | Config | `.env` não ignorado, com `.env.example` mandando criá-lo | ✅ Corrigido |
 | SEC-02 | Baixa | Confirmado | Electron | Popup do webview não restringe suas próprias novas janelas | ✅ Corrigido |
-| PRIV-01 | Média | Confirmado | Dados | Títulos de conversa pessoais versionados em repo open source | ⚠️ Parcial — removido do `HEAD`, segue no histórico |
+| PRIV-01 | Média | Confirmado | Dados | Títulos de conversa pessoais versionados em repo open source | ✅ Corrigido — expurgado do histórico (seção 3.1) |
 | ARQ-01 | Alta | Confirmado | Backend | `sendCliRequest`: ~570 linhas dentro de função de ~790 | ⏸️ Aberto (Fase 2) |
 | ARQ-02 | Média | Confirmado | Frontend | `CanvasView.tsx`: 1611 linhas, 54 hooks, 37 imports | ⏸️ Aberto (Fase 2) |
 | DUP-01 | Média | Confirmado | Backend | `toErrorResult` idêntico em 9 arquivos | ✅ Corrigido |
@@ -351,13 +351,27 @@ auditoria superestimados e foram rebaixados após teste.
 | ID | Severidade | Confiança | Local | Resumo | Status |
 |---|---|---|---|---|---|
 | BUG-03 | Baixa | Confirmado | `orchestration-runner.cjs:403` | `cliType` chegava `undefined` na detecção de disponibilidade | ✅ Corrigido (`2de8b0f`) |
-| RACE-01 | Alta | Provável | `orchestration-runner.cjs:504-516` | Respawn de fallback reusa o `threadId` sem marcar o job | ⏸️ Aberto |
+| RACE-01 | Alta | Provável | `orchestration-runner.cjs:504-516` | Respawn de fallback reusa o `threadId` sem marcar o job | ✅ Corrigido (`6156e89`) |
+| BUG-01 | Média | Confirmado | `orchestration-runner.cjs:614` | `failExpiredRuns()` nunca é chamado em produção | ✅ Corrigido (`049e460`) |
+| LEAK-01 | Média | Confirmado | `orchestration-store.cjs:91` | Runs concluídos nunca saem do store | ✅ Corrigido (`6156e89`) |
+| LEAK-02 | Média | Confirmado | `persistent-cli-session.cjs:412-429` | `deferredPromptFallbackTimer` sobrevive ao fim da sessão | ✅ Corrigido (`049e460`) |
+| RACE-03 | — | **Descartado** | `persistent-cli-session.cjs:323-326` | `stdoutGuard` não é drenado no `close` | ❌ Não é bug — ver abaixo |
 | RACE-02 | Média | Provável | `persistent-cli-session.cjs:78,119` | Guard `activeRun` checado antes do spawn, atribuído depois | ⏸️ Aberto |
-| RACE-03 | Média | Provável | `persistent-cli-session.cjs:323-326` | `stdoutGuard` não é drenado no `close` | ⏸️ Aberto |
-| BUG-01 | Média | Confirmado | `orchestration-runner.cjs:614` | `failExpiredRuns()` nunca é chamado em produção | ⏸️ Aberto |
 | BUG-02 | Média | Confirmado | `orchestration-runner.cjs:578` | `maxTurns` esgotado falha o run em vez de sintetizar | ⏸️ Aberto |
-| LEAK-01 | Média | Confirmado | `orchestration-store.cjs:91` | Runs concluídos nunca saem do store | ⏸️ Aberto |
-| LEAK-02 | Média | Confirmado | `persistent-cli-session.cjs:412-429` | `deferredPromptFallbackTimer` sobrevive ao fim da sessão | ⏸️ Aberto |
+
+**RACE-03 foi descartado por verificação.** O guard só bufferiza até a primeira
+inspeção: no primeiro caractere não-branco ele despeja o buffer e todo chunk seguinte passa
+direto. O único caso de retenção é uma saída composta *apenas* de espaço em branco — que o
+line-reader descartaria de qualquer forma. Não há perda de dado real, e o `flush()` do
+line-reader (esse sim existente) é chamado tanto em `end` quanto em `close`.
+
+**Por que RACE-02 e BUG-02 seguem abertos.** RACE-02 depende de duas chamadas concorrentes
+com o mesmo `threadId` se intercalarem entre a checagem e a atribuição de `activeRun`; o
+gatilho mais plausível era a dupla reinvocação da RACE-01, agora corrigida, então o cenário
+pode ter deixado de ser alcançável — verificar isso exige reproduzir a corrida, não ler o
+código. BUG-02 não é defeito técnico e sim decisão de produto: hoje, esgotar `maxTurns`
+falha o run e descarta o trabalho dos agentes; sintetizar uma resposta final com o que já
+existe é comportamento diferente, e quem decide isso é o dono do projeto.
 
 **Sobre o BUG-03 e a disciplina anti-ruído.** A auditoria o classificou como Média, alegando que o
 `undefined` impedia o fallback de reconhecer erros específicos por provedor. Verifiquei rodando
@@ -382,9 +396,88 @@ resolve um run que trava para sempre), **LEAK-02** (falta `clearDeferredPromptFa
 pontos), **LEAK-01** (evict FIFO no store), depois **BUG-02**, e por fim as três races, que pedem
 teste dedicado antes.
 
-**Incertezas que a auditoria não resolveu** e que valem checar antes de mexer: se
-`createJsonlOutputGuard` expõe `flush()` (RACE-03 depende disso) e se a janela de reentrância da
-RACE-02 é alcançável no main process single-threaded sem o gatilho da RACE-01.
+---
+
+## 5.2 Terceira passada — restante de `electron/services` e o launcher Python
+
+Cobre os arquivos de tamanho médio de `electron/services/` e as ~2167 linhas do
+`felixo_launcher/`, que as passadas anteriores só tinham varrido por segurança.
+
+### `electron/services/`
+
+| ID | Severidade | Local | Resumo | Status |
+|---|---|---|---|---|
+| AVAIL-01 | **Alta** | `model-availability.cjs:130-152` | `done` de um modelo apagava o limite de toda a CLI | ✅ Corrigido (`27b7799`) |
+| AVAIL-02 | Baixa | `model-availability.cjs:286-288` | Regex de reset não casava "reset **at** 3pm" | ✅ Corrigido (`27b7799`) |
+| SEC-03 | Baixa | `system-design-service.cjs:39` | `git clone` sem `--` antes de uma URL configurável | ✅ Corrigido (`27b7799`) |
+| LEAK-03 | Baixa | `pty-process-manager.cjs:313` | `killTimer` seguia armado após o processo morrer | ✅ Corrigido (`27b7799`) |
+
+**AVAIL-01 é o achado mais grave desta rodada e foi reproduzido antes de corrigir:** com o
+limite de uso da Claude ativo em um modelo, o `done` de qualquer outro modelo do mesmo provedor
+zerava o registro cli-wide. O seletor voltava a considerar o modelo esgotado operacional,
+respawnava nele, tomava o mesmo erro — queimando turnos de orquestração em vez de migrar de
+provedor.
+
+### `felixo_launcher/`
+
+| ID | Severidade | Local | Resumo | Status |
+|---|---|---|---|---|
+| LAUNCH-01 | Alta | `runner.py:74-92` | `FELIXO_NODE_BIN` salvo no menu era ignorado | ✅ Corrigido (`1dd9fb0`) |
+| LAUNCH-02 | Alta | `git.py:141-151`, `menu.py:298` | Saída do git decodificada pelo locale (quebra no Windows) | ✅ Corrigido (`1dd9fb0`) |
+| LAUNCH-03 | Média-Alta | `process.py:185-191` | Limpeza matava editor aberto em `node_modules` | ✅ Corrigido (`1dd9fb0`) |
+| LAUNCH-04 | Média-Alta | `commands.py:132-142` | Ctrl+C no Windows deixava Electron/vite órfãos | ✅ Corrigido (`1dd9fb0`) |
+
+**LAUNCH-03 violava uma promessa escrita no próprio código.** O docstring de
+`cleanup_app_processes` diz que só processos cujo comando *nomeia um binário que iniciamos* são
+elegíveis, mas o filtro aceitava qualquer menção — e `.../node_modules/vite/...` já contém
+`/vite`. Um `vim` aberto num arquivo dessa pasta recebia SIGTERM e, 1s depois, SIGKILL, com
+perda de trabalho não salvo. O filtro passou a exigir o executável no `argv[0]` (ou no script,
+quando o `argv[0]` é um runtime nosso).
+
+**LAUNCH-02 quebrava antes de o app abrir.** `text=True` sem `encoding=` usa o locale — cp1252
+num Windows pt-BR. Uma branch acentuada levanta `UnicodeDecodeError`, que é subclasse de
+`ValueError` e por isso escapava dos `except (OSError, CalledProcessError)`. Como o auto-update
+roda em toda inicialização, o resultado seria um traceback na primeira execução.
+
+**Cobertura da terceira passada:** o auditor do launcher rodou a suíte inteira sob Python 3.9 em
+container para confirmar compatibilidade (o CI testa 3.9 e 3.13). Nenhum `shell=True`, `eval`,
+download remoto ou escrita de segredo foi encontrado.
+
+---
+
+## 5.3 Validação no app real
+
+As passadas anteriores foram por leitura. Rodar o app empacotado encontrou **dois bugs que
+nenhuma suíte pegaria**, ambos invisíveis em desenvolvimento:
+
+| ID | Severidade | Local | Resumo | Status |
+|---|---|---|---|---|
+| BUILD-01 | **Alta** | `vite.config.ts` | Build de produção abria em branco | ✅ Corrigido (`a63b574`) |
+| OAUTH-01 | **Alta** | `WebpageNode.tsx` | `allowpopups` nunca chegava ao DOM | ✅ Corrigido (`5f0dada`) |
+
+**BUILD-01** — o Vite não definia `base`, emitindo assets como `/assets/…`. O app empacotado
+carrega o renderer com `loadFile()`, isto é, `file://`, onde um caminho absoluto resolve para a
+raiz do disco: o bundle nunca carregava. Existia desde o commit inicial e **só afeta produção** —
+em dev o Vite serve por `http://` e o caminho funciona. Coberto por teste que lê o `dist/index.html`
+e falha se um asset local voltar a usar caminho absoluto.
+
+**OAUTH-01 explica por que duas correções anteriores do login não funcionaram.** O atributo
+`allowpopups`, escrito em JSX, nunca era serializado — `@types/react` o declara como boolean, e o
+React não emite atributo booleano em elemento desconhecido. O DOM real mostrava
+`allowpopups: false`. Setá-lo por `ref` também não resolve: o Chromium decide se o guest aceita
+popups no instante em que o anexa, e nem setar depois nem re-setar `src` revertem — ambos
+verificados no app. A saída foi criar o `<webview>` imperativamente, com os atributos definidos
+antes do `appendChild`. Verificado no app: `window.open` passou a devolver uma janela em vez de
+`null`, e o `did-create-window` do main process dispara.
+
+**Método**: driver Playwright (`_electron`) sobre Xvfb, com `--user-data-dir` isolado para não
+tocar no banco do usuário. Um detalhe custou tempo e vale registrar: `ELECTRON_RUN_AS_NODE=1`
+vem herdado quando o driver roda de dentro de outro app Electron, e faz o binário rodar como Node
+puro — janela vazia e flags do Chromium recusadas, sintoma facilmente confundido com bug do app.
+
+**Validado visualmente**: botão "Página Web" na toolbar, popover com URL + nome, bloco criado
+carregando a página de verdade, URL normalizada (`example.com` → `https://example.com/`) e o bloco
+listado no dock "Elementos" com o ícone correto.
 
 ---
 
@@ -392,19 +485,24 @@ RACE-02 é alcançável no main process single-threaded sem o gatilho da RACE-01
 
 Em nome da honestidade sobre o alcance desta auditoria:
 
-- **Testado por leitura, não por execução**: nenhum achado foi validado rodando o app. As
-  verificações executadas foram `npm test` (447 passando), `npm run test:frontend` (200 passando),
-  `tsc -b` (limpo), `npm audit` (0 vulns) e `git check-ignore`.
+- **Rodando o app**: a validação no Electron real aconteceu e encontrou dois bugs que nenhuma
+  suíte pegaria — o build de produção abrindo em branco (assets absolutos sob `file://`) e o
+  `allowpopups` do bloco de Página Web nunca chegando ao DOM, que era a causa real do login OAuth
+  bloqueado. Ver seção 5.3.
+- **Verificações executadas**: `npm test` (466 passando), `npm run test:frontend` (200 passando),
+  `pytest tests/` (89 + 70 subtests), `tsc -b` (limpo), `npm audit` (0 vulns) e `git check-ignore`.
 - **A suíte de frontend passou despercebida na primeira passada.** O projeto tem `vitest` e um
   script `test:frontend` com 24 arquivos de teste que eu não estava executando — só rodava
   `npm test`, que cobre apenas os `.cjs` do processo principal. Todas as mudanças de frontend da
   primeira rodada foram validadas só por `tsc -b`. Rodada depois, a suíte passou inteira, mas o
   risco existiu; quem for mexer aqui precisa rodar **as duas**.
-- **Cobertura rasa**: `felixo_launcher/` (2167 linhas Python) recebeu apenas varredura de segurança
-  (sem `shell=True`, confirmado); sua lógica interna não foi auditada. `docs/_legado/` foi ignorado
-  por ser documentação arquivada.
+- ~~**Cobertura rasa**: `felixo_launcher/`~~ → **auditado na terceira passada** (seção 5.2),
+  incluindo execução da suíte sob Python 3.9. `docs/_legado/` segue ignorado por ser documentação
+  arquivada.
 - ~~**Não auditado**: `orchestration-runner.cjs` e `persistent-cli-session.cjs`~~ → **coberto na
-  segunda passada** (seção 5.1). Restam sem leitura linha a linha os demais arquivos de tamanho
-  médio de `electron/services/`.
+  segunda passada** (seção 5.1). ~~Restam os demais arquivos de `electron/services/`~~ →
+  **cobertos na terceira passada** (seção 5.2).
+- **Segue sem leitura linha a linha**: o frontend (`app/src/`, ~24k linhas). As três passadas
+  focaram no processo principal e no launcher, que são as superfícies com acesso ao SO.
 - **Sem análise dinâmica**: não houve fuzzing de IPC, teste de penetração, nem verificação de
   comportamento em runtime.
