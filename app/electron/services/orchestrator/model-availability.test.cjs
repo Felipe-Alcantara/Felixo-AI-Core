@@ -213,3 +213,18 @@ test('continua reconhecendo o formato sem preposição', () => {
   assert.equal(parseResetInfo('resets 3pm', now).label, '3pm')
   assert.equal(parseResetInfo('resets 4:40pm', now).label, '4:40pm')
 })
+
+test('parseResetInfo calcula o horário de reset em America/Sao_Paulo, não no fuso do processo', () => {
+  // Bug real: a implementação usava Date#setHours, que opera no fuso local do
+  // processo Node — correto por acaso em quem desenvolve no fuso de São Paulo,
+  // errado em qualquer CI rodando em UTC (a diferença observada no CI foi
+  // consistentemente de 3h, o offset entre os dois). A mensagem da CLI inclui
+  // o fuso explicitamente ("resets 4:40pm (America/Sao_Paulo)"), então o
+  // horário sempre deve ser interpretado nesse fuso, não no do processo.
+  const agoraUtc = new Date('2026-05-02T18:10:00Z').getTime() // 15:10 em SP
+
+  const resetInfo = parseResetInfo('resets 4:40pm', agoraUtc)
+
+  // 16:40 em São Paulo (UTC-3) é 19:40 UTC.
+  assert.equal(resetInfo.expiresAt, new Date('2026-05-02T19:40:00Z').getTime())
+})

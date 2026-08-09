@@ -287,6 +287,69 @@ function shouldTreatLimitAsCliWide(normalizedText, cliType) {
   )
 }
 
+// A CLI da Claude sempre anuncia o horário de reset neste fuso ("resets 4:40pm
+// (America/Sao_Paulo)"), então o cálculo tem que fixar esse fuso — nunca o do
+// processo Node. `Date#setHours` opera no fuso local do processo, o que
+// funcionava por acidente em quem desenvolve em UTC-3 e quebrava em qualquer
+// CI rodando em UTC, com o horário de reset saindo 3h adiantado.
+const RESET_TIME_ZONE = 'America/Sao_Paulo'
+
+/**
+ * Timestamp da próxima ocorrência de `hour:minute` no fuso `timeZone`, a
+ * partir de `nowMs`. Rola para o dia seguinte quando o horário já passou hoje.
+ *
+ * Calcula por tentativa e ajuste em vez de aritmética de offset: o deslocamento
+ * de um fuso varia com horário de verão, e `Intl.DateTimeFormat` já sabe disso
+ * — replicar essa tabela à mão seria reintroduzir o mesmo tipo de bug.
+ */
+function nextOccurrenceInTimeZone(nowMs, hour, minute, timeZone) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  // Chuta meia-noite UTC do dia civil atual NO FUSO ALVO como partida — no
+  // pior caso (fuso maior que -12h) o alvo cai no dia seguinte, e o loop
+  // abaixo corrige.
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(nowMs)
+  const ano = Number(partes.find((p) => p.type === 'year').value)
+  const mes = Number(partes.find((p) => p.type === 'month').value)
+  const dia = Number(partes.find((p) => p.type === 'day').value)
+
+  for (let deltaDias = 0; deltaDias < 3; deltaDias += 1) {
+    // Ponto de partida em UTC; ajustado abaixo até bater a hora local alvo.
+    let candidato = Date.UTC(ano, mes - 1, dia + deltaDias, hour, minute)
+
+    for (let tentativa = 0; tentativa < 4; tentativa += 1) {
+      const [horaLocal, minutoLocal] = formatter
+        .formatToParts(candidato)
+        .filter((parte) => parte.type === 'hour' || parte.type === 'minute')
+        .map((parte) => Number(parte.value))
+
+      const diffMinutos = (hour - horaLocal) * 60 + (minute - minutoLocal)
+      if (diffMinutos === 0) {
+        break
+      }
+      candidato += diffMinutos * 60_000
+    }
+
+    if (candidato > nowMs) {
+      return candidato
+    }
+  }
+
+  // Não deveria ser alcançável (o loop de deltaDias cobre folga suficiente),
+  // mas nunca devolver algo no passado é mais seguro que lançar aqui.
+  return nowMs
+}
+
 function parseResetInfo(message, nowMs) {
   const match = String(message).match(
     // O "at" opcional cobre o formato que a CLI da Claude emite de fato
@@ -324,15 +387,10 @@ function parseResetInfo(message, nowMs) {
     hour = 0
   }
 
-  const resetDate = new Date(nowMs)
-  resetDate.setHours(hour, minuteValue, 0, 0)
-
-  if (resetDate.getTime() <= nowMs) {
-    resetDate.setDate(resetDate.getDate() + 1)
-  }
+  const expiresAt = nextOccurrenceInTimeZone(nowMs, hour, minuteValue, RESET_TIME_ZONE)
 
   return {
-    expiresAt: resetDate.getTime(),
+    expiresAt,
     // Apara a pontuação final da frase: "...reset at 3pm." não deve virar
     // o rótulo "3pm.".
     label: match[0]
