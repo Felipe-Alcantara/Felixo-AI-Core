@@ -1,4 +1,4 @@
-export type CanvasNodeType = 'terminal' | 'note' | 'group' | 'file'
+export type CanvasNodeType = 'terminal' | 'note' | 'group' | 'file' | 'webpage'
 
 export type GroupNodeData = {
   label?: string
@@ -64,6 +64,18 @@ export type TerminalNodeData = {
   terminalIndex?: number
 }
 
+/**
+ * A canvas block that embeds a live <webview> — a mini-browser docked in the
+ * canvas. Only the current/last-navigated URL is kept: back/forward history
+ * lives in the webview's own in-memory session and is never serialized.
+ */
+export type WebpageNodeData = {
+  /** Current/last-navigated URL — restored as-is when the block reopens. */
+  url?: string
+  /** Human label shown on the node header (searchable). */
+  label?: string
+}
+
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'
 
 export type NoteNodeData = {
@@ -91,6 +103,7 @@ export type CanvasNodeData = TerminalNodeData &
   NoteNodeData &
   GroupNodeData &
   FileNodeData &
+  WebpageNodeData &
   OrderedNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */

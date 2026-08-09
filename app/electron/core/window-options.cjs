@@ -16,6 +16,10 @@ const mainWindowOptions = {
     contextIsolation: true,
     nodeIntegration: false,
     sandbox: true,
+    // Lets canvas blocks embed a live <webview> (the "Página Web" block) —
+    // each guest still gets its own contextIsolation/nodeIntegration via the
+    // element's `webpreferences` attribute (see WebpageNode.tsx).
+    webviewTag: true,
   },
 }
 

@@ -11,6 +11,7 @@ export const DEFAULT_SIZE: Record<
   file: { width: 320, height: 260 },
   terminal: { width: 520, height: 360 },
   note: { width: 220, height: 160 },
+  webpage: { width: 560, height: 420 },
 }
 
 const NODE_PLACEMENT_GAP = 32

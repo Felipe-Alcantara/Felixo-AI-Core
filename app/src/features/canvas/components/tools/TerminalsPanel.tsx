@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
+  Globe,
   GripVertical,
   Group,
   Loader2,
@@ -64,6 +65,7 @@ const TYPE_ICON: Record<CanvasNodeType, typeof TerminalIcon> = {
   note: StickyNote,
   file: FileText,
   group: Group,
+  webpage: Globe,
 }
 
 function elementTitle(node: Node<CanvasNodeData>) {
@@ -72,6 +74,7 @@ function elementTitle(node: Node<CanvasNodeData>) {
     data.label ||
     data.command ||
     data.fileName ||
+    data.url ||
     `${node.type ?? 'Bloco'} ${node.id.slice(0, 6)}`
   )
 }

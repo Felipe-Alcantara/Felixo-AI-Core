@@ -27,6 +27,7 @@ import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { GroupNode } from './GroupNode'
 import { FileNode } from './FileNode'
+import { WebpageNode } from './WebpageNode'
 import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import { CanvasToolbar } from './CanvasToolbar'
@@ -844,7 +845,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         }
       }
 
-      if (node.type === 'note' || node.type === 'group') {
+      if (node.type === 'note' || node.type === 'group' || node.type === 'webpage') {
         return {
           ...withHandle,
           data: reuseData(node.id, [node.data], () => ({
@@ -1373,7 +1374,13 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   )
 
   const nodeTypes = useMemo<NodeTypes>(
-    () => ({ terminal: TerminalNode, note: NoteNode, group: GroupNode, file: FileNode }),
+    () => ({
+      terminal: TerminalNode,
+      note: NoteNode,
+      group: GroupNode,
+      file: FileNode,
+      webpage: WebpageNode,
+    }),
     [],
   )
 
@@ -1415,6 +1422,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         }
         onAddFile={addFileNode}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
+        onAddWebpage={(url, name) =>
+          addNode('webpage', { url, ...(name ? { label: name } : {}) })
+        }
         canvasMode={canvasMode}
         onToggleMode={() =>
           setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))

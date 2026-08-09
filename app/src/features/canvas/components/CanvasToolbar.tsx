@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Download,
   FileText,
+  Globe,
   Group,
   Hand,
   LayoutGrid,
@@ -32,6 +33,7 @@ import {
   toolbarFlyoutStyle,
   useToolbarFlyoutPosition,
 } from './toolbar-flyout'
+import { normalizeUrlInput } from '../services/url-utils'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
 /** Shape shared by every toolbar button; the press depth comes from the
@@ -65,6 +67,7 @@ type CanvasToolbarProps = {
   onAddNote: (name?: string) => void
   onAddFile: (name?: string) => void
   onAddGroup: (name?: string) => void
+  onAddWebpage: (url: string, name?: string) => void
   canvasMode: 'select' | 'pan'
   onToggleMode: () => void
   onFitView: () => void
@@ -95,6 +98,7 @@ export function CanvasToolbar({
   onAddNote,
   onAddFile,
   onAddGroup,
+  onAddWebpage,
   canvasMode,
   onToggleMode,
   onFitView,
@@ -256,6 +260,12 @@ export function CanvasToolbar({
         buttonLabel="Grupo"
         placeholder="Nome do grupo (opcional)"
         onCreate={onAddGroup}
+        toolsMenuOpen={toolsMenuOpen}
+      />
+      <UrlCreateButton
+        icon={<Globe size={16} />}
+        buttonLabel="Página Web"
+        onCreate={onAddWebpage}
         toolsMenuOpen={toolsMenuOpen}
       />
 
@@ -421,6 +431,113 @@ function NamedCreateButton({
               }
             }}
             placeholder={placeholder}
+            className="mb-2 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-sky-500/50"
+          />
+          <button
+            type="button"
+            onClick={create}
+            className="felixo-btn w-full rounded bg-sky-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-600"
+          >
+            Criar
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type UrlCreateButtonProps = {
+  icon: ReactNode
+  buttonLabel: string
+  /** Creates the block; `name` is undefined when the field is left empty. */
+  onCreate: (url: string, name?: string) => void
+  /** The tools menu widens the toolbar column; the popover slides over to clear it. */
+  toolsMenuOpen: boolean
+}
+
+/**
+ * Like NamedCreateButton, but for a block that needs a URL rather than just a
+ * name — the "Página Web" mini-browser block. The URL is required (blocked
+ * client-side via normalizeUrlInput); the name stays optional.
+ */
+function UrlCreateButton({ icon, buttonLabel, onCreate, toolsMenuOpen }: UrlCreateButtonProps) {
+  const [open, setOpen] = useState(false)
+  const [url, setUrl] = useState('')
+  const [name, setName] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const flyoutPosition = useToolbarFlyoutPosition({
+    open,
+    toolsMenuOpen,
+    containerRef,
+    panelRef,
+    panelWidth: 224,
+  })
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [open])
+
+  const create = () => {
+    const normalized = normalizeUrlInput(url)
+    if (!normalized) return
+    onCreate(normalized, name.trim() || undefined)
+    setUrl('')
+    setName('')
+    setOpen(false)
+  }
+
+  return (
+    <div ref={containerRef} className="relative w-36">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`${TOOLBAR_BUTTON_CLASS} w-full`}
+      >
+        {icon}
+        {buttonLabel}
+      </button>
+
+      {open && (
+        <div
+          ref={panelRef}
+          style={toolbarFlyoutStyle(flyoutPosition)}
+          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-56 rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+        >
+          <input
+            autoFocus
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                create()
+              } else if (event.key === 'Escape') {
+                setOpen(false)
+              }
+            }}
+            placeholder="URL (ex: google.com)"
+            className="mb-1.5 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-sky-500/50"
+          />
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                create()
+              } else if (event.key === 'Escape') {
+                setOpen(false)
+              }
+            }}
+            placeholder="Nome (opcional)"
             className="mb-2 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-500 focus:ring-sky-500/50"
           />
           <button

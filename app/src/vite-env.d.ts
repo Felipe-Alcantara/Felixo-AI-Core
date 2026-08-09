@@ -31,7 +31,7 @@ type PersistedCanvasEdge = {
 
 type PersistedCanvasNode = {
   id: string
-  type: 'terminal' | 'note' | 'group' | 'file'
+  type: 'terminal' | 'note' | 'group' | 'file' | 'webpage'
   parentId?: string | null
   position: { x: number; y: number }
   width?: number | null
