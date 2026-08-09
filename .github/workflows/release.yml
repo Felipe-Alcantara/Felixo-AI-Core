@@ -1,21 +1,41 @@
 name: Release
 
+# Publica os instaladores dos três SOs a cada push em main — mas só depois
+# do CI daquele commit passar. `workflow_run` é o que permite esse
+# encadeamento: o gatilho é a CONCLUSÃO do CI, não o push em si, então um
+# commit que quebrou teste nunca vira instalador publicado.
+#
+# `workflow_dispatch` fica para republicar um commit manualmente sem
+# precisar de um push novo.
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
     branches:
-      - production
+      - main
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
   contents: write
 
+# Um release por vez. Se dois pushes entrarem em sequência, o mais novo
+# cancela o anterior — publicar o penúltimo commit não tem valor quando o
+# último já está a caminho.
 concurrency:
-  group: release-production
+  group: release-main
   cancel-in-progress: true
 
 jobs:
   publish:
     name: Publish ${{ matrix.os }}
+    # No caminho do workflow_dispatch não existe `workflow_run`, e a
+    # conclusão vem vazia — por isso o segundo lado do OR, que deixa a
+    # execução manual passar.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+      || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,6 +55,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # workflow_run roda no contexto do branch padrão, não no commit que
+          # disparou o CI. Sem fixar o SHA, o release publicaria o topo de
+          # main em vez do commit que realmente foi validado.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -46,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Set production version
+      - name: Set release version
         shell: bash
         run: |
           BASE_VERSION="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
