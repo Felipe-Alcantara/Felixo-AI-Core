@@ -18,6 +18,13 @@ from .support import clean_node_env, make_node_bin, write_executable
 
 
 class StartAppNodeDiscoveryTests(unittest.TestCase):
+    @unittest.skipIf(
+        os.name == "nt",
+        "Cenário exclusivo do Homebrew (macOS): depende de symlinks, que no "
+        "Windows exigem privilégio elevado, e de um layout prefix/Cellar que "
+        "não existe lá. Simular a plataforma não ajudaria — o que se testa "
+        "aqui é a resolução de symlink real do sistema de arquivos.",
+    )
     def test_preserves_homebrew_symlink_bin_instead_of_resolving_to_cellar(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -124,9 +131,14 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
             root = Path(tmpdir)
             homebrew_bin = make_node_bin(root / "opt" / "homebrew" / "bin")
 
+            # os.name="posix" junto de sys.platform="darwin": a busca decide o
+            # ramo do Windows por os.name, então sem fixar os dois o teste roda
+            # o caminho do Windows no runner de lá e nunca olha o Homebrew.
             with patch.dict(os.environ, clean_node_env(root), clear=True), patch.object(
                 node, "MACOS_NODE_BIN_DIRS", (str(homebrew_bin),)
-            ), patch.object(node.sys, "platform", "darwin"):
+            ), patch.object(node.sys, "platform", "darwin"), patch.object(
+                node.os, "name", "posix"
+            ):
                 self.assertEqual(
                     node.find_node_bin(None, "22.12.0"),
                     homebrew_bin,

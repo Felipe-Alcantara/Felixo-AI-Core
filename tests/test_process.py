@@ -75,8 +75,16 @@ class ProcessCleanupTests(unittest.TestCase):
         # os.name="posix": a limpeza é um no-op no Windows (não há pgrep nem
         # grupos de processo), então rodando lá esta lógica nunca executaria e
         # o teste não veria chamada nenhuma. Fixar a plataforma mantém a regra
-        # de escalonamento coberta nos três SOs.
-        with patch.object(process_module.os, "name", "posix"), patch(
+        # de escalonamento coberta nos três SOs — e, como o módulo `signal` do
+        # Windows não tem SIGKILL, ele entra mockado junto para a função poder
+        # ler a constante que só existe no POSIX que estamos simulando.
+        signal_posix = SimpleNamespace(
+            **{**vars(signal), "SIGKILL": POSIX_FORCE_SIGNAL}
+        )
+
+        with patch.object(process_module.os, "name", "posix"), patch.object(
+            process_module, "signal", signal_posix
+        ), patch(
             "felixo_launcher.process.find_stale_app_pids", return_value=[10, 20]
         ), patch("felixo_launcher.process.time.sleep"), patch(
             "felixo_launcher.process.process_is_alive", side_effect=lambda pid: pid == 20
@@ -121,9 +129,14 @@ class StopProcessTests(unittest.TestCase):
         process = MagicMock()
         process.pid = 4242
 
+        # `os.killpg` também precisa ser mockado, e não só `getpgid`: no
+        # Windows o atributo não existe no módulo `os`, e a chamada
+        # `os.killpg(os.getpgid(...))` resolve o nome externo antes de o
+        # `getpgid` interno chegar a levantar — o AttributeError vinha de
+        # `killpg`, fora do `except ProcessLookupError`.
         with patch.object(process_module.os, "name", "posix"), patch(
             "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError, create=True
-        ):
+        ), patch("felixo_launcher.process.os.killpg", create=True):
             process_module.signal_process_group(process, signal.SIGTERM)
 
         process.terminate.assert_called_once()
@@ -135,7 +148,7 @@ class StopProcessTests(unittest.TestCase):
 
         with patch.object(process_module.os, "name", "posix"), patch(
             "felixo_launcher.process.os.getpgid", side_effect=ProcessLookupError, create=True
-        ):
+        ), patch("felixo_launcher.process.os.killpg", create=True):
             process_module.signal_process_group(process, signal.SIGTERM)
 
     def test_reaps_child_from_a_signal_handler_without_falsely_timing_out(self) -> None:
