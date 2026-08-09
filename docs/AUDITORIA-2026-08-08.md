@@ -263,6 +263,35 @@ normalização de entrada e formatação de evento no mesmo arquivo (ver ARQ-01)
 
 ---
 
+## 3.1 Expurgo do histórico (PRIV-01) — procedimento e limitações
+
+Executado a pedido do dono do projeto, depois de apresentado o custo/benefício.
+
+**Procedimento**:
+1. Backup espelho completo do repositório antes de qualquer escrita.
+2. Correção do próprio relatório, que citava três dos títulos como evidência e os
+   reintroduziria no `HEAD` (commit `e65df2b`, pré-expurgo).
+3. `git filter-repo --replace-text`, substituindo cada um dos 12 títulos por um rótulo genérico
+   (`Exemplo de conversa N`). Escolhido em vez de remover o arquivo: `models.ts` contém código
+   legítimo que deve permanecer no histórico, e o dado havia passado por **10 arquivos** de
+   `app/src/features/chat/` ao longo do tempo — remover só `models.ts` não teria bastado.
+4. `--force-with-lease` em `main` e `production`, mais a tag `v0.1.1` (reescrita junto).
+
+**Verificação**: busca por cada título em `git log --all -S` retorna zero ocorrências, tanto no
+repositório local quanto em **clone fresco do GitHub**. A contagem de commits bate com o backup
+(478 + 1 novo = 479), `git fsck` sem erros, `tsc -b` limpo e 428/428 testes passando. O diff entre
+o histórico antigo e o novo é exatamente as 12 linhas — nenhum outro conteúdo mudou.
+
+**O que o expurgo NÃO resolveu** (limitação inerente, não falha de execução):
+- O fork `flaviavs-commits/Felixo-AI-Core` mantém o histórico antigo com o dado original. Se a
+  conta for do próprio dono, dá para limpar da mesma forma; se não for, o dado permanece fora
+  do seu controle.
+- Objetos órfãos podem persistir no cache do GitHub por tempo indeterminado. É possível pedir
+  coleta de lixo ao suporte do GitHub caso o dado seja sensível o bastante para justificar.
+- Clones locais feitos antes desta data seguem com o histórico antigo.
+
+---
+
 ## 4. Plano de remediação
 
 ### Fase 0 — Parar o sangramento ✅ concluída
@@ -270,7 +299,8 @@ normalização de entrada e formatação de evento no mesmo arquivo (ver ARQ-01)
 | Item | Esforço | Risco de regressão | Como foi validado |
 |---|---|---|---|
 | SEC-01 — `.env` no `.gitignore` | P | Nenhum | `git check-ignore` confirma `.env`, `app/.env`, `.env.*` ignorados e `.env.example` preservado |
-| PRIV-01 — remover `recentItems` | P | Nenhum (era morto) | `tsc -b` limpo; `ChatWorkspace.tsx:3-7` importa só os 3 exports restantes |
+| PRIV-01 — remover `recentItems` do `HEAD` | P | Nenhum (era morto) | `tsc -b` limpo; `ChatWorkspace.tsx:3-7` importa só os 3 exports restantes |
+| PRIV-01 — expurgar do histórico | M | Nenhum no código; quebra clones/fork | Ver seção 3.1: verificado em clone fresco do remoto |
 
 ### Fase 1 — Consolidação barata ✅ concluída
 
@@ -295,13 +325,20 @@ normalização de entrada e formatação de evento no mesmo arquivo (ver ARQ-01)
 
 ## 5. Perguntas em aberto
 
-1. **PRIV-01 / histórico**: remover `recentItems` do `HEAD` é trivial, mas o dado permanece no
-   histórico público. Reescrever o histórico (`git filter-repo` + force-push) resolve, mas quebra
-   clones existentes. Vale a pena, ou o conteúdo é inócuo o suficiente para deixar como está?
-2. **ARQ-01**: a refatoração de `sendCliRequest` é a de maior retorno estrutural e a de maior risco.
-   Quer que ela seja feita com você acompanhando, ou prefere manter como está e só documentar?
-3. **`.env` na raiz vs `app/`**: o `.env.example` está na raiz, mas o app Node vive em `app/`.
-   Qual é o local pretendido para o `.env` real? A correção do `.gitignore` deve cobrir os dois.
+Todas as três perguntas originais foram respondidas pelo dono do projeto. Registradas aqui com o
+desfecho, e o que sobrou de cada uma:
+
+1. ~~**PRIV-01 / histórico**~~ → **Resolvido**: expurgo autorizado e executado (seção 3.1). Sobrou
+   uma ação fora do escopo desta auditoria: **limpar o fork `flaviavs-commits/Felixo-AI-Core`**,
+   que mantém o histórico antigo. Se a conta for do próprio dono, o mesmo procedimento se aplica.
+2. ~~**ARQ-01**~~ → **Resolvido**: refatoração autorizada, com exigência explícita de TDD.
+3. ~~**`.env` na raiz vs `app/`**~~ → **A premissa da pergunta estava errada.** Investigando para
+   responder, descobri que **nenhum processo carrega `.env`**: não há `dotenv` no Node nem
+   `load_dotenv` no Python. O `.env.example` documentava um mecanismo inexistente — copiá-lo para
+   `.env` não teria efeito nenhum. A configuração real é o menu do `start_app.py`, que grava
+   `.felixo-start-config.json` (já gitignorado) e o aplica ao ambiente em
+   `felixo_launcher/runner.py:92` via `apply_config_to_env`. O exemplo foi corrigido para apontar
+   o caminho que funciona; o `.gitignore` mantém `.env` coberto como rede de segurança.
 
 ---
 
