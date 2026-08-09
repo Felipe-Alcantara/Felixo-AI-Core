@@ -130,7 +130,12 @@ function createModelAvailabilityRegistry(options = {}) {
   function clearForModel(model, cliType) {
     const resolvedCliType = cliType ?? model?.cliType
     let cleared = false
-    for (const key of createAvailabilityKeys(model, resolvedCliType, 'all')) {
+    // Só o escopo do modelo. Um limite cli-wide (o de uso da Claude, por
+    // exemplo) vale para todos os modelos do provedor e expira pelo próprio
+    // cooldown — apagá-lo aqui faria o sucesso de um modelo "liberar" outro
+    // que continua esgotado, e o seletor voltaria a escolhê-lo só para tomar
+    // o mesmo erro, queimando turnos em vez de migrar de provedor.
+    for (const key of createAvailabilityKeys(model, resolvedCliType, 'model')) {
       if (entries.delete(key)) {
         cleared = true
       }
@@ -284,7 +289,10 @@ function shouldTreatLimitAsCliWide(normalizedText, cliType) {
 
 function parseResetInfo(message, nowMs) {
   const match = String(message).match(
-    /\bresets?\s+(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i,
+    // O "at" opcional cobre o formato que a CLI da Claude emite de fato
+    // ("...will reset at 3pm"); sem ele o horário não era reconhecido e a UI
+    // perdia o "Reset previsto".
+    /\bresets?(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i,
   )
 
   if (!match) {
@@ -325,7 +333,12 @@ function parseResetInfo(message, nowMs) {
 
   return {
     expiresAt: resetDate.getTime(),
-    label: match[0].replace(/^resets?\s+/i, '').trim(),
+    // Apara a pontuação final da frase: "...reset at 3pm." não deve virar
+    // o rótulo "3pm.".
+    label: match[0]
+      .replace(/^resets?(?:\s+at)?\s+/i, '')
+      .replace(/[.,;:]+$/, '')
+      .trim(),
   }
 }
 

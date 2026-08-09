@@ -310,6 +310,14 @@ class PtyProcessManager {
       // Keep a completed entry until the renderer explicitly kills/removes the
       // node. A renderer reload can then restore the final output and status
       // instead of spawning a fresh agent for a task that already ended.
+      //
+      // The entry stays, but the pending SIGKILL timer must not: the process
+      // is already gone, so the escalation has nothing left to do and would
+      // just sit armed until it fires.
+      if (entry.killTimer) {
+        clearTimeout(entry.killTimer)
+        entry.killTimer = null
+      }
       entry.exitEvent = event
       entry.onExit?.(event)
     })

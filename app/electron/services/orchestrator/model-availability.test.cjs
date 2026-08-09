@@ -137,3 +137,79 @@ test('parseResetInfo rolls past times into the next day', () => {
 
   assert.equal(resetInfo.expiresAt, new Date('2026-05-03T16:40:00-03:00').getTime())
 })
+
+test('sucesso de um modelo não levanta o limite que vale para a CLI inteira', () => {
+  // Um limite de uso da Claude é cli-wide: vale para todos os modelos do
+  // provedor, com cooldown de horas. Antes, o `done` de qualquer modelo
+  // apagava também a chave de escopo CLI, então um sub-agente que terminasse
+  // bem "liberava" um modelo comprovadamente esgotado — o seletor voltava a
+  // escolhê-lo, tomava o mesmo erro e queimava turnos de orquestração em vez
+  // de migrar de provedor.
+  const registry = createModelAvailabilityRegistry()
+  const opus = { id: 'opus', name: 'Opus', cliType: 'claude' }
+  const haiku = { id: 'haiku', name: 'Haiku', cliType: 'claude' }
+
+  registry.recordError({
+    message: 'usage limit reached',
+    cliType: 'claude',
+    model: opus,
+  })
+  assert.equal(registry.getModelAvailability(opus).status, 'limit_reached')
+
+  registry.recordCliEvent({
+    cliEvent: { type: 'done' },
+    cliType: 'claude',
+    model: haiku,
+  })
+
+  assert.equal(
+    registry.getModelAvailability(opus).status,
+    'limit_reached',
+    'o limite da CLI deveria sobreviver ao sucesso de outro modelo dela',
+  )
+})
+
+test('sucesso de um modelo levanta o limite que era só daquele modelo', () => {
+  // O contraponto do teste acima: um limite de escopo `model` continua sendo
+  // limpo por um `done`, senão o modelo ficaria bloqueado à toa.
+  const registry = createModelAvailabilityRegistry()
+  const modelo = { id: 'gpt', name: 'GPT', cliType: 'codex' }
+
+  registry.recordError({
+    message: 'rate limit exceeded',
+    cliType: 'codex',
+    model: modelo,
+  })
+  assert.equal(registry.getModelAvailability(modelo).status, 'limit_reached')
+
+  registry.recordCliEvent({
+    cliEvent: { type: 'done' },
+    cliType: 'codex',
+    model: modelo,
+  })
+
+  assert.equal(registry.getModelAvailability(modelo).status, 'available')
+})
+
+test('reconhece o horário de reset mesmo com "at" antes da hora', () => {
+  // Formato que a CLI da Claude realmente emite. O regex exigia o dígito
+  // imediatamente após "reset(s)", então a preposição quebrava o casamento e
+  // a UI perdia o "Reset previsto" (caía no cooldown fixo, sem rótulo).
+  const now = new Date('2026-05-03T10:00:00-03:00').getTime()
+
+  for (const mensagem of [
+    'resets at 3pm',
+    'Claude usage limit reached. Your limit will reset at 3pm.',
+  ]) {
+    const info = parseResetInfo(mensagem, now)
+    assert.ok(info, `deveria reconhecer: ${mensagem}`)
+    assert.equal(info.label, '3pm', 'o rótulo não deve incluir o "at"')
+  }
+})
+
+test('continua reconhecendo o formato sem preposição', () => {
+  const now = new Date('2026-05-03T10:00:00-03:00').getTime()
+
+  assert.equal(parseResetInfo('resets 3pm', now).label, '3pm')
+  assert.equal(parseResetInfo('resets 4:40pm', now).label, '4:40pm')
+})

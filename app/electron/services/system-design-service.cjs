@@ -36,7 +36,7 @@ async function syncSystemDesignRepository({
   const isFreshClone = !(await pathExists(path.join(repoPath, '.git')))
 
   if (isFreshClone) {
-    await runGit(cacheDir, ['clone', '--depth', '1', '--branch', branch, repoUrl, 'repo'])
+    await runGit(cacheDir, createCloneArgs({ repoUrl, branch }))
   } else {
     try {
       await runGit(repoPath, ['fetch', '--depth', '1', 'origin', branch])
@@ -135,6 +135,18 @@ function parseMarkdownTitleAndSummary(content, fallbackPath) {
   return { title, summary }
 }
 
+/**
+ * Monta os argumentos do `git clone`.
+ *
+ * O `--` antes da URL não é decorativo: `repoUrl` é configurável pelo renderer
+ * (canal `system-design:save-config`), e sem o separador um valor começando com
+ * "-" seria interpretado pelo git como opção em vez de endereço — a classe de
+ * problema que flags como `--upload-pack` exploram.
+ */
+function createCloneArgs({ repoUrl, branch }) {
+  return ['clone', '--depth', '1', '--branch', branch, '--', repoUrl, 'repo']
+}
+
 async function runGit(cwd, args) {
   const { stdout } = await execFileAsync('git', args, {
     cwd,
@@ -159,6 +171,7 @@ function describeError(error) {
 
 module.exports = {
   DEFAULT_REPO_URL,
+  createCloneArgs,
   DEFAULT_BRANCH,
   parseMarkdownTitleAndSummary,
   syncSystemDesignRepository,
