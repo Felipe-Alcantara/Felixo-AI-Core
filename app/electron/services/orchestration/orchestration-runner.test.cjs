@@ -903,3 +903,52 @@ test('checkOrchestratorDoneWithoutSpawn skips when at least one agent already sp
   assert.notEqual(result?.rejected, true)
   assert.equal(invokeCalls.length, 0, 'guard must not fire when spawn already happened')
 })
+
+test('mid-task fallback propaga o cliType do agente que falhou', async () => {
+  // `locatedJob` carrega apenas { runId, agentId }, então a detecção de
+  // disponibilidade recebia `cliType: undefined`.
+  //
+  // Hoje isso não muda comportamento observável: o retorno da detecção só é
+  // testado por `if (!issue)`, e nenhuma mensagem de limite deixa de ser
+  // reconhecida por falta de cliType — o provedor afeta apenas o scope e o
+  // cooldown do objeto, que ali são descartados. O registro persistido
+  // também não dependia disso, porque `recordError` refaz a detecção por
+  // conta própria com o cliType certo.
+  //
+  // O teste existe para que a informação continue chegando inteira: no dia
+  // em que a decisão passar a olhar o scope (ex.: "limite da CLI toda →
+  // migra de provedor; limite do modelo → tenta outro modelo"), o campo
+  // precisa estar preenchido, e um undefined silencioso levaria à escolha
+  // errada sem nada falhar.
+  const recordedErrors = []
+  const runner = createTestRunner({
+    spawnAgent: async (params) => ({ ok: true, threadId: params.threadId }),
+    validateSpawnAgent: () => ({
+      ok: true,
+      modelChoice: { selectionRule: 'best-available-model', selectedCliType: 'claude' },
+      selectedModel: { id: 'claude-main', cliType: 'claude' },
+    }),
+  })
+
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({
+      modelAvailabilityRegistry: {
+        recordError: (params) => recordedErrors.push(params),
+      },
+    }),
+  )
+
+  const result = await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: 'rate limit exceeded',
+  })
+
+  assert.deepEqual(
+    recordedErrors.map((entry) => entry.cliType),
+    ['claude'],
+    'o provedor do agente que falhou deveria chegar ao registro de disponibilidade',
+  )
+  assert.equal(result.ok, true)
+})

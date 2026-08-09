@@ -398,9 +398,20 @@ class OrchestrationRunner {
       return null
     }
 
+    // O job precisa ser localizado ANTES da detecção: `locatedJob` carrega
+    // apenas { runId, agentId }, então ler o cliType dali daria sempre
+    // undefined — e o provedor muda o resultado da classificação (um limite
+    // do Claude é cli-wide, com cooldown próprio; sem cliType viraria um
+    // limite de modelo, e o orquestrador tentaria outro modelo da mesma CLI
+    // igualmente bloqueada).
+    const job = findAgentJob(run, locatedJob.agentId)
+    if (!job) {
+      return null
+    }
+
     const issue = detectAvailabilityIssue({
       message: errorMessage,
-      cliType: locatedJob.cliType,
+      cliType: job.cliType,
     })
 
     if (!issue) {
@@ -414,10 +425,6 @@ class OrchestrationRunner {
     }
 
     const runContext = this.getRunContext(locatedJob.runId)
-    const job = findAgentJob(run, locatedJob.agentId)
-    if (!job) {
-      return null
-    }
 
     if (runContext.modelAvailabilityRegistry?.recordError) {
       runContext.modelAvailabilityRegistry.recordError({
