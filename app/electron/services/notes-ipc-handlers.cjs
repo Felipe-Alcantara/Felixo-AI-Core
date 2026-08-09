@@ -1,4 +1,5 @@
 const { ipcMain } = require('electron')
+const { toErrorResult } = require('./ipc-result.cjs')
 const {
   createNotesRepository,
 } = require('./storage/notes-repository.cjs')
@@ -38,13 +39,6 @@ function registerNotesIpcHandlers(options = {}) {
       return toErrorResult(error, 'Nao foi possivel excluir a nota.')
     }
   })
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
-  }
 }
 
 module.exports = {

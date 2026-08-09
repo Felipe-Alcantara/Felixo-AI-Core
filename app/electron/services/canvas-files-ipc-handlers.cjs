@@ -15,6 +15,7 @@ const { ipcMain } = require('electron')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const path = require('node:path')
+const { toErrorResult } = require('./ipc-result.cjs')
 
 function registerCanvasFilesIpcHandlers(getMainWindow, appPaths) {
   const baseDir = appPaths.canvasFiles
@@ -207,13 +208,6 @@ function resolveSafePath(baseDir, rawName) {
   }
 
   return resolved
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
-  }
 }
 
 module.exports = {

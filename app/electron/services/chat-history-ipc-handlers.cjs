@@ -1,4 +1,5 @@
 const { ipcMain } = require('electron')
+const { toErrorResult } = require('./ipc-result.cjs')
 const {
   createChatHistoryRepository,
 } = require('./storage/chat-history-repository.cjs')
@@ -51,13 +52,6 @@ function registerChatHistoryIpcHandlers(options = {}) {
       return toErrorResult(error, 'Nao foi possivel remover o chat.')
     }
   })
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
-  }
 }
 
 module.exports = {

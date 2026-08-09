@@ -1,6 +1,7 @@
 'use strict'
 
 const { ipcMain } = require('electron')
+const { toErrorResult } = require('./ipc-result.cjs')
 const {
   createAutomationsRepository,
 } = require('./storage/automations-repository.cjs')
@@ -31,13 +32,6 @@ function registerAutomationsIpcHandlers(options = {}) {
       return toErrorResult(error, 'Nao foi possivel excluir automation.')
     }
   })
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
-  }
 }
 
 module.exports = {

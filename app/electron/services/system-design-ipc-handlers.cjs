@@ -14,6 +14,7 @@ const {
   syncSystemDesignRepository,
 } = require('./system-design-service.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
+const { toErrorResult } = require('./ipc-result.cjs')
 
 const SYSTEM_DESIGN_CONFIG_KEY = 'system-design.config'
 
@@ -172,13 +173,6 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
       return toErrorResult(error, 'Falha ao limpar cache do System Design.')
     }
   })
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
-  }
 }
 
 module.exports = {

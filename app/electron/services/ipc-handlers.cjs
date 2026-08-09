@@ -1097,10 +1097,10 @@ function normalizeOrchestrationSettings(value) {
   return {
     preferredModelIds: normalizeStringList(value.preferredModelIds),
     blockedModelIds: normalizeStringList(value.blockedModelIds),
-    maxAgentsPerTurn: normalizePositiveInteger(value.maxAgentsPerTurn),
-    maxTurns: normalizePositiveInteger(value.maxTurns),
-    maxTotalAgents: normalizePositiveInteger(value.maxTotalAgents),
-    maxRuntimeMinutes: normalizePositiveInteger(value.maxRuntimeMinutes),
+    maxAgentsPerTurn: toPositiveIntegerOrUndefined(value.maxAgentsPerTurn),
+    maxTurns: toPositiveIntegerOrUndefined(value.maxTurns),
+    maxTotalAgents: toPositiveIntegerOrUndefined(value.maxTotalAgents),
+    maxRuntimeMinutes: toPositiveIntegerOrUndefined(value.maxRuntimeMinutes),
   }
 }
 
@@ -1123,7 +1123,7 @@ function normalizeStringList(value) {
     : []
 }
 
-function normalizePositiveInteger(value) {
+function toPositiveIntegerOrUndefined(value) {
   return Number.isInteger(value) && value > 0 ? value : undefined
 }
 

@@ -1,6 +1,7 @@
 const { ipcMain, dialog } = require('electron')
 const fs = require('fs')
 const path = require('path')
+const { toErrorResult } = require('./ipc-result.cjs')
 const {
   createProjectsRepository,
 } = require('./storage/projects-repository.cjs')
@@ -287,13 +288,6 @@ function hasGit(dirPath) {
     return fs.existsSync(path.join(dirPath, '.git'))
   } catch {
     return false
-  }
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
   }
 }
 

@@ -10,6 +10,7 @@
  */
 
 const { ipcMain } = require('electron')
+const { toErrorResult } = require('./ipc-result.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
 
 /**
@@ -101,15 +102,10 @@ function requireSessionId(sessionId) {
   return sessionId
 }
 
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
-  }
-}
-
 module.exports = {
   registerPtyIpcHandlers,
   requireSessionId,
+  // Reexportado a partir de ./ipc-result.cjs para não quebrar quem já importa
+  // daqui (inclusive o teste deste módulo).
   toErrorResult,
 }

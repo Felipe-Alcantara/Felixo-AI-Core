@@ -1,6 +1,7 @@
 'use strict'
 
 const { ipcMain } = require('electron')
+const { toErrorResult } = require('./ipc-result.cjs')
 const {
   createModelsRepository,
 } = require('./storage/models-repository.cjs')
@@ -31,13 +32,6 @@ function registerModelsIpcHandlers(options = {}) {
       return toErrorResult(error, 'Nao foi possivel excluir o modelo.')
     }
   })
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
-  }
 }
 
 module.exports = {

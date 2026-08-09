@@ -8,6 +8,7 @@
  */
 
 const { ipcMain } = require('electron')
+const { toErrorResult } = require('./ipc-result.cjs')
 const {
   createCanvasRepository,
 } = require('./storage/canvas-repository.cjs')
@@ -262,13 +263,6 @@ async function restoreFiles(replaceFiles, files) {
     await replaceFiles(files)
   } catch {
     // Preserve the original import failure.
-  }
-}
-
-function toErrorResult(error, fallbackMessage) {
-  return {
-    ok: false,
-    message: error instanceof Error ? error.message : fallbackMessage,
   }
 }
 

@@ -161,10 +161,6 @@ export function detectModelCliType(
   return detectCliType([model.command, model.name, model.source].join(' '))
 }
 
-export function normalizeCliType(value: unknown): CliType {
-  return isCliType(value) ? value : 'unknown'
-}
-
 function normalizeModel(value: unknown): Model | null {
   if (!value || typeof value !== 'object') {
     return null

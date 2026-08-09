@@ -368,23 +368,23 @@ function normalizeAgentJobs(agentJobs) {
 
 function normalizeLimits(limits = {}) {
   return {
-    maxTurns: normalizePositiveInteger(limits.maxTurns, DEFAULT_LIMITS.maxTurns),
-    maxAgentsPerTurn: normalizePositiveInteger(
+    maxTurns: requirePositiveInteger(limits.maxTurns, DEFAULT_LIMITS.maxTurns),
+    maxAgentsPerTurn: requirePositiveInteger(
       limits.maxAgentsPerTurn,
       DEFAULT_LIMITS.maxAgentsPerTurn,
     ),
-    maxTotalAgents: normalizePositiveInteger(
+    maxTotalAgents: requirePositiveInteger(
       limits.maxTotalAgents,
       DEFAULT_LIMITS.maxTotalAgents,
     ),
-    maxRuntimeMinutes: normalizePositiveInteger(
+    maxRuntimeMinutes: requirePositiveInteger(
       limits.maxRuntimeMinutes,
       DEFAULT_LIMITS.maxRuntimeMinutes,
     ),
   }
 }
 
-function normalizePositiveInteger(value, fallback) {
+function requirePositiveInteger(value, fallback) {
   if (value === undefined || value === null) {
     return fallback
   }

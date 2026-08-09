@@ -229,5 +229,3 @@ export function useOrchestrationDashboard(): OrchestrationDashboardState & {
     reset,
   }
 }
-
-export const ORCHESTRATION_DASHBOARD_EMPTY = EMPTY_DASHBOARD
