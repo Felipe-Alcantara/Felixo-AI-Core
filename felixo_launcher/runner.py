@@ -71,6 +71,18 @@ def prepare_node_env() -> tuple[Path, dict[str, str]] | None:
         print(f"[felixo] App directory not found: {APP_DIR}", file=sys.stderr)
         return None
 
+    # A configuração entra ANTES da descoberta: FELIXO_NODE_BIN existe
+    # justamente para apontar um Node que a busca automática não acha, e é
+    # lido de os.environ lá dentro. Aplicá-la só depois deixava a opção do
+    # menu "Configurar" sem efeito nenhum.
+    #
+    # setdefault, não atribuição: uma variável exportada no shell é um
+    # override pontual e deve vencer o valor salvo.
+    config = load_config()
+    for chave, valor in config.items():
+        if valor:
+            os.environ.setdefault(chave, valor)
+
     node_version = read_node_version()
     minimum_node_version = read_minimum_node_version()
     node_bin = find_node_bin(node_version, minimum_node_version)
@@ -89,7 +101,7 @@ def prepare_node_env() -> tuple[Path, dict[str, str]] | None:
         return None
 
     env = build_env(node_bin)
-    apply_config_to_env(env, load_config())
+    apply_config_to_env(env, config)
     return node_bin, env
 
 

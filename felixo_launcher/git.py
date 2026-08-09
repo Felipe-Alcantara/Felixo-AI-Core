@@ -143,9 +143,11 @@ def get_current_branch(env: dict[str, str]) -> str | None:
             cwd=ROOT_DIR,
             env=env,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             stderr=subprocess.DEVNULL,
         ).strip()
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, ValueError, subprocess.CalledProcessError):
         return None
 
     return branch or None
@@ -167,9 +169,11 @@ def is_behind_upstream(branch: str, env: dict[str, str]) -> bool:
             cwd=ROOT_DIR,
             env=env,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             stderr=subprocess.DEVNULL,
         ).strip()
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, ValueError, subprocess.CalledProcessError):
         return False
 
     try:
@@ -193,7 +197,7 @@ def run_git_quietly(
             stderr=subprocess.DEVNULL,
             timeout=timeout,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.TimeoutExpired):
         return 1
 
 
@@ -204,6 +208,8 @@ def get_dirty_files(env: dict[str, str]) -> list[str]:
             cwd=ROOT_DIR,
             env=env,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except subprocess.CalledProcessError:
         return ["Unable to read git status."]
@@ -218,6 +224,8 @@ def get_current_revision(env: dict[str, str]) -> str | None:
             cwd=ROOT_DIR,
             env=env,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         ).strip()
     except subprocess.CalledProcessError:
         print("[felixo] Unable to read current Git revision.", file=sys.stderr)

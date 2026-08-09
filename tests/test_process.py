@@ -250,3 +250,55 @@ class StopProcessTests(unittest.TestCase):
         process.kill.assert_called_once()
 
 
+
+
+class IsAppProcessCommandArgv0Test(unittest.TestCase):
+    """A limpeza só pode matar o que o launcher de fato inicia.
+
+    O filtro exigia apenas que a linha de comando *contivesse* algo como
+    `/vite` — e o próprio caminho `.../node_modules/vite/...` já contém. Um
+    editor aberto num arquivo dessa pasta passava no teste e levava SIGTERM
+    seguido de SIGKILL, com perda de trabalho não salvo.
+    """
+
+    MARKER = "/home/dev/proj/app/node_modules"
+
+    def test_nao_mata_processo_que_apenas_menciona_o_caminho(self) -> None:
+        alheios = [
+            f"vim {self.MARKER}/vite/dist/node/chunks/dep-abc.js",
+            f"less {self.MARKER}/vite/CHANGELOG.md",
+            f"tail -f {self.MARKER}/electron/path.txt",
+            f"code {self.MARKER}/electron/index.js",
+            f"grep -r foo {self.MARKER}",
+        ]
+
+        for comando in alheios:
+            with self.subTest(comando=comando):
+                self.assertFalse(
+                    process_module.is_app_process_command(comando, self.MARKER),
+                    "processo alheio não pode ser elegível para a limpeza",
+                )
+
+    def test_ainda_mata_os_processos_que_o_launcher_inicia(self) -> None:
+        nossos = [
+            f"node {self.MARKER}/vite/bin/vite.js",
+            f"node {self.MARKER}/.bin/concurrently -k -n VITE,ELECTRON",
+            f"{self.MARKER}/electron/dist/electron .",
+            f"node {self.MARKER}/wait-on/bin/wait-on http://127.0.0.1:5173",
+        ]
+
+        for comando in nossos:
+            with self.subTest(comando=comando):
+                self.assertTrue(
+                    process_module.is_app_process_command(comando, self.MARKER),
+                    "um processo iniciado pelo launcher deveria ser elegível",
+                )
+
+    def test_exige_o_marcador_do_checkout(self) -> None:
+        # Outro checkout do mesmo projeto não é da nossa conta.
+        self.assertFalse(
+            process_module.is_app_process_command(
+                "node /outro/checkout/app/node_modules/vite/bin/vite.js",
+                self.MARKER,
+            )
+        )

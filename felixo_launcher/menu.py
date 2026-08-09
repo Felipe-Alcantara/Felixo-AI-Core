@@ -302,6 +302,8 @@ def _menu_status(console: object) -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         current_branch = branch_result.stdout.strip() or "(detached)"
         dirty_files = get_dirty_files(env)

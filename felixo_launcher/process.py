@@ -14,6 +14,7 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import PurePosixPath
 
 from .paths import APP_DIR
 
@@ -35,6 +36,10 @@ APP_PROCESS_EXECUTABLES = (
     "electron.app",
     "Electron.app",
 )
+
+# Runtimes que executam um script nosso. Só com um destes no argv[0] é que o
+# caminho do script conta como prova de que o processo é do launcher.
+APP_PROCESS_RUNTIMES = frozenset({"node", "node.exe", "npm", "npm.cmd", "npx", "npx.cmd"})
 
 def stop_process(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
@@ -183,12 +188,34 @@ def parse_pgrep_line(line: str) -> tuple[int, str] | None:
 
 
 def is_app_process_command(command_line: str, marker: str) -> bool:
+    """True apenas para processos que este checkout de fato iniciou.
+
+    Olhar a linha de comando inteira não serve: o caminho
+    `.../node_modules/vite/...` já contém `/vite`, então um `vim` ou um `tail`
+    aberto num arquivo dessa pasta passaria no teste e seria morto junto — o
+    oposto do que o `cleanup_app_processes` promete. O executável precisa
+    aparecer no argv[0] (o binário) ou no script que está sendo executado,
+    nunca num argumento qualquer.
+    """
     if marker not in command_line:
         return False
 
-    return any(
-        executable in command_line for executable in APP_PROCESS_EXECUTABLES
-    )
+    partes = command_line.split()
+    if not partes:
+        return False
+
+    argv0 = partes[0]
+    if any(executable in argv0 for executable in APP_PROCESS_EXECUTABLES):
+        return True
+
+    # `node .../vite/bin/vite.js` também é nosso, mas só quando quem executa é
+    # um runtime que nós usamos: em `vim .../vite/dist/dep.js` o arquivo é
+    # apenas o que o editor abriu, e o argv[0] denuncia isso.
+    if PurePosixPath(argv0).name not in APP_PROCESS_RUNTIMES:
+        return False
+
+    script = next((parte for parte in partes[1:] if parte.startswith(marker)), "")
+    return any(executable in script for executable in APP_PROCESS_EXECUTABLES)
 
 
 def own_process_tree_pids() -> set[int]:

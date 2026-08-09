@@ -139,4 +139,12 @@ def run_in_dedicated_debug_terminal(command: list[str], env: dict[str, str]) -> 
         print(f"[felixo] Não foi possível abrir o terminal de depuração: {error}", file=sys.stderr)
         return 1
 
-    return process.wait()
+    try:
+        return process.wait()
+    except KeyboardInterrupt:
+        # Sem isto, o Ctrl+C sobe direto e deixa o console de depuração — e a
+        # árvore Electron/vite abaixo dele — rodando sem ninguém para
+        # encerrá-los. No Windows `cleanup_app_processes` é no-op, então nada
+        # os recolheria depois. 130 é o código convencional para SIGINT.
+        stop_process(process)
+        return 130
