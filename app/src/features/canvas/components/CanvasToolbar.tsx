@@ -28,6 +28,8 @@ import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
 import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
 import { NotificationsMenu } from './NotificationsMenu'
+import { UpdateIndicator } from '../../updates/UpdateNotice'
+import type { UpdatePresentation } from '../../updates/update-presentation'
 import {
   toolbarFlyoutClass,
   toolbarFlyoutStyle,
@@ -47,6 +49,8 @@ const TOOLBAR_ICON_BUTTON_CLASS = `felixo-btn-icon ${TOOLBAR_BUTTON_SHAPE}`
 type CanvasToolbarProps = {
   activeTool: CanvasTool | null
   onSelectTool: (tool: CanvasTool) => void
+  updatePresentation: UpdatePresentation
+  onInstallUpdate: () => void
   projects: CanvasProject[]
   onAddTerminal: (options: {
     command?: string
@@ -88,6 +92,8 @@ type CanvasToolbarProps = {
 export function CanvasToolbar({
   activeTool,
   onSelectTool,
+  updatePresentation,
+  onInstallUpdate,
   projects,
   onAddTerminal,
   onAddTerminals,
@@ -267,6 +273,12 @@ export function CanvasToolbar({
         buttonLabel="Página Web"
         onCreate={onAddWebpage}
         toolsMenuOpen={toolsMenuOpen}
+      />
+      {/* Informativo, não uma ferramenta: fica fora do agrupamento de criação
+          e some por completo quando não há nada a dizer. */}
+      <UpdateIndicator
+        presentation={updatePresentation}
+        onInstall={onInstallUpdate}
       />
 
       <button

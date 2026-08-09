@@ -36,6 +36,8 @@ import {
   type NodeDataCacheEntry,
 } from '../services/node-data-cache'
 import { CanvasToolbar } from './CanvasToolbar'
+import { UpdateToast } from '../../updates/UpdateNotice'
+import { useUpdateStatus } from '../../updates/useUpdateStatus'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
 import { moveById } from './tools/terminals-panel-reorder'
@@ -200,6 +202,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     removeNode,
     cancelPendingSaves,
   } = useCanvasPersistence()
+  const updates = useUpdateStatus()
   // Declarado (e sincronizado) aqui, antes de qualquer efeito que o consuma:
   // o compilador do React proíbe modificar um ref que um efeito anterior já
   // leu, e a poda horária de notificações lá embaixo lê justamente este.
@@ -1409,6 +1412,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onSelectTool={(tool) =>
           setActiveTool((current) => (current === tool ? null : tool))
         }
+        updatePresentation={updates.presentation}
+        onInstallUpdate={updates.install}
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddTerminals={addTerminalNodes}
@@ -1605,6 +1610,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           onClose={() => setExpandedTerminalId(null)}
         />
       )}
+      <UpdateToast
+        presentation={updates.presentation}
+        dismissed={updates.dismissed}
+        onDismiss={updates.dismiss}
+        onInstall={updates.install}
+      />
     </div>
   )
 }
