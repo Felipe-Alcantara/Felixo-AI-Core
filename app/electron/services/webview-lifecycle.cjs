@@ -46,17 +46,33 @@ function resolveWindowOpenAction(disposition) {
 
 function registerWebviewLifecycle(mainWindow) {
   mainWindow.webContents.on('did-attach-webview', (_event, guestWebContents) => {
-    guestWebContents.setWindowOpenHandler(({ url, disposition }) => {
-      const resolved = resolveWindowOpenAction(disposition)
-      if (resolved.action === 'deny') {
-        guestWebContents.loadURL(url)
-      }
-      return resolved
-    })
+    applyWindowOpenPolicy(guestWebContents)
+  })
+}
+
+/**
+ * Aplica a política de novas janelas a um webContents e, recursivamente, a
+ * cada popup que ele abrir. Sem a recursão, um popup de login legítimo poderia
+ * abrir outras janelas sem nenhuma restrição, em cascata.
+ *
+ * @param {import('electron').WebContents} webContents
+ */
+function applyWindowOpenPolicy(webContents) {
+  webContents.setWindowOpenHandler(({ url, disposition }) => {
+    const resolved = resolveWindowOpenAction(disposition)
+    if (resolved.action === 'deny') {
+      webContents.loadURL(url)
+    }
+    return resolved
+  })
+
+  webContents.on('did-create-window', (childWindow) => {
+    applyWindowOpenPolicy(childWindow.webContents)
   })
 }
 
 module.exports = {
+  applyWindowOpenPolicy,
   registerWebviewLifecycle,
   resolveWindowOpenAction,
 }
