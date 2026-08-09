@@ -25,6 +25,13 @@ const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
 const { createJsonlOutputGuard } = require('./jsonl-output-guard.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
 const {
+  createOrchestrationLimits,
+  normalizeAvailableModels,
+  normalizeOrchestrationSettings,
+  resolveCliCwd,
+  validateCliRequest,
+} = require('./cli-request-policy.cjs')
+const {
   createOrchestrationIpcBridge,
 } = require('./orchestration/orchestration-ipc-bridge.cjs')
 const {
@@ -156,13 +163,22 @@ function registerCliIpcHandlers(getMainWindow) {
   })
 
   function sendCliRequest(params, targetWebContents, orchestrationContext = {}) {
-    const streamSessionId = getRequiredString(params?.sessionId)
-    const threadId = getRequiredString(params?.threadId) || streamSessionId
-    const prompt = getRequiredString(params?.prompt)
-    const resumePrompt = getRequiredString(params?.resumePrompt)
-    const promptHint = getRequiredString(params?.promptHint)
+    const request = validateCliRequest(params)
+
+    if (!request.ok) {
+      logQaEvent({
+        level: 'warn',
+        scope: 'cli:send',
+        sessionId:
+          getRequiredString(params?.threadId) || getRequiredString(params?.sessionId),
+        message: 'Rejected send request with invalid prompt or session.',
+      })
+      return { ok: false, message: request.message }
+    }
+
+    const { streamSessionId, threadId, prompt, resumePrompt, promptHint, projectCwd } =
+      request
     const model = params?.model
-    const projectCwd = typeof params?.cwd === 'string' && params.cwd ? params.cwd : null
     const cliType = model?.cliType
     const adapter = getTerminalAdapter(cliType)
     const availableModels = normalizeAvailableModels(
@@ -171,16 +187,6 @@ function registerCliIpcHandlers(getMainWindow) {
     const orchestratorSettings = normalizeOrchestrationSettings(
       params?.orchestratorSettings ?? orchestrationContext.orchestratorSettings,
     )
-
-    if (!streamSessionId || !threadId || !prompt) {
-      logQaEvent({
-        level: 'warn',
-        scope: 'cli:send',
-        sessionId: threadId || streamSessionId,
-        message: 'Rejected send request with invalid prompt or session.',
-      })
-      return { ok: false, message: 'Prompt ou sessão inválidos.' }
-    }
 
     if (!adapter) {
       logQaEvent({
@@ -205,7 +211,7 @@ function registerCliIpcHandlers(getMainWindow) {
 
     stoppedSessions.delete(threadId)
 
-    const cwd = projectCwd ?? resolveCliCwd(cliType)
+    const cwd = projectCwd ?? resolveCliCwd()
     const requestOrchestrationContext = {
       ...orchestrationContext,
       targetWebContents,
@@ -996,14 +1002,6 @@ function getTargetWebContents(getMainWindow, fallbackWebContents) {
   return fallbackWebContents
 }
 
-function resolveCliCwd(cliType) {
-  if (cliType === 'codex') {
-    return process.env.HOME || process.cwd()
-  }
-
-  return process.env.HOME || process.cwd()
-}
-
 function spawnOrchestrationAgent({
   run,
   event,
@@ -1042,98 +1040,6 @@ function spawnOrchestrationAgent({
       orchestratorSettings: context.orchestratorSettings,
       limits: context.limits,
     },
-  )
-}
-
-function normalizeAvailableModels(value) {
-  if (!Array.isArray(value)) {
-    return null
-  }
-
-  return value
-    .map(normalizeAvailableModel)
-    .filter((model) => model && model.cliType !== 'unknown')
-}
-
-function normalizeAvailableModel(value) {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-
-  const model = value
-
-  if (
-    typeof model.id !== 'string' ||
-    typeof model.name !== 'string' ||
-    typeof model.command !== 'string' ||
-    typeof model.source !== 'string' ||
-    !isValidOrchestrationCliType(model.cliType)
-  ) {
-    return null
-  }
-
-  return {
-    id: model.id,
-    name: model.name,
-    command: model.command,
-    source: model.source,
-    cliType: model.cliType,
-    providerModel:
-      typeof model.providerModel === 'string' && model.providerModel.trim()
-        ? model.providerModel.trim()
-        : undefined,
-    reasoningEffort:
-      typeof model.reasoningEffort === 'string' && model.reasoningEffort.trim()
-        ? model.reasoningEffort.trim()
-        : undefined,
-  }
-}
-
-function normalizeOrchestrationSettings(value) {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-
-  return {
-    preferredModelIds: normalizeStringList(value.preferredModelIds),
-    blockedModelIds: normalizeStringList(value.blockedModelIds),
-    maxAgentsPerTurn: toPositiveIntegerOrUndefined(value.maxAgentsPerTurn),
-    maxTurns: toPositiveIntegerOrUndefined(value.maxTurns),
-    maxTotalAgents: toPositiveIntegerOrUndefined(value.maxTotalAgents),
-    maxRuntimeMinutes: toPositiveIntegerOrUndefined(value.maxRuntimeMinutes),
-  }
-}
-
-function createOrchestrationLimits(settings) {
-  if (!settings) {
-    return undefined
-  }
-
-  return {
-    maxAgentsPerTurn: settings.maxAgentsPerTurn,
-    maxTurns: settings.maxTurns,
-    maxTotalAgents: settings.maxTotalAgents,
-    maxRuntimeMinutes: settings.maxRuntimeMinutes,
-  }
-}
-
-function normalizeStringList(value) {
-  return Array.isArray(value)
-    ? value.filter((item) => typeof item === 'string' && item.trim())
-    : []
-}
-
-function toPositiveIntegerOrUndefined(value) {
-  return Number.isInteger(value) && value > 0 ? value : undefined
-}
-
-function isValidOrchestrationCliType(value) {
-  return (
-    value === 'claude' ||
-    value === 'codex' ||
-    value === 'codex-app-server' ||
-    value === 'gemini' ||
-    value === 'gemini-acp'
   )
 }
 
