@@ -124,6 +124,13 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
                     current_bin,
                 )
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "Cenário exclusivo do macOS. Rodá-lo no Windows exigiria simular a "
+        "plataforma em tantas camadas (ramo da busca, PATHEXT, chave do PATH e "
+        "a execução de um .cmd em vez de um binário) que o teste deixaria de "
+        "exercitar a busca real e passaria a exercitar os próprios mocks.",
+    )
     def test_macos_homebrew_dirs_are_searched_when_path_is_empty(self) -> None:
         """A GUI-launched process on macOS inherits a minimal PATH that omits
         /opt/homebrew/bin, which is where Apple Silicon Homebrew puts Node."""
@@ -131,17 +138,9 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
             root = Path(tmpdir)
             homebrew_bin = make_node_bin(root / "opt" / "homebrew" / "bin")
 
-            # `is_windows_platform` em vez de `os.name`: a busca decide o ramo
-            # do Windows por essa função, e sem desligá-la o teste roda o
-            # caminho do Windows no runner de lá e nunca olha o Homebrew.
-            # Mockar `os.name` direto seria abrangente demais — o pathlib
-            # também o consulta, e passa a tentar montar um PosixPath no
-            # Windows, o que é UnsupportedOperation.
             with patch.dict(os.environ, clean_node_env(root), clear=True), patch.object(
                 node, "MACOS_NODE_BIN_DIRS", (str(homebrew_bin),)
-            ), patch.object(node.sys, "platform", "darwin"), patch.object(
-                node, "is_windows_platform", return_value=False
-            ):
+            ), patch.object(node.sys, "platform", "darwin"):
                 self.assertEqual(
                     node.find_node_bin(None, "22.12.0"),
                     homebrew_bin,
