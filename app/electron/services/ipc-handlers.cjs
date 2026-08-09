@@ -38,6 +38,9 @@ const {
   createOrchestrationRunner,
 } = require('./orchestration/orchestration-runner.cjs')
 const {
+  startExpiredRunsSweeper,
+} = require('./orchestration/expired-runs-sweeper.cjs')
+const {
   createErrorTerminalEvent,
   createOrchestrationTerminalEvent,
   createStartTerminalEvent,
@@ -864,12 +867,27 @@ function registerCliIpcHandlers(getMainWindow) {
     return { ok: true, killed, threadIds }
   })
 
+  // Sem este pulso, `maxRuntimeMinutes` só é verificado quando chega um
+  // evento — e um run cujo sub-agente travou sem emitir `done` nem `error`
+  // não gera evento nenhum, ficando preso em `waiting_agents` para sempre.
+  const stopExpiredRunsSweeper = startExpiredRunsSweeper({
+    failExpiredRuns: () => orchestrationRunner.failExpiredRuns(),
+    onError: (error) => {
+      logQaEvent({
+        level: 'warn',
+        scope: 'orchestration:sweeper',
+        message: `Falha ao expirar runs de orquestracao: ${error.message}`,
+      })
+    },
+  })
+
   app.once('before-quit', () => {
     logQaEvent({
       level: 'info',
       scope: 'app',
       message: 'before-quit: killing all CLI processes.',
     })
+    stopExpiredRunsSweeper()
     cliManager.killAll({ force: true })
   })
 }

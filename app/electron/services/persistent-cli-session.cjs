@@ -643,6 +643,7 @@ function createPersistentCliSessionManager({
 
     if (stoppedSessions.delete(threadId)) {
       clearPersistentRunTimer(activeRun)
+      clearDeferredPromptFallback(activeRun)
       persistentSession.activeRun = null
       return
     }
@@ -652,6 +653,7 @@ function createPersistentCliSessionManager({
     }
 
     clearPersistentRunTimer(activeRun)
+    clearDeferredPromptFallback(activeRun)
     const message =
       code && code !== 0
         ? createExitErrorMessage(command, code, signal, activeRun.stderrOutput)
@@ -825,6 +827,10 @@ function createPersistentCliSessionManager({
     if (persistentSession) {
       clearPersistentIdleTimer(persistentSession)
       clearPersistentRunTimer(persistentSession.activeRun)
+      // Sem isto, um fallback de prompt agendado sobrevive ao fechamento e
+      // dispara depois: escreve num stdin já morto, o write falha e a UI
+      // recebe um erro espúrio segundos depois de a thread ter sido parada.
+      clearDeferredPromptFallback(persistentSession.activeRun)
       persistentCliSessions.delete(threadId)
     }
 
