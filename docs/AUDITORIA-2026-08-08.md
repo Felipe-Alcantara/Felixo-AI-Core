@@ -342,18 +342,69 @@ desfecho, e o que sobrou de cada uma:
 
 ---
 
+## 5.1 Segunda passada — `orchestration-runner` e `persistent-cli-session`
+
+Os dois maiores arquivos de lógica que a primeira passada não leu linha a linha foram auditados
+depois. Achados abaixo, com a severidade **revista por verificação direta** — dois deles vieram da
+auditoria superestimados e foram rebaixados após teste.
+
+| ID | Severidade | Confiança | Local | Resumo | Status |
+|---|---|---|---|---|---|
+| BUG-03 | Baixa | Confirmado | `orchestration-runner.cjs:403` | `cliType` chegava `undefined` na detecção de disponibilidade | ✅ Corrigido (`2de8b0f`) |
+| RACE-01 | Alta | Provável | `orchestration-runner.cjs:504-516` | Respawn de fallback reusa o `threadId` sem marcar o job | ⏸️ Aberto |
+| RACE-02 | Média | Provável | `persistent-cli-session.cjs:78,119` | Guard `activeRun` checado antes do spawn, atribuído depois | ⏸️ Aberto |
+| RACE-03 | Média | Provável | `persistent-cli-session.cjs:323-326` | `stdoutGuard` não é drenado no `close` | ⏸️ Aberto |
+| BUG-01 | Média | Confirmado | `orchestration-runner.cjs:614` | `failExpiredRuns()` nunca é chamado em produção | ⏸️ Aberto |
+| BUG-02 | Média | Confirmado | `orchestration-runner.cjs:578` | `maxTurns` esgotado falha o run em vez de sintetizar | ⏸️ Aberto |
+| LEAK-01 | Média | Confirmado | `orchestration-store.cjs:91` | Runs concluídos nunca saem do store | ⏸️ Aberto |
+| LEAK-02 | Média | Confirmado | `persistent-cli-session.cjs:412-429` | `deferredPromptFallbackTimer` sobrevive ao fim da sessão | ⏸️ Aberto |
+
+**Sobre o BUG-03 e a disciplina anti-ruído.** A auditoria o classificou como Média, alegando que o
+`undefined` impedia o fallback de reconhecer erros específicos por provedor. Verifiquei rodando
+`detectAvailabilityIssue` com e sem `cliType` sobre as mensagens de limite reais: **nenhuma** muda
+o fato de o fallback disparar — o provedor altera apenas `scope` e `cooldown`, que o chamador
+descarta (`if (!issue)`). O registro persistido também não dependia disso, porque `recordError`
+refaz a própria detecção com o `cliType` certo. É defeito real de código, mas de impacto nulo
+hoje: rebaixado para **Baixa** e corrigido pelo valor preventivo.
+
+Também escrevi um teste que **passava com e sem a correção** e o descartei em vez de mantê-lo —
+ele media `recordError`, que nunca teve o bug. Um teste que não falha na presença do defeito não
+protege nada.
+
+**Por que RACE-01/02/03, BUG-01/02 e LEAK-01/02 ficaram abertos.** São mudanças em concorrência e
+ciclo de vida de processos de longa duração: janelas de reentrância, ordem de eventos entre `close`
+e flush de stdout, e política de expiração de runs. Diferente das extrações desta sessão, não têm
+como ser validadas por teste de caracterização sozinho — exigem reproduzir a corrida. Aplicá-las
+sem acompanhamento trocaria um defeito latente por um defeito imediato.
+
+Recomendação de ordem, por risco eliminado ÷ esforço: **BUG-01** (um `setInterval` com `unref`
+resolve um run que trava para sempre), **LEAK-02** (falta `clearDeferredPromptFallback` em dois
+pontos), **LEAK-01** (evict FIFO no store), depois **BUG-02**, e por fim as três races, que pedem
+teste dedicado antes.
+
+**Incertezas que a auditoria não resolveu** e que valem checar antes de mexer: se
+`createJsonlOutputGuard` expõe `flush()` (RACE-03 depende disso) e se a janela de reentrância da
+RACE-02 é alcançável no main process single-threaded sem o gatilho da RACE-01.
+
+---
+
 ## 6. O que NÃO foi coberto
 
 Em nome da honestidade sobre o alcance desta auditoria:
 
 - **Testado por leitura, não por execução**: nenhum achado foi validado rodando o app. As
-  verificações executadas foram `npm test` (425 passando), `tsc -b` (limpo), `npm audit` (0 vulns)
-  e `git check-ignore`.
+  verificações executadas foram `npm test` (447 passando), `npm run test:frontend` (200 passando),
+  `tsc -b` (limpo), `npm audit` (0 vulns) e `git check-ignore`.
+- **A suíte de frontend passou despercebida na primeira passada.** O projeto tem `vitest` e um
+  script `test:frontend` com 24 arquivos de teste que eu não estava executando — só rodava
+  `npm test`, que cobre apenas os `.cjs` do processo principal. Todas as mudanças de frontend da
+  primeira rodada foram validadas só por `tsc -b`. Rodada depois, a suíte passou inteira, mas o
+  risco existiu; quem for mexer aqui precisa rodar **as duas**.
 - **Cobertura rasa**: `felixo_launcher/` (2167 linhas Python) recebeu apenas varredura de segurança
   (sem `shell=True`, confirmado); sua lógica interna não foi auditada. `docs/_legado/` foi ignorado
   por ser documentação arquivada.
-- **Não auditado**: `orchestration-runner.cjs` (1010 linhas) e `persistent-cli-session.cjs`
-  (847 linhas) — são os dois maiores arquivos de lógica que restaram sem leitura linha a linha.
-  São candidatos naturais a uma segunda passada.
+- ~~**Não auditado**: `orchestration-runner.cjs` e `persistent-cli-session.cjs`~~ → **coberto na
+  segunda passada** (seção 5.1). Restam sem leitura linha a linha os demais arquivos de tamanho
+  médio de `electron/services/`.
 - **Sem análise dinâmica**: não houve fuzzing de IPC, teste de penetração, nem verificação de
   comportamento em runtime.
