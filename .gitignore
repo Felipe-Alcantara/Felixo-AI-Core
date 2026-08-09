@@ -5,9 +5,10 @@ Padrão de qualidade - Felixo System Design/
 .felixo-start-config.json
 logs/startup/
 
-# Variáveis de ambiente locais. O .env.example instrui a copiar este arquivo
-# para .env, que pode acabar guardando credenciais (ex.: GH_TOKEN do
-# publish:github) — só o exemplo, sem valores, é versionado.
+# Variáveis de ambiente locais. O app não carrega .env (a configuração real é
+# o menu do start_app.py, que grava .felixo-start-config.json), mas quem criar
+# um .env à mão pode acabar guardando credencial nele — ex.: o GH_TOKEN do
+# publish:github. Só o exemplo, sem valores, é versionado.
 .env
 .env.*
 !.env.example
