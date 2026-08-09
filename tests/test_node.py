@@ -131,13 +131,16 @@ class StartAppNodeDiscoveryTests(unittest.TestCase):
             root = Path(tmpdir)
             homebrew_bin = make_node_bin(root / "opt" / "homebrew" / "bin")
 
-            # os.name="posix" junto de sys.platform="darwin": a busca decide o
-            # ramo do Windows por os.name, então sem fixar os dois o teste roda
-            # o caminho do Windows no runner de lá e nunca olha o Homebrew.
+            # `is_windows_platform` em vez de `os.name`: a busca decide o ramo
+            # do Windows por essa função, e sem desligá-la o teste roda o
+            # caminho do Windows no runner de lá e nunca olha o Homebrew.
+            # Mockar `os.name` direto seria abrangente demais — o pathlib
+            # também o consulta, e passa a tentar montar um PosixPath no
+            # Windows, o que é UnsupportedOperation.
             with patch.dict(os.environ, clean_node_env(root), clear=True), patch.object(
                 node, "MACOS_NODE_BIN_DIRS", (str(homebrew_bin),)
             ), patch.object(node.sys, "platform", "darwin"), patch.object(
-                node.os, "name", "posix"
+                node, "is_windows_platform", return_value=False
             ):
                 self.assertEqual(
                     node.find_node_bin(None, "22.12.0"),
