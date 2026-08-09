@@ -12,6 +12,7 @@ Esta pasta foi reorganizada para refletir o estado atual do projeto: o **canvas 
 | [projeto/RODAR-VIA-CODIGO-FONTE.md](projeto/RODAR-VIA-CODIGO-FONTE.md) | Como rodar o app a partir do código-fonte. |
 | [guias/GUIA-DESENVOLVEDOR.md](guias/GUIA-DESENVOLVEDOR.md) | Guia para desenvolvedores. |
 | [guias/GUIA-USUARIO.md](guias/GUIA-USUARIO.md) | Guia de instalação e uso para o usuário final. |
+| [AUDITORIA-2026-08-08.md](AUDITORIA-2026-08-08.md) | Auditoria de código e segurança: mapa de arquitetura, achados com evidência, plano de remediação e o que ficou em aberto. |
 
 ## Histórico arquivado
 

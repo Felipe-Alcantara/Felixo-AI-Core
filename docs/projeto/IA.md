@@ -1019,3 +1019,19 @@ TESTE: inspeção visual no Electron, `npm run lint`, `npm run build` e `git dif
 RISCO RESIDUAL: conferir o fechamento com `prefers-reduced-motion` e uma lista extensa continua recomendado, apesar de o fluxo aberto ter sido validado visualmente.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-08 — auditoria de código e segurança do repositório
+
+RESPONSÁVEL: Revisar codigo.
+
+PEDIDO: code review completo do repositório inteiro (não só do diff) somado a auditoria de segurança, partindo da premissa de projeto maduro construído em blocos independentes — esperando duplicação, camadas mal delimitadas e partes mortas. Exigência de toda afirmação vir ancorada em `arquivo:linha`, com regra anti-ruído explícita (melhor 12 achados sólidos que 60 duvidosos). O pedido original restringia a apenas diagnosticar; a autorização para corrigir veio depois, já durante a execução.
+
+FEITO: auditoria registrada em [`docs/AUDITORIA-2026-08-08.md`](../AUDITORIA-2026-08-08.md), com mapa de arquitetura (diagrama Mermaid), 8 achados e plano de remediação em 3 fases. A premissa do pedido não se confirmou: o backend mostrou SQL 100% parametrizado, `execFile` sem shell, allowlist de argv em `git-service.cjs`, `resolveSafePath` confinando os arquivos do canvas, zero `catch` vazio, zero promise flutuante e `npm audit` limpo. Vários candidatos a achado foram investigados e descartados por não terem gatilho concreto — `JSON.parse` dos adapters (protegido por `parseAdapterLine` em `cli-event-utils.cjs:12-24`), storages do frontend (todos dentro de `try`), e a flag `--dangerously-bypass-approvals-and-sandbox` (opt-in explícito do usuário, não vulnerabilidade).
+
+Corrigidas as Fases 0 e 1: `.env` passou a ser ignorado (o `.env.example:3` mandava criá-lo e nada o cobria); `recentItems` removido de `models.ts` — era código morto contendo títulos de conversas pessoais num repositório público; `toErrorResult`, que estava copiado byte a byte em 9 handlers e define o contrato de erro de todo IPC do app, foi unificado em `services/ipc-result.cjs`; `normalizePositiveInteger`, que existia 2x no mesmo processo com contratos opostos (uma lança, outra retorna `undefined`), foi renomeada pelo que cada uma faz; e a política de novas janelas do webview passou a ser aplicada recursivamente, fechando uma lacuna do código introduzido nesta mesma sessão — um popup de login podia abrir outras janelas sem restrição.
+
+TESTE: `npx tsc -b` limpo e `npm test` com 428/428 passando, incluindo 3 testes novos cobrindo a política de janelas do webview (deny navegando in-place, allow sem arrastar o opener, e herança da política pelo popup). Verificação de `.gitignore` feita com `git check-ignore` confirmando `.env`, `app/.env` e `.env.*` ignorados com `.env.example` preservado. Histórico auditado com `git log --all --diff-filter=A`: `.env` nunca foi commitado.
+
+RISCO RESIDUAL: três frentes seguem abertas e estão registradas no relatório. (1) ARQ-01 e ARQ-02 — `sendCliRequest` com ~570 linhas dentro de uma função de ~790 em `ipc-handlers.cjs:82-871`, e `CanvasView.tsx` com 1611 linhas e 54 hooks — não foram tocadas de propósito: são as únicas mudanças da lista capazes de quebrar comportamento silenciosamente e nenhuma tem hoje rede de testes que pegue a regressão. (2) PRIV-01 é correção parcial: os títulos pessoais saíram do `HEAD` mas permanecem no histórico do Git, cujo expurgo exige `git filter-repo` com force-push — decisão do dono do projeto. (3) A auditoria foi por leitura, sem execução do app; `orchestration-runner.cjs` (1010 linhas) e `persistent-cli-session.cjs` (847 linhas) ficaram sem leitura linha a linha, e o `felixo_launcher/` recebeu só varredura de segurança.
+
+Estado final: concluído — Fases 0 e 1 aplicadas e commitadas (`ce878a1`, `e8518d9`, `8c2e7d3`); Fase 2 aguardando decisão do dono do projeto.
