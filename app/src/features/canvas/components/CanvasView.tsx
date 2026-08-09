@@ -30,6 +30,11 @@ import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
 import { TerminalDrawer } from './TerminalDrawer'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
+import {
+  countTerminalOrder,
+  createNodeDataReuse,
+  type NodeDataCacheEntry,
+} from '../services/node-data-cache'
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
@@ -122,11 +127,6 @@ type FlowPositionMapper = {
     options?: { zoom?: number; duration?: number },
   ) => void
   fitView: (options?: { padding?: number; duration?: number }) => void
-}
-
-type NodeDataCacheEntry = {
-  deps: unknown[]
-  data: Record<string, unknown>
 }
 
 type RestoredAgentTerminals = {
@@ -774,40 +774,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // node objects but reuse the same data reference, so React.memo keeps every
   // untouched block from re-rendering — the main render cost on weak GPUs.
   const renderedNodes = useMemo(() => {
-    const previousCache = new Map(nodeDataCache)
-    const nextCache = nodeDataCache
-    nextCache.clear()
-    const reuseData = (
-      id: string,
-      deps: unknown[],
-      build: () => Record<string, unknown>,
-    ) => {
-      const cached = previousCache.get(id)
-      if (
-        cached &&
-        cached.deps.length === deps.length &&
-        cached.deps.every((dep, index) => dep === deps[index])
-      ) {
-        nextCache.set(id, cached)
-        return cached.data
-      }
-      const entry = { deps, data: build() }
-      nextCache.set(id, entry)
-      return entry.data
-    }
-
-    // 1-based position among currently open terminals, in creation order
-    // (nodes are appended, never reordered, so array order == creation
-    // order). Recomputed every render, so closing a terminal shifts the
-    // numbers of the ones after it instead of leaving a gap.
-    let terminalCount = 0
-    const terminalOrder = new Map<string, number>()
-    for (const item of nodes) {
-      if (item.type === 'terminal') {
-        terminalCount += 1
-        terminalOrder.set(item.id, terminalCount)
-      }
-    }
+    const { reuseData, commit } = createNodeDataReuse(nodeDataCache)
+    const terminalOrder = countTerminalOrder(nodes)
 
     const rendered = nodes.map((node) => {
       const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
@@ -899,6 +867,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
       return withHandle
     })
+
+    // Fecha a passagem: o cache fica só com os blocos ainda no canvas.
+    commit()
 
     return rendered
   }, [
