@@ -27,7 +27,10 @@ export function useAgentModelCatalog(): {
   discoveredAt: string | null
 } {
   const [discovered, setDiscovered] = useState<AgentModelCatalog | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
+  // Já nasce `true` quando há ponte: o efeito abaixo dispara a descoberta no
+  // primeiro render, e ligar o estado lá dentro obrigaria a um render extra só
+  // para refletir algo que se sabe desde o início.
+  const [refreshing, setRefreshing] = useState(() => Boolean(window.felixo?.agentModels))
 
   const applyCatalog = useCallback((catalog: AgentModelCatalog | undefined) => {
     // Catálogo vazio significa "não descobri" — manter o que já está na tela
@@ -65,8 +68,9 @@ export function useAgentModelCatalog(): {
       }
     })
 
-    // E, em seguida, a consulta às CLIs — uma vez por sessão do app.
-    setRefreshing(true)
+    // E, em seguida, a consulta às CLIs — uma vez por sessão do app. O estado
+    // `refreshing` já entra ligado (ver useState acima), então aqui só resta
+    // desligá-lo quando a consulta terminar.
     void bridge
       .refresh()
       .then((result) => {

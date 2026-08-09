@@ -41,8 +41,11 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // Seeded once from the persisted URL — later navigation updates state/data,
   // never this prop, so the webview is never force-reloaded from underneath
   // the user by a re-render.
-  const initialUrlRef = useRef(nodeData.url || 'https://www.google.com')
-  const [addressInput, setAddressInput] = useState(initialUrlRef.current)
+  // useState com inicializador (e não useRef lido no render): o valor é
+  // calculado uma única vez, na montagem, e ler `.current` de um ref durante o
+  // render é justamente o que o React não garante em modo concorrente.
+  const [initialUrl] = useState(() => nodeData.url || 'https://www.google.com')
+  const [addressInput, setAddressInput] = useState(initialUrl)
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -58,7 +61,11 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // keeps the listeners bound for the node's whole lifetime instead of being
   // torn down and rebound on every navigation.
   const onDataChangeRef = useRef(nodeData.onDataChange)
-  onDataChangeRef.current = nodeData.onDataChange
+  useEffect(() => {
+    // Num effect, e não durante o render: escrever em ref no corpo do
+    // componente quebra a garantia do React de que o render é puro.
+    onDataChangeRef.current = nodeData.onDataChange
+  }, [nodeData.onDataChange])
 
   // O <webview> é montado à mão em vez de declarado em JSX porque
   // `allowpopups` precisa estar no elemento ANTES de ele entrar no DOM: o
@@ -88,11 +95,11 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       'webpreferences',
       'contextIsolation=yes,nodeIntegration=no,sandbox=yes',
     )
-    element.setAttribute('src', initialUrlRef.current)
+    element.setAttribute('src', initialUrl)
 
     container.prepend(element)
     webviewRef.current = element
-  }, [])
+  }, [initialUrl])
 
   useEffect(() => {
     const webview = webviewRef.current

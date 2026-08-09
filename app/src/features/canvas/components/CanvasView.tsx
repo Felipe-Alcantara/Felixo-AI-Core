@@ -200,6 +200,15 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     removeNode,
     cancelPendingSaves,
   } = useCanvasPersistence()
+  // Declarado (e sincronizado) aqui, antes de qualquer efeito que o consuma:
+  // o compilador do React proíbe modificar um ref que um efeito anterior já
+  // leu, e a poda horária de notificações lá embaixo lê justamente este.
+  // Mantido em ref para os callbacks que o usam continuarem estáveis — assim
+  // arrastar um bloco não invalida os dados injetados de todos os outros.
+  const nodesRef = useRef(nodes)
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
   const [edges, setEdges] = useEdgesState<Edge>([])
   const [edgesHydrated, setEdgesHydrated] = useState(false)
   const [terminalCanvasFilePaths, setTerminalCanvasFilePaths] = useState<
@@ -474,11 +483,10 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const agentMatrixAnimationFrameRef = useRef<number | undefined>(undefined)
   const agentMatrixAnimationCleanupRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const agentMatrixAnimationRunRef = useRef(0)
-  // Mirrors of nodes/edges for callbacks injected into node data. Reading via
-  // refs keeps those callbacks referentially stable, so dragging one block
-  // doesn't invalidate the injected data of every other block (see the
-  // rendered-nodes cache below).
-  const nodesRef = useRef(nodes)
+  // Espelho de edges para os callbacks injetados nos dados dos nodes (o de
+  // nodes fica lá em cima, junto da origem). Ler por ref mantém esses
+  // callbacks referencialmente estáveis, então arrastar um bloco não invalida
+  // os dados injetados de todos os outros (ver o cache de nodes abaixo).
   const edgesRef = useRef(edges)
   // Per-node cache of injected data objects: while a node's inputs don't
   // change, the same data object is reused, letting React.memo skip re-renders
@@ -488,10 +496,6 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const [nodeDataCache] = useState(
     () => new Map<string, NodeDataCacheEntry>(),
   )
-
-  useEffect(() => {
-    nodesRef.current = nodes
-  }, [nodes])
 
   useEffect(() => {
     edgesRef.current = edges
