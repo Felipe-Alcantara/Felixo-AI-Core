@@ -20,6 +20,12 @@ function felixoDevMarkerPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  // O app empacotado carrega o renderer com `loadFile()`, isto é, por
+  // file://. Sem isto o Vite emite os assets como "/assets/…", que sob
+  // file:// resolve para a raiz do disco: o bundle não carrega e a janela
+  // abre em branco. O caminho relativo funciona nos dois casos, porque em
+  // dev o Vite serve a partir da raiz do próprio servidor.
+  base: './',
   plugins: [react(), felixoDevMarkerPlugin()],
   optimizeDeps: {
     include: [
