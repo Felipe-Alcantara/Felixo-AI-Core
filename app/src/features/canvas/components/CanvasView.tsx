@@ -110,9 +110,10 @@ import {
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import {
   buildTerminalHandoffPrompt,
-  getNextHandoffAgent,
   prepareHandoffTranscript,
 } from '../services/terminal-handoff'
+import type { NewTerminalOptions } from '../services/new-terminal-options'
+import { HandoffDialog } from './HandoffDialog'
 import {
   arrangeNodesAsMatrix,
   countArrangeableNodes,
@@ -225,6 +226,13 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   >({})
   const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
+  // Passagem de responsabilidade em andamento: o histórico é capturado no
+  // momento do clique, e não quando o usuário confirma — do contrário o agente
+  // de origem continuaria escrevendo enquanto o diálogo está aberto e o
+  // destino receberia um histórico diferente do que estava na tela.
+  const [handoff, setHandoff] = useState<{ sourceId: string; transcript: string } | null>(
+    null,
+  )
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
@@ -1190,40 +1198,41 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [addNode, buildTerminalNodeData],
   )
 
+  /**
+   * Cria o agente escolhido no diálogo já sabendo o que o anterior estava
+   * fazendo. O destino vem da configuração que o usuário montou — qualquer
+   * agente, qualquer modelo, qualquer direção —, e não mais de um rodízio fixo
+   * entre as CLIs conhecidas, que na prática só fazia Claude → Codex.
+   */
   const passResponsibility = useCallback(
     async (
       sourceId: string,
-      request: { transcript: string; truncated: boolean },
-    ): Promise<{ ok: boolean; message?: string; targetLabel?: string }> => {
+      transcript: string,
+      options: NewTerminalOptions,
+    ): Promise<{ ok: boolean; message?: string }> => {
       const source = nodesRef.current.find((node) => node.id === sourceId)
       if (!source || source.type !== 'terminal') {
         return { ok: false, message: 'O terminal de origem não está mais disponível.' }
       }
 
       const sourceData = source.data
-      const target = getNextHandoffAgent(sourceData.command)
-      if (!target) {
-        return {
-          ok: false,
-          message: 'Não há outro agente nativo disponível para assumir este terminal.',
-        }
-      }
-
-      const targetLabel = `${target.label} · continuação`
-      const prepared = prepareHandoffTranscript(request.transcript)
+      const targetLabel = options.label
+      const prepared = prepareHandoffTranscript(transcript)
       const handoffText = buildTerminalHandoffPrompt({
         sourceLabel: sourceData.label,
         sourceCommand: sourceData.command,
-        cwd: sourceData.cwd,
+        // O diretório do destino é o que o usuário escolheu; só cai no do
+        // agente de origem quando ele não escolheu projeto nenhum.
+        cwd: options.cwd ?? sourceData.cwd,
         targetLabel,
         transcript: prepared.text,
-        truncated: prepared.truncated || request.truncated,
+        truncated: prepared.truncated,
       })
       const newId = addNode(
         'terminal',
         buildTerminalNodeData({
-          command: target.command,
-          cwd: sourceData.cwd,
+          ...options,
+          cwd: options.cwd ?? sourceData.cwd,
           label: targetLabel,
           handoffText,
         }),
@@ -1251,7 +1260,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       }
 
       setExpandedTerminalId(newId)
-      return { ok: true, targetLabel }
+      return { ok: true }
     },
     [addNode, buildTerminalNodeData, setEdges],
   )
@@ -1479,7 +1488,6 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       }
     | undefined
   const expandedTitle = expandedNodeData?.label ?? 'Terminal'
-  const handoffTarget = getNextHandoffAgent(expandedNodeData?.command)
   const arrangeableCount = countArrangeableNodes(nodes)
 
   return (
@@ -1660,11 +1668,24 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             cwd: expandedNodeData?.cwd,
             initialText: expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
           }}
-          handoffTargetLabel={handoffTarget?.label}
-          onPassResponsibility={(request) =>
-            passResponsibility(expandedTerminalId, request)
+          onPassResponsibility={(transcript) =>
+            setHandoff({ sourceId: expandedTerminalId, transcript })
           }
           onClose={() => setExpandedTerminalId(null)}
+        />
+      )}
+
+      {handoff && (
+        <HandoffDialog
+          sourceLabel={
+            nodes.find((node) => node.id === handoff.sourceId)?.data.label || 'agente anterior'
+          }
+          projects={projects}
+          onAddFolder={addProjectFolder}
+          onConfirm={(options) =>
+            passResponsibility(handoff.sourceId, handoff.transcript, options)
+          }
+          onClose={() => setHandoff(null)}
         />
       )}
       <UpdateToast

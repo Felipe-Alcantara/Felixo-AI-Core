@@ -1174,3 +1174,35 @@ VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos.
 RISCO RESIDUAL: `/resume` e passagem de responsabilidade seguem disparando sozinhos — é a leitura que fizemos do pedido ("o prompt inicial de contexto"), e não a leitura literal do critério "nenhum agente envia sozinho o prompt inicial"; se a intenção era incluir esses dois, o lugar de mexer é a mesma linha, e vale como decisão do dono do projeto. Não validado com o app rodando: a suíte é `environment: 'node'`, sem PTY. A conferência manual é abrir um agente novo de cada tipo e ver o contexto parado na entrada, esperando; depois reiniciar o app com um agente salvo e confirmar que o `/resume` continua sendo enviado sozinho.
 
 Estado final: concluído — pendente de conferência manual no app rodando.
+
+## Registro de Trabalho — 2026-08-10 (parte 7) — passar responsabilidade refeito como ação, não como reação
+
+PEDIDO: tarefa do Notion "Refazer a feature de passar responsabilidade entre agentes (está bugada)". O relato listava cinco sintomas: a detecção de limite de uso quase nunca funciona, o botão pisca (aparece e some), clicar não faz nada além de o terminal piscar, só funciona Claude → Codex, e passa só o texto visível na tela.
+
+CAUSA COMUM: a feature tinha sido construída como **reação a um estado detectado** em vez de **ação do usuário**. Disso saem quatro dos cinco sintomas de uma vez. O botão só existia quando `snapshot.usageLimit` estava preenchido **e** a atividade era `idle`/`exited`/`error`; como a atividade oscila a cada redesenho da CLI, a condição ligava e desligava sozinha — daí o piscar. E como `detectTerminalUsageLimit` era uma lista de expressões regulares contra o texto da tela, o gatilho quase nunca chegava.
+
+FEITO: a passagem virou item fixo da topbar do terminal, sempre clicável, que abre a escolha do agente que vai assumir.
+
+O ponto que decidiu o desenho: a escolha do destino era um **rodízio fixo** (`getNextHandoffAgent`) entre as CLIs conhecidas. Não era só a limitação "Claude → Codex" que o relato aponta — era não perguntar nada: nem modelo, nem esforço, nem projeto, nem nome. Só que o canvas já tem uma tela que pergunta tudo isso, no `TerminalMenu`. Ela estava soldada ao flyout da toolbar, então o único jeito de reusá-la era separá-la:
+
+- `hooks/useAgentConfig.ts` — o estado de "como abrir um agente" (CLI, modelo, esforço, yolo, projeto, nome, arquivo de planejamento), o catálogo de modelos e a tradução disso em opções de terminal.
+- `components/AgentConfigFields.tsx` — os campos, sem opinião sobre onde aparecem.
+- `services/new-terminal-options.ts` — o tipo compartilhado, que antes morava dentro do componente de menu.
+
+Com isso o `TerminalMenu` ficou só com o que é dele (o flyout e a fila de configurações) e o novo `HandoffDialog` oferece exatamente as mesmas opções. `getNextHandoffAgent` foi removido: qualquer agente, qualquer direção, escolhido por quem está olhando.
+
+O histórico já vinha do buffer inteiro do xterm (`readBuffer`, 20 mil linhas de rolagem), não do viewport — o sintoma "passa só o que está na tela" era, na verdade, o corte: quando o transcript passava do orçamento, `prepareHandoffTranscript` **descartava o começo** e mandava só o fim. Isso entrega um agente que sabe *como* o outro estava mexendo no código e não faz ideia de *para quê*, porque o pedido original está no começo da conversa. Agora o corte preserva as duas pontas e anuncia o buraco no meio. O buffer do processo principal foi considerado e descartado como fonte: ele guarda 200 mil caracteres de bytes crus com ANSI, menos e pior do que as 20 mil linhas já renderizadas.
+
+O prompt de handoff também parou de afirmar que o agente anterior bateu no limite de uso. A passagem agora acontece quando o usuário quiser; dizer o motivo seria inventá-lo.
+
+REMOVIDO: `terminal-usage-limit.ts` e todo o rastro dele — o campo `usageLimit` do snapshot, a checagem por regex a cada chegada de saída (que rodava no caminho quente do `onOutput`), o rótulo "limite de uso atingido" no bloco e na gaveta, o ponto âmbar do trilho e a mensagem correspondente no painel de notificações.
+
+CONVERSA COM A PARTE 6: o `handoffText` continua submetido, e isso é coerente com a correção de hoje mais cedo — contexto permanente é digitado e espera, mas uma passagem de responsabilidade carrega um pedido de verdade, despachado de propósito para aquele terminal. É a mesma regra ("submete quem carrega uma instrução"), aplicada aos dois casos.
+
+TESTE: 323 testes de frontend. Os novos cobrem o corte que preserva as duas pontas (com marca explícita do trecho omitido), o transcript que cabe e não é tocado, e o prompt que não afirma mais o motivo da parada.
+
+VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos.
+
+RISCO RESIDUAL: "todo o histórico" tem um teto real — 20 mil linhas de rolagem do xterm, e 160 mil caracteres no que é colado. Uma sessão muito longa perde o meio, com aviso, e o começo mais antigo que 20 mil linhas não existe mais no renderer. Não validado com o app rodando: a suíte é `environment: 'node'`, sem PTY nem DOM. A conferência manual é abrir dois agentes de CLIs diferentes, passar responsabilidade em cada direção e perguntar ao que recebeu o que o anterior estava fazendo. O sintoma "o terminal fica piscando sem parar depois de clicar" não pôde ser reproduzido aqui; ele vinha do caminho condicional que deixou de existir, mas isso é dedução, não observação.
+
+Estado final: concluído — pendente de conferência manual no app rodando.

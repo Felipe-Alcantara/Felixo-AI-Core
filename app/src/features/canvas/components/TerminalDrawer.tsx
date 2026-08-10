@@ -40,13 +40,12 @@ type TerminalDrawerProps = {
     cwd?: string
     initialText?: string
   }
-  /** Native CLI selected for the automatic continuation, if any. */
-  handoffTargetLabel?: string
-  /** Creates a continuation node after the user confirms the transcript transfer. */
-  onPassResponsibility?: (request: {
-    transcript: string
-    truncated: boolean
-  }) => Promise<{ ok: boolean; message?: string; targetLabel?: string }>
+  /**
+   * Abre a escolha do agente que vai assumir o trabalho, levando o histórico
+   * completo da sessão. Sempre disponível: passar responsabilidade é uma
+   * decisão do usuário, não a consequência de um estado detectado.
+   */
+  onPassResponsibility?: (transcript: string) => void
   onClose: () => void
 }
 
@@ -62,7 +61,6 @@ export function TerminalDrawer({
   sessionId,
   title,
   restartOptions,
-  handoffTargetLabel,
   onPassResponsibility,
   onClose,
 }: TerminalDrawerProps) {
@@ -94,17 +92,7 @@ export function TerminalDrawer({
   // just shrinks to a rail, so reopening is instant and nothing is lost.
   const [collapsed, setCollapsed] = useState(() => readCollapsedPreference(localStorage))
   const [maximized, setMaximized] = useState(false)
-  const [handoffConfirmationOpen, setHandoffConfirmationOpen] = useState(false)
-  const [handoffBusy, setHandoffBusy] = useState(false)
   const [handoffError, setHandoffError] = useState<string | undefined>()
-  const canPassResponsibility = Boolean(
-    onPassResponsibility &&
-      handoffTargetLabel &&
-      snapshot?.usageLimit &&
-      (snapshot.activity === 'idle' ||
-        snapshot.activity === 'exited' ||
-        snapshot.activity === 'error'),
-  )
 
   const togglePinned = useCallback(() => {
     setPinned((prev) => {
@@ -129,38 +117,23 @@ export function TerminalDrawer({
     writeCollapsedPreference(localStorage, false)
   }, [])
 
-  const confirmResponsibilityHandoff = useCallback(async () => {
-    if (!onPassResponsibility || !canPassResponsibility || handoffBusy) {
+  // Lê o histórico e entrega a escolha do agente para quem sabe criar nós no
+  // canvas. O único motivo para o botão falhar aqui é não haver histórico —
+  // uma sessão que acabou de subir e ainda não escreveu nada.
+  const startResponsibilityHandoff = useCallback(() => {
+    if (!onPassResponsibility) {
       return
     }
 
-    setHandoffBusy(true)
-    setHandoffError(undefined)
     const transcript = store.getTranscript(sessionId).text
     if (!transcript.trim()) {
-      setHandoffBusy(false)
-      setHandoffError('Não há histórico disponível para transferir.')
+      setHandoffError('Este terminal ainda não tem histórico para transferir.')
       return
     }
 
-    try {
-      const result = await onPassResponsibility({ transcript, truncated: false })
-      if (!result.ok) {
-        setHandoffError(result.message ?? 'Não foi possível passar a responsabilidade.')
-        return
-      }
-
-      setHandoffConfirmationOpen(false)
-    } catch (error) {
-      setHandoffError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível passar a responsabilidade.',
-      )
-    } finally {
-      setHandoffBusy(false)
-    }
-  }, [canPassResponsibility, handoffBusy, onPassResponsibility, sessionId, store])
+    setHandoffError(undefined)
+    onPassResponsibility(transcript)
+  }, [onPassResponsibility, sessionId, store])
 
   const effectiveWidth = collapsed
     ? COLLAPSED_WIDTH
@@ -312,14 +285,12 @@ export function TerminalDrawer({
         <div className={`flex items-center gap-2 ${collapsed ? 'flex-col' : ''}`}>
           {!collapsed && (
             <span className="text-xs text-zinc-500">
-              {snapshot?.usageLimit
-                ? 'limite de uso atingido'
-                : snapshot?.activity === 'working'
+              {snapshot?.activity === 'working'
                 ? 'trabalhando'
                 : snapshot?.activity === 'idle'
                   ? 'aguardando'
-                      : snapshot?.activity === 'exited'
-                        ? 'encerrado'
+                  : snapshot?.activity === 'exited'
+                    ? 'encerrado'
                     : ''}
             </span>
           )}
@@ -327,9 +298,7 @@ export function TerminalDrawer({
             // The rail keeps a status dot so a collapsed agent still shows life.
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${
-                snapshot?.usageLimit
-                  ? 'bg-amber-400'
-                  : snapshot?.activity === 'working'
+                snapshot?.activity === 'working'
                   ? 'bg-sky-400'
                   : snapshot?.activity === 'idle'
                     ? 'bg-emerald-400'
@@ -364,16 +333,17 @@ export function TerminalDrawer({
               <RotateCcw size={16} />
             </button>
           )}
-          {!collapsed && canPassResponsibility && (
+          {/* Item fixo da topbar. A versão anterior só aparecia quando uma
+              heurística achava que o agente tinha batido no limite de uso, e
+              como a atividade da sessão oscila a cada redesenho da CLI, o botão
+              piscava — aparecia e sumia debaixo do cursor. */}
+          {!collapsed && onPassResponsibility && (
             <button
               type="button"
-              onClick={() => {
-                setHandoffError(undefined)
-                setHandoffConfirmationOpen(true)
-              }}
-              className="felixo-btn-icon rounded p-1 text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+              onClick={startResponsibilityHandoff}
+              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Passar responsabilidade para outro agente"
-              title={`Passar responsabilidade para ${handoffTargetLabel}`}
+              title="Passar responsabilidade para outro agente"
             >
               <ArrowRightLeft size={16} />
             </button>
@@ -405,42 +375,9 @@ export function TerminalDrawer({
           {snapshot.message}
         </div>
       )}
-      {!collapsed && handoffConfirmationOpen && canPassResponsibility && (
-        <div
-          role="dialog"
-          aria-label="Confirmar passagem de responsabilidade"
-          className="border-b border-amber-500/30 bg-amber-950/30 px-3 py-3 text-xs text-amber-100"
-        >
-          <p className="font-semibold">Passar responsabilidade?</p>
-          <p className="mt-1 text-amber-200/80">
-            O histórico do terminal será enviado em memória para {handoffTargetLabel} no mesmo diretório.
-            Ele pode conter tokens, senhas ou dados pessoais.
-          </p>
-          <p className="mt-1 text-amber-200/80">
-            O agente receberá o transcript como contexto não confiável e deverá validar o estado do projeto.
-          </p>
-          {handoffError && <p className="mt-2 text-red-300">{handoffError}</p>}
-          <div className="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              disabled={handoffBusy}
-              onClick={() => {
-                setHandoffConfirmationOpen(false)
-                setHandoffError(undefined)
-              }}
-              className="felixo-btn rounded bg-white/10 px-2 py-1 text-zinc-200 hover:bg-white/15 disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              disabled={handoffBusy}
-              onClick={() => void confirmResponsibilityHandoff()}
-              className="felixo-btn rounded bg-amber-500/20 px-2 py-1 font-medium text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
-            >
-              {handoffBusy ? 'Iniciando…' : 'Confirmar passagem'}
-            </button>
-          </div>
+      {!collapsed && handoffError && (
+        <div className="border-b border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+          {handoffError}
         </div>
       )}
       {/* The terminal element stays mounted while collapsed (the PTY and its

@@ -145,11 +145,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         onClick={() => nodeData.onExpand?.(id)}
         className="felixo-btn nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
       >
-        <ActivityBadge
-          activity={activity}
-          exitCode={snapshot?.exitCode}
-          usageLimit={Boolean(snapshot?.usageLimit)}
-        />
+        <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
         {snapshot?.lastPrompt && (
           <div
             className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-1 text-[10px] leading-snug text-emerald-200"
@@ -215,11 +211,9 @@ function TerminalSideHandles() {
 function ActivityBadge({
   activity,
   exitCode,
-  usageLimit,
 }: {
   activity: SessionActivity
   exitCode?: number
-  usageLimit?: boolean
 }) {
   const config: Record<SessionActivity, { label: string; className: string }> = {
     starting: { label: 'iniciando…', className: 'text-amber-400' },
@@ -230,10 +224,8 @@ function ActivityBadge({
     },
     idle: { label: 'aguardando', className: 'text-emerald-400' },
     exited: {
-      label: usageLimit
-        ? 'limite de uso atingido'
-        : `encerrado${exitCode != null ? ` (${exitCode})` : ''}`,
-      className: usageLimit ? 'text-amber-400' : 'text-zinc-500',
+      label: `encerrado${exitCode != null ? ` (${exitCode})` : ''}`,
+      className: 'text-zinc-500',
     },
     error: { label: 'erro', className: 'text-red-400' },
   }

@@ -6,7 +6,6 @@ import {
   computePreview,
   computeSignature,
   readBuffer,
-  readTerminalTail,
   readViewport,
 } from './terminal-buffer-reader'
 import {
@@ -16,10 +15,6 @@ import {
   isCodexTrustPrompt,
   looksLikeApprovalPrompt,
 } from './terminal-screen-state'
-import {
-  detectTerminalUsageLimit,
-  type TerminalUsageLimit,
-} from './terminal-usage-limit'
 
 /**
  * Activity derived from the output stream:
@@ -46,8 +41,6 @@ export type SessionSnapshot = {
   message?: string
   /** The most recent prompt submitted to the session (typed or programmatic). */
   lastPrompt?: string
-  /** Explicit provider usage-limit output detected in the terminal. */
-  usageLimit?: TerminalUsageLimit
 }
 
 export type TerminalTranscript = {
@@ -524,13 +517,6 @@ export class TerminalSessionStore {
     // Agent CLIs animate a spinner/timer while idle, emitting bytes every frame.
     // Treat output as real "work" only when the buffer changes beyond that
     // in-place animation; otherwise a waiting agent would look busy forever.
-    if (!session.snapshot.usageLimit) {
-      const usageLimit = detectTerminalUsageLimit(readTerminalTail(session.terminal))
-      if (usageLimit) {
-        this.update(session, { usageLimit })
-      }
-    }
-
     const signature = computeSignature(session.terminal)
     if (signature !== session.lastSignature) {
       session.lastSignature = signature

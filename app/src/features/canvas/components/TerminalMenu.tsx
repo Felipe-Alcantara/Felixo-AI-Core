@@ -1,39 +1,19 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { ChevronDown, Plus, RotateCw, TerminalSquare, Trash2, X } from 'lucide-react'
-import { useAgentModelCatalog } from '../hooks/useAgentModelCatalog'
-import {
-  buildAgentArgs,
-  describeLaunch,
-  getAgent,
-  getEffortLevels,
-  isEffortValidForModel,
-  type EffortLevel,
-} from '../services/agent-launch-options'
-import {
-  readAgentLaunchPreferences,
-  saveAgentLaunchPreferences,
-  SHELL_AGENT_VALUE,
-  type AgentLaunchPreferences,
-} from '../services/agent-launch-preferences'
+import { ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
+import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
+import type { NewTerminalOptions } from '../services/new-terminal-options'
+import { AgentConfigFields } from './AgentConfigFields'
 import {
   toolbarFlyoutClass,
   toolbarFlyoutStyle,
   useToolbarFlyoutPosition,
 } from './toolbar-flyout'
 
-type TerminalMenuProject = { id: string; name: string; path: string }
-
-export type NewTerminalOptions = {
-  command?: string
-  args?: string[]
-  cwd?: string
-  label: string
-  planningFile?: string
-}
+export type { NewTerminalOptions } from '../services/new-terminal-options'
 
 type TerminalMenuProps = {
-  projects: TerminalMenuProject[]
+  projects: AgentConfigProject[]
   onAdd: (options: NewTerminalOptions) => void
   /** Starts every queued config at once — see the "Fila" section below. */
   onAddMany: (optionsList: NewTerminalOptions[]) => void
@@ -43,12 +23,14 @@ type TerminalMenuProps = {
   toolsMenuOpen?: boolean
 }
 
-/** Sentinel value in the project select that triggers the folder picker. */
-const ADD_FOLDER_VALUE = '__add_folder__'
 /**
  * Toolbar control for adding a terminal node. Pick an agent (or plain shell)
  * and a project, plus the agent's model / effort / yolo options — the fields
  * adapt to what each agent supports. A single click opens a local shell.
+ *
+ * Os campos em si vivem em `AgentConfigFields`, compartilhados com o diálogo de
+ * passar responsabilidade; aqui fica o que é próprio da toolbar: o flyout e a
+ * fila de configurações.
  */
 export function TerminalMenu({
   projects,
@@ -57,7 +39,6 @@ export function TerminalMenu({
   onAddFolder,
   toolsMenuOpen = false,
 }: TerminalMenuProps) {
-  const [initialPreferences] = useState(readAgentLaunchPreferences)
   const fieldIdPrefix = useId()
   const [open, setOpen] = useState(false)
   const {
@@ -66,21 +47,12 @@ export function TerminalMenu({
     resetPanel,
     markPanelReady,
   } = useDeferredExpansionPanel(open)
-  const [agentValue, setAgentValue] = useState<AgentLaunchPreferences['agentValue']>(
-    initialPreferences.agentValue,
-  )
-  const [model, setModel] = useState(initialPreferences.model)
-  const [effort, setEffort] = useState(initialPreferences.effort)
-  const [yolo, setYolo] = useState(initialPreferences.yolo)
-  const [projectId, setProjectId] = useState(initialPreferences.projectId)
-  const [name, setName] = useState('')
-  const [planningFile, setPlanningFile] = useState(initialPreferences.planningFile)
+  const config = useAgentConfig(projects)
   // Configs queued up to start together — lets one click launch a whole
   // agent setup instead of repeating "configure, open" once per terminal.
   const [queue, setQueue] = useState<NewTerminalOptions[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const planningFileInputRef = useRef<HTMLInputElement>(null)
   const flyoutPosition = useToolbarFlyoutPosition({
     open: open && settingsReady,
     toolsMenuOpen,
@@ -89,15 +61,6 @@ export function TerminalMenu({
     panelWidth: 256,
     placement: 'below',
   })
-
-  // Modelos que as CLIs oferecem agora; cai na lista fixa se a descoberta
-  // não trouxer nada, para o menu nunca abrir sem opções.
-  const { agents, refreshing, refresh } = useAgentModelCatalog()
-  const agent =
-    agentValue === SHELL_AGENT_VALUE
-      ? undefined
-      : agents.find((item) => item.id === agentValue) ?? getAgent(agentValue)
-  const effortLevels = agent ? getEffortLevels(agent, model) : null
 
   const closeSettings = useCallback(() => {
     resetPanel()
@@ -114,57 +77,6 @@ export function TerminalMenu({
     setOpen(true)
   }
 
-  const handleModelChange = (value: string) => {
-    setModel(value)
-    if (agent && !isEffortValidForModel(agent, value, effort)) {
-      setEffort('')
-    }
-  }
-
-  const saveCurrentPreferences = () => {
-    saveAgentLaunchPreferences({
-      agentValue,
-      model,
-      effort,
-      yolo,
-      projectId,
-      planningFile,
-    })
-  }
-
-  const handleProjectChange = async (value: string) => {
-    if (value !== ADD_FOLDER_VALUE) {
-      setProjectId(value)
-      return
-    }
-    const addedIds = await onAddFolder()
-    setProjectId(addedIds[0] ?? '')
-  }
-
-  const buildOptions = (): NewTerminalOptions => {
-    const project = projects.find((item) => item.id === projectId)
-    const place = project ? project.name : 'local'
-    const customName = name.trim()
-
-    if (!agent) {
-      return { cwd: project?.path, label: customName || `Shell · ${place}` }
-    }
-
-    const choices = {
-      agentId: agent.id,
-      model: model || undefined,
-      effort: (effort || undefined) as EffortLevel | undefined,
-      yolo,
-    }
-    return {
-      command: agent.command,
-      args: buildAgentArgs(choices) ?? undefined,
-      cwd: project?.path,
-      label: customName || `${describeLaunch(choices)} · ${place}`,
-      planningFile: planningFile.trim() || undefined,
-    }
-  }
-
   useEffect(() => {
     if (!open) {
       return
@@ -179,10 +91,10 @@ export function TerminalMenu({
   }, [closeSettings, open])
 
   const openTerminal = () => {
-    const options = buildOptions()
-    saveCurrentPreferences()
+    const options = config.buildOptions()
+    config.savePreferences()
     onAdd(options)
-    setName('')
+    config.setName('')
     closeSettings()
   }
 
@@ -190,9 +102,9 @@ export function TerminalMenu({
   // right away, so the user can stack up several different setups (agent,
   // model, project…) and start them all in one go.
   const queueCurrent = () => {
-    saveCurrentPreferences()
-    setQueue((current) => [...current, buildOptions()])
-    setName('')
+    config.savePreferences()
+    setQueue((current) => [...current, config.buildOptions()])
+    config.setName('')
   }
 
   const startQueue = () => {
@@ -256,150 +168,12 @@ export function TerminalMenu({
           style={toolbarFlyoutStyle(flyoutPosition)}
           className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10`}
         >
-          <label htmlFor={`${fieldIdPrefix}-name`} className="mb-1 block text-xs font-medium text-zinc-400">
-            Nome (opcional)
-          </label>
-          <input
-            id={`${fieldIdPrefix}-name`}
+          <AgentConfigFields
+            config={config}
+            projects={projects}
+            onAddFolder={onAddFolder}
             autoFocus
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Ex.: Agente de testes"
-            className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
           />
-
-          <label htmlFor={`${fieldIdPrefix}-agent`} className="mb-1 block text-xs font-medium text-zinc-400">Agente</label>
-          <select
-            id={`${fieldIdPrefix}-agent`}
-            value={agentValue}
-            onChange={(event) => {
-              setAgentValue(event.target.value as AgentLaunchPreferences['agentValue'])
-              setModel('')
-              setEffort('')
-            }}
-            className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
-          >
-            <option value={SHELL_AGENT_VALUE}>Nenhum (shell)</option>
-            {agents.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-
-          {agent && (
-            <>
-              <div className="mb-1 flex items-center justify-between">
-                <label htmlFor={`${fieldIdPrefix}-model`} className="block text-xs font-medium text-zinc-400">Modelo</label>
-                <button
-                  type="button"
-                  onClick={refresh}
-                  disabled={refreshing}
-                  className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
-                  title="Buscar de novo os modelos que as CLIs oferecem"
-                  aria-label="Atualizar lista de modelos"
-                >
-                  <RotateCw size={11} className={refreshing ? 'animate-spin' : undefined} />
-                </button>
-              </div>
-              <select
-                id={`${fieldIdPrefix}-model`}
-                value={model}
-                onChange={(event) => handleModelChange(event.target.value)}
-                className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
-              >
-                <option value="">Padrão</option>
-                {agent.models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-
-              {effortLevels && (
-                <>
-                  <label htmlFor={`${fieldIdPrefix}-effort`} className="mb-1 block text-xs font-medium text-zinc-400">
-                    Esforço de raciocínio
-                  </label>
-                  <select
-                    id={`${fieldIdPrefix}-effort`}
-                    value={effort}
-                    onChange={(event) => setEffort(event.target.value)}
-                    className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
-                  >
-                    <option value="">Padrão</option>
-                    {effortLevels.map((level) => (
-                      <option key={level} value={level}>
-                        {level}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
-
-              <label className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={yolo}
-                  onChange={(event) => setYolo(event.target.checked)}
-                  className="accent-emerald-600"
-                />
-                Yolo (acesso total, sem confirmações)
-              </label>
-            </>
-          )}
-
-          {agent && (
-            <>
-              <label htmlFor={`${fieldIdPrefix}-planning-file`} className="mb-1 block text-xs font-medium text-zinc-400">Arquivo de planejamento</label>
-              <div className="mb-3 flex gap-1.5">
-                <input
-                  id={`${fieldIdPrefix}-planning-file`}
-                  value={planningFile}
-                  onChange={(event) => setPlanningFile(event.target.value)}
-                  placeholder="Caminho para um arquivo (opcional)"
-                  className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
-                />
-                <button
-                  type="button"
-                  onClick={() => planningFileInputRef.current?.click()}
-                  className="felixo-btn-icon rounded bg-zinc-700 px-2 text-xs text-zinc-200 hover:bg-zinc-600"
-                  title="Selecionar arquivo de planejamento"
-                  aria-label="Selecionar arquivo de planejamento"
-                >
-                  …
-                </button>
-                <input
-                  ref={planningFileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (!file) return
-                    const selectedPath = window.felixo?.getFilePath?.(file) || file.name
-                    setPlanningFile(selectedPath)
-                    event.target.value = ''
-                  }}
-                />
-              </div>
-            </>
-          )}
-
-          <label htmlFor={`${fieldIdPrefix}-project`} className="mb-1 block text-xs font-medium text-zinc-400">Projeto</label>
-          <select
-            id={`${fieldIdPrefix}-project`}
-            value={projectId}
-            onChange={(event) => void handleProjectChange(event.target.value)}
-            className="mb-3 w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10"
-          >
-            <option value="">Local (sem projeto)</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-            <option value={ADD_FOLDER_VALUE}>+ Adicionar pasta…</option>
-          </select>
 
           <div className="flex gap-1.5">
             <button
