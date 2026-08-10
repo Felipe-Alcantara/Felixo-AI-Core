@@ -4,6 +4,14 @@
  * else falls back to letting the OS shell resolve it directly (file
  * associations, shebang, `.exe`/`.bat`/`.cmd`/`.ps1`, etc.).
  */
+/** What a caller needs to spawn the terminal that runs a picked file. */
+export type RunFileOptions = {
+  command: string
+  args: string[]
+  cwd: string
+  label: string
+}
+
 const INTERPRETER_BY_EXTENSION: Record<string, string> = {
   '.js': 'node',
   '.mjs': 'node',

@@ -3,14 +3,15 @@ import {
   BrainCircuit,
   ChevronDown,
   ChevronUp,
+  Download,
   FolderGit2,
   GitBranch,
   LayoutList,
   type LucideIcon,
   Notebook,
-  Search,
   Settings,
   Sparkles,
+  Upload,
   Wrench,
 } from 'lucide-react'
 import { useDeferredExpansionPanel } from '../../hooks/useDeferredExpansionPanel'
@@ -23,6 +24,9 @@ import {
 // 'terminals' is not here on purpose — the terminals dock is always visible
 // (see TerminalsPanel.tsx, rendered directly by CanvasView), not a panel you
 // open/close through this menu.
+//
+// 'search' is not here either: Buscar sits at the top of the toolbar, where the
+// most-used action of the canvas shouldn't cost two clicks.
 export type CanvasTool =
   | 'search'
   | 'projects'
@@ -36,7 +40,6 @@ export type CanvasTool =
 type ToolEntry = { tool: CanvasTool; label: string; icon: LucideIcon }
 
 const TOOLS: ToolEntry[] = [
-  { tool: 'search', label: 'Pesquisar', icon: Search },
   { tool: 'projects', label: 'Projetos', icon: FolderGit2 },
   { tool: 'notes', label: 'Notas', icon: Notebook },
   { tool: 'models', label: 'Modelos', icon: LayoutList },
@@ -50,6 +53,12 @@ type CanvasToolsMenuProps = {
   activeTool: CanvasTool | null
   onSelect: (tool: CanvasTool) => void
   onOpenChange?: (open: boolean) => void
+  /** Saves the whole canvas to a portable file. */
+  onExport: () => void
+  /** Opens the file picker that restores a canvas export. */
+  onImport: () => void
+  /** Export/import touch the whole canvas, so they wait on any pending work. */
+  isBusy?: boolean
 }
 
 /**
@@ -57,7 +66,14 @@ type CanvasToolsMenuProps = {
  * button; expanded it lists the extra canvas tools brought over from the chat
  * (projects, notes, models, prompts, git).
  */
-export function CanvasToolsMenu({ activeTool, onSelect, onOpenChange }: CanvasToolsMenuProps) {
+export function CanvasToolsMenu({
+  activeTool,
+  onSelect,
+  onOpenChange,
+  onExport,
+  onImport,
+  isBusy,
+}: CanvasToolsMenuProps) {
   const [open, setOpen] = useState(false)
   const {
     panelReady: optionsReady,
@@ -134,6 +150,30 @@ export function CanvasToolsMenu({ activeTool, onSelect, onOpenChange }: CanvasTo
               className={`felixo-btn flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-700 ${
                 activeTool === tool ? 'bg-zinc-700 text-white' : 'text-zinc-200'
               }`}
+            >
+              <Icon size={15} className="opacity-70" />
+              {label}
+            </button>
+          ))}
+
+          {/* Manutenção do canvas, não uma ferramenta que abre painel: fica
+              abaixo da divisória e fecha o menu ao agir. */}
+          <div className="my-1 border-t border-white/10" />
+          {[
+            { label: 'Exportar', icon: Download, run: onExport },
+            { label: 'Importar', icon: Upload, run: onImport },
+          ].map(({ label, icon: Icon, run }) => (
+            <button
+              key={label}
+              type="button"
+              disabled={isBusy}
+              onClick={() => {
+                run()
+                resetPanel()
+                setOpen(false)
+                onOpenChange?.(false)
+              }}
+              className="felixo-btn flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
             >
               <Icon size={15} className="opacity-70" />
               {label}

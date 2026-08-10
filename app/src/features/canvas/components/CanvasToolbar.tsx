@@ -11,7 +11,6 @@ import {
 import {
   ChevronDown,
   ChevronUp,
-  Download,
   FileText,
   Globe,
   Group,
@@ -20,13 +19,11 @@ import {
   Maximize,
   MessageSquare,
   MousePointer2,
-  StickyNote,
+  Search,
   Trash2,
-  Upload,
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
-import { ProjectsMenu, type RunFileOptions } from './ProjectsMenu'
 import { NotificationsMenu } from './NotificationsMenu'
 import { UpdateIndicator } from '../../updates/UpdateNotice'
 import type { UpdatePresentation } from '../../updates/update-presentation'
@@ -66,11 +63,6 @@ type CanvasToolbarProps = {
   onOrganizeAgents: () => void
   agentCount: number
   onAddFolder: () => Promise<string[]>
-  /** Unregisters a folder from the projects list (see ProjectsMenu). */
-  onRemoveFolder: (projectId: string) => Promise<boolean>
-  /** Spawns a terminal whose process IS the file running (see ProjectsMenu). */
-  onRunFile: (options: RunFileOptions) => void
-  onAddNote: (name?: string) => void
   onAddFile: (name?: string) => void
   onAddGroup: (name?: string) => void
   onAddWebpage: (url: string, name?: string) => void
@@ -105,9 +97,6 @@ export function CanvasToolbar({
   onOrganizeAgents,
   agentCount,
   onAddFolder,
-  onRemoveFolder,
-  onRunFile,
-  onAddNote,
   onAddFile,
   onAddGroup,
   onAddWebpage,
@@ -220,10 +209,25 @@ export function CanvasToolbar({
         <MessageSquare size={16} />
         Chat
       </button>
+      {/* Buscar mora aqui, não dentro de Ferramentas: é a ação mais usada do
+          canvas e não faz sentido custar dois cliques. */}
+      <button
+        type="button"
+        onClick={() => onSelectTool('search')}
+        className={`${TOOLBAR_BUTTON_CLASS} ${activeTool === 'search' ? '!bg-zinc-700 text-white' : ''}`}
+        title="Buscar blocos no canvas"
+        aria-expanded={activeTool === 'search'}
+      >
+        <Search size={16} />
+        Buscar
+      </button>
       <CanvasToolsMenu
         activeTool={activeTool}
         onSelect={onSelectTool}
         onOpenChange={changeToolsMenuOpen}
+        onExport={onExport}
+        onImport={() => importInputRef.current?.click()}
+        isBusy={isBusy}
       />
       <NotificationsMenu
         open={notificationsOpen}
@@ -253,20 +257,9 @@ export function CanvasToolbar({
         <LayoutGrid size={16} />
         Organizar
       </button>
-      <ProjectsMenu
-        projects={projects}
-        onAddFolder={onAddFolder}
-        onRemoveFolder={onRemoveFolder}
-        onRunFile={onRunFile}
-        toolsMenuOpen={toolsMenuOpen}
-      />
-      <NamedCreateButton
-        icon={<StickyNote size={16} />}
-        buttonLabel="Nota"
-        placeholder="Nome da nota (opcional)"
-        onCreate={onAddNote}
-        toolsMenuOpen={toolsMenuOpen}
-      />
+      {/* "Projetos" e "Nota" não ficam aqui: os painéis em Ferramentas já fazem
+          o ciclo completo de cada um — navegar/rodar e adicionar/remover pasta,
+          criar nota e gerenciar as salvas. */}
       <NamedCreateButton
         icon={<FileText size={16} />}
         buttonLabel="Arquivo"
@@ -328,27 +321,8 @@ export function CanvasToolbar({
         Ver tudo
       </button>
 
-      <button
-        type="button"
-        onClick={onExport}
-        disabled={isBusy}
-        className={`${TOOLBAR_BUTTON_CLASS} disabled:opacity-60`}
-        title="Exportar canvas para um arquivo portátil"
-      >
-        <Download size={16} />
-        Exportar
-      </button>
-
-      <button
-        type="button"
-        onClick={() => importInputRef.current?.click()}
-        disabled={isBusy}
-        className={`${TOOLBAR_BUTTON_CLASS} disabled:opacity-60`}
-        title="Importar canvas de outro computador"
-      >
-        <Upload size={16} />
-        Importar
-      </button>
+      {/* Exportar/Importar vivem em Ferramentas — são manutenção do canvas, não
+          ações do dia a dia. O input fica aqui porque é disparado por ref. */}
       <input
         ref={importInputRef}
         type="file"

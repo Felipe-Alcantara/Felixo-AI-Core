@@ -1424,11 +1424,6 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onOrganizeAgents={organizeAgentNodes}
         agentCount={topLevelAgentCount}
         onAddFolder={addProjectFolder}
-        onRemoveFolder={removeProjectFolder}
-        onRunFile={runFileInTerminal}
-        onAddNote={(name) =>
-          addNode('note', { text: '', ...(name ? { label: name } : {}) })
-        }
         onAddFile={addFileNode}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
         onAddWebpage={(url, name) =>
@@ -1526,6 +1521,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onFocusNode={focusNode}
         onAddNote={() => addNode('note', { text: '' })}
         onProjectsChanged={reloadProjects}
+        onRemoveFolder={removeProjectFolder}
+        onRunFile={runFileInTerminal}
         onActivateSkill={activateSkill}
         onInsertPrompt={insertPrompt}
         onPromptSaved={(prompt) => {

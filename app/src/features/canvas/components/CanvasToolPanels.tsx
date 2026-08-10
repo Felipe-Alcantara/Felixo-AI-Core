@@ -12,6 +12,7 @@ import { SkillsPanel, type SkillActivationResult } from './tools/SkillsPanel'
 import { GitPanel } from './tools/GitPanel'
 import { SettingsPanel } from './tools/SettingsPanel'
 import type { CanvasSkill } from '../types'
+import type { RunFileOptions } from '../services/run-file-command'
 
 type CanvasToolPanelsProps = {
   activeTool: CanvasTool | null
@@ -23,6 +24,10 @@ type CanvasToolPanelsProps = {
   /** Creates a new note block on the canvas (same flow as the toolbar button). */
   onAddNote: () => void
   onProjectsChanged: () => void
+  /** Unregisters a folder from the shared projects list — nothing leaves disk. */
+  onRemoveFolder: (projectId: string) => Promise<boolean>
+  /** Spawns a terminal whose process IS the file picked in the projects panel. */
+  onRunFile: (options: RunFileOptions) => void
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
   onInsertPrompt: (prompt: string) => Promise<SkillActivationResult>
   onPromptSaved: (prompt: string) => void
@@ -38,6 +43,8 @@ export function CanvasToolPanels({
   onFocusNode,
   onAddNote,
   onProjectsChanged,
+  onRemoveFolder,
+  onRunFile,
   onActivateSkill,
   onInsertPrompt,
   onPromptSaved,
@@ -50,6 +57,8 @@ export function CanvasToolPanels({
         <ProjectsPanel
           onClose={onClose}
           onProjectsChanged={onProjectsChanged}
+          onRemoveFolder={onRemoveFolder}
+          onRunFile={onRunFile}
           toolsMenuOpen={toolsMenuOpen}
         />
       )
