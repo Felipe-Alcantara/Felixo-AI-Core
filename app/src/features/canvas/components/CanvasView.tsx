@@ -114,9 +114,9 @@ import {
   prepareHandoffTranscript,
 } from '../services/terminal-handoff'
 import {
-  arrangeTopLevelAgentsAsMatrix,
-  countTopLevelAgentNodes,
-} from '../services/agent-matrix-layout'
+  arrangeNodesAsMatrix,
+  countArrangeableNodes,
+} from '../services/canvas-matrix-layout'
 import type { CanvasNodeType, CanvasSkill, DiagnosisRequestStatus } from '../types'
 
 type FlowPositionMapper = {
@@ -130,6 +130,11 @@ type FlowPositionMapper = {
     options?: { zoom?: number; duration?: number },
   ) => void
   fitView: (options?: { padding?: number; duration?: number }) => void
+  /** Enquadra uma área do canvas — usado para mostrar a matriz recém-organizada. */
+  fitBounds: (
+    bounds: { x: number; y: number; width: number; height: number },
+    options?: { padding?: number; duration?: number },
+  ) => void
 }
 
 type RestoredAgentTerminals = {
@@ -1241,9 +1246,10 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
   // Explicit, opt-in layout for agents that were added at different times.
   // Shells and group children stay exactly where the user put them.
-  const organizeAgentNodes = useCallback(() => {
-    const viewport = visibleCanvasBounds()
-    const organized = arrangeTopLevelAgentsAsMatrix(nodes, viewport)
+  const organizeCanvasBlocks = useCallback(() => {
+    // Sem viewport: a matriz é ancorada no bloco mais ao topo-esquerda, então o
+    // resultado não muda com pan, zoom ou tamanho de janela.
+    const { nodes: organized, bounds } = arrangeNodesAsMatrix(nodes, edges)
     const targetPositions = new Map(
       organized.flatMap((node, index) => {
         const current = nodes[index]
@@ -1254,6 +1260,18 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     )
     if (targetPositions.size === 0) {
       return
+    }
+
+    // A matriz pode ser maior que a área visível (telas menores, zoom alto).
+    // Enquadrar depois de posicionar garante que o usuário veja o resultado
+    // inteiro, em vez de achar que "não organizou" porque os blocos saíram
+    // do campo de visão.
+    const frameMatrix = () => {
+      if (!bounds) return
+      flowInstanceRef.current?.fitBounds(bounds, {
+        padding: 0.1,
+        duration: AGENT_MATRIX_ANIMATION_MS,
+      })
     }
 
     const applyTargetPositions = () => {
@@ -1273,6 +1291,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       applyTargetPositions()
+      frameMatrix()
       return
     }
 
@@ -1302,6 +1321,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           return
         }
         applyTargetPositions()
+        frameMatrix()
         agentMatrixAnimationCleanupRef.current = setTimeout(() => {
           if (agentMatrixAnimationRunRef.current !== run) {
             return
@@ -1320,7 +1340,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         }, AGENT_MATRIX_ANIMATION_MS)
       })
     })
-  }, [nodes, setNodes, persistNode, visibleCanvasBounds])
+  }, [nodes, edges, setNodes, persistNode])
 
   // "Run this file" from the Projects panel: the terminal's process IS the
   // file running (command = interpreter, args = [file]) — unlike agent
@@ -1411,7 +1431,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     | undefined
   const expandedTitle = expandedNodeData?.label ?? 'Terminal'
   const handoffTarget = getNextHandoffAgent(expandedNodeData?.command)
-  const topLevelAgentCount = countTopLevelAgentNodes(nodes)
+  const arrangeableCount = countArrangeableNodes(nodes)
 
   return (
     <div className="flex h-full w-full">
@@ -1428,8 +1448,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddTerminals={addTerminalNodes}
-        onOrganizeAgents={organizeAgentNodes}
-        agentCount={topLevelAgentCount}
+        onOrganizeBlocks={organizeCanvasBlocks}
+        arrangeableCount={arrangeableCount}
         onAddFolder={addProjectFolder}
         onAddFile={addFileNode}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}

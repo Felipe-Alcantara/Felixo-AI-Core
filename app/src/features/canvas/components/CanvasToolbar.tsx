@@ -60,8 +60,8 @@ type CanvasToolbarProps = {
   onAddTerminals: (
     optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[],
   ) => void
-  onOrganizeAgents: () => void
-  agentCount: number
+  onOrganizeBlocks: () => void
+  arrangeableCount: number
   onAddFolder: () => Promise<string[]>
   onAddFile: (name?: string) => void
   onAddGroup: (name?: string) => void
@@ -94,8 +94,8 @@ export function CanvasToolbar({
   projects,
   onAddTerminal,
   onAddTerminals,
-  onOrganizeAgents,
-  agentCount,
+  onOrganizeBlocks,
+  arrangeableCount,
   onAddFolder,
   onAddFile,
   onAddGroup,
@@ -254,13 +254,13 @@ export function CanvasToolbar({
       />
       <button
         type="button"
-        onClick={onOrganizeAgents}
-        disabled={agentCount < 2}
+        onClick={onOrganizeBlocks}
+        disabled={arrangeableCount < 2}
         className={`${TOOLBAR_BUTTON_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
         title={
-          agentCount < 2
-            ? 'Adicione pelo menos dois agentes para organizá-los'
-            : `Organizar ${agentCount} agentes em uma matriz`
+          arrangeableCount < 2
+            ? 'Adicione pelo menos dois blocos para organizá-los'
+            : `Organizar ${arrangeableCount} blocos em uma matriz, mantendo os conectados lado a lado`
         }
       >
         <LayoutGrid size={16} />
