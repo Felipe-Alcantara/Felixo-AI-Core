@@ -1053,3 +1053,80 @@ TESTE: 466 testes do backend, 200 do frontend e 89 (+70 subtests) do launcher, t
 RISCO RESIDUAL: dois achados seguem abertos de propósito. O RACE-02 depende de duas chamadas concorrentes se intercalarem entre a checagem e a atribuição de `activeRun`; o gatilho mais plausível era a dupla reinvocação do RACE-01, agora corrigido, então o cenário pode ter deixado de ser alcançável — confirmar exige reproduzir a corrida, não ler o código. O BUG-02 não é defeito técnico e sim decisão de produto: hoje esgotar `maxTurns` falha o run e descarta o trabalho dos agentes, e sintetizar uma resposta final com o que já existe é comportamento diferente. O frontend (~24k linhas em `app/src/`) segue sem leitura linha a linha, já que as três passadas priorizaram o processo principal e o launcher, que são as superfícies com acesso ao SO. Por fim, o fork `flaviavs-commits/Felixo-AI-Core` ainda carrega o histórico anterior ao expurgo dos dados pessoais: não é uma conta do dono do projeto, então a limpeza depende de quem a controla — o caminho simples é deletar e refazer o fork a partir do repositório já limpo.
 
 Estado final: concluído — 8 commits aplicados (`049e460`, `27b7799`, `1dd9fb0`, `6156e89`, `a63b574`, `5f0dada` e os de documentação); RACE-02 e BUG-02 aguardando decisão do dono do projeto.
+
+## Registro de Trabalho — 2026-08-10 — três bugs de campo: abrir arquivo no Windows, webview duplicado e "Organizar" instável
+
+PEDIDO: três relatos de uso, investigados e corrigidos em sequência — arquivos `.py` que "não abrem nem interagem" no Windows, páginas web abrindo duas vezes (áudio sempre duplicado) e o botão **Organizar** que "às vezes funciona, às vezes só chega os elementos mais perto".
+
+FEITO: **os três eram bugs distintos e nenhum estava no lugar onde o sintoma aparecia.**
+
+*Abrir arquivo no Windows.* O PTY montava `cmd.exe /d /s /c py script.py`, e `/c` encerra o shell junto com o comando — quando o script terminava (ou falhava na primeira linha), o painel morria antes de o usuário ler qualquer coisa. Pior: um `.py` que quebra na importação sai em ~50 ms com código ≠ 0, caindo no `allowEmergencyShellFallback`, que re-spawnava um shell limpo em `os.homedir()` e **descartava o traceback** — daí o relato ser sempre "não abre", nunca o erro real. Quatro correções: `keepShellOpen` faz o Windows usar `/k` e o POSIX devolver um shell interativo em vez de `exec`; sessões "rodar arquivo" saem da retentativa que remove argumentos (para `py script.py` o argumento *é* o trabalho, e removê-lo abria um REPL que ninguém pediu); o `outputBuffer` do processo morto é reproduzido antes de qualquer fallback; e `py` ganhou fallback para `python`, já que o launcher só existe em instalações python.org — Microsoft Store e conda trazem apenas `python`.
+
+*Página web duplicada.* O guard contra webview duplicado consultava `webviewRef.current?.isConnected`, mas o cleanup do ref callback fazia `webviewRef.current = null` **sem remover o elemento do DOM**. Sob `<StrictMode>` (mount → cleanup → mount), o segundo mount lia `null`, o guard não segurava e um segundo `<webview>` era criado sobre o primeiro — ambos vivos, ambos carregando a URL, ambos com áudio. O cleanup passou a remover o elemento; órfãos de montagens anteriores são limpos antes de criar o novo. Duas correções vieram a reboque: o efeito de listeners dependia só de `[id]` e, como refs rodam antes de efeitos, na remontagem lia um ref já anulado e deixava o webview **sem nenhum listener** (sem título, sem persistência de URL, sem back/forward) — passou a depender do elemento via state; e como recriar o guest recarregava `initialUrl`, um `currentUrlRef` acompanha a navegação para a remontagem não rebobinar a página.
+
+*"Organizar" instável.* A âncora da matriz vinha de `placementOrigin(viewport)`, isto é, do canto visível da tela: com o canvas rolado 300px, o destino mudava 300px. Somava-se um fallback silencioso de três níveis — numa tela 1366x768 uma matriz de 4 terminais precisa de 1072x752 contra 1286x640 de área útil, então **nunca** cabia e o resultado era sempre o fallback que empilha os blocos (o "só chega mais perto"); em monitor maior, cabia. O zoom entrava na conta pelo mesmo caminho. O viewport saiu inteiramente do cálculo: a matriz agora ancora no bloco que já está mais ao topo-esquerda, e `fitBounds` enquadra o resultado depois de posicionar. Por decisão do dono do projeto, o escopo passou de "agentes conhecidos" para todos os blocos de topo (grupos entram inteiros, filhos de grupo continuam de fora porque suas coordenadas são relativas ao pai), com célula única dimensionada pelo maior bloco; e blocos ligados por arestas ficam em células vizinhas, via union-find sobre as arestas, com uma regra que impede um componente de ser partido entre duas linhas quando ainda caberia inteiro na seguinte.
+
+CONVENÇÃO/ARQUITETURA: `agent-matrix-layout.ts` foi dividido em três módulos coesos e renomeado, porque o nome passou a mentir sobre o conteúdo (não organiza mais agentes) e o arquivo acumulava três responsabilidades: `node-connectivity.ts` (grafo puro — union-find e ordem de leitura), `matrix-grid.ts` (geometria da grade — célula, âncora, slots, bounds) e `canvas-matrix-layout.ts` (orquestração). As props `onOrganizeAgents`/`agentCount` viraram `onOrganizeBlocks`/`arrangeableCount`, alinhando o contrato da toolbar ao comportamento real.
+
+TESTE: 276 testes de frontend (44 novos: 10 de layout, 12 de grade, 11 de conectividade, 11 de montagem de webview) e 514 do backend, todos passando; `tsc -b`, build do Vite, ESLint e `git diff --check` limpos com Node 25.9.0. Os casos-limite do layout foram verificados à parte (blocos exatamente sobrepostos, coordenadas negativas, bloco sem tamanho medido) e nenhum quebra a âncora.
+
+RISCO RESIDUAL: nada foi validado com o app rodando — o ambiente de testes é `environment: 'node'`, sem DOM, então `fitBounds` está garantido por tipo e pela API do React Flow, não por execução. Três conferências manuais valem a pena: rodar um `.py` no Windows real (o `/k` e o exit 9009 vêm do comportamento documentado do `cmd.exe`), abrir um bloco de Página Web com vídeo e confirmar um único áudio, e clicar em **Organizar** com o canvas rolado para longe. Duas consequências de escopo ficam registradas: `keepShellOpen` é persistido no node, então blocos de "rodar arquivo" criados antes desta mudança continuam fechando ao terminar; e notas e páginas web agora **se movem** ao organizar — quem usa nota como rótulo fixo ao lado de um bloco vai vê-la entrar na grade. Fixar blocos individualmente é uma ideia natural para quem quiser contribuir.
+
+Estado final: concluído — pendente de conferência manual nos três pontos acima.
+
+## Registro de Trabalho — 2026-08-10 (parte 2) — `/resume` digitado mas não enviado
+
+PEDIDO: ao reiniciar o app, nem sempre o `/resume` é enviado ao agente restaurado — "às vezes ele só escreve".
+
+FEITO: o prompt inicial é entregue em duas escritas no PTY: o texto e, 75 ms depois, o Enter. A separação existe por um motivo real (CLIs de tela cheia tratam um CR colado junto com o texto como quebra de linha), mas os 75 ms são um valor fixo e a única guarda antes de enviar a tecla era `!session.disposed` — nada confirmava que o TUI havia consumido o texto. Quando a interface ainda está redesenhando, o Enter se perde e o `/resume` fica parado na linha de entrada. O `INITIAL_TEXT_MAX_WAIT_MS` de 10 s agrava: se a CLI demora mais que isso para ficar pronta, o texto é digitado com a interface ainda inicializando.
+
+A correção troca o palpite de relógio por verificação de estado. Novo módulo `terminal/terminal-submission.ts` com `isSubmissionPending(viewport, text)`, que inspeciona **apenas a linha de entrada** do viewport — depois de uma submissão bem-sucedida a CLI limpa essa linha, e o texto que reaparece acima é histórico da conversa, não pendência. Se o texto ainda estiver lá, o Enter é reenviado, até 3 vezes com 600 ms de intervalo (`SUBMIT_RETRY_LIMIT`/`SUBMIT_RETRY_DELAY_MS`). Reenviar é seguro exatamente porque só ocorre enquanto a linha continua preenchida: se a CLI já submeteu, nada é enviado. O timer novo (`submitRetryTimer`) é limpo em `remove()`, junto dos demais.
+
+O relato do dono do projeto direcionou o diagnóstico e evitou uma correção errada: escolhido "texto escrito e parado, esperando Enter" (e não truncado/embaralhado), o problema ficou isolado na entrega da tecla, não no gate de prontidão — que continua intocado.
+
+TESTE: `terminal-submission.test.ts` (12 casos: linha de entrada do Claude dentro da caixa e do Codex, linha limpa após submissão, prompt ecoado no histórico, cursor de bloco, espaçamento do TUI, dica após o texto, comando diferente, texto vazio, instrução multilinha, viewport sem prompt). **Um teste reprovou a primeira implementação e apontou um defeito real:** o regex exigia o marcador no início da linha, então `│ > /resume` — exatamente o formato do Claude Code, onde a falha foi relatada — não era reconhecido; o padrão passou a aceitar as bordas de caixa que CLIs de tela cheia desenham.
+
+VALIDAÇÃO: 288 testes de frontend, `tsc -b`, build do Vite e ESLint limpos com Node 25.9.0.
+
+RISCO RESIDUAL: não validado com o app rodando — a suíte é `environment: 'node'`, sem DOM nem PTY real, então a detecção foi verificada contra viewports representativos, não contra a saída real das CLIs. A conferência manual é reiniciar o app com um agente Claude salvo e confirmar que o `/resume` é submetido sozinho. Se alguma CLI desenhar a entrada num formato não coberto por `PROMPT_LINE`, a reconferência simplesmente não dispara e o comportamento volta a ser o de antes — degrada para o estado atual, não para pior. Os 75 ms iniciais e o limite de 10 s de espera seguem como estavam: mexer neles é outra decisão, e não era necessária para este defeito.
+
+Estado final: concluído — pendente de conferência manual em reinício real.
+
+## Registro de Trabalho — 2026-08-10 (parte 3) — padrão de qualidade sobre a correção do `/resume`
+
+PEDIDO: aplicar o padrão de qualidade ao trabalho da parte 2.
+
+FEITO: auditoria do `terminal-session-store.ts` contra o item 2 do guia mínimo ("arquivos faz-tudo devem ser tratados como sinal de refatoração"). O arquivo tinha 934 linhas e três responsabilidades sobrepostas: ciclo de vida da sessão (a razão de existir da classe), leitura do buffer renderizado do xterm e interpretação do que a tela mostra. Os dois últimos blocos eram funções puras, sem acesso à classe, e **nenhum tinha teste** — apesar de decidirem se um agente aparece como ocupado, ocioso ou esperando aprovação.
+
+Extraídos dois módulos, na mesma convenção dos demais arquivos de `terminal/` e `services/` (um assunto por arquivo):
+
+- `terminal-buffer-reader.ts` — `readViewport`, `readBuffer`, `readTerminalTail`, `computePreview`, `computeSignature`. Recebe um terminal, devolve texto; não conhece sessão.
+- `terminal-screen-state.ts` — `cleanPrompt`, `isBusyScreen`, `looksLikeApprovalPrompt`, `hasCodexInteractivePrompt`, `isCodexTrustPrompt`. Heurísticas sobre texto renderizado; não conhece xterm.
+
+O store caiu para 790 linhas e passou a importar ambos. `BUSY_INDICATOR`, que era testado direto como regex, virou a função `isBusyScreen` — a constante deixou de vazar para fora do módulo que a define. `getInitialTextDelay` ficou no store por depender de `Session`.
+
+TESTE: 29 casos novos (12 para o leitor de buffer, 17 para o reconhecimento de tela), cobrindo o que antes não tinha nenhum: a assinatura que colapsa spinner e contador de tempo mas muda quando há saída real, a rejeição de lista numerada sem pergunta de confirmação, o rodapé fixo da CLI fora da pré-visualização, e o diálogo de confiança do Codex sob ANSI. O leitor usa um `Terminal` mínimo dublado, já que a suíte roda em `environment: 'node'`, sem DOM. Total: 317 testes de frontend e 514 do backend.
+
+VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos com Node 25.9.0. Dois defeitos apareceram durante a validação e foram corrigidos: o ESLint apontou que a anotação `no-control-regex` do `ANSI_ESCAPE` não veio junto na extração, e um teste meu comparava `'antigo\novo'`, onde o `\n` consumia a letra da palavra seguinte — erro do teste, não do código.
+
+RISCO RESIDUAL: a extração é mecânica e o comportamento não mudou, mas as heurísticas de tela seguem sendo heurísticas: reconhecem os formatos atuais das CLIs e podem precisar de ajuste quando elas mudarem o desenho. Agora, ao menos, cada formato reconhecido está registrado como teste, então uma mudança de formato falha visivelmente em vez de degradar em silêncio. A conferência manual do `/resume` (parte 2) continua pendente.
+
+Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-10 (parte 4) — guias específicos: risco de submeter texto do usuário
+
+PEDIDO: seguir os guias do padrão de qualidade, não só o guia mínimo.
+
+FEITO: leitura de `docs/CORE-PADROES-OBRIGATORIOS.md`, `core/DESIGN_SYSTEM_BACKEND.md` e do índice de `guias/`. Os guias de `guias/frontend|backend|integracao/` tratam de features específicas (heatmap, calendário, scraping, deploy) e nenhum se aplica a este trabalho; o `DESIGN_SYSTEM_FRONTEND.md` é identidade visual, também fora de escopo. O contrato aplicável é a seção 8 do design system de backend — pirâmide de testes, TDD e "o que não pode ficar sem teste" — mais o checklist da seção 11.
+
+A auditoria por esse critério encontrou **uma falha de segurança no código que eu mesmo tinha escrito na parte 2**. O item 8.3 exige teste para "fluxos destrutivos ou irreversíveis", e a reconferência de submissão era exatamente isso sem estar coberta: `isSubmissionPending` usava `startsWith`, então se o usuário começasse a digitar durante a janela de retentativa (até ~1,8 s) e sua frase começasse com o texto que enviamos, a função reportava "pendente" e um Enter era disparado — **submetendo a linha inacabada dele**, sem confirmação, para um agente que pode agir de forma irreversível.
+
+Seguindo o fluxo de TDD da seção 8.2, o teste veio primeiro e reprovou a implementação existente. A correção troca `startsWith` por igualdade: se a linha contém mais do que enviamos, alguém está digitando nela e nada é reenviado. Dicas que o próprio TUI desenha ("enter to send") continuam toleradas porque ficam depois de um espaçamento largo até a borda da caixa, recortado antes da comparação — diferente de digitação contínua, que segue um espaço simples. Casos ambíguos resolvem como "não pendente", ou seja, deixam de reenviar o Enter em vez de arriscar submeter rascunho alheio: a falha segura é o `/resume` não ser enviado, que é o bug original, e não uma ação que ninguém pediu.
+
+Um segundo teste caiu junto no caminho e expôs que meu limiar inicial de espaçamento (3) recortaria instrução legítima com quebra de linha; passou para 5, acima do que o reflow de texto produz entre palavras. Dois testes que eu havia escrito para o mesmo comportamento com espaçamentos diferentes foram consolidados em um, com o critério explicitado no comentário.
+
+TESTE: 318 testes de frontend (13 no módulo de submissão, incluindo o novo caso de segurança) e 514 do backend. `tsc -b`, build do Vite, ESLint e `git diff --check` limpos com Node 25.9.0.
+
+RISCO RESIDUAL: a separação entre "dica do TUI" e "usuário digitando" é heurística de espaçamento e pode errar em uma CLI que alinhe dicas com menos de cinco espaços — nesse caso a reconferência simplesmente não dispara, degradando para o comportamento anterior à correção, nunca para envio indevido. O primeiro Enter (75 ms após o texto) continua sem essa verificação de propósito: ali acabamos de escrever e o usuário não teve janela para digitar; é o comportamento original, preservado. A conferência manual em reinício real segue pendente.
+
+Estado final: concluído.
