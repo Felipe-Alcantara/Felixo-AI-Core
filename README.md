@@ -173,9 +173,10 @@ Observações importantes:
 - Usuários precisam ter as CLIs `codex`, `claude` e/ou `gemini` instaladas e autenticadas no próprio sistema.
 - Se a CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com os diretórios extras onde os comandos estão instalados.
 - No Linux, prefira o AppImage para auto-update dentro do app; pacote `.deb` é útil para instalação tradicional, mas não segue o mesmo fluxo de atualização automática.
-- Releases públicas de macOS/Windows ainda devem receber assinatura/notarização antes de distribuição ampla.
+- **macOS: os artefatos não são assinados nem notarizados**, então o Gatekeeper bloqueia a primeira abertura — às vezes com uma mensagem confusa que sugere procurar um app na App Store. O usuário precisa liberar manualmente em **Ajustes do Sistema > Privacidade e Segurança**, ou rodar `xattr -dr com.apple.quarantine "/Applications/Felixo AI Core.app"`. Resolver isso de vez exige uma conta do Apple Developer Program (US$ 99/ano) e os secrets de assinatura no workflow de release.
+- No Windows, o SmartScreen pode alertar enquanto não houver assinatura, mas o app abre após confirmar.
 
-Detalhes: [Distribuição e Atualizações](./docs/projeto/DISTRIBUICAO-E-ATUALIZACOES.md).
+Detalhes de instalação por sistema operacional: [Guia do Usuário](./docs/guias/GUIA-USUARIO.md#2-instalação-por-sistema-operacional).
 
 ---
 

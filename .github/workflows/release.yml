@@ -84,3 +84,43 @@ jobs:
 
       - name: Publish installers
         run: npx electron-builder --publish always
+
+      # Os artefatos de macOS não são assinados nem notarizados, então o
+      # Gatekeeper bloqueia a primeira abertura — às vezes com uma mensagem que
+      # sugere procurar um app na App Store, sem deixar claro que é bloqueio de
+      # segurança. Quem baixa o .dmg lê a página da release, não o repositório,
+      # então a instrução precisa estar aqui.
+      #
+      # Só no runner Linux: os três jobs publicam na MESMA release, e sem esse
+      # guard o aviso seria anexado três vezes.
+      - name: Add macOS Gatekeeper notice to the release
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${FELIXO_RELEASE_VERSION}"
+          NOTICE_MARKER="<!-- macos-gatekeeper-notice -->"
+          CURRENT_BODY="$(gh release view "$TAG" --json body --jq .body)"
+
+          # Idempotente: uma re-execução do workflow não deve empilhar avisos.
+          if [[ "$CURRENT_BODY" == *"$NOTICE_MARKER"* ]]; then
+            echo "Aviso já presente na release $TAG."
+            exit 0
+          fi
+
+          {
+            printf '%s\n' "$CURRENT_BODY"
+            printf '\n%s\n' "$NOTICE_MARKER"
+            printf '\n---\n\n'
+            printf '### ⚠️ macOS: a primeira abertura é bloqueada\n\n'
+            printf 'Esta build **não é assinada nem notarizada** pela Apple. O macOS bloqueia a primeira execução e pode exibir uma mensagem confusa — inclusive uma janela pedindo para **escolher um aplicativo na App Store**. O Felixo não é distribuído pela App Store; é apenas o bloqueio de segurança.\n\n'
+            printf 'Para abrir, depois de arrastar o app para **Aplicativos**:\n\n'
+            printf '1. **Ajustes do Sistema > Privacidade e Segurança**, role até o final e clique em **Abrir Assim Mesmo**; ou\n'
+            printf '2. rode no Terminal:\n\n'
+            printf '   ```bash\n   xattr -dr com.apple.quarantine "/Applications/Felixo AI Core.app"\n   ```\n\n'
+            printf 'Se o macOS disser que o app está **"danificado"**, é o mesmo bloqueio — use o comando acima. Passo a passo completo no [Guia do Usuário](https://github.com/Felipe-Alcantara/Felixo-AI-Core/blob/main/docs/guias/GUIA-USUARIO.md#macos).\n\n'
+            printf 'Faça isso apenas com arquivos baixados desta página oficial de Releases.\n'
+          } > release-notes-body.md
+
+          gh release edit "$TAG" --notes-file release-notes-body.md

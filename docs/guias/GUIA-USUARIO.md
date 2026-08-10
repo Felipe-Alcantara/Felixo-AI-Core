@@ -59,7 +59,46 @@ Artefatos configurados:
 - `.dmg`.
 - `.zip`.
 
-Baixe o arquivo adequado à arquitetura publicada na release, abra o `.dmg` e arraste o app para **Aplicativos**. Como a distribuição pública ainda pode não estar notarizada, o Gatekeeper pode bloquear a primeira execução. Para abrir, clique com o botão direito no app, escolha **Abrir** e confirme novamente em **Abrir**.
+Baixe o arquivo adequado à arquitetura publicada na release, abra o `.dmg` e arraste o app para **Aplicativos**.
+
+#### A primeira abertura é bloqueada — isso é esperado
+
+A distribuição pública **não é assinada nem notarizada** pela Apple. O macOS marca todo arquivo baixado da internet com um atributo de quarentena e, como o app não tem assinatura reconhecida, o Gatekeeper recusa abri-lo.
+
+A mensagem varia conforme a versão do macOS, e nem sempre ela deixa claro que se trata de bloqueio de segurança. Você pode ver:
+
+- "Não é possível abrir porque a Apple não pode verificar se ele está livre de malware."
+- "O app está danificado e não pode ser aberto."
+- Uma janela pedindo para **escolher um aplicativo na App Store** para abrir o arquivo.
+
+A terceira é a mais confusa: o macOS não reconhece o `.app` como aplicativo executável e o trata como um arquivo qualquer. Não significa que o Felixo precise ser instalado pela App Store, nem que o download esteja corrompido.
+
+**Para abrir (escolha um caminho):**
+
+*Caminho 1 — Ajustes do Sistema (macOS Ventura ou mais recente):*
+
+1. Tente abrir o app normalmente e feche o aviso.
+2. Vá em **Ajustes do Sistema > Privacidade e Segurança**.
+3. Role até o final: haverá uma linha citando o Felixo AI Core, com o botão **Abrir Assim Mesmo**.
+4. Clique nele e confirme com sua senha ou Touch ID.
+
+Este passo só é necessário uma vez por versão instalada.
+
+*Caminho 2 — Terminal (funciona em qualquer versão, inclusive quando o app aparece como "danificado"):*
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Felixo AI Core.app"
+```
+
+O comando remove o atributo de quarentena do app já instalado. Depois disso ele abre normalmente pelo Launchpad ou pelo Finder.
+
+*Caminho 3 — Botão direito (macOS mais antigos):*
+
+Clique com o botão direito no app, escolha **Abrir** e confirme novamente em **Abrir**. Em versões recentes do macOS este caminho deixou de funcionar de forma confiável; use o caminho 1 ou 2.
+
+> **Só faça isso com arquivos baixados da [página oficial de Releases](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases).** Esses passos desativam uma proteção real do sistema — a verificação existe justamente para barrar software de origem desconhecida. Confira o `sha256` publicado na release se quiser validar o download.
+
+Cada atualização baixada recria a quarentena, então o procedimento pode precisar ser repetido quando você instalar uma versão nova manualmente.
 
 ## 3. CLIs externas e contas de IA
 
@@ -231,7 +270,8 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 - O app depende das CLIs externas estarem instaladas, autenticadas e acessíveis no `PATH`.
 - Auto-update fica ativo apenas no app empacotado, não no `npm run dev` nem no modo código-fonte.
 - No Linux, prefira AppImage para o fluxo de auto-update. `.deb` exige reinstalação/atualização tradicional.
-- Windows e macOS ainda podem exibir alertas de segurança enquanto a distribuição pública não tiver assinatura/notarização completa.
+- **macOS bloqueia a primeira execução.** Os artefatos não são assinados nem notarizados, então o Gatekeeper barra o app até que ele seja liberado manualmente (ver a [seção de instalação para macOS](#macos)). Não há como evitar isso sem uma conta paga do Apple Developer Program.
+- No Windows, o SmartScreen pode exibir um alerta enquanto a distribuição não tiver assinatura, mas o app abre após confirmar.
 - Ambientes corporativos com antivírus, bloqueio de shell ou políticas rígidas podem impedir automações locais.
 - O painel Code atual é read-only; ações Git com escrita ainda dependem de política de confirmação.
 
@@ -247,7 +287,15 @@ Se estiver usando AppImage, confirme a permissão de execução com `chmod +x Fe
 
 **O macOS bloqueou a primeira abertura.**
 
-Clique com o botão direito no app, escolha **Abrir** e confirme. Se necessário, libere o app em **Ajustes do Sistema > Privacidade e Segurança**.
+Esperado: a distribuição pública ainda não é notarizada. Libere o app em **Ajustes do Sistema > Privacidade e Segurança > Abrir Assim Mesmo**, ou rode `xattr -dr com.apple.quarantine "/Applications/Felixo AI Core.app"`. O procedimento completo está na [seção de instalação para macOS](#macos).
+
+**O macOS pede para escolher um aplicativo na App Store.**
+
+É o mesmo bloqueio acima, com outra mensagem: o sistema não reconhece o `.app` como executável porque ele não tem assinatura. O Felixo não é distribuído pela App Store e não precisa de nenhum aplicativo adicional — siga os passos da [seção de instalação para macOS](#macos).
+
+**O macOS diz que o app está "danificado".**
+
+Também é o mesmo bloqueio, e o download não está corrompido. Neste caso o botão **Abrir Assim Mesmo** costuma não aparecer; use `xattr -dr com.apple.quarantine "/Applications/Felixo AI Core.app"`.
 
 **Uma CLI não foi detectada.**
 
