@@ -12,6 +12,8 @@ import {
   FolderOpen,
   Loader2,
   Play,
+  Trash2,
+  X,
 } from 'lucide-react'
 import { buildRunCommand } from '../services/run-file-command'
 import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
@@ -34,6 +36,8 @@ type ProjectsMenuProps = {
   projects: ProjectsMenuProject[]
   /** Adds a folder as a project (picker + detect repos), returns the new ids. */
   onAddFolder: () => Promise<string[]>
+  /** Unregisters a folder from the projects list — nothing is deleted on disk. */
+  onRemoveFolder: (projectId: string) => Promise<boolean>
   /** Spawns a terminal whose process IS the file running — no shell typed after. */
   onRunFile: (options: RunFileOptions) => void
   /** The tools menu widens the toolbar column; the flyout slides over to clear it. */
@@ -46,6 +50,7 @@ type Browsing = { project: ProjectsMenuProject; relativePath: string }
 export function ProjectsMenu({
   projects,
   onAddFolder,
+  onRemoveFolder,
   onRunFile,
   toolsMenuOpen = false,
 }: ProjectsMenuProps) {
@@ -63,6 +68,10 @@ export function ProjectsMenu({
   // would risk mixing '/' (used for relativePath) with the OS's separator.
   const [currentDirPath, setCurrentDirPath] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Id da pasta esperando confirmação para sair da lista. Confirmar em dois
+  // toques dentro do próprio painel evita o window.confirm nativo, que cortaria
+  // a animação do flyout com um diálogo modal do sistema.
+  const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const flyoutPosition = useToolbarFlyoutPosition({
@@ -81,6 +90,7 @@ export function ProjectsMenu({
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
         resetPanel()
+        setPendingRemovalId(null)
         setOpen(false)
       }
     }
@@ -115,7 +125,13 @@ export function ProjectsMenu({
   const openProject = (project: ProjectsMenuProject) => {
     setEntries(null)
     setLoadError(null)
+    setPendingRemovalId(null)
     setBrowsing({ project, relativePath: '' })
+  }
+
+  const removeProject = (project: ProjectsMenuProject) => {
+    setPendingRemovalId(null)
+    void onRemoveFolder(project.id)
   }
 
   const openSubfolder = (entry: DirectoryEntry) => {
@@ -164,6 +180,7 @@ export function ProjectsMenu({
   const toggleOpen = () => {
     if (open) {
       resetPanel()
+      setPendingRemovalId(null)
       setOpen(false)
       return
     }
@@ -215,19 +232,57 @@ export function ProjectsMenu({
                 </div>
               )}
               <ul className="felixo-anim-stagger-list mb-2 flex flex-col gap-0.5">
-                {projects.map((project) => (
-                  <li key={project.id}>
-                    <button
-                      type="button"
-                      onClick={() => openProject(project)}
-                      className="felixo-btn flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
+                {projects.map((project) =>
+                  pendingRemovalId === project.id ? (
+                    <li
+                      key={project.id}
+                      className="flex items-center gap-1 rounded bg-red-500/10 px-2 py-1.5 text-sm ring-1 ring-red-500/30"
                     >
-                      <Folder size={14} className="shrink-0 text-zinc-400" />
-                      <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                      <ChevronRight size={14} className="shrink-0 text-zinc-500" />
-                    </button>
-                  </li>
-                ))}
+                      <span className="min-w-0 flex-1 truncate text-xs text-zinc-300">
+                        Tirar <span className="text-zinc-100">{project.name}</span> da lista?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeProject(project)}
+                        className="felixo-btn shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-500"
+                      >
+                        Remover
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingRemovalId(null)}
+                        className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                        title="Cancelar"
+                        aria-label={`Cancelar remoção de ${project.name}`}
+                      >
+                        <X size={14} />
+                      </button>
+                    </li>
+                  ) : (
+                    <li key={project.id} className="group flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => openProject(project)}
+                        className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
+                      >
+                        <Folder size={14} className="shrink-0 text-zinc-400" />
+                        <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                        <ChevronRight size={14} className="shrink-0 text-zinc-500" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingRemovalId(project.id)}
+                        // Sempre no DOM (só transparente) para a linha não mudar
+                        // de largura no hover e empurrar o nome da pasta.
+                        className="felixo-btn-icon shrink-0 rounded p-1.5 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-red-400 focus-visible:opacity-100 group-hover:opacity-100"
+                        title={`Tirar ${project.name} da lista de projetos`}
+                        aria-label={`Remover ${project.name} dos projetos`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </li>
+                  ),
+                )}
               </ul>
               <button
                 type="button"

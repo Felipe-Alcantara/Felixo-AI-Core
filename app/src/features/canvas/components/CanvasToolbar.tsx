@@ -66,6 +66,8 @@ type CanvasToolbarProps = {
   onOrganizeAgents: () => void
   agentCount: number
   onAddFolder: () => Promise<string[]>
+  /** Unregisters a folder from the projects list (see ProjectsMenu). */
+  onRemoveFolder: (projectId: string) => Promise<boolean>
   /** Spawns a terminal whose process IS the file running (see ProjectsMenu). */
   onRunFile: (options: RunFileOptions) => void
   onAddNote: (name?: string) => void
@@ -100,6 +102,7 @@ export function CanvasToolbar({
   onOrganizeAgents,
   agentCount,
   onAddFolder,
+  onRemoveFolder,
   onRunFile,
   onAddNote,
   onAddFile,
@@ -243,6 +246,7 @@ export function CanvasToolbar({
       <ProjectsMenu
         projects={projects}
         onAddFolder={onAddFolder}
+        onRemoveFolder={onRemoveFolder}
         onRunFile={onRunFile}
         toolsMenuOpen={toolsMenuOpen}
       />

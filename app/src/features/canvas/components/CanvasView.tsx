@@ -217,7 +217,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const [terminalCanvasFilePaths, setTerminalCanvasFilePaths] = useState<
     Record<string, string[]>
   >({})
-  const { projects, reloadProjects, addProjectFolder } = useCanvasProjects()
+  const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
@@ -1420,6 +1420,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onOrganizeAgents={organizeAgentNodes}
         agentCount={topLevelAgentCount}
         onAddFolder={addProjectFolder}
+        onRemoveFolder={removeProjectFolder}
         onRunFile={runFileInTerminal}
         onAddNote={(name) =>
           addNode('note', { text: '', ...(name ? { label: name } : {}) })

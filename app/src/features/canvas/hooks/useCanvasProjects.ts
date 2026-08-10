@@ -1,5 +1,6 @@
-// Estado dos projetos disponíveis no canvas: carga inicial, recarga e o fluxo
-// "Adicionar pasta…" (escolher pasta, detectar repositórios e registrá-los).
+// Estado dos projetos disponíveis no canvas: carga inicial, recarga, o fluxo
+// "Adicionar pasta…" (escolher pasta, detectar repositórios e registrá-los) e
+// a remoção de uma pasta da lista.
 import { useCallback, useEffect, useState } from 'react'
 
 export type CanvasProject = { id: string; name: string; path: string }
@@ -55,6 +56,25 @@ export function useCanvasProjects() {
     return ids
   }, [reloadProjects, projects])
 
+  // Só desregistra a pasta da lista de projetos — nada é apagado do disco.
+  // A remoção local é otimista para a lista reagir na hora; o reload logo em
+  // seguida reconcilia com o que o backend realmente gravou.
+  const removeProjectFolder = useCallback(
+    async (projectId: string): Promise<boolean> => {
+      const bridge = window.felixo?.projects
+      if (!bridge) {
+        return false
+      }
+
+      setProjects((current) => current.filter((project) => project.id !== projectId))
+
+      const result = await bridge.delete(projectId)
+      reloadProjects()
+      return result?.ok === true
+    },
+    [reloadProjects],
+  )
+
   useEffect(() => {
     let cancelled = false
 
@@ -74,5 +94,5 @@ export function useCanvasProjects() {
     }
   }, [])
 
-  return { projects, reloadProjects, addProjectFolder }
+  return { projects, reloadProjects, addProjectFolder, removeProjectFolder }
 }
