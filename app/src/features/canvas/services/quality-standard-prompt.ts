@@ -1,4 +1,4 @@
-import { toSubmittedTerminalText } from '../terminal/terminal-input'
+import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
 
 /**
  * Standing instruction typed into a terminal that opens WITH an agent
@@ -45,9 +45,15 @@ export function buildAgentIdentityPrompt(identity: AgentIdentity): string {
   return lines.join('\n')
 }
 
-/** Appends Enter (CR) so the instruction is submitted to the agent's REPL. */
+/**
+ * A instrução permanente como texto, sem Enter.
+ *
+ * Ela só prepara o agente: não há nada para executar, então ela é digitada e
+ * fica esperando. Quem acrescenta o Enter é o chamador que junta uma tarefa de
+ * verdade a ela (ver `composeTerminalInitialText`).
+ */
 export function buildQualityStandardMessage(template: string): string {
-  return toSubmittedTerminalText(template)
+  return template.trimEnd()
 }
 
 /** Typed into an agent terminal restored from a previous run instead of its
@@ -75,7 +81,14 @@ export function buildPlanningFileInstruction(
   ].join('\n')
 }
 
-/** Joins complete terminal instructions and submits the final combined prompt. */
+/**
+ * Junta instruções completas num prompt só, sem decidir se ele roda.
+ *
+ * Devolve texto puro de propósito: `injetar contexto` e `enviar prompt` são
+ * coisas diferentes, e misturar as duas foi o que fez o terminal sair
+ * executando sozinho. Quem tem uma tarefa a despachar envolve o resultado em
+ * `toSubmittedTerminalText`.
+ */
 export function composeTerminalInitialText(
   ...sections: Array<string | undefined>
 ): string | undefined {
@@ -83,9 +96,7 @@ export function composeTerminalInitialText(
     .map((section) => section?.trim())
     .filter((section): section is string => Boolean(section))
 
-  return normalized.length > 0
-    ? toSubmittedTerminalText(normalized.join('\n\n'))
-    : undefined
+  return normalized.length > 0 ? normalized.join('\n\n') : undefined
 }
 
 /**
@@ -145,6 +156,12 @@ export function resolveTerminalInitialText(params: {
  * Builds the full standing instruction for a canvas terminal, combining the
  * quality standard with the canvas-specific shared-scratchpad context and the
  * agent's identity (name, cwd, multi-agent setting).
+ *
+ * O resultado só é submetido quando `existingPrompt` já vinha submetido — isto
+ * é, quando existe uma tarefa de verdade embrulhada nele (uma passagem de
+ * responsabilidade). Contexto sozinho não tem o que executar: ele é digitado e
+ * espera o usuário escrever o pedido. Sem essa distinção o agente subia já
+ * executando e ia caçar uma tarefa dentro do texto de contexto.
  */
 export function buildCanvasTerminalInitialText(
   qualityPrompt: string,
@@ -180,5 +197,8 @@ export function buildCanvasTerminalInitialText(
     sections.push(pathPrompt)
   }
 
-  return toSubmittedTerminalText(sections.join('\n\n'))
+  const combined = sections.join('\n\n')
+  return existingPrompt && isSubmittedTerminalText(existingPrompt)
+    ? toSubmittedTerminalText(combined)
+    : combined
 }

@@ -76,7 +76,7 @@ import {
   isTerminalInitialTextReady,
   resolveTerminalInitialText,
 } from '../services/quality-standard-prompt'
-import { toSubmittedTerminalText } from '../terminal/terminal-input'
+import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import { isKnownAgentCommand } from '../services/agent-launch-options'
 import type { RunFileOptions } from '../services/run-file-command'
@@ -915,7 +915,13 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           qualityStandardEnabled: quality.enabled,
           qualityStandardPrompt: quality.prompt,
           hasCommand: isKnownAgentCommand(node.data.command),
-          existingInitialText: node.data.handoffText ?? node.data.initialText,
+          // `handoffText` é transitório e carrega um pedido de verdade, então
+          // pode sair submetido; `initialText` é persistido e é sempre
+          // contexto. O recorte cobre os blocos salvos antes desta mudança,
+          // gravados com o Enter no fim — sem ele, um canvas antigo voltaria a
+          // executar sozinho ao reabrir.
+          existingInitialText:
+            node.data.handoffText ?? stripTerminalSubmission(node.data.initialText),
           canvasFilePaths,
           identity: { agentName: node.data.label, cwd: node.data.cwd },
         })
@@ -1130,14 +1136,22 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       // Agent terminals get the standing quality-standard instruction (if on)
       // plus their canvas identity (name, cwd, multi-agent setting); a plain
       // shell does not (there's no agent to read it).
+      //
+      // Só a passagem de responsabilidade sai submetida: ela carrega um pedido
+      // que alguém despachou de propósito para este terminal. A instrução
+      // permanente sozinha é contexto — fica digitada na entrada esperando o
+      // usuário escrever a tarefa, em vez de o agente subir executando.
       const quality = qualityStandardRef.current
       const planningInstruction = buildPlanningFileInstruction(options.planningFile)
-      const handoffInstruction = options.handoffText
+      const handoffSections = options.handoffText
         ? composeTerminalInitialText(
             quality.enabled ? buildQualityStandardMessage(quality.prompt) : undefined,
             options.handoffText,
             planningInstruction,
           )
+        : undefined
+      const handoffInstruction = handoffSections
+        ? toSubmittedTerminalText(handoffSections)
         : undefined
       const initialText = options.command
         ? handoffInstruction ?? composeTerminalInitialText(

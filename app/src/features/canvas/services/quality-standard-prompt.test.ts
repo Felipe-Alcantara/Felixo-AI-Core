@@ -6,6 +6,11 @@ import {
   RESUME_INITIAL_TEXT,
   resolveTerminalInitialText,
 } from './quality-standard-prompt'
+import {
+  isSubmittedTerminalText,
+  splitTerminalSubmission,
+  toSubmittedTerminalText,
+} from '../terminal/terminal-input'
 
 describe('resolveTerminalInitialText', () => {
   it('uses Codex slash-command casing and submits it with Enter', () => {
@@ -79,6 +84,59 @@ describe('resolveTerminalInitialText', () => {
   })
 })
 
+// A regra que separa "preparar o agente" de "mandar ele trabalhar". Quando o
+// contexto era submetido, o agente subia executando: o usuário perdia a janela
+// para escrever a tarefa e a CLI ia caçar um pedido dentro do texto de
+// contexto. A quebra final é o que carrega essa intenção até o PTY.
+describe('intenção de envio do prompt inicial', () => {
+  const contexto = {
+    isRestoredAgent: false,
+    qualityStandardEnabled: true,
+    qualityStandardPrompt: 'Siga o padrão.',
+    hasCommand: true,
+    canvasFilePaths: ['notas.md'],
+    identity: { agentName: 'Agente A', cwd: '/repo' },
+  }
+
+  // O relato era de que só ALGUNS agentes enviavam sozinhos; o caminho é o
+  // mesmo para os três, então a checagem vale para todos de uma vez.
+  it('não submete o contexto permanente de nenhum agente (claude, codex, gemini)', () => {
+    const inicial = resolveTerminalInitialText(contexto)
+
+    expect(inicial).toContain('Siga o padrão.')
+    expect(inicial).toContain('notas.md')
+    expect(inicial).toContain('Agente A')
+    expect(isSubmittedTerminalText(inicial ?? '')).toBe(false)
+    expect(splitTerminalSubmission(inicial ?? '').submit).toBeNull()
+  })
+
+  it('mantém submetida a passagem de responsabilidade, que carrega um pedido de verdade', () => {
+    const handoff = toSubmittedTerminalText('Continue de onde o outro agente parou.')
+    const inicial = resolveTerminalInitialText({ ...contexto, existingInitialText: handoff })
+
+    expect(inicial).toContain('Continue de onde o outro agente parou.')
+    expect(isSubmittedTerminalText(inicial ?? '')).toBe(true)
+    expect(splitTerminalSubmission(inicial ?? '').submit).toBe('\r')
+  })
+
+  it('mantém submetido o "/resume" de um agente restaurado — é um comando para rodar, não contexto', () => {
+    const inicial = resolveTerminalInitialText({ ...contexto, isRestoredAgent: true })
+
+    expect(inicial).toBe(RESUME_INITIAL_TEXT)
+    expect(splitTerminalSubmission(inicial ?? '').submit).toBe('\r')
+  })
+
+  it('não inventa envio para um terminal comum, que nunca teve instrução permanente', () => {
+    const inicial = resolveTerminalInitialText({
+      ...contexto,
+      hasCommand: false,
+      existingInitialText: 'ls -la',
+    })
+
+    expect(splitTerminalSubmission(inicial ?? '').submit).toBeNull()
+  })
+})
+
 describe('terminal initial-text readiness', () => {
   it('waits for the restored-agent capture before spawning a terminal', () => {
     expect(
@@ -120,10 +178,10 @@ describe('planning-file initial text', () => {
     expect(instruction).toContain('/repo/plans/release-plan.pdf')
   })
 
-  it('combines the quality standard and plan into one submitted prompt', () => {
+  it('combines the quality standard and plan into one prompt, without submitting it', () => {
     expect(
       composeTerminalInitialText('Siga o padrão de qualidade.\n', 'Leia o plano.'),
-    ).toBe('Siga o padrão de qualidade.\n\nLeia o plano.\r')
+    ).toBe('Siga o padrão de qualidade.\n\nLeia o plano.')
   })
 
   it('does not create text when neither instruction is configured', () => {

@@ -1150,3 +1150,27 @@ VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos.
 RISCO RESIDUAL: se a gaveta já estiver aberta quando o agente fizer um pedido novo, a notificação dispara mesmo com o terminal à vista — decisão deliberada: o usuário pode ter aberto e saído de perto, e deixar de avisar um pedido real é pior que um badge a mais. Um novo pedido depois da visita volta a notificar normalmente porque o reconhecimento é amarrado ao `lastPrompt` do turno, e um prompt novo é turno novo. Não validado com o app rodando: a suíte é `environment: 'node'`, sem DOM; a conferência manual é deixar um agente ocioso, clicar no card dele no canvas e ver o contador do sino cair na hora.
 
 Estado final: concluído — pendente de conferência manual no app rodando.
+
+## Registro de Trabalho — 2026-08-10 (parte 6) — injetar contexto deixou de ser o mesmo que enviar prompt
+
+PEDIDO: tarefa do Notion "Bug: prompt inicial sendo enviado automaticamente". Para alguns agentes, o prompt de contexto — aquele que só prepara o agente — era submetido assim que o terminal subia. O usuário perdia a janela para escrever o pedido real e o agente saía caçando uma tarefa inexistente dentro do texto de contexto, gastando token e produzindo trabalho fora do escopo.
+
+CAUSA: a intenção de executar estava embutida no próprio texto. `composeTerminalInitialText` e `buildCanvasTerminalInitialText` terminavam chamando `toSubmittedTerminalText`, ou seja, todo prompt inicial nascia com o Enter colado nele; o store só obedecia. Não havia, em lugar nenhum, a distinção entre "isto é contexto" e "isto é um pedido".
+
+A divergência entre agentes que o relato descreve era acidental, e a parte 2 desta mesma data a eliminou na direção errada: antes, quando o TUI comia o Enter, o texto ficava parado na linha de entrada e o agente não executava — que é justamente o comportamento desejado, acontecendo por acaso. A confirmação de envio adicionada na parte 2 tornou o disparo confiável para todos, e com isso o defeito de regra deixou de ser intermitente e apareceu inteiro.
+
+FEITO: a quebra de linha final passou a ser o portador explícito da intenção, do compositor até o PTY. `splitTerminalSubmission` devolve `submit: null` quando o prompt não termina em quebra, e o store, nesse caso, escreve o texto e para por aí — sem Enter e sem confirmação de envio, porque não há envio a confirmar. Ganhou companhia de `isSubmittedTerminalText` e `stripTerminalSubmission`, que dão nome à mesma regra nos dois sentidos.
+
+Com isso o contexto permanente (padrão de qualidade + contexto do canvas + identidade + arquivos .md ligados + arquivo de planejamento) sai como texto puro: é digitado na entrada da CLI e fica esperando o usuário escrever a tarefa depois dele. O contexto continua chegando ao agente — chega junto com o pedido, numa mensagem só.
+
+Dois caminhos continuam submetendo, e é decisão consciente, não sobra: o `/resume` de um agente restaurado é um comando cuja razão de existir é rodar (deixá-lo digitado e parado é exatamente o defeito corrigido na parte 2), e a passagem de responsabilidade carrega um pedido que alguém despachou de propósito para aquele terminal. A regra que ficou é "submete quem carrega uma instrução de verdade", e `buildCanvasTerminalInitialText` a aplica propagando a intenção do prompt que recebe, em vez de decidir por conta.
+
+Um detalhe de dados entrou junto: `handoffText` é transitório e pode vir submetido, mas `initialText` é persistido e é sempre contexto. Blocos salvos antes desta mudança guardaram o contexto já com o Enter no fim, então a leitura do dado persistido recorta a quebra final — sem isso, um canvas antigo voltaria a executar sozinho ao reabrir, e o defeito sobreviveria à correção.
+
+TESTE: 325 testes de frontend. Os novos cobrem a regra nos dois lados: contexto permanente não sai submetido (o mesmo caminho serve claude, codex e gemini — a divergência por agente não existe mais para checar uma a uma), passagem de responsabilidade e `/resume` continuam submetidos, terminal comum não ganha envio que nunca teve, e o formato antigo persistido é desarmado na leitura.
+
+VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos.
+
+RISCO RESIDUAL: `/resume` e passagem de responsabilidade seguem disparando sozinhos — é a leitura que fizemos do pedido ("o prompt inicial de contexto"), e não a leitura literal do critério "nenhum agente envia sozinho o prompt inicial"; se a intenção era incluir esses dois, o lugar de mexer é a mesma linha, e vale como decisão do dono do projeto. Não validado com o app rodando: a suíte é `environment: 'node'`, sem PTY. A conferência manual é abrir um agente novo de cada tipo e ver o contexto parado na entrada, esperando; depois reiniciar o app com um agente salvo e confirmar que o `/resume` continua sendo enviado sozinho.
+
+Estado final: concluído — pendente de conferência manual no app rodando.

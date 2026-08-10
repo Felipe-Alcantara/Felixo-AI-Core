@@ -663,6 +663,15 @@ export class TerminalSessionStore {
         sessionId: session.ptySessionId,
         data: submission.text,
       })
+
+      // Sem Enter, o prompt é contexto: fica escrito na entrada da CLI e quem
+      // decide executar é o usuário, que ainda vai digitar a tarefa depois
+      // dele. Nada de confirmação de envio aqui — não há envio a confirmar.
+      const submit = submission.submit
+      if (!submit) {
+        return
+      }
+
       // Codex occasionally treats an immediate CR appended to a programmatic
       // paste as a line break. Delivering the key separately mirrors a real
       // user submission after the TUI has consumed the text.
@@ -670,9 +679,9 @@ export class TerminalSessionStore {
         if (!session.disposed) {
           void window.felixo?.pty?.write({
             sessionId: session.ptySessionId,
-            data: submission.submit,
+            data: submit,
           })
-          this.confirmSubmission(session, submission.text, submission.submit)
+          this.confirmSubmission(session, submission.text, submit)
         }
       }, INITIAL_TEXT_SUBMIT_DELAY_MS)
     }, delayMs)
