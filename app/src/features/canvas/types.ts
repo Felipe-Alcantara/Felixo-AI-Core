@@ -55,6 +55,13 @@ export type TerminalNodeData = {
   handoffText?: string
   /** Render-time flag: waits for canvas connections/path resolution before spawning. */
   initialTextReady?: boolean
+  /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */
+  fallbackCommand?: string
+  /**
+   * "Run this file" sessions: the command is the whole job, so the terminal
+   * must stay interactive after it finishes instead of closing with it.
+   */
+  keepShellOpen?: boolean
   /**
    * Render-time only (never persisted): this terminal's position among the
    * currently open terminal blocks, 1-based in creation order. Recomputed on

@@ -26,9 +26,17 @@ describe('buildRunCommand', () => {
     })
   })
 
-  it('runs a .py file with the `py` launcher on Windows', () => {
+  it('runs a .py file with the `py` launcher on Windows, falling back to `python`', () => {
     setPlatform('win32')
-    expect(buildRunCommand('script.py')).toEqual({ command: 'py', args: ['script.py'] })
+    expect(buildRunCommand('script.py')).toEqual({
+      command: 'py',
+      args: ['script.py'],
+      fallbackCommand: 'python',
+    })
+  })
+
+  it('offers no interpreter fallback for .py outside Windows', () => {
+    expect(buildRunCommand('script.py').fallbackCommand).toBeUndefined()
   })
 
   it('runs a .js/.mjs/.cjs file with node', () => {

@@ -53,6 +53,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       args: nodeData.args,
       cwd: nodeData.cwd,
       initialText: nodeData.initialText,
+      fallbackCommand: nodeData.fallbackCommand,
+      keepShellOpen: nodeData.keepShellOpen,
     })
   }, [
     store,
@@ -62,6 +64,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.cwd,
     nodeData.initialText,
     nodeData.initialTextReady,
+    nodeData.fallbackCommand,
+    nodeData.keepShellOpen,
   ])
 
   const activity = snapshot?.activity ?? 'starting'
@@ -74,6 +78,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       args: nodeData.args,
       cwd: nodeData.cwd,
       initialText: nodeData.initialText,
+      fallbackCommand: nodeData.fallbackCommand,
+      keepShellOpen: nodeData.keepShellOpen,
     })
   }
 

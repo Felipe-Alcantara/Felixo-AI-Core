@@ -42,6 +42,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         cols: params.cols,
         rows: params.rows,
         reuseExisting: Boolean(params.reuseExisting),
+        fallbackCommand: params.fallbackCommand,
+        keepShellOpen: Boolean(params.keepShellOpen),
         onData: (data) => send('pty:data', { sessionId, data }),
         onExit: (event) =>
           send('pty:exit', {

@@ -68,6 +68,10 @@ type SessionOptions = {
   cwd?: string
   /** Text submitted to the PTY shortly after spawn (e.g. a standing instruction). */
   initialText?: string
+  /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */
+  fallbackCommand?: string
+  /** Keeps the terminal interactive after the command exits (run-a-file). */
+  keepShellOpen?: boolean
 }
 
 type Session = {
@@ -255,6 +259,8 @@ export class TerminalSessionStore {
         cols: terminal.cols || 80,
         rows: terminal.rows || 24,
         reuseExisting: true,
+        fallbackCommand: options.fallbackCommand,
+        keepShellOpen: options.keepShellOpen,
       })
       .then((result) => {
         if (session.disposed) {

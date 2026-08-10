@@ -184,12 +184,13 @@ export function ProjectsPanel({
 
   const runFile = (entry: DirectoryEntry) => {
     if (!browsing || !currentDirPath) return
-    const { command, args } = buildRunCommand(entry.name)
+    const { command, args, fallbackCommand } = buildRunCommand(entry.name)
     onRunFile({
       command,
       args,
       cwd: currentDirPath,
       label: `${entry.name} · ${browsing.project.name}`,
+      ...(fallbackCommand ? { fallbackCommand } : {}),
     })
     onClose()
   }

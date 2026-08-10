@@ -624,6 +624,174 @@ test('non-Windows: a fast exit with args is reported as-is, no fallback retry', 
   assert.deepEqual(exits, [{ exitCode: 0 }])
 })
 
+test('Windows: a run-a-file session keeps the shell open with /k instead of /c', () => {
+  const launch = createPtyLaunchSpec('py', ['script.py'], {}, fakeWin32Platform, true)
+
+  // /c would close the pane the moment the script ends, leaving the user with
+  // nothing to read and nothing to type into.
+  assert.deepEqual(launch, {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/k', 'py', 'script.py'],
+  })
+})
+
+test('Windows: a normal CLI launch still uses /c', () => {
+  const launch = createPtyLaunchSpec('claude', ['--print'], {}, fakeWin32Platform)
+
+  assert.deepEqual(launch, {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/c', 'claude', '--print'],
+  })
+})
+
+test('POSIX: a run-a-file session hands control back to an interactive shell', () => {
+  const linuxPlatform = require('../core/platform/linux.cjs')
+  const launch = createPtyLaunchSpec(
+    'env',
+    ['python3', 'script.py'],
+    { SHELL: '/bin/bash' },
+    linuxPlatform,
+    true,
+  )
+
+  assert.equal(launch.command, '/bin/bash')
+  // No `exec` on the command itself: the shell must outlive it.
+  assert.ok(!launch.args[2].startsWith('exec env'))
+  assert.match(launch.args[2], /^env python3 script\.py; exec \/bin\/bash -i$/)
+})
+
+test('Windows: a run-a-file session never retries by dropping the file argument', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform })
+
+  manager.spawn('term-run-1', {
+    command: 'py',
+    args: ['script.py'],
+    keepShellOpen: true,
+    onExit: () => {},
+  })
+
+  first.fakePty.emitExit({ exitCode: 1 })
+
+  // Dropping the args here would launch a bare `py` REPL — running something
+  // the user never asked for. The emergency shell is the only allowed step.
+  const retried = spawnCalls[1]
+  assert.ok(!retried.args.includes('py') || !retried.args.includes('script.py'))
+  assert.ok(!(retried.args.includes('py') && retried.args.length === 4))
+})
+
+test('Windows: the failed process output is replayed before the emergency shell', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform })
+  const output = []
+
+  manager.spawn('term-run-2', {
+    command: 'py',
+    args: ['script.py'],
+    keepShellOpen: true,
+    onData: (data) => output.push(data),
+    onExit: () => {},
+  })
+
+  first.fakePty.emitData("ModuleNotFoundError: No module named 'requests'")
+  first.fakePty.emitExit({ exitCode: 1 })
+
+  // The traceback is the whole diagnosis; without it the user only sees a
+  // clean shell in their home folder and reports "the file doesn't open".
+  const replayed = output.join('')
+  assert.match(replayed, /ModuleNotFoundError: No module named 'requests'/)
+  assert.match(replayed, /encerrou com código 1/)
+})
+
+test('Windows: a silent failure says the command produced no output', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform })
+  const output = []
+
+  manager.spawn('term-run-3', {
+    command: 'py',
+    args: ['script.py'],
+    keepShellOpen: true,
+    onData: (data) => output.push(data),
+    onExit: () => {},
+  })
+
+  first.fakePty.emitExit({ exitCode: 9009 })
+
+  assert.match(output.join(''), /sem produzir saída/)
+})
+
+test('Windows: `py` failing instantly retries the file with `python`', () => {
+  const first = createFakePty()
+  const second = createFakePty()
+  const spawnCalls = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return (spawnCalls.length === 1 ? first : second).spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform })
+
+  manager.spawn('term-run-4', {
+    command: 'py',
+    args: ['script.py'],
+    fallbackCommand: 'python',
+    keepShellOpen: true,
+    onExit: () => {},
+  })
+
+  // `py` is absent on Microsoft Store / conda installs: cmd exits 9009.
+  first.fakePty.emitExit({ exitCode: 9009 })
+
+  assert.equal(spawnCalls.length, 2)
+  // Still the user's file, still keeping the shell open — only the
+  // interpreter changed.
+  assert.deepEqual(spawnCalls[1].args, ['/d', '/s', '/k', 'python', 'script.py'])
+})
+
+test('Windows: the interpreter fallback is tried only once', () => {
+  const ptys = [createFakePty(), createFakePty(), createFakePty()]
+  const spawnCalls = []
+  const spawnPty = (file, args, options) => {
+    spawnCalls.push({ file, args, options })
+    return ptys[Math.min(spawnCalls.length - 1, ptys.length - 1)].spawnPty(file, args, options)
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform })
+
+  manager.spawn('term-run-5', {
+    command: 'py',
+    args: ['script.py'],
+    fallbackCommand: 'python',
+    keepShellOpen: true,
+    onExit: () => {},
+  })
+
+  ptys[0].fakePty.emitExit({ exitCode: 9009 })
+  ptys[1].fakePty.emitExit({ exitCode: 9009 })
+
+  // Neither interpreter exists: the third attempt must be the emergency
+  // shell, not an infinite py/python ping-pong.
+  assert.equal(spawnCalls.length, 3)
+  assert.ok(!spawnCalls[2].args.includes('script.py'))
+})
+
 test('killAll terminates every tracked session', () => {
   const { spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })

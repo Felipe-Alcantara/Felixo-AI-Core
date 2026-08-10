@@ -89,6 +89,11 @@ class PtyProcessManager {
    * @param {(event: { exitCode: number, signal?: number }) => void} [options.onExit]
    * @param {boolean} [options.reuseExisting] - Reattach to a live/completed session with this id.
    * @param {string} [options.defaultShell] - Internal Windows fallback shell.
+   * @param {string} [options.fallbackCommand] - Interpreter to retry with when
+   *   `command` isn't installed (e.g. Windows `py` → `python`).
+   * @param {boolean} [options.keepShellOpen] - Leave an interactive shell behind
+   *   once the command exits, for "run this file" sessions where the command is
+   *   the whole job and its output must remain readable.
    * @param {boolean} [isFallbackRetry] - Internal: true when this call is a
    *   recovery retry after an early exit or Windows PTY backend error. Callers
    *   should never pass this themselves.
@@ -127,8 +132,9 @@ class PtyProcessManager {
       this.platform,
       this.resolveCodexPath,
     )
+    const keepShellOpen = Boolean(options.keepShellOpen)
     const launch = options.command
-      ? createPtyLaunchSpec(command, args, env, this.platform)
+      ? createPtyLaunchSpec(command, args, env, this.platform, keepShellOpen)
       : { command, args: getDefaultPtyShellArgs(command, this.platform) }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
@@ -147,10 +153,16 @@ class PtyProcessManager {
     // where the argv-quoting fallback applies (see EARLY_EXIT_THRESHOLD_MS
     // above), gets a retry — a bare shell, a command with no args, or the
     // retry itself has nothing simpler left to fall back to.
+    //
+    // Run-a-file sessions are excluded: the retry drops the extra args, which
+    // for a CLI means losing optional flags but for a file means losing the
+    // file itself — `py script.py` would silently become a bare `py` REPL,
+    // running something the user never asked for.
     const allowFallback =
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
+      !keepShellOpen &&
       args.length > 0
     const allowWindowsBackendFallback =
       !isFallbackRetry &&
@@ -161,6 +173,14 @@ class PtyProcessManager {
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
       isCodexCommand(requestedCommand)
+    // Unlike the other fallbacks this one may run on a retry: the caller names
+    // a specific replacement interpreter, so there is exactly one alternative
+    // to try and no risk of looping (the retry clears fallbackCommand).
+    const allowInterpreterFallback =
+      Boolean(options.command) &&
+      typeof options.fallbackCommand === 'string' &&
+      Boolean(options.fallbackCommand) &&
+      options.fallbackCommand !== command
     let windowsBackendFallbackRetried = false
 
     let ptyProcess
@@ -254,6 +274,26 @@ class PtyProcessManager {
         this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS
 
       if (exitedEarly) {
+        // Tried before every other recovery: a missing interpreter is the
+        // likeliest cause of an instant failure for a run-a-file session, and
+        // swapping it keeps the user's actual file running — unlike the args
+        // retry or the emergency shell, which both abandon the request.
+        if (allowInterpreterFallback) {
+          this.reportLayer(
+            options,
+            'interpretador',
+            `O comando "${command}" não pôde ser executado; tentando "${options.fallbackCommand}".`,
+            'interpreter-fallback',
+          )
+          this.spawn(
+            sessionId,
+            { ...options, command: options.fallbackCommand, fallbackCommand: undefined },
+            true,
+            allowEmergencyShellFallback,
+          )
+          return
+        }
+
         if (!isFallbackRetry && allowCodexPathFallback) {
           const resolvedCodexPath = this.resolveCodexPath(requestedCommand, env)
           if (resolvedCodexPath && resolvedCodexPath !== command) {
@@ -291,6 +331,13 @@ class PtyProcessManager {
         }
 
         if (allowEmergencyShellFallback) {
+          // The emergency shell throws away the command, the args and the cwd,
+          // so whatever the process printed before dying is the only remaining
+          // evidence of WHY it died — a Python traceback, a missing
+          // interpreter, a bad path. Replaying it into the new session turns an
+          // unactionable "the terminal opened somewhere else" report into one
+          // that names the actual error.
+          this.replayFailureOutput(options, entry.outputBuffer, event.exitCode)
           this.reportLayer(
             options,
             'shell de emergência',
@@ -526,6 +573,38 @@ class PtyProcessManager {
   }
 
   /**
+   * Surface the dead process's own output before a recovery path discards the
+   * session it came from. Without this the user only sees the replacement
+   * shell, and the error that actually broke their run is lost — which is what
+   * made these failures impossible to diagnose from user reports.
+   *
+   * @param {object} options
+   * @param {string} outputBuffer - Raw bytes the failed process emitted.
+   * @param {number} exitCode
+   */
+  replayFailureOutput(options, outputBuffer, exitCode) {
+    const output = String(outputBuffer ?? '').trim()
+
+    try {
+      if (output) {
+        options.onData?.(
+          `\r\n[Felixo] O processo encerrou com código ${exitCode}. Saída original:\r\n${output}\r\n`,
+        )
+        return
+      }
+
+      // No output at all is itself the diagnosis: the process never started,
+      // so the command could not be found or executed.
+      options.onData?.(
+        `\r\n[Felixo] O processo encerrou com código ${exitCode} sem produzir saída ` +
+          `(o comando provavelmente não foi encontrado).\r\n`,
+      )
+    } catch {
+      // A renderer listener must not alter the PTY recovery path.
+    }
+  }
+
+  /**
    * Reports the recovery layer to diagnostics and the visible terminal.
    * Paths and command arguments are intentionally omitted from the notice.
    *
@@ -604,18 +683,26 @@ function resolvePtyCommand(command, isExplicitCommand, env, adapter, resolveCode
  * @param {string[]} args
  * @param {Record<string, string>} env
  * @param {typeof platform} [adapter]
+ * @param {boolean} [keepShellOpen] - Keep an interactive shell alive after the
+ *   command exits, instead of letting the PTY close with it.
  * @returns {{ command: string, args: string[] }}
  */
-function createPtyLaunchSpec(command, args, env, adapter = platform) {
+function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOpen = false) {
   if (adapter.name === 'darwin') {
     const shell = adapter.getDefaultShell(env)
     const commandLine = [command, ...args]
       .map((value) => adapter.escapeArg(String(value)))
       .join(' ')
 
+    // `exec` replaces the shell with the command, so the PTY dies the moment
+    // the command does. A run-a-file session must outlive it: drop the `exec`
+    // and hand control back to an interactive shell in the same cwd, so the
+    // user can read the output and keep working.
     return {
       command: shell,
-      args: ['-l', '-i', '-c', `exec ${commandLine}`],
+      args: keepShellOpen
+        ? ['-l', '-i', '-c', `${commandLine}; exec ${adapter.escapeArg(shell)} -i`]
+        : ['-l', '-i', '-c', `exec ${commandLine}`],
     }
   }
 
@@ -626,9 +713,29 @@ function createPtyLaunchSpec(command, args, env, adapter = platform) {
     // command-line builder — which already quotes each argument correctly for
     // CreateProcess/ConPTY — does the joining, instead of risking a second,
     // divergent round of escaping here.
+    //
+    // `/k` instead of `/c` for run-a-file sessions: `/c` exits as soon as the
+    // command finishes, closing the PTY before the user can read the output or
+    // type anything — the "the file doesn't open" report on Windows. `/k`
+    // leaves the same cmd.exe interactive in the file's directory.
     return {
       command: 'cmd.exe',
-      args: ['/d', '/s', '/c', command, ...args],
+      args: ['/d', '/s', keepShellOpen ? '/k' : '/c', command, ...args],
+    }
+  }
+
+  if (keepShellOpen) {
+    // Same reasoning as the darwin branch, without the login-shell wrapper:
+    // on Linux the command is on PATH as-is, so we only need a shell to stay
+    // behind once it exits.
+    const shell = adapter.getDefaultShell(env)
+    const commandLine = [command, ...args]
+      .map((value) => adapter.escapeArg(String(value)))
+      .join(' ')
+
+    return {
+      command: shell,
+      args: ['-i', '-c', `${commandLine}; exec ${adapter.escapeArg(shell)} -i`],
     }
   }
 

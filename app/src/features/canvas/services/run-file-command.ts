@@ -10,6 +10,8 @@ export type RunFileOptions = {
   args: string[]
   cwd: string
   label: string
+  /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */
+  fallbackCommand?: string
 }
 
 const INTERPRETER_BY_EXTENSION: Record<string, string> = {
@@ -26,7 +28,11 @@ const INTERPRETER_BY_EXTENSION: Record<string, string> = {
  * directly (no shell typed afterwards — the file IS the process), given the
  * file's name relative to the terminal's cwd.
  */
-export function buildRunCommand(fileName: string): { command: string; args: string[] } {
+export function buildRunCommand(fileName: string): {
+  command: string
+  args: string[]
+  fallbackCommand?: string
+} {
   const dotIndex = fileName.lastIndexOf('.')
   const extension = dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : ''
 
@@ -36,12 +42,13 @@ export function buildRunCommand(fileName: string): { command: string; args: stri
     // shell to resolve aliases for us (see createPtyLaunchSpec on non-Windows
     // platforms). `env python3` is the POSIX-standard way to reach it.
     //
-    // Windows is the one platform where `env` isn't available, but every
-    // official Windows Python install ships the `py` launcher, which is a
-    // safer bet there than a bare `python`/`python3` (neither is guaranteed
-    // on PATH even when Python is installed).
+    // Windows has no single reliable interpreter name: the `py` launcher ships
+    // with python.org installs but is absent from Microsoft Store and conda
+    // setups, which provide `python` instead. Since the Windows PTY already
+    // goes through cmd.exe, we let cmd try `py` and fall back to `python` when
+    // it isn't there, rather than betting on either one being present.
     return window.felixo?.platform === 'win32'
-      ? { command: 'py', args: [fileName] }
+      ? { command: 'py', args: [fileName], fallbackCommand: 'python' }
       : { command: 'env', args: ['python3', fileName] }
   }
 

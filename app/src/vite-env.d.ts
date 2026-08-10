@@ -205,6 +205,10 @@ declare global {
           cols?: number
           rows?: number
           reuseExisting?: boolean
+          /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */
+          fallbackCommand?: string
+          /** Keeps the terminal interactive after the command exits (run-a-file). */
+          keepShellOpen?: boolean
         }) => Promise<CliInvokeResult & { sessionId?: string; reused?: boolean }>
         write: (params: {
           sessionId: string

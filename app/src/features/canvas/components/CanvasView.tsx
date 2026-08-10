@@ -79,6 +79,7 @@ import {
 import { toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import { isKnownAgentCommand } from '../services/agent-launch-options'
+import type { RunFileOptions } from '../services/run-file-command'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import type { SkillActivationResult } from './tools/SkillsPanel'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
@@ -1324,13 +1325,19 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // "Run this file" from the Projects panel: the terminal's process IS the
   // file running (command = interpreter, args = [file]) — unlike agent
   // terminals, nothing gets typed into it afterwards, so no initialText.
+  //
+  // keepShellOpen marks it as a run-a-file session so the PTY leaves an
+  // interactive shell behind instead of closing the pane the instant the file
+  // finishes (or crashes), which read as "the file doesn't open" on Windows.
   const runFileInTerminal = useCallback(
-    (options: { command: string; args: string[]; cwd: string; label: string }) => {
+    (options: RunFileOptions) => {
       addNode('terminal', {
         label: options.label,
         command: options.command,
         ...(options.args.length ? { args: options.args } : {}),
+        ...(options.fallbackCommand ? { fallbackCommand: options.fallbackCommand } : {}),
         cwd: options.cwd,
+        keepShellOpen: true,
       })
     },
     [addNode],
