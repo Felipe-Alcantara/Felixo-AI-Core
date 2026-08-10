@@ -42,6 +42,20 @@ describe('canvas notifications', () => {
     expect(countUnreadCanvasNotifications(read)).toBe(0)
   })
 
+  // Abrir um terminal marca as notificações dele como lidas, então isso roda a
+  // cada clique: sem preservar a identidade, todo clique regravaria o histórico
+  // no storage e re-renderizaria o painel sem nada ter mudado.
+  it('keeps the same history reference when there is nothing left to mark as read', () => {
+    const { notifications } = appendCanvasNotifications([], ['agent-a'], { 'agent-a': idleSnapshot }, 0)
+    const read = markCanvasNotificationsReadForNode(notifications, 'agent-a', 5_000)
+
+    expect(read).not.toBe(notifications)
+    expect(markCanvasNotificationsReadForNode(read, 'agent-a', 6_000)).toBe(read)
+    expect(markCanvasNotificationsReadForNode(read, 'agent-b', 6_000)).toBe(read)
+    expect(markCanvasNotificationRead(read, 'agent-a:0', 6_000)).toBe(read)
+    expect(markAllCanvasNotificationsRead(read, 6_000)).toBe(read)
+  })
+
   it('replaces the unread notification from the same agent instead of duplicating it', () => {
     const first = appendCanvasNotifications([], ['agent-a'], { 'agent-a': idleSnapshot }, 0, 1_000)
     const updatedSnapshot: SessionSnapshot = { activity: 'waiting_approval', previewLines: ['Posso continuar?'] }

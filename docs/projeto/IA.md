@@ -1130,3 +1130,23 @@ TESTE: 318 testes de frontend (13 no módulo de submissão, incluindo o novo cas
 RISCO RESIDUAL: a separação entre "dica do TUI" e "usuário digitando" é heurística de espaçamento e pode errar em uma CLI que alinhe dicas com menos de cinco espaços — nesse caso a reconferência simplesmente não dispara, degradando para o comportamento anterior à correção, nunca para envio indevido. O primeiro Enter (75 ms após o texto) continua sem essa verificação de propósito: ali acabamos de escrever e o usuário não teve janela para digitar; é o comportamento original, preservado. A conferência manual em reinício real segue pendente.
 
 Estado final: concluído.
+
+## Registro de Trabalho — 2026-08-10 (parte 5) — abrir o terminal marca a notificação como lida
+
+PEDIDO: tarefa do Notion "Bug: clicar no terminal com notificação ativa não marca como 'lida'". Com vários terminais no canvas, a notificação continuava ativa depois de eu visitar o agente, então o badge deixava de dizer quais realmente ainda precisam de mim.
+
+CAUSA: "ler" era um efeito colateral escrito à mão dentro do painel de notificações. Só o `onDismiss` do `NotificationsPanel` marcava lida — e ele existia apenas no clique do item da lista. Os outros dois caminhos de abertura (clique no card do terminal no canvas e clique na linha do dock de terminais) chamavam `setExpandedTerminalId` direto, abrindo o agente sem tocar no histórico. Abrir e ler eram a mesma ação para o usuário e duas coisas diferentes no código.
+
+FEITO: `CanvasView` ganhou um `openTerminal` que é o único caminho de abertura — ele abre a gaveta, registra o `lastPrompt` do turno como reconhecido e marca as pendências daquele nó como lidas. Os três pontos que abriam terminal (`onExpand` do bloco, `onExpandNode` do dock, `onExpandNode` do painel) passam por ele. O `onDismiss` do painel virou código morto e foi removido junto com o prop: abrir já é ler, em qualquer caminho.
+
+O reconhecimento em si (guardar o `lastPrompt` + soltar o nó do conjunto de notificações ativas) estava copiado em quatro handlers do painel e virou `acknowledgeNodeNotifications`. Ele lê o snapshot pelo `store.getSnapshot`, não pelo `sessionSnapshots` renderizado — assim o callback é estável e pode ser injetado nos dados dos blocos sem que cada tecla digitada por um agente invalide os nós todos (o `reuseData` não observa esse campo, e uma closure recriada a cada snapshot guardaria prompt velho).
+
+Em `canvas-notifications.ts`, as três funções de marcar como lida eram o mesmo `map` repetido; foram reduzidas a um `markRead(history, alvo, now)` compartilhado que **devolve o próprio histórico quando nada muda**. Isso deixou de ser detalhe quando marcar virou parte de abrir: sem preservar a identidade, todo clique num terminal regravaria o histórico no `localStorage` e re-renderizaria o painel sem nenhuma mudança real.
+
+TESTE: caso novo cobrindo a estabilidade de referência das três funções (marcar de novo o que já está lido, marcar um nó sem pendência, marcar tudo) — é a garantia do clique barato. 319 testes de frontend.
+
+VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos.
+
+RISCO RESIDUAL: se a gaveta já estiver aberta quando o agente fizer um pedido novo, a notificação dispara mesmo com o terminal à vista — decisão deliberada: o usuário pode ter aberto e saído de perto, e deixar de avisar um pedido real é pior que um badge a mais. Um novo pedido depois da visita volta a notificar normalmente porque o reconhecimento é amarrado ao `lastPrompt` do turno, e um prompt novo é turno novo. Não validado com o app rodando: a suíte é `environment: 'node'`, sem DOM; a conferência manual é deixar um agente ocioso, clicar no card dele no canvas e ver o contador do sino cair na hora.
+
+Estado final: concluído — pendente de conferência manual no app rodando.

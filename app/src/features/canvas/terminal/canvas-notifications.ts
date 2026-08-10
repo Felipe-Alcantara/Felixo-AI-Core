@@ -50,17 +50,40 @@ export function appendCanvasNotifications(
   }
 }
 
+/**
+ * Carimba como lidas as notificações não lidas que casam com `alvo`.
+ *
+ * Devolve o próprio histórico quando nada mudou. A identidade estável não é
+ * detalhe: marcar como lida virou parte de abrir um terminal, e um array novo
+ * a cada abertura regravaria o histórico no storage e re-renderizaria o painel
+ * sem nenhuma mudança real.
+ */
+function markRead(
+  history: readonly CanvasNotification[],
+  alvo: (notification: CanvasNotification) => boolean,
+  now: number,
+): CanvasNotification[] {
+  let mudou = false
+  const marcadas = history.map((notification) => {
+    if (notification.readAt !== null || !alvo(notification)) {
+      return notification
+    }
+    mudou = true
+    return { ...notification, readAt: now }
+  })
+
+  // O cast preserva a identidade do array quando nada mudou: ninguém aqui
+  // muta o histórico, o `readonly` do parâmetro é só a garantia disso.
+  return mudou ? marcadas : (history as CanvasNotification[])
+}
+
 /** Consuming an agent marks every unread item it accumulated as read. */
 export function markCanvasNotificationsReadForNode(
   history: readonly CanvasNotification[],
   nodeId: string,
   now: number = Date.now(),
 ): CanvasNotification[] {
-  return history.map((notification) =>
-    notification.nodeId === nodeId && notification.readAt === null
-      ? { ...notification, readAt: now }
-      : notification,
-  )
+  return markRead(history, (notification) => notification.nodeId === nodeId, now)
 }
 
 /** Marks a single item as read without touching the agent's other entries. */
@@ -69,20 +92,14 @@ export function markCanvasNotificationRead(
   notificationId: string,
   now: number = Date.now(),
 ): CanvasNotification[] {
-  return history.map((notification) =>
-    notification.id === notificationId && notification.readAt === null
-      ? { ...notification, readAt: now }
-      : notification,
-  )
+  return markRead(history, (notification) => notification.id === notificationId, now)
 }
 
 export function markAllCanvasNotificationsRead(
   history: readonly CanvasNotification[],
   now: number = Date.now(),
 ): CanvasNotification[] {
-  return history.map((notification) =>
-    notification.readAt === null ? { ...notification, readAt: now } : notification,
-  )
+  return markRead(history, () => true, now)
 }
 
 /** Removes a single item from the history permanently. */

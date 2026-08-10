@@ -341,6 +341,40 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     saveNotificationHistory(notificationHistory)
   }, [notificationHistory])
 
+  // Consumir um agente é sempre a mesma coisa, venha de onde vier: o pedido
+  // atual dele deixa de ser novidade. Guardar o `lastPrompt` do turno impede
+  // que o mesmo pedido volte a notificar (um redesenho da tela não muda o
+  // prompt), enquanto um prompt novo — turno novo — volta a notificar normal.
+  //
+  // Lê o snapshot do store, não do `sessionSnapshots` renderizado: assim o
+  // callback fica estável e pode ser injetado nos dados dos nós sem que cada
+  // batida de tecla de um agente invalide os blocos todos.
+  const acknowledgeNodeNotifications = useCallback(
+    (nodeId: string) => {
+      acknowledgedNotificationPromptsRef.current.set(
+        nodeId,
+        store.getSnapshot(nodeId)?.lastPrompt,
+      )
+      activeNotificationNodeIdsRef.current.delete(nodeId)
+    },
+    [store],
+  )
+
+  // Abrir o terminal É ler a notificação dele. Todo caminho de abertura
+  // (clique no bloco do canvas, dock de terminais, item do painel) passa por
+  // aqui, então visitar o agente limpa a marca na hora em vez de deixar uma
+  // notificação fantasma que só o painel sabia apagar.
+  const openTerminal = useCallback(
+    (nodeId: string) => {
+      setExpandedTerminalId(nodeId)
+      acknowledgeNodeNotifications(nodeId)
+      setNotificationHistory((current) =>
+        markCanvasNotificationsReadForNode(current, nodeId),
+      )
+    },
+    [acknowledgeNodeNotifications],
+  )
+
   // Read items older than the retention window drop out of the history, and so
   // do notifications whose terminal no longer exists — an unread one never
   // expires on age alone, so a closed agent's history would linger forever.
@@ -897,7 +931,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               ...(fallbackInitialText ? { initialText: fallbackInitialText } : {}),
               initialTextReady,
               terminalIndex,
-              onExpand: setExpandedTerminalId,
+              onExpand: openTerminal,
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
             }),
@@ -920,6 +954,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     linkAgentToFile,
     notifyTerminalRenamed,
     nodes,
+    openTerminal,
     qualityStandard,
     restoredAgentTerminals,
     terminalCanvasFilePaths,
@@ -1481,27 +1516,13 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             toolsMenuOpen={toolsMenuOpen}
             onClose={() => setNotificationsOpen(false)}
             onFocusNode={focusNode}
-            onExpandNode={setExpandedTerminalId}
-            onDismiss={(nodeId) => {
-              acknowledgedNotificationPromptsRef.current.set(
-                nodeId,
-                sessionSnapshots[nodeId]?.lastPrompt,
-              )
-              activeNotificationNodeIdsRef.current.delete(nodeId)
-              setNotificationHistory((current) =>
-                markCanvasNotificationsReadForNode(current, nodeId),
-              )
-            }}
+            onExpandNode={openTerminal}
             onMarkRead={(notificationId) => {
               const target = notificationHistory.find(
                 (notification) => notification.id === notificationId,
               )
               if (target) {
-                acknowledgedNotificationPromptsRef.current.set(
-                  target.nodeId,
-                  sessionSnapshots[target.nodeId]?.lastPrompt,
-                )
-                activeNotificationNodeIdsRef.current.delete(target.nodeId)
+                acknowledgeNodeNotifications(target.nodeId)
               }
               setNotificationHistory((current) =>
                 markCanvasNotificationRead(current, notificationId),
@@ -1510,11 +1531,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             onMarkAllRead={() => {
               notificationHistory.forEach((notification) => {
                 if (notification.readAt !== null) return
-                acknowledgedNotificationPromptsRef.current.set(
-                  notification.nodeId,
-                  sessionSnapshots[notification.nodeId]?.lastPrompt,
-                )
-                activeNotificationNodeIdsRef.current.delete(notification.nodeId)
+                acknowledgeNodeNotifications(notification.nodeId)
               })
               setNotificationHistory((current) => markAllCanvasNotificationsRead(current))
             }}
@@ -1523,11 +1540,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
                 (notification) => notification.id === notificationId,
               )
               if (target?.readAt === null) {
-                acknowledgedNotificationPromptsRef.current.set(
-                  target.nodeId,
-                  sessionSnapshots[target.nodeId]?.lastPrompt,
-                )
-                activeNotificationNodeIdsRef.current.delete(target.nodeId)
+                acknowledgeNodeNotifications(target.nodeId)
               }
               setNotificationHistory((current) =>
                 removeCanvasNotification(current, notificationId),
@@ -1565,7 +1578,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         nodes={nodes}
         activeTerminalId={expandedTerminalId}
         onFocusNode={focusNode}
-        onExpandNode={setExpandedTerminalId}
+        onExpandNode={openTerminal}
         onReorder={reorderNodes}
       />
 

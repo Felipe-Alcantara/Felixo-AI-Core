@@ -19,9 +19,9 @@ type NotificationsPanelProps = {
   toolsMenuOpen: boolean
   onClose: () => void
   onFocusNode: (nodeId: string) => void
+  /** Abre o agente. Abrir já vale como ler: quem trata isso marca as
+   * pendências dele como lidas, aqui e em qualquer outro caminho de abertura. */
   onExpandNode: (nodeId: string) => void
-  /** Opening an agent acknowledges every unread item it accumulated. */
-  onDismiss: (nodeId: string) => void
   onMarkRead: (notificationId: string) => void
   onMarkAllRead: () => void
   onRemove: (notificationId: string) => void
@@ -39,7 +39,6 @@ export function NotificationsPanel({
   onClose,
   onFocusNode,
   onExpandNode,
-  onDismiss,
   onMarkRead,
   onMarkAllRead,
   onRemove,
@@ -163,7 +162,6 @@ export function NotificationsPanel({
                   onClick={() => {
                     onFocusNode(node.id)
                     onExpandNode(node.id)
-                    onDismiss(node.id)
                     onClose()
                   }}
                   className="felixo-btn flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left"
