@@ -15,6 +15,12 @@ import {
 import type { WebviewTag } from 'electron'
 import { NodeHeader } from './NodeHeader'
 import { normalizeUrlInput } from '../services/url-utils'
+import {
+  resolveGuestSrc,
+  shouldCreateGuest,
+  shouldRemoveOnDetach,
+  staleGuests,
+} from '../services/webview-mount'
 import type { WebpageNodeData } from '../types'
 
 /**
@@ -38,6 +44,10 @@ const SHARED_WEBVIEW_PARTITION = 'persist:felixo-webview'
 function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = (data ?? {}) as WebpageNodeDataWithHandler
   const webviewRef = useRef<WebviewTag | null>(null)
+  // Mirrors `webviewRef` as state so the listener effect re-runs when the
+  // element is (re)created. The ref stays for the imperative callers
+  // (back/forward/reload/loadURL) that must not re-render on every read.
+  const [webview, setWebview] = useState<WebviewTag | null>(null)
   // Seeded once from the persisted URL — later navigation updates state/data,
   // never this prop, so the webview is never force-reloaded from underneath
   // the user by a re-render.
@@ -46,6 +56,9 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // render é justamente o que o React não garante em modo concorrente.
   const [initialUrl] = useState(() => nodeData.url || 'https://www.google.com')
   const [addressInput, setAddressInput] = useState(initialUrl)
+  // Tracks where the page actually is, so a remount recreates the webview on
+  // the current URL instead of rewinding it to `initialUrl`.
+  const currentUrlRef = useRef(initialUrl)
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -80,12 +93,28 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // (Google/Apple/Microsoft…) exibem "seu navegador está bloqueando pop-ups".
   const mountWebview = useCallback((container: HTMLDivElement | null) => {
     if (!container) {
+      // Dropping the ref is not enough: the <webview> stays in the DOM as a
+      // live guest, still loading and still PLAYING AUDIO. StrictMode (and any
+      // remount) then runs this callback again with a null ref, the
+      // already-mounted check below passes, and a second guest is prepended
+      // over the first — two pages loaded, doubled audio. Removing the element
+      // ends the guest with it.
+      if (shouldRemoveOnDetach(webviewRef.current)) {
+        webviewRef.current?.remove()
+      }
       webviewRef.current = null
+      setWebview(null)
       return
     }
-    if (webviewRef.current?.isConnected) {
+    if (!shouldCreateGuest(webviewRef.current)) {
       return
     }
+    // A previous mount may have left a guest behind (e.g. a remount whose
+    // cleanup never ran). Clearing them keeps exactly one webview per node.
+    staleGuests(
+      { existingGuests: () => Array.from(container.querySelectorAll('webview')) },
+      webviewRef.current,
+    ).forEach((stale) => stale.remove())
 
     const element = document.createElement('webview') as WebviewTag
     element.className = 'nodrag nowheel nopan h-full w-full'
@@ -95,14 +124,23 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       'webpreferences',
       'contextIsolation=yes,nodeIntegration=no,sandbox=yes',
     )
-    element.setAttribute('src', initialUrl)
+    // The URL the node is actually on, not the one it opened with: a remount
+    // after the user navigated away must not silently rewind the page to
+    // wherever the block started.
+    element.setAttribute('src', resolveGuestSrc(currentUrlRef.current, initialUrl))
 
     container.prepend(element)
     webviewRef.current = element
+    setWebview(element)
+    // `initialUrl` is frozen at mount, so this identity is stable for the
+    // node's lifetime — the callback is never torn down mid-session.
   }, [initialUrl])
 
+  // Depends on the mounted element, not just `id`: ref callbacks run before
+  // effects, so on a remount the effect below would read an already-cleared
+  // ref, bail out, and leave the new webview with no listeners at all —
+  // no title, no URL persistence, no back/forward.
   useEffect(() => {
-    const webview = webviewRef.current
     if (!webview) return
 
     const syncHistoryState = () => {
@@ -115,6 +153,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     const onNavigate = () => {
       setLoadError(null)
       const url = webview.getURL()
+      currentUrlRef.current = url
       setAddressInput(url)
       syncHistoryState()
       onDataChangeRef.current?.(id, { url })
@@ -146,12 +185,13 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       webview.removeEventListener('page-title-updated', onTitleUpdated)
       webview.removeEventListener('did-fail-load', onFailLoad)
     }
-  }, [id])
+  }, [id, webview])
 
   const navigateTo = (raw: string) => {
     const normalized = normalizeUrlInput(raw)
     if (!normalized) return
     setAddressInput(normalized)
+    currentUrlRef.current = normalized
     webviewRef.current?.loadURL(normalized)
   }
 
