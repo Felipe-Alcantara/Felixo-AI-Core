@@ -22,6 +22,17 @@ const TOOLBAR_OFFSET = 9 * 16 + 8
 const OPEN_TOOLS_OFFSET = 18.5 * 16 + 8
 const DEFAULT_VIEWPORT_MARGIN = 16
 
+/**
+ * How far right of the toolbar's own `left` a panel must sit to clear the
+ * button column — the collapsed width, or the wider one while the tools menu
+ * is open. Exported for the tool panels (see CanvasPanel), which are rendered
+ * as siblings of the toolbar rather than inside it, so they offset from the
+ * same origin instead of measuring an anchor they have no ref to.
+ */
+export function toolbarColumnOffset(toolsMenuOpen: boolean): number {
+  return toolsMenuOpen ? OPEN_TOOLS_OFFSET : TOOLBAR_OFFSET
+}
+
 export type ToolbarFlyoutPlacement = 'beside' | 'below'
 
 /** Tailwind classes placing a popover beside the toolbar column. */

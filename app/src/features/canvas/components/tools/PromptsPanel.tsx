@@ -16,6 +16,8 @@ type PromptsPanelProps = {
   onClose: () => void
   /** Sends the prompt to the expanded terminal, or copies it as a fallback. */
   onInsertPrompt: (prompt: string) => Promise<SkillActivationResult>
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 const SAVE_DEBOUNCE_MS = 500
@@ -41,7 +43,11 @@ function createAutomationId() {
  * fall back to a fresh preset later (the built-in definition in
  * defaultAutomations never changes).
  */
-export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
+export function PromptsPanel({
+  onClose,
+  onInsertPrompt,
+  toolsMenuOpen,
+}: PromptsPanelProps) {
   const [custom, setCustom] = useState<AutomationDefinition[]>([])
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
@@ -174,6 +180,7 @@ export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
         icon={<Sparkles size={15} />}
         onClose={onClose}
         widthClassName="w-[36rem]"
+        toolsMenuOpen={toolsMenuOpen}
       >
         <PromptDetailPanel
           key={`${detailPrompt.id}:${overridesById.has(detailPrompt.id) ? 'override' : 'preset'}`}
@@ -198,6 +205,7 @@ export function PromptsPanel({ onClose, onInsertPrompt }: PromptsPanelProps) {
       icon={<Sparkles size={15} />}
       onClose={onClose}
       widthClassName="w-[26rem]"
+      toolsMenuOpen={toolsMenuOpen}
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">

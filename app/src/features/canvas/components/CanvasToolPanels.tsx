@@ -15,6 +15,8 @@ import type { CanvasSkill } from '../types'
 
 type CanvasToolPanelsProps = {
   activeTool: CanvasTool | null
+  /** Widens the toolbar column, so every panel slides further right to clear it. */
+  toolsMenuOpen: boolean
   onClose: () => void
   nodes: Node[]
   onFocusNode: (nodeId: string) => void
@@ -30,6 +32,7 @@ type CanvasToolPanelsProps = {
 
 export function CanvasToolPanels({
   activeTool,
+  toolsMenuOpen,
   onClose,
   nodes,
   onFocusNode,
@@ -43,9 +46,22 @@ export function CanvasToolPanels({
 }: CanvasToolPanelsProps) {
   switch (activeTool) {
     case 'projects':
-      return <ProjectsPanel onClose={onClose} onProjectsChanged={onProjectsChanged} />
+      return (
+        <ProjectsPanel
+          onClose={onClose}
+          onProjectsChanged={onProjectsChanged}
+          toolsMenuOpen={toolsMenuOpen}
+        />
+      )
     case 'search':
-      return <SearchPanel nodes={nodes} onFocusNode={onFocusNode} onClose={onClose} />
+      return (
+        <SearchPanel
+          nodes={nodes}
+          onFocusNode={onFocusNode}
+          onClose={onClose}
+          toolsMenuOpen={toolsMenuOpen}
+        />
+      )
     case 'notes':
       return (
         <NotesPanel
@@ -53,16 +69,29 @@ export function CanvasToolPanels({
           onFocusNode={onFocusNode}
           onAddNote={onAddNote}
           onClose={onClose}
+          toolsMenuOpen={toolsMenuOpen}
         />
       )
     case 'models':
-      return <ModelsPanel onClose={onClose} />
+      return <ModelsPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
     case 'prompts':
-      return <PromptsPanel onClose={onClose} onInsertPrompt={onInsertPrompt} />
+      return (
+        <PromptsPanel
+          onClose={onClose}
+          onInsertPrompt={onInsertPrompt}
+          toolsMenuOpen={toolsMenuOpen}
+        />
+      )
     case 'skills':
-      return <SkillsPanel onActivateSkill={onActivateSkill} onClose={onClose} />
+      return (
+        <SkillsPanel
+          onActivateSkill={onActivateSkill}
+          onClose={onClose}
+          toolsMenuOpen={toolsMenuOpen}
+        />
+      )
     case 'git':
-      return <GitPanel onClose={onClose} />
+      return <GitPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
     case 'settings':
       return (
         <SettingsPanel
@@ -70,6 +99,7 @@ export function CanvasToolPanels({
           onPromptSaved={onPromptSaved}
           onBootstrapSaved={onBootstrapSaved}
           onQualityStandardSaved={onQualityStandardSaved}
+          toolsMenuOpen={toolsMenuOpen}
         />
       )
     default:

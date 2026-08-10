@@ -10,6 +10,8 @@ type SkillsPanelProps = {
   /** Sends the skill to the expanded terminal, or copies it as a fallback. */
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
   onClose: () => void
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 const emptyDraft = { name: '', description: '', path: '' }
@@ -19,7 +21,11 @@ const emptyDraft = { name: '', description: '', path: '' }
  * tells a connected agent where the skill lives so it reads and applies it.
  * Skills persist via the canvas settings bridge (canvas:get/set-skills).
  */
-export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
+export function SkillsPanel({
+  onActivateSkill,
+  onClose,
+  toolsMenuOpen,
+}: SkillsPanelProps) {
   const [skills, setSkills] = useState<CanvasSkill[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState(emptyDraft)
@@ -90,7 +96,12 @@ export function SkillsPanel({ onActivateSkill, onClose }: SkillsPanelProps) {
   }
 
   return (
-    <CanvasPanel title="Skills" icon={<BrainCircuit size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Skills"
+      icon={<BrainCircuit size={15} />}
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
       <button
         type="button"
         onClick={startNew}

@@ -222,6 +222,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
+  // Espelha a largura da coluna da toolbar para os painéis de ferramenta, que
+  // são irmãos dela e abrem ao lado em vez de por cima.
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const sessionSnapshots = useSessionSnapshots()
   const actionableNotificationIds = useMemo(
@@ -1412,6 +1415,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onSelectTool={(tool) =>
           setActiveTool((current) => (current === tool ? null : tool))
         }
+        onToolsMenuOpenChange={setToolsMenuOpen}
         updatePresentation={updates.presentation}
         onInstallUpdate={updates.install}
         projects={projects}
@@ -1516,6 +1520,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
       <CanvasToolPanels
         activeTool={activeTool}
+        toolsMenuOpen={toolsMenuOpen}
         onClose={() => setActiveTool(null)}
         nodes={nodes}
         onFocusNode={focusNode}

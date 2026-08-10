@@ -21,6 +21,8 @@ type NotesPanelProps = {
   /** Creates a new note block on the canvas. */
   onAddNote: () => void
   onClose: () => void
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 const SAVE_DEBOUNCE_MS = 500
@@ -32,7 +34,13 @@ const SAVE_DEBOUNCE_MS = 500
  * local state immediately and persist with a debounce, so typing never waits
  * on an IPC round-trip nor loses focus to a list reload.
  */
-export function NotesPanel({ nodes, onFocusNode, onAddNote, onClose }: NotesPanelProps) {
+export function NotesPanel({
+  nodes,
+  onFocusNode,
+  onAddNote,
+  onClose,
+  toolsMenuOpen,
+}: NotesPanelProps) {
   const [notes, setNotes] = useState<CanvasNote[]>([])
   const saveTimers = useRef(new Map<string, number>())
 
@@ -109,7 +117,12 @@ export function NotesPanel({ nodes, onFocusNode, onAddNote, onClose }: NotesPane
   }, [])
 
   return (
-    <CanvasPanel title="Notas" icon={<Notebook size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Notas"
+      icon={<Notebook size={15} />}
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
           Notas no canvas

@@ -89,6 +89,9 @@ type CanvasToolbarProps = {
   onToggleNotifications: () => void
   notificationCount: number
   notificationPanel?: (ready: boolean, toolsMenuOpen: boolean) => ReactNode
+  /** Lets the tool panels, rendered as siblings by CanvasView, slide clear of
+   *  the button column when the tools menu widens it. */
+  onToolsMenuOpenChange?: (open: boolean) => void
 }
 
 export function CanvasToolbar({
@@ -121,14 +124,21 @@ export function CanvasToolbar({
   onToggleNotifications,
   notificationCount,
   notificationPanel,
+  onToolsMenuOpenChange,
 }: CanvasToolbarProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [isCollapsing, setIsCollapsing] = useState(false)
   const [isExpanding, setIsExpanding] = useState(false)
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
+  // Mantém o CanvasView em sincronia: os painéis de ferramenta são irmãos da
+  // toolbar e se deslocam junto com a largura desta coluna.
+  const changeToolsMenuOpen = (open: boolean) => {
+    setToolsMenuOpen(open)
+    onToolsMenuOpenChange?.(open)
+  }
   const collapseToolbar = () => {
-    setToolsMenuOpen(false)
+    changeToolsMenuOpen(false)
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       setCollapsed(true)
       return
@@ -213,7 +223,7 @@ export function CanvasToolbar({
       <CanvasToolsMenu
         activeTool={activeTool}
         onSelect={onSelectTool}
-        onOpenChange={setToolsMenuOpen}
+        onOpenChange={changeToolsMenuOpen}
       />
       <NotificationsMenu
         open={notificationsOpen}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useExitAnimation } from '../../hooks/useExitAnimation'
 import { PANEL_EXIT_MS } from '../../services/animation-timing'
+import { toolbarColumnOffset } from '../toolbar-flyout'
 
 type CanvasPanelProps = {
   title: string
@@ -10,12 +11,19 @@ type CanvasPanelProps = {
   children: ReactNode
   /** Panel width as a Tailwind width class. Defaults to the standard w-80. */
   widthClassName?: string
+  /** Widens the toolbar column, so the panel slides further right to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 /**
  * A consistent floating panel for canvas tools (projects, notes, models…).
  * Sits over the canvas without dimming it, so the board stays visible.
  * Slides in on mount and plays a brief exit animation before unmounting.
+ *
+ * Opens beside the toolbar rather than on top of it: the panel and the toolbar
+ * are absolute siblings sharing an origin, so it offsets right by the button
+ * column's width and tracks the tools menu widening with the same transition
+ * the toolbar flyouts use.
  */
 export function CanvasPanel({
   title,
@@ -23,12 +31,14 @@ export function CanvasPanel({
   onClose,
   children,
   widthClassName = 'w-80',
+  toolsMenuOpen = false,
 }: CanvasPanelProps) {
   const { closing, close } = useExitAnimation(PANEL_EXIT_MS, onClose)
 
   return (
     <div
-      className={`absolute left-4 top-16 z-20 flex max-h-[80vh] ${widthClassName} max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
+      style={{ left: `calc(1rem + ${toolbarColumnOffset(toolsMenuOpen)}px)` }}
+      className={`absolute top-16 z-20 flex max-h-[80vh] ${widthClassName} max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl transition-[left] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
         closing ? 'felixo-anim-panel-out' : 'felixo-anim-panel-in'
       }`}
     >

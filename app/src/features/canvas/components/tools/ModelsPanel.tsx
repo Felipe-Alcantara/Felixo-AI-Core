@@ -12,6 +12,8 @@ type CanvasModel = {
 
 type ModelsPanelProps = {
   onClose: () => void
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 /**
@@ -19,7 +21,7 @@ type ModelsPanelProps = {
  * one, reading/writing straight through IPC. Creation stays in the chat's
  * richer config flow; here we keep it read + delete.
  */
-export function ModelsPanel({ onClose }: ModelsPanelProps) {
+export function ModelsPanel({ onClose, toolsMenuOpen }: ModelsPanelProps) {
   const [models, setModels] = useState<CanvasModel[]>([])
 
   useEffect(() => {
@@ -43,7 +45,12 @@ export function ModelsPanel({ onClose }: ModelsPanelProps) {
   }, [])
 
   return (
-    <CanvasPanel title="Modelos" icon={<LayoutList size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Modelos"
+      icon={<LayoutList size={15} />}
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
       {models.length === 0 ? (
         <p className="text-sm text-zinc-500">Nenhum modelo configurado.</p>
       ) : (

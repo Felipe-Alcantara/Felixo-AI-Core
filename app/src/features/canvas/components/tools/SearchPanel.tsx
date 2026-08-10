@@ -9,6 +9,8 @@ type SearchPanelProps = {
   /** Centers/zooms the canvas on a node and selects it. */
   onFocusNode: (nodeId: string) => void
   onClose: () => void
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 type SearchHit = {
@@ -52,7 +54,12 @@ function nodeTitle(node: Node<CanvasNodeData>): string {
  * Instead of messages, it finds BLOCKS by their title, file name, note text or
  * terminal command; picking a result centers and selects that block.
  */
-export function SearchPanel({ nodes, onFocusNode, onClose }: SearchPanelProps) {
+export function SearchPanel({
+  nodes,
+  onFocusNode,
+  onClose,
+  toolsMenuOpen,
+}: SearchPanelProps) {
   const [query, setQuery] = useState('')
 
   const hits = useMemo<SearchHit[]>(() => {
@@ -80,7 +87,12 @@ export function SearchPanel({ nodes, onFocusNode, onClose }: SearchPanelProps) {
   }, [nodes, query])
 
   return (
-    <CanvasPanel title="Pesquisar" icon={<Search size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Pesquisar"
+      icon={<Search size={15} />}
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
       <input
         autoFocus
         value={query}

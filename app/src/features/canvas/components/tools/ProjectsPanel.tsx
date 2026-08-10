@@ -8,13 +8,19 @@ type ProjectsPanelProps = {
   onClose: () => void
   /** Notifies the canvas so the terminal menu picks up new projects. */
   onProjectsChanged?: () => void
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 /**
  * Canvas-side projects manager — lists, adds (folder picker) and removes
  * projects straight through the IPC bridge, independent of the chat UI.
  */
-export function ProjectsPanel({ onClose, onProjectsChanged }: ProjectsPanelProps) {
+export function ProjectsPanel({
+  onClose,
+  onProjectsChanged,
+  toolsMenuOpen,
+}: ProjectsPanelProps) {
   const [projects, setProjects] = useState<CanvasProject[]>([])
   const [busy, setBusy] = useState(false)
 
@@ -87,7 +93,12 @@ export function ProjectsPanel({ onClose, onProjectsChanged }: ProjectsPanelProps
   )
 
   return (
-    <CanvasPanel title="Projetos" icon={<FolderGit2 size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Projetos"
+      icon={<FolderGit2 size={15} />}
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
       <button
         type="button"
         onClick={() => void addProject()}

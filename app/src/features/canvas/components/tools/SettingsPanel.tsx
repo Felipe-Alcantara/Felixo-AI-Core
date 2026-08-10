@@ -15,6 +15,8 @@ type SettingsPanelProps = {
   onBootstrapSaved?: (prompt: string) => void
   /** Lets the canvas pick up the quality-standard text/toggle without a reload. */
   onQualityStandardSaved?: (value: { prompt: string; enabled: boolean }) => void
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 /**
@@ -28,9 +30,15 @@ export function SettingsPanel({
   onPromptSaved,
   onBootstrapSaved,
   onQualityStandardSaved,
+  toolsMenuOpen,
 }: SettingsPanelProps) {
   return (
-    <CanvasPanel title="Configurações" icon={<Settings size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Configurações"
+      icon={<Settings size={15} />}
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
       <QualityStandardField onSaved={onQualityStandardSaved} />
 
       <div className="my-3 border-t border-white/10" />

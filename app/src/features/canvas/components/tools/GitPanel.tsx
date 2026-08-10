@@ -13,10 +13,12 @@ type GitSummary = {
 
 type GitPanelProps = {
   onClose: () => void
+  /** Widens the toolbar column; the panel slides over to clear it. */
+  toolsMenuOpen?: boolean
 }
 
 /** Canvas-side git tool — pick a project and stage/commit through IPC. */
-export function GitPanel({ onClose }: GitPanelProps) {
+export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
   const [projects, setProjects] = useState<CanvasProject[]>([])
   const [projectPath, setProjectPath] = useState('')
   const [summary, setSummary] = useState<GitSummary | null>(null)
@@ -95,7 +97,12 @@ export function GitPanel({ onClose }: GitPanelProps) {
   }, [projectPath, message, refresh])
 
   return (
-    <CanvasPanel title="Git" icon={<GitBranch size={15} />} onClose={onClose}>
+    <CanvasPanel
+      title="Git"
+      icon={<GitBranch size={15} />}
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
       <div className="mb-3 flex items-center gap-2">
         <select
           value={projectPath}
