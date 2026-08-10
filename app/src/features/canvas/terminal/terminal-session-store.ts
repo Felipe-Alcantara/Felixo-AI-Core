@@ -3,6 +3,20 @@ import { FitAddon } from '@xterm/addon-fit'
 import { splitTerminalSubmission } from './terminal-input'
 import { isSubmissionPending } from './terminal-submission'
 import {
+  computePreview,
+  computeSignature,
+  readBuffer,
+  readTerminalTail,
+  readViewport,
+} from './terminal-buffer-reader'
+import {
+  cleanPrompt,
+  hasCodexInteractivePrompt,
+  isBusyScreen,
+  isCodexTrustPrompt,
+  looksLikeApprovalPrompt,
+} from './terminal-screen-state'
+import {
   detectTerminalUsageLimit,
   type TerminalUsageLimit,
 } from './terminal-usage-limit'
@@ -45,8 +59,6 @@ type SessionListener = (snapshot: SessionSnapshot) => void
 
 /** Ms of output silence after which a running session is considered idle. */
 const IDLE_AFTER_MS = 1500
-/** How many trailing lines to keep for the card preview. */
-const PREVIEW_LINES = 6
 /** A configured agent should not terminate silently immediately after launch. */
 const SILENT_EARLY_EXIT_MS = 5000
 const DEFAULT_INITIAL_TEXT_DELAY_MS = 1200
@@ -578,7 +590,7 @@ export class TerminalSessionStore {
       const quietFor = Date.now() - session.lastMeaningfulAt
       if (quietFor >= IDLE_AFTER_MS) {
         const viewport = readViewport(session.terminal)
-        if (BUSY_INDICATOR.test(viewport)) {
+        if (isBusyScreen(viewport)) {
           // The CLI is still showing its "working" banner — only its elapsed-time
           // counter is ticking, which the signature check normalizes away. Stay
           // 'working' instead of settling to idle/green while it's still busy.
@@ -769,166 +781,9 @@ export class TerminalSessionStore {
   }
 }
 
-/** Strip ANSI escapes and collapse whitespace for a readable prompt label. */
-// eslint-disable-next-line no-control-regex
-const ANSI_ESCAPE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g
-
-function cleanPrompt(text: string): string {
-  return text
-    .replace(ANSI_ESCAPE, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
+/** Cada CLI precisa de um tempo diferente até aceitar entrada programática. */
 function getInitialTextDelay(session: Session): number {
   return session.command === 'codex'
     ? CODEX_INITIAL_TEXT_DELAY_MS
     : DEFAULT_INITIAL_TEXT_DELAY_MS
-}
-
-function isCodexTrustPrompt(text: string): boolean {
-  const compact = text
-    .replace(ANSI_ESCAPE, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '')
-
-  return (
-    compact.includes('doyoutrustthecontentsofthisdirectory') ||
-    (
-      compact.includes('trust') &&
-      compact.includes('untrustedcontents') &&
-      compact.includes('yescontinue')
-    )
-  )
-}
-
-/** A bare Codex composer prompt means its interactive input is ready. */
-function hasCodexInteractivePrompt(viewport: string): boolean {
-  return viewport.split('\n').some((line) => /^\s*›\s*$/.test(line))
-}
-
-/** A selection cursor next to a yes/no-ish option, e.g. "❯ 1. Yes". */
-const APPROVAL_OPTION_LINE =
-  /[❯>●]\s*\d*\.?\s*(yes|no|sim|não|allow|deny|approve|aprovar|negar)\b/i
-/** A numbered menu of options, the general shape CLIs use for decisions. */
-const NUMBERED_OPTION_LIST = /^\s*\d\.\s+\S/m
-/** Phrasing that asks the human to confirm or decide something. */
-const CONFIRMATION_PHRASE =
-  /\b(proceed\?|continue\?|approve|aprovar|continuar\?|prosseguir\?|do you want to|would you like to|deseja)\b/i
-/**
- * Agent CLIs show a persistent "still working" banner while busy, e.g.
- * "Working (7s • esc to interrupt)" or "Aguardando... (12s)". Its digits get
- * stripped by ELAPSED_TIMER before the idle-vs-working signature comparison,
- * so a CLI stuck on this screen (ticking only its counter, no new lines)
- * would otherwise read as "no meaningful change" and settle to idle/green
- * while still actively working. Checked directly against the live viewport
- * so it overrides that signature-based idle detection.
- */
-const BUSY_INDICATOR =
-  /\b(working|aguardando|thinking|pensando|running|executando|processing|processando)\b.*(esc to interrupt|interrupt)|esc to interrupt/i
-
-/**
- * Best-effort, CLI-agnostic detection of an interactive decision prompt
- * (tool approval, plan confirmation, clarifying question) sitting settled in
- * the buffer. Mirrors `isCodexTrustPrompt` below but for the general shape of
- * "waiting on you" screens rather than one specific CLI's trust dialog —
- * these can appear even under auto-approve flags, since they aren't tool
- * permission checks.
- */
-function looksLikeApprovalPrompt(text: string): boolean {
-  return (
-    APPROVAL_OPTION_LINE.test(text) ||
-    (NUMBERED_OPTION_LIST.test(text) && CONFIRMATION_PHRASE.test(text))
-  )
-}
-
-/**
- * Reads the last non-empty lines straight from xterm's rendered buffer. This
- * is already the clean, parsed text the terminal shows — far more reliable
- * than stripping ANSI from the raw byte stream ourselves.
- */
-function computePreview(terminal: Terminal): string[] {
-  const buffer = terminal.buffer.active
-  const lines: string[] = []
-
-  // Walk upward from the last row, collecting non-empty lines.
-  for (let row = buffer.length - 1; row >= 0 && lines.length < PREVIEW_LINES; row -= 1) {
-    const text = buffer.getLine(row)?.translateToString(true).trimEnd() ?? ''
-    if (text.length > 0 && !isTerminalChromeLine(text)) {
-      lines.unshift(text)
-    }
-  }
-
-  return lines
-}
-
-/** Lines from an agent CLI's persistent footer, not part of its response. */
-function isTerminalChromeLine(line: string): boolean {
-  return /^(?:gpt-|claude|gemini)\S*.*[·•]|^(?:model|tokens?|contexto|esc to interrupt)\b/i.test(
-    line.trim(),
-  )
-}
-
-/** Spinner frames (braille, ascii, dots, clocks) agent CLIs cycle while idle. */
-const ANIMATION_GLYPHS = /[⠀-⣿■-◿▖-▟⏰-⏿⠿|/\-\\▁▂▃▄▅▆▇█·•∙…]/g
-/** Elapsed-time counters like "12s", "1m04s", "(3.2s)" that tick every frame. */
-const ELAPSED_TIMER = /\(?\b\d+(?:[.:]\d+)?\s?(?:ms|s|m|h)\b\)?/g
-
-/**
- * A signature of what the terminal currently shows, with spinner frames and
- * elapsed-time counters normalized away. Two repaints of the same waiting
- * prompt — differing only by an animated glyph — collapse to the same string,
- * so they don't count as fresh "work".
- */
-function computeSignature(terminal: Terminal): string {
-  const buffer = terminal.buffer.active
-  const start = Math.max(0, buffer.length - terminal.rows)
-  const lines: string[] = []
-  for (let row = start; row < buffer.length; row += 1) {
-    const text = buffer.getLine(row)?.translateToString(true) ?? ''
-    lines.push(text.replace(ELAPSED_TIMER, '').replace(ANIMATION_GLYPHS, '').trimEnd())
-  }
-  // Total line count anchors real scrolling/work even if the viewport text repeats.
-  return `${buffer.length}|${lines.join('\n').replace(/\s+/g, ' ').trim()}`
-}
-
-/** Reads the currently visible viewport text from the xterm buffer. */
-function readViewport(terminal: Terminal): string {
-  const buffer = terminal.buffer.active
-  const start = buffer.viewportY
-  const end = start + terminal.rows
-  const lines: string[] = []
-
-  for (let row = start; row < end; row += 1) {
-    lines.push(buffer.getLine(row)?.translateToString(true).trimEnd() ?? '')
-  }
-
-  return lines.join('\n').replace(/\n+$/, '')
-}
-
-/** Reads the entire xterm active buffer, including scrollback lines. */
-function readBuffer(terminal: Terminal): string {
-  const buffer = terminal.buffer.active
-  const lines: string[] = []
-
-  for (let row = 0; row < buffer.length; row += 1) {
-    lines.push(buffer.getLine(row)?.translateToString(true).trimEnd() ?? '')
-  }
-
-  return lines.join('\n').replace(/\n+$/, '')
-}
-
-/** Avoids rescanning a large scrollback on every output callback. */
-function readTerminalTail(terminal: Terminal, maxChars = 16_000): string {
-  const buffer = terminal.buffer.active
-  const lines: string[] = []
-  let length = 0
-
-  for (let row = buffer.length - 1; row >= 0 && length < maxChars; row -= 1) {
-    const line = buffer.getLine(row)?.translateToString(true).trimEnd() ?? ''
-    lines.unshift(line)
-    length += line.length + 1
-  }
-
-  return lines.join('\n').slice(-maxChars)
 }
