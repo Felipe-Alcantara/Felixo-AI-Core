@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { splitTerminalSubmission } from './terminal-input'
+import { isSubmissionPending } from './terminal-submission'
 import {
   detectTerminalUsageLimit,
   type TerminalUsageLimit,
@@ -58,6 +59,14 @@ const CLAUDE_INITIAL_TEXT_DELAY_MS = 1800
 const CODEX_INITIAL_TEXT_DELAY_MS = 1800
 /** Lets the Codex TUI process pasted text before it receives the Enter key. */
 const INITIAL_TEXT_SUBMIT_DELAY_MS = 75
+/**
+ * O Enter pode se perder quando o TUI ainda está redesenhando — sob carga (o
+ * app reiniciando com vários agentes), o texto fica escrito na linha de entrada
+ * esperando submissão. Estas constantes governam a reconferência: se o texto
+ * ainda estiver na linha de entrada, o Enter é reenviado.
+ */
+const SUBMIT_RETRY_DELAY_MS = 600
+const SUBMIT_RETRY_LIMIT = 3
 const CODEX_TRUST_ACCEPT_DELAY_MS = 150
 const CODEX_POST_TRUST_INITIAL_TEXT_DELAY_MS = 2500
 const CODEX_TRUST_BUFFER_LIMIT = 12000
@@ -99,6 +108,8 @@ type Session = {
   args: string[]
   initialText?: string
   initialTextTimer: ReturnType<typeof setTimeout> | null
+  /** Reconferência de que o prompt inicial foi submetido, não só digitado. */
+  submitRetryTimer: ReturnType<typeof setTimeout> | null
   initialTextSent: boolean
   codexTrustBuffer: string
   codexTrustHandled: boolean
@@ -177,6 +188,7 @@ export class TerminalSessionStore {
       args: options.args ?? [],
       initialText: options.initialText,
       initialTextTimer: null,
+      submitRetryTimer: null,
       initialTextSent: false,
       codexTrustBuffer: '',
       codexTrustHandled: false,
@@ -474,6 +486,7 @@ export class TerminalSessionStore {
     session.disposed = true
     this.clearIdleTimer(session)
     this.clearInitialTextTimer(session)
+    this.clearSubmitRetryTimer(session)
     session.offData()
     session.offExit()
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })
@@ -647,9 +660,51 @@ export class TerminalSessionStore {
             sessionId: session.ptySessionId,
             data: submission.submit,
           })
+          this.confirmSubmission(session, submission.text, submission.submit)
         }
       }, INITIAL_TEXT_SUBMIT_DELAY_MS)
     }, delayMs)
+  }
+
+  /**
+   * Confere se o prompt inicial foi realmente submetido e reenvia o Enter
+   * enquanto o texto continuar parado na linha de entrada.
+   *
+   * O Enter é entregue numa escrita separada do texto (ver acima), e essa
+   * segunda escrita pode chegar enquanto o TUI ainda redesenha — aí a tecla se
+   * perde e o `/resume` fica escrito, esperando. O intervalo fixo não tem como
+   * saber disso; o conteúdo da tela tem.
+   *
+   * Reenviar Enter é seguro justamente porque só acontece quando o texto ainda
+   * está pendente: se a CLI já submeteu, a linha de entrada está limpa e nada
+   * é enviado.
+   */
+  private confirmSubmission(
+    session: Session,
+    text: string,
+    submit: string,
+    attempt = 1,
+  ): void {
+    if (attempt > SUBMIT_RETRY_LIMIT) {
+      return
+    }
+
+    session.submitRetryTimer = setTimeout(() => {
+      session.submitRetryTimer = null
+      if (session.disposed || !isSubmissionPending(readViewport(session.terminal), text)) {
+        return
+      }
+
+      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: submit })
+      this.confirmSubmission(session, text, submit, attempt + 1)
+    }, SUBMIT_RETRY_DELAY_MS)
+  }
+
+  private clearSubmitRetryTimer(session: Session): void {
+    if (session.submitRetryTimer) {
+      clearTimeout(session.submitRetryTimer)
+      session.submitRetryTimer = null
+    }
   }
 
   private clearInitialTextTimer(session: Session): void {
