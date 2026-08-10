@@ -221,14 +221,6 @@ export function CanvasToolbar({
         <Search size={16} />
         Buscar
       </button>
-      <CanvasToolsMenu
-        activeTool={activeTool}
-        onSelect={onSelectTool}
-        onOpenChange={changeToolsMenuOpen}
-        onExport={onExport}
-        onImport={() => importInputRef.current?.click()}
-        isBusy={isBusy}
-      />
       <NotificationsMenu
         open={notificationsOpen}
         notificationCount={notificationCount}
@@ -242,6 +234,23 @@ export function CanvasToolbar({
         onAddMany={onAddTerminals}
         onAddFolder={onAddFolder}
         toolsMenuOpen={toolsMenuOpen}
+      />
+      <UrlCreateButton
+        icon={<Globe size={16} />}
+        buttonLabel="Página Web"
+        onCreate={onAddWebpage}
+        toolsMenuOpen={toolsMenuOpen}
+      />
+
+      {/* Fim do grupo de acesso rápido. Daqui para baixo vem o resto: as
+          ferramentas, a criação de blocos e as ações sobre o canvas. */}
+      <CanvasToolsMenu
+        activeTool={activeTool}
+        onSelect={onSelectTool}
+        onOpenChange={changeToolsMenuOpen}
+        onExport={onExport}
+        onImport={() => importInputRef.current?.click()}
+        isBusy={isBusy}
       />
       <button
         type="button"
@@ -273,12 +282,6 @@ export function CanvasToolbar({
         buttonLabel="Grupo"
         placeholder="Nome do grupo (opcional)"
         onCreate={onAddGroup}
-        toolsMenuOpen={toolsMenuOpen}
-      />
-      <UrlCreateButton
-        icon={<Globe size={16} />}
-        buttonLabel="Página Web"
-        onCreate={onAddWebpage}
         toolsMenuOpen={toolsMenuOpen}
       />
       {/* Informativo, não uma ferramenta: fica fora do agrupamento de criação
