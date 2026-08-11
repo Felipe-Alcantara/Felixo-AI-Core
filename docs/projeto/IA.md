@@ -136,6 +136,8 @@ npm run build
 
 ## Testes Importantes
 
+[2026-08-11] ✅ `terminal-session-store.test.ts` — primeira suíte do store de terminais, que até então era considerado intestável por depender de PTY. A ponte PTY é falsa, mas o terminal é o do próprio store: os testes alimentam o xterm com o stream de bytes capturado de uma CLI de agente real (preâmbulo de escapes, tela de aviso, REPL pronto) e verificam o que o store escreve de volta. É o padrão a seguir para qualquer comportamento do store que dependa do que está desenhado na tela.
+
 [2026-04-29] ✅ `npm test` — valida adapters `claude`, `codex`, `gemini` e preservação de linhas parciais no leitor JSONL.
 
 [2026-04-29] ✅ `npm run build` e `npm run lint` — validação da fase de contratos TypeScript para modelos, stream events e preload bridge.
@@ -1240,5 +1242,47 @@ TESTE: 5 casos novos em `terminal-screen-state.test.ts` para `isClaudeTrustPromp
 VALIDAÇÃO: `npm run build`, `npx vitest run` (328/328) e `npm run lint` limpos.
 
 RISCO RESIDUAL: não conferido com o app rodando — sem PTY real, a heurística de texto foi verificada contra telas representativas, não contra a saída real da CLI, e a redação exata da tela de confiança do Claude pode mudar entre versões (mesma limitação já aceita para `isCodexTrustPrompt`). O gap de "texto de contexto sem confirmação de que chegou" (fire-and-forget, ver parte 6 de 2026-08-10) segue existindo para qualquer CLI — não foi endereçado aqui porque a causa raiz confirmada era a tela de confiança do Claude, não a ausência geral de confirmação. A conferência manual é abrir um terminal Claude yolo em boot mais lento (ou simular) e confirmar que o texto de contexto chega mesmo quando a tela de confiança demora a aparecer.
+
+Estado final: concluído — pendente de conferência manual no app rodando.
+
+## Registro de Trabalho — 2026-08-11 (parte 3) — prompt inicial do Claude Code não chegava mais
+
+PEDIDO: "o Claude não está mais recebendo o prompt inicial de contexto".
+
+MÉTODO: diferente das rodadas anteriores, a investigação foi feita contra a CLI de verdade. Um PTY real com `claude --dangerously-skip-permissions`, a saída interpretada por um emulador de terminal (pyte, para não confundir cursor-forward com espaço — dois falsos negativos meus vieram de recortar ANSI na mão), e o próprio store rodando sob vitest com uma ponte PTY falsa alimentada com o stream capturado. Todas as afirmações abaixo são observações, não deduções.
+
+CORREÇÃO DA PARTE 2: o diagnóstico da rodada anterior estava errado, e o próprio registro dela já avisava que não tinha sido conferido com PTY real. Em modo yolo o Claude **não** mostra a tela de confiança na pasta — verificado abrindo um repositório com `hasTrustDialogAccepted: false`, onde ela não aparece, justamente porque o modo já dispensa aprovação. O que aparece em todo processo novo é outra tela:
+
+    WARNING: Claude Code running in Bypass Permissions mode
+    ❯ 1. No, exit
+      2. Yes, I accept
+
+`isClaudeTrustPrompt` exigia "trust" + "this folder", que essa tela não tem, então `handleClaudeTrustPrompt` nunca disparava: a parte 2 removeu o aceite cego que existia e o substituiu por um detector que nunca casa. O aviso ficava na tela, e o texto de contexto era digitado dentro dele.
+
+CAUSA REAL, dois defeitos somados:
+
+1. `\x1b[B\r` numa única escrita não aceita o aviso. Verificado 4 vezes (2 com as teclas juntas, 2 separadas): juntas, o aviso fica intocado na tela; separadas por uma pausa, ele é aceito. É a mesma razão já documentada para separar o texto inicial do seu Enter — ou seja, o aceite automático do modo yolo nunca funcionou de fato, nem antes da parte 2.
+
+2. A checagem de "processo pronto" era vazia para o Claude. `receivedOutput` virava verdadeiro no primeiro byte, e os primeiros bytes de uma CLI de tela cheia são só sequências de escape, que não mudam a tela — então `lastMeaningfulAt` nunca era reiniciado e "quieto há 500 ms" já era verdade desde a criação da sessão. Medido com o stream real: a CLI desenha a interface em 2591 ms e o store escrevia o contexto em 2120 ms, antes de existir qualquer linha de entrada. O Codex tinha `hasCodexInteractivePrompt` para isso; o Claude não tinha equivalente.
+
+Somados: o contexto era escrito cedo, numa tela que não era o REPL, e nada nunca conferia se ele havia chegado — o texto sem Enter (contexto puro, ver parte 6 de 2026-08-10) não tinha reconferência nenhuma. Daí o silêncio.
+
+FEITO: a entrega deixou de ser cronometrada e passou a ser guiada pela tela, com confirmação.
+
+- `hasClaudeInteractivePrompt` / `hasEmptyClaudeInput` (`terminal-screen-state.ts`): a linha de entrada do Claude existe / está vazia. A primeira pergunta só se o REPL subiu (tolerante: menu numerado não conta, porque aí a tela é um diálogo), a segunda é a que reconhece a sugestão `Try "..."` como entrada vazia. `hasCodexInputLine` faz o par equivalente para o Codex, distinguindo "ainda não subiu" de "já tem texto aqui".
+- `readInputLineState(command, viewport)` reúne essas leituras numa tabela por CLI e devolve `{ ready, visible, empty }` — ou `undefined` para a CLI que não sabemos ler. O store consulta uma vez e não guarda mais nenhum `command === '...'` sobre telas; é aqui que uma CLI nova entra.
+- `isClaudeBypassPermissionsWarning` substitui `isClaudeTrustPrompt`, com a redação real da tela.
+- `scheduleInitialText` só escreve quando a linha de entrada da CLI está na tela; o teto para as CLIs que sabemos reconhecer subiu para 60 s (`INITIAL_TEXT_INPUT_WAIT_MS`), porque esperar entrega tarde e escrever cedo não entrega nunca. `paintedOutput` substitui `receivedOutput` na decisão: só conta como "a CLI começou" o que mudou a tela.
+- `acceptClaudeBypassWarning` manda a seta e o Enter em escritas separadas (`KEY_SEQUENCE_DELAY_MS`) e reconfere pela tela: enquanto o aviso continuar visível, reenvia (até 3 vezes).
+- `confirmContextDelivery` fecha o gap de fire-and-forget: 800 ms depois de escrever, se a linha de entrada estiver vazia, o contexto é reescrito (até 3 vezes, janela de 30 s). Só reescreve com a entrada visível e vazia — se o contexto está lá, se a entrada não apareceu ainda ou se alguém digitou (`inputTouched`), nada é escrito.
+- `inputTouched` só é marcado por digitação de verdade: o `onData` do xterm carrega também as respostas do terminal às perguntas da CLI (atributos do dispositivo), que chegam como sequência de escape. Isso apareceu na bancada — a reconferência morria antes da primeira volta — e de passagem consertou o `[?1;2c` que essas respostas colavam no início do prompt registrado no card.
+
+DOC: `GUIA-USUARIO.md` ganhou o comportamento observável que faltava desde a parte 6 de 2026-08-10 — o contexto é digitado sem Enter e espera o pedido do usuário; agora também que ele só é digitado quando a entrada da CLI está pronta, e que o aviso do modo yolo é respondido pelo app.
+
+TESTE: `terminal-session-store.test.ts`, novo — o arquivo nunca teve suíte por depender de PTY, mas o que decide a entrega é a tela, não o PTY. Os testes alimentam o xterm do próprio store com o stream capturado da CLI real (preâmbulo de escapes, aviso do modo yolo, REPL pronto) e olham o que o store escreve: não escreve com só escapes na tela, não escreve dentro do aviso, aceita o aviso em duas escritas na ordem certa, reenvia o aceite enquanto o aviso persistir, escreve quando a entrada aparece, reescreve se a entrada continuar vazia e não reescreve quando o contexto está lá. Em `terminal-screen-state.test.ts`, as telas reais (aviso e REPL pronto) entraram como fixtures, incluindo o caso que mais importa: o rodapé do REPL pronto também diz "bypass permissions on" e não pode ser confundido com o aviso.
+
+VALIDAÇÃO: `npm run build`, `npx vitest run` (348/348) e `npm run lint` limpos. Além disso, o algoritmo do fix foi executado contra um `claude` real, nos dois caminhos: com a tela de aviso (reconhecida em 2018 ms, aceita em 2368 ms, contexto escrito em 4913 ms e confirmado na entrada em 5716 ms) e sem ela (contexto escrito em 2026 ms, confirmado em 2855 ms). Nos dois, o contexto termina digitado na entrada, esperando o pedido do usuário.
+
+RISCO RESIDUAL: não conferido com o app Electron rodando — a validação foi com PTY real, mas fora do app. O aviso do modo yolo só aparece uma vez por máquina: aceitá-lo faz a própria CLI gravar `skipDangerousModePermissionPrompt: true` no `settings.json` do usuário, então esse caminho não é reproduzível de novo sem uma configuração isolada (foi assim que ele foi testado aqui). A redação das telas pode mudar entre versões: se `hasClaudeInteractivePrompt` deixar de reconhecer a entrada, a escrita cai no teto de 60 s em vez de nunca acontecer; se a sugestão `Try "..."` mudar, a reconferência deixa de reescrever, que é o comportamento antigo. Gemini e CLIs sem detector continuam no esquema de silêncio + fallback de 10 s, sem reconferência de entrega.
 
 Estado final: concluído — pendente de conferência manual no app rodando.

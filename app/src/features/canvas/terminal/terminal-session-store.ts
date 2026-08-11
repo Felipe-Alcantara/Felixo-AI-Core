@@ -10,11 +10,11 @@ import {
 } from './terminal-buffer-reader'
 import {
   cleanPrompt,
-  hasCodexInteractivePrompt,
   isBusyScreen,
-  isClaudeTrustPrompt,
+  isClaudeBypassPermissionsWarning,
   isCodexTrustPrompt,
   looksLikeApprovalPrompt,
+  readInputLineState,
 } from './terminal-screen-state'
 
 /**
@@ -60,11 +60,31 @@ const DEFAULT_INITIAL_TEXT_DELAY_MS = 1200
 const INITIAL_TEXT_READY_QUIET_MS = 500
 /** Safety fallback for CLIs that do not emit a startup banner. */
 const INITIAL_TEXT_MAX_WAIT_MS = 10000
-/** Espera curta depois de detectar a tela de confiança do Claude antes de aceitá-la. */
-const CLAUDE_TRUST_ACCEPT_DELAY_MS = 150
-/** Depois de aceitar a confiança, tempo para o Claude sair da tela e carregar o REPL. */
-const CLAUDE_POST_TRUST_INITIAL_TEXT_DELAY_MS = 2500
-const CLAUDE_TRUST_BUFFER_LIMIT = 12000
+/**
+ * Teto para as CLIs cuja linha de entrada sabemos reconhecer (Claude, Codex).
+ *
+ * Enquanto a entrada não aparece, escrever é jogar o texto fora, então vale
+ * esperar bem mais do que o fallback cego: um boot travado num aviso só sai de
+ * lá quando a pessoa responde, e é melhor entregar o contexto tarde do que
+ * digitá-lo numa tela que ninguém lê.
+ */
+const INITIAL_TEXT_INPUT_WAIT_MS = 60000
+/** Espera curta depois de reconhecer uma tela de aceite antes de responder a ela. */
+const SCREEN_ACCEPT_DELAY_MS = 150
+/**
+ * Intervalo entre duas teclas de uma mesma resposta (mover a seleção, confirmar).
+ *
+ * Mesma razão do intervalo entre o texto inicial e o seu Enter: com as duas
+ * teclas na mesma escrita, o TUI trata o bloco como uma sequência só e ignora a
+ * confirmação — verificado contra a CLI real, em que `seta-baixo + Enter` juntos
+ * deixavam o aviso do modo yolo intocado e separados o aceitavam.
+ */
+const KEY_SEQUENCE_DELAY_MS = 200
+/** Reconferência do aceite: a tela diz se a tecla foi recebida. */
+const SCREEN_ACCEPT_ATTEMPTS = 3
+/** Depois de aceitar a tela, tempo para a CLI sair dela e carregar o REPL. */
+const POST_ACCEPT_INITIAL_TEXT_DELAY_MS = 2500
+const ACCEPT_SCREEN_BUFFER_LIMIT = 12000
 const CODEX_INITIAL_TEXT_DELAY_MS = 1800
 /** Lets the Codex TUI process pasted text before it receives the Enter key. */
 const INITIAL_TEXT_SUBMIT_DELAY_MS = 75
@@ -76,9 +96,16 @@ const INITIAL_TEXT_SUBMIT_DELAY_MS = 75
  */
 const SUBMIT_RETRY_DELAY_MS = 600
 const SUBMIT_RETRY_LIMIT = 3
-const CODEX_TRUST_ACCEPT_DELAY_MS = 150
-const CODEX_POST_TRUST_INITIAL_TEXT_DELAY_MS = 2500
-const CODEX_TRUST_BUFFER_LIMIT = 12000
+/**
+ * Reconferência do texto de contexto, que não tem Enter e portanto não tem
+ * submissão para confirmar: o único sinal de que ele chegou é ele aparecer na
+ * linha de entrada. Sem isso, um contexto perdido é perdido em silêncio — foi o
+ * que manteve este bug de pé por três rodadas.
+ */
+const CONTEXT_CONFIRM_DELAY_MS = 800
+const CONTEXT_REWRITE_LIMIT = 3
+/** Janela total da reconferência, para o timer não sobreviver ao boot da CLI. */
+const CONTEXT_DELIVERY_WINDOW_MS = 30000
 
 type SessionOptions = {
   command?: string
@@ -105,6 +132,16 @@ type Session = {
   disposed: boolean
   startedAt: number
   receivedOutput: boolean
+  /**
+   * A CLI já desenhou algo, não apenas emitiu bytes.
+   *
+   * Uma CLI de tela cheia começa mandando só sequências de escape (cursor,
+   * modos do terminal, alt-screen) que não mudam nada na tela. Tratar esses
+   * bytes como "a CLI começou" fazia a espera por silêncio terminar antes de
+   * existir qualquer prompt: o relógio do silêncio nunca era reiniciado, então
+   * "quieto há 500 ms" já era verdade no primeiro byte.
+   */
+  paintedOutput: boolean
   pendingWrites: number
   pendingExit?: { exitCode: number; signal?: number }
   command?: string
@@ -119,11 +156,19 @@ type Session = {
   initialTextTimer: ReturnType<typeof setTimeout> | null
   /** Reconferência de que o prompt inicial foi submetido, não só digitado. */
   submitRetryTimer: ReturnType<typeof setTimeout> | null
+  /** Reconferência de que o texto de contexto chegou na linha de entrada. */
+  contextRetryTimer: ReturnType<typeof setTimeout> | null
   initialTextSent: boolean
+  /**
+   * Alguém já escreveu nesta entrada depois de nós (o usuário digitando, um
+   * aviso de renomeação). A partir daí a linha é dele: reescrever contexto ali
+   * atropelaria o que ele está montando.
+   */
+  inputTouched: boolean
   codexTrustBuffer: string
   codexTrustHandled: boolean
-  claudeTrustBuffer: string
-  claudeTrustHandled: boolean
+  claudeBypassBuffer: string
+  claudeBypassHandled: boolean
 }
 
 /**
@@ -191,6 +236,7 @@ export class TerminalSessionStore {
       disposed: false,
       startedAt: Date.now(),
       receivedOutput: false,
+      paintedOutput: false,
       pendingWrites: 0,
       command: options.command,
       inputBuffer: '',
@@ -200,11 +246,13 @@ export class TerminalSessionStore {
       initialText: options.initialText,
       initialTextTimer: null,
       submitRetryTimer: null,
+      contextRetryTimer: null,
       initialTextSent: false,
+      inputTouched: false,
       codexTrustBuffer: '',
       codexTrustHandled: false,
-      claudeTrustBuffer: '',
-      claudeTrustHandled: false,
+      claudeBypassBuffer: '',
+      claudeBypassHandled: false,
     }
     this.listeners.set(id, session.listeners)
     this.sessions.set(id, session)
@@ -221,7 +269,7 @@ export class TerminalSessionStore {
         session.receivedOutput ||= event.data.length > 0
         session.pendingWrites += 1
         this.handleCodexTrustPrompt(session, event.data)
-        this.handleClaudeTrustPrompt(session, event.data)
+        this.handleClaudeBypassWarning(session, event.data)
         terminal.write(event.data, () => {
           session.pendingWrites -= 1
           if (session.disposed) {
@@ -259,6 +307,12 @@ export class TerminalSessionStore {
     // Returning false stops xterm's default handling so it doesn't also emit a
     // CR via onData, which would submit.
     terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type === 'keydown') {
+        // Tecla de verdade, vinda do teclado: daqui em diante a linha de entrada
+        // tem dono. É o sinal mais confiável para isso — ao contrário do
+        // `onData`, nada além de uma pessoa gera keydown.
+        session.inputTouched = true
+      }
       if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
         void pty.write({ sessionId: session.ptySessionId, data: '\n' })
         return false
@@ -273,6 +327,18 @@ export class TerminalSessionStore {
     // handler above and never reaches here, so it correctly keeps building.
     terminal.onData((data) => {
       void pty.write({ sessionId: session.ptySessionId, data })
+
+      // O `onData` do xterm carrega duas coisas diferentes: o que a pessoa
+      // digita e as respostas que o próprio terminal dá às perguntas da CLI
+      // (atributos do dispositivo, foco), que chegam como sequência de escape
+      // durante o boot. Tratar essas respostas como digitação fazia o store
+      // acreditar que a linha de entrada já tinha dono — e, antes disso, colava
+      // o texto da resposta (`[?1;2c`) no início do prompt mostrado no card.
+      if (data.startsWith('\x1b')) {
+        return
+      }
+
+      session.inputTouched = true
       this.trackTypedInput(session, data)
     })
 
@@ -305,16 +371,11 @@ export class TerminalSessionStore {
 
           this.markWorking(session)
 
-          // Claude's `--dangerously-skip-permissions` shows a "Yes, I accept"
-          // trust screen on every fresh process start, so a yolo terminal looks
-          // like it "reverted to normal" after an app restart. Auto-accepting
-          // it on a blind fixed delay used to type the standing instruction
-          // straight into that screen when it took longer than expected to
-          // render (slow boot) — the text never reached the real prompt and
-          // was silently lost. `handleClaudeTrustPrompt` now watches the
-          // actual output for the trust question, same as the Codex trust
-          // flow below, and only then sends the accept keystrokes and
-          // (re)schedules the standing instruction.
+          // Nada de delay calculado para adivinhar quando a CLI está pronta: o
+          // relógio só decide quando começar a olhar a tela. Quem libera a
+          // escrita é a linha de entrada aparecer (`scheduleInitialText`), e as
+          // telas de aceite que aparecem antes dela são respondidas pelos
+          // observadores do stream de saída mais abaixo.
           this.scheduleInitialText(session, getInitialTextDelay(session))
         } else {
           this.update(session, {
@@ -381,6 +442,7 @@ export class TerminalSessionStore {
       return
     }
     void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+    session.inputTouched = true
     const prompt = cleanPrompt(text)
     if (prompt) {
       this.update(session, { lastPrompt: prompt })
@@ -483,6 +545,7 @@ export class TerminalSessionStore {
     this.clearIdleTimer(session)
     this.clearInitialTextTimer(session)
     this.clearSubmitRetryTimer(session)
+    this.clearContextRetryTimer(session)
     session.offData()
     session.offExit()
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })
@@ -512,6 +575,7 @@ export class TerminalSessionStore {
     if (signature !== session.lastSignature) {
       session.lastSignature = signature
       session.lastMeaningfulAt = Date.now()
+      session.paintedOutput = true
       this.markWorking(session)
     } else {
       // Only the animation moved — make sure an idle check is scheduled so we
@@ -525,6 +589,7 @@ export class TerminalSessionStore {
     event: { exitCode: number; signal?: number },
   ): void {
     this.clearInitialTextTimer(session)
+    this.clearContextRetryTimer(session)
     const silentEarlyExit =
       Boolean(session.command) &&
       !session.receivedOutput &&
@@ -615,29 +680,22 @@ export class TerminalSessionStore {
 
       const elapsed = Date.now() - waitStartedAt
       const quietFor = Date.now() - session.lastMeaningfulAt
-      const codexPromptReady =
-        session.command !== 'codex' || hasCodexInteractivePrompt(readViewport(session.terminal))
-      // A tela de confiança do Claude fica "quieta" que nem um prompt real
-      // assim que termina de desenhar — sem esta checagem, a heurística de
-      // silêncio a confunde com o REPL pronto e digita o texto ali, onde se
-      // perde. `claudeTrustHandled` só cobre o caso em que a tela já foi
-      // vista e aceita; olhar a tela atual também cobre o caso raro de a
-      // pasta já estar confiada nesta sessão (a tela nunca aparece).
-      const claudeTrustPromptShowing =
-        session.command === 'claude' &&
-        !session.claudeTrustHandled &&
-        isClaudeTrustPrompt(readViewport(session.terminal))
+      // A pergunta que importa é "a linha de entrada da CLI já existe?", e não
+      // "faz quanto tempo que a tela não muda": uma CLI inicializando, um aviso
+      // do modo yolo e um REPL esperando texto ficam igualmente quietos, e só um
+      // dos três lê o que escrevemos. Para a CLI que não sabemos ler, resta o
+      // silêncio como sinal — com teto bem mais curto, porque é um palpite.
+      const inputLine = readInputLineState(session.command, readViewport(session.terminal))
       const processLooksReady =
-        session.receivedOutput &&
+        session.paintedOutput &&
         quietFor >= INITIAL_TEXT_READY_QUIET_MS &&
-        codexPromptReady &&
-        !claudeTrustPromptShowing
-      const fallbackReady = elapsed >= INITIAL_TEXT_MAX_WAIT_MS
+        (inputLine?.ready ?? true)
+      const fallbackReady =
+        elapsed >= (inputLine ? INITIAL_TEXT_INPUT_WAIT_MS : INITIAL_TEXT_MAX_WAIT_MS)
 
-      // A PTY can be created successfully before the CLI has reached its
-      // interactive prompt. Wait for actual startup output to settle instead
-      // of typing into the process while it is still booting. The fallback
-      // keeps silent CLIs usable and is deliberately bounded.
+      // A PTY sobe muito antes de a CLI chegar no prompt: até lá, cada volta só
+      // olha a tela de novo. O fallback mantém utilizável a CLI que não desenha
+      // nada reconhecível, e é deliberadamente limitado.
       if (!processLooksReady && !fallbackReady) {
         this.scheduleInitialText(
           session,
@@ -656,9 +714,11 @@ export class TerminalSessionStore {
 
       // Sem Enter, o prompt é contexto: fica escrito na entrada da CLI e quem
       // decide executar é o usuário, que ainda vai digitar a tarefa depois
-      // dele. Nada de confirmação de envio aqui — não há envio a confirmar.
+      // dele. Não há envio a confirmar, mas há entrega: o texto precisa estar
+      // na linha de entrada, e é isso que a reconferência abaixo verifica.
       const submit = submission.submit
       if (!submit) {
+        this.confirmContextDelivery(session, submission.text)
         return
       }
 
@@ -711,6 +771,74 @@ export class TerminalSessionStore {
     }, SUBMIT_RETRY_DELAY_MS)
   }
 
+  /**
+   * Confere se o texto de contexto realmente chegou na linha de entrada e o
+   * reescreve enquanto ela continuar vazia.
+   *
+   * Texto sem Enter não tem submissão para confirmar, e era justamente aí que
+   * ele se perdia sem deixar rastro: escrito num instante em que a CLI ainda não
+   * estava lendo o teclado, ou dentro de uma tela de aceite. Agora a entrega tem
+   * a mesma reconferência que a submissão já tinha — pelo conteúdo da tela, não
+   * pelo relógio.
+   *
+   * Reescrever é seguro porque só acontece com a entrada vazia: se o contexto
+   * está lá, se o usuário digitou (`inputTouched`) ou se a CLI ainda não mostrou
+   * a entrada, nada é escrito. `deadline` fecha a janela para o timer não
+   * sobreviver ao boot da CLI.
+   */
+  private confirmContextDelivery(
+    session: Session,
+    text: string,
+    rewrites = 0,
+    deadline = Date.now() + CONTEXT_DELIVERY_WINDOW_MS,
+  ): void {
+    if (rewrites >= CONTEXT_REWRITE_LIMIT || Date.now() >= deadline) {
+      return
+    }
+
+    this.clearContextRetryTimer(session)
+    session.contextRetryTimer = setTimeout(() => {
+      session.contextRetryTimer = null
+      if (
+        session.disposed ||
+        session.inputTouched ||
+        session.snapshot.activity === 'exited' ||
+        session.snapshot.activity === 'error'
+      ) {
+        return
+      }
+
+      const inputLine = readInputLineState(session.command, readViewport(session.terminal))
+      if (!inputLine) {
+        // CLI cuja entrada não sabemos ler: não há como confirmar a entrega, e
+        // reescrever no escuro seria pior do que não reescrever.
+        return
+      }
+
+      if (!inputLine.visible) {
+        // A entrada ainda não apareceu — a CLI pode estar num aviso. Não há o
+        // que reescrever ainda; a próxima volta pega a entrada quando existir.
+        this.confirmContextDelivery(session, text, rewrites, deadline)
+        return
+      }
+
+      if (!inputLine.empty) {
+        // O contexto está na entrada (ou alguém assumiu a linha): entregue.
+        return
+      }
+
+      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+      this.confirmContextDelivery(session, text, rewrites + 1, deadline)
+    }, CONTEXT_CONFIRM_DELAY_MS)
+  }
+
+  private clearContextRetryTimer(session: Session): void {
+    if (session.contextRetryTimer) {
+      clearTimeout(session.contextRetryTimer)
+      session.contextRetryTimer = null
+    }
+  }
+
   private clearSubmitRetryTimer(session: Session): void {
     if (session.submitRetryTimer) {
       clearTimeout(session.submitRetryTimer)
@@ -732,7 +860,7 @@ export class TerminalSessionStore {
 
     session.codexTrustBuffer = (
       session.codexTrustBuffer + data
-    ).slice(-CODEX_TRUST_BUFFER_LIMIT)
+    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
 
     if (!isCodexTrustPrompt(session.codexTrustBuffer)) {
       return
@@ -755,50 +883,79 @@ export class TerminalSessionStore {
           data: '\r',
         })
       }
-    }, CODEX_TRUST_ACCEPT_DELAY_MS)
+    }, SCREEN_ACCEPT_DELAY_MS)
 
-    this.scheduleInitialText(session, CODEX_POST_TRUST_INITIAL_TEXT_DELAY_MS)
+    this.scheduleInitialText(session, POST_ACCEPT_INITIAL_TEXT_DELAY_MS)
   }
 
   /**
-   * Only Claude in yolo mode (`--dangerously-skip-permissions`) shows a trust
-   * screen on every fresh process start. Waits for it to actually render
-   * instead of guessing a fixed delay (see the spawn handler above for why
-   * the guess used to lose the standing instruction), then auto-accepts it
-   * — the screen defaults to "No", so Down Arrow + Enter picks "Yes" — and
-   * reschedules the standing instruction so it lands on the real prompt.
+   * O Claude em modo yolo (`--dangerously-skip-permissions`) abre todo processo
+   * novo no aviso do modo, antes do REPL: um terminal yolo salvo no canvas
+   * parece ter "voltado ao normal" depois de reiniciar o app. Aceita o aviso
+   * quando ele aparece de fato no stream de saída, e não num delay adivinhado.
+   *
+   * A seleção nesse aviso começa em "1. No, exit", então aceitar é descer uma
+   * opção e confirmar. É por isso que a tecla depende de reconhecer a tela certa:
+   * as mesmas teclas na tela de confiança na pasta (onde a seleção já começa em
+   * "Yes, proceed") escolheriam sair e matariam a CLI.
    */
-  private handleClaudeTrustPrompt(session: Session, data: string): void {
+  private handleClaudeBypassWarning(session: Session, data: string): void {
     if (
       session.command !== 'claude' ||
       !session.args.includes('--dangerously-skip-permissions') ||
-      session.claudeTrustHandled ||
+      session.claudeBypassHandled ||
       !data
     ) {
       return
     }
 
-    session.claudeTrustBuffer = (
-      session.claudeTrustBuffer + data
-    ).slice(-CLAUDE_TRUST_BUFFER_LIMIT)
+    session.claudeBypassBuffer = (
+      session.claudeBypassBuffer + data
+    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
 
-    if (!isClaudeTrustPrompt(session.claudeTrustBuffer)) {
+    if (!isClaudeBypassPermissionsWarning(session.claudeBypassBuffer)) {
       return
     }
 
-    session.claudeTrustHandled = true
+    session.claudeBypassHandled = true
     this.clearInitialTextTimer(session)
+    this.acceptClaudeBypassWarning(session)
+    this.scheduleInitialText(session, POST_ACCEPT_INITIAL_TEXT_DELAY_MS)
+  }
+
+  /**
+   * Responde o aviso do modo yolo: desce para "2. Yes, I accept" e confirma.
+   *
+   * As duas teclas vão em escritas separadas porque juntas não funcionam — a CLI
+   * ignora a confirmação e o aviso fica na tela. E o resultado é reconferido pela
+   * tela, não pelo relógio: enquanto o aviso continuar visível, a tecla se
+   * perdeu no redesenho e vale reenviar.
+   */
+  private acceptClaudeBypassWarning(session: Session, attempt = 1): void {
+    if (attempt > SCREEN_ACCEPT_ATTEMPTS) {
+      return
+    }
 
     setTimeout(() => {
-      if (!session.disposed) {
-        void window.felixo?.pty?.write({
-          sessionId: session.ptySessionId,
-          data: '\x1b[B\r',
-        })
+      if (session.disposed) {
+        return
       }
-    }, CLAUDE_TRUST_ACCEPT_DELAY_MS)
+      // Na primeira tentativa o aviso acabou de ser reconhecido no stream, e o
+      // xterm pode ainda não ter desenhado; a partir da segunda, a tela já é
+      // fonte confiável de "o aceite passou ou não".
+      if (attempt > 1 && !isClaudeBypassPermissionsWarning(readViewport(session.terminal))) {
+        return
+      }
 
-    this.scheduleInitialText(session, CLAUDE_POST_TRUST_INITIAL_TEXT_DELAY_MS)
+      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: '\x1b[B' })
+      setTimeout(() => {
+        if (session.disposed) {
+          return
+        }
+        void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: '\r' })
+        this.acceptClaudeBypassWarning(session, attempt + 1)
+      }, KEY_SEQUENCE_DELAY_MS)
+    }, SCREEN_ACCEPT_DELAY_MS)
   }
 
   private update(session: Session, patch: Partial<SessionSnapshot>): void {

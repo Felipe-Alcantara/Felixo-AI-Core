@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   cleanPrompt,
+  hasClaudeInteractivePrompt,
+  hasCodexInputLine,
   hasCodexInteractivePrompt,
+  hasEmptyClaudeInput,
   isBusyScreen,
-  isClaudeTrustPrompt,
+  isClaudeBypassPermissionsWarning,
   isCodexTrustPrompt,
   looksLikeApprovalPrompt,
+  readInputLineState,
 } from './terminal-screen-state'
 
 describe('cleanPrompt', () => {
@@ -97,28 +101,184 @@ describe('isCodexTrustPrompt', () => {
   })
 })
 
-describe('isClaudeTrustPrompt', () => {
-  it('detects the folder trust question', () => {
-    expect(isClaudeTrustPrompt('Do you trust the files in this folder?')).toBe(true)
+describe('telas reais do Claude Code (capturadas da CLI 2.1.227)', () => {
+  /** Tela de aviso do modo yolo, o que a CLI mostra antes do REPL. */
+  const BYPASS_WARNING = [
+    '─'.repeat(60),
+    '  WARNING: Claude Code running in Bypass Permissions mode',
+    '  In Bypass Permissions mode, Claude Code will not ask for your approval before running',
+    '  potentially dangerous commands.',
+    '  By proceeding, you accept all responsibility for actions taken while running in Bypass',
+    '  Permissions mode.',
+    '  https://code.claude.com/docs/en/security',
+    '  ❯ 1. No, exit',
+    '    2. Yes, I accept',
+    '  Enter to confirm · Esc to cancel',
+  ].join('\n')
+
+  /** REPL pronto, com a sugestão que a CLI desenha na entrada vazia. */
+  const READY_PROMPT = [
+    ' ▐▛███▜▌   Claude Code v2.1.227',
+    '▝▜█████▛▘  Opus 5 with high effort · Claude Pro',
+    '  ▘▘ ▝▝    ~/Programação/Github/Repositórios/Felixo-AI-Core',
+    '─'.repeat(60),
+    '❯ Try "how does ChatWorkspace.tsx work?"',
+    '─'.repeat(60),
+    '⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents',
+  ].join('\n')
+
+  describe('isClaudeBypassPermissionsWarning', () => {
+    it('detects the yolo warning screen', () => {
+      expect(isClaudeBypassPermissionsWarning(BYPASS_WARNING)).toBe(true)
+    })
+
+    it('sees through ANSI formatting and line breaks', () => {
+      const screen = '\x1b[1mWARNING: Claude Code running in Bypass Permissions\x1b[0m\nmode\n2. Yes, I accept'
+
+      expect(isClaudeBypassPermissionsWarning(screen)).toBe(true)
+    })
+
+    it('does not fire on the ready prompt, whose footer also mentions bypass permissions', () => {
+      expect(isClaudeBypassPermissionsWarning(READY_PROMPT)).toBe(false)
+    })
+
+    it('does not fire on the folder trust dialog, which yolo mode never shows', () => {
+      const screen = [
+        'Do you trust the files in this folder?',
+        '❯ 1. Yes, proceed',
+        '  2. No, exit',
+      ].join('\n')
+
+      expect(isClaudeBypassPermissionsWarning(screen)).toBe(false)
+    })
+
+    it('does not fire on the Codex trust wording', () => {
+      expect(
+        isClaudeBypassPermissionsWarning('Do you trust the contents of this directory?'),
+      ).toBe(false)
+    })
   })
 
-  it('detects the wording variant built from separate phrases', () => {
-    const screen = ['Trust this folder?', '❯ 1. Yes, proceed', '  2. No, exit'].join('\n')
+  describe('hasClaudeInteractivePrompt', () => {
+    it('recognizes the ready prompt', () => {
+      expect(hasClaudeInteractivePrompt(READY_PROMPT)).toBe(true)
+    })
 
-    expect(isClaudeTrustPrompt(screen)).toBe(true)
+    it('recognizes a bare input line, without the CLI suggestion', () => {
+      expect(hasClaudeInteractivePrompt(['─'.repeat(20), '│ ❯ ', '─'.repeat(20)].join('\n'))).toBe(
+        true,
+      )
+    })
+
+    it('recognizes the input line with text already written in it', () => {
+      expect(hasClaudeInteractivePrompt('❯ Antes de qualquer tarefa: siga o padrão')).toBe(true)
+    })
+
+    it('does not mistake the yolo warning for the input line', () => {
+      expect(hasClaudeInteractivePrompt(BYPASS_WARNING)).toBe(false)
+    })
+
+    it('does not mistake a decision dialog for the input line', () => {
+      const screen = ['Do you want to proceed?', '❯ 1. Yes', '  2. No, and tell Claude why'].join(
+        '\n',
+      )
+
+      expect(hasClaudeInteractivePrompt(screen)).toBe(false)
+    })
+
+    it('is false while the CLI is still booting (no input line drawn yet)', () => {
+      expect(hasClaudeInteractivePrompt('Claude Code v2.1.227\nOpus 5 with high effort')).toBe(
+        false,
+      )
+    })
   })
 
-  it('sees through ANSI formatting and line breaks', () => {
-    const screen = '\x1b[1mDo you trust the files\x1b[0m\nin this folder?'
+  describe('hasEmptyClaudeInput', () => {
+    it('reads the CLI suggestion as an empty input', () => {
+      expect(hasEmptyClaudeInput(READY_PROMPT)).toBe(true)
+    })
 
-    expect(isClaudeTrustPrompt(screen)).toBe(true)
+    it('reads a bare marker as an empty input', () => {
+      expect(hasEmptyClaudeInput('│ ❯ ')).toBe(true)
+    })
+
+    it('reads the block cursor as an empty input', () => {
+      expect(hasEmptyClaudeInput('❯ █')).toBe(true)
+    })
+
+    it('is false once the context text is sitting in the input', () => {
+      expect(hasEmptyClaudeInput('❯ Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE')).toBe(
+        false,
+      )
+    })
+  })
+})
+
+describe('hasCodexInputLine', () => {
+  it('recognizes the composer with text already written in it', () => {
+    expect(hasCodexInputLine('› /resume')).toBe(true)
   })
 
-  it('does not fire on a normal approval prompt', () => {
-    expect(isClaudeTrustPrompt('Do you want to proceed? 1. Yes')).toBe(false)
+  it('recognizes the empty composer', () => {
+    expect(hasCodexInputLine('›  ')).toBe(true)
   })
 
-  it('does not fire on the Codex trust wording alone', () => {
-    expect(isClaudeTrustPrompt('Do you trust the contents of this directory?')).toBe(false)
+  it('is false while the CLI is still booting', () => {
+    expect(hasCodexInputLine('OpenAI Codex\nworking directory: /tmp')).toBe(false)
+  })
+})
+
+describe('readInputLineState', () => {
+  const CLAUDE_READY = ['─'.repeat(20), '❯ Try "fix lint errors"', '─'.repeat(20)].join('\n')
+
+  it('lê a entrada do Claude esperando texto', () => {
+    expect(readInputLineState('claude', CLAUDE_READY)).toEqual({
+      ready: true,
+      visible: true,
+      empty: true,
+    })
+  })
+
+  it('lê a entrada do Claude com texto escrito nela', () => {
+    expect(readInputLineState('claude', '❯ Antes de qualquer tarefa: siga o padrão')).toEqual({
+      ready: true,
+      visible: true,
+      empty: false,
+    })
+  })
+
+  it('não vê entrada nenhuma no aviso do modo yolo', () => {
+    const screen = [
+      'WARNING: Claude Code running in Bypass Permissions mode',
+      '❯ 1. No, exit',
+      '  2. Yes, I accept',
+    ].join('\n')
+
+    expect(readInputLineState('claude', screen)).toEqual({
+      ready: false,
+      visible: false,
+      empty: false,
+    })
+  })
+
+  it('lê o composer vazio do Codex como pronto', () => {
+    expect(readInputLineState('codex', '›  ')).toEqual({
+      ready: true,
+      visible: true,
+      empty: true,
+    })
+  })
+
+  it('não considera o composer do Codex pronto quando já tem texto', () => {
+    expect(readInputLineState('codex', '› /resume')).toEqual({
+      ready: false,
+      visible: true,
+      empty: false,
+    })
+  })
+
+  it('responde "não sei" para CLI cuja entrada não sabemos reconhecer', () => {
+    expect(readInputLineState('gemini', '❯ qualquer coisa')).toBeUndefined()
+    expect(readInputLineState(undefined, CLAUDE_READY)).toBeUndefined()
   })
 })
