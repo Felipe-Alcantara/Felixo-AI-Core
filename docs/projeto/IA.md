@@ -1206,3 +1206,19 @@ VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos.
 RISCO RESIDUAL: "todo o histórico" tem um teto real — 20 mil linhas de rolagem do xterm, e 160 mil caracteres no que é colado. Uma sessão muito longa perde o meio, com aviso, e o começo mais antigo que 20 mil linhas não existe mais no renderer. Não validado com o app rodando: a suíte é `environment: 'node'`, sem PTY nem DOM. A conferência manual é abrir dois agentes de CLIs diferentes, passar responsabilidade em cada direção e perguntar ao que recebeu o que o anterior estava fazendo. O sintoma "o terminal fica piscando sem parar depois de clicar" não pôde ser reproduzido aqui; ele vinha do caminho condicional que deixou de existir, mas isso é dedução, não observação.
 
 Estado final: concluído — pendente de conferência manual no app rodando.
+
+## Registro de Trabalho — 2026-08-11 (parte 1) — campo de nome do menu de agente travando
+
+PEDIDO: relato de campo — o input "Nome (opcional)" do menu de configuração de agente (toolbar e diálogo de handoff) às vezes fica travado, sem receber clique nem digitação, resolvendo sozinho ao fechar e reabrir o menu.
+
+CAUSA: o campo fica dentro do flyout do menu de ferramentas, posicionado por `useToolbarFlyoutPosition` (`toolbar-flyout.ts`). O `useLayoutEffect` lia o elemento âncora (`containerRef?.current ?? panelRef.current?.parentElement`) uma única vez por abertura; se o ref ainda não estivesse anexado nesse frame exato — reabrir o menu rápido, enquanto ele ainda remonta — o efeito retornava sem agendar nova tentativa nem registrar listeners. O painel ficava preso na classe `invisible` (`visibility: hidden`), que torna todo o conteúdo, inclusive o input, não clicável e não focável — sem nenhum `disabled` visível no DOM, o que tornava o sintoma difícil de diagnosticar pelo DevTools. Nada além de fechar e reabrir o menu (que reseta `open`) fazia o efeito rodar de novo.
+
+FEITO: o efeito agora tenta de novo via `requestAnimationFrame` (`waitForContainer`) até o container existir, e só então anexa os listeners de posicionamento (resize/scroll/`ResizeObserver`). O cleanup passou a cancelar tanto o frame de espera quanto os listeners.
+
+TESTE: sem caso novo — `toolbar-flyout.ts` não tinha suíte própria antes desta mudança (é DOM-dependente: mede `getBoundingClientRect`/`ResizeObserver`, e a suíte de frontend roda em `environment: 'node'`).
+
+VALIDAÇÃO: `npm run build` (`tsc -b` + `vite build`), suíte de frontend e `npm run lint` limpos.
+
+RISCO RESIDUAL: não conferido com o app rodando — a verificação ficou restrita a build/lint, sem PTY nem DOM real. A conferência manual é abrir o menu de agente repetidamente e rápido (o caso que mais provocava o travamento) e confirmar que o campo de nome nunca mais fica preso.
+
+Estado final: concluído — pendente de conferência manual no app rodando.

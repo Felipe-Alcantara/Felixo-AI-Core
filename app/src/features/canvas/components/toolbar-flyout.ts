@@ -112,50 +112,70 @@ export function useToolbarFlyoutPosition({
       return
     }
 
-    const container = containerRef?.current ?? panelRef.current?.parentElement
-    if (!container) {
-      return
-    }
-
     let frameId = 0
-    const update = () => {
-      const containerRect = container.getBoundingClientRect()
-      const measuredWidth = panelRef.current?.getBoundingClientRect().width ?? panelWidth
-      const desiredOffset = toolsMenuOpen ? OPEN_TOOLS_OFFSET : TOOLBAR_OFFSET
-      const anchorTop = placement === 'below' ? containerRect.bottom : containerRect.top
+    let detach: (() => void) | undefined
 
-      setPosition({
-        left: flyoutLeft(
-          containerRect.left,
-          desiredOffset,
-          window.innerWidth,
-          measuredWidth,
-          margin,
-        ),
-        maxHeight: flyoutMaxHeight(anchorTop, window.innerHeight, margin),
-        maxWidth: `calc(100vw - ${margin * 2}px)`,
-      })
-    }
-    const requestUpdate = () => {
-      window.cancelAnimationFrame(frameId)
-      frameId = window.requestAnimationFrame(update)
+    const attach = (container: HTMLElement) => {
+      const update = () => {
+        const containerRect = container.getBoundingClientRect()
+        const measuredWidth = panelRef.current?.getBoundingClientRect().width ?? panelWidth
+        const desiredOffset = toolsMenuOpen ? OPEN_TOOLS_OFFSET : TOOLBAR_OFFSET
+        const anchorTop = placement === 'below' ? containerRect.bottom : containerRect.top
+
+        setPosition({
+          left: flyoutLeft(
+            containerRect.left,
+            desiredOffset,
+            window.innerWidth,
+            measuredWidth,
+            margin,
+          ),
+          maxHeight: flyoutMaxHeight(anchorTop, window.innerHeight, margin),
+          maxWidth: `calc(100vw - ${margin * 2}px)`,
+        })
+      }
+      const requestUpdate = () => {
+        window.cancelAnimationFrame(frameId)
+        frameId = window.requestAnimationFrame(update)
+      }
+
+      requestUpdate()
+      window.addEventListener('resize', requestUpdate)
+      window.addEventListener('scroll', requestUpdate, true)
+
+      const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(requestUpdate)
+      observer?.observe(container)
+      if (panelRef.current) {
+        observer?.observe(panelRef.current)
+      }
+
+      detach = () => {
+        window.cancelAnimationFrame(frameId)
+        window.removeEventListener('resize', requestUpdate)
+        window.removeEventListener('scroll', requestUpdate, true)
+        observer?.disconnect()
+      }
     }
 
-    requestUpdate()
-    window.addEventListener('resize', requestUpdate)
-    window.addEventListener('scroll', requestUpdate, true)
-
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(requestUpdate)
-    observer?.observe(container)
-    if (panelRef.current) {
-      observer?.observe(panelRef.current)
+    // The container ref may not be attached yet on the frame this effect
+    // runs (e.g. reopening the menu right as it remounts). Retrying via rAF
+    // instead of bailing out keeps the panel from getting stuck `invisible`
+    // forever — without this, nothing else would re-run this effect until
+    // `open` changed again.
+    const waitForContainer = () => {
+      const container = containerRef?.current ?? panelRef.current?.parentElement
+      if (!container) {
+        frameId = window.requestAnimationFrame(waitForContainer)
+        return
+      }
+      attach(container)
     }
+
+    waitForContainer()
 
     return () => {
       window.cancelAnimationFrame(frameId)
-      window.removeEventListener('resize', requestUpdate)
-      window.removeEventListener('scroll', requestUpdate, true)
-      observer?.disconnect()
+      detach?.()
     }
   }, [containerRef, margin, open, panelRef, panelWidth, placement, toolsMenuOpen])
 
