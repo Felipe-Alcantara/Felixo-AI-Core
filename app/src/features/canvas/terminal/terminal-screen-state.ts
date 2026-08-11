@@ -79,3 +79,23 @@ export function isCodexTrustPrompt(text: string): boolean {
       compact.includes('yescontinue'))
   )
 }
+
+/**
+ * Diálogo do Claude Code que pergunta se a pasta é confiável — aparece toda
+ * vez que `--dangerously-skip-permissions` sobe um processo novo. Tolerante à
+ * redação exata (varia entre versões da CLI) do mesmo jeito que
+ * `isCodexTrustPrompt`.
+ */
+export function isClaudeTrustPrompt(text: string): boolean {
+  const compact = text
+    .replace(ANSI_ESCAPE, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+
+  return (
+    compact.includes('doyoutrustthefilesinthisfolder') ||
+    (compact.includes('trust') &&
+      compact.includes('thisfolder') &&
+      (compact.includes('yesproceed') || compact.includes('yesiaccept')))
+  )
+}

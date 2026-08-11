@@ -3,6 +3,7 @@ import {
   cleanPrompt,
   hasCodexInteractivePrompt,
   isBusyScreen,
+  isClaudeTrustPrompt,
   isCodexTrustPrompt,
   looksLikeApprovalPrompt,
 } from './terminal-screen-state'
@@ -93,5 +94,31 @@ describe('isCodexTrustPrompt', () => {
 
   it('does not fire on a normal approval prompt', () => {
     expect(isCodexTrustPrompt('Do you want to proceed? 1. Yes')).toBe(false)
+  })
+})
+
+describe('isClaudeTrustPrompt', () => {
+  it('detects the folder trust question', () => {
+    expect(isClaudeTrustPrompt('Do you trust the files in this folder?')).toBe(true)
+  })
+
+  it('detects the wording variant built from separate phrases', () => {
+    const screen = ['Trust this folder?', '❯ 1. Yes, proceed', '  2. No, exit'].join('\n')
+
+    expect(isClaudeTrustPrompt(screen)).toBe(true)
+  })
+
+  it('sees through ANSI formatting and line breaks', () => {
+    const screen = '\x1b[1mDo you trust the files\x1b[0m\nin this folder?'
+
+    expect(isClaudeTrustPrompt(screen)).toBe(true)
+  })
+
+  it('does not fire on a normal approval prompt', () => {
+    expect(isClaudeTrustPrompt('Do you want to proceed? 1. Yes')).toBe(false)
+  })
+
+  it('does not fire on the Codex trust wording alone', () => {
+    expect(isClaudeTrustPrompt('Do you trust the contents of this directory?')).toBe(false)
   })
 })

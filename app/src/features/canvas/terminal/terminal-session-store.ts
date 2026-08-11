@@ -12,6 +12,7 @@ import {
   cleanPrompt,
   hasCodexInteractivePrompt,
   isBusyScreen,
+  isClaudeTrustPrompt,
   isCodexTrustPrompt,
   looksLikeApprovalPrompt,
 } from './terminal-screen-state'
@@ -59,8 +60,11 @@ const DEFAULT_INITIAL_TEXT_DELAY_MS = 1200
 const INITIAL_TEXT_READY_QUIET_MS = 500
 /** Safety fallback for CLIs that do not emit a startup banner. */
 const INITIAL_TEXT_MAX_WAIT_MS = 10000
-const CLAUDE_TRUST_ACCEPT_DELAY_MS = 800
-const CLAUDE_INITIAL_TEXT_DELAY_MS = 1800
+/** Espera curta depois de detectar a tela de confiança do Claude antes de aceitá-la. */
+const CLAUDE_TRUST_ACCEPT_DELAY_MS = 150
+/** Depois de aceitar a confiança, tempo para o Claude sair da tela e carregar o REPL. */
+const CLAUDE_POST_TRUST_INITIAL_TEXT_DELAY_MS = 2500
+const CLAUDE_TRUST_BUFFER_LIMIT = 12000
 const CODEX_INITIAL_TEXT_DELAY_MS = 1800
 /** Lets the Codex TUI process pasted text before it receives the Enter key. */
 const INITIAL_TEXT_SUBMIT_DELAY_MS = 75
@@ -118,6 +122,8 @@ type Session = {
   initialTextSent: boolean
   codexTrustBuffer: string
   codexTrustHandled: boolean
+  claudeTrustBuffer: string
+  claudeTrustHandled: boolean
 }
 
 /**
@@ -197,6 +203,8 @@ export class TerminalSessionStore {
       initialTextSent: false,
       codexTrustBuffer: '',
       codexTrustHandled: false,
+      claudeTrustBuffer: '',
+      claudeTrustHandled: false,
     }
     this.listeners.set(id, session.listeners)
     this.sessions.set(id, session)
@@ -213,6 +221,7 @@ export class TerminalSessionStore {
         session.receivedOutput ||= event.data.length > 0
         session.pendingWrites += 1
         this.handleCodexTrustPrompt(session, event.data)
+        this.handleClaudeTrustPrompt(session, event.data)
         terminal.write(event.data, () => {
           session.pendingWrites -= 1
           if (session.disposed) {
@@ -298,33 +307,15 @@ export class TerminalSessionStore {
 
           // Claude's `--dangerously-skip-permissions` shows a "Yes, I accept"
           // trust screen on every fresh process start, so a yolo terminal looks
-          // like it "reverted to normal" after an app restart. Auto-accept it:
-          // the screen defaults to "No", so we send Down Arrow + Enter to pick
-          // "Yes, I accept" before typing anything else. Only for Claude yolo.
-          const needsTrustAccept =
-            options.command === 'claude' &&
-            (options.args ?? []).includes('--dangerously-skip-permissions')
-          if (needsTrustAccept) {
-            setTimeout(() => {
-              if (!session.disposed) {
-                void window.felixo?.pty?.write({
-                  sessionId: session.ptySessionId,
-                  data: '\x1b[B\r',
-                })
-              }
-            }, CLAUDE_TRUST_ACCEPT_DELAY_MS)
-          }
-
-          // Give the agent a moment to start its REPL before typing the
-          // standing instruction, so it lands in the prompt and not mid-boot.
-          // When we auto-accept the trust screen, wait a bit longer so the
-          // instruction lands on the real prompt and not mid-acceptance.
-          this.scheduleInitialText(
-            session,
-            needsTrustAccept
-              ? CLAUDE_INITIAL_TEXT_DELAY_MS
-              : getInitialTextDelay(session),
-          )
+          // like it "reverted to normal" after an app restart. Auto-accepting
+          // it on a blind fixed delay used to type the standing instruction
+          // straight into that screen when it took longer than expected to
+          // render (slow boot) — the text never reached the real prompt and
+          // was silently lost. `handleClaudeTrustPrompt` now watches the
+          // actual output for the trust question, same as the Codex trust
+          // flow below, and only then sends the accept keystrokes and
+          // (re)schedules the standing instruction.
+          this.scheduleInitialText(session, getInitialTextDelay(session))
         } else {
           this.update(session, {
             activity: 'error',
@@ -626,8 +617,21 @@ export class TerminalSessionStore {
       const quietFor = Date.now() - session.lastMeaningfulAt
       const codexPromptReady =
         session.command !== 'codex' || hasCodexInteractivePrompt(readViewport(session.terminal))
+      // A tela de confiança do Claude fica "quieta" que nem um prompt real
+      // assim que termina de desenhar — sem esta checagem, a heurística de
+      // silêncio a confunde com o REPL pronto e digita o texto ali, onde se
+      // perde. `claudeTrustHandled` só cobre o caso em que a tela já foi
+      // vista e aceita; olhar a tela atual também cobre o caso raro de a
+      // pasta já estar confiada nesta sessão (a tela nunca aparece).
+      const claudeTrustPromptShowing =
+        session.command === 'claude' &&
+        !session.claudeTrustHandled &&
+        isClaudeTrustPrompt(readViewport(session.terminal))
       const processLooksReady =
-        session.receivedOutput && quietFor >= INITIAL_TEXT_READY_QUIET_MS && codexPromptReady
+        session.receivedOutput &&
+        quietFor >= INITIAL_TEXT_READY_QUIET_MS &&
+        codexPromptReady &&
+        !claudeTrustPromptShowing
       const fallbackReady = elapsed >= INITIAL_TEXT_MAX_WAIT_MS
 
       // A PTY can be created successfully before the CLI has reached its
@@ -754,6 +758,47 @@ export class TerminalSessionStore {
     }, CODEX_TRUST_ACCEPT_DELAY_MS)
 
     this.scheduleInitialText(session, CODEX_POST_TRUST_INITIAL_TEXT_DELAY_MS)
+  }
+
+  /**
+   * Only Claude in yolo mode (`--dangerously-skip-permissions`) shows a trust
+   * screen on every fresh process start. Waits for it to actually render
+   * instead of guessing a fixed delay (see the spawn handler above for why
+   * the guess used to lose the standing instruction), then auto-accepts it
+   * — the screen defaults to "No", so Down Arrow + Enter picks "Yes" — and
+   * reschedules the standing instruction so it lands on the real prompt.
+   */
+  private handleClaudeTrustPrompt(session: Session, data: string): void {
+    if (
+      session.command !== 'claude' ||
+      !session.args.includes('--dangerously-skip-permissions') ||
+      session.claudeTrustHandled ||
+      !data
+    ) {
+      return
+    }
+
+    session.claudeTrustBuffer = (
+      session.claudeTrustBuffer + data
+    ).slice(-CLAUDE_TRUST_BUFFER_LIMIT)
+
+    if (!isClaudeTrustPrompt(session.claudeTrustBuffer)) {
+      return
+    }
+
+    session.claudeTrustHandled = true
+    this.clearInitialTextTimer(session)
+
+    setTimeout(() => {
+      if (!session.disposed) {
+        void window.felixo?.pty?.write({
+          sessionId: session.ptySessionId,
+          data: '\x1b[B\r',
+        })
+      }
+    }, CLAUDE_TRUST_ACCEPT_DELAY_MS)
+
+    this.scheduleInitialText(session, CLAUDE_POST_TRUST_INITIAL_TEXT_DELAY_MS)
   }
 
   private update(session: Session, patch: Partial<SessionSnapshot>): void {
