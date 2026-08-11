@@ -220,6 +220,20 @@ O Python não está instalado (necessário apenas para `start_app.py`).
 
 **Solução:** Use `npm run dev` diretamente em `app/`, ou instale Python 3.
 
+### macOS: arquivo `.py` não inicia pelo painel Projetos
+
+O painel executa arquivos `.py` e `.PY` com `python3` dentro de um terminal
+interativo. Confirme que o interpretador está disponível no mesmo ambiente do
+app:
+
+```bash
+python3 --version
+```
+
+Se o comando não existir, instale o Python 3 e reinicie o Felixo. Quando o app
+é aberto por uma GUI, o shell de login do macOS é usado para carregar o PATH;
+isso também cobre instalações feitas por Homebrew em Apple Silicon e Intel.
+
 ### "CLI não encontrada" (claude, codex, gemini)
 
 A CLI não está instalada ou não está no PATH.

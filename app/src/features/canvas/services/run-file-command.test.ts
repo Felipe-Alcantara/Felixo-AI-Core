@@ -19,10 +19,18 @@ describe('buildRunCommand', () => {
     globalWithWindow.window = originalWindow
   })
 
-  it('runs a .py file with `env python3` on non-Windows platforms', () => {
+  it('runs a .py file with python3 on non-Windows platforms', () => {
     expect(buildRunCommand('script.py')).toEqual({
-      command: 'env',
-      args: ['python3', 'script.py'],
+      command: 'python3',
+      args: ['script.py'],
+    })
+  })
+
+  it('keeps .PY runnable on macOS', () => {
+    setPlatform('darwin')
+    expect(buildRunCommand('Script.PY')).toEqual({
+      command: 'python3',
+      args: ['Script.PY'],
     })
   })
 
@@ -58,7 +66,7 @@ describe('buildRunCommand', () => {
   })
 
   it('is case-insensitive on the extension', () => {
-    expect(buildRunCommand('Script.PY')).toEqual({ command: 'env', args: ['python3', 'Script.PY'] })
+    expect(buildRunCommand('Script.PY')).toEqual({ command: 'python3', args: ['Script.PY'] })
   })
 
   it('falls back to the bare path for an unrecognized extension', () => {

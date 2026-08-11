@@ -303,6 +303,12 @@ Também é o mesmo bloqueio, e o download não está corrompido. Neste caso o bo
 
 Rode `claude --version`, `codex --version`, `gemini --version` ou `git --version` no terminal. Se funcionar fora do app, reinicie o Felixo ou configure `FELIXO_CLI_PATHS`.
 
+**Um arquivo `.PY` não inicia no macOS.**
+
+O Felixo executa arquivos Python com `python3`, inclusive quando a extensão
+está em maiúsculas. Confirme `python3 --version` no Terminal, instale o Python
+3 se necessário e reinicie o app para que o shell de login carregue o PATH.
+
 **A IA retorna erro de login/autenticação.**
 
 Abra a CLI diretamente no terminal e refaça o login ou a configuração conforme o provider. O Felixo apenas chama a CLI já autenticada.

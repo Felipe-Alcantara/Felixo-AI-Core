@@ -409,6 +409,12 @@ FIX JUNTO (dívidas da rodada anterior): (a) `react-hooks/refs` — o quality st
 TESTE: `npm run build` (tsc -b + vite), `npm run lint` e suíte (392 pass) limpos.
 PENDENTE/IDEIAS: o modo é só por bloco e não muda o conteúdo já escrito; o diagnóstico assume 1 terminal conectado (pega o primeiro); sem teste unitário próprio do FileNode (depende de DOM/React Flow).
 
+[2026-08-11] Concluído — Bug “Prompt inicial no codex demora demais pra chegar no terminal”.
+IDENTIDADE: Bug: Prompt inicial no codex demora demais pra chegar no terminal.
+CAUSA: a entrega do `initialText` aguardava atrasos fixos de 1,2 s no primeiro ciclo e 2,5 s depois de uma tela de aceite, mesmo quando a linha de entrada já podia ser reconhecida. Isso acumulava latência perceptível e duplicava a espera que o detector de tela já controla.
+FIX: `terminal-session-store.ts` reduziu os atrasos de início e pós-aceite para 250 ms. A proteção permanece orientada pela tela: o texto só é escrito quando há saída desenhada, a linha de entrada está visível/pronta e as reconferências continuam ativas.
+VALIDAÇÃO: testes automatizados da suíte de terminal preservados; validação completa em execução (`npm test`).
+
 [2026-06-23] Paridade chat→canvas — busca visual e skills; decisões de descarte.
 CONTEXTO: revisão de quais funções do antigo modo chat faltavam no canvas. Decisões do usuário sobre cada lacuna:
 - DESCARTADO POR DESIGN: exportar conversa (não faz sentido no terminal); QA Logger e painel de Código (observabilidade de backend — esta versão não dá problema o bastante para justificar). Histórico de sessões/Composer/ChatThread são intrínsecos ao chat e já têm substituto no canvas (terminais reais + scratchpads .md).
@@ -1152,6 +1158,23 @@ VALIDAÇÃO: `tsc -b`, build do Vite, ESLint e `git diff --check` limpos.
 RISCO RESIDUAL: se a gaveta já estiver aberta quando o agente fizer um pedido novo, a notificação dispara mesmo com o terminal à vista — decisão deliberada: o usuário pode ter aberto e saído de perto, e deixar de avisar um pedido real é pior que um badge a mais. Um novo pedido depois da visita volta a notificar normalmente porque o reconhecimento é amarrado ao `lastPrompt` do turno, e um prompt novo é turno novo. Não validado com o app rodando: a suíte é `environment: 'node'`, sem DOM; a conferência manual é deixar um agente ocioso, clicar no card dele no canvas e ver o contador do sino cair na hora.
 
 Estado final: concluído — pendente de conferência manual no app rodando.
+
+## Registro de Trabalho — 2026-08-11 (parte 3) — execução de `.PY` no macOS
+
+IDENTIDADE: Bug: Não estou conseguindo rodar arquivos no canvas pelo MAC.
+PEDIDO: arquivo com extensão `.PY` não abria no terminal na versão macOS.
+
+CAUSA PROVÁVEL: o compositor de execução gerava `env python3 arquivo.PY` para todos os sistemas POSIX. O PTY do macOS já envolve comandos explícitos no shell de login (`zsh -l -i -c`), portanto a camada extra de `env` não era necessária e tornava o caminho diferente dos demais interpretadores.
+
+FEITO: `.py`/`.PY` agora gera `python3 arquivo` diretamente. A resolução continua sendo feita pelo shell de login do macOS, preservando o PATH carregado pelo ambiente do usuário.
+
+TESTE: adicionada regressão explícita para `.PY` em `darwin`; teste existente de `.py` atualizado para o contrato direto `python3`.
+
+DOC: adicionadas orientações de Python 3 no macOS em `docs/projeto/RODAR-VIA-CODIGO-FONTE.md` e `docs/guias/GUIA-USUARIO.md`.
+
+VALIDAÇÃO: pendente nesta máquina Linux — precisa ser executado no macOS com Python 3 instalado e um arquivo `.PY` real.
+
+Estado final: concluído — aguardando conferência manual no macOS.
 
 ## Registro de Trabalho — 2026-08-10 (parte 6) — injetar contexto deixou de ser o mesmo que enviar prompt
 

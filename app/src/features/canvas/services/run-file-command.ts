@@ -37,10 +37,12 @@ export function buildRunCommand(fileName: string): {
   const extension = dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : ''
 
   if (extension === '.py') {
-    // Most Linux distros (and some macOS setups) only ship `python3`, not a
-    // bare `python` — and the PTY spawns the interpreter directly, without a
-    // shell to resolve aliases for us (see createPtyLaunchSpec on non-Windows
-    // platforms). `env python3` is the POSIX-standard way to reach it.
+    // Most Linux distros (and macOS setups) only ship `python3`, not a bare
+    // `python`. The PTY's POSIX launch path already runs explicit commands
+    // through the user's login shell, so `python3` can be resolved there
+    // directly. Keeping the interpreter as the command (instead of wrapping
+    // it in `env`) also preserves the same launch contract as node/bash and
+    // avoids an extra process on macOS.
     //
     // Windows has no single reliable interpreter name: the `py` launcher ships
     // with python.org installs but is absent from Microsoft Store and conda
@@ -49,7 +51,7 @@ export function buildRunCommand(fileName: string): {
     // it isn't there, rather than betting on either one being present.
     return window.felixo?.platform === 'win32'
       ? { command: 'py', args: [fileName], fallbackCommand: 'python' }
-      : { command: 'env', args: ['python3', fileName] }
+      : { command: 'python3', args: [fileName] }
   }
 
   const interpreter = INTERPRETER_BY_EXTENSION[extension]

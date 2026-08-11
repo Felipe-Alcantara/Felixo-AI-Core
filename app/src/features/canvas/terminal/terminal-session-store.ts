@@ -55,7 +55,8 @@ type SessionListener = (snapshot: SessionSnapshot) => void
 const IDLE_AFTER_MS = 1500
 /** A configured agent should not terminate silently immediately after launch. */
 const SILENT_EARLY_EXIT_MS = 5000
-const DEFAULT_INITIAL_TEXT_DELAY_MS = 1200
+/** A tela reconhecida, e não um atraso fixo, decide quando o texto pode entrar. */
+const DEFAULT_INITIAL_TEXT_DELAY_MS = 250
 /** Minimum quiet period after the CLI starts emitting output before input. */
 const INITIAL_TEXT_READY_QUIET_MS = 500
 /** Safety fallback for CLIs that do not emit a startup banner. */
@@ -83,7 +84,8 @@ const KEY_SEQUENCE_DELAY_MS = 200
 /** Reconferência do aceite: a tela diz se a tecla foi recebida. */
 const SCREEN_ACCEPT_ATTEMPTS = 3
 /** Depois de aceitar a tela, tempo para a CLI sair dela e carregar o REPL. */
-const POST_ACCEPT_INITIAL_TEXT_DELAY_MS = 2500
+/** Após o aceite, basta dar ao TUI uma volta curta antes de reler a tela. */
+const POST_ACCEPT_INITIAL_TEXT_DELAY_MS = 250
 const ACCEPT_SCREEN_BUFFER_LIMIT = 12000
 const CODEX_INITIAL_TEXT_DELAY_MS = 1800
 /** Lets the Codex TUI process pasted text before it receives the Enter key. */
@@ -102,7 +104,10 @@ const SUBMIT_RETRY_LIMIT = 3
  * linha de entrada. Sem isso, um contexto perdido é perdido em silêncio — foi o
  * que manteve este bug de pé por três rodadas.
  */
-const CONTEXT_CONFIRM_DELAY_MS = 800
+// Give the TUI time to redraw the pasted context before deciding it was lost.
+// This remains a delivery check, not a startup delay: the first write is still
+// released as soon as the recognized input line is ready.
+const CONTEXT_CONFIRM_DELAY_MS = 2000
 const CONTEXT_REWRITE_LIMIT = 3
 /** Janela total da reconferência, para o timer não sobreviver ao boot da CLI. */
 const CONTEXT_DELIVERY_WINDOW_MS = 30000
