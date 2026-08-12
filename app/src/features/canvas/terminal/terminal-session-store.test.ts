@@ -45,6 +45,9 @@ const READY_PROMPT = [
   '⏵⏵ bypass permissions on (shift+tab to cycle)',
 ].join('\r\n')
 
+/** Codex TUI pronto: o compositor vazio é o único sinal necessário. */
+const CODEX_READY_PROMPT = ['OpenAI Codex', 'gpt-5.6 · medium', '›'].join('\r\n')
+
 const CONTEXT = 'Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE\n\nContexto do canvas: ...'
 
 type Harness = {
@@ -58,7 +61,7 @@ type Harness = {
 const SESSION_ID = 'terminal-1'
 const PTY_SESSION_ID = `canvas:${SESSION_ID}`
 
-function createHarness(initialText = CONTEXT): Harness {
+function createHarness(initialText = CONTEXT, command = 'claude'): Harness {
   const writes: string[] = []
   const dataListeners = new Set<(event: { sessionId: string; data: string }) => void>()
 
@@ -82,8 +85,11 @@ function createHarness(initialText = CONTEXT): Harness {
 
   const store = new TerminalSessionStore()
   store.ensure(SESSION_ID, {
-    command: 'claude',
-    args: ['--dangerously-skip-permissions'],
+    command,
+    args:
+      command === 'codex'
+        ? ['--dangerously-bypass-approvals-and-sandbox']
+        : ['--dangerously-skip-permissions'],
     cwd: '/tmp',
     initialText,
   })
@@ -177,6 +183,18 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
     expect(contextWrites(harness.writes)[0]).toBe(CONTEXT)
   }, 15000)
+
+  it('escreve no Codex assim que o compositor aparece, sem esperar silêncio extra', async () => {
+    harness = createHarness(CONTEXT, 'codex')
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+
+    // O detector do compositor já confirma que o TUI aceita entrada; não há
+    // motivo para aguardar os 500 ms usados apenas pelo fallback genérico.
+    await wait(400)
+
+    expect(contextWrites(harness.writes)).toEqual([CONTEXT])
+  }, 10000)
 
   it('reescreve o contexto se ele não aparecer na linha de entrada', async () => {
     harness = createHarness()

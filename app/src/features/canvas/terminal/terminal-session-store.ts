@@ -62,8 +62,8 @@ const IDLE_AFTER_MS = 1500
 /** A configured agent should not terminate silently immediately after launch. */
 const SILENT_EARLY_EXIT_MS = 5000
 /** A tela reconhecida, e não um atraso fixo, decide quando o texto pode entrar. */
-const DEFAULT_INITIAL_TEXT_DELAY_MS = 250
-/** Minimum quiet period after the CLI starts emitting output before input. */
+const DEFAULT_INITIAL_TEXT_DELAY_MS = 0
+/** Fallback de silêncio para CLIs cuja linha de entrada não conhecemos. */
 const INITIAL_TEXT_READY_QUIET_MS = 500
 /** Safety fallback for CLIs that do not emit a startup banner. */
 const INITIAL_TEXT_MAX_WAIT_MS = 10000
@@ -734,6 +734,13 @@ export class TerminalSessionStore {
       session.lastMeaningfulAt = Date.now()
       session.paintedOutput = true
       this.markWorking(session)
+      // A tela acabou de mudar: a próxima checagem não precisa esperar o
+      // intervalo de polling. Para Codex e Claude, a linha de entrada é a
+      // confirmação de prontidão; se ela ainda não existir, scheduleInitialText
+      // volta ao polling curto sem escrever no lugar errado.
+      if (session.initialText && !session.initialTextSent) {
+        this.scheduleInitialText(session, 0)
+      }
     } else {
       // Only the animation moved — make sure an idle check is scheduled so we
       // eventually settle even though bytes keep arriving.
@@ -845,8 +852,7 @@ export class TerminalSessionStore {
       const inputLine = readInputLineState(session.command, readViewport(session.terminal))
       const processLooksReady =
         session.paintedOutput &&
-        quietFor >= INITIAL_TEXT_READY_QUIET_MS &&
-        (inputLine?.ready ?? true)
+        (inputLine ? inputLine.ready : quietFor >= INITIAL_TEXT_READY_QUIET_MS)
       const fallbackReady =
         elapsed >= (inputLine ? INITIAL_TEXT_INPUT_WAIT_MS : INITIAL_TEXT_MAX_WAIT_MS)
 
