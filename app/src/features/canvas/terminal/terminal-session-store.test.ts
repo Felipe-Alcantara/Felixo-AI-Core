@@ -45,8 +45,19 @@ const READY_PROMPT = [
   '⏵⏵ bypass permissions on (shift+tab to cycle)',
 ].join('\r\n')
 
-/** Codex TUI pronto: o compositor vazio é o único sinal necessário. */
+/** Codex TUI pronto: o compositor de pé é o único sinal necessário. */
 const CODEX_READY_PROMPT = ['OpenAI Codex', 'gpt-5.6 · medium', '›'].join('\r\n')
+
+/**
+ * O que o Codex realmente desenha quando fica pronto: o compositor vazio traz
+ * uma sugestão da própria CLI, nunca uma linha em branco.
+ */
+const CODEX_READY_PROMPT_WITH_HINT = [
+  'OpenAI Codex (v0.147.0)',
+  '',
+  '› Summarize recent commits',
+  'gpt-5.6 · xhigh',
+].join('\r\n')
 
 const CONTEXT = 'Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE\n\nContexto do canvas: ...'
 
@@ -194,6 +205,37 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     await wait(400)
 
     expect(contextWrites(harness.writes)).toEqual([CONTEXT])
+  }, 10000)
+
+  it('escreve no Codex mesmo com a sugestão da CLI dentro do compositor', async () => {
+    harness = createHarness(CONTEXT, 'codex')
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT_WITH_HINT)
+
+    // Enquanto a prontidão exigia o compositor em branco — tela que o Codex não
+    // mostra — o contexto só saía quando a espera de emergência estourava, e o
+    // agente parecia demorar dezenas de segundos para receber o prompt.
+    await wait(400)
+
+    expect(contextWrites(harness.writes)).toEqual([CONTEXT])
+  }, 10000)
+
+  it('não escreve enquanto o Codex pergunta se a pasta é confiável', async () => {
+    harness = createHarness(CONTEXT, 'codex')
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(
+      [
+        'Do you trust the contents of this directory?',
+        '› 1. Yes, continue',
+        '  2. No, quit',
+      ].join('\r\n'),
+    )
+
+    // A tela de confiança usa o mesmo marcador do compositor: escrever aqui
+    // seria digitar dentro de um menu de decisão.
+    await wait(400)
+
+    expect(contextWrites(harness.writes)).toEqual([])
   }, 10000)
 
   it('reescreve o contexto se ele não aparecer na linha de entrada', async () => {

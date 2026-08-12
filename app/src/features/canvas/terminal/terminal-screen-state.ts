@@ -71,11 +71,6 @@ export function looksLikeApprovalPrompt(text: string): boolean {
   )
 }
 
-/** Composer vazio do Codex: a entrada interativa está pronta. */
-export function hasCodexInteractivePrompt(viewport: string): boolean {
-  return viewport.split('\n').some((line) => /^\s*›\s*$/.test(line))
-}
-
 /**
  * Linha de entrada de uma CLI de tela cheia: o marcador e o que já está escrito
  * depois dele. O prefixo opcional cobre a borda da caixa que essas CLIs
@@ -104,13 +99,35 @@ function readInputLines(viewport: string, marker: RegExp): string[] {
 }
 
 /**
- * A entrada do Codex está na tela, com ou sem texto escrito nela.
+ * O composer do Codex já está de pé — ou seja, é ele que vai receber o que
+ * escrevermos.
  *
- * `hasCodexInteractivePrompt` responde outra pergunta — se ela está vazia — e as
- * duas juntas distinguem "a CLI ainda não subiu" de "já tem texto aqui".
+ * A pergunta é se o composer existe, e não se ele está vazio: o Codex desenha
+ * uma sugestão apagada dentro do composer vazio ("Summarize recent commits",
+ * "Explain this codebase", …), sorteada de uma lista que muda entre versões.
+ * Exigir a linha vazia era exigir uma tela que a CLI nunca mostra — a prontidão
+ * nunca era reconhecida e o contexto só saía no fim da espera de emergência,
+ * que é o "Codex demora muito pra receber os prompts".
+ *
+ * Item de menu numerado não conta: a tela de confiança na pasta usa o mesmo
+ * marcador (`› 1. Yes, continue`) e é uma decisão, não a entrada.
  */
-export function hasCodexInputLine(viewport: string): boolean {
-  return readInputLines(viewport, CODEX_INPUT_LINE).length > 0
+export function hasCodexInteractivePrompt(viewport: string): boolean {
+  return readInputLines(viewport, CODEX_INPUT_LINE).some(
+    (content) => !MENU_ITEM.test(content),
+  )
+}
+
+/**
+ * O composer do Codex está literalmente vazio.
+ *
+ * Com a sugestão apagada na tela não dá para separar, só pelo texto renderizado,
+ * a dica da CLI do que alguém digitou — então a resposta é "não está vazio", e
+ * quem confere a entrega deixa a linha em paz. Reescrever por cima de texto que
+ * pode ser do usuário é pior do que não reescrever.
+ */
+export function hasEmptyCodexInput(viewport: string): boolean {
+  return readInputLines(viewport, CODEX_INPUT_LINE).some((content) => content === '')
 }
 
 /**
@@ -178,11 +195,12 @@ const INPUT_LINE_READERS: Record<string, (viewport: string) => InputLineState> =
     return { ready: visible, visible, empty: visible && hasEmptyClaudeInput(viewport) }
   },
   codex: (viewport) => {
-    // O composer do Codex é reconhecido apenas vazio, e é esse o sinal que
-    // libera a escrita desde que o caminho dele foi validado.
-    const empty = hasCodexInteractivePrompt(viewport)
+    // Mesma leitura do Claude: o composer de pé é o sinal de prontidão. A
+    // sugestão que o Codex desenha dentro do composer vazio não é texto de
+    // ninguém, e esperar a linha vazia era esperar para sempre.
+    const visible = hasCodexInteractivePrompt(viewport)
 
-    return { ready: empty, visible: hasCodexInputLine(viewport), empty }
+    return { ready: visible, visible, empty: visible && hasEmptyCodexInput(viewport) }
   },
 }
 

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   cleanPrompt,
   hasClaudeInteractivePrompt,
-  hasCodexInputLine,
   hasCodexInteractivePrompt,
   hasEmptyClaudeInput,
+  hasEmptyCodexInput,
   isBusyScreen,
   isClaudeBypassPermissionsWarning,
   isCodexTrustPrompt,
@@ -70,12 +70,40 @@ describe('hasCodexInteractivePrompt', () => {
     expect(hasCodexInteractivePrompt(['banner', '›', ''].join('\n'))).toBe(true)
   })
 
-  it('does not consider a composer with text already typed as ready', () => {
-    expect(hasCodexInteractivePrompt('› /resume')).toBe(false)
+  it('recognizes the composer that shows the CLI suggestion', () => {
+    // O composer vazio do Codex nunca aparece em branco: a CLI desenha uma
+    // sugestão apagada dentro dele. Exigir a linha em branco era não reconhecer
+    // nunca a prontidão, e o contexto só saía quando a espera de emergência
+    // estourava.
+    expect(hasCodexInteractivePrompt('› Summarize recent commits')).toBe(true)
+  })
+
+  it('recognizes the composer with text already written in it', () => {
+    expect(hasCodexInteractivePrompt('› /resume')).toBe(true)
+  })
+
+  it('does not read the directory trust screen as the composer', () => {
+    const screen = [
+      'Do you trust the contents of this directory?',
+      '› 1. Yes, continue',
+      '  2. No, quit',
+    ].join('\n')
+
+    expect(hasCodexInteractivePrompt(screen)).toBe(false)
   })
 
   it('does not fire before the composer appears', () => {
     expect(hasCodexInteractivePrompt('carregando…')).toBe(false)
+  })
+})
+
+describe('hasEmptyCodexInput', () => {
+  it('is true only for a composer with nothing rendered in it', () => {
+    expect(hasEmptyCodexInput('›  ')).toBe(true)
+  })
+
+  it('treats the CLI suggestion as content, so nobody writes over it', () => {
+    expect(hasEmptyCodexInput('› Explain this codebase')).toBe(false)
   })
 })
 
@@ -214,20 +242,6 @@ describe('telas reais do Claude Code (capturadas da CLI 2.1.227)', () => {
   })
 })
 
-describe('hasCodexInputLine', () => {
-  it('recognizes the composer with text already written in it', () => {
-    expect(hasCodexInputLine('› /resume')).toBe(true)
-  })
-
-  it('recognizes the empty composer', () => {
-    expect(hasCodexInputLine('›  ')).toBe(true)
-  })
-
-  it('is false while the CLI is still booting', () => {
-    expect(hasCodexInputLine('OpenAI Codex\nworking directory: /tmp')).toBe(false)
-  })
-})
-
 describe('readInputLineState', () => {
   const CLAUDE_READY = ['─'.repeat(20), '❯ Try "fix lint errors"', '─'.repeat(20)].join('\n')
 
@@ -269,10 +283,30 @@ describe('readInputLineState', () => {
     })
   })
 
-  it('não considera o composer do Codex pronto quando já tem texto', () => {
-    expect(readInputLineState('codex', '› /resume')).toEqual({
-      ready: false,
+  it('lê o composer do Codex com a sugestão da CLI como pronto', () => {
+    expect(readInputLineState('codex', '› Write tests for @filename')).toEqual({
+      ready: true,
       visible: true,
+      empty: false,
+    })
+  })
+
+  it('lê o composer do Codex com texto escrito nele', () => {
+    expect(readInputLineState('codex', '› /resume')).toEqual({
+      ready: true,
+      visible: true,
+      empty: false,
+    })
+  })
+
+  it('não vê entrada nenhuma na tela de confiança do Codex', () => {
+    const screen = ['Do you trust the contents of this directory?', '› 1. Yes, continue'].join(
+      '\n',
+    )
+
+    expect(readInputLineState('codex', screen)).toEqual({
+      ready: false,
+      visible: false,
       empty: false,
     })
   })

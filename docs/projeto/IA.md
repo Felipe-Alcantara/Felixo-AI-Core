@@ -1559,3 +1559,24 @@ VALIDAÇÃO: `npm run build`, `npx vitest run` (400/400) e `npm run lint` limpos
 RISCO RESIDUAL: se a verificação falhar de novo, o indicador volta ao erro — correto, mas sem qualquer espera entre tentativas: clicar repetidamente dispara uma verificação por clique. Como é ação humana e a chamada é barata, não vale um limitador agora. O intervalo automático de dez minutos continua o mesmo; o que mudou é existir uma saída manual.
 
 Estado final: concluído e validado no app rodando.
+
+## Registro de Trabalho — 2026-08-12 (parte 10) — o Codex demorava 60s para receber o prompt (Bug: Codex demora muito pra receber os prompts)
+
+MOTIVO: abrir um agente Codex e ver o contexto chegar na entrada só depois de quase um minuto. Três commits anteriores atacaram o relógio (`CODEX_INITIAL_TEXT_DELAY_MS`, o silêncio de 500 ms, o polling) e nenhum resolveu, porque o atraso nunca esteve num intervalo configurado.
+
+A CAUSA: `hasCodexInteractivePrompt` exigia uma linha com **só** o marcador (`/^\s*›\s*$/`) para declarar o composer pronto. O Codex 0.147 nunca desenha essa linha: o composer vazio traz uma sugestão apagada sorteada de uma lista embutida na CLI — `› Summarize recent commits`, `› Explain this codebase`, `› Write tests for @filename`, … Confirmado lendo os literais do binário e capturando a tela real num PTY (o script respondia às consultas de terminal — `CSI 6n`, DA1, OSC 10/11 — que o Codex faz antes de pintar qualquer coisa; sem resposta ele não pinta e a captura sai vazia).
+
+Ou seja: `ready` era **sempre falso**. O texto só saía quando estourava `INITIAL_TEXT_INPUT_WAIT_MS`, a espera de emergência de 60 s. Os ajustes de intervalo anteriores não podiam funcionar — eles encurtavam o caminho que nunca era tomado.
+
+FEITO:
+
+- `hasCodexInteractivePrompt` passou a perguntar o que o nome dela diz: **o composer está de pé?**. Vira o espelho exato de `hasClaudeInteractivePrompt` — qualquer linha com o marcador que não seja item de menu numerado. Item de menu fica de fora porque a tela de confiança na pasta usa o mesmo `›` (`› 1. Yes, continue`) e é decisão, não entrada.
+- `hasEmptyCodexInput` nasceu para a outra pergunta (a entrada está vazia?), e `hasCodexInputLine` saiu: com a exclusão de menu, "visível" e "pronto" respondem à mesma coisa, como no Claude.
+
+LIMITE ASSUMIDO: com a sugestão na tela não dá para separar, só pelo texto renderizado, a dica da CLI do que alguém digitou. `empty` responde "não está vazio", então a reconferência de entrega não reescreve o composer do Codex. É de propósito: escrever por cima de texto que pode ser do usuário é pior do que não reescrever, e a entrega agora acontece no momento certo, que era o que faltava.
+
+TESTE: sete casos novos — o composer com a sugestão da CLI, o composer com texto, a tela de confiança (que não pode ser lida como entrada) e o store escrevendo o contexto na tela real do Codex. Os antigos que fixavam "só o composer vazio é pronto" foram substituídos, porque descreviam a tela errada.
+
+VALIDAÇÃO no app rodando, A/B com a mesma build e userData limpo: **sem o fix, o contexto apareceu na entrada aos 63 s; com o fix, aos 3 s** — abaixo do primeiro instante em que dá para medir. `npm run build`, `npx vitest run` (406/406) e `npm run lint` limpos.
+
+Estado final: concluído e validado no app rodando, com medição antes e depois.
