@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { findLastEditedFile } from './terminal-open-file'
+import {
+  findLastEditedFile,
+  findLaunchedEditorFile,
+  resolveOpenEditorFile,
+} from './terminal-open-file'
 
 describe('findLastEditedFile', () => {
   it('acha o arquivo do último comando nano na tela', () => {
@@ -70,5 +74,75 @@ describe('findLastEditedFile', () => {
       path: '/x/ola-mundo.md',
       name: 'ola-mundo.md',
     })
+  })
+})
+
+describe('findLaunchedEditorFile', () => {
+  it('lê o arquivo da opção de lançamento do bloco', () => {
+    // Como ProjectsPanel monta: [...editor.args, entry.name].
+    expect(
+      findLaunchedEditorFile('nano', ['ola-mundo.md'], '/home/felipe/blog'),
+    ).toEqual({ path: '/home/felipe/blog/ola-mundo.md', name: 'ola-mundo.md' })
+  })
+
+  it('aceita editor resolvido por caminho completo', () => {
+    expect(findLaunchedEditorFile('/usr/bin/vim', ['notas.md'], '/x')?.name).toBe(
+      'notas.md',
+    )
+  })
+
+  it('ignora comando que não é editor de texto', () => {
+    expect(findLaunchedEditorFile('python3', ['script.py'], '/x')).toBeUndefined()
+    expect(findLaunchedEditorFile(undefined, ['a.md'], '/x')).toBeUndefined()
+  })
+
+  it('não trata flag final como arquivo', () => {
+    expect(findLaunchedEditorFile('nano', ['-v'], '/x')).toBeUndefined()
+    expect(findLaunchedEditorFile('nano', [], '/x')).toBeUndefined()
+  })
+})
+
+describe('resolveOpenEditorFile', () => {
+  it('usa a opção de lançamento quando o app abriu o editor', () => {
+    // Regressão do caso real, com o dado exatamente como o canvas persistiu
+    // o bloco: o app monta `bash -i -c "nano arquivo; exec bash -i"`, que NÃO
+    // ecoa o comando na tela — o histórico do shell fica vazio e só a opção
+    // de lançamento sabe o arquivo.
+    expect(
+      resolveOpenEditorFile({
+        command: 'nano',
+        args: ['ola-mundo.md'],
+        cwd: '/home/user/projeto/src/content/posts',
+        shellHistory: '',
+      }),
+    ).toEqual({
+      path: '/home/user/projeto/src/content/posts/ola-mundo.md',
+      name: 'ola-mundo.md',
+    })
+  })
+
+  it('cai para o histórico do shell quando o bloco não lançou editor nenhum', () => {
+    expect(
+      resolveOpenEditorFile({
+        command: 'bash',
+        args: [],
+        cwd: '/home/felipe/blog',
+        shellHistory: '$ nano digitado-a-mao.md',
+      }),
+    ).toEqual({
+      path: '/home/felipe/blog/digitado-a-mao.md',
+      name: 'digitado-a-mao.md',
+    })
+  })
+
+  it('não inventa arquivo quando nenhuma das duas fontes tem um', () => {
+    expect(
+      resolveOpenEditorFile({
+        command: 'bash',
+        args: [],
+        cwd: '/x',
+        shellHistory: '$ ls\n$ npm run build',
+      }),
+    ).toBeUndefined()
   })
 })

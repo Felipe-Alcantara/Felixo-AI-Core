@@ -16,7 +16,7 @@ import {
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
-import { findLastEditedFile } from './terminal-open-file'
+import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import {
@@ -146,17 +146,19 @@ export function TerminalDrawer({
     onPassResponsibility(transcript)
   }, [onPassResponsibility, sessionId, store])
 
-  // Lê o histórico de comandos do shell em busca do último `nano`/`vim`
-  // rodado neste terminal e abre o arquivo correspondente como um bloco
-  // "arquivo" (que já sabe renderizar markdown, código e imagem) — sem pedir
-  // o caminho de novo. Usa getShellHistory, não getTranscript: enquanto o
-  // editor está aberto, o terminal está no alternate screen buffer, e o
-  // comando que abriu o editor só existe no buffer normal por baixo dele.
+  // Abre o arquivo que está sendo editado aqui como um bloco "arquivo" (que
+  // já sabe renderizar markdown, código e imagem), sem pedir o caminho de
+  // novo. A opção de lançamento do bloco responde quando foi o app que abriu
+  // o editor; o histórico do shell cobre quem digitou `nano` à mão.
   const openRenderedPreview = useCallback(() => {
     if (!onOpenFilePreview) return
 
-    const transcript = store.getShellHistory(sessionId).text
-    const found = findLastEditedFile(transcript, restartOptions?.cwd)
+    const found = resolveOpenEditorFile({
+      command: restartOptions?.command,
+      args: restartOptions?.args,
+      cwd: restartOptions?.cwd,
+      shellHistory: store.getShellHistory(sessionId).text,
+    })
     if (!found) {
       setPreviewError('Não achei nenhum arquivo aberto com nano/vim neste terminal.')
       return
@@ -164,7 +166,14 @@ export function TerminalDrawer({
 
     setPreviewError(undefined)
     onOpenFilePreview(found.path, found.name)
-  }, [onOpenFilePreview, restartOptions?.cwd, sessionId, store])
+  }, [
+    onOpenFilePreview,
+    restartOptions?.args,
+    restartOptions?.command,
+    restartOptions?.cwd,
+    sessionId,
+    store,
+  ])
 
   const effectiveWidth = collapsed
     ? COLLAPSED_WIDTH

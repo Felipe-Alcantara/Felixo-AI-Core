@@ -1,11 +1,21 @@
 /**
  * Descobre qual arquivo está aberto num editor de texto (`nano`/`vim`/`vi`)
- * dentro do histórico de um terminal, para oferecer o preview renderizado sem
- * pedir que a pessoa aponte o caminho de novo.
+ * num terminal, para oferecer o preview renderizado sem pedir que a pessoa
+ * aponte o caminho de novo.
  *
- * É best-effort: lê o scrollback em busca do último comando desses editores.
- * Se a pessoa não abriu nenhum, ou abriu algo que não é um editor reconhecido,
- * não há nada pra detectar — e o botão que usa isto avisa em vez de inventar.
+ * Há duas formas de um editor estar aberto ali, e elas pedem fontes
+ * diferentes:
+ *
+ * 1. **O app abriu** (painel Projetos → "editar no terminal"): o bloco nasce
+ *    com `command: nano`, `args: [..., arquivo]`. O comando é executado via
+ *    `bash -c` e por isso **nunca é ecoado na tela** — procurá-lo no texto do
+ *    terminal não acha nada. Aqui a resposta certa é a opção de lançamento,
+ *    que o app já tem e não precisa adivinhar.
+ * 2. **A pessoa digitou** `nano arquivo.md` num terminal de shell: aí o
+ *    comando foi ecoado e vive no histórico do shell.
+ *
+ * `resolveOpenEditorFile` tenta (1) e cai para (2), porque (1) é um fato
+ * registrado e (2) é leitura de tela.
  */
 
 // Exige o editor no INÍCIO de um comando (começo de linha ou depois de um
@@ -48,6 +58,48 @@ export function findLastEditedFile(
   }
 
   return undefined
+}
+
+/** Editor conhecido, aceitando caminho completo (`/usr/bin/nano`). */
+const EDITOR_BINARY = /^(?:nano|vim?)$/
+
+/**
+ * O arquivo que o app mandou o terminal abrir, lido da opção de lançamento.
+ *
+ * @param command - Comando do bloco (`nano`, `/usr/bin/vim`, …).
+ * @param args - Argumentos do bloco; o arquivo é o último, como montado em
+ *   `ProjectsPanel.editFileInTerminal` (`[...editor.args, entry.name]`).
+ * @param cwd - Diretório do bloco, para resolver o nome relativo.
+ */
+export function findLaunchedEditorFile(
+  command: string | undefined,
+  args: string[] | undefined,
+  cwd: string | undefined,
+): { path: string; name: string } | undefined {
+  const binary = (command ?? '').split(/[\\/]/).pop() ?? ''
+  if (!EDITOR_BINARY.test(binary)) return undefined
+
+  const last = args?.[args.length - 1]
+  if (!last || last.startsWith('-')) return undefined
+
+  const path = resolvePath(last, cwd)
+  return { path, name: path.split(/[\\/]/).pop() ?? path }
+}
+
+/**
+ * O arquivo aberto num editor deste terminal, preferindo o que o app
+ * registrou ao lançar o bloco e caindo para o histórico do shell.
+ */
+export function resolveOpenEditorFile(options: {
+  command?: string
+  args?: string[]
+  cwd?: string
+  shellHistory: string
+}): { path: string; name: string } | undefined {
+  return (
+    findLaunchedEditorFile(options.command, options.args, options.cwd) ??
+    findLastEditedFile(options.shellHistory, options.cwd)
+  )
 }
 
 /** Pega o primeiro argumento da linha, respeitando aspas simples/duplas. */
