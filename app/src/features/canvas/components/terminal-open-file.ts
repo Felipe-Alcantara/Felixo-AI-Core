@@ -8,7 +8,13 @@
  * não há nada pra detectar — e o botão que usa isto avisa em vez de inventar.
  */
 
-const EDITOR_COMMAND = /(?:^|[;&|]|\s)(?:nano|vim?)\s+(.+)$/
+// Exige o editor no INÍCIO de um comando (começo de linha ou depois de um
+// prompt/separador de comando), nunca só "depois de um espaço qualquer" — sem
+// isso, o próprio texto que o editor imprime na tela ("GNU nano 7.2") também
+// batia, e "7.2" virava um nome de arquivo fantasma.
+const EDITOR_COMMAND = /^(?:nano|vim?)\s+(.+)$/
+const COMMAND_SEPARATORS = /[;&|]+/
+const PROMPT_PREFIX = /^[$#>%]\s*/
 
 /**
  * @param transcript - Texto completo do scrollback (`store.getTranscript`).
@@ -21,15 +27,22 @@ export function findLastEditedFile(
   const lines = transcript.split('\n')
 
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const match = EDITOR_COMMAND.exec(lines[i].trim())
-    if (!match) continue
+    // Uma linha pode encadear vários comandos (`cd x && nano y`); cada pedaço
+    // é testado como um comando próprio.
+    const segments = lines[i].trim().split(COMMAND_SEPARATORS)
 
-    const arg = extractFirstArg(match[1])
-    if (!arg || arg.startsWith('-')) continue
+    for (let j = segments.length - 1; j >= 0; j -= 1) {
+      const segment = segments[j].trim().replace(PROMPT_PREFIX, '')
+      const match = EDITOR_COMMAND.exec(segment)
+      if (!match) continue
 
-    const path = resolvePath(arg, cwd)
-    const name = path.split(/[\\/]/).pop() ?? path
-    return { path, name }
+      const arg = extractFirstArg(match[1])
+      if (!arg || arg.startsWith('-')) continue
+
+      const path = resolvePath(arg, cwd)
+      const name = path.split(/[\\/]/).pop() ?? path
+      return { path, name }
+    }
   }
 
   return undefined
