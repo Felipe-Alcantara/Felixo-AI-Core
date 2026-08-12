@@ -116,6 +116,7 @@ contextBridge.exposeInMainWorld('felixo', {
     pick: () => ipcRenderer.invoke('text-file:pick'),
     openInProject: (params) => ipcRenderer.invoke('text-file:open-in-project', params),
     read: (params) => ipcRenderer.invoke('text-file:read', params),
+    resolveEditor: () => ipcRenderer.invoke('text-file:resolve-editor'),
     write: (params) => ipcRenderer.invoke('text-file:write', params),
     watch: (params) => ipcRenderer.invoke('text-file:watch', params),
     unwatch: (params) => ipcRenderer.invoke('text-file:unwatch', params),

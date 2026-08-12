@@ -1442,3 +1442,29 @@ VALIDAÇÃO: YAML validado e a sintaxe shell dos passos conferida com `bash -n`.
 RISCO RESIDUAL: se `gh release view` não enxergar a release em rascunho no runner, o `finalize` falha e a release fica em rascunho — ninguém recebe uma release quebrada, mas o deploy não sai e é preciso publicar à mão (`gh release edit vX.Y.Z --draft=false --latest`). É o modo de falha seguro, e vale conferir a primeira execução. Além disso, a v0.1.14 já saiu no esquema antigo; o rascunho só vale da próxima em diante.
 
 Estado final: concluído — aguardando o próximo deploy para conferir o caminho rascunho→público.
+
+## Registro de Trabalho — 2026-08-12 (parte 6) — ler e editar arquivo de projeto no terminal (Colar imagnes é dificil no terminal)
+
+RELATO: clicar num `.md` na aba Projetos abria um terminal com `README.md: comando não encontrado`; e o botão de abrir no canvas (parte 4) não era o que se queria para ler — a preferência é ler e editar **no terminal**.
+
+CAUSA do "comando não encontrado": `buildRunCommand` só conhece interpretador para `.py/.js/.ts/.sh/.ps1`; qualquer outra extensão caía no fallback `{ command: fileName, args: [] }`, que entrega o caminho nu ao shell — o equivalente a digitar `./README.md`. Para um script sem shebang isso ainda é um erro informativo; para um markdown é uma ação que nunca fez sentido.
+
+DECISÕES DO FELIPE: clique abre **editor direto** (`$VISUAL`/`$EDITOR`, senão o primeiro instalado); o bloco de canvas **continua**, como ação secundária.
+
+FEITO:
+
+- `editor-command.cjs`, novo — `$VISUAL` antes de `$EDITOR` (quem configurou já disse o que quer), e sem configuração cai numa lista **conferida no PATH** com o `resolveCommandPath` que já existia: `nano`, `micro`, `vim`, `vi` no POSIX, `notepad` no Windows. Conferir importa: oferecer um editor não instalado só mudaria o "comando não encontrado" de lugar, que é o bug que este módulo existe para matar. Editor configurado não passa pelo PATH — pode ser caminho absoluto ou função do shell. A configuração é separada respeitando aspas, para `code -w` virar comando + argumento e um caminho com espaço no Windows continuar sendo um comando só.
+- `text-file:resolve-editor` — resolvido no processo principal porque depende de `process.env` e do PATH, que o renderer não enxerga.
+- `project-file-action.ts`, novo — `resolveProjectFileClick` devolve `edit` para texto e `run` para binário (abrir um `.png` no nano só mostraria lixo), e `canRunProjectFile` diz se vale oferecer o botão de rodar. A lista de binários é de **exclusão**, não de inclusão: arquivo de texto sem extensão é comum num projeto (`Makefile`, `LICENSE`, `Dockerfile`) e uma lista de inclusão deixaria todos eles de fora.
+- `ProjectsPanel` — o clique na linha agora abre o editor; rodar virou botão próprio, oferecido **só** onde rodar significa alguma coisa; abrir no canvas continua como terceira ação. O ícone da linha deixou de ser o ▶ e passou a ser o lápis, para a linha dizer a verdade sobre o que o clique faz. Editar reaproveita o mesmo `onRunFile`: para o canvas, editar e rodar são a mesma coisa — um bloco de terminal com um comando e um diretório.
+- **Rodar deixou de ser o clique padrão mesmo em `.py`/`.sh`.** É mudança de comportamento consciente: clicar num script para lê-lo não deve executá-lo sem aviso, e o botão de rodar continua a um hover de distância.
+
+SOBRE O PASTE, que veio no mesmo relato: não era defeito. Os dois arquivos foram gravados (12:15:20 e 12:17:08), um por `Ctrl+V`, e o caminho foi digitado na entrada — foi assim que as imagens chegaram para leitura. A expectativa era ver `[Image #1]` como no Claude Code fora do app, e isso não é alcançável aqui: no xterm o `Ctrl+V` é consumido pelo navegador como evento de paste e nunca chega ao processo da CLI como tecla, então a CLI não tem como ler o clipboard sozinha. O caminho de arquivo é o que dá para entregar, e o agente lê a imagem por ele.
+
+TESTE: `editor-command.test.cjs`, 10 casos com dublê de PATH — precedência `VISUAL`>`EDITOR`, opção junto do comando, caminho entre aspas, candidato ausente sendo pulado, ordem de preferência, Windows, nenhum editor disponível e variável vazia. `project-file-action.test.ts`, 11 casos — texto vai para o editor, binário não, arquivo sem extensão e oculto tratados como texto, rodar oferecido só onde cabe, caixa da extensão ignorada e pasta não decidindo pelo arquivo.
+
+VALIDAÇÃO: `npm run build`, `npm test` (544/544), `npx vitest run` (392/392) e `npm run lint` limpos. No app rodando, pela skill `rodar-app`: `resolveEditor` devolveu `nano` (a máquina não tem `$EDITOR`); as ações por arquivo saíram certas — `README.md` e `dados.json` com editor + canvas e **sem** botão de rodar, `script.py` com os três; clicar no `README.md` abriu `GNU nano 7.2 README.md` num terminal do canvas com o conteúdo na tela; e digitar + `Ctrl+O` + Enter gravou no arquivo em disco.
+
+RISCO RESIDUAL: se `$EDITOR` apontar para um editor gráfico (`code`, `gedit`), o clique abre esse programa fora do terminal — é a configuração da pessoa sendo respeitada, mas não é "editar no terminal". Um editor que não existe e está configurado em `$EDITOR` volta a dar "comando não encontrado", porque configuração explícita não passa pelo PATH de propósito. A lista de extensões binárias é finita: um formato binário fora dela abriria no editor mostrando lixo — sem risco de corromper, já que sair sem salvar não grava nada.
+
+Estado final: concluído e validado no app rodando.

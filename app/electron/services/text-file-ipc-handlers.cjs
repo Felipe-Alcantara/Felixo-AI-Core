@@ -18,6 +18,7 @@ const fsp = require('node:fs/promises')
 const path = require('node:path')
 const { toErrorResult } = require('./ipc-result.cjs')
 const { createTextFileAccess } = require('./text-file-access.cjs')
+const { resolveEditorCommand } = require('./editor-command.cjs')
 
 /**
  * Um arquivo de texto grande trava o bloco sem entregar nada util — o editor e
@@ -129,6 +130,18 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
       return { ok: true, path: filePath, name: path.basename(filePath) }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel abrir o arquivo.')
+    }
+  })
+
+  /**
+   * Qual editor usar para abrir um arquivo num terminal. Resolvido aqui porque
+   * depende de `process.env` e do PATH, que o renderer nao enxerga.
+   */
+  ipcMain.handle('text-file:resolve-editor', () => {
+    try {
+      return resolveEditorCommand()
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel escolher um editor.')
     }
   })
 

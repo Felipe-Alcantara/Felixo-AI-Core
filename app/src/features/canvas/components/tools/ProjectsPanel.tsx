@@ -6,6 +6,7 @@ import {
   FolderGit2,
   FolderPlus,
   Loader2,
+  Pencil,
   Play,
   SquarePen,
   Trash2,
@@ -13,6 +14,10 @@ import {
 import { CanvasPanel } from './CanvasPanel'
 import { sortProjectsByName } from './projects-panel-order'
 import { buildRunCommand, type RunFileOptions } from '../../services/run-file-command'
+import {
+  canRunProjectFile,
+  resolveProjectFileClick,
+} from '../../services/project-file-action'
 
 type CanvasProject = { id: string; name: string; path: string }
 type DirectoryEntry = { name: string; isDirectory: boolean; path: string }
@@ -207,6 +212,29 @@ export function ProjectsPanel({
     }
   }
 
+  /**
+   * Abre o arquivo num editor de terminal. Reaproveita o mesmo caminho de
+   * "rodar num terminal": para o canvas, editar e rodar são a mesma coisa —
+   * um bloco de terminal com um comando e um diretório.
+   */
+  const editFileInTerminal = async (entry: DirectoryEntry) => {
+    if (!browsing || !currentDirPath) return
+
+    const result = await window.felixo?.textFiles?.resolveEditor()
+    if (!result?.ok || !result.editor) {
+      setLoadError(result?.message ?? 'Nenhum editor de terminal disponível.')
+      return
+    }
+
+    onRunFile({
+      command: result.editor.command,
+      args: [...result.editor.args, entry.name],
+      cwd: currentDirPath,
+      label: `${entry.name} · ${browsing.project.name}`,
+    })
+    onClose()
+  }
+
   const runFile = (entry: DirectoryEntry) => {
     if (!browsing || !currentDirPath) return
     const { command, args, fallbackCommand } = buildRunCommand(entry.name)
@@ -218,6 +246,23 @@ export function ProjectsPanel({
       ...(fallbackCommand ? { fallbackCommand } : {}),
     })
     onClose()
+  }
+
+  const openEntry = (entry: DirectoryEntry) => {
+    if (entry.isDirectory) {
+      openSubfolder(entry)
+    } else if (resolveProjectFileClick(entry.name) === 'run') {
+      runFile(entry)
+    } else {
+      void editFileInTerminal(entry)
+    }
+  }
+
+  const entryClickTitle = (entry: DirectoryEntry) => {
+    if (entry.isDirectory) return undefined
+    return resolveProjectFileClick(entry.name) === 'run'
+      ? `Rodar ${entry.name} num terminal`
+      : `Abrir ${entry.name} num editor de terminal`
   }
 
   const breadcrumb = browsing
@@ -262,9 +307,9 @@ export function ProjectsPanel({
             <li key={entry.path} className="group flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => (entry.isDirectory ? openSubfolder(entry) : runFile(entry))}
+                onClick={() => openEntry(entry)}
                 className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
-                title={entry.isDirectory ? undefined : `Rodar ${entry.name} num terminal`}
+                title={entryClickTitle(entry)}
               >
                 {entry.isDirectory ? (
                   <Folder size={14} className="shrink-0 text-zinc-400" />
@@ -275,15 +320,26 @@ export function ProjectsPanel({
                 {entry.isDirectory ? (
                   <ChevronRight size={14} className="shrink-0 text-zinc-500" />
                 ) : (
-                  <Play size={12} className="shrink-0 text-emerald-400" />
+                  <Pencil size={12} className="shrink-0 text-zinc-500" />
                 )}
               </button>
+              {/* Ações extras aparecem no hover. Sempre no DOM, só
+                  transparentes, para a linha não mudar de largura. */}
+              {!entry.isDirectory && canRunProjectFile(entry.name) && (
+                <button
+                  type="button"
+                  onClick={() => runFile(entry)}
+                  className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-emerald-300 focus-visible:opacity-100 group-hover:opacity-100"
+                  title={`Rodar ${entry.name} num terminal`}
+                  aria-label={`Rodar ${entry.name}`}
+                >
+                  <Play size={14} />
+                </button>
+              )}
               {!entry.isDirectory && (
                 <button
                   type="button"
                   onClick={() => void openFileInCanvas(entry)}
-                  // Mesmo padrão da lixeira dos projetos: sempre no DOM, só
-                  // transparente, para a linha não mudar de largura no hover.
                   className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-sky-300 focus-visible:opacity-100 group-hover:opacity-100"
                   title={`Abrir ${entry.name} num bloco do canvas`}
                   aria-label={`Abrir ${entry.name} no canvas`}

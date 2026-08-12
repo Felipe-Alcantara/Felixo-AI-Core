@@ -368,6 +368,10 @@ declare global {
           path: string
           content: string
         }) => Promise<CliInvokeResult & { path?: string }>
+        /** Editor de terminal a usar: `$VISUAL`/`$EDITOR`, senão o primeiro do PATH. */
+        resolveEditor: () => Promise<
+          CliInvokeResult & { editor?: { command: string; args: string[] } }
+        >
         watch: (params: { path: string }) => Promise<CliInvokeResult>
         unwatch: (params: { path: string }) => Promise<CliInvokeResult>
         onChanged: (callback: (event: { path: string }) => void) => () => void

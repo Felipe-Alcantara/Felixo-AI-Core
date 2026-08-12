@@ -180,6 +180,8 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 ### Projetos, Code, Notas e Exportação
 
 - **Projetos:** adicione um repositório individual ou detecte vários repositórios dentro de um workspace. A lista aparece em ordem alfabética, e o mesmo vale para os arquivos ao abrir um projeto (pastas primeiro). A ordenação ignora acento e maiúscula — `Álbum` fica junto de `alfa`, não no fim — e compara número por valor, então `projeto2` vem antes de `projeto10`.
+
+  Ao navegar os arquivos de um projeto, **clicar num arquivo o abre num editor de terminal** para ler e editar ali mesmo. O editor é o do seu `$VISUAL`/`$EDITOR`, se você tiver um configurado; senão o app usa o primeiro que encontrar instalado (`nano`, `micro`, `vim`, `vi`; `notepad` no Windows). Passando o mouse sobre a linha aparecem duas ações extras: **rodar num terminal**, oferecida só em arquivos que o app sabe executar (`.py`, `.js`, `.ts`, `.sh`, `.ps1`, executáveis), e **abrir num bloco do canvas**, para deixar o arquivo visível enquanto você trabalha em outra coisa.
 - **Code:** veja status, branch, diff e commits recentes dos projetos ativos. O painel atual é read-only.
 - **Notas:** registre notas associadas ao uso do app/projetos.
 - **Exportar:** exporte chats em JSON compacto, Markdown ou texto simples.
