@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ChevronRight,
   File as FileIcon,
@@ -10,6 +10,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { sortProjectsByName } from './projects-panel-order'
 import { buildRunCommand, type RunFileOptions } from '../../services/run-file-command'
 
 type CanvasProject = { id: string; name: string; path: string }
@@ -56,6 +57,12 @@ export function ProjectsPanel({
   // dentro do próprio painel evita o window.confirm nativo, que cortaria a
   // animação com um diálogo modal do sistema.
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null)
+
+  // Ordena aqui, e não a cada `setProjects`, para a ordem ser uma consequência
+  // da lista e não algo que cada ponto de carga precise lembrar de aplicar. O
+  // memo evita reordenar em renders que não mexeram nos projetos — a lista é
+  // pequena, mas o painel re-renderiza a cada passo da remoção em dois toques.
+  const sortedProjects = useMemo(() => sortProjectsByName(projects), [projects])
 
   const reload = useCallback(async () => {
     const result = await window.felixo?.projects?.list()
@@ -277,11 +284,11 @@ export function ProjectsPanel({
         {busy ? 'Adicionando…' : 'Adicionar pasta'}
       </button>
 
-      {projects.length === 0 ? (
+      {sortedProjects.length === 0 ? (
         <p className="text-sm text-zinc-500">Nenhum projeto ainda.</p>
       ) : (
         <ul className="felixo-anim-stagger-list flex flex-col gap-1">
-          {projects.map((project) =>
+          {sortedProjects.map((project) =>
             pendingRemovalId === project.id ? (
               <li
                 key={project.id}

@@ -1358,3 +1358,26 @@ DOC: `GUIA-DESENVOLVEDOR.md`, seção "Conferir no app rodando", aponta para a s
 RISCO RESIDUAL: um `npm ci` apaga o `playwright-core` instalado com `--no-save`; o `SKILL.md` avisa que basta repetir o comando. O driver abre a build de produção (`app/dist/`), então mudança no renderer sem `npm run build` não aparece e a tela mostra a versão antiga sem erro nenhum — está nos "detalhes que custaram tempo". Conferido só em Linux/X11 sob Xvfb.
 
 Estado final: concluído e validado.
+
+## Registro de Trabalho — 2026-08-12 (parte 3) — ordem alfabética na aba Projetos (Colar imagnes é dificil no terminal)
+
+PEDIDO: a aba "Projetos" do canvas deveria listar em ordem alfabética.
+
+ESTADO ANTERIOR: `projects:list` devolve `ORDER BY updated_at DESC` (`projects-repository.cjs`) — o projeto mexido por último no topo. Faz sentido para um seletor, em que o mais recente costuma ser o próximo, mas numa lista que existe para *encontrar* uma pasta a ordem muda a cada uso e obriga a varrer tudo de novo. A navegação de arquivos dentro do projeto (`projects:list-directory`) já era ordenada, com pastas antes de arquivos.
+
+FEITO:
+
+- `projects-panel-order.ts`, novo, ao lado do painel (mesmo padrão de `terminals-panel-reorder.ts`): `sortProjectsByName` com um `Intl.Collator` de módulo. `numeric: true` põe `projeto2` antes de `projeto10`; `sensitivity: 'base'` ignora acento e caixa, sem o que `Álbum` iria para depois de `Zulu` (`Á` vem depois de `z` por código de caractere) e todo nome com inicial maiúscula viria antes de qualquer minúscula. Sem locale fixo: quem usa decide, pela configuração do sistema. O caminho desempata, para dois nomes equivalentes ao collator (`Api`/`API`) não trocarem de lugar sozinhos entre recargas.
+- `ProjectsPanel.tsx` aplica a ordem num `useMemo` sobre o estado, não a cada `setProjects` — assim a ordem é consequência da lista, e não algo que cada ponto de carga precise lembrar de aplicar. O memo evita reordenar em renders que não mexeram nos projetos; o painel re-renderiza a cada passo da remoção em dois toques.
+- **A ordenação foi feita só no painel, de propósito.** `projects:list` também alimenta o menu de terminais, o painel Git e os projetos do chat, onde "usado por último primeiro" continua sendo a ordem útil. Mudar o `ORDER BY` no repositório teria alcance bem maior do que o pedido.
+- `projects-ipc-handlers.cjs`: o `localeCompare` da listagem de arquivos virou um `Intl.Collator` de módulo com `numeric: true`. Sem isso as duas listas da mesma aba discordavam na tela — a de projetos mostrando `projeto2, projeto10` e a de arquivos logo abaixo mostrando `script10.sh, script2.sh`. Apareceu na conferência visual, não nos testes.
+
+TESTE: `projects-panel-order.test.ts`, 8 casos — ordem alfabética, caixa ignorada, acento tratado como letra base, número por valor, desempate por caminho, lista de origem preservada, lista vazia/de um item e demais campos do projeto intactos.
+
+VALIDAÇÃO: `npm run build`, `npm test` (523/523), `npx vitest run` (373/373) e `npm run lint` limpos. Conferido também no app rodando, pela skill `rodar-app`: sete projetos gravados fora de ordem, com o backend devolvendo `["Marte","projeto2","projeto10","Ação","Álbum","alfa","Zulu"]` e a tela mostrando `Ação, Álbum, alfa, Marte, projeto2, projeto10, Zulu` — o contraste entre as duas listas é a prova de que a ordenação está agindo. A navegação de arquivos passou a mostrar `script2.sh` antes de `script10.sh`. A remoção em dois toques foi refeita ponta a ponta: a linha de confirmação aparece na posição certa e o projeto some do banco.
+
+DE PASSAGEM: a skill `rodar-app` ganhou uma correção achada aqui — o `click-text` casava por trecho antes de casar exato, então `click-text Remover` acertava a lixeira do primeiro projeto (`aria-label` "Remover <nome> dos projetos") em vez do botão "Remover" da confirmação. O clique parecia ter funcionado, no alvo errado. Agora tenta exato primeiro.
+
+RISCO RESIDUAL: as outras listas alimentadas por `projects:list` seguem por `updated_at DESC` — se a ordem alfabética for desejada nelas também, o lugar é o `ORDER BY` do repositório, e aí vale rever se o menu de terminais perde algo. `sensitivity: 'base'` faz `Api` e `API` empatarem no nome, e é o caminho que decide a ordem entre eles.
+
+Estado final: concluído e validado no app rodando.

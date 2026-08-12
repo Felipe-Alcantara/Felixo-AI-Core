@@ -11,6 +11,16 @@ const {
 
 const ACTIVE_PROJECT_IDS_KEY = 'projects.activeIds'
 
+/**
+ * Ordem dos arquivos e pastas mostrados ao navegar um projeto.
+ *
+ * `numeric` para `script2.sh` vir antes de `script10.sh`, como a lista de
+ * projetos do painel — sem isso, as duas listas da mesma aba discordam sobre
+ * numeros na tela. Um collator so, no modulo, porque `readdir` de uma pasta
+ * grande faz muitas comparacoes.
+ */
+const entryCollator = new Intl.Collator(undefined, { numeric: true })
+
 function registerProjectsIpcHandlers(getMainWindow, options = {}) {
   const projectsRepository = options.database
     ? createProjectsRepository(options.database)
@@ -169,7 +179,7 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
             ? a.isDirectory
               ? -1
               : 1
-            : a.name.localeCompare(b.name),
+            : entryCollator.compare(a.name, b.name),
         )
 
       return {

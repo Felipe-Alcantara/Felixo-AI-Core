@@ -179,7 +179,7 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 
 ### Projetos, Code, Notas e Exportação
 
-- **Projetos:** adicione um repositório individual ou detecte vários repositórios dentro de um workspace.
+- **Projetos:** adicione um repositório individual ou detecte vários repositórios dentro de um workspace. A lista aparece em ordem alfabética, e o mesmo vale para os arquivos ao abrir um projeto (pastas primeiro). A ordenação ignora acento e maiúscula — `Álbum` fica junto de `alfa`, não no fim — e compara número por valor, então `projeto2` vem antes de `projeto10`.
 - **Code:** veja status, branch, diff e commits recentes dos projetos ativos. O painel atual é read-only.
 - **Notas:** registre notas associadas ao uso do app/projetos.
 - **Exportar:** exporte chats em JSON compacto, Markdown ou texto simples.
