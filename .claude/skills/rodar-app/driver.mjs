@@ -88,7 +88,15 @@ const COMMANDS = {
     )
   },
 
-  /** Clica por texto visivel ou por `aria-label` — a barra do canvas usa os dois. */
+  /**
+   * Clica por texto visivel ou por `aria-label` — a barra do canvas usa os dois.
+   *
+   * Casamento exato primeiro, aproximado so depois. A ordem importa: a lista de
+   * projetos tem lixeiras com `aria-label` "Remover <nome> dos projetos", entao
+   * um `click-text Remover` procurando por trecho acertaria a lixeira do
+   * primeiro projeto em vez do botao "Remover" da confirmacao — e o clique
+   * parece ter funcionado, so que no alvo errado.
+   */
   async 'click-text'(text) {
     console.log(
       'click-text',
@@ -96,14 +104,16 @@ const COMMANDS = {
       '->',
       await requirePage().evaluate((t) => {
         const els = [...document.querySelectorAll('button, a, [role="button"]')]
-        const matches = (el) =>
-          (el.getAttribute('aria-label') || '').includes(t) ||
-          (el.textContent || '').trim() === t ||
-          (el.textContent || '').includes(t)
-        const el = els.find(matches)
+        const label = (el) => (el.getAttribute('aria-label') || '').trim()
+        const content = (el) => (el.textContent || '').trim()
+        const el =
+          els.find((e) => label(e) === t) ??
+          els.find((e) => content(e) === t) ??
+          els.find((e) => label(e).includes(t)) ??
+          els.find((e) => content(e).includes(t))
         if (!el) return 'NAO_ENCONTRADO'
         el.click()
-        return 'OK: ' + (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 50)
+        return 'OK: ' + (label(el) || content(el)).slice(0, 50)
       }, text),
     )
   },
