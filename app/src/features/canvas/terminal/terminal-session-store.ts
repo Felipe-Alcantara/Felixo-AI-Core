@@ -93,7 +93,6 @@ const SCREEN_ACCEPT_ATTEMPTS = 3
 /** Após o aceite, basta dar ao TUI uma volta curta antes de reler a tela. */
 const POST_ACCEPT_INITIAL_TEXT_DELAY_MS = 250
 const ACCEPT_SCREEN_BUFFER_LIMIT = 12000
-const CODEX_INITIAL_TEXT_DELAY_MS = 1800
 /** Lets the Codex TUI process pasted text before it receives the Enter key. */
 const INITIAL_TEXT_SUBMIT_DELAY_MS = 75
 /**
@@ -413,7 +412,7 @@ export class TerminalSessionStore {
           // escrita é a linha de entrada aparecer (`scheduleInitialText`), e as
           // telas de aceite que aparecem antes dela são respondidas pelos
           // observadores do stream de saída mais abaixo.
-          this.scheduleInitialText(session, getInitialTextDelay(session))
+          this.scheduleInitialText(session, getInitialTextDelay())
         } else {
           this.update(session, {
             activity: 'error',
@@ -1136,9 +1135,12 @@ export class TerminalSessionStore {
   }
 }
 
-/** Cada CLI precisa de um tempo diferente até aceitar entrada programática. */
-function getInitialTextDelay(session: Session): number {
-  return session.command === 'codex'
-    ? CODEX_INITIAL_TEXT_DELAY_MS
-    : DEFAULT_INITIAL_TEXT_DELAY_MS
+/** Intervalo curto entre o spawn e a primeira checagem de prontidão. */
+function getInitialTextDelay(): number {
+  // A fixed Codex-specific wait made the standing context visibly lag behind
+  // the ready prompt. Readiness is already guarded by the screen recognizer;
+  // trust screens are handled separately, so every CLI can use the same short
+  // scheduling interval and release the first write as soon as its input line
+  // is recognized.
+  return DEFAULT_INITIAL_TEXT_DELAY_MS
 }

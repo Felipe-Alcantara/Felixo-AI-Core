@@ -136,6 +136,8 @@ npm run build
 
 ## Testes Importantes
 
+[2026-08-12] BUG corrigido — O contexto inicial do agente Codex demorava a aparecer ao abrir um terminal porque o store aplicava uma espera fixa adicional de 1800 ms antes da checagem de prontidão. A espera específica foi removida: a entrega agora usa a mesma janela curta das demais CLIs, mantendo a detecção da linha de entrada e o tratamento da tela de confiança como guardas reais. Estado: concluído nesta sessão; validação manual do Codex permanece como acompanhamento opcional.
+
 [2026-08-11] ✅ `terminal-session-store.test.ts` — primeira suíte do store de terminais, que até então era considerado intestável por depender de PTY. A ponte PTY é falsa, mas o terminal é o do próprio store: os testes alimentam o xterm com o stream de bytes capturado de uma CLI de agente real (preâmbulo de escapes, tela de aviso, REPL pronto) e verificam o que o store escreve de volta. É o padrão a seguir para qualquer comportamento do store que dependa do que está desenhado na tela.
 
 [2026-04-29] ✅ `npm test` — valida adapters `claude`, `codex`, `gemini` e preservação de linhas parciais no leitor JSONL.
