@@ -1,4 +1,8 @@
 /felixo-standards
+# Permissoes locais do Claude Code: sao da maquina de quem edita (caminhos
+# absolutos, versoes de node) e nao valem para mais ninguem. As skills do
+# projeto, em .claude/skills/, sao versionadas normalmente.
+.claude/settings.local.json
 __pycache__/
 *.pyc
 Padrão de qualidade - Felixo System Design/
