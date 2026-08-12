@@ -12,6 +12,7 @@ import {
   computePreview,
   computeSignature,
   readBuffer,
+  readShellHistory,
   readViewport,
 } from './terminal-buffer-reader'
 import {
@@ -663,6 +664,15 @@ export class TerminalSessionStore {
   getTranscript(id: string): TerminalTranscript {
     const session = this.sessions.get(id)
     return { text: session ? readBuffer(session.terminal) : '' }
+  }
+
+  /**
+   * Histórico de comandos do shell, mesmo com um app de tela cheia
+   * (nano/vim/less/htop…) ocupando a tela agora — ver `readShellHistory`.
+   */
+  getShellHistory(id: string): TerminalTranscript {
+    const session = this.sessions.get(id)
+    return { text: session ? readShellHistory(session.terminal) : '' }
   }
 
   getSnapshot(id: string): SessionSnapshot | undefined {

@@ -52,6 +52,28 @@ export function readBuffer(terminal: Terminal): string {
 }
 
 /**
+ * Histórico de comandos do shell — o buffer **normal**, não o `active`.
+ *
+ * Enquanto um app de tela cheia (nano, vim, less, htop…) está rodando, o
+ * terminal muda para o "alternate screen buffer": `buffer.active` passa a
+ * apontar pra ele, que só tem a tela atual do app, sem o histórico do shell
+ * que a abriu. O comando que lançou o app (`nano arquivo.md`) continua vivo no
+ * buffer normal, só não é mais o ativo. Quem precisa do histórico de comandos
+ * — não do que está desenhado na tela agora — deve ler daqui, não de
+ * `readBuffer`.
+ */
+export function readShellHistory(terminal: Terminal): string {
+  const buffer = terminal.buffer.normal
+  const lines: string[] = []
+
+  for (let row = 0; row < buffer.length; row += 1) {
+    lines.push(buffer.getLine(row)?.translateToString(true).trimEnd() ?? '')
+  }
+
+  return joinTrimmed(lines)
+}
+
+/**
  * Últimos caracteres do buffer. Evita reprocessar um histórico grande a cada
  * chegada de saída.
  */

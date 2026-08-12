@@ -17,7 +17,9 @@ const COMMAND_SEPARATORS = /[;&|]+/
 const PROMPT_PREFIX = /^[$#>%]\s*/
 
 /**
- * @param transcript - Texto completo do scrollback (`store.getTranscript`).
+ * @param transcript - Histórico de comandos do shell (`store.getShellHistory`,
+ *   não `getTranscript` — este último lê a tela atual de um app de tela
+ *   cheia como o nano, que não tem o comando que o abriu).
  * @param cwd - Diretório de trabalho do terminal, para resolver caminho relativo.
  */
 export function findLastEditedFile(

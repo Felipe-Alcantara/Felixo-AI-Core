@@ -146,13 +146,16 @@ export function TerminalDrawer({
     onPassResponsibility(transcript)
   }, [onPassResponsibility, sessionId, store])
 
-  // Lê o scrollback em busca do último `nano`/`vim` rodado neste terminal e
-  // abre o arquivo correspondente como um bloco "arquivo" (que já sabe
-  // renderizar markdown, código e imagem) — sem pedir o caminho de novo.
+  // Lê o histórico de comandos do shell em busca do último `nano`/`vim`
+  // rodado neste terminal e abre o arquivo correspondente como um bloco
+  // "arquivo" (que já sabe renderizar markdown, código e imagem) — sem pedir
+  // o caminho de novo. Usa getShellHistory, não getTranscript: enquanto o
+  // editor está aberto, o terminal está no alternate screen buffer, e o
+  // comando que abriu o editor só existe no buffer normal por baixo dele.
   const openRenderedPreview = useCallback(() => {
     if (!onOpenFilePreview) return
 
-    const transcript = store.getTranscript(sessionId).text
+    const transcript = store.getShellHistory(sessionId).text
     const found = findLastEditedFile(transcript, restartOptions?.cwd)
     if (!found) {
       setPreviewError('Não achei nenhum arquivo aberto com nano/vim neste terminal.')

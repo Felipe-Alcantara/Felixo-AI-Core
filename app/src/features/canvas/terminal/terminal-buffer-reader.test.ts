@@ -4,27 +4,37 @@ import {
   computePreview,
   computeSignature,
   readBuffer,
+  readShellHistory,
   readTerminalTail,
   readViewport,
 } from './terminal-buffer-reader'
+
+function fakeBuffer(lines: string[], viewportY = 0) {
+  return {
+    length: lines.length,
+    viewportY,
+    getLine: (row: number) =>
+      row >= 0 && row < lines.length ? { translateToString: () => lines[row] } : undefined,
+  }
+}
 
 /**
  * Minimal stand-in for the slice of xterm these readers touch: a list of lines
  * plus the viewport window over them. Keeps the tests free of a real terminal
  * (and of a DOM, which this suite does not have).
+ *
+ * `normalLines` simula o buffer normal quando ele diverge do `active` — o
+ * caso de um app de tela cheia (nano/vim) ocupando o alternate buffer.
  */
-function fakeTerminal(lines: string[], { rows = lines.length, viewportY = 0 } = {}): Terminal {
+function fakeTerminal(
+  lines: string[],
+  { rows = lines.length, viewportY = 0, normalLines }: { rows?: number; viewportY?: number; normalLines?: string[] } = {},
+): Terminal {
   return {
     rows,
     buffer: {
-      active: {
-        length: lines.length,
-        viewportY,
-        getLine: (row: number) =>
-          row >= 0 && row < lines.length
-            ? { translateToString: () => lines[row] }
-            : undefined,
-      },
+      active: fakeBuffer(lines, viewportY),
+      normal: fakeBuffer(normalLines ?? lines),
     },
   } as unknown as Terminal
 }
@@ -51,6 +61,27 @@ describe('readBuffer', () => {
     const terminal = fakeTerminal(['antigo', 'atual'], { rows: 1, viewportY: 1 })
 
     expect(readBuffer(terminal)).toBe('antigo\natual')
+  })
+
+  it('lê o buffer alternate (tela atual) quando ele está ativo', () => {
+    const terminal = fakeTerminal(['GNU nano 7.2', 'ola-mundo.md'], {
+      normalLines: ['$ nano ola-mundo.md'],
+    })
+
+    expect(readBuffer(terminal)).toBe('GNU nano 7.2\nola-mundo.md')
+  })
+})
+
+describe('readShellHistory', () => {
+  it('lê o buffer normal mesmo com um app de tela cheia ativo no alternate', () => {
+    // É exatamente o caso do nano: enquanto ele roda, buffer.active aponta
+    // pro alternate (só a tela do editor); o comando que o abriu só existe
+    // no normal, que continua vivo por baixo.
+    const terminal = fakeTerminal(['GNU nano 7.2', 'ola-mundo.md'], {
+      normalLines: ['$ nano ola-mundo.md'],
+    })
+
+    expect(readShellHistory(terminal)).toBe('$ nano ola-mundo.md')
   })
 })
 
