@@ -1,6 +1,11 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { splitTerminalSubmission } from './terminal-input'
+import {
+  findClipboardImage,
+  formatImagePathForPrompt,
+  hasClipboardText,
+} from './terminal-image-paste'
 import { isSubmissionPending } from './terminal-submission'
 import {
   computePreview,
@@ -170,6 +175,8 @@ type Session = {
    * atropelaria o que ele está montando.
    */
   inputTouched: boolean
+  /** The paste interceptor is bound to the xterm element, which outlives attach. */
+  imagePasteBound: boolean
   codexTrustBuffer: string
   codexTrustHandled: boolean
   claudeBypassBuffer: string
@@ -254,6 +261,7 @@ export class TerminalSessionStore {
       contextRetryTimer: null,
       initialTextSent: false,
       inputTouched: false,
+      imagePasteBound: false,
       codexTrustBuffer: '',
       codexTrustHandled: false,
       claudeBypassBuffer: '',
@@ -412,7 +420,87 @@ export class TerminalSessionStore {
       container.appendChild(session.terminal.element)
     }
 
+    this.bindImagePaste(session)
     this.fit(session)
+  }
+
+  /**
+   * Makes a plain Ctrl+V / Cmd+V carry images, not just text.
+   *
+   * xterm only knows how to paste text, and the agent CLIs that do accept an
+   * image each use a different shortcut — and, on Linux, depend on `xclip` or
+   * `wl-paste` being installed, which they usually are not. Intercepting the
+   * paste here, before xterm sees it, saves the image alongside the other
+   * attachments and types its path into the prompt. One shortcut, same result
+   * on every OS and for every agent.
+   */
+  private bindImagePaste(session: Session): void {
+    const element = session.terminal.element
+
+    if (!element || session.imagePasteBound) {
+      return
+    }
+
+    session.imagePasteBound = true
+
+    // Capture phase: xterm listens on its inner textarea, so this runs first
+    // and can stop an image from being pasted as the empty string it looks
+    // like to a text-only handler. The listener needs no teardown — it lives on
+    // the element, which `terminal.dispose()` destroys along with the session.
+    element.addEventListener(
+      'paste',
+      (event) => {
+        void this.handleImagePaste(session, event as ClipboardEvent)
+      },
+      { capture: true },
+    )
+  }
+
+  private async handleImagePaste(
+    session: Session,
+    event: ClipboardEvent,
+  ): Promise<void> {
+    const clipboardData = event.clipboardData
+    const image = findClipboardImage(clipboardData)
+
+    if (!image && hasClipboardText(clipboardData)) {
+      // Ordinary text: xterm's own paste still owns this.
+      return
+    }
+
+    // Claim the event before the first `await`. Afterwards the paste has
+    // already happened and preventing it is too late.
+    event.preventDefault()
+    event.stopPropagation()
+
+    const files = window.felixo?.files
+    const saved = image
+      ? await files?.saveAttachment({
+          name: image.name,
+          type: image.type,
+          data: await image.arrayBuffer(),
+        })
+      : // No image in the event and no text either. Some environments — the
+        // Linux Mint screenshot tool among them — publish the bitmap in a
+        // format the renderer never sees, but the native clipboard read finds.
+        await files?.saveClipboardImage()
+
+    if (!saved?.ok || !saved.filePath) {
+      return
+    }
+
+    this.typeIntoSession(session, formatImagePathForPrompt(saved.filePath))
+  }
+
+  /** Writes text into the PTY exactly as if the person had typed it. */
+  private typeIntoSession(session: Session, text: string): void {
+    if (!text || session.disposed) {
+      return
+    }
+
+    void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+    session.inputTouched = true
+    this.trackTypedInput(session, text)
   }
 
   /** Re-fits the terminal to its current container and pushes a PTY resize. */

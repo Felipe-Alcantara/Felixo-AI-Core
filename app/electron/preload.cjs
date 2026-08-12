@@ -147,6 +147,7 @@ contextBridge.exposeInMainWorld('felixo', {
     readImageAttachment: (params) =>
       ipcRenderer.invoke('files:read-image-attachment', params),
     saveAttachment: (params) => ipcRenderer.invoke('files:save-attachment', params),
+    saveClipboardImage: () => ipcRenderer.invoke('files:save-clipboard-image'),
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
   },
   settings: {

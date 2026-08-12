@@ -1,16 +1,12 @@
 const fs = require('fs/promises')
 const path = require('node:path')
 const { randomUUID } = require('node:crypto')
-
-const IMAGE_MIME_EXTENSIONS = new Map([
-  ['image/avif', 'avif'],
-  ['image/bmp', 'bmp'],
-  ['image/gif', 'gif'],
-  ['image/jpeg', 'jpg'],
-  ['image/png', 'png'],
-  ['image/svg+xml', 'svg'],
-  ['image/webp', 'webp'],
-])
+const { readClipboardImage } = require('./clipboard-image.cjs')
+const {
+  IMAGE_MIME_EXTENSIONS,
+  imageMimeTypeFromFileName,
+  normalizeImageMimeType,
+} = require('./image-mime-types.cjs')
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
@@ -26,10 +22,30 @@ function registerFileAttachmentIpcHandlers(appPaths, options = {}) {
   ipcMain.handle('files:read-image-attachment', async (_event, params) =>
     readImageAttachment(params),
   )
+  ipcMain.handle('files:save-clipboard-image', async () =>
+    saveClipboardImage(attachmentDir, options),
+  )
+}
+
+/**
+ * Turns "there is an image in the clipboard" into "there is a file on disk" —
+ * the only form a terminal can carry. Used when the renderer's paste event
+ * came through without the bitmap, which is routine on Linux: several
+ * screenshot tools publish a clipboard format Chromium never surfaces to the
+ * page, while the native clipboard read still finds it.
+ *
+ * @param {string} attachmentDir
+ * @param {object} [options] - Forwarded to {@link readClipboardImage} for tests.
+ * @returns {Promise<object>} Same shape as `files:save-attachment`.
+ */
+async function saveClipboardImage(attachmentDir, options = {}) {
+  const image = await readClipboardImage(options)
+
+  return image.ok ? saveAttachment(image, attachmentDir) : image
 }
 
 async function saveAttachment(params, attachmentDir) {
-  const mimeType = normalizeMimeType(params?.type)
+  const mimeType = normalizeImageMimeType(params?.type)
   const buffer = toBuffer(params?.data)
 
   if (!mimeType || !mimeType.startsWith('image/')) {
@@ -126,33 +142,18 @@ async function readImageAttachment(params) {
   }
 }
 
-function normalizeMimeType(value) {
-  const mimeType = typeof value === 'string' ? value.trim().toLowerCase() : ''
-
-  return mimeType === 'image/jpg' ? 'image/jpeg' : mimeType
-}
-
 function resolveAttachmentMimeType(params) {
-  const mimeType = normalizeMimeType(params?.type)
+  const mimeType = normalizeImageMimeType(params?.type)
 
   if (IMAGE_MIME_EXTENSIONS.has(mimeType)) {
     return mimeType
   }
 
+  // Fall back to the extension: a path picked from disk often carries no
+  // declared type at all.
   const name = typeof params?.name === 'string' ? params.name : params?.path
-  const extension = path.extname(name || '').toLowerCase().replace(/^\./, '')
 
-  for (const [candidateMimeType, candidateExtension] of IMAGE_MIME_EXTENSIONS) {
-    if (extension === candidateExtension) {
-      return candidateMimeType
-    }
-  }
-
-  if (extension === 'jpeg') {
-    return 'image/jpeg'
-  }
-
-  return mimeType
+  return imageMimeTypeFromFileName(name) || mimeType
 }
 
 function toBuffer(value) {
@@ -195,4 +196,5 @@ module.exports = {
   readImageAttachment,
   registerFileAttachmentIpcHandlers,
   saveAttachment,
+  saveClipboardImage,
 }

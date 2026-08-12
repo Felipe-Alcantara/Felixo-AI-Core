@@ -414,6 +414,12 @@ declare global {
           type: string
           data: ArrayBuffer
         }) => Promise<SaveAttachmentResult>
+        /**
+         * Saves whatever image the OS clipboard holds. Used when the paste
+         * event reached the renderer without the bitmap, which happens with
+         * several Linux screenshot tools.
+         */
+        saveClipboardImage: () => Promise<SaveAttachmentResult>
         saveTextFile: (params: {
           defaultPath: string
           content: string
