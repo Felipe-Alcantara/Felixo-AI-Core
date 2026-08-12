@@ -1441,7 +1441,7 @@ VALIDAÇÃO: YAML validado e a sintaxe shell dos passos conferida com `bash -n`.
 
 RISCO RESIDUAL: se `gh release view` não enxergar a release em rascunho no runner, o `finalize` falha e a release fica em rascunho — ninguém recebe uma release quebrada, mas o deploy não sai e é preciso publicar à mão (`gh release edit vX.Y.Z --draft=false --latest`). É o modo de falha seguro, e vale conferir a primeira execução. Além disso, a v0.1.14 já saiu no esquema antigo; o rascunho só vale da próxima em diante.
 
-Estado final: concluído — aguardando o próximo deploy para conferir o caminho rascunho→público.
+Estado final: **este fix estava errado e foi substituído na parte 8**. Rascunho não cria tag no git, e sem tag o GitHub aceita várias releases com o mesmo `tag_name` — os três jobs paralelos deixaram de colidir e criaram três rascunhos separados na v0.1.15.
 
 ## Registro de Trabalho — 2026-08-12 (parte 6) — ler e editar arquivo de projeto no terminal (Colar imagnes é dificil no terminal)
 
@@ -1498,3 +1498,34 @@ VALIDAÇÃO: `npm run build`, `npm test` (544/544), `npx vitest run` (397/397) e
 RISCO RESIDUAL: `Ctrl+Shift+V` com texto não foi testado. O comportamento do menu padrão do Electron pode diferir em Windows e macOS — lá o `Ctrl/Cmd+V` pode gerar evento e tecla ao mesmo tempo, e é para isso que existe a janela de 500 ms, que não foi exercitada nessas plataformas. A leitura continua sendo do sistema operacional, então uma área de transferência com texto e imagem juntos segue colando o texto.
 
 Estado final: concluído e validado no app rodando, com tecla real.
+
+## Registro de Trabalho — 2026-08-12 (parte 8) — o fix de release da parte 5 quebrou o deploy (Colar imagnes é dificil no terminal)
+
+SINTOMA: o Felipe subiu e a atualização não chegou no app.
+
+O QUE ACONTECEU: a v0.1.15 saiu como **três releases separadas com a mesma tag**, e a que ficou pública tinha só os artefatos de macOS. O `/releases/latest` — que é o que o app consulta — devolvia uma release sem `latest-linux.yml`, então no Linux não havia atualização nenhuma a encontrar. Linux e Windows ficaram presos em rascunhos invisíveis.
+
+CAUSA, confirmada lendo `electron-publish/out/gitHubPublisher.js` e não por hipótese. O próprio comentário do arquivo diz: *"we don't use 'Get a release by tag name' because 'tag name' means existing git tag, but we draft release and don't create git tag"*. Rascunho **não cria tag**. Sem tag, o GitHub aceita várias releases com o mesmo `tag_name`, então:
+
+- `getOrCreateRelease` lista as releases, não acha nenhuma com a tag (os três jobs correm juntos) e cada um chama `createRelease`;
+- criar a segunda release não devolve `422 already_exists`, porque não há tag para colidir;
+- resultado: três releases, cada uma com o que aquele job subiu.
+
+Era justamente esse 422 — tratado por `doesErrorMeanAlreadyExists` — que fazia os três jobs convergirem na mesma release enquanto o tipo era `release`. A parte 5 removeu esse mecanismo sem perceber que ele existia.
+
+FEITO: `releaseType` passou de `draft` para **`prerelease`**.
+
+- Pré-lançamento **cria a tag**, então o 422 volta e os três jobs voltam a convergir na mesma release — é exatamente o mesmo caminho de código que funcionava antes.
+- `/releases/latest` do GitHub ignora pré-lançamento tanto quanto rascunho, e o app tem `allowPrerelease = false` por padrão. A propriedade que a parte 5 queria (release invisível enquanto incompleta) continua valendo.
+- `finalize` agora faz `gh release edit --prerelease=false --latest`.
+- E ganhou uma guarda contra o defeito que acabou de acontecer: se existir **mais de uma** release com a tag, o job falha em vez de publicar uma delas. Publicar pela metade é pior do que não publicar.
+
+SOBRE A v0.1.15: fica como está. Assim que a próxima release sair, ela vira a `latest` e a v0.1.15 quebrada deixa de ser alcançável — apagar release publicada é destrutivo e não é necessário para destravar. Os dois rascunhos órfãos são invisíveis; limpá-los é opcional.
+
+VALIDAÇÃO: YAML validado, shell dos passos conferido com `bash -n`, `allowPrerelease` conferido no `auto-updater.cjs`. O mecanismo do 422 está **verificado no código do electron-publish**, e é o mesmo caminho que a v0.1.14 usou com sucesso — ou seja, a falha específica da v0.1.15 não pode se repetir. O que segue sem execução real é o passo final `--prerelease=false --latest`.
+
+RISCO RESIDUAL: quem rodar com `FELIXO_UPDATE_PRERELEASE=1` passa a enxergar a release enquanto ela ainda está incompleta — é o preço de usar pré-lançamento como estado intermediário. Se o `finalize` falhar, a release fica como pré-lançamento e ninguém a recebe: modo de falha seguro, mas o deploy não sai e é preciso rodar `gh release edit vX.Y.Z --prerelease=false --latest` à mão.
+
+LIÇÃO: a parte 5 mudou um comportamento de publicação sem ler como o publicador decide criar ou reaproveitar uma release. O sintoma original — uma janela de ~1 min mostrando "Falha ao atualizar" — era cosmético e se resolvia sozinho; o conserto quebrou o deploy inteiro. Ler o `getOrCreateRelease` levou dez minutos e teria evitado tudo.
+
+Estado final: concluído — aguardando o próximo push para conferir o caminho pré-lançamento→definitiva.

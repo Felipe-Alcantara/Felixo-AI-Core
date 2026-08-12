@@ -85,16 +85,23 @@ jobs:
       - name: Publish installers
         run: npx electron-builder --publish always
 
-  # A release nasce como rascunho e só fica pública aqui, depois que os três
-  # jobs passaram.
+  # A release nasce como PRÉ-lançamento e só vira definitiva aqui, depois que os
+  # três jobs passaram.
   #
-  # Enquanto publicava direto, cada job criava/alimentava uma release JÁ pública
-  # e os três terminam em momentos diferentes — na v0.1.14 o AppImage subiu
-  # 15:01:01 e o `latest-linux.yml` só 15:02:06, com o `latest.yml` do Windows
-  # às 15:03:58. Nessas janelas a release já era a "latest" sem o manifesto da
+  # Enquanto publicava direto, cada job alimentava uma release já pública e os
+  # três terminam em momentos diferentes — na v0.1.14 o AppImage subiu 15:01:01
+  # e o `latest-linux.yml` só 15:02:06, com o `latest.yml` do Windows às
+  # 15:03:58. Nessas janelas a release já era a "latest" sem o manifesto da
   # plataforma, então quem checasse ali tomava 404 e via "Falha ao atualizar".
-  # O electron-updater ignora rascunho, então agora não existe estado
-  # intermediário visível: ou a release está completa, ou ela não existe.
+  #
+  # Pré-lançamento, e não rascunho: `/releases/latest` do GitHub ignora os dois,
+  # mas rascunho **não cria tag no git** — está dito no próprio
+  # `electron-publish/out/gitHubPublisher.js`. Sem tag, o GitHub aceita várias
+  # releases com o mesmo `tag_name`, os três jobs paralelos deixam de colidir e
+  # nenhum recebe o `422 already_exists` que os faz convergir na mesma release.
+  # Foi o que aconteceu na v0.1.15: três rascunhos, com Linux, macOS e Windows
+  # separados, e a publicação de um deles sozinho. Pré-lançamento cria a tag e
+  # devolve o 422, que é justamente o mecanismo que junta os três.
   finalize:
     name: Publish release
     needs: publish
@@ -167,11 +174,22 @@ jobs:
             exit 1
           fi
 
-          # Idempotente: reexecutar o workflow com a release já pública não é erro.
-          if [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" == "false" ]]; then
-            echo "Release $RELEASE_TAG ja esta publica."
+          # Guarda contra o defeito que a v0.1.15 expos: se por qualquer motivo
+          # existir mais de uma release com esta tag, publicar uma delas
+          # entregaria uma release parcial como "latest". Melhor falhar e deixar
+          # tudo invisivel do que publicar pela metade.
+          COUNT="$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            --jq "[.[] | select(.tag_name == \"$RELEASE_TAG\")] | length")"
+          if [[ "$COUNT" != "1" ]]; then
+            echo "Esperava 1 release com a tag $RELEASE_TAG, encontrei $COUNT." >&2
+            exit 1
+          fi
+
+          # Idempotente: reexecutar o workflow com a release ja definitiva nao e erro.
+          if [[ "$(gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease)" == "false" ]]; then
+            echo "Release $RELEASE_TAG ja esta publicada."
             exit 0
           fi
 
-          gh release edit "$RELEASE_TAG" --draft=false --latest
+          gh release edit "$RELEASE_TAG" --prerelease=false --latest
           echo "Release $RELEASE_TAG publicada."
