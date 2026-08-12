@@ -1622,3 +1622,23 @@ VALIDAÇÃO: `npm run build` (`tsc -b && vite build`), `npm run lint` e `npx vit
 RISCO RESIDUAL: nenhum teste automatizado cobre o hook/handler novos — são poucas linhas que só encaminham um valor do Electron, sem lógica própria a testar; a badge foi conferida lendo o resultado do build. Fora do Electron empacotado (build de desenvolvimento, navegador) a badge não aparece, porque não há `window.felixo` nem versão real para mostrar.
 
 Estado final: concluído e validado (build + lint + testes).
+
+## Registro de Trabalho — 2026-08-12 (parte 13) — preview renderizado a partir do terminal (Feature: botão de visualização renderizada no topbar do terminal)
+
+MOTIVO: quem edita um `.md` num terminal com `nano`/`vim` não tem como conferir título, código destacado e imagem sem sair do app e olhar o arquivo publicado. O bloco "arquivo" do canvas já resolve isso — toggle 👁/✏️ que renderiza markdown com `MarkdownContent` (remark-gfm + highlight.js + `<img>`) — mas só existe pra quem abriu o arquivo por ali; quem trabalha dentro do terminal não tinha ponte nenhuma até esse bloco.
+
+O LIMITE ASSUMIDO DE PROPÓSITO: o terminal é um pty de texto puro (xterm.js) — não renderiza HTML nem imagem, por natureza da tecnologia, não por lacuna a fechar. Em vez de simular renderização dentro do grid de caracteres, o botão novo detecta qual arquivo está aberto e abre o bloco "arquivo" de verdade ao lado, reaproveitando a renderização que já existia.
+
+FEITO:
+
+- `findLastEditedFile` (`terminal-open-file.ts`): lê o scrollback do terminal (`store.getTranscript`) e acha o último `nano`/`vim`/`vi <arquivo>` digitado, resolvendo caminho relativo pelo `cwd` da sessão e ignorando flags (`-R`, `-c`, …) como se fossem o caminho.
+- Botão 👁 no topbar do `TerminalDrawer`, ao lado de "Reiniciar terminal": aciona `findLastEditedFile` sobre o transcript atual e chama `onOpenFilePreview`. Sem arquivo detectado, mostra aviso inline (mesmo padrão visual do erro de handoff), em vez de abrir um bloco vazio.
+- `CanvasView` liga `onOpenFilePreview` a `openTextFileNode` — a mesma função que o painel Projetos usa para abrir um arquivo existente, então o bloco criado é idêntico ao que já existia (preview aberto por padrão, sem editar nada).
+
+TESTE: `terminal-open-file.test.ts`, 6 casos — caminho relativo resolvido pelo cwd, caminho absoluto, aspas em nome com espaço, múltiplos comandos (usa o mais recente), flag tratada como não-caminho, e nenhum editor rodado no terminal.
+
+VALIDAÇÃO: `npx tsc -b`, `npx eslint` nos arquivos tocados e `npx vitest run` (95/95 em `features/canvas/components`, incluindo os 6 novos) limpos.
+
+RISCO RESIDUAL: a detecção lê texto do scrollback — se o histórico rolar além do buffer do xterm antes de clicar no botão, ou se o comando usar um alias/wrapper em vez de `nano`/`vim`/`vi` diretamente, nada é encontrado e o aviso aparece (falha visível, não falha silenciosa). Build empacotado (`/opt/Felixo AI Core`) ainda não tem essa mudança — só entra depois de `npm run build`/reinstalação.
+
+Estado final: concluído e validado (typecheck + lint + testes). Pendente apenas rebuild do binário instalado para o usuário ver o botão em uso.

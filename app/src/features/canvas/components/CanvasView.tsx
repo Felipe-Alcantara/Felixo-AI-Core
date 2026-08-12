@@ -1695,6 +1695,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           onPassResponsibility={(transcript) =>
             setHandoff({ sourceId: expandedTerminalId, transcript })
           }
+          onOpenFilePreview={openTextFileNode}
           onClose={() => setExpandedTerminalId(null)}
         />
       )}

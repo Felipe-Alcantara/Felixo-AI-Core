@@ -3,6 +3,7 @@ import {
   ArrowRightLeft,
   ChevronLeft,
   ChevronRight,
+  Eye,
   Maximize2,
   Minimize2,
   Pin,
@@ -15,6 +16,7 @@ import {
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
+import { findLastEditedFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import {
@@ -46,6 +48,13 @@ type TerminalDrawerProps = {
    * decisão do usuário, não a consequência de um estado detectado.
    */
   onPassResponsibility?: (transcript: string) => void
+  /**
+   * Cria (ou reaproveita) o bloco "arquivo" apontando para o caminho dado, já
+   * em modo visualização — o mesmo bloco que o painel Projetos cria ao abrir
+   * um arquivo existente. Terminal continua sendo pty puro; quem renderiza
+   * markdown/código/imagem é sempre o bloco arquivo.
+   */
+  onOpenFilePreview?: (filePath: string, fileName: string) => void
   onClose: () => void
 }
 
@@ -62,6 +71,7 @@ export function TerminalDrawer({
   title,
   restartOptions,
   onPassResponsibility,
+  onOpenFilePreview,
   onClose,
 }: TerminalDrawerProps) {
   const store = useTerminalSessions()
@@ -93,6 +103,7 @@ export function TerminalDrawer({
   const [collapsed, setCollapsed] = useState(() => readCollapsedPreference(localStorage))
   const [maximized, setMaximized] = useState(false)
   const [handoffError, setHandoffError] = useState<string | undefined>()
+  const [previewError, setPreviewError] = useState<string | undefined>()
 
   const togglePinned = useCallback(() => {
     setPinned((prev) => {
@@ -134,6 +145,23 @@ export function TerminalDrawer({
     setHandoffError(undefined)
     onPassResponsibility(transcript)
   }, [onPassResponsibility, sessionId, store])
+
+  // Lê o scrollback em busca do último `nano`/`vim` rodado neste terminal e
+  // abre o arquivo correspondente como um bloco "arquivo" (que já sabe
+  // renderizar markdown, código e imagem) — sem pedir o caminho de novo.
+  const openRenderedPreview = useCallback(() => {
+    if (!onOpenFilePreview) return
+
+    const transcript = store.getTranscript(sessionId).text
+    const found = findLastEditedFile(transcript, restartOptions?.cwd)
+    if (!found) {
+      setPreviewError('Não achei nenhum arquivo aberto com nano/vim neste terminal.')
+      return
+    }
+
+    setPreviewError(undefined)
+    onOpenFilePreview(found.path, found.name)
+  }, [onOpenFilePreview, restartOptions?.cwd, sessionId, store])
 
   const effectiveWidth = collapsed
     ? COLLAPSED_WIDTH
@@ -333,6 +361,20 @@ export function TerminalDrawer({
               <RotateCcw size={16} />
             </button>
           )}
+          {/* O terminal em si é só um pty de texto — quem renderiza markdown,
+              código e imagem é o bloco "arquivo". Este botão detecta o
+              arquivo aberto com nano/vim e abre esse bloco ao lado. */}
+          {!collapsed && onOpenFilePreview && (
+            <button
+              type="button"
+              onClick={openRenderedPreview}
+              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              aria-label="Ver arquivo em modo renderizado"
+              title="Ver o arquivo aberto (nano/vim) em modo renderizado, igual ao site"
+            >
+              <Eye size={16} />
+            </button>
+          )}
           {/* Item fixo da topbar. A versão anterior só aparecia quando uma
               heurística achava que o agente tinha batido no limite de uso, e
               como a atividade da sessão oscila a cada redesenho da CLI, o botão
@@ -378,6 +420,11 @@ export function TerminalDrawer({
       {!collapsed && handoffError && (
         <div className="border-b border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-300">
           {handoffError}
+        </div>
+      )}
+      {!collapsed && previewError && (
+        <div className="border-b border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+          {previewError}
         </div>
       )}
       {/* The terminal element stays mounted while collapsed (the PTY and its
