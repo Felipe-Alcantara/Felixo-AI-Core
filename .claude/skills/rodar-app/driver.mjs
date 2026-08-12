@@ -170,6 +170,47 @@ const COMMANDS = {
   async press(key) { await requirePage().keyboard.press(key) },
 
   /**
+   * Tecla de verdade, pelo X, em vez de evento sintetico do Playwright.
+   *
+   * `press` entra pelo CDP e nunca vira tecla do sistema — entao nao aciona
+   * acelerador de menu do Electron nem o caminho nativo do Chromium. Isso ja
+   * escondeu um bug real: `paste image` passava e o Ctrl+V do app nao colava,
+   * porque com imagem na area de transferencia o comando de colar do Chromium
+   * e um no-op e nenhum evento `paste` nasce. Para qualquer atalho que dependa
+   * do sistema (colar, menu, acelerador), use este.
+   *
+   * Precisa de `xdotool` e do foco certo — rode `focus-terminal` antes, e nao
+   * chame `windowfocus` depois, que devolve o foco para a janela e tira do
+   * elemento.
+   */
+  async realkey(combo) {
+    if (!app) return console.log('ERRO: lance o app primeiro')
+    if (!combo) return console.log('uso: realkey ctrl+v')
+
+    const { execFileSync } = await import('node:child_process')
+    const fsSync = await import('node:fs')
+    const environ = fsSync.readFileSync(`/proc/${app.process().pid}/environ`, 'utf8')
+    const read = (name) =>
+      environ.split('\0').find((entry) => entry.startsWith(`${name}=`))?.slice(name.length + 1)
+    const env = { ...process.env, DISPLAY: read('DISPLAY'), XAUTHORITY: read('XAUTHORITY') }
+
+    try {
+      const windowId = execFileSync('xdotool', ['search', '--name', '^app$'], { env })
+        .toString().trim().split('\n')[0]
+      execFileSync('xdotool', ['windowfocus', windowId], { env })
+      // Foco do DOM de novo: `windowfocus` devolve o foco a janela e tira do
+      // elemento, e sem elemento focado a tecla nao chega em lugar nenhum util.
+      await requirePage().evaluate(() => {
+        document.querySelector('.xterm-helper-textarea')?.focus()
+      })
+      execFileSync('xdotool', ['key', '--clearmodifiers', combo], { env })
+      console.log('realkey', combo, '-> enviada para', windowId)
+    } catch (error) {
+      console.log('ERRO:', error.message, '(xdotool instalado?)')
+    }
+  },
+
+  /**
    * Dispara um `paste` de verdade no elemento do xterm.
    *
    * `kind` diz o que vai dentro do evento:

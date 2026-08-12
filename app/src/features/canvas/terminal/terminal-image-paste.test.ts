@@ -3,7 +3,12 @@ import {
   findClipboardImage,
   formatImagePathForPrompt,
   hasClipboardText,
+  isImagePasteShortcut,
 } from './terminal-image-paste'
+
+function keyEvent(init: Partial<KeyboardEvent> & { key: string }) {
+  return { type: 'keydown', shiftKey: false, altKey: false, ctrlKey: false, metaKey: false, ...init } as KeyboardEvent
+}
 
 /** Minimal stand-in for a paste event's `clipboardData`. */
 function fakeClipboardData({
@@ -101,5 +106,32 @@ describe('formatImagePathForPrompt', () => {
   it('produces nothing for an empty path, so nothing is typed', () => {
     expect(formatImagePathForPrompt('')).toBe('')
     expect(formatImagePathForPrompt('   ')).toBe('')
+  })
+})
+
+describe('isImagePasteShortcut', () => {
+  it('reconhece Ctrl+V, o atalho que não gera evento de paste com imagem', () => {
+    expect(isImagePasteShortcut(keyEvent({ key: 'v', ctrlKey: true }))).toBe(true)
+    expect(isImagePasteShortcut(keyEvent({ key: 'V', ctrlKey: true }))).toBe(true)
+  })
+
+  it('reconhece Cmd+V, o atalho do macOS', () => {
+    expect(isImagePasteShortcut(keyEvent({ key: 'v', metaKey: true }))).toBe(true)
+  })
+
+  it('ignora Ctrl+Shift+V, que já gera um evento de paste de verdade', () => {
+    // Tratar os dois colaria a mesma imagem duas vezes.
+    expect(isImagePasteShortcut(keyEvent({ key: 'v', ctrlKey: true, shiftKey: true }))).toBe(false)
+  })
+
+  it('ignora combinações que não são colar', () => {
+    expect(isImagePasteShortcut(keyEvent({ key: 'v' }))).toBe(false)
+    expect(isImagePasteShortcut(keyEvent({ key: 'c', ctrlKey: true }))).toBe(false)
+    expect(isImagePasteShortcut(keyEvent({ key: 'v', ctrlKey: true, altKey: true }))).toBe(false)
+  })
+
+  it('ignora o que não é keydown, para não colar duas vezes por tecla', () => {
+    expect(isImagePasteShortcut(keyEvent({ type: 'keyup', key: 'v', ctrlKey: true }))).toBe(false)
+    expect(isImagePasteShortcut(keyEvent({ type: 'keypress', key: 'v', ctrlKey: true }))).toBe(false)
   })
 })

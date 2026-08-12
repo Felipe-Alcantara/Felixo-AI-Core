@@ -1341,7 +1341,7 @@ E a prova de que a ponta serve para alguma coisa: com o caminho da imagem verde 
 
 RISCO RESIDUAL: as imagens coladas se acumulam em `clipboard-attachments` sem limpeza automática, igual ao que já acontecia com os anexos do chat. Se a área de transferência trouxer texto **e** imagem ao mesmo tempo, o texto ganha; é o comportamento esperado de um `Ctrl+V`, mas significa que uma imagem acompanhada de legenda cola só a legenda. Colar por arrastar-e-soltar não foi coberto. A imagem referenciada por um arquivo é **copiada** para a pasta de anexos, não referenciada onde está — o caminho fica estável se o original for movido, ao custo de duplicar o arquivo. A conferência foi em Linux/X11 sob Xvfb; Windows, macOS e Wayland seguem cobertos apenas pelo `clipboard` do Electron ser nativo neles, sem execução real.
 
-Estado final: concluído e validado no app rodando.
+Estado final: concluído — mas a validação tinha um furo, corrigido na parte 7 deste mesmo dia: os quatro caminhos foram exercitados com `ClipboardEvent` **sintético**, o que prova o tratamento do evento e não que o atalho do teclado produz esse evento. Com `Ctrl+V` ele não produzia, e só `Ctrl+Shift+V` funcionava de verdade.
 
 ## Registro de Trabalho — 2026-08-12 (parte 2) — skill para dirigir o app (Colar imagnes é dificil no terminal)
 
@@ -1468,3 +1468,33 @@ VALIDAÇÃO: `npm run build`, `npm test` (544/544), `npx vitest run` (392/392) e
 RISCO RESIDUAL: se `$EDITOR` apontar para um editor gráfico (`code`, `gedit`), o clique abre esse programa fora do terminal — é a configuração da pessoa sendo respeitada, mas não é "editar no terminal". Um editor que não existe e está configurado em `$EDITOR` volta a dar "comando não encontrado", porque configuração explícita não passa pelo PATH de propósito. A lista de extensões binárias é finita: um formato binário fora dela abriria no editor mostrando lixo — sem risco de corromper, já que sair sem salvar não grava nada.
 
 Estado final: concluído e validado no app rodando.
+
+## Registro de Trabalho — 2026-08-12 (parte 7) — Ctrl+V não colava imagem; só Ctrl+Shift+V (Colar imagnes é dificil no terminal)
+
+CORREÇÃO DE ROTA: a parte 1 deu a feature de colar imagem como validada no app rodando. Estava errado, e o Felipe apontou: o que funcionava era `Ctrl+Shift+V`; o `Ctrl+V` não colava nada. A validação de lá disparava um `ClipboardEvent` **sintético** no elemento do xterm — isso prova que o tratamento do evento funciona, e não que o atalho do teclado produz esse evento. A tecla real nunca passou pelo teste.
+
+CAUSA, reproduzida com tecla de verdade (`xdotool` sobre o Xvfb, não `page.keyboard`):
+
+- `Ctrl+V` com imagem na área de transferência: **nenhum evento `paste`** chega à página (log de eventos vazio) e nada acontece.
+- `Ctrl+Shift+V` com a mesma imagem: o evento chega — com `items: 0` e texto vazio, ou seja, quem salva é o fallback nativo.
+- O `keydown` do `Ctrl+V`, esse, **chega** na página e no textarea do xterm.
+
+O app não define menu próprio, então herda o menu padrão do Electron, cujo Editar tem `role: 'paste'` com acelerador `Ctrl+V`. A tecla aciona `webContents.paste()`, e o comando de colar do Chromium num `<textarea>` só sabe inserir texto: com a área de transferência contendo apenas imagem não há nada a inserir, o comando vira no-op e **nenhum evento `paste` é disparado**. `Ctrl+Shift+V` não tem acelerador de menu, segue o caminho nativo do navegador e gera o evento.
+
+Conferido de propósito antes de mexer: `Ctrl+V` com **texto** continua colando normalmente (o `webContents.paste()` insere direto no textarea), então não havia regressão a consertar ali.
+
+FEITO: o atalho passa a ser tratado onde ele comprovadamente chega — no `attachCustomKeyEventHandler` do xterm.
+
+- `isImagePasteShortcut` (`terminal-image-paste.ts`): reconhece `Ctrl+V` e `Cmd+V`, e **ignora `Ctrl+Shift+V`** de propósito — esse já gera evento de verdade, e tratar os dois colaria a mesma imagem duas vezes.
+- `pasteClipboardImageFromOs` no store: lê a imagem pela área de transferência do sistema e digita o caminho. O handler de tecla devolve `true` (não consome), para que, havendo texto, o caminho normal de colar continue valendo — a leitura de imagem simplesmente não acha nada.
+- `claimImagePaste` + `lastImagePasteAt`: janela de 500 ms que impede o evento e a tecla de atenderem o mesmo Ctrl+V. Em Linux só um dos dois dispara, mas o comportamento do menu padrão varia por plataforma e um duplo salvamento seria silencioso.
+
+DE PASSAGEM, a skill `rodar-app` foi cúmplice do erro e ganhou o que faltava: comando `realkey`, que manda tecla de verdade pelo X (`xdotool`), e um item nos "detalhes que custaram tempo" avisando que `press`/`paste` entram pelo CDP e **não** acionam acelerador de menu nem caminho nativo. Também ficou registrado que `xdotool windowfocus` tira o foco do elemento — foi o que fez o primeiro teste do fix parecer falho quando já estava certo.
+
+TESTE: `isImagePasteShortcut` ganhou 5 casos em `terminal-image-paste.test.ts` — Ctrl+V, Cmd+V, Ctrl+Shift+V recusado, combinações que não são colar, e tipo de evento diferente de `keydown`.
+
+VALIDAÇÃO: `npm run build`, `npm test` (544/544), `npx vitest run` (397/397) e `npm run lint` limpos. E, desta vez, **com tecla de verdade no app rodando**: `Ctrl+V` com imagem passou a salvar o arquivo e digitar o caminho; `Ctrl+V` com texto colou o texto sem criar arquivo nenhum; `Ctrl+Shift+V` com imagem continuou funcionando e salvou **um** arquivo, não dois. O `realkey` da skill foi exercitado no fluxo completo.
+
+RISCO RESIDUAL: `Ctrl+Shift+V` com texto não foi testado. O comportamento do menu padrão do Electron pode diferir em Windows e macOS — lá o `Ctrl/Cmd+V` pode gerar evento e tecla ao mesmo tempo, e é para isso que existe a janela de 500 ms, que não foi exercitada nessas plataformas. A leitura continua sendo do sistema operacional, então uma área de transferência com texto e imagem juntos segue colando o texto.
+
+Estado final: concluído e validado no app rodando, com tecla real.

@@ -60,6 +60,29 @@ export function formatImagePathForPrompt(filePath: string): string {
   return /\s/.test(trimmed) ? `"${trimmed}" ` : `${trimmed} `
 }
 
+/**
+ * Se este `keydown` é o atalho de colar do sistema (Ctrl+V, Cmd+V no macOS).
+ *
+ * Existe porque o evento `paste` não é confiável para imagem: com uma imagem na
+ * área de transferência não há nada para inserir como texto, o comando de colar
+ * do Chromium vira um no-op e nenhum evento nasce. A tecla, essa, sempre chega.
+ *
+ * `Ctrl+Shift+V` fica de fora de propósito: esse atalho não tem acelerador de
+ * menu, segue o caminho nativo do navegador e já gera um `paste` de verdade —
+ * tratá-lo aqui também colaria a mesma imagem duas vezes.
+ */
+export function isImagePasteShortcut(event: KeyboardEvent): boolean {
+  if (event.type !== 'keydown' || event.shiftKey || event.altKey) {
+    return false
+  }
+
+  // No macOS o atalho é Cmd+V; em Windows e Linux, Ctrl+V.
+  const usesCommandKey = event.metaKey && !event.ctrlKey
+  const usesControlKey = event.ctrlKey && !event.metaKey
+
+  return (usesCommandKey || usesControlKey) && event.key.toLowerCase() === 'v'
+}
+
 function isImageFile(file: File): boolean {
   return file.type.startsWith('image/')
 }

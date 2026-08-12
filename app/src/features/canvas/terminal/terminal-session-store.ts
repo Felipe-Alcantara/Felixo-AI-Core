@@ -5,6 +5,7 @@ import {
   findClipboardImage,
   formatImagePathForPrompt,
   hasClipboardText,
+  isImagePasteShortcut,
 } from './terminal-image-paste'
 import { isSubmissionPending } from './terminal-submission'
 import {
@@ -116,6 +117,12 @@ const CONTEXT_CONFIRM_DELAY_MS = 2000
 const CONTEXT_REWRITE_LIMIT = 3
 /** Janela total da reconferência, para o timer não sobreviver ao boot da CLI. */
 const CONTEXT_DELIVERY_WINDOW_MS = 30000
+/**
+ * Janela em que uma segunda tentativa de colar imagem é tratada como eco da
+ * primeira. Curta o bastante para não atrapalhar quem cola duas imagens em
+ * sequência, longa o bastante para cobrir a ida e volta ao processo principal.
+ */
+const IMAGE_PASTE_DEDUPE_MS = 500
 
 type SessionOptions = {
   command?: string
@@ -177,6 +184,15 @@ type Session = {
   inputTouched: boolean
   /** The paste interceptor is bound to the xterm element, which outlives attach. */
   imagePasteBound: boolean
+  /**
+   * Quando uma imagem foi colada por aqui pela última vez.
+   *
+   * Colar imagem chega por dois caminhos — o evento `paste` e a tecla Ctrl+V —
+   * e qual deles dispara depende de plataforma e do que está na área de
+   * transferência. Se os dois dispararem para a mesma colagem, o arquivo seria
+   * salvo duas vezes e o caminho digitado duas vezes.
+   */
+  lastImagePasteAt: number
   codexTrustBuffer: string
   codexTrustHandled: boolean
   claudeBypassBuffer: string
@@ -262,6 +278,7 @@ export class TerminalSessionStore {
       initialTextSent: false,
       inputTouched: false,
       imagePasteBound: false,
+      lastImagePasteAt: 0,
       codexTrustBuffer: '',
       codexTrustHandled: false,
       claudeBypassBuffer: '',
@@ -329,6 +346,13 @@ export class TerminalSessionStore {
       if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
         void pty.write({ sessionId: session.ptySessionId, data: '\n' })
         return false
+      }
+      // Ctrl+V (Cmd+V no macOS) com imagem na área de transferência não gera
+      // evento `paste` nenhum — ver `pasteClipboardImageFromOs`. A tecla, essa,
+      // chega. Devolve `true` de propósito: se houver texto, quem cola continua
+      // sendo o caminho normal, e a leitura de imagem não acha nada.
+      if (isImagePasteShortcut(event)) {
+        void this.pasteClipboardImageFromOs(session)
       }
       return true
     })
@@ -473,23 +497,64 @@ export class TerminalSessionStore {
     event.preventDefault()
     event.stopPropagation()
 
-    const files = window.felixo?.files
-    const saved = image
-      ? await files?.saveAttachment({
-          name: image.name,
-          type: image.type,
-          data: await image.arrayBuffer(),
-        })
-      : // No image in the event and no text either. Some environments — the
-        // Linux Mint screenshot tool among them — publish the bitmap in a
-        // format the renderer never sees, but the native clipboard read finds.
-        await files?.saveClipboardImage()
-
-    if (!saved?.ok || !saved.filePath) {
+    if (!image) {
+      // Nem imagem no evento, nem texto. Alguns ambientes — a ferramenta de
+      // captura do Linux Mint entre eles — publicam o bitmap num formato que o
+      // renderer nunca enxerga, mas a leitura nativa acha.
+      await this.pasteClipboardImageFromOs(session)
       return
     }
 
-    this.typeIntoSession(session, formatImagePathForPrompt(saved.filePath))
+    if (!this.claimImagePaste(session)) {
+      return
+    }
+
+    const saved = await window.felixo?.files?.saveAttachment({
+      name: image.name,
+      type: image.type,
+      data: await image.arrayBuffer(),
+    })
+
+    if (saved?.ok && saved.filePath) {
+      this.typeIntoSession(session, formatImagePathForPrompt(saved.filePath))
+    }
+  }
+
+  /**
+   * Lê a imagem da área de transferência do sistema e digita o caminho dela.
+   *
+   * É o caminho que atende o Ctrl+V: com uma imagem na área de transferência não
+   * há nada para inserir como texto, então o comando de colar do Chromium não
+   * faz nada e **nenhum evento `paste` chega à página** — o evento só nasce
+   * quando há texto. Sem isso, Ctrl+V simplesmente não colava imagem, e só o
+   * Ctrl+Shift+V (que não tem acelerador de menu e segue o caminho nativo do
+   * navegador) funcionava.
+   */
+  private async pasteClipboardImageFromOs(session: Session): Promise<void> {
+    if (!this.claimImagePaste(session)) {
+      return
+    }
+
+    const saved = await window.felixo?.files?.saveClipboardImage()
+
+    if (saved?.ok && saved.filePath) {
+      this.typeIntoSession(session, formatImagePathForPrompt(saved.filePath))
+    }
+  }
+
+  /**
+   * Reserva esta colagem, para os dois caminhos (evento e tecla) não atenderem
+   * o mesmo Ctrl+V. Devolve `false` quando outro caminho acabou de atender.
+   */
+  private claimImagePaste(session: Session): boolean {
+    const now = Date.now()
+
+    if (now - session.lastImagePasteAt < IMAGE_PASTE_DEDUPE_MS) {
+      return false
+    }
+
+    session.lastImagePasteAt = now
+    return true
   }
 
   /** Writes text into the PTY exactly as if the person had typed it. */

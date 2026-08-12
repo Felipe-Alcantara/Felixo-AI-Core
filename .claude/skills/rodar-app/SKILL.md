@@ -68,7 +68,8 @@ Ao terminar: `./d.sh quit`, `tmux kill-session -t felixo` e
 | `click <sel>` | clica por seletor CSS |
 | `expand` | abre a gaveta do primeiro terminal — **necessario antes de mexer no xterm** |
 | `focus-terminal` | poe o foco na entrada do terminal |
-| `type <txt>` / `press <tecla>` | teclado |
+| `type <txt>` / `press <tecla>` | teclado sintético (CDP) |
+| `realkey <combo>` | **tecla de verdade** pelo X (`realkey ctrl+v`) — precisa de `xdotool` |
 | `paste image [cor]` | dispara paste com imagem no evento |
 | `paste text <txt>` | dispara paste de texto |
 | `paste empty` | dispara paste sem nada (o caso do Linux Mint) |
@@ -104,12 +105,17 @@ antes de um teste: `focus-terminal` e `press Control+u` (algumas vezes).
 Os quatro caminhos de `terminal-image-paste.ts` / `clipboard-image.cjs`:
 
 ```bash
+# Evento sintetico: cobre o tratamento do evento, NAO o atalho do teclado.
 ./d.sh "paste image red"          # defaultPrevented: true  → interceptador pegou
 ./d.sh "paste text ola mundo"     # defaultPrevented: false → xterm colou o texto
-./d.sh "clipboard-image blue"     # imagem so no clipboard do SO...
-./d.sh "paste empty"              # ...e o evento vazio cai na leitura nativa
 ./d.sh "clipboard-file /tmp/x.png"
 ./d.sh "paste empty"              # arquivo copiado no gerenciador
+
+# Atalho de verdade: e isto que prova que colar funciona para quem usa o app.
+./d.sh "clipboard-image blue"
+./d.sh focus-terminal
+./d.sh "realkey ctrl+v"           # Ctrl+V nao gera evento `paste` com imagem
+./d.sh "realkey ctrl+shift+v"     # este gera; os dois devem salvar UM arquivo
 ```
 
 Confira o resultado em `/tmp/felixo-test-userdata/clipboard-attachments/` (o
@@ -118,6 +124,15 @@ diferentes por caminho provam qual rota entregou a imagem.
 
 ## Detalhes que custaram tempo
 
+- **`press` e `paste` nao sao teclas de verdade.** Eles entram pelo CDP e nunca
+  viram evento do sistema, entao nao acionam acelerador de menu do Electron nem
+  o caminho nativo do Chromium. Isso ja escondeu um bug inteiro: `paste image`
+  passava e o `Ctrl+V` do app nao colava nada, porque com imagem na area de
+  transferencia o comando de colar do Chromium e um no-op e **nenhum evento
+  `paste` nasce**. Para qualquer atalho que dependa do sistema, use `realkey`.
+- **`realkey` exige o foco no elemento.** Rode `focus-terminal` antes; e nao
+  chame `xdotool windowfocus` depois, que devolve o foco a janela e tira do
+  elemento — a tecla chega e nao faz nada, parecendo bug do app.
 - **O `.xterm` nao existe ate a gaveta abrir.** O card recolhido mostra so um
   preview em texto; o elemento so e montado no `attach` do
   `TerminalSessionStore`. `document.querySelector(".xterm")` retorna `null` e
