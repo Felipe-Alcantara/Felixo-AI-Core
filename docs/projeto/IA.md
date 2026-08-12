@@ -1580,3 +1580,28 @@ TESTE: sete casos novos — o composer com a sugestão da CLI, o composer com te
 VALIDAÇÃO no app rodando, A/B com a mesma build e userData limpo: **sem o fix, o contexto apareceu na entrada aos 63 s; com o fix, aos 3 s** — abaixo do primeiro instante em que dá para medir. `npm run build`, `npx vitest run` (406/406) e `npm run lint` limpos.
 
 Estado final: concluído e validado no app rodando, com medição antes e depois.
+
+## Registro de Trabalho — 2026-08-12 (parte 11) — um Ctrl+V colava duas imagens no Codex (Bug: Codex demora muito pra receber os prompts)
+
+RELATO: depois do conserto do Ctrl+V (parte 7), colar uma imagem num agente **Codex** anexava a imagem duas vezes — `[Image #1][Image #2]` por um único Ctrl+V. Só no Codex.
+
+A CAUSA: a tecla era atendida **duas vezes**, por dois programas diferentes. O tratador de teclas devolvia `true` depois de disparar a leitura da área de transferência, então o xterm seguia o caminho normal e mandava o `^V` (0x16) para o PTY — `evaluateKeyboardEvent` mapeia Ctrl+letra para o caractere de controle, conferido no `xterm.js`. O Codex lê a área de transferência por conta própria, com biblioteca nativa e sem depender de `xclip` (o binário traz `no image on clipboard`), então ele anexava a imagem ao receber o `^V`, e nós anexávamos de novo ao digitar o caminho do arquivo salvo. O Claude Code não faz essa leitura, e por isso o defeito só aparecia no Codex.
+
+A PROVA que separou as duas rotas: `Ctrl+Shift+V` sempre colou **uma** imagem só. Ele não tem acelerador de menu, não vira `^V` no PTY e portanto nunca chega à CLI — a única diferença entre os dois atalhos era exatamente a tecla vazando para o Codex. O contador de arquivos confirmou o resto: um Ctrl+V salvava **um** arquivo em `clipboard-attachments` e produzia **duas** anexações na tela, ou seja, a segunda imagem não vinha de uma segunda gravação nossa.
+
+FEITO: o tratador devolve `false` para o atalho de colar, e o xterm deixa de repassar o `^V`. Colar texto não depende dessa tecla — quem cola é o evento `paste`, que continua nascendo normalmente — então a mudança atinge só o que precisava mudar: a CLI para de ver um atalho que o app já atendeu.
+
+VALIDAÇÃO no app rodando, com Codex de verdade e dados isolados, medindo tela e arquivos gravados a cada passo:
+
+| ação | antes | depois |
+| --- | --- | --- |
+| Ctrl+V com imagem | `[Image #1][Image #2]`, 1 arquivo | `[Image #1]`, 1 arquivo |
+| Ctrl+Shift+V com imagem | 1 imagem, 1 arquivo | 1 imagem, 1 arquivo |
+| Ctrl+V com texto | texto colado | texto colado, nenhum arquivo |
+| Ctrl+C | interrompe | interrompe (compositor limpo) |
+
+`npm run build`, `npx vitest run` (406/406) e `npm run lint` limpos.
+
+RISCO RESIDUAL: **este caminho não tem teste automatizado.** A suíte roda em ambiente `node`, sem DOM, e o `keydown` do xterm exige elemento montado — um teste de verdade aqui pediria `jsdom` no projeto, dependência que a suíte inteira não usa hoje. Ficou coberto por conferência no app rodando e pelos testes de `isImagePasteShortcut`, que é o predicado usado tanto para atender quanto para suprimir. O `^V` deixa de chegar a qualquer CLI e a qualquer shell: em shell isso significa perder o *quoted-insert* do readline, consequência aceita de o app ser dono do Ctrl+V no terminal.
+
+Estado final: concluído e validado no app rodando.

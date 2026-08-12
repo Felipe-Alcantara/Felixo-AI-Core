@@ -348,10 +348,17 @@ export class TerminalSessionStore {
       }
       // Ctrl+V (Cmd+V no macOS) com imagem na área de transferência não gera
       // evento `paste` nenhum — ver `pasteClipboardImageFromOs`. A tecla, essa,
-      // chega. Devolve `true` de propósito: se houver texto, quem cola continua
-      // sendo o caminho normal, e a leitura de imagem não acha nada.
+      // chega, e é por ela que a colagem é atendida.
+      //
+      // `false` impede o xterm de mandar o ^V (0x16) para o PTY. Sem isso a
+      // tecla é atendida duas vezes: por nós e pela própria CLI, para quem lê a
+      // área de transferência sozinha — o Codex lê, com biblioteca nativa e sem
+      // depender de `xclip`, e anexava a mesma imagem de novo (`[Image #1]
+      // [Image #2]` por um único Ctrl+V). Colar texto não depende do ^V: quem
+      // cola é o evento `paste`, que continua nascendo normalmente.
       if (isImagePasteShortcut(event)) {
         void this.pasteClipboardImageFromOs(session)
+        return false
       }
       return true
     })

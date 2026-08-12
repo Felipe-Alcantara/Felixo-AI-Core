@@ -70,6 +70,11 @@ export function formatImagePathForPrompt(filePath: string): string {
  * `Ctrl+Shift+V` fica de fora de propósito: esse atalho não tem acelerador de
  * menu, segue o caminho nativo do navegador e já gera um `paste` de verdade —
  * tratá-lo aqui também colaria a mesma imagem duas vezes.
+ *
+ * Quem atende esta tecla **não** pode repassá-la ao PTY: a CLI que lê a área de
+ * transferência por conta própria (o Codex lê) atende o mesmo ^V e anexa a
+ * imagem outra vez. É por isso que o `Ctrl+Shift+V`, que nunca chega ao PTY,
+ * sempre colou uma imagem só.
  */
 export function isImagePasteShortcut(event: KeyboardEvent): boolean {
   if (event.type !== 'keydown' || event.shiftKey || event.altKey) {
