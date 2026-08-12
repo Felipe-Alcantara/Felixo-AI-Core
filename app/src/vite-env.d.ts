@@ -345,6 +345,33 @@ declare global {
           callback: (event: { name: string }) => void,
         ) => () => void
       }
+      /**
+       * Arquivos de texto que já existem no disco, abertos num bloco do canvas.
+       * Ao contrário de `canvasFiles`, o bloco não é dono do arquivo — só aponta
+       * para ele, então nada é criado nem apagado por aqui.
+       */
+      textFiles?: {
+        /** Abre o seletor nativo; escolher é o que autoriza o caminho. */
+        pick: () => Promise<
+          CliInvokeResult & { canceled?: boolean; path?: string; name?: string }
+        >
+        /** Autoriza um arquivo alcançado por dentro de um projeto registrado. */
+        openInProject: (params: {
+          path: string
+        }) => Promise<CliInvokeResult & { path?: string; name?: string }>
+        read: (params: {
+          path: string
+        }) => Promise<
+          CliInvokeResult & { path?: string; name?: string; content?: string }
+        >
+        write: (params: {
+          path: string
+          content: string
+        }) => Promise<CliInvokeResult & { path?: string }>
+        watch: (params: { path: string }) => Promise<CliInvokeResult>
+        unwatch: (params: { path: string }) => Promise<CliInvokeResult>
+        onChanged: (callback: (event: { path: string }) => void) => () => void
+      }
       automations?: {
         list: () => Promise<
           CliInvokeResult & { automations?: AutomationDefinition[] }

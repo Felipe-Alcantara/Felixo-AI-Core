@@ -28,6 +28,8 @@ type CanvasToolPanelsProps = {
   onRemoveFolder: (projectId: string) => Promise<boolean>
   /** Spawns a terminal whose process IS the file picked in the projects panel. */
   onRunFile: (options: RunFileOptions) => void
+  /** Abre um arquivo do projeto num bloco do canvas, em vez de rodá-lo. */
+  onOpenFileInCanvas: (filePath: string, fileName: string) => void
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
   onInsertPrompt: (prompt: string) => Promise<SkillActivationResult>
   onPromptSaved: (prompt: string) => void
@@ -45,6 +47,7 @@ export function CanvasToolPanels({
   onProjectsChanged,
   onRemoveFolder,
   onRunFile,
+  onOpenFileInCanvas,
   onActivateSkill,
   onInsertPrompt,
   onPromptSaved,
@@ -59,6 +62,7 @@ export function CanvasToolPanels({
           onProjectsChanged={onProjectsChanged}
           onRemoveFolder={onRemoveFolder}
           onRunFile={onRunFile}
+          onOpenFileInCanvas={onOpenFileInCanvas}
           toolsMenuOpen={toolsMenuOpen}
         />
       )

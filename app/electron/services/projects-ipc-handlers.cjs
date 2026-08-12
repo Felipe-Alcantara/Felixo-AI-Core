@@ -241,6 +241,16 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
       return toErrorResult(error, 'Erro ao indexar diretorio de docs.')
     }
   })
+
+  return {
+    /**
+     * Raizes dos projetos registrados, para outro modulo decidir se um caminho
+     * esta dentro de um projeto. Expoe so os caminhos, e nao o repositorio, para
+     * que ninguem passe a gravar projetos por fora daqui.
+     */
+    listProjectRoots: () =>
+      (projectsRepository?.list() ?? []).map((project) => project.path),
+  }
 }
 
 /** Resolves an existing path and rejects lexical or symlink escapes. */

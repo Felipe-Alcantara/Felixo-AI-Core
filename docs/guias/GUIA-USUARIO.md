@@ -184,6 +184,19 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 - **Notas:** registre notas associadas ao uso do app/projetos.
 - **Exportar:** exporte chats em JSON compacto, Markdown ou texto simples.
 
+### Abrir arquivos de texto no canvas
+
+Um bloco de arquivo pode apontar para um arquivo que já existe no disco, para ler e editar sem sair do canvas. Duas formas de abrir:
+
+- na aba **Projetos**, navegue até o arquivo e use o botão de abrir no canvas (ao lado do de rodar);
+- no botão **Arquivo** da barra, escolha **Abrir arquivo existente…** para pegar qualquer arquivo pelo seletor do sistema.
+
+O bloco não é dono desse arquivo: ele não cria nem apaga nada, só lê e grava no lugar. O caminho aparece logo abaixo do título, e o bloco acompanha o arquivo ao vivo — se um agente editar por fora, o conteúdo se atualiza sozinho.
+
+No topo do bloco, o lápis alterna entre editar e visualizar. Em `.md`, `.markdown` e `.mdx` a visualização mostra o markdown formatado; em qualquer outro arquivo mostra o texto como está, em fonte monoespaçada, preservando indentação e quebras de linha — formatar markdown num `.py` comeria justamente a indentação, que ali é o programa.
+
+Por segurança, o app só abre arquivos que estejam dentro de um projeto registrado ou que você tenha escolhido no seletor. As escolhas do seletor valem enquanto o app estiver aberto: ao reabrir, um bloco apontando para fora dos projetos pede que você escolha o arquivo de novo.
+
 ### Nomes dos blocos
 
 - Todo bloco (terminal, nota, arquivo, grupo) pode ser **renomeado pelo cabeçalho** — clique no título e digite.

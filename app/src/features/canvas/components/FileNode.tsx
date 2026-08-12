@@ -19,6 +19,8 @@ import {
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { MarkdownContent } from '../../shared/components/MarkdownContent'
+import { resolvePreviewKind } from './file-node-preview'
+import { useFileNodeDocument } from '../hooks/useFileNodeDocument'
 import type {
   DiagnosisRequestStatus,
   FileNodeData,
@@ -50,17 +52,30 @@ const DIAGNOSIS_FEEDBACK: Record<DiagnosisRequestStatus, string> = {
 }
 
 /**
- * A canvas block bound to a shared .md file on disk. It renders the file as
- * markdown and watches it: when an agent edits the file (given its path), the
- * block re-renders live. Editing here writes back to the same file, so humans
- * and agents collaborate through it.
+ * A canvas block bound to a text file on disk, in one of two flavours:
+ *
+ * - a shared `.md` the block itself created, in the app's own directory;
+ * - a file that already existed and the person opened — a project README, a
+ *   script, a note. Here the block only points at it: nothing is created and
+ *   nothing is deleted.
+ *
+ * Either way it watches the file, so an agent editing it (given its path) makes
+ * the block re-render live, and editing here writes back to the same file —
+ * that shared file is how humans and agents coordinate.
  */
 function FileNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = (data ?? {}) as FileNodeDataWithHandlers
   const fileName = nodeData.fileName ?? ''
-  const [content, setContent] = useState('')
+  const filePath = nodeData.filePath ?? ''
+  /** Um arquivo externo é de outra pessoa; o bloco é só uma janela para ele. */
+  const isExternal = Boolean(filePath)
+  const displayName = isExternal ? (nodeData.fileLabel ?? filePath) : fileName
+  const { content, absolutePath, error, save } = useFileNodeDocument({
+    fileName: isExternal ? undefined : fileName,
+    filePath: isExternal ? filePath : undefined,
+  })
+  const previewKind = resolvePreviewKind(displayName)
   const [editing, setEditing] = useState(false)
-  const [absolutePath, setAbsolutePath] = useState('')
   const [copied, setCopied] = useState(false)
   const [diagnosing, setDiagnosing] = useState(false)
   const [diagnosisFeedback, setDiagnosisFeedback] = useState('')
@@ -106,48 +121,6 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
     }
   }
 
-  // Load, resolve absolute path, and watch the file for external changes.
-  useEffect(() => {
-    const files = window.felixo?.canvasFiles
-    if (!files || !fileName) {
-      return
-    }
-
-    let cancelled = false
-
-    const load = () => {
-      void files.read({ name: fileName }).then((result) => {
-        if (!cancelled && result?.ok) {
-          setContent(result.content ?? '')
-        }
-      })
-    }
-
-    load()
-    void files.resolve({ name: fileName }).then((result) => {
-      if (!cancelled && result?.ok && result.path) {
-        setAbsolutePath(result.path)
-      }
-    })
-    void files.watch({ name: fileName })
-    const off = files.onChanged((event) => {
-      if (event.name === fileName) {
-        load()
-      }
-    })
-
-    return () => {
-      cancelled = true
-      off()
-      void files.unwatch({ name: fileName })
-    }
-  }, [fileName])
-
-  const save = (next: string) => {
-    setContent(next)
-    void window.felixo?.canvasFiles?.write({ name: fileName, content: next })
-  }
-
   const copyPath = async () => {
     if (!absolutePath) return
     await navigator.clipboard?.writeText(absolutePath)
@@ -167,8 +140,8 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       <FourSideHandles />
       <NodeHeader
         icon={<FileText size={13} />}
-        editableValue={nodeData.label ?? fileName}
-        placeholder={fileName || 'arquivo.md'}
+        editableValue={nodeData.label ?? displayName}
+        placeholder={displayName || 'arquivo.md'}
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
         className="bg-sky-950/60 text-sky-100"
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
@@ -186,13 +159,42 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => setEditing((value) => !value)}
-          title={editing ? 'Visualizar' : 'Editar'}
-          aria-label={editing ? 'Visualizar' : 'Editar'}
+          // O rótulo diz o que a visualização vai fazer neste arquivo: markdown
+          // formatado só onde isso significa alguma coisa. Num `.py`, dizer
+          // "markdown" prometeria uma leitura que o conteúdo não tem.
+          title={
+            editing
+              ? previewKind === 'markdown'
+                ? 'Visualizar como markdown'
+                : 'Visualizar texto'
+              : 'Editar'
+          }
+          aria-label={
+            editing
+              ? previewKind === 'markdown'
+                ? 'Visualizar como markdown'
+                : 'Visualizar texto'
+              : 'Editar'
+          }
         >
           {editing ? <Eye size={13} /> : <Pencil size={13} />}
         </button>
       </NodeHeader>
 
+      {/*
+        Scratchpad/Plano só fazem sentido num arquivo que o bloco criou para
+        coordenar agentes. Num README de projeto, "Gerar diagnóstico" ofereceria
+        sobrescrever o arquivo de outra pessoa — então ali o lugar mostra de onde
+        o arquivo veio, que é o que importa saber.
+      */}
+      {isExternal ? (
+        <div
+          className="nodrag truncate border-b border-sky-300/10 bg-sky-950/30 px-2 py-1 text-[11px] text-sky-300/60"
+          title={absolutePath || filePath}
+        >
+          {absolutePath || filePath}
+        </div>
+      ) : (
       <div className="nodrag flex items-center gap-1 border-b border-sky-300/10 bg-sky-950/30 px-2 py-1 text-[11px]">
         <span className="inline-flex overflow-hidden rounded ring-1 ring-white/10">
           <button
@@ -225,8 +227,15 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           </button>
         )}
       </div>
+      )}
 
-      {mode === 'plan' && diagnosisFeedback && (
+      {error && (
+        <div className="nodrag border-b border-rose-400/20 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200">
+          {error}
+        </div>
+      )}
+
+      {!isExternal && mode === 'plan' && diagnosisFeedback && (
         <div className="nodrag border-b border-sky-300/10 bg-sky-950/20 px-2 py-1 text-[11px] text-sky-200/80">
           {diagnosisFeedback}
         </div>
@@ -236,16 +245,24 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         <textarea
           value={content}
           onChange={(event) => save(event.target.value)}
-          placeholder="# Conteúdo do arquivo .md"
+          placeholder={isExternal ? 'Arquivo vazio.' : '# Conteúdo do arquivo .md'}
           className="nodrag nowheel nopan min-h-0 w-full flex-1 resize-none overflow-auto bg-transparent p-3 font-mono text-xs text-zinc-200 outline-none"
         />
-      ) : (
-        <div className="nodrag nowheel nopan markdown-content min-h-0 flex-1 overflow-auto p-3 text-sm">
-          {content.trim() ? (
+      ) : content.trim() ? (
+        previewKind === 'markdown' ? (
+          <div className="nodrag nowheel nopan markdown-content min-h-0 flex-1 overflow-auto p-3 text-sm">
             <MarkdownContent content={content} />
-          ) : (
-            <span className="text-zinc-600">Arquivo vazio. Clique no lapis para editar.</span>
-          )}
+          </div>
+        ) : (
+          // Texto puro preserva indentação e quebra de linha — num arquivo de
+          // código elas são o conteúdo, não formatação.
+          <pre className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto whitespace-pre p-3 font-mono text-xs text-zinc-200">
+            {content}
+          </pre>
+        )
+      ) : (
+        <div className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto p-3 text-sm">
+          <span className="text-zinc-600">Arquivo vazio. Clique no lápis para editar.</span>
         </div>
       )}
 

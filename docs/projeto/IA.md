@@ -1381,3 +1381,33 @@ DE PASSAGEM: a skill `rodar-app` ganhou uma correção achada aqui — o `click-
 RISCO RESIDUAL: as outras listas alimentadas por `projects:list` seguem por `updated_at DESC` — se a ordem alfabética for desejada nelas também, o lugar é o `ORDER BY` do repositório, e aí vale rever se o menu de terminais perde algo. `sensitivity: 'base'` faz `Api` e `API` empatarem no nome, e é o caminho que decide a ordem entre eles.
 
 Estado final: concluído e validado no app rodando.
+
+## Registro de Trabalho — 2026-08-12 (parte 4) — abrir arquivos de texto do disco no canvas (Colar imagnes é dificil no terminal)
+
+PEDIDO: abrir arquivos de texto no canvas, editar, com modo de visualização de markdown no topo do bloco.
+
+ESTADO ANTERIOR: o bloco de arquivo já editava e já alternava edição/visualização no topbar — mas era **preso a `.md` dentro da pasta `canvas-files` do próprio app**. O `resolveSafePath` força a extensão e confina ao diretório; não havia como apontar para um arquivo que já existisse no disco.
+
+DECISÕES DO FELIPE (perguntadas antes de implementar, porque mudavam o trabalho):
+1. Abrir **dos dois jeitos** — pela aba Projetos e por um seletor livre.
+2. Num arquivo que não é markdown, a visualização mostra **texto puro**.
+
+FEITO:
+
+- `text-file-access.cjs`, novo — o coração da entrega. Abrir "qualquer arquivo do disco" tira o chão que confinar numa pasta dava: sem regra explícita, `text-file:read` passa a ler qualquer caminho que o renderer resolva nomear. A regra é uma só: **o renderer nunca autoriza um caminho, ele só usa um caminho já autorizado**. Um caminho entra por dois jeitos legítimos — estar dentro de um projeto registrado (a fronteira que o app já aceita em `projects:list-directory`) ou ter sido escolhido **pela pessoa** num diálogo nativo, com o processo principal guardando aquele caminho exato. As concessões vivem em memória e morrem com o app.
+- Resolver com `realpath` antes de comparar é o que fecha a porta do link simbólico: sem isso, um atalho dentro de um projeto apontando para fora dele passaria pela verificação de prefixo. Tem teste para esse caso e para `..`.
+- `text-file-ipc-handlers.cjs`, novo — `pick`/`open-in-project`/`read`/`write`/`watch`/`unwatch`. Nada cria nem apaga: o bloco não é dono do arquivo, só aponta. Limite de 2 MB porque o editor é um `<textarea>`, não um editor com virtualização — recusar cedo é melhor do que congelar a janela.
+- `registerProjectsIpcHandlers` passou a devolver `listProjectRoots`. Expõe só os caminhos, e não o repositório, para ninguém passar a gravar projetos por fora dali.
+- `canvas:clear` também revoga as concessões: limpar o canvas apaga os blocos que as carregavam, e mantê-las vivas seria guardar acesso sem dono.
+- `useFileNodeDocument.ts`, novo — resolve qual das duas fontes usar e entrega sempre a mesma coisa, para o componente cuidar de aparência e não de origem. Resolve também dois problemas que existiam **antes** e ficariam piores num arquivo de projeto de verdade: (a) gravar dispara o observador do próprio arquivo, que recarregava e jogava o cursor para o fim no meio da digitação — agora o hook compara com o que acabou de gravar e distingue "mudou por fora" de "fomos nós"; (b) gravava a cada tecla, agora agrupa em 300 ms, com descarga garantida ao sair do bloco para nenhuma edição morrer com ele.
+- `file-node-preview.ts`, novo — `.md`/`.markdown`/`.mdx` viram markdown formatado; qualquer outra coisa vira texto puro em `<pre>`. Formatar markdown num `.py` não é preview, é leitura errada: `#` viraria título e a indentação, que ali *é* o programa, sumiria.
+- `FileNode.tsx` — o alternador do topbar agora diz o que vai fazer neste arquivo ("Visualizar como markdown" ou "Visualizar texto"). Num arquivo externo, a faixa Scratchpad/Plano dá lugar ao caminho: "Gerar diagnóstico" num README ofereceria sobrescrever o arquivo de outra pessoa.
+- Entradas: botão de abrir no canvas em cada arquivo da aba Projetos (ao lado do de rodar) e "Abrir arquivo existente…" dentro do popover do botão Arquivo — junto de "Criar" porque as duas respondem à mesma intenção, e um botão a mais na barra faria a coluna crescer por uma diferença que só importa depois.
+
+TESTE: `text-file-access.test.cjs`, 11 casos com um dublê de `realpath` que monta link simbólico sem tocar o disco — dentro do projeto autoriza, fora recusa, escolher autoriza, a concessão vale para o arquivo e não para a pasta, link simbólico e `..` não escapam, raiz consultada a cada verificação, raiz sumida não derruba a checagem, revogação devolve o acesso. `file-node-preview.test.ts`, 8 casos, incluindo os que separam extensão de sufixo parecido (`notas.mdo`) e pasta de arquivo (`docs.md/notas.txt`).
+
+VALIDAÇÃO: `npm run build`, `npm test` (534/534), `npx vitest run` (381/381) e `npm run lint` limpos. No app rodando, pela skill `rodar-app`: `window.felixo.textFiles.read({path:"/etc/passwd"})` foi recusado com a mensagem certa (a fronteira segura de verdade, não só em teste); um `.md` do projeto abriu renderizado com o caminho no lugar da faixa de modos; editar no bloco chegou no arquivo em disco; trocar o arquivo por fora atualizou o bloco ao vivo; um `.py` abriu como texto puro com a indentação preservada e o `#` sem virar título; e o scratchpad `.md` do próprio canvas continua criando, editando e gravando (regressão, já que a carga dele passou pelo hook novo).
+
+RISCO RESIDUAL: **o seletor nativo não foi exercitado.** Sob Xvfb não há portal de diálogo, então `dialog.showOpenDialog` não abre e a chamada fica pendurada — o caminho "escolher no seletor → bloco abre" só está coberto por tipos e pelos testes de `grant`/`authorize`, não por execução. Vale conferir à mão. Fora isso: as concessões do seletor morrem com o app, então um bloco apontando para fora dos projetos pede o arquivo de novo ao reabrir (é o comportamento seguro, mas é uma aspereza — persistir isso exigiria decidir por quanto tempo uma permissão dada uma vez continua valendo). Um arquivo aberto e depois removido do projeto deixa de ser autorizado e o bloco passa a mostrar erro. O editor é um `<textarea>`: sem realce de sintaxe, e por isso o limite de 2 MB.
+
+Estado final: concluído e validado no app rodando, com a ressalva do seletor nativo acima.

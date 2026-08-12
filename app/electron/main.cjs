@@ -18,6 +18,9 @@ const {
   registerCanvasFilesIpcHandlers,
 } = require('./services/canvas-files-ipc-handlers.cjs')
 const {
+  registerTextFileIpcHandlers,
+} = require('./services/text-file-ipc-handlers.cjs')
+const {
   registerAutomationsIpcHandlers,
 } = require('./services/automations-ipc-handlers.cjs')
 const {
@@ -44,6 +47,7 @@ const platform = require('./core/platform/index.cjs')
 let mainWindow = null
 let ptyHandlers = null
 let canvasFilesHandlers = null
+let textFileHandlers = null
 let storageDatabase = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
@@ -88,14 +92,22 @@ app.whenReady().then(() => {
   ptyHandlers = registerPtyIpcHandlers(getMainWindow)
   registerFileAttachmentIpcHandlers(appPaths)
   registerFileExportIpcHandlers(getMainWindow)
-  registerProjectsIpcHandlers(getMainWindow, { database: storageDatabase })
+  const projectsHandlers = registerProjectsIpcHandlers(getMainWindow, {
+    database: storageDatabase,
+  })
   registerNotesIpcHandlers({ database: storageDatabase })
   canvasFilesHandlers = registerCanvasFilesIpcHandlers(getMainWindow, appPaths)
+  textFileHandlers = registerTextFileIpcHandlers(getMainWindow, {
+    listProjectRoots: projectsHandlers.listProjectRoots,
+  })
   registerCanvasIpcHandlers({
     database: storageDatabase,
     clearFiles: () => canvasFilesHandlers.clear(),
     exportFiles: () => canvasFilesHandlers.exportFiles(),
     replaceFiles: (files) => canvasFilesHandlers.replaceFiles(files),
+    // Limpar o canvas apaga os blocos que carregavam as permissoes de arquivo;
+    // manter as concessoes vivas depois disso seria guardar acesso sem dono.
+    revokeTextFiles: () => textFileHandlers?.revokeAll(),
   })
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
@@ -161,6 +173,15 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     canvasFilesHandlers = null
+  }
+
+  if (textFileHandlers) {
+    try {
+      textFileHandlers.dispose()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    textFileHandlers = null
   }
 
   const databaseToClose = storageDatabase

@@ -1132,6 +1132,27 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [addNode],
   )
 
+  /**
+   * Cria um bloco apontando para um arquivo que já existe no disco.
+   *
+   * O caminho vem sempre autorizado pelo processo principal — pelo seletor
+   * nativo (a pessoa escolheu) ou por estar dentro de um projeto registrado. O
+   * renderer nunca inventa um caminho aqui; ele repassa o que recebeu.
+   */
+  const openTextFileNode = useCallback(
+    (filePath: string, fileLabel: string) => {
+      addNode('file', { filePath, fileLabel, label: fileLabel })
+    },
+    [addNode],
+  )
+
+  const pickAndOpenTextFile = useCallback(async () => {
+    const result = await window.felixo?.textFiles?.pick()
+    if (result?.ok && !result.canceled && result.path) {
+      openTextFileNode(result.path, result.name ?? result.path)
+    }
+  }, [openTextFileNode])
+
   const buildTerminalNodeData = useCallback(
     (options: {
       command?: string
@@ -1509,6 +1530,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         arrangeableCount={arrangeableCount}
         onAddFolder={addProjectFolder}
         onAddFile={addFileNode}
+        onOpenFile={() => void pickAndOpenTextFile()}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
         onAddWebpage={(url, name) =>
           addNode('webpage', { url, ...(name ? { label: name } : {}) })
@@ -1585,6 +1607,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onProjectsChanged={reloadProjects}
         onRemoveFolder={removeProjectFolder}
         onRunFile={runFileInTerminal}
+        onOpenFileInCanvas={openTextFileNode}
         onActivateSkill={activateSkill}
         onInsertPrompt={insertPrompt}
         onPromptSaved={(prompt) => {

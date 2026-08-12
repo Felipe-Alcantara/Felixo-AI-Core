@@ -16,6 +16,16 @@ export type FileNodeMode = 'scratchpad' | 'plan'
 export type FileNodeData = {
   /** Filename of the .md inside the app's canvas-files directory. */
   fileName?: string
+  /**
+   * Absolute path of a text file that already existed on disk, opened by the
+   * person. Mutually exclusive with `fileName`: when present the block only
+   * points at someone else's file, so it neither creates nor deletes it — and
+   * the scratchpad/plan modes, which are about coordinating agents through a
+   * file the block owns, don't apply.
+   */
+  filePath?: string
+  /** Basename of `filePath`, kept so the header reads well before the file loads. */
+  fileLabel?: string
   label?: string
   /** Per-block mode; defaults to `scratchpad` when absent. */
   mode?: FileNodeMode

@@ -64,6 +64,8 @@ type CanvasToolbarProps = {
   arrangeableCount: number
   onAddFolder: () => Promise<string[]>
   onAddFile: (name?: string) => void
+  /** Abre o seletor nativo e cria um bloco apontando para o arquivo escolhido. */
+  onOpenFile: () => void
   onAddGroup: (name?: string) => void
   onAddWebpage: (url: string, name?: string) => void
   canvasMode: 'select' | 'pan'
@@ -98,6 +100,7 @@ export function CanvasToolbar({
   arrangeableCount,
   onAddFolder,
   onAddFile,
+  onOpenFile,
   onAddGroup,
   onAddWebpage,
   canvasMode,
@@ -275,6 +278,9 @@ export function CanvasToolbar({
         placeholder="Nome do arquivo (opcional)"
         title="Bloco de arquivo .md compartilhado (agentes podem editar)"
         onCreate={onAddFile}
+        secondaryLabel="Abrir arquivo existente…"
+        secondaryTitle="Abrir um arquivo de texto do disco num bloco do canvas"
+        onSecondary={onOpenFile}
         toolsMenuOpen={toolsMenuOpen}
       />
       <NamedCreateButton
@@ -355,6 +361,15 @@ type NamedCreateButtonProps = {
   title?: string
   /** Creates the block; `name` is undefined when the field is left empty. */
   onCreate: (name?: string) => void
+  /**
+   * Ação alternativa oferecida no mesmo popover — para "Arquivo", abrir um
+   * arquivo que já existe. Fica junto de "Criar" porque as duas respondem à
+   * mesma intenção ("quero um bloco de arquivo") e separá-las em dois botões
+   * da barra faria a coluna crescer por uma diferença que só importa depois.
+   */
+  secondaryLabel?: string
+  secondaryTitle?: string
+  onSecondary?: () => void
   /** The tools menu widens the toolbar column; the popover slides over to clear it. */
   toolsMenuOpen: boolean
 }
@@ -371,6 +386,9 @@ function NamedCreateButton({
   placeholder,
   title,
   onCreate,
+  secondaryLabel,
+  secondaryTitle,
+  onSecondary,
   toolsMenuOpen,
 }: NamedCreateButtonProps) {
   const [open, setOpen] = useState(false)
@@ -443,6 +461,20 @@ function NamedCreateButton({
           >
             Criar
           </button>
+
+          {secondaryLabel && onSecondary && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onSecondary()
+              }}
+              title={secondaryTitle}
+              className="felixo-btn mt-2 w-full rounded border-t border-white/10 px-3 py-1.5 pt-2.5 text-sm text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
+            >
+              {secondaryLabel}
+            </button>
+          )}
         </div>
       )}
     </div>

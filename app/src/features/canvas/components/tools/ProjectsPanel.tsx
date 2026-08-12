@@ -7,6 +7,7 @@ import {
   FolderPlus,
   Loader2,
   Play,
+  SquarePen,
   Trash2,
 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
@@ -25,6 +26,8 @@ type ProjectsPanelProps = {
   onRemoveFolder: (projectId: string) => Promise<boolean>
   /** Spawns a terminal whose process IS the file running — no shell typed after. */
   onRunFile: (options: RunFileOptions) => void
+  /** Abre o arquivo num bloco do canvas, para ler e editar em vez de rodar. */
+  onOpenFileInCanvas: (filePath: string, fileName: string) => void
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
 }
@@ -42,6 +45,7 @@ export function ProjectsPanel({
   onProjectsChanged,
   onRemoveFolder,
   onRunFile,
+  onOpenFileInCanvas,
   toolsMenuOpen,
 }: ProjectsPanelProps) {
   const [projects, setProjects] = useState<CanvasProject[]>([])
@@ -189,6 +193,20 @@ export function ProjectsPanel({
     setBrowsing({ project: browsing.project, relativePath: parts.join('/') })
   }
 
+  /**
+   * Pede ao processo principal que autorize o arquivo — estar dentro de um
+   * projeto registrado é o que basta — e abre um bloco apontando para ele.
+   */
+  const openFileInCanvas = async (entry: DirectoryEntry) => {
+    const result = await window.felixo?.textFiles?.openInProject({ path: entry.path })
+    if (result?.ok && result.path) {
+      onOpenFileInCanvas(result.path, result.name ?? entry.name)
+      onClose()
+    } else {
+      setLoadError(result?.message ?? 'Não foi possível abrir o arquivo.')
+    }
+  }
+
   const runFile = (entry: DirectoryEntry) => {
     if (!browsing || !currentDirPath) return
     const { command, args, fallbackCommand } = buildRunCommand(entry.name)
@@ -241,11 +259,11 @@ export function ProjectsPanel({
         )}
         <ul className="felixo-anim-stagger-list flex flex-col gap-0.5">
           {entries?.map((entry) => (
-            <li key={entry.path}>
+            <li key={entry.path} className="group flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => (entry.isDirectory ? openSubfolder(entry) : runFile(entry))}
-                className="felixo-btn flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
+                className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
                 title={entry.isDirectory ? undefined : `Rodar ${entry.name} num terminal`}
               >
                 {entry.isDirectory ? (
@@ -260,6 +278,19 @@ export function ProjectsPanel({
                   <Play size={12} className="shrink-0 text-emerald-400" />
                 )}
               </button>
+              {!entry.isDirectory && (
+                <button
+                  type="button"
+                  onClick={() => void openFileInCanvas(entry)}
+                  // Mesmo padrão da lixeira dos projetos: sempre no DOM, só
+                  // transparente, para a linha não mudar de largura no hover.
+                  className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-sky-300 focus-visible:opacity-100 group-hover:opacity-100"
+                  title={`Abrir ${entry.name} num bloco do canvas`}
+                  aria-label={`Abrir ${entry.name} no canvas`}
+                >
+                  <SquarePen size={14} />
+                </button>
+              )}
             </li>
           ))}
         </ul>

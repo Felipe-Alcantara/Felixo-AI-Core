@@ -78,6 +78,9 @@ function registerCanvasIpcHandlers(options = {}) {
     try {
       const filesDeleted =
         typeof options.clearFiles === 'function' ? await options.clearFiles() : 0
+      if (typeof options.revokeTextFiles === 'function') {
+        options.revokeTextFiles()
+      }
       const result = repository.clear()
       return { ok: true, ...result, filesDeleted }
     } catch (error) {
