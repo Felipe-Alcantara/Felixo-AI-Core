@@ -28,6 +28,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare:
+    name: Prepare release
+    # A release/tag is created once before the OS matrix starts. electron-builder
+    # can then only upload assets, so parallel jobs never race to create it.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+      || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release.outputs.release_tag }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          BASE_VERSION="$(node -p "require('./app/package.json').version.split('.').slice(0, 2).join('.')")"
+          RELEASE_TAG="v${BASE_VERSION}.${GITHUB_RUN_NUMBER}"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create prerelease container
+        shell: bash
+        run: |
+          TAG="${{ steps.release.outputs.release_tag }}"
+          TARGET="${{ github.event.workflow_run.head_sha || github.sha }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG já existe; mantendo os artefatos publicados."
+          else
+            gh release create "$TAG" \
+              --target "$TARGET" \
+              --title "$TAG" \
+              --prerelease \
+              --notes "Build em publicação; será promovida após os instaladores de Linux, Windows e macOS passarem."
+          fi
+
   publish:
     name: Publish ${{ matrix.os }}
     # No caminho do workflow_dispatch não existe `workflow_run`, e a
@@ -36,6 +78,7 @@ jobs:
     if: >-
       ${{ github.event_name == 'workflow_dispatch'
       || github.event.workflow_run.conclusion == 'success' }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
