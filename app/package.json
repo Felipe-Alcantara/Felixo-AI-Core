@@ -51,7 +51,7 @@
         "provider": "github",
         "owner": "Felipe-Alcantara",
         "repo": "Felixo-AI-Core",
-        "releaseType": "release"
+        "releaseType": "draft"
       }
     ],
     "fileAssociations": [

@@ -1411,3 +1411,34 @@ VALIDAÇÃO: `npm run build`, `npm test` (534/534), `npx vitest run` (381/381) e
 RISCO RESIDUAL: **o seletor nativo não foi exercitado.** Sob Xvfb não há portal de diálogo, então `dialog.showOpenDialog` não abre e a chamada fica pendurada — o caminho "escolher no seletor → bloco abre" só está coberto por tipos e pelos testes de `grant`/`authorize`, não por execução. Vale conferir à mão. Fora isso: as concessões do seletor morrem com o app, então um bloco apontando para fora dos projetos pede o arquivo de novo ao reabrir (é o comportamento seguro, mas é uma aspereza — persistir isso exigiria decidir por quanto tempo uma permissão dada uma vez continua valendo). Um arquivo aberto e depois removido do projeto deixa de ser autorizado e o bloco passa a mostrar erro. O editor é um `<textarea>`: sem realce de sintaxe, e por isso o limite de 2 MB.
 
 Estado final: concluído e validado no app rodando, com a ressalva do seletor nativo acima.
+
+## Registro de Trabalho — 2026-08-12 (parte 5) — "Falha ao atualizar" logo após o deploy (Colar imagnes é dificil no terminal)
+
+SINTOMA: depois de subir o deploy da v0.1.14, o app mostrou "Falha ao atualizar".
+
+CAUSA: corrida no workflow de release, não no código do app. Os três jobs de plataforma publicavam **na mesma release já pública**, e ela nascia pública no primeiro asset enviado. Os horários de upload da v0.1.14 mostram a janela:
+
+```
+15:01:01  Felixo-AI-Core-0.1.14-linux-x86_64.AppImage   <- release fica publica
+15:01:36  latest-mac.yml
+15:02:06  latest-linux.yml                              <- 65 s depois
+15:03:58  Felixo-AI-Core-0.1.14-win-x64.exe
+15:04:02  latest.yml (Windows)                          <- ~3 min depois
+```
+
+Entre 15:01:01 e 15:02:06 a release já era a "latest" sem o `latest-linux.yml`. O app checa 10 s após abrir e a cada 10 min; caindo nessa janela, toma 404 no manifesto da própria plataforma e o `autoUpdater.on('error')` vira `state: 'error'`, que a `update-presentation.ts` mostra como "Falha ao atualizar". No Windows a janela era de quase 3 minutos.
+
+DESCARTADO com evidência, para não consertar o que não estava quebrado: o app instalado é o `.deb` (`/opt/Felixo AI Core`, 0.1.13), e `resources/package-type` traz `deb`, então o electron-updater usa o `DebUpdater` — não é o erro clássico de `APPIMAGE env is not defined`. Rodando o binário instalado com `--user-data-dir` isolado, o update baixou inteiro (`New version 0.1.14 has been downloaded`). Ou seja, release e updater estão sãos; o erro foi de janela de tempo.
+
+FEITO: a release passa a nascer rascunho e só vira pública quando os três jobs passarem.
+
+- `app/package.json`: `releaseType` de `release` para `draft`. O electron-updater ignora rascunho, então deixa de existir estado intermediário visível — ou a release está completa, ou ela não existe para quem procura atualização.
+- `.github/workflows/release.yml`: job `finalize` com `needs: publish`, que roda `gh release edit --draft=false --latest`. Com `needs` numa matriz, ele só roda se as três plataformas passarem; e como `fail-fast: false` deixa as outras terminarem quando uma falha, uma release parcial simplesmente fica em rascunho em vez de ir ao ar pela metade.
+- O aviso de Gatekeeper do macOS mudou do job de matriz para o `finalize`: é edição de metadados da release, igual à publicação, e no job de matriz precisava de um `if: matrix.os == 'ubuntu-latest'` só para não ser anexado três vezes.
+- Os dois passos são idempotentes (aviso já presente / release já pública), para reexecutar o workflow não ser erro.
+
+VALIDAÇÃO: YAML validado e a sintaxe shell dos passos conferida com `bash -n`. **O caminho completo não foi executado** — só um release de verdade exercita rascunho→público, e isso depende de um push.
+
+RISCO RESIDUAL: se `gh release view` não enxergar a release em rascunho no runner, o `finalize` falha e a release fica em rascunho — ninguém recebe uma release quebrada, mas o deploy não sai e é preciso publicar à mão (`gh release edit vX.Y.Z --draft=false --latest`). É o modo de falha seguro, e vale conferir a primeira execução. Além disso, a v0.1.14 já saiu no esquema antigo; o rascunho só vale da próxima em diante.
+
+Estado final: concluído — aguardando o próximo deploy para conferir o caminho rascunho→público.

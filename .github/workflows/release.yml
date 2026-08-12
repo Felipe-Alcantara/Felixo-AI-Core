@@ -85,21 +85,55 @@ jobs:
       - name: Publish installers
         run: npx electron-builder --publish always
 
+  # A release nasce como rascunho e só fica pública aqui, depois que os três
+  # jobs passaram.
+  #
+  # Enquanto publicava direto, cada job criava/alimentava uma release JÁ pública
+  # e os três terminam em momentos diferentes — na v0.1.14 o AppImage subiu
+  # 15:01:01 e o `latest-linux.yml` só 15:02:06, com o `latest.yml` do Windows
+  # às 15:03:58. Nessas janelas a release já era a "latest" sem o manifesto da
+  # plataforma, então quem checasse ali tomava 404 e via "Falha ao atualizar".
+  # O electron-updater ignora rascunho, então agora não existe estado
+  # intermediário visível: ou a release está completa, ou ela não existe.
+  finalize:
+    name: Publish release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # Mesma conta do job de publicação (`major.minor` do package.json +
+      # número da execução), porque a tag precisa bater com a que o
+      # electron-builder criou.
+      - name: Resolve release tag
+        shell: bash
+        working-directory: app
+        run: |
+          BASE_VERSION="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
+          echo "RELEASE_TAG=v${BASE_VERSION}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
       # Os artefatos de macOS não são assinados nem notarizados, então o
       # Gatekeeper bloqueia a primeira abertura — às vezes com uma mensagem que
       # sugere procurar um app na App Store, sem deixar claro que é bloqueio de
       # segurança. Quem baixa o .dmg lê a página da release, não o repositório,
       # então a instrução precisa estar aqui.
       #
-      # Só no runner Linux: os três jobs publicam na MESMA release, e sem esse
-      # guard o aviso seria anexado três vezes.
+      # Fica aqui, e não no job de matriz, por dois motivos: é uma edição de
+      # metadados da release, igual à publicação logo abaixo, e no job de
+      # matriz precisava de um `if: matrix.os == 'ubuntu-latest'` só para o
+      # aviso não ser anexado três vezes.
       - name: Add macOS Gatekeeper notice to the release
-        if: matrix.os == 'ubuntu-latest'
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v${FELIXO_RELEASE_VERSION}"
+          TAG="$RELEASE_TAG"
           NOTICE_MARKER="<!-- macos-gatekeeper-notice -->"
           CURRENT_BODY="$(gh release view "$TAG" --json body --jq .body)"
 
@@ -124,3 +158,20 @@ jobs:
           } > release-notes-body.md
 
           gh release edit "$TAG" --notes-file release-notes-body.md
+
+      - name: Publish the draft release
+        shell: bash
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG nao encontrada." >&2
+            exit 1
+          fi
+
+          # Idempotente: reexecutar o workflow com a release já pública não é erro.
+          if [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" == "false" ]]; then
+            echo "Release $RELEASE_TAG ja esta publica."
+            exit 0
+          fi
+
+          gh release edit "$RELEASE_TAG" --draft=false --latest
+          echo "Release $RELEASE_TAG publicada."
