@@ -11,14 +11,20 @@ const TONE_TEXT: Record<UpdatePresentation['tone'], string> = {
 type UpdateIndicatorProps = {
   presentation: UpdatePresentation
   onInstall: () => void
+  /** Verifica de novo, oferecido quando a última verificação falhou. */
+  onRetry: () => void
 }
 
 /**
  * Marcador discreto na barra: diz em que pé está a atualização sem exigir
- * nada de quem só quer trabalhar. Quando há o que instalar, ele próprio vira
- * o botão — para quem dispensou o aviso flutuante e depois mudou de ideia.
+ * nada de quem só quer trabalhar. Quando há uma ação — instalar o que já
+ * baixou, ou tentar de novo depois de uma falha — ele próprio vira o botão.
  */
-export function UpdateIndicator({ presentation, onInstall }: UpdateIndicatorProps) {
+export function UpdateIndicator({
+  presentation,
+  onInstall,
+  onRetry,
+}: UpdateIndicatorProps) {
   if (!presentation.showIndicator) {
     return null
   }
@@ -37,7 +43,18 @@ export function UpdateIndicator({ presentation, onInstall }: UpdateIndicatorProp
     TONE_TEXT[presentation.tone]
   }`
 
-  if (!presentation.canInstall) {
+  const action = presentation.canInstall
+    ? { onClick: onInstall, title: 'Reiniciar agora para aplicar a atualização' }
+    : presentation.canRetry
+      ? {
+          onClick: onRetry,
+          // O detalhe do erro continua no title, porque é ele que diz o que
+          // deu errado — a nova tentativa entra como convite, não no lugar.
+          title: `${presentation.toastDescription || presentation.indicatorLabel}\n\nClique para verificar de novo.`,
+        }
+      : null
+
+  if (!action) {
     // Sem ação disponível não é botão: um controle que não faz nada ao ser
     // clicado é pior do que um rótulo honesto, inclusive para leitores de tela.
     return (
@@ -50,9 +67,9 @@ export function UpdateIndicator({ presentation, onInstall }: UpdateIndicatorProp
   return (
     <button
       type="button"
-      onClick={onInstall}
+      onClick={action.onClick}
       className={`${shared} transition hover:bg-white/10`}
-      title="Reiniciar agora para aplicar a atualização"
+      title={action.title}
     >
       {content}
     </button>

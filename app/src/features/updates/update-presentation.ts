@@ -40,6 +40,15 @@ export type UpdatePresentation = {
   toastDescription: string
   /** Se o botão de reiniciar/instalar deve aparecer. */
   canInstall: boolean
+  /**
+   * Se vale oferecer "verificar de novo".
+   *
+   * Só no erro. A verificação automática acontece a cada dez minutos, então um
+   * erro passageiro — uma release que ficou incompleta por alguns minutos, a
+   * rede caindo — fica na tela por até dez minutos sem nada a fazer. Um estado
+   * de erro que não oferece nova tentativa é um beco sem saída.
+   */
+  canRetry: boolean
   /** 0–100 quando há download em curso; null quando não há barra a mostrar. */
   progress: number | null
   /** Urgência, para o componente escolher a cor. */
@@ -53,6 +62,7 @@ const HIDDEN: UpdatePresentation = {
   toastTitle: '',
   toastDescription: '',
   canInstall: false,
+  canRetry: false,
   progress: null,
   tone: 'neutral',
 }
@@ -95,6 +105,7 @@ export function presentUpdateStatus(
         toastTitle: `${version} disponível`,
         toastDescription: 'O download começou e roda em segundo plano.',
         canInstall: false,
+        canRetry: false,
         progress: 0,
         tone: 'info',
       }
@@ -111,6 +122,7 @@ export function presentUpdateStatus(
             ? 'O download roda em segundo plano.'
             : `${percent}% concluído. Pode continuar trabalhando.`,
         canInstall: false,
+        canRetry: false,
         progress: percent,
         tone: 'info',
       }
@@ -125,6 +137,7 @@ export function presentUpdateStatus(
         toastDescription:
           'Reinicie para usar agora, ou ela será instalada ao fechar o app.',
         canInstall: true,
+        canRetry: false,
         progress: 100,
         tone: 'success',
       }
@@ -138,6 +151,7 @@ export function presentUpdateStatus(
         indicatorLabel: 'Falha ao atualizar',
         toastTitle: 'Não foi possível atualizar',
         toastDescription: status.message,
+        canRetry: true,
         tone: 'error',
       }
 

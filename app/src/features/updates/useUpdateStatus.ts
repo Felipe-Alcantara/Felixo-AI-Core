@@ -22,6 +22,7 @@ export function useUpdateStatus(): {
   dismissed: boolean
   dismiss: () => void
   install: () => void
+  check: () => void
 } {
   const [status, setStatus] = useState<UpdateStatus | null>(null)
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
@@ -62,7 +63,18 @@ export function useUpdateStatus(): {
     void window.felixo?.updates?.install()
   }, [])
 
+  /**
+   * Verifica agora, sem esperar o ciclo de dez minutos.
+   *
+   * O processo principal já emite o novo status por IPC, incluindo o
+   * 'checking' — então não há nada a fazer com o retorno aqui: a interface
+   * reage ao fluxo, como no resto do ciclo.
+   */
+  const check = useCallback(() => {
+    void window.felixo?.updates?.check()
+  }, [])
+
   const dismissed = dismissedKey !== null && dismissedKey === noticeKey
 
-  return { presentation, dismissed, dismiss, install }
+  return { presentation, dismissed, dismiss, install, check }
 }

@@ -48,6 +48,8 @@ type CanvasToolbarProps = {
   onSelectTool: (tool: CanvasTool) => void
   updatePresentation: UpdatePresentation
   onInstallUpdate: () => void
+  /** Verifica atualização agora, oferecido quando a última verificação falhou. */
+  onCheckUpdate: () => void
   projects: CanvasProject[]
   onAddTerminal: (options: {
     command?: string
@@ -93,6 +95,7 @@ export function CanvasToolbar({
   onSelectTool,
   updatePresentation,
   onInstallUpdate,
+  onCheckUpdate,
   projects,
   onAddTerminal,
   onAddTerminals,
@@ -295,6 +298,7 @@ export function CanvasToolbar({
       <UpdateIndicator
         presentation={updatePresentation}
         onInstall={onInstallUpdate}
+        onRetry={onCheckUpdate}
       />
 
       <button

@@ -99,6 +99,29 @@ describe('presentUpdateStatus', () => {
     expect(presentation.tone).toBe('error')
   })
 
+  it('oferece nova tentativa no erro, para ele não ser um beco sem saída', () => {
+    // A verificação automática só volta em dez minutos: sem nova tentativa, um
+    // erro passageiro fica na tela todo esse tempo sem nada a fazer.
+    expect(presentUpdateStatus(status('error')).canRetry).toBe(true)
+  })
+
+  it('não oferece nova tentativa quando não houve falha', () => {
+    for (const state of ['idle', 'checking', 'available', 'downloading', 'downloaded'] as const) {
+      expect(presentUpdateStatus(status(state)).canRetry).toBe(false)
+    }
+    expect(presentUpdateStatus(null).canRetry).toBe(false)
+  })
+
+  it('não oferece instalar e tentar de novo ao mesmo tempo', () => {
+    // O indicador é um botão só; duas ações concorrendo tornariam o clique
+    // imprevisível.
+    const downloaded = presentUpdateStatus(status('downloaded'))
+    const failed = presentUpdateStatus(status('error'))
+
+    expect(downloaded.canInstall && downloaded.canRetry).toBe(false)
+    expect(failed.canInstall && failed.canRetry).toBe(false)
+  })
+
   it('usa "Nova versão" quando o updater não informa o número', () => {
     const presentation = presentUpdateStatus(status('downloaded'))
 

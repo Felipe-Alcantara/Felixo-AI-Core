@@ -1528,4 +1528,26 @@ RISCO RESIDUAL: quem rodar com `FELIXO_UPDATE_PRERELEASE=1` passa a enxergar a r
 
 LIÇÃO: a parte 5 mudou um comportamento de publicação sem ler como o publicador decide criar ou reaproveitar uma release. O sintoma original — uma janela de ~1 min mostrando "Falha ao atualizar" — era cosmético e se resolvia sozinho; o conserto quebrou o deploy inteiro. Ler o `getOrCreateRelease` levou dez minutos e teria evitado tudo.
 
-Estado final: concluído — aguardando o próximo push para conferir o caminho pré-lançamento→definitiva.
+VALIDADO NA v0.1.16, execução real: os três jobs convergiram numa **única** release (contra três na v0.1.15), o `finalize` rodou `--prerelease=false --latest` e a release terminou com os 13 artefatos — Linux, macOS, Windows e os quatro manifestos. Conferido que o 404 não pode mais acontecer: `latest-linux.yml` foi baixado e os dois arquivos que ele referencia responderam HTTP 206. O caminho pré-lançamento→definitiva, que era a pendência explícita, está exercitado.
+
+Estado final: concluído e validado numa release real.
+
+## Registro de Trabalho — 2026-08-12 (parte 9) — o erro de atualização era um beco sem saída (Colar imagnes é dificil no terminal)
+
+MOTIVO: enquanto a v0.1.16 subia, o app do Felipe mostrou "Falha ao atualizar" e o indicador **ficou preso**. Os horários explicam: o erro foi registrado às 16:03:15 e o `finalize` promoveu a release às 16:05:59 — ou seja, o erro antecedeu o conserto em 2m44s. Só que o app guarda o último status e a verificação automática só volta a cada dez minutos (`CHECK_INTERVAL_MS`), então um erro que já não valia mais ocupou a tela por todo esse tempo.
+
+O AGRAVANTE: não havia como tentar de novo. A ponte `updates.check()` existe no preload e no processo principal desde sempre, mas **nenhum componente a chamava** — conferido com busca em todo o `app/src`: a interface só usava `install`. Restavam esperar dez minutos ou reiniciar o app.
+
+FEITO:
+
+- `canRetry` na `UpdatePresentation`, verdadeiro **só** no estado de erro. A decisão de quando oferecer nova tentativa fica onde já moram as outras decisões de apresentação, e não espalhada no componente.
+- `check()` no `useUpdateStatus`, chamando `updates.check()`. Não faz nada com o retorno de propósito: o processo principal já emite o novo status por IPC (inclusive o `checking`), então a interface reage ao fluxo como no resto do ciclo.
+- `UpdateIndicator` passou a escolher a ação em vez de olhar só `canInstall`: instalar quando há o que instalar, verificar de novo quando falhou, e continuar sendo um rótulo (não botão) quando não há ação — a regra que já existia ali e que vale manter, porque botão que não faz nada é pior que texto honesto. O `title` no erro mantém a mensagem técnica e acrescenta o convite; a mensagem é o que diz o que houve, a tentativa entra ao lado, não no lugar.
+
+TESTE: três casos novos em `update-presentation.test.ts` — o erro oferece nova tentativa, nenhum outro estado oferece (incluindo `null`), e instalar e tentar de novo nunca aparecem juntos, já que o indicador é um botão só e duas ações concorrendo tornariam o clique imprevisível.
+
+VALIDAÇÃO: `npm run build`, `npx vitest run` (400/400) e `npm run lint` limpos. No app rodando: como a build de desenvolvimento não é empacotada, o updater fica desligado e o indicador não aparece sozinho — então o status de erro foi injetado pelo IPC (`webContents.send('updates:status', …)`), que é exatamente o que o processo principal faz. O indicador virou `BUTTON` com o `title` `"Cannot find latest-linux.yml in the latest release artifacts\n\nClique para verificar de novo."`, e clicar nele disparou a verificação de verdade — o indicador saiu do estado de erro, o que só acontece se a chamada chegou ao processo principal.
+
+RISCO RESIDUAL: se a verificação falhar de novo, o indicador volta ao erro — correto, mas sem qualquer espera entre tentativas: clicar repetidamente dispara uma verificação por clique. Como é ação humana e a chamada é barata, não vale um limitador agora. O intervalo automático de dez minutos continua o mesmo; o que mudou é existir uma saída manual.
+
+Estado final: concluído e validado no app rodando.

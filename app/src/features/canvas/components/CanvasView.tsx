@@ -1523,6 +1523,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onToolsMenuOpenChange={setToolsMenuOpen}
         updatePresentation={updates.presentation}
         onInstallUpdate={updates.install}
+        onCheckUpdate={updates.check}
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddTerminals={addTerminalNodes}
