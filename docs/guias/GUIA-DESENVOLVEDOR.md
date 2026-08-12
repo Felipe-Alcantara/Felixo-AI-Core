@@ -172,6 +172,15 @@ Exemplos:
 - `cli-detector.cjs` → `cli-detector.test.cjs`
 - `shell-adapter.cjs` → `shell-adapter.test.cjs`
 
+### Conferir no app rodando
+
+Teste verde não é a mesma coisa que funcionar na tela. Para abrir o app de
+verdade e interagir com ele — inclusive sem servidor gráfico, em CI ou por um
+agente —, use a skill em [`.claude/skills/rodar-app/`](../../.claude/skills/rodar-app/SKILL.md).
+Ela abre o Electron sob xvfb com dados isolados (não encosta no canvas real de
+quem está usando a máquina) e expõe comandos para clicar, tirar screenshot,
+digitar no terminal de um agente e simular colagens.
+
 ---
 
 ## CI Pipeline

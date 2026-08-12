@@ -1342,3 +1342,19 @@ E a prova de que a ponta serve para alguma coisa: com o caminho da imagem verde 
 RISCO RESIDUAL: as imagens coladas se acumulam em `clipboard-attachments` sem limpeza automática, igual ao que já acontecia com os anexos do chat. Se a área de transferência trouxer texto **e** imagem ao mesmo tempo, o texto ganha; é o comportamento esperado de um `Ctrl+V`, mas significa que uma imagem acompanhada de legenda cola só a legenda. Colar por arrastar-e-soltar não foi coberto. A imagem referenciada por um arquivo é **copiada** para a pasta de anexos, não referenciada onde está — o caminho fica estável se o original for movido, ao custo de duplicar o arquivo. A conferência foi em Linux/X11 sob Xvfb; Windows, macOS e Wayland seguem cobertos apenas pelo `clipboard` do Electron ser nativo neles, sem execução real.
 
 Estado final: concluído e validado no app rodando.
+
+## Registro de Trabalho — 2026-08-12 (parte 2) — skill para dirigir o app (Colar imagnes é dificil no terminal)
+
+MOTIVO: a conferência do paste de imagem no app rodando (parte 1) custou uma descoberta inteira que ia se perder com a sessão — xvfb, `--no-sandbox`, userData isolado e, o que mais atrasa, o fato de o elemento `.xterm` só existir depois que a gaveta do terminal abre. Antes disso `document.querySelector(".xterm")` devolve `null` e o app parece quebrado.
+
+FEITO: `.claude/skills/rodar-app/`, com `SKILL.md`, `driver.mjs` e `d.sh`. O driver é um REPL sobre o `_electron` do Playwright: uma linha de texto por comando, resposta terminada por `--done--`, que é o que permite dirigi-lo de dentro do tmux sem dormir tempo fixo. Além do básico (`launch`, `ss`, `click-text`, `type`, `press`, `eval`, `main`), traz o que a feature de colar imagem exigiu: `expand` (abre a gaveta e confirma que o xterm montou), `paste image|text|empty` e `clipboard-image` / `clipboard-file` / `clipboard-clear`, que escrevem no clipboard **do sistema operacional** pelo processo principal — é assim que se testa a leitura nativa sem xclip e sem ninguém apertando "copiar" em outro programa.
+
+`playwright-core` fica fora do `package.json` (`npm install --no-save`, dentro de `app/`): serve só para dirigir o app e não vale pesar a instalação de quem só quer usar o Felixo. Como ele mora em `app/node_modules`, fora da cadeia de resolução da skill, o driver o resolve com `createRequire` a partir do `package.json` do app — sem isso o `import` não o acha.
+
+VALIDAÇÃO: a skill foi executada seguindo o próprio `SKILL.md`, do zero: instalar, subir o tmux, `launch`, abrir um agente Claude Code real, `expand`, `focus-terminal` e os quatro caminhos de paste. As cores confirmaram qual rota entregou cada imagem (vermelho pelo evento DOM, azul pelo clipboard nativo, e o arquivo copiado pelo `clipboard-file`), e colar com o clipboard vazio não gravou nada. O guard do `d.sh` para sessão tmux ausente também foi conferido.
+
+DOC: `GUIA-DESENVOLVEDOR.md`, seção "Conferir no app rodando", aponta para a skill. `.claude/settings.local.json` entrou no `.gitignore` — é da máquina de quem edita (caminhos absolutos, versões de node), ao contrário das skills do projeto, que são versionadas.
+
+RISCO RESIDUAL: um `npm ci` apaga o `playwright-core` instalado com `--no-save`; o `SKILL.md` avisa que basta repetir o comando. O driver abre a build de produção (`app/dist/`), então mudança no renderer sem `npm run build` não aparece e a tela mostra a versão antiga sem erro nenhum — está nos "detalhes que custaram tempo". Conferido só em Linux/X11 sob Xvfb.
+
+Estado final: concluído e validado.
