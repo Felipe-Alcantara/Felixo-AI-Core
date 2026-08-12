@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('felixo', {
     node: process.versions.node,
   },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
+  getVersion: () => ipcRenderer.invoke('app:get-version'),
   cli: {
     send: (params) => ipcRenderer.invoke('cli:send', params),
     stop: (params) => ipcRenderer.invoke('cli:stop', params),

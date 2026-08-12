@@ -118,6 +118,10 @@ app.whenReady().then(() => {
   registerAutoUpdateHandlers(getMainWindow)
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
 
+  // Expõe a versão empacotada (definida pelo CI no release, não no
+  // package.json versionado) para a interface conseguir mostrá-la.
+  ipcMain.handle('app:get-version', () => app.getVersion())
+
   ipcMain.handle('file:get-pending', () => {
     const filePath = pendingFilePath
     pendingFilePath = null

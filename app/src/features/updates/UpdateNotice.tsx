@@ -76,6 +76,26 @@ export function UpdateIndicator({
   )
 }
 
+/**
+ * Número da versão instalada, discreto na barra. Some se ainda não chegou
+ * (fora do Electron, ou IPC não respondeu ainda) em vez de mostrar um
+ * placeholder vazio.
+ */
+export function AppVersionBadge({ version }: { version: string | null }) {
+  if (!version) {
+    return null
+  }
+
+  return (
+    <span
+      className="select-text px-1.5 text-xs text-slate-500"
+      title="Versão instalada do Felixo AI Core"
+    >
+      v{version}
+    </span>
+  )
+}
+
 type UpdateToastProps = {
   presentation: UpdatePresentation
   dismissed: boolean

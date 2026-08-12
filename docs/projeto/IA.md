@@ -1605,3 +1605,20 @@ VALIDAÇÃO no app rodando, com Codex de verdade e dados isolados, medindo tela 
 RISCO RESIDUAL: **este caminho não tem teste automatizado.** A suíte roda em ambiente `node`, sem DOM, e o `keydown` do xterm exige elemento montado — um teste de verdade aqui pediria `jsdom` no projeto, dependência que a suíte inteira não usa hoje. Ficou coberto por conferência no app rodando e pelos testes de `isImagePasteShortcut`, que é o predicado usado tanto para atender quanto para suprimir. O `^V` deixa de chegar a qualquer CLI e a qualquer shell: em shell isso significa perder o *quoted-insert* do readline, consequência aceita de o app ser dono do Ctrl+V no terminal.
 
 Estado final: concluído e validado no app rodando.
+
+## Registro de Trabalho — 2026-08-12 (parte 12) — badge de versão instalada no canvas (Feature: preciso de um lugar que eu possa ver a versão atual do programa)
+
+MOTIVO: o usuário não tinha como saber qual versão do Felixo AI Core estava rodando. O `app/package.json` fica travado em `0.1.0` de propósito — o número real (ex.: `0.1.23`) só é atribuído pelo workflow de release, no empacotamento — então mostrar o valor do `package.json` na interface exibiria sempre o mesmo número errado; era preciso o valor real do binário empacotado, em runtime.
+
+FEITO:
+
+- `app:get-version`, um handler IPC no processo principal que devolve `app.getVersion()` (a API do Electron que lê a versão do pacote empacotado, não a do repositório).
+- `window.felixo.getVersion()` no `preload.cjs`, expondo o handler ao renderer pelo mesmo padrão já usado por `updates.getStatus()`.
+- `useAppVersion`, hook que busca essa versão ao montar; fica `null` fora do Electron (navegador, testes), e quem exibe decide o que fazer com isso.
+- `AppVersionBadge`, componente que mostra `vX.Y.Z` discreto na barra do canvas, ao lado do indicador de atualização — some sozinho enquanto a versão não chega, em vez de mostrar um espaço vazio.
+
+VALIDAÇÃO: `npm run build` (`tsc -b && vite build`), `npm run lint` e `npx vitest run src/features/updates` (19/19) limpos.
+
+RISCO RESIDUAL: nenhum teste automatizado cobre o hook/handler novos — são poucas linhas que só encaminham um valor do Electron, sem lógica própria a testar; a badge foi conferida lendo o resultado do build. Fora do Electron empacotado (build de desenvolvimento, navegador) a badge não aparece, porque não há `window.felixo` nem versão real para mostrar.
+
+Estado final: concluído e validado (build + lint + testes).

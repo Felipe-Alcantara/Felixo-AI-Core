@@ -25,7 +25,8 @@ import {
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
 import { NotificationsMenu } from './NotificationsMenu'
-import { UpdateIndicator } from '../../updates/UpdateNotice'
+import { AppVersionBadge, UpdateIndicator } from '../../updates/UpdateNotice'
+import { useAppVersion } from '../../updates/useAppVersion'
 import type { UpdatePresentation } from '../../updates/update-presentation'
 import {
   toolbarFlyoutClass,
@@ -126,6 +127,7 @@ export function CanvasToolbar({
   const [isCollapsing, setIsCollapsing] = useState(false)
   const [isExpanding, setIsExpanding] = useState(false)
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
+  const appVersion = useAppVersion()
   // Mantém o CanvasView em sincronia: os painéis de ferramenta são irmãos da
   // toolbar e se deslocam junto com a largura desta coluna.
   const changeToolsMenuOpen = (open: boolean) => {
@@ -300,6 +302,7 @@ export function CanvasToolbar({
         onInstall={onInstallUpdate}
         onRetry={onCheckUpdate}
       />
+      <AppVersionBadge version={appVersion} />
 
       <button
         type="button"
