@@ -1328,8 +1328,17 @@ Resultado: um atalho só (`Ctrl+V` / `Cmd+V`), mesmo comportamento em Windows, m
 
 TESTE: `clipboard-image.test.cjs` (9 casos, com um dublê de `clipboard` para não exigir Electron): bitmap lido como PNG sem tocar o disco, queda para referência de arquivo quando o bitmap está vazio, lista do GNOME lida de bytes com o prefixo de operação ignorado, referência morta pulada para a próxima entrada resolver, arquivo que não é imagem recusado, área de transferência sem imagem reportada em vez de estourar, e um `clipboard` sem nenhum dos formatos tratado como simplesmente não ter imagem. `terminal-image-paste.test.ts` (13 casos): imagem por `items` e por `files`, item `string` que acompanha uma imagem copiada ignorado (tratá-lo como arquivo entregaria anexo vazio), documento não confundido com imagem, texto comum reconhecido para preservar o paste do xterm, e a formatação do caminho com e sem espaços.
 
-VALIDAÇÃO: `npm run build`, `npm test` (523/523) e `npx vitest run` (109/109) limpos.
+VALIDAÇÃO: `npm run build`, `npm test` (523/523), `npx vitest run` (109/109) e `npm run lint` limpos.
 
-RISCO RESIDUAL: não conferido com o app Electron rodando — os testes cobrem a decisão, não o evento real de paste dentro do xterm. As imagens coladas se acumulam em `clipboard-attachments` sem limpeza automática, igual ao que já acontecia com os anexos do chat. Se a área de transferência trouxer texto **e** imagem ao mesmo tempo, o texto ganha; é o comportamento esperado de um `Ctrl+V`, mas significa que uma imagem acompanhada de legenda cola só a legenda. Colar por arrastar-e-soltar não foi coberto.
+Além disso, conferido **no app Electron rodando de verdade**, sob Xvfb, com `--user-data-dir` isolado para não tocar o canvas real de ninguém, com um agente Claude Code de verdade aberto no canvas. Os quatro caminhos, cada um com um evento `paste` disparado no elemento do xterm:
 
-Estado final: concluído — pendente de conferência manual no app rodando.
+1. **Imagem no evento** (caminho rápido): PNG vermelho 8×8 num `DataTransfer`. `defaultPrevented: true` — o interceptador tomou o evento antes do xterm; arquivo gravado em `clipboard-attachments` e caminho digitado na linha de entrada do Claude.
+2. **Nada no evento, bitmap no clipboard do SO** (o caso do Linux Mint): PNG azul escrito no clipboard nativo pelo processo principal, e o `paste` disparado com `items: 0` e `text: ""` — literalmente vazio, que é o que o Chromium entrega à página nesse cenário. O fallback nativo achou a imagem, salvou e digitou o caminho. Confirmado pelo pixel (0,0) de cada arquivo: vermelho no caso 1, azul no caso 2 — cada imagem veio pela rota certa.
+3. **Texto comum** (regressão): `defaultPrevented: false` e o texto colado normalmente pelo caminho do próprio xterm, intocado.
+4. **Arquivo copiado no gerenciador de arquivos**: `x-special/gnome-copied-files` com `copy\nfile://...` apontando para um PNG verde em `/tmp/pasta com espaço/`. Lido, copiado para os anexos e digitado.
+
+E a prova de que a ponta serve para alguma coisa: com o caminho da imagem verde na entrada, o agente foi perguntado "que cor tem essa imagem?" e respondeu **"Verde"** depois de `Read 1 file` — ou seja, a CLI de fato enxergou a imagem colada. Por fim, colar com a área de transferência inteiramente vazia não gravou arquivo nenhum e não quebrou o app.
+
+RISCO RESIDUAL: as imagens coladas se acumulam em `clipboard-attachments` sem limpeza automática, igual ao que já acontecia com os anexos do chat. Se a área de transferência trouxer texto **e** imagem ao mesmo tempo, o texto ganha; é o comportamento esperado de um `Ctrl+V`, mas significa que uma imagem acompanhada de legenda cola só a legenda. Colar por arrastar-e-soltar não foi coberto. A imagem referenciada por um arquivo é **copiada** para a pasta de anexos, não referenciada onde está — o caminho fica estável se o original for movido, ao custo de duplicar o arquivo. A conferência foi em Linux/X11 sob Xvfb; Windows, macOS e Wayland seguem cobertos apenas pelo `clipboard` do Electron ser nativo neles, sem execução real.
+
+Estado final: concluído e validado no app rodando.
