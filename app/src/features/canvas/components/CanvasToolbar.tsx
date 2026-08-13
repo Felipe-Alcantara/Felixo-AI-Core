@@ -26,6 +26,7 @@ import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
 import { NotificationsMenu } from './NotificationsMenu'
 import { AppVersionBadge, UpdateIndicator } from '../../updates/UpdateNotice'
+import { CliSetupIndicator } from '../../setup/CliSetupNotice'
 import { useAppVersion } from '../../updates/useAppVersion'
 import type { UpdatePresentation } from '../../updates/update-presentation'
 import {
@@ -302,6 +303,7 @@ export function CanvasToolbar({
         onInstall={onInstallUpdate}
         onRetry={onCheckUpdate}
       />
+      <CliSetupIndicator />
       <AppVersionBadge version={appVersion} />
 
       <button

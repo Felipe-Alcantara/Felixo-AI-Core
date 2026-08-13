@@ -11,6 +11,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     authUrl: 'https://developers.openai.com/codex/auth',
     install: {
       label: 'npm i -g @openai/codex',
+      npmPackage: '@openai/codex',
       command: 'npm',
       windowsCommand: 'npm.cmd',
       args: ['i', '-g', '@openai/codex'],
@@ -72,6 +73,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     authUrl: 'https://code.claude.com/docs/en/setup',
     install: {
       label: 'npm install -g @anthropic-ai/claude-code',
+      npmPackage: '@anthropic-ai/claude-code',
       command: 'npm',
       windowsCommand: 'npm.cmd',
       args: ['install', '-g', '@anthropic-ai/claude-code'],
@@ -110,6 +112,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     authUrl: 'https://geminicli.com/docs/get-started/authentication/',
     install: {
       label: 'npm install -g @google/gemini-cli',
+      npmPackage: '@google/gemini-cli',
       command: 'npm',
       windowsCommand: 'npm.cmd',
       args: ['install', '-g', '@google/gemini-cli'],

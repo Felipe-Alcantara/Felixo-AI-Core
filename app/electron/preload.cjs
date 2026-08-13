@@ -182,6 +182,17 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('updates:status', handler)
     },
   },
+  // Instalacao automatica das CLIs de IA: roda em segundo plano na primeira
+  // abertura do app instalado, e o status vira um indicador discreto.
+  cliSetup: {
+    getStatus: () => ipcRenderer.invoke('clis:get-setup-status'),
+    retry: () => ipcRenderer.invoke('clis:retry-setup'),
+    onStatus: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('clis:setup-status', handler)
+      return () => ipcRenderer.removeListener('clis:setup-status', handler)
+    },
+  },
   git: {
     getSummary: (params) => ipcRenderer.invoke('git:get-summary', params),
     stageAll: (params) => ipcRenderer.invoke('git:stage-all', params),

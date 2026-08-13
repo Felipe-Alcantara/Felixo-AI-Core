@@ -4,6 +4,11 @@ const os = require('node:os')
 const path = require('node:path')
 const platform = require('../core/platform/index.cjs')
 const { getNvmNodeBinCandidates } = require('../core/platform/nvm.cjs')
+const { getAppPaths } = require('../core/app-paths.cjs')
+const {
+  getManagedCliLayout,
+  getManagedCliPathCandidates,
+} = require('../core/managed-cli-paths.cjs')
 
 const CLI_PATHS_ENV_KEY = 'FELIXO_CLI_PATHS'
 
@@ -128,6 +133,10 @@ function createCliEnv(baseEnv = process.env) {
     ...configuredPaths,
     ...userPaths,
     ...(baseEnv[pathKey] ?? '').split(path.delimiter).filter(Boolean),
+    // Por último de propósito: as CLIs instaladas pelo próprio app são rede
+    // de segurança para quem não tem nada instalado. Se a pessoa já tem a
+    // sua, é a dela que deve rodar.
+    ...getManagedCliPaths(baseEnv),
   ]
   const nextEnv = { ...baseEnv }
   const nextPath = uniqueExistingPathParts(pathParts).join(path.delimiter)
@@ -139,6 +148,21 @@ function createCliEnv(baseEnv = process.env) {
   }
 
   return nextEnv
+}
+
+/**
+ * Pastas das CLIs que o app instalou por conta própria.
+ *
+ * Silencia falha de propósito: sem Electron (testes, scripts) não há
+ * `userData` a resolver, e isso não pode impedir o PATH normal de ser montado.
+ */
+function getManagedCliPaths(env) {
+  try {
+    const { userData } = getAppPaths()
+    return getManagedCliPathCandidates(getManagedCliLayout({ userData, env }))
+  } catch {
+    return []
+  }
 }
 
 function getConfiguredCliPaths(env) {

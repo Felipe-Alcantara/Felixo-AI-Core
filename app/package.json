@@ -46,6 +46,13 @@
       "package.json",
       "public/**/*"
     ],
+    "beforePack": "scripts/bundle-npm-runtime.cjs",
+    "extraResources": [
+      {
+        "from": "build/npm-runtime",
+        "to": "npm-runtime"
+      }
+    ],
     "publish": [
       {
         "provider": "github",

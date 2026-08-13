@@ -37,6 +37,7 @@ import {
 } from '../services/node-data-cache'
 import { CanvasToolbar } from './CanvasToolbar'
 import { UpdateToast } from '../../updates/UpdateNotice'
+import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
@@ -1723,6 +1724,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onDismiss={updates.dismiss}
         onInstall={updates.install}
       />
+      {/* Cuida do proprio estado: o avanco da instalacao nao precisa passar
+          pelo canvas para chegar na tela. */}
+      <CliSetupToast />
     </div>
   )
 }

@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Artefatos gerados pelo build/empacotamento não são código do projeto.
+  // Em especial, o npm empacotado traz regras ESLint incompatíveis com este
+  // conjunto de plugins e não deve entrar na análise da aplicação.
+  globalIgnores(['dist', 'build', 'release']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

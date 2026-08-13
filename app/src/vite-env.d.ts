@@ -82,6 +82,19 @@ type ReadImageAttachmentResult = CliInvokeResult & {
   size?: number
 }
 
+/** Andamento da instalação automática das CLIs de IA. */
+type CliSetupStatus = {
+  state: 'disabled' | 'idle' | 'checking' | 'installing' | 'done' | 'error'
+  message: string
+  updatedAt: string
+  clis?: Array<{
+    id: string
+    name: string
+    state: 'present' | 'pending' | 'installing' | 'installed' | 'failed' | 'skipped'
+    message?: string
+  }>
+}
+
 type UpdateStatus = {
   state:
     | 'disabled'
@@ -480,6 +493,15 @@ declare global {
         >
         install: () => Promise<CliInvokeResult & { status?: UpdateStatus }>
         onStatus: (callback: (status: UpdateStatus) => void) => () => void
+      }
+      /**
+       * Instalação automática das CLIs de IA, em segundo plano na primeira
+       * abertura do app instalado.
+       */
+      cliSetup?: {
+        getStatus: () => Promise<CliInvokeResult & { status?: CliSetupStatus }>
+        retry: () => Promise<CliInvokeResult & { status?: CliSetupStatus }>
+        onStatus: (callback: (status: CliSetupStatus) => void) => () => void
       }
       fileOpen?: {
         getPending: () => Promise<{ filePath: string; ext: string } | null>

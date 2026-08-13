@@ -39,6 +39,9 @@ const {
 } = require('./services/fetch-all-ipc-handlers.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
 const {
+  registerCliAutoInstallHandlers,
+} = require('./services/cli-auto-install.cjs')
+const {
   registerOrchestratorSettingsIpcHandlers,
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
@@ -52,6 +55,7 @@ let ptyHandlers = null
 let canvasFilesHandlers = null
 let textFileHandlers = null
 let storageDatabase = null
+let cliAutoInstall = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -120,6 +124,11 @@ app.whenReady().then(() => {
   registerGitIpcHandlers()
   registerFetchAllIpcHandlers(getMainWindow, appPaths)
   registerAutoUpdateHandlers(getMainWindow)
+  cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
+    appPaths,
+    appVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+  })
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
 
   // Expõe a versão empacotada (definida pelo CI no release, não no
@@ -165,6 +174,15 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  if (cliAutoInstall) {
+    try {
+      cliAutoInstall.stop()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    cliAutoInstall = null
+  }
+
   if (ptyHandlers) {
     try {
       ptyHandlers.dispose()
