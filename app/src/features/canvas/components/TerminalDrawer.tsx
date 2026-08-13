@@ -199,6 +199,12 @@ export function TerminalDrawer({
   }, [pinned, close])
 
   // Attach the live terminal element into the drawer and focus it.
+  //
+  // `restart()` swaps in a brand-new xterm.Terminal under the same sessionId,
+  // so `snapshot.generation` is in the deps too — without it this effect
+  // wouldn't re-run after a restart, and the drawer would keep showing the
+  // disposed terminal's (now-empty) container until it was closed and
+  // reopened.
   useEffect(() => {
     const container = mountRef.current
     if (!container) {
@@ -223,7 +229,7 @@ export function TerminalDrawer({
       window.cancelAnimationFrame(rafId)
       observer.disconnect()
     }
-  }, [store, sessionId])
+  }, [store, sessionId, snapshot?.generation])
 
   // Keep the terminal fitted as the drawer width changes. Expanding also
   // returns focus to the terminal so the user can type right away.

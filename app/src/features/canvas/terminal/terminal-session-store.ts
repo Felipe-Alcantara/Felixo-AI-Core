@@ -49,6 +49,14 @@ export type SessionSnapshot = {
   message?: string
   /** The most recent prompt submitted to the session (typed or programmatic). */
   lastPrompt?: string
+  /**
+   * Bumped every time `ensure()` creates a brand-new `xterm.Terminal` for this
+   * id (first mount, or after `restart()`). The id itself doesn't change on
+   * restart, so consumers that mount the terminal's DOM element into a
+   * container (the drawer) need this to notice the swap and re-attach —
+   * otherwise the new instance is never mounted until the component remounts.
+   */
+  generation?: number
 }
 
 export type TerminalTranscript = {
@@ -211,6 +219,8 @@ export class TerminalSessionStore {
   private allListeners = new Set<() => void>()
   /** Immutable cache used by React's external-store subscription. */
   private snapshots: Record<string, SessionSnapshot> = {}
+  /** Survives `remove()`, so a restart's fresh session gets a new generation. */
+  private generations = new Map<string, number>()
 
   /**
    * Ends an exited/errored session and immediately re-creates it with the
@@ -248,6 +258,9 @@ export class TerminalSessionStore {
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
 
+    const generation = (this.generations.get(id) ?? 0) + 1
+    this.generations.set(id, generation)
+
     const session: Session = {
       id,
       // The id must survive renderer HMR, navigation to Chat and a drawer
@@ -257,7 +270,7 @@ export class TerminalSessionStore {
       terminal,
       fitAddon,
       listeners: this.listeners.get(id) ?? new Set(),
-      snapshot: { activity: 'starting', previewLines: [] },
+      snapshot: { activity: 'starting', previewLines: [], generation },
       idleTimer: null,
       offData: () => {},
       offExit: () => {},
