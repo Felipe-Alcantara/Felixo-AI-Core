@@ -17,6 +17,12 @@ import type {
   SystemDesignDocumentSummary,
   TerminalOutputEvent,
 } from './features/chat/types'
+import type {
+  FetchAllActionResult,
+  FetchAllPlan,
+  FetchAllProgress,
+  FetchAllSettings,
+} from './features/canvas/types'
 
 type DetectedRepo = { name: string; path: string }
 type DirectoryEntry = { name: string; isDirectory: boolean; path: string }
@@ -510,6 +516,56 @@ declare global {
           output?: string
           summary?: GitProjectSummary
         }>
+      }
+      fetchAll?: {
+        getState: () => Promise<{
+          ok: boolean
+          phase?: FetchAllProgress['phase']
+          busy?: boolean
+          plan?: FetchAllPlan | null
+          scanMode?: string
+        }>
+        getSettings: () => Promise<{
+          ok: boolean
+          message?: string
+          settings?: FetchAllSettings
+        }>
+        saveSettings: (settings: FetchAllSettings) => Promise<{
+          ok: boolean
+          message?: string
+          settings?: FetchAllSettings
+        }>
+        getScope: () => Promise<{
+          ok: boolean
+          message?: string
+          scope?: { configured: string[]; resolved: string[]; available: string[] }
+        }>
+        scan: (params?: { useCache?: boolean }) => Promise<{
+          ok: boolean
+          message?: string
+          cancelled?: boolean
+          plan?: FetchAllPlan
+          scanMode?: string
+        }>
+        execute: (params?: { autoCommit?: boolean }) => Promise<{
+          ok: boolean
+          message?: string
+          results?: FetchAllActionResult[]
+          reportPath?: string
+        }>
+        cancel: () => Promise<{ ok: boolean; cancelled: boolean }>
+        ignorePath: (params: { path: string }) => Promise<{
+          ok: boolean
+          message?: string
+          settings?: FetchAllSettings
+          plan?: FetchAllPlan | null
+        }>
+        unignorePath: (params: { path: string }) => Promise<{
+          ok: boolean
+          message?: string
+          settings?: FetchAllSettings
+        }>
+        onProgress: (callback: (progress: FetchAllProgress) => void) => () => void
       }
       qaLogger?: {
         getEntries: () => Promise<QaLogEntry[]>

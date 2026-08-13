@@ -34,6 +34,9 @@ const {
 } = require('./services/system-design-ipc-handlers.cjs')
 const { registerChatHistoryIpcHandlers } = require('./services/chat-history-ipc-handlers.cjs')
 const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
+const {
+  registerFetchAllIpcHandlers,
+} = require('./services/fetch-all-ipc-handlers.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
 const {
   registerOrchestratorSettingsIpcHandlers,
@@ -115,6 +118,7 @@ app.whenReady().then(() => {
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
+  registerFetchAllIpcHandlers(getMainWindow, appPaths)
   registerAutoUpdateHandlers(getMainWindow)
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
 

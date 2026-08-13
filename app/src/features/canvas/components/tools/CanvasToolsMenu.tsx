@@ -9,6 +9,7 @@ import {
   LayoutList,
   type LucideIcon,
   Notebook,
+  RefreshCw,
   Settings,
   Sparkles,
   Upload,
@@ -35,6 +36,7 @@ export type CanvasTool =
   | 'prompts'
   | 'skills'
   | 'git'
+  | 'fetchAll'
   | 'settings'
 
 type ToolEntry = { tool: CanvasTool; label: string; icon: LucideIcon }
@@ -46,6 +48,7 @@ const TOOLS: ToolEntry[] = [
   { tool: 'prompts', label: 'Prompts', icon: Sparkles },
   { tool: 'skills', label: 'Skills', icon: BrainCircuit },
   { tool: 'git', label: 'Git', icon: GitBranch },
+  { tool: 'fetchAll', label: 'Fetch All', icon: RefreshCw },
   { tool: 'settings', label: 'Configurações', icon: Settings },
 ]
 

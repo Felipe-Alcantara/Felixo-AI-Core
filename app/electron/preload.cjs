@@ -188,6 +188,26 @@ contextBridge.exposeInMainWorld('felixo', {
     unstageAll: (params) => ipcRenderer.invoke('git:unstage-all', params),
     commit: (params) => ipcRenderer.invoke('git:commit', params),
   },
+  // Fetch All: varre os discos atras de repositorios git, classifica cada um
+  // e sincroniza os seguros. O progresso chega por evento porque a varredura
+  // demora minutos e a interface precisa mostrar o avanco.
+  fetchAll: {
+    getState: () => ipcRenderer.invoke('fetch-all:get-state'),
+    getSettings: () => ipcRenderer.invoke('fetch-all:get-settings'),
+    saveSettings: (settings) =>
+      ipcRenderer.invoke('fetch-all:save-settings', { settings }),
+    getScope: () => ipcRenderer.invoke('fetch-all:get-scope'),
+    scan: (params) => ipcRenderer.invoke('fetch-all:scan', params),
+    execute: (params) => ipcRenderer.invoke('fetch-all:execute', params),
+    cancel: () => ipcRenderer.invoke('fetch-all:cancel'),
+    ignorePath: (params) => ipcRenderer.invoke('fetch-all:ignore-path', params),
+    unignorePath: (params) => ipcRenderer.invoke('fetch-all:unignore-path', params),
+    onProgress: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('fetch-all:progress', handler)
+      return () => ipcRenderer.removeListener('fetch-all:progress', handler)
+    },
+  },
   fileOpen: {
     getPending: () => ipcRenderer.invoke('file:get-pending'),
     onOpened: (callback) => {

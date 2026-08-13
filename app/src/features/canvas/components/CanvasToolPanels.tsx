@@ -1,6 +1,6 @@
 // Renderiza o painel lateral da ferramenta ativa (busca, projetos, notas,
-// modelos, prompts, skills, git e configurações). Mantém o CanvasView focado
-// na orquestração do fluxo, não no switch de painéis.
+// modelos, prompts, skills, git, fetch all e configurações). Mantém o
+// CanvasView focado na orquestração do fluxo, não no switch de painéis.
 import type { Node } from '@xyflow/react'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import { SearchPanel } from './tools/SearchPanel'
@@ -10,6 +10,7 @@ import { ModelsPanel } from './tools/ModelsPanel'
 import { PromptsPanel } from './tools/PromptsPanel'
 import { SkillsPanel, type SkillActivationResult } from './tools/SkillsPanel'
 import { GitPanel } from './tools/GitPanel'
+import { FetchAllPanel } from './tools/FetchAllPanel'
 import { SettingsPanel } from './tools/SettingsPanel'
 import type { CanvasSkill } from '../types'
 import type { RunFileOptions } from '../services/run-file-command'
@@ -105,6 +106,8 @@ export function CanvasToolPanels({
       )
     case 'git':
       return <GitPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+    case 'fetchAll':
+      return <FetchAllPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
     case 'settings':
       return (
         <SettingsPanel

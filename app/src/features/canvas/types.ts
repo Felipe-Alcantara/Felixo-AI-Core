@@ -153,3 +153,69 @@ export type CanvasTransferBundle = {
   edges: PersistedCanvasEdge[]
   files: Array<{ name: string; content: string }>
 }
+
+/** Estado de sincronização de um repositório após o fetch do Fetch All. */
+export type FetchAllRepoState =
+  | 'UP_TO_DATE'
+  | 'NEEDS_PULL'
+  | 'NEEDS_PUSH'
+  | 'DIVERGED'
+  | 'DIRTY'
+  | 'CONFLICT'
+  | 'NO_REMOTE'
+  | 'NO_UPSTREAM'
+  | 'DETACHED'
+  | 'FETCH_ERROR'
+  | 'GIT_ERROR'
+
+export type FetchAllRepoStatus = {
+  path: string
+  name: string
+  state: FetchAllRepoState
+  /** Rótulo legível do estado, montado no processo principal. */
+  stateLabel: string
+  branch: string
+  ahead: number
+  behind: number
+  detail: string
+  dirtyFiles: string[]
+}
+
+/** Plano revisável: o que dá para resolver sozinho e o que só é reportado. */
+export type FetchAllPlan = {
+  upToDate: FetchAllRepoStatus[]
+  toPull: FetchAllRepoStatus[]
+  toPush: FetchAllRepoStatus[]
+  problems: FetchAllRepoStatus[]
+  total: number
+}
+
+export type FetchAllActionResult = {
+  status: FetchAllRepoStatus
+  action: 'pull' | 'push' | 'commit'
+  ok: boolean
+  message: string
+}
+
+export type FetchAllSettings = {
+  /** Vazio significa "todos os discos locais". */
+  scanRoots: string[]
+  excludeDirs: string[]
+  ignoredPaths: string[]
+  analyzeWorkers: number
+}
+
+/** Avanço da passada, publicado pelo processo principal enquanto ela roda. */
+export type FetchAllProgress = {
+  phase: 'idle' | 'scanning' | 'analyzing' | 'executing'
+  type: 'scan' | 'analyze' | 'execute' | 'done'
+  scannedDirs?: number
+  foundRepos?: number
+  currentPath?: string
+  analyzed?: number
+  total?: number
+  repoName?: string
+  stateLabel?: string
+  done?: number
+  result?: FetchAllActionResult
+}
