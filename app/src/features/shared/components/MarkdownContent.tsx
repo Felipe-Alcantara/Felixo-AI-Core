@@ -1,6 +1,7 @@
 import {
   Children,
   isValidElement,
+  useMemo,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -18,9 +19,17 @@ import xmlLanguage from 'highlight.js/lib/languages/xml'
 import rehypeRaw from 'rehype-raw'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { resolveMarkdownImageSrc } from './markdown-image-src'
 
 type MarkdownContentProps = {
   content: string
+  /**
+   * Pasta do arquivo sendo exibido, para resolver imagem com caminho
+   * relativo (`./foto.png`, a convenção de imagem de post do blog) contra o
+   * disco. Sem isso, caminho relativo passa como veio — o comportamento de
+   * sempre, correto para markdown sem arquivo por trás (ex.: chat).
+   */
+  baseDir?: string
 }
 
 const highlightLanguageAliases: Record<string, string> = {
@@ -44,167 +53,182 @@ hljs.registerLanguage('python', pythonLanguage)
 hljs.registerLanguage('typescript', typescriptLanguage)
 hljs.registerLanguage('xml', xmlLanguage)
 
-const markdownComponents: Components = {
-  h1({ children }) {
-    return <h1 className="text-base font-semibold text-zinc-50">{children}</h1>
-  },
-  h2({ children }) {
-    return <h2 className="text-sm font-semibold text-zinc-100">{children}</h2>
-  },
-  h3({ children }) {
-    return <h3 className="text-[13px] font-semibold text-zinc-100">{children}</h3>
-  },
-  h4({ children }) {
-    return <h4 className="text-[13px] font-semibold text-zinc-100">{children}</h4>
-  },
-  h5({ children }) {
-    return <h5 className="text-[12px] font-semibold text-zinc-200">{children}</h5>
-  },
-  h6({ children }) {
-    return (
-      <h6 className="text-[11px] font-semibold uppercase text-zinc-300">
-        {children}
-      </h6>
-    )
-  },
-  p({ children }) {
-    return <p className="whitespace-pre-wrap text-zinc-100">{children}</p>
-  },
-  strong({ children }) {
-    return <strong className="font-semibold text-zinc-50">{children}</strong>
-  },
-  em({ children }) {
-    return <em className="italic text-zinc-100">{children}</em>
-  },
-  del({ children }) {
-    return <del className="text-zinc-400 line-through">{children}</del>
-  },
-  a({ children, href }) {
-    return (
-      <a
-        className="font-medium text-cyan-200 underline decoration-cyan-200/35 underline-offset-4 hover:text-cyan-100"
-        href={href}
-        rel="noreferrer"
-        target="_blank"
-      >
-        {children}
-      </a>
-    )
-  },
-  blockquote({ children }) {
-    return (
-      <blockquote className="border-l-2 border-orange-200/35 pl-3 text-zinc-300">
-        {children}
-      </blockquote>
-    )
-  },
-  ul({ children, className }) {
-    const isTaskList = className?.includes('contains-task-list')
-
-    return (
-      <ul
-        className={joinClassNames(
-          isTaskList
-            ? 'space-y-1 pl-0 text-zinc-100'
-            : 'list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500',
-          className,
-        )}
-      >
-        {children}
-      </ul>
-    )
-  },
-  ol({ children, className }) {
-    return (
-      <ol
-        className={joinClassNames(
-          'list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500',
-          className,
-        )}
-      >
-        {children}
-      </ol>
-    )
-  },
-  li({ children, className }) {
-    const isTaskItem = className?.includes('task-list-item')
-
-    return (
-      <li
-        className={joinClassNames(
-          isTaskItem ? 'flex list-none items-start gap-2 pl-0' : 'pl-1',
-          className,
-        )}
-      >
-        {children}
-      </li>
-    )
-  },
-  hr() {
-    return <hr className="my-3 border-white/[0.08]" />
-  },
-  table({ children }) {
-    return (
-      <div className="max-w-full overflow-x-auto rounded-lg border border-white/[0.08]">
-        <table className="w-full min-w-max border-collapse text-left text-[12px]">
-          {children}
-        </table>
-      </div>
-    )
-  },
-  thead({ children }) {
-    return <thead className="bg-white/[0.05] text-zinc-200">{children}</thead>
-  },
-  tbody({ children }) {
-    return <tbody className="divide-y divide-white/[0.06]">{children}</tbody>
-  },
-  tr({ children }) {
-    return <tr>{children}</tr>
-  },
-  th({ children }) {
-    return (
-      <th className="border-r border-white/[0.06] px-3 py-2 font-semibold last:border-r-0">
-        {children}
-      </th>
-    )
-  },
-  td({ children }) {
-    return (
-      <td className="border-r border-white/[0.06] px-3 py-2 text-zinc-300 last:border-r-0">
-        {children}
-      </td>
-    )
-  },
-  img: MarkdownImage,
-  input(props) {
-    return <input {...props} className="mr-2 align-middle accent-orange-200" />
-  },
-  code({ children, className }) {
-    return <code className={className}>{children}</code>
-  },
-  pre({ children }) {
-    const language = getCodeBlockLanguage(children)
-    const codeText = getCodeBlockText(children)
-    const recoveredMarkdown = recoverMarkdownSwallowedByCodeBlock(
-      codeText,
-      language,
-    )
-
-    if (recoveredMarkdown) {
+/**
+ * Uma fábrica, não um objeto fixo: `img` e `pre` (que pode renderizar outro
+ * `MarkdownContent` aninhado) precisam do `baseDir` atual para resolver
+ * imagem com caminho relativo. `react-markdown` só repassa pra cada
+ * componente o que o próprio Markdown escreveu — nenhum jeito de injetar um
+ * prop extra por fora — então `baseDir` entra por closure.
+ */
+function createMarkdownComponents(baseDir: string | undefined): Components {
+  return {
+    h1({ children }) {
+      return <h1 className="text-base font-semibold text-zinc-50">{children}</h1>
+    },
+    h2({ children }) {
+      return <h2 className="text-sm font-semibold text-zinc-100">{children}</h2>
+    },
+    h3({ children }) {
+      return <h3 className="text-[13px] font-semibold text-zinc-100">{children}</h3>
+    },
+    h4({ children }) {
+      return <h4 className="text-[13px] font-semibold text-zinc-100">{children}</h4>
+    },
+    h5({ children }) {
+      return <h5 className="text-[12px] font-semibold text-zinc-200">{children}</h5>
+    },
+    h6({ children }) {
       return (
-        <>
-          <CodeBlock code={recoveredMarkdown.code} language={language} />
-          <MarkdownContent content={recoveredMarkdown.markdown} />
-        </>
+        <h6 className="text-[11px] font-semibold uppercase text-zinc-300">{children}</h6>
       )
-    }
+    },
+    p({ children }) {
+      return <p className="whitespace-pre-wrap text-zinc-100">{children}</p>
+    },
+    strong({ children }) {
+      return <strong className="font-semibold text-zinc-50">{children}</strong>
+    },
+    em({ children }) {
+      return <em className="italic text-zinc-100">{children}</em>
+    },
+    del({ children }) {
+      return <del className="text-zinc-400 line-through">{children}</del>
+    },
+    a({ children, href }) {
+      return (
+        <a
+          className="font-medium text-cyan-200 underline decoration-cyan-200/35 underline-offset-4 hover:text-cyan-100"
+          href={href}
+          rel="noreferrer"
+          target="_blank"
+        >
+          {children}
+        </a>
+      )
+    },
+    blockquote({ children }) {
+      return (
+        <blockquote className="border-l-2 border-orange-200/35 pl-3 text-zinc-300">
+          {children}
+        </blockquote>
+      )
+    },
+    ul({ children, className }) {
+      const isTaskList = className?.includes('contains-task-list')
 
-    return <CodeBlock code={codeText} language={language} />
-  },
+      return (
+        <ul
+          className={joinClassNames(
+            isTaskList
+              ? 'space-y-1 pl-0 text-zinc-100'
+              : 'list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500',
+            className,
+          )}
+        >
+          {children}
+        </ul>
+      )
+    },
+    ol({ children, className }) {
+      return (
+        <ol
+          className={joinClassNames(
+            'list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500',
+            className,
+          )}
+        >
+          {children}
+        </ol>
+      )
+    },
+    li({ children, className }) {
+      const isTaskItem = className?.includes('task-list-item')
+
+      return (
+        <li
+          className={joinClassNames(
+            isTaskItem ? 'flex list-none items-start gap-2 pl-0' : 'pl-1',
+            className,
+          )}
+        >
+          {children}
+        </li>
+      )
+    },
+    hr() {
+      return <hr className="my-3 border-white/[0.08]" />
+    },
+    table({ children }) {
+      return (
+        <div className="max-w-full overflow-x-auto rounded-lg border border-white/[0.08]">
+          <table className="w-full min-w-max border-collapse text-left text-[12px]">
+            {children}
+          </table>
+        </div>
+      )
+    },
+    thead({ children }) {
+      return <thead className="bg-white/[0.05] text-zinc-200">{children}</thead>
+    },
+    tbody({ children }) {
+      return <tbody className="divide-y divide-white/[0.06]">{children}</tbody>
+    },
+    tr({ children }) {
+      return <tr>{children}</tr>
+    },
+    th({ children }) {
+      return (
+        <th className="border-r border-white/[0.06] px-3 py-2 font-semibold last:border-r-0">
+          {children}
+        </th>
+      )
+    },
+    td({ children }) {
+      return (
+        <td className="border-r border-white/[0.06] px-3 py-2 text-zinc-300 last:border-r-0">
+          {children}
+        </td>
+      )
+    },
+    img(props) {
+      return <MarkdownImage {...props} baseDir={baseDir} />
+    },
+    input(props) {
+      return <input {...props} className="mr-2 align-middle accent-orange-200" />
+    },
+    code({ children, className }) {
+      return <code className={className}>{children}</code>
+    },
+    pre({ children }) {
+      const language = getCodeBlockLanguage(children)
+      const codeText = getCodeBlockText(children)
+      const recoveredMarkdown = recoverMarkdownSwallowedByCodeBlock(codeText, language)
+
+      if (recoveredMarkdown) {
+        return (
+          <>
+            <CodeBlock code={recoveredMarkdown.code} language={language} />
+            {/* baseDir explícito: sem isso, o `<MarkdownContent>` aninhado
+              nasceria sem saber a pasta do arquivo. */}
+            <MarkdownContent baseDir={baseDir} content={recoveredMarkdown.markdown} />
+          </>
+        )
+      }
+
+      return <CodeBlock code={codeText} language={language} />
+    },
+  }
 }
 
-function MarkdownImage({ alt, src, title }: ComponentProps<'img'>) {
-  const [hasError, setHasError] = useState(!src)
+function MarkdownImage({
+  alt,
+  src,
+  title,
+  baseDir,
+}: ComponentProps<'img'> & { baseDir: string | undefined }) {
+  const resolvedSrc =
+    typeof src === 'string' ? resolveMarkdownImageSrc(src, baseDir) : src
+  const [hasError, setHasError] = useState(!resolvedSrc)
 
   if (hasError) {
     return (
@@ -223,19 +247,13 @@ function MarkdownImage({ alt, src, title }: ComponentProps<'img'>) {
       className="max-h-64 max-w-full rounded-lg border border-white/[0.08] object-contain"
       loading="lazy"
       onError={() => setHasError(true)}
-      src={src}
+      src={resolvedSrc}
       title={title}
     />
   )
 }
 
-function CodeBlock({
-  code,
-  language,
-}: {
-  code: string
-  language: string
-}) {
+function CodeBlock({ code, language }: { code: string; language: string }) {
   const highlightedCode = highlightCode(code, language)
 
   const [copied, setCopied] = useState(false)
@@ -273,7 +291,10 @@ function CodeBlock({
       <pre className="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200">
         {highlightedCode ? (
           <code
-            className={joinClassNames('hljs', language ? `language-${language}` : undefined)}
+            className={joinClassNames(
+              'hljs',
+              language ? `language-${language}` : undefined,
+            )}
             dangerouslySetInnerHTML={{ __html: highlightedCode }}
           />
         ) : (
@@ -284,13 +305,14 @@ function CodeBlock({
   )
 }
 
-export function MarkdownContent({ content }: MarkdownContentProps) {
+export function MarkdownContent({ content, baseDir }: MarkdownContentProps) {
   const normalizedContent = normalizeMarkdownContent(content)
+  const components = useMemo(() => createMarkdownComponents(baseDir), [baseDir])
 
   return (
     <div className="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100">
       <ReactMarkdown
-        components={markdownComponents}
+        components={components}
         rehypePlugins={[rehypeRaw]}
         remarkPlugins={[remarkGfm]}
       >
@@ -384,9 +406,7 @@ function isFenceCloser(line: string, openingMarker: string) {
 
   const fenceCharacter = openingMarker[0]
   const fenceLength = openingMarker.length
-  const closingFencePattern = new RegExp(
-    `^\\${fenceCharacter}{${fenceLength},}\\s*$`,
-  )
+  const closingFencePattern = new RegExp(`^\\${fenceCharacter}{${fenceLength},}\\s*$`)
 
   return closingFencePattern.test(trimmedLine)
 }

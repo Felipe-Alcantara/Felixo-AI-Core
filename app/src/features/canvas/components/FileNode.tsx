@@ -19,13 +19,10 @@ import {
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { MarkdownContent } from '../../shared/components/MarkdownContent'
+import { dirnameOf } from '../../shared/components/markdown-image-src'
 import { resolvePreviewKind } from './file-node-preview'
 import { useFileNodeDocument } from '../hooks/useFileNodeDocument'
-import type {
-  DiagnosisRequestStatus,
-  FileNodeData,
-  FileNodeMode,
-} from '../types'
+import type { DiagnosisRequestStatus, FileNodeData, FileNodeMode } from '../types'
 
 /** A terminal/agent block, summarised for the file node's link panel. */
 export type LinkableAgent = { id: string; label: string }
@@ -195,38 +192,38 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           {absolutePath || filePath}
         </div>
       ) : (
-      <div className="nodrag flex items-center gap-1 border-b border-sky-300/10 bg-sky-950/30 px-2 py-1 text-[11px]">
-        <span className="inline-flex overflow-hidden rounded ring-1 ring-white/10">
-          <button
-            type="button"
-            onClick={() => setMode('scratchpad')}
-            className={`felixo-btn px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
-            title="Modo scratchpad: log vivo e leve"
-          >
-            Scratchpad
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('plan')}
-            className={`felixo-btn px-1.5 py-0.5 ${mode === 'plan' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
-            title="Modo plano: gerar diagnóstico do repositório"
-          >
-            Plano
-          </button>
-        </span>
-        {mode === 'plan' && (
-          <button
-            type="button"
-            onClick={() => void generateDiagnosis()}
-            disabled={diagnosing}
-            className="felixo-btn nodrag ml-auto inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60 disabled:opacity-50"
-            title="Pedir ao terminal conectado um diagnóstico do repositório"
-          >
-            <Stethoscope size={12} />
-            {diagnosing ? 'Solicitando…' : 'Gerar diagnóstico'}
-          </button>
-        )}
-      </div>
+        <div className="nodrag flex items-center gap-1 border-b border-sky-300/10 bg-sky-950/30 px-2 py-1 text-[11px]">
+          <span className="inline-flex overflow-hidden rounded ring-1 ring-white/10">
+            <button
+              type="button"
+              onClick={() => setMode('scratchpad')}
+              className={`felixo-btn px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+              title="Modo scratchpad: log vivo e leve"
+            >
+              Scratchpad
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('plan')}
+              className={`felixo-btn px-1.5 py-0.5 ${mode === 'plan' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+              title="Modo plano: gerar diagnóstico do repositório"
+            >
+              Plano
+            </button>
+          </span>
+          {mode === 'plan' && (
+            <button
+              type="button"
+              onClick={() => void generateDiagnosis()}
+              disabled={diagnosing}
+              className="felixo-btn nodrag ml-auto inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60 disabled:opacity-50"
+              title="Pedir ao terminal conectado um diagnóstico do repositório"
+            >
+              <Stethoscope size={12} />
+              {diagnosing ? 'Solicitando…' : 'Gerar diagnóstico'}
+            </button>
+          )}
+        </div>
       )}
 
       {error && (
@@ -251,7 +248,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       ) : content.trim() ? (
         previewKind === 'markdown' ? (
           <div className="nodrag nowheel nopan markdown-content min-h-0 flex-1 overflow-auto p-3 text-sm">
-            <MarkdownContent content={content} />
+            <MarkdownContent baseDir={dirnameOf(absolutePath)} content={content} />
           </div>
         ) : (
           // Texto puro preserva indentação e quebra de linha — num arquivo de
@@ -262,7 +259,9 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         )
       ) : (
         <div className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto p-3 text-sm">
-          <span className="text-zinc-600">Arquivo vazio. Clique no lápis para editar.</span>
+          <span className="text-zinc-600">
+            Arquivo vazio. Clique no lápis para editar.
+          </span>
         </div>
       )}
 
@@ -364,9 +363,7 @@ function LinkedAgentsPanel({
               className="group flex items-center gap-1 rounded px-1 py-0.5 hover:bg-white/5"
             >
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-              <span className="min-w-0 flex-1 truncate text-sky-100">
-                {agent.label}
-              </span>
+              <span className="min-w-0 flex-1 truncate text-sky-100">{agent.label}</span>
               {canUnlink && (
                 <button
                   type="button"
