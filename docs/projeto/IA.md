@@ -1687,3 +1687,31 @@ VALIDAÇÃO: `tsc -b`, `eslint` e `vitest` (375/375 em `features/canvas`, 16/16 
 LIMITE ASSUMIDO: isto só muda o prompt **padrão** do código (`DEFAULT_QUALITY_STANDARD_PROMPT`). Quem já salvou um prompt customizado nas Configurações (`window.felixo.canvas.setQualityStandard`) não recebe a frase nova automaticamente — precisa clicar "Padrão" e "Salvar" de novo, ou editar manualmente. Conferido no banco do usuário (`settings` no sqlite) que ele **não** tem prompt customizado salvo hoje, então a mudança já vale para os próximos terminais dele sem ação nenhuma. Também não propaga pra fora do app: um `CLAUDE.md`/`AGENTS.md` estático de outro repositório (ex.: `felixo-blog`) que copiou este texto manualmente em algum momento não é atualizado por esta mudança.
 
 Estado final: concluído e validado por typecheck/lint/teste; efeito no app precisa de um terminal novo pra ser observado (terminal já aberto não relê a instrução).
+
+## Registro de Trabalho — 2026-08-13 (parte 16) — lista de projetos fora de ordem e som de notificação mudo (Feedback: dois relatos do usuário)
+
+### Lista de projetos fora de ordem alfabética
+
+RELATO: o dropdown "Projeto" (usado ao configurar um agente/terminal) mostrava as pastas na ordem em que foram registradas, não em ordem alfabética — difícil de achar um projeto numa lista de dezenas.
+
+CAUSA: `useCanvasProjects` (hook que carrega e recarrega a lista) repassava direto o array que vinha do backend, sem ordenar.
+
+CORREÇÃO: `sortByName` (`useCanvasProjects.ts`), comparação por `localeCompare('pt-BR', { sensitivity: 'base' })` — alfabética e sem diferenciar maiúsculas/minúsculas —, aplicada tanto na carga inicial quanto em todo `reloadProjects` (adicionar/remover pasta). Função exportada e pura, sem mutar o array de entrada.
+
+TESTE: 3 casos novos em `useCanvasProjects.test.ts` — ordem alfabética a partir de ordem de chegada arbitrária, case-insensitive, e não-mutação do array recebido.
+
+VALIDAÇÃO: `tsc -b`, `eslint` e `vitest` (378/378 em `features/canvas`) limpos.
+
+### Som de notificação não tocava
+
+RELATO: o app deveria tocar um som quando um agente termina o turno ou pede aprovação, mas nada tocava.
+
+CAUSA: `CanvasView` criava o elemento de áudio com caminho absoluto (`new Audio('/sounds/notification.mp3')`). Isso funciona em dev (Vite serve a partir da raiz do próprio servidor), mas quebra no app empacotado: a janela principal carrega o renderer via `loadFile` (protocolo `file://`), onde um caminho começando com `/` resolve para a raiz do disco, não para a pasta do app — exatamente o problema que `base: './'` em `vite.config.ts` já existe para evitar nos demais assets, mas que passou batido neste `new Audio(...)`, por não ser processado pelo pipeline de assets do Vite. O `.catch()` do `audio.play()` engolia o erro de carregamento silenciosamente, então não havia nem log indicando a falha.
+
+CORREÇÃO: caminho relativo (`./sounds/notification.mp3`), que resolve corretamente nos dois casos — dev (relativo à raiz do servidor) e produção (relativo ao `dist/index.html`, mesma pasta de `dist/sounds/`).
+
+VALIDAÇÃO: `tsc -b`, `eslint` e `vitest` (378/378 em `features/canvas`) limpos; `npm run build` confirma `dist/sounds/notification.mp3` no mesmo diretório de `dist/index.html`. Não testado ouvindo o som no app empacotado de verdade (exigiria rodar o instalador) — a validação ficou na correção do caminho, cuja causa raiz é a mesma documentada e já resolvida para os outros assets do projeto.
+
+RISCO RESIDUAL: build empacotado (`/opt/Felixo AI Core`) ainda não tem essa correção — só entra depois de rebuild/reinstalação, como já registrado noutras entregas deste arquivo.
+
+Estado final: concluído e validado por typecheck/lint/teste; verificação sonora real no app empacotado fica pendente até o próximo rebuild/reinstalação do usuário.
