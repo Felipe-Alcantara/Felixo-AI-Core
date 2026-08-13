@@ -70,9 +70,12 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
 
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
-  const canRestart = activity === 'exited' || activity === 'error'
+  const isLive = activity !== 'exited' && activity !== 'error'
 
   const restart = () => {
+    if (isLive && !window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')) {
+      return
+    }
     store.restart(id, {
       command: nodeData.command,
       args: nodeData.args,
@@ -118,17 +121,15 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         }}
       >
         <CopyButton onCopy={() => store.copy(id)} />
-        {canRestart && (
-          <button
-            type="button"
-            className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
-            onClick={restart}
-            aria-label="Reiniciar terminal"
-            title="Reiniciar terminal"
-          >
-            <RotateCcw size={13} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          onClick={restart}
+          aria-label="Reiniciar terminal"
+          title="Reiniciar terminal"
+        >
+          <RotateCcw size={13} />
+        </button>
         <button
           type="button"
           className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"

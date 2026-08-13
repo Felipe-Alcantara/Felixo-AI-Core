@@ -76,7 +76,13 @@ export function TerminalDrawer({
 }: TerminalDrawerProps) {
   const store = useTerminalSessions()
   const snapshot = useSessionSnapshot(sessionId)
-  const canRestart = snapshot?.activity === 'exited' || snapshot?.activity === 'error'
+  const isLive = snapshot?.activity !== 'exited' && snapshot?.activity !== 'error'
+  const restart = () => {
+    if (isLive && !window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')) {
+      return
+    }
+    store.restart(sessionId, restartOptions ?? {})
+  }
   const mountRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(() =>
@@ -362,10 +368,10 @@ export function TerminalDrawer({
               {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
           )}
-          {!collapsed && canRestart && (
+          {!collapsed && (
             <button
               type="button"
-              onClick={() => store.restart(sessionId, restartOptions ?? {})}
+              onClick={restart}
               className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Reiniciar terminal"
               title="Reiniciar terminal"
