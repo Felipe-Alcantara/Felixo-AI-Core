@@ -271,7 +271,11 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const notificationIdsInitializedRef = useRef(false)
 
   useEffect(() => {
-    const audio = new Audio('/sounds/notification.mp3')
+    // Caminho relativo, não absoluto: o app empacotado carrega o renderer via
+    // file://, onde um "/sounds/…" resolveria para a raiz do disco em vez da
+    // pasta do app (mesmo motivo do `base: './'` em vite.config.ts) — o som
+    // falhava silenciosamente porque o catch abaixo engole o erro de load.
+    const audio = new Audio('./sounds/notification.mp3')
     audio.preload = 'auto'
     notificationAudioRef.current = audio
     return () => {
