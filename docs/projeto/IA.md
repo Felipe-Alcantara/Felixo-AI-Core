@@ -1673,3 +1673,17 @@ ERRO NO CAMINHO, CORRIGIDO ANTES DO COMMIT: rodei `npx prettier --write` sem not
 RISCO RESIDUAL: `<img src="file://…">` só carrega no **build empacotado** (a janela principal usa `loadFile`, origem `file://` — imagem local de mesma origem carrega sem CORS). Em modo dev (`npm run dev`, Vite em `http://localhost`), o Chromium bloqueia carregar `file://` a partir de uma origem `http`, então imagem relativa continuaria caindo no fallback ali — limitação conhecida do Electron, não deste código, e não afeta o uso real (app instalado). Não testado no app rodando (nenhum post do usuário tem imagem ainda para conferir visualmente); a cobertura ficou nas funções puras que decidem a URL.
 
 Estado final: concluído e validado por teste automatizado; validação visual no app pendente até existir um post com imagem relativa para abrir no preview.
+
+## Registro de Trabalho — 2026-08-12 (parte 15) — agente pergunta em texto corrido em vez da ferramenta interativa (Feedback: agente sempre manda pergunta no chat em vez de usar o questionário)
+
+RELATO: agentes rodando num terminal do canvas às vezes escrevem uma pergunta de múltipla escolha como texto corrido no chat ("Questionário (responda uma a uma)...") em vez de usar a ferramenta interativa de pergunta que a própria CLI oferece (ex.: `AskUserQuestion` no Claude Code) — que dá botão/campo de verdade pra responder, não um parágrafo pra escrever a resposta na mão.
+
+CAUSA: a instrução permanente que todo terminal-com-agente recebe (`DEFAULT_QUALITY_STANDARD_PROMPT`, digitada e submetida em todo terminal aberto com Claude/Gemini/Codex) nunca mencionava a ferramenta de pergunta interativa — só padrão de qualidade de código/commit/doc. Sem essa instrução, a CLI decide por conta própria como perguntar, e nem sempre escolhe a ferramenta interativa.
+
+FEITO: acrescentado um parágrafo ao `DEFAULT_QUALITY_STANDARD_PROMPT` pedindo que, ao precisar perguntar algo ao usuário, o agente use a ferramenta interativa de pergunta da própria CLI (se existir) em vez de escrever a pergunta como texto corrido.
+
+VALIDAÇÃO: `tsc -b`, `eslint` e `vitest` (375/375 em `features/canvas`, 16/16 no arquivo tocado) limpos — os testes cobrem comportamento de composição do prompt, não o texto literal, então a frase nova não quebrou nada.
+
+LIMITE ASSUMIDO: isto só muda o prompt **padrão** do código (`DEFAULT_QUALITY_STANDARD_PROMPT`). Quem já salvou um prompt customizado nas Configurações (`window.felixo.canvas.setQualityStandard`) não recebe a frase nova automaticamente — precisa clicar "Padrão" e "Salvar" de novo, ou editar manualmente. Conferido no banco do usuário (`settings` no sqlite) que ele **não** tem prompt customizado salvo hoje, então a mudança já vale para os próximos terminais dele sem ação nenhuma. Também não propaga pra fora do app: um `CLAUDE.md`/`AGENTS.md` estático de outro repositório (ex.: `felixo-blog`) que copiou este texto manualmente em algum momento não é atualizado por esta mudança.
+
+Estado final: concluído e validado por typecheck/lint/teste; efeito no app precisa de um terminal novo pra ser observado (terminal já aberto não relê a instrução).
