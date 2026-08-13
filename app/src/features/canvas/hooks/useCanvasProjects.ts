@@ -5,6 +5,13 @@ import { useCallback, useEffect, useState } from 'react'
 
 export type CanvasProject = { id: string; name: string; path: string }
 
+// Ordem alfabética (pt-BR, sem diferenciar maiúsculas/minúsculas) para a
+// lista de projetos ficar sempre previsível, independente da ordem de
+// criação/registro vinda do backend.
+export function sortByName(projects: CanvasProject[]): CanvasProject[] {
+  return [...projects].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }))
+}
+
 export function useCanvasProjects() {
   const [projects, setProjects] = useState<CanvasProject[]>([])
 
@@ -12,8 +19,10 @@ export function useCanvasProjects() {
     void window.felixo?.projects?.list().then((result) => {
       if (result?.ok && Array.isArray(result.projects)) {
         setProjects(
-          (result.projects as CanvasProject[]).filter(
-            (project) => project && typeof project.path === 'string',
+          sortByName(
+            (result.projects as CanvasProject[]).filter(
+              (project) => project && typeof project.path === 'string',
+            ),
           ),
         )
       }
@@ -83,8 +92,10 @@ export function useCanvasProjects() {
         return
       }
 
-      const loaded = (result.projects as CanvasProject[]).filter(
-        (project) => project && typeof project.path === 'string',
+      const loaded = sortByName(
+        (result.projects as CanvasProject[]).filter(
+          (project) => project && typeof project.path === 'string',
+        ),
       )
       setProjects(loaded)
     })
