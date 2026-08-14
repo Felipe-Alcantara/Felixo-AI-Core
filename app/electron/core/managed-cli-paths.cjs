@@ -35,14 +35,19 @@ function getManagedCliLayout({
     throw new Error('getManagedCliLayout requer userData.')
   }
 
-  const root = env[MANAGED_ROOT_ENV_KEY] || path.join(userData, 'clis')
+  // Usa o `path` do platformName pedido, não o do SO onde o código roda: os
+  // testes fixam `platformName` para checar o layout de cada plataforma, e
+  // isso só funciona se o separador de caminho também respeitar essa escolha.
+  const platformPath = platformName === 'win32' ? path.win32 : path.posix
+
+  const root = env[MANAGED_ROOT_ENV_KEY] || platformPath.join(userData, 'clis')
 
   return {
     root,
     // O npm instala os executáveis em `<prefix>/bin` no POSIX, mas direto em
     // `<prefix>` no Windows.
-    packagesBin: platformName === 'win32' ? root : path.join(root, 'bin'),
-    runtimeBin: path.join(root, 'runtime-bin'),
+    packagesBin: platformName === 'win32' ? root : platformPath.join(root, 'bin'),
+    runtimeBin: platformPath.join(root, 'runtime-bin'),
   }
 }
 
