@@ -34,8 +34,12 @@ function ensureManagedCliRuntime({
 }) {
   fileSystem.mkdirSync(layout.runtimeBin, { recursive: true })
 
+  // Usa o `path` do platformName pedido, não o do SO onde o código roda: os
+  // testes fixam `platformName` para checar o shim de cada plataforma, e
+  // isso só funciona se o separador de caminho também respeitar essa escolha.
   const isWindows = platformName === 'win32'
-  const nodeShim = path.join(layout.runtimeBin, isWindows ? 'node.cmd' : 'node')
+  const platformPath = isWindows ? path.win32 : path.posix
+  const nodeShim = platformPath.join(layout.runtimeBin, isWindows ? 'node.cmd' : 'node')
 
   writeShim(
     fileSystem,
@@ -50,7 +54,7 @@ function ensureManagedCliRuntime({
     return { node: nodeShim, npm: null }
   }
 
-  const npmShim = path.join(layout.runtimeBin, isWindows ? 'npm.cmd' : 'npm')
+  const npmShim = platformPath.join(layout.runtimeBin, isWindows ? 'npm.cmd' : 'npm')
 
   writeShim(
     fileSystem,
