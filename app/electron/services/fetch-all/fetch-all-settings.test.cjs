@@ -40,12 +40,17 @@ test('normalizeSettings mescla de volta as exclusões padrão perdidas', () => {
 })
 
 test('normalizeSettings resolve e deduplica os caminhos ignorados', () => {
+  // path.resolve() segue o SO real (em Windows, '/a/b' vira 'D:\a\b' e não
+  // '/a/b'), então o esperado tem que passar pelo mesmo resolve, não vir
+  // como literal POSIX cravado no teste.
+  const resolved = path.resolve('/a/b')
+
   const settings = normalizeSettings({
     ignoredPaths: ['/a/b', '/a/b/', '/a/b/../b', 'relativo'],
   })
 
-  assert.ok(settings.ignoredPaths.includes('/a/b'))
-  assert.equal(settings.ignoredPaths.filter((item) => item === '/a/b').length, 1)
+  assert.ok(settings.ignoredPaths.includes(resolved))
+  assert.equal(settings.ignoredPaths.filter((item) => item === resolved).length, 1)
   assert.ok(settings.ignoredPaths.every((item) => path.isAbsolute(item)))
 })
 
@@ -56,7 +61,7 @@ test('o store persiste e relê a configuração já normalizada', async () => {
 
   const saved = await store.save({ ignoredPaths: ['/dados/arquivo-morto'], analyzeWorkers: 4 })
 
-  assert.deepEqual(saved.ignoredPaths, ['/dados/arquivo-morto'])
+  assert.deepEqual(saved.ignoredPaths, [path.resolve('/dados/arquivo-morto')])
   assert.deepEqual(await store.load(), saved)
 })
 
