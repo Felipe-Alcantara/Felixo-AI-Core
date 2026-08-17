@@ -51,6 +51,10 @@
       {
         "from": "build/npm-runtime",
         "to": "npm-runtime"
+      },
+      {
+        "from": "resources/skills",
+        "to": "skills"
       }
     ],
     "publish": [

@@ -347,6 +347,13 @@ declare global {
         setSkills: (
           skills: CanvasSkill[],
         ) => Promise<CliInvokeResult & { skills?: CanvasSkill[] }>
+        listAvailableSkills: () => Promise<
+          CliInvokeResult & { skills?: CanvasSkill[]; communityEnabled?: boolean }
+        >
+        setSkillsSettings: (params: {
+          communityEnabled?: boolean
+          hiddenBuiltinIds?: string[]
+        }) => Promise<CliInvokeResult>
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>

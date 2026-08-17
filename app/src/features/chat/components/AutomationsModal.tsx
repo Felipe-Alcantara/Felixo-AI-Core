@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Play, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { AUTOMATION_SCOPE_LABELS } from '../../shared/types/automations'
 import type { AutomationDefinition, AutomationScope } from '../types'
 
 type AutomationDraft = Pick<
@@ -234,14 +235,5 @@ export function AutomationsModal({
 }
 
 function formatScope(scope: AutomationScope) {
-  const labels: Record<AutomationScope, string> = {
-    chat: 'Chat',
-    code: 'Código',
-    docs: 'Docs',
-    git: 'Git',
-    planning: 'Plano',
-    security: 'Segurança',
-  }
-
-  return labels[scope]
+  return AUTOMATION_SCOPE_LABELS[scope]
 }

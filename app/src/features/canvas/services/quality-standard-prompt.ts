@@ -1,4 +1,6 @@
 import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
+import { buildSkillsManifestPrompt } from './skills-manifest'
+import type { CanvasSkill } from '../types'
 
 /**
  * Standing instruction typed into a terminal that opens WITH an agent
@@ -170,6 +172,7 @@ export function buildCanvasTerminalInitialText(
   existingPrompt?: string,
   canvasFilePaths: string[] = [],
   identity?: AgentIdentity,
+  skills: CanvasSkill[] = [],
 ): string {
   const basePrompt = (existingPrompt?.trim() || buildQualityStandardMessage(qualityPrompt)).trimEnd()
   const uniquePaths = [...new Set(canvasFilePaths.map((path) => path.trim()).filter(Boolean))]
@@ -197,6 +200,14 @@ export function buildCanvasTerminalInitialText(
 
   if (pathPrompt && uniquePaths.some((path) => !basePrompt.includes(path))) {
     sections.push(pathPrompt)
+  }
+
+  // Por último: a lista de skills é referência de consulta, não instrução a
+  // seguir de cara. Vindo depois da tarefa e da identidade, ela não compete
+  // com o que o agente precisa fazer primeiro.
+  const skillsPrompt = buildSkillsManifestPrompt(skills)
+  if (skillsPrompt && !basePrompt.includes('Skills disponíveis neste sistema')) {
+    sections.push(skillsPrompt)
   }
 
   const combined = sections.join('\n\n')

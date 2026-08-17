@@ -15,6 +15,10 @@ const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handler
 const { registerNotesIpcHandlers } = require('./services/notes-ipc-handlers.cjs')
 const { registerCanvasIpcHandlers } = require('./services/canvas-ipc-handlers.cjs')
 const {
+  getBundledSkillsDir,
+  installBuiltinSkills,
+} = require('./services/skills/skills-library.cjs')
+const {
   registerCanvasFilesIpcHandlers,
 } = require('./services/canvas-files-ipc-handlers.cjs')
 const {
@@ -107,8 +111,20 @@ app.whenReady().then(() => {
   textFileHandlers = registerTextFileIpcHandlers(getMainWindow, {
     listProjectRoots: projectsHandlers.listProjectRoots,
   })
+  // A biblioteca de skills e materializada a cada inicio: instala o que falta,
+  // atualiza o que a pessoa nao editou e preserva o que ela editou.
+  try {
+    installBuiltinSkills({
+      bundledDir: getBundledSkillsDir({ isPackaged: app.isPackaged }),
+      targetDir: appPaths.skills,
+    })
+  } catch (error) {
+    console.error('[felixo] nao foi possivel instalar as skills:', error)
+  }
+
   registerCanvasIpcHandlers({
     database: storageDatabase,
+    skillsDir: appPaths.skills,
     clearFiles: () => canvasFilesHandlers.clear(),
     exportFiles: () => canvasFilesHandlers.exportFiles(),
     replaceFiles: (files) => canvasFilesHandlers.replaceFiles(files),

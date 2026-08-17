@@ -39,8 +39,17 @@ export type CanvasSkill = {
   id: string
   name: string
   description: string
-  /** Absolute path to the skill file the agent should read/use. */
+  /**
+   * Where the agent finds the skill: an absolute path to the SKILL.md for
+   * skills on disk, or the public URL of the original source for third-party
+   * ones — those are referenced, never downloaded or rewritten, so the credit
+   * stays with the author and the catalog doesn't age with the app.
+   */
   path: string
+  /** Who provides it: the app's own library, a third party, or the person. */
+  source?: 'builtin' | 'community' | 'user'
+  /** For third-party skills, the repository/site it comes from. */
+  origin?: string
 }
 
 /** Outcome of an on-demand repo-diagnosis request from a file block. */

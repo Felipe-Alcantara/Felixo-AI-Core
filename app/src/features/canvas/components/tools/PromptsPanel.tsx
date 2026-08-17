@@ -9,6 +9,7 @@ import {
   resolveVisiblePrompts,
   upsertPresetOverride,
 } from '../../services/prompt-overrides'
+import { AUTOMATION_SCOPES } from '../../../shared/types/automations'
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
 import type { SkillActivationResult } from './SkillsPanel'
 
@@ -22,7 +23,7 @@ type PromptsPanelProps = {
 
 const SAVE_DEBOUNCE_MS = 500
 
-const SCOPES: AutomationScope[] = ['chat', 'code', 'docs', 'git', 'planning', 'security']
+const SCOPES = AUTOMATION_SCOPES
 
 function createAutomationId() {
   return `automation-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`

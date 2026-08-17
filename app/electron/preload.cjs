@@ -97,6 +97,8 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('canvas:set-quality-standard', params),
     getSkills: () => ipcRenderer.invoke('canvas:get-skills'),
     setSkills: (skills) => ipcRenderer.invoke('canvas:set-skills', skills),
+    listAvailableSkills: () => ipcRenderer.invoke('canvas:list-available-skills'),
+    setSkillsSettings: (params) => ipcRenderer.invoke('canvas:set-skills-settings', params),
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),

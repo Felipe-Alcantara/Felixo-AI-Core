@@ -502,6 +502,21 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     enabled: true,
   })
   const qualityStandardRef = useRef(qualityStandard)
+  // Catálogo de skills disponíveis (biblioteca do app + terceiros + as da
+  // pessoa). Só a LISTA entra no prompt inicial do agente; o conteúdo de cada
+  // skill ele lê do arquivo quando a tarefa combinar.
+  const availableSkillsRef = useRef<CanvasSkill[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void window.felixo?.canvas?.listAvailableSkills?.().then((result) => {
+      if (!cancelled && result?.ok && Array.isArray(result.skills)) {
+        availableSkillsRef.current = result.skills
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const applyQualityStandard = useCallback(
     (value: { prompt: string; enabled: boolean }) => {
       qualityStandardRef.current = value
@@ -1190,10 +1205,13 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       const initialText = options.command
         ? handoffInstruction ?? composeTerminalInitialText(
             quality.enabled
-              ? buildCanvasTerminalInitialText(quality.prompt, undefined, [], {
-                  agentName: options.label,
-                  cwd: options.cwd,
-                })
+              ? buildCanvasTerminalInitialText(
+                  quality.prompt,
+                  undefined,
+                  [],
+                  { agentName: options.label, cwd: options.cwd },
+                  availableSkillsRef.current,
+                )
               : undefined,
             planningInstruction,
           )

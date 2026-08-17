@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { BrainCircuit, Check, Pencil, Plus, Trash2, Zap } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import type { CanvasSkill } from '../../types'
@@ -27,10 +27,23 @@ export function SkillsPanel({
   toolsMenuOpen,
 }: SkillsPanelProps) {
   const [skills, setSkills] = useState<CanvasSkill[]>([])
+  // Catálogo completo (biblioteca do app + terceiros + as da pessoa). É esta
+  // lista que o agente recebe ao nascer, então o painel mostra o mesmo que ele
+  // vê — sem isso a pessoa não tem como saber o que o agente sabe.
+  const [catalogo, setCatalogo] = useState<CanvasSkill[]>([])
+  const [terceirosLigados, setTerceirosLigados] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState(emptyDraft)
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
+
+  const recarregarCatalogo = useCallback(async () => {
+    const result = await window.felixo?.canvas?.listAvailableSkills?.()
+    if (result?.ok && Array.isArray(result.skills)) {
+      setCatalogo(result.skills)
+      setTerceirosLigados(result.communityEnabled !== false)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -39,14 +52,28 @@ export function SkillsPanel({
         setSkills(result.skills)
       }
     })
+    void window.felixo?.canvas?.listAvailableSkills?.().then((result) => {
+      if (!cancelled && result?.ok && Array.isArray(result.skills)) {
+        setCatalogo(result.skills)
+        setTerceirosLigados(result.communityEnabled !== false)
+      }
+    })
     return () => {
       cancelled = true
     }
   }, [])
 
+  const alternarTerceiros = async () => {
+    const proximo = !terceirosLigados
+    setTerceirosLigados(proximo)
+    await window.felixo?.canvas?.setSkillsSettings?.({ communityEnabled: proximo })
+    await recarregarCatalogo()
+  }
+
   const persist = async (next: CanvasSkill[]) => {
     setSkills(next)
     await window.felixo?.canvas?.setSkills?.(next)
+    await recarregarCatalogo()
   }
 
   const startNew = () => {
@@ -158,10 +185,56 @@ export function SkillsPanel({
         </div>
       )}
 
+      <section className="mb-3 rounded border border-white/10 bg-black/20 p-2">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-xs font-medium text-zinc-300">
+            Skills do sistema ({catalogo.filter((s) => s.source !== 'user').length})
+          </span>
+          <label className="flex cursor-pointer items-center gap-1 text-[11px] text-zinc-400">
+            <input
+              type="checkbox"
+              checked={terceirosLigados}
+              onChange={() => void alternarTerceiros()}
+              className="accent-sky-500"
+            />
+            Usar skills de terceiros
+          </label>
+        </div>
+        <p className="text-[11px] leading-snug text-zinc-500">
+          Todo agente novo recebe esta lista (nome, para que serve e onde está) e
+          lê o arquivo só quando a tarefa combinar. As de terceiros apontam para a
+          fonte original — nada é baixado.
+        </p>
+        <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto">
+          {catalogo
+            .filter((item) => item.source !== 'user')
+            .map((item) => (
+              <li key={item.id} className="flex items-baseline gap-1.5 text-[11px]">
+                <span className="truncate text-zinc-300" title={item.description}>
+                  {item.name}
+                </span>
+                {item.source === 'community' && (
+                  <span className="shrink-0 rounded bg-amber-900/40 px-1 text-[10px] text-amber-200">
+                    {item.origin ?? 'terceiros'}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void activate(item)}
+                  className="felixo-btn ml-auto shrink-0 rounded px-1 text-[10px] text-emerald-300 hover:bg-white/10"
+                  title="Ativar agora no terminal aberto"
+                >
+                  Ativar
+                </button>
+              </li>
+            ))}
+        </ul>
+      </section>
+
       {skills.length === 0 && !editingId && (
         <p className="text-sm text-zinc-500">
-          Nenhuma skill ainda. Crie uma apontando o caminho de um arquivo para o
-          agente usar.
+          Nenhuma skill sua ainda — as do sistema acima já estão disponíveis para
+          todo agente. Crie uma apontando o caminho de um arquivo.
         </p>
       )}
 

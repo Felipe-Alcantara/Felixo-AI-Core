@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import { ArrowLeft, Check, RotateCcw, SendHorizontal } from 'lucide-react'
+import {
+  AUTOMATION_SCOPE_LABELS,
+  AUTOMATION_SCOPES,
+} from '../../../shared/types/automations'
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
 
 type PromptDetailPanelProps = {
@@ -15,16 +19,8 @@ type PromptDetailPanelProps = {
   onInsert: () => void
 }
 
-const SCOPES: AutomationScope[] = ['chat', 'code', 'docs', 'git', 'planning', 'security']
-
-const SCOPE_LABELS: Record<AutomationScope, string> = {
-  chat: 'Chat',
-  code: 'Código',
-  docs: 'Docs',
-  git: 'Git',
-  planning: 'Planejamento',
-  security: 'Segurança',
-}
+const SCOPES = AUTOMATION_SCOPES
+const SCOPE_LABELS = AUTOMATION_SCOPE_LABELS
 
 /**
  * Full-text viewer/editor for a preset prompt, rendered inline inside

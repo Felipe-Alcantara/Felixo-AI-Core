@@ -9,6 +9,8 @@
 
 const { ipcMain } = require('electron')
 const { toErrorResult } = require('./ipc-result.cjs')
+const { listAvailableSkills } = require('./skills/skills-catalog.cjs')
+const { builtinSkillPath } = require('./skills/skills-library.cjs')
 const {
   createCanvasRepository,
 } = require('./storage/canvas-repository.cjs')
@@ -29,6 +31,11 @@ const QUALITY_STANDARD_PROMPT_KEY = 'canvas.quality-standard-prompt'
 const QUALITY_STANDARD_ENABLED_KEY = 'canvas.quality-standard-enabled'
 /** Settings key for the canvas skill library (array of {id,name,description,path}). */
 const SKILLS_KEY = 'canvas.skills'
+// Skills de terceiros vem LIGADAS: elas cobrem trabalho que a biblioteca
+// propria nao cobre, e sao so referencia a fonte original (nada e baixado).
+const COMMUNITY_SKILLS_KEY = 'canvas.skills.communityEnabled'
+// Built-ins que a pessoa removeu do painel continuam removidas entre sessoes.
+const HIDDEN_SKILLS_KEY = 'canvas.skills.hidden'
 
 /** Keeps only well-formed skill entries, coercing fields to strings. */
 function sanitizeSkills(value) {
@@ -49,6 +56,7 @@ function sanitizeSkills(value) {
 function registerCanvasIpcHandlers(options = {}) {
   const repository = createCanvasRepository(options.database)
   const settings = createSettingsRepository(options.database)
+  const skillsDir = options.skillsDir || ''
 
   ipcMain.handle('canvas:list', () => {
     try {
@@ -236,6 +244,38 @@ function registerCanvasIpcHandlers(options = {}) {
       return { ok: true }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel salvar a configuracao.')
+    }
+  })
+
+  ipcMain.handle('canvas:list-available-skills', () => {
+    try {
+      const communityEnabled = settings.get(COMMUNITY_SKILLS_KEY) !== false
+      const hiddenBuiltinIds = Array.isArray(settings.get(HIDDEN_SKILLS_KEY))
+        ? settings.get(HIDDEN_SKILLS_KEY).map(String)
+        : []
+      const skills = listAvailableSkills({
+        resolveBuiltinPath: (slug) => builtinSkillPath(skillsDir, slug),
+        communityEnabled,
+        userSkills: sanitizeSkills(settings.get(SKILLS_KEY)),
+        hiddenBuiltinIds,
+      })
+      return { ok: true, skills, communityEnabled }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel listar as skills.')
+    }
+  })
+
+  ipcMain.handle('canvas:set-skills-settings', (_event, params = {}) => {
+    try {
+      if (typeof params.communityEnabled === 'boolean') {
+        settings.set(COMMUNITY_SKILLS_KEY, params.communityEnabled)
+      }
+      if (Array.isArray(params.hiddenBuiltinIds)) {
+        settings.set(HIDDEN_SKILLS_KEY, params.hiddenBuiltinIds.map(String))
+      }
+      return { ok: true }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel salvar a configuracao das skills.')
     }
   })
 
