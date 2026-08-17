@@ -133,3 +133,30 @@ disponível, e o app não foi executado a pedido do usuário (a sessão do agent
 rodava dentro dele). A correção é dirigida pela causa e coberta por teste de
 unidade; a confirmação do sintoma original ainda depende de uma execução no
 Windows com um prompt inicial grande.
+
+### [2026-08-17] Complemento: prova contra PTY real, e o limite do tty medido
+
+Os testes de unidade da fila usam um `escrever` falso — provam fatiamento, ordem
+e dreno, mas **não** provam que o dado atravessa uma PTY. E o bug era perda em
+trânsito. Foi acrescentado `pty-write-queue.integration.test.cjs`, que passa o
+texto pelo `PtyProcessManager` real, pelo `node-pty` real, e faz o `cat` do outro
+lado gravar em arquivo: o conteúdo do arquivo é o que o processo filho recebeu.
+
+**Resultado:** payload realista de ~57 mil caracteres (700 linhas, com acento e
+emoji) chega **inteiro**. Emoji não é partido.
+
+**Limite do tty medido, e registrado como fronteira e não como bug.** Uma linha
+**única** de 14.401 bytes chegou com **4.096** — exatamente o `MAX_CANON` do
+modo canônico — e o corte caiu no meio de um emoji, produzindo `�`. A mesma
+carga **com quebras de linha** chega 100% íntegra.
+
+Isso importa saber, mas **não é a causa do bug relatado**: medida a maior linha
+do prompt padrão, ela tem **745 bytes**. Nenhuma chega perto do limite. Se um dia
+alguém gerar uma linha gigante — um transcript de handoff sem quebras, por
+exemplo — o sintoma vai ser este, e o conserto é outro: *bracketed paste*, ou
+garantir que o consumidor esteja em modo raw. Há um teste travando esse limite,
+para a descoberta não se perder.
+
+**Segue não verificado no Windows.** O que existe agora é prova de mecanismo
+contra PTY real em POSIX; o ConPTY tem implementação própria e é onde o sintoma
+apareceu.
