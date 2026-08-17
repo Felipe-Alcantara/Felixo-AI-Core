@@ -239,3 +239,17 @@ PTY é de fato reiniciada.
 **Validação:** `npm run build` e o teste de formatadores (3 testes) passaram. O ID nativo de
 sessão do agente continua não inferido: o painel exibe explicitamente o ID da PTY e não o chama
 de sessão Claude/Codex.
+
+## [2026-08-17] Painel de detalhes validado e task concluída
+
+**Fechamento:** o aviso de dependência de hook no `TerminalNode` foi corrigido. O painel agora
+mantém o contrato de identidade sem misturar a sessão PTY com um eventual ID interno do agente:
+exibe e permite copiar o ID persistido do elemento e o ID `canvas:<nodeId>` da PTY. Não foi criado
+um ID Claude/Codex sem fonte confiável.
+
+**Validação final:** `npm run test:frontend` passou com 473 testes em 47 arquivos; `npm run build`,
+`npm run lint` e `git diff --check` passaram. O Electron iniciou com Vite isolado na porta 5190 e
+permaneceu ativo durante a verificação; a porta padrão 5173 estava ocupada por processo externo e
+não foi interrompida.
+
+**Estado:** concluído por **Continue o trabalho do Claude "https://app.notion.com/p/Spicy-Game-devolver-a-senha-secreta-ao-easter-egg-da-namorada-hoje-o-agente-a-reaproveitou-para-d-3bf91f95497e814b8087e21ce392c8e3?source=copy_link"**.

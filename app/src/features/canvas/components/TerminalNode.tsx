@@ -45,6 +45,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const snapshot = useSessionSnapshot(id)
   const metadata = useSessionMetadata(id)
   const { deleteElements } = useReactFlow()
+  const onSessionStarted = nodeData.onSessionStarted
 
   // Start (or adopt) the background session as soon as the card mounts.
   // ensure() is idempotent, so initialText only fires on the first creation.
@@ -77,9 +78,9 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
 
   useEffect(() => {
     if (metadata?.startedAt != null && metadata.startedAt !== nodeData.sessionStartedAt) {
-      nodeData.onSessionStarted?.(id, metadata.startedAt)
+      onSessionStarted?.(id, metadata.startedAt)
     }
-  }, [id, metadata?.startedAt, nodeData.onSessionStarted, nodeData.sessionStartedAt])
+  }, [id, metadata?.startedAt, onSessionStarted, nodeData.sessionStartedAt])
 
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
