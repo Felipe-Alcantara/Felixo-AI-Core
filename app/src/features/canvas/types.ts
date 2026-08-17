@@ -81,6 +81,8 @@ export type TerminalNodeData = {
    * must stay interactive after it finishes instead of closing with it.
    */
   keepShellOpen?: boolean
+  /** Start timestamp of the current PTY instance, persisted for reopen. */
+  sessionStartedAt?: number
   /**
    * Render-time only (never persisted): this terminal's position among the
    * currently open terminal blocks, 1-based in creation order. Recomputed on

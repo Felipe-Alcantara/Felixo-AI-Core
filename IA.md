@@ -227,3 +227,15 @@ separadas até haver uma fonte confiável para o segundo ID.
 src/features/canvas/terminal/session-metadata.test.ts` passou com 3 testes; `git diff --check`
 sem erros. Pendências desta task: persistir/reconhecer o início na reabertura e investigar ID
 de sessão nativo de Claude/Codex.
+
+## [2026-08-17] Início da PTY passou a sobreviver à reabertura do canvas
+
+**O que mudou:** `sessionStartedAt` foi acrescentado aos dados persistidos do terminal. O
+`TerminalSessionStore` aceita o timestamp ao reanexar uma sessão e cria um novo timestamp ao
+reiniciar; o `TerminalNode` sincroniza o valor observado de volta ao nó persistido. Assim,
+“aberto há” não recomeça simplesmente porque o renderer foi reaberto, mas reinicia quando a
+PTY é de fato reiniciada.
+
+**Validação:** `npm run build` e o teste de formatadores (3 testes) passaram. O ID nativo de
+sessão do agente continua não inferido: o painel exibe explicitamente o ID da PTY e não o chama
+de sessão Claude/Codex.

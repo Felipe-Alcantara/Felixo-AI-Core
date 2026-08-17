@@ -143,6 +143,8 @@ type SessionOptions = {
   fallbackCommand?: string
   /** Keeps the terminal interactive after the command exits (run-a-file). */
   keepShellOpen?: boolean
+  /** Restored timestamp; omitted on restart so a fresh clock is created. */
+  startedAt?: number
 }
 
 type Session = {
@@ -276,7 +278,7 @@ export class TerminalSessionStore {
       offData: () => {},
       offExit: () => {},
       disposed: false,
-      startedAt: Date.now(),
+      startedAt: options.startedAt ?? Date.now(),
       receivedOutput: false,
       paintedOutput: false,
       pendingWrites: 0,

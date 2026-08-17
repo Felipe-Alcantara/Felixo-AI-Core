@@ -969,6 +969,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               terminalIndex,
               onExpand: openTerminal,
               onDetails: setDetailsTerminalId,
+              onSessionStarted: (nodeId: string, startedAt: number) =>
+                updateNodeData(nodeId, { sessionStartedAt: startedAt }),
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
             }),

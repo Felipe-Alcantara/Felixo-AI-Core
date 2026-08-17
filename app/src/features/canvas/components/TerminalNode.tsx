@@ -18,6 +18,7 @@ import { NodeHeader } from './NodeHeader'
 import { CopyButton } from './TerminalCopyButton'
 import {
   useSessionSnapshot,
+  useSessionMetadata,
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import type { SessionActivity } from '../terminal/terminal-session-store'
@@ -26,6 +27,7 @@ import type { TerminalNodeData } from '../types'
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
   onDetails?: (nodeId: string) => void
+  onSessionStarted?: (nodeId: string, startedAt: number) => void
   onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
   /** Tells the running agent its new name once a rename is committed (blur/Enter). */
   onRenameCommit?: (nodeId: string, label: string) => void
@@ -41,6 +43,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = (data ?? {}) as TerminalNodeDataWithHandlers
   const store = useTerminalSessions()
   const snapshot = useSessionSnapshot(id)
+  const metadata = useSessionMetadata(id)
   const { deleteElements } = useReactFlow()
 
   // Start (or adopt) the background session as soon as the card mounts.
@@ -54,6 +57,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       command: nodeData.command,
       args: nodeData.args,
       cwd: nodeData.cwd,
+      startedAt: nodeData.sessionStartedAt,
       initialText: nodeData.initialText,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
@@ -68,7 +72,14 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.initialTextReady,
     nodeData.fallbackCommand,
     nodeData.keepShellOpen,
+    nodeData.sessionStartedAt,
   ])
+
+  useEffect(() => {
+    if (metadata?.startedAt != null && metadata.startedAt !== nodeData.sessionStartedAt) {
+      nodeData.onSessionStarted?.(id, metadata.startedAt)
+    }
+  }, [id, metadata?.startedAt, nodeData.onSessionStarted, nodeData.sessionStartedAt])
 
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
@@ -86,6 +97,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
     })
+    nodeData.onSessionStarted?.(id, Date.now())
   }
 
   return (
