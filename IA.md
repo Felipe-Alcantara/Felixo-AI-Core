@@ -207,3 +207,23 @@ de aplicada sem ele.
 
 **Validação:** 470 testes de frontend verdes, `eslint` e `tsc --noEmit` limpos.
 Não executado visualmente: o app não foi aberto nesta sessão, a pedido.
+
+---
+
+## [2026-08-17] Primeira fatia do painel de detalhes dos blocos do canvas
+
+**O que mudou.** Criado `session-metadata.ts` como contrato puro para identidade da sessão,
+atividade e formatação de duração/início. O `TerminalSessionStore` passou a expor metadados
+sem vazar o objeto interno da PTY; `TerminalNode` ganhou o botão **Ver detalhes** e o painel
+`TerminalDetailsPanel` reutiliza o padrão `CanvasPanel`. O painel mostra `cwd`, agente,
+argumentos, estado, ID do elemento, ID da sessão PTY, início e “aberto há”, com cópia dos IDs.
+
+**Decisões.** O relógio mede a instância atual da PTY e reinicia no `restart`; o ID do elemento
+continua sendo a identidade persistida. Quando não há timestamp, a UI mostra “tempo
+indisponível” em vez de inventar duração. Sessão PTY e sessão própria do agente continuam
+separadas até haver uma fonte confiável para o segundo ID.
+
+**Validação.** `npm run build` passou (`tsc -b` + Vite); `npx vitest run
+src/features/canvas/terminal/session-metadata.test.ts` passou com 3 testes; `git diff --check`
+sem erros. Pendências desta task: persistir/reconhecer o início na reabertura e investigar ID
+de sessão nativo de Claude/Codex.

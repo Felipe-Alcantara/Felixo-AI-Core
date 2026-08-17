@@ -8,6 +8,7 @@ import {
   isImagePasteShortcut,
 } from './terminal-image-paste'
 import { isSubmissionPending } from './terminal-submission'
+import type { SessionMetadata } from './session-metadata'
 import {
   computePreview,
   computeSignature,
@@ -690,6 +691,21 @@ export class TerminalSessionStore {
 
   getSnapshot(id: string): SessionSnapshot | undefined {
     return this.sessions.get(id)?.snapshot
+  }
+
+  /** Metadata for the details surface; keeps PTY lifecycle out of React. */
+  getSessionMetadata(id: string): SessionMetadata | undefined {
+    const session = this.sessions.get(id)
+    if (!session) return undefined
+
+    return {
+      elementId: session.id,
+      ptySessionId: session.ptySessionId,
+      activity: session.snapshot.activity,
+      startedAt: session.startedAt,
+      command: session.command,
+      args: [...session.args],
+    }
   }
 
   getSnapshots(): Record<string, SessionSnapshot> {

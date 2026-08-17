@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { TerminalSessionStore, type SessionSnapshot } from './terminal-session-store'
+import type { SessionMetadata } from './session-metadata'
 
 export const TerminalSessionContext = createContext<TerminalSessionStore | null>(null)
 
@@ -32,6 +33,22 @@ export function useSessionSnapshot(sessionId: string): SessionSnapshot | undefin
   }, [store, sessionId])
 
   return snapshot
+}
+
+/** Reads the stable identity/lifecycle metadata for a terminal details view. */
+export function useSessionMetadata(sessionId: string): SessionMetadata | undefined {
+  const store = useTerminalSessions()
+  const [metadata, setMetadata] = useState<SessionMetadata | undefined>(() =>
+    store.getSessionMetadata(sessionId),
+  )
+
+  useEffect(() => {
+    const refresh = () => setMetadata(store.getSessionMetadata(sessionId))
+    refresh()
+    return store.subscribe(sessionId, refresh)
+  }, [store, sessionId])
+
+  return metadata
 }
 
 /** Subscribes to all live sessions, used by the notifications surface. */

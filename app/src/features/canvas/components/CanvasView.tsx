@@ -29,6 +29,7 @@ import { GroupNode } from './GroupNode'
 import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
 import { TerminalDrawer } from './TerminalDrawer'
+import { TerminalDetailsPanel } from './TerminalDetailsPanel'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import {
   countTerminalOrder,
@@ -227,6 +228,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   >({})
   const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
+  const [detailsTerminalId, setDetailsTerminalId] = useState<string | null>(null)
   // Passagem de responsabilidade em andamento: o histórico é capturado no
   // momento do clique, e não quando o usuário confirma — do contrário o agente
   // de origem continuaria escrevendo enquanto o diálogo está aberto e o
@@ -966,6 +968,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               initialTextReady,
               terminalIndex,
               onExpand: openTerminal,
+              onDetails: setDetailsTerminalId,
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
             }),
@@ -1642,6 +1645,18 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         }}
         onQualityStandardSaved={applyQualityStandard}
       />
+
+      {detailsTerminalId && (() => {
+        const detailsNode = nodes.find((node) => node.id === detailsTerminalId && node.type === 'terminal')
+        return detailsNode ? (
+          <TerminalDetailsPanel
+            nodeId={detailsNode.id}
+            data={detailsNode.data}
+            onClose={() => setDetailsTerminalId(null)}
+            toolsMenuOpen={toolsMenuOpen}
+          />
+        ) : null
+      })()}
 
       <TerminalsPanel
         nodes={nodes}

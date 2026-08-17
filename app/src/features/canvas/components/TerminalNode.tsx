@@ -11,6 +11,7 @@ import {
   Loader2,
   Maximize2,
   RotateCcw,
+  Info,
   Terminal as TerminalIcon,
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
@@ -24,6 +25,7 @@ import type { TerminalNodeData } from '../types'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
+  onDetails?: (nodeId: string) => void
   onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
   /** Tells the running agent its new name once a rename is committed (blur/Enter). */
   onRenameCommit?: (nodeId: string, label: string) => void
@@ -129,6 +131,15 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
           title="Reiniciar terminal"
         >
           <RotateCcw size={13} />
+        </button>
+        <button
+          type="button"
+          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          onClick={() => nodeData.onDetails?.(id)}
+          aria-label="Ver detalhes do terminal"
+          title="Ver detalhes"
+        >
+          <Info size={13} />
         </button>
         <button
           type="button"
