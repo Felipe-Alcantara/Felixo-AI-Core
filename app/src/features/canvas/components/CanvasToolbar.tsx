@@ -34,6 +34,7 @@ import {
   toolbarFlyoutStyle,
   useToolbarFlyoutPosition,
 } from './toolbar-flyout'
+import { deveMostrarRodapeDeStatus } from './toolbar-status'
 import { normalizeUrlInput } from '../services/url-utils'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
@@ -296,16 +297,6 @@ export function CanvasToolbar({
         onCreate={onAddGroup}
         toolsMenuOpen={toolsMenuOpen}
       />
-      {/* Informativo, não uma ferramenta: fica fora do agrupamento de criação
-          e some por completo quando não há nada a dizer. */}
-      <UpdateIndicator
-        presentation={updatePresentation}
-        onInstall={onInstallUpdate}
-        onRetry={onCheckUpdate}
-      />
-      <CliSetupIndicator />
-      <AppVersionBadge version={appVersion} />
-
       <button
         type="button"
         onClick={onToggleMode}
@@ -359,6 +350,27 @@ export function CanvasToolbar({
         <Trash2 size={16} />
         {isClearing ? 'Limpando...' : 'Limpar'}
       </button>
+
+      {/* Rodapé de status: informação, não ação.
+          Vive DEPOIS do último botão de propósito. Estes elementos aparecem e
+          somem sozinhos (o de atualização reavalia a cada dez minutos), e no
+          meio da coluna cada aparição empurrava para baixo todos os botões
+          seguintes — um alvo que se move sem ninguém encostar nele. Por último,
+          eles crescem e encolhem sem mover nada. */}
+      {deveMostrarRodapeDeStatus({
+        versao: appVersion,
+        atualizacaoVisivel: updatePresentation.showIndicator,
+      }) && (
+        <div className="mt-1 flex w-36 flex-col items-start gap-1 border-t border-white/5 pt-2">
+          <UpdateIndicator
+            presentation={updatePresentation}
+            onInstall={onInstallUpdate}
+            onRetry={onCheckUpdate}
+          />
+          <CliSetupIndicator />
+          <AppVersionBadge version={appVersion} />
+        </div>
+      )}
     </div>
   )
 }

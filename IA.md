@@ -160,3 +160,50 @@ para a descoberta não se perder.
 **Segue não verificado no Windows.** O que existe agora é prova de mecanismo
 contra PTY real em POSIX; o ConPTY tem implementação própria e é onde o sintoma
 apareceu.
+
+---
+
+## [2026-08-17] Toolbar do canvas: informação saiu do meio dos botões
+
+**Contexto.** O front do canvas foi organizado pelo **Doktor** (André Gustavo,
+15 commits): atalhos mais usados agrupados no topo, painéis abrindo ao lado sem
+cobrir nada, animações desaceleradas. Depois disso, funções novas minhas
+desfizeram parte dessa harmonia.
+
+**O defeito, localizado.** `CanvasToolbar` é uma **coluna**. Três elementos
+**informativos** — `UpdateIndicator`, `CliSetupIndicator` e `AppVersionBadge` —
+tinham sido inseridos **entre os botões "Grupo" e "Selecionar/Mover tela"**
+(commits `89dd8f8`, `d764f40`, `51b5fd8`). Como aparecem e somem sozinhos — o de
+atualização reavalia a cada dez minutos —, cada aparição **empurrava para baixo
+todos os botões seguintes**. Botão que muda de lugar sem ninguém encostar nele é
+o oposto do que uma barra de ferramentas promete: alvo fixo.
+
+**A correção é de posição, não de estilo.** Os três foram para um **rodapé de
+status**, depois do último botão, separados por uma divisória sutil
+(`border-white/5`, a opacidade que o design system define para borda sutil).
+Estando por último, eles crescem e encolhem **sem mover nada** — não há nada
+abaixo deles. A ordem da coluna passou a ser coerente: acesso rápido →
+ferramentas → criação e ações do canvas → modo → enquadrar → destrutivo →
+status.
+
+**Uma decisão respeitada.** `CliSetupIndicator` mantém o próprio estado, e o
+componente registra o porquê: subir a assinatura do IPC ao pai faria a árvore
+redesenhar a cada linha de progresso da instalação. Por isso ele **não** entra
+no cálculo de `deveMostrarRodapeDeStatus` — ele aparece dentro do rodapé quando
+existe, e no app empacotado o rodapé já está de pé porque a versão está sempre
+presente.
+
+**Testabilidade.** Não há biblioteca de teste de componente no projeto (só
+`vitest`, sem jsdom nem testing-library), então a única decisão testável do
+rodapé foi extraída para `toolbar-status.ts`: *há algo a dizer?* — para não
+sobrar um separador desenhado sozinho, que seria trocar um defeito visual por
+outro. 5 testes.
+
+**Observação deixada em aberto, e não aplicada de propósito:** o grupo de acesso
+rápido do topo existe hoje só como **comentário** no código; visualmente não há
+nada separando-o do resto. Uma divisória ali tornaria visível o agrupamento que
+o Doktor criou — mas é design dele, e a mudança foi anotada como sugestão em vez
+de aplicada sem ele.
+
+**Validação:** 470 testes de frontend verdes, `eslint` e `tsc --noEmit` limpos.
+Não executado visualmente: o app não foi aberto nesta sessão, a pedido.
