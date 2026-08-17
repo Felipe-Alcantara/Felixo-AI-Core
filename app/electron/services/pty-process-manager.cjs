@@ -18,6 +18,7 @@
  */
 
 const os = require('node:os')
+const { criarFilaDeEscrita } = require('./pty-write-queue.cjs')
 const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
@@ -215,7 +216,16 @@ class PtyProcessManager {
       exitEvent: null,
       onData: options.onData,
       onExit: options.onExit,
+      filaDeEscrita: null,
     }
+
+    // Escrita grande vai fatiada e em ordem: o ConPTY do Windows descarta em
+    // silêncio o excedente de uma escrita única grande, e era isso que cortava
+    // o prompt inicial de contexto.
+    entry.filaDeEscrita = criarFilaDeEscrita({
+      escrever: (dados) => ptyProcess.write(dados),
+      ativa: () => this.sessions.get(sessionId) === entry && !entry.exitEvent,
+    })
 
     this.sessions.set(sessionId, entry)
 
@@ -366,6 +376,9 @@ class PtyProcessManager {
         entry.killTimer = null
       }
       entry.exitEvent = event
+      // O que ainda estava na fila não tem mais para onde ir; escrever num
+      // processo encerrado só produziria erro dentro do node-pty.
+      entry.filaDeEscrita?.descartar()
       entry.onExit?.(event)
     })
 
@@ -430,8 +443,26 @@ class PtyProcessManager {
       return false
     }
 
+    if (entry.filaDeEscrita) {
+      return entry.filaDeEscrita.enfileirar(input)
+    }
     entry.ptyProcess.write(input)
     return true
+  }
+
+  /**
+   * Resolve quando tudo que foi enfileirado para a sessao ja saiu.
+   *
+   * Quem envia um texto grande precisa saber quando a entrega **terminou**, e
+   * nao so que foi aceita: o verificador do renderer decide reescrever o
+   * contexto se nao o enxergar na tela, e sem esperar o dreno ele reescreveria
+   * um texto que ainda estava saindo.
+   *
+   * @param {string} sessionId
+   * @returns {Promise<void>}
+   */
+  async aguardarEscritas(sessionId) {
+    await this.sessions.get(sessionId)?.filaDeEscrita?.aguardar()
   }
 
   /**
@@ -523,6 +554,7 @@ class PtyProcessManager {
     if (entry.killTimer) {
       clearTimeout(entry.killTimer)
     }
+    entry.filaDeEscrita?.descartar()
 
     this.sessions.delete(sessionId)
   }

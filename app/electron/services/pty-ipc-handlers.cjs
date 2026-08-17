@@ -59,10 +59,16 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
     }
   })
 
-  ipcMain.handle('pty:write', (_event, params = {}) => {
+  ipcMain.handle('pty:write', async (_event, params = {}) => {
     try {
       const sessionId = requireSessionId(params.sessionId)
       const delivered = manager.write(sessionId, String(params.data ?? ''))
+      // Só responde depois que a carga saiu de verdade. Texto grande vai
+      // fatiado, e quem escreve precisa distinguir "aceito" de "entregue" —
+      // senão confere a tela cedo demais e reescreve o que ainda estava saindo.
+      if (delivered) {
+        await manager.aguardarEscritas?.(sessionId)
+      }
       return { ok: true, delivered }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel enviar dados ao terminal.')

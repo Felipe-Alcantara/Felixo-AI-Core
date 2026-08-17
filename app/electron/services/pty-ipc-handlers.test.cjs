@@ -127,10 +127,12 @@ test('pty:spawn returns an error result for a missing sessionId', () => {
   )
 })
 
-test('pty:write forwards input to the manager', () => {
+test('pty:write forwards input to the manager', async () => {
   const { manager, invoke } = setup()
 
-  const result = invoke('pty:write', { sessionId: 'term-1', data: 'ls\n' })
+  // O handler ficou assíncrono de propósito: ele só responde depois que a
+  // carga saiu de verdade, para quem escreve distinguir "aceito" de "entregue".
+  const result = await invoke('pty:write', { sessionId: 'term-1', data: 'ls\n' })
 
   assert.deepEqual(result, { ok: true, delivered: true })
   assert.deepEqual(
@@ -172,4 +174,35 @@ test('dispose force-kills every session', () => {
     manager.calls.find((call) => call.method === 'killAll'),
     { method: 'killAll', options: { force: true } },
   )
+})
+
+
+test('pty:write so responde depois que a escrita drenou', async () => {
+  // Sem esperar o dreno, o verificador do renderer confere a tela cedo demais
+  // e reescreve um texto que ainda estava saindo — duplicando o contexto.
+  const { manager, invoke } = setup()
+  let drenou = false
+  manager.aguardarEscritas = async () => {
+    await new Promise((resolve) => setImmediate(resolve))
+    drenou = true
+  }
+
+  const resultado = await invoke('pty:write', { sessionId: 'term-1', data: 'oi' })
+
+  assert.equal(drenou, true, 'a resposta veio antes do dreno terminar')
+  assert.deepEqual(resultado, { ok: true, delivered: true })
+})
+
+test('pty:write nao espera dreno quando a sessao recusou a escrita', async () => {
+  const { manager, invoke } = setup()
+  manager.write = () => false
+  let esperou = false
+  manager.aguardarEscritas = async () => {
+    esperou = true
+  }
+
+  const resultado = await invoke('pty:write', { sessionId: 'term-1', data: 'oi' })
+
+  assert.equal(esperou, false)
+  assert.deepEqual(resultado, { ok: true, delivered: false })
 })

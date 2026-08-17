@@ -76,3 +76,60 @@ terminava pedindo a entrada do usuário, e o preset foi corrigido.
 
 **Não** foi executado o app empacotado nesta sessão, a pedido: a validação foi
 por gate e testes, sem subir nem derrubar processo do Electron.
+
+---
+
+## [2026-08-17] Prompt inicial chegava cortado no Windows: escrita única e grande na PTY
+
+**Sintoma relatado.** Na versão instalada no **Windows**, o prompt inicial de
+contexto chegava ao Claude Code **cortado, faltando grande parte do texto**.
+Reiniciar não resolvia.
+
+**Causa.** `PtyProcessManager.write()` fazia `entry.ptyProcess.write(input)` de
+uma vez só. No Windows a PTY é o **ConPTY**, cujo buffer de entrada é bem menos
+tolerante que o `pty` de Linux/macOS a uma escrita única e grande. O começo
+entra, o resto é descartado — e **em silêncio**, porque `write()` não devolve
+quantos bytes foram aceitos. Nada no caminho percebia.
+
+Agravante que explica o "funcionava e parou": o prompt inicial cresceu. Ele
+passou a carregar o bloco do Felixo System Design, a identidade do agente no
+canvas, os caminhos dos arquivos e agora o manifesto de skills.
+
+### A correção
+
+`services/pty-write-queue.cjs` — fila de escrita **por sessão**:
+
+- **Fatiamento** em blocos de 512 pontos de código, com 12 ms entre eles.
+- **Corte por ponto de código**, não por unidade UTF-16: cortar no meio de um
+  par surrogate partiria um emoji em dois caracteres inválidos, e os prompts têm
+  emoji e acento.
+- **Ordem FIFO por sessão.** O prompt é escrito e logo depois o Enter; um Enter
+  que ultrapassasse a fila submeteria o prompt pela metade — falha pior do que
+  não entregar. Tecla digitada durante uma carga grande também entra na fila.
+- **Digitação normal não paga nada**: só acima de 1024 caracteres a carga é
+  tratada como grande. Abaixo disso, com a fila vazia, a escrita é direta.
+- Sessão que morre no meio **descarta** o restante em vez de escrever num
+  processo encerrado.
+
+### O risco que a própria correção criava
+
+Fatiar torna a entrega **demorada**: 160 mil caracteres (o teto de um handoff)
+levam alguns segundos. Do outro lado, `confirmContextDelivery` no renderer
+espera 2 s, olha a linha de entrada e, se estiver vazia, **reescreve o texto
+inteiro** — o que duplicaria o contexto justamente nos casos maiores.
+
+Por isso `pty:write` passou a ser **assíncrono e só responder depois do dreno**
+(`aguardarEscritas`). Quem escreve passa a distinguir "aceito" de "entregue",
+que é a informação que faltava desde o começo — a mesma lacuna, em outra camada.
+
+### Validação
+
+19 testes novos da fila (fatiamento, surrogate, ordem, descarte, dreno) e 2 do
+IPC; **640 testes do processo principal verdes**, `eslint` e `tsc --noEmit`
+limpos.
+
+⚠️ **Não verificado em Windows real nesta sessão** — não havia máquina Windows
+disponível, e o app não foi executado a pedido do usuário (a sessão do agente
+rodava dentro dele). A correção é dirigida pela causa e coberta por teste de
+unidade; a confirmação do sintoma original ainda depende de uma execução no
+Windows com um prompt inicial grande.
