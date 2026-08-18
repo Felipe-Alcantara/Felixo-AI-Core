@@ -50,6 +50,8 @@ function tryLoadElectronApp() {
  *   exports: string,
  *   notes: string,
  *   reports: string,
+ *   canvasFiles: string,
+ *   contextFiles: string,
  *   skills: string,
  *   assets: string,
  *   appRoot: string,
@@ -81,6 +83,10 @@ function getAppPaths(options = {}) {
   const reports = path.join(userData, 'reports')
   // Shared markdown files that canvas file-blocks render and agents edit.
   const canvasFiles = path.join(userData, 'canvas-files')
+  // Short-lived, read-only payloads delivered to agent terminals. This is a
+  // separate channel from canvas-files, whose Markdown files are live and
+  // intentionally editable scratchpads.
+  const contextFiles = path.join(userData, 'context-deliveries')
   // Skill library shipped with the app, materialized here so the agent can
   // read it and the person can edit it without rebuilding anything.
   const skills = path.join(userData, 'skills')
@@ -101,6 +107,7 @@ function getAppPaths(options = {}) {
     notes,
     reports,
     canvasFiles,
+    contextFiles,
     skills,
     assets,
     appRoot,
@@ -143,6 +150,7 @@ function initAppPaths(options = {}) {
   ensureDir(paths.notes)
   ensureDir(paths.reports)
   ensureDir(paths.canvasFiles)
+  ensureDir(paths.contextFiles)
   ensureDir(paths.skills)
 
   return paths

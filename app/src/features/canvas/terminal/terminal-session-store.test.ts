@@ -60,11 +60,14 @@ const CODEX_READY_PROMPT_WITH_HINT = [
 ].join('\r\n')
 
 const CONTEXT = 'Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE\n\nContexto do canvas: ...'
+const DELIVERED_QUALITY_CONTEXT = 'Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE'
 
 type Harness = {
   store: TerminalSessionStore
   /** Tudo que o store escreveu no PTY, na ordem. */
   writes: string[]
+  /** Corpos que seriam gravados pelo processo principal nos arquivos temporários. */
+  contextBodies: string[]
   /** Entrega bytes da CLI para o terminal do store, como a ponte faria. */
   feed: (data: string) => void
 }
@@ -72,8 +75,13 @@ type Harness = {
 const SESSION_ID = 'terminal-1'
 const PTY_SESSION_ID = `canvas:${SESSION_ID}`
 
-function createHarness(initialText = CONTEXT, command = 'claude'): Harness {
+function createHarness(
+  initialText = CONTEXT,
+  command = 'claude',
+  contextFilesAvailable = true,
+): Harness {
   const writes: string[] = []
+  const contextBodies: string[] = []
   const dataListeners = new Set<(event: { sessionId: string; data: string }) => void>()
 
   ;(globalThis as { window?: unknown }).window = {
@@ -90,6 +98,19 @@ function createHarness(initialText = CONTEXT, command = 'claude'): Harness {
         },
         resize: async () => {},
         kill: async () => {},
+      },
+      contextFiles: {
+        write: async ({ content }: { content: string }) => {
+          if (!contextFilesAvailable) {
+            return { ok: false, message: 'simulated context directory failure' }
+          }
+          contextBodies.push(content)
+          return {
+            ok: true,
+            path: `/tmp/felixo-context-${contextBodies.length}.txt`,
+          }
+        },
+        release: async () => ({ ok: true }),
       },
     },
   }
@@ -108,6 +129,7 @@ function createHarness(initialText = CONTEXT, command = 'claude'): Harness {
   return {
     store,
     writes,
+    contextBodies,
     feed: (data: string) => {
       for (const listener of dataListeners) {
         listener({ sessionId: PTY_SESSION_ID, data })
@@ -118,7 +140,7 @@ function createHarness(initialText = CONTEXT, command = 'claude'): Harness {
 
 /** Só o que é texto de contexto: descarta as respostas do próprio terminal. */
 function contextWrites(writes: string[]): string[] {
-  return writes.filter((data) => data.includes('PADRÃO DE QUALIDADE'))
+  return writes.filter((data) => data.includes('CONTEXTO ENTREGUE EM'))
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -192,7 +214,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness.feed(READY_PROMPT)
     await wait(1600)
 
-    expect(contextWrites(harness.writes)[0]).toBe(CONTEXT)
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
   }, 15000)
 
   it('escreve no Codex assim que o compositor aparece, sem esperar silêncio extra', async () => {
@@ -204,7 +226,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     // motivo para aguardar os 500 ms usados apenas pelo fallback genérico.
     await wait(400)
 
-    expect(contextWrites(harness.writes)).toEqual([CONTEXT])
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
   }, 10000)
 
   it('escreve no Codex mesmo com a sugestão da CLI dentro do compositor', async () => {
@@ -217,7 +239,43 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     // agente parecia demorar dezenas de segundos para receber o prompt.
     await wait(400)
 
-    expect(contextWrites(harness.writes)).toEqual([CONTEXT])
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
+  }, 10000)
+
+  it('volta ao inline com aviso quando a entrega por arquivo falha', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+
+    await wait(400)
+
+    const fallback = harness.writes.find((data) =>
+      data.startsWith('AVISO DO FELIXO AI CORE'),
+    )
+    expect(fallback).toBeDefined()
+    expect(fallback).toContain('PADRÃO DE QUALIDADE')
+    expect(fallback).toContain('Contexto do canvas: ...')
+    expect(harness.contextBodies).toEqual([])
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toContain(
+      'fallback inline',
+    )
+  }, 10000)
+
+  it('não aplica o recorte de handoff a um prompt de catálogo no fallback', async () => {
+    harness = createHarness('', 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const longPrompt = `catálogo começo\n${'x'.repeat(160_100)}\ncatálogo fim`
+    await harness.store.sendText(SESSION_ID, `${longPrompt}\r`, { kind: 'catalog-prompt' })
+
+    const fallback = harness.writes.find((data) =>
+      data.startsWith('AVISO DO FELIXO AI CORE'),
+    )
+    expect(fallback).toContain('catálogo começo')
+    expect(fallback).toContain('catálogo fim')
+    expect(fallback).not.toContain('trecho do meio do histórico omitido')
   }, 10000)
 
   it('não escreve enquanto o Codex pergunta se a pasta é confiável', async () => {

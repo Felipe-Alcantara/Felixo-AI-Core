@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { splitTerminalSubmission } from './terminal-input'
+import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 import {
   findClipboardImage,
   formatImagePathForPrompt,
@@ -8,6 +8,15 @@ import {
   isImagePasteShortcut,
 } from './terminal-image-paste'
 import { isSubmissionPending } from './terminal-submission'
+import {
+  buildContextFileReferences,
+  buildInlineFallback,
+  contextFileKindForPrompt,
+  isAgentCliCommand,
+  splitInitialContext,
+} from '../services/context-file-delivery'
+import type { ContextFileKind } from '../services/context-file-delivery'
+import { prepareHandoffTranscript } from '../services/terminal-handoff'
 import type { SessionMetadata } from './session-metadata'
 import {
   computePreview,
@@ -48,6 +57,8 @@ export type SessionSnapshot = {
   previewLines: string[]
   exitCode?: number
   message?: string
+  /** File delivery failed; the session used the old inline fallback. */
+  contextWarning?: string
   /** The most recent prompt submitted to the session (typed or programmatic). */
   lastPrompt?: string
   /**
@@ -139,6 +150,8 @@ type SessionOptions = {
   cwd?: string
   /** Text submitted to the PTY shortly after spawn (e.g. a standing instruction). */
   initialText?: string
+  /** Human label used in the generated context-file header. */
+  sourceLabel?: string
   /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */
   fallbackCommand?: string
   /** Keeps the terminal interactive after the command exits (run-a-file). */
@@ -181,6 +194,10 @@ type Session = {
   lastMeaningfulAt: number
   args: string[]
   initialText?: string
+  rawInitialText?: string
+  sourceLabel?: string
+  /** Serializes programmatic deliveries so file creation cannot reorder prompts. */
+  sendChain: Promise<void>
   initialTextTimer: ReturnType<typeof setTimeout> | null
   /** Reconferência de que o prompt inicial foi submetido, não só digitado. */
   submitRetryTimer: ReturnType<typeof setTimeout> | null
@@ -287,7 +304,10 @@ export class TerminalSessionStore {
       lastSignature: '',
       lastMeaningfulAt: Date.now(),
       args: options.args ?? [],
-      initialText: options.initialText,
+      initialText: undefined,
+      rawInitialText: options.initialText,
+      sourceLabel: options.sourceLabel,
+      sendChain: Promise.resolve(),
       initialTextTimer: null,
       submitRetryTimer: null,
       contextRetryTimer: null,
@@ -429,14 +449,18 @@ export class TerminalSessionStore {
             return
           }
 
-          this.markWorking(session)
+          void this.prepareInitialText(session).then(() => {
+            if (session.disposed) return
 
-          // Nada de delay calculado para adivinhar quando a CLI está pronta: o
-          // relógio só decide quando começar a olhar a tela. Quem libera a
-          // escrita é a linha de entrada aparecer (`scheduleInitialText`), e as
-          // telas de aceite que aparecem antes dela são respondidas pelos
-          // observadores do stream de saída mais abaixo.
-          this.scheduleInitialText(session, getInitialTextDelay())
+            this.markWorking(session)
+
+            // Nada de delay calculado para adivinhar quando a CLI está pronta:
+            // o relógio só decide quando começar a olhar a tela. Quem libera a
+            // escrita é a linha de entrada aparecer (`scheduleInitialText`), e
+            // as telas de aceite que aparecem antes dela são respondidas pelos
+            // observadores do stream de saída mais abaixo.
+            this.scheduleInitialText(session, getInitialTextDelay())
+          })
         } else {
           this.update(session, {
             activity: 'error',
@@ -617,17 +641,38 @@ export class TerminalSessionStore {
   }
 
   /** Types text into the session's PTY as if the user had typed it. */
-  sendText(id: string, text: string): void {
+  async sendText(
+    id: string,
+    text: string,
+    options: { kind?: ContextFileKind } = {},
+  ): Promise<void> {
     const session = this.sessions.get(id)
-    if (!session) {
+    if (!session || session.disposed || !text) {
       return
     }
-    void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
-    session.inputTouched = true
-    const prompt = cleanPrompt(text)
-    if (prompt) {
-      this.update(session, { lastPrompt: prompt })
-    }
+
+    const delivery = session.sendChain.then(async () => {
+      if (session.disposed) return
+
+      const delivered = await this.deliverContextText(
+        session,
+        text,
+        options.kind ?? 'catalog-prompt',
+      )
+      if (session.disposed) return
+
+      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: delivered })
+      session.inputTouched = true
+      const prompt = cleanPrompt(delivered)
+      if (prompt) {
+        this.update(session, { lastPrompt: prompt })
+      }
+    })
+
+    // Keep the chain alive after one failed delivery. A transient IPC failure
+    // must not permanently disable later prompts for this session.
+    session.sendChain = delivery.catch(() => {})
+    await delivery.catch(() => {})
   }
 
   /**
@@ -754,6 +799,7 @@ export class TerminalSessionStore {
     session.offData()
     session.offExit()
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })
+    void window.felixo?.contextFiles?.release({ sessionId: session.ptySessionId })
     session.terminal.dispose()
     this.sessions.delete(id)
     this.listeners.delete(id)
@@ -802,6 +848,10 @@ export class TerminalSessionStore {
   ): void {
     this.clearInitialTextTimer(session)
     this.clearContextRetryTimer(session)
+    // Once the process is gone, keeping its private bootstrap/handoff files
+    // serves no live session. The main process also removes stale leftovers at
+    // startup for crashes and renderer resets that bypass this callback.
+    void window.felixo?.contextFiles?.release({ sessionId: session.ptySessionId })
     const silentEarlyExit =
       Boolean(session.command) &&
       !session.receivedOutput &&
@@ -946,6 +996,85 @@ export class TerminalSessionStore {
         }
       }, INITIAL_TEXT_SUBMIT_DELAY_MS)
     }, delayMs)
+  }
+
+  /**
+   * Converts injected context into a short PTY reference after the process is
+   * known to exist. Slash commands such as `/resume` stay inline because they
+   * are parsed by the agent CLI itself, not read as context.
+   */
+  private async prepareInitialText(session: Session): Promise<void> {
+    const text = session.rawInitialText
+    if (!text) {
+      session.initialText = undefined
+      return
+    }
+
+    session.initialText = await this.deliverContextText(
+      session,
+      text,
+      isAgentCliCommand(text) ? undefined : contextFileKindForPrompt(text),
+    )
+  }
+
+  /** Writes one generated, read-only context file or returns an explicit inline fallback. */
+  private async deliverContextText(
+    session: Session,
+    text: string,
+    kind?: ContextFileKind,
+  ): Promise<string> {
+    if (isAgentCliCommand(text) || !kind) {
+      return text
+    }
+
+    const split = splitTerminalSubmission(text)
+    const parts = kind === 'initial-context'
+      ? splitInitialContext(split.text)
+      : [{ kind, content: split.text }]
+    const deliveredFiles: Array<{ path: string; kind: ContextFileKind }> = []
+
+    for (const part of parts) {
+      let result: { ok?: boolean; path?: string } | undefined
+      try {
+        result = await window.felixo?.contextFiles?.write({
+          sessionId: session.ptySessionId,
+          kind: part.kind,
+          source: session.sourceLabel || session.command || session.id,
+          content: part.content,
+        })
+      } catch {
+        // A renderer/main-process boundary can fail while the PTY is still
+        // usable (startup race, old packaged preload, or a permission error).
+        // Treat that exactly like an IPC error response and preserve the old
+        // inline delivery with a visible warning.
+        result = undefined
+      }
+
+      if (!result?.ok || !result.path) {
+        return this.contextDeliveryFallback(session, text, kind)
+      }
+      deliveredFiles.push({ path: result.path, kind: part.kind })
+    }
+
+    this.update(session, { contextWarning: undefined })
+    return buildContextFileReferences(deliveredFiles, Boolean(split.submit))
+  }
+
+  private contextDeliveryFallback(
+    session: Session,
+    text: string,
+    kind?: ContextFileKind,
+  ): string {
+    const warning =
+      'Arquivo temporário de contexto indisponível; o terminal usou o fallback inline. Para handoffs muito grandes, o limite antigo preserva o começo e o fim e marca o trecho omitido.'
+    this.update(session, { contextWarning: warning })
+    const split = splitTerminalSubmission(text)
+    if (!split.submit || kind !== 'handoff') {
+      return buildInlineFallback(text)
+    }
+
+    const prepared = prepareHandoffTranscript(split.text)
+    return buildInlineFallback(toSubmittedTerminalText(prepared.text))
   }
 
   /**

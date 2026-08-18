@@ -7,8 +7,11 @@ import {
   buildFileLinkPrompt,
 } from './file-link-prompt'
 import type { DiagnosisRequestStatus } from '../types'
+import type { ContextFileKind } from './context-file-delivery'
 
-type TerminalTextSink = { sendText: (id: string, text: string) => void }
+type TerminalTextSink = {
+  sendText: (id: string, text: string, options?: { kind?: ContextFileKind }) => void
+}
 
 /** The file + terminal a connection links, in either direction (or null). */
 function filePairFromConnection(
@@ -81,6 +84,7 @@ export async function announceFileNodeToTerminalNode(
   store.sendText(
     terminalNode.id,
     buildFileLinkPrompt(template, resolved.path, agentNameOf(terminalNode)),
+    { kind: 'scratchpad-link' },
   )
 }
 
@@ -125,6 +129,7 @@ export async function requestRepoDiagnosis(
   store.sendText(
     terminalNode.id,
     buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentNameOf(terminalNode)),
+    { kind: 'scratchpad-link' },
   )
   return 'ok'
 }

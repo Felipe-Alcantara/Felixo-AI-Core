@@ -60,6 +60,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       cwd: nodeData.cwd,
       startedAt: nodeData.sessionStartedAt,
       initialText: nodeData.initialText,
+      sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
     })
@@ -69,6 +70,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.command,
     nodeData.args,
     nodeData.cwd,
+    nodeData.label,
     nodeData.initialText,
     nodeData.initialTextReady,
     nodeData.fallbackCommand,
@@ -95,6 +97,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       args: nodeData.args,
       cwd: nodeData.cwd,
       initialText: nodeData.initialText,
+      sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
     })
@@ -178,6 +181,14 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
           >
             <span className="mr-1 font-semibold text-emerald-400">›</span>
             <span className="line-clamp-2">{snapshot.lastPrompt}</span>
+          </div>
+        )}
+        {snapshot?.contextWarning && (
+          <div
+            className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] leading-snug text-amber-200"
+            title={snapshot.contextWarning}
+          >
+            {snapshot.contextWarning}
           </div>
         )}
         <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">

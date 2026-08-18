@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, Eye, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, Eye, ListFilter, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { PromptDetailPanel } from './PromptDetailPanel'
 import { defaultAutomations } from '../../../shared/data/automations'
@@ -9,9 +9,10 @@ import {
   resolveVisiblePrompts,
   upsertPresetOverride,
 } from '../../services/prompt-overrides'
-import { AUTOMATION_SCOPES } from '../../../shared/types/automations'
+import { AUTOMATION_SCOPE_LABELS, AUTOMATION_SCOPES } from '../../../shared/types/automations'
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
 import type { SkillActivationResult } from './SkillsPanel'
+import { composeSelectedPrompts } from '../../services/prompt-composition'
 
 type PromptsPanelProps = {
   onClose: () => void
@@ -53,6 +54,8 @@ export function PromptsPanel({
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [query, setQuery] = useState('')
   const saveTimers = useRef(new Map<string, number>())
 
   useEffect(() => {
@@ -76,6 +79,30 @@ export function PromptsPanel({
   const presetIds = buildPresetIds(defaultAutomations)
   const overridesById = buildOverridesById(custom)
   const prompts = resolveVisiblePrompts(defaultAutomations, custom)
+  const filteredPrompts = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase()
+    if (!normalizedQuery) return prompts
+    return prompts.filter((prompt) =>
+      [
+        prompt.name,
+        prompt.description,
+        prompt.prompt,
+        AUTOMATION_SCOPE_LABELS[prompt.scope],
+      ]
+        .join('\n')
+        .toLocaleLowerCase()
+        .includes(normalizedQuery),
+    )
+  }, [prompts, query])
+  const groupedPrompts = useMemo(
+    () =>
+      SCOPES.map((scope) => ({
+        scope,
+        prompts: filteredPrompts.filter((prompt) => prompt.scope === scope),
+      })).filter((group) => group.prompts.length > 0),
+    [filteredPrompts],
+  )
+  const selectedPrompts = prompts.filter((prompt) => selectedIds.has(prompt.id))
   const detailPrompt = detailId ? prompts.find((prompt) => prompt.id === detailId) ?? null : null
   const detailPresetFallback = detailId
     ? defaultAutomations.find((preset) => preset.id === detailId) ?? null
@@ -90,6 +117,28 @@ export function PromptsPanel({
         : 'Sem terminal aberto — copiado para a área de transferência.',
     )
     window.setTimeout(() => setFeedbackId((id) => (id === prompt.id ? null : id)), 2500)
+  }
+
+  const togglePrompt = (promptId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(promptId)) next.delete(promptId)
+      else next.add(promptId)
+      return next
+    })
+  }
+
+  const insertSelected = async () => {
+    const combined = composeSelectedPrompts(selectedPrompts)
+    if (!combined) return
+    const result = await onInsertPrompt(combined)
+    setFeedbackId('combined')
+    setFeedbackText(
+      result === 'sent'
+        ? `${selectedPrompts.length} prompts combinados e enviados.`
+        : `${selectedPrompts.length} prompts combinados e copiados.`,
+    )
+    window.setTimeout(() => setFeedbackId((id) => (id === 'combined' ? null : id)), 2500)
   }
 
   const persistAutomation = useCallback((automation: AutomationDefinition) => {
@@ -180,7 +229,7 @@ export function PromptsPanel({
         title={detailPrompt.name}
         icon={<Sparkles size={15} />}
         onClose={onClose}
-        widthClassName="w-[36rem]"
+        widthClassName="w-[42rem]"
         toolsMenuOpen={toolsMenuOpen}
       >
         <PromptDetailPanel
@@ -205,25 +254,66 @@ export function PromptsPanel({
       title="Prompts"
       icon={<Sparkles size={15} />}
       onClose={onClose}
-      widthClassName="w-[26rem]"
+      widthClassName="w-[42rem]"
       toolsMenuOpen={toolsMenuOpen}
     >
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Prontos
-        </span>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <label className="flex min-w-[14rem] flex-1 items-center gap-2 rounded bg-zinc-800/70 px-2 py-1.5 text-xs text-zinc-400">
+          <ListFilter size={14} />
+          <span className="sr-only">Filtrar prompts</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filtrar por tema, nome ou texto…"
+            className="min-w-0 flex-1 bg-transparent text-zinc-200 outline-none placeholder:text-zinc-600"
+          />
+        </label>
         <button
           type="button"
           onClick={() => void addCustomAutomation()}
-          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
         >
           <Plus size={13} />
           Novo prompt
         </button>
       </div>
 
-      <ul className="felixo-anim-stagger-list flex flex-col gap-2">
-        {prompts.map((prompt) => {
+      <div className="mb-3 rounded border border-sky-500/20 bg-sky-500/[0.06] p-2.5 text-xs leading-relaxed text-sky-100/80">
+        Marque um ou vários prompts para montar uma única tarefa. Os textos são
+        enviados na ordem do catálogo, com o nome de cada prompt preservado.
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-sky-200/60">
+            {selectedPrompts.length === 0
+              ? 'Nenhum prompt selecionado.'
+              : `${selectedPrompts.length} selecionado${selectedPrompts.length === 1 ? '' : 's'}.`}
+          </span>
+          <button
+            type="button"
+            onClick={() => void insertSelected()}
+            disabled={selectedPrompts.length === 0}
+            className="felixo-btn flex items-center gap-1 rounded bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {feedbackId === 'combined' ? <Check size={13} /> : <SendHorizontal size={13} />}
+            {feedbackId === 'combined' ? 'Feito' : 'Enviar conjunto'}
+          </button>
+        </div>
+        {feedbackId === 'combined' && (
+          <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-300">
+            <Check size={11} />
+            {feedbackText}
+          </p>
+        )}
+      </div>
+
+      <div className="felixo-anim-stagger-list flex flex-col gap-4">
+        {groupedPrompts.map(({ scope, prompts: scopePrompts }) => (
+          <section key={scope}>
+            <h2 className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <span>{AUTOMATION_SCOPE_LABELS[scope]}</span>
+              <span className="font-normal text-zinc-600">{scopePrompts.length}</span>
+            </h2>
+            <ul className="flex flex-col gap-2">
+              {scopePrompts.map((prompt) => {
           const isPreset = presetIds.has(prompt.id)
           const isOverridden = isPreset && overridesById.has(prompt.id)
           const isFreeCustom = !isPreset
@@ -231,6 +321,13 @@ export function PromptsPanel({
           return (
             <li key={prompt.id} className="rounded bg-zinc-800/60 p-2">
               <div className="mb-1 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(prompt.id)}
+                  onChange={() => togglePrompt(prompt.id)}
+                  className="h-3.5 w-3.5 shrink-0 accent-sky-500"
+                  aria-label={`Selecionar ${prompt.name}`}
+                />
                 {isFreeCustom ? (
                   <input
                     value={prompt.name}
@@ -339,9 +436,12 @@ export function PromptsPanel({
                 </p>
               )}
             </li>
-          )
-        })}
-      </ul>
+              )
+            })}
+            </ul>
+          </section>
+        ))}
+      </div>
     </CanvasPanel>
   )
 }

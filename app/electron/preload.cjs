@@ -113,6 +113,10 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('canvas-file:changed', handler)
     },
   },
+  contextFiles: {
+    write: (params) => ipcRenderer.invoke('context-file:write', params),
+    release: (params) => ipcRenderer.invoke('context-file:release', params),
+  },
   // Arquivos de texto que ja existem no disco, abertos num bloco do canvas.
   // Diferente de `canvasFiles`, aqui o bloco nao e dono do arquivo: so aponta.
   textFiles: {

@@ -272,13 +272,23 @@ arquivo que eventualmente estejam na pasta de dados.
 
 ## 5. Dados locais, banco e logs
 
-O app resolve diretórios pelo `app.getPath()` do Electron e cria subpastas para configurações, banco, exports, notas, relatórios e logs.
+O app resolve diretórios pelo `app.getPath()` do Electron e cria subpastas para configurações, banco, exports, notas, relatórios, logs, scratchpads do canvas e arquivos temporários de contexto entregues aos agentes.
 
 Locais comuns de dados do app:
 
 - Linux: `~/.config/felixo-ai-core/`
 - Windows: `%APPDATA%\felixo-ai-core\`
 - macOS: `~/Library/Application Support/felixo-ai-core/`
+
+Os arquivos em `context-deliveries/` são artefatos temporários somente leitura:
+o app os cria fora do repositório para entregar prompts longos sem digitá-los
+inteiros na PTY, remove-os quando a sessão termina e limpa sobras com mais de
+24 horas na inicialização. Eles não são os scratchpads editáveis de
+`canvas-files/` e não devem ser versionados.
+Se o processo do app não conseguir criar um arquivo, o terminal volta ao
+fallback inline e mostra um aviso; uma restrição de leitura imposta pela CLI
+é reportada pela própria instrução entregue ao agente, porque o app não tem
+como observar a sandbox de cada CLI.
 
 Arquivos e pastas úteis:
 

@@ -112,7 +112,6 @@ import {
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import {
   buildTerminalHandoffPrompt,
-  prepareHandoffTranscript,
 } from '../services/terminal-handoff'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import { HandoffDialog } from './HandoffDialog'
@@ -723,6 +722,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       store.sendText(
         nodeId,
         toSubmittedTerminalText(`A partir de agora, seu nome neste canvas é "${trimmed}".`),
+        { kind: 'rename' },
       )
     },
     [store],
@@ -846,7 +846,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     async (skill: CanvasSkill): Promise<SkillActivationResult> => {
       const prompt = buildSkillActivationPrompt(skill)
       if (expandedTerminalId) {
-        store.sendText(expandedTerminalId, prompt)
+        store.sendText(expandedTerminalId, prompt, { kind: 'skill-prompt' })
         return 'sent'
       }
       await navigator.clipboard?.writeText(prompt)
@@ -860,7 +860,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const insertPrompt = useCallback(
     async (prompt: string): Promise<SkillActivationResult> => {
       if (expandedTerminalId) {
-        store.sendText(expandedTerminalId, toSubmittedTerminalText(prompt))
+        store.sendText(expandedTerminalId, toSubmittedTerminalText(prompt), {
+          kind: 'catalog-prompt',
+        })
         return 'sent'
       }
       await navigator.clipboard?.writeText(prompt)
@@ -1266,7 +1268,6 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
       const sourceData = source.data
       const targetLabel = options.label
-      const prepared = prepareHandoffTranscript(transcript)
       const handoffText = buildTerminalHandoffPrompt({
         sourceLabel: sourceData.label,
         sourceCommand: sourceData.command,
@@ -1274,8 +1275,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         // agente de origem quando ele não escolheu projeto nenhum.
         cwd: options.cwd ?? sourceData.cwd,
         targetLabel,
-        transcript: prepared.text,
-        truncated: prepared.truncated,
+        transcript,
       })
       const newId = addNode(
         'terminal',
@@ -1731,6 +1731,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             args: expandedNodeData?.args,
             cwd: expandedNodeData?.cwd,
             initialText: expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
+            sourceLabel: expandedTitle,
           }}
           onPassResponsibility={(transcript) =>
             setHandoff({ sourceId: expandedTerminalId, transcript })

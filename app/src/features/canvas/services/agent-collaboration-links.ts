@@ -1,8 +1,11 @@
 import type { Connection, Node } from '@xyflow/react'
 import { isKnownAgentCommand } from './agent-launch-options'
 import { toSubmittedTerminalText } from '../terminal/terminal-input'
+import type { ContextFileKind } from './context-file-delivery'
 
-type TerminalTextSink = { sendText: (id: string, text: string) => void }
+type TerminalTextSink = {
+  sendText: (id: string, text: string, options?: { kind?: ContextFileKind }) => void
+}
 
 type AgentPair = { first: Node; second: Node }
 
@@ -75,7 +78,11 @@ export function announceAgentCollaboration(
     return false
   }
 
-  store.sendText(pair.first.id, buildAgentCollaborationPrompt(pair.first, pair.second))
-  store.sendText(pair.second.id, buildAgentCollaborationPrompt(pair.second, pair.first))
+  store.sendText(pair.first.id, buildAgentCollaborationPrompt(pair.first, pair.second), {
+    kind: 'collaboration',
+  })
+  store.sendText(pair.second.id, buildAgentCollaborationPrompt(pair.second, pair.first), {
+    kind: 'collaboration',
+  })
   return true
 }

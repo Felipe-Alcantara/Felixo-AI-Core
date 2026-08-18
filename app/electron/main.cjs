@@ -23,6 +23,9 @@ const {
   registerCanvasFilesIpcHandlers,
 } = require('./services/canvas-files-ipc-handlers.cjs')
 const {
+  registerContextFilesIpcHandlers,
+} = require('./services/context-files-ipc-handlers.cjs')
+const {
   registerTextFileIpcHandlers,
 } = require('./services/text-file-ipc-handlers.cjs')
 const {
@@ -58,6 +61,7 @@ const platform = require('./core/platform/index.cjs')
 let mainWindow = null
 let ptyHandlers = null
 let canvasFilesHandlers = null
+let contextFilesHandlers = null
 let textFileHandlers = null
 let storageDatabase = null
 let cliAutoInstall = null
@@ -118,6 +122,7 @@ app.whenReady().then(() => {
   })
   registerNotesIpcHandlers({ database: storageDatabase })
   canvasFilesHandlers = registerCanvasFilesIpcHandlers(getMainWindow, appPaths)
+  contextFilesHandlers = registerContextFilesIpcHandlers(appPaths)
   textFileHandlers = registerTextFileIpcHandlers(getMainWindow, {
     listProjectRoots: projectsHandlers.listProjectRoots,
   })
@@ -228,6 +233,11 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     canvasFilesHandlers = null
+  }
+
+  if (contextFilesHandlers) {
+    void contextFilesHandlers.dispose().catch(() => {})
+    contextFilesHandlers = null
   }
 
   if (textFileHandlers) {

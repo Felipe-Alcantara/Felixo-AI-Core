@@ -41,6 +41,7 @@ type TerminalDrawerProps = {
     args?: string[]
     cwd?: string
     initialText?: string
+    sourceLabel?: string
   }
   /**
    * Abre a escolha do agente que vai assumir o trabalho, levando o histórico
@@ -439,6 +440,11 @@ export function TerminalDrawer({
       {!collapsed && snapshot?.message && (
         <div className="border-b border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-300">
           {snapshot.message}
+        </div>
+      )}
+      {!collapsed && snapshot?.contextWarning && (
+        <div className="border-b border-amber-500/20 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+          {snapshot.contextWarning}
         </div>
       )}
       {!collapsed && handoffError && (

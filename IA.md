@@ -331,3 +331,31 @@ passaram. Como este ambiente do GitHub não oferece uma PTY utilizável para ess
 testes agora são pulados explicitamente no macOS com esse motivo; a fila permanece coberta pelos
 testes unitários em todos os sistemas. Isso não mascara o defeito da fila: sem PTY não há caminho
 para exercitá-la de ponta a ponta nesse runner.
+
+## [2026-08-18] Contexto longo entregue por arquivos temporários, com fallback seguro
+
+**Task:** substituir a digitação de prompts gigantes na PTY por arquivos temporários e entregar ao agente somente caminhos curtos, preservando o corpo original de prompts, catálogos e handoffs.
+
+**Identidade do registro:** Continue o trabalho do Claude "https://app.notion.com/p/Spicy-Game-devolver-a-senha-secreta-ao-easter-egg-da-namorada-hoje-o-agente-a-reaproveitou-para-d-3bf91f95497e814b8087e21ce392c8e3?source=copy_link".
+
+### Implementação
+
+- `app/electron/services/context-files-ipc-handlers.cjs` cria artefatos com nome gerado pelo processo principal, dentro de `userData/context-deliveries/`, modo privado no POSIX, cabeçalho identificável, origem, data, regime somente leitura e aviso de que não são repositório nem scratchpad. A ponte não aceita caminho/filename do renderer.
+- Os arquivos são rastreados por sessão PTY, removidos no encerramento/remoção da sessão e sobras com mais de 24 horas são limpas no início do app. `context-deliveries/` permanece separado de `canvas-files/`, que continua sendo o canal `.md` compartilhado e editável.
+- `TerminalSessionStore` serializa as entregas programáticas, espera a criação do arquivo antes de liberar a referência curta para a PTY e classifica comandos como `/resume`/`/clear` para continuarem inline. Handoffs, prompts de catálogo, skills, renomeações, colaboração e links de scratchpad usam arquivos.
+- O corpo de handoff é entregue inteiro no caminho normal, portanto o trecho intermediário não é cortado. `prepareHandoffTranscript()` foi preservada como plano B: só é usada se a criação do arquivo falhar, mantendo o limite antigo, começo/fim e marcador explícito.
+- Se o IPC/bridge não conseguir criar o arquivo, o app volta ao inline, mostra aviso visível no nó e no drawer e mantém o conteúdo disponível. O app não consegue detectar uma sandbox de leitura imposta posteriormente pela CLI; essa limitação está documentada e o agente é instruído a reportar caminho inacessível.
+- O painel Prompts agora filtra e agrupa por tema, aceita seleção múltipla e compõe uma única tarefa na ordem do catálogo, com o nome de cada prompt e corpo preservado.
+
+### Testes e verificação
+
+- `npm test`: **684/684** testes Electron/backend verdes, incluindo os 6 testes do IPC de arquivos temporários.
+- `npm run test:frontend`: **484/484** testes Vitest verdes em 49 arquivos, incluindo entrega realista do prompt inicial, fallback inline, distinção entre handoff e catálogo no fallback e preservação do handoff grande.
+- `python3 -m unittest discover -s tests -t . -v`: **101/101** testes do launcher Linux verdes.
+- `python3 start_app.py --help`: executado sem erro.
+- `npm run lint`, `npm run build` e `git diff --check`: limpos. O build mantém somente o aviso já conhecido de bundle JavaScript acima de 500 kB.
+- Linux foi executado de fato nesta sessão. Os testes automatizados também exercitam `darwin` e `win32` por adaptadores injetáveis: shell, caminhos, menu, PTY, launcher, shims e permissões. Não foi aberta outra instância do IA Core.
+
+### Estado final e risco residual
+
+**Estado: concluído no código e nos gates locais; aguardando validação nativa em macOS e Windows.** A execução nativa desses dois sistemas não é possível neste terminal Linux e não deve ser tratada como validada. O risco aberto é exclusivamente de integração específica do Electron/PTY e permissões do sistema operacional real, especialmente a leitura dos arquivos pelo sandbox da CLI e o ciclo de limpeza em app empacotado. A matriz CI existente permanece responsável por essa confirmação antes de release.

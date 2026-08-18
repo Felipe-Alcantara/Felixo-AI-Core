@@ -373,6 +373,16 @@ declare global {
           callback: (event: { name: string }) => void,
         ) => () => void
       }
+      /** Contextos imutáveis e temporários entregues aos terminais de agentes. */
+      contextFiles?: {
+        write: (params: {
+          sessionId: string
+          kind?: string
+          source?: string
+          content: string
+        }) => Promise<CliInvokeResult & { path?: string; name?: string; bytes?: number }>
+        release: (params: { sessionId: string }) => Promise<CliInvokeResult & { removed?: number }>
+      }
       /**
        * Arquivos de texto que já existem no disco, abertos num bloco do canvas.
        * Ao contrário de `canvasFiles`, o bloco não é dono do arquivo — só aponta

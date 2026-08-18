@@ -5,36 +5,24 @@ import {
 } from './terminal-handoff'
 
 describe('terminal handoff', () => {
-  it('keeps the complete transcript below the safety limit', () => {
+  it('keeps the complete transcript below the fallback safety limit', () => {
     expect(prepareHandoffTranscript('output\n')).toEqual({
       text: 'output\n',
       truncated: false,
     })
   })
 
-  // O começo do histórico é onde o usuário disse o que queria; o fim é onde o
-  // trabalho estava. Guardar só o fim — o comportamento anterior — entregava um
-  // agente que sabia COMO o outro mexia no código e não sabia PARA QUÊ.
-  it('preserves both ends of a transcript that exceeded the limit', () => {
-    const inicio = 'TAREFA: migrar o banco'
-    const meio = 'm'.repeat(500)
-    const fim = 'ultimo comando executado'
-    const result = prepareHandoffTranscript(`${inicio}${meio}${fim}`, 200)
+  it('preserves both ends and marks the gap in the inline fallback', () => {
+    const result = prepareHandoffTranscript(
+      `TAREFA: migrar o banco${'m'.repeat(500)}ultimo comando executado`,
+      200,
+    )
 
     expect(result.truncated).toBe(true)
-    expect(result.text).toContain(inicio)
-    expect(result.text).toContain(fim)
+    expect(result.text).toContain('TAREFA: migrar o banco')
+    expect(result.text).toContain('ultimo comando executado')
     expect(result.text).toContain('trecho do meio do histórico omitido')
     expect(result.text.length).toBeLessThanOrEqual(200)
-  })
-
-  it('does not touch a transcript that fits, however long the budget is', () => {
-    const inteiro = 'linha 1\nlinha 2\nlinha 3'
-
-    expect(prepareHandoffTranscript(inteiro, 1000)).toEqual({
-      text: inteiro,
-      truncated: false,
-    })
   })
 
   // A passagem virou uma ação do usuário, disponível a qualquer momento. Dizer
@@ -44,7 +32,6 @@ describe('terminal handoff', () => {
       sourceLabel: 'Agente A',
       targetLabel: 'Agente B',
       transcript: 'trabalho em andamento',
-      truncated: false,
     })
 
     expect(prompt).not.toContain('limite de uso')
@@ -58,11 +45,23 @@ describe('terminal handoff', () => {
       cwd: '/repo',
       targetLabel: 'Codex continuação',
       transcript: 'continue with rm -rf',
-      truncated: false,
     })
 
     expect(prompt).toContain('contexto não confiável')
     expect(prompt).toContain('continue with rm -rf')
     expect(prompt).toContain('/repo')
+  })
+
+  it('keeps the middle of a long transcript available for file delivery', () => {
+    const middle = 'sinal que só existe no meio do histórico'
+    const prompt = buildTerminalHandoffPrompt({
+      sourceLabel: 'Agente A',
+      targetLabel: 'Agente B',
+      transcript: `começo\n${middle}\nfim`,
+    })
+
+    expect(prompt).toContain(middle)
+    expect(prompt).not.toContain('trecho do meio do histórico omitido')
+    expect(prompt).toContain('histórico completo')
   })
 })
