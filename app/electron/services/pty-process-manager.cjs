@@ -401,6 +401,29 @@ class PtyProcessManager {
     return this.sessions.has(sessionId)
   }
 
+  /**
+   * Quantas sessões ainda têm processo vivo.
+   *
+   * Uma entrada com `exitEvent` já preenchido é histórico: o processo morreu e
+   * o registro só continua ali para responder ao renderer. Contar essas daria
+   * "tem agente rodando" para uma janela vazia — e a guarda de fechamento, que
+   * é quem consome este número, passaria a perguntar sem motivo. Guarda que
+   * pergunta à toa é guarda que a pessoa aprende a ignorar.
+   *
+   * @returns {number}
+   */
+  contarSessoesVivas() {
+    let vivas = 0
+
+    for (const entry of this.sessions.values()) {
+      if (!entry.exitEvent) {
+        vivas += 1
+      }
+    }
+
+    return vivas
+  }
+
   /** Replaces renderer callbacks and replays output after an HMR/navigation reload. */
   attach(sessionId, options = {}) {
     const entry = this.sessions.get(sessionId)

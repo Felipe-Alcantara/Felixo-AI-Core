@@ -253,3 +253,55 @@ permaneceu ativo durante a verificação; a porta padrão 5173 estava ocupada po
 não foi interrompida.
 
 **Estado:** concluído por **Continue o trabalho do Claude "https://app.notion.com/p/Spicy-Game-devolver-a-senha-secreta-ao-easter-egg-da-namorada-hoje-o-agente-a-reaproveitou-para-d-3bf91f95497e814b8087e21ce392c8e3?source=copy_link"**.
+
+## [2026-08-18] ⌘+W deixa de fechar a janela por acidente no macOS
+
+**Problema:** um usuário de Mac relatou que o app "fecha fácil" — no macOS a tecla ⌘ ocupa a
+posição física do Alt do Windows, então quem alterna entre os dois sistemas acerta ⌘+W sem
+querer, e a janela fecha na hora levando os terminais junto.
+
+**Causa:** o atalho nunca foi escolhido. O app não definia menu de aplicação nenhum
+(`setApplicationMenu` não aparecia em lugar nenhum do processo principal), então valia o menu
+padrão do Electron, que no macOS entrega `Close Window` com ⌘+W embutido. A janela também não
+tinha guarda de `close`.
+
+**Agravante encontrado durante a investigação:** nada encerra as PTYs no fechamento da janela —
+`ptyHandlers.dispose()` só roda no `before-quit`. No macOS, onde `window-all-closed` não encerra
+o app, o ⌘+W deixava os processos vivos sem interface para onde mandar saída, e a janela recriada
+pelo `activate` sobe limpa sem reconectar neles. O acidente **vazava processo**, não só contexto.
+
+**Decisão sobre o item 3 da task (comportamento no macOS):** mantida a convenção do sistema — o
+app continua no Dock e o `activate` recria a janela. Mudar isso quebraria a expectativa de quem
+usa o app instalado no Mac; o processo órfão em modo de desenvolvimento é escopo da task da porta
+5173, e não desta.
+
+**Correção, em duas camadas:**
+
+- `windows/app-menu.cjs` — menu próprio. "Fechar janela" continua no menu (dá para fechar de
+  propósito) mas **sem acelerador**: `role: 'close'` foi evitado justamente porque o role carrega
+  o atalho junto. Todos os *roles* de edição foram repostos — no macOS ⌘+C, ⌘+V, ⌘+A e ⌘+Z vêm do
+  MENU, não do sistema, e um menu sem eles trocaria um incômodo por um pior. ⌘+Q segue disponível:
+  o alvo é o fechamento acidental, não o deliberado.
+- `windows/close-guard.cjs` — segunda camada, para o botão de fechar e o ⌘+Q. Com terminal vivo,
+  `preventDefault()` e pergunta dizendo **quantos** agentes morrem. Diálogo que falha **não**
+  fecha: perder trabalho por erro de interface seria o pior desfecho.
+- `PtyProcessManager.contarSessoesVivas()` ignora entradas com `exitEvent` — contar sessão morta
+  faria a guarda perguntar sobre uma janela vazia, e guarda que pergunta à toa é guarda que a
+  pessoa aprende a ignorar.
+
+**Detalhe de ordem que teria virado falha silenciosa:** `ptyHandlers` é criado *depois* da janela
+em `main.cjs`. A guarda recebe `contarSessoesVivas` como **função**, não como número — um valor
+lido na criação seria sempre zero e a guarda nunca perguntaria nada.
+
+**Achado colateral, e o mais importante do dia:** o script `test` do `package.json` era uma lista
+de diretórios escrita à mão. `electron/windows/` nunca esteve nela, e `electron/services/skills/`
+também não — ou seja, os **13 testes de `skills-library.test.cjs`, escritos ontem, nunca rodaram**,
+nem aqui nem no CI. Trocado por `node --test "electron/**/*.test.cjs"`. O total saltou de 643 para
+677 sem uma linha de produção mudar. **Teste que não roda é pior que teste ausente: ele dá a
+sensação de cobertura sem a cobertura.**
+
+**Validação:** 677 testes passando (era 643), `npm run lint`, `npx tsc -b` e `npm run build`
+limpos. **Não validado, declarado:** nada foi verificado num Mac — a única máquina disponível é
+Linux. O template do menu é exercitado com a plataforma `darwin` injetada, o que prova a ausência
+do acelerador, mas **não** prova o comportamento do ⌘+W no sistema real. E o app não foi aberto,
+porque a sessão do agente roda dentro dele.

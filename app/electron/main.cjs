@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain } = require('electron')
 const path = require('node:path')
 const { createMainWindow } = require('./windows/main-window.cjs')
+const { instalarMenuDoApp } = require('./windows/app-menu.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
 const {
   registerOfficialCliAccountIpcHandlers,
@@ -94,7 +95,16 @@ app.whenReady().then(() => {
     databaseDir: appPaths.database,
   })
 
-  mainWindow = createMainWindow()
+  // Menu próprio ANTES da janela: sem ele vale o menu padrão do Electron, que
+  // no macOS entrega ⌘+W para fechar a janela — atalho que ninguém escolheu e
+  // que quem vem do Windows acerta sem querer, matando os terminais junto.
+  instalarMenuDoApp({ Menu })
+
+  // Função, não número: `ptyHandlers` só é criado algumas linhas abaixo. Lido
+  // agora daria sempre zero, e a guarda nunca perguntaria nada.
+  const contarSessoesVivas = () => ptyHandlers?.manager?.contarSessoesVivas?.() ?? 0
+
+  mainWindow = createMainWindow({ contarSessoesVivas })
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
 
   registerQaLoggerIpcHandlers(getMainWindow)
@@ -184,7 +194,10 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createMainWindow()
+      // A janela recriada precisa da MESMA guarda: no macOS este é o caminho
+      // normal de voltar ao app depois de fechar, e uma janela sem guarda
+      // desfaria a proteção na segunda vez.
+      mainWindow = createMainWindow({ contarSessoesVivas })
     }
   })
 })
