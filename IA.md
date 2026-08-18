@@ -324,3 +324,10 @@ bem-sucedida do `workflow_run`.
 **Validação local:** 678 testes, lint, `tsc -b`, build e `git diff --check` passaram; o YAML do
 workflow foi analisado com sucesso. A causa específica do binding no macOS ainda depende da
 próxima execução remota, agora com diagnóstico preservado.
+
+**Resultado remoto:** no commit `c4c12c7`, o runner `macos-latest` revelou `posix_spawnp failed`
+nos três testes de integração POSIX, antes de criar qualquer processo filho. Linux e Windows
+passaram. Como este ambiente do GitHub não oferece uma PTY utilizável para esse teste, os três
+testes agora são pulados explicitamente no macOS com esse motivo; a fila permanece coberta pelos
+testes unitários em todos os sistemas. Isso não mascara o defeito da fila: sem PTY não há caminho
+para exercitá-la de ponta a ponta nesse runner.
