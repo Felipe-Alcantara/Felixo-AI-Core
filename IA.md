@@ -305,3 +305,22 @@ limpos. **Não validado, declarado:** nada foi verificado num Mac — a única m
 Linux. O template do menu é exercitado com a plataforma `darwin` injetada, o que prova a ausência
 do acelerador, mas **não** prova o comportamento do ⌘+W no sistema real. E o app não foi aberto,
 porque a sessão do agente roda dentro dele.
+
+## [2026-08-18] Diagnóstico do CI macOS e proteção do release
+
+**Problema confirmado:** o CI remoto ainda falhava em três testes de PTY no macOS, enquanto os
+678 testes passavam localmente em Linux. O `PtyProcessManager` descartava a exceção nativa de
+`spawnPty`, deixando o runner com apenas uma mensagem genérica e impedindo descobrir a causa.
+
+**Correção:** a falha agora preserva a mensagem original e a propriedade `cause`, sem despejar o
+ambiente ou argumentos potencialmente sensíveis. Foi adicionado teste unitário que simula falha
+do binding nativo e exige a causa original no erro relançado.
+
+**Portão de release:** o `workflow_dispatch` passou a exigir um SHA explícito e a verificar uma
+execução CI verde para aquele SHA antes de criar ou publicar a release. Isso impede publicar o
+topo de `main` sem validação correspondente. O caminho automático continua preso à conclusão
+bem-sucedida do `workflow_run`.
+
+**Validação local:** 678 testes, lint, `tsc -b`, build e `git diff --check` passaram; o YAML do
+workflow foi analisado com sucesso. A causa específica do binding no macOS ainda depende da
+próxima execução remota, agora com diagnóstico preservado.

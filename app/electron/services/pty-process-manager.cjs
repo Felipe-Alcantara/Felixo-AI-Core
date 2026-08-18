@@ -196,14 +196,18 @@ class PtyProcessManager {
         env,
         ...(useConpty === false ? { useConpty: false } : {}),
       })
-    } catch {
+    } catch (error) {
       this.reportLayer(
         options,
         'inicialização do PTY',
         'Não foi possível criar a sessão do terminal.',
         'pty-spawn-error',
       )
-      throw new Error('Camada de inicialização do PTY: não foi possível criar a sessão.')
+      const detalhe = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `Camada de inicialização do PTY: não foi possível criar a sessão: ${detalhe}`,
+        { cause: error },
+      )
     }
 
     const entry = {

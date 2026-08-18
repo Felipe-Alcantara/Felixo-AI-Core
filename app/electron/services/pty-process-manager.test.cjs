@@ -55,6 +55,25 @@ function createFakePty() {
   return { fakePty, spawnPty, calls }
 }
 
+test('preserva a causa original quando a fábrica nativa da PTY falha', () => {
+  const nativeError = new Error('node-pty: dlopen failed for arm64')
+  const manager = new PtyProcessManager({
+    spawnPty: () => {
+      throw nativeError
+    },
+  })
+
+  assert.throws(
+    () => manager.spawn('term-spawn-error', {}),
+    (error) => {
+      assert.match(error.message, /não foi possível criar a sessão/)
+      assert.match(error.message, /dlopen failed for arm64/)
+      assert.equal(error.cause, nativeError)
+      return true
+    },
+  )
+})
+
 test('spawn launches the shell by default and streams raw output', () => {
   const { fakePty, spawnPty, calls } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })

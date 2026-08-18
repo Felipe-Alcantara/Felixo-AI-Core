@@ -5,8 +5,9 @@ name: Release
 # encadeamento: o gatilho é a CONCLUSÃO do CI, não o push em si, então um
 # commit que quebrou teste nunca vira instalador publicado.
 #
-# `workflow_dispatch` fica para republicar um commit manualmente sem
-# precisar de um push novo.
+# `workflow_dispatch` fica para republicar um commit já validado sem
+# precisar de um push novo. O SHA é obrigatório para impedir que o dispatch
+# publique o topo de `main` sem CI correspondente.
 on:
   workflow_run:
     workflows:
@@ -16,9 +17,15 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'SHA exato de um commit que passou no workflow CI'
+        required: true
+        type: string
 
 permissions:
   contents: write
+  actions: read
 
 # Um release por vez. Se dois pushes entrarem em sequência, o mais novo
 # cancela o anterior — publicar o penúltimo commit não tem valor quando o
@@ -45,7 +52,20 @@ jobs:
       - name: Checkout validated commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
+
+      - name: Verify CI passed for this exact commit
+        shell: bash
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
+        run: |
+          passed="$(gh run list --workflow CI --commit "$TARGET_SHA" --limit 20 \
+            --json status,conclusion \
+            --jq 'any(.[]; .status == "completed" and .conclusion == "success")')"
+          if [[ "$passed" != "true" ]]; then
+            echo "Nenhuma execução CI verde encontrada para $TARGET_SHA." >&2
+            exit 1
+          fi
 
       - name: Resolve release tag
         id: release
@@ -59,7 +79,7 @@ jobs:
         shell: bash
         run: |
           TAG="${{ steps.release.outputs.release_tag }}"
-          TARGET="${{ github.event.workflow_run.head_sha || github.sha }}"
+          TARGET="${{ github.event.workflow_run.head_sha || inputs.commit_sha }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG já existe; mantendo os artefatos publicados."
           else
@@ -102,7 +122,7 @@ jobs:
           # workflow_run roda no contexto do branch padrão, não no commit que
           # disparou o CI. Sem fixar o SHA, o release publicaria o topo de
           # main em vez do commit que realmente foi validado.
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -175,7 +195,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 
       # Mesma conta do job de publicação (`major.minor` do package.json +
       # número da execução), porque a tag precisa bater com a que o
