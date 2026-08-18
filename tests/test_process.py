@@ -1,115 +1,17 @@
-"""Tests for stopping the app and clearing leftover processes.
+"""Tests for stopping the app process tree.
 
-`pgrep -f` matches whole command lines, so cleanup has to tell a stale dev
-server apart from an editor that merely has the app path open. Shutdown also
-runs from a signal handler, which constrains how the child can be reaped.
+Shutdown also runs from a signal handler, which constrains how the child can
+be reaped.
 """
 
 from __future__ import annotations
 
 import signal
-import subprocess
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from felixo_launcher import paths
 from felixo_launcher import process as process_module
-
-# `cleanup_app_processes` é POSIX-only (sai cedo no Windows, onde não há
-# pgrep nem grupos de processo), então o SIGKILL que ela usa existe sempre que
-# aquele código roda. Fora dali o escalonamento viaja como `force=True`, e não
-# como um número de sinal — ver `signal_process_group`.
-POSIX_FORCE_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
-
-
-class ProcessCleanupTests(unittest.TestCase):
-    """`pgrep -f` matches whole command lines, so cleanup has to distinguish a
-    stale Vite/Electron from an editor that merely has the path open."""
-
-    def test_kills_only_processes_started_by_this_launcher(self) -> None:
-        marker = str(paths.APP_DIR / "node_modules")
-        pgrep_output = "\n".join(
-            [
-                f"4001 node {marker}/vite/bin/vite.js --host 127.0.0.1",
-                f"4002 /usr/bin/vim {marker}/notes.txt",
-                f"4003 grep -r foo {marker}",
-                f"4004 node {marker}/electron/cli.js .",
-            ]
-        )
-
-        with patch(
-            "felixo_launcher.process.subprocess.check_output", return_value=pgrep_output
-        ), patch("felixo_launcher.process.own_process_tree_pids", return_value=set()):
-            self.assertEqual(process_module.find_stale_app_pids(), [4001, 4004])
-
-    def test_never_kills_the_launcher_or_its_own_process_group(self) -> None:
-        marker = str(paths.APP_DIR / "node_modules")
-        pgrep_output = f"777 node {marker}/vite/bin/vite.js\n888 node {marker}/vite/x.js"
-
-        with patch(
-            "felixo_launcher.process.subprocess.check_output", return_value=pgrep_output
-        ), patch("felixo_launcher.process.own_process_tree_pids", return_value={777}):
-            self.assertEqual(process_module.find_stale_app_pids(), [888])
-
-    def test_returns_no_pids_when_pgrep_is_unavailable(self) -> None:
-        with patch(
-            "felixo_launcher.process.subprocess.check_output", side_effect=FileNotFoundError
-        ):
-            self.assertEqual(process_module.find_stale_app_pids(), [])
-
-    def test_returns_no_pids_when_pgrep_matches_nothing(self) -> None:
-        with patch(
-            "felixo_launcher.process.subprocess.check_output",
-            side_effect=subprocess.CalledProcessError(1, "pgrep"),
-        ):
-            self.assertEqual(process_module.find_stale_app_pids(), [])
-
-    def test_ignores_malformed_pgrep_output(self) -> None:
-        with patch(
-            "felixo_launcher.process.subprocess.check_output", return_value="\nnot-a-pid line\n\n"
-        ), patch("felixo_launcher.process.own_process_tree_pids", return_value=set()):
-            self.assertEqual(process_module.find_stale_app_pids(), [])
-
-    def test_escalates_to_sigkill_only_for_survivors(self) -> None:
-        # os.name="posix": a limpeza é um no-op no Windows (não há pgrep nem
-        # grupos de processo), então rodando lá esta lógica nunca executaria e
-        # o teste não veria chamada nenhuma. Fixar a plataforma mantém a regra
-        # de escalonamento coberta nos três SOs — e, como o módulo `signal` do
-        # Windows não tem SIGKILL, ele entra mockado junto para a função poder
-        # ler a constante que só existe no POSIX que estamos simulando.
-        signal_posix = SimpleNamespace(
-            **{**vars(signal), "SIGKILL": POSIX_FORCE_SIGNAL}
-        )
-
-        with patch.object(process_module.os, "name", "posix"), patch.object(
-            process_module, "signal", signal_posix
-        ), patch(
-            "felixo_launcher.process.find_stale_app_pids", return_value=[10, 20]
-        ), patch("felixo_launcher.process.time.sleep"), patch(
-            "felixo_launcher.process.process_is_alive", side_effect=lambda pid: pid == 20
-        ), patch("felixo_launcher.process.terminate_pids") as terminate:
-            process_module.cleanup_app_processes()
-
-        self.assertEqual(terminate.call_args_list[0].args, ([10, 20], signal.SIGTERM))
-        self.assertEqual(terminate.call_args_list[1].args, ([20], POSIX_FORCE_SIGNAL))
-
-    def test_terminate_ignores_processes_that_already_exited(self) -> None:
-        with patch(
-            "felixo_launcher.process.os.kill", side_effect=[ProcessLookupError, PermissionError, None]
-        ) as kill:
-            process_module.terminate_pids([1, 2, 3], signal.SIGTERM)
-
-        self.assertEqual(kill.call_count, 3)
-
-    def test_process_is_alive_treats_permission_denied_as_running(self) -> None:
-        with patch("felixo_launcher.process.os.kill", side_effect=PermissionError):
-            self.assertTrue(process_module.process_is_alive(1))
-
-        with patch("felixo_launcher.process.os.kill", side_effect=ProcessLookupError):
-            self.assertFalse(process_module.process_is_alive(1))
-
-
 
 
 class StopProcessTests(unittest.TestCase):
@@ -201,9 +103,7 @@ class StopProcessTests(unittest.TestCase):
 
         with patch("felixo_launcher.process.wait_for_exit", side_effect=[False, True]), patch(
             "felixo_launcher.process.signal_process_group"
-        ) as signal_group, patch("felixo_launcher.process.cleanup_app_processes"), patch(
-            "felixo_launcher.process.print"
-        ) as printed:
+        ) as signal_group, patch("felixo_launcher.process.print") as printed:
             process_module.stop_process(process)
 
         # O escalonamento é o `force=True` da segunda chamada, não um número
@@ -238,9 +138,7 @@ class StopProcessTests(unittest.TestCase):
 
         with patch("felixo_launcher.process.wait_for_exit", side_effect=record), patch(
             "felixo_launcher.process.signal_process_group"
-        ), patch("felixo_launcher.process.cleanup_app_processes"), patch(
-            "felixo_launcher.process.print"
-        ) as printed:
+        ), patch("felixo_launcher.process.print") as printed:
             process_module.stop_process(process)
 
         self.assertEqual(
@@ -258,9 +156,7 @@ class StopProcessTests(unittest.TestCase):
 
         with patch("felixo_launcher.process.wait_for_exit", return_value=True), patch(
             "felixo_launcher.process.signal_process_group"
-        ) as signal_group, patch("felixo_launcher.process.cleanup_app_processes"), patch(
-            "felixo_launcher.process.print"
-        ) as printed:
+        ) as signal_group, patch("felixo_launcher.process.print") as printed:
             process_module.stop_process(process)
 
         self.assertEqual(len(signal_group.call_args_list), 1)
@@ -291,8 +187,8 @@ class StopProcessTests(unittest.TestCase):
         ), patch(
             "felixo_launcher.process.wait_for_exit", side_effect=[False, True]
         ), patch("felixo_launcher.process.signal_process_group") as signal_group, patch(
-            "felixo_launcher.process.cleanup_app_processes"
-        ), patch("felixo_launcher.process.print"):
+            "felixo_launcher.process.print"
+        ):
             process_module.stop_process(process)
 
         self.assertEqual(len(signal_group.call_args_list), 2)
@@ -324,9 +220,7 @@ class StopProcessTests(unittest.TestCase):
             process_module, "signal", self.signal_sem_sigkill()
         ), patch(
             "felixo_launcher.process.wait_for_exit", side_effect=[False, True]
-        ), patch("felixo_launcher.process.cleanup_app_processes"), patch(
-            "felixo_launcher.process.print"
-        ):
+        ), patch("felixo_launcher.process.print"):
             process_module.stop_process(process)
 
         process.terminate.assert_called_once()
@@ -336,60 +230,6 @@ class StopProcessTests(unittest.TestCase):
         """O módulo `signal` como ele é no Windows: sem SIGKILL."""
         return SimpleNamespace(
             **{name: value for name, value in vars(signal).items() if name != "SIGKILL"}
-        )
-
-
-
-
-class IsAppProcessCommandArgv0Test(unittest.TestCase):
-    """A limpeza só pode matar o que o launcher de fato inicia.
-
-    O filtro exigia apenas que a linha de comando *contivesse* algo como
-    `/vite` — e o próprio caminho `.../node_modules/vite/...` já contém. Um
-    editor aberto num arquivo dessa pasta passava no teste e levava SIGTERM
-    seguido de SIGKILL, com perda de trabalho não salvo.
-    """
-
-    MARKER = "/home/dev/proj/app/node_modules"
-
-    def test_nao_mata_processo_que_apenas_menciona_o_caminho(self) -> None:
-        alheios = [
-            f"vim {self.MARKER}/vite/dist/node/chunks/dep-abc.js",
-            f"less {self.MARKER}/vite/CHANGELOG.md",
-            f"tail -f {self.MARKER}/electron/path.txt",
-            f"code {self.MARKER}/electron/index.js",
-            f"grep -r foo {self.MARKER}",
-        ]
-
-        for comando in alheios:
-            with self.subTest(comando=comando):
-                self.assertFalse(
-                    process_module.is_app_process_command(comando, self.MARKER),
-                    "processo alheio não pode ser elegível para a limpeza",
-                )
-
-    def test_ainda_mata_os_processos_que_o_launcher_inicia(self) -> None:
-        nossos = [
-            f"node {self.MARKER}/vite/bin/vite.js",
-            f"node {self.MARKER}/.bin/concurrently -k -n VITE,ELECTRON",
-            f"{self.MARKER}/electron/dist/electron .",
-            f"node {self.MARKER}/wait-on/bin/wait-on http://127.0.0.1:5173",
-        ]
-
-        for comando in nossos:
-            with self.subTest(comando=comando):
-                self.assertTrue(
-                    process_module.is_app_process_command(comando, self.MARKER),
-                    "um processo iniciado pelo launcher deveria ser elegível",
-                )
-
-    def test_exige_o_marcador_do_checkout(self) -> None:
-        # Outro checkout do mesmo projeto não é da nossa conta.
-        self.assertFalse(
-            process_module.is_app_process_command(
-                "node /outro/checkout/app/node_modules/vite/bin/vite.js",
-                self.MARKER,
-            )
         )
 
 

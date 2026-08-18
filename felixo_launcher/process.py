@@ -1,10 +1,9 @@
-"""Stops the app and clears leftover processes from previous runs.
+"""Stops the launcher child process tree.
 
-Two subtleties drive this module. Signals go to the whole process group, so
-the dev server and Electron stop together with `npm run dev`. And leftover
-cleanup only ever targets processes this launcher itself starts — matching on
-the app path alone would also match an editor or a shell that merely has that
-path on its command line.
+Signals go to the whole process group, so the dev runner, Vite and Electron
+stop together with `npm run dev`. Marker-based Vite reuse and cleanup belong to
+`app/scripts/dev-runner.cjs`, where the HTTP contract can be checked before a
+port owner is touched.
 """
 
 from __future__ import annotations
@@ -14,11 +13,6 @@ import signal
 import subprocess
 import sys
 import time
-from pathlib import PurePosixPath
-
-from .paths import APP_DIR
-
-
 # How long a well-behaved dev server gets to shut down on its own. Vite and
 # Electron normally exit in well under a second; the rest of the budget is for
 # a loaded machine. Anything still alive after this is not going to stop on
@@ -28,18 +22,6 @@ GRACEFUL_STOP_TIMEOUT = 5.0
 # SIGKILL is not catchable — this only covers the kernel reaping the process.
 FORCED_STOP_TIMEOUT = 2.0
 
-APP_PROCESS_EXECUTABLES = (
-    "/electron",
-    "/vite",
-    "/concurrently",
-    "/wait-on",
-    "electron.app",
-    "Electron.app",
-)
-
-# Runtimes que executam um script nosso. Só com um destes no argv[0] é que o
-# caminho do script conta como prova de que o processo é do launcher.
-APP_PROCESS_RUNTIMES = frozenset({"node", "node.exe", "npm", "npm.cmd", "npx", "npx.cmd"})
 
 def stop_process(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
@@ -55,8 +37,6 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
                     "[felixo] The app process did not exit; it may still be running.",
                     file=sys.stderr,
                 )
-
-    cleanup_app_processes()
 
 
 def wait_for_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:
@@ -151,133 +131,3 @@ def force_process(process: subprocess.Popen[bytes], force: bool) -> None:
         process.kill()
     else:
         process.terminate()
-
-
-def cleanup_app_processes() -> None:
-    """Kills leftover dev-server/Electron processes from a previous run of *this*
-    checkout.
-
-    `pgrep -f` matches the whole command line, so a bare `app/node_modules`
-    marker also matches an editor, a shell, or a `grep` that merely has the path
-    on its command line — killing a coworker's editor instead of a stale Vite.
-    Only processes whose command line names a binary we actually launch are
-    eligible, and never our own process tree."""
-    if os.name == "nt":
-        return
-
-    pids = find_stale_app_pids()
-    if not pids:
-        return
-
-    terminate_pids(pids, signal.SIGTERM)
-    time.sleep(1)
-
-    survivors = [pid for pid in pids if process_is_alive(pid)]
-    if survivors:
-        terminate_pids(survivors, signal.SIGKILL)
-
-
-def find_stale_app_pids() -> list[int]:
-    marker = str(APP_DIR / "node_modules")
-
-    try:
-        output = subprocess.check_output(
-            ["pgrep", "-af", marker],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError, OSError):
-        return []
-
-    protected = own_process_tree_pids()
-    pids: list[int] = []
-
-    for line in output.splitlines():
-        entry = parse_pgrep_line(line)
-        if entry is None:
-            continue
-
-        pid, command_line = entry
-        if pid in protected or pid in pids:
-            continue
-
-        if is_app_process_command(command_line, marker):
-            pids.append(pid)
-
-    return pids
-
-
-def parse_pgrep_line(line: str) -> tuple[int, str] | None:
-    """`pgrep -af` prints `<pid> <full command line>`."""
-    stripped = line.strip()
-    if not stripped:
-        return None
-
-    pid_text, _, command_line = stripped.partition(" ")
-    try:
-        return int(pid_text), command_line
-    except ValueError:
-        return None
-
-
-def is_app_process_command(command_line: str, marker: str) -> bool:
-    """True apenas para processos que este checkout de fato iniciou.
-
-    Olhar a linha de comando inteira não serve: o caminho
-    `.../node_modules/vite/...` já contém `/vite`, então um `vim` ou um `tail`
-    aberto num arquivo dessa pasta passaria no teste e seria morto junto — o
-    oposto do que o `cleanup_app_processes` promete. O executável precisa
-    aparecer no argv[0] (o binário) ou no script que está sendo executado,
-    nunca num argumento qualquer.
-    """
-    if marker not in command_line:
-        return False
-
-    partes = command_line.split()
-    if not partes:
-        return False
-
-    argv0 = partes[0]
-    if any(executable in argv0 for executable in APP_PROCESS_EXECUTABLES):
-        return True
-
-    # `node .../vite/bin/vite.js` também é nosso, mas só quando quem executa é
-    # um runtime que nós usamos: em `vim .../vite/dist/dep.js` o arquivo é
-    # apenas o que o editor abriu, e o argv[0] denuncia isso.
-    if PurePosixPath(argv0).name not in APP_PROCESS_RUNTIMES:
-        return False
-
-    script = next((parte for parte in partes[1:] if parte.startswith(marker)), "")
-    return any(executable in script for executable in APP_PROCESS_EXECUTABLES)
-
-
-def own_process_tree_pids() -> set[int]:
-    """Our own PID and process group, so cleanup never kills the launcher or
-    the shell/terminal that started it."""
-    pids = {os.getpid(), os.getppid()}
-
-    try:
-        pids.add(os.getpgrp())
-    except OSError:
-        pass
-
-    return pids
-
-
-def terminate_pids(pids: list[int], sig: int) -> None:
-    for pid in pids:
-        try:
-            os.kill(pid, sig)
-        except (ProcessLookupError, PermissionError):
-            continue
-
-
-def process_is_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-
-    return True

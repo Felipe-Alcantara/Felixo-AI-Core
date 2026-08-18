@@ -26,7 +26,6 @@ from .node import (
 )
 from .node_deps import ensure_dependencies
 from .paths import APP_DIR, DEFAULT_URL, ROOT_DIR
-from .process import cleanup_app_processes
 from .python_deps import ensure_python_requirements
 from .runner import prepare_node_env
 
@@ -143,8 +142,6 @@ def _menu_start(console: object) -> None:
     if install_code != 0:
         console.print("[red]Falha instalando dependências Node.[/red]")
         return
-
-    cleanup_app_processes()
 
     if target == "web":
         console.print(f"[green]Abrindo o preview web em {DEFAULT_URL}...[/green]")

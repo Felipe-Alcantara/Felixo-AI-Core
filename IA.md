@@ -359,3 +359,63 @@ para exercitá-la de ponta a ponta nesse runner.
 ### Estado final e risco residual
 
 **Estado: concluído no código e nos gates locais; aguardando validação nativa em macOS e Windows.** A execução nativa desses dois sistemas não é possível neste terminal Linux e não deve ser tratada como validada. O risco aberto é exclusivamente de integração específica do Electron/PTY e permissões do sistema operacional real, especialmente a leitura dos arquivos pelo sandbox da CLI e o ciclo de limpeza em app empacotado. A matriz CI existente permanece responsável por essa confirmação antes de release.
+
+## [2026-08-18] Vite órfão no macOS após fechar o app em desenvolvimento
+
+**Task:** corrigir o reinício do Felixo AI Core quando o Electron era fechado no macOS e a
+execução anterior deixava a porta 5173 presa. A task registrava o log de duas tentativas: o
+verificador confirmava um Vite do Felixo, o Vite novo falhava com `EADDRINUSE` e o
+`concurrently -k` derrubava o Electron junto.
+
+**Identidade do registro:** Continue o trabalho do Claude "https://app.notion.com/p/Spicy-Game-devolver-a-senha-secreta-ao-easter-egg-da-namorada-hoje-o-agente-a-reaproveitou-para-d-3bf91f95497e814b8087e21ce392c8e3?source=copy_link".
+
+### Causa e decisão
+
+O marcador `__felixo_dev_marker` já provava que a porta ocupada era do próprio Felixo, mas
+essa informação só era usada para liberar o Electron; o script ainda tentava iniciar um segundo
+Vite. A limpeza Python anterior procurava processos pelo caminho de `node_modules`, sem consultar
+o marcador HTTP, e por isso não era uma fronteira segura para matar o dono da porta.
+
+A decisão foi centralizar o ciclo de desenvolvimento em Node: **limpar e iniciar** quando uma
+instância antiga responde com o marcador exato, **recusar sem matar** quando a porta pertence a
+outro processo e liberar o Vite criado ao terminar a sessão.
+No Electron, `window-all-closed` agora chama `app.quit()` também no macOS quando
+`VITE_DEV_SERVER_URL` está presente. O comportamento do app empacotado no Dock permanece intacto.
+
+### Implementação
+
+- `app/scripts/dev-runner.cjs` passou a ser o único orquestrador de `npm run dev` e
+  `npm run dev:web`. Ele valida o marcador antes de encerrar uma instância antiga, encontra o PID por
+  `lsof` no POSIX e `netstat` no Windows, usa `taskkill /T` no Windows, trata sinais e mostra uma
+  mensagem acionável se o PID não puder ser identificado ou continuar ouvindo; inclusive um sinal
+  durante a espera inicial encerra o Vite recém-criado.
+- `app/scripts/wait-for-felixo-vite.cjs` reutiliza a mesma lógica, evitando duas implementações
+  divergentes do contrato HTTP.
+- A limpeza ampla por `pgrep` foi removida de `felixo_launcher/process.py`; o launcher Python
+  continua responsável por parar sua árvore de processos, enquanto a decisão sobre o Vite fica
+  perto do marcador e da porta que ela protege.
+- `app/electron/core/app-lifecycle.cjs` isolou a regra testável de que só o modo de desenvolvimento
+  encerra Electron no macOS ao fechar a última janela.
+- A suíte Node passou a incluir testes em `scripts/**/*.test.cjs`, que antes não entravam no
+  `npm test`.
+
+### Validação
+
+- `npm test`: **696/696** testes Node verdes.
+- `npm run test:frontend`: **484/484** testes Vitest verdes em 49 arquivos.
+- `python3 -m unittest discover -s tests -t . -v`: **89/89** testes do launcher verdes; os testes
+  removidos eram da limpeza antiga por `pgrep`, substituída pelos testes do `dev-runner`.
+- `npm run lint`, `npm run build` e verificações de sintaxe CJS/Python passaram. O build mantém o
+  aviso conhecido de bundle JavaScript acima de 500 kB.
+- `npm run dev:web` foi executado no Linux: o Vite subiu, o marcador foi aceito, Ctrl+C encerrou a
+  sessão e `lsof -nP -iTCP:5173 -sTCP:LISTEN` não encontrou processo remanescente.
+- A matriz unitária exercita Linux, macOS e Windows por entradas/adaptadores injetados, incluindo
+  `lsof`, `netstat`, `taskkill`, ciclo macOS empacotado/dev e parsing de sinais. Não foi aberto
+  Electron nem outra instância do IA Core.
+
+### Estado final e risco residual
+
+**Estado: concluído no código, na documentação e nos gates locais; aguardando somente validação
+nativa em macOS/Windows.** O risco aberto é a integração real do Electron e das ferramentas de
+processo nesses sistemas; não há claim de que um Mac ou Windows tenha sido executado neste
+terminal Linux.

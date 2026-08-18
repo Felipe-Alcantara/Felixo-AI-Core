@@ -29,8 +29,14 @@ npm install
 
 ```bash
 npm run dev       # Vite + Electron com hot reload
-npm run dev:web   # Apenas frontend (navegador)
+npm run dev:web   # Apenas frontend (navegador), com ciclo de porta coordenado
 ```
+
+O modo de desenvolvimento passa pelo `scripts/dev-runner.cjs`: ele só encerra
+uma instância antiga depois que ela responde com o marcador do Felixo, recusa
+uma porta de outro projeto sem tocá-la e cria uma árvore nova e coordenada. No
+macOS, fechar a última janela encerra o Electron apenas no modo de
+desenvolvimento; o app empacotado continua seguindo o comportamento do Dock.
 
 ---
 
@@ -78,7 +84,7 @@ Felixo-AI-Core/
 | Comando | Diretório | Descrição |
 |---------|-----------|-----------|
 | `npm run dev` | app/ | Inicia Vite + Electron |
-| `npm run dev:web` | app/ | Inicia apenas Vite |
+| `npm run dev:web` | app/ | Inicia apenas Vite com limpeza coordenada |
 | `npm run build` | app/ | Compila TypeScript + Vite |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run lint` | app/ | Roda ESLint |

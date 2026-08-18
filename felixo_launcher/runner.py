@@ -17,7 +17,6 @@ from .config import apply_config_to_env, load_config
 from .node import build_env, find_node_bin, read_minimum_node_version, read_node_version
 from .node_deps import ensure_dependencies
 from .paths import APP_DIR, DEFAULT_URL
-from .process import cleanup_app_processes
 from .python_deps import ensure_python_requirements
 from .git import auto_update, update_source_from_branch
 
@@ -140,8 +139,6 @@ def run_direct(args: argparse.Namespace) -> int:
     install_code = ensure_dependencies(env, args.skip_install, source_updated)
     if install_code != 0:
         return install_code
-
-    cleanup_app_processes()
 
     if args.web:
         print(f"[felixo] Opening web preview at {DEFAULT_URL}")

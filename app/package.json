@@ -15,8 +15,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "(npm run rebuild:electron || echo \"[felixo] rebuild:electron falhou (sem toolchain C++?) — seguindo com o prebuild do node-pty\") && concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite --host 127.0.0.1\" \"node scripts/wait-for-felixo-vite.cjs && node scripts/start-electron.cjs --dev\"",
-    "dev:web": "vite --host 127.0.0.1",
+    "dev": "(npm run rebuild:electron || echo \"[felixo] rebuild:electron falhou (sem toolchain C++?) — seguindo com o prebuild do node-pty\") && node scripts/dev-runner.cjs",
+    "dev:web": "node scripts/dev-runner.cjs --web",
     "rebuild:electron": "electron-rebuild -f -w node-pty",
     "rebuild:node": "npm rebuild node-pty",
     "build": "tsc -b && vite build",
@@ -28,7 +28,7 @@
     "publish:github": "npm run build && electron-builder --publish always",
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",
-    "test": "node --test \"electron/**/*.test.cjs\"",
+    "test": "node --test \"electron/**/*.test.cjs\" \"scripts/**/*.test.cjs\"",
     "test:frontend": "vitest run",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node scripts/start-electron.cjs"
@@ -161,7 +161,6 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
-    "concurrently": "^9.2.1",
     "electron": "^41.3.0",
     "electron-builder": "^26.15.3",
     "eslint": "^10.2.1",
@@ -174,8 +173,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.1",
     "vite": "^8.0.10",
-    "vitest": "^4.1.10",
-    "wait-on": "^9.0.5"
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "brace-expansion": "^5.0.8"

@@ -9,7 +9,7 @@ be read and tested on its own:
 | `config`       | The local settings file written by the menu             |
 | `node`         | Finding a working Node.js/npm and building its env      |
 | `commands`     | Resolving and launching child commands                  |
-| `process`      | Stopping the app and clearing leftover processes        |
+| `process`      | Stopping the launcher child process tree               |
 | `node_deps`    | Keeping `app/node_modules` in sync with `package.json`  |
 | `python_deps`  | Installing the launcher's own Python dependencies       |
 | `git`          | Fast-forwarding the checkout from the production branch |

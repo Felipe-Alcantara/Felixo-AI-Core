@@ -81,12 +81,22 @@ npm run dev:web
 | `python3 start_app.py --update` | raiz | **Atalho sem menu**: atualiza código da branch production |
 | `python3 start_app.py --skip-install` | raiz | **Atalho sem menu**: pula instalação de deps |
 | `npm run dev` | app/ | Inicia Vite + Electron |
-| `npm run dev:web` | app/ | Inicia apenas Vite dev server |
+| `npm run dev:web` | app/ | Inicia apenas o Vite dev server com limpeza coordenada |
 | `npm run build` | app/ | Compila TypeScript + Vite bundle |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run lint` | app/ | Roda ESLint |
 | `npm run pack` | app/ | Gera build empacotado local |
 | `npm run dist:linux` | app/ | Gera instaladores Linux |
+
+### Ciclo de vida do Vite no modo dev
+
+`npm run dev` e `npm run dev:web` usam `scripts/dev-runner.cjs`. Antes de
+iniciar, ele consulta `__felixo_dev_marker`: se a porta 5173 já responder com
+o marcador do Felixo, a instância antiga é encerrada de forma controlada antes
+de iniciar uma árvore nova; se responder outra coisa, a execução para sem
+matar o processo estrangeiro. Ao encerrar a sessão, o Vite criado é liberado,
+inclusive quando o Electron fecha a última janela no macOS. O app empacotado não
+usa o Vite de desenvolvimento.
 
 ---
 
@@ -251,7 +261,9 @@ O modelo selecionado não tem adapter configurado.
 
 ### Vite não inicia (porta ocupada)
 
-Outra instância do Vite ou outro serviço está usando a porta 5173.
+Outro serviço está usando a porta 5173 e não respondeu com o marcador do
+Felixo. O launcher não mata esse processo automaticamente, porque ele pode ser
+outro projeto.
 
 **Solução:**
 ```bash
@@ -259,8 +271,9 @@ Outra instância do Vite ou outro serviço está usando a porta 5173.
 lsof -i :5173   # Linux/macOS
 netstat -aon | findstr :5173   # Windows
 
-# Ou matar processos anteriores do app:
-python3 start_app.py   # O script limpa automaticamente
+# Se for uma instância antiga do próprio Felixo, encerre-a pelo app/terminal e
+# tente novamente; o dev-runner libera automaticamente uma instância confirmada.
+python3 start_app.py
 ```
 
 ### Erro de build TypeScript

@@ -144,7 +144,6 @@ def run_in_dedicated_debug_terminal(command: list[str], env: dict[str, str]) -> 
     except KeyboardInterrupt:
         # Sem isto, o Ctrl+C sobe direto e deixa o console de depuração — e a
         # árvore Electron/vite abaixo dele — rodando sem ninguém para
-        # encerrá-los. No Windows `cleanup_app_processes` é no-op, então nada
-        # os recolheria depois. 130 é o código convencional para SIGINT.
+        # encerrá-los. 130 é o código convencional para SIGINT.
         stop_process(process)
         return 130

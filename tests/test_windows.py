@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from felixo_launcher import commands, node, process
+from felixo_launcher import commands, node
 
 from .support import clean_node_env
 
@@ -107,11 +107,3 @@ class StartAppWindowsTests(unittest.TestCase):
             node.set_path_env(env, "C:/novo")
 
         self.assertEqual(env, {"Path": "C:/novo"})
-
-    def test_cleanup_is_a_noop_on_windows_where_pgrep_does_not_exist(self) -> None:
-        with patch.object(process.os, "name", "nt"), patch(
-            "felixo_launcher.process.subprocess.check_output"
-        ) as check_output:
-            process.cleanup_app_processes()
-
-        check_output.assert_not_called()

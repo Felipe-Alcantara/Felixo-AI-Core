@@ -55,6 +55,7 @@ const {
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { initAppPaths } = require('./core/app-paths.cjs')
+const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
 
@@ -262,7 +263,14 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (platform.name !== 'darwin') {
+  // O macOS mantém o app empacotado no Dock, mas o modo dev pertence à
+  // sessão do dev-runner: sair aqui libera Electron e a porta do Vite juntos.
+  if (
+    shouldQuitWhenAllWindowsClosed({
+      platformName: platform.name,
+      isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
+    })
+  ) {
     app.quit()
   }
 })

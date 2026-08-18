@@ -7,10 +7,9 @@
  * guarda é a segunda camada — e é a que protege o que realmente se perde.
  *
  * O que se perde não é "uma aba": os terminais com agente morrem junto com a
- * janela. Pior no macOS, onde fechar a janela NÃO encerra o app (ver
- * `main.cjs`, `window-all-closed`): as PTYs continuam vivas, sem interface
- * nenhuma para onde mandar saída, e a janela recriada pelo `activate` sobe
- * limpa, sem reconectar nelas. Ou seja, o acidente vaza processo.
+ * janela. No app empacotado, o macOS mantém o processo no Dock por convenção;
+ * no modo de desenvolvimento, o ciclo de execução encerra Electron e Vite
+ * junto para não deixar a porta órfã.
  *
  * O incômodo relatado nunca foi "o app fecha". Foi "o app fecha SEM PERGUNTAR".
  * Por isso aqui não se impede o fechamento — se confirma.
