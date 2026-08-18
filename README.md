@@ -75,7 +75,14 @@ No menu você tem: **Iniciar/Rodar** (app desktop ou preview web), **Instalar/Se
 
 Ao iniciar, o launcher verifica sozinho se há uma versão nova da branch em que você está e atualiza antes de abrir o app — você não precisa ficar rodando `git pull` para saber se saiu novidade. Quando já está em dia, não mostra nada e não custa nada perceptível.
 
-Ele só atualiza quando é seguro, e **nunca impede o app de abrir**. Pula a atualização quando:
+No macOS, ao escolher **Iniciar/Rodar**, aparece também uma confirmação de
+atualização forçada, ativada por padrão. Se confirmada, ela sincroniza a branch
+atual exatamente com `origin/<branch>` antes de abrir; alterações locais são
+guardadas em `git stash`; commits locais divergentes são substituídos, mas
+ficam recuperáveis pelo reflog do Git. Se essa atualização explícita falhar, o
+app não abre uma versão antiga silenciosamente.
+
+A atualização automática silenciosa só atualiza quando é seguro e **nunca impede o app de abrir**. Ela pula a atualização quando:
 
 - há alterações locais não commitadas (seu trabalho sempre ganha da atualização);
 - não há rede, ou o `fetch` demora demais (é interrompido e o app abre normalmente);

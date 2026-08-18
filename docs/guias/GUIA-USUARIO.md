@@ -12,7 +12,7 @@ O Felixo AI Core pode ser usado de duas formas:
 - **App instalado:** baixe um artefato em GitHub Releases e abra como aplicativo desktop. Este é o fluxo recomendado para usuários finais.
 - **Código-fonte:** clone o repositório e rode `python3 start_app.py`. Este fluxo é voltado para desenvolvimento, testes e contribuição.
 
-No modo instalado, o auto-update fica ativo apenas quando o app está empacotado. No modo código-fonte, a atualização é manual com `python3 start_app.py --update`.
+No modo instalado, o auto-update fica ativo apenas quando o app está empacotado. No modo código-fonte, o launcher tenta atualizar a branch atual antes de iniciar; no macOS, o prompt de atualização forçada vem confirmado por padrão. A atualização manual continua disponível com `python3 start_app.py --update`.
 
 ## 2. Instalação por sistema operacional
 
@@ -302,7 +302,7 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 ## 6. Limitações conhecidas
 
 - O app depende das CLIs externas estarem instaladas, autenticadas e acessíveis no `PATH`.
-- Auto-update fica ativo apenas no app empacotado, não no `npm run dev` nem no modo código-fonte.
+- O auto-update silencioso também existe no launcher do código-fonte; no macOS, o prompt de atualização forçada vem confirmado por padrão. `npm run dev` direto não executa atualização Git.
 - No Linux, prefira AppImage para o fluxo de auto-update. `.deb` exige reinstalação/atualização tradicional.
 - **macOS bloqueia a primeira execução.** Os artefatos não são assinados nem notarizados, então o Gatekeeper barra o app até que ele seja liberado manualmente (ver a [seção de instalação para macOS](#macos)). Não há como evitar isso sem uma conta paga do Apple Developer Program.
 - No Windows, o SmartScreen pode exibir um alerta enquanto a distribuição não tiver assinatura, mas o app abre após confirmar.
@@ -347,4 +347,6 @@ Abra a CLI diretamente no terminal e refaça o login ou a configuração conform
 
 **A atualização não aparece.**
 
-Confirme que você está usando o app empacotado. No modo código-fonte, atualize manualmente com `python3 start_app.py --update`.
+No app empacotado, o update usa GitHub Releases. No código-fonte, use o
+launcher; no macOS, confirme o prompt padrão de atualização forçada. Também é
+possível atualizar manualmente com `python3 start_app.py --update`.

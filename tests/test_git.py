@@ -152,6 +152,49 @@ class AutoUpdateBehaviourTests(unittest.TestCase):
         self.assertIn("HEAD..origin/main", check_output.call_args.args[0])
 
 
+class ForceUpdateBehaviourTests(unittest.TestCase):
+    def test_force_update_stashes_local_work_before_resetting_to_github(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkout = Path(tmpdir)
+            (checkout / ".git").mkdir()
+
+            with patch("felixo_launcher.git.shutil.which", return_value="/usr/bin/git"), patch(
+                "felixo_launcher.git.ROOT_DIR", checkout
+            ), patch(
+                "felixo_launcher.git.get_current_branch", return_value="main"
+            ), patch(
+                "felixo_launcher.git.get_current_revision", side_effect=["old", "new"]
+            ), patch(
+                "felixo_launcher.git.get_dirty_files", return_value=[" M app.txt"]
+            ), patch(
+                "felixo_launcher.git.subprocess.call", side_effect=[0, 0, 0]
+            ) as call, patch("felixo_launcher.git.print"):
+                result = git.force_update_from_github("main", {})
+
+        self.assertEqual(result, (0, True))
+        self.assertEqual(call.call_args_list[0].args[0], ["git", "fetch", "origin", "main"])
+        self.assertEqual(call.call_args_list[1].args[0][:4], ["git", "stash", "push", "--include-untracked"])
+        self.assertEqual(call.call_args_list[2].args[0], ["git", "reset", "--hard", "origin/main"])
+
+    def test_force_update_refuses_when_the_branch_changed_during_confirmation(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkout = Path(tmpdir)
+            (checkout / ".git").mkdir()
+            with patch("felixo_launcher.git.shutil.which", return_value="/usr/bin/git"), patch(
+                "felixo_launcher.git.ROOT_DIR", checkout
+            ), patch("felixo_launcher.git.get_current_branch", return_value="feature"), patch(
+                "felixo_launcher.git.get_current_revision", return_value="old"
+            ), patch("felixo_launcher.git.subprocess.call") as call:
+                result = git.force_update_from_github("main", {})
+
+        self.assertEqual(result, (1, False))
+        call.assert_not_called()
+
+
 class AutoUpdateIntegrationTests(unittest.TestCase):
     """Drives real `git` against throwaway repositories, because the whole
     feature is about how git actually behaves.
@@ -237,6 +280,28 @@ class AutoUpdateIntegrationTests(unittest.TestCase):
                 self.assertFalse(git.auto_update(windows_base_env()))
 
             printed.assert_not_called()
+
+    def test_force_update_preserves_dirty_work_in_a_stash_and_uses_remote_state(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            origin, clone = self.make_repos(tmpdir)
+            self.publish(origin, "v2\n")
+            (clone / "app.txt").write_text("meu trabalho\n", encoding="utf-8")
+            (clone / "rascunho.txt").write_text("não apagar\n", encoding="utf-8")
+
+            with patch("felixo_launcher.git.ROOT_DIR", clone), patch(
+                "felixo_launcher.git.print"
+            ):
+                updated = git.force_update_from_github("main", windows_base_env())
+
+            self.assertEqual(updated, (0, True))
+            self.assertEqual((clone / "app.txt").read_text(encoding="utf-8"), "v2\n")
+            self.assertFalse((clone / "rascunho.txt").exists())
+            stash_list = subprocess.check_output(
+                ["git", "stash", "list"], cwd=clone, text=True, encoding="utf-8"
+            )
+            self.assertIn("backup antes da atualização forçada", stash_list)
 
 
 if __name__ == "__main__":

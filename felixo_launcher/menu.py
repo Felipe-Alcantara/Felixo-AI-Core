@@ -11,11 +11,19 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .commands import run_command
 from .config import CONFIG_FIELDS, load_config, save_config
-from .git import auto_update, get_dirty_files, update_source_from_branch
+from .git import (
+    auto_update,
+    auto_update_is_enabled,
+    force_update_from_github,
+    get_current_branch,
+    get_dirty_files,
+    update_source_from_branch,
+)
 from .node import (
     build_env,
     find_command_in_bin,
@@ -125,6 +133,10 @@ def _menu_start(console: object) -> None:
     node_bin, env = prepared
     console.print(f"[dim]Usando Node.js de {node_bin}[/dim]")
 
+    source_updated = update_source_before_start(console, questionary, env)
+    if source_updated is None:
+        return
+
     # The Python packages only draw this menu — the app is Node. If they cannot
     # be installed the menu is already on screen anyway, so warn and carry on
     # instead of refusing to start the app over an unrelated dependency.
@@ -133,10 +145,6 @@ def _menu_start(console: object) -> None:
             "[yellow]As dependências Python do menu não puderam ser instaladas — "
             "seguindo assim mesmo, o app não precisa delas.[/yellow]"
         )
-
-    # Before installing, so that a version pulled in here has its own
-    # dependencies installed in this same launch.
-    source_updated = auto_update(env)
 
     install_code = ensure_dependencies(env, skip_install=False, force_install=source_updated)
     if install_code != 0:
@@ -149,6 +157,55 @@ def _menu_start(console: object) -> None:
     else:
         console.print("[green]Abrindo o Felixo AI Core (desktop)...[/green]")
         run_command(["npm", "run", "dev"], env, debug_terminal=True)
+
+
+def should_offer_force_update(platform_name: str | None = None) -> bool:
+    """The destructive confirmation is a macOS source-launcher affordance."""
+    return (platform_name or sys.platform) == "darwin"
+
+
+def update_source_before_start(
+    console: object,
+    questionary_module: object,
+    env: dict[str, str],
+) -> bool | None:
+    """Updates source before dependency setup and app start.
+
+    ``None`` means the person explicitly requested the latest source but the
+    operation failed, so opening the stale checkout would violate the choice.
+    """
+    if not should_offer_force_update():
+        return auto_update(env)
+
+    if not auto_update_is_enabled(env):
+        return False
+
+    branch = get_current_branch(env)
+    if not branch:
+        # Detached HEAD cannot be force-updated without guessing which remote
+        # branch the person meant. Keep the normal launch available instead.
+        return auto_update(env)
+
+    force_update = bool(
+        questionary_module.confirm(  # type: ignore[attr-defined]
+            f"Forçar atualização de origin/{branch} antes de abrir? "
+            "Alterações não commitadas serão guardadas em um stash; "
+            "commits locais divergentes serão substituídos.",
+            default=True,
+        ).ask()
+    )
+    if not force_update:
+        return auto_update(env)
+
+    update_code, source_updated = force_update_from_github(branch, env)
+    if update_code != 0:
+        console.print(
+            "[red]Não foi possível abrir a versão atualizada. "
+            "Veja a mensagem acima e tente novamente.[/red]"
+        )
+        return None
+
+    return source_updated
 
 
 def _menu_install(console: object) -> None:

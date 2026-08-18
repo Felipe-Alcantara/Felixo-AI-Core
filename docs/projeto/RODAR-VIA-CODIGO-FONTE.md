@@ -48,6 +48,14 @@ Sem argumentos, `start_app.py` abre um **menu interativo colorido** (biblioteca 
 | **Configurar** | Ajusta, sem editar arquivo na mão, os overrides opcionais de ambiente: pasta do Node, pastas extras de CLI, modo de permissão de cada agente, branch de produção. Fica salvo em `.felixo-start-config.json` (gitignored). |
 | **Status / Sair** | Mostra Node detectado, se as dependências estão instaladas, branch/estado do Git e as configurações salvas; sai do menu. |
 
+No macOS, ao escolher **Iniciar / Rodar**, o launcher pergunta se deve forçar a
+atualização para a versão de `origin/<branch-atual>` antes de abrir. Essa opção
+vem ativada por padrão: pressionar Enter confirma. Alterações não commitadas e
+arquivos não rastreados são guardados em um `git stash`; a branch local é então
+sincronizada com o estado do GitHub. Commits locais divergentes são
+substituídos, mas continuam recuperáveis pelo reflog do Git. Se a atualização
+falhar, o app não abre a versão antiga silenciosamente.
+
 O menu não trava o fluxo: se algo estiver faltando (Node, dependências), ele avisa e deixa você escolher como resolver.
 
 No macOS, a detecção de Node cobre Apple Silicon e Intel, incluindo Homebrew (`/opt/homebrew/bin` e `/usr/local/bin`), MacPorts (`/opt/local/bin`), NVM, fnm, Volta, asdf, mise, nodenv, `PATH` atual e paths customizados. O launcher valida `node --version` e `npm --version` antes de instalar dependências, então instalações quebradas são puladas quando houver outro Node funcional disponível.

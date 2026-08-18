@@ -38,6 +38,13 @@ def update_source_from_branch(branch: str, env: dict[str, str]) -> tuple[int, bo
         return 1, False
 
     dirty_files = get_dirty_files(env)
+    if dirty_files == ["Unable to read git status."]:
+        print(
+            "[felixo] Não foi possível ler o estado local do Git; "
+            "a atualização foi cancelada.",
+            file=sys.stderr,
+        )
+        return 1, False
     if dirty_files:
         print(
             "[felixo] Local changes detected. Commit, stash or discard them before updating.",
@@ -65,6 +72,90 @@ def update_source_from_branch(branch: str, env: dict[str, str]) -> tuple[int, bo
     )
     if pull_code != 0:
         return pull_code, False
+
+    after = get_current_revision(env)
+    return 0, bool(after and after != before)
+
+
+def force_update_from_github(branch: str, env: dict[str, str]) -> tuple[int, bool]:
+    """Makes the current checkout match ``origin/<branch>``.
+
+    This is intentionally separate from the quiet start-up update. It is only
+    called after an explicit confirmation in the macOS launcher. Uncommitted
+    files, including untracked files, go into a named stash before the hard
+    reset so the request for the latest source never silently destroys local
+    work. Local commits that diverged from the remote are replaced by the
+    confirmed remote state and remain recoverable through Git's reflog.
+    """
+    if shutil.which("git") is None:
+        print("[felixo] git was not found. Install Git first.", file=sys.stderr)
+        return 1, False
+
+    if not (ROOT_DIR / ".git").exists():
+        print("[felixo] This folder is not a Git checkout.", file=sys.stderr)
+        return 1, False
+
+    current_branch = get_current_branch(env)
+    if current_branch != branch:
+        print(
+            f"[felixo] A branch mudou durante a atualização "
+            f"({current_branch or 'detached'} != {branch}); nada foi alterado.",
+            file=sys.stderr,
+        )
+        return 1, False
+
+    before = get_current_revision(env)
+    if not before:
+        return 1, False
+
+    print(f"[felixo] Buscando a versão mais recente de origin/{branch}...")
+    fetch_code = subprocess.call(["git", "fetch", "origin", branch], cwd=ROOT_DIR, env=env)
+    if fetch_code != 0:
+        return fetch_code, False
+
+    dirty_files = get_dirty_files(env)
+    if dirty_files == ["Unable to read git status."]:
+        print(
+            "[felixo] Não foi possível ler o estado local do Git; "
+            "a atualização foi cancelada.",
+            file=sys.stderr,
+        )
+        return 1, False
+    if dirty_files:
+        stash_code = subprocess.call(
+            [
+                "git",
+                "stash",
+                "push",
+                "--include-untracked",
+                "--message",
+                "Felixo: backup antes da atualização forçada",
+            ],
+            cwd=ROOT_DIR,
+            env=env,
+        )
+        if stash_code != 0:
+            print(
+                "[felixo] Não foi possível guardar as alterações locais; "
+                "a atualização foi cancelada.",
+                file=sys.stderr,
+            )
+            return stash_code, False
+        print("[felixo] Alterações locais guardadas em um stash do Git.")
+
+    print(f"[felixo] Abrindo a versão de origin/{branch}...")
+    reset_code = subprocess.call(
+        ["git", "reset", "--hard", f"origin/{branch}"],
+        cwd=ROOT_DIR,
+        env=env,
+    )
+    if reset_code != 0:
+        print(
+            "[felixo] O reset para a versão do GitHub falhou. "
+            "Se havia alterações locais, elas continuam no stash.",
+            file=sys.stderr,
+        )
+        return reset_code, False
 
     after = get_current_revision(env)
     return 0, bool(after and after != before)

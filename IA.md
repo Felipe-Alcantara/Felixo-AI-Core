@@ -419,3 +419,39 @@ No Electron, `window-all-closed` agora chama `app.quit()` também no macOS quand
 nativa em macOS/Windows.** O risco aberto é a integração real do Electron e das ferramentas de
 processo nesses sistemas; não há claim de que um Mac ou Windows tenha sido executado neste
 terminal Linux.
+
+## [2026-08-18] Trigger de atualização forçada no start_app do macOS
+
+### Intenção
+
+O launcher do código-fonte já fazia uma tentativa silenciosa de atualizar a
+branch atual, mas pulava quando havia alterações locais ou histórico divergente.
+No macOS, o início pelo menu agora pergunta explicitamente se a pessoa quer
+abrir a versão mais recente do GitHub. O prompt vem confirmado por padrão:
+pressionar Enter aceita a atualização forçada; escolher Não conserva o fluxo
+automático e seguro anterior.
+
+### Implementação
+
+- `felixo_launcher/menu.py` oferece o prompt somente no caminho interativo do
+  macOS, antes de instalar dependências e abrir Electron/preview web.
+- `felixo_launcher/git.py` ganhou `force_update_from_github()`: faz fetch da
+  branch atual, guarda alterações não commitadas e não rastreadas num stash
+  nomeado, e sincroniza a branch com `git reset --hard origin/<branch>`.
+- Commits locais divergentes são substituídos apenas após a confirmação
+  explícita e permanecem recuperáveis pelo reflog; falha na atualização impede
+  abrir uma versão antiga silenciosamente.
+- Linux, Windows e execução direta por `npm run dev` não recebem o prompt.
+- `FELIXO_AUTO_UPDATE=off` continua sendo uma saída explícita: no macOS ele
+  também desativa o prompt forçado.
+- README, guia de execução, guia de usuário e testes do launcher foram
+  atualizados.
+
+### Validação e estado
+
+- Suíte Python total: **95/95** testes verdes. Os testes cobrem o default
+  confirmado no prompt, restrição ao macOS,
+  branch trocada durante a confirmação, stash de alterações e sincronização
+  real contra repositório Git temporário.
+- Estado final: concluído no código e documentação; falta apenas validar a
+  interação visual no macOS real.
