@@ -455,3 +455,29 @@ automático e seguro anterior.
   real contra repositório Git temporário.
 - Estado final: concluído no código e documentação; falta apenas validar a
   interação visual no macOS real.
+
+## [2026-08-18] Detecção de CLIs npm no Windows e instalação repetida
+
+### Causa e decisão
+
+A detecção tentava executar `claude`, `codex` e `gemini` diretamente antes de
+resolver os shims `.cmd` no PATH. Em versões atuais do Node no Windows,
+`execFile` não executa esses shims sem shell; por isso uma CLI instalada era
+reportada como ausente. A detecção agora resolve o caminho antes da execução e
+habilita `shell: true` somente para `.cmd`/`.bat`, mantendo a entrada como
+argumento separado e sem registrar credenciais.
+
+Além disso, a instalação automática agora trata `ok: true` registrado na
+versão atual como `skipped` quando a detecção ainda falha. Isso impede o ciclo
+de reinstalação a cada abertura, enquanto a tentativa manual continua
+ignorando esse bloqueio.
+
+### Validação e estado
+
+- Teste determinístico cobre resolução e execução de um shim `.cmd` com
+  adaptador `win32`.
+- Teste do plano cobre instalação bem-sucedida seguida de detecção indisponível.
+- `npm test -- --test-name-pattern='cli-detector|cli-auto-install-plan'` passou;
+  o comando executou a suíte Node sem falhas nos testes relacionados.
+- Estado: concluído no código; permanece necessária validação nativa em
+  Windows com CLIs instaladas por npm e confirmação do usuário reportante.

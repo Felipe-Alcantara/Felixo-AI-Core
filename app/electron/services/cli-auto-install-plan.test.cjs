@@ -54,6 +54,18 @@ describe('cli-auto-install-plan', () => {
     assert.equal(progress[1].message, 'sem rede')
   })
 
+  it('does not reinstall automatically after a successful install when detection is still unavailable', () => {
+    const { pending, progress } = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(false, true, true),
+      previousState: { codex: { version: '0.1.0', ok: true, message: 'instalado' } },
+      appVersion: '0.1.0',
+    })
+
+    assert.deepEqual(pending, [])
+    assert.equal(progress[0].state, 'skipped')
+  })
+
   it('tries again in a new version of the app', () => {
     const { pending } = planAutoInstall({
       catalog: CATALOG,

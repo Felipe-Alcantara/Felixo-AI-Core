@@ -99,6 +99,10 @@ const SUPPORTED_CLIS = [
  *
  * @param {CliInfo} cliInfo
  * @param {Record<string, string>} [env]
+ * @param {object} [options]
+ * @param {string} [options.platformName]
+ * @param {(command: string, env?: Record<string, string>, options?: object) => string | null} [options.resolvePath]
+ * @param {(command: string, args: string[], options: object) => Promise<{ stdout?: string, stderr?: string }>} [options.execute]
  * @returns {Promise<{
  *   name: string,
  *   command: string,
@@ -110,7 +114,10 @@ const SUPPORTED_CLIS = [
  *   error: string | null,
  * }>}
  */
-async function detectCli(cliInfo, env) {
+async function detectCli(cliInfo, env, options = {}) {
+  const adapter = platform.getAdapter(options.platformName || platform.name)
+  const execute = options.execute || execFileAsync
+  const resolvePath = options.resolvePath || resolveCommandPath
   const result = {
     name: cliInfo.name,
     command: cliInfo.command,
@@ -124,29 +131,36 @@ async function detectCli(cliInfo, env) {
 
   const commandsToTry = [cliInfo.command]
 
-  if (platform.name === 'win32' && cliInfo.windowsAliases) {
+  if (adapter.name === 'win32' && cliInfo.windowsAliases) {
     commandsToTry.push(...cliInfo.windowsAliases)
   }
 
   for (const command of commandsToTry) {
     try {
-      const { stdout, stderr } = await execFileAsync(command, [cliInfo.versionFlag], {
+      const commandPath = adapter.name === 'win32'
+        ? resolvePath(command, env, { platform: adapter.name })
+        : null
+      const executable = commandPath || command
+      const { stdout, stderr } = await execute(executable, [cliInfo.versionFlag], {
         timeout: DETECTION_TIMEOUT_MS,
         env: env || process.env,
         windowsHide: true,
+        ...(adapter.name === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
+          ? { shell: true }
+          : {}),
       })
 
       const output = (stdout || stderr || '').trim()
       result.detected = true
       result.version = parseVersionFromOutput(output)
-      result.path = resolveCommandPath(command, env)
+      result.path = commandPath || resolvePath(command, env, { platform: adapter.name })
       return result
     } catch {
       continue
     }
   }
 
-  result.error = `${cliInfo.name} não foi encontrado no PATH do sistema.`
+  result.error = `${cliInfo.name} não foi executado: nenhum comando compatível respondeu a ${cliInfo.versionFlag}. Verifique o PATH e o instalador da CLI.`
   return result
 }
 

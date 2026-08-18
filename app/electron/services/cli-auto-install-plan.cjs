@@ -57,6 +57,14 @@ function planAutoInstall({
       return createCliProgress(cli, 'present')
     }
 
+    if (!forced && hasInstalledForVersion(previousState, cli.id, appVersion)) {
+      return createCliProgress(
+        cli,
+        'skipped',
+        previousState[cli.id]?.message ?? 'Instalação concluída; aguardando detecção da CLI.',
+      )
+    }
+
     if (!forced && hasFailedForVersion(previousState, cli.id, appVersion)) {
       return createCliProgress(
         cli,
@@ -83,6 +91,11 @@ function allDetected(detections) {
 function hasFailedForVersion(state, id, appVersion) {
   const attempt = state?.[id]
   return Boolean(attempt && attempt.version === appVersion && attempt.ok === false)
+}
+
+function hasInstalledForVersion(state, id, appVersion) {
+  const attempt = state?.[id]
+  return Boolean(attempt && attempt.version === appVersion && attempt.ok === true)
 }
 
 function createCliProgress(cli, state, message = '') {

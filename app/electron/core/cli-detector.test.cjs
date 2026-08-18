@@ -6,6 +6,7 @@ const {
   parseVersionFromOutput,
   createCliNotFoundMessage,
   formatDetectionSummary,
+  detectCli,
   resolveCommandPath,
 } = require('./cli-detector.cjs')
 
@@ -136,5 +137,24 @@ describe('cli-detector', () => {
 
       assert.equal(result, 'C:\\Users\\me\\npm\\codex.cmd')
     })
+  })
+
+  it('resolves and executes a Windows .cmd shim before reporting it missing', async () => {
+    const calls = []
+    const result = await detectCli(SUPPORTED_CLIS.find((cli) => cli.command === 'codex'), {
+      PATH: 'C:\\Users\\me\\npm',
+    }, {
+      platformName: 'win32',
+      resolvePath: () => 'C:\\Users\\me\\npm\\codex.cmd',
+      execute: async (command, args, options) => {
+        calls.push({ command, args, options })
+        return { stdout: 'codex 1.2.3' }
+      },
+    })
+
+    assert.equal(result.detected, true)
+    assert.equal(calls[0].command, 'C:\\Users\\me\\npm\\codex.cmd')
+    assert.equal(calls[0].options.shell, true)
+    assert.equal(result.version, '1.2.3')
   })
 })
