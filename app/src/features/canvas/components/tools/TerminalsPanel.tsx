@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Node } from '@xyflow/react'
 import {
   ChevronDown,
@@ -49,6 +49,11 @@ type TerminalsPanelProps = {
    * canvas node order. Ids, not indices: the dock renders a filtered view of
    * `nodes`, so its row indices are not guaranteed to be node array indices. */
   onReorder: (nodeId: string, targetId: string, edge: 'before' | 'after') => void
+  /** Reports this dock's real rendered height (puck or expanded list, either
+   *  way) every time it changes, so other floating panels anchored to the
+   *  same bottom-right corner — or growing down toward it, like the
+   *  notifications panel — can cap themselves before reaching it. */
+  onHeightChange?: (height: number) => void
 }
 
 const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
@@ -101,6 +106,7 @@ export function TerminalsPanel({
   onFocusNode,
   onExpandNode,
   onReorder,
+  onHeightChange,
 }: TerminalsPanelProps) {
   const elements = nodes.filter((node) => node.type != null)
   const [rawActiveIndex, setActiveIndex] = useState(0)
@@ -301,6 +307,25 @@ export function TerminalsPanel({
     moveActiveRef.current = moveActive
   })
 
+  const [dockElement, setDockElement] = useState<HTMLDivElement | null>(null)
+  const dockRef = useCallback((node: HTMLDivElement | null) => {
+    setDockElement(node)
+  }, [])
+
+  useEffect(() => {
+    if (!onHeightChange) return
+    if (elements.length === 0 || !dockElement) {
+      onHeightChange(0)
+      return
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) onHeightChange(entry.contentRect.height)
+    })
+    observer.observe(dockElement)
+    return () => observer.disconnect()
+  }, [onHeightChange, elements.length, dockElement])
+
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       if (!event.shiftKey) return
@@ -338,7 +363,11 @@ export function TerminalsPanel({
   return (
     // The wrapper is only an anchor: it never eats canvas clicks, and each of
     // the two states re-enables pointer events for itself while visible.
-    <div data-terminals-dock className="pointer-events-none absolute bottom-4 right-4 z-20">
+    <div
+      ref={dockRef}
+      data-terminals-dock
+      className="pointer-events-none absolute bottom-4 right-4 z-20"
+    >
       {/* Collapsed, the dock shrinks away into this puck in the corner. Both
           states share the same bottom-right anchor, so the scale animation
           reads as the panel folding down and to the side into the button. */}

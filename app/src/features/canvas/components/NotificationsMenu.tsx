@@ -1,12 +1,19 @@
-import type { ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Bell } from 'lucide-react'
 import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
+
+const BUTTON_HEIGHT_AND_GAP = 52
 
 type NotificationsMenuProps = {
   open: boolean
   notificationCount: number
   onToggle: () => void
-  children?: (ready: boolean) => ReactNode
+  children?: (ready: boolean, panelRef: (node: HTMLDivElement | null) => void) => ReactNode
+  /** Reports the trigger's total on-screen height (button + open panel, if
+   *  any) every time it changes, so callers can reserve exactly that much
+   *  space instead of guessing a fixed offset that breaks once the panel's
+   *  own content (e.g. a growing notification list) makes it taller. */
+  onHeightChange?: (height: number) => void
 }
 
 /** Bell trigger anchored top-right, above the minimap — the panel opens
@@ -16,6 +23,7 @@ export function NotificationsMenu({
   notificationCount,
   onToggle,
   children,
+  onHeightChange,
 }: NotificationsMenuProps) {
   const {
     panelReady,
@@ -23,6 +31,31 @@ export function NotificationsMenu({
     resetPanel,
     markPanelReady,
   } = useDeferredExpansionPanel(open)
+  // The panel (rendered by `children`) is `position: absolute` so it never
+  // pushes the bell button around — which also means it never contributes to
+  // a parent's flow height. A callback ref is handed straight to the panel's
+  // own root element (not a wrapper div around it) so its *real* rendered
+  // height — including however many notifications currently fill the list —
+  // can be measured directly, instead of guessing a fixed number that breaks
+  // the moment the list grows past it.
+  const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
+  const panelRef = useCallback((node: HTMLDivElement | null) => {
+    setPanelElement(node)
+  }, [])
+
+  useEffect(() => {
+    if (!onHeightChange) return
+    if (!open || !panelElement) {
+      onHeightChange(BUTTON_HEIGHT_AND_GAP)
+      return
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) onHeightChange(BUTTON_HEIGHT_AND_GAP + entry.contentRect.height)
+    })
+    observer.observe(panelElement)
+    return () => observer.disconnect()
+  }, [onHeightChange, open, panelElement])
 
   const toggle = () => {
     if (open) {
@@ -36,7 +69,7 @@ export function NotificationsMenu({
   }
 
   return (
-    <div className="fixed right-4 top-4 z-40">
+    <div className="fixed right-4 top-4 z-40 inline-block">
       <button
         type="button"
         onClick={toggle}
@@ -59,7 +92,7 @@ export function NotificationsMenu({
           </span>
         )}
       </button>
-      {children?.(panelReady)}
+      {children?.(panelReady, panelRef)}
     </div>
   )
 }

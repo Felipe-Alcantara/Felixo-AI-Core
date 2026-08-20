@@ -247,6 +247,16 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // são irmãos dela e abrem ao lado em vez de por cima.
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  // Measured live from the bell+panel's actual DOM height (ResizeObserver in
+  // NotificationsMenu), not guessed — a fixed offset broke as soon as the
+  // notification list grew past whatever number was hardcoded here.
+  const [notificationsTriggerHeight, setNotificationsTriggerHeight] = useState(52)
+  // Same idea for the bottom-right "Elementos" dock: both it and the
+  // notifications panel are independent floating panels that can each grow
+  // tall enough to reach the other (dock grows up from the bottom, panel
+  // grows down from the top) — measuring the dock's real height lets the
+  // panel cap itself before the two ever collide.
+  const [terminalsDockHeight, setTerminalsDockHeight] = useState(0)
   const sessionSnapshots = useSessionSnapshots()
   const actionableNotificationIds = useMemo(
     () => getActionRequiredNodeIds(nodes, sessionSnapshots),
@@ -1601,13 +1611,16 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         open={notificationsOpen}
         notificationCount={notificationCount}
         onToggle={() => setNotificationsOpen((open) => !open)}
+        onHeightChange={setNotificationsTriggerHeight}
       >
-        {(ready) => (
+        {(ready, panelRef) => (
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
             open={notificationsOpen}
             ready={ready}
+            panelRef={panelRef}
+            reservedBottomSpace={terminalsDockHeight > 0 ? terminalsDockHeight + 32 : 0}
             soundEnabled={notificationSoundEnabled}
             onSoundEnabledChange={setNotificationSoundEnabled}
             volume={notificationVolume}
@@ -1691,6 +1704,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onFocusNode={focusNode}
         onExpandNode={openTerminal}
         onReorder={reorderNodes}
+        onHeightChange={setTerminalsDockHeight}
       />
 
         <ReactFlow
@@ -1733,15 +1747,20 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           <Background gap={20} color="#1e293b" />
           <Controls position="bottom-left" className="!mb-4 !ml-4" />
           {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle.
-              The notifications bell lives right above it in the same corner,
-              so the minimap is pushed down (never covered) while the panel
-              is open — see the !mt-* swap tied to notificationsOpen. */}
+              The notifications bell lives right above it in the same corner;
+              its real measured height (bell + open panel, via ResizeObserver
+              in NotificationsMenu) sets this gap, so the minimap is pushed
+              down by exactly as much space as the trigger actually occupies —
+              never overlapped, however tall the notification list grows. */}
           <MiniMap
             pannable
             zoomable
             position="top-right"
-            className={`!mr-4 ${notificationsOpen ? '!mt-[27rem]' : '!mt-16'}`}
-            style={{ transition: 'margin-top 300ms ease' }}
+            className="!mr-4"
+            style={{
+              marginTop: notificationsTriggerHeight + 16,
+              transition: 'margin-top 300ms ease',
+            }}
             bgColor="#18181b"
             maskColor="rgba(0, 0, 0, 0.6)"
             nodeColor="#3f3f46"

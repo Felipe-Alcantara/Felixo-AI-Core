@@ -1,5 +1,5 @@
 import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Search, Trash2, Volume2, VolumeX, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { Node } from '@xyflow/react'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
@@ -13,6 +13,18 @@ type NotificationsPanelProps = {
   ready: boolean
   soundEnabled: boolean
   volume: number
+  /** Root element callback ref, so NotificationsMenu can measure this panel's
+   *  real rendered height (it's `position: absolute`, so it never
+   *  contributes to a parent's flow height on its own) and reserve exactly
+   *  that much space for it elsewhere on screen — e.g. pushing the minimap
+   *  down. */
+  panelRef?: (node: HTMLDivElement | null) => void
+  /** Extra space (px) to leave clear at the bottom of the viewport, on top of
+   *  the panel's own margin — e.g. the "Elementos" dock's current height, so
+   *  a long notification list stops growing before it reaches that dock
+   *  instead of sliding underneath it. 0 when nothing else occupies that
+   *  corner. */
+  reservedBottomSpace?: number
   onClose: () => void
   onFocusNode: (nodeId: string) => void
   /** Abre o agente. Abrir já vale como ler: quem trata isso marca as
@@ -35,6 +47,8 @@ export function NotificationsPanel({
   ready,
   soundEnabled,
   volume,
+  panelRef,
+  reservedBottomSpace = 0,
   onClose,
   onFocusNode,
   onExpandNode,
@@ -84,8 +98,19 @@ export function NotificationsPanel({
 
   return (
     <section
+      ref={panelRef}
       aria-label="Notificações dos agentes"
-      className="felixo-anim-sequential-panel fixed right-4 top-16 z-40 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
+      // `felixo-anim-sequential-panel`'s open animation drives `max-height`
+      // itself (see `--felixo-panel-max-height` in index.css) and, being a
+      // CSS animation with `animation-fill-mode: both`, would otherwise win
+      // over a plain inline `maxHeight` for the panel's entire open lifetime
+      // — not just override it once at mount.
+      style={
+        {
+          '--felixo-panel-max-height': `calc(100vh - 5rem - ${reservedBottomSpace}px)`,
+        } as CSSProperties
+      }
+      className="felixo-anim-sequential-panel absolute right-0 top-12 z-40 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-red-400" />
