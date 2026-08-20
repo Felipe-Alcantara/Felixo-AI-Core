@@ -44,6 +44,7 @@ import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
 import { moveById } from './tools/terminals-panel-reorder'
 import { NotificationsPanel } from './NotificationsPanel'
+import { NotificationsMenu } from './NotificationsMenu'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
 import {
@@ -257,6 +258,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(
     () => readNotificationPreferences().soundEnabled,
   )
+  const [notificationVolume, setNotificationVolume] = useState(
+    () => readNotificationPreferences().volume,
+  )
   // Restored ids carry their original sequence numbers; resume past the highest
   // one so a new notification can never reuse an id still in the history.
   const notificationSequenceRef = useRef(
@@ -359,8 +363,11 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   }, [actionableNotificationIds, hydrated, notificationSoundEnabled, sessionSnapshots])
 
   useEffect(() => {
-    saveNotificationPreferences({ soundEnabled: notificationSoundEnabled })
-  }, [notificationSoundEnabled])
+    if (notificationAudioRef.current) {
+      notificationAudioRef.current.volume = notificationVolume
+    }
+    saveNotificationPreferences({ soundEnabled: notificationSoundEnabled, volume: notificationVolume })
+  }, [notificationSoundEnabled, notificationVolume])
 
   useEffect(() => {
     saveNotificationHistory(notificationHistory)
@@ -1588,10 +1595,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         isBusy={isBusy}
         isClearing={isClearing}
         onOpenChat={onOpenChat}
-        notificationsOpen={notificationsOpen}
-        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+      />
+
+      <NotificationsMenu
+        open={notificationsOpen}
         notificationCount={notificationCount}
-        notificationPanel={(ready) => (
+        onToggle={() => setNotificationsOpen((open) => !open)}
+      >
+        {(ready) => (
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
@@ -1599,6 +1610,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             ready={ready}
             soundEnabled={notificationSoundEnabled}
             onSoundEnabledChange={setNotificationSoundEnabled}
+            volume={notificationVolume}
+            onVolumeChange={setNotificationVolume}
             onClose={() => setNotificationsOpen(false)}
             onFocusNode={focusNode}
             onExpandNode={openTerminal}
@@ -1636,7 +1649,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             }
           />
         )}
-      />
+      </NotificationsMenu>
 
       <CanvasToolPanels
         activeTool={activeTool}
@@ -1719,12 +1732,16 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         >
           <Background gap={20} color="#1e293b" />
           <Controls position="bottom-left" className="!mb-4 !ml-4" />
-          {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle. */}
+          {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle.
+              The notifications bell lives right above it in the same corner,
+              so the minimap is pushed down (never covered) while the panel
+              is open — see the !mt-* swap tied to notificationsOpen. */}
           <MiniMap
             pannable
             zoomable
             position="top-right"
-            className="!mr-4 !mt-4"
+            className={`!mr-4 ${notificationsOpen ? '!mt-[27rem]' : '!mt-16'}`}
+            style={{ transition: 'margin-top 300ms ease' }}
             bgColor="#18181b"
             maskColor="rgba(0, 0, 0, 0.6)"
             nodeColor="#3f3f46"

@@ -9,7 +9,8 @@ type NotificationsMenuProps = {
   children?: (ready: boolean) => ReactNode
 }
 
-/** Toolbar trigger that uses the same deferred expansion sequence as tools. */
+/** Bell trigger anchored top-right, above the minimap — the panel opens
+ *  below it and pushes the minimap down instead of covering it. */
 export function NotificationsMenu({
   open,
   notificationCount,
@@ -28,37 +29,30 @@ export function NotificationsMenu({
       resetPanel()
     } else {
       preparePanel()
+      // No width transition to key off here; the panel is ready as soon as it mounts.
+      markPanelReady()
     }
     onToggle()
   }
 
   return (
-    <div
-      className={`relative transition-[width] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        open ? 'w-[18.5rem]' : 'w-36'
-      }`}
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
-          markPanelReady()
-        }
-      }}
-    >
+    <div className="fixed right-4 top-4 z-40">
       <button
         type="button"
         onClick={toggle}
-        className={`felixo-btn flex !w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 ${
+        className={`felixo-btn-icon flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 ${
           notificationCount > 0
             ? 'border border-red-500/80 ring-red-500/30 shadow-red-950/40'
             : ''
         }`}
         title="Notificações dos agentes"
+        aria-label="Notificações dos agentes"
         aria-expanded={open}
       >
-        <Bell size={16} className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
+        <Bell size={16} />
         {notificationCount > 0 && (
           <span
-            className="pointer-events-none absolute -left-2 top-1/2 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950 animate-pulse"
+            className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950 animate-pulse"
             aria-label={`${notificationCount} novas notificações`}
           >
             {notificationCount}

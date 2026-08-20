@@ -24,7 +24,6 @@ import {
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
-import { NotificationsMenu } from './NotificationsMenu'
 import { AppVersionBadge, UpdateIndicator } from '../../updates/UpdateNotice'
 import { CliSetupIndicator } from '../../setup/CliSetupNotice'
 import { useAppVersion } from '../../updates/useAppVersion'
@@ -84,10 +83,6 @@ type CanvasToolbarProps = {
   /** Switches to the chat screen. A toolbar button, not a floating overlay —
    * canvas content (terminals) can be panned under any fixed screen corner. */
   onOpenChat: () => void
-  notificationsOpen: boolean
-  onToggleNotifications: () => void
-  notificationCount: number
-  notificationPanel?: (ready: boolean, toolsMenuOpen: boolean) => ReactNode
   /** Lets the tool panels, rendered as siblings by CanvasView, slide clear of
    *  the button column when the tools menu widens it. */
   onToolsMenuOpenChange?: (open: boolean) => void
@@ -118,10 +113,6 @@ export function CanvasToolbar({
   isBusy,
   isClearing,
   onOpenChat,
-  notificationsOpen,
-  onToggleNotifications,
-  notificationCount,
-  notificationPanel,
   onToolsMenuOpenChange,
 }: CanvasToolbarProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
@@ -167,13 +158,6 @@ export function CanvasToolbar({
         >
           <ChevronDown size={16} />
         </button>
-        <NotificationsMenu
-          open={notificationsOpen}
-          notificationCount={notificationCount}
-          onToggle={onToggleNotifications}
-        >
-          {(ready) => notificationPanel?.(ready, toolsMenuOpen)}
-        </NotificationsMenu>
       </div>
     )
   }
@@ -231,13 +215,6 @@ export function CanvasToolbar({
         <Search size={16} />
         Buscar
       </button>
-      <NotificationsMenu
-        open={notificationsOpen}
-        notificationCount={notificationCount}
-        onToggle={onToggleNotifications}
-      >
-        {(ready) => notificationPanel?.(ready, toolsMenuOpen)}
-      </NotificationsMenu>
       <TerminalMenu
         projects={projects}
         onAdd={onAddTerminal}

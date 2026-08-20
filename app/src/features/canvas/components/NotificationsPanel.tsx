@@ -12,6 +12,7 @@ type NotificationsPanelProps = {
   open: boolean
   ready: boolean
   soundEnabled: boolean
+  volume: number
   onClose: () => void
   onFocusNode: (nodeId: string) => void
   /** Abre o agente. Abrir já vale como ler: quem trata isso marca as
@@ -22,6 +23,7 @@ type NotificationsPanelProps = {
   onRemove: (notificationId: string) => void
   onClearRead: () => void
   onSoundEnabledChange: (enabled: boolean) => void
+  onVolumeChange: (volume: number) => void
 }
 
 type HistoryFilter = 'unread' | 'all'
@@ -32,6 +34,7 @@ export function NotificationsPanel({
   open,
   ready,
   soundEnabled,
+  volume,
   onClose,
   onFocusNode,
   onExpandNode,
@@ -40,6 +43,7 @@ export function NotificationsPanel({
   onRemove,
   onClearRead,
   onSoundEnabledChange,
+  onVolumeChange,
 }: NotificationsPanelProps) {
   const [filter, setFilter] = useState<HistoryFilter>('unread')
   const [query, setQuery] = useState('')
@@ -81,22 +85,12 @@ export function NotificationsPanel({
   return (
     <section
       aria-label="Notificações dos agentes"
-      className="felixo-anim-sequential-panel fixed right-4 top-4 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
+      className="felixo-anim-sequential-panel fixed right-4 top-16 z-40 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-red-400" />
         Notificações
         <span className="text-xs font-normal text-zinc-500">{unreadCount}</span>
-        <button
-          type="button"
-          onClick={() => onSoundEnabledChange(!soundEnabled)}
-          className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
-          title={soundEnabled ? 'Desativar som das notificações' : 'Ativar som das notificações'}
-          aria-label={soundEnabled ? 'Desativar som das notificações' : 'Ativar som das notificações'}
-          aria-pressed={soundEnabled}
-        >
-          {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-        </button>
         <button
           type="button"
           onClick={onMarkAllRead}
@@ -116,6 +110,37 @@ export function NotificationsPanel({
           <X size={14} />
         </button>
       </header>
+
+      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => onSoundEnabledChange(!soundEnabled)}
+          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
+          title={soundEnabled ? 'Mutar notificações' : 'Ativar som das notificações'}
+          aria-label={soundEnabled ? 'Mutar notificações' : 'Ativar som das notificações'}
+          aria-pressed={!soundEnabled}
+        >
+          {soundEnabled && volume > 0 ? <Volume2 size={14} /> : <VolumeX size={14} />}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(volume * 100)}
+          onChange={(event) => {
+            const next = Number(event.target.value) / 100
+            onVolumeChange(next)
+            if (next > 0 && !soundEnabled) onSoundEnabledChange(true)
+            if (next === 0 && soundEnabled) onSoundEnabledChange(false)
+          }}
+          disabled={!soundEnabled && volume === 0}
+          aria-label="Volume das notificações"
+          className="h-1.5 flex-1 accent-sky-400"
+        />
+        <span className="w-8 shrink-0 text-right text-[11px] text-zinc-500">
+          {soundEnabled ? `${Math.round(volume * 100)}%` : 'Mudo'}
+        </span>
+      </div>
 
       <label className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-sky-400/50 focus-within:text-sky-300">
         <Search size={13} aria-hidden />

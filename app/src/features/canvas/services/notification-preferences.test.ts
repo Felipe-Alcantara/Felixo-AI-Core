@@ -20,7 +20,7 @@ describe('notification preferences', () => {
     const target = storage()
     expect(readNotificationPreferences(target)).toEqual(DEFAULT_NOTIFICATION_PREFERENCES)
 
-    saveNotificationPreferences({ soundEnabled: false }, target)
+    saveNotificationPreferences({ soundEnabled: false, volume: 1 }, target)
     expect(readNotificationPreferences(target).soundEnabled).toBe(false)
   })
 
@@ -29,5 +29,17 @@ describe('notification preferences', () => {
       DEFAULT_NOTIFICATION_PREFERENCES,
     )
     expect(readNotificationPreferences(storage('{"soundEnabled":"no"}')).soundEnabled).toBe(true)
+  })
+
+  it('persists and clamps the volume', () => {
+    const target = storage()
+    saveNotificationPreferences({ soundEnabled: true, volume: 0.4 }, target)
+    expect(readNotificationPreferences(target).volume).toBe(0.4)
+
+    saveNotificationPreferences({ soundEnabled: true, volume: 5 }, target)
+    expect(readNotificationPreferences(target).volume).toBe(1)
+
+    saveNotificationPreferences({ soundEnabled: true, volume: -2 }, target)
+    expect(readNotificationPreferences(target).volume).toBe(0)
   })
 })
