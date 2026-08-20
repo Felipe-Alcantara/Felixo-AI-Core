@@ -16,8 +16,12 @@ type NotificationsMenuProps = {
   onHeightChange?: (height: number) => void
 }
 
-/** Bell trigger anchored top-right, above the minimap — the panel opens
- *  below it and pushes the minimap down instead of covering it. */
+/** Bell trigger anchored to the canvas container, above the minimap.
+ *
+ * The panel opens horizontally to the left, keeping the minimap's corner
+ * clear. This must be absolute rather than fixed: the canvas can share the
+ * window with another screen/pane (such as Chat).
+ */
 export function NotificationsMenu({
   open,
   notificationCount,
@@ -69,7 +73,7 @@ export function NotificationsMenu({
   }
 
   return (
-    <div className="fixed right-4 top-4 z-40 inline-block">
+    <div className="absolute right-[228px] top-4 z-40 inline-block">
       <button
         type="button"
         onClick={toggle}

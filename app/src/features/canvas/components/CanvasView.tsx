@@ -250,7 +250,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // Measured live from the bell+panel's actual DOM height (ResizeObserver in
   // NotificationsMenu), not guessed — a fixed offset broke as soon as the
   // notification list grew past whatever number was hardcoded here.
-  const [notificationsTriggerHeight, setNotificationsTriggerHeight] = useState(52)
+  const [, setNotificationsTriggerHeight] = useState(52)
   // Same idea for the bottom-right "Elementos" dock: both it and the
   // notifications panel are independent floating panels that can each grow
   // tall enough to reach the other (dock grows up from the bottom, panel
@@ -1757,10 +1757,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             zoomable
             position="top-right"
             className="!mr-4"
-            style={{
-              marginTop: notificationsTriggerHeight + 16,
-              transition: 'margin-top 300ms ease',
-            }}
+              style={{
+                // Notifications open horizontally to the left of the map,
+                // so the minimap does not need to be pushed down anymore.
+                marginTop: 16,
+                transition: 'margin-top 300ms ease',
+              }}
             bgColor="#18181b"
             maskColor="rgba(0, 0, 0, 0.6)"
             nodeColor="#3f3f46"
