@@ -110,7 +110,7 @@ export function NotificationsPanel({
           '--felixo-panel-max-height': `calc(100vh - 5rem - ${reservedBottomSpace}px)`,
         } as CSSProperties
       }
-      className="felixo-anim-sequential-panel absolute right-0 top-12 z-40 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
+      className="felixo-anim-sequential-panel absolute right-0 top-12 z-40 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-red-400" />
@@ -217,7 +217,7 @@ export function NotificationsPanel({
               : 'Nenhuma notificação nos últimos 7 dias.'}
         </div>
       ) : (
-        <div className="felixo-anim-stagger-list max-h-[50vh] overflow-auto p-1.5">
+        <div className="felixo-anim-stagger-list max-h-[38vh] overflow-auto p-1.5">
           {visibleItems.map(({ notification, node }) => {
             const unread = notification.readAt === null
             return (
