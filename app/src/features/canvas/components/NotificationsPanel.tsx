@@ -1,22 +1,17 @@
-import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Trash2, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Search, Trash2, Volume2, VolumeX, X } from 'lucide-react'
+import { useState } from 'react'
 import type { Node } from '@xyflow/react'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
 import type { CanvasNotification } from '../terminal/canvas-notifications'
 import type { CanvasNodeData } from '../types'
-import {
-  toolbarFlyoutClass,
-  toolbarFlyoutStyle,
-  useToolbarFlyoutPosition,
-} from './toolbar-flyout'
 
 type NotificationsPanelProps = {
   nodes: Node<CanvasNodeData>[]
   notifications: CanvasNotification[]
   open: boolean
   ready: boolean
-  toolsMenuOpen: boolean
+  soundEnabled: boolean
   onClose: () => void
   onFocusNode: (nodeId: string) => void
   /** Abre o agente. Abrir já vale como ler: quem trata isso marca as
@@ -26,6 +21,7 @@ type NotificationsPanelProps = {
   onMarkAllRead: () => void
   onRemove: (notificationId: string) => void
   onClearRead: () => void
+  onSoundEnabledChange: (enabled: boolean) => void
 }
 
 type HistoryFilter = 'unread' | 'all'
@@ -35,7 +31,7 @@ export function NotificationsPanel({
   notifications,
   open,
   ready,
-  toolsMenuOpen,
+  soundEnabled,
   onClose,
   onFocusNode,
   onExpandNode,
@@ -43,17 +39,10 @@ export function NotificationsPanel({
   onMarkAllRead,
   onRemove,
   onClearRead,
+  onSoundEnabledChange,
 }: NotificationsPanelProps) {
   const [filter, setFilter] = useState<HistoryFilter>('unread')
-  const panelRef = useRef<HTMLElement>(null)
-  const flyoutPosition = useToolbarFlyoutPosition({
-    open: open && ready,
-    toolsMenuOpen,
-    panelRef,
-    panelWidth: 320,
-    placement: 'below',
-  })
-
+  const [query, setQuery] = useState('')
   // Reopening the panel always starts on what still needs attention. Adjusted
   // during render (React's documented pattern for deriving state from a prop
   // change) rather than in an effect, which would render the stale tab first.
@@ -79,22 +68,35 @@ export function NotificationsPanel({
 
   const unreadCount = allItems.filter((item) => item.notification.readAt === null).length
   const readCount = allItems.length - unreadCount
-  const visibleItems =
-    filter === 'unread'
-      ? allItems.filter((item) => item.notification.readAt === null)
-      : allItems
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const visibleItems = allItems.filter(({ notification, node }) => {
+      if (filter === 'unread' && notification.readAt !== null) return false
+      if (!normalizedQuery) return true
+      const label = String(node.data.label || node.data.command || node.id)
+      return `${label} ${lastNotificationMessage(notification.snapshot)}`
+        .toLocaleLowerCase()
+        .includes(normalizedQuery)
+  })
 
   return (
     <section
-      ref={panelRef}
       aria-label="Notificações dos agentes"
-      style={toolbarFlyoutStyle(flyoutPosition)}
-      className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} w-80 overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl`}
+      className="felixo-anim-sequential-panel fixed right-4 top-4 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-red-400" />
         Notificações
         <span className="text-xs font-normal text-zinc-500">{unreadCount}</span>
+        <button
+          type="button"
+          onClick={() => onSoundEnabledChange(!soundEnabled)}
+          className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
+          title={soundEnabled ? 'Desativar som das notificações' : 'Ativar som das notificações'}
+          aria-label={soundEnabled ? 'Desativar som das notificações' : 'Ativar som das notificações'}
+          aria-pressed={soundEnabled}
+        >
+          {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+        </button>
         <button
           type="button"
           onClick={onMarkAllRead}
@@ -114,6 +116,22 @@ export function NotificationsPanel({
           <X size={14} />
         </button>
       </header>
+
+      <label className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-sky-400/50 focus-within:text-sky-300">
+        <Search size={13} aria-hidden />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Buscar notificações…"
+          aria-label="Buscar notificações"
+          className="min-w-0 flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600"
+        />
+        {query && (
+          <button type="button" onClick={() => setQuery('')} aria-label="Limpar busca">
+            <X size={12} />
+          </button>
+        )}
+      </label>
 
       <div className="flex items-center gap-1 border-b border-white/10 px-2 py-1.5">
         <FilterTab
@@ -144,7 +162,9 @@ export function NotificationsPanel({
           <CheckCircle2 size={15} className="text-emerald-500" />
           {filter === 'unread'
             ? 'Nenhum agente aguardando ação.'
-            : 'Nenhuma notificação nos últimos 7 dias.'}
+            : query
+              ? 'Nenhuma notificação encontrada.'
+              : 'Nenhuma notificação nos últimos 7 dias.'}
         </div>
       ) : (
         <div className="felixo-anim-stagger-list max-h-[50vh] overflow-auto p-1.5">

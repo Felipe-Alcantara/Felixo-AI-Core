@@ -47,7 +47,9 @@ export function NotificationsMenu({
         type="button"
         onClick={toggle}
         className={`felixo-btn flex !w-full items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700 ${
-          notificationCount > 0 ? 'border border-red-500/80 ring-red-500/30' : ''
+          notificationCount > 0
+            ? 'border border-red-500/80 ring-red-500/30 shadow-red-950/40'
+            : ''
         }`}
         title="Notificações dos agentes"
         aria-expanded={open}
@@ -56,7 +58,7 @@ export function NotificationsMenu({
         <span className="min-w-0 flex-1 truncate text-left">Notificações</span>
         {notificationCount > 0 && (
           <span
-            className="pointer-events-none absolute -left-2 top-1/2 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950"
+            className="pointer-events-none absolute -left-2 top-1/2 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow ring-2 ring-zinc-950 animate-pulse"
             aria-label={`${notificationCount} novas notificações`}
           >
             {notificationCount}

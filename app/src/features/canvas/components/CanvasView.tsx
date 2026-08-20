@@ -66,6 +66,10 @@ import {
   saveNotificationHistory,
 } from '../services/notification-history-storage'
 import {
+  readNotificationPreferences,
+  saveNotificationPreferences,
+} from '../services/notification-preferences'
+import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
 } from '../services/file-link-prompt'
@@ -250,6 +254,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const [notificationHistory, setNotificationHistory] = useState<CanvasNotification[]>(
     () => readNotificationHistory(),
   )
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(
+    () => readNotificationPreferences().soundEnabled,
+  )
   // Restored ids carry their original sequence numbers; resume past the highest
   // one so a new notification can never reuse an id still in the history.
   const notificationSequenceRef = useRef(
@@ -344,12 +351,16 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     )
 
     const audio = notificationAudioRef.current
-    if (!audio) return
+    if (!audio || !notificationSoundEnabled) return
     audio.currentTime = 0
     void audio.play().catch(() => {
       // Browsers may block playback until the user has interacted with the app.
     })
-  }, [actionableNotificationIds, hydrated, sessionSnapshots])
+  }, [actionableNotificationIds, hydrated, notificationSoundEnabled, sessionSnapshots])
+
+  useEffect(() => {
+    saveNotificationPreferences({ soundEnabled: notificationSoundEnabled })
+  }, [notificationSoundEnabled])
 
   useEffect(() => {
     saveNotificationHistory(notificationHistory)
@@ -1580,13 +1591,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         notificationsOpen={notificationsOpen}
         onToggleNotifications={() => setNotificationsOpen((open) => !open)}
         notificationCount={notificationCount}
-        notificationPanel={(ready, toolsMenuOpen) => (
+        notificationPanel={(ready) => (
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
             open={notificationsOpen}
             ready={ready}
-            toolsMenuOpen={toolsMenuOpen}
+            soundEnabled={notificationSoundEnabled}
+            onSoundEnabledChange={setNotificationSoundEnabled}
             onClose={() => setNotificationsOpen(false)}
             onFocusNode={focusNode}
             onExpandNode={openTerminal}

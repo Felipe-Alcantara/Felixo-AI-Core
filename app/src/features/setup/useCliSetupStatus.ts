@@ -52,6 +52,19 @@ export function useCliSetupStatus(): {
   const presentation = useMemo(() => presentCliSetupStatus(status), [status])
   const noticeKey = cliSetupNoticeKey(status)
 
+  // Resultados positivos são confirmação, não uma interrupção permanente.
+  // O usuário ainda consegue encontrá-los no indicador da barra e no histórico
+  // de notificações; o toast só precisa ficar tempo suficiente para ser lido.
+  useEffect(() => {
+    if (presentation.tone !== 'success' || noticeKey === null) return
+
+    const timeout = window.setTimeout(() => {
+      setDismissedKey((current) => (current === noticeKey ? current : noticeKey))
+    }, 6_000)
+
+    return () => window.clearTimeout(timeout)
+  }, [noticeKey, presentation.tone])
+
   const dismiss = useCallback(() => {
     setDismissedKey(noticeKey)
   }, [noticeKey])
