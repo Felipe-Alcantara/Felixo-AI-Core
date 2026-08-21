@@ -46,6 +46,9 @@
       "package.json",
       "public/**/*"
     ],
+    "asarUnpack": [
+      "**/node_modules/node-pty/**"
+    ],
     "beforePack": "scripts/bundle-npm-runtime.cjs",
     "extraResources": [
       {

@@ -481,3 +481,36 @@ ignorando esse bloqueio.
   o comando executou a suíte Node sem falhas nos testes relacionados.
 - Estado: concluído no código; permanece necessária validação nativa em
   Windows com CLIs instaladas por npm e confirmação do usuário reportante.
+
+## [2026-08-21] Terminal não abre no macOS empacotado: node-pty preso no asar
+
+### Causa e decisão
+
+Usuário reportou, no app Mac já instalado, o erro `Camada de inicialização do
+PTY: não foi possível criar a sessão: posix_spawnp failed.` ao tentar rodar um
+arquivo (`start_app.py`) num terminal do canvas. `app/electron/services/pty-process-manager.cjs`
+só repassava o erro do `node-pty`; a causa estava no empacotamento.
+
+No macOS/Linux, `node-pty` executa um binário auxiliar real
+(`node_modules/node-pty/prebuilds/darwin-{arm64,x64}/spawn-helper`) via
+`posix_spawnp`. `app/package.json` não declarava `asarUnpack`, então o
+electron-builder embutia esse binário dentro do `app.asar` — onde ele deixa de
+ser um executável válido no filesystem, e o `posix_spawnp` falha. O problema
+só aparece no app empacotado/instalado; `npm run dev` roda fora do asar, por
+isso passou despercebido.
+
+### Implementação
+
+- `app/package.json`: `build.asarUnpack` agora inclui
+  `"**/node_modules/node-pty/**"`, mantendo o `spawn-helper` (e o `.node`
+  nativo) fora do `app.asar` em qualquer plataforma empacotada.
+- `app/scripts/package-build-config.test.cjs` (novo): trava por regressão que
+  `build.asarUnpack` continua cobrindo `node-pty`.
+
+### Validação e estado
+
+- `npm test` (raiz `app/`): **699/699** testes verdes, incluindo o novo teste
+  de regressão do `asarUnpack`.
+- Estado: concluído no código; falta apenas gerar um build/dmg real do macOS e
+  confirmar com quem reportou que o terminal abre normalmente no app
+  instalado.
