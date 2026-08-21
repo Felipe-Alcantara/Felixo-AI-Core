@@ -514,3 +514,78 @@ isso passou despercebido.
 - Estado: concluído no código; falta apenas gerar um build/dmg real do macOS e
   confirmar com quem reportou que o terminal abre normalmente no app
   instalado.
+
+## [2026-08-21] Trocar a conta da CLI oficial sem prometer o que não se cumpre
+
+### Contexto e decisão
+
+Quando uma conta atinge o limite de uso, é preciso ver qual conta está
+autenticada e trocar para outra sem reconstruir o trabalho do canvas. Já
+existia uma implementação parcial: o catálogo declarava `codex login status` e
+`codex logout` para o Codex, o serviço executava os dois, e o modal tinha os
+botões "Status da conta" e "Trocar conta". O que faltava era justamente o que
+torna a operação segura — identidade, confirmação e o efeito sobre terminais
+abertos.
+
+Três decisões moldaram a entrega:
+
+1. **A CLI é a única fonte de identidade.** Nada lê `~/.codex` nem deduz conta
+   por caminho no disco. A `codex-cli 0.148.0` instalada aqui responde apenas
+   `Logged in using ChatGPT` — sem conta, sem plano. O parser lê os campos
+   `Account`/`Plan`/`Organization` quando existirem, e a UI diz "a CLI não expõe
+   qual conta está em uso" quando não existirem, em vez de sugerir uma.
+2. **Logout exige confirmação explícita no serviço, não só na UI.**
+   `switchOfficialCliAccount` recusa sem `confirmed === true`. A trava está na
+   camada que executa, para que qualquer chamador futuro passe por ela.
+3. **Não prometer continuidade de sessão.** O canvas preserva o cartão porque o
+   id da PTY (`canvas:<elemento>`) não depende do componente; isso não preserva
+   a autorização de um processo já autenticado com outra conta. A confirmação
+   nomeia os terminais afetados, avisa que nenhum será encerrado e diz que o
+   reinício, quando necessário, é pelo cartão.
+
+### Implementação
+
+- `app/electron/services/official-cli-account-status.cjs` (novo): parser de
+  status com identidade opcional e redação de segredo (rótulo preservado, valor
+  mascarado até o fim da linha, porque `Authorization: Bearer <token>` esconde o
+  segredo depois de um prefixo). `describeAccountStatusForLog` mantém e-mail e
+  plano fora do log de QA.
+- `app/electron/services/official-cli-service.cjs`: status devolve campos
+  declarados + texto já redigido (`stdout`/`stderr` crus não atravessam a ponte);
+  `switchOfficialCliAccount` ganhou a trava de confirmação e `loggedOut`, para a
+  UI distinguir "nada mudou" de "a conta saiu e o login não abriu";
+  `listOfficialCliAccountSessions` cruza a CLI com as sessões vivas.
+- `app/electron/services/pty-process-manager.cjs`: cada sessão guarda o comando
+  pedido, os args e o cwd; `listarSessoesVivas()` os expõe. Sessão sem comando
+  explícito é shell e reporta `command: null` — reportar o shell padrão faria a
+  troca acusar terminal alheio.
+- `app/electron/services/official-cli-account-ipc-handlers.cjs`: novo canal
+  `cli:official-account-sessions`, repasse de `confirmed` e log sem identidade.
+  O gerenciador de PTY chega por getter porque estes handlers são registrados
+  antes dele existir.
+- `app/src/features/chat/services/official-cli-account.ts` (novo) + modal:
+  painel de confirmação com conta atual, terminais afetados e impacto; cancelar
+  não desconecta nada; a mensagem final repete os terminais a reiniciar.
+
+### Validação
+
+- `npm test` em `app/`: **728/728**. `npx vitest run`: **495/495** (51 arquivos).
+  `npm run lint` e `npm run build` limpos. `pytest tests` na raiz: 95 passaram.
+- Verificação manual no app empacotado (driver Playwright sob xvfb, userData
+  isolado): status mostrou `Codex CLI: conectado — via ChatGPT.`; a confirmação
+  listou o terminal vivo (`tmp · teste-conta`) com o aviso de impacto; "Cancelar"
+  fechou sem desconectar (status seguiu `logged_in`); `switchOfficialAccount`
+  sem `confirmed` foi recusado pela ponte.
+
+### Estado e risco residual
+
+- Concluído no código. **Não medido**: o que acontece com um processo Codex já
+  em execução depois de um logout/login em outra conta — isso exigiria
+  desconectar a conta real de quem usa a máquina. Por isso nenhuma promessa de
+  continuidade foi feita na UI; o texto diz que o processo *pode* perder a
+  autorização.
+- Falta verificação manual em macOS e Windows, e com duas contas autorizadas. O
+  caminho do shim `.cmd`/`.exe` está coberto por teste determinístico, não por
+  execução nativa.
+- Só o Codex declara operações de conta. Claude e Gemini seguem sem os botões,
+  como antes.

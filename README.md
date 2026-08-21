@@ -164,6 +164,17 @@ python3 start_app.py --skip-install
 
 Se alguma CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com a pasta onde o comando está instalado. Por padrão, as CLIs rodam em modo de automação com acesso total: Claude usa `--permission-mode bypassPermissions`, Codex usa `--dangerously-bypass-approvals-and-sandbox` e Gemini usa `--yolo`/`--skip-trust`. Para reduzir permissões, use `FELIXO_CLAUDE_PERMISSION_MODE=default|plan|auto|dontAsk|acceptEdits|off`, `FELIXO_CODEX_FULL_ACCESS=off` ou `FELIXO_GEMINI_FULL_ACCESS=off`.
 
+### Conta da CLI oficial: ver e trocar
+
+No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações de conta — hoje o Codex — ganha dois botões:
+
+- **Status da conta** roda o comando de status da própria CLI (`codex login status`) e mostra o que ela responder. Identidade (conta, plano, organização) só aparece quando a CLI a imprime; quando ela informa apenas "conectado", a tela diz exatamente isso, em vez de sugerir qual conta está em uso. O app não lê arquivo de credencial nem deduz identidade por caminho no disco, e a saída do comando é redigida antes de virar mensagem ou linha de log.
+- **Trocar conta** abre uma confirmação antes de qualquer coisa: ela mostra a conta autenticada, lista os terminais do canvas que estão rodando aquela CLI e explica o efeito. Só depois de confirmar é que o app executa o logout e abre o login oficial em um terminal do sistema. Cancelar não desconecta nada.
+
+**Efeito sobre terminais abertos.** O app não encerra nenhum processo durante a troca: o cartão, o diretório e o histórico do terminal continuam no canvas. Isso não é o mesmo que preservar a autenticação — um processo que já estava rodando pode perder a autorização no meio do trabalho, porque a credencial que ele carregou é a da conta anterior. Quando isso acontecer, reinicie aquele terminal pelo botão de reiniciar do próprio cartão: o nó e o diretório são reaproveitados; o contexto interno da CLI, não.
+
+**Recuperação manual.** Se o app não conseguir abrir um terminal para o login, a troca informa o comando a rodar à mão (`codex login`). Para conferir o estado a qualquer momento, `codex login status` no terminal responde o mesmo que o botão.
+
 ## Como distribuir
 
 Build local:

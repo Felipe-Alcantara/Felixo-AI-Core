@@ -822,3 +822,24 @@ test('killAll terminates every tracked session', () => {
   assert.equal(manager.has('a'), false)
   assert.equal(manager.has('b'), false)
 })
+
+test('lista as sessões vivas com o comando que cada uma pediu', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+
+  manager.spawn('canvas:no-codex', { command: 'codex', cwd: process.cwd() })
+  manager.spawn('canvas:no-shell', {})
+
+  const sessoes = manager.listarSessoesVivas()
+  const porId = new Map(sessoes.map((sessao) => [sessao.sessionId, sessao]))
+
+  assert.equal(sessoes.length, 2)
+  assert.equal(porId.get('canvas:no-codex').command, 'codex')
+  // Sessão sem comando explícito é um shell: não pertence a nenhuma CLI, e
+  // reportar o shell padrão aqui faria a troca de conta acusar terminal alheio.
+  assert.equal(porId.get('canvas:no-shell').command, null)
+
+  fakePty.emitExit({ exitCode: 0 })
+
+  assert.deepEqual(manager.listarSessoesVivas(), [])
+})

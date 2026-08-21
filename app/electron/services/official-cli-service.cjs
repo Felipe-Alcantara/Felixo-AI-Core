@@ -10,10 +10,17 @@ const {
 const {
   launchCommandInTerminal,
 } = require('../core/terminal-launcher.cjs')
+const {
+  parseCodexAccountStatus,
+  parseCodexLoginStatus,
+  redactSecrets,
+} = require('./official-cli-account-status.cjs')
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const AUTH_COMMAND_TIMEOUT_MS = 30 * 1000
 const OUTPUT_LIMIT = 12000
+/** Prefixo que o canvas usa no id de sessão de PTY de cada terminal seu. */
+const CANVAS_SESSION_PREFIX = 'canvas:'
 
 async function listOfficialCliCatalog() {
   const env = createCliEnv()
@@ -90,7 +97,15 @@ function openOfficialCliLogin(
   }
 }
 
-async function getOfficialCliAccountStatus(id) {
+/**
+ * @param {string} id
+ * @param {object} [dependencies]
+ * @param {typeof runBufferedCommand} [dependencies.runCommand] - Injetável para teste.
+ */
+async function getOfficialCliAccountStatus(
+  id,
+  { runCommand = runBufferedCommand } = {},
+) {
   const cli = getOfficialAiCli(id)
 
   if (!cli) {
@@ -108,23 +123,111 @@ async function getOfficialCliAccountStatus(id) {
   }
 
   const command = getPlatformCommand(cli.accountSwitch.status)
-  const result = await runBufferedCommand({
+  const result = await runCommand({
     command,
     args: cli.accountSwitch.status.args,
     cwd: os.homedir(),
     env: createCliEnv(),
     timeoutMs: AUTH_COMMAND_TIMEOUT_MS,
   })
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
+  const output = redactSecrets(
+    `${result.stdout ?? ''}${result.stderr ?? ''}`,
+  ).trim()
+  const accountStatus = parseCodexAccountStatus(output)
 
+  // `stdout`/`stderr` crus ficam neste processo. O renderer recebe o texto já
+  // redigido e os campos que a CLI declarou — nada que precise ser filtrado de
+  // novo do outro lado da ponte.
   return {
-    ...result,
-    authStatus: parseCodexLoginStatus(output),
+    ok: result.ok,
+    ...accountStatus,
+    statusCommand: cli.accountSwitch.status.label,
+    output,
     message: output || result.message,
   }
 }
 
-async function switchOfficialCliAccount(id) {
+/**
+ * Sessões de terminal vivas que rodam a CLI cuja conta será trocada.
+ *
+ * Existe para que a confirmação de troca possa nomear o que está em risco em
+ * vez de avisar genericamente. Um terminal ausente desta lista não é afetado;
+ * um terminal presente pode perder a autorização no meio do trabalho.
+ *
+ * @param {string} id
+ * @param {object} [dependencies]
+ * @param {() => Array<{ sessionId: string, command: string | null, cwd?: string, startedAt?: number }>} [dependencies.listSessions]
+ * @param {string} [dependencies.platformName]
+ */
+function listOfficialCliAccountSessions(
+  id,
+  { listSessions = () => [], platformName = platform.name } = {},
+) {
+  const cli = getOfficialAiCli(id)
+
+  if (!cli) {
+    return { ok: false, message: 'CLI oficial desconhecida.', sessions: [] }
+  }
+
+  const aliases = new Set(
+    [cli.command, ...(platformName === 'win32' ? cli.windowsAliases ?? [] : [])].map(
+      (alias) => alias.toLowerCase(),
+    ),
+  )
+  const sessions = listSessions()
+    .filter((session) => aliases.has(commandBasename(session.command)))
+    .map((session) => ({
+      sessionId: session.sessionId,
+      // O canvas identifica cada terminal pelo id do elemento; o `canvas:` é
+      // prefixo de transporte, e mostrar ele na UI não ajudaria ninguém.
+      elementId: String(session.sessionId).startsWith(CANVAS_SESSION_PREFIX)
+        ? String(session.sessionId).slice(CANVAS_SESSION_PREFIX.length)
+        : null,
+      cwd: session.cwd ?? '',
+      startedAt: session.startedAt ?? null,
+    }))
+
+  return { ok: true, sessions }
+}
+
+/**
+ * Nome do executável sem diretório nem extensão de shim do Windows.
+ *
+ * @param {unknown} command
+ * @returns {string}
+ */
+function commandBasename(command) {
+  const normalized = String(command ?? '')
+    .trim()
+    .replace(/\\/g, '/')
+  const base = normalized.slice(normalized.lastIndexOf('/') + 1)
+
+  return base.toLowerCase()
+}
+
+/**
+ * Desconecta a conta atual e abre o login oficial para a próxima.
+ *
+ * Só executa com `confirmed === true`. O logout é destrutivo do ponto de vista
+ * de quem está trabalhando — derruba a autorização que as sessões abertas
+ * usam — e um clique acidental não pode ser suficiente para dispará-lo. A
+ * confirmação é responsabilidade da UI, mas a recusa mora aqui: qualquer
+ * chamador (IPC, teste, automação futura) passa pela mesma trava.
+ *
+ * @param {string} id
+ * @param {object} [options]
+ * @param {boolean} [options.confirmed] - Confirmação explícita de quem usa.
+ * @param {typeof runBufferedCommand} [options.runCommand] - Injetável para teste.
+ * @param {typeof openOfficialCliLogin} [options.openLogin] - Injetável para teste.
+ */
+async function switchOfficialCliAccount(
+  id,
+  {
+    confirmed = false,
+    runCommand = runBufferedCommand,
+    openLogin = openOfficialCliLogin,
+  } = {},
+) {
   const cli = getOfficialAiCli(id)
 
   if (!cli) {
@@ -141,8 +244,16 @@ async function switchOfficialCliAccount(id) {
     }
   }
 
+  if (!confirmed) {
+    return {
+      ok: false,
+      requiresConfirmation: true,
+      message: `Troca de conta de ${cli.name} exige confirmação explícita.`,
+    }
+  }
+
   const command = getPlatformCommand(cli.accountSwitch.logout)
-  const logoutResult = await runBufferedCommand({
+  const logoutResult = await runCommand({
     command,
     args: cli.accountSwitch.logout.args,
     cwd: os.homedir(),
@@ -151,15 +262,19 @@ async function switchOfficialCliAccount(id) {
   })
 
   if (!logoutResult.ok) {
-    return logoutResult
+    return {
+      ok: false,
+      message: redactSecrets(logoutResult.message),
+    }
   }
 
-  const loginResult = openOfficialCliLogin(id)
+  const loginResult = openLogin(id)
 
   if (!loginResult.ok) {
     return {
       ...loginResult,
-      logout: logoutResult,
+      message: redactSecrets(loginResult.message),
+      loggedOut: true,
     }
   }
 
@@ -168,7 +283,7 @@ async function switchOfficialCliAccount(id) {
     message: `Conta de ${cli.name} desconectada. Login oficial aberto no terminal.`,
     command: loginResult.command,
     args: loginResult.args,
-    logout: logoutResult,
+    loggedOut: true,
   }
 }
 
@@ -301,33 +416,11 @@ function createInstallErrorMessage(command, code, signal, stderr) {
   return `${command} encerrou com ${status}: ${detail.slice(0, 1000)}`
 }
 
-function parseCodexLoginStatus(output) {
-  const normalizedOutput = String(output ?? '').trim().toLowerCase()
-
-  if (!normalizedOutput) {
-    return 'unknown'
-  }
-
-  if (
-    normalizedOutput.includes('not logged in') ||
-    normalizedOutput.includes('not authenticated') ||
-    normalizedOutput.includes('no login') ||
-    normalizedOutput.includes('logged out')
-  ) {
-    return 'logged_out'
-  }
-
-  if (normalizedOutput.includes('logged in')) {
-    return 'logged_in'
-  }
-
-  return 'unknown'
-}
-
 module.exports = {
   createCatalogItem,
   getOfficialCliAccountStatus,
   installOfficialCli,
+  listOfficialCliAccountSessions,
   listOfficialCliCatalog,
   openOfficialCliLogin,
   parseCodexLoginStatus,

@@ -216,6 +216,12 @@ class PtyProcessManager {
       rows,
       killTimer: null,
       spawnedAt: this.now(),
+      // Guardados para responder "quais terminais usam esta CLI?" antes de uma
+      // operação que mexe na credencial dela. Sem isso, a troca de conta só
+      // poderia avisar "pode afetar algum terminal", que é aviso que ninguém lê.
+      requestedCommand: options.command ? requestedCommand : null,
+      args: [...args],
+      cwd,
       outputBuffer: '',
       exitEvent: null,
       onData: options.onData,
@@ -426,6 +432,36 @@ class PtyProcessManager {
     }
 
     return vivas
+  }
+
+  /**
+   * Sessões com processo vivo, com o comando que cada uma pediu.
+   *
+   * Só o comando pedido pelo renderer entra aqui — nunca o caminho resolvido
+   * nem o shell padrão de uma sessão sem comando explícito. Quem consome quer
+   * saber "esta sessão é do Codex?", e é o comando pedido que responde isso de
+   * forma estável entre plataformas.
+   *
+   * @returns {Array<{ sessionId: string, command: string | null, args: string[], cwd: string, startedAt: number }>}
+   */
+  listarSessoesVivas() {
+    const sessoes = []
+
+    for (const [sessionId, entry] of this.sessions.entries()) {
+      if (entry.exitEvent) {
+        continue
+      }
+
+      sessoes.push({
+        sessionId,
+        command: entry.requestedCommand ?? null,
+        args: [...(entry.args ?? [])],
+        cwd: entry.cwd ?? '',
+        startedAt: entry.spawnedAt,
+      })
+    }
+
+    return sessoes
   }
 
   /** Replaces renderer callbacks and replays output after an HMR/navigation reload. */

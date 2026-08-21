@@ -152,17 +152,38 @@ type OfficialCliLoginResult = CliInvokeResult & {
   manualCommand?: string
 }
 
+/**
+ * Identidade só aparece quando a própria CLI a imprime. Campo ausente
+ * significa "a CLI não informa", nunca "não há conta".
+ */
 type OfficialCliAccountStatusResult = CliInvokeResult & {
   authStatus?: 'logged_in' | 'logged_out' | 'unknown'
-  stdout?: string
-  stderr?: string
+  method?: string
+  account?: string
+  plan?: string
+  organization?: string
+  statusCommand?: string
+  /** Saída da CLI já redigida no processo principal. */
+  output?: string
+}
+
+/** Terminal vivo que roda a CLI cuja conta será trocada. */
+type OfficialCliAccountSession = {
+  sessionId: string
+  elementId: string | null
+  cwd: string
+  startedAt: number | null
+}
+
+type OfficialCliAccountSessionsResult = CliInvokeResult & {
+  sessions?: OfficialCliAccountSession[]
 }
 
 type OfficialCliSwitchAccountResult = OfficialCliLoginResult & {
-  logout?: CliInvokeResult & {
-    stdout?: string
-    stderr?: string
-  }
+  /** A troca foi recusada por falta de confirmação explícita. */
+  requiresConfirmation?: boolean
+  /** O logout foi executado; a conta anterior já não está autenticada. */
+  loggedOut?: boolean
 }
 
 declare global {
@@ -206,8 +227,12 @@ declare global {
         getOfficialAccountStatus: (params: {
           id: string
         }) => Promise<OfficialCliAccountStatusResult>
+        getOfficialAccountSessions: (params: {
+          id: string
+        }) => Promise<OfficialCliAccountSessionsResult>
         switchOfficialAccount: (params: {
           id: string
+          confirmed: boolean
         }) => Promise<OfficialCliSwitchAccountResult>
         orchestrationStatus: (params?: {
           runId?: string

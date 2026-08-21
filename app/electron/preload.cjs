@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('cli:open-official-login', params),
     getOfficialAccountStatus: (params) =>
       ipcRenderer.invoke('cli:official-account-status', params),
+    getOfficialAccountSessions: (params) =>
+      ipcRenderer.invoke('cli:official-account-sessions', params),
     switchOfficialAccount: (params) =>
       ipcRenderer.invoke('cli:switch-official-account', params),
     orchestrationStatus: (params) =>

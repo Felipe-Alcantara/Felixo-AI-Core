@@ -21,6 +21,13 @@ import {
   detectModelCliType,
   preferModelForDedupe,
 } from '../services/model-storage'
+import {
+  describeSwitchImpact,
+  formatAccountIdentity,
+  formatSessionLabel,
+  type OfficialCliAccountSession,
+  type OfficialCliAccountStatus,
+} from '../services/official-cli-account'
 
 type ModelManagerModalProps = {
   isOpen: boolean
@@ -50,6 +57,19 @@ type OfficialCliCatalogItem = {
   models: Model[]
 }
 
+/**
+ * Troca de conta pendente de confirmação.
+ *
+ * A operação só existe depois que o usuário viu o que ela afeta: qual conta
+ * está autenticada agora e quais terminais do canvas rodam esta CLI. Enquanto
+ * este objeto existe, nenhum logout foi executado.
+ */
+type PendingAccountSwitch = {
+  cli: OfficialCliCatalogItem
+  status: OfficialCliAccountStatus
+  sessions: OfficialCliAccountSession[]
+}
+
 export function ModelManagerModal({
   isOpen,
   models,
@@ -67,6 +87,23 @@ export function ModelManagerModal({
   const [officialClis, setOfficialClis] = useState<OfficialCliCatalogItem[]>([])
   const [isLoadingOfficialClis, setIsLoadingOfficialClis] = useState(false)
   const [busyOfficialCliId, setBusyOfficialCliId] = useState<string | null>(null)
+  const [accountStatuses, setAccountStatuses] = useState<
+    Record<string, OfficialCliAccountStatus>
+  >({})
+  const [pendingSwitch, setPendingSwitch] =
+    useState<PendingAccountSwitch | null>(null)
+
+  /**
+   * Fecha a tela descartando a confirmação pendente.
+   *
+   * Uma confirmação de logout não sobrevive ao fechamento: reabrir o
+   * gerenciador não deve ressuscitar um "confirmar" que a pessoa deixou para
+   * trás.
+   */
+  const closeManager = useCallback(() => {
+    setPendingSwitch(null)
+    onClose()
+  }, [onClose])
 
   const loadOfficialCatalog = useCallback(async () => {
     if (!window.felixo?.cli?.listOfficial) {
@@ -187,9 +224,26 @@ export function ModelManagerModal({
   }
 
   async function checkOfficialAccountStatus(cli: OfficialCliCatalogItem) {
+    const status = await readOfficialAccountStatus(cli)
+
+    if (status) {
+      setStatus(formatAccountIdentity(cli.name, status))
+    }
+  }
+
+  /**
+   * Lê o estado de conta e guarda para exibição, sem decidir nada por conta
+   * própria. Devolve `null` quando a consulta falhou — quem chamou já viu a
+   * mensagem de erro e não deve seguir tratando isso como "desconectado".
+   */
+  async function readOfficialAccountStatus(
+    cli: OfficialCliCatalogItem,
+  ): Promise<OfficialCliAccountStatus | null> {
     if (!window.felixo?.cli?.getOfficialAccountStatus) {
-      setStatus(`Rode ${cli.statusCommand ?? `${cli.command} login status`} no terminal.`)
-      return
+      setStatus(
+        `Rode ${cli.statusCommand ?? `${cli.command} login status`} no terminal.`,
+      )
+      return null
     }
 
     setBusyOfficialCliId(cli.id)
@@ -201,33 +255,75 @@ export function ModelManagerModal({
 
       if (!result.ok) {
         setStatus(result.message ?? `Falha ao consultar conta de ${cli.name}.`)
-        return
+        return null
       }
 
-      const label =
-        result.authStatus === 'logged_in'
-          ? 'conectado'
-          : result.authStatus === 'logged_out'
-            ? 'desconectado'
-            : 'status desconhecido'
-
-      setStatus(`${cli.name}: ${label}. ${result.message ?? ''}`.trim())
+      setAccountStatuses((current) => ({ ...current, [cli.id]: result }))
+      return result
     } catch (error) {
       setStatus(
         error instanceof Error
           ? error.message
           : `Falha ao consultar conta de ${cli.name}.`,
       )
+      return null
     } finally {
       setBusyOfficialCliId(null)
     }
   }
 
-  async function switchOfficialAccount(cli: OfficialCliCatalogItem) {
+  /**
+   * Primeiro passo da troca: reunir o que a decisão exige e mostrar.
+   *
+   * Nada é desconectado aqui. O logout só acontece em
+   * `confirmOfficialAccountSwitch`, depois que a pessoa viu a conta atual e os
+   * terminais que rodam esta CLI.
+   */
+  async function requestOfficialAccountSwitch(cli: OfficialCliCatalogItem) {
     if (!window.felixo?.cli?.switchOfficialAccount) {
       setStatus(
         `Rode ${cli.switchAccountCommand ?? `${cli.command} logout`} e depois ${cli.loginCommand} no terminal.`,
       )
+      return
+    }
+
+    setBusyOfficialCliId(cli.id)
+
+    try {
+      const sessionsResult =
+        await window.felixo.cli.getOfficialAccountSessions?.({ id: cli.id })
+
+      setPendingSwitch({
+        cli,
+        status: accountStatuses[cli.id] ?? {},
+        sessions: sessionsResult?.sessions ?? [],
+      })
+      setStatus(null)
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : `Falha ao preparar a troca de conta de ${cli.name}.`,
+      )
+    } finally {
+      setBusyOfficialCliId(null)
+    }
+
+    // O estado da conta é lido depois do painel aparecer: a confirmação não
+    // depende dele, e uma CLI lenta para responder não deve atrasar a tela.
+    const status = await readOfficialAccountStatus(cli)
+
+    if (status) {
+      setPendingSwitch((current) =>
+        current?.cli.id === cli.id ? { ...current, status } : current,
+      )
+    }
+  }
+
+  async function confirmOfficialAccountSwitch(pending: PendingAccountSwitch) {
+    const { cli } = pending
+
+    if (!window.felixo?.cli?.switchOfficialAccount) {
       return
     }
 
@@ -237,6 +333,7 @@ export function ModelManagerModal({
     try {
       const result = await window.felixo.cli.switchOfficialAccount({
         id: cli.id,
+        confirmed: true,
       })
 
       if (!result.ok) {
@@ -248,10 +345,13 @@ export function ModelManagerModal({
         return
       }
 
-      setStatus(
-        result.message ??
-          `Conta de ${cli.name} desconectada. Login oficial aberto no terminal.`,
-      )
+      setPendingSwitch(null)
+      setAccountStatuses((current) => {
+        const remaining = { ...current }
+        delete remaining[cli.id]
+        return remaining
+      })
+      setStatus(buildSwitchDoneMessage(pending, result.message))
     } catch (error) {
       setStatus(
         error instanceof Error
@@ -357,7 +457,7 @@ export function ModelManagerModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={closeManager}
     >
       <section
         className="flex max-h-[85vh] w-full max-w-[480px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
@@ -376,7 +476,7 @@ export function ModelManagerModal({
           <button
             type="button"
             title="Fechar"
-            onClick={onClose}
+            onClick={closeManager}
             className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
@@ -461,6 +561,59 @@ export function ModelManagerModal({
               </button>
             </div>
 
+            {pendingSwitch && (
+              <div className="mb-2 space-y-2 rounded-2xl border border-theme-error/30 bg-theme-error/[0.06] p-3 text-[11px] text-zinc-300">
+                <p className="text-xs font-medium text-zinc-100">
+                  Trocar a conta de {pendingSwitch.cli.name}?
+                </p>
+
+                <p>
+                  {formatAccountIdentity(
+                    pendingSwitch.cli.name,
+                    pendingSwitch.status,
+                  )}
+                </p>
+
+                {describeSwitchImpact(
+                  pendingSwitch.cli.name,
+                  pendingSwitch.sessions,
+                ).map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+
+                {pendingSwitch.sessions.length > 0 && (
+                  <ul className="space-y-1 rounded-xl border border-white/[0.08] bg-black/20 p-2 font-mono text-[10px] text-zinc-400">
+                    {pendingSwitch.sessions.map((session) => (
+                      <li key={session.sessionId} className="truncate">
+                        {formatSessionLabel(session)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setPendingSwitch(null)}
+                    disabled={busyOfficialCliId !== null}
+                    className="felixo-btn-icon h-8 rounded-lg px-3 text-xs text-zinc-300 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void confirmOfficialAccountSwitch(pendingSwitch)
+                    }
+                    disabled={busyOfficialCliId !== null}
+                    className="felixo-btn-icon h-8 rounded-lg border border-theme-error/40 px-3 text-xs text-theme-error hover:bg-theme-error/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Desconectar e abrir login
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 rounded-2xl border border-white/[0.08] bg-black/10 p-2">
               {officialClis.length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-zinc-500">
@@ -496,6 +649,14 @@ export function ModelManagerModal({
                             {cli.version && <span>v{cli.version}</span>}
                             <span>{cli.provider}</span>
                           </div>
+                          {accountStatuses[cli.id] && (
+                            <p className="mt-1 text-[11px] text-zinc-400">
+                              {formatAccountIdentity(
+                                cli.name,
+                                accountStatuses[cli.id],
+                              )}
+                            </p>
+                          )}
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1">
@@ -568,7 +729,9 @@ export function ModelManagerModal({
                               <button
                                 type="button"
                                 title={`Trocar conta ${cli.name}`}
-                                onClick={() => void switchOfficialAccount(cli)}
+                                onClick={() =>
+                                  void requestOfficialAccountSwitch(cli)
+                                }
                                 disabled={!cli.detected || isAnyOfficialCliBusy}
                                 className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-theme-error/10 hover:text-theme-error disabled:cursor-not-allowed disabled:opacity-40"
                               >
@@ -661,6 +824,29 @@ export function ModelManagerModal({
       </section>
     </div>
   )
+}
+
+/**
+ * Mensagem final da troca: o que já mudou e o que ainda depende da pessoa.
+ *
+ * Os terminais afetados são nomeados de novo aqui porque, terminado o fluxo, o
+ * painel de confirmação sai da tela e essa é a única lista que sobra.
+ */
+function buildSwitchDoneMessage(
+  pending: PendingAccountSwitch,
+  message?: string,
+): string {
+  const base =
+    message ??
+    `Conta de ${pending.cli.name} desconectada. Login oficial aberto no terminal.`
+
+  if (pending.sessions.length === 0) {
+    return base
+  }
+
+  const labels = pending.sessions.map(formatSessionLabel).join(', ')
+
+  return `${base} Reinicie pelo cartão quando um destes terminais perder a autorização: ${labels}.`
 }
 
 async function createSelectionFromBrowserFile(

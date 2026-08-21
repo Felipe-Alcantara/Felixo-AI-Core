@@ -114,7 +114,9 @@ app.whenReady().then(() => {
 
   registerQaLoggerIpcHandlers(getMainWindow)
   registerCliIpcHandlers(getMainWindow)
-  registerOfficialCliAccountIpcHandlers()
+  registerOfficialCliAccountIpcHandlers({
+    getPtyManager: () => ptyHandlers?.manager ?? null,
+  })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow)
   registerFileAttachmentIpcHandlers(appPaths)
   registerFileExportIpcHandlers(getMainWindow)
