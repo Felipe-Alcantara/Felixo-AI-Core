@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Edge, Node } from '@xyflow/react'
-import { connectedComponents, inReadingOrder } from './node-connectivity'
+import { connectedComponents } from './node-connectivity'
 
 function node(id: string, x: number, y: number): Node {
   return { id, type: 'terminal', position: { x, y }, width: 520, height: 360, data: {} }
@@ -11,35 +11,6 @@ function edge(source: string, target: string): Edge {
 }
 
 const idsOf = (nodes: Node[]) => nodes.map((entry) => entry.id)
-
-describe('inReadingOrder', () => {
-  it('orders top to bottom, then left to right', () => {
-    const nodes = [node('c', 100, 900), node('b', 700, 100), node('a', 100, 100)]
-
-    expect(idsOf(inReadingOrder(nodes))).toEqual(['a', 'b', 'c'])
-  })
-
-  it('treats blocks within the row tolerance as the same row', () => {
-    // 40px apart vertically: visually side by side, so x decides the order.
-    const nodes = [node('right', 700, 140), node('left', 100, 100)]
-
-    expect(idsOf(inReadingOrder(nodes))).toEqual(['left', 'right'])
-  })
-
-  it('breaks ties by id so exactly stacked blocks never swap', () => {
-    const nodes = [node('b', 100, 100), node('a', 100, 100)]
-
-    expect(idsOf(inReadingOrder(nodes))).toEqual(['a', 'b'])
-    expect(idsOf(inReadingOrder([...nodes].reverse()))).toEqual(['a', 'b'])
-  })
-
-  it('does not mutate the input', () => {
-    const nodes = [node('b', 700, 100), node('a', 100, 100)]
-    inReadingOrder(nodes)
-
-    expect(idsOf(nodes)).toEqual(['b', 'a'])
-  })
-})
 
 describe('connectedComponents', () => {
   it('groups blocks joined by an edge', () => {
@@ -59,7 +30,7 @@ describe('connectedComponents', () => {
     expect(idsOf(components[0])).toEqual(['a', 'b', 'c'])
   })
 
-  it('puts larger components first so links stay grouped', () => {
+  it('mantém os componentes na ordem de entrada, não do maior para o menor', () => {
     const nodes = [
       node('solo', 100, 100),
       node('a', 700, 100),
@@ -69,8 +40,16 @@ describe('connectedComponents', () => {
 
     const components = connectedComponents(nodes, [edge('a', 'b'), edge('b', 'c')])
 
-    expect(components[0]).toHaveLength(3)
-    expect(idsOf(components[1])).toEqual(['solo'])
+    // Ordenar por tamanho fazia ligar/desligar uma aresta reorganizar a matriz
+    // inteira em cascata: o componente de 3 pulava para a frente do 'solo'.
+    expect(components.map(idsOf)).toEqual([['solo'], ['a', 'b', 'c']])
+  })
+
+  it('ignora a posição no canvas: só a ordem de entrada decide', () => {
+    // 'b' está acima e à esquerda de 'a', mas entra depois no dock.
+    const nodes = [node('a', 900, 900), node('b', 100, 100)]
+
+    expect(connectedComponents(nodes, []).map(idsOf)).toEqual([['a'], ['b']])
   })
 
   it('ignores edges pointing at blocks outside the list', () => {
@@ -85,11 +64,11 @@ describe('connectedComponents', () => {
     expect(components.map(idsOf)).toEqual([['a'], ['b']])
   })
 
-  it('is deterministic for equally sized components', () => {
+  it('é determinístico para a mesma entrada', () => {
     const nodes = [node('x', 100, 100), node('y', 700, 100)]
 
     const first = connectedComponents(nodes, []).map(idsOf)
-    const second = connectedComponents([...nodes].reverse(), []).map(idsOf)
+    const second = connectedComponents(nodes, []).map(idsOf)
 
     expect(second).toEqual(first)
   })

@@ -35,6 +35,7 @@ import {
 } from './toolbar-flyout'
 import { deveMostrarRodapeDeStatus } from './toolbar-status'
 import { normalizeUrlInput } from '../services/url-utils'
+import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
 /** Shape shared by every toolbar button; the press depth comes from the
@@ -64,7 +65,7 @@ type CanvasToolbarProps = {
   onAddTerminals: (
     optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[],
   ) => void
-  onOrganizeBlocks: () => void
+  onOrganizeBlocks: (mode: ArrangeMode) => void
   arrangeableCount: number
   onAddFolder: () => Promise<string[]>
   onAddFile: (name?: string) => void
@@ -239,20 +240,11 @@ export function CanvasToolbar({
         onImport={() => importInputRef.current?.click()}
         isBusy={isBusy}
       />
-      <button
-        type="button"
-        onClick={onOrganizeBlocks}
-        disabled={arrangeableCount < 2}
-        className={`${TOOLBAR_BUTTON_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
-        title={
-          arrangeableCount < 2
-            ? 'Adicione pelo menos dois blocos para organizá-los'
-            : `Organizar ${arrangeableCount} blocos em uma matriz, mantendo os conectados lado a lado`
-        }
-      >
-        <LayoutGrid size={16} />
-        Organizar
-      </button>
+      <OrganizeButton
+        onOrganize={onOrganizeBlocks}
+        arrangeableCount={arrangeableCount}
+        toolsMenuOpen={toolsMenuOpen}
+      />
       {/* "Projetos" e "Nota" não ficam aqui: os painéis em Ferramentas já fazem
           o ciclo completo de cada um — navegar/rodar e adicionar/remover pasta,
           criar nota e gerenciar as salvas. */}
@@ -346,6 +338,120 @@ export function CanvasToolbar({
           />
           <CliSetupIndicator />
           <AppVersionBadge version={appVersion} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+type OrganizeButtonProps = {
+  onOrganize: (mode: ArrangeMode) => void
+  arrangeableCount: number
+  toolsMenuOpen: boolean
+}
+
+/**
+ * "Organizar", com o modo por repositório atrás de uma setinha.
+ *
+ * O clique no corpo do botão continua fazendo o de sempre (uma matriz só), para
+ * que quem já usava não precise aprender nada. A setinha abre as duas opções —
+ * um botão a mais na coluna da barra custaria largura permanente por uma
+ * escolha que se faz de vez em quando.
+ */
+function OrganizeButton({
+  onOrganize,
+  arrangeableCount,
+  toolsMenuOpen,
+}: OrganizeButtonProps) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const flyoutPosition = useToolbarFlyoutPosition({
+    open,
+    toolsMenuOpen,
+    containerRef,
+    panelRef,
+    panelWidth: 240,
+  })
+  const disabled = arrangeableCount < 2
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [open])
+
+  const organize = (mode: ArrangeMode) => {
+    setOpen(false)
+    onOrganize(mode)
+  }
+
+  return (
+    <div ref={containerRef} className="relative w-36">
+      <div
+        className={`${TOOLBAR_BUTTON_SHAPE} w-full gap-0 p-0 ${disabled ? 'opacity-60' : ''}`}
+      >
+        <button
+          type="button"
+          onClick={() => organize('single')}
+          disabled={disabled}
+          className="felixo-btn flex flex-1 items-center gap-2 rounded-l-lg px-3 py-2 disabled:cursor-not-allowed"
+          title={
+            disabled
+              ? 'Adicione pelo menos dois blocos para organizá-los'
+              : `Organizar ${arrangeableCount} blocos em uma matriz, na ordem do dock, mantendo os conectados lado a lado`
+          }
+        >
+          <LayoutGrid size={16} />
+          Organizar
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          disabled={disabled}
+          aria-label="Modos de organização"
+          aria-expanded={open}
+          className="felixo-btn-icon flex h-full items-center rounded-r-lg border-l border-white/10 px-1.5 py-2 disabled:cursor-not-allowed"
+          title="Modos de organização"
+        >
+          <ChevronDown size={14} />
+        </button>
+      </div>
+
+      {open && (
+        <div
+          ref={panelRef}
+          style={toolbarFlyoutStyle(flyoutPosition)}
+          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass()} ${flyoutPosition ? '' : 'invisible'} w-60 rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10`}
+        >
+          <button
+            type="button"
+            onClick={() => organize('single')}
+            className="felixo-btn w-full rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-zinc-700"
+          >
+            Matriz única
+            <span className="mt-0.5 block text-[11px] text-zinc-400">
+              Todos os blocos numa grade só, na ordem do dock.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => organize('by-repository')}
+            className="felixo-btn mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-zinc-700"
+          >
+            Uma matriz por repositório
+            <span className="mt-0.5 block text-[11px] text-zinc-400">
+              Uma faixa por pasta de trabalho; blocos sem pasta ficam por último.
+            </span>
+          </button>
         </div>
       )}
     </div>

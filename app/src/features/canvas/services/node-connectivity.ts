@@ -3,32 +3,6 @@
 // células nem posições finais, só quem está ligado a quem.
 import type { Edge, Node } from '@xyflow/react'
 
-/**
- * Tolerância vertical para considerar dois blocos na mesma faixa visual. Sem
- * ela, poucos pixels de diferença trocariam a ordem de blocos que o usuário vê
- * lado a lado.
- */
-const SAME_ROW_TOLERANCE = 80
-
-/**
- * Ordem de leitura (cima→baixo, esquerda→direita) a partir das posições atuais.
- * Preserva aproximadamente o arranjo que o usuário já tinha, em vez de
- * embaralhar os blocos pela ordem de criação.
- *
- * O desempate por id garante determinismo: blocos exatamente sobrepostos não
- * podem trocar de lugar entre duas execuções.
- */
-export function inReadingOrder<TNode extends Node>(nodes: TNode[]): TNode[] {
-  return [...nodes].sort((left, right) => {
-    const verticalGap = left.position.y - right.position.y
-    if (Math.abs(verticalGap) > SAME_ROW_TOLERANCE) {
-      return verticalGap
-    }
-    const horizontalGap = left.position.x - right.position.x
-    return horizontalGap !== 0 ? horizontalGap : left.id.localeCompare(right.id)
-  })
-}
-
 /** Union-find com compressão de caminho, sobre os ids dos blocos. */
 function createDisjointSet(ids: string[]) {
   const parent = new Map(ids.map((id) => [id, id]))
@@ -64,9 +38,20 @@ function createDisjointSet(ids: string[]) {
  * Separa os blocos em componentes conectados. Blocos sem nenhuma ligação viram
  * componentes de um elemento só.
  *
- * Os componentes saem ordenados do maior para o menor, e blocos dentro de cada
- * componente saem em ordem de leitura — assim o layout pode colocá-los em
- * células consecutivas sem precisar reordenar nada.
+ * **A ordem de entrada manda, e é a identidade dos blocos.** A lista chega na
+ * ordem do dock "Elementos" — a mesma que numera os terminais (`#N`) e que a
+ * pessoa reordena arrastando lá. Os membros de cada componente saem nessa
+ * ordem, e os componentes saem na ordem do seu primeiro membro.
+ *
+ * Duas coisas que esta função deliberadamente NÃO faz, porque cada uma
+ * embaralhava a matriz a cada clique:
+ *
+ * - Não ordena por posição atual. Arrastar um bloco pelo canvas mudava a
+ *   ordem de leitura e, com ela, a célula de destino — a pessoa perdia a
+ *   referência de qual terminal era qual.
+ * - Não põe os componentes maiores primeiro. Ligar ou desligar uma aresta
+ *   mudava o tamanho de um componente e reorganizava a matriz inteira em
+ *   cascata.
  *
  * Arestas que citam blocos ausentes da lista (filhos de grupo, blocos já
  * removidos) são ignoradas, mantendo a união restrita ao que será organizado.
@@ -84,7 +69,7 @@ export function connectedComponents<TNode extends Node>(
   }
 
   const components = new Map<string, TNode[]>()
-  for (const node of inReadingOrder(nodes)) {
+  for (const node of nodes) {
     const root = groups.find(node.id)
     const members = components.get(root)
     if (members) {
@@ -94,15 +79,7 @@ export function connectedComponents<TNode extends Node>(
     }
   }
 
-  const ordering = new Map(inReadingOrder(nodes).map((node, index) => [node.id, index]))
-
-  return [...components.values()].sort((left, right) => {
-    // Componentes maiores primeiro: as ligações ficam agrupadas no topo da
-    // matriz, e blocos soltos preenchem o restante.
-    if (left.length !== right.length) {
-      return right.length - left.length
-    }
-    // Empate resolvido pela ordem de leitura do primeiro membro.
-    return (ordering.get(left[0].id) ?? 0) - (ordering.get(right[0].id) ?? 0)
-  })
+  // A ordem de inserção do Map já é a do primeiro membro de cada componente,
+  // que é a ordem de entrada. Não há nada a reordenar depois.
+  return [...components.values()]
 }

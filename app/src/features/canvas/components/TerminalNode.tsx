@@ -22,6 +22,7 @@ import {
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import type { SessionActivity } from '../terminal/terminal-session-store'
+import { repositoryLabel } from '../services/repository-grouping'
 import type { TerminalNodeData } from '../types'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
@@ -84,6 +85,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [id, metadata?.startedAt, onSessionStarted, nodeData.sessionStartedAt])
 
+  const repository = repositoryLabel(nodeData.cwd)
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
   const isLive = activity !== 'exited' && activity !== 'error'
@@ -124,6 +126,17 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
                 title="Posição deste terminal na lista de terminais abertos"
               >
                 #{nodeData.terminalIndex}
+              </span>
+            )}
+            {/* O repositório fica legível sem abrir o terminal. O nome do
+                bloco envelhece — a pessoa o escolhe na criação e continua na
+                mesma sessão depois que aquela tarefa acaba; o diretório, não. */}
+            {repository && (
+              <span
+                className="max-w-[8rem] truncate rounded bg-black/20 px-1 text-[10px] leading-tight text-emerald-200/80"
+                title={nodeData.cwd}
+              >
+                {repository}
               </span>
             )}
           </span>

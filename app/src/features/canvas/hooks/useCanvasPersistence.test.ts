@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { sortByOrderIndex, toPersistedNode } from './useCanvasPersistence'
+import {
+  sortByOrderIndex,
+  toPersistedNode,
+  withOrderIndex,
+} from './useCanvasPersistence'
 import type { CanvasNodeData, PersistedCanvasNode } from '../types'
 
 function node(id: string, data: CanvasNodeData = {}): PersistedCanvasNode {
@@ -50,6 +54,33 @@ describe('sortByOrderIndex', () => {
     const loaded = [node('b', { orderIndex: 1 }), node('a', { orderIndex: 0 })]
     sortByOrderIndex(loaded)
     expect(loaded.map((item) => item.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('withOrderIndex', () => {
+  it('carimba o índice em quem não tem, congelando a ordem carregada', () => {
+    // Um canvas que nunca foi reordenado volta na ordem de `updated_at`:
+    // arrastar um bloco o jogaria para o fim do dock no próximo início. O
+    // carimbo transforma a ordem atual em identidade.
+    const stamped = withOrderIndex([node('a'), node('b'), node('c')])
+
+    expect(stamped.map((item) => item.data.orderIndex)).toEqual([0, 1, 2])
+  })
+
+  it('corrige índice desalinhado da posição real', () => {
+    const stamped = withOrderIndex([node('a', { orderIndex: 7 }), node('b')])
+
+    expect(stamped.map((item) => item.data.orderIndex)).toEqual([0, 1])
+  })
+
+  it('devolve o mesmo objeto para quem já está certo, para não gravar à toa', () => {
+    const correct = node('a', { orderIndex: 0 })
+    const wrong = node('b')
+
+    const stamped = withOrderIndex([correct, wrong])
+
+    expect(stamped[0]).toBe(correct)
+    expect(stamped[1]).not.toBe(wrong)
   })
 })
 

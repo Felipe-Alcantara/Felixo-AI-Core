@@ -164,6 +164,22 @@ python3 start_app.py --skip-install
 
 Se alguma CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com a pasta onde o comando está instalado. Por padrão, as CLIs rodam em modo de automação com acesso total: Claude usa `--permission-mode bypassPermissions`, Codex usa `--dangerously-bypass-approvals-and-sandbox` e Gemini usa `--yolo`/`--skip-trust`. Para reduzir permissões, use `FELIXO_CLAUDE_PERMISSION_MODE=default|plan|auto|dontAsk|acceptEdits|off`, `FELIXO_CODEX_FULL_ACCESS=off` ou `FELIXO_GEMINI_FULL_ACCESS=off`.
 
+### Organizar os blocos do canvas
+
+O botão **Organizar** reposiciona os blocos de topo numa matriz quase quadrada, mantendo em células vizinhas os que estão ligados por uma aresta. Duas coisas definem o resultado, e nenhuma delas é a tela:
+
+- **A ordem das células é a ordem do dock "Elementos"** — a mesma numeração `#N` que aparece no cabeçalho de cada terminal, e que você reordena arrastando as linhas do dock. Arrastar um bloco pelo canvas não muda mais para qual célula ele vai: dois cliques seguidos produzem o mesmo arranjo, e um bloco novo entra numa célula no fim, sem deslocar os que já estavam.
+- **A âncora é o canto do bloco mais ao topo-esquerda**, não o canto visível da tela, então pan, zoom e tamanho de janela não alteram o destino.
+
+A setinha ao lado do botão abre os dois modos:
+
+| Modo | O que faz |
+| --- | --- |
+| **Matriz única** | Todos os blocos numa grade só (o clique direto no botão faz isso). |
+| **Uma matriz por repositório** | Uma faixa por diretório de trabalho (`cwd`), empilhadas. Blocos sem diretório — notas, arquivos, páginas — ficam na última faixa. |
+
+Para saber a que repositório um terminal pertence **sem abri-lo**, o cabeçalho do bloco mostra o nome da última pasta do `cwd` ao lado do `#N` (o caminho completo fica no *tooltip*). É a informação que não envelhece: o nome do bloco é escolhido na criação e costuma ficar desatualizado quando a mesma sessão segue para outra tarefa.
+
 ### Conta da CLI oficial: ver e trocar
 
 No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações de conta — hoje o Codex — ganha dois botões:

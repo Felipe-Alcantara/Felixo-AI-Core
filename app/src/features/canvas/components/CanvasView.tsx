@@ -123,6 +123,7 @@ import { HandoffDialog } from './HandoffDialog'
 import {
   arrangeNodesAsMatrix,
   countArrangeableNodes,
+  type ArrangeMode,
 } from '../services/canvas-matrix-layout'
 import type { CanvasNodeType, CanvasSkill, DiagnosisRequestStatus } from '../types'
 
@@ -1164,7 +1165,13 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         position: findFreeNodePosition(nodes, size, visibleCanvasBounds()),
         width: size.width,
         height: size.height,
-        data: data ?? (type === 'terminal' ? { label: 'Terminal' } : { text: '' }),
+        data: {
+          ...(data ?? (type === 'terminal' ? { label: 'Terminal' } : { text: '' })),
+          // O bloco novo entra no fim do dock, e o índice é gravado já na
+          // criação: assim o "#N" e a célula do Organizar não dependem de a
+          // pessoa reordenar o dock alguma vez.
+          orderIndex: nodes.length,
+        },
       }
 
       setNodes((current) => [...current, node])
@@ -1369,7 +1376,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           position: positions[index],
           width: size.width,
           height: size.height,
-          data: buildTerminalNodeData(options),
+          data: { ...buildTerminalNodeData(options), orderIndex: nodes.length + index },
         }),
       )
 
@@ -1381,10 +1388,11 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
   // Explicit, opt-in layout for agents that were added at different times.
   // Shells and group children stay exactly where the user put them.
-  const organizeCanvasBlocks = useCallback(() => {
+  const organizeCanvasBlocks = useCallback((mode: ArrangeMode = 'single') => {
     // Sem viewport: a matriz é ancorada no bloco mais ao topo-esquerda, então o
-    // resultado não muda com pan, zoom ou tamanho de janela.
-    const { nodes: organized, bounds } = arrangeNodesAsMatrix(nodes, edges)
+    // resultado não muda com pan, zoom ou tamanho de janela. A ordem das
+    // células vem da ordem deste array — a mesma do dock e do "#N" do bloco.
+    const { nodes: organized, bounds } = arrangeNodesAsMatrix(nodes, edges, mode)
     const targetPositions = new Map(
       organized.flatMap((node, index) => {
         const current = nodes[index]

@@ -32,7 +32,20 @@ export function useCanvasPersistence() {
         return
       }
 
-      setNodes(sortByOrderIndex(persisted).map(toFlowNode))
+      // A ordem carregada vira índice explícito antes de qualquer outra coisa.
+      // Sem isso, um canvas que nunca foi reordenado volta na ordem de
+      // `updated_at`: arrastar um bloco reescreve a linha dele, e no próximo
+      // início ele aparece no fim do dock — com outro `#N` e, agora, em outra
+      // célula do Organizar. O primeiro carregamento congela a ordem que
+      // existe; a partir daí ela é identidade, não efeito colateral de salvar.
+      const sorted = sortByOrderIndex(persisted)
+      const loaded = withOrderIndex(sorted)
+      loaded.forEach((node, index) => {
+        if (sorted[index] !== node) {
+          void saveCanvasNode(node)
+        }
+      })
+      setNodes(loaded.map(toFlowNode))
       setHydrated(true)
     })
 
@@ -113,6 +126,21 @@ export function sortByOrderIndex(
       return left.loadedAt - right.loadedAt
     })
     .map((entry) => entry.node)
+}
+
+/**
+ * Carimba em cada bloco o índice que ele ocupa na lista, quando ele ainda não
+ * tem esse índice ou tem outro. Devolve o mesmo objeto para quem já está certo,
+ * para que quem chama consiga distinguir o que precisa ser gravado.
+ */
+export function withOrderIndex(
+  nodes: readonly PersistedCanvasNode[],
+): PersistedCanvasNode[] {
+  return nodes.map((node, index) =>
+    node.data?.orderIndex === index
+      ? node
+      : { ...node, data: { ...node.data, orderIndex: index } },
+  )
 }
 
 export function toFlowNode(node: PersistedCanvasNode): CanvasFlowNode {

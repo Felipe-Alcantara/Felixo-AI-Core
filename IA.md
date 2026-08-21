@@ -589,3 +589,87 @@ Três decisões moldaram a entrega:
   execução nativa.
 - Só o Codex declara operações de conta. Claude e Gemini seguem sem os botões,
   como antes.
+
+## [2026-08-21] Organizar estável por identidade e matrizes por repositório
+
+### O problema, e o que a investigação mostrou
+
+Usar o Organizar no dia a dia revelou dois problemas que o refino anterior
+(`c61ca72`, que tirou a âncora do viewport) não cobria.
+
+**1. Os blocos embaralhavam a cada clique.** Duas decisões causavam isso:
+`inReadingOrder()` ordenava os blocos pela `position` atual, então arrastar um
+terminal mudava a célula dele na organização seguinte; e `connectedComponents()`
+devolvia os componentes do maior para o menor, então ligar ou desligar uma
+aresta reorganizava a matriz inteira em cascata. O efeito prático era perder a
+referência de qual terminal era qual.
+
+**2. Não dava para saber o contexto de um terminal sem abri-lo.** O nome do
+bloco é escolhido na criação e envelhece quando a mesma sessão segue para outra
+tarefa; o cabeçalho da CLI rola para fora do buffer.
+
+Antes de implementar, foi confirmado que a identidade do bloco é estável: o `id`
+é `<tipo>-<uuid>`, gravado em `canvas_nodes` e restaurado por `toFlowNode`. Mas
+a **ordem** não era: `sortByOrderIndex` só ordena por `data.orderIndex`, e blocos
+sem esse campo caíam na ordem de `updated_at` — arrastar um bloco reescrevia a
+linha dele e o jogava para o fim do dock no próximo início, mudando o `#N`.
+
+### Decisões
+
+- **A ordem das células é a ordem do dock**, não a posição no canvas nem o
+  tamanho do componente. Ela já é visível (`#N` no cabeçalho), já é editável
+  (arrastar no dock) e já é persistida — é identidade, e não efeito colateral.
+- **`orderIndex` passou a ser sempre explícito**: carimbado na criação do bloco e
+  no primeiro carregamento de canvas antigos. Sem isso a "identidade" ainda
+  dependeria de `updated_at`.
+- **Faixas, não grupos, para o modo por repositório.** Criar um `GroupNode` por
+  `cwd` daria o rótulo de graça, mas mexeria em `parentId`, coordenadas
+  relativas, persistência e exclusão — e bloco em grupo hoje fica fora do
+  Organizar. As faixas resolvem o posicionamento, e o rótulo do repositório foi
+  para o cabeçalho do bloco, onde serve mesmo sem organizar nada.
+
+### Implementação
+
+- `node-connectivity.ts`: `inReadingOrder` removida; os componentes saem na ordem
+  de entrada, e o Map de componentes já preserva a ordem do primeiro membro.
+- `canvas-matrix-layout.ts`: novo parâmetro `mode` (`single` | `by-repository`).
+  No modo por repositório, uma matriz por faixa, empilhadas com um vão maior que
+  o das células (o vão igual lia-se como "matriz única com buraco"); a célula
+  continua dimensionada por todos os blocos, para as faixas ficarem alinhadas.
+- `repository-grouping.ts` (novo): `repositoryKey` (normaliza separador e barra
+  final), `repositoryLabel` (última pasta) e `groupByRepository` (faixa dos sem
+  repositório por último). Fonte única para o layout e para o cabeçalho.
+- `TerminalNode.tsx`: chip com o nome do repositório ao lado do `#N`, com o
+  caminho completo no `title`.
+- `CanvasToolbar.tsx`: `OrganizeButton` — clique no corpo mantém a matriz única;
+  a setinha abre os dois modos. Nenhum botão novo na coluna.
+- `useCanvasPersistence.ts`: `withOrderIndex` carimba o índice no carregamento e
+  grava só o que mudou; `CanvasView` carimba na criação de blocos.
+
+### Validação
+
+- `npm test` **728/728**, `vitest` **512/512** (52 arquivos), lint e build limpos,
+  `pytest tests` da raiz 95 testes + 65 subtests.
+- Testes novos cobrem: arranjo idêntico depois de arrastar; bloco novo entra no
+  fim sem mover os outros; fechar o último não move os que ficaram; faixas por
+  `cwd` com caminhos equivalentes unificados; blocos sem repositório por último;
+  `bounds` cobrindo todas as faixas; carimbo de `orderIndex`.
+- Verificação manual no app (driver sob xvfb, userData isolado) com 5 terminais
+  em dois diretórios: matriz única saiu na ordem `#1..#5`; mover um bloco para
+  longe e reorganizar devolveu o mesmo mapeamento bloco→célula; o modo por
+  repositório separou as faixas (3 do alpha, 2 do beta) com o vão maior; o chip
+  do repositório aparece no cabeçalho de cada bloco.
+
+### Estado e risco residual
+
+- Concluído no código.
+- **Limite conhecido:** a âncora continua sendo o canto do bloco mais ao
+  topo-esquerda, então arrastar um bloco para longe move a matriz inteira para
+  lá — o *arranjo* não muda, a posição de origem sim. Não foi alterado por ser
+  o comportamento estabelecido em `c61ca72`.
+- O número de colunas é `ceil(sqrt(n))`: ao cruzar um quadrado perfeito (2, 5,
+  10, 17 blocos) a grade ganha uma coluna e o arranjo se reacomoda. Dentro do
+  mesmo número de colunas, acrescentar um bloco não move nenhum outro.
+- O carimbo de `orderIndex` em canvas antigos congela a ordem que existir no
+  primeiro carregamento após esta versão — que pode já ter derivado de
+  `updated_at`. A partir daí, é estável.
