@@ -1,22 +1,30 @@
-import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Trash2, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Search, Trash2, Volume2, VolumeX, X } from 'lucide-react'
+import { useState, type CSSProperties } from 'react'
 import type { Node } from '@xyflow/react'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
 import type { CanvasNotification } from '../terminal/canvas-notifications'
 import type { CanvasNodeData } from '../types'
-import {
-  toolbarFlyoutClass,
-  toolbarFlyoutStyle,
-  useToolbarFlyoutPosition,
-} from './toolbar-flyout'
 
 type NotificationsPanelProps = {
   nodes: Node<CanvasNodeData>[]
   notifications: CanvasNotification[]
   open: boolean
   ready: boolean
-  toolsMenuOpen: boolean
+  soundEnabled: boolean
+  volume: number
+  /** Root element callback ref, so NotificationsMenu can measure this panel's
+   *  real rendered height (it's `position: absolute`, so it never
+   *  contributes to a parent's flow height on its own) and reserve exactly
+   *  that much space for it elsewhere on screen — e.g. pushing the minimap
+   *  down. */
+  panelRef?: (node: HTMLDivElement | null) => void
+  /** Extra space (px) to leave clear at the bottom of the viewport, on top of
+   *  the panel's own margin — e.g. the "Elementos" dock's current height, so
+   *  a long notification list stops growing before it reaches that dock
+   *  instead of sliding underneath it. 0 when nothing else occupies that
+   *  corner. */
+  reservedBottomSpace?: number
   onClose: () => void
   onFocusNode: (nodeId: string) => void
   /** Abre o agente. Abrir já vale como ler: quem trata isso marca as
@@ -26,6 +34,8 @@ type NotificationsPanelProps = {
   onMarkAllRead: () => void
   onRemove: (notificationId: string) => void
   onClearRead: () => void
+  onSoundEnabledChange: (enabled: boolean) => void
+  onVolumeChange: (volume: number) => void
 }
 
 type HistoryFilter = 'unread' | 'all'
@@ -35,7 +45,10 @@ export function NotificationsPanel({
   notifications,
   open,
   ready,
-  toolsMenuOpen,
+  soundEnabled,
+  volume,
+  panelRef,
+  reservedBottomSpace = 0,
   onClose,
   onFocusNode,
   onExpandNode,
@@ -43,17 +56,11 @@ export function NotificationsPanel({
   onMarkAllRead,
   onRemove,
   onClearRead,
+  onSoundEnabledChange,
+  onVolumeChange,
 }: NotificationsPanelProps) {
   const [filter, setFilter] = useState<HistoryFilter>('unread')
-  const panelRef = useRef<HTMLElement>(null)
-  const flyoutPosition = useToolbarFlyoutPosition({
-    open: open && ready,
-    toolsMenuOpen,
-    panelRef,
-    panelWidth: 320,
-    placement: 'below',
-  })
-
+  const [query, setQuery] = useState('')
   // Reopening the panel always starts on what still needs attention. Adjusted
   // during render (React's documented pattern for deriving state from a prop
   // change) rather than in an effect, which would render the stale tab first.
@@ -79,17 +86,31 @@ export function NotificationsPanel({
 
   const unreadCount = allItems.filter((item) => item.notification.readAt === null).length
   const readCount = allItems.length - unreadCount
-  const visibleItems =
-    filter === 'unread'
-      ? allItems.filter((item) => item.notification.readAt === null)
-      : allItems
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const visibleItems = allItems.filter(({ notification, node }) => {
+      if (filter === 'unread' && notification.readAt !== null) return false
+      if (!normalizedQuery) return true
+      const label = String(node.data.label || node.data.command || node.id)
+      return `${label} ${lastNotificationMessage(notification.snapshot)}`
+        .toLocaleLowerCase()
+        .includes(normalizedQuery)
+  })
 
   return (
     <section
       ref={panelRef}
       aria-label="Notificações dos agentes"
-      style={toolbarFlyoutStyle(flyoutPosition)}
-      className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} w-80 overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl`}
+      // `felixo-anim-sequential-panel`'s open animation drives `max-height`
+      // itself (see `--felixo-panel-max-height` in index.css) and, being a
+      // CSS animation with `animation-fill-mode: both`, would otherwise win
+      // over a plain inline `maxHeight` for the panel's entire open lifetime
+      // — not just override it once at mount.
+      style={
+        {
+          '--felixo-panel-max-height': `calc(100vh - 5rem - ${reservedBottomSpace}px)`,
+        } as CSSProperties
+      }
+      className="felixo-anim-sequential-panel absolute right-[calc(100%+0.75rem)] top-0 z-40 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
         <Bell size={15} className="text-red-400" />
@@ -114,6 +135,53 @@ export function NotificationsPanel({
           <X size={14} />
         </button>
       </header>
+
+      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => onSoundEnabledChange(!soundEnabled)}
+          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
+          title={soundEnabled ? 'Mutar notificações' : 'Ativar som das notificações'}
+          aria-label={soundEnabled ? 'Mutar notificações' : 'Ativar som das notificações'}
+          aria-pressed={!soundEnabled}
+        >
+          {soundEnabled && volume > 0 ? <Volume2 size={14} /> : <VolumeX size={14} />}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(volume * 100)}
+          onChange={(event) => {
+            const next = Number(event.target.value) / 100
+            onVolumeChange(next)
+            if (next > 0 && !soundEnabled) onSoundEnabledChange(true)
+            if (next === 0 && soundEnabled) onSoundEnabledChange(false)
+          }}
+          disabled={!soundEnabled && volume === 0}
+          aria-label="Volume das notificações"
+          className="h-1.5 flex-1 accent-sky-400"
+        />
+        <span className="w-8 shrink-0 text-right text-[11px] text-zinc-500">
+          {soundEnabled ? `${Math.round(volume * 100)}%` : 'Mudo'}
+        </span>
+      </div>
+
+      <label className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-sky-400/50 focus-within:text-sky-300">
+        <Search size={13} aria-hidden />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Buscar notificações…"
+          aria-label="Buscar notificações"
+          className="min-w-0 flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600"
+        />
+        {query && (
+          <button type="button" onClick={() => setQuery('')} aria-label="Limpar busca">
+            <X size={12} />
+          </button>
+        )}
+      </label>
 
       <div className="flex items-center gap-1 border-b border-white/10 px-2 py-1.5">
         <FilterTab
@@ -144,10 +212,12 @@ export function NotificationsPanel({
           <CheckCircle2 size={15} className="text-emerald-500" />
           {filter === 'unread'
             ? 'Nenhum agente aguardando ação.'
-            : 'Nenhuma notificação nos últimos 7 dias.'}
+            : query
+              ? 'Nenhuma notificação encontrada.'
+              : 'Nenhuma notificação nos últimos 7 dias.'}
         </div>
       ) : (
-        <div className="felixo-anim-stagger-list max-h-[50vh] overflow-auto p-1.5">
+        <div className="felixo-anim-stagger-list max-h-[38vh] overflow-auto p-1.5">
           {visibleItems.map(({ notification, node }) => {
             const unread = notification.readAt === null
             return (

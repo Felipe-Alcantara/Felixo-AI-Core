@@ -44,6 +44,7 @@ import { CanvasToolPanels } from './CanvasToolPanels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
 import { moveById } from './tools/terminals-panel-reorder'
 import { NotificationsPanel } from './NotificationsPanel'
+import { NotificationsMenu } from './NotificationsMenu'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
 import {
@@ -65,6 +66,10 @@ import {
   readNotificationHistory,
   saveNotificationHistory,
 } from '../services/notification-history-storage'
+import {
+  readNotificationPreferences,
+  saveNotificationPreferences,
+} from '../services/notification-preferences'
 import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
@@ -242,6 +247,16 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // são irmãos dela e abrem ao lado em vez de por cima.
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  // Measured live from the bell+panel's actual DOM height (ResizeObserver in
+  // NotificationsMenu), not guessed — a fixed offset broke as soon as the
+  // notification list grew past whatever number was hardcoded here.
+  const [, setNotificationsTriggerHeight] = useState(52)
+  // Same idea for the bottom-right "Elementos" dock: both it and the
+  // notifications panel are independent floating panels that can each grow
+  // tall enough to reach the other (dock grows up from the bottom, panel
+  // grows down from the top) — measuring the dock's real height lets the
+  // panel cap itself before the two ever collide.
+  const [terminalsDockHeight, setTerminalsDockHeight] = useState(0)
   const sessionSnapshots = useSessionSnapshots()
   const actionableNotificationIds = useMemo(
     () => getActionRequiredNodeIds(nodes, sessionSnapshots),
@@ -249,6 +264,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   )
   const [notificationHistory, setNotificationHistory] = useState<CanvasNotification[]>(
     () => readNotificationHistory(),
+  )
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(
+    () => readNotificationPreferences().soundEnabled,
+  )
+  const [notificationVolume, setNotificationVolume] = useState(
+    () => readNotificationPreferences().volume,
   )
   // Restored ids carry their original sequence numbers; resume past the highest
   // one so a new notification can never reuse an id still in the history.
@@ -344,12 +365,19 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     )
 
     const audio = notificationAudioRef.current
-    if (!audio) return
+    if (!audio || !notificationSoundEnabled) return
     audio.currentTime = 0
     void audio.play().catch(() => {
       // Browsers may block playback until the user has interacted with the app.
     })
-  }, [actionableNotificationIds, hydrated, sessionSnapshots])
+  }, [actionableNotificationIds, hydrated, notificationSoundEnabled, sessionSnapshots])
+
+  useEffect(() => {
+    if (notificationAudioRef.current) {
+      notificationAudioRef.current.volume = notificationVolume
+    }
+    saveNotificationPreferences({ soundEnabled: notificationSoundEnabled, volume: notificationVolume })
+  }, [notificationSoundEnabled, notificationVolume])
 
   useEffect(() => {
     saveNotificationHistory(notificationHistory)
@@ -1577,16 +1605,26 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         isBusy={isBusy}
         isClearing={isClearing}
         onOpenChat={onOpenChat}
-        notificationsOpen={notificationsOpen}
-        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+      />
+
+      <NotificationsMenu
+        open={notificationsOpen}
         notificationCount={notificationCount}
-        notificationPanel={(ready, toolsMenuOpen) => (
+        onToggle={() => setNotificationsOpen((open) => !open)}
+        onHeightChange={setNotificationsTriggerHeight}
+      >
+        {(ready, panelRef) => (
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
             open={notificationsOpen}
             ready={ready}
-            toolsMenuOpen={toolsMenuOpen}
+            panelRef={panelRef}
+            reservedBottomSpace={terminalsDockHeight > 0 ? terminalsDockHeight + 32 : 0}
+            soundEnabled={notificationSoundEnabled}
+            onSoundEnabledChange={setNotificationSoundEnabled}
+            volume={notificationVolume}
+            onVolumeChange={setNotificationVolume}
             onClose={() => setNotificationsOpen(false)}
             onFocusNode={focusNode}
             onExpandNode={openTerminal}
@@ -1624,7 +1662,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             }
           />
         )}
-      />
+      </NotificationsMenu>
 
       <CanvasToolPanels
         activeTool={activeTool}
@@ -1666,6 +1704,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onFocusNode={focusNode}
         onExpandNode={openTerminal}
         onReorder={reorderNodes}
+        onHeightChange={setTerminalsDockHeight}
       />
 
         <ReactFlow
@@ -1707,12 +1746,23 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         >
           <Background gap={20} color="#1e293b" />
           <Controls position="bottom-left" className="!mb-4 !ml-4" />
-          {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle. */}
+          {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle.
+              The notifications bell lives right above it in the same corner;
+              its real measured height (bell + open panel, via ResizeObserver
+              in NotificationsMenu) sets this gap, so the minimap is pushed
+              down by exactly as much space as the trigger actually occupies —
+              never overlapped, however tall the notification list grows. */}
           <MiniMap
             pannable
             zoomable
             position="top-right"
-            className="!mr-4 !mt-4"
+            className="!mr-4"
+              style={{
+                // Notifications open horizontally to the left of the map,
+                // so the minimap does not need to be pushed down anymore.
+                marginTop: 16,
+                transition: 'margin-top 300ms ease',
+              }}
             bgColor="#18181b"
             maskColor="rgba(0, 0, 0, 0.6)"
             nodeColor="#3f3f46"
