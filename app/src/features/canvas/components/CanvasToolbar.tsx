@@ -38,10 +38,26 @@ import { normalizeUrlInput } from '../services/url-utils'
 import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 
+/**
+ * A moldura de um controle da barra: largura, canto, sombra e aro — o que
+ * desenha a pílula, sem nada do que acontece dentro dela.
+ *
+ * Existe separada porque o controle dividido ("Organizar") é uma moldura com
+ * dois botões dentro: ele precisa do contorno, mas não do fundo, do padding nem
+ * do hover, que ali pertencem a cada metade. Aplicar a forma inteira e desfazer
+ * o excedente depois não funciona — `p-0` não cancela `px-3 py-2`, porque o
+ * Tailwind emite as utilidades de eixo depois da genérica, e o resultado era um
+ * botão 16px mais alto que os vizinhos, com o rótulo 12px mais para dentro.
+ */
+const TOOLBAR_BUTTON_FRAME = 'w-36 rounded-lg shadow-lg ring-1 ring-white/10'
+
+/** A superfície clicável: fundo, cor e o realce que segue o ponteiro. */
+const TOOLBAR_BUTTON_SURFACE = 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
+
 /** Shape shared by every toolbar button; the press depth comes from the
  *  felixo-btn / felixo-btn-icon each call site adds. */
 const TOOLBAR_BUTTON_SHAPE =
-  'flex w-36 items-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10 hover:bg-zinc-700'
+  `flex items-center gap-2 px-3 py-2 text-sm ${TOOLBAR_BUTTON_FRAME} ${TOOLBAR_BUTTON_SURFACE}`
 
 const TOOLBAR_BUTTON_CLASS = `felixo-btn ${TOOLBAR_BUTTON_SHAPE}`
 const TOOLBAR_ICON_BUTTON_CLASS = `felixo-btn-icon ${TOOLBAR_BUTTON_SHAPE}`
@@ -396,14 +412,24 @@ function OrganizeButton({
 
   return (
     <div ref={containerRef} className="relative w-36">
+      {/*
+        Moldura só: o fundo e o realce moram nas metades, senão passar o ponteiro
+        sobre uma delas acende o controle inteiro — inclusive a borda entre as
+        duas, que não faz nada. O `felixo-btn` fica aqui, não nas metades, para o
+        pressionar afundar a peça toda; nelas, cada metade encolhia sozinha e
+        abria fresta no meio da pílula. `overflow-hidden` recorta as metades no
+        canto da moldura, dispensando arredondamento em cada uma.
+      */}
       <div
-        className={`${TOOLBAR_BUTTON_SHAPE} w-full gap-0 p-0 ${disabled ? 'opacity-60' : ''}`}
+        className={`${TOOLBAR_BUTTON_FRAME} flex w-full overflow-hidden ${
+          disabled ? 'opacity-60' : 'felixo-btn'
+        }`}
       >
         <button
           type="button"
           onClick={() => organize('single')}
           disabled={disabled}
-          className="felixo-btn flex flex-1 items-center gap-2 rounded-l-lg px-3 py-2 disabled:cursor-not-allowed"
+          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 enabled:hover:bg-zinc-700 disabled:cursor-not-allowed"
           title={
             disabled
               ? 'Adicione pelo menos dois blocos para organizá-los'
@@ -419,7 +445,7 @@ function OrganizeButton({
           disabled={disabled}
           aria-label="Modos de organização"
           aria-expanded={open}
-          className="felixo-btn-icon flex h-full items-center rounded-r-lg border-l border-white/10 px-1.5 py-2 disabled:cursor-not-allowed"
+          className="felixo-btn-flat flex items-center border-l border-white/10 bg-zinc-800 px-1.5 text-zinc-300 enabled:hover:bg-zinc-700 disabled:cursor-not-allowed"
           title="Modos de organização"
         >
           <ChevronDown size={14} />

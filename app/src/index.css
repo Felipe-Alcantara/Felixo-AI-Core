@@ -517,9 +517,14 @@ div::-webkit-scrollbar-thumb {
 
    .felixo-btn      — default press depth, for labelled buttons.
    .felixo-btn-icon — deeper press, so small icon-only hit areas still read.
-   Both compose with whatever hover/disabled classes a button already has. */
+   .felixo-btn-flat — mesma transicao e mesmo foco, sem afundar: para a metade
+                      de um controle dividido, onde quem afunda e a moldura
+                      inteira. Se cada metade encolhesse sozinha, a pilula se
+                      partiria no clique.
+   All compose with whatever hover/disabled classes a button already has. */
 .felixo-btn,
-.felixo-btn-icon {
+.felixo-btn-icon,
+.felixo-btn-flat {
   transition-property: transform, background-color, color, opacity, border-color;
   transition-duration: var(--felixo-release-duration);
   transition-timing-function: ease-out;
@@ -537,7 +542,8 @@ div::-webkit-scrollbar-thumb {
 
 /* Keyboard focus only — avoids a ring flashing on every mouse click. */
 .felixo-btn:focus-visible,
-.felixo-btn-icon:focus-visible {
+.felixo-btn-icon:focus-visible,
+.felixo-btn-flat:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }

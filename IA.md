@@ -731,3 +731,62 @@ a colagem já fazia — em vez de inventar outra.
   sintético no `.xterm-screen` **não** cria seleção no xterm. Fica registrado
   para a próxima verificação manual não perder tempo com isso.
 - A tarefa irmã do **Ctrl+A** (mesmo handler) segue aberta e não foi feita aqui.
+
+---
+
+## [2026-08-23] O botão dividido do Organizar: moldura, realce e pressão
+
+**Contexto.** A anotação dizia só "o botão ficou meio bugado". A tarefa mandava
+olhar antes de mexer, e valeu: o defeito mais visível não era nenhum dos dois
+previstos por leitura de código.
+
+### O que foi medido no app antes de tocar no código
+
+| Medida | Organizar | Vizinhos (Ferramentas, Arquivo…) |
+| --- | --- | --- |
+| Altura do controle | **52px** | 36px |
+| Início do rótulo (`x`) | **28px** | 16px |
+| Hover em qualquer metade | acende o **controle inteiro** | — |
+| Pressionar a metade esquerda | `scale(0.96)` **só nela** (108×35 dentro de 144×52) | a peça toda afunda |
+
+A altura e a indentação vinham de um detalhe do Tailwind: o contêiner recebia o
+`TOOLBAR_BUTTON_SHAPE` inteiro e tentava desfazer o excedente com `w-full gap-0
+p-0` — mas **`p-0` não cancela `px-3 py-2`**, porque as utilidades de eixo são
+emitidas depois da genérica. O padding do contêiner somava com o das metades.
+
+### Decisão
+
+O padrão certo já existia no repositório: o botão dividido do **Agente**
+(`TerminalMenu.tsx`) usa o contêiner só como moldura, com fundo e hover em cada
+metade. O Organizar passou a seguir o mesmo caminho, com a moldura extraída num
+token próprio:
+
+- `TOOLBAR_BUTTON_FRAME` — largura, canto, sombra e aro; o que desenha a pílula.
+- `TOOLBAR_BUTTON_SURFACE` — fundo, cor e hover; o que pertence ao clicável.
+- `TOOLBAR_BUTTON_SHAPE` passou a ser a composição dos dois mais o espaçamento,
+  então nenhum outro botão mudou de aparência.
+
+O `felixo-btn` (que dá a profundidade da pressão) saiu das metades e foi para a
+moldura: assim o controle afunda inteiro, como qualquer botão da barra. As
+metades ganharam `felixo-btn-flat`, classe nova em `index.css` com a mesma
+transição e o mesmo anel de foco, **sem** o `scale` — se cada metade encolhe
+sozinha, a pílula se parte no clique. O hover virou `enabled:hover:` para não
+acender o que está desabilitado.
+
+### Validação
+
+- Depois: altura **36px** e `x=16` — idênticos aos vizinhos.
+- Hover na metade esquerda: ela em `rgb(63,63,70)`, a setinha em `rgb(39,39,42)`,
+  moldura transparente. Hover na setinha: exatamente o inverso.
+- Pressionando: o **contêiner** em `matrix(0.96…)`, metades sem transform,
+  **fresta = 0** e a soma das metades igual à largura da moldura (138.2px).
+- Desabilitado: pílula única, 36px, `opacity 0.6`, sem realce em nenhuma metade.
+- `eslint`, `tsc -b`, `vitest` **520/520**, `node --test` **728/728** e `build`
+  limpos. Captura antes/depois anexada à task no Notion.
+
+### Pendência
+
+O botão do **Agente** monta as metades com `felixo-btn`/`felixo-btn-icon`, o
+mesmo arranjo que aqui partia a pílula no clique. Não foi alterado — está fora
+do escopo desta tarefa — e a medição do `:active` nele ficou inconclusiva no
+driver. Virou task própria.
