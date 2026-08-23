@@ -790,3 +790,70 @@ O botão do **Agente** monta as metades com `felixo-btn`/`felixo-btn-icon`, o
 mesmo arranjo que aqui partia a pílula no clique. Não foi alterado — está fora
 do escopo desta tarefa — e a medição do `:active` nele ficou inconclusiva no
 driver. Virou task própria.
+
+---
+
+## [2026-08-23] Ctrl+A seleciona o que foi escrito na linha de entrada
+
+**Contexto.** A anotação pedia "Ctrl+A para selecionar e poder apagar todo o
+input". A investigação tinha proposto trocar isso por "limpar a linha", já que
+num PTY não existe seleção de texto. Perguntado, o usuário manteve o pedido
+original: **Ctrl+A seleciona**. É o que foi feito — e o apagar veio junto, porque
+uma seleção que não se consegue apagar não resolveria a queixa.
+
+### Decisão
+
+`Ctrl+A` destaca, na **seleção do xterm** (a mesma do mouse, que o Ctrl+C já
+copia), o trecho entre o fim do prompt e o cursor. `Backspace`/`Delete` com essa
+seleção ativa apagam a linha inteira — `\x15\x0b` (Ctrl+U + Ctrl+K), sem `\r`
+junto, porque limpar não é enviar.
+
+Com a entrada vazia, ou numa linha sem marcador de prompt, a tecla **segue crua**
+para o PTY: o `0x01` ("ir para o começo da linha") continua valendo onde não
+atrapalha.
+
+A seleção só vira comando de apagar se ainda for a que o Ctrl+A fez
+(`session.selectedInput`): uma seleção de mouse no histórico não pode virar um
+"limpe a entrada".
+
+### Três erros que só a verificação no app revelou
+
+O módulo puro (`terminal-input-selection.ts`) passou nos testes desde o começo.
+O que os testes não sabiam, o app mostrou:
+
+1. **Linha lógica ≠ linha visual.** Passando da largura da janela, a entrada vira
+   duas linhas e o cursor para numa que **não tem prompt**. Texto curto
+   selecionava, texto longo não. Daí `positionFromOffset` e a subida por
+   `isWrapped` para reconstruir a linha lógica antes de decidir.
+2. **O último marcador é o errado.** `#`, `$` e `>` aparecem no texto digitado:
+   com `❯ [Pasted text #1 +6 lines]`, o `#` do texto virava o prompt e a seleção
+   saía como `1 +6 lines]`. É o **primeiro** marcador da linha que conta.
+3. **O espaço depois do marcador não é `0x20`.** As CLIs de tela cheia usam
+   espaço não separável, e comparar com `' '` deixava um espaço na frente da
+   seleção.
+
+Também ficou registrado um detalhe do driver que custou tempo: **o HMR do Vite
+não reatacha o `attachCustomKeyEventHandler`** de uma sessão já criada. Depois de
+editar o store é preciso relançar o app — senão a verificação testa o código
+antigo e o resultado engana.
+
+### Validação
+
+- `terminal-input-selection.test.ts`: 21 casos, incluindo os três erros acima
+  como regressão.
+- Suíte: `vitest` **541/541** (54 arquivos), `npm test` **728/728**, `eslint`,
+  `tsc -b` e `build` limpos.
+- No app, com tecla física (`xdotool`), nos três desenhos de entrada:
+  **shell** (`$`), **Claude Code** (`❯`, inclusive com o texto quebrando em duas
+  linhas visuais) e **Codex** (`›`). Em todos: Ctrl+A destaca só o que foi
+  escrito (o Ctrl+C devolve exatamente esse texto), Backspace esvazia a entrada e
+  **nada é enviado ao agente**.
+
+### Limite conhecido
+
+Quando o cursor está numa linha **sem** marcador de prompt — composer de várias
+linhas desenhado pelo TUI, por exemplo — o range volta `null` e o Ctrl+A segue
+para o PTY. Isso foi medido no Codex com o cursor fora do composer; **não** foi
+possível reproduzir o composer multi-linha para confirmar (o Shift+Enter enviado
+pelo driver submeteu o prompt em vez de quebrar a linha, e insistir gastaria a
+conta do usuário). Virou task própria.

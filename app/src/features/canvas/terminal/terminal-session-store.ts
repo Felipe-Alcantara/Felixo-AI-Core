@@ -3,6 +3,13 @@ import { FitAddon } from '@xterm/addon-fit'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
+  CLEAR_INPUT_SEQUENCE,
+  findTypedInputRange,
+  isDeleteSelectionKey,
+  isSelectInputShortcut,
+  positionFromOffset,
+} from './terminal-input-selection'
+import {
   findClipboardImage,
   formatImagePathForPrompt,
   hasClipboardText,
@@ -189,6 +196,14 @@ type Session = {
   command?: string
   /** Printable keystrokes typed since the last submit, to capture the prompt. */
   inputBuffer: string
+  /**
+   * O texto que o Ctrl+A destacou na linha de entrada.
+   *
+   * Guardado para que o Backspace só apague a linha quando a seleção ainda for
+   * aquela — uma seleção feita com o mouse no meio do histórico não pode virar
+   * um comando de limpar a entrada.
+   */
+  selectedInput?: string
   /** Buffer signature at the last idle check, to ignore in-place UI redraws. */
   lastSignature: string
   /** When output last changed the buffer in a meaningful way. */
@@ -382,6 +397,28 @@ export class TerminalSessionStore {
       }
       if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
         void pty.write({ sessionId: session.ptySessionId, data: '\n' })
+        return false
+      }
+      // Ctrl+A: selecionar o que foi escrito na linha de entrada.
+      //
+      // No terminal essa tecla é o `0x01` — "ir para o começo da linha" — e não
+      // existe seleção de texto numa linha de PTY. O que existe é a seleção do
+      // xterm, a mesma do mouse, que o Ctrl+C já copia: é ela que destacamos,
+      // do fim do prompt até o cursor. Com a entrada vazia (ou numa linha sem
+      // prompt) não há o que destacar e a tecla segue crua, preservando o gesto
+      // de sempre onde ele não atrapalha.
+      if (isSelectInputShortcut(event)) {
+        // `false` engole a tecla quando houve seleção; `true` deixa o `0x01`
+        // seguir para o PTY quando não havia nada escrito.
+        return !this.selectTypedInput(session)
+      }
+      // Backspace com essa seleção ativa apaga a linha inteira — sem isso, o
+      // Ctrl+A destacaria um texto que ninguém consegue apagar de uma vez, que
+      // era exatamente a queixa de origem.
+      if (isDeleteSelectionKey(event) && this.hasTypedInputSelection(session)) {
+        void pty.write({ sessionId: session.ptySessionId, data: CLEAR_INPUT_SEQUENCE })
+        session.terminal.clearSelection()
+        session.selectedInput = undefined
         return false
       }
       // Ctrl+C dentro do terminal é o `0x03`: `SIGINT` para a CLI do agente, que
@@ -717,6 +754,57 @@ export class TerminalSessionStore {
   }
 
   /**
+   * Destaca o texto digitado na linha onde o cursor está.
+   *
+   * Devolve `false` quando não há nada a destacar, para quem chamou deixar a
+   * tecla seguir para o PTY.
+   */
+  private selectTypedInput(session: Session): boolean {
+    const { terminal } = session
+    const buffer = terminal.buffer.active
+    const cursorRow = buffer.baseY + buffer.cursorY
+
+    // Uma entrada mais larga que a janela vira duas ou três linhas visuais, e o
+    // cursor para numa delas — que não tem prompt. Subir pelas linhas marcadas
+    // como continuação reconstrói a linha lógica, que é onde o prompt está.
+    let startRow = cursorRow
+    while (startRow > 0 && buffer.getLine(startRow)?.isWrapped) {
+      startRow -= 1
+    }
+
+    let logicalLine = ''
+    for (let row = startRow; row < cursorRow; row += 1) {
+      // Sem aparar à direita: nas linhas do meio o espaço em branco é coluna
+      // ocupada, e comê-lo desalinharia a conta que devolve a coordenada.
+      logicalLine += buffer.getLine(row)?.translateToString(false) ?? ''
+    }
+    logicalLine += (buffer.getLine(cursorRow)?.translateToString(false) ?? '').slice(
+      0,
+      buffer.cursorX,
+    )
+
+    const range = findTypedInputRange(logicalLine, logicalLine.length)
+    if (!range) {
+      return false
+    }
+
+    const inicio = positionFromOffset(startRow, range.start, terminal.cols)
+    terminal.select(inicio.col, inicio.row, range.length)
+    session.selectedInput = terminal.getSelection()
+
+    return Boolean(session.selectedInput)
+  }
+
+  /** Se a seleção ativa ainda é a que o Ctrl+A fez na linha de entrada. */
+  private hasTypedInputSelection(session: Session): boolean {
+    return (
+      Boolean(session.selectedInput) &&
+      session.terminal.hasSelection() &&
+      session.terminal.getSelection() === session.selectedInput
+    )
+  }
+
+  /**
    * Copia a seleção pelo teclado e a desfaz em seguida.
    *
    * Diferente de `copy`, não cai para o viewport: quem chega aqui só chega com
@@ -730,6 +818,7 @@ export class TerminalSessionStore {
     }
     await navigator.clipboard?.writeText(text)
     session.terminal.clearSelection()
+    session.selectedInput = undefined
   }
 
   /**
