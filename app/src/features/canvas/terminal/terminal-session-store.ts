@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
+import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
   findClipboardImage,
   formatImagePathForPrompt,
@@ -383,6 +384,19 @@ export class TerminalSessionStore {
         void pty.write({ sessionId: session.ptySessionId, data: '\n' })
         return false
       }
+      // Ctrl+C dentro do terminal é o `0x03`: `SIGINT` para a CLI do agente, que
+      // interrompe o turno (e encerra a sessão no segundo aperto seguido). Com
+      // texto selecionado a intenção é copiar, e é isso que atendemos aqui,
+      // devolvendo `false` para o PTY não receber o sinal. Sem seleção a tecla
+      // segue intacta: interromper com Ctrl+C é o gesto padrão de terminal.
+      const copyDecision = decideCopyShortcut(event, terminal.hasSelection())
+      if (copyDecision === 'copy') {
+        void this.copySelection(session)
+        return false
+      }
+      if (copyDecision === 'passthrough') {
+        return true
+      }
       // Ctrl+V (Cmd+V no macOS) com imagem na área de transferência não gera
       // evento `paste` nenhum — ver `pasteClipboardImageFromOs`. A tecla, essa,
       // chega, e é por ela que a colagem é atendida.
@@ -700,6 +714,22 @@ export class TerminalSessionStore {
         session.inputBuffer += char
       }
     }
+  }
+
+  /**
+   * Copia a seleção pelo teclado e a desfaz em seguida.
+   *
+   * Diferente de `copy`, não cai para o viewport: quem chega aqui só chega com
+   * seleção, e limpar depois evita que o próximo Ctrl+C copie de novo sem querer
+   * quando a intenção já era interromper o agente.
+   */
+  private async copySelection(session: Session): Promise<void> {
+    const text = session.terminal.getSelection()
+    if (!text) {
+      return
+    }
+    await navigator.clipboard?.writeText(text)
+    session.terminal.clearSelection()
   }
 
   /**
