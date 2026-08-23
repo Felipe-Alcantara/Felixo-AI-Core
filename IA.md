@@ -673,3 +673,61 @@ linha dele e o jogava para o fim do dock no próximo início, mudando o `#N`.
 - O carimbo de `orderIndex` em canvas antigos congela a ordem que existir no
   primeiro carregamento após esta versão — que pode já ter derivado de
   `updated_at`. A partir daí, é estável.
+
+---
+
+## [2026-08-23] Ctrl+C no terminal: copiar a seleção sem perder o SIGINT
+
+**Contexto.** A anotação do usuário dizia que selecionar texto no terminal e
+apertar Ctrl+C "às vezes" encerrava a sessão. A investigação mostrou que não era
+intermitente: **nunca copiava**. No xterm, Ctrl+C é o caractere `0x03` — vira
+`SIGINT` e quem decide o resto é a CLI do agente. O Claude Code interrompe o
+turno e, no segundo aperto seguido, encerra; daí a impressão de "às vezes fecha".
+
+O `attachCustomKeyEventHandler` de `terminal-session-store.ts` já interceptava
+Shift+Enter e Ctrl+V, mas não Ctrl+C. A metade cara já existia: o método
+`copy(id)`, usado pelo botão, lê a seleção e escreve na área de transferência.
+Faltava ligar a tecla.
+
+### Decisão
+
+A regra depende de uma coisa só, a **seleção**: com texto selecionado a intenção
+é copiar; sem seleção, Ctrl+C continua sendo o gesto padrão de terminal para
+interromper — e alguém depende disso. Transformar Ctrl+C em "sempre copiar"
+seria trocar um bug por outro.
+
+A decisão foi isolada em `terminal-copy-shortcut.ts` (`decideCopyShortcut` →
+`'copy'` | `'passthrough'` | `null`), longe do DOM e do PTY, no mesmo molde de
+`terminal-image-paste.ts`, para ser testável direto. Ctrl+Shift+C e Cmd+C
+(macOS) entram pelo mesmo caminho, reusando a distinção `metaKey`/`ctrlKey` que
+a colagem já fazia — em vez de inventar outra.
+
+### Implementação
+
+- `terminal-copy-shortcut.ts` (novo): a decisão pura e o porquê de cada ramo.
+- `terminal-session-store.ts`: o handler consulta a decisão antes do Ctrl+V;
+  `copy` chama o novo `copySelection(session)` e devolve `false`, para o `0x03`
+  não chegar ao PTY; `passthrough` devolve `true`.
+- `copySelection` é privado e, ao contrário do `copy(id)` do botão, **não** cai
+  para o viewport — quem chega ali só chega com seleção — e limpa a seleção
+  depois, para o próximo Ctrl+C não copiar de novo sem querer.
+
+### Validação
+
+- `terminal-copy-shortcut.test.ts`: 8 casos (com/sem seleção, Ctrl+Shift+C,
+  Cmd+C, sem modificador, outra tecla, Ctrl+Alt+C, `keyup`).
+- `vitest run src/features/canvas/terminal/`: 10 arquivos, **135 testes**
+  passando. `tsc -b` limpo.
+- No app real (Electron sob xvfb, userData isolado, agente "Nenhum (shell)") com
+  **tecla de verdade** via `xdotool` — tecla sintética do CDP não serve aqui:
+  com `FELIXOCOPIA` selecionado, o Ctrl+C deixou `FELIXOCOPIA` na área de
+  transferência do SO, **nenhum `^C` chegou ao shell** e a seleção sumiu; sem
+  seleção, `naoenviar` + Ctrl+C imprimiu `naoenviar^C` e um prompt novo.
+
+### Estado e pendência
+
+- Concluído no código e no app (`3493f88`).
+- A seleção precisou ser feita com mouse real (`xdotool`): evento de mouse
+  sintético no `.xterm-screen` **não** cria seleção no xterm. Fica registrado
+  para a próxima verificação manual não perder tempo com isso.
+- A tarefa irmã do **Ctrl+A** (mesmo handler) segue aberta e não foi feita aqui.
