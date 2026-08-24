@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLEAR_INPUT_SEQUENCE,
+  findMultiLineTypedInputRange,
   findTypedInputRange,
   isDeleteSelectionKey,
   isSelectInputShortcut,
@@ -62,6 +63,52 @@ describe('findTypedInputRange', () => {
   it('não confunde uma variável de ambiente com o prompt do shell', () => {
     const linha = 'felipe@maquina:~$ echo $HOME'
     expect(findTypedInputRange(linha, linha.length)).toEqual({ start: 18, length: 10 })
+  })
+})
+
+describe('findMultiLineTypedInputRange', () => {
+  it('sobe até o prompt e monta três linhas de um composer com moldura', () => {
+    const lines = ['│ ❯ primeira linha │', '│   segunda linha  │', '│   terceira linha │']
+
+    expect(findMultiLineTypedInputRange(lines, 2, '│   terceira linha'.length)).toEqual({
+      startLine: 0,
+      startColumn: 4,
+      text: 'primeira linha\nsegunda linha\nterceira linha',
+    })
+  })
+
+  it('preserva uma continuação sem recuo em um TUI sem moldura', () => {
+    const lines = ['› primeira linha', 'segunda linha', 'terceira linha']
+
+    expect(findMultiLineTypedInputRange(lines, 2, 'terceira linha'.length)).toEqual({
+      startLine: 0,
+      startColumn: 2,
+      text: 'primeira linha\nsegunda linha\nterceira linha',
+    })
+  })
+
+  it('não toma um redirecionamento da continuação pelo marcador de prompt', () => {
+    const lines = ['› primeira linha', '  segunda > arquivo', '  terceira linha']
+
+    expect(findMultiLineTypedInputRange(lines, 2, '  terceira linha'.length)).toEqual({
+      startLine: 0,
+      startColumn: 2,
+      text: 'primeira linha\nsegunda > arquivo\nterceira linha',
+    })
+  })
+
+  it('ignora uma linha de saída antes do composer que contém >', () => {
+    const lines = ['resultado > arquivo', '› primeira linha', 'segunda linha']
+
+    expect(findMultiLineTypedInputRange(lines, 2, 'segunda linha'.length)).toEqual({
+      startLine: 1,
+      startColumn: 2,
+      text: 'primeira linha\nsegunda linha',
+    })
+  })
+
+  it('não inventa uma entrada quando nenhuma linha tem marcador', () => {
+    expect(findMultiLineTypedInputRange(['saída anterior', 'ainda saída'], 1, 11)).toBeNull()
   })
 })
 

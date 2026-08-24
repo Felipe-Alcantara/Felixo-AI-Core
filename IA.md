@@ -1110,3 +1110,23 @@ principal a redireciona para o navegador do sistema. Esquemas como `file:`,
 
 **Validação.** Testes cobrem os esquemas permitidos e bloqueados, a exigência
 do modificador e a ativação. A suíte de frontend confirma o registro do addon.
+
+---
+
+## [2026-08-24] Ctrl+A alcança composers de múltiplas linhas
+
+**Problema.** A seleção de entrada só reconstruía linhas que o xterm marcava
+como `isWrapped`. Quebras lógicas desenhadas pelo composer após Shift+Enter
+deixavam o cursor numa linha sem marcador e o Ctrl+A voltava ao PTY.
+
+**Decisão.** A busca sobe no máximo quatro linhas a partir do cursor, até o
+marcador de prompt. É alcance suficiente para o composer curto sem transformar
+Ctrl+A em seleção de saída antiga.
+
+**Implementação.** O intervalo selecionado permanece contínuo, como o xterm
+exige, mas o texto guardado para Ctrl+C é montado sem prompt, preenchimento ou
+molduras laterais. Ctrl+U seguido de Ctrl+K continua sendo enviado pelo
+Backspace, sem Enter.
+
+**Validação.** Os testes montam três linhas de buffer, com e sem moldura,
+além dos casos de entrada simples, quebra visual e entrada ausente.

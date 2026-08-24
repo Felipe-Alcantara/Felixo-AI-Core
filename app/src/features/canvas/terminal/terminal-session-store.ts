@@ -6,10 +6,9 @@ import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-inp
 import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
   CLEAR_INPUT_SEQUENCE,
-  findTypedInputRange,
+  findMultiLineTypedInputRange,
   isDeleteSelectionKey,
   isSelectInputShortcut,
-  positionFromOffset,
 } from './terminal-input-selection'
 import {
   findClipboardImage,
@@ -153,6 +152,7 @@ const CONTEXT_DELIVERY_WINDOW_MS = 30000
  * sequência, longa o bastante para cobrir a ida e volta ao processo principal.
  */
 const IMAGE_PASTE_DEDUPE_MS = 500
+const MAX_MULTILINE_INPUT_ROWS = 4
 
 type SessionOptions = {
   command?: string
@@ -205,7 +205,12 @@ type Session = {
    * aquela — uma seleção feita com o mouse no meio do histórico não pode virar
    * um comando de limpar a entrada.
    */
-  selectedInput?: string
+  selectedInput?: {
+    /** Texto que o xterm destacou, usado para confirmar que ele ainda está ativo. */
+    selection: string
+    /** Texto digitado sem o prompt nem a moldura que a CLI desenha. */
+    text: string
+  }
   /** Buffer signature at the last idle check, to ignore in-place UI redraws. */
   lastSignature: string
   /** When output last changed the buffer in a meaningful way. */
@@ -776,44 +781,36 @@ export class TerminalSessionStore {
     const buffer = terminal.buffer.active
     const cursorRow = buffer.baseY + buffer.cursorY
 
-    // Uma entrada mais larga que a janela vira duas ou três linhas visuais, e o
-    // cursor para numa delas — que não tem prompt. Subir pelas linhas marcadas
-    // como continuação reconstrói a linha lógica, que é onde o prompt está.
-    let startRow = cursorRow
-    while (startRow > 0 && buffer.getLine(startRow)?.isWrapped) {
-      startRow -= 1
+    // Quebras visuais e lógicas deixam o cursor numa linha sem marcador. A
+    // busca limitada encontra o começo do composer sem alcançar a saída antiga.
+    const firstRow = Math.max(0, cursorRow - (MAX_MULTILINE_INPUT_ROWS - 1))
+    const lines: string[] = []
+    for (let row = firstRow; row <= cursorRow; row += 1) {
+      lines.push(buffer.getLine(row)?.translateToString(false) ?? '')
     }
 
-    let logicalLine = ''
-    for (let row = startRow; row < cursorRow; row += 1) {
-      // Sem aparar à direita: nas linhas do meio o espaço em branco é coluna
-      // ocupada, e comê-lo desalinharia a conta que devolve a coordenada.
-      logicalLine += buffer.getLine(row)?.translateToString(false) ?? ''
-    }
-    logicalLine += (buffer.getLine(cursorRow)?.translateToString(false) ?? '').slice(
-      0,
-      buffer.cursorX,
-    )
-
-    const range = findTypedInputRange(logicalLine, logicalLine.length)
+    const range = findMultiLineTypedInputRange(lines, lines.length - 1, buffer.cursorX)
     if (!range) {
       return false
     }
 
-    const inicio = positionFromOffset(startRow, range.start, terminal.cols)
-    terminal.select(inicio.col, inicio.row, range.length)
-    session.selectedInput = terminal.getSelection()
+    const startRow = firstRow + range.startLine
+    const selectionLength =
+      (cursorRow - startRow) * terminal.cols + buffer.cursorX - range.startColumn
+    terminal.select(range.startColumn, startRow, selectionLength)
+    session.selectedInput = { selection: terminal.getSelection(), text: range.text }
 
     return Boolean(session.selectedInput)
   }
 
   /** Se a seleção ativa ainda é a que o Ctrl+A fez na linha de entrada. */
   private hasTypedInputSelection(session: Session): boolean {
-    return (
-      Boolean(session.selectedInput) &&
-      session.terminal.hasSelection() &&
-      session.terminal.getSelection() === session.selectedInput
-    )
+    const selectedInput = session.selectedInput
+    if (!selectedInput) {
+      return false
+    }
+
+    return session.terminal.hasSelection() && session.terminal.getSelection() === selectedInput.selection
   }
 
   /**
@@ -824,7 +821,9 @@ export class TerminalSessionStore {
    * quando a intenção já era interromper o agente.
    */
   private async copySelection(session: Session): Promise<void> {
-    const text = session.terminal.getSelection()
+    const selection = session.terminal.getSelection()
+    const text =
+      session.selectedInput?.selection === selection ? session.selectedInput.text : selection
     if (!text) {
       return
     }

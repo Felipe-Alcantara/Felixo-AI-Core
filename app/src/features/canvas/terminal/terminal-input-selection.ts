@@ -26,6 +26,13 @@ export type TypedInputRange = {
   length: number
 }
 
+/** A entrada localizada em uma sequência curta de linhas do buffer. */
+export type MultiLineTypedInputRange = {
+  startLine: number
+  startColumn: number
+  text: string
+}
+
 /**
  * O trecho digitado na linha onde o cursor está.
  *
@@ -66,6 +73,70 @@ export function findTypedInputRange(line: string, cursorX: number): TypedInputRa
   const length = antesDoCursor.length - start
 
   return length > 0 ? { start, length } : null
+}
+
+/**
+ * Encontra uma entrada que o composer desenhou em várias linhas lógicas.
+ *
+ * O xterm marca apenas quebras automáticas com `isWrapped`; Shift+Enter cria
+ * linhas independentes e deixa o cursor numa delas, sem o marcador de prompt.
+ * Por isso procuramos o marcador nas poucas linhas anteriores e retornamos o
+ * texto limpo que deve ir para a área de transferência.
+ */
+export function findMultiLineTypedInputRange(
+  lines: string[],
+  cursorLine: number,
+  cursorX: number,
+): MultiLineTypedInputRange | null {
+  // O prompt vem antes das continuações. Procurar de cima para baixo preserva
+  // um `>` ou `$` que a pessoa escreveu nas linhas seguintes.
+  for (let lineIndex = 0; lineIndex <= cursorLine; lineIndex += 1) {
+    if (!looksLikePromptLine(lines[lineIndex])) {
+      continue
+    }
+
+    const lineEnd = lineIndex === cursorLine ? cursorX : lines[lineIndex].length
+    const range = findTypedInputRange(lines[lineIndex], lineEnd)
+    if (!range) {
+      continue
+    }
+
+    const hasFrame = /^[\s│┃|]*[│┃|]/.test(lines[lineIndex])
+    const text = lines
+      .slice(lineIndex, cursorLine + 1)
+      .map((line, index) => {
+        const end = lineIndex + index === cursorLine ? cursorX : line.length
+        const start = index === 0 ? range.start : continuationStart(line, range.start, hasFrame)
+        return trimComposerLine(line.slice(start, end), hasFrame)
+      })
+      .join('\n')
+
+    return { startLine: lineIndex, startColumn: range.start, text }
+  }
+
+  return null
+}
+
+function looksLikePromptLine(line: string): boolean {
+  // Claude e Codex põem o marcador no começo da área de edição, às vezes depois
+  // da borda da caixa. Shells deixam `$` ou `#` antes de um espaço.
+  return /^[\s│┃|]*[❯›>](?:\s|$)/.test(line) || /[$#]\s/.test(line)
+}
+
+function continuationStart(line: string, promptStart: number, hasFrame: boolean): number {
+  if (hasFrame) {
+    return promptStart
+  }
+
+  // TUI sem moldura normalmente mantém o recuo do prompt. Se não o fizer,
+  // começar em zero evita comer o primeiro caractere da continuação.
+  const indentation = line.match(/^\s*/)?.[0].length ?? 0
+  return Math.min(promptStart, indentation)
+}
+
+function trimComposerLine(line: string, hasFrame: boolean): string {
+  const withoutPadding = line.replace(/\s+$/, '')
+  return hasFrame ? withoutPadding.replace(/\s*[│┃|]\s*$/, '') : withoutPadding
 }
 
 /** Uma coordenada do buffer do xterm: linha absoluta e coluna. */
