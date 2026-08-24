@@ -1046,3 +1046,23 @@ aviso vermelho junto ao prompt, em vez de fazer a edição parecer salva.
 inválido e protege a união parcial. `tsc -b`, `npm run lint`, `npm run
 test:frontend` (**562/562**) e `npm test` (**729 passando, 3 pulados, 0
 falhando**) passaram.
+
+---
+
+## [2026-08-24] Novo prompt só passa a existir depois de o SQLite confirmar
+
+**Problema.** O botão `Novo prompt` criava na interface uma automation com
+texto vazio e tentava gravá-la imediatamente. O repositório corretamente a
+recusava, mas o item ainda aparecia no estado local; ao recarregar, sumia como
+se tivesse sido salvo.
+
+**Decisão.** A criação agora abre um rascunho local, separado de `custom`.
+Ele explica que falta o texto do prompt e não chama o IPC enquanto estiver
+vazio. Só uma resposta `ok: true` adiciona a automation à lista persistida;
+recusa ou falha mantêm o rascunho e mostram uma mensagem acionável.
+
+**Validação.** O teste unitário protege os três limites: texto vazio sem
+chamada ao backend, primeira gravação válida e recusa do backend. No Electron
+isolado, o rascunho vazio manteve o SQLite vazio; após preencher o texto, a
+automation voltou da listagem com id e `updatedAt`, inclusive depois de
+recarregar. O item de QA foi removido ao final.

@@ -13,6 +13,10 @@ import { AUTOMATION_SCOPE_LABELS, AUTOMATION_SCOPES } from '../../../shared/type
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
 import type { SkillActivationResult } from './SkillsPanel'
 import { composeSelectedPrompts } from '../../services/prompt-composition'
+import {
+  createCustomAutomation,
+  CUSTOM_AUTOMATION_TEXT_REQUIRED,
+} from '../../services/custom-automation-creation'
 
 type PromptsPanelProps = {
   onClose: () => void
@@ -51,6 +55,8 @@ export function PromptsPanel({
   toolsMenuOpen,
 }: PromptsPanelProps) {
   const [custom, setCustom] = useState<AutomationDefinition[]>([])
+  const [draft, setDraft] = useState<AutomationDefinition | null>(null)
+  const [isCreatingDraft, setIsCreatingDraft] = useState(false)
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackIsError, setFeedbackIsError] = useState(false)
@@ -216,9 +222,11 @@ export function PromptsPanel({
     [schedulePersist],
   )
 
-  const addCustomAutomation = useCallback(async () => {
+  const startCustomAutomation = useCallback(() => {
     const now = new Date().toISOString()
-    const automation: AutomationDefinition = {
+    setFeedbackId(null)
+    setIsCreatingDraft(false)
+    setDraft({
       id: createAutomationId(),
       name: 'Novo prompt',
       description: '',
@@ -226,9 +234,36 @@ export function PromptsPanel({
       scope: 'chat',
       createdAt: now,
       updatedAt: now,
+    })
+  }, [])
+
+  const createDraftAutomation = useCallback(async () => {
+    if (!draft || isCreatingDraft) return
+
+    setIsCreatingDraft(true)
+    try {
+      const result = await createCustomAutomation(
+        draft,
+        async (automation) => window.felixo?.automations?.save(automation),
+      )
+
+      if (result.status === 'saved') {
+        setCustom((current) => [...current, result.automation])
+        setDraft(null)
+        return
+      }
+
+      setFeedbackId('draft')
+      setFeedbackIsError(true)
+      setFeedbackText(result.message)
+    } finally {
+      setIsCreatingDraft(false)
     }
-    await window.felixo?.automations?.save(automation)
-    setCustom((current) => [...current, automation])
+  }, [draft, isCreatingDraft])
+
+  const updateDraft = useCallback((patch: Partial<AutomationDefinition>) => {
+    setFeedbackId((id) => (id === 'draft' ? null : id))
+    setDraft((current) => (current ? { ...current, ...patch } : current))
   }, [])
 
   const removeCustomAutomation = useCallback(async (automationId: string) => {
@@ -288,13 +323,79 @@ export function PromptsPanel({
         </label>
         <button
           type="button"
-          onClick={() => void addCustomAutomation()}
+          onClick={startCustomAutomation}
+          disabled={Boolean(draft)}
           className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
         >
           <Plus size={13} />
           Novo prompt
         </button>
       </div>
+
+      {draft && (
+        <section className="mb-3 rounded border border-emerald-500/30 bg-emerald-500/[0.06] p-2.5">
+          <div className="mb-1 flex items-center gap-2">
+            <input
+              value={draft.name}
+              onChange={(event) => updateDraft({ name: event.target.value })}
+              placeholder="Nome do prompt"
+              className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setDraft(null)}
+              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              aria-label="Cancelar novo prompt"
+            >
+              ×
+            </button>
+          </div>
+          <input
+            value={draft.description}
+            onChange={(event) => updateDraft({ description: event.target.value })}
+            placeholder="Descrição curta…"
+            className="mb-1 w-full bg-transparent text-xs text-zinc-500 outline-none placeholder:text-zinc-600"
+          />
+          <textarea
+            value={draft.prompt}
+            onChange={(event) => updateDraft({ prompt: event.target.value })}
+            placeholder="Texto do prompt…"
+            rows={2}
+            className="mb-1 w-full resize-y rounded bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-none placeholder:text-zinc-600"
+          />
+          <div className="flex items-center justify-between gap-2">
+            <select
+              value={draft.scope}
+              onChange={(event) => updateDraft({ scope: event.target.value as AutomationScope })}
+              className="rounded bg-zinc-900/60 px-1.5 py-1 text-xs text-zinc-300 outline-none"
+            >
+              {SCOPES.map((scope) => (
+                <option key={scope} value={scope}>
+                  {scope}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void createDraftAutomation()}
+              disabled={isCreatingDraft}
+              className="felixo-btn rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+            >
+              {isCreatingDraft ? 'Criando…' : 'Criar prompt'}
+            </button>
+          </div>
+          {feedbackId === 'draft' ? (
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-red-300">
+              <CircleAlert size={11} />
+              {feedbackText}
+            </p>
+          ) : !draft.prompt.trim() ? (
+            <p className="mt-1 text-[11px] text-zinc-400">
+              {CUSTOM_AUTOMATION_TEXT_REQUIRED}
+            </p>
+          ) : null}
+        </section>
+      )}
 
       <div className="mb-3 rounded border border-sky-500/20 bg-sky-500/[0.06] p-2.5 text-xs leading-relaxed text-sky-100/80">
         Marque um ou vários prompts para montar uma única tarefa. Os textos são
