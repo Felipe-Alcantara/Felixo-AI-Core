@@ -138,11 +138,19 @@ export function TerminalMenu({
         }
       }}
     >
-      <div className="flex w-full overflow-hidden rounded-lg shadow-lg ring-1 ring-white/10">
+      {/*
+        O `felixo-btn` fica na moldura, não nas metades: aplicado em cada metade,
+        pressionar uma delas encolhia só ela e abria fresta no meio da pílula
+        (medido em 24/08/2026: 2,34px pela metade rotulada, 1,35px pela setinha,
+        com a moldura parada em `transform: none`). As metades usam
+        `felixo-btn-flat`, que mantém transição e anel de foco sem o `scale`.
+        Mesmo conserto do controle dividido do Organizar (commit 83178b9).
+      */}
+      <div className="felixo-btn flex w-full overflow-hidden rounded-lg shadow-lg ring-1 ring-white/10">
         <button
           type="button"
           onClick={openTerminal}
-          className="felixo-btn flex flex-1 items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700"
+          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700"
         >
           <TerminalSquare size={16} />
           Agente
@@ -150,7 +158,7 @@ export function TerminalMenu({
         <button
           type="button"
           onClick={toggleSettings}
-          className="felixo-btn-icon border-l border-white/10 bg-zinc-800 px-1.5 text-zinc-300 hover:bg-zinc-700"
+          className="felixo-btn-flat border-l border-white/10 bg-zinc-800 px-1.5 text-zinc-300 hover:bg-zinc-700"
           aria-label="Configurar novo agente"
           aria-controls={`${fieldIdPrefix}-settings`}
           aria-expanded={open}

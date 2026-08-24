@@ -857,3 +857,57 @@ para o PTY. Isso foi medido no Codex com o cursor fora do composer; **não** foi
 possível reproduzir o composer multi-linha para confirmar (o Shift+Enter enviado
 pelo driver submeteu o prompt em vez de quebrar a linha, e insistir gastaria a
 conta do usuário). Virou task própria.
+
+---
+
+## [2026-08-24] O botão dividido do Agente: a mesma fresta, agora medida
+
+**Contexto.** O conserto do Organizar (23/08/2026, commit `83178b9`) deixou uma
+pendência declarada: o botão do **Agente** montava as metades do mesmo jeito
+— `felixo-btn` na metade rotulada e `felixo-btn-icon` na setinha, dentro de um
+contêiner `overflow-hidden` — e devia partir a pílula no clique. Era previsão por
+leitura de código: a medição da época não fechou, porque o clique abre um
+terminal e o React re-renderiza a árvore no meio da leitura.
+
+### O que foi medido
+
+A medição saiu com Chrome real dirigido pelo `playwright-core` que já vinha nas
+dependências, contra o Vite em `127.0.0.1:5173`. Dois detalhes fizeram ela
+funcionar onde a anterior falhou: `page.mouse.down()` produz `:active` de
+verdade (evento sintético não produz), e o ponteiro sai da área **antes** do
+`mouse.up()` — sem `click`, o `onClick` não dispara e nada re-renderiza.
+
+| Medida (com o botão pressionado) | Antes | Depois |
+| --- | --- | --- |
+| `transform` da moldura | `none` | `matrix(0.96, …)` |
+| `transform` da metade rotulada | `matrix(0.96, …)` | `none` |
+| `transform` da setinha | `matrix(0.9, …)` | `none` |
+| Fresta rótulo↔setinha (metade rotulada) | **2,34px** | **0** |
+| Fresta rótulo↔setinha (setinha) | **1,35px** | **0** |
+
+O defeito previsto existia, e era pior na metade rotulada que na setinha só por
+causa das escalas diferentes (`0.96` contra `0.9`). Vale o registro: a setinha
+usava a escala **maior** de afundamento (`felixo-btn-icon`), pensada para alvo
+pequeno isolado — dentro de uma pílula ela só aumentava o rasgo.
+
+### O que foi feito
+
+Igual ao Organizar: `felixo-btn` saiu das duas metades e foi para a moldura;
+as metades ficaram com `felixo-btn-flat` (mesma transição e mesmo anel de foco,
+sem o `scale`), criada justamente para isso no conserto anterior. Nenhuma outra
+diferença sobrou: o contêiner do Agente já era moldura pura, sem fundo nem hover
+próprios — foi dele que o padrão veio.
+
+### Validação
+
+- Medição acima, no app rodando, antes e depois.
+- Hover continua isolado por metade: passar no rótulo deixa o rótulo em
+  `rgb(63,63,70)` e a setinha em `rgb(39,39,42)`, e vice-versa.
+- O menu de configuração continua abrindo: clicar na setinha leva
+  `aria-expanded` a `true` e o painel a altura maior que zero.
+- `tsc -b`, `eslint .` e `vitest` (**559/559**, 56 arquivos) limpos.
+- `npm test`: **726/728**. As duas falhas são de ambiente e **anteriores** a esta
+  mudança — conferido com o arquivo em `git stash`, o mesmo par falha em
+  `electron/services/pty-process-manager.test.cjs`, porque o teste espera o
+  comando `codex` puro e a máquina resolve `codex.cmd` do PATH do usuário.
+  Virou task própria.
