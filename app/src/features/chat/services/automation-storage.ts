@@ -1,4 +1,5 @@
 import type { AutomationDefinition, AutomationScope } from '../types'
+import { AUTOMATION_SCOPES } from '../../shared/types/automations'
 
 const AUTOMATIONS_STORAGE_KEY = 'felixo-ai-core.customAutomations'
 const AUTOMATIONS_BACKEND_MIGRATION_KEY =
@@ -161,13 +162,17 @@ function getOptionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+/**
+ * Deriva de AUTOMATION_SCOPES em vez de repetir a lista.
+ *
+ * Esta funcao ja teve a lista escrita a mao e sem `notion`: um prompt salvo
+ * nesse topico era descartado aqui, antes de chegar ao IPC, e desaparecia na
+ * leitura seguinte do localStorage. Repetir a lista certa noutro lugar so
+ * adiaria o proximo desencontro.
+ */
 function isAutomationScope(value: unknown): value is AutomationScope {
   return (
-    value === 'chat' ||
-    value === 'code' ||
-    value === 'docs' ||
-    value === 'git' ||
-    value === 'planning' ||
-    value === 'security'
+    typeof value === 'string' &&
+    (AUTOMATION_SCOPES as string[]).includes(value)
   )
 }

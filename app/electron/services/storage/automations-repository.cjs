@@ -1,6 +1,11 @@
 'use strict'
 
-const VALID_SCOPES = new Set(['chat', 'code', 'docs', 'git', 'planning'])
+// Os topicos vem do JSON compartilhado, nao de uma copia local: a lista ja
+// esteve escrita em quatro lugares que discordavam, e um prompt salvo com um
+// topico que o seletor oferecia era recusado aqui e sumia sem aviso.
+const { scopes } = require('./automation-scopes.json')
+
+const VALID_SCOPES = new Set(scopes)
 
 function createAutomationsRepository(database) {
   const connection = database?.connection ?? database

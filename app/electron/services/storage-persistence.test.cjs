@@ -23,6 +23,14 @@ const {
   createProjectsRepository,
 } = require('./storage/projects-repository.cjs')
 const {
+  createAutomationsRepository,
+  normalizeAutomation: normalizeAutomationRow,
+  VALID_SCOPES,
+} = require('./storage/automations-repository.cjs')
+const {
+  scopes: AUTOMATION_SCOPES_JSON,
+} = require('./storage/automation-scopes.json')
+const {
   createChatHistoryRepository,
 } = require('./storage/chat-history-repository.cjs')
 const {
@@ -462,6 +470,124 @@ function sqliteTestOptions() {
     skip: hasNodeSqlite() ? false : 'node:sqlite indisponivel neste runtime',
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// Topicos (scope) de um prompt: uma fonte de verdade, quatro lugares que
+// precisam concordar. Ver 009_automations_scopes.sql e automation-scopes.json.
+// ---------------------------------------------------------------------------
+
+test('os quatro lugares que declaram os topicos de um prompt concordam', () => {
+  const esperados = [...AUTOMATION_SCOPES_JSON].sort()
+
+  // 1. O repositorio SQLite valida a partir do JSON.
+  assert.deepEqual(
+    [...VALID_SCOPES].sort(),
+    esperados,
+    'VALID_SCOPES do repositorio divergiu de automation-scopes.json',
+  )
+
+  // 2. A uniao TypeScript e escrita a mao (TS nao deriva uniao de JSON), entao
+  //    e conferida por texto.
+  const tiposFonte = fs.readFileSync(
+    path.join(__dirname, '../../src/features/shared/types/automations.ts'),
+    'utf8',
+  )
+  const uniao = /export type AutomationScope =([\s\S]*?)\r?\n\r?\n/.exec(tiposFonte)
+  assert.ok(uniao, 'nao foi possivel ler a uniao AutomationScope')
+  const daUniao = [...uniao[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort()
+  assert.deepEqual(
+    daUniao,
+    esperados,
+    'a uniao AutomationScope divergiu de automation-scopes.json',
+  )
+
+  // 3. Os rotulos precisam cobrir todos os topicos, senao um deles aparece
+  //    sem nome no seletor.
+  const rotulos = /AUTOMATION_SCOPE_LABELS[\s\S]*?\{([\s\S]*?)\r?\n\}/.exec(tiposFonte)
+  assert.ok(rotulos, 'nao foi possivel ler AUTOMATION_SCOPE_LABELS')
+  const rotulados = [...rotulos[1].matchAll(/^\s{2}([a-z]+):/gm)].map((m) => m[1]).sort()
+  assert.deepEqual(
+    rotulados,
+    esperados,
+    'AUTOMATION_SCOPE_LABELS nao cobre exatamente os topicos do JSON',
+  )
+
+  // 4. O CHECK do SQLite e SQL, nao le JSON: e conferido contra a migracao
+  //    mais recente que redefine a tabela.
+  const migracoes = listStorageMigrations()
+  const comCheck = migracoes
+    .filter((migracao) => /CHECK\s*\(\s*scope IN/.test(migracao.sql))
+    .pop()
+  assert.ok(comCheck, 'nenhuma migracao define o CHECK de scope')
+  // So o que esta DENTRO do parenteses do CHECK: os comentarios da migracao
+  // tambem citam os topicos entre aspas, e varreriam o arquivo inteiro.
+  const trechoCheck = /CHECK\s*\(\s*scope IN\s*\(([^)]*)\)/.exec(comCheck.sql)
+  assert.ok(trechoCheck, `nao foi possivel ler o CHECK de ${comCheck.fileName}`)
+  const doCheck = [...trechoCheck[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort()
+  assert.deepEqual(
+    doCheck,
+    esperados,
+    `o CHECK de ${comCheck.fileName} divergiu de automation-scopes.json — ` +
+      'SQLite nao altera constraint, entao acrescentar um topico exige migracao nova',
+  )
+})
+
+test(
+  'um prompt sobrevive a ida e volta ao banco em cada um dos sete topicos',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-automation-scopes-')
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+      const repository = createAutomationsRepository(database)
+      const agora = new Date().toISOString()
+
+      for (const scope of AUTOMATION_SCOPES_JSON) {
+        repository.save({
+          id: `prompt-${scope}`,
+          name: `Prompt de ${scope}`,
+          description: '',
+          prompt: `conteudo de ${scope}`,
+          scope,
+          createdAt: agora,
+          updatedAt: agora,
+        })
+      }
+
+      database.close()
+
+      // Reabrir e um teste melhor que ler a mesma conexao: e o que o app faz
+      // ao reiniciar, que era exatamente quando os prompts sumiam.
+      const reaberto = createStorageDatabase({ databaseDir })
+      const recuperados = createAutomationsRepository(reaberto).list()
+
+      assert.deepEqual(
+        recuperados.map((automation) => automation.scope).sort(),
+        [...AUTOMATION_SCOPES_JSON].sort(),
+        'algum topico nao sobreviveu a ida e volta ao banco',
+      )
+      reaberto.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
+test('um topico fora da lista continua sendo recusado', () => {
+  assert.throws(
+    () =>
+      normalizeAutomationRow({
+        id: 'prompt-invalido',
+        name: 'Invalido',
+        prompt: 'texto',
+        scope: 'topico-que-nao-existe',
+      }),
+    /Scope de automation invalido/,
+    'a validacao precisa continuar recusando o que nao esta na lista',
+  )
+})
 
 function hasNodeSqlite() {
   try {

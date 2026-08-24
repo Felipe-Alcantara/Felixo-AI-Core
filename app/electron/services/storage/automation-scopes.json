@@ -1,0 +1,12 @@
+{
+  "comentario": "Fonte de verdade unica dos topicos (scope) de um prompt. Vive no lado Electron e e lido tambem pelo renderer, como orchestrator-prompt-presets.json — JSON e o formato de fronteira deste repositorio. Ao acrescentar um topico aqui, e preciso uma migracao nova para o CHECK do SQLite; o teste de guarda em storage-persistence.test.cjs falha ate isso ser feito.",
+  "scopes": [
+    "chat",
+    "code",
+    "docs",
+    "git",
+    "notion",
+    "planning",
+    "security"
+  ]
+}
