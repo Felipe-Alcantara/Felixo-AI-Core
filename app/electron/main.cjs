@@ -54,6 +54,7 @@ const {
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
+const { createSettingsRepository } = require('./services/storage/settings-repository.cjs')
 const { initAppPaths } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
@@ -65,6 +66,7 @@ let canvasFilesHandlers = null
 let contextFilesHandlers = null
 let textFileHandlers = null
 let storageDatabase = null
+let settingsRepository = null
 let cliAutoInstall = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
@@ -99,6 +101,7 @@ app.whenReady().then(() => {
   storageDatabase = createStorageDatabase({
     databaseDir: appPaths.database,
   })
+  settingsRepository = createSettingsRepository(storageDatabase)
 
   // Menu próprio ANTES da janela: sem ele vale o menu padrão do Electron, que
   // no macOS entrega ⌘+W para fechar a janela — atalho que ninguém escolheu e
@@ -109,7 +112,7 @@ app.whenReady().then(() => {
   // agora daria sempre zero, e a guarda nunca perguntaria nada.
   const contarSessoesVivas = () => ptyHandlers?.manager?.contarSessoesVivas?.() ?? 0
 
-  mainWindow = createMainWindow({ contarSessoesVivas })
+  mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository })
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
 
   registerQaLoggerIpcHandlers(getMainWindow)
@@ -205,7 +208,7 @@ app.whenReady().then(() => {
       // A janela recriada precisa da MESMA guarda: no macOS este é o caminho
       // normal de voltar ao app depois de fechar, e uma janela sem guarda
       // desfaria a proteção na segunda vez.
-      mainWindow = createMainWindow({ contarSessoesVivas })
+      mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository })
     }
   })
 })
@@ -254,6 +257,7 @@ app.on('before-quit', () => {
 
   const databaseToClose = storageDatabase
   storageDatabase = null
+  settingsRepository = null
 
   if (databaseToClose) {
     try {

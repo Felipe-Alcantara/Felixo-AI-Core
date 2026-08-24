@@ -1130,3 +1130,24 @@ Backspace, sem Enter.
 
 **Validação.** Os testes montam três linhas de buffer, com e sem moldura,
 além dos casos de entrada simples, quebra visual e entrada ausente.
+
+---
+
+## [2026-08-24] Janela principal recupera posição e estado com segurança
+
+**Problema.** A única janela do app sempre nascia no tamanho padrão e no
+monitor primário. Quem alternava entre telas vertical e horizontal precisava
+reposicioná-la a cada abertura, e uma coordenada antiga pode ficar invisível
+quando um monitor é desconectado.
+
+**Decisão.** Antes de qualquer segunda janela, o app persiste bounds, estado
+maximizado e tela cheia no SQLite. Só restaura bounds que cruzem uma área útil
+de monitor ativo; caso contrário, centraliza no monitor primário.
+
+**Implementação.** A decisão de restauração é pura e recebe a lista de
+monitores. A criação da janela aplica os bounds resolvidos, reaplica o estado e
+persiste mudanças de tamanho, posição e modo. Não há modo destacado nem
+tentativa de esticar uma janela pelos dois monitores.
+
+**Validação.** Testes usam monitores horizontal e vertical fabricados, monitor
+desconectado e estados maximizado/tela cheia.

@@ -1,10 +1,15 @@
-const { BrowserWindow, dialog } = require('electron')
+const { BrowserWindow, dialog, screen } = require('electron')
 const { rendererBuildPath } = require('../core/paths.cjs')
 const { mainWindowOptions } = require('../core/window-options.cjs')
 const { denyExternalWindowOpen } = require('../services/external-links.cjs')
 const { registerWindowZoomShortcuts } = require('../services/window-zoom-shortcuts.cjs')
 const { registerWebviewLifecycle } = require('../services/webview-lifecycle.cjs')
 const { registrarGuardaDeFechamento } = require('./close-guard.cjs')
+const {
+  applyWindowState,
+  registerWindowStatePersistence,
+  resolveWindowState,
+} = require('./window-state.cjs')
 
 /**
  * Pergunta de fechamento usando o diálogo nativo.
@@ -40,8 +45,23 @@ function criarPerguntaNativa(browserWindow) {
  *   sempre zero, e a guarda nunca perguntaria nada.
  * @returns {import('electron').BrowserWindow}
  */
-function createMainWindow({ contarSessoesVivas } = {}) {
-  const mainWindow = new BrowserWindow(mainWindowOptions)
+function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen } = {}) {
+  let savedState = null
+  try {
+    savedState = settingsRepository?.get('window.main.state') ?? null
+  } catch {
+    // A janela precisa continuar abrindo se uma configuração antiga corrompeu.
+  }
+  const state = resolveWindowState(
+    savedState,
+    screenApi?.getAllDisplays?.() ?? [],
+    screenApi?.getPrimaryDisplay?.(),
+    mainWindowOptions,
+  )
+  const mainWindow = new BrowserWindow({ ...mainWindowOptions, ...state.bounds })
+
+  applyWindowState(mainWindow, state)
+  registerWindowStatePersistence(mainWindow, settingsRepository)
 
   mainWindow.webContents.setWindowOpenHandler(denyExternalWindowOpen)
   registerWindowZoomShortcuts(mainWindow)
