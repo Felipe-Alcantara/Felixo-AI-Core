@@ -201,6 +201,23 @@ export type FetchAllPlan = {
   total: number
 }
 
+/**
+ * Pedido que um agente deixou pelo comando `felixo fetch-all pedir-execucao`.
+ *
+ * O agente nunca escreve: ele registra a intenção e a pessoa confirma no
+ * painel. Por isso o pedido não carrega plano — o plano dele veio de outro
+ * processo e já está velho quando chega aqui.
+ */
+export type FetchAllAgentRequest = {
+  id: string
+  acao: 'executar-plano'
+  comCommit: boolean
+  estado: 'pendente' | 'aceito' | 'recusado'
+  pedidoEm: string
+  origem: string
+  resolvidoEm?: string
+}
+
 export type FetchAllActionResult = {
   status: FetchAllRepoStatus
   action: 'pull' | 'push' | 'commit'

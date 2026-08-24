@@ -90,6 +90,13 @@ function getAppPaths(options = {}) {
   // Skill library shipped with the app, materialized here so the agent can
   // read it and the person can edit it without rebuilding anything.
   const skills = path.join(userData, 'skills')
+  // Pedidos que um agente deixa para o app executar depois da confirmação da
+  // pessoa. É um canal deliberadamente burro — arquivo numa pasta — porque o
+  // agente só precisa PEDIR; quem escreve no disco continua sendo o app, com
+  // um clique humano no meio.
+  const agentRequests = path.join(userData, 'agent-requests')
+  // Onde mora o comando `felixo` exposto no PATH dos terminais do canvas.
+  const bin = path.join(userData, 'bin')
 
   const appRoot = path.join(__dirname, '..')
   const assets = isPackaged
@@ -109,6 +116,8 @@ function getAppPaths(options = {}) {
     canvasFiles,
     contextFiles,
     skills,
+    agentRequests,
+    bin,
     assets,
     appRoot,
     isPackaged,

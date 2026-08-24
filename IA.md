@@ -1133,6 +1133,28 @@ além dos casos de entrada simples, quebra visual e entrada ausente.
 
 ---
 
+## [2026-08-24] Fetch All disponível aos agentes do canvas
+
+**O que mudou.** Terminais abertos pelo canvas passam a receber um shim
+`felixo` no PATH. O subcomando `felixo fetch-all` expõe somente `varrer`,
+`estado`, `pedir-execucao` e `ver-pedido`; a skill integrada `fetch-all` explica
+o contrato ao agente sem ocupar o prompt inicial com o conteúdo inteiro.
+
+**Decisão de segurança.** O processo de terminal reutiliza apenas o serviço de
+leitura do Fetch All. Não há verbo de pull, push ou commit no comando. Quando
+precisa sincronizar, o agente cria um pedido em arquivo na pasta de dados do
+app; o painel recebe o aviso, exige uma varredura/revisão atual e só então a
+pessoa pode confirmar. O estado de cada repositório ainda é revalidado pela
+execução do app imediatamente antes da escrita.
+
+**Validação.** `npm test`, `npm run test:frontend`, `npm run lint`, `npm run
+build` e `git diff --check` passaram. O executável Node respondeu a
+`fetch-all estado` sem plano prévio, como esperado. A instalação do shim e a
+execução real são cobertas por teste; a verificação visual no app aberto continua
+pendente para uma sessão futura.
+
+---
+
 ## [2026-08-24] Janela principal recupera posição e estado com segurança
 
 **Problema.** A única janela do app sempre nascia no tamanho padrão e no

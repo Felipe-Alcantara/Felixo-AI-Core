@@ -19,6 +19,7 @@ import type {
 } from './features/chat/types'
 import type {
   FetchAllActionResult,
+  FetchAllAgentRequest,
   FetchAllPlan,
   FetchAllProgress,
   FetchAllSettings,
@@ -630,6 +631,25 @@ declare global {
           settings?: FetchAllSettings
         }>
         onProgress: (callback: (progress: FetchAllProgress) => void) => () => void
+        listRequests: () => Promise<{
+          ok: boolean
+          message?: string
+          requests?: FetchAllAgentRequest[]
+        }>
+        resolveRequest: (params: { id: string; aceito: boolean }) => Promise<{
+          ok: boolean
+          message?: string
+          resolved?: FetchAllAgentRequest | null
+          resultado?: {
+            ok: boolean
+            message?: string
+            results?: FetchAllActionResult[]
+            reportPath?: string
+          }
+        }>
+        onRequests: (
+          callback: (data: { requests: FetchAllAgentRequest[] }) => void,
+        ) => () => void
       }
       qaLogger?: {
         getEntries: () => Promise<QaLogEntry[]>

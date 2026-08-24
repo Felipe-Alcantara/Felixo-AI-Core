@@ -240,6 +240,13 @@ O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que f
 - **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
 - **Fetch All** varre os discos locais atrás de todos os repositórios Git, faz `fetch` em cada um e monta um plano: o que só precisa de pull, o que precisa de push, o que tem pendência e o que já está atualizado. A varredura só lê. Pull (sempre `--ff-only`), push e o commit automático dos repositórios cuja única pendência é commitar acontecem num segundo passo, depois de você revisar o plano e confirmar — e o estado de cada repositório é conferido de novo imediatamente antes de qualquer escrita. Cada passada gera um relatório em Markdown na pasta de relatórios do app. A varredura **rápida** reaproveita a lista da última varredura completa (é mais rápida, mas não encontra repositórios novos), e o ícone ao lado de um repositório passa a **ignorar** aquela pasta nas próximas varreduras — a lista de ignoradas fica no rodapé do painel.
 
+Agentes abertos pelo canvas também podem consultar essa ferramenta pelo terminal:
+`felixo fetch-all varrer`, `estado` e `ver-pedido` apenas informam; para pedir
+uma sincronização, usam `felixo fetch-all pedir-execucao` (ou `--com-commit`).
+O pedido aparece no painel **Fetch All**, mas nunca executa pull, push ou commit
+sozinho: você primeiro faz uma varredura, revisa o plano atual e confirma a
+aplicação na tela.
+
 ### Navegação no canvas
 
 - **Selecionar / Mover tela:** o botão da barra (ou a tecla `Q`, com o canvas em foco) alterna entre arrastar uma caixa de seleção e arrastar a tela. Dentro do conteúdo de um bloco (nota, terminal, arquivo), o arrasto não move a tela — interaja normalmente com o bloco.

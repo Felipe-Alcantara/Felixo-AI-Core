@@ -133,6 +133,9 @@ function createCliEnv(baseEnv = process.env) {
     ...configuredPaths,
     ...userPaths,
     ...(baseEnv[pathKey] ?? '').split(path.delimiter).filter(Boolean),
+    // As ferramentas do próprio app (`felixo`) vêm depois do PATH da pessoa:
+    // se ela já tem um comando com esse nome, é o dela que roda.
+    ...getAgentCommandPaths(),
     // Por último de propósito: as CLIs instaladas pelo próprio app são rede
     // de segurança para quem não tem nada instalado. Se a pessoa já tem a
     // sua, é a dela que deve rodar.
@@ -148,6 +151,23 @@ function createCliEnv(baseEnv = process.env) {
   }
 
   return nextEnv
+}
+
+/**
+ * Pasta do comando `felixo` exposto aos agentes nos terminais do canvas.
+ *
+ * Silencia falha pelo mesmo motivo de `getManagedCliPaths`: sem Electron (nos
+ * testes e em scripts) não há `userData`, e isso não pode impedir o PATH normal
+ * de ser montado.
+ *
+ * @returns {string[]}
+ */
+function getAgentCommandPaths() {
+  try {
+    return [getAppPaths().bin]
+  } catch {
+    return []
+  }
 }
 
 /**

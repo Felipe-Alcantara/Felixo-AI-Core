@@ -45,6 +45,9 @@ const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
 const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
+const {
+  instalarComandoDoAgente: installAgentCommand,
+} = require('./services/agent-command-install.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
 const {
   registerCliAutoInstallHandlers,
@@ -141,6 +144,19 @@ app.whenReady().then(() => {
     })
   } catch (error) {
     console.error('[felixo] nao foi possivel instalar as skills:', error)
+  }
+
+  // O comando `felixo` vive numa pasta propria que entra no PATH dos terminais
+  // do canvas. E o que permite um agente qualquer usar as ferramentas do app
+  // sem saber nada da nossa arquitetura: ele roda um comando e le texto.
+  try {
+    installAgentCommand({
+      binDir: appPaths.bin,
+      execPath: process.execPath,
+      entrypoint: path.join(__dirname, 'cli', 'felixo.cjs'),
+    })
+  } catch (error) {
+    console.error('[felixo] nao foi possivel instalar o comando do agente:', error)
   }
 
   registerCanvasIpcHandlers({

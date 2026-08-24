@@ -19,6 +19,12 @@
 /** Skills que acompanham o app. `slug` e a pasta em `resources/skills`. */
 const BUILTIN_SKILLS = [
   {
+    slug: 'fetch-all',
+    name: 'Fetch All pela linha de comando',
+    description:
+      'Descobrir quais repositorios git da maquina estao fora de sincronia com `felixo fetch-all`, e pedir a sincronizacao sem executa-la: pull/push/commit continuam dependendo de confirmacao da pessoa no painel.',
+  },
+  {
     slug: 'notion-operacoes',
     name: 'Operar o Notion sem estragar nada',
     description:

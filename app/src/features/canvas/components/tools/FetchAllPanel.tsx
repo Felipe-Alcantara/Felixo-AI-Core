@@ -18,8 +18,15 @@ import {
   planHasSafeActions,
   summarizeResults,
 } from './fetch-all-plan'
+import {
+  agentRequestAction,
+  describeAgentRequest,
+  formatRequestTime,
+  pickPendingRequest,
+} from './fetch-all-agent-requests'
 import type {
   FetchAllActionResult,
+  FetchAllAgentRequest,
   FetchAllPlan,
   FetchAllProgress,
   FetchAllSettings,
@@ -57,6 +64,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
   const [autoCommit, setAutoCommit] = useState(false)
   const [confirmingExecute, setConfirmingExecute] = useState(false)
   const [showIgnored, setShowIgnored] = useState(false)
+  const [requests, setRequests] = useState<FetchAllAgentRequest[]>([])
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -96,6 +104,24 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
     [],
   )
 
+  // Pedidos deixados por agentes nos terminais. Chegam por evento porque o
+  // agente pede enquanto a pessoa está em outra coisa; a leitura na montagem
+  // cobre o pedido que já estava esperando antes de o painel abrir.
+  const loadRequests = useCallback(async () => {
+    const result = await window.felixo?.fetchAll?.listRequests()
+    if (mountedRef.current && result?.ok) {
+      setRequests(result.requests ?? [])
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadRequests()
+    return window.felixo?.fetchAll?.onRequests((data) => {
+      setRequests(data.requests ?? [])
+    })
+  }, [loadRequests])
+
+  const pendingRequest = useMemo(() => pickPendingRequest(requests), [requests])
   const sections = useMemo(() => buildPlanSections(plan), [plan])
   const autoCommitCount = useMemo(() => countAutoCommitCandidates(plan), [plan])
   const canExecute = planHasSafeActions(plan, autoCommit)
@@ -151,6 +177,35 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
     }
   }, [autoCommit])
 
+  const resolveRequest = useCallback(
+    async (id: string, aceito: boolean) => {
+      setBusy(true)
+      setError(null)
+
+      try {
+        const result = await window.felixo?.fetchAll?.resolveRequest({ id, aceito })
+        if (!mountedRef.current) return
+        if (!result?.ok) {
+          setError(result?.message ?? 'Falha ao responder o pedido do agente.')
+          return
+        }
+        if (aceito && result.resultado) {
+          setResults(result.resultado.results ?? [])
+          setReportPath(result.resultado.reportPath ?? '')
+          // Mesmo motivo do botão de executar: o plano aplicado envelheceu.
+          setPlan(null)
+        }
+      } finally {
+        if (mountedRef.current) {
+          setBusy(false)
+          setProgress(null)
+        }
+        void loadRequests()
+      }
+    },
+    [loadRequests],
+  )
+
   const ignorePath = useCallback(async (targetPath: string) => {
     const result = await window.felixo?.fetchAll?.ignorePath({ path: targetPath })
     if (!mountedRef.current) return
@@ -177,6 +232,52 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       widthClassName="w-96"
       toolsMenuOpen={toolsMenuOpen}
     >
+      {pendingRequest && (
+        <div className="mb-3 rounded border border-amber-500/40 bg-amber-500/10 p-2.5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs leading-relaxed text-amber-100">
+                {describeAgentRequest(pendingRequest)}
+              </p>
+              <p className="mt-1 text-[11px] text-amber-200/70">
+                Pedido às {formatRequestTime(pendingRequest)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            {agentRequestAction(plan, busy) === 'aplicar' ? (
+              <button
+                type="button"
+                onClick={() => void resolveRequest(pendingRequest.id, true)}
+                className="felixo-btn flex-1 rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-amber-400"
+                title="Aplica o plano acima; cada repositório é revalidado antes da escrita"
+              >
+                Aplicar o plano revisado
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void scan(false)}
+                disabled={busy}
+                className="felixo-btn flex-1 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
+                title="Varre para você revisar o plano antes de autorizar qualquer escrita"
+              >
+                {busy ? 'Varrendo…' : 'Varrer para revisar'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void resolveRequest(pendingRequest.id, false)}
+              disabled={busy}
+              className="felixo-btn rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+            >
+              Recusar
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-3 flex items-center gap-2">
         <button
           type="button"

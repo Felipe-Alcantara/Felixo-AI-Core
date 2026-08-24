@@ -226,6 +226,15 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('fetch-all:progress', handler)
       return () => ipcRenderer.removeListener('fetch-all:progress', handler)
     },
+    // Pedidos deixados por agentes nos terminais do canvas. Eles nunca
+    // escrevem: so pedem, e quem confirma e a pessoa, aqui na tela.
+    listRequests: () => ipcRenderer.invoke('fetch-all:list-requests'),
+    resolveRequest: (params) => ipcRenderer.invoke('fetch-all:resolve-request', params),
+    onRequests: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('fetch-all:agent-requests', handler)
+      return () => ipcRenderer.removeListener('fetch-all:agent-requests', handler)
+    },
   },
   fileOpen: {
     getPending: () => ipcRenderer.invoke('file:get-pending'),
