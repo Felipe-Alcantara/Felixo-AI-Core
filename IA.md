@@ -911,3 +911,60 @@ próprios — foi dele que o padrão veio.
   `electron/services/pty-process-manager.test.cjs`, porque o teste espera o
   comando `codex` puro e a máquina resolve `codex.cmd` do PATH do usuário.
   Virou task própria.
+
+---
+
+## [2026-08-24] "Sumiram as animações": era o Windows, não o app
+
+**Contexto.** Logo depois do conserto do botão do Agente veio o relato de que
+**nenhuma** animação da interface acontecia mais. A suspeita imediata — a mudança
+recém-commitada — foi descartada por medição, não por argumento: `6ab2a26` troca
+duas classes num único botão e não toca no `index.css`.
+
+### O que foi medido
+
+A causa é a preferência de movimento reduzido do sistema, que o `index.css` respeita
+desde `58d1321` (22/06/2026), zerando `animation` em todo o conjunto `felixo-anim-*`:
+
+```
+SPI_GETCLIENTAREAANIMATION = False   →   prefers-reduced-motion: reduce
+```
+
+No app rodando, abrindo o painel do Agente, com e sem a preferência:
+
+| | Como o sistema estava | Com animação permitida |
+| --- | --- | --- |
+| `matchMedia('(prefers-reduced-motion: reduce)')` | `true` | `false` |
+| `animation-name` do painel | `none` (`0s`) | `felixo-tools-list-in` (`0.62s`) |
+| `animation-name` dos itens | `none` | `felixo-tools-list-item-in` |
+
+O painel continuava abrindo — só aparecia instantaneamente. **É o comportamento que o
+CSS foi escrito para ter**, não um defeito.
+
+### A armadilha da ferramenta de medição
+
+O Playwright **força** `reducedMotion: 'no-preference'` por padrão em todo contexto
+novo. A primeira leitura voltou `reduce: false` e quase enterrou a hipótese certa.
+Só com `newPage({ reducedMotion: null })` — que manda usar o valor do sistema — a
+medição passou a refletir a máquina. Quem for medir qualquer coisa sensível a
+`prefers-reduced-motion`, `prefers-color-scheme` ou `forced-colors` com Playwright
+precisa passar `null` explicitamente, senão mede o navegador da própria ferramenta.
+
+### A parte que ficou sem resposta
+
+O valor **persistido** no registro (`UserPreferencesMask` byte 2 = `0x03`) dizia
+animação **ligada**, enquanto a sessão em execução respondia **desligada**. Algo
+chamou `SystemParametersInfo` sem `SPIF_UPDATEINIFILE` — desligou em memória e não
+gravou, o que não deixa rastro. Não foi possível identificar o programa.
+
+### Decisão
+
+Nada mudou no repositório. A correção foi na máquina do usuário, com escolha dele:
+religar o bit de animação e devolver `VisualFXSetting` de `2` ("melhor desempenho")
+para `0`. Depois disso a mesma medição no app voltou `felixo-tools-list-in` /
+`0.62s`.
+
+**Fica registrado para a próxima vez que alguém disser "as animações sumiram":** medir
+`prefers-reduced-motion` antes de procurar no código. E vale a pena discutir se o app
+deveria expor essa preferência em algum lugar visível, em vez de o usuário descobrir
+que o sistema a desligou — virou task.
