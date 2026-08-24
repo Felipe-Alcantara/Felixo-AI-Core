@@ -1066,3 +1066,27 @@ chamada ao backend, primeira gravação válida e recusa do backend. No Electron
 isolado, o rascunho vazio manteve o SQLite vazio; após preencher o texto, a
 automation voltou da listagem com id e `updatedAt`, inclusive depois de
 recarregar. O item de QA foi removido ao final.
+
+---
+
+## [2026-08-24] Movimento reduzido passa a ser explicado nas Configurações
+
+**Problema.** O Felixo já desligava corretamente as animações quando o sistema
+pedia movimento reduzido, mas não dizia por quê. Para quem não escolheu a
+preferência conscientemente, a interface parecia quebrada e a causa ficava
+fora do alcance do app.
+
+**Decisão.** Foi escolhido o aviso persistente e não intrusivo nas
+Configurações. Não há toast repetitivo nem opção do app para contrariar o
+sistema: o padrão continua respeitando acessibilidade. O texto esclarece que
+não é defeito e aponta o caminho do Windows para Efeitos de animação.
+
+**Implementação.** `useReducedMotionPreference` lê
+`prefers-reduced-motion: reduce` e fica inscrito em mudanças do `matchMedia`.
+Assim, abrir Configurações depois de uma alteração do sistema mostra o estado
+atual sem depender de reiniciar o app.
+
+**Validação.** O teste cobre preferência reduzida, preferência normal e a
+mudança em tempo real. No Electron isolado, o aviso apareceu com o switch
+`--force-prefers-reduced-motion` e não apareceu na preferência normal do
+sistema.

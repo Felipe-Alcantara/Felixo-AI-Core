@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { RotateCcw, Save, Settings } from 'lucide-react'
+import { CircleAlert, RotateCcw, Save, Settings } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { useReducedMotionPreference } from '../../../shared/accessibility/reduced-motion-preference'
 import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
@@ -32,6 +33,8 @@ export function SettingsPanel({
   onQualityStandardSaved,
   toolsMenuOpen,
 }: SettingsPanelProps) {
+  const prefersReducedMotion = useReducedMotionPreference()
+
   return (
     <CanvasPanel
       title="Configurações"
@@ -39,6 +42,8 @@ export function SettingsPanel({
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}
     >
+      {prefersReducedMotion && <ReducedMotionNotice />}
+
       <QualityStandardField onSaved={onQualityStandardSaved} />
 
       <div className="my-3 border-t border-white/10" />
@@ -73,6 +78,30 @@ export function SettingsPanel({
         onSaved={onBootstrapSaved}
       />
     </CanvasPanel>
+  )
+}
+
+function ReducedMotionNotice() {
+  return (
+    <div
+      role="status"
+      className="mb-3 rounded border border-sky-500/30 bg-sky-500/[0.08] p-2.5 text-xs leading-relaxed text-sky-100/90"
+    >
+      <div className="flex gap-2">
+        <CircleAlert className="mt-0.5 shrink-0 text-sky-300" size={15} />
+        <div>
+          <p className="font-medium text-sky-100">As animações estão desligadas pelo sistema.</p>
+          <p className="mt-1 text-sky-100/75">
+            Isso não é um defeito: o Felixo respeita a preferência de movimento
+            reduzido do seu sistema.
+          </p>
+          <p className="mt-1 text-sky-100/75">
+            No Windows, ajuste em Configurações → Acessibilidade → Efeitos visuais
+            → Efeitos de animação.
+          </p>
+        </div>
+      </div>
+    </div>
   )
 }
 
