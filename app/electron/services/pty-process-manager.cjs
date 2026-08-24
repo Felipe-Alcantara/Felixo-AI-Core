@@ -813,9 +813,20 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
     // command finishes, closing the PTY before the user can read the output or
     // type anything — the "the file doesn't open" report on Windows. `/k`
     // leaves the same cmd.exe interactive in the file's directory.
+    // CMD's `/c` parser is not argv-aware. In particular, passing an absolute
+    // executable path with spaces as the next separate PTY argument makes it
+    // attempt only the part before the first space. Give it one command string
+    // instead; a quoted executable needs an additional outer pair of quotes
+    // for CMD's `/s /c` convention.
+    const commandLine = [command, ...args]
+      .map((value) => adapter.escapeArg(String(value)))
+      .join(' ')
+    const commandNeedsQuotes = /[" &|<>^%]/.test(String(command))
+    const cmdPayload = commandNeedsQuotes ? `"${commandLine}"` : commandLine
+
     return {
       command: 'cmd.exe',
-      args: ['/d', '/s', keepShellOpen ? '/k' : '/c', command, ...args],
+      args: ['/d', '/s', keepShellOpen ? '/k' : '/c', cmdPayload],
     }
   }
 
