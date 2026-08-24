@@ -489,7 +489,14 @@ export class TerminalSessionStore {
         if (session.disposed) {
           return
         }
-        if (result?.ok && session.snapshot.activity === 'starting') {
+        // Só `result.ok` decide se o spawn deu certo. A checagem de
+        // `activity === 'starting'` mora no ramo de erro, e não aqui: o
+        // `onData` é assinado antes do `spawn`, então a CLI pode pintar a
+        // primeira tela — e levar a sessão para 'working' — antes desta
+        // promise resolver. No Windows o ConPTY ganha essa corrida quase
+        // sempre, e o spawn bem-sucedido era marcado como erro, o que ainda
+        // impedia `scheduleInitialText` de enviar o texto inicial.
+        if (result?.ok) {
           if (result.reused) {
             // The PTY already contains the original agent turn. Replaying the
             // initial instruction here would submit a duplicate task after a
@@ -512,7 +519,9 @@ export class TerminalSessionStore {
             // observadores do stream de saída mais abaixo.
             this.scheduleInitialText(session, getInitialTextDelay())
           })
-        } else {
+        } else if (session.snapshot.activity === 'starting') {
+          // Uma sessão que já saiu de 'starting' teve seu estado definido por
+          // algo mais recente (saída da CLI, exit, dispose); não o sobrescreve.
           this.update(session, {
             activity: 'error',
             message: result?.message ?? 'Falha ao iniciar o terminal.',

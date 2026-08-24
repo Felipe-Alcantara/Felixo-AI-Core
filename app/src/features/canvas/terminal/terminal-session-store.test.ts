@@ -70,6 +70,11 @@ type Harness = {
   contextBodies: string[]
   /** Entrega bytes da CLI para o terminal do store, como a ponte faria. */
   feed: (data: string) => void
+  /**
+   * Resolve a promise do `pty:spawn`. Só existe quando a bancada foi criada com
+   * `deferSpawn`; nos demais casos o spawn já resolveu sozinho.
+   */
+  resolveSpawn: () => void
 }
 
 const SESSION_ID = 'terminal-1'
@@ -79,10 +84,22 @@ function createHarness(
   initialText = CONTEXT,
   command = 'claude',
   contextFilesAvailable = true,
+  deferSpawn = false,
 ): Harness {
   const writes: string[] = []
   const contextBodies: string[] = []
   const dataListeners = new Set<(event: { sessionId: string; data: string }) => void>()
+
+  // Com `deferSpawn`, a resposta do `pty:spawn` fica pendurada até o teste
+  // soltá-la, reproduzindo a ordem que o ConPTY impõe no Windows: a CLI pinta
+  // a primeira tela antes de a promise do IPC voltar ao renderer.
+  let releaseSpawn = () => {}
+  const spawnResult = { ok: true, reused: false }
+  const spawnGate = deferSpawn
+    ? new Promise<void>((resolve) => {
+        releaseSpawn = resolve
+      })
+    : Promise.resolve()
 
   ;(globalThis as { window?: unknown }).window = {
     felixo: {
@@ -92,7 +109,10 @@ function createHarness(
           return () => dataListeners.delete(listener)
         },
         onExit: () => () => {},
-        spawn: async () => ({ ok: true, reused: false }),
+        spawn: async () => {
+          await spawnGate
+          return spawnResult
+        },
         write: async ({ data }: { data: string }) => {
           writes.push(data)
         },
@@ -135,6 +155,7 @@ function createHarness(
         listener({ sessionId: PTY_SESSION_ID, data })
       }
     },
+    resolveSpawn: () => releaseSpawn(),
   }
 }
 
@@ -327,4 +348,77 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
     expect(contextWrites(harness.writes)).toHaveLength(1)
   }, 15000)
+})
+
+/**
+ * A corrida entre a primeira tela da CLI e a resposta do `pty:spawn`.
+ *
+ * O `onData` é assinado antes do `spawn`, então os dois chegam em qualquer
+ * ordem. No Windows o ConPTY pinta a tela primeiro quase sempre, e o spawn
+ * bem-sucedido era tratado como falha — o card mostrava "Falha ao iniciar o
+ * terminal." com a CLI viva atrás, e o texto inicial nunca era enviado.
+ */
+describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+  })
+
+  it('não marca erro quando a CLI desenha antes de o spawn responder', async () => {
+    harness = createHarness(CONTEXT, 'claude', true, true)
+
+    // A CLI já está de pé e pintando: a sessão sai de 'starting'.
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(READY_PROMPT)
+    await wait(50)
+    expect(harness.store.getSnapshot(SESSION_ID)?.activity).not.toBe('starting')
+
+    // Só agora o IPC volta, com o sucesso que sempre foi verdade.
+    harness.resolveSpawn()
+    await wait(50)
+
+    const snapshot = harness.store.getSnapshot(SESSION_ID)
+    expect(snapshot?.activity).not.toBe('error')
+    expect(snapshot?.message).toBeUndefined()
+  }, 10000)
+
+  it('entrega o texto inicial mesmo com a saída chegando primeiro', async () => {
+    harness = createHarness(CONTEXT, 'claude', true, true)
+
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(READY_PROMPT)
+    await wait(50)
+
+    harness.resolveSpawn()
+    await wait(1600)
+
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
+  }, 15000)
+
+  it('ainda marca erro quando o spawn falha antes de qualquer saída', async () => {
+    harness = createHarness(CONTEXT, 'claude', true, true)
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { spawn: () => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.spawn = async () => ({ ok: false, message: 'comando não encontrado' })
+
+    harness.store.clear()
+    harness.store.ensure(SESSION_ID, {
+      command: 'claude',
+      args: [],
+      cwd: '/tmp',
+      initialText: CONTEXT,
+    })
+    await wait(50)
+
+    const snapshot = harness.store.getSnapshot(SESSION_ID)
+    expect(snapshot?.activity).toBe('error')
+    expect(snapshot?.message).toBe('comando não encontrado')
+  }, 10000)
 })
