@@ -968,3 +968,57 @@ para `0`. Depois disso a mesma medição no app voltou `felixo-tools-list-in` /
 `prefers-reduced-motion` antes de procurar no código. E vale a pena discutir se o app
 deveria expor essa preferência em algum lugar visível, em vez de o usuário descobrir
 que o sistema a desligou — virou task.
+
+---
+
+## [2026-08-24] Os dois testes vermelhos do PTY eram ambiente, e a correção veio de outra frente
+
+**Contexto.** Em 24/08 ficou registrado que `npm test` fechava em 726/728 nesta
+máquina, com duas falhas **de ambiente** em
+`electron/services/pty-process-manager.test.cjs`: o teste esperava o comando `codex`
+puro e recebia `C:\…\npm\codex.cmd`, porque a máquina de quem desenvolve tem a CLI
+instalada no `PATH`. Numa máquina sem o Codex, o par passava. Virou task própria.
+
+Ao pegar a task, a primeira medição já contou outra história: **40 testes, 40
+passando**. Entre a leitura do repositório e o `git status` seguinte, outro agente do
+canvas commitou `0b96d15` ("fix: quote Windows PTY command paths"), que resolveu o
+problema como efeito de outro conserto.
+
+### O que `0b96d15` fez
+
+O alvo dele era um bug real e diferente: `cmd.exe /c` não é *argv-aware*, então um
+caminho absoluto **com espaços** passado como argumento separado era truncado no
+primeiro espaço. A correção junta tudo numa única linha de comando, com um par extra
+de aspas quando o executável precisa delas.
+
+Isso mudou a forma esperada dos argumentos em vários testes
+(`['/d','/s','/c','claude','--model','opus']` → `['/d','/s','/c','claude --model opus']`)
+e, ao reescrevê-los, os dois testes de ambiente ganharam
+`resolveCodexPath: () => null` — **a primeira das duas saídas** que a task listava:
+isolar o ambiente em vez de afrouxar a asserção. É a saída certa: a asserção continua
+exigindo a string exata, e o teste deixou de perguntar à máquina o que ela tem
+instalado.
+
+### O que foi medido aqui
+
+- `npm test`: **729 testes, 726 passando, 0 falhando**, 3 pulados (pré-existentes),
+  exit 0. A contagem subiu de 728 porque `0b96d15` acrescentou um teste — o do caminho
+  absoluto com espaços.
+- **Prova por mutação**, que era o critério de aceite que ninguém tinha verificado:
+  desligando a retentativa com WinPTY (`allowWindowsBackendFallback = false && …`), o
+  arquivo vai a **38/40**, com estes dois vermelhos:
+  - `Windows retries a startup path error with the WinPTY backend before changing shell`
+  - `Windows retries an explicit Codex launch with WinPTY after an early path error`
+
+  O segundo é justamente um dos dois que antes falhavam por ambiente: ele voltou a
+  proteger o comportamento em vez de só ficar verde. Mutação desfeita em seguida
+  (`git checkout --`), com o arquivo reconferido em 40/40.
+
+### Lição de canvas multiagente
+
+O `git status` desta investigação mostrou os dois arquivos como modificados; a chamada
+seguinte, poucos segundos depois, mostrou a árvore limpa e um commit novo no topo.
+Não era normalização de fim de linha nem engano: era **o trabalho de outro agente em
+voo**. Vale o registro de que, aqui, "modificado e não commitado" não é sinônimo de
+"meu" — e que ler o estado duas vezes antes de agir evitou refazer um conserto que já
+existia.
