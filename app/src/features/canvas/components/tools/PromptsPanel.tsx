@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Eye, ListFilter, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
+import { Check, CircleAlert, Eye, ListFilter, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { PromptDetailPanel } from './PromptDetailPanel'
 import { defaultAutomations } from '../../../shared/data/automations'
@@ -53,6 +53,7 @@ export function PromptsPanel({
   const [custom, setCustom] = useState<AutomationDefinition[]>([])
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
+  const [feedbackIsError, setFeedbackIsError] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
@@ -111,6 +112,7 @@ export function PromptsPanel({
   const insertPrompt = async (prompt: AutomationDefinition) => {
     const result = await onInsertPrompt(prompt.prompt)
     setFeedbackId(prompt.id)
+    setFeedbackIsError(false)
     setFeedbackText(
       result === 'sent'
         ? 'Inserido no terminal aberto.'
@@ -133,6 +135,7 @@ export function PromptsPanel({
     if (!combined) return
     const result = await onInsertPrompt(combined)
     setFeedbackId('combined')
+    setFeedbackIsError(false)
     setFeedbackText(
       result === 'sent'
         ? `${selectedPrompts.length} prompts combinados e enviados.`
@@ -141,11 +144,26 @@ export function PromptsPanel({
     window.setTimeout(() => setFeedbackId((id) => (id === 'combined' ? null : id)), 2500)
   }
 
-  const persistAutomation = useCallback((automation: AutomationDefinition) => {
-    void window.felixo?.automations?.save({
-      ...automation,
-      updatedAt: new Date().toISOString(),
-    })
+  const persistAutomation = useCallback(async (automation: AutomationDefinition) => {
+    try {
+      const result = await window.felixo?.automations?.save({
+        ...automation,
+        updatedAt: new Date().toISOString(),
+      })
+      if (result?.ok) {
+        return
+      }
+    } catch {
+      // The same actionable message below covers IPC failures and rejections.
+    }
+
+    setFeedbackId(automation.id)
+    setFeedbackIsError(true)
+    setFeedbackText('Não foi possível salvar este prompt. Tente novamente.')
+    window.setTimeout(
+      () => setFeedbackId((id) => (id === automation.id ? null : id)),
+      2500,
+    )
   }, [])
 
   const schedulePersist = useCallback(
@@ -298,8 +316,8 @@ export function PromptsPanel({
           </button>
         </div>
         {feedbackId === 'combined' && (
-          <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-300">
-            <Check size={11} />
+          <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-red-300' : 'text-emerald-300'}`}>
+            {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
             {feedbackText}
           </p>
         )}
@@ -317,6 +335,7 @@ export function PromptsPanel({
           const isPreset = presetIds.has(prompt.id)
           const isOverridden = isPreset && overridesById.has(prompt.id)
           const isFreeCustom = !isPreset
+          const inserted = feedbackId === prompt.id && !feedbackIsError
 
           return (
             <li key={prompt.id} className="rounded bg-zinc-800/60 p-2">
@@ -364,7 +383,7 @@ export function PromptsPanel({
                   className="felixo-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
                   title="Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)"
                 >
-                  {feedbackId === prompt.id ? (
+                  {inserted ? (
                     <>
                       <Check size={13} className="text-emerald-400" />
                       Feito
@@ -430,8 +449,8 @@ export function PromptsPanel({
               )}
 
               {feedbackId === prompt.id && (
-                <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-300">
-                  <Check size={11} />
+                <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-red-300' : 'text-emerald-300'}`}>
+                  {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
                   {feedbackText}
                 </p>
               )}

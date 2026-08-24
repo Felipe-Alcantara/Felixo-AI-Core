@@ -7,6 +7,7 @@ import {
   loadAutomationsFromBackend,
   loadCustomAutomations,
   markAutomationsBackendMigrationRun,
+  mergeAutomationsForBackendMigration,
   saveAutomationsToBackend,
   saveCustomAutomations,
 } from '../services/automation-storage'
@@ -49,12 +50,34 @@ export function useAutomations() {
 
         if (backendAutomations.length > 0) {
           if (automationsUserEditedRef.current) {
-            void saveAutomationsToBackend(automationsRef.current)
+            void saveAutomationsToBackend(automationsRef.current).then((saved) => {
+              if (saved) {
+                markAutomationsBackendMigrationRun()
+              }
+            })
+            return
+          }
+
+          const migrationAlreadyRan = hasAutomationsBackendMigrationRun()
+          const mergedAutomations = migrationAlreadyRan
+            ? backendAutomations
+            : mergeAutomationsForBackendMigration(
+                backendAutomations,
+                automationsRef.current,
+              )
+
+          setCustomAutomations(mergedAutomations)
+
+          if (migrationAlreadyRan || mergedAutomations.length === backendAutomations.length) {
             markAutomationsBackendMigrationRun()
             return
           }
-          setCustomAutomations(backendAutomations)
-          markAutomationsBackendMigrationRun()
+
+          void saveAutomationsToBackend(mergedAutomations).then((saved) => {
+            if (saved) {
+              markAutomationsBackendMigrationRun()
+            }
+          })
           return
         }
 

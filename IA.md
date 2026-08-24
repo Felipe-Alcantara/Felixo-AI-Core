@@ -1022,3 +1022,27 @@ Não era normalização de fim de linha nem engano: era **o trabalho de outro ag
 voo**. Vale o registro de que, aqui, "modificado e não commitado" não é sinônimo de
 "meu" — e que ler o estado duas vezes antes de agir evitou refazer um conserto que já
 existia.
+
+---
+
+## [2026-08-24] Automations legadas não somem na migração parcial
+
+**Problema.** A primeira migração de `localStorage` para SQLite tratava qualquer
+lista não vazia do banco como completa. Assim, se uma versão antiga tivesse
+gravado parte dos prompts e rejeitado outros por escopos que ainda não existiam
+no `CHECK`, abrir o app substituía a lista local pela lista parcial do banco.
+
+**Decisão.** Enquanto o marcador de migração ainda não existir,
+`mergeAutomationsForBackendMigration` mantém as automations ausentes do
+armazenamento local e preserva a versão do SQLite nos ids que já existem. A
+união é salva antes de marcar a migração como concluída; nas próximas aberturas,
+o SQLite volta a ser a fonte de verdade.
+
+**Feedback de falha.** O autosave no painel de Prompts agora aguarda o resultado
+do IPC. Rejeição, indisponibilidade da ponte ou erro do repositório exibem um
+aviso vermelho junto ao prompt, em vez de fazer a edição parecer salva.
+
+**Validação.** Novo teste de storage cobre os sete escopos, rejeita um escopo
+inválido e protege a união parcial. `tsc -b`, `npm run lint`, `npm run
+test:frontend` (**562/562**) e `npm test` (**729 passando, 3 pulados, 0
+falhando**) passaram.

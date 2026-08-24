@@ -86,6 +86,29 @@ export async function saveAutomationsToBackend(
   return results.every(Boolean)
 }
 
+/**
+ * Preserva automations que ainda existiam apenas no armazenamento legado na
+ * primeira sincronização com o SQLite. O banco vence em ids já presentes:
+ * depois da migração ele é a fonte persistente e pode conter uma edição mais
+ * recente do mesmo prompt.
+ */
+export function mergeAutomationsForBackendMigration(
+  backendAutomations: AutomationDefinition[],
+  localAutomations: AutomationDefinition[],
+): AutomationDefinition[] {
+  const mergedById = new Map(
+    backendAutomations.map((automation) => [automation.id, automation]),
+  )
+
+  for (const automation of localAutomations) {
+    if (!mergedById.has(automation.id)) {
+      mergedById.set(automation.id, automation)
+    }
+  }
+
+  return [...mergedById.values()]
+}
+
 export async function deleteAutomationFromBackend(
   automationId: string,
 ): Promise<boolean> {
