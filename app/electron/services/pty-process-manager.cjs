@@ -813,20 +813,25 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
     // command finishes, closing the PTY before the user can read the output or
     // type anything — the "the file doesn't open" report on Windows. `/k`
     // leaves the same cmd.exe interactive in the file's directory.
-    // CMD's `/c` parser is not argv-aware. In particular, passing an absolute
-    // executable path with spaces as the next separate PTY argument makes it
-    // attempt only the part before the first space. Give it one command string
-    // instead; a quoted executable needs an additional outer pair of quotes
-    // for CMD's `/s /c` convention.
-    const commandLine = [command, ...args]
-      .map((value) => adapter.escapeArg(String(value)))
-      .join(' ')
-    const commandNeedsQuotes = /[" &|<>^%]/.test(String(command))
-    const cmdPayload = commandNeedsQuotes ? `"${commandLine}"` : commandLine
+    // CMD's `/c` parser does not safely execute a quoted first token when it
+    // is supplied as the command itself. `call` is CMD's built-in dispatcher:
+    // with it, node-pty can continue passing the path and every argument as
+    // individual argv values, while CMD correctly executes a `.cmd` shim such
+    // as `C:\\Users\\Felipe Martins\\...\\claude.cmd`. Do not use the common
+    // extra-outer-quotes form here: under ConPTY it becomes part of the command
+    // name and produces "O caminho da rede nÃ£o foi encontrado".
+    const usesCallDispatcher = /\s/.test(String(command))
 
     return {
       command: 'cmd.exe',
-      args: ['/d', '/s', keepShellOpen ? '/k' : '/c', cmdPayload],
+      args: [
+        '/d',
+        '/s',
+        keepShellOpen ? '/k' : '/c',
+        ...(usesCallDispatcher ? ['call'] : []),
+        command,
+        ...args,
+      ],
     }
   }
 

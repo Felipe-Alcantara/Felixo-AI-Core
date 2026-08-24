@@ -210,15 +210,15 @@ test('Windows launches explicit CLIs through cmd.exe so PATHEXT resolves .cmd sh
 
   // Bare `claude` (installed as claude.cmd) must go through the shell, not be
   // handed straight to CreateProcess — otherwise: "Cannot create process".
-  // CMD receives one complete command string, which also keeps absolute paths
-  // containing spaces intact.
+  // Bare commands stay separate so node-pty can construct its normal Windows
+  // command line and CMD can resolve the `.cmd` shim through PATHEXT.
   assert.deepEqual(launch, {
     command: 'cmd.exe',
-    args: ['/d', '/s', '/c', 'claude --model opus'],
+    args: ['/d', '/s', '/c', 'claude', '--model', 'opus'],
   })
 })
 
-test('Windows wraps an absolute CLI path with spaces for cmd.exe /c', () => {
+test('Windows dispatches an absolute CLI path with spaces through cmd.exe call', () => {
   const adapter = {
     name: 'win32',
     getDefaultShell: () => 'powershell.exe',
@@ -238,7 +238,9 @@ test('Windows wraps an absolute CLI path with spaces for cmd.exe /c', () => {
       '/d',
       '/s',
       '/c',
-      '""C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\claude.cmd" --print"',
+      'call',
+      'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\claude.cmd',
+      '--print',
     ],
   })
 })
@@ -400,7 +402,9 @@ test('Windows retries an explicit Codex launch with WinPTY after an early path e
     '/d',
     '/s',
     '/c',
-    'codex --model gpt-5.6-luna',
+    'codex',
+    '--model',
+    'gpt-5.6-luna',
   ])
   assert.deepEqual(received, [
     '\r\n[Felixo] Camada: backend PTY do Windows. A camada de terminal reportou um erro de caminho; tentando o backend alternativo.\r\n',
@@ -462,7 +466,9 @@ test('Windows resolves the Codex shim before the first PTY attempt', () => {
     '/d',
     '/s',
     '/c',
-    `${resolvedPath} --model gpt-5.6-luna`,
+    resolvedPath,
+    '--model',
+    'gpt-5.6-luna',
   ])
 })
 
@@ -676,7 +682,7 @@ test('Windows: a run-a-file session keeps the shell open with /k instead of /c',
   // nothing to read and nothing to type into.
   assert.deepEqual(launch, {
     command: 'cmd.exe',
-    args: ['/d', '/s', '/k', 'py script.py'],
+    args: ['/d', '/s', '/k', 'py', 'script.py'],
   })
 })
 
@@ -685,7 +691,7 @@ test('Windows: a normal CLI launch still uses /c', () => {
 
   assert.deepEqual(launch, {
     command: 'cmd.exe',
-    args: ['/d', '/s', '/c', 'claude --print'],
+    args: ['/d', '/s', '/c', 'claude', '--print'],
   })
 })
 
@@ -808,7 +814,7 @@ test('Windows: `py` failing instantly retries the file with `python`', () => {
   assert.equal(spawnCalls.length, 2)
   // Still the user's file, still keeping the shell open — only the
   // interpreter changed.
-  assert.deepEqual(spawnCalls[1].args, ['/d', '/s', '/k', 'python script.py'])
+  assert.deepEqual(spawnCalls[1].args, ['/d', '/s', '/k', 'python', 'script.py'])
 })
 
 test('Windows: the interpreter fallback is tried only once', () => {
