@@ -1,5 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import { activateTerminalExternalLink } from './terminal-external-link'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
@@ -293,6 +295,7 @@ export class TerminalSessionStore {
     })
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
+    terminal.loadAddon(new WebLinksAddon(activateTerminalExternalLink))
 
     const generation = (this.generations.get(id) ?? 0) + 1
     this.generations.set(id, generation)

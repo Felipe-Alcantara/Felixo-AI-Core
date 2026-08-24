@@ -1090,3 +1090,23 @@ atual sem depender de reiniciar o app.
 mudança em tempo real. No Electron isolado, o aviso apareceu com o switch
 `--force-prefers-reduced-motion` e não apareceu na preferência normal do
 sistema.
+
+---
+
+## [2026-08-24] Links de agentes no terminal saem para o navegador com confirmação
+
+**Problema.** URLs impressas por Codex, Claude ou outra CLI apareciam no xterm
+como texto comum; a pessoa via o endereço, mas não tinha como abri-lo dentro
+do app.
+
+**Decisão.** O terminal aceita apenas `http:` e `https:` e exige Ctrl+clique
+(ou Cmd+clique no macOS) antes de sair para o navegador. A política é própria
+do terminal e não altera as regras dos blocos de Página Web.
+
+**Implementação.** O `WebLinksAddon` do xterm reconhece URLs e encaminha a
+ativação confirmada para `window.open`. O handler já existente da janela
+principal a redireciona para o navegador do sistema. Esquemas como `file:`,
+`javascript:` e `mailto:` são recusados antes dessa chamada.
+
+**Validação.** Testes cobrem os esquemas permitidos e bloqueados, a exigência
+do modificador e a ativação. A suíte de frontend confirma o registro do addon.
