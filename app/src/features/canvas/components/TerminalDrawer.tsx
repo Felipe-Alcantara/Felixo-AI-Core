@@ -347,6 +347,14 @@ export function TerminalDrawer({
                     : ''}
             </span>
           )}
+          {!collapsed && (
+            <span
+              className="hidden text-[11px] text-zinc-600 sm:inline"
+              title="Use Ctrl+clique (Windows/Linux) ou Cmd+clique (macOS) para abrir links no navegador"
+            >
+              links: Ctrl/Cmd+clique
+            </span>
+          )}
           {collapsed && (
             // The rail keeps a status dot so a collapsed agent still shows life.
             <span

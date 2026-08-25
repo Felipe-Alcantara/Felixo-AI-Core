@@ -1210,3 +1210,18 @@ React escapa caracteres não confiáveis sem perder a busca case-insensitive.
 confirma que o resultado contém texto escapado e mantém o termo marcado. O gate
 passou com lint, build, 583 testes de frontend e 734 testes do processo principal
 (3 pulados). O build manteve apenas o aviso pré-existente de chunk inicial grande.
+
+---
+
+## [2026-08-25] Terminal comunica o gesto para abrir links externos
+
+**Problema.** URLs do terminal exigem Ctrl/Cmd+clique por segurança, mas a
+interface não explicava o gesto e podia parecer que o link estava quebrado.
+
+**Decisão.** O cabeçalho do terminal exibe “links: Ctrl/Cmd+clique” (com tooltip
+para Windows/Linux e macOS), mantendo a whitelist http/https e a abertura no
+navegador do sistema.
+
+**Validação.** A política e o callback continuam cobertos pelo teste unitário
+de links externos; a build instalada v0.1.76 contém a implementação e o CI
+multiplataforma/release estão verdes.
