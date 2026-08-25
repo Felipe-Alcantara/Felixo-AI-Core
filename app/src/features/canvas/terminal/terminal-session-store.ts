@@ -1,7 +1,11 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { activateTerminalExternalLink } from './terminal-external-link'
+import {
+  activateTerminalExternalLink,
+  isAllowedTerminalExternalLink,
+  openAllowedTerminalExternalLink,
+} from './terminal-external-link'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
@@ -168,6 +172,87 @@ type SessionOptions = {
   keepShellOpen?: boolean
   /** Restored timestamp; omitted on restart so a fresh clock is created. */
   startedAt?: number
+  /** Cria um bloco Página Web quando a pessoa abre um link do terminal. */
+  onOpenWebpage?: (url: string) => void
+}
+
+type LinkMenuActions = {
+  onOpenWebpage: (url: string) => void
+}
+
+function mountTerminalLinkMenu(
+  event: MouseEvent,
+  url: string,
+  actions: LinkMenuActions,
+): () => void {
+  const menu = document.createElement('div')
+  menu.setAttribute('role', 'menu')
+  menu.setAttribute('aria-label', 'Ações do link')
+  menu.style.cssText = [
+    'position:fixed',
+    `left:${Math.min(event.clientX, window.innerWidth - 220)}px`,
+    `top:${Math.min(event.clientY, window.innerHeight - 100)}px`,
+    'z-index:10000',
+    'display:flex',
+    'flex-direction:column',
+    'min-width:210px',
+    'padding:4px',
+    'border:1px solid rgba(110,231,183,.3)',
+    'border-radius:6px',
+    'background:#101a18',
+    'box-shadow:0 10px 25px rgba(0,0,0,.4)',
+  ].join(';')
+
+  const addAction = (label: string, action: () => void) => {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = label
+    button.setAttribute('role', 'menuitem')
+    button.style.cssText = [
+      'padding:7px 9px',
+      'border:0',
+      'border-radius:4px',
+      'background:transparent',
+      'color:#d1fae5',
+      'text-align:left',
+      'font:13px system-ui,sans-serif',
+      'cursor:pointer',
+    ].join(';')
+    button.addEventListener('mouseenter', () => {
+      button.style.background = 'rgba(255,255,255,.1)'
+    })
+    button.addEventListener('mouseleave', () => {
+      button.style.background = 'transparent'
+    })
+    button.addEventListener('click', () => {
+      action()
+      cleanup()
+    })
+    menu.appendChild(button)
+  }
+
+  addAction('Abrir no canvas', () => actions.onOpenWebpage(url))
+  addAction('Abrir no navegador', () => {
+    openAllowedTerminalExternalLink(url)
+  })
+  document.body.appendChild(menu)
+
+  const cleanup = () => {
+    menu.remove()
+    document.removeEventListener('mousedown', onOutside)
+    document.removeEventListener('keydown', onEscape)
+  }
+  const onOutside = (outsideEvent: MouseEvent) => {
+    if (!menu.contains(outsideEvent.target as Node)) cleanup()
+  }
+  const onEscape = (keyboardEvent: KeyboardEvent) => {
+    if (keyboardEvent.key === 'Escape') cleanup()
+  }
+  queueMicrotask(() => {
+    document.addEventListener('mousedown', onOutside)
+    document.addEventListener('keydown', onEscape)
+  })
+  return cleanup
 }
 
 type Session = {
@@ -219,6 +304,7 @@ type Session = {
   initialText?: string
   rawInitialText?: string
   sourceLabel?: string
+  optionsOnOpenWebpage?: (url: string) => void
   /** Serializes programmatic deliveries so file creation cannot reorder prompts. */
   sendChain: Promise<void>
   initialTextTimer: ReturnType<typeof setTimeout> | null
@@ -235,6 +321,9 @@ type Session = {
   inputTouched: boolean
   /** The paste interceptor is bound to the xterm element, which outlives attach. */
   imagePasteBound: boolean
+  hoveredLink?: string
+  offLinkContextMenu?: () => void
+  linkMenuCleanup?: () => void
   /**
    * Quando uma imagem foi colada por aqui pela última vez.
    *
@@ -300,7 +389,25 @@ export class TerminalSessionStore {
     })
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
-    terminal.loadAddon(new WebLinksAddon(activateTerminalExternalLink))
+    let createdSession: Session | null = null
+    terminal.loadAddon(
+      new WebLinksAddon(activateTerminalExternalLink, {
+        hover: (_event, text) => {
+          if (createdSession && isAllowedTerminalExternalLink(text)) {
+            createdSession.hoveredLink = text
+            if (createdSession.terminal.element) {
+              createdSession.terminal.element.title =
+                'Ctrl/Cmd+clique: abrir no navegador · clique direito: mais opções'
+            }
+          }
+        },
+        leave: () => {
+          if (createdSession?.terminal.element) {
+            createdSession.terminal.element.title = ''
+          }
+        },
+      }),
+    )
 
     const generation = (this.generations.get(id) ?? 0) + 1
     this.generations.set(id, generation)
@@ -331,6 +438,7 @@ export class TerminalSessionStore {
       initialText: undefined,
       rawInitialText: options.initialText,
       sourceLabel: options.sourceLabel,
+      optionsOnOpenWebpage: options.onOpenWebpage,
       sendChain: Promise.resolve(),
       initialTextTimer: null,
       submitRetryTimer: null,
@@ -338,12 +446,14 @@ export class TerminalSessionStore {
       initialTextSent: false,
       inputTouched: false,
       imagePasteBound: false,
+      hoveredLink: undefined,
       lastImagePasteAt: 0,
       codexTrustBuffer: '',
       codexTrustHandled: false,
       claudeBypassBuffer: '',
       claudeBypassHandled: false,
     }
+    createdSession = session
     this.listeners.set(id, session.listeners)
     this.sessions.set(id, session)
     this.snapshots = { ...this.snapshots, [id]: session.snapshot }
@@ -559,8 +669,28 @@ export class TerminalSessionStore {
       container.appendChild(session.terminal.element)
     }
 
+    this.bindLinkContextMenu(session)
+
     this.bindImagePaste(session)
     this.fit(session)
+  }
+
+  private bindLinkContextMenu(session: Session): void {
+    const element = session.terminal.element
+    if (!element || session.offLinkContextMenu) return
+
+    const onContextMenu = (event: MouseEvent) => {
+      const url = session.hoveredLink
+      if (!url || !isAllowedTerminalExternalLink(url)) return
+      event.preventDefault()
+      event.stopPropagation()
+      session.linkMenuCleanup?.()
+      session.linkMenuCleanup = mountTerminalLinkMenu(event, url, {
+        onOpenWebpage: (link) => session.optionsOnOpenWebpage?.(link),
+      })
+    }
+    element.addEventListener('contextmenu', onContextMenu)
+    session.offLinkContextMenu = () => element.removeEventListener('contextmenu', onContextMenu)
   }
 
   /**
@@ -926,6 +1056,8 @@ export class TerminalSessionStore {
     this.clearInitialTextTimer(session)
     this.clearSubmitRetryTimer(session)
     this.clearContextRetryTimer(session)
+    session.linkMenuCleanup?.()
+    session.offLinkContextMenu?.()
     session.offData()
     session.offExit()
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })

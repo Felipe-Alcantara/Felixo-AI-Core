@@ -1225,3 +1225,26 @@ navegador do sistema.
 **Validação.** A política e o callback continuam cobertos pelo teste unitário
 de links externos; a build instalada v0.1.76 contém a implementação e o CI
 multiplataforma/release estão verdes.
+
+---
+
+## [2026-08-25] Link do terminal pode abrir no canvas ou no navegador
+
+**Contexto.** A task do Notion pedia uma segunda ação para URLs reconhecidas no
+terminal: abrir dentro do canvas como bloco Página Web, sem remover o caminho já
+existente para o navegador externo.
+
+**Implementação.** O link continua aceitando somente `http:`/`https:`. Ctrl/Cmd-
+clique mantém a abertura externa; ao passar pelo link, o terminal informa os
+gestos e o clique direito abre um menu com **Abrir no canvas** e **Abrir no
+navegador**. A ação do canvas atravessa o store de sessões até `CanvasView`,
+cria o bloco Página Web persistido ao lado do terminal de origem, seleciona-o e
+centraliza a viewport nele. A posição próxima usa uma função pura que tenta os
+quatro lados do terminal e recua para o posicionamento geral quando necessário.
+
+**Validação.** `npm run lint`, `npm run build`, `npx vitest run
+src/features/canvas/services/node-geometry.test.ts
+src/features/canvas/terminal/terminal-external-link.test.ts` (16 testes),
+`npm test` (765 testes) e `git diff --check` passaram. Não foi feita abertura
+visual do app empacotado nem carregamento de uma URL externa real nesta sessão;
+isso permanece como validação manual de integração.

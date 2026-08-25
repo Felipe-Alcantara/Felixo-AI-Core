@@ -32,6 +32,7 @@ type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
   /** Tells the running agent its new name once a rename is committed (blur/Enter). */
   onRenameCommit?: (nodeId: string, label: string) => void
+  onOpenWebpage?: (nodeId: string, url: string) => void
 }
 
 /**
@@ -47,6 +48,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const metadata = useSessionMetadata(id)
   const { deleteElements } = useReactFlow()
   const onSessionStarted = nodeData.onSessionStarted
+  const onOpenWebpage = nodeData.onOpenWebpage
 
   // Start (or adopt) the background session as soon as the card mounts.
   // ensure() is idempotent, so initialText only fires on the first creation.
@@ -64,6 +66,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
+      onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
   }, [
     store,
@@ -76,6 +79,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.initialTextReady,
     nodeData.fallbackCommand,
     nodeData.keepShellOpen,
+    onOpenWebpage,
     nodeData.sessionStartedAt,
   ])
 
@@ -102,6 +106,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
+      onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
     nodeData.onSessionStarted?.(id, Date.now())
   }

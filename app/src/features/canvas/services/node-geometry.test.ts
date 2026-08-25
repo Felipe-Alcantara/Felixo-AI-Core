@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from '@xyflow/react'
-import { findFreeNodePosition, findFreeNodePositions } from './node-geometry'
+import {
+  findFreeNodePosition,
+  findFreeNodePositionNearNode,
+  findFreeNodePositions,
+} from './node-geometry'
 
 const SIZE = { width: 100, height: 100 }
 
@@ -57,5 +61,47 @@ describe('findFreeNodePositions', () => {
       { x: 252, y: 252 },
       { x: 384, y: 252 },
     ])
+  })
+})
+
+describe('findFreeNodePositionNearNode', () => {
+  it('places the new block beside its terminal when that space is free', () => {
+    const terminal: Node = {
+      id: 'terminal-1',
+      type: 'terminal',
+      position: { x: 120, y: 120 },
+      width: 100,
+      height: 100,
+      data: {},
+    }
+
+    expect(findFreeNodePositionNearNode([terminal], terminal.id, SIZE)).toEqual({
+      x: 252,
+      y: 120,
+    })
+  })
+
+  it('tries another side when the first neighboring position is occupied', () => {
+    const terminal: Node = {
+      id: 'terminal-1',
+      type: 'terminal',
+      position: { x: 120, y: 120 },
+      width: 100,
+      height: 100,
+      data: {},
+    }
+    const right: Node = {
+      id: 'right',
+      type: 'note',
+      position: { x: 252, y: 120 },
+      width: 100,
+      height: 100,
+      data: {},
+    }
+
+    expect(findFreeNodePositionNearNode([terminal, right], terminal.id, SIZE)).toEqual({
+      x: -12,
+      y: 120,
+    })
   })
 })

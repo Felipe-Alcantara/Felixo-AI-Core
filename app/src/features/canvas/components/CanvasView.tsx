@@ -100,6 +100,7 @@ import {
 import {
   DEFAULT_SIZE,
   findFreeNodePosition,
+  findFreeNodePositionNearNode,
   findFreeNodePositions,
   getNodeSize,
   isInside,
@@ -900,6 +901,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [expandedTerminalId, store],
   )
 
+  const addNodeRef = useRef<(sourceId: string, url: string) => void>(() => {})
+
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
@@ -1004,6 +1007,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
                 updateNodeData(nodeId, { sessionStartedAt: startedAt }),
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
+              onOpenWebpage: (sourceId: string, url: string) =>
+                addNodeRef.current(sourceId, url),
             }),
           ),
         }
@@ -1155,14 +1160,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   }, [])
 
   const addNode = useCallback(
-    (type: CanvasNodeType, data?: Record<string, unknown>) => {
+    (type: CanvasNodeType, data?: Record<string, unknown>, position?: { x: number; y: number }) => {
       const id = `${type}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
       const size = DEFAULT_SIZE[type]
 
       const node: Node = {
         id,
         type,
-        position: findFreeNodePosition(nodes, size, visibleCanvasBounds()),
+        position: position ?? findFreeNodePosition(nodes, size, visibleCanvasBounds()),
         width: size.width,
         height: size.height,
         data: {
@@ -1180,6 +1185,26 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     },
     [nodes, setNodes, persistNode, visibleCanvasBounds],
   )
+
+  const openWebpageFromTerminal = useCallback(
+    (sourceId: string, url: string) => {
+      const position = findFreeNodePositionNearNode(nodes, sourceId, DEFAULT_SIZE.webpage)
+      const id = addNode('webpage', { url }, position)
+      setNodes((current) =>
+        current.map((node) => ({ ...node, selected: node.id === id })),
+      )
+      const center = {
+        x: position.x + DEFAULT_SIZE.webpage.width / 2,
+        y: position.y + DEFAULT_SIZE.webpage.height / 2,
+      }
+      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 350 })
+    },
+    [addNode, nodes, setNodes],
+  )
+
+  useEffect(() => {
+    addNodeRef.current = openWebpageFromTerminal
+  }, [openWebpageFromTerminal])
 
   const addFileNode = useCallback(
     (name?: string) => {

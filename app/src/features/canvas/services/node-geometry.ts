@@ -19,6 +19,30 @@ const VIEWPORT_PLACEMENT_PADDING = { x: 40, top: 88, bottom: 40 }
 
 export type CanvasBounds = { x: number; y: number; width: number; height: number }
 
+/** Encontra uma posição livre ao redor de um bloco existente. */
+export function findFreeNodePositionNearNode(
+  nodes: Node[],
+  sourceId: string,
+  size: NodeSize,
+): Position {
+  const source = nodes.find((node) => node.id === sourceId)
+  if (!source || source.parentId) {
+    return findFreeNodePosition(nodes, size)
+  }
+
+  const sourceSize = getNodeSize(source)
+  const candidates = [
+    { x: source.position.x + sourceSize.width + NODE_PLACEMENT_GAP, y: source.position.y },
+    { x: source.position.x - size.width - NODE_PLACEMENT_GAP, y: source.position.y },
+    { x: source.position.x, y: source.position.y + sourceSize.height + NODE_PLACEMENT_GAP },
+    { x: source.position.x, y: source.position.y - size.height - NODE_PLACEMENT_GAP },
+  ]
+  const topLevelNodes = nodes.filter((node) => !node.parentId)
+
+  return candidates.find((candidate) => isPositionFree(candidate, size, topLevelNodes)) ??
+    findFreeNodePosition(nodes, size)
+}
+
 export type Side = 'top' | 'right' | 'bottom' | 'left'
 
 type Position = { x: number; y: number }
