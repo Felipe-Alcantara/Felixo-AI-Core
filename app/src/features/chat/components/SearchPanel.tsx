@@ -1,23 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import type { ChatSession } from '../types'
+import { highlight } from './search-highlight'
 
 type SearchPanelProps = {
   sessions: ChatSession[]
   isOpen: boolean
   onClose: () => void
   onSelectSession: (session: ChatSession) => void
-}
-
-function highlight(text: string, query: string) {
-  if (!query) return text
-  const index = text.toLowerCase().indexOf(query.toLowerCase())
-  if (index === -1) return text
-  return (
-    text.slice(0, index) +
-    `<mark class="bg-amber-400/30 text-inherit rounded-sm">${text.slice(index, index + query.length)}</mark>` +
-    text.slice(index + query.length)
-  )
 }
 
 export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: SearchPanelProps) {
@@ -113,15 +103,13 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
                 }}
                 className="felixo-btn flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-white/[0.05]"
               >
-                <span
-                  className="text-[12px] font-medium text-zinc-300"
-                  dangerouslySetInnerHTML={{ __html: highlight(session.title, query) }}
-                />
+                <span className="text-[12px] font-medium text-zinc-300">
+                  {highlight(session.title, query)}
+                </span>
                 {trimmedSnippet && (
-                  <span
-                    className="text-[11px] text-zinc-600 leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: highlight(trimmedSnippet, query) }}
-                  />
+                  <span className="text-[11px] text-zinc-600 leading-relaxed">
+                    {highlight(trimmedSnippet, query)}
+                  </span>
                 )}
               </button>
             )

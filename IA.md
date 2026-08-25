@@ -1151,3 +1151,20 @@ tentativa de esticar uma janela pelos dois monitores.
 
 **Validação.** Testes usam monitores horizontal e vertical fabricados, monitor
 desconectado e estados maximizado/tela cheia.
+
+---
+
+## [2026-08-25] Busca de chats renderiza conteúdo importado como texto
+
+**Problema.** O destaque de busca montava uma string HTML com título e trecho de
+chat e a inseria com `dangerouslySetInnerHTML`. Conteúdo de sessões importadas
+podia conter marcação literal e virar DOM no renderer.
+
+**Decisão.** O destaque passou a compor nós React: texto antes/depois permanece
+como `children` e somente a correspondência vira um elemento `mark`. Assim, o
+React escapa caracteres não confiáveis sem perder a busca case-insensitive.
+
+**Validação.** O teste novo renderiza um título com tag e atributo literais,
+confirma que o resultado contém texto escapado e mantém o termo marcado. O gate
+passou com lint, build, 583 testes de frontend e 734 testes do processo principal
+(3 pulados). O build manteve apenas o aviso pré-existente de chunk inicial grande.
