@@ -35,16 +35,34 @@ test('aspasPosix não deixa apóstrofo escapar do argumento', () => {
 test('instalar cria o comando executável e é idempotente', () => {
   const binDir = path.join(pastaTemporaria(), 'bin')
   const alvo = { execPath: '/usr/bin/node', entrypoint: '/app/felixo.cjs' }
+  const chmods = []
+  const sistemaDeArquivos = {
+    ...fs,
+    chmodSync(caminho, modo) {
+      chmods.push({ caminho, modo })
+    },
+  }
 
-  const primeira = instalarComandoDoAgente({ binDir, ...alvo, plataforma: 'linux' })
+  const primeira = instalarComandoDoAgente({
+    binDir,
+    ...alvo,
+    plataforma: 'linux',
+    sistemaDeArquivos,
+  })
 
   assert.equal(primeira.escrito, true)
-  assert.equal(fs.statSync(primeira.caminho).mode & 0o111 ? true : false, true)
+  assert.deepEqual(chmods, [{ caminho: primeira.caminho, modo: 0o755 }])
 
-  const segunda = instalarComandoDoAgente({ binDir, ...alvo, plataforma: 'linux' })
+  const segunda = instalarComandoDoAgente({
+    binDir,
+    ...alvo,
+    plataforma: 'linux',
+    sistemaDeArquivos,
+  })
 
   // Reescrever a cada abertura trocaria o inode de um arquivo em execução.
   assert.equal(segunda.escrito, false)
+  assert.equal(chmods.length, 1)
 })
 
 test('mudança de caminho do app reescreve o shim', () => {
