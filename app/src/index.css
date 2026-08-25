@@ -34,6 +34,14 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Feedback local: o arquivo ainda não foi lido nem enviado; apenas o alvo
+   exato do terminal recebe a indicação durante o arraste. */
+.felixo-terminal-drop-target {
+  outline: 2px dashed rgba(52, 211, 153, 0.9);
+  outline-offset: -3px;
+  background: rgba(6, 78, 59, 0.22);
+}
+
 :root[data-theme='high_contrast'] {
   --color-app-bg: #050505;
   --color-main-bg: #020617;

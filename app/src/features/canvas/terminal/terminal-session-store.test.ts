@@ -421,4 +421,33 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
     expect(snapshot?.activity).toBe('error')
     expect(snapshot?.message).toBe('comando não encontrado')
   }, 10000)
+
+  it('insere referências de arquivos arrastados sem enviar Enter', async () => {
+    harness = createHarness('')
+    ;(globalThis as unknown as { window: { felixo: { getFilePath: (file: File) => string } } }).window.felixo.getFilePath =
+      (file) => `/tmp/${file.name}`
+
+    harness.store.handleFileDrop(SESSION_ID, [
+      { name: 'um arquivo.txt' } as File,
+      { name: 'ação.png' } as File,
+    ])
+    await wait(0)
+
+    const dropped = harness.writes.find((data) => data.includes('Arquivos arrastados'))
+    expect(dropped).toContain('"/tmp/um arquivo.txt"')
+    expect(dropped).toContain('"/tmp/ação.png"')
+    expect(dropped).not.toContain('\r')
+  })
+
+  it('ignora o drop quando a sessão já foi encerrada', async () => {
+    harness = createHarness('')
+    ;(globalThis as unknown as { window: { felixo: { getFilePath: (file: File) => string } } }).window.felixo.getFilePath =
+      () => '/tmp/encerrado.txt'
+
+    harness.store.remove(SESSION_ID)
+    harness.store.handleFileDrop(SESSION_ID, [{ name: 'encerrado.txt' } as File])
+    await wait(0)
+
+    expect(harness.writes).toEqual([])
+  })
 })

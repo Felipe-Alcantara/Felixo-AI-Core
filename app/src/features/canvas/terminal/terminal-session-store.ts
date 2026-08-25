@@ -6,6 +6,7 @@ import {
   isAllowedTerminalExternalLink,
   openAllowedTerminalExternalLink,
 } from './terminal-external-link'
+import { buildDroppedFileReference } from './terminal-dropped-files'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
@@ -324,6 +325,7 @@ type Session = {
   hoveredLink?: string
   offLinkContextMenu?: () => void
   linkMenuCleanup?: () => void
+  fileDropBound: boolean
   /**
    * Quando uma imagem foi colada por aqui pela última vez.
    *
@@ -447,6 +449,7 @@ export class TerminalSessionStore {
       inputTouched: false,
       imagePasteBound: false,
       hoveredLink: undefined,
+      fileDropBound: false,
       lastImagePasteAt: 0,
       codexTrustBuffer: '',
       codexTrustHandled: false,
@@ -670,6 +673,7 @@ export class TerminalSessionStore {
     }
 
     this.bindLinkContextMenu(session)
+    this.bindFileDrop(session)
 
     this.bindImagePaste(session)
     this.fit(session)
@@ -691,6 +695,57 @@ export class TerminalSessionStore {
     }
     element.addEventListener('contextmenu', onContextMenu)
     session.offLinkContextMenu = () => element.removeEventListener('contextmenu', onContextMenu)
+  }
+
+  private bindFileDrop(session: Session): void {
+    const element = session.terminal.element
+    if (!element || session.fileDropBound) return
+
+    session.fileDropBound = true
+    const isFileDrag = (event: DragEvent) =>
+      Boolean(
+        Array.from(event.dataTransfer?.types ?? []).includes('Files') ||
+          event.dataTransfer?.files.length,
+      )
+    const clearFeedback = () => element.classList.remove('felixo-terminal-drop-target')
+
+    const onDragOver = (event: DragEvent) => {
+      if (!isFileDrag(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+      element.classList.add('felixo-terminal-drop-target')
+    }
+    const onDragLeave = (event: DragEvent) => {
+      if (!element.contains(event.relatedTarget as Node | null)) {
+        clearFeedback()
+      }
+    }
+    const onDrop = (event: DragEvent) => {
+      if (!isFileDrag(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      clearFeedback()
+      this.handleFileDrop(session.id, event.dataTransfer?.files ?? [])
+    }
+
+    element.addEventListener('dragover', onDragOver)
+    element.addEventListener('dragleave', onDragLeave)
+    element.addEventListener('drop', onDrop)
+  }
+
+  /** Insere referências no terminal exato do drop; nunca envia Enter. */
+  handleFileDrop(id: string, files: Iterable<File>): void {
+    const session = this.sessions.get(id)
+    if (!session || session.disposed) return
+
+    const reference = buildDroppedFileReference(
+      files,
+      (file) => window.felixo?.getFilePath?.(file) ?? '',
+    )
+    if (!reference.text) return
+
+    this.typeIntoSession(session, reference.text)
+    session.terminal.focus()
   }
 
   /**
@@ -808,9 +863,13 @@ export class TerminalSessionStore {
       return
     }
 
-    void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
-    session.inputTouched = true
-    this.trackTypedInput(session, text)
+    const delivery = session.sendChain.then(() => {
+      if (session.disposed) return
+      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+      session.inputTouched = true
+      this.trackTypedInput(session, text)
+    })
+    session.sendChain = delivery.catch(() => {})
   }
 
   /** Re-fits the terminal to its current container and pushes a PTY resize. */

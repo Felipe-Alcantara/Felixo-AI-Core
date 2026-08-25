@@ -1248,3 +1248,26 @@ src/features/canvas/terminal/terminal-external-link.test.ts` (16 testes),
 `npm test` (765 testes) e `git diff --check` passaram. Não foi feita abertura
 visual do app empacotado nem carregamento de uma URL externa real nesta sessão;
 isso permanece como validação manual de integração.
+
+---
+
+## [2026-08-25] Terminal aceita arquivos arrastados como referências seguras
+
+**Contexto.** A task pedia aceitar qualquer tipo de arquivo arrastado para o
+terminal, sem abrir, executar, ler ou enviar o conteúdo do arquivo.
+
+**Implementação.** O alvo exato de cada sessão PTY agora intercepta `dragover`,
+`dragleave` e `drop`, mostra feedback visual local e resolve somente o caminho
+pela ponte Electron `webUtils.getPathForFile`. As referências são formatadas
+como texto JSON para preservar espaços, aspas, barras e Unicode; entradas sem
+caminho recebem uma orientação acionável. O texto entra pela fila de escrita da
+sessão, mantém a ordem, devolve o foco ao terminal e nunca envia Enter. Não há
+capability de anexos exposta pelos agentes atuais, então o fallback explícito de
+caminho é usado para todos os tipos, inclusive diretórios.
+
+**Validação.** `npm run lint`, `npm run build`, `npx vitest run
+src/features/canvas/terminal/terminal-dropped-files.test.ts
+src/features/canvas/terminal/terminal-session-store.test.ts` (21 testes),
+`npm test` (765 testes) e `git diff --check` passaram. A validação manual de
+arraste em Linux/Windows/macOS ainda não foi executada; permanece risco residual
+de diferenças do Chromium/Electron no gesto de arrastar, especialmente no macOS.
