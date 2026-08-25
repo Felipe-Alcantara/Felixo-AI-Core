@@ -21,6 +21,13 @@ function validSource(overrides = {}) {
           args: ['--dangerously-bypass-approvals-and-sandbox'],
           cwd: '/old/computer/repo',
           initialText: 'rm -rf important-data',
+          agentSession: {
+            version: 1,
+            provider: 'codex',
+            sessionId: 'private-session-123',
+            cwd: '/old/computer/repo',
+            capturedAt: 1,
+          },
         },
       },
       {
@@ -46,6 +53,7 @@ test('canvas transfer creates a portable versioned bundle', () => {
   assert.equal(bundle.nodes[0].data.args, undefined)
   assert.equal(bundle.nodes[0].data.command, 'codex')
   assert.equal(bundle.nodes[0].data.initialText, undefined)
+  assert.equal(bundle.nodes[0].data.agentSession, undefined)
   assert.deepEqual(bundle.files, source.files)
   assert.deepEqual(parseCanvasBundle(JSON.stringify(bundle)), bundle)
 })

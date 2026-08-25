@@ -86,6 +86,8 @@ import {
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import { isKnownAgentCommand } from '../services/agent-launch-options'
+import { canResumeAgentSession } from '../services/agent-session'
+import type { AgentSessionReference } from '../services/agent-session'
 import type { RunFileOptions } from '../services/run-file-command'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import type { SkillActivationResult } from './tools/SkillsPanel'
@@ -971,11 +973,15 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           connectedCanvasFileCount: connectedFileNames.length,
           resolvedCanvasFileCount: canvasFilePaths.length,
         })
+        const resumeAgentSession =
+          restoredAgentTerminals.ids.has(node.id) &&
+          canResumeAgentSession(node.data.command, node.data.cwd, node.data.agentSession)
         // Left open from a previous run: whatever it was doing may not have
         // finished, so type "/resume" on this (re)spawn instead of the usual
         // standing instruction — see restoredAgentTerminalIds above.
         const fallbackInitialText = resolveTerminalInitialText({
           isRestoredAgent: restoredAgentTerminals.ids.has(node.id),
+          command: node.data.command,
           qualityStandardEnabled: quality.enabled,
           qualityStandardPrompt: quality.prompt,
           hasCommand: isKnownAgentCommand(node.data.command),
@@ -988,6 +994,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             node.data.handoffText ?? stripTerminalSubmission(node.data.initialText),
           canvasFilePaths,
           identity: { agentName: node.data.label, cwd: node.data.cwd },
+          cwd: node.data.cwd,
+          agentSession: node.data.agentSession,
+          resumeAgentSession,
         })
         const terminalIndex = terminalOrder.get(node.id)
 
@@ -995,16 +1004,25 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           ...withHandle,
           data: reuseData(
             node.id,
-            [node.data, fallbackInitialText, initialTextReady, terminalIndex],
+            [node.data, fallbackInitialText, initialTextReady, resumeAgentSession, terminalIndex],
             () => ({
               ...node.data,
-              ...(fallbackInitialText ? { initialText: fallbackInitialText } : {}),
+              ...(resumeAgentSession
+                ? { initialText: undefined }
+                : fallbackInitialText
+                  ? { initialText: fallbackInitialText }
+                  : {}),
               initialTextReady,
+              resumeAgentSession,
               terminalIndex,
               onExpand: openTerminal,
               onDetails: setDetailsTerminalId,
               onSessionStarted: (nodeId: string, startedAt: number) =>
                 updateNodeData(nodeId, { sessionStartedAt: startedAt }),
+              onAgentSession: (nodeId: string, reference: unknown) =>
+                updateNodeData(nodeId, { agentSession: reference }),
+              onClearAgentSession: (nodeId: string) =>
+                updateNodeData(nodeId, { agentSession: undefined }),
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
               onOpenWebpage: (sourceId: string, url: string) =>
@@ -1595,9 +1613,15 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         cwd?: string
         initialText?: string
         handoffText?: string
+        agentSession?: AgentSessionReference
       }
     | undefined
   const expandedTitle = expandedNodeData?.label ?? 'Terminal'
+  const expandedCanResumeAgentSession = canResumeAgentSession(
+    expandedNodeData?.command,
+    expandedNodeData?.cwd,
+    expandedNodeData?.agentSession,
+  )
   const arrangeableCount = countArrangeableNodes(nodes)
 
   return (
@@ -1727,6 +1751,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             data={detailsNode.data}
             onClose={() => setDetailsTerminalId(null)}
             toolsMenuOpen={toolsMenuOpen}
+            onClearAgentSession={() => updateNodeData(detailsNode.id, { agentSession: undefined })}
           />
         ) : null
       })()}
@@ -1813,8 +1838,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             command: expandedNodeData?.command,
             args: expandedNodeData?.args,
             cwd: expandedNodeData?.cwd,
-            initialText: expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
+            initialText: expandedCanResumeAgentSession
+              ? undefined
+              : expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
             sourceLabel: expandedTitle,
+            agentSession: expandedNodeData?.agentSession,
+            resumeAgentSession: expandedCanResumeAgentSession,
           }}
           onPassResponsibility={(transcript) =>
             setHandoff({ sourceId: expandedTerminalId, transcript })

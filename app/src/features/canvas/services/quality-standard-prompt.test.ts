@@ -40,6 +40,45 @@ describe('resolveTerminalInitialText', () => {
     expect(result).toBe(RESUME_INITIAL_TEXT)
   })
 
+  it('não digita /resume quando o lançamento já aponta para o ID compatível', () => {
+    const result = resolveTerminalInitialText({
+      isRestoredAgent: true,
+      qualityStandardEnabled: true,
+      qualityStandardPrompt: 'Follow the standard.',
+      hasCommand: true,
+      command: 'codex',
+      cwd: '/repo',
+      resumeAgentSession: true,
+      agentSession: {
+        version: 1,
+        provider: 'codex',
+        sessionId: 'codex-session-123',
+        cwd: '/repo',
+        capturedAt: 1,
+      },
+    })
+    expect(result).toBeUndefined()
+  })
+
+  it('exibe fallback honesto quando o diretório salvo mudou', () => {
+    const result = resolveTerminalInitialText({
+      isRestoredAgent: true,
+      qualityStandardEnabled: true,
+      qualityStandardPrompt: 'Follow the standard.',
+      hasCommand: true,
+      command: 'codex',
+      cwd: '/other-repo',
+      agentSession: {
+        version: 1,
+        provider: 'codex',
+        sessionId: 'codex-session-123',
+        cwd: '/repo',
+        capturedAt: 1,
+      },
+    })
+    expect(result).toContain('nenhum ID foi usado')
+  })
+
   it('does not resume a restored PLAIN SHELL (no command) — "/resume" is an agent CLI slash command, and this function enforces that even if a caller mismarks isRestoredAgent', () => {
     const result = resolveTerminalInitialText({
       isRestoredAgent: true,

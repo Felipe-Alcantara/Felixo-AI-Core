@@ -51,6 +51,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
             exitCode: event.exitCode,
             signal: event.signal,
           }),
+        onSession: (reference) => send('pty:session', { ptySessionId: sessionId, ...reference }),
       })
 
       return { ok: true, sessionId, ...(reused ? { reused: true } : {}) }

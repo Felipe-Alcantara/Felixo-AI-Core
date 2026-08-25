@@ -280,6 +280,14 @@ declare global {
             signal?: number
           }) => void,
         ) => () => void
+        onSession: (callback: (event: {
+          ptySessionId: string
+          version: 1
+          provider: 'codex' | 'claude' | 'gemini'
+          cwd: string
+          capturedAt: number
+          source?: string
+        }) => void) => () => void
       }
       projects?: {
         pickFolder: () => Promise<string | null>

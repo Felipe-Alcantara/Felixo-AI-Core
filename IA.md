@@ -1271,3 +1271,41 @@ src/features/canvas/terminal/terminal-session-store.test.ts` (21 testes),
 `npm test` (765 testes) e `git diff --check` passaram. A validação manual de
 arraste em Linux/Windows/macOS ainda não foi executada; permanece risco residual
 de diferenças do Chromium/Electron no gesto de arrastar, especialmente no macOS.
+
+---
+
+## [2026-08-25] Retomada reabre a conversa exata do agente
+
+**Contexto.** A retomada de terminais restaurados usava apenas `/resume`,
+deixando a CLI escolher uma conversa e permitindo associação errada. A task
+exigia persistir o ID do agente, respeitar provider e diretório, e nunca abrir
+silenciosamente uma conversa privada diferente.
+
+**Implementação.** O canvas agora persiste uma referência versionada com
+`provider`, `sessionId`, `cwd` e `capturedAt`. O processo principal descobre o
+ID apenas no metadata inicial dos históricos locais do Codex, Claude e Gemini,
+sem ler conteúdo de conversa, e o renderer o recebe por uma ponte PTY separada
+do ID interno do processo. Na reabertura, Codex usa `codex resume <id>` e Claude
+ou Gemini usam `--resume <id>` somente quando provider e `cwd` coincidem. IDs
+inválidos, incompatíveis ou ambíguos caem para uma orientação explícita de
+`/resume`; a UI mostra a associação, permite copiá-la e esquecê-la. Exportação
+e clonagem removem a associação privada para não transportar uma conversa de
+uma pessoa ou conta para outra.
+
+**Medições.** Nesta máquina: `codex-cli 0.149.1`, Claude Code `2.1.241` e
+Gemini CLI `0.52.0`. Os três CLIs expõem retomada por ID na ajuda oficial; a
+captura automática foi validada por testes com históricos sintéticos e não
+exige credenciais nem envia prompts de teste aos provedores.
+
+**Validação.** `npm run test:frontend -- --maxWorkers=1` passou com 609 testes,
+`npm test` passou com 769 testes, `npm run lint`, `npm run build` e
+`git diff --check` passaram. Foram adicionados testes para IDs antigos ou
+inválidos, provider/diretório incompatíveis, histórico ambíguo, reinício,
+persistência e privacidade de importação/exportação.
+
+**Limitações não validadas.** Não foi possível concluir nesta sessão a
+checagem manual com duas conversas antigas do Codex, nem medir uma identidade
+de conta de forma segura a partir do PTY; a referência capturada fica limitada
+ao provider e diretório quando a CLI não fornece conta no metadata. Também não
+houve teste visual do app empacotado em Windows/macOS. O fallback permanece
+intencionalmente honesto nesses casos.

@@ -56,6 +56,11 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('pty:exit', handler)
       return () => ipcRenderer.removeListener('pty:exit', handler)
     },
+    onSession: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('pty:session', handler)
+      return () => ipcRenderer.removeListener('pty:session', handler)
+    },
   },
   projects: {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),

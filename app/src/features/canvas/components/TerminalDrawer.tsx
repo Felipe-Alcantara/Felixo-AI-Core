@@ -19,6 +19,7 @@ import { CopyButton } from './TerminalCopyButton'
 import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import { DRAWER_EXIT_MS } from '../services/animation-timing'
+import type { AgentSessionReference } from '../services/agent-session'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
@@ -42,6 +43,8 @@ type TerminalDrawerProps = {
     cwd?: string
     initialText?: string
     sourceLabel?: string
+    agentSession?: AgentSessionReference
+    resumeAgentSession?: boolean
   }
   /**
    * Abre a escolha do agente que vai assumir o trabalho, levando o histórico

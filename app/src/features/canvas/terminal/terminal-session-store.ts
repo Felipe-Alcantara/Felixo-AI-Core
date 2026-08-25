@@ -31,6 +31,11 @@ import {
 } from '../services/context-file-delivery'
 import type { ContextFileKind } from '../services/context-file-delivery'
 import { prepareHandoffTranscript } from '../services/terminal-handoff'
+import {
+  buildAgentResumeArgs,
+  isAgentSessionReference,
+  type AgentSessionReference,
+} from '../services/agent-session'
 import type { SessionMetadata } from './session-metadata'
 import {
   computePreview,
@@ -175,6 +180,9 @@ type SessionOptions = {
   startedAt?: number
   /** Cria um bloco Página Web quando a pessoa abre um link do terminal. */
   onOpenWebpage?: (url: string) => void
+  agentSession?: AgentSessionReference
+  resumeAgentSession?: boolean
+  onAgentSession?: (reference: AgentSessionReference) => void
 }
 
 type LinkMenuActions = {
@@ -266,6 +274,7 @@ type Session = {
   idleTimer: ReturnType<typeof setTimeout> | null
   offData: () => void
   offExit: () => void
+  offSession: () => void
   disposed: boolean
   startedAt: number
   receivedOutput: boolean
@@ -306,6 +315,7 @@ type Session = {
   rawInitialText?: string
   sourceLabel?: string
   optionsOnOpenWebpage?: (url: string) => void
+  agentSession?: AgentSessionReference
   /** Serializes programmatic deliveries so file creation cannot reorder prompts. */
   sendChain: Promise<void>
   initialTextTimer: ReturnType<typeof setTimeout> | null
@@ -414,6 +424,15 @@ export class TerminalSessionStore {
     const generation = (this.generations.get(id) ?? 0) + 1
     this.generations.set(id, generation)
 
+    const launchArgs = options.resumeAgentSession
+      ? buildAgentResumeArgs(
+          options.command,
+          options.args ?? [],
+          options.cwd,
+          options.agentSession,
+        ) ?? options.args ?? []
+      : options.args ?? []
+
     const session: Session = {
       id,
       // The id must survive renderer HMR, navigation to Chat and a drawer
@@ -427,6 +446,7 @@ export class TerminalSessionStore {
       idleTimer: null,
       offData: () => {},
       offExit: () => {},
+      offSession: () => {},
       disposed: false,
       startedAt: options.startedAt ?? Date.now(),
       receivedOutput: false,
@@ -436,11 +456,14 @@ export class TerminalSessionStore {
       inputBuffer: '',
       lastSignature: '',
       lastMeaningfulAt: Date.now(),
-      args: options.args ?? [],
+      args: [...launchArgs],
       initialText: undefined,
       rawInitialText: options.initialText,
       sourceLabel: options.sourceLabel,
       optionsOnOpenWebpage: options.onOpenWebpage,
+      agentSession: isAgentSessionReference(options.agentSession)
+        ? options.agentSession
+        : undefined,
       sendChain: Promise.resolve(),
       initialTextTimer: null,
       submitRetryTimer: null,
@@ -502,6 +525,16 @@ export class TerminalSessionStore {
       }
       this.finishExit(session, event)
     })
+
+    session.offSession =
+      pty.onSession?.((event) => {
+        if (event.ptySessionId !== session.ptySessionId || !isAgentSessionReference(event)) {
+          return
+        }
+        session.agentSession = event
+        options.onAgentSession?.(event)
+        this.notifyAll()
+      }) ?? (() => {})
 
     // Shift+Enter inserts a newline instead of submitting. xterm sends plain
     // CR ('\r') for both Enter and Shift+Enter, so the agent CLI can't tell
@@ -598,7 +631,7 @@ export class TerminalSessionStore {
       .spawn({
         sessionId: session.ptySessionId,
         command: options.command,
-        args: options.args,
+        args: launchArgs,
         cwd: options.cwd,
         cols: terminal.cols || 80,
         rows: terminal.rows || 24,
@@ -1071,6 +1104,8 @@ export class TerminalSessionStore {
       startedAt: session.startedAt,
       command: session.command,
       args: [...session.args],
+      agentSessionId: session.agentSession?.sessionId,
+      agentSession: session.agentSession,
     }
   }
 
@@ -1119,6 +1154,7 @@ export class TerminalSessionStore {
     session.offLinkContextMenu?.()
     session.offData()
     session.offExit()
+    session.offSession()
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })
     void window.felixo?.contextFiles?.release({ sessionId: session.ptySessionId })
     session.terminal.dispose()

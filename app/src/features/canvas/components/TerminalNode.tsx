@@ -24,11 +24,17 @@ import {
 import type { SessionActivity } from '../terminal/terminal-session-store'
 import { repositoryLabel } from '../services/repository-grouping'
 import type { TerminalNodeData } from '../types'
+import {
+  canResumeAgentSession,
+  type AgentSessionReference,
+} from '../services/agent-session'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
   onDetails?: (nodeId: string) => void
   onSessionStarted?: (nodeId: string, startedAt: number) => void
+  onAgentSession?: (nodeId: string, reference: AgentSessionReference) => void
+  onClearAgentSession?: (nodeId: string) => void
   onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
   /** Tells the running agent its new name once a rename is committed (blur/Enter). */
   onRenameCommit?: (nodeId: string, label: string) => void
@@ -48,6 +54,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const metadata = useSessionMetadata(id)
   const { deleteElements } = useReactFlow()
   const onSessionStarted = nodeData.onSessionStarted
+  const onAgentSession = nodeData.onAgentSession
   const onOpenWebpage = nodeData.onOpenWebpage
 
   // Start (or adopt) the background session as soon as the card mounts.
@@ -62,10 +69,13 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       args: nodeData.args,
       cwd: nodeData.cwd,
       startedAt: nodeData.sessionStartedAt,
-      initialText: nodeData.initialText,
+      initialText: nodeData.resumeAgentSession ? undefined : nodeData.initialText,
       sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
+      agentSession: nodeData.agentSession,
+      resumeAgentSession: nodeData.resumeAgentSession,
+      onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),
       onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
   }, [
@@ -79,6 +89,9 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.initialTextReady,
     nodeData.fallbackCommand,
     nodeData.keepShellOpen,
+    nodeData.agentSession,
+    nodeData.resumeAgentSession,
+    onAgentSession,
     onOpenWebpage,
     nodeData.sessionStartedAt,
   ])
@@ -93,6 +106,11 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
   const isLive = activity !== 'exited' && activity !== 'error'
+  const canResume = canResumeAgentSession(
+    nodeData.command,
+    nodeData.cwd,
+    nodeData.agentSession,
+  )
 
   const restart = () => {
     if (isLive && !window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')) {
@@ -102,10 +120,13 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       command: nodeData.command,
       args: nodeData.args,
       cwd: nodeData.cwd,
-      initialText: nodeData.initialText,
+      initialText: canResume ? undefined : nodeData.initialText,
       sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
+      agentSession: nodeData.agentSession,
+      resumeAgentSession: canResume,
+      onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),
       onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
     nodeData.onSessionStarted?.(id, Date.now())

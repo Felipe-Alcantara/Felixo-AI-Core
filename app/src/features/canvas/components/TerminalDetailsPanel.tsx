@@ -9,14 +9,18 @@ export function TerminalDetailsPanel({
   data,
   onClose,
   toolsMenuOpen,
+  onClearAgentSession,
 }: {
   nodeId: string
   data: TerminalNodeData
   onClose: () => void
   toolsMenuOpen: boolean
+  onClearAgentSession: () => void
 }) {
   const metadata = useSessionMetadata(nodeId)
   const value = (text: string | undefined, fallback = 'não informado') => text?.trim() || fallback
+  const hasPersistedAssociation = Object.prototype.hasOwnProperty.call(data, 'agentSession')
+  const agentSession = hasPersistedAssociation ? data.agentSession : metadata?.agentSession
 
   return (
     <CanvasPanel title="Detalhes do terminal" icon={<Info size={15} />} onClose={onClose} toolsMenuOpen={toolsMenuOpen}>
@@ -32,9 +36,28 @@ export function TerminalDetailsPanel({
         <Detail label="ID do elemento" value={nodeId} copy={nodeId} mono />
         <Detail label="ID da sessão PTY" value={value(metadata?.ptySessionId)} copy={metadata?.ptySessionId} mono />
         <Detail label="Agente" value={value(data.command, 'Shell padrão')} />
+        <Detail
+          label="Sessão do agente"
+          value={agentSession ? `${agentSession.provider}: ${agentSession.sessionId}` : 'não associada; retomada genérica'}
+          copy={agentSession?.sessionId}
+          mono
+        />
+        {agentSession && (
+          <button
+            type="button"
+            className="rounded border border-amber-400/30 px-2 py-1 text-left text-[11px] text-amber-200 hover:bg-amber-400/10"
+            onClick={() => {
+              if (window.confirm('Remover a associação desta conversa? O terminal atual não será encerrado.')) {
+                onClearAgentSession()
+              }
+            }}
+          >
+            Esquecer associação da conversa
+          </button>
+        )}
         {data.args && data.args.length > 0 && <Detail label="Argumentos" value={data.args.join(' ')} mono />}
         <p className="border-t border-white/10 pt-2 text-[11px] leading-relaxed text-zinc-500">
-          “Aberto há” mede a instância atual da PTY. Ao reiniciar, o relógio recomeça; o ID do elemento continua estável.
+          “Aberto há” mede a instância atual da PTY. Ao reiniciar, o relógio recomeça; o ID do elemento continua estável. A associação da conversa só é usada quando provider e diretório coincidem.
         </p>
       </div>
     </CanvasPanel>

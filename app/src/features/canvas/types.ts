@@ -1,3 +1,5 @@
+import type { AgentSessionReference } from './services/agent-session'
+
 export type CanvasNodeType = 'terminal' | 'note' | 'group' | 'file' | 'webpage'
 
 export type GroupNodeData = {
@@ -83,6 +85,10 @@ export type TerminalNodeData = {
   keepShellOpen?: boolean
   /** Start timestamp of the current PTY instance, persisted for reopen. */
   sessionStartedAt?: number
+  /** Provider-owned conversation identity used only after exact compatibility checks. */
+  agentSession?: AgentSessionReference
+  /** Render-time flag: launch the persisted provider session instead of generic /resume. */
+  resumeAgentSession?: boolean
   /**
    * Render-time only (never persisted): this terminal's position among the
    * currently open terminal blocks, 1-based in creation order. Recomputed on

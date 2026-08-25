@@ -71,6 +71,7 @@ function normalizeCanvasBundle(value) {
         cwd: _cwd,
         args: _args,
         initialText: _initialText,
+        agentSession: _agentSession,
         command,
         ...portableData
       } = node.data

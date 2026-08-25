@@ -70,6 +70,8 @@ type Harness = {
   contextBodies: string[]
   /** Entrega bytes da CLI para o terminal do store, como a ponte faria. */
   feed: (data: string) => void
+  feedSession: (reference: object) => void
+  spawnArgs: string[]
   /**
    * Resolve a promise do `pty:spawn`. Só existe quando a bancada foi criada com
    * `deferSpawn`; nos demais casos o spawn já resolveu sozinho.
@@ -89,6 +91,8 @@ function createHarness(
   const writes: string[] = []
   const contextBodies: string[] = []
   const dataListeners = new Set<(event: { sessionId: string; data: string }) => void>()
+  const sessionListeners = new Set<(event: object) => void>()
+  const spawnArgs: string[] = []
 
   // Com `deferSpawn`, a resposta do `pty:spawn` fica pendurada até o teste
   // soltá-la, reproduzindo a ordem que o ConPTY impõe no Windows: a CLI pinta
@@ -109,7 +113,12 @@ function createHarness(
           return () => dataListeners.delete(listener)
         },
         onExit: () => () => {},
-        spawn: async () => {
+        onSession: (listener: (event: object) => void) => {
+          sessionListeners.add(listener)
+          return () => sessionListeners.delete(listener)
+        },
+        spawn: async ({ args }: { args?: string[] }) => {
+          spawnArgs.splice(0, spawnArgs.length, ...(args ?? []))
           await spawnGate
           return spawnResult
         },
@@ -150,10 +159,14 @@ function createHarness(
     store,
     writes,
     contextBodies,
+    spawnArgs,
     feed: (data: string) => {
       for (const listener of dataListeners) {
         listener({ sessionId: PTY_SESSION_ID, data })
       }
+    },
+    feedSession: (reference: object) => {
+      for (const listener of sessionListeners) listener(reference)
     },
     resolveSpawn: () => releaseSpawn(),
   }
@@ -437,6 +450,48 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
     expect(dropped).toContain('"/tmp/um arquivo.txt"')
     expect(dropped).toContain('"/tmp/ação.png"')
     expect(dropped).not.toContain('\r')
+  })
+
+  it('captura e expõe o ID do agente sem guardar conteúdo da conversa', async () => {
+    harness = createHarness('')
+    harness.feedSession({
+      ptySessionId: PTY_SESSION_ID,
+      version: 1,
+      provider: 'codex',
+      sessionId: 'codex-session-123',
+      cwd: '/tmp',
+      capturedAt: 123,
+    })
+    await wait(0)
+
+    const metadata = harness.store.getSessionMetadata(SESSION_ID)
+    expect(metadata?.agentSessionId).toBe('codex-session-123')
+    expect(metadata?.agentSession?.cwd).toBe('/tmp')
+  })
+
+  it('usa o ID persistido na retomada e não injeta /resume genérico', async () => {
+    harness = createHarness('')
+    harness.store.restart(SESSION_ID, {
+      command: 'codex',
+      args: ['--dangerously-bypass-approvals-and-sandbox'],
+      cwd: '/tmp',
+      resumeAgentSession: true,
+      agentSession: {
+        version: 1,
+        provider: 'codex',
+        sessionId: 'codex-session-123',
+        cwd: '/tmp',
+        capturedAt: 123,
+      },
+    })
+    await wait(0)
+
+    expect(harness.spawnArgs).toEqual([
+      'resume',
+      '--dangerously-bypass-approvals-and-sandbox',
+      'codex-session-123',
+    ])
+    expect(harness.writes.some((data) => data.includes('/resume'))).toBe(false)
   })
 
   it('ignora o drop quando a sessão já foi encerrada', async () => {

@@ -23,6 +23,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
+const { discoverAgentSession } = require('./agent-session-discovery.cjs')
 
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
@@ -41,6 +42,8 @@ const EARLY_EXIT_THRESHOLD_MS = 800
 const WINDOWS_SHELL_PATH_ERROR = /(?:cannot find the path specified|sistema não pode encontrar o caminho especificado)/i
 const SHELL_STARTUP_RECOVERY_WINDOW_MS = 3000
 const MAX_REPLAY_BUFFER_CHARS = 200_000
+const AGENT_SESSION_DISCOVERY_WINDOW_MS = 15_000
+const AGENT_SESSION_DISCOVERY_INTERVAL_MS = 250
 
 /**
  * @typedef {object} PtyHandle
@@ -65,8 +68,9 @@ class PtyProcessManager {
    * @param {{ warn?: (...args: unknown[]) => void }} [dependencies.logger] - Diagnostic logger.
    * @param {(command: string, env: Record<string, string>) => string | null} [dependencies.resolveCodexPath] - Injectable Codex resolver.
    * @param {() => boolean} [dependencies.isDebugSession] - Whether detailed local diagnostics are enabled.
+   * @param {(options: object) => object | null} [dependencies.discoverAgentSession] - Provider history resolver.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -74,6 +78,7 @@ class PtyProcessManager {
     this.logger = logger ?? console
     this.resolveCodexPath = resolveCodexPath ?? resolveWindowsCodexPath
     this.isDebugSession = isDebugSession ?? (() => process.env.FELIXO_DEBUG_SESSION === '1')
+    this.discoverAgentSession = discover
   }
 
   /**
@@ -88,6 +93,7 @@ class PtyProcessManager {
    * @param {number} [options.rows]
    * @param {(data: string) => void} [options.onData] - Raw output sink.
    * @param {(event: { exitCode: number, signal?: number }) => void} [options.onExit]
+   * @param {(reference: object) => void} [options.onSession] - Provider session metadata, without conversation content.
    * @param {boolean} [options.reuseExisting] - Reattach to a live/completed session with this id.
    * @param {string} [options.defaultShell] - Internal Windows fallback shell.
    * @param {string} [options.fallbackCommand] - Interpreter to retry with when
@@ -226,6 +232,9 @@ class PtyProcessManager {
       exitEvent: null,
       onData: options.onData,
       onExit: options.onExit,
+      onSession: options.onSession,
+      discoveryTimer: null,
+      agentSession: null,
       filaDeEscrita: null,
     }
 
@@ -238,6 +247,7 @@ class PtyProcessManager {
     })
 
     this.sessions.set(sessionId, entry)
+    this.scheduleAgentSessionDiscovery(sessionId, options)
 
     ptyProcess.onData((data) => {
       entry.outputBuffer = `${entry.outputBuffer}${String(data)}`.slice(-MAX_REPLAY_BUFFER_CHARS)
@@ -474,6 +484,13 @@ class PtyProcessManager {
 
     entry.onData = options.onData
     entry.onExit = options.onExit
+    entry.onSession = options.onSession
+
+    if (entry.agentSession) {
+      queueMicrotask(() => entry.onSession?.(entry.agentSession))
+    } else {
+      this.scheduleAgentSessionDiscovery(sessionId, options)
+    }
 
     if (entry.outputBuffer) {
       try {
@@ -617,9 +634,61 @@ class PtyProcessManager {
     if (entry.killTimer) {
       clearTimeout(entry.killTimer)
     }
+    if (entry.discoveryTimer) {
+      clearTimeout(entry.discoveryTimer)
+    }
     entry.filaDeEscrita?.descartar()
 
     this.sessions.delete(sessionId)
+  }
+
+  /**
+   * Provider history is metadata-only and best effort. A missing or ambiguous
+   * candidate deliberately produces no event; the renderer then keeps its
+   * honest generic /resume fallback instead of guessing another conversation.
+   */
+  scheduleAgentSessionDiscovery(sessionId, options) {
+    if (!options.command || !['codex', 'claude', 'gemini'].includes(options.command)) {
+      return
+    }
+
+    const entry = this.sessions.get(sessionId)
+    if (!entry || typeof this.discoverAgentSession !== 'function') return
+
+    const deadline = this.now() + AGENT_SESSION_DISCOVERY_WINDOW_MS
+    const attempt = () => {
+      const current = this.sessions.get(sessionId)
+      if (!current || current !== entry || current.agentSession) return
+
+      let reference = null
+      try {
+        reference = this.discoverAgentSession({
+          command: options.command,
+          cwd: current.cwd,
+          startedAt: current.spawnedAt,
+          now: this.now(),
+        })
+      } catch {
+        reference = null
+      }
+
+      if (reference?.sessionId) {
+        current.agentSession = reference
+        current.onSession?.(reference)
+        return
+      }
+
+      if (this.now() >= deadline) return
+      current.discoveryTimer = setTimeout(attempt, AGENT_SESSION_DISCOVERY_INTERVAL_MS)
+      if (typeof current.discoveryTimer.unref === 'function') {
+        current.discoveryTimer.unref()
+      }
+    }
+
+    entry.discoveryTimer = setTimeout(attempt, AGENT_SESSION_DISCOVERY_INTERVAL_MS)
+    if (typeof entry.discoveryTimer.unref === 'function') {
+      entry.discoveryTimer.unref()
+    }
   }
 
   /**
