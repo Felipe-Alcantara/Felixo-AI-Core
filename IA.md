@@ -1155,6 +1155,26 @@ pendente para uma sessão futura.
 
 ---
 
+## [2026-08-25] Lockfile do npm volta a permitir o CI
+
+**Causa.** O commit `9fec253` tinha sincronizado o `package-lock.json` com a
+árvore resolvida pelo npm do CI. Ao adicionar os links do terminal, `d381b0a`
+regenerou o arquivo sem as dependências opcionais transitivas
+`@emnapi/core@1.11.3` e `@emnapi/runtime@1.11.3`. Em checkout limpo com Node
+22.22.3, `npm ci` então recusava instalar a árvore antes de rodar qualquer
+teste, nos três sistemas operacionais.
+
+**Correção.** O lockfile foi regenerado somente com npm 10.9.8, distribuído com
+Node 22.22.3 — a versão da matriz do CI. A alteração recompõe a árvore exata;
+nenhuma dependência declarada em `package.json` nem o workflow foi alterado.
+
+**Validação local.** A falha foi reproduzida a partir de `d381b0a`; após a
+regeneração, `npm ci --ignore-scripts --no-audit --no-fund` concluiu no checkout
+limpo sob Node 22.22.3. O CI remoto e a publicação da release permanecem a
+confirmação pendente deste commit.
+
+---
+
 ## [2026-08-24] Janela principal recupera posição e estado com segurança
 
 **Problema.** A única janela do app sempre nascia no tamanho padrão e no
