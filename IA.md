@@ -1393,3 +1393,44 @@ sem regressão, confirmado depois da correção acima.
   de verdade.
 - Duplo Ctrl+C para sair (comportamento pré-existente do Claude Code, não desta correção) não
   foi reexercido depois do fix.
+
+---
+
+## [2026-08-26] O workflow Release tenta de novo sozinho, e para de reverter quem já atualizou
+
+Duas falhas medidas em 25 e 26/08/2026, ambas resolvidas na hora com intervenção manual (ver
+entrada de acompanhamento de deploy no relatório do dia): o passo `gh release create` falha de
+vez em quando com `HTTP 500` transitório da API do GitHub, e nada tentava de novo sozinho — uma
+das duas ficou parada ~13 horas até alguém notar.
+
+**Um segundo defeito apareceu destravando a primeira:** a release mais antiga (`v0.1.80`) terminou
+de publicar *depois* da mais nova (`v0.1.81`, já promovida), e `gh release edit --latest` marcou
+a mais antiga como "Latest" só por ter rodado por último — quem tivesse atualização automática
+ligada seria revertido, sem aviso.
+
+### O que mudou
+
+- `.github/scripts/retry.sh` — função `retry <tentativas> <espera> -- comando`, backoff
+  exponencial. Usada no `Create prerelease container` (`retry 5 5 -- gh release create ...`).
+- `.github/scripts/release-version.sh` — `is_tag_newer <candidata> <atual>`, comparação por
+  `sort -V` (não texto — `v0.1.10 > v0.1.9` importa). Usada em `Publish the draft release`: só
+  passa `--latest` quando a release sendo finalizada é de fato mais nova que a atual "Latest".
+- Ambos com teste próprio (`retry.test.sh`, `release-version.test.sh`), rodando num job novo
+  (`release-scripts`) do `ci.yml` — para não virarem código que ninguém mais exercita.
+
+### Validação
+
+Não bastava ler o código — a task pedia prova contra falha real ou simulada de propósito.
+Simulei os dois incidentes exatos com um `gh` falso: `retry` engoliu dois `HTTP 500` seguidos e
+passou na terceira tentativa (o padrão medido nos dois incidentes reais); `is_tag_newer`
+reproduziu o caso de ontem (`v0.1.80` tentando virar "Latest" depois da `v0.1.81`) e decidiu
+certo — publica sem `--latest`, a mais nova continua sendo a mais nova. 17 verificações unitárias
+mais as duas simulações de ponta a ponta, todas passando. `yaml.safe_load` e `bash -n` em cada
+`run:` do workflow, limpos.
+
+### O que ficou fora, declarado
+
+Item 3 do critério de aceite pedia "avaliar notificação" quando o retry esgota as tentativas.
+Não há nenhum canal de notificação configurado neste repositório (sem webhook de Slack/Discord,
+sem secret para isso) — implementar um exigiria uma decisão de infraestrutura fora do escopo
+desta task. A falha continua visível do jeito que já era: o job fica vermelho no Actions.

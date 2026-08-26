@@ -45,6 +45,23 @@ jobs:
         shell: bash
         run: python start_app.py --help
 
+  # Scripts que o workflow de Release usa (retry de HTTP 500 transitório,
+  # decisão de "latest") — só bash, roda em ubuntu-latest porque é onde os
+  # jobs `prepare`/`finalize` do Release de fato executam. Testado aqui para
+  # não virar código que ninguém mais roda depois de escrito.
+  release-scripts:
+    name: Release scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test retry.sh
+        run: bash .github/scripts/retry.test.sh
+
+      - name: Test release-version.sh
+        run: bash .github/scripts/release-version.test.sh
+
   validate:
     name: Validate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

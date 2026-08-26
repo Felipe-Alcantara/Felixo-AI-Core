@@ -77,13 +77,20 @@ jobs:
 
       - name: Create prerelease container
         shell: bash
+        # A API do GitHub falha de vez em quando com um HTTP 500 transitório
+        # que passa sozinho na tentativa seguinte — medido em 25 e 26/08/2026:
+        # duas releases ficaram paradas por horas nesse erro, até alguém
+        # notar e mandar rodar de novo à mão. `retry.sh` (com teste próprio em
+        # `retry.test.sh`) automatiza exatamente esse "rodar de novo".
         run: |
+          source "$GITHUB_WORKSPACE/.github/scripts/retry.sh"
+
           TAG="${{ steps.release.outputs.release_tag }}"
           TARGET="${{ github.event.workflow_run.head_sha || inputs.commit_sha }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG já existe; mantendo os artefatos publicados."
           else
-            gh release create "$TAG" \
+            retry 5 5 -- gh release create "$TAG" \
               --target "$TARGET" \
               --title "$TAG" \
               --prerelease \
@@ -271,5 +278,20 @@ jobs:
             exit 0
           fi
 
-          gh release edit "$RELEASE_TAG" --prerelease=false --latest
-          echo "Release $RELEASE_TAG publicada."
+          # Não force "--latest" sem checar quem já é a mais nova. Medido em
+          # 26/08/2026: quando um release de commit mais antigo termina de
+          # publicar DEPOIS de um mais novo (reexecução tardia, ordem de
+          # matriz diferente entre execuções concorrentes), "--latest" sem
+          # essa checagem reverte quem está atualizado — a v0.1.80 marcou por
+          # cima a v0.1.81 só por ter rodado por último.
+          source "$GITHUB_WORKSPACE/.github/scripts/release-version.sh"
+
+          CURRENT_LATEST_TAG="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+
+          if [[ -z "$CURRENT_LATEST_TAG" ]] || is_tag_newer "$RELEASE_TAG" "$CURRENT_LATEST_TAG"; then
+            gh release edit "$RELEASE_TAG" --prerelease=false --latest
+            echo "Release $RELEASE_TAG publicada e marcada como mais recente."
+          else
+            gh release edit "$RELEASE_TAG" --prerelease=false
+            echo "Release $RELEASE_TAG publicada, mas $CURRENT_LATEST_TAG continua sendo a mais recente (é posterior a esta)."
+          fi
