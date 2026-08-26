@@ -1309,3 +1309,87 @@ de conta de forma segura a partir do PTY; a referência capturada fica limitada
 ao provider e diretório quando a CLI não fornece conta no metadata. Também não
 houve teste visual do app empacotado em Windows/macOS. O fallback permanece
 intencionalmente honesto nesses casos.
+
+---
+
+## [2026-08-25] Ctrl+C reaberto: a causa não era o Ctrl+C, era a seleção com mouse
+
+**Correção de rota da entrada [2026-08-23] acima.** Aquela entrada deu por resolvido
+que Ctrl+C com seleção copia e sem seleção interrompe. Estava certa sobre `decideCopyShortcut`
+— mas a validação só cobriu shell puro, e o usuário voltou a relatar o problema em CLIs de
+tela cheia (Claude Code, Codex, Gemini).
+
+### O que foi medido (25/08/2026, app real sob Xvfb, xdotool)
+
+Instrumentado `terminal.modes.mouseTrackingMode` numa sessão Claude Code real: `"any"`. Um
+arrasto de mouse **de verdade** (xdotool mousedown→mousemove→mouseup, não CDP sintético)
+sobre o texto renderizado voltou `hasSelection(): false` — nenhuma seleção nasceu.
+
+Causa, achada no código-fonte do `@xterm/xterm` (`SelectionService.handleMouseDown`,
+`CoreBrowserTerminal.bindMouse`): quando o programa liga o mouse tracking, o xterm.js
+**desliga a seleção por clique-arrastar comum** e passa a mandar cada clique/arrasto ao
+processo como coordenada. Só Shift+arrastar (Option no macOS) força a seleção mesmo assim
+— gesto que ninguém usa sem saber que existe.
+
+Como o `0x03` cru chegava ao Claude Code sem seleção nenhuma no xterm, ele reagia com um
+copiador **próprio**: `Ctrl+C` real com "Sonnet 5 with xhigh effort" arrastado no xterm
+copiou, pelo clipboard do SO, `"et 5 with xhigh effor"` — um trecho errado, sem interromper
+a sessão nesse teste, mas sem ser o que a pessoa selecionou.
+
+### A decisão (perguntada antes de implementar)
+
+Três caminhos possíveis: (a) fazer o clique-arrastar comum sempre vencer o mouse tracking,
+igual VS Code/iTerm2/Windows Terminal fazem por padrão; (b) só ensinar `decideCopyShortcut`
+a aceitar Shift+arrastar (não resolve o caso relatado); (c) investigar Codex/Gemini antes.
+Escolhido (a).
+
+### O mecanismo do fix — sem reimplementar a seleção do xterm.js
+
+`xterm.js` decide "forçar seleção" e "não mandar mouse ao programa" a partir da MESMA
+pergunta: `SelectionService.shouldForceSelection(event)` (`event.shiftKey`, ou `event.altKey`
+no macOS). Em vez de recriar a lógica de seleção, `terminal-mouse-selection.ts` intercepta o
+`mousedown` em fase de captura, cancela o original e redispara um evento idêntico com esse
+modificador ligado — o próprio xterm.js processa o resto. `event.isTrusted` distingue o
+evento sintético do real e evita laço infinito (nenhuma marca própria precisou existir).
+
+### O regresso que quase entrou, pego antes do commit
+
+Testado no shell puro (mouse tracking desligado): a primeira versão interceptava **todo**
+`mousedown`, e forçar Shift quando a seleção já estava habilitada (`_enabled: true`) caía em
+`SelectionService._handleIncrementalClick` — que só estende uma seleção **já existente**; sem
+âncora prévia, o primeiro clique-arrastar comum passava a não selecionar nada. Corrigido
+gatilhando a interceptação só quando `terminal.modes.mouseTrackingMode !== 'none'`.
+
+### O que mudou
+
+- `terminal-mouse-selection.ts` (novo, módulo puro): `isMacPlatform`, `xtermAlreadyForcesSelection`,
+  `shouldForceMouseSelection`, `buildForcedSelectionEventInit`.
+- `terminal-session-store.ts`: `bindMouseSelection(session)` — mesmo padrão de
+  `bindImagePaste` (listener único por sessão, vive no elemento do xterm). Opções novas no
+  `new Terminal()`: `macOptionClickForcesSelection: true` (sem ela, Option-arrastar cairia no
+  modo de seleção em coluna do xterm.js) e `altClickMovesCursor: false` (sem ela, Option
+  forçado moveria o cursor da CLI num clique rápido sem arrastar).
+
+### Validação
+
+193 testes no módulo do terminal (11 novos), 622 no frontend, 769 no processo principal,
+`tsc -b` e `npm run lint` limpos.
+
+**No app real**, sessão Claude Code (`mouseTrackingMode: "any"`), arrasto por `xdotool`:
+antes do fix `hasSelection: false`; depois, `hasSelection: true`, texto exato ("celled" de
+"Resume cancelled"). Ctrl+C real copiou exatamente esse texto (clipboard do SO conferido) e
+a sessão continuou em `aguardando`, sem `^C` nem qualquer sinal de interrupção. Sem seleção,
+Ctrl+C real ainda interrompe (`"Press Ctrl-C again to exit"` apareceu normalmente). No shell
+puro (`mouseTrackingMode: "none"`), o mesmo arrasto real seguiu selecionando como antes —
+sem regressão, confirmado depois da correção acima.
+
+### O que não foi validado
+
+- **Só Claude Code foi medido de ponta a ponta com mouse real.** Codex e Gemini têm o mesmo
+  mecanismo do xterm.js por trás (não são código nosso), mas nenhum dos dois foi aberto nesta
+  sessão para confirmar o `mouseTrackingMode` deles nem repetir o teste de arrasto.
+- **Não testado no macOS.** O caminho `altKey`/`macOptionClickForcesSelection` tem teste
+  unitário da decisão pura, mas ninguém arrastou o mouse segurando Option numa máquina Mac
+  de verdade.
+- Duplo Ctrl+C para sair (comportamento pré-existente do Claude Code, não desta correção) não
+  foi reexercido depois do fix.

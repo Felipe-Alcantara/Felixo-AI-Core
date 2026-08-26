@@ -10,6 +10,12 @@ import { buildDroppedFileReference } from './terminal-dropped-files'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
+  buildForcedSelectionEventInit,
+  isMacPlatform,
+  shouldForceMouseSelection,
+  xtermAlreadyForcesSelection,
+} from './terminal-mouse-selection'
+import {
   CLEAR_INPUT_SEQUENCE,
   findMultiLineTypedInputRange,
   isDeleteSelectionKey,
@@ -332,6 +338,8 @@ type Session = {
   inputTouched: boolean
   /** The paste interceptor is bound to the xterm element, which outlives attach. */
   imagePasteBound: boolean
+  /** O interceptador de clique-arrastar é ligado ao elemento do xterm, como o de colar imagem. */
+  mouseSelectionBound: boolean
   hoveredLink?: string
   offLinkContextMenu?: () => void
   linkMenuCleanup?: () => void
@@ -398,6 +406,16 @@ export class TerminalSessionStore {
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       fontSize: 13,
       theme: { background: '#0b0f14' },
+      // A seleção de mouse deste app força Option no macOS para vencer o
+      // "mouse tracking" das CLIs de tela cheia (ver terminal-mouse-selection.ts).
+      // Sem esta opção, Option-arrastar cairia no modo de seleção em coluna do
+      // xterm.js em vez de selecionar o texto normalmente; com ela, o próprio
+      // xterm.js neutraliza esse modo quando Option está forçando seleção.
+      macOptionClickForcesSelection: true,
+      // O mesmo Option forçado dispararia "mover o cursor da CLI para onde
+      // cliquei" num clique rápido sem arrastar — comportamento do xterm.js
+      // que este app não pediu e que confundiria quem só queria clicar.
+      altClickMovesCursor: false,
     })
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
@@ -471,6 +489,7 @@ export class TerminalSessionStore {
       initialTextSent: false,
       inputTouched: false,
       imagePasteBound: false,
+      mouseSelectionBound: false,
       hoveredLink: undefined,
       fileDropBound: false,
       lastImagePasteAt: 0,
@@ -709,6 +728,7 @@ export class TerminalSessionStore {
     this.bindFileDrop(session)
 
     this.bindImagePaste(session)
+    this.bindMouseSelection(session)
     this.fit(session)
   }
 
@@ -808,6 +828,56 @@ export class TerminalSessionStore {
       'paste',
       (event) => {
         void this.handleImagePaste(session, event as ClipboardEvent)
+      },
+      { capture: true },
+    )
+  }
+
+  /**
+   * Faz o clique-arrastar comum sempre selecionar texto, mesmo quando a CLI
+   * ligou o "mouse tracking" — ver `terminal-mouse-selection.ts` para o porquê.
+   *
+   * A fase de captura garante que este listener roda antes do próprio
+   * `mousedown` do xterm.js, que está preso ao elemento em fase de bolha.
+   * Interceptamos, cancelamos o original e redisparamos um evento idêntico
+   * com o modificador que o xterm.js já entende como "forçar seleção" — o
+   * próprio xterm.js decide o resto a partir daí, sem reimplementar nada da
+   * seleção. O evento sintético passa de novo por este mesmo listener, mas
+   * `shouldForceMouseSelection` o deixa passar (`isTrusted: false`).
+   */
+  private bindMouseSelection(session: Session): void {
+    const element = session.terminal.element
+
+    if (!element || session.mouseSelectionBound) {
+      return
+    }
+
+    session.mouseSelectionBound = true
+    const isMac = isMacPlatform(window.navigator)
+
+    element.addEventListener(
+      'mousedown',
+      (event) => {
+        const mouseEvent = event as MouseEvent
+
+        const mouseTrackingActive = session.terminal.modes.mouseTrackingMode !== 'none'
+
+        if (
+          !shouldForceMouseSelection(mouseEvent, mouseTrackingActive) ||
+          xtermAlreadyForcesSelection(mouseEvent, isMac)
+        ) {
+          return
+        }
+
+        event.preventDefault()
+        event.stopImmediatePropagation()
+
+        const target = event.target
+        if (target instanceof EventTarget) {
+          target.dispatchEvent(
+            new MouseEvent('mousedown', buildForcedSelectionEventInit(mouseEvent, isMac)),
+          )
+        }
       },
       { capture: true },
     )
