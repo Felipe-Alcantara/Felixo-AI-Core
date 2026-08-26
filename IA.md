@@ -1434,3 +1434,34 @@ Item 3 do critério de aceite pedia "avaliar notificação" quando o retry esgot
 Não há nenhum canal de notificação configurado neste repositório (sem webhook de Slack/Discord,
 sem secret para isso) — implementar um exigiria uma decisão de infraestrutura fora do escopo
 desta task. A falha continua visível do jeito que já era: o job fica vermelho no Actions.
+
+---
+
+## [2026-08-26] O fix de seleção por mouse confirmado em Codex e Gemini — e por que só o Claude Code precisava dele
+
+Fechamento da pendência aberta em 25/08 (o fix `terminal-mouse-selection.ts`, commit `e2e55fc`,
+tinha sido medido só no Claude Code). Reinseri o mesmo probe temporário e abri sessões reais de
+Codex e Gemini no app, com mouse real via `xdotool`.
+
+### O que foi medido
+
+| CLI | `mouseTrackingMode` | Precisava do fix? | Arrasto real → seleção | Ctrl+C com seleção | Ctrl+C sem seleção |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code (25/08) | `"any"` | Sim | sem o fix: não nascia | com o fix: exata, sessão viva | interrompe |
+| Codex 0.149.1 | `"none"` | Não | já nascia normalmente | copia exato, sessão viva | interrompe (`Press Ctrl-C again...` equivalente) |
+| Gemini CLI 0.52.0 | `"none"` | Não | já nascia normalmente | copia exato (`" │"`, conferido no clipboard do SO), sessão viva | `Press Ctrl+C again to exit.` |
+
+Nem Codex nem Gemini ligam o mouse tracking do xterm nos estados testados (Codex: tela inicial
+"aguardando"; Gemini: menu de autenticação, ambos TUIs de tela cheia de verdade, não simplificados).
+Por isso o clique-arrastar comum **já funcionava neles antes do fix** — e continua funcionando
+depois, sem regressão (o mesmo motivo que `mouseTrackingMode !== 'none'` é o portão da
+interceptação: nada nesses dois CLIs entra nesse caminho).
+
+### O que ficou sem medir
+
+- **macOS**: impossível nesta máquina — sem hardware Mac disponível. Não é "não fiz por
+  escolha", é bloqueio de ambiente. O caminho `altKey`/`macOptionClickForcesSelection` segue só
+  com teste unitário da decisão pura.
+- Só os estados iniciais de Codex e Gemini foram exercitados (tela de espera / menu de auth) —
+  não uma sessão autenticada em pleno uso, nem telas específicas desses CLIs (diff viewer do
+  Codex, por exemplo) que poderiam, em tese, ligar o mouse tracking num momento diferente.
