@@ -11,8 +11,10 @@ import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-inp
 import { decideCopyShortcut } from './terminal-copy-shortcut'
 import {
   buildForcedSelectionEventInit,
+  buildReplayEventInit,
+  exceedsDragThreshold,
   isMacPlatform,
-  shouldForceMouseSelection,
+  shouldDeferMouseDown,
   xtermAlreadyForcesSelection,
 } from './terminal-mouse-selection'
 import {
@@ -351,6 +353,8 @@ type Session = {
   mouseSelectionBound: boolean
   hoveredLink?: string
   offLinkContextMenu?: () => void
+  /** Encerra um gesto de mouse retido e solta os listeners do documento. */
+  offMouseSelection?: () => void
   linkMenuCleanup?: () => void
   fileDropBound: boolean
   /**
@@ -844,16 +848,16 @@ export class TerminalSessionStore {
   }
 
   /**
-   * Faz o clique-arrastar comum sempre selecionar texto, mesmo quando a CLI
-   * ligou o "mouse tracking" — ver `terminal-mouse-selection.ts` para o porquê.
+   * Decide, por gesto, quem fica com o mouse: a CLI (clique) ou a seleção
+   * (arrasto) — ver `terminal-mouse-selection.ts` para o porquê de a decisão
+   * não poder sair no `mousedown`.
    *
-   * A fase de captura garante que este listener roda antes do próprio
-   * `mousedown` do xterm.js, que está preso ao elemento em fase de bolha.
-   * Interceptamos, cancelamos o original e redisparamos um evento idêntico
-   * com o modificador que o xterm.js já entende como "forçar seleção" — o
-   * próprio xterm.js decide o resto a partir daí, sem reimplementar nada da
-   * seleção. O evento sintético passa de novo por este mesmo listener, mas
-   * `shouldForceMouseSelection` o deixa passar (`isTrusted: false`).
+   * A fase de captura garante que este listener roda antes dos `mousedown` do
+   * próprio xterm.js, que estão presos ao mesmo elemento em fase de bolha
+   * (`CoreBrowserTerminal` os registra em `element`, um para o relatório de
+   * mouse e outro para a seleção). Retemos o evento, esperamos o gesto se
+   * revelar e então redisparamos o que for o caso. Os sintéticos passam de novo
+   * por aqui, mas `shouldDeferMouseDown` os deixa seguir (`isTrusted: false`).
    */
   private bindMouseSelection(session: Session): void {
     const element = session.terminal.element
@@ -865,6 +869,67 @@ export class TerminalSessionStore {
     session.mouseSelectionBound = true
     const isMac = isMacPlatform(window.navigator)
 
+    // O `mousedown` retido, à espera de virar clique ou arrasto. Enquanto ele
+    // existe, o gesto está indefinido e ninguém — nem a CLI, nem a seleção —
+    // recebeu nada.
+    let pendingDown: MouseEvent | null = null
+
+    const forget = (): void => {
+      pendingDown = null
+      document.removeEventListener('mousemove', onDocumentMove, true)
+      document.removeEventListener('mouseup', onDocumentUp, true)
+      window.removeEventListener('blur', onWindowBlur)
+    }
+
+    // Andou o bastante: é arrasto. A seleção nasce ancorada em onde o gesto
+    // COMEÇOU, não em onde o ponteiro está agora — senão os primeiros pixels
+    // do arrasto ficariam de fora da seleção.
+    function onDocumentMove(event: Event): void {
+      const origin = pendingDown
+      if (!origin || !exceedsDragThreshold(origin, event as MouseEvent)) {
+        return
+      }
+
+      forget()
+      redispatch(origin, 'mousedown', buildForcedSelectionEventInit(origin, isMac))
+      // Se o ponteiro já saiu do elemento, o movimento original tem `document`
+      // como alvo e o xterm.js não o verá. Reenviar o primeiro movimento ao
+      // alvo do `mousedown` mantém a seleção ancorada e inicia o trecho que
+      // ultrapassou o limiar.
+      redispatch(origin, 'mousemove', buildReplayEventInit(event as MouseEvent))
+    }
+
+    // Soltou sem sair do lugar: é clique, e a CLI precisa dele inteiro. O par
+    // é devolvido na ordem original, sem modificador nenhum; o `mouseup` real
+    // é engolido no lugar dele para o processo não receber duas soltas.
+    function onDocumentUp(event: Event): void {
+      const origin = pendingDown
+      const up = event as MouseEvent
+      if (!origin || up.button !== 0) {
+        return
+      }
+
+      forget()
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      redispatch(origin, 'mousedown', buildReplayEventInit(origin))
+      redispatch(origin, 'mouseup', buildReplayEventInit(up))
+    }
+
+    // A janela perdeu o foco no meio do gesto: não haverá `mouseup` para
+    // fechá-lo. Descartar é melhor que deixar um gesto pendente que
+    // transformaria o próximo movimento do ponteiro numa seleção fantasma.
+    function onWindowBlur(): void {
+      forget()
+    }
+
+    function redispatch(origin: MouseEvent, type: string, init: MouseEventInit): void {
+      const target = origin.target
+      if (target instanceof EventTarget) {
+        target.dispatchEvent(new MouseEvent(type, init))
+      }
+    }
+
     element.addEventListener(
       'mousedown',
       (event) => {
@@ -873,7 +938,7 @@ export class TerminalSessionStore {
         const mouseTrackingActive = session.terminal.modes.mouseTrackingMode !== 'none'
 
         if (
-          !shouldForceMouseSelection(mouseEvent, mouseTrackingActive) ||
+          !shouldDeferMouseDown(mouseEvent, mouseTrackingActive) ||
           xtermAlreadyForcesSelection(mouseEvent, isMac)
         ) {
           return
@@ -882,15 +947,18 @@ export class TerminalSessionStore {
         event.preventDefault()
         event.stopImmediatePropagation()
 
-        const target = event.target
-        if (target instanceof EventTarget) {
-          target.dispatchEvent(
-            new MouseEvent('mousedown', buildForcedSelectionEventInit(mouseEvent, isMac)),
-          )
-        }
+        pendingDown = mouseEvent
+        // No documento, e em captura: o gesto continua valendo se o ponteiro
+        // sair do terminal, e a decisão precisa acontecer antes de qualquer
+        // outro interessado no mesmo evento.
+        document.addEventListener('mousemove', onDocumentMove, true)
+        document.addEventListener('mouseup', onDocumentUp, true)
+        window.addEventListener('blur', onWindowBlur)
       },
       { capture: true },
     )
+
+    session.offMouseSelection = forget
   }
 
   private async handleImagePaste(
@@ -1238,6 +1306,7 @@ export class TerminalSessionStore {
     this.clearContextRetryTimer(session)
     session.linkMenuCleanup?.()
     session.offLinkContextMenu?.()
+    session.offMouseSelection?.()
     session.offData()
     session.offExit()
     session.offSession()

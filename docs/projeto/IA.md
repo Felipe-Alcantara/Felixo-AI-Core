@@ -1743,3 +1743,13 @@ LIMITE ASSUMIDO: o cancelamento durante a execução impede a *próxima* ação,
 CONTEXTO MULTI-AGENTE: outro agente estava editando `main.cjs` e `preload.cjs` em paralelo (instalação automática de CLIs). O commit desta entrega foi montado por hunk para levar só os trechos do Fetch All, deixando o trabalho em andamento do outro agente intacto na árvore.
 
 Estado final: concluído e validado por build/lint/testes; verificação no app rodando fica para o usuário, já que uma varredura real percorre os discos da máquina dele.
+
+## Registro de Trabalho — 2026-08-27 (parte 18) — clique da CLI e arrasto para seleção no terminal
+
+RESPONSÁVEL: Continue o trabalho do Claude.
+
+CORREÇÃO: o `bindMouseSelection` agora retém somente o `mousedown` primário de sessões com mouse tracking ativo. Se o ponteiro ultrapassa três pixels, o gesto é redisparado como seleção forçada; se solta sem arrastar, o par `mousedown`/`mouseup` é reproduzido sem modificadores, devolvendo o clique à CLI. O primeiro `mousemove` também é reenviado ao alvo original quando o cursor já saiu do terminal. Listeners pendentes são removidos no blur e ao destruir a sessão.
+
+VALIDAÇÃO: `npm run test:frontend -- --run src/features/canvas/terminal/terminal-mouse-selection.test.ts` — 19/19; `git diff --check` limpo. `npm run build`, `npm run lint` e `npx tsc -b` foram iniciados, mas excederam o limite de execução do ambiente sem saída de erro; não houve validação manual com o app, xdotool ou mouse real.
+
+Estado final: concluído quanto à implementação e aos testes automatizados disponíveis; validação completa de build/lint e comportamento visual com mouse real pendente por limitação de tempo do ambiente.

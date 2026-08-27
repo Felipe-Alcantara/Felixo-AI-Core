@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildForcedSelectionEventInit,
+  buildReplayEventInit,
+  DRAG_THRESHOLD_PX,
+  exceedsDragThreshold,
   isMacPlatform,
-  shouldForceMouseSelection,
+  shouldDeferMouseDown,
   xtermAlreadyForcesSelection,
 } from './terminal-mouse-selection'
 
@@ -55,31 +58,31 @@ describe('xtermAlreadyForcesSelection', () => {
   })
 })
 
-describe('shouldForceMouseSelection', () => {
-  it('intercepta um mousedown real de botão primário quando o mouse tracking está ligado', () => {
-    expect(shouldForceMouseSelection(mouseEvent(), true)).toBe(true)
+describe('shouldDeferMouseDown', () => {
+  it('retém um mousedown real de botão primário quando o mouse tracking está ligado', () => {
+    expect(shouldDeferMouseDown(mouseEvent(), true)).toBe(true)
   })
 
-  it('não intercepta nada quando o mouse tracking está desligado', () => {
+  it('não retém nada quando o mouse tracking está desligado', () => {
     // Regressão medida em 25/08/2026: forçar Shift num shell puro (tracking
     // desligado, seleção já normal) cai em "estender seleção existente"
     // (_handleIncrementalClick), que sem âncora prévia não seleciona nada — o
     // primeiro clique-arrastar comum deixaria de funcionar.
-    expect(shouldForceMouseSelection(mouseEvent(), false)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent(), false)).toBe(false)
   })
 
-  it('ignora o evento sintético que este próprio módulo cria — sem isso, laço infinito', () => {
-    expect(shouldForceMouseSelection(mouseEvent({ isTrusted: false }), true)).toBe(false)
+  it('ignora os eventos sintéticos que este próprio módulo dispara — sem isso, laço infinito', () => {
+    expect(shouldDeferMouseDown(mouseEvent({ isTrusted: false }), true)).toBe(false)
   })
 
   it('ignora botão direito e do meio: menu de contexto e colar do X11 continuam intactos', () => {
-    expect(shouldForceMouseSelection(mouseEvent({ button: 1 }), true)).toBe(false)
-    expect(shouldForceMouseSelection(mouseEvent({ button: 2 }), true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ button: 1 }), true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ button: 2 }), true)).toBe(false)
   })
 
   it('ignora outros tipos de evento de mouse', () => {
-    expect(shouldForceMouseSelection(mouseEvent({ type: 'mouseup' }), true)).toBe(false)
-    expect(shouldForceMouseSelection(mouseEvent({ type: 'click' }), true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ type: 'mouseup' }), true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ type: 'click' }), true)).toBe(false)
   })
 })
 
@@ -109,5 +112,53 @@ describe('buildForcedSelectionEventInit', () => {
     expect(init.detail).toBe(2)
     expect(init.button).toBe(0)
     expect(init.buttons).toBe(1)
+  })
+})
+
+describe('exceedsDragThreshold', () => {
+  const origem = { clientX: 100, clientY: 100 }
+
+  it('um clique parado não é arrasto — é o caso que devolve o clique à CLI', () => {
+    expect(exceedsDragThreshold(origem, { clientX: 100, clientY: 100 })).toBe(false)
+  })
+
+  it('tremer a mão dentro do limiar continua sendo clique', () => {
+    expect(exceedsDragThreshold(origem, { clientX: 102, clientY: 98 })).toBe(false)
+  })
+
+  it('passar do limiar em qualquer eixo, para qualquer lado, é arrasto', () => {
+    expect(exceedsDragThreshold(origem, { clientX: 100 + DRAG_THRESHOLD_PX, clientY: 100 })).toBe(true)
+    expect(exceedsDragThreshold(origem, { clientX: 100 - DRAG_THRESHOLD_PX, clientY: 100 })).toBe(true)
+    expect(exceedsDragThreshold(origem, { clientX: 100, clientY: 100 + DRAG_THRESHOLD_PX })).toBe(true)
+    expect(exceedsDragThreshold(origem, { clientX: 100, clientY: 100 - DRAG_THRESHOLD_PX })).toBe(true)
+  })
+})
+
+describe('buildReplayEventInit', () => {
+  it('não força modificador nenhum — é isto que faz o clique voltar a chegar na CLI', () => {
+    // Regressão medida em 27/08/2026: o commit e2e55fc ligava shiftKey em todo
+    // mousedown, e o xterm.js só chama `sendEvent` quando
+    // `shouldForceSelection` é falso. Com o modificador ligado, o relatório de
+    // mouse nunca saía e clicar numa opção da Claude Code não fazia nada.
+    const init = buildReplayEventInit(mouseEvent())
+
+    expect(init.shiftKey).toBe(false)
+    expect(init.altKey).toBe(false)
+  })
+
+  it('preserva os modificadores que a pessoa realmente apertou', () => {
+    const init = buildReplayEventInit(mouseEvent({ ctrlKey: true, metaKey: true, altKey: true }))
+
+    expect(init.ctrlKey).toBe(true)
+    expect(init.metaKey).toBe(true)
+    expect(init.altKey).toBe(true)
+  })
+
+  it('preserva posição e botões, para o processo receber o clique onde ele foi dado', () => {
+    const init = buildReplayEventInit(mouseEvent({ clientX: 77, clientY: 88, buttons: 0 }))
+
+    expect(init.clientX).toBe(77)
+    expect(init.clientY).toBe(88)
+    expect(init.buttons).toBe(0)
   })
 })
