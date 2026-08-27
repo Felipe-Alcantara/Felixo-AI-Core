@@ -1465,3 +1465,57 @@ interceptação: nada nesses dois CLIs entra nesse caminho).
 - Só os estados iniciais de Codex e Gemini foram exercitados (tela de espera / menu de auth) —
   não uma sessão autenticada em pleno uso, nem telas específicas desses CLIs (diff viewer do
   Codex, por exemplo) que poderiam, em tese, ligar o mouse tracking num momento diferente.
+
+---
+
+## [2026-08-26] O que desligava a animação: investigado, sem culpado provado
+
+**Contexto.** Task aberta em 24/08 pedia identificar quem desliga a preferência de
+movimento reduzido do Windows nesta máquina, com a ressalva de que **só é possível
+investigar quando o sintoma reaparecer**.
+
+### O sintoma não reapareceu
+
+Medido nesta sessão: `SPI_GETCLIENTAREAANIMATION = True`, registro (`UserPreferencesMask`
+byte 2 = `0x03`) concordando, `VisualFXSetting = 0`. Tudo consistente com o estado
+salvo em 24/08. `LastBootUpTime` mudou de 21/08 para **26/08 22:16** — a máquina
+reiniciou desde a investigação, e reler o valor salvo no boot é o esperado.
+
+### A pista levantada, e por que não fecha o caso
+
+O log de eventos (`Application`) tem uma fonte chamada **`asus`** — o serviço
+"Serviço do ASUS Update (asus)", que roda `AsusUpdate.exe /svc` e se autodesliga
+("Service stopped") pouco depois de cada boot. Em 24/08 esse evento disparou às
+`00:00:29`, **9 segundos** depois do registro ter sido reescrito (`00:00:20`).
+
+Isso parecia a pista certa até cruzar com os outros dias: o mesmo evento aparece
+2–10 min depois de **qualquer** boot (`26/08 22:18`/`22:26`, 10 min após o boot das
+`22:16`; `21/08 01:06`/`01:14`; `19/08 00:34`/`00:38`), inclusive num dia (26/08) em
+que a animação **não** foi desligada. Ou seja: o horário batendo com meia-noite em
+24/08 é porque a máquina foi ligada tarde naquele dia, não porque o serviço dispare à
+meia-noite — a correlação com o registro reescrito é provavelmente coincidência de
+janela (muita coisa inicializa nos primeiros minutos de logon), não causa.
+
+Não achei nada mais forte: sem eventos do Agendador de Tarefas na janela (o log
+`Microsoft-Windows-TaskScheduler/Operational` não estava habilitado), sem entrada
+`7036` de start/stop do serviço `asus` nas últimas ~6000 linhas do log `System`
+(rotacionado), e busca nos arquivos de configuração do Armoury Crate / AI Suite III
+por um horário de agendamento de modo silencioso/eco não encontrou nada.
+
+### Suspeitos guardados, sem acusação
+
+A máquina tem o conjunto completo de utilitários de "otimização" ASUS instalado e
+rodando — **exatamente a classe de programa que a task mandava suspeitar**:
+`ArmouryCrate.Service.exe`, `AsPowerBar.exe` (troca de modo silencioso/desempenho),
+`AI Suite III` (tarefa agendada `ASUS AISuiteIII` com o argumento `-schedule`,
+disparada no logon) e `DIP Away Mode`. Nenhum foi flagrado alterando
+`SystemParametersInfo`; ficam registrados como primeiro lugar a olhar se o sintoma
+voltar.
+
+### Decisão
+
+Fechar sem monitor novo e sem culpado nomeado — decisão do usuário, perguntado
+explicitamente entre "montar um monitor", "fechar só com o registro" e "desinstalar o
+suite ASUS de uma vez". Nenhuma mudança na máquina nem no repositório. Se o sintoma
+voltar, o próximo passo é medir `SystemParametersInfo(SPI_GETCLIENTAREAANIMATION)` na
+hora, não depois — só assim dá para separar causa de coincidência de horário.
