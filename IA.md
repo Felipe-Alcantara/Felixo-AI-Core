@@ -1519,3 +1519,74 @@ explicitamente entre "montar um monitor", "fechar só com o registro" e "desinst
 suite ASUS de uma vez". Nenhuma mudança na máquina nem no repositório. Se o sintoma
 voltar, o próximo passo é medir `SystemParametersInfo(SPI_GETCLIENTAREAANIMATION)` na
 hora, não depois — só assim dá para separar causa de coincidência de horário.
+
+---
+
+## [2026-08-28] Ctrl+A+Backspace multilinha: medido com tecla real no Codex, gate coberto por teste
+
+Fechamento parcial da pendência aberta em 28/08 sobre o commit `c451a7c`
+(`buildClearInputSequence`). Sessão em Linux, com Xvfb + xdotool disponíveis (ao
+contrário das duas sessões anteriores, em Windows sem esse ferramental).
+
+### O que foi medido
+
+- `notion-tasks conteudo` nas duas tasks (a pendência e a técnica original) antes de
+  qualquer escrita, confirmando o que já tinha sido coberto.
+- `git rebase origin/main`: o `main` local estava divergido (1 commit local não
+  publicado, `b45fe8b`, 3 commits do remoto não puxados, entre eles o próprio
+  `c451a7c`) — sem isso a build local nem tinha o fix. Rebase limpo, push em
+  `068fc68`.
+- `npx vitest run` (suíte inteira): 635 testes, incluindo os 4 novos deste commit,
+  todos verdes. `npm run lint`: só o warning pré-existente de `TerminalNode.tsx`,
+  não relacionado. `npm run build`: OK.
+- App real, `rodar-app` sob Xvfb, Codex `v0.150.1` aberto no canvas com CDP
+  (`page.keyboard.press`, não `xdotool` — ver "o que não funcionou" abaixo).
+  Composer com o texto de entrega de contexto do próprio Felixo (4 linhas visuais,
+  marcador `›` na primeira): Ctrl+A destacou (visível como barra cinza no painel
+  expandido) e Backspace apagou a entrada **inteira**, voltando ao prompt vazio —
+  sem sobrar nenhuma linha, o comportamento que o commit `c451a7c` deveria garantir.
+  Nenhum Enter foi enviado; nenhum turno de API foi gasto de propósito.
+- Teste novo, direto contra `hasTypedInputSelection` (sem xterm real — ver abaixo):
+  abre quando a seleção lida bate com a guardada, fecha sem Ctrl+A nenhum, fecha
+  quando a seleção diverge e fecha quando foi limpa por fora. `terminal-session-store.test.ts`,
+  commit `3c71cb4`, pushado.
+
+### O que não funcionou (e por que importa para quem repetir)
+
+- **`realkey` (xdotool) parou de entregar teclas nesta sessão** depois de funcionar
+  uma vez: sem window manager rodando sob Xvfb, `xdotool windowfocus` não tem o que
+  focar de verdade (`_NET_ACTIVE_WINDOW` não suportado), e o clique perdia o foco do
+  elemento sem aviso — o app ficava com foco de DOM (`document.hasFocus() === true`)
+  mas sem receber o evento do X. Troquei para `page.keyboard.press` (CDP) para
+  Ctrl+A/Backspace, que é suficiente aqui porque `attachCustomKeyEventHandler` só
+  precisa de um `keydown` — nenhuma das duas teclas depende de um caminho nativo do
+  SO (diferente do Ctrl+V de imagem, que genuinamente precisa do `realkey`).
+- **Testar `hasTypedInputSelection` com o xterm real exige DOM.** `terminal.select()`
+  chama o `SelectionService`, que só existe depois de `terminal.open(container)` num
+  elemento de verdade — e a suíte roda em `environment: 'node'` (sem DOM), como o
+  resto do arquivo. O teste novo usa um `terminal` dublê (`hasSelection`/`getSelection`
+  controlados) para exercitar exatamente a lógica do portão, não o xterm inteiro.
+- **`MAX_MULTILINE_INPUT_ROWS = 4` limita o que dá para testar com o texto de
+  contexto do próprio Felixo**, que passa de 10 linhas visuais quando entregue por
+  inteiro — Ctrl+A não seleciona nada nesse caso (comportamento correto: fora da
+  janela de 4 linhas o módulo intencionalmente não sobe atrás do marcador, para não
+  varrer saída antiga). A medição de tecla real só ficou limpa quando o composer
+  tinha 4 linhas ou menos — o próprio texto de entrega de contexto, capturado no
+  meio da retentativa automática do store, serviu como entrada de teste real.
+
+### O que ainda falta
+
+- **Gemini**: não autenticado nesta máquina (o CLI abriu o assistente de login do
+  Google, "Sign in with Google" / "Use Gemini API Key" / "Vertex AI" — não avancei
+  nesse fluxo por não ser uma decisão que um agente deva tomar sozinho). Sem conta
+  configurada aqui, a medição de tecla real no Gemini segue pendente.
+- **Shell puro**: já medido na sessão de 28/08 15:50–16:00 (PowerShell, ver task
+  técnica) — não repetido aqui.
+- **Divergência do "um caractere" da anotação original**: não reproduzida em Codex
+  (mesmo padrão das sessões anteriores em Claude Code e PowerShell). Com Codex e
+  PowerShell cobertos e nenhuma reprodução em nenhum dos três, e Gemini bloqueado por
+  falta de conta, a divergência seguirá como "não reproduzida, documentada" até
+  alguém com acesso a uma conta Gemini fechar a quarta frente.
+- **Achado do Shift+Enter** (Claude Code v2.1.250 submetendo cada linha em vez de
+  quebrar) da sessão de 28/08 16:00: não investigado nesta sessão, é bug diferente e
+  anterior a este.
