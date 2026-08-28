@@ -56,6 +56,10 @@ const {
 const {
   registerOrchestratorSettingsIpcHandlers,
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
+const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
+const {
+  registerAgentUsageIpcHandlers,
+} = require('./services/agent-usage-ipc-handlers.cjs')
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { createSettingsRepository } = require('./services/storage/settings-repository.cjs')
@@ -106,6 +110,9 @@ app.whenReady().then(() => {
     databaseDir: appPaths.database,
   })
   settingsRepository = createSettingsRepository(storageDatabase)
+  const agentUsageService = createAgentUsageService({
+    database: storageDatabase,
+  })
 
   // Menu próprio ANTES da janela: sem ele vale o menu padrão do Electron, que
   // no macOS entrega ⌘+W para fechar a janela — atalho que ninguém escolheu e
@@ -186,6 +193,7 @@ app.whenReady().then(() => {
     isPackaged: app.isPackaged,
   })
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
+  registerAgentUsageIpcHandlers({ service: agentUsageService })
 
   // Expõe a versão empacotada (definida pelo CI no release, não no
   // package.json versionado) para a interface conseguir mostrá-la.

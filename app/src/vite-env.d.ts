@@ -24,6 +24,10 @@ import type {
   FetchAllProgress,
   FetchAllSettings,
 } from './features/canvas/types'
+import type {
+  AgentUsageDashboard,
+  AgentUsageMutationResult,
+} from './features/chat/services/agent-usage'
 
 type DetectedRepo = { name: string; path: string }
 type DirectoryEntry = { name: string; isDirectory: boolean; path: string }
@@ -503,6 +507,16 @@ declare global {
       agentModels?: {
         get: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
         refresh: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
+      }
+      agentUsage?: {
+        list: () => Promise<AgentUsageDashboard>
+        refresh: () => Promise<AgentUsageDashboard>
+        addAccount: (params: {
+          providerId: string
+          label: string
+          identityHint?: string
+        }) => Promise<AgentUsageMutationResult>
+        removeAccount: (accountId: string) => Promise<AgentUsageMutationResult>
       }
       systemDesign?: {
         getConfig: () => Promise<

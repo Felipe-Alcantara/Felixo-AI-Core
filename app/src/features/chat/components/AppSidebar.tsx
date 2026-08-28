@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Code2,
   Download,
+  Gauge,
   Folder,
   GitBranch,
   MessageSquare,
@@ -57,6 +58,7 @@ type AppSidebarProps = {
   onOpenFelixoSettings: () => void
   onOpenNotes: () => void
   onOpenOrchestratorSettings: () => void
+  onOpenAgentUsage: () => void
   onToggleSidebar: () => void
   onSelectSession: (session: ChatSession) => void
   onToggleProject: (project: Project) => void
@@ -80,6 +82,7 @@ export function AppSidebar({
   onOpenFelixoSettings,
   onOpenNotes,
   onOpenOrchestratorSettings,
+  onOpenAgentUsage,
   onToggleSidebar,
   onSelectSession,
   onToggleProject,
@@ -133,6 +136,7 @@ export function AppSidebar({
     else if (label === 'Automações') onOpenAutomations()
     else if (label === 'Skills') onOpenSkills()
     else if (label === 'Orquestrador') onOpenOrchestratorSettings()
+    else if (label === 'Limites e uso') onOpenAgentUsage()
     else if (label === 'Notas') onOpenNotes()
     else if (label === 'Exportar') onOpenExport()
   }
@@ -286,6 +290,15 @@ export function AppSidebar({
           >
             <Network size={14} aria-hidden="true" />
             Orquestrador
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleNavClick('Limites e uso')}
+            className="felixo-btn flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+          >
+            <Gauge size={14} aria-hidden="true" />
+            Limites e uso
           </button>
 
           <button

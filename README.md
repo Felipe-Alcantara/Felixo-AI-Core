@@ -43,6 +43,7 @@ Primeira versão funcional entregue:
 - Botão de parar para interromper processo em andamento
 - Canvas visual para organizar agentes, arquivos compartilhados, notas, grupos e páginas web (mini-navegador embutido)
 - Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
+- Painel **Limites e uso** para acompanhar contas de Codex, Claude, Gemini e Openia sem misturar identidades
 - Frontend organizado por feature em `app/src/features/chat/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
 - Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL
@@ -222,6 +223,20 @@ nasce com `openia run <interface> --provider --model <id> --dir <projeto>` (ou
 `--no-model`), sem o prompt de interface, modelo ou pasta. Se Python, `pip` ou o
 comando `openia` não estiverem disponíveis, o cartão informa a falha e o restante
 do app continua utilizável. A versão pode ser conferida com `openia --version`.
+
+### Limites e uso por conta
+
+O painel **Limites e uso** reúne as contas detectadas de Codex, Claude, Gemini e
+Openia, preservando a identidade da conta e o histórico de amostras sem salvar
+tokens, cookies ou chaves. Cada número exibe a fonte e o horário da coleta;
+quando a CLI não oferece uma cota consultável sem interação, o painel informa
+**indisponível** ou mostra explicitamente o último valor conhecido como antigo.
+
+As fontes oficiais disponíveis variam por CLI: Codex expõe estado de autenticação,
+Claude pode fornecer limites pelo evento `rate_limits` do status line, Gemini
+oferece estatísticas locais em `/stats model`, e Openia expõe o estado seguro da
+chave, mas não uma cota. A atualização manual é sempre controlada pelo app e a
+atualização automática pode ser configurada em intervalos de 5, 15 ou 30 minutos.
 
 ## Como distribuir
 

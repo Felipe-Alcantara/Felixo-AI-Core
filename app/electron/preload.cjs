@@ -163,6 +163,13 @@ contextBridge.exposeInMainWorld('felixo', {
     get: () => ipcRenderer.invoke('agent-models:get'),
     refresh: () => ipcRenderer.invoke('agent-models:refresh'),
   },
+  agentUsage: {
+    list: () => ipcRenderer.invoke('agent-usage:list'),
+    refresh: () => ipcRenderer.invoke('agent-usage:refresh'),
+    addAccount: (params) => ipcRenderer.invoke('agent-usage:add-account', params),
+    removeAccount: (accountId) =>
+      ipcRenderer.invoke('agent-usage:remove-account', accountId),
+  },
   systemDesign: {
     getConfig: () => ipcRenderer.invoke('system-design:get-config'),
     saveConfig: (partial) =>

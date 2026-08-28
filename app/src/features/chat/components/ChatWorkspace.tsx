@@ -86,6 +86,7 @@ import { useAutomations } from '../hooks/useAutomations'
 import { useNotes } from '../hooks/useNotes'
 import { useProjects } from '../hooks/useProjects'
 import { AutomationsModal } from './AutomationsModal'
+import { AgentUsageLimitsModal } from './AgentUsageLimitsModal'
 import { ChatExportModal } from './ChatExportModal'
 import { CodePanel } from './CodePanel'
 import { FelixoSettingsModal } from './FelixoSettingsModal'
@@ -141,6 +142,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isFelixoSettingsOpen, setIsFelixoSettingsOpen] = useState(false)
   const [isNotesOpen, setIsNotesOpen] = useState(false)
+  const [isAgentUsageOpen, setIsAgentUsageOpen] = useState(false)
   const [isOrchestratorSettingsOpen, setIsOrchestratorSettingsOpen] =
     useState(false)
   const [isSkillsOpen, setIsSkillsOpen] = useState(false)
@@ -1222,6 +1224,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         onOpenFelixoSettings={() => setIsFelixoSettingsOpen(true)}
         onOpenNotes={() => setIsNotesOpen(true)}
         onOpenOrchestratorSettings={() => setIsOrchestratorSettingsOpen(true)}
+        onOpenAgentUsage={() => setIsAgentUsageOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
         onSelectSession={loadSession}
         onToggleProject={toggleProject}
@@ -1366,6 +1369,11 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         onApplyAutomation={applyAutomation}
         onAddAutomation={addCustomAutomation}
         onRemoveAutomation={removeCustomAutomation}
+      />
+
+      <AgentUsageLimitsModal
+        isOpen={isAgentUsageOpen}
+        onClose={() => setIsAgentUsageOpen(false)}
       />
 
       <SkillsModal
