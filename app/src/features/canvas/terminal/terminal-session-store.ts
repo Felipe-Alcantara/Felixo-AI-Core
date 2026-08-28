@@ -21,6 +21,7 @@ import {
   buildClearInputSequence,
   findMultiLineTypedInputRange,
   isDeleteSelectionKey,
+  isNewlineShortcut,
   isSelectInputShortcut,
 } from './terminal-input-selection'
 import {
@@ -581,8 +582,13 @@ export class TerminalSessionStore {
         // `onData`, nada além de uma pessoa gera keydown.
         session.inputTouched = true
       }
-      if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
-        void pty.write({ sessionId: session.ptySessionId, data: '\n' })
+      if (isNewlineShortcut(event)) {
+        // Só escrevemos no keydown — isNewlineShortcut também reconhece o
+        // keypress que o xterm.js dispara logo depois (ver o porquê no
+        // próprio módulo), e escrever nos dois duplicaria o '\n'.
+        if (event.type === 'keydown') {
+          void pty.write({ sessionId: session.ptySessionId, data: '\n' })
+        }
         return false
       }
       // Ctrl+A: selecionar o que foi escrito na linha de entrada.

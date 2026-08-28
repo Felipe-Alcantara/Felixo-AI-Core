@@ -194,6 +194,29 @@ export function isDeleteSelectionKey(event: KeyboardEvent): boolean {
 }
 
 /**
+ * Shift+Enter: quebra de linha no composer, não envio.
+ *
+ * Ao contrário de `isSelectInputShortcut`/`isDeleteSelectionKey`, esta função
+ * bate tanto para `event.type === 'keydown'` quanto para `'keypress'` — de
+ * propósito. O xterm.js chama `attachCustomKeyEventHandler` duas vezes por
+ * tecla: uma no `keydown`, outra no `keypress` nativo que o navegador ainda
+ * dispara para o Enter. Quando o handler só devolvia `false` no `keydown`,
+ * `_keyDown` retornava cedo sem marcar `_keyDownHandled` (o sinalizador que
+ * faria `_keyPress` pular o keypress) e sem chamar `preventDefault()` — só
+ * faria isso mais adiante, no trecho que a devolução antecipada pula. Sem
+ * esse sinalizador, `_keyPress` processava o keypress como se nada tivesse
+ * acontecido: chamava o handler nesse segundo evento, que (checando só
+ * `'keydown'`) não reconhecia o atalho e devolvia `true` — mandando xterm.js
+ * seguir o caminho padrão, que manda `String.fromCharCode(13)` (`'\r'`) cru
+ * para o PTY. Esse `\r` chegava um instante depois do `\n` que a intercepção
+ * escreve e submetia o turno — o bug medido em Claude Code v2.1.250 (28/08/2026).
+ * Reconhecer os dois tipos de evento fecha as duas portas.
+ */
+export function isNewlineShortcut(event: KeyboardEvent): boolean {
+  return (event.type === 'keydown' || event.type === 'keypress') && event.key === 'Enter' && event.shiftKey
+}
+
+/**
  * Monta o que apaga a linha de entrada de qualquer CLI: `Ctrl+U` (do cursor
  * para trás) repetido uma vez por linha **visual** que a seleção cobre,
  * seguido de `Ctrl+K` (do cursor para a frente, na linha em que ele parou).

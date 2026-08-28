@@ -4,6 +4,7 @@ import {
   findMultiLineTypedInputRange,
   findTypedInputRange,
   isDeleteSelectionKey,
+  isNewlineShortcut,
   isSelectInputShortcut,
   positionFromOffset,
 } from './terminal-input-selection'
@@ -144,6 +145,34 @@ describe('isDeleteSelectionKey', () => {
 
   it('ignora outras teclas', () => {
     expect(isDeleteSelectionKey(keyEvent({ key: 'a' }))).toBe(false)
+  })
+})
+
+describe('isNewlineShortcut', () => {
+  it('reconhece Shift+Enter no keydown', () => {
+    expect(isNewlineShortcut(keyEvent({ key: 'Enter', shiftKey: true }))).toBe(true)
+  })
+
+  it('reconhece Shift+Enter também no keypress — é o que fecha o vazamento do \\r', () => {
+    // Regressão: Claude Code v2.1.250 submetia cada linha em vez de quebrar
+    // (28/08/2026). Causa: xterm.js chama attachCustomKeyEventHandler duas
+    // vezes por tecla, uma no keydown e outra no keypress nativo que o Enter
+    // ainda dispara — reconhecer só o keydown deixava o keypress cair no
+    // caminho padrão do xterm.js, que manda '\r' cru para o PTY.
+    expect(isNewlineShortcut(keyEvent({ key: 'Enter', shiftKey: true, type: 'keypress' }))).toBe(true)
+  })
+
+  it('ignora Enter sem Shift — esse é o envio normal', () => {
+    expect(isNewlineShortcut(keyEvent({ key: 'Enter' }))).toBe(false)
+    expect(isNewlineShortcut(keyEvent({ key: 'Enter', type: 'keypress' }))).toBe(false)
+  })
+
+  it('ignora Shift+Enter no keyup', () => {
+    expect(isNewlineShortcut(keyEvent({ key: 'Enter', shiftKey: true, type: 'keyup' }))).toBe(false)
+  })
+
+  it('ignora outras teclas com Shift', () => {
+    expect(isNewlineShortcut(keyEvent({ key: 'a', shiftKey: true }))).toBe(false)
   })
 })
 
