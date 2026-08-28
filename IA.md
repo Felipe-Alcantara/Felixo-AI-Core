@@ -1945,3 +1945,41 @@ painel não existe no código (é a task de backlog
 - Só duas das sete interfaces do Openia foram exercitadas (`orchat` e
   `opencode`), uma de cada modo (chat / agente de código).
 - `.deb` não foi instalado de fato via `apt`/`dpkg` no sistema, só inspecionado.
+
+## [2026-08-28] Instalação do Openia sobrevive ao PEP 668 (Debian/Ubuntu recentes)
+
+Corrige o achado registrado mais cedo hoje: `python3 -m pip install --user
+--upgrade <zip do GitHub>` (comando do catálogo para o Openia) falhava com
+`error: externally-managed-environment` em qualquer Debian 12+/Ubuntu 23.04+
+(inclui a 24.04 LTS, atual) — quebrando por padrão o passo "instalar com
+consentimento" em qualquer máquina Linux atual.
+
+`installOfficialCli` agora detecta esse erro especificamente (stderr contendo
+`externally-managed-environment`, só quando o comando já é `pip install`) e
+repete uma única vez com `--break-system-packages` — que continua `--user`,
+não mexe em pacote de sistema. Se a segunda tentativa também falhar, a
+mensagem final explica que já tentou das duas formas, em vez de devolver o
+stderr cru do pip. A UI (`ModelManagerModal.tsx`) avisa quando a segunda
+tentativa foi necessária, em vez de esconder que houve retry.
+
+Fix irmão no repositório Openia: o instalador interno de interfaces
+(`runner.install()`, disparado na primeira execução de uma interface como
+`orchat`) tinha o mesmo problema e recebeu o mesmo tratamento — commit
+`d248538` em `Felipe-Alcantara/Openia`.
+
+### Validação
+
+- `npm test`: **780/780** testes Node (3 novos cobrindo o retry: resolve
+  sozinho, não repete por outro motivo, mensagem clara quando persiste).
+- `npm run test:frontend`: **649/649**.
+- `npm run lint`: só os 3 warnings pré-existentes. `npm run build`: ok.
+- Medido contra o pip real deste Ubuntu 24.04: desinstalei o Openia de
+  verdade (`pip uninstall`) e chamei `installOfficialCli('openia',
+  {confirmed:true})` sem nenhum flag manual — completou sozinho e detectou a
+  versão instalada (`0.1.0`).
+
+### Limite
+
+Não testado em Fedora/openSUSE (também adotaram PEP 668) nem o efeito em
+macOS/Windows — tasks de macOS/Windows e do achado original seguem abertas
+para essa cobertura.
