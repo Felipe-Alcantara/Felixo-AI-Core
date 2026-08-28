@@ -1983,3 +1983,31 @@ Fix irmão no repositório Openia: o instalador interno de interfaces
 Não testado em Fedora/openSUSE (também adotaram PEP 668) nem o efeito em
 macOS/Windows — tasks de macOS/Windows e do achado original seguem abertas
 para essa cobertura.
+
+## [2026-08-28] Auditoria do catálogo empacotado após o fix do PEP 668
+
+Uma auditoria da integração encontrou que o catálogo do Felixo ainda apontava
+para o snapshot antigo `9b89b43` do Openia, apesar de o fix do instalador estar
+publicado em `d248538`. Isso faria uma instalação limpa pelo cartão oficial
+receber a revisão sem o retry automático do PEP 668. Instalação e atualização
+do catálogo agora apontam para
+`https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip`, e o teste do
+catálogo fixa esse contrato.
+
+### Validação desta auditoria
+
+- Catálogo do Felixo: **4/4** testes focados.
+- Felixo: `npm test` **780/780**, `npm run test:frontend` **649/649**, lint
+  sem erros (os 3 avisos React já existentes) e build de **692 módulos**.
+- Artefatos Linux regenerados: AppImage x86_64, AppImage arm64 e `.deb`
+  amd64; `file` confirmou os formatos/arquiteturas, `dpkg-deb -I` confirmou o
+  pacote Debian e o `app.asar` empacotado confirmou as duas URLs em
+  `d248538`.
+- Openia no repositório publicado: `python3 -m pytest -q` **65/65**, Ruff,
+  compilação, `python3 -m openia --version` (**0.1.0**) e listagem JSON
+  passaram.
+
+Nenhuma chave foi lida, digitada ou adicionada ao repositório nesta auditoria;
+os fluxos reais com credencial e o custo já estão registrados na validação
+anterior. macOS/Windows continuam delegados por falta dessas plataformas
+nesta sessão.

@@ -41,7 +41,7 @@ describe('official-cli-catalog', () => {
       'install',
       '--user',
       '--upgrade',
-      'https://github.com/Felipe-Alcantara/Openia/archive/9b89b43.zip',
+      'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip',
     ])
     assert.equal(getOfficialAiCli('openia').isLauncher, true)
     assert.equal(getOfficialAiCli('openia').autoInstall, false)

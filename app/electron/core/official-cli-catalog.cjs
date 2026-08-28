@@ -171,7 +171,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
         'install',
         '--user',
         '--upgrade',
-        'https://github.com/Felipe-Alcantara/Openia/archive/9b89b43.zip',
+        'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip',
       ],
       requiresConfirmation: true,
     },
@@ -185,7 +185,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
         'install',
         '--user',
         '--upgrade',
-        'https://github.com/Felipe-Alcantara/Openia/archive/9b89b43.zip',
+        'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip',
       ],
     },
     login: {
