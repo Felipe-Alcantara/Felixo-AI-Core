@@ -37,6 +37,8 @@ describe('agent launch preferences', () => {
         yolo: true,
         projectId: 'project-a',
         planningFile: '/work/plans/release-plan.pdf',
+        openiaInterface: 'aichat',
+        openiaModel: 'anthropic/claude-sonnet-4',
       },
       storage,
     )
@@ -48,6 +50,8 @@ describe('agent launch preferences', () => {
       yolo: true,
       projectId: 'project-a',
       planningFile: '/work/plans/release-plan.pdf',
+      openiaInterface: 'aichat',
+      openiaModel: 'anthropic/claude-sonnet-4',
     })
   })
 
@@ -70,6 +74,31 @@ describe('agent launch preferences', () => {
       yolo: false,
       projectId: '',
       planningFile: '',
+      openiaInterface: 'orchat',
+      openiaModel: '',
+    })
+  })
+
+  it('preserves interface/model but never stores a key in the reusable settings', () => {
+    const storage = createStorage()
+    saveAgentLaunchPreferences({
+      agentValue: 'openia',
+      model: '',
+      effort: '',
+      yolo: false,
+      projectId: '',
+      planningFile: '',
+      openiaInterface: 'openclaw',
+      openiaModel: 'openai/gpt-5',
+    }, storage)
+
+    const raw = storage.getItem('felixo:last-agent-launch-preferences') ?? ''
+    expect(raw.includes('openrouter-key')).toBe(false)
+    expect(raw.includes('sk-or-')).toBe(false)
+    expect(readAgentLaunchPreferences(storage)).toMatchObject({
+      agentValue: 'openia',
+      openiaInterface: 'openclaw',
+      openiaModel: 'openai/gpt-5',
     })
   })
 })

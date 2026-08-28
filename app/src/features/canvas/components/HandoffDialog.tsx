@@ -47,6 +47,10 @@ export function HandoffDialog({
     setBusy(true)
     setErro(undefined)
     try {
+      if (!(await config.prepareForLaunch())) {
+        setErro(config.openiaError ?? 'Configure o agente antes de continuar.')
+        return
+      }
       const opcoes = config.buildOptions()
       // Sem nome próprio, o bloco herda o rótulo automático da configuração
       // ("Claude · projeto"), que não diz nada sobre ser uma continuação. O

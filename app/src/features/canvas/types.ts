@@ -70,7 +70,10 @@ export type TerminalNodeData = {
   cwd?: string
   /** Human label shown on the node header. */
   label?: string
-  /** Launcher opaque to Felixo; do not inject prompts or model flags. */
+  /**
+   * Launcher configurado pela interface. O spawn direto do Openia recebe o
+   * contexto do canvas; nodes antigos sem `run` preservam o menu opaco.
+   */
   launchMode?: 'agent' | 'launcher'
   /** Text typed into the agent shortly after spawn (e.g. standing instruction). Persisted with the node so reopen replays it. */
   initialText?: string

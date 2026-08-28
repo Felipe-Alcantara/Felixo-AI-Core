@@ -51,6 +51,7 @@ export function TerminalMenu({
   // Configs queued up to start together — lets one click launch a whole
   // agent setup instead of repeating "configure, open" once per terminal.
   const [queue, setQueue] = useState<NewTerminalOptions[]>([])
+  const [launching, setLaunching] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const flyoutPosition = useToolbarFlyoutPosition({
@@ -90,21 +91,43 @@ export function TerminalMenu({
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [closeSettings, open])
 
-  const openTerminal = () => {
-    const options = config.buildOptions()
-    config.savePreferences()
-    onAdd(options)
-    config.setName('')
-    closeSettings()
+  const openTerminal = async () => {
+    if (launching) return
+    setLaunching(true)
+    try {
+      if (!(await config.prepareForLaunch())) {
+        // O clique no botão compacto acontece com o painel fechado; reabri-lo
+        // torna o erro de configuração visível e deixa a pessoa corrigir ali.
+        if (!open) {
+          preparePanel()
+          setOpen(true)
+        }
+        return
+      }
+      const options = config.buildOptions()
+      config.savePreferences()
+      onAdd(options)
+      config.setName('')
+      closeSettings()
+    } finally {
+      setLaunching(false)
+    }
   }
 
   // Adds the currently configured agent to the queue instead of opening it
   // right away, so the user can stack up several different setups (agent,
   // model, project…) and start them all in one go.
-  const queueCurrent = () => {
-    config.savePreferences()
-    setQueue((current) => [...current, config.buildOptions()])
-    config.setName('')
+  const queueCurrent = async () => {
+    if (launching) return
+    setLaunching(true)
+    try {
+      if (!(await config.prepareForLaunch())) return
+      config.savePreferences()
+      setQueue((current) => [...current, config.buildOptions()])
+      config.setName('')
+    } finally {
+      setLaunching(false)
+    }
   }
 
   const startQueue = () => {
@@ -149,8 +172,9 @@ export function TerminalMenu({
       <div className="felixo-btn flex w-full overflow-hidden rounded-lg shadow-lg ring-1 ring-white/10">
         <button
           type="button"
-          onClick={openTerminal}
-          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700"
+          onClick={() => void openTerminal()}
+          disabled={launching}
+          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700 disabled:opacity-50"
         >
           <TerminalSquare size={16} />
           Agente
@@ -186,14 +210,16 @@ export function TerminalMenu({
           <div className="flex gap-1.5">
             <button
               type="button"
-              onClick={openTerminal}
-              className="felixo-btn flex-1 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+              onClick={() => void openTerminal()}
+              disabled={launching}
+              className="felixo-btn flex-1 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
             >
               Abrir agente
             </button>
             <button
               type="button"
-              onClick={queueCurrent}
+              onClick={() => void queueCurrent()}
+              disabled={launching}
               title="Adicionar esta configuração à fila, para iniciar vários terminais de uma vez"
               aria-label="Adicionar à fila de terminais"
               className="felixo-btn-icon flex items-center justify-center rounded bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"

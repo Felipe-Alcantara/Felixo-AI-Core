@@ -1845,3 +1845,44 @@ passar chave em argumentos e sem ler ou migrar `keys.json`/`.env`.
   validar em máquinas empacotadas Windows/macOS e executar uma conversa real em
   cada sistema; o contrato e os testes de consentimento/detecção/lançamento já
   estão preparados para essa rodada manual.
+
+## [2026-08-28] Spawn do Openia configurado na interface do Felixo
+
+O launcher Openia deixou de ser um passo de configuração escondido no terminal
+quando nasce pelo canvas. `AgentConfigFields`, compartilhado pelo botão de novo
+terminal e pelo handoff, agora consulta `openia list --json`,
+`openia models --json` e `openia key status --json`. A pessoa escolhe interface e
+modelo na tela e informa a chave num campo de senha; o Felixo envia a chave ao
+Openia por `key set-stdin` via stdin, sem gravá-la em localStorage, node,
+argumento, log ou retorno IPC.
+
+Antes de criar o terminal, o fluxo espera o carregamento, salva a chave pendente
+se necessário e exige projeto quando a interface escolhida é agente de código.
+O node recebe somente `openia run <interface> --provider --model <id> --dir
+<projeto>` (ou `--no-model`) e `launchMode: launcher`; por isso o Openia e a CLI
+subjacente abrem já posicionados, sem pedir interface, modelo ou pasta de novo.
+Como o spawn direto é identificável pelo argumento `run`, ele também segue o
+fluxo dos agentes nativos para contexto permanente, arquivos ligados e handoff;
+nodes antigos que ainda não têm esse argumento permanecem opacos e compatíveis
+com o menu manual.
+Interface/modelo selecionados são as únicas preferências persistidas no canvas;
+o registro e o catálogo continuam no repositório Openia.
+
+Também foram alinhados os adaptadores do Openia: seleção por `--model` para as
+CLIs que aceitam flag, namespace do plugin para llm e `openclaw models set` para
+OpenClaw. O catálogo oficial do Felixo identifica a configuração como
+`felixo-spawn-interface`; o botão existente continua disponível apenas como
+menu manual.
+
+### Validação
+
+- `npm test`: **777/777** testes Node verdes.
+- `npm run test:frontend`: **649/649** testes Vitest verdes.
+- `npm run lint`: concluído sem erros; permanecem somente 3 warnings antigos de
+  dependências de effects (`TerminalNode.tsx` e `SearchPanel.tsx`).
+- `npm run build`: concluído; Vite transformou 692 módulos e manteve apenas o
+  aviso conhecido de chunk inicial acima de 500 kB.
+- `python3 -m pytest -q` no Openia: **62/62** testes verdes.
+- Nenhuma chave real foi lida, e não foi feita conversa real com provedor. Neste
+  ambiente o comando global `openia` não está instalado; a ponte foi validada
+  com dublês e o contrato Python com a suíte local.

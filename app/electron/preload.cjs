@@ -41,6 +41,12 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('cli:terminal-output', handler)
     },
   },
+  openia: {
+    listInterfaces: () => ipcRenderer.invoke('openia:list-interfaces'),
+    listModels: (params) => ipcRenderer.invoke('openia:list-models', params),
+    keyStatus: () => ipcRenderer.invoke('openia:key-status'),
+    setKey: (params) => ipcRenderer.invoke('openia:set-key', params),
+  },
   pty: {
     spawn: (params) => ipcRenderer.invoke('pty:spawn', params),
     write: (params) => ipcRenderer.invoke('pty:write', params),

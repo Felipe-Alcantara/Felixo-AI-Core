@@ -1,5 +1,8 @@
 import type { Connection, Node } from '@xyflow/react'
-import { isKnownAgentCommand } from './agent-launch-options'
+import {
+  isDirectOpeniaLaunch,
+  isKnownAgentCommand,
+} from './agent-launch-options'
 import { toSubmittedTerminalText } from '../terminal/terminal-input'
 import type { ContextFileKind } from './context-file-delivery'
 
@@ -15,7 +18,15 @@ function textFromNode(node: Node, key: 'label' | 'command' | 'cwd'): string {
 }
 
 function isAgentTerminal(node: Node): boolean {
-  return node.type === 'terminal' && isKnownAgentCommand(textFromNode(node, 'command'))
+  if (node.type !== 'terminal') return false
+
+  const command = textFromNode(node, 'command')
+  const data = node.data as Record<string, unknown> | undefined
+  const args = Array.isArray(data?.args)
+    ? data.args.filter((value): value is string => typeof value === 'string')
+    : undefined
+
+  return isKnownAgentCommand(command) || isDirectOpeniaLaunch(command, args)
 }
 
 function agentPairFromConnection(connection: Connection, nodes: Node[]): AgentPair | null {

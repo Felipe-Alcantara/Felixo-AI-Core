@@ -195,20 +195,25 @@ No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações
 ## Openia como launcher de OpenRouter
 
 O gerenciador de modelos (Modelos > CLIs oficiais) também identifica o `openia` como
-launcher oficial. Ele não é apresentado como um modelo fictício: o Felixo inicia o
-comando `openia` no diretório escolhido, e o menu do Openia continua sendo a fonte
-de verdade para as interfaces, a chave do OpenRouter e a seleção de modelo.
+launcher oficial. Ele não é apresentado como um modelo fictício: na configuração
+de spawn, o Felixo consulta o registro do Openia e oferece interface, modelo e
+chave na própria interface, mantendo o catálogo no Openia como fonte única.
 
 Quando o Openia não está instalado, o botão **Instalar** mostra o repositório de
 origem e pede confirmação antes de executar o `pip` remoto. A instalação usa o
 Python do sistema (`python3` no Linux/macOS ou `py` no Windows), não depende de um
 clone local e não entra na instalação automática baseada em npm do app. Depois de
-instalado, **Abrir configuração** abre o menu próprio do Openia em um terminal.
+instalado, o botão de spawn já pode abrir a interface escolhida sem repetir a
+configuração no terminal. O botão de terminal do gerenciador continua abrindo o
+menu manual do Openia para quem quiser administrá-lo diretamente.
 
-O Felixo não lê, migra ou imprime `keys.json`/`.env` do Openia, não passa a chave em
-argumentos e não mantém uma segunda lista de modelos. Se Python, `pip` ou o comando
-`openia` não estiverem disponíveis, o cartão informa a falha e o restante do app
-continua utilizável. A versão pode ser conferida com `openia --version`.
+O spawn usa `openia list --json` e `openia models --json`; a chave é enviada ao
+`openia key set-stdin felixo --json` exclusivamente por stdin, nunca como
+argumento, log, preferência do canvas ou dado do node. Em seguida o terminal já
+nasce com `openia run <interface> --provider --model <id> --dir <projeto>` (ou
+`--no-model`), sem o prompt de interface, modelo ou pasta. Se Python, `pip` ou o
+comando `openia` não estiverem disponíveis, o cartão informa a falha e o restante
+do app continua utilizável. A versão pode ser conferida com `openia --version`.
 
 ## Como distribuir
 

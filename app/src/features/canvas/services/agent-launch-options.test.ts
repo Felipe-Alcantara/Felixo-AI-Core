@@ -3,10 +3,11 @@ import {
   AGENTS,
   buildAgentArgs,
   getAgent,
+  isDirectOpeniaLaunch,
   isKnownAgentCommand,
 } from './agent-launch-options'
 
-describe('Openia como launcher opaco', () => {
+describe('Openia como launcher configurado pela interface', () => {
   it('fica disponível no seletor sem virar um modelo nativo do Felixo', () => {
     const openia = getAgent('openia')
 
@@ -29,8 +30,10 @@ describe('Openia como launcher opaco', () => {
     ).toEqual([])
   })
 
-  it('não envia contexto automático para o menu interativo do launcher', () => {
+  it('separa o comando manual antigo do spawn direto configurado', () => {
     expect(isKnownAgentCommand('openia')).toBe(false)
+    expect(isDirectOpeniaLaunch('openia', ['run', 'orchat'])).toBe(true)
+    expect(isDirectOpeniaLaunch('openia', [])).toBe(false)
     expect(isKnownAgentCommand('codex')).toBe(true)
   })
 })

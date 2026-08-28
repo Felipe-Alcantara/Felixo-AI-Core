@@ -7,6 +7,7 @@ const {
   registerOfficialCliAccountIpcHandlers,
 } = require('./services/official-cli-account-ipc-handlers.cjs')
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
+const { registerOpeniaIpcHandlers } = require('./services/openia-service.cjs')
 const {
   registerFileAttachmentIpcHandlers,
 } = require('./services/file-attachments-ipc-handlers.cjs')
@@ -123,6 +124,7 @@ app.whenReady().then(() => {
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
+  registerOpeniaIpcHandlers()
   ptyHandlers = registerPtyIpcHandlers(getMainWindow)
   registerFileAttachmentIpcHandlers(appPaths)
   registerFileExportIpcHandlers(getMainWindow)

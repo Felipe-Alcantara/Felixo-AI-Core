@@ -200,7 +200,7 @@ export function ModelManagerModal({
 
       if (cli.isLauncher) {
         setStatus(
-          `${cli.name} instalado. Abra o menu de configuração para escolher a interface e o modelo dentro do Openia.`,
+          `${cli.name} instalado. Interface, modelo e chave ficam na configuração de spawn; o menu manual continua disponível.`,
         )
       } else {
         importOfficialModels(result.models ?? cli.models)
@@ -676,7 +676,7 @@ export function ModelManagerModal({
                           </div>
                           {cli.isLauncher && (
                             <p className="mt-1 text-[11px] text-zinc-400">
-                              Launcher opaco: chave e modelo são configurados dentro do Openia.
+                              Launcher: interface, modelo e chave são configurados na tela de spawn.
                             </p>
                           )}
                           {accountStatuses[cli.id] && (
@@ -693,13 +693,13 @@ export function ModelManagerModal({
                           {cli.detected && cli.isLauncher ? (
                             <button
                               type="button"
-                              title="Abrir configuração do Openia"
+                              title="Abrir menu manual do Openia"
                               onClick={() => void openOfficialLogin(cli)}
                               disabled={isAnyOfficialCliBusy}
                               className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Terminal size={14} aria-hidden="true" />
-                              <span className="sr-only">Abrir configuração do Openia</span>
+                              <span className="sr-only">Abrir menu manual do Openia</span>
                             </button>
                           ) : cli.detected ? (
                             <button

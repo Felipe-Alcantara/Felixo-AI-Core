@@ -41,10 +41,11 @@ describe('official-cli-catalog', () => {
       'install',
       '--user',
       '--upgrade',
-      'https://github.com/Felipe-Alcantara/Openia/archive/841857c.zip',
+      'https://github.com/Felipe-Alcantara/Openia/archive/9b89b43.zip',
     ])
     assert.equal(getOfficialAiCli('openia').isLauncher, true)
     assert.equal(getOfficialAiCli('openia').autoInstall, false)
+    assert.equal(getOfficialAiCli('openia').modelSelection, 'felixo-spawn-interface')
     assert.deepEqual(getOfficialAiCli('openia').models, [])
   })
 

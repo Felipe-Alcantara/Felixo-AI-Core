@@ -57,6 +57,25 @@ describe('agent collaboration links', () => {
     expect(sent[1].text).toContain('contextos de trabalho são relacionados')
   })
 
+  it('treats a directly configured Openia spawn as an agent terminal', () => {
+    const sent: Array<{ id: string; text: string }> = []
+    const nodes = [
+      {
+        ...terminalNode('openia', 'Openia', 'openia', '/repo'),
+        data: { label: 'Openia', command: 'openia', cwd: '/repo', args: ['run', 'orchat'] },
+      },
+      terminalNode('agent', 'Implementador', 'codex', '/repo'),
+    ]
+
+    expect(
+      announceAgentCollaboration(connection('openia', 'agent'), nodes, {
+        sendText: (id, text) => sent.push({ id, text }),
+      }),
+    ).toBe(true)
+    expect(sent).toHaveLength(2)
+    expect(sent[0].text).toContain('agente "Implementador"')
+  })
+
   it('ignores pairs that are not two known agent terminals', () => {
     const sent: Array<{ id: string; text: string }> = []
     const nodes = [

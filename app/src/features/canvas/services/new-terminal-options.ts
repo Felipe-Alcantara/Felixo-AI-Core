@@ -12,6 +12,10 @@ export type NewTerminalOptions = {
   cwd?: string
   label: string
   planningFile?: string
-  /** O launcher mantém a seleção e o contexto inicial dentro da própria CLI. */
+  /**
+   * Marca lançadores configurados antes de o terminal nascer. O spawn direto
+   * do Openia ainda recebe o contexto do canvas; nós antigos sem `run`
+   * continuam no modo opaco do menu manual.
+   */
   launchMode?: 'agent' | 'launcher'
 }

@@ -70,6 +70,28 @@ type CliInvokeResult = {
   message?: string
 }
 
+type OpeniaInterface = {
+  key: string
+  name: string
+  description: string
+  ecosystem: string
+  command: string
+  homepage: string
+  modelPrefix: string
+  supportsModelSelection: boolean
+  modelSelection: 'automatic' | 'inside'
+  supportsSubscription: boolean
+  isCodeAgent: boolean
+  emoji: string
+}
+
+type OpeniaModel = {
+  id: string
+  vendor: string
+  name: string
+  completionPrice: number
+}
+
 type SaveAttachmentResult = CliInvokeResult & {
   filePath?: string
   fileName?: string
@@ -248,6 +270,12 @@ declare global {
         onStream: (callback: (event: CliStreamEvent) => void) => () => void
         onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
         onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
+      }
+      openia?: {
+        listInterfaces: () => Promise<CliInvokeResult & { interfaces?: OpeniaInterface[] }>
+        listModels: (params?: { refresh?: boolean }) => Promise<CliInvokeResult & { models?: OpeniaModel[] }>
+        keyStatus: () => Promise<CliInvokeResult & { configured?: boolean; active?: string | null }>
+        setKey: (params: { name?: string; key: string }) => Promise<CliInvokeResult & { configured?: boolean }>
       }
       pty?: {
         spawn: (params: {

@@ -34,6 +34,17 @@ export function AgentConfigFields({
 }: Props) {
   const prefixo = useId()
   const planningFileInputRef = useRef<HTMLInputElement>(null)
+  const openiaModelGroups = config.openiaModels.reduce<Record<string, typeof config.openiaModels>>(
+    (groups, model) => {
+      groups[model.vendor] ??= []
+      groups[model.vendor].push(model)
+      return groups
+    },
+    {},
+  )
+  const selectedOpeniaInterface = config.openiaInterfaces.find(
+    (item) => item.key === config.openiaInterfaceKey,
+  )
 
   const handleProjectChange = async (value: string) => {
     if (value !== ADD_FOLDER_VALUE) {
@@ -85,11 +96,109 @@ export function AgentConfigFields({
       {config.agent && (
         <>
           {config.agent.isLauncher ? (
-            <p className="mb-3 rounded bg-zinc-900/70 px-2 py-2 text-xs leading-relaxed text-zinc-400 ring-1 ring-white/10">
-              O Openia é um launcher: a interface, a chave do OpenRouter e o modelo
-              são escolhidos no próprio terminal. O Felixo não duplica nem lê essa
-              configuração.
-            </p>
+            <div className="mb-3 rounded bg-zinc-900/70 px-2 py-2 ring-1 ring-white/10">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-zinc-200">Configuração do Openia</p>
+                <button
+                  type="button"
+                  onClick={config.refreshOpenia}
+                  disabled={config.openiaLoading}
+                  className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
+                  title="Atualizar interfaces, modelos e estado da chave"
+                  aria-label="Atualizar configuração do Openia"
+                >
+                  <RotateCw size={11} className={config.openiaLoading ? 'animate-spin' : undefined} />
+                </button>
+              </div>
+
+              <label htmlFor={`${prefixo}-openia-interface`} className={ROTULO}>
+                Interface
+              </label>
+              <select
+                id={`${prefixo}-openia-interface`}
+                value={config.openiaInterfaceKey}
+                onChange={(event) => config.setOpeniaInterfaceKey(event.target.value)}
+                disabled={config.openiaLoading || config.openiaInterfaces.length === 0}
+                className={`${CAMPO} mb-2`}
+              >
+                {config.openiaInterfaces.length === 0 ? (
+                  <option value="">
+                    {config.openiaLoading ? 'Carregando interfaces…' : 'Openia não disponível'}
+                  </option>
+                ) : (
+                  config.openiaInterfaces.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.emoji} {item.name}
+                    </option>
+                  ))
+                )}
+              </select>
+              {selectedOpeniaInterface?.description && (
+                <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
+                  {selectedOpeniaInterface.description}
+                </p>
+              )}
+
+              <label htmlFor={`${prefixo}-openia-model`} className={ROTULO}>
+                Modelo
+              </label>
+              <select
+                id={`${prefixo}-openia-model`}
+                value={config.openiaModel}
+                onChange={(event) => config.changeOpeniaModel(event.target.value)}
+                disabled={config.openiaLoading || config.openiaModels.length === 0}
+                className={`${CAMPO} mb-2`}
+              >
+                <option value="">Padrão da interface</option>
+                {Object.entries(openiaModelGroups).map(([vendor, models]) => (
+                  <optgroup key={vendor} label={vendor}>
+                    {models.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} · {item.completionPrice > 0
+                          ? `$${(item.completionPrice * 1_000_000).toFixed(2)}/M`
+                          : 'free'}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
+                {selectedOpeniaInterface?.supportsModelSelection
+                  ? 'O modelo escolhido será aplicado automaticamente antes da interface abrir.'
+                  : 'Esta interface usa a configuração própria dela; o Openia abrirá com o modelo padrão.'}
+              </p>
+
+              <label htmlFor={`${prefixo}-openia-key`} className={ROTULO}>
+                Chave do OpenRouter
+              </label>
+              <div className="mb-1.5 flex gap-1.5">
+                <input
+                  id={`${prefixo}-openia-key`}
+                  type="password"
+                  autoComplete="new-password"
+                  value={config.openiaKeyDraft}
+                  onChange={(event) => config.setOpeniaKeyDraft(event.target.value)}
+                  placeholder={config.openiaKeyConfigured ? 'Chave já configurada' : 'sk-or-…'}
+                  className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => void config.saveOpeniaKey()}
+                  disabled={config.openiaSaving || !config.openiaKeyDraft.trim()}
+                  className="felixo-btn rounded bg-zinc-700 px-2 text-[11px] text-zinc-200 hover:bg-zinc-600 disabled:opacity-50"
+                >
+                  {config.openiaSaving ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
+              <p className="text-[11px] leading-relaxed text-zinc-500">
+                {config.openiaKeyConfigured
+                  ? 'Chave configurada no armazenamento do Openia. O Felixo não a lê nem a persiste.'
+                  : 'A chave será enviada diretamente ao Openia e não ficará no canvas nem no comando.'}
+              </p>
+              {config.openiaError && (
+                <p className="mt-2 text-[11px] leading-relaxed text-red-300">{config.openiaError}</p>
+              )}
+            </div>
           ) : (
             <>
               <div className="mb-1 flex items-center justify-between">

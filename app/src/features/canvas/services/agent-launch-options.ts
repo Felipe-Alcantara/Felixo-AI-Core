@@ -24,7 +24,7 @@ export type AgentDefinition = {
   label: string
   /** Model options shown in the menu (extendable — adding new ones is safe). */
   models: string[]
-  /** Launcher whose own menu owns interface, key, and model selection. */
+  /** Launcher whose interface/key/model contract is configured by its host UI. */
   isLauncher?: boolean
   /**
    * Effort levels supported, or null when the CLI has no effort flag.
@@ -119,6 +119,18 @@ export function isKnownAgentCommand(command?: string): boolean {
   return AGENTS.some((agent) => agent.command === command && !agent.isLauncher)
 }
 
+/**
+ * True for the Openia invocation assembled by the Felixo spawn form. Old
+ * persisted launcher nodes have no `run` argument and must keep their opaque,
+ * manual-menu behavior.
+ */
+export function isDirectOpeniaLaunch(
+  command?: string,
+  args?: readonly string[],
+): boolean {
+  return command === 'openia' && args?.[0] === 'run'
+}
+
 export type AgentLaunchChoices = {
   agentId: AgentId
   /** Empty string means "default model" — no model flag is added. */
@@ -137,8 +149,8 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
     return null
   }
 
-  // Openia is an opaque launcher: its own menu owns interface/model selection.
-  // Felixo must never invent flags that could bypass that contract.
+  // Openia has a dedicated host-UI contract. The generic native-agent helper
+  // must not invent flags; use the launcher-specific builder instead.
   if (agent.isLauncher) {
     return []
   }

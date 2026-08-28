@@ -85,7 +85,10 @@ import {
 } from '../services/quality-standard-prompt'
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
-import { isKnownAgentCommand } from '../services/agent-launch-options'
+import {
+  isDirectOpeniaLaunch,
+  isKnownAgentCommand,
+} from '../services/agent-launch-options'
 import { canResumeAgentSession } from '../services/agent-session'
 import type { AgentSessionReference } from '../services/agent-session'
 import type { RunFileOptions } from '../services/run-file-command'
@@ -976,6 +979,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         const resumeAgentSession =
           restoredAgentTerminals.ids.has(node.id) &&
           canResumeAgentSession(node.data.command, node.data.cwd, node.data.agentSession)
+        const isDirectOpenia = isDirectOpeniaLaunch(node.data.command, node.data.args)
         // Left open from a previous run: whatever it was doing may not have
         // finished, so type "/resume" on this (re)spawn instead of the usual
         // standing instruction — see restoredAgentTerminalIds above.
@@ -985,8 +989,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           qualityStandardEnabled: quality.enabled,
           qualityStandardPrompt: quality.prompt,
           hasCommand:
-            node.data.launchMode !== 'launcher' &&
-            isKnownAgentCommand(node.data.command),
+            isDirectOpenia ||
+            (node.data.launchMode !== 'launcher' &&
+              isKnownAgentCommand(node.data.command)),
           // `handoffText` é transitório e carrega um pedido de verdade, então
           // pode sair submetido; `initialText` é persistido e é sempre
           // contexto. O recorte cobre os blocos salvos antes desta mudança,
@@ -1006,7 +1011,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           ...withHandle,
           data: reuseData(
             node.id,
-            [node.data, fallbackInitialText, initialTextReady, resumeAgentSession, terminalIndex],
+            [
+              node.data,
+              fallbackInitialText,
+              initialTextReady,
+              resumeAgentSession,
+              isDirectOpenia,
+              terminalIndex,
+            ],
             () => ({
               ...node.data,
               ...(resumeAgentSession
@@ -1282,7 +1294,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       // permanente sozinha é contexto — fica digitada na entrada esperando o
       // usuário escrever a tarefa, em vez de o agente subir executando.
       const quality = qualityStandardRef.current
-      const isOpaqueLauncher = options.launchMode === 'launcher'
+      const isDirectOpenia = isDirectOpeniaLaunch(options.command, options.args)
+      const isOpaqueLauncher = options.launchMode === 'launcher' && !isDirectOpenia
       const isContextAwareCommand = Boolean(options.command && !isOpaqueLauncher)
       const planningInstruction = isContextAwareCommand
         ? buildPlanningFileInstruction(options.planningFile)

@@ -17,6 +17,9 @@ export type AgentLaunchPreferences = {
   yolo: boolean
   projectId: string
   planningFile: string
+  /** Interface e modelo do Openia; a chave nunca é persistida aqui. */
+  openiaInterface: string
+  openiaModel: string
 }
 
 type StorageReader = Pick<Storage, 'getItem'>
@@ -29,6 +32,8 @@ const DEFAULT_PREFERENCES: AgentLaunchPreferences = {
   yolo: false,
   projectId: '',
   planningFile: '',
+  openiaInterface: 'orchat',
+  openiaModel: '',
 }
 
 function getBrowserStorage(): Storage | undefined {
@@ -84,6 +89,8 @@ function normalizePreferences(
     yolo: typeof value.yolo === 'boolean' ? value.yolo : fallback.yolo,
     projectId: stringValue(value.projectId),
     planningFile: stringValue(value.planningFile),
+    openiaInterface: stringValue(value.openiaInterface) || fallback.openiaInterface,
+    openiaModel: stringValue(value.openiaModel),
   }
 }
 
