@@ -21,6 +21,14 @@ const AUTH_COMMAND_TIMEOUT_MS = 30 * 1000
 const OUTPUT_LIMIT = 12000
 /** Prefixo que o canvas usa no id de sessão de PTY de cada terminal seu. */
 const CANVAS_SESSION_PREFIX = 'canvas:'
+/**
+ * Debian 12+/Ubuntu 23.04+ (inclui a 24.04 LTS) recusam `pip install` fora de
+ * venv com esse erro (PEP 668). Como a instalação já é `--user` — não mexe em
+ * pacote de sistema —, repetir uma vez com `--break-system-packages` é seguro
+ * e evita que a pessoa precise editar o comando na mão (achado de 28/08/2026).
+ */
+const EXTERNALLY_MANAGED_ENVIRONMENT_PATTERN = /externally-managed-environment/i
+const BREAK_SYSTEM_PACKAGES_FLAG = '--break-system-packages'
 
 async function listOfficialCliCatalog() {
   const env = createCliEnv()
@@ -62,20 +70,68 @@ async function installOfficialCli(
   }
 
   const installCommand = getPlatformCommand(cli.install, platformName)
-  const installResult = await runCommand({
+  let installResult = await runCommand({
     command: installCommand,
     args: cli.install.args,
     cwd: os.homedir(),
     env: createCliEnv(),
     timeoutMs: INSTALL_TIMEOUT_MS,
   })
+
+  const retriedWithBreakSystemPackages =
+    isExternallyManagedEnvironmentError(installResult) && isPipInstallCommand(cli.install.args)
+
+  if (retriedWithBreakSystemPackages) {
+    installResult = await runCommand({
+      command: installCommand,
+      args: [...cli.install.args, BREAK_SYSTEM_PACKAGES_FLAG],
+      cwd: os.homedir(),
+      env: createCliEnv(),
+      timeoutMs: INSTALL_TIMEOUT_MS,
+    })
+  }
+
   const detection = await detect(cli, createCliEnv())
 
   return {
     ...installResult,
+    message: composeInstallMessage(installResult, retriedWithBreakSystemPackages),
+    retriedWithBreakSystemPackages,
     cli: createCatalogItem(cli, detection),
     models: cli.models.map((model) => ({ ...model })),
   }
+}
+
+/**
+ * @param {{ ok?: boolean, stderr?: string }} result
+ */
+function isExternallyManagedEnvironmentError(result) {
+  return (
+    Boolean(result) &&
+    result.ok === false &&
+    EXTERNALLY_MANAGED_ENVIRONMENT_PATTERN.test(String(result.stderr ?? ''))
+  )
+}
+
+/** @param {string[]} args */
+function isPipInstallCommand(args) {
+  return Array.isArray(args) && args.includes('pip') && args.includes('install')
+}
+
+/**
+ * @param {{ ok?: boolean, message?: string }} installResult
+ * @param {boolean} retriedWithBreakSystemPackages
+ */
+function composeInstallMessage(installResult, retriedWithBreakSystemPackages) {
+  if (!retriedWithBreakSystemPackages) {
+    return installResult.message
+  }
+
+  if (installResult.ok) {
+    return 'Instalação concluída. O Python deste sistema bloqueia instalação fora de venv (PEP 668); repetimos automaticamente com --break-system-packages, sem mexer em nenhum pacote do sistema.'
+  }
+
+  return `Mesmo repetindo com --break-system-packages (o Python deste sistema bloqueia instalação fora de venv — PEP 668), a instalação falhou: ${installResult.message}`
 }
 
 function openOfficialCliLogin(

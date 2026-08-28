@@ -55,6 +55,71 @@ describe('official-cli-service', () => {
     ])
   })
 
+  it('repete a instalação com --break-system-packages quando o pip recusa por PEP 668', async () => {
+    const invocations = []
+    const result = await installOfficialCli('openia', {
+      confirmed: true,
+      runCommand: async (options) => {
+        invocations.push(options)
+        if (invocations.length === 1) {
+          return {
+            ok: false,
+            stdout: '',
+            stderr: 'error: externally-managed-environment\n\n× This environment is externally managed',
+          }
+        }
+        return { ok: true, stdout: 'Successfully installed openia', stderr: '' }
+      },
+      detect: async () => ({ detected: true, version: '0.1.0', path: '/home/user/.local/bin/openia', error: null }),
+    })
+
+    assert.equal(invocations.length, 2)
+    assert.equal(invocations[0].args.includes('--break-system-packages'), false)
+    assert.equal(invocations[1].args.at(-1), '--break-system-packages')
+    assert.equal(result.ok, true)
+    assert.equal(result.retriedWithBreakSystemPackages, true)
+    assert.match(result.message, /PEP 668/)
+  })
+
+  it('não repete quando o pip falha por outro motivo', async () => {
+    let calls = 0
+    const result = await installOfficialCli('openia', {
+      confirmed: true,
+      runCommand: async () => {
+        calls += 1
+        return {
+          ok: false,
+          stdout: '',
+          stderr: 'ConnectionError: could not resolve host',
+          message: 'python3 encerrou com código 1: ConnectionError: could not resolve host',
+        }
+      },
+      detect: async () => ({ detected: false, version: null, path: null, error: null }),
+    })
+
+    assert.equal(calls, 1)
+    assert.equal(result.ok, false)
+    assert.equal(result.retriedWithBreakSystemPackages, false)
+    assert.match(result.message, /ConnectionError/)
+  })
+
+  it('devolve mensagem redigida quando o PEP 668 persiste mesmo depois da nova tentativa', async () => {
+    const result = await installOfficialCli('openia', {
+      confirmed: true,
+      runCommand: async () => ({
+        ok: false,
+        stdout: '',
+        stderr: 'error: externally-managed-environment',
+      }),
+      detect: async () => ({ detected: false, version: null, path: null, error: null }),
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.retriedWithBreakSystemPackages, true)
+    assert.match(result.message, /--break-system-packages/)
+    assert.match(result.message, /PEP 668/)
+  })
+
   it('parses Codex ChatGPT login status', () => {
     assert.equal(
       parseCodexLoginStatus('Logged in using ChatGPT'),

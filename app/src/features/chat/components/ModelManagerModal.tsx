@@ -198,13 +198,20 @@ export function ModelManagerModal({
         return
       }
 
+      // Python deste sistema bloqueia pip fora de venv (PEP 668); a instalação
+      // repetiu sozinha com --break-system-packages — vale dizer isso em vez
+      // de esconder que precisou de uma segunda tentativa.
+      const notaPep668 = result.retriedWithBreakSystemPackages
+        ? ' (o Python deste sistema exigiu uma segunda tentativa com --break-system-packages.)'
+        : ''
+
       if (cli.isLauncher) {
         setStatus(
-          `${cli.name} instalado. Interface, modelo e chave ficam na configuração de spawn; o menu manual continua disponível.`,
+          `${cli.name} instalado. Interface, modelo e chave ficam na configuração de spawn; o menu manual continua disponível.${notaPep668}`,
         )
       } else {
         importOfficialModels(result.models ?? cli.models)
-        setStatus(`${cli.name} instalado e importado.`)
+        setStatus(`${cli.name} instalado e importado.${notaPep668}`)
       }
       await loadOfficialCatalog()
     } catch (error) {

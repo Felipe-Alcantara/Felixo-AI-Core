@@ -170,6 +170,8 @@ type OfficialCliInstallResult = CliInvokeResult & {
   cli?: OfficialCliCatalogItem
   models?: Model[]
   requiresConfirmation?: boolean
+  /** True quando o pip recusou por PEP 668 e a instalação repetiu sozinha com --break-system-packages. */
+  retriedWithBreakSystemPackages?: boolean
   stdout?: string
   stderr?: string
 }
