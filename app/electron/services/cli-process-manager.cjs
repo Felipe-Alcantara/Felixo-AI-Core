@@ -135,7 +135,7 @@ function createCliEnv(baseEnv = process.env) {
     ...(baseEnv[pathKey] ?? '').split(path.delimiter).filter(Boolean),
     // As ferramentas do próprio app (`felixo`) vêm depois do PATH da pessoa:
     // se ela já tem um comando com esse nome, é o dela que roda.
-    ...getAgentCommandPaths(),
+    ...getAgentCommandPaths(baseEnv),
     // Por último de propósito: as CLIs instaladas pelo próprio app são rede
     // de segurança para quem não tem nada instalado. Se a pessoa já tem a
     // sua, é a dela que deve rodar.
@@ -162,9 +162,9 @@ function createCliEnv(baseEnv = process.env) {
  *
  * @returns {string[]}
  */
-function getAgentCommandPaths() {
+function getAgentCommandPaths(environment = process.env) {
   try {
-    return [getAppPaths().bin]
+    return [getAppPaths({ environment }).bin]
   } catch {
     return []
   }

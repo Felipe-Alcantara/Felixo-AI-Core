@@ -60,6 +60,24 @@ test('cli env discovers fnm, mise and nodenv installations', (t) => {
   assert.equal(pathParts.includes(nodenvBin), true)
 })
 
+test('cli env exposes the agent command directory from the app profile', (t) => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-profile-'))
+  const binDir = path.join(userData, 'bin')
+  fs.mkdirSync(binDir)
+
+  t.after(() => {
+    fs.rmSync(userData, { recursive: true, force: true })
+  })
+
+  const env = createCliEnv({
+    FELIXO_USER_DATA_DIR: userData,
+    HOME: path.join(userData, 'home'),
+    PATH: '/usr/bin',
+  })
+
+  assert.equal(env.PATH.split(path.delimiter).includes(binDir), true)
+})
+
 test('cli process manager keeps stdin closed by default', async () => {
   const manager = new CliProcessManager()
   const childProcess = manager.spawn('default-stdin', process.execPath, [

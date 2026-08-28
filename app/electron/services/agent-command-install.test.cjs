@@ -28,6 +28,16 @@ test('o shim aguenta caminho com espaço e acento', () => {
   assert.match(shim, /ELECTRON_RUN_AS_NODE=1/)
 })
 
+test('o shim leva o userData do app para o processo Node', () => {
+  const shim = construirShimPosix({
+    execPath: '/opt/Felixo AI Core/felixo',
+    entrypoint: '/home/pessoa/app/electron/cli/felixo.cjs',
+    userData: "/home/pessoa/.config/Felixo AI Core",
+  })
+
+  assert.match(shim, /FELIXO_USER_DATA_DIR='\/home\/pessoa\/\.config\/Felixo AI Core'/)
+})
+
 test('aspasPosix não deixa apóstrofo escapar do argumento', () => {
   assert.equal(aspasPosix("/home/d'angelo/app"), `'/home/d'\\''angelo/app'`)
 })
@@ -92,11 +102,16 @@ test('no Windows o comando vira .cmd e não recebe chmod', () => {
     binDir,
     execPath: 'C:\\Program Files\\Felixo\\felixo.exe',
     entrypoint: 'C:\\Program Files\\Felixo\\felixo.cjs',
+    userData: 'C:\\Users\\pessoa\\AppData\\Roaming\\felixo-ai-core',
     plataforma: 'win32',
   })
 
   assert.equal(path.basename(caminho), 'felixo.cmd')
   assert.match(fs.readFileSync(caminho, 'utf8'), /set ELECTRON_RUN_AS_NODE=1/)
+  assert.match(
+    fs.readFileSync(caminho, 'utf8'),
+    /set "FELIXO_USER_DATA_DIR=C:\\Users\\pessoa\\AppData\\Roaming\\felixo-ai-core"/,
+  )
 })
 
 test('o comando instalado roda de verdade e responde a ajuda', (t) => {
@@ -110,6 +125,7 @@ test('o comando instalado roda de verdade e responde a ajuda', (t) => {
     binDir,
     execPath: process.execPath,
     entrypoint: path.join(__dirname, '..', 'cli', 'felixo.cjs'),
+    userData: path.join(binDir, 'profile'),
     plataforma: 'linux',
   })
 
@@ -119,4 +135,30 @@ test('o comando instalado roda de verdade e responde a ajuda', (t) => {
 
   assert.match(saida, /felixo fetch-all/)
   assert.match(saida, /pedir-execucao/)
+})
+
+test('o shim executado grava pedidos no userData recebido do app', () => {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  const root = pastaTemporaria()
+  const binDir = path.join(root, 'bin')
+  const userData = path.join(root, 'Felixo AI Core profile')
+  const { caminho } = instalarComandoDoAgente({
+    binDir,
+    execPath: process.execPath,
+    entrypoint: path.join(__dirname, '..', 'cli', 'felixo.cjs'),
+    userData,
+    plataforma: 'linux',
+  })
+
+  const saida = execFileSync(caminho, ['fetch-all', 'pedir-execucao'], {
+    encoding: 'utf8',
+  })
+  const arquivos = fs.readdirSync(path.join(userData, 'agent-requests'))
+
+  assert.match(saida, /Pedido registrado:/)
+  assert.equal(arquivos.length, 1)
+  assert.match(arquivos[0], /\.json$/)
 })

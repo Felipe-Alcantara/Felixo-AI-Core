@@ -30,6 +30,8 @@ function dependencias(extras = {}) {
       criarPedidos: () => criarRepositorioDePedidos({ pasta }),
       diretorioAtual: () => '/projeto/atual',
       gravarRelatorio: async () => '/relatorios/fetch-all/2026.md',
+      gravarEstado: async () => '',
+      lerEstado: async () => null,
       ...extras.deps,
     },
   }
@@ -72,7 +74,14 @@ test('sem argumento nenhum, imprime a ajuda com sucesso', async () => {
 })
 
 test('varrer imprime o plano, o relatório e o aviso de escrita', async () => {
-  const { deps } = dependencias()
+  let estadoGravado = null
+  const { deps } = dependencias({
+    deps: {
+      gravarEstado: async (resultado) => {
+        estadoGravado = resultado
+      },
+    },
+  })
 
   const resultado = await executar(['fetch-all', 'varrer'], deps)
 
@@ -82,6 +91,7 @@ test('varrer imprime o plano, o relatório e o aviso de escrita', async () => {
   assert.match(resultado.saida, /\/relatorios\/fetch-all\/2026\.md/)
   // O aviso não é decoração: é o que impede o agente de procurar como escrever.
   assert.ok(resultado.saida.includes(AVISO_ESCRITA))
+  assert.equal(estadoGravado.plan, PLANO)
 })
 
 test('varrer --json entrega o plano cru com o caminho do relatório', async () => {
@@ -139,6 +149,28 @@ test('estado mostra o último plano sem varrer de novo', async () => {
 
   assert.equal(varreu, false)
   assert.match(resultado.saida, /2 repositório\(s\)/)
+})
+
+test('estado lê o plano persistido quando o processo do comando é novo', async () => {
+  let varreu = false
+  const { deps } = dependencias({
+    servico: {
+      scan: async () => {
+        varreu = true
+        return { ok: true, plan: PLANO }
+      },
+      getState: () => ({ phase: 'idle', busy: false, plan: null, scanMode: '' }),
+    },
+    deps: {
+      lerEstado: async () => ({ plan: PLANO, scanMode: 'completa (1 raiz)', scannedAt: 'agora' }),
+    },
+  })
+
+  const resultado = await executar(['fetch-all', 'estado'], deps)
+
+  assert.equal(varreu, false)
+  assert.match(resultado.saida, /2 repositório\(s\)/)
+  assert.match(resultado.saida, /completa \(1 raiz\)/)
 })
 
 test('pedir-execucao só registra o pedido — nada é executado', async () => {

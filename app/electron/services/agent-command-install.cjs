@@ -26,13 +26,14 @@ const NOME_DO_COMANDO = 'felixo'
  * `exec` de propósito: o shim não precisa sobreviver ao comando, e sem ele
  * ficaria um shell de sobra segurando o processo do agente.
  *
- * @param {{ execPath: string, entrypoint: string }} alvo
+ * @param {{ execPath: string, entrypoint: string, userData?: string }} alvo
  * @returns {string}
  */
-function construirShimPosix({ execPath, entrypoint }) {
+function construirShimPosix({ execPath, entrypoint, userData }) {
   return [
     '#!/bin/sh',
     '# Gerado pelo Felixo AI Core. Edições aqui são sobrescritas.',
+    ...(userData ? [`FELIXO_USER_DATA_DIR=${aspasPosix(userData)} \\`] : []),
     'ELECTRON_RUN_AS_NODE=1 \\',
     `exec ${aspasPosix(execPath)} ${aspasPosix(entrypoint)} "$@"`,
     '',
@@ -42,14 +43,15 @@ function construirShimPosix({ execPath, entrypoint }) {
 /**
  * Conteúdo do shim do Windows.
  *
- * @param {{ execPath: string, entrypoint: string }} alvo
+ * @param {{ execPath: string, entrypoint: string, userData?: string }} alvo
  * @returns {string}
  */
-function construirShimWindows({ execPath, entrypoint }) {
+function construirShimWindows({ execPath, entrypoint, userData }) {
   return [
     '@echo off',
     'rem Gerado pelo Felixo AI Core. Edicoes aqui sao sobrescritas.',
     'setlocal',
+    ...(userData ? [`set "FELIXO_USER_DATA_DIR=${escaparValorWindows(userData)}"`] : []),
     'set ELECTRON_RUN_AS_NODE=1',
     `"${execPath}" "${entrypoint}" %*`,
     '',
@@ -69,6 +71,11 @@ function aspasPosix(valor) {
   return `'${String(valor).replace(/'/g, `'\\''`)}'`
 }
 
+/** Escapa aspas para o formato seguro `set "NOME=valor"` do cmd.exe. */
+function escaparValorWindows(valor) {
+  return String(valor).replace(/"/g, '""')
+}
+
 /**
  * Instala (ou atualiza) o comando na pasta indicada.
  *
@@ -78,6 +85,7 @@ function aspasPosix(valor) {
  * @param {string} opcoes.binDir - pasta do comando (`appPaths.bin`).
  * @param {string} opcoes.execPath - o Node/Electron que vai executar.
  * @param {string} opcoes.entrypoint - o `.cjs` do comando.
+ * @param {string} [opcoes.userData] - `app.getPath('userData')` do processo principal.
  * @param {string} [opcoes.plataforma] - `process.platform`.
  * @param {object} [opcoes.sistemaDeArquivos] - injeção para teste.
  * @returns {{ caminho: string, escrito: boolean }}
@@ -87,6 +95,7 @@ function instalarComandoDoAgente(opcoes) {
     binDir,
     execPath,
     entrypoint,
+    userData,
     plataforma = process.platform,
     sistemaDeArquivos = fs,
   } = opcoes
@@ -94,8 +103,8 @@ function instalarComandoDoAgente(opcoes) {
   const windows = plataforma === 'win32'
   const caminho = path.join(binDir, windows ? `${NOME_DO_COMANDO}.cmd` : NOME_DO_COMANDO)
   const conteudo = windows
-    ? construirShimWindows({ execPath, entrypoint })
-    : construirShimPosix({ execPath, entrypoint })
+    ? construirShimWindows({ execPath, entrypoint, userData })
+    : construirShimPosix({ execPath, entrypoint, userData })
 
   let atual = null
 

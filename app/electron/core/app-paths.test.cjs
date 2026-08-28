@@ -4,7 +4,14 @@ const path = require('node:path')
 const os = require('node:os')
 const fs = require('node:fs')
 
-const { getAppPaths, ensureDir, initAppPaths, getCacheBase, APP_NAME } = require('./app-paths.cjs')
+const {
+  getAppPaths,
+  ensureDir,
+  initAppPaths,
+  getCacheBase,
+  APP_NAME,
+  USER_DATA_ENV_KEY,
+} = require('./app-paths.cjs')
 
 const mockUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-paths-'))
 
@@ -76,6 +83,18 @@ describe('app-paths', () => {
       const paths = getAppPaths()
       assert.ok(path.isAbsolute(paths.userData))
       assert.strictEqual(paths.isPackaged, false)
+    })
+
+    it('uses the main process userData passed to a standalone agent command', () => {
+      const userData = path.join(mockUserData, 'profile-with-spaces')
+      const paths = getAppPaths({
+        electronApp: null,
+        environment: { [USER_DATA_ENV_KEY]: userData },
+      })
+
+      assert.equal(paths.userData, userData)
+      assert.equal(paths.agentRequests, path.join(userData, 'agent-requests'))
+      assert.equal(paths.bin, path.join(userData, 'bin'))
     })
   })
 

@@ -1147,11 +1147,20 @@ app; o painel recebe o aviso, exige uma varredura/revisão atual e só então a
 pessoa pode confirmar. O estado de cada repositório ainda é revalidado pela
 execução do app imediatamente antes da escrita.
 
+**Correção de portabilidade.** O shim roda o binário do Electron com
+`ELECTRON_RUN_AS_NODE=1`; nesse modo `require('electron').app` não existe. O
+processo principal agora grava `FELIXO_USER_DATA_DIR` no shim, para o comando
+usar exatamente o mesmo `userData` do app em Linux, macOS e Windows. Assim,
+relatórios, configurações e pedidos de confirmação continuam compartilhando o
+mesmo perfil, mesmo no app empacotado.
+
 **Validação.** `npm test`, `npm run test:frontend`, `npm run lint`, `npm run
 build` e `git diff --check` passaram. O executável Node respondeu a
 `fetch-all estado` sem plano prévio, como esperado. A instalação do shim e a
 execução real são cobertas por teste; a verificação visual no app aberto continua
-pendente para uma sessão futura.
+pendente para uma sessão futura. A correção do perfil também tem testes do
+shim POSIX/Windows, do PATH do terminal e de um pedido gravado no `userData`
+recebido do app.
 
 ---
 

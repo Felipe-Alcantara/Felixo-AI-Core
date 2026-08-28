@@ -156,6 +156,7 @@ app.whenReady().then(() => {
       binDir: appPaths.bin,
       execPath: process.execPath,
       entrypoint: path.join(__dirname, 'cli', 'felixo.cjs'),
+      userData: appPaths.userData,
     })
   } catch (error) {
     console.error('[felixo] nao foi possivel instalar o comando do agente:', error)

@@ -245,7 +245,8 @@ Agentes abertos pelo canvas também podem consultar essa ferramenta pelo termina
 uma sincronização, usam `felixo fetch-all pedir-execucao` (ou `--com-commit`).
 O pedido aparece no painel **Fetch All**, mas nunca executa pull, push ou commit
 sozinho: você primeiro faz uma varredura, revisa o plano atual e confirma a
-aplicação na tela.
+aplicação na tela. O comando usa o mesmo perfil de dados do app, inclusive no
+macOS e no Windows, para que o pedido chegue ao painel correto.
 
 ### Navegação no canvas
 

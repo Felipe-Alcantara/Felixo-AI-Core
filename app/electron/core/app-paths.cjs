@@ -22,6 +22,8 @@ const os = require('node:os')
 const platform = require('./platform/index.cjs')
 
 const APP_NAME = 'felixo-ai-core'
+/** Environment override used by the standalone agent command shim. */
+const USER_DATA_ENV_KEY = 'FELIXO_USER_DATA_DIR'
 
 /**
  * Try to load Electron app. Returns null in non-Electron environments (tests).
@@ -40,6 +42,7 @@ function tryLoadElectronApp() {
  *
  * @param {object} [options] - Optional overrides for testing.
  * @param {object} [options.electronApp] - Electron app object override.
+ * @param {Record<string, string>} [options.environment] - Environment override.
  * @returns {{
  *   userData: string,
  *   config: string,
@@ -52,6 +55,8 @@ function tryLoadElectronApp() {
  *   reports: string,
  *   canvasFiles: string,
  *   contextFiles: string,
+ *   agentRequests: string,
+ *   bin: string,
  *   skills: string,
  *   assets: string,
  *   appRoot: string,
@@ -61,12 +66,21 @@ function tryLoadElectronApp() {
  */
 function getAppPaths(options = {}) {
   const electronApp = options.electronApp || tryLoadElectronApp()
+  const environment = options.environment || process.env
   const isPackaged = electronApp?.isPackaged ?? false
   const platform = process.platform
 
+  // `ELECTRON_RUN_AS_NODE=1` deliberately makes `require('electron').app`
+  // unavailable in the `felixo` shim. The main process passes this path to the
+  // shim so the standalone command still uses the exact same profile on every
+  // OS, instead of guessing from the shell's home directory.
+  const overriddenUserData =
+    typeof environment[USER_DATA_ENV_KEY] === 'string'
+      ? environment[USER_DATA_ENV_KEY].trim()
+      : ''
   const userData = electronApp
     ? electronApp.getPath('userData')
-    : path.join(os.homedir(), '.config', APP_NAME)
+    : overriddenUserData || path.join(os.homedir(), '.config', APP_NAME)
 
   const logs = safeGetPath(electronApp, 'logs', path.join(userData, 'logs'))
   const cache = safeGetPath(
@@ -194,6 +208,7 @@ function getCacheBase() {
 
 module.exports = {
   APP_NAME,
+  USER_DATA_ENV_KEY,
   ensureDir,
   getAppPaths,
   getCacheBase,

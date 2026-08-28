@@ -23,6 +23,7 @@
 const { getAppPaths } = require('../core/app-paths.cjs')
 const { createFetchAllService } = require('../services/fetch-all-service.cjs')
 const { criarRepositorioDePedidos } = require('../services/fetch-all/agent-requests.cjs')
+const { loadAgentScanState, saveAgentScanState } = require('./agent-scan-state.cjs')
 const { AJUDA, formatarPlano } = require('./agent-command-output.cjs')
 
 /**
@@ -71,6 +72,8 @@ async function executar(argumentos, dependencias = {}) {
     criarPedidos = () => criarRepositorioDePedidos({ pasta: getAppPaths().agentRequests }),
     diretorioAtual = () => process.cwd(),
     gravarRelatorio = gravarRelatorioPadrao,
+    gravarEstado = gravarEstadoPadrao,
+    lerEstado = lerEstadoPadrao,
   } = dependencias
 
   const { ferramenta, verbo, argumento, opcoes } = interpretarArgumentos(argumentos)
@@ -116,7 +119,11 @@ async function executar(argumentos, dependencias = {}) {
   const servico = criarServico()
 
   if (verbo === 'estado') {
-    const estado = servico.getState()
+    const estadoAtual = servico.getState()
+    const estadoPersistido = estadoAtual.plan ? null : await lerEstado()
+    const estado = estadoPersistido
+      ? { ...estadoAtual, plan: estadoPersistido.plan, scanMode: estadoPersistido.scanMode }
+      : estadoAtual
     return {
       saida: opcoes.json
         ? JSON.stringify(estado, null, 2)
@@ -138,6 +145,8 @@ async function executar(argumentos, dependencias = {}) {
   if (resultado.cancelled) {
     return { saida: 'Varredura cancelada.', codigo: 0 }
   }
+
+  await gravarEstado(resultado)
 
   // O painel mostra o plano na tela e só grava relatório ao executar. Aqui não
   // há tela: se a passada do agente não deixar arquivo, ela não deixa rastro
@@ -176,6 +185,38 @@ async function gravarRelatorioPadrao(resultado) {
     })
   } catch {
     return ''
+  }
+}
+
+/**
+ * Persiste o plano para que uma chamada posterior de `estado` consiga lê-lo.
+ * Falha de cache não esconde o resultado que já está na saída do agente.
+ *
+ * @param {{ plan: object, scanMode?: string }} resultado
+ * @returns {Promise<string>}
+ */
+async function gravarEstadoPadrao(resultado) {
+  try {
+    const { reports } = getAppPaths()
+
+    return await saveAgentScanState({
+      reportsDir: reports,
+      plan: resultado.plan,
+      scanMode: resultado.scanMode || '',
+    })
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * @returns {Promise<{ plan: object, scanMode: string, scannedAt: string }|null>}
+ */
+async function lerEstadoPadrao() {
+  try {
+    return await loadAgentScanState({ reportsDir: getAppPaths().reports })
+  } catch {
+    return null
   }
 }
 
