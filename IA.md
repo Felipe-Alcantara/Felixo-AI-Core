@@ -2071,3 +2071,68 @@ por um cabeçalho não reescreve `cwd` nem mistura grupos.
 O navegador embutido não estava conectado nesta sessão, então não houve
 automação por esse canal. A validação visual foi feita no Electron local e
 isolado; macOS e Windows continuam sem execução nativa nesta máquina.
+
+## [2026-08-28] Limites e uso de todos os agentes e contas no app
+
+### Contexto
+
+A task reaberta pedia uma experiência útil dentro do Felixo AI Core para
+acompanhar várias contas de Codex, Claude, Gemini e Openia ao mesmo tempo. O
+contrato preserva a regra de que a CLI é a fonte de verdade: quando ela não
+oferece quota em uma consulta não interativa, o app não inventa percentual nem
+trata ausência como zero.
+
+### O que foi feito
+
+- Criei fontes declarativas por provider, com comando/evento, documentação,
+  versão detectada, janela, reset e precisão; o parser aceita os objetos
+  `rate_limits`/quota publicados pela fonte e preserva o valor 0.
+
+- Adicionei a migração SQLite 010 com contas, identidade estável por fingerprint
+  SHA-256 e amostras separadas por conta. A persistência permite estado
+  `current`, `stale`, `unavailable` e `error`, guarda somente metadados seguros
+  e nunca armazena token, cookie, senha ou chave.
+
+- O serviço consulta cada provider uma vez por rodada, deduplica refreshes
+  simultâneos, vincula a saída somente à identidade correspondente e recusa
+  associação quando há conta ambígua ou troca de identidade. Em falha/offline,
+  o painel conserva o último valor conhecido explicitamente marcado como
+  antigo.
+
+- O app ganhou a entrada **Limites e uso** na sidebar e um painel agregado com
+  contas por provider, consumo, limite, restante, reset, identidade mascarada,
+  fonte e horário da leitura. Há adição/arquivamento de contas, atualização
+  manual e intervalos automáticos controlados de 5, 15 ou 30 minutos.
+
+- Codex expõe o estado da sessão, mas a versão instalada não entrega quota em
+  modo não interativo. Claude fica pronto para consumir `rate_limits` da status
+  line quando esse evento estruturado estiver disponível; Gemini informa a
+  limitação da coleta interativa `/stats model`; Openia informa o estado seguro
+  da chave, sem apresentar chave como identidade ou prometer quota.
+
+### Validação
+
+- `npm test`: **796/796** testes Node aprovados.
+- `npm run test:frontend`: **662/662** testes aprovados.
+- `npm run lint`: **0 erros**; permanecem somente 3 avisos React preexistentes
+  em `TerminalNode.tsx` e `SearchPanel.tsx`.
+- `npm run build`: concluído com **697 módulos**.
+- `npm run dist:linux`: AppImage x86_64, AppImage arm64 e `.deb` amd64
+  regenerados; `file`, `dpkg-deb --info` e inspeção do `app.asar` confirmaram
+  os formatos e os arquivos da feature nos pacotes x64/arm64.
+- Smoke test do Electron empacotado em perfil/userData temporário sob Xvfb:
+  iniciou e encerrou sem processo remanescente. O ambiente reportou apenas o
+  limite externo `inotify_init: Too many open files`.
+- Testes focados da feature cobrem parser, zero válido, redaction, migração e
+  persistência, dois Codex isolados, offline/último valor, ambiguidade,
+  troca de conta e refresh concorrente (12 testes focados no total).
+
+### Publicação e limites
+
+Implementação registrada no commit local `2c8cc5f` (`feat(usage): add
+per-account agent limits panel`). O navegador embutido não estava conectado,
+então a validação visual automatizada por esse canal não ocorreu; a inicialização
+do pacote foi validada no Electron isolado. macOS e Windows não foram executados
+nativamente nesta máquina Linux. A coleta de quota permanece honesta:
+providers sem endpoint/evento não interativo exibem indisponibilidade ou último
+valor conhecido, com fonte e horário, em vez de um número estimado.
