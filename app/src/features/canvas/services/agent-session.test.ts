@@ -23,6 +23,26 @@ describe('sessão do agente do canvas', () => {
     expect(canResumeAgentSession('codex', '/outro', reference)).toBe(false)
   })
 
+  it('recusa retomar quando o cwd do node está vazio, mesmo com referência válida', () => {
+    // Regressão medida no Linux (28/08/2026): um terminal aberto sem projeto
+    // explícito ("Local (sem projeto)") nunca tinha `node.data.cwd` — o PTY
+    // caía no diretório do usuário por baixo dos panos
+    // (`resolveWorkingDirectory` em pty-process-manager.cjs), mas isso nunca
+    // era escrito de volta no node. A descoberta best-effort achava e
+    // persistia uma `agentSession` válida com o cwd real; a comparação aqui
+    // (que exige os dois lados preenchidos e iguais) sempre falhava do mesmo
+    // jeito, e a retomada caía sempre no `/resume` genérico — mesmo com uma
+    // sessão descoberta e compatível. O fix backfilla `node.data.cwd` a
+    // partir de `reference.cwd` assim que a sessão é descoberta
+    // (`CanvasView.tsx`, `onAgentSession`); este teste documenta por que esse
+    // backfill é necessário, não opcional.
+    expect(canResumeAgentSession('codex', undefined, reference)).toBe(false)
+    expect(canResumeAgentSession('codex', '', reference)).toBe(false)
+    // Com o cwd do node sincronizado com o da referência (o que o fix faz),
+    // a retomada volta a funcionar.
+    expect(canResumeAgentSession('codex', reference.cwd, reference)).toBe(true)
+  })
+
   it('monta as formas oficiais de retomada por CLI', () => {
     expect(buildAgentResumeArgs('codex', ['--dangerously-bypass-approvals-and-sandbox'], '/repo', reference)).toEqual([
       'resume',

@@ -1019,8 +1019,19 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               onDetails: setDetailsTerminalId,
               onSessionStarted: (nodeId: string, startedAt: number) =>
                 updateNodeData(nodeId, { sessionStartedAt: startedAt }),
-              onAgentSession: (nodeId: string, reference: unknown) =>
-                updateNodeData(nodeId, { agentSession: reference }),
+              onAgentSession: (nodeId: string, reference: AgentSessionReference) =>
+                // `reference.cwd` é o diretório real em que o PTY rodou — não
+                // necessariamente `node.data.cwd`, que fica vazio para
+                // qualquer terminal aberto sem projeto explícito ("Local (sem
+                // projeto)"): o processo cai no diretório do usuário
+                // (`resolveWorkingDirectory` em pty-process-manager.cjs), mas
+                // isso nunca era escrito de volta no node. Na retomada,
+                // `canResumeAgentSession` compara `node.data.cwd` (vazio) com
+                // `agentSession.cwd` (preenchido) e falha sempre — mesmo com
+                // uma sessão descoberta e válida. Gravar os dois aqui fecha
+                // essa divergência: é a mesma pasta onde o terminal já está,
+                // nunca uma pasta nova (achado de 28/08/2026).
+                updateNodeData(nodeId, { agentSession: reference, cwd: reference.cwd }),
               onClearAgentSession: (nodeId: string) =>
                 updateNodeData(nodeId, { agentSession: undefined }),
               onDataChange: updateNodeData,
