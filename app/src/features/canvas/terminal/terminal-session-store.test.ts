@@ -506,3 +506,80 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
     expect(harness.writes).toEqual([])
   })
 })
+
+/**
+ * Portão `hasTypedInputSelection`: decide se o Backspace pós-Ctrl+A pode
+ * mandar a sequência de limpeza ou se deve deixar a tecla crua seguir para o
+ * PTY.
+ *
+ * Testado com um `terminal` falso, não o xterm de verdade: `terminal.select()`
+ * exige `SelectionService`, que só existe depois de `terminal.open(container)`
+ * num DOM real — e a suíte roda em `environment: 'node'` (sem DOM), como o
+ * resto deste arquivo. O gate em si só lê `hasSelection()`/`getSelection()`
+ * e compara com o que foi guardado, então um dublê que responde essas duas
+ * chamadas exercita exatamente a lógica sob teste sem precisar do xterm real.
+ */
+describe('TerminalSessionStore: portão hasTypedInputSelection', () => {
+  function fakeSession(opts: {
+    selectedInput?: { selection: string; text: string; visualLineCount: number }
+    hasSelection: boolean
+    selection: string
+  }) {
+    return {
+      selectedInput: opts.selectedInput,
+      terminal: {
+        hasSelection: () => opts.hasSelection,
+        getSelection: () => opts.selection,
+      },
+    }
+  }
+
+  function gate(store: TerminalSessionStore, session: unknown): boolean {
+    return (store as unknown as { hasTypedInputSelection: (session: unknown) => boolean }).hasTypedInputSelection(
+      session,
+    )
+  }
+
+  it('abre quando a seleção lida ainda é a que o Ctrl+A guardou', () => {
+    const store = new TerminalSessionStore()
+    const session = fakeSession({
+      selectedInput: { selection: 'abc', text: 'abc', visualLineCount: 1 },
+      hasSelection: true,
+      selection: 'abc',
+    })
+
+    expect(gate(store, session)).toBe(true)
+  })
+
+  it('fecha quando não houve Ctrl+A nenhum', () => {
+    const store = new TerminalSessionStore()
+    const session = fakeSession({ selectedInput: undefined, hasSelection: true, selection: 'abc' })
+
+    expect(gate(store, session)).toBe(false)
+  })
+
+  it('fecha quando a seleção lida diverge da guardada — não apaga um caractere em silêncio', () => {
+    const store = new TerminalSessionStore()
+    // Simula o que a anotação original suspeitava: a seleção do xterm mudou
+    // por fora do Ctrl+A (repintura, clique, seleção do mouse) e passou a
+    // cobrir outra coisa — a guardada no Ctrl+A não bate mais.
+    const session = fakeSession({
+      selectedInput: { selection: 'abc', text: 'abc', visualLineCount: 1 },
+      hasSelection: true,
+      selection: 'ab',
+    })
+
+    expect(gate(store, session)).toBe(false)
+  })
+
+  it('fecha quando a seleção foi limpa depois do Ctrl+A', () => {
+    const store = new TerminalSessionStore()
+    const session = fakeSession({
+      selectedInput: { selection: 'abc', text: 'abc', visualLineCount: 1 },
+      hasSelection: false,
+      selection: 'abc',
+    })
+
+    expect(gate(store, session)).toBe(false)
+  })
+})
