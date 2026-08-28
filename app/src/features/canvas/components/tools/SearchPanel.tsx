@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { Node } from '@xyflow/react'
 import { FileText, Notebook, Search, Square, Terminal } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import type { CanvasNodeData } from '../../types'
+import { useSearchInputFocus, useSearchQuery } from '../../../search/SearchControls'
 
 type SearchPanelProps = {
   nodes: Node<CanvasNodeData>[]
@@ -60,7 +61,8 @@ export function SearchPanel({
   onClose,
   toolsMenuOpen,
 }: SearchPanelProps) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useSearchQuery()
+  const inputRef = useSearchInputFocus()
 
   const hits = useMemo<SearchHit[]>(() => {
     const term = query.trim().toLowerCase()
@@ -94,7 +96,7 @@ export function SearchPanel({
       toolsMenuOpen={toolsMenuOpen}
     >
       <input
-        autoFocus
+        ref={inputRef}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Buscar blocos por título, arquivo, nota ou comando…"

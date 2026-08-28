@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 import { Search, X } from 'lucide-react'
 import type { ChatSession } from '../types'
-import { highlight } from './search-highlight'
+import { highlight, useSearchInputFocus, useSearchQuery } from '../../search/SearchControls'
 
 type SearchPanelProps = {
   sessions: ChatSession[]
@@ -11,8 +11,8 @@ type SearchPanelProps = {
 }
 
 export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: SearchPanelProps) {
-  const [query, setQuery] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useSearchQuery()
+  const inputRef = useSearchInputFocus()
 
   useEffect(() => {
     if (isOpen) {
