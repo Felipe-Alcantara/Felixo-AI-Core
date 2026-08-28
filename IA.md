@@ -1660,3 +1660,80 @@ por tecla.
 
 Commit `2253027`, pushado. Fecha a task
 [Felixo AI Core/Terminal — investigar Shift+Enter submetendo linha por linha no Claude Code v2.1.250](https://app.notion.com/p/Felixo-AI-Core-Terminal-investigar-Shift-Enter-submetendo-linha-por-linha-no-Claude-Code-v2-1-250-3ca91f95497e8138a2e8c54557c36a5d).
+
+---
+
+## [2026-08-28] A retomada por ID sempre caía no /resume genérico sem projeto explícito
+
+Causa raiz da regressão relatada: um terminal Codex/Claude/Gemini aberto **sem
+projeto explícito** ("Local (sem projeto)" no seletor) nunca conseguia retomar a
+conversa exata depois de fechar e reabrir o app — sempre caía no `/resume`
+genérico, mesmo com uma sessão descoberta e válida.
+
+### A investigação
+
+`useAgentConfig.ts` só grava `cwd: project?.path` quando um projeto foi escolhido;
+sem projeto, `node.data.cwd` fica `undefined` para sempre. O PTY, porém, não fica
+sem diretório: `resolveWorkingDirectory()` em `pty-process-manager.cjs` cai no
+`os.homedir()` — o terminal roda normalmente, só que numa pasta que o node do
+canvas nunca soube que era a sua.
+
+A descoberta best-effort (`agent-session-discovery.cjs`) usa o cwd **real** do PTY
+(`current.cwd`, já resolvido) para achar e persistir a `agentSession` — e essa
+`agentSession.cwd` fica preenchida corretamente. O problema é a comparação em
+`canResumeAgentSession()`: exige `node.data.cwd` **e** `agentSession.cwd`
+preenchidos e iguais. Com o primeiro sempre vazio, a comparação falhava sempre,
+por mais que a sessão descoberta fosse exatamente a certa.
+
+Confirmado lendo `useAgentConfig.ts`, `pty-process-manager.cjs` e
+`TerminalDetailsPanel.tsx` (que mostra "Pasta de trabalho: não informado" para
+esses nodes) — e reproduzido no app real: um Codex aberto sem projeto, com um
+turno real submetido (`diga apenas oi e pare`, bateu no limite de uso da conta,
+mas isso não impede a criação do rollout do Codex) gerou um
+`rollout-*.jsonl` real com `cwd: "/home/felipe"`, enquanto o painel de detalhes do
+node mostrava "Pasta de trabalho: não informado" e "Sessão do agente: não
+associada: retomada genérica".
+
+### O fix
+
+`onAgentSession`, em `CanvasView.tsx`, agora grava `cwd: reference.cwd` junto com
+`agentSession` assim que a sessão é descoberta — a mesma pasta em que o terminal
+já está rodando, nunca uma pasta nova. Depois disso, `node.data.cwd` e
+`agentSession.cwd` sempre concordam, e `canResumeAgentSession()` volta a decidir
+certo.
+
+### O que foi medido
+
+- `discoverAgentSession()` chamado diretamente (fora da suíte, script isolado)
+  contra o rollout real criado nesta investigação: devolveu `cwd: '/home/felipe'`
+  e o `sessionId` certo — confirma que o mecanismo de descoberta em si funciona
+  quando a janela de tempo bate.
+- Teste novo em `agent-session.test.ts`: `canResumeAgentSession` recusa com
+  `cwd` vazio ou `undefined` mesmo com referência válida (documenta o bug),
+  e volta a aceitar com o cwd sincronizado (documenta o fix).
+- `npx vitest run`: 641 testes (suíte inteira) verdes. `npm test` (electron):
+  769 testes verdes. `npm run lint`: só o warning pré-existente. `npm run build`:
+  OK.
+
+### O que não foi validado
+
+- **O ciclo completo "fechar o app, reabrir, ver retomar direto sem seletor"**
+  não foi confirmado ponta a ponta no app real. A janela de descoberta
+  (`AGENT_SESSION_DISCOVERY_WINDOW_MS = 15_000`, contada a partir do spawn) exige
+  que o rollout do provedor exista **perto** do spawn — um `codex resume`/reabertura
+  que não submete nada novo não gera arquivo fresco, e tentar forçar isso pela UI
+  automatizada esbarrou nessa corrida de tempo (documentado para quem repetir:
+  spawnar, submeter algo real rapidamente, só então a descoberta encontra o
+  arquivo dentro da janela).
+- A conta de Codex usada bateu no limite de uso durante a medição (`You've hit
+  your usage limit`) — o rollout ainda foi criado (o que bastava para confirmar
+  `cwd`), mas nenhum turno completo foi observado.
+- Não foi medido com pelo menos duas conversas Codex **não recentes**, como o
+  critério de aceite original da task-mãe pedia — só uma sessão criada na hora.
+- Migração de nodes antigos, incompatibilidade de conta/diretório e diferença
+  entre CLIs (Claude/Gemini) não foram remedidas nesta sessão — o fix é genérico
+  o bastante (mesma função `onAgentSession` para os três providers) para não ter
+  motivo esperado de divergir, mas isso é inferência, não medição.
+
+Commit `586db33`, pushado. Fecha a task
+[Felixo AI Core/Retomada — reproduzir o fallback /resume no Linux e recuperar a retomada por ID](https://app.notion.com/p/Felixo-AI-Core-Retomada-reproduzir-o-fallback-resume-no-Linux-e-recuperar-a-retomada-por-ID-3c891f95497e81aa8c19eeecf9fe823d).
