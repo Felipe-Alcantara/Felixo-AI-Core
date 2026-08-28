@@ -57,6 +57,15 @@ const SUPPORTED_CLIS = [
     installUrl: 'https://geminicli.com/docs/get-started/installation/',
   },
   {
+    name: 'Openia (launcher OpenRouter)',
+    command: 'openia',
+    windowsAliases: ['openia.exe', 'openia.cmd', 'openia.ps1'],
+    versionFlag: '--version',
+    authCheckFlag: null,
+    category: 'ai-provider',
+    installUrl: 'https://github.com/Felipe-Alcantara/Openia',
+  },
+  {
     name: 'Git',
     command: 'git',
     windowsAliases: ['git.exe'],

@@ -17,6 +17,7 @@ describe('cli-detector', () => {
       assert.ok(names.includes('claude'))
       assert.ok(names.includes('codex'))
       assert.ok(names.includes('gemini'))
+      assert.ok(names.includes('openia'))
       assert.ok(names.includes('git'))
       assert.ok(names.includes('node'))
       assert.ok(names.includes('ollama'))

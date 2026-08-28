@@ -70,6 +70,8 @@ export type TerminalNodeData = {
   cwd?: string
   /** Human label shown on the node header. */
   label?: string
+  /** Launcher opaque to Felixo; do not inject prompts or model flags. */
+  launchMode?: 'agent' | 'launcher'
   /** Text typed into the agent shortly after spawn (e.g. standing instruction). Persisted with the node so reopen replays it. */
   initialText?: string
   /** One-shot in-memory prompt used by responsibility handoff; never persisted. */

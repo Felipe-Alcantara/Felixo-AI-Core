@@ -33,6 +33,7 @@ Primeira versão funcional entregue:
 - Interface de chat com seletor visual de modelos/CLIs
 - Backend Electron executando CLIs reais em streaming
 - Adapters para `claude`, `codex` e `gemini`
+- Launcher Openia para as interfaces compatíveis com OpenRouter, sem duplicar seu catálogo de modelos
 - Perfis padrão para CLIs instaladas no sistema, sem depender dos scripts locais em `ai-clis/`
 - Registry de Terminal Adapters
 - Orchestrator Core inicial para decidir processo persistente, retomada nativa ou one-shot
@@ -191,6 +192,24 @@ No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações
 
 **Recuperação manual.** Se o app não conseguir abrir um terminal para o login, a troca informa o comando a rodar à mão (`codex login`). Para conferir o estado a qualquer momento, `codex login status` no terminal responde o mesmo que o botão.
 
+## Openia como launcher de OpenRouter
+
+O gerenciador de modelos (Modelos > CLIs oficiais) também identifica o `openia` como
+launcher oficial. Ele não é apresentado como um modelo fictício: o Felixo inicia o
+comando `openia` no diretório escolhido, e o menu do Openia continua sendo a fonte
+de verdade para as interfaces, a chave do OpenRouter e a seleção de modelo.
+
+Quando o Openia não está instalado, o botão **Instalar** mostra o repositório de
+origem e pede confirmação antes de executar o `pip` remoto. A instalação usa o
+Python do sistema (`python3` no Linux/macOS ou `py` no Windows), não depende de um
+clone local e não entra na instalação automática baseada em npm do app. Depois de
+instalado, **Abrir configuração** abre o menu próprio do Openia em um terminal.
+
+O Felixo não lê, migra ou imprime `keys.json`/`.env` do Openia, não passa a chave em
+argumentos e não mantém uma segunda lista de modelos. Se Python, `pip` ou o comando
+`openia` não estiverem disponíveis, o cartão informa a falha e o restante do app
+continua utilizável. A versão pode ser conferida com `openia --version`.
+
 ## Como distribuir
 
 Build local:
@@ -204,7 +223,7 @@ O workflow `.github/workflows/release.yml` publica instaladores para Linux, Wind
 
 Observações importantes:
 
-- Usuários precisam ter as CLIs `codex`, `claude` e/ou `gemini` instaladas e autenticadas no próprio sistema.
+- Usuários precisam ter as CLIs `codex`, `claude` e/ou `gemini` instaladas e autenticadas no próprio sistema; para usar o launcher Openia, precisam também de Python 3 e pip.
 - Se a CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com os diretórios extras onde os comandos estão instalados.
 - No Linux, prefira o AppImage para auto-update dentro do app; pacote `.deb` é útil para instalação tradicional, mas não segue o mesmo fluxo de atualização automática.
 - **macOS: os artefatos não são assinados nem notarizados**, então o Gatekeeper bloqueia a primeira abertura — às vezes com uma mensagem confusa que sugere procurar um app na App Store. O usuário precisa liberar manualmente em **Ajustes do Sistema > Privacidade e Segurança**, ou rodar `xattr -dr com.apple.quarantine "/Applications/Felixo AI Core.app"`. Resolver isso de vez exige uma conta do Apple Developer Program (US$ 99/ano) e os secrets de assinatura no workflow de release.

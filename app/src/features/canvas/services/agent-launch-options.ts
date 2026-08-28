@@ -13,7 +13,7 @@
  * Luna doesn't, so effort options must be looked up per model, not per agent.
  */
 
-export type AgentId = 'claude' | 'codex' | 'gemini'
+export type AgentId = 'claude' | 'codex' | 'gemini' | 'openia'
 
 export type EffortLevel = 'low' | 'medium' | 'high' | 'max' | 'xhigh' | 'ultra'
 
@@ -24,6 +24,8 @@ export type AgentDefinition = {
   label: string
   /** Model options shown in the menu (extendable — adding new ones is safe). */
   models: string[]
+  /** Launcher whose own menu owns interface, key, and model selection. */
+  isLauncher?: boolean
   /**
    * Effort levels supported, or null when the CLI has no effort flag.
    * Either a flat list shared by every model, or a per-model lookup (Codex).
@@ -56,6 +58,14 @@ export const AGENTS: AgentDefinition[] = [
     label: 'Gemini',
     models: ['gemini-3-pro-preview', 'gemini-3-flash', 'gemini-2.5-pro'],
     effortLevels: null,
+  },
+  {
+    id: 'openia',
+    command: 'openia',
+    label: 'Openia (launcher OpenRouter)',
+    models: [],
+    effortLevels: null,
+    isLauncher: true,
   },
 ]
 
@@ -98,7 +108,7 @@ export function isEffortValidForModel(
 }
 
 /**
- * True when `command` is a known agent CLI (claude/codex/gemini) — the only
+ * True when `command` is a native agent CLI (claude/codex/gemini) — the only
  * terminals meant to receive a standing instruction typed after they spawn
  * (quality standard, `/resume`). A terminal running an arbitrary command
  * (e.g. `python file.py` from the Projects panel) has a command too, but
@@ -106,7 +116,7 @@ export function isEffortValidForModel(
  * which is not what either feature is for.
  */
 export function isKnownAgentCommand(command?: string): boolean {
-  return AGENTS.some((agent) => agent.command === command)
+  return AGENTS.some((agent) => agent.command === command && !agent.isLauncher)
 }
 
 export type AgentLaunchChoices = {
@@ -125,6 +135,12 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
   const agent = getAgent(choices.agentId)
   if (!agent) {
     return null
+  }
+
+  // Openia is an opaque launcher: its own menu owns interface/model selection.
+  // Felixo must never invent flags that could bypass that contract.
+  if (agent.isLauncher) {
+    return []
   }
 
   const args: string[] = []

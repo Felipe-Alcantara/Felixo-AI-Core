@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 
 const {
   getOfficialCliAccountStatus,
+  installOfficialCli,
   listOfficialCliAccountSessions,
   openOfficialCliLogin,
   parseCodexLoginStatus,
@@ -10,6 +11,50 @@ const {
 } = require('./official-cli-service.cjs')
 
 describe('official-cli-service', () => {
+  it('exige consentimento antes de instalar o código remoto do Openia', async () => {
+    let called = false
+    const result = await installOfficialCli('openia', {
+      runCommand: async () => {
+        called = true
+        return { ok: true, stdout: '', stderr: '' }
+      },
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.requiresConfirmation, true)
+    assert.equal(called, false)
+  })
+
+  it('instala o Openia com o Python do sistema e não o npm gerenciado', async () => {
+    let invocation
+    const result = await installOfficialCli('openia', {
+      confirmed: true,
+      platformName: 'win32',
+      runCommand: async (options) => {
+        invocation = options
+        return { ok: true, stdout: 'Successfully installed openia', stderr: '' }
+      },
+      detect: async () => ({
+        detected: true,
+        version: '0.1.0',
+        path: 'C:/Users/me/AppData/Roaming/Python/Python312/Scripts/openia.exe',
+        error: null,
+      }),
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.cli.isLauncher, true)
+    assert.equal(result.cli.models.length, 0)
+    assert.equal(invocation.command, 'py')
+    assert.deepEqual(invocation.args.slice(0, 5), [
+      '-m',
+      'pip',
+      'install',
+      '--user',
+      '--upgrade',
+    ])
+  })
+
   it('parses Codex ChatGPT login status', () => {
     assert.equal(
       parseCodexLoginStatus('Logged in using ChatGPT'),
@@ -40,6 +85,22 @@ describe('official-cli-service', () => {
     assert.equal(result.ok, true)
     assert.equal(launched.command, 'codex.cmd')
     assert.deepEqual(launched.args, ['login'])
+  })
+
+  it('opens the Openia menu with its Windows executable', () => {
+    let launched
+
+    const result = openOfficialCliLogin('openia', {
+      platformName: 'win32',
+      launchTerminal: (options) => {
+        launched = options
+        return { ok: true, command: 'openia.exe', args: [] }
+      },
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(launched.command, 'openia.exe')
+    assert.deepEqual(launched.args, [])
   })
 })
 

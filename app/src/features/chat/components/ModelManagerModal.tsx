@@ -52,6 +52,10 @@ type OfficialCliCatalogItem = {
   statusCommand?: string
   switchAccountCommand?: string
   supportsAccountSwitch?: boolean
+  isLauncher?: boolean
+  sourceOfTruth?: string
+  modelSelection?: string
+  installRequiresConfirmation?: boolean
   installUrl: string
   authUrl: string
   models: Model[]
@@ -150,7 +154,7 @@ export function ModelManagerModal({
   }
 
   async function installOfficialCli(cli: OfficialCliCatalogItem) {
-    if (getMissingOfficialModels(cli.models, models).length === 0) {
+    if (!cli.isLauncher && getMissingOfficialModels(cli.models, models).length === 0) {
       setStatus(`${cli.name} já está importada. Instalação não foi iniciada.`)
       return
     }
@@ -160,11 +164,26 @@ export function ModelManagerModal({
       return
     }
 
+    const confirmed = cli.installRequiresConfirmation
+      ? window.confirm(
+          `${cli.name} será instalado a partir do código remoto indicado em ${cli.installUrl}. ` +
+            'A instalação pode executar código no seu computador. Deseja continuar?',
+        )
+      : true
+
+    if (!confirmed) {
+      setStatus(`Instalação de ${cli.name} cancelada.`)
+      return
+    }
+
     setBusyOfficialCliId(cli.id)
     setStatus(`Instalando ${cli.name}...`)
 
     try {
-      const result = await window.felixo.cli.installOfficial({ id: cli.id })
+      const result = await window.felixo.cli.installOfficial({
+        id: cli.id,
+        confirmed,
+      })
 
       if (!result.ok) {
         setStatus(result.message ?? `Falha ao instalar ${cli.name}.`)
@@ -179,8 +198,14 @@ export function ModelManagerModal({
         return
       }
 
-      importOfficialModels(result.models ?? cli.models)
-      setStatus(`${cli.name} instalado e importado.`)
+      if (cli.isLauncher) {
+        setStatus(
+          `${cli.name} instalado. Abra o menu de configuração para escolher a interface e o modelo dentro do Openia.`,
+        )
+      } else {
+        importOfficialModels(result.models ?? cli.models)
+        setStatus(`${cli.name} instalado e importado.`)
+      }
       await loadOfficialCatalog()
     } catch (error) {
       setStatus(
@@ -622,7 +647,7 @@ export function ModelManagerModal({
               ) : (
                 officialClis.map((cli) => {
                   const missingModels = getMissingOfficialModels(cli.models, models)
-                  const isImported = missingModels.length === 0
+                  const isImported = !cli.isLauncher && missingModels.length === 0
                   const isAnyOfficialCliBusy = busyOfficialCliId !== null
 
                   return (
@@ -649,6 +674,11 @@ export function ModelManagerModal({
                             {cli.version && <span>v{cli.version}</span>}
                             <span>{cli.provider}</span>
                           </div>
+                          {cli.isLauncher && (
+                            <p className="mt-1 text-[11px] text-zinc-400">
+                              Launcher opaco: chave e modelo são configurados dentro do Openia.
+                            </p>
+                          )}
                           {accountStatuses[cli.id] && (
                             <p className="mt-1 text-[11px] text-zinc-400">
                               {formatAccountIdentity(
@@ -660,7 +690,18 @@ export function ModelManagerModal({
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1">
-                          {cli.detected ? (
+                          {cli.detected && cli.isLauncher ? (
+                            <button
+                              type="button"
+                              title="Abrir configuração do Openia"
+                              onClick={() => void openOfficialLogin(cli)}
+                              disabled={isAnyOfficialCliBusy}
+                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Terminal size={14} aria-hidden="true" />
+                              <span className="sr-only">Abrir configuração do Openia</span>
+                            </button>
+                          ) : cli.detected ? (
                             <button
                               type="button"
                               title={
@@ -698,7 +739,7 @@ export function ModelManagerModal({
                             </button>
                           )}
 
-                          <button
+                          {!cli.isLauncher && <button
                             type="button"
                             title={`Login ${cli.name}`}
                             onClick={() => void openOfficialLogin(cli)}
@@ -707,7 +748,7 @@ export function ModelManagerModal({
                           >
                             <LogIn size={14} aria-hidden="true" />
                             <span className="sr-only">Login {cli.name}</span>
-                          </button>
+                          </button>}
 
                           {cli.supportsAccountSwitch && (
                             <>

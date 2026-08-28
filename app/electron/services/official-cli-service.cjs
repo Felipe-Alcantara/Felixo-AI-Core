@@ -35,7 +35,15 @@ async function listOfficialCliCatalog() {
   return clis
 }
 
-async function installOfficialCli(id) {
+async function installOfficialCli(
+  id,
+  {
+    confirmed = false,
+    runCommand = runBufferedCommand,
+    detect = detectCli,
+    platformName = platform.name,
+  } = {},
+) {
   const cli = getOfficialAiCli(id)
 
   if (!cli) {
@@ -45,15 +53,23 @@ async function installOfficialCli(id) {
     }
   }
 
-  const installCommand = getPlatformCommand(cli.install)
-  const installResult = await runBufferedCommand({
+  if (cli.install.requiresConfirmation && !confirmed) {
+    return {
+      ok: false,
+      requiresConfirmation: true,
+      message: `${cli.name} instala código remoto e exige confirmação explícita.`,
+    }
+  }
+
+  const installCommand = getPlatformCommand(cli.install, platformName)
+  const installResult = await runCommand({
     command: installCommand,
     args: cli.install.args,
     cwd: os.homedir(),
     env: createCliEnv(),
     timeoutMs: INSTALL_TIMEOUT_MS,
   })
-  const detection = await detectCli(cli, createCliEnv())
+  const detection = await detect(cli, createCliEnv())
 
   return {
     ...installResult,
@@ -302,6 +318,10 @@ function createCatalogItem(cli, detection) {
     statusCommand: cli.accountSwitch?.status?.label,
     switchAccountCommand: cli.accountSwitch?.logout?.label,
     supportsAccountSwitch: Boolean(cli.accountSwitch),
+    isLauncher: Boolean(cli.isLauncher),
+    sourceOfTruth: cli.sourceOfTruth,
+    modelSelection: cli.modelSelection,
+    installRequiresConfirmation: Boolean(cli.install.requiresConfirmation),
     installUrl: cli.installUrl,
     authUrl: cli.authUrl,
     models: cli.models.map((model) => ({ ...model })),

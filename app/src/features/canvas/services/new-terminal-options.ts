@@ -12,4 +12,6 @@ export type NewTerminalOptions = {
   cwd?: string
   label: string
   planningFile?: string
+  /** O launcher mantém a seleção e o contexto inicial dentro da própria CLI. */
+  launchMode?: 'agent' | 'launcher'
 }

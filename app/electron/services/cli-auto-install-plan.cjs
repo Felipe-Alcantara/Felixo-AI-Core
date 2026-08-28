@@ -26,6 +26,18 @@ function isAutoInstallEnabled(isPackaged, env = process.env) {
 }
 
 /**
+ * O catálogo também contém launchers instalados por outro ecossistema (por
+ * exemplo, Python). Eles continuam visíveis no gerenciador oficial, mas não
+ * podem entrar na rotina silenciosa que usa o npm gerenciado pelo app.
+ *
+ * @param {Array<{ autoInstall?: boolean }>} catalog
+ * @returns {Array<object>}
+ */
+function getAutoInstallableClis(catalog) {
+  return catalog.filter((cli) => cli.autoInstall !== false)
+}
+
+/**
  * Monta a fila de instalação e o estado inicial de cada CLI.
  *
  * Três situações não entram na fila:
@@ -135,6 +147,7 @@ function summarizeAutoInstall(progress) {
 module.exports = {
   allDetected,
   createCliProgress,
+  getAutoInstallableClis,
   isAutoInstallEnabled,
   planAutoInstall,
   summarizeAutoInstall,

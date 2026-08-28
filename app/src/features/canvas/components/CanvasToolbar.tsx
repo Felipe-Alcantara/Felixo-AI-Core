@@ -37,6 +37,7 @@ import { deveMostrarRodapeDeStatus } from './toolbar-status'
 import { normalizeUrlInput } from '../services/url-utils'
 import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
+import type { NewTerminalOptions } from '../services/new-terminal-options'
 
 /**
  * A moldura de um controle da barra: largura, canto, sombra e aro — o que
@@ -70,17 +71,9 @@ type CanvasToolbarProps = {
   /** Verifica atualização agora, oferecido quando a última verificação falhou. */
   onCheckUpdate: () => void
   projects: CanvasProject[]
-  onAddTerminal: (options: {
-    command?: string
-    args?: string[]
-    cwd?: string
-    label: string
-    planningFile?: string
-  }) => void
+  onAddTerminal: (options: NewTerminalOptions) => void
   /** Starts several terminal configs at once — a whole agent setup in one click. */
-  onAddTerminals: (
-    optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[],
-  ) => void
+  onAddTerminals: (optionsList: NewTerminalOptions[]) => void
   onOrganizeBlocks: (mode: ArrangeMode) => void
   arrangeableCount: number
   onAddFolder: () => Promise<string[]>

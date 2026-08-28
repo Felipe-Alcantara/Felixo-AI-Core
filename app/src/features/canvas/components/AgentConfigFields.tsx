@@ -84,98 +84,108 @@ export function AgentConfigFields({
 
       {config.agent && (
         <>
-          <div className="mb-1 flex items-center justify-between">
-            <label htmlFor={`${prefixo}-model`} className="block text-xs font-medium text-zinc-400">
-              Modelo
-            </label>
-            <button
-              type="button"
-              onClick={config.refresh}
-              disabled={config.refreshing}
-              className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
-              title="Buscar de novo os modelos que as CLIs oferecem"
-              aria-label="Atualizar lista de modelos"
-            >
-              <RotateCw size={11} className={config.refreshing ? 'animate-spin' : undefined} />
-            </button>
-          </div>
-          <select
-            id={`${prefixo}-model`}
-            value={config.model}
-            onChange={(event) => config.changeModel(event.target.value)}
-            className={`${CAMPO} mb-3`}
-          >
-            <option value="">Padrão</option>
-            {config.agent.models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-
-          {config.effortLevels && (
+          {config.agent.isLauncher ? (
+            <p className="mb-3 rounded bg-zinc-900/70 px-2 py-2 text-xs leading-relaxed text-zinc-400 ring-1 ring-white/10">
+              O Openia é um launcher: a interface, a chave do OpenRouter e o modelo
+              são escolhidos no próprio terminal. O Felixo não duplica nem lê essa
+              configuração.
+            </p>
+          ) : (
             <>
-              <label htmlFor={`${prefixo}-effort`} className={ROTULO}>
-                Esforço de raciocínio
-              </label>
+              <div className="mb-1 flex items-center justify-between">
+                <label htmlFor={`${prefixo}-model`} className="block text-xs font-medium text-zinc-400">
+                  Modelo
+                </label>
+                <button
+                  type="button"
+                  onClick={config.refresh}
+                  disabled={config.refreshing}
+                  className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
+                  title="Buscar de novo os modelos que as CLIs oferecem"
+                  aria-label="Atualizar lista de modelos"
+                >
+                  <RotateCw size={11} className={config.refreshing ? 'animate-spin' : undefined} />
+                </button>
+              </div>
               <select
-                id={`${prefixo}-effort`}
-                value={config.effort}
-                onChange={(event) => config.setEffort(event.target.value)}
+                id={`${prefixo}-model`}
+                value={config.model}
+                onChange={(event) => config.changeModel(event.target.value)}
                 className={`${CAMPO} mb-3`}
               >
                 <option value="">Padrão</option>
-                {config.effortLevels.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
+                {config.agent.models.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
                   </option>
                 ))}
               </select>
+
+              {config.effortLevels && (
+                <>
+                  <label htmlFor={`${prefixo}-effort`} className={ROTULO}>
+                    Esforço de raciocínio
+                  </label>
+                  <select
+                    id={`${prefixo}-effort`}
+                    value={config.effort}
+                    onChange={(event) => config.setEffort(event.target.value)}
+                    className={`${CAMPO} mb-3`}
+                  >
+                    <option value="">Padrão</option>
+                    {config.effortLevels.map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              <label className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={config.yolo}
+                  onChange={(event) => config.setYolo(event.target.checked)}
+                  className="accent-emerald-600"
+                />
+                Yolo (acesso total, sem confirmações)
+              </label>
+
+              <label htmlFor={`${prefixo}-planning-file`} className={ROTULO}>
+                Arquivo de planejamento
+              </label>
+              <div className="mb-3 flex gap-1.5">
+                <input
+                  id={`${prefixo}-planning-file`}
+                  value={config.planningFile}
+                  onChange={(event) => config.setPlanningFile(event.target.value)}
+                  placeholder="Caminho para um arquivo (opcional)"
+                  className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => planningFileInputRef.current?.click()}
+                  className="felixo-btn-icon rounded bg-zinc-700 px-2 text-xs text-zinc-200 hover:bg-zinc-600"
+                  title="Selecionar arquivo de planejamento"
+                  aria-label="Selecionar arquivo de planejamento"
+                >
+                  …
+                </button>
+                <input
+                  ref={planningFileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    config.setPlanningFile(window.felixo?.getFilePath?.(file) || file.name)
+                    event.target.value = ''
+                  }}
+                />
+              </div>
             </>
           )}
-
-          <label className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
-            <input
-              type="checkbox"
-              checked={config.yolo}
-              onChange={(event) => config.setYolo(event.target.checked)}
-              className="accent-emerald-600"
-            />
-            Yolo (acesso total, sem confirmações)
-          </label>
-
-          <label htmlFor={`${prefixo}-planning-file`} className={ROTULO}>
-            Arquivo de planejamento
-          </label>
-          <div className="mb-3 flex gap-1.5">
-            <input
-              id={`${prefixo}-planning-file`}
-              value={config.planningFile}
-              onChange={(event) => config.setPlanningFile(event.target.value)}
-              placeholder="Caminho para um arquivo (opcional)"
-              className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
-            />
-            <button
-              type="button"
-              onClick={() => planningFileInputRef.current?.click()}
-              className="felixo-btn-icon rounded bg-zinc-700 px-2 text-xs text-zinc-200 hover:bg-zinc-600"
-              title="Selecionar arquivo de planejamento"
-              aria-label="Selecionar arquivo de planejamento"
-            >
-              …
-            </button>
-            <input
-              ref={planningFileInputRef}
-              type="file"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (!file) return
-                config.setPlanningFile(window.felixo?.getFilePath?.(file) || file.name)
-                event.target.value = ''
-              }}
-            />
-          </div>
         </>
       )}
 

@@ -11,10 +11,10 @@ describe('official-cli-catalog', () => {
   it('contains official install commands for supported AI CLIs', () => {
     const clis = listOfficialAiClis()
 
-    assert.equal(clis.length, 3)
+    assert.equal(clis.length, 4)
     assert.deepEqual(
       clis.map((cli) => cli.id),
-      ['codex', 'claude', 'gemini'],
+      ['codex', 'claude', 'gemini', 'openia'],
     )
     assert.deepEqual(getOfficialAiCli('codex').install.args, [
       'i',
@@ -35,6 +35,17 @@ describe('official-cli-catalog', () => {
       '@google/gemini-cli',
     ])
     assert.equal(getOfficialAiCli('gemini').login.windowsCommand, 'gemini.cmd')
+    assert.deepEqual(getOfficialAiCli('openia').install.args, [
+      '-m',
+      'pip',
+      'install',
+      '--user',
+      '--upgrade',
+      'https://github.com/Felipe-Alcantara/Openia/archive/841857c.zip',
+    ])
+    assert.equal(getOfficialAiCli('openia').isLauncher, true)
+    assert.equal(getOfficialAiCli('openia').autoInstall, false)
+    assert.deepEqual(getOfficialAiCli('openia').models, [])
   })
 
   it('maps one installed CLI to all app adapters it unlocks', () => {
@@ -62,6 +73,7 @@ describe('official-cli-catalog', () => {
     ])
     assert.equal(getOfficialAiCli('claude').accountSwitch, undefined)
     assert.equal(getOfficialAiCli('gemini').accountSwitch, undefined)
+    assert.equal(getOfficialAiCli('openia').accountSwitch, undefined)
   })
 
   it('returns cloned catalog entries', () => {

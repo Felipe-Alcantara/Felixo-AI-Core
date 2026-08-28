@@ -984,7 +984,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           command: node.data.command,
           qualityStandardEnabled: quality.enabled,
           qualityStandardPrompt: quality.prompt,
-          hasCommand: isKnownAgentCommand(node.data.command),
+          hasCommand:
+            node.data.launchMode !== 'launcher' &&
+            isKnownAgentCommand(node.data.command),
           // `handoffText` é transitório e carrega um pedido de verdade, então
           // pode sair submetido; `initialText` é persistido e é sempre
           // contexto. O recorte cobre os blocos salvos antes desta mudança,
@@ -1270,14 +1272,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   }, [openTextFileNode])
 
   const buildTerminalNodeData = useCallback(
-    (options: {
-      command?: string
-      args?: string[]
-      cwd?: string
-      label: string
-      planningFile?: string
-      handoffText?: string
-    }) => {
+    (options: NewTerminalOptions & { handoffText?: string }) => {
       // Agent terminals get the standing quality-standard instruction (if on)
       // plus their canvas identity (name, cwd, multi-agent setting); a plain
       // shell does not (there's no agent to read it).
@@ -1287,8 +1282,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       // permanente sozinha é contexto — fica digitada na entrada esperando o
       // usuário escrever a tarefa, em vez de o agente subir executando.
       const quality = qualityStandardRef.current
-      const planningInstruction = buildPlanningFileInstruction(options.planningFile)
-      const handoffSections = options.handoffText
+      const isOpaqueLauncher = options.launchMode === 'launcher'
+      const isContextAwareCommand = Boolean(options.command && !isOpaqueLauncher)
+      const planningInstruction = isContextAwareCommand
+        ? buildPlanningFileInstruction(options.planningFile)
+        : undefined
+      const handoffSections = isContextAwareCommand && options.handoffText
         ? composeTerminalInitialText(
             quality.enabled ? buildQualityStandardMessage(quality.prompt) : undefined,
             options.handoffText,
@@ -1298,7 +1297,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       const handoffInstruction = handoffSections
         ? toSubmittedTerminalText(handoffSections)
         : undefined
-      const initialText = options.command
+      const initialText = isContextAwareCommand
         ? handoffInstruction ?? composeTerminalInitialText(
             quality.enabled
               ? buildCanvasTerminalInitialText(
@@ -1318,6 +1317,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         ...(options.command ? { command: options.command } : {}),
         ...(options.args && options.args.length ? { args: options.args } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
+        ...(options.launchMode ? { launchMode: options.launchMode } : {}),
         ...(initialText && !options.handoffText ? { initialText } : {}),
         ...(options.handoffText ? { handoffText: initialText } : {}),
       }
@@ -1326,13 +1326,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   )
 
   const addTerminalNode = useCallback(
-    (options: {
-      command?: string
-      args?: string[]
-      cwd?: string
-      label: string
-      planningFile?: string
-    }) => {
+    (options: NewTerminalOptions) => {
       addNode('terminal', buildTerminalNodeData(options))
     },
     [addNode, buildTerminalNodeData],
@@ -1411,7 +1405,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // near-square matrix before everything lands in one `setNodes` + one
   // `persistNode` per node.
   const addTerminalNodes = useCallback(
-    (optionsList: { command?: string; args?: string[]; cwd?: string; label: string; planningFile?: string }[]) => {
+    (optionsList: NewTerminalOptions[]) => {
       if (optionsList.length === 0) {
         return
       }

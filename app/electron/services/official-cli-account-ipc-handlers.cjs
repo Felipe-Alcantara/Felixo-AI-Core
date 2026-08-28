@@ -58,7 +58,9 @@ function registerOfficialCliAccountIpcHandlers({ getPtyManager = () => null } = 
       message: `Installing official CLI ${id}.`,
     })
 
-    return installOfficialCli(id)
+    return installOfficialCli(id, {
+      confirmed: params?.confirmed === true,
+    })
   })
 
   ipcMain.handle('cli:open-official-login', (_event, params) => {

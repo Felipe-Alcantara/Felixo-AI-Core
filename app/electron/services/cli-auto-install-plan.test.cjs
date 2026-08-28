@@ -2,6 +2,7 @@ const { describe, it } = require('node:test')
 const assert = require('node:assert/strict')
 
 const {
+  getAutoInstallableClis,
   isAutoInstallEnabled,
   planAutoInstall,
   summarizeAutoInstall,
@@ -18,6 +19,18 @@ function detections(...detected) {
 }
 
 describe('cli-auto-install-plan', () => {
+  it('does not put another ecosystem launcher in the npm auto-install queue', () => {
+    const catalog = [
+      ...CATALOG,
+      { id: 'openia', name: 'Openia', autoInstall: false },
+    ]
+
+    assert.deepEqual(
+      getAutoInstallableClis(catalog).map((cli) => cli.id),
+      ['codex', 'claude', 'gemini'],
+    )
+  })
+
   it('only queues the CLIs missing from the machine', () => {
     const { pending, progress } = planAutoInstall({
       catalog: CATALOG,

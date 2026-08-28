@@ -96,6 +96,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       cwd: project?.path,
       label: customName || `${describeLaunch(choices)} · ${place}`,
       planningFile: planningFile.trim() || undefined,
+      ...(agent.isLauncher ? { launchMode: 'launcher' as const } : {}),
     }
   }, [agent, effort, model, name, planningFile, projectId, projects, yolo])
 

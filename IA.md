@@ -1806,3 +1806,42 @@ nova aberta para isso, separada.
 
 Relatório do dia e task de origem atualizados. Task nova:
 [Felixo AI Core/Retomada — --resume do Gemini CLI não aceita mais UUID (mudança de versão)](https://app.notion.com/p/Felixo-AI-Core-Retomada-resume-do-Gemini-CLI-n-o-aceita-mais-UUID-mudan-a-de-vers-o-3ca91f95497e8135b6a9ed68cad71f4f).
+
+## [2026-08-28] Openia integrado como launcher opaco do Felixo
+
+O catálogo oficial agora identifica `openia` como launcher OpenRouter, mantendo a
+fonte de verdade de interfaces, chave e modelos no próprio projeto Openia. O
+Felixo inicia `openia` no `cwd` escolhido, sem clonar o repositório local, sem
+passar chave em argumentos e sem ler ou migrar `keys.json`/`.env`.
+
+### Implementação e segurança
+
+- Instalação manual usa `python3 -m pip --user --upgrade` no Linux/macOS e `py -m
+  pip --user --upgrade` no Windows, apontando para a revisão publicada do Openia.
+  O comando remoto exige confirmação explícita no serviço e na interface; a
+  instalação automática baseada no npm gerenciado pelo app o ignora.
+- `openia --version` passou a ser o contrato de detecção. O ambiente do processo
+  inclui diretórios de scripts do pip por usuário em Linux, macOS e Windows para
+  que detecção e PTY encontrem o executável após a instalação.
+- O seletor de agentes oferece o Openia como launcher, mas não injeta `--model`,
+  esforço, modo yolo, prompt de qualidade ou handoff no menu interativo. Isso
+  evita tratar o launcher como uma quarta CLI nativa e evita duplicação de regras.
+- O cartão oficial deixa claro que a configuração acontece dentro do Openia e
+  oferece **Abrir configuração** em vez de importar um modelo vazio.
+
+### Validação
+
+- Catálogo, consentimento, seleção Windows, exclusão da auto-instalação e PATH
+  foram cobertos por 37 testes Node focados; 15 testes frontend focados cobrem o
+  launcher e a persistência relacionada.
+- `npm run build` passou: TypeScript e Vite transformaram 691 módulos.
+- `python3 -m pytest -q tests/test_cli.py` passou com 9 testes, incluindo a
+  detecção por `--version`.
+
+### Limites ainda explícitos
+
+- A instalação remota real e um fluxo com uma chave válida não foram executados
+  nesta sessão para não alterar a configuração local nem expor segredo. Falta
+  validar em máquinas empacotadas Windows/macOS e executar uma conversa real em
+  cada sistema; o contrato e os testes de consentimento/detecção/lançamento já
+  estão preparados para essa rodada manual.

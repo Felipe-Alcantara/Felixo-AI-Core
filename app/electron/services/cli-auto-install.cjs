@@ -25,6 +25,7 @@ const { ensureManagedCliRuntime } = require('./managed-cli-runtime.cjs')
 const { installManagedPackage } = require('./managed-cli-installer.cjs')
 const {
   allDetected,
+  getAutoInstallableClis,
   isAutoInstallEnabled,
   planAutoInstall,
   summarizeAutoInstall,
@@ -114,7 +115,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
 
     setStatus({ state: 'checking', message: 'Verificando as CLIs de IA.', clis: [] })
 
-    const catalog = listOfficialAiClis()
+    const catalog = getAutoInstallableClis(listOfficialAiClis())
     const detections = await Promise.all(
       catalog.map((cli) => detectCli(cli, createCliEnv())),
     )

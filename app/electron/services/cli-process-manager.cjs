@@ -198,9 +198,39 @@ function getUserCliPathCandidates(env) {
 
   return [
     ...platform.getUserCliPaths(home),
+    ...getPythonUserScriptPaths(env, home),
     ...getVersionManagerCliPaths(env, home),
     ...platform.getSystemCliPaths(),
   ]
+}
+
+/**
+ * Pip --user não usa exatamente o mesmo diretório em todos os sistemas:
+ * Linux costuma usar ~/.local/bin, enquanto macOS e Windows incluem a versão
+ * do Python no caminho. O catálogo do Openia instala nesse escopo do usuário;
+ * descobrir essas pastas aqui faz o comando aparecer tanto na detecção quanto
+ * no PTY sem alterar a configuração da pessoa.
+ */
+function getPythonUserScriptPaths(env, home) {
+  if (platform.name === 'darwin') {
+    return getInstalledVersionBinCandidates(path.join(home, 'Library', 'Python'), [
+      'bin',
+    ])
+  }
+
+  if (platform.name === 'win32') {
+    const roots = uniqueStrings([
+      env.APPDATA && path.join(env.APPDATA, 'Python'),
+      env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Python'),
+      path.join(home, 'AppData', 'Roaming', 'Python'),
+    ])
+
+    return roots.flatMap((root) =>
+      getInstalledVersionBinCandidates(root, ['Scripts']),
+    )
+  }
+
+  return []
 }
 
 function getVersionManagerCliPaths(env, home) {

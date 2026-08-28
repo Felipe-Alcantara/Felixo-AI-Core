@@ -131,6 +131,10 @@ type OfficialCliCatalogItem = {
   statusCommand?: string
   switchAccountCommand?: string
   supportsAccountSwitch?: boolean
+  isLauncher?: boolean
+  sourceOfTruth?: string
+  modelSelection?: string
+  installRequiresConfirmation?: boolean
   installUrl: string
   authUrl: string
   models: Model[]
@@ -143,6 +147,7 @@ type OfficialCliCatalogResult = CliInvokeResult & {
 type OfficialCliInstallResult = CliInvokeResult & {
   cli?: OfficialCliCatalogItem
   models?: Model[]
+  requiresConfirmation?: boolean
   stdout?: string
   stderr?: string
 }
@@ -221,6 +226,7 @@ declare global {
         listOfficial: () => Promise<OfficialCliCatalogResult>
         installOfficial: (params: {
           id: string
+          confirmed?: boolean
         }) => Promise<OfficialCliInstallResult>
         openOfficialLogin: (params: {
           id: string
