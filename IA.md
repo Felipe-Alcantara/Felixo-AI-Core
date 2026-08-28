@@ -1886,3 +1886,62 @@ menu manual.
 - Nenhuma chave real foi lida, e não foi feita conversa real com provedor. Neste
   ambiente o comando global `openia` não está instalado; a ponte foi validada
   com dublês e o contrato Python com a suíte local.
+
+## [2026-08-28] Openia empacotado, chave real e fluxos reais validados em Linux
+
+Validação manual do contrato do Openia como launcher opaco, sobre os commits
+Felixo `6e8298c` e Openia `9b89b43`. Só em Linux — esta sessão não tem acesso a
+macOS nem Windows; task nova aberta para essa parte
+(`3ca91f95-497e-81ff-8689-f6fec5627868`). Nenhum código foi alterado; é
+validação pura.
+
+`npm run dist:linux` gerou AppImage e `.deb` reais via electron-builder. O
+AppImage, copiado sozinho para fora do repositório e rodado com `--user-data-dir`
+isolado, abriu de verdade — inclusive disparando o auto-update real e
+auto-instalando a Gemini CLI que faltava, via o mecanismo `managed` (não o do
+Openia). `dpkg-deb -I` confirmou o `.deb` válido, com as dependências corretas;
+não foi instalado no sistema (evitei mudança de sistema irreversível sem pedido
+explícito).
+
+**Achado real**: o comando de instalação do catálogo (`python3 -m pip install
+--user --upgrade <zip do GitHub>`) falha com `error: externally-managed-environment`
+neste Ubuntu 24.04 (PEP 668) — e o próprio Openia bate no mesmo problema ao
+tentar instalar sozinho o pacote da primeira interface usada (`orchat`).
+Contornado manualmente com `--break-system-packages` para seguir a validação;
+task nova aberta com as opções de correção
+(`3ca91f95-497e-8107-bd5a-c7cf9c50da4f`).
+
+O fluxo de cancelamento da instalação foi medido ao vivo na UI real (`Gerenciar
+modelos` → `Instalar Openia`): o `window.confirm()` recusado mostrou
+corretamente "Instalação de Openia (launcher OpenRouter) cancelada.", sem
+disparar nada.
+
+A chave real do OpenRouter do usuário nunca foi digitada em nenhum campo do
+Felixo: já estava exportada no ambiente do sistema e chegou ao processo do
+Openia por herança de ambiente (`createCliEnv()`); `openia key status --json`
+confirmou `configured: true` sem chave nomeada persistida. A UI mostrou "Chave
+já configurada / O Felixo não a lê nem a persiste", e uma varredura por
+`sk-or-` em todo o `userData` de teste (sqlite + arquivos) confirmou **zero**
+ocorrências.
+
+Validado com a chave real: um fluxo de chat completo (`OrChat`, modelo
+gratuito, pergunta e resposta reais), uma falha real de modelo inválido (erro
+400 da API, mensagem limpa sem vazar a chave) e a recuperação trocando de
+volta para um modelo válido (nova resposta real, sem recriar o node), e um
+fluxo de agente de código real (`opencode`, projeto de teste isolado) que leu
+um `README.md` de verdade e respondeu com o conteúdo exato — custo real e
+pequeno: **$0,03**, 19,4K tokens, 26,9s.
+
+O critério "saldo OpenRouter no painel de limites" não é testável ainda: esse
+painel não existe no código (é a task de backlog
+`3c591f95497e81b5ababcba76aec0147`, ainda não implementada).
+
+### Limites explícitos
+
+- macOS e Windows não foram validados nesta sessão.
+- FUSE do AppImage falhou nesta sandbox (`Operation not permitted`),
+  contornado com `--appimage-extract-and-run`; não confirmado se isso também
+  ocorre numa máquina desktop real.
+- Só duas das sete interfaces do Openia foram exercitadas (`orchat` e
+  `opencode`), uma de cada modo (chat / agente de código).
+- `.deb` não foi instalado de fato via `apt`/`dpkg` no sistema, só inspecionado.
