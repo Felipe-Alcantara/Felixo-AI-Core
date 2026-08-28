@@ -2125,7 +2125,7 @@ trata ausência como zero.
   limite externo `inotify_init: Too many open files`.
 - Testes focados da feature cobrem parser, zero válido, redaction, migração e
   persistência, dois Codex isolados, offline/último valor, ambiguidade,
-  troca de conta e refresh concorrente (12 testes focados no total).
+  troca de conta e refresh concorrente (15 testes focados no total).
 
 ### Publicação e limites
 
