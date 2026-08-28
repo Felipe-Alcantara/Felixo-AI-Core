@@ -1590,3 +1590,73 @@ contrário das duas sessões anteriores, em Windows sem esse ferramental).
 - **Achado do Shift+Enter** (Claude Code v2.1.250 submetendo cada linha em vez de
   quebrar) da sessão de 28/08 16:00: não investigado nesta sessão, é bug diferente e
   anterior a este.
+
+---
+
+## [2026-08-28] Shift+Enter submetia porque o xterm.js chama o handler duas vezes por tecla
+
+Causa raiz do achado da sessão anterior (16:00): Shift+Enter, em vez de quebrar linha
+no composer, submetia cada linha como turno separado no Claude Code v2.1.250.
+
+### A investigação
+
+`terminal.attachCustomKeyEventHandler` intercepta Shift+Enter e manda um `'\n'` cru
+para o PTY, devolvendo `false` para o xterm.js não processar a tecla — só que a
+condição só reagia a `event.type === 'keydown'`. O xterm.js (`_keyDown` em
+`xterm.js`) chama esse handler; quando ele devolve `false`, `_keyDown` retorna cedo
+**sem marcar `_keyDownHandled = true`** e **sem chamar `preventDefault()`** — os dois
+só aconteceriam mais adiante, no trecho que a devolução antecipada pula.
+
+O navegador ainda dispara um `keypress` nativo para o Enter (não previne por padrão,
+já que `preventDefault()` nunca foi chamado). `_keyPress` do xterm.js verifica
+`if (this._keyDownHandled) return false` — como ficou `false`, não pula — e chama o
+handler de novo, agora com `event.type === 'keypress'`. A condição original só
+reconhecia `'keydown'`, então devolvia `true` (passthrough) para esse segundo evento,
+e `_keyPress` seguia o caminho padrão: `String.fromCharCode(e.charCode)` com
+`charCode === 13` vira `'\r'`, mandado cru para o PTY via `triggerDataEvent`. Esse
+`\r` chegava um instante depois do `\n` da intercepção — e `\r` é "enviar" para o
+composer do Claude Code.
+
+Confirmado lendo `node_modules/@xterm/xterm/lib/xterm.js` (minificado, buscando
+`_customKeyEventHandler`) e com um listener de `keydown` em fase de bubble no
+`document`, que mostrou `defaultPrevented: false` no evento de Enter mesmo com o
+handler devolvendo `false` — a pista de que `preventDefault()` nunca era chamado.
+
+### O fix
+
+`isNewlineShortcut(event)`, nova função pura em `terminal-input-selection.ts`,
+reconhece Shift+Enter tanto em `'keydown'` quanto em `'keypress'`. O handler em
+`terminal-session-store.ts` só escreve o `'\n'` no `keydown` (para não duplicar),
+mas devolve `false` para os dois tipos — fechando as duas portas que o xterm.js abre
+por tecla.
+
+### O que foi medido
+
+- App real, Claude Code `v2.1.250`, sob Xvfb com CDP (`page.keyboard.press`), sem
+  xdotool. Composer limpo (sem o texto de entrega de contexto por perto, para não
+  confundir com a retentativa automática do store).
+- **Antes do fix**: digitar texto e apertar Shift+Enter submeteu o texto como turno —
+  reproduzido 2 vezes (uma com o texto de entrega de contexto ainda no composer, outra
+  com texto próprio digitado do zero), turnos curtos (~8s, "Cooked for 8s"),
+  interrompidos com Esc assim que confirmado.
+- **Depois do fix**: mesmo teste, duas linhas digitadas com Shift+Enter entre elas —
+  compuseram um único envio ainda não submetido, as duas visíveis no composer, sem
+  nenhum turno iniciado.
+- `npx vitest run`: 640 testes (suíte inteira), verdes, incluindo os 5 novos de
+  `isNewlineShortcut`. `npm run lint`: só o warning pré-existente de
+  `TerminalNode.tsx`. `npm run build`: OK.
+
+### O que não foi medido
+
+- Codex e Gemini não foram testados para este bug específico — o achado original só
+  citava Claude Code, e o mecanismo (`attachCustomKeyEventHandler`, agnóstico de CLI)
+  não dá motivo para achar que displays diferentes por CLI; fica como risco aceito,
+  não validado.
+- Teste automatizado cobre a decisão pura (`isNewlineShortcut` para os dois tipos de
+  evento) — não há teste que dispare o `keydown`/`keypress` reais do xterm.js via
+  vitest, porque `_customKeyEventHandler` vive num objeto interno do Core que a
+  classe pública `Terminal` não expõe (confirmado tentando acessar em Node puro), e a
+  suíte roda em `environment: 'node'` sem DOM para abrir um terminal de verdade.
+
+Commit `2253027`, pushado. Fecha a task
+[Felixo AI Core/Terminal — investigar Shift+Enter submetendo linha por linha no Claude Code v2.1.250](https://app.notion.com/p/Felixo-AI-Core-Terminal-investigar-Shift-Enter-submetendo-linha-por-linha-no-Claude-Code-v2-1-250-3ca91f95497e8138a2e8c54557c36a5d).
