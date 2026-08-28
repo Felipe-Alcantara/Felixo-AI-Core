@@ -2011,3 +2011,54 @@ Nenhuma chave foi lida, digitada ou adicionada ao repositório nesta auditoria;
 os fluxos reais com credencial e o custo já estão registrados na validação
 anterior. macOS/Windows continuam delegados por falta dessas plataformas
 nesta sessão.
+
+## [2026-08-28] Organizar em linha por pasta também no dock Elementos
+
+### Decisão
+
+O Organizar ganhou uma terceira opção, **Uma linha por pasta**. Cada `cwd` vira
+uma faixa horizontal, com os blocos lado a lado na ordem estável do dock; as
+faixas continuam empilhadas e a faixa sem pasta fica por último. A ordem dos
+componentes conectados continua estável — a linha deixa de usar a matriz quase
+quadrada, mas não perde a proximidade dos blocos ligados.
+
+O dock Elementos passou a contar a mesma história: quando há mais de uma pasta,
+renderiza um cabeçalho visual por grupo usando `repositoryKey` e
+`repositoryLabel`, na mesma ordem das faixas do canvas. A seção sem pasta usa o
+rótulo **Sem pasta de trabalho** e fica no fim; com uma pasta só, os cabeçalhos
+não aparecem.
+
+### Contratos preservados
+
+Os cabeçalhos não têm `data-element-row`: ficam fora da indexação, das caixas
+medidas pelo drag e dos atalhos de navegação. Cada bloco mantém o índice da
+lista plana, o `#N` continua contínuo e a prévia de arraste calcula o resultado
+por id. O arraste e `Alt+↑/↓` só reordenam blocos dentro da mesma pasta; passar
+por um cabeçalho não reescreve `cwd` nem mistura grupos.
+
+### Implementação e validação
+
+- `canvas-matrix-layout.ts` aceita `by-repository-row` e usa o tamanho da faixa
+  como número de colunas, inclusive para uma faixa larga; `TerminalsPanel.tsx`
+  renderiza os grupos com cabeçalhos fora da lista plana.
+- `terminals-panel-groups.ts` concentra a projeção entre grupos visuais e
+  índices persistidos, além dos limites de reordenação; os testes cobrem grupos
+  intercalados, pasta sem nome, faixa única, faixa larga e tentativa de cruzar
+  cabeçalho.
+- O modo novo e o modo anterior permanecem determinísticos quando organizados
+  novamente; a organização não altera `cwd` nem a persistência de dados do
+  bloco.
+- Gate do repositório: `npm run test:frontend` **658/658**, `npm test`
+  **780/780**, `npm run lint` sem erros (os três avisos React já existentes) e
+  `npm run build` concluído com **693 módulos**.
+- Validação visual em Electron de desenvolvimento, com perfil temporário e
+  cinco blocos de teste (três pastas diferentes, duas linhas na mesma pasta e
+  um bloco sem pasta): o menu exibiu os três modos, a opção nova deixou Alpha
+  lado a lado e empilhou Beta, Gamma e Sem pasta de trabalho; a captura ficou
+  em `/tmp/felixo-canvas-M7P4qc/row-mode-isolated.png`.
+
+### Limite
+
+O navegador embutido não estava conectado nesta sessão, então não houve
+automação por esse canal. A validação visual foi feita no Electron local e
+isolado; macOS e Windows continuam sem execução nativa nesta máquina.

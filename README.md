@@ -172,12 +172,20 @@ O botão **Organizar** reposiciona os blocos de topo numa matriz quase quadrada,
 - **A ordem das células é a ordem do dock "Elementos"** — a mesma numeração `#N` que aparece no cabeçalho de cada terminal, e que você reordena arrastando as linhas do dock. Arrastar um bloco pelo canvas não muda mais para qual célula ele vai: dois cliques seguidos produzem o mesmo arranjo, e um bloco novo entra numa célula no fim, sem deslocar os que já estavam.
 - **A âncora é o canto do bloco mais ao topo-esquerda**, não o canto visível da tela, então pan, zoom e tamanho de janela não alteram o destino.
 
-A setinha ao lado do botão abre os dois modos:
+A setinha ao lado do botão abre os três modos:
 
 | Modo | O que faz |
 | --- | --- |
 | **Matriz única** | Todos os blocos numa grade só (o clique direto no botão faz isso). |
 | **Uma matriz por repositório** | Uma faixa por diretório de trabalho (`cwd`), empilhadas. Blocos sem diretório — notas, arquivos, páginas — ficam na última faixa. |
+| **Uma linha por pasta** | Uma linha horizontal por diretório de trabalho (`cwd`), com os blocos lado a lado na ordem do dock. Blocos sem diretório ficam na última linha. |
+
+O dock **Elementos** conta a mesma história quando há mais de uma pasta: as
+linhas são separadas por cabeçalhos visuais com o nome da última pasta do
+`cwd`, e a seção sem pasta fica por último. Com apenas uma pasta, os cabeçalhos
+somem para não acrescentar ruído. A numeração continua sendo a lista plana do
+canvas; portanto, os cabeçalhos não ocupam posição nem mudam o `#N`. Arrastar
+um bloco pode reordená-lo dentro da própria pasta, mas nunca muda o seu `cwd`.
 
 Para saber a que repositório um terminal pertence **sem abri-lo**, o cabeçalho do bloco mostra o nome da última pasta do `cwd` ao lado do `#N` (o caminho completo fica no *tooltip*). É a informação que não envelhece: o nome do bloco é escolhido na criação e costuma ficar desatualizado quando a mesma sessão segue para outra tarefa.
 

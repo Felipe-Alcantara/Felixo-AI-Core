@@ -361,10 +361,10 @@ type OrganizeButtonProps = {
 }
 
 /**
- * "Organizar", com o modo por repositório atrás de uma setinha.
+ * "Organizar", com os modos por repositório atrás de uma setinha.
  *
  * O clique no corpo do botão continua fazendo o de sempre (uma matriz só), para
- * que quem já usava não precise aprender nada. A setinha abre as duas opções —
+ * que quem já usava não precise aprender nada. A setinha abre as três opções —
  * um botão a mais na coluna da barra custaria largura permanente por uma
  * escolha que se faz de vez em quando.
  */
@@ -469,6 +469,16 @@ function OrganizeButton({
             Uma matriz por repositório
             <span className="mt-0.5 block text-[11px] text-zinc-400">
               Uma faixa por pasta de trabalho; blocos sem pasta ficam por último.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => organize('by-repository-row')}
+            className="felixo-btn mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-zinc-700"
+          >
+            Uma linha por pasta
+            <span className="mt-0.5 block text-[11px] text-zinc-400">
+              Uma linha lado a lado por pasta de trabalho; blocos sem pasta ficam por último.
             </span>
           </button>
         </div>

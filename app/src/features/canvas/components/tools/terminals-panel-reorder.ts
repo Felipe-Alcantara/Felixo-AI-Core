@@ -1,8 +1,8 @@
 /**
  * Reordering math for the "Elementos" dock, extracted so it's unit-testable
- * without a DOM. The dock's list order IS the canvas node array order, which
- * also drives each terminal's "#N" badge — so moving a row here renumbers the
- * blocks themselves.
+ * without a DOM. The flat dock order IS the canvas node array order, which
+ * also drives each terminal's "#N" badge — the visual grouping by folder is
+ * presentation-only and does not enter these index calculations.
  */
 
 /** Moves one item to another index, returning a new array. Out-of-range or

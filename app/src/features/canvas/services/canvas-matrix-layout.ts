@@ -32,8 +32,9 @@ export type { MatrixBounds }
  * Como o "Organizar" distribui os blocos:
  * - `single`: uma matriz só, com todos os blocos (comportamento padrão).
  * - `by-repository`: uma faixa por repositório (`cwd`), empilhadas.
+ * - `by-repository-row`: uma linha por repositório (`cwd`), empilhadas.
  */
-export type ArrangeMode = 'single' | 'by-repository'
+export type ArrangeMode = 'single' | 'by-repository' | 'by-repository-row'
 
 /** Número mínimo de blocos para que organizar faça alguma diferença. */
 const MINIMUM_ARRANGEABLE = 2
@@ -88,7 +89,7 @@ export function arrangeNodesAsMatrix<TNode extends Node>(
   const cell = cellSize(arrangeable)
   const anchor = matrixAnchor(arrangeable)
   const bands =
-    mode === 'by-repository'
+    mode === 'by-repository' || mode === 'by-repository-row'
       ? groupByRepository(arrangeable).map((band) => band.nodes)
       : [arrangeable]
 
@@ -97,7 +98,12 @@ export function arrangeNodesAsMatrix<TNode extends Node>(
   let widestBand = 0
 
   for (const band of bands) {
-    const columns = matrixColumns(band.length)
+    // A grade quase quadrada continua sendo útil para a faixa tradicional. Na
+    // variante em linha, a própria faixa define o número de colunas: todos os
+    // blocos daquele cwd ficam na mesma linha, na ordem do dock. A conectividade
+    // ainda é calculada para preservar a ordem estável dos componentes, mas não
+    // pode criar uma segunda linha quando há espaço para a faixa inteira.
+    const columns = mode === 'by-repository-row' ? band.length : matrixColumns(band.length)
     const slots = assignSlots(connectedComponents(band, edges), columns)
     const rows = Math.max(...[...slots.values()].map((slot) => slot.row)) + 1
     const bandAnchor = { x: anchor.x, y: bandTop }

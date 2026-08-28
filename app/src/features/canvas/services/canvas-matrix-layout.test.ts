@@ -322,3 +322,76 @@ describe('arrangeNodesAsMatrix por repositório', () => {
     )
   })
 })
+
+describe('arrangeNodesAsMatrix em linha por repositório', () => {
+  it('põe cada pasta em uma linha e preserva a ordem do dock da esquerda para a direita', () => {
+    const nodes = [
+      agent('a1', '/projetos/alpha'),
+      agent('b1', '/projetos/beta'),
+      agent('a2', '/projetos/alpha'),
+      agent('a3', '/projetos/alpha'),
+      note('sem-pasta', { x: 0, y: 0 }),
+    ]
+
+    const { nodes: arranged } = arrangeNodesAsMatrix(nodes, [], 'by-repository-row')
+    const position = (id: string) => positionOf(arranged, id)
+
+    expect(position('a1')).toEqual({ x: 0, y: 0 })
+    expect(position('a2')).toEqual({ x: 552, y: 0 })
+    expect(position('a3')).toEqual({ x: 1104, y: 0 })
+    expect(position('b1')?.x).toBe(0)
+    expect(position('b1')?.y).toBeGreaterThan(position('a1')?.y ?? 0)
+    expect(position('sem-pasta')?.x).toBe(0)
+    expect(position('sem-pasta')?.y).toBeGreaterThan(position('b1')?.y ?? 0)
+  })
+
+  it('não quebra uma faixa larga em várias linhas e enquadra toda a largura', () => {
+    const nodes = Array.from({ length: 5 }, (_, index) =>
+      agent(`alpha-${index + 1}`, '/projetos/alpha'),
+    )
+
+    const { nodes: arranged, bounds } = arrangeNodesAsMatrix(
+      nodes,
+      [],
+      'by-repository-row',
+    )
+    const positions = arranged.map((node) => node.position)
+
+    expect(new Set(positions.map(({ y }) => y))).toEqual(new Set([0]))
+    expect(positions.map(({ x }) => x)).toEqual([0, 552, 1104, 1656, 2208])
+    expect(bounds?.width).toBe(5 * 520 + 4 * 32)
+  })
+
+  it('mantém a ordem dos componentes conectados sem sacrificar a linha única', () => {
+    const nodes = [
+      agent('a1', '/projetos/alpha'),
+      agent('a2', '/projetos/alpha'),
+      agent('a3', '/projetos/alpha'),
+    ]
+
+    const { nodes: arranged } = arrangeNodesAsMatrix(
+      nodes,
+      [edge('a1', 'a3')],
+      'by-repository-row',
+    )
+
+    expect(arranged.map((node) => node.position)).toEqual([
+      { x: 0, y: 0 },
+      { x: 1104, y: 0 },
+      { x: 552, y: 0 },
+    ])
+  })
+
+  it('continua determinístico quando a mesma faixa é organizada duas vezes', () => {
+    const nodes = [
+      agent('a1', '/projetos/alpha', { x: 900, y: 700 }),
+      agent('b1', '/projetos/beta', { x: 300, y: 200 }),
+      agent('a2', '/projetos/alpha', { x: 1500, y: 1200 }),
+    ]
+
+    const first = arrangeNodesAsMatrix(nodes, [], 'by-repository-row').nodes
+    const second = arrangeNodesAsMatrix(first, [], 'by-repository-row').nodes
+
+    expect(second.map((node) => node.position)).toEqual(first.map((node) => node.position))
+  })
+})

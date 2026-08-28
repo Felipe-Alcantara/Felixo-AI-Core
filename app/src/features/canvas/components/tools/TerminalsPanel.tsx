@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { Node } from '@xyflow/react'
 import {
   ChevronDown,
@@ -25,9 +33,14 @@ import { pendingDraftNodeIds, type TerminalDrafts } from './terminals-panel-draf
 import {
   clamp,
   draggedRowIndex,
-  previewIndex,
+  moveById,
   rowShift,
 } from './terminals-panel-reorder'
+import {
+  canReorderDockRows,
+  dockGroupRange,
+  groupDockElements,
+} from './terminals-panel-groups'
 import {
   browserStorage,
   readDockCollapsed,
@@ -86,9 +99,10 @@ function elementTitle(node: Node<CanvasNodeData>) {
 
 /**
  * Fixed, always-on dock (not a toggleable tool panel) listing every block
- * currently on the canvas — terminais, notas, arquivos e grupos —, numbered
- * in the user's own order — matches the "#N" badge shown on each terminal's
- * header. Renders nothing when the canvas is empty.
+ * currently on the canvas — terminais, notas, arquivos e grupos —, grouped
+ * visually by working folder and numbered in the user's own flat order —
+ * matches the "#N" badge shown on each terminal's header. Renders nothing when
+ * the canvas is empty.
  *
  * Clicking a row centers it on the canvas and, for terminals, opens the side
  * drawer ready to type (other block types already show their content inline
@@ -97,8 +111,10 @@ function elementTitle(node: Node<CanvasNodeData>) {
  * focus, and immediately focus + expand the newly selected block.
  *
  * Rows can be dragged (by the grip, or by Alt+Arrow from the keyboard) to
- * pick which block is 1st, 2nd, … — the order is the canvas node order, so
- * the terminals' "#N" badges renumber to match and the choice is persisted.
+ * pick which block is 1st, 2nd, … inside its folder — the order is still the
+ * canvas node order, so the terminals' "#N" badges renumber to match and the
+ * choice is persisted. A folder header is visual only and never participates
+ * in the list indices.
  */
 export function TerminalsPanel({
   nodes,
@@ -108,7 +124,20 @@ export function TerminalsPanel({
   onReorder,
   onHeightChange,
 }: TerminalsPanelProps) {
-  const elements = nodes.filter((node) => node.type != null)
+  const elements = useMemo(() => nodes.filter((node) => node.type != null), [nodes])
+  const dockGroups = useMemo(() => groupDockElements(elements), [elements])
+  const showRepositoryHeaders = dockGroups.length > 1
+  const dockRows = useMemo(
+    () =>
+      dockGroups.flatMap((group) =>
+        group.nodes.map((entry) => ({ ...entry, groupKey: group.key })),
+      ),
+    [dockGroups],
+  )
+  const dockRowIndexById = useMemo(
+    () => new Map(dockRows.map((row, rowIndex) => [row.node.id, rowIndex])),
+    [dockRows],
+  )
   const [rawActiveIndex, setActiveIndex] = useState(0)
   // "Enviar em massa": shows a text field + send button under every terminal
   // row, so each one can get its own message fired off independently instead
@@ -125,13 +154,15 @@ export function TerminalsPanel({
   // of the browser's floating "ghost" image that detaches from the panel and
   // can be dropped anywhere on screen.
   //
-  // `drag` holds the row being moved, the measured row boxes (taken once, at
-  // drag start — rows only *translate* during the drag, so re-measuring would
+  // `drag` holds the visual row being moved, the measured row boxes (taken once,
+  // at drag start — rows only *translate* during the drag, so re-measuring would
   // feed the moved positions back into the math), how far the pointer has
-  // travelled vertically, and where the row currently belongs.
+  // travelled vertically, and where the row currently belongs. Visual row
+  // indices are separate from the flat canvas indices because headers and
+  // grouped folders are presentation only.
   const [drag, setDrag] = useState<{
-    fromIndex: number
-    toIndex: number
+    fromRowIndex: number
+    toRowIndex: number
     offsetY: number
     rects: { top: number; height: number }[]
   } | null>(null)
@@ -208,15 +239,47 @@ export function TerminalsPanel({
    * their next keystrokes here instead of in the newly focused element.
    */
   const moveActive = (delta: number, refocusList: boolean) => {
-    const next = nextActiveIndex(activeIndex, delta, elements.length)
-    const nextElement = elements[next]
-    if (!nextElement) {
+    const currentRowIndex = dockRows.findIndex((row) => row.index === activeIndex)
+    if (currentRowIndex === -1) {
       return
     }
-    setActiveIndex(next)
-    activateNode(nextElement)
+    const nextRowIndex = nextActiveIndex(currentRowIndex, delta, dockRows.length)
+    const nextRow = dockRows[nextRowIndex]
+    if (!nextRow) {
+      return
+    }
+    setActiveIndex(nextRow.index)
+    activateNode(nextRow.node)
     if (refocusList) {
       window.requestAnimationFrame(() => listRef.current?.focus())
+    }
+  }
+
+  /**
+   * Reorders two visual rows only when they belong to the same folder. The
+   * callback still receives ids, and the resulting active index is calculated
+   * against the flat list that the canvas persists.
+   */
+  const reorderDockRows = (fromRowIndex: number, toRowIndex: number) => {
+    if (fromRowIndex === toRowIndex) {
+      return
+    }
+    const from = dockRows[fromRowIndex]
+    const to = dockRows[toRowIndex]
+    if (!from || !to || !canReorderDockRows(dockRows, fromRowIndex, toRowIndex)) {
+      return
+    }
+
+    const edge = toRowIndex > fromRowIndex ? 'after' : 'before'
+    const moved = moveById(elements, from.node.id, to.node.id, edge)
+    if (moved === elements) {
+      return
+    }
+
+    onReorder(from.node.id, to.node.id, edge)
+    const movedIndex = moved.findIndex((node) => node.id === from.node.id)
+    if (movedIndex !== -1) {
+      setActiveIndex(movedIndex)
     }
   }
 
@@ -224,23 +287,23 @@ export function TerminalsPanel({
    * Grabs a row. Measures every row once here (see `drag` above) so the move
    * math and the neighbours' shifts both work off the pre-drag layout.
    */
-  const startDrag = (index: number, event: ReactPointerEvent<HTMLElement>) => {
+  const startDrag = (rowIndex: number, event: ReactPointerEvent<HTMLElement>) => {
     const list = listRef.current
-    if (!list || event.button !== 0) {
+    if (!list || event.button !== 0 || !dockRows[rowIndex]) {
       return
     }
     const rects = Array.from(list.querySelectorAll('[data-element-row]')).map((row) => {
       const box = row.getBoundingClientRect()
       return { top: box.top, height: box.height }
     })
-    if (rects.length !== elements.length) {
+    if (rects.length !== dockRows.length) {
       return
     }
     // Keeps receiving move/up events even when the pointer outruns the row
     // (fast drags) or leaves the dock entirely.
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
-    setDrag({ fromIndex: index, toIndex: index, offsetY: 0, rects })
+    setDrag({ fromRowIndex: rowIndex, toRowIndex: rowIndex, offsetY: 0, rects })
     dragStartYRef.current = event.clientY
   }
 
@@ -249,36 +312,49 @@ export function TerminalsPanel({
       if (!current) {
         return current
       }
-      const { rects, fromIndex } = current
+      const { rects, fromRowIndex } = current
+      const source = dockRows[fromRowIndex]
+      const own = rects[fromRowIndex]
+      if (!source || !own) {
+        return current
+      }
+
+      // The visual group is contiguous even when the persisted flat list was
+      // interleaved. Clamping to its first/last row makes a pointer over a
+      // different folder's header a no-op instead of a cross-folder reorder.
+      const groupRange = dockGroupRange(dockRows, fromRowIndex)
+      const groupStart = groupRange?.start ?? -1
+      const groupEnd = groupRange?.end ?? -1
+      const first = rects[groupStart]
+      const last = rects[groupEnd]
+      if (!first || !last || groupStart === -1 || groupEnd === -1) {
+        return current
+      }
+
       // The row never leaves the list: its travel is capped at the top of the
-      // first row and the bottom of the last one.
-      const first = rects[0]
-      const last = rects[rects.length - 1]
-      const own = rects[fromIndex]
+      // first and last row of its folder, including the header gap between
+      // folders in the measured layout.
       const offsetY = clamp(
         event.clientY - dragStartYRef.current,
         first.top - own.top,
         last.top + last.height - (own.top + own.height),
       )
-      const toIndex = draggedRowIndex(own.top + own.height / 2 + offsetY, fromIndex, rects)
-      return toIndex === current.toIndex && offsetY === current.offsetY
+      const toRowIndex = clamp(
+        draggedRowIndex(own.top + own.height / 2 + offsetY, fromRowIndex, rects),
+        groupStart,
+        groupEnd,
+      )
+      return toRowIndex === current.toRowIndex && offsetY === current.offsetY
         ? current
-        : { ...current, offsetY, toIndex }
+        : { ...current, offsetY, toRowIndex }
     })
   }
 
   /** Drops the row where it currently sits, keeping the highlight (and the
    * keyboard cursor) on the block that moved. */
   const endDrag = () => {
-    const from = drag ? elements[drag.fromIndex] : undefined
-    const to = drag ? elements[drag.toIndex] : undefined
-    if (from && to && drag && drag.toIndex !== drag.fromIndex) {
-      onReorder(
-        from.id,
-        to.id,
-        drag.toIndex > drag.fromIndex ? 'after' : 'before',
-      )
-      setActiveIndex(drag.toIndex)
+    if (drag) {
+      reorderDockRows(drag.fromRowIndex, drag.toRowIndex)
     }
     setDrag(null)
   }
@@ -286,18 +362,12 @@ export function TerminalsPanel({
   /** Keyboard equivalent of dragging: Alt+Arrow moves the ACTIVE row itself
    * (Shift+Arrow moves the cursor between rows). */
   const moveActiveRow = (delta: number) => {
-    const to = activeIndex + delta
-    if (to < 0 || to >= elements.length) {
+    const fromRowIndex = dockRows.findIndex((row) => row.index === activeIndex)
+    const toRowIndex = fromRowIndex + delta
+    if (fromRowIndex < 0 || toRowIndex < 0 || toRowIndex >= dockRows.length) {
       return
     }
-    const activeElement = elements[activeIndex]
-    const targetElement = elements[to]
-    if (!activeElement || !targetElement) {
-      return
-    }
-    // Swapping with the neighbour = landing on the far side of it.
-    onReorder(activeElement.id, targetElement.id, delta > 0 ? 'after' : 'before')
-    setActiveIndex(to)
+    reorderDockRows(fromRowIndex, toRowIndex)
   }
 
   // Always holds the latest moveActive so the window-level listener (mounted
@@ -348,6 +418,23 @@ export function TerminalsPanel({
     window.addEventListener('keydown', onWindowKeyDown, true)
     return () => window.removeEventListener('keydown', onWindowKeyDown, true)
   }, [])
+
+  // The dock is grouped visually, but the badge still represents the flat
+  // persisted canvas order. During a drag, preview that same order by id so a
+  // folder with interleaved source indices does not show misleading numbers.
+  const dragPreviewIndexes = useMemo(() => {
+    if (!drag) {
+      return null
+    }
+    const from = dockRows[drag.fromRowIndex]
+    const to = dockRows[drag.toRowIndex]
+    if (!from || !to || !canReorderDockRows(dockRows, drag.fromRowIndex, drag.toRowIndex)) {
+      return null
+    }
+    const edge = drag.toRowIndex > drag.fromRowIndex ? 'after' : 'before'
+    const moved = moveById(elements, from.node.id, to.node.id, edge)
+    return new Map(moved.map((node, index) => [node.id, index]))
+  }, [drag, dockRows, elements])
 
   if (elements.length === 0) {
     return null
@@ -471,40 +558,89 @@ export function TerminalsPanel({
           collapsed || drag ? '' : 'felixo-anim-stagger-list'
         }`}
       >
-        {elements.map((node, index) => (
-          <ElementRow
-            key={node.id}
-            node={node}
-            // While a row is in flight the badges preview the order it would
-            // land in, so "#1" is already on the row that will be first.
-            index={(drag ? previewIndex(index, drag.fromIndex, drag.toIndex) : index) + 1}
-            active={index === activeIndex}
-            dragging={drag?.fromIndex === index}
-            // The dragged row follows the pointer; the ones it passes slide
-            // out of the way by exactly one row height.
-            translateY={
-              drag
-                ? drag.fromIndex === index
-                  ? drag.offsetY
-                  : rowShift(index, drag.fromIndex, drag.toIndex, drag.rects)
-                : 0
-            }
-            composeMode={composeMode}
-            draft={drafts[node.id] ?? ''}
-            onDraftChange={(text) => setDraft(node.id, text)}
-            onSend={() => sendDraft(node.id)}
-            onSelect={() => {
-              setActiveIndex(index)
-              activateNode(node)
-            }}
-            onGrabPointerDown={(event) => startDrag(index, event)}
-            onGrabPointerMove={updateDrag}
-            onGrabPointerUp={endDrag}
-          />
+        {dockGroups.map((group) => (
+          <Fragment key={`repository-${group.key || 'none'}`}>
+            {showRepositoryHeaders && (
+              <RepositoryHeading
+                label={group.label || 'Sem pasta de trabalho'}
+                path={group.key}
+                count={group.nodes.length}
+              />
+            )}
+            {group.nodes.map(({ node, index }) => {
+              const rowIndex = dockRowIndexById.get(node.id)
+              if (rowIndex === undefined) {
+                return null
+              }
+              return (
+                <ElementRow
+                  key={node.id}
+                  node={node}
+                  // While a row is in flight the badges preview the order it
+                  // would land in, so "#1" is already on the row that will be
+                  // first in the persisted canvas order.
+                  index={(dragPreviewIndexes?.get(node.id) ?? index) + 1}
+                  active={index === activeIndex}
+                  dragging={drag?.fromRowIndex === rowIndex}
+                  // The dragged row follows the pointer; the ones it passes
+                  // slide out of the way by exactly one row height.
+                  translateY={
+                    drag
+                      ? drag.fromRowIndex === rowIndex
+                        ? drag.offsetY
+                        : rowShift(
+                            rowIndex,
+                            drag.fromRowIndex,
+                            drag.toRowIndex,
+                            drag.rects,
+                          )
+                      : 0
+                  }
+                  composeMode={composeMode}
+                  draft={drafts[node.id] ?? ''}
+                  onDraftChange={(text) => setDraft(node.id, text)}
+                  onSend={() => sendDraft(node.id)}
+                  onSelect={() => {
+                    setActiveIndex(index)
+                    activateNode(node)
+                  }}
+                  onGrabPointerDown={(event) => startDrag(rowIndex, event)}
+                  onGrabPointerMove={updateDrag}
+                  onGrabPointerUp={endDrag}
+                />
+              )
+            })}
+          </Fragment>
         ))}
       </ul>
       </div>
     </div>
+  )
+}
+
+function RepositoryHeading({
+  label,
+  path,
+  count,
+}: {
+  label: string
+  path: string
+  count: number
+}) {
+  return (
+    <li data-repository-heading role="presentation" className="px-1 pb-0.5 pt-2 first:pt-0">
+      <div
+        title={path || 'Blocos sem pasta de trabalho'}
+        className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500"
+      >
+        <span className="h-px min-w-2 flex-1 bg-white/10" aria-hidden />
+        <span role="heading" aria-level={3} className="max-w-[15rem] truncate">
+          {label}
+        </span>
+        <span className="tabular-nums text-zinc-600">{count}</span>
+        <span className="h-px min-w-2 flex-1 bg-white/10" aria-hidden />
+      </div>
+    </li>
   )
 }
 
