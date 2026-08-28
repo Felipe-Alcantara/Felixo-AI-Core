@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CLEAR_INPUT_SEQUENCE,
+  buildClearInputSequence,
   findMultiLineTypedInputRange,
   findTypedInputRange,
   isDeleteSelectionKey,
@@ -147,10 +147,25 @@ describe('isDeleteSelectionKey', () => {
   })
 })
 
-describe('CLEAR_INPUT_SEQUENCE', () => {
-  it('é Ctrl+U seguido de Ctrl+K, e não carrega um Enter junto', () => {
-    expect(CLEAR_INPUT_SEQUENCE).toBe('\x15\x0b')
-    expect(CLEAR_INPUT_SEQUENCE).not.toContain('\r')
+describe('buildClearInputSequence', () => {
+  it('numa linha, é um só Ctrl+U seguido de Ctrl+K — igual ao comportamento anterior', () => {
+    expect(buildClearInputSequence(1)).toBe('\x15\x0b')
+  })
+
+  it('repete o Ctrl+U uma vez por linha visual antes do Ctrl+K final', () => {
+    // Regressão: com a entrada em 3 linhas visuais, um único Ctrl+U só matava
+    // a última — sobravam as duas primeiras linhas do composer.
+    expect(buildClearInputSequence(3)).toBe('\x15\x15\x15\x0b')
+  })
+
+  it('nunca carrega um Enter junto — limpar não é enviar', () => {
+    expect(buildClearInputSequence(1)).not.toContain('\r')
+    expect(buildClearInputSequence(3)).not.toContain('\r')
+  })
+
+  it('trata contagem inválida como uma única linha', () => {
+    expect(buildClearInputSequence(0)).toBe('\x15\x0b')
+    expect(buildClearInputSequence(-2)).toBe('\x15\x0b')
   })
 })
 

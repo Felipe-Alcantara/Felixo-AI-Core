@@ -16,7 +16,7 @@ import {
   xtermAlreadyForcesSelection,
 } from './terminal-mouse-selection'
 import {
-  CLEAR_INPUT_SEQUENCE,
+  buildClearInputSequence,
   findMultiLineTypedInputRange,
   isDeleteSelectionKey,
   isSelectInputShortcut,
@@ -311,6 +311,15 @@ type Session = {
     selection: string
     /** Texto digitado sem o prompt nem a moldura que a CLI desenha. */
     text: string
+    /**
+     * Quantas linhas visuais do buffer a seleção ocupou.
+     *
+     * É o que decide quantas vezes `Ctrl+U` precisa se repetir para apagar a
+     * entrada inteira — uma por linha visual, não uma por quebra lógica
+     * (`\n`), porque é a linha visual que o composer da CLI desenha e é nela
+     * que o `Ctrl+U` age.
+     */
+    visualLineCount: number
   }
   /** Buffer signature at the last idle check, to ignore in-place UI redraws. */
   lastSignature: string
@@ -589,7 +598,8 @@ export class TerminalSessionStore {
       // Ctrl+A destacaria um texto que ninguém consegue apagar de uma vez, que
       // era exatamente a queixa de origem.
       if (isDeleteSelectionKey(event) && this.hasTypedInputSelection(session)) {
-        void pty.write({ sessionId: session.ptySessionId, data: CLEAR_INPUT_SEQUENCE })
+        const clearSequence = buildClearInputSequence(session.selectedInput?.visualLineCount ?? 1)
+        void pty.write({ sessionId: session.ptySessionId, data: clearSequence })
         session.terminal.clearSelection()
         session.selectedInput = undefined
         return false
@@ -1090,7 +1100,13 @@ export class TerminalSessionStore {
     const selectionLength =
       (cursorRow - startRow) * terminal.cols + buffer.cursorX - range.startColumn
     terminal.select(range.startColumn, startRow, selectionLength)
-    session.selectedInput = { selection: terminal.getSelection(), text: range.text }
+    session.selectedInput = {
+      selection: terminal.getSelection(),
+      text: range.text,
+      // `cursorRow - startRow` linhas visuais entre o começo da seleção e o
+      // cursor, mais a própria linha do cursor.
+      visualLineCount: cursorRow - startRow + 1,
+    }
 
     return Boolean(session.selectedInput)
   }

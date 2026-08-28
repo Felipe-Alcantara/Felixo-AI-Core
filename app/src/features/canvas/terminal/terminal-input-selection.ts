@@ -194,14 +194,28 @@ export function isDeleteSelectionKey(event: KeyboardEvent): boolean {
 }
 
 /**
- * O que apaga a linha de entrada de qualquer CLI: `Ctrl+U` (do cursor para
- * trás) seguido de `Ctrl+K` (do cursor para a frente).
+ * Monta o que apaga a linha de entrada de qualquer CLI: `Ctrl+U` (do cursor
+ * para trás) repetido uma vez por linha **visual** que a seleção cobre,
+ * seguido de `Ctrl+K` (do cursor para a frente, na linha em que ele parou).
  *
  * São teclas que o readline e as CLIs de agente já entendem — mais confiável do
  * que contar caracteres e mandar Backspace na conta certa, que erra assim que o
  * texto tem acento, emoji ou uma quebra de linha no meio.
  *
+ * Um só `Ctrl+U` mata apenas até o começo da linha visual **corrente**, não da
+ * entrada inteira: numa entrada de uma linha os dois coincidem, mas a partir da
+ * segunda linha a seleção do Ctrl+A cobre mais do que aquele único Ctrl+U
+ * apaga, sobrando as linhas de cima. Repeti-lo por linha some com cada uma
+ * delas antes do Ctrl+K final limpar o que resta na linha onde o cursor parou.
+ *
+ * `visualLineCount` vem de quantas linhas do buffer do xterm a seleção ocupou
+ * (não da contagem de `\n` no texto lógico) — são as mesmas linhas que o
+ * composer da CLI desenhou, e é nelas que o Ctrl+U age.
+ *
  * Sem `\r` junto: limpar não é enviar. Um `\r` aqui mandaria para o agente o
  * prompt pela metade que a pessoa estava justamente descartando.
  */
-export const CLEAR_INPUT_SEQUENCE = '\x15\x0b'
+export function buildClearInputSequence(visualLineCount: number): string {
+  const ctrlU = '\x15'.repeat(Math.max(1, visualLineCount))
+  return `${ctrlU}\x0b`
+}
