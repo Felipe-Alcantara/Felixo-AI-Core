@@ -1737,3 +1737,72 @@ certo.
 
 Commit `586db33`, pushado. Fecha a task
 [Felixo AI Core/Retomada — reproduzir o fallback /resume no Linux e recuperar a retomada por ID](https://app.notion.com/p/Felixo-AI-Core-Retomada-reproduzir-o-fallback-resume-no-Linux-e-recuperar-a-retomada-por-ID-3c891f95497e81aa8c19eeecf9fe823d).
+
+---
+
+## [2026-08-28] Retomada por ID validada ponta a ponta — Codex e Claude certos, Gemini quebrado por mudança da própria CLI
+
+Fechamento da validação que tinha ficado pendente na entrada anterior. Desta vez, em
+vez de brigar com a corrida de tempo da janela de descoberta (15s a partir do spawn),
+editei a `agentSession`/`cwd` direto no SQLite do `userData` isolado do `rodar-app`
+— testa exatamente o mesmo código de decisão (`canResumeAgentSession`,
+`buildAgentResumeArgs`, `resolveTerminalInitialText`) sem depender de o discovery
+achar o arquivo a tempo.
+
+### Método
+
+1. Criei um node Codex de verdade pelo app (sem projeto), fechei o app.
+2. Editei `data_json` do node no SQLite, apontando `cwd` e `agentSession` para uma
+   sessão **real e não recente** já existente no histórico de cada CLI (Codex:
+   26/08; Claude: 10/08, 18 dias; Gemini: 17/08, 11 dias) — peguei o `sessionId` e o
+   `cwd` reais de dentro dos próprios arquivos de histórico (`~/.codex/sessions`,
+   `~/.claude/projects`, `~/.gemini/tmp`).
+3. Reabri o app e conferi o que o terminal desenhou.
+
+### O que foi medido
+
+| CLI | Sessão usada | Resultado |
+| --- | --- | --- |
+| Codex 0.150.1 | 26/08, `cwd=/home/felipe` | **Retomou direto** — `<EXTERNAL SESSION IMPORTED>`, sem seletor. |
+| Claude Code | 10/08 (18 dias), repo Automações do Notion | **Retomou direto** — abriu exatamente a conversa antiga (tabela de tasks, "Baked for 7m 48s · done segunda-feira, 10 de ago."), sem seletor. |
+| Gemini CLI 0.57.0 | 17/08 (11 dias), `app/` | **Falhou** — `Error resuming session: No previous sessions found for this project.` (a CLI encerrou, código 42). |
+
+**Teste negativo** (proteção contra conta/diretório errado): forcei `node.data.cwd`
+(`/tmp`) divergente de `agentSession.cwd` (`/home/felipe`) — o app **não** tentou
+resumir; abriu um Codex novo em `/tmp` com o prompt de confiança de diretório
+normal, sem nenhum sinal de "importando sessão". A proteção segura o que deveria.
+
+### A causa do Gemini: a própria CLI mudou de sintaxe
+
+`buildAgentResumeArgs()` (`agent-session.ts`) manda `--resume <sessionId>` para
+Claude **e** Gemini, igual. Isso batia com o Gemini CLI `0.52.0`, medido na
+implementação original (25/08/2026). Só que `gemini --help` nesta máquina (CLI
+`0.57.0`) mostra:
+
+```
+-r, --resume   Resume a previous session. Use "latest" for most recent or index
+               number (e.g. --resume 5)
+--session-id   Start a new session with a manually provided UUID.
+```
+
+`--resume` não aceita mais um UUID — só `"latest"` ou um **índice** dentro da lista
+de sessões do projeto corrente (`--list-sessions`). `--session-id` existe, mas é para
+**começar uma sessão nova com um UUID escolhido**, não para retomar uma existente.
+Não há mais, nesta versão, uma forma direta de "retomar por UUID" documentada — seria
+preciso `--list-sessions` primeiro para achar o índice, e esse índice muda a cada
+sessão nova criada no projeto (não é estável para persistir).
+
+Isso não é o bug desta task (que já estava fechado para Codex e Claude): é a CLI do
+Gemini tendo mudado de sintaxe depois que a implementação original foi validada. Task
+nova aberta para isso, separada.
+
+### O que não foi medido
+
+- Migração de nodes antigos (persistidos antes do fix de `cwd`) não foi testada
+  isoladamente — o teste usado já simulava esse cenário (node sem `cwd` original,
+  ganhando um depois via edição direta), mas não cobre todos os casos de
+  incompatibilidade de schema mais antigos.
+- Não testado com troca de conta (só de diretório).
+
+Relatório do dia e task de origem atualizados. Task nova:
+[Felixo AI Core/Retomada — --resume do Gemini CLI não aceita mais UUID (mudança de versão)](https://app.notion.com/p/Felixo-AI-Core-Retomada-resume-do-Gemini-CLI-n-o-aceita-mais-UUID-mudan-a-de-vers-o-3ca91f95497e8135b6a9ed68cad71f4f).
