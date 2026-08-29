@@ -105,8 +105,9 @@ test(
       const result = await service.refresh()
       assert.equal(result.ok, true)
       // Codex e Claude já tinham conta; Openia foi descoberto agora e entrou
-      // na rodada. Gemini não consulta nada porque não tem comando de auth.
-      assert.equal(calls.length, 3)
+      // na rodada com dois comandos (auth e `statusline`). Gemini não consulta
+      // nada porque não tem comando de auth.
+      assert.equal(calls.length, 4)
 
       const accounts = new Map(result.accounts.map((account) => [account.id, account]))
 
@@ -358,6 +359,98 @@ test(
       assert.equal(accounts.get('switch-bob').latestSample.status, 'current')
       assert.equal(accounts.get('switch-bob').latestSample.metrics[0].used, 7)
       assert.equal(accounts.get('switch-alice').lastKnownSample.metrics[0].used, 2)
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'CLI sem sessão aparece como indisponível, não como erro',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-logout-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+
+    repository.createAccount({
+      id: 'openia-account',
+      providerId: 'openia',
+      label: 'Openia',
+    })
+
+    const service = createAgentUsageService({
+      repository,
+      probe: () => null,
+      listCatalog: async () => [],
+      runCommand: async ({ args }) =>
+        args.includes('statusline')
+          ? { ok: true, stdout: 'openia: sem chave', stderr: '' }
+          : {
+              ok: true,
+              stdout: JSON.stringify({ configured: false, active: null, storedKeys: 0 }),
+              stderr: '',
+            },
+    })
+
+    try {
+      const result = await service.refresh()
+      const sample = result.accounts[0].latestSample
+
+      // Não estar logado é ausência de dado, não falha: um selo de erro aqui
+      // faria a pessoa procurar defeito onde só falta entrar na conta.
+      assert.equal(sample.status, 'unavailable')
+      assert.match(sample.errorMessage, /não há uma sessão autenticada/)
+      assert.deepEqual(sample.metrics, [])
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'conta única fica com a métrica mesmo quando a CLI não publica identidade',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-anonima-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+
+    repository.createAccount({
+      id: 'openia-unica',
+      providerId: 'openia',
+      label: 'Openia',
+    })
+
+    const service = createAgentUsageService({
+      repository,
+      probe: () => null,
+      listCatalog: async () => [],
+      // O launcher lê a chave do ambiente: informa que está configurado, mas
+      // não tem nome de conta para publicar.
+      runCommand: async ({ args }) =>
+        args.includes('statusline')
+          ? {
+              ok: true,
+              stdout: 'OpenRouter  usado $0.4210  ·  resta $4.58  (de $5.00)',
+              stderr: '',
+            }
+          : {
+              ok: true,
+              stdout: JSON.stringify({ configured: true, active: null, storedKeys: 0 }),
+              stderr: '',
+            },
+    })
+
+    try {
+      const result = await service.refresh()
+      const sample = result.accounts[0].latestSample
+
+      assert.equal(sample.status, 'current')
+      assert.equal(sample.metrics[0].used, 0.421)
+      assert.equal(sample.metrics[0].limit, 5)
     } finally {
       database.close()
       fs.rmSync(databaseDir, { recursive: true, force: true })

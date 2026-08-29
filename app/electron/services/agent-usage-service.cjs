@@ -40,6 +40,8 @@ const AMBIGUOUS_IDENTITY_MESSAGE =
   'Há mais de uma conta sem identidade vinculada; a amostra ficou sem associação para evitar mistura de histórico.'
 const CLI_QUERY_FAILED_MESSAGE =
   'A consulta da CLI falhou; o estado desta rodada não está disponível.'
+const LOGGED_OUT_MESSAGE =
+  'A CLI informa que não há uma sessão autenticada, então não há uso a mostrar.'
 
 /**
  * Orquestra a coleta das fontes de uso sem transportar credenciais ao
@@ -257,8 +259,14 @@ async function collectProviderSnapshot({ providerId, runCommand, now, probe }) {
     `${result?.stdout ?? ''}\n${result?.stderr ?? ''}`,
   )
 
-  const commandMetrics =
+  // Algumas CLIs devolvem quota na própria saída de auth; quando não devolvem,
+  // vale o comando de uso declarado pela fonte, e só então a leitura local.
+  const authMetrics =
     result?.ok === true ? parseAgentUsage(providerId, safeOutput).metrics : []
+  const commandMetrics =
+    authMetrics.length > 0
+      ? authMetrics
+      : await runUsageCommand({ source, providerId, runCommand })
   const metrics = commandMetrics.length > 0 ? commandMetrics : local?.metrics ?? []
 
   return {
@@ -275,6 +283,42 @@ async function collectProviderSnapshot({ providerId, runCommand, now, probe }) {
     metrics,
     queryFailed: result?.ok !== true,
   }
+}
+
+/**
+ * Roda o comando de uso quando a fonte declara um diferente do de
+ * autenticação — o caso do `openia statusline`, que consulta o saldo da conta
+ * com a chave que o próprio launcher guarda.
+ *
+ * A falha aqui não derruba a rodada: sem métrica, o painel mostra o estado de
+ * autenticação e a limitação, como em qualquer fonte sem número.
+ */
+async function runUsageCommand({ source, providerId, runCommand }) {
+  if (source.usage.kind !== 'cli-command' || !source.usage.command) {
+    return []
+  }
+
+  let result
+  try {
+    result = await runCommand({
+      command: source.usage.command,
+      args: [...(source.usage.args ?? [])],
+      cwd: os.homedir(),
+      env: createCliEnv(),
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    })
+  } catch {
+    return []
+  }
+
+  if (result?.ok !== true) {
+    return []
+  }
+
+  return parseAgentUsage(
+    providerId,
+    redactOutput(`${result.stdout ?? ''}\n${result.stderr ?? ''}`),
+  ).metrics
 }
 
 function saveProviderSamples({
@@ -330,7 +374,29 @@ function saveProviderSamples({
       continue
     }
 
-    if (resolution.kind === 'ambiguous' || resolution.kind === 'missing') {
+    // Sem sessão não há identidade a resolver: isso é ausência de dado, não
+    // falha. Marcar como erro pintava de vermelho a CLI em que a pessoa
+    // simplesmente ainda não entrou.
+    if (snapshot.auth.authStatus === 'logged_out') {
+      repository.saveSample({
+        ...base,
+        status: 'unavailable',
+        errorMessage: LOGGED_OUT_MESSAGE,
+      })
+      continue
+    }
+
+    // Nem toda CLI diz de qual conta é a sessão — o launcher que lê a chave do
+    // ambiente, por exemplo, não tem nome de conta para publicar. Exigir
+    // identidade aí jogava fora número verdadeiro. A regra protege contra
+    // misturar histórico de contas diferentes, e esse risco só existe quando
+    // há mais de uma conta no provider: com uma só, a amostra é dela.
+    const singleAccountProvider = accounts.length === 1
+
+    if (
+      resolution.kind === 'ambiguous' ||
+      (resolution.kind === 'missing' && !singleAccountProvider)
+    ) {
       const message =
         resolution.kind === 'ambiguous'
           ? AMBIGUOUS_IDENTITY_MESSAGE
@@ -343,7 +409,12 @@ function saveProviderSamples({
       continue
     }
 
-    if (resolution.kind !== 'matched' || resolution.targetId !== account.id) {
+    const attributable =
+      resolution.kind === 'matched'
+        ? resolution.targetId === account.id
+        : resolution.kind === 'missing' && singleAccountProvider
+
+    if (!attributable) {
       repository.saveSample({
         ...base,
         status: 'unavailable',
@@ -365,9 +436,7 @@ function saveProviderSamples({
     repository.saveSample({
       ...base,
       status: previous ? 'stale' : 'unavailable',
-      errorMessage: snapshot.auth.authStatus === 'logged_out'
-        ? 'A CLI informa que não há uma sessão autenticada.'
-        : snapshot.source.usage.limitation,
+      errorMessage: snapshot.source.usage.limitation,
     })
   }
 }
