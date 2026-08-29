@@ -1,92 +1,30 @@
-export type ModelId = string
+// Tipos de modelo e orquestração moram em shared/ (usados pelo canvas e pelo
+// chat). Importados para uso local e re-exportados para os imports existentes
+// continuarem valendo.
+import type {
+  Model,
+  ModelId,
+  OrchestrationCliType,
+} from '../shared/types/models'
+import type { TerminalOutputEvent } from '../shared/types/terminal-output'
 
-export type CliType =
-  | 'claude'
-  | 'codex'
-  | 'codex-app-server'
-  | 'gemini'
-  | 'gemini-acp'
-  | 'unknown'
+export type {
+  CliType,
+  Model,
+  ModelAvailabilityStatus,
+  ModelCapabilityProfile,
+  ModelFileSelection,
+  ModelId,
+  OrchestrationCliType,
+  OrchestratorMode,
+  OrchestratorSettings,
+  ReasoningEffort,
+  SkillPrompt,
+} from '../shared/types/models'
 
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
-
-export type Model = {
-  id: ModelId
-  name: string
-  command: string
-  source: string
-  cliType: CliType
-  providerModel?: string
-  reasoningEffort?: ReasoningEffort
-}
-
-export type ModelFileSelection = Omit<Model, 'id'>
-
-export type OrchestrationCliType = Exclude<CliType, 'unknown'>
-
-export type OrchestratorMode =
-  | 'manual'
-  | 'semi_auto'
-  | 'automatic'
-  | 'read_only'
-  | 'experimental'
-
-export type SkillPrompt = {
-  id: string
-  name: string
-  description: string
-  prompt: string
-  enabled: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export type OrchestratorSettings = {
-  customContext: string
-  globalMemories: string
-  enabledSkills: string[]
-  skills: SkillPrompt[]
-  preferredModelIds: string[]
-  blockedModelIds: string[]
-  defaultWorkflow: string
-  mode: OrchestratorMode
-  maxAgentsPerTurn: number
-  maxTurns: number
-  maxTotalAgents: number
-  maxRuntimeMinutes: number
-  maxCostEstimate: number
-  maxContextTokens: number
-  requireConfirmationForSensitiveActions: boolean
-}
-
-export type ModelAvailabilityStatus =
-  | 'available'
-  | 'blocked'
-  | 'unavailable'
-  | 'error'
-  | 'no_login'
-  | 'limit_reached'
-  | 'unknown'
-
-export type ModelCapabilityProfile = {
-  id: string
-  name: string
-  cliType: OrchestrationCliType
-  providerModel?: string
-  reasoningEffort?: ReasoningEffort
-  execution: string
-  supportsTools: boolean
-  supportsMcp: boolean
-  supportsFileEdits: boolean
-  supportsLongContext: boolean
-  supportsNativeSession: boolean
-  strengths: string[]
-  limits: string
-  cost: string
-  status: ModelAvailabilityStatus
-}
-
-export type AppTheme = 'dark' | 'high_contrast'
+// O tema deixou de ser da tela de chat e passou a ser do app; o alias fica
+// para não quebrar quem já importava daqui.
+export type { AppTheme } from '../shared/theme/theme-storage'
 
 export type ProjectNote = {
   id: string
@@ -97,24 +35,12 @@ export type ProjectNote = {
   updatedAt: string
 }
 
-export type TerminalOutputKind =
-  | 'assistant'
-  | 'error'
-  | 'lifecycle'
-  | 'metrics'
-  | 'stderr'
-  | 'tool'
-
-export type TerminalOutputEvent = {
-  sessionId: string
-  parentThreadId?: string
-  source: 'stdout' | 'stderr' | 'system'
-  chunk: string
-  severity?: 'debug' | 'info' | 'warn' | 'error'
-  kind?: TerminalOutputKind
-  title?: string
-  metadata?: Record<string, string | number | boolean | null | undefined>
-}
+// O evento de saída de terminal mora em shared/; re-exportado para os imports
+// existentes continuarem valendo.
+export type {
+  TerminalOutputEvent,
+  TerminalOutputKind,
+} from '../shared/types/terminal-output'
 
 export type RawOutputEvent = TerminalOutputEvent
 
@@ -223,15 +149,9 @@ export type StreamEvent =
       message: string
     })
 
-export type QaLogEntry = {
-  id: number
-  createdAt: string
-  level: 'debug' | 'info' | 'warn' | 'error'
-  scope: string
-  sessionId?: string
-  message: string
-  details: unknown
-}
+// O tipo do log do backend mora em shared/; re-exportado para os imports
+// existentes continuarem valendo.
+export type { QaLogEntry } from '../shared/types/qa-log'
 
 export type ChatMessage = {
   id: number
@@ -271,27 +191,13 @@ export type ChatSession = {
   updatedAt: string
 }
 
-export type SystemDesignConfig = {
-  enabled: boolean
-  repoUrl: string
-  branch: string
-  lastSha: string | null
-  lastSyncedAt: string | null
-  lastError: string | null
-}
-
-export type SystemDesignDocumentSummary = {
-  path: string
-  title: string
-  summary: string
-  byteSize: number
-  sourceSha?: string
-  updatedAt: string
-}
-
-export type SystemDesignDocument = SystemDesignDocumentSummary & {
-  content: string
-}
+// Os tipos do Felixo System Design moram em shared/ (usados pelo canvas e pelo
+// chat); re-exportados aqui para os imports existentes continuarem valendo.
+export type {
+  SystemDesignConfig,
+  SystemDesignDocument,
+  SystemDesignDocumentSummary,
+} from '../shared/system-design/types'
 
 // Automation types live in shared/ (used by chat and canvas); re-exported here
 // so existing chat imports keep working.

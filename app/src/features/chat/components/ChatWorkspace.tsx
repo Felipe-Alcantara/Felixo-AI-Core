@@ -30,7 +30,7 @@ import {
   inferAvailabilityStatus,
 } from '../services/stream-status'
 import { createSystemDesignPromptBlock } from '../services/system-design-prompt'
-import { useSystemDesignSettings } from '../hooks/useSystemDesignSettings'
+import { useSystemDesignSettings } from '../../shared/system-design/useSystemDesignSettings'
 import {
   createSuggestedExportFileName,
   exportChat,
@@ -64,9 +64,9 @@ import {
   loadInitialOrchestratorSettings,
   loadOrchestratorSettings,
   saveOrchestratorSettings,
-} from '../services/orchestrator-settings-storage'
+} from '../../shared/orchestrator/orchestrator-settings-storage'
 import { buildDocsIndexForProject, type DocsIndexEntry } from '../services/project-storage'
-import { loadTheme, saveTheme } from '../services/theme-storage'
+import { useAppTheme } from '../../shared/theme/theme-context'
 import type {
   AutomationDefinition,
   AppTheme,
@@ -117,7 +117,9 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   )
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [theme, setTheme] = useState<AppTheme>(() => loadTheme())
+  // O tema é do app inteiro, não desta tela: quem guarda e aplica é o
+  // ThemeProvider, para que a escolha valha também no canvas.
+  const { theme, setTheme } = useAppTheme()
   const {
     projects,
     activeProjectIds,
@@ -405,11 +407,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
 
     void saveOrchestratorSettings(orchestratorSettings)
   }, [orchestratorSettings])
-
-  useEffect(() => {
-    saveTheme(theme)
-    document.documentElement.dataset.theme = theme
-  }, [theme])
 
   function sendMessage() {
     const trimmedInput = input.trim()

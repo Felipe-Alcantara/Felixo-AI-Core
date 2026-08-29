@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChatWorkspace } from './features/chat/components/ChatWorkspace'
 import { CanvasView } from './features/canvas/components/CanvasView'
 import { useFocusRestore } from './features/shared/focus/useFocusRestore'
+import { ThemeProvider } from './features/shared/theme/ThemeProvider'
 
 type Screen = 'canvas' | 'chat'
 
@@ -18,13 +19,17 @@ function App() {
   useFocusRestore()
 
   return (
-    <div className="relative h-screen overflow-hidden bg-[var(--color-main-bg)] text-zinc-50">
-      {screen === 'canvas' ? (
-        <CanvasView onOpenChat={() => setScreen('chat')} />
-      ) : (
-        <ChatWorkspace onBack={() => setScreen('canvas')} />
-      )}
-    </div>
+    // O tema envolve as duas telas: quem escolhe é o painel de configurações do
+    // canvas, e a escolha não pode depender de qual tela está montada.
+    <ThemeProvider>
+      <div className="relative h-screen overflow-hidden bg-[var(--color-main-bg)] text-zinc-50">
+        {screen === 'canvas' ? (
+          <CanvasView onOpenChat={() => setScreen('chat')} />
+        ) : (
+          <ChatWorkspace onBack={() => setScreen('canvas')} />
+        )}
+      </div>
+    </ThemeProvider>
   )
 }
 

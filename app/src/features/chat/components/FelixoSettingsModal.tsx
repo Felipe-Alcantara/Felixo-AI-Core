@@ -2,7 +2,7 @@ import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
-import { SystemDesignSettingsSection } from './SystemDesignSettingsSection'
+import { SystemDesignSettingsSection } from '../../shared/system-design/SystemDesignSettingsSection'
 
 type FelixoSettingsModalProps = {
   isOpen: boolean

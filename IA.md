@@ -2136,3 +2136,78 @@ do pacote foi validada no Electron isolado. macOS e Windows não foram executado
 nativamente nesta máquina Linux. A coleta de quota permanece honesta:
 providers sem endpoint/evento não interativo exibem indisponibilidade ou último
 valor conhecido, com fonte e horário, em vez de um número estimado.
+
+## [2026-08-28] Quota real do Codex e migração das funções do chat para o canvas
+
+### Contexto
+
+A função "Limites e uso" já existia (commit `2c8cc5f`), mas não era encontrada
+nem mostrava número: a entrada estava só na sidebar da tela de chat, o painel
+abria vazio exigindo cadastro manual de conta, e nenhum provider entregava
+percentual. Durante a tarefa o dono do produto decidiu que o chat foi
+descontinuado e que suas funções precisam viver no canvas.
+
+### O que foi feito
+
+- **Quota real do Codex.** `codex login status` não devolve quota, mas a própria
+  CLI grava o objeto `rate_limits` nos rollouts de sessão
+  (`~/.codex/sessions/**/rollout-*.jsonl`). O novo `agent-usage-codex-local.cjs`
+  lê esse arquivo do fim para o começo (janela que cresce até 4 MB, teto de 6
+  rollouts) e devolve janela de 5 h, janela semanal, reset e créditos. A conta
+  logada sai das claims do `id_token` (e-mail, id da conta, plano) — nenhum
+  token é lido, devolvido ou persistido, e o e-mail vira fingerprint SHA-256 e
+  forma mascarada antes de chegar ao painel.
+
+- **Probes locais declarativos.** `agent-usage-local-probes.cjs` mapeia
+  `localProbe` → função; a fonte declara qual usa em `agent-usage-sources.cjs`,
+  sem `if` de provider no serviço.
+
+- **Medição separada da leitura.** Amostra de arquivo tem dois horários:
+  `collectedAt` (quando o app leu, ordena as amostras da rodada) e
+  `measuredAt` (quando a CLI mediu, é o que envelhece o valor). Sem isso um
+  rate limit de três horas atrás aparecia como se fosse de agora — e usar o
+  horário da medição como `collectedAt` empatava as amostras e quebrava a
+  ordenação (pego por teste existente).
+
+- **Descoberta automática de contas.** Cada CLI detectada ganha a primeira
+  conta sozinha; a identidade é vinculada pela primeira coleta. Segunda conta do
+  mesmo provider continua manual, porque automatizar exigiria adivinhar
+  identidade.
+
+- **Canvas.** Novas ferramentas no menu: **Limites e uso** (barras por janela,
+  conta, plano, reset, medido/lido), **Orquestrador** (modo, tetos por execução,
+  modelos preferidos/bloqueados, contexto, memórias e a execução ao vivo com
+  modelos que bateram limite) e **QA Logger**. O painel de **Configurações**
+  ganhou tema e Felixo System Design; o **Git** ganhou unstage, diff e commits
+  recentes.
+
+- **Tema deixou de morrer com o chat.** Era aplicado dentro do `ChatWorkspace`,
+  então com o canvas aberto o `data-theme` nunca valia. Virou `ThemeProvider` no
+  `App`.
+
+- **Código compartilhado saiu de `features/chat/`** para `features/shared/`
+  (agent-usage, orquestrador, system design, tema e os tipos de modelo, log e
+  saída de terminal), mantendo re-exports em `chat/types.ts`. O canvas nunca
+  importa do chat.
+
+### Validação
+
+- `npm test`: **804/804** testes Node aprovados (8 novos do leitor do Codex).
+- `npm run test:frontend`: **670/670** aprovados (12 no serviço compartilhado).
+- `npm run lint`: **0 erros**; seguem 3 avisos preexistentes em `TerminalNode.tsx`
+  e `SearchPanel.tsx`.
+- `tsc -b` e `npm run build` limpos.
+- App real sob Xvfb: painel de limites mostrando Codex `f***@gmail.com` PLUS,
+  **27 % da janela de 5 h** e **12 % da semanal**, medido 20:44 / lido 23:29,
+  marcado como "Desatualizado"; Claude `f***@vitissouls.com` PRO sem número, com
+  a limitação por extenso. Orquestrador, QA Logger (eventos reais do backend) e
+  Configurações (tema + System Design com 32 documentos sincronizados)
+  conferidos por screenshot.
+
+### Limites
+
+O Claude continua sem percentual: os números só existem no payload da status
+line, que exigiria o app registrar um script no `~/.claude/settings.json`
+global — não feito, por alterar configuração fora do projeto. Gemini e Openia
+seguem sem fonte não interativa. A tela de chat continua no código e alcançável
+pelo botão "Chat"; a remoção não foi feita nesta rodada.

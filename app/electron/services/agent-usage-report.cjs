@@ -238,6 +238,26 @@ function readNumber(value, keys) {
   return null
 }
 
+/**
+ * Completa o estado de autenticação com o que só a leitura local sabe.
+ *
+ * O comando da CLI nem sempre diz qual conta está logada (o `codex login
+ * status` não diz). Quando o probe local descobre isso, a identidade entra
+ * aqui — pelo mesmo caminho de segurança do parser, com `isSafeIdentity` e
+ * fingerprint — em vez de o serviço montar o snapshot por fora.
+ */
+function mergeAuthIdentity(providerId, auth, extra) {
+  if (!extra || (!extra.identity && !extra.plan)) {
+    return auth
+  }
+
+  return createAuthSnapshot(providerId, {
+    ...auth,
+    account: auth.account ?? extra.identity ?? null,
+    plan: auth.plan ?? extra.plan ?? null,
+  })
+}
+
 function createAuthSnapshot(providerId, values) {
   const identityCandidate = values.account || values.organization || null
   const identity = isSafeIdentity(identityCandidate)
@@ -343,6 +363,7 @@ function formatMetricLabel(path) {
 }
 
 module.exports = {
+  mergeAuthIdentity,
   parseAgentAuth,
   parseAgentUsage,
   parseStructuredPayload,

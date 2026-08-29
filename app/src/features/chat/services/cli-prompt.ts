@@ -4,7 +4,7 @@
 import {
   ORCHESTRATOR_PROMPT_PRESETS,
   createOpenEndedOrchestrationRules,
-} from './orchestrator-prompt-presets'
+} from '../../shared/orchestrator/orchestrator-prompt-presets'
 import { requiresDelegation } from './delegation-policy'
 import type { DocsIndexEntry } from './project-storage'
 import type { ChatMessage, ContextAttachment, Model, Project } from '../types'

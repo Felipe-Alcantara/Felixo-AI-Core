@@ -20,12 +20,16 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       command: 'codex',
       args: ['login', 'status'],
     },
+    // A quota não vem do comando: `codex login status` só diz que existe
+    // sessão. Quem tem o número é o rollout que a própria CLI grava em
+    // ~/.codex/sessions — daí o probe local.
+    localProbe: 'codex-rollout',
     usage: {
-      kind: 'cli-command',
-      label: 'codex login status',
+      kind: 'local-execution',
+      label: 'Codex rollout da sessão (rate_limits)',
       docsUrl: 'https://developers.openai.com/codex/cli',
       limitation:
-        'A CLI informa o estado da conta, mas não entrega quota do plano em uma saída não interativa.',
+        'O número vem do último rate_limits que a CLI gravou no rollout da sessão; entre sessões ele permanece como último valor conhecido.',
     },
   },
   {
@@ -94,6 +98,7 @@ function getAgentUsageSource(providerId) {
 function cloneSource(source) {
   return {
     ...source,
+    localProbe: source.localProbe ?? null,
     auth: source.auth
       ? { ...source.auth, args: [...source.auth.args] }
       : null,

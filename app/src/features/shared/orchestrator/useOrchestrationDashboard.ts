@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { TerminalOutputEvent } from '../types'
+import type { TerminalOutputEvent } from '../types/terminal-output'
 
 export type OrchestrationAgentState = {
   agentId: string

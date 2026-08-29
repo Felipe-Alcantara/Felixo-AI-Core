@@ -23,6 +23,8 @@ const SAFE_METADATA_KEYS = new Set([
   'identityMatched',
   'identityAmbiguous',
   'lastKnownAt',
+  // Quando o número foi medido pela CLI, que não é quando o app o leu.
+  'measuredAt',
   'lastKnownSource',
   'limitation',
   'window',

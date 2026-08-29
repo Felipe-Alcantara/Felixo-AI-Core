@@ -1,4 +1,4 @@
-import { useOrchestrationDashboard } from '../hooks/useOrchestrationDashboard'
+import { useOrchestrationDashboard } from '../../shared/orchestrator/useOrchestrationDashboard'
 
 type Props = {
   isOpen: boolean

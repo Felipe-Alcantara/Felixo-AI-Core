@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { CircleAlert, RotateCcw, Save, Settings } from 'lucide-react'
+import { CircleAlert, Palette, RotateCcw, Save, Settings } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { useReducedMotionPreference } from '../../../shared/accessibility/reduced-motion-preference'
 import {
@@ -7,6 +7,9 @@ import {
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
 } from '../../services/file-link-prompt'
 import { DEFAULT_QUALITY_STANDARD_PROMPT } from '../../services/quality-standard-prompt'
+import { SystemDesignSettingsSection } from '../../../shared/system-design/SystemDesignSettingsSection'
+import { useAppTheme } from '../../../shared/theme/theme-context'
+import type { AppTheme } from '../../../shared/theme/theme-storage'
 
 type SettingsPanelProps = {
   onClose: () => void
@@ -44,6 +47,16 @@ export function SettingsPanel({
     >
       {prefersReducedMotion && <ReducedMotionNotice />}
 
+      <ThemeField />
+
+      <div className="my-3 border-t border-white/10" />
+
+      {/* Sincroniza os guias do Felixo System Design — antes só existia dentro
+          das configurações do chat. */}
+      <SystemDesignSettingsSection />
+
+      <div className="my-3 border-t border-white/10" />
+
       <QualityStandardField onSaved={onQualityStandardSaved} />
 
       <div className="my-3 border-t border-white/10" />
@@ -78,6 +91,31 @@ export function SettingsPanel({
         onSaved={onBootstrapSaved}
       />
     </CanvasPanel>
+  )
+}
+
+/**
+ * Escolha do tema. Estava só na tela de chat, então quem trabalha no canvas
+ * não tinha como sair do escuro nem ligar o alto contraste.
+ */
+function ThemeField() {
+  const { theme, setTheme } = useAppTheme()
+
+  return (
+    <label className="block text-xs text-zinc-400">
+      <span className="mb-1 flex items-center gap-1.5 text-zinc-300">
+        <Palette size={13} aria-hidden="true" />
+        Tema
+      </span>
+      <select
+        value={theme}
+        onChange={(event) => setTheme(event.target.value as AppTheme)}
+        className="w-full rounded-md border border-white/10 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-white/20"
+      >
+        <option value="dark">Escuro</option>
+        <option value="high_contrast">Alto contraste</option>
+      </select>
+    </label>
   )
 }
 

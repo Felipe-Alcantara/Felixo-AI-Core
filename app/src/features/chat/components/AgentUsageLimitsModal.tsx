@@ -11,12 +11,12 @@ import {
   getLastKnownAgentUsage,
   groupAgentUsageAccounts,
   summarizeAgentUsage,
-} from '../services/agent-usage'
+} from '../../shared/agent-usage/agent-usage'
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
   AgentUsageProviderGroup,
-} from '../services/agent-usage'
+} from '../../shared/agent-usage/agent-usage'
 
 type AgentUsageLimitsModalProps = {
   isOpen: boolean

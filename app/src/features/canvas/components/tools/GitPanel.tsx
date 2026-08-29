@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { GitBranch, GitCommit, Plus, RefreshCw } from 'lucide-react'
+import { GitBranch, GitCommit, Minus, Plus, RefreshCw } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 
 type CanvasProject = { id: string; name: string; path: string }
@@ -7,6 +7,11 @@ type CanvasProject = { id: string; name: string; path: string }
 type GitSummary = {
   branch: string | null
   statusLines: string[]
+  // O backend já devolvia diff e histórico; o painel do canvas simplesmente
+  // não os mostrava, e eram eles que faziam a diferença na hora de conferir o
+  // que vai no commit.
+  diffStat: string
+  recentCommits: string[]
   isClean: boolean
   error?: string
 }
@@ -62,6 +67,23 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
     },
     [refresh],
   )
+
+  const unstageAll = useCallback(async () => {
+    if (!projectPath) {
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await window.felixo?.git?.unstageAll({ projectPath })
+      if (!result?.ok) {
+        setError(result?.message ?? 'Falha ao tirar do stage.')
+        return
+      }
+      await refresh(projectPath)
+    } finally {
+      setBusy(false)
+    }
+  }, [projectPath, refresh])
 
   const stageAll = useCallback(async () => {
     if (!projectPath) return
@@ -159,15 +181,49 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
             <p className="text-xs text-zinc-500">Sem alterações pendentes.</p>
           )}
 
-          <button
-            type="button"
-            onClick={() => void stageAll()}
-            disabled={busy || summary.isClean}
-            className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
-          >
-            <Plus size={14} />
-            Stage all
-          </button>
+          {summary.diffStat.trim() && (
+            <details className="rounded bg-zinc-800/60 p-2 text-[11px] text-zinc-400">
+              <summary className="cursor-pointer text-zinc-300">Diff não staged</summary>
+              <pre className="mt-1 overflow-auto whitespace-pre-wrap font-mono">
+                {summary.diffStat}
+              </pre>
+            </details>
+          )}
+
+          {summary.recentCommits.length > 0 && (
+            <details className="rounded bg-zinc-800/60 p-2 text-[11px] text-zinc-400">
+              <summary className="cursor-pointer text-zinc-300">Commits recentes</summary>
+              <div className="mt-1 space-y-0.5 font-mono">
+                {summary.recentCommits.map((commit, index) => (
+                  <div key={index} className="truncate" title={commit}>
+                    {commit}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void stageAll()}
+              disabled={busy || summary.isClean}
+              className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
+            >
+              <Plus size={14} />
+              Stage all
+            </button>
+            <button
+              type="button"
+              onClick={() => void unstageAll()}
+              disabled={busy}
+              className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+              title="Tirar tudo do stage"
+            >
+              <Minus size={14} />
+              Unstage
+            </button>
+          </div>
 
           <textarea
             value={message}

@@ -1,4 +1,4 @@
-import type { AppTheme } from '../types'
+export type AppTheme = 'dark' | 'high_contrast'
 
 const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
 
@@ -12,9 +12,13 @@ export function loadTheme(): AppTheme {
 }
 
 export function saveTheme(theme: AppTheme) {
-  window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  } catch {
+    // Sem localStorage o tema vale só para esta sessão; não é motivo de erro.
+  }
 }
 
-function isAppTheme(value: unknown): value is AppTheme {
+export function isAppTheme(value: unknown): value is AppTheme {
   return value === 'dark' || value === 'high_contrast'
 }

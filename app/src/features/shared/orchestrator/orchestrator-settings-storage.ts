@@ -7,8 +7,12 @@ import type {
   OrchestratorSettings,
   ReasoningEffort,
   SkillPrompt,
-} from '../types'
+} from '../types/models'
 import { ORCHESTRATOR_PROMPT_PRESETS } from './orchestrator-prompt-presets'
+
+// Este módulo é a origem única das configurações do orquestrador: o painel do
+// canvas lê e grava por aqui. As funções que montam blocos de contexto de
+// prompt ainda servem a tela de chat e saem junto com ela.
 
 const ORCHESTRATOR_SETTINGS_STORAGE_KEY =
   'felixo-ai-core.orchestrator-settings'

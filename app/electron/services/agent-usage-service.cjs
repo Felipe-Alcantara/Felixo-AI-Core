@@ -17,9 +17,11 @@ const {
   sampleHasMetrics,
 } = require('./agent-usage-model.cjs')
 const {
+  mergeAuthIdentity,
   parseAgentAuth,
   parseAgentUsage,
 } = require('./agent-usage-report.cjs')
+const { runLocalProbe } = require('./agent-usage-local-probes.cjs')
 const {
   createAgentUsageRepository,
 } = require('./storage/agent-usage-repository.cjs')
@@ -29,6 +31,7 @@ const STALE_AFTER_MS = 15 * 60 * 1000
 const SECRET_LIKE_INPUT_PATTERN =
   /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-|eyJ[A-Za-z0-9_-]{8,})/i
 
+const DISCOVERED_ACCOUNT_LABEL = 'Conta desta máquina'
 const NO_SAFE_IDENTITY_MESSAGE =
   'A fonte não informou uma identidade estável; nenhuma métrica foi associada.'
 const IDENTITY_MISMATCH_MESSAGE =
@@ -49,13 +52,14 @@ function createAgentUsageService({
   now = () => Date.now(),
   runCommand = runBufferedCommand,
   listCatalog = listOfficialCliCatalog,
+  probe = runLocalProbe,
 } = {}) {
   let refreshPromise = null
   let lastRefreshAt = null
 
   async function list() {
-    const accounts = repository.listAccounts()
     const catalog = await readCatalog(listCatalog)
+    const accounts = ensureDiscoveredAccounts({ catalog, repository, now })
     return {
       ok: true,
       ...buildDashboard({
@@ -81,8 +85,8 @@ function createAgentUsageService({
   }
 
   async function refreshInternal() {
-    const accounts = repository.listAccounts()
     const catalog = await readCatalog(listCatalog)
+    const accounts = ensureDiscoveredAccounts({ catalog, repository, now })
     const catalogById = new Map(catalog.map((item) => [item.id, item]))
     const providerIds = [
       ...new Set(accounts.map((account) => account.providerId)),
@@ -94,6 +98,7 @@ function createAgentUsageService({
           providerId,
           runCommand,
           now,
+          probe,
         }),
       ),
     )
@@ -200,7 +205,7 @@ function createAgentUsageService({
   }
 }
 
-async function collectProviderSnapshot({ providerId, runCommand, now }) {
+async function collectProviderSnapshot({ providerId, runCommand, now, probe }) {
   const source = getAgentUsageSource(providerId)
   const collectedAt = nowIso(now)
 
@@ -216,14 +221,19 @@ async function collectProviderSnapshot({ providerId, runCommand, now }) {
     }
   }
 
+  // Leitura de arquivo que a CLI já escreveu: não custa processo nem rede, e é
+  // o único caminho de quota em fontes que não respondem número por comando.
+  const local = source.localProbe ? probe(source.localProbe) : null
+
   if (!source.auth) {
     return {
       providerId,
       source,
       collectedAt,
+      measuredAt: local?.collectedAt ?? null,
       commandOk: true,
-      auth: { authStatus: 'unknown' },
-      metrics: [],
+      auth: mergeAuthIdentity(providerId, { authStatus: 'unknown' }, local),
+      metrics: local?.metrics ?? [],
       queryFailed: false,
     }
   }
@@ -247,13 +257,22 @@ async function collectProviderSnapshot({ providerId, runCommand, now }) {
     `${result?.stdout ?? ''}\n${result?.stderr ?? ''}`,
   )
 
+  const commandMetrics =
+    result?.ok === true ? parseAgentUsage(providerId, safeOutput).metrics : []
+  const metrics = commandMetrics.length > 0 ? commandMetrics : local?.metrics ?? []
+
   return {
     providerId,
     source,
     collectedAt,
+    // Quando o número vem de um arquivo, medição e leitura são momentos
+    // diferentes. Os dois são guardados: `collectedAt` ordena as amostras da
+    // rodada e `measuredAt` é o que envelhece o valor — sem isso um rate limit
+    // de três horas atrás apareceria como se fosse de agora.
+    measuredAt: commandMetrics.length === 0 ? local?.collectedAt ?? null : null,
     commandOk: result?.ok === true,
-    auth: parseAgentAuth(providerId, safeOutput),
-    metrics: result?.ok === true ? parseAgentUsage(providerId, safeOutput).metrics : [],
+    auth: mergeAuthIdentity(providerId, parseAgentAuth(providerId, safeOutput), local),
+    metrics,
     queryFailed: result?.ok !== true,
   }
 }
@@ -378,6 +397,7 @@ function createSampleBase({
       identityMatched: resolution.kind === 'matched',
       identityAmbiguous: resolution.kind === 'ambiguous',
       limitation: snapshot.source.usage.limitation,
+      measuredAt: snapshot.measuredAt ?? undefined,
       providerVersion: providerVersion ?? undefined,
     },
   }
@@ -421,6 +441,55 @@ function resolveObservedIdentity({
   }
 
   return { kind: 'different', targetId: null }
+}
+
+/**
+ * Cria a primeira conta de cada CLI detectada na máquina.
+ *
+ * Sem isto o painel abre vazio e exige que a pessoa cadastre na mão a conta em
+ * que ela já está logada — trabalho que o app consegue fazer sozinho, já que a
+ * CLI está instalada e responde qual é a conta. A conta nasce sem
+ * `identityKey`: quem preenche é a primeira coleta, pelo caminho que vincula
+ * uma conta não vinculada à identidade observada.
+ *
+ * Só a primeira conta é criada. Quem usa duas contas do mesmo provider
+ * continua adicionando a segunda no formulário — automatizar isso exigiria
+ * adivinhar identidade, que é justamente o que o contrato proíbe.
+ */
+function ensureDiscoveredAccounts({ catalog, repository, now }) {
+  const accounts = repository.listAccounts()
+  const providersWithAccount = new Set(
+    accounts.map((account) => account.providerId),
+  )
+  const detected = new Map(
+    catalog
+      .filter((item) => item.detected === true)
+      .map((item) => [item.id, item]),
+  )
+
+  const created = []
+
+  for (const source of listAgentUsageSources()) {
+    if (providersWithAccount.has(source.id) || !detected.has(source.id)) {
+      continue
+    }
+
+    const createdAt = nowIso(now)
+    created.push(
+      repository.createAccount({
+        id: randomUUID(),
+        providerId: source.id,
+        label: DISCOVERED_ACCOUNT_LABEL,
+        identityKey: null,
+        identityDisplay: null,
+        identitySource: null,
+        createdAt,
+        updatedAt: createdAt,
+      }),
+    )
+  }
+
+  return created.length > 0 ? repository.listAccounts() : accounts
 }
 
 function buildDashboard({
@@ -505,10 +574,11 @@ function normalizeDashboardSample(sample, now) {
     return null
   }
 
-  if (
-    sample.status === 'current' &&
-    isOlderThan(sample.collectedAt, now, STALE_AFTER_MS)
-  ) {
+  // O que envelhece é a medição. Reler um arquivo antigo não rejuvenesce o
+  // número que estava escrito nele.
+  const measuredAt = sample.metadata?.measuredAt ?? sample.collectedAt
+
+  if (sample.status === 'current' && isOlderThan(measuredAt, now, STALE_AFTER_MS)) {
     return { ...sample, status: 'stale' }
   }
 

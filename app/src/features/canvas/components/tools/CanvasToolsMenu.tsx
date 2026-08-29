@@ -5,6 +5,8 @@ import {
   ChevronUp,
   Download,
   FolderGit2,
+  Gauge,
+  Network,
   GitBranch,
   LayoutList,
   type LucideIcon,
@@ -12,6 +14,7 @@ import {
   RefreshCw,
   Settings,
   Sparkles,
+  Terminal,
   Upload,
   Wrench,
 } from 'lucide-react'
@@ -37,6 +40,9 @@ export type CanvasTool =
   | 'skills'
   | 'git'
   | 'fetchAll'
+  | 'agentUsage'
+  | 'orchestrator'
+  | 'qaLogger'
   | 'settings'
 
 type ToolEntry = { tool: CanvasTool; label: string; icon: LucideIcon }
@@ -49,6 +55,9 @@ const TOOLS: ToolEntry[] = [
   { tool: 'skills', label: 'Skills', icon: BrainCircuit },
   { tool: 'git', label: 'Git', icon: GitBranch },
   { tool: 'fetchAll', label: 'Fetch All', icon: RefreshCw },
+  { tool: 'agentUsage', label: 'Limites e uso', icon: Gauge },
+  { tool: 'orchestrator', label: 'Orquestrador', icon: Network },
+  { tool: 'qaLogger', label: 'QA Logger', icon: Terminal },
   { tool: 'settings', label: 'Configurações', icon: Settings },
 ]
 

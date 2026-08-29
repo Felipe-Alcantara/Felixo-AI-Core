@@ -1,6 +1,6 @@
 import { BookOpen, ExternalLink, RefreshCw, Trash2 } from 'lucide-react'
 
-import { useSystemDesignSettings } from '../hooks/useSystemDesignSettings'
+import { useSystemDesignSettings } from './useSystemDesignSettings'
 
 export function SystemDesignSettingsSection() {
   const { state, sync, updateConfig, resetCache } = useSystemDesignSettings()

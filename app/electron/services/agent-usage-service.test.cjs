@@ -65,6 +65,8 @@ test(
 
     const service = createAgentUsageService({
       repository,
+      // Sem stub, o probe leria o ~/.codex da máquina que roda o teste.
+      probe: () => null,
       now: () => nowValue.value,
       listCatalog: async () => catalog,
       runCommand: async ({ command, args }) => {
@@ -102,9 +104,18 @@ test(
     try {
       const result = await service.refresh()
       assert.equal(result.ok, true)
-      assert.equal(calls.length, 2)
+      // Codex e Claude já tinham conta; Openia foi descoberto agora e entrou
+      // na rodada. Gemini não consulta nada porque não tem comando de auth.
+      assert.equal(calls.length, 3)
 
       const accounts = new Map(result.accounts.map((account) => [account.id, account]))
+
+      // A descoberta cria uma conta por CLI instalada e não duplica as que já
+      // existiam — o Codex continua com as duas contas cadastradas na mão.
+      assert.deepEqual(
+        countAccountsByProvider(result.accounts),
+        { codex: 2, claude: 1, gemini: 1, openia: 1 },
+      )
       assert.equal(accounts.get('codex-alice').latestSample.status, 'current')
       assert.equal(accounts.get('codex-alice').latestSample.metrics[0].used, 0)
       assert.equal(accounts.get('codex-bob').latestSample.status, 'error')
@@ -156,6 +167,8 @@ test(
     let calls = 0
     const service = createAgentUsageService({
       repository,
+      // Sem stub, o probe leria o ~/.codex da máquina que roda o teste.
+      probe: () => null,
       listCatalog: async () => [],
       runCommand: async () => {
         calls += 1
@@ -199,6 +212,8 @@ test(
     let online = true
     const service = createAgentUsageService({
       repository,
+      // Sem stub, o probe leria o ~/.codex da máquina que roda o teste.
+      probe: () => null,
       listCatalog: async () => [],
       runCommand: async () =>
         online
@@ -259,6 +274,8 @@ test(
 
     const service = createAgentUsageService({
       repository,
+      // Sem stub, o probe leria o ~/.codex da máquina que roda o teste.
+      probe: () => null,
       listCatalog: async () => [],
       runCommand: async () => ({
         ok: true,
@@ -313,6 +330,8 @@ test(
     let activeAccount = 'switch-alice@example.com'
     const service = createAgentUsageService({
       repository,
+      // Sem stub, o probe leria o ~/.codex da máquina que roda o teste.
+      probe: () => null,
       listCatalog: async () => [],
       runCommand: async () => ({
         ok: true,
@@ -345,6 +364,13 @@ test(
     }
   },
 )
+
+function countAccountsByProvider(accounts) {
+  return accounts.reduce((total, account) => {
+    total[account.providerId] = (total[account.providerId] ?? 0) + 1
+    return total
+  }, {})
+}
 
 function hasNodeSqlite() {
   try {

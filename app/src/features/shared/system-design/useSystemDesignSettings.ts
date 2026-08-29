@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { SystemDesignConfig, SystemDesignDocumentSummary } from '../types'
+import type { SystemDesignConfig, SystemDesignDocumentSummary } from './types'
 
 const DEFAULT_CONFIG: SystemDesignConfig = {
   // Mirror of defaultConfig() in system-design-ipc-handlers.cjs.

@@ -180,6 +180,84 @@ export function getLastKnownAgentUsage(
   return account.lastKnownSample ?? null
 }
 
+/**
+ * Percentual preenchido da barra, ou `null` quando a métrica não é uma escala
+ * fechada. Sem limite conhecido não existe barra honesta a desenhar — o painel
+ * cai no número puro em vez de inventar uma proporção.
+ */
+export function agentUsagePercent(metric: AgentUsageMetric): number | null {
+  if (metric.used === null || metric.limit === null || metric.limit <= 0) {
+    return null
+  }
+
+  return Math.min(100, Math.max(0, (metric.used / metric.limit) * 100))
+}
+
+/**
+ * Frase pronta sobre o reset da janela ("Reseta em 1 h 20 min").
+ *
+ * Quando o horário de reset já passou, a frase muda de tempo em vez de contar
+ * minutos negativos: a janela virou depois da medição, então o percentual na
+ * tela é de antes da renovação e dizer "reseta em -3 h" esconderia isso.
+ */
+export function formatAgentUsageReset(
+  resetAt: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!resetAt) {
+    return null
+  }
+
+  const target = new Date(resetAt)
+  if (Number.isNaN(target.getTime())) {
+    return null
+  }
+
+  const minutes = Math.round((target.getTime() - now.getTime()) / 60_000)
+
+  if (minutes <= 0) {
+    return `Janela já renovada às ${formatAgentUsageDate(resetAt)}`
+  }
+
+  return `Reseta ${formatRemaining(minutes)}`
+}
+
+function formatRemaining(minutes: number): string {
+  if (minutes < 60) {
+    return `em ${minutes} min`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const restMinutes = minutes % 60
+
+  if (hours < 24) {
+    return restMinutes > 0 ? `em ${hours} h ${restMinutes} min` : `em ${hours} h`
+  }
+
+  const days = Math.floor(hours / 24)
+  const restHours = hours % 24
+
+  return restHours > 0 ? `em ${days} d ${restHours} h` : `em ${days} d`
+}
+
+/**
+ * Momento em que o número foi medido pela CLI, que só é igual ao da leitura
+ * quando a fonte responde na hora. O painel mostra os dois para nunca
+ * apresentar um valor antigo como se fosse recém-colhido.
+ */
+export function getAgentUsageMeasuredAt(
+  sample: AgentUsageSample | null,
+): string | null {
+  const measuredAt = sample?.metadata?.measuredAt
+  return typeof measuredAt === 'string' ? measuredAt : null
+}
+
+/** Plano informado pela própria CLI (`plus`, `pro`…), quando ela informa. */
+export function getAgentUsagePlan(sample: AgentUsageSample | null): string | null {
+  const plan = sample?.metadata?.plan
+  return typeof plan === 'string' && plan.trim() ? plan.trim() : null
+}
+
 export function summarizeAgentUsage(
   accounts: AgentUsageAccount[],
 ): Record<AgentUsageStatus, number> {
