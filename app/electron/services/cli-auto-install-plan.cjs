@@ -42,14 +42,25 @@ function getAutoInstallableClis(catalog) {
  *
  * Três situações não entram na fila:
  * - `present`: já existe na máquina (instalada pela pessoa ou por nós antes);
- * - `skipped`: falhou nesta mesma versão do app numa tentativa automática —
- *   repetir a cada abertura só gastaria rede e tempo de quem já viu o erro;
+ * - `skipped`: ou já foi instalada por nós e os arquivos continuam lá, ou
+ *   falhou nesta mesma versão do app — repetir a cada abertura só gastaria
+ *   rede e tempo de quem já viu o erro;
  * - tudo, quando `reason` é `manual`: aí a pessoa pediu explicitamente, e o
- *   registro de falha anterior deixa de valer.
+ *   registro anterior deixa de valer.
+ *
+ * A instalação bem-sucedida **não** expira quando o app é atualizado: o app
+ * publica uma versão por push, então amarrar o sucesso à versão fazia a
+ * verificação valer por poucas horas e a CLI ser reinstalada na abertura
+ * seguinte. Só a falha continua amarrada à versão, porque aí uma versão nova
+ * do app pode ser justamente o que corrige.
+ *
+ * O que substitui a versão como prova é `managedPresent`: se o executável que
+ * instalamos sumiu do disco, o registro de sucesso não vale mais.
  *
  * @param {object} options
  * @param {Array<{ id: string, name: string }>} options.catalog
  * @param {Array<{ detected: boolean }>} options.detections - Na ordem do catálogo.
+ * @param {Array<boolean>} [options.managedPresent] - Na ordem do catálogo.
  * @param {Record<string, { version?: string, ok?: boolean }>} [options.previousState]
  * @param {string} options.appVersion
  * @param {'startup' | 'manual'} [options.reason]
@@ -58,6 +69,7 @@ function getAutoInstallableClis(catalog) {
 function planAutoInstall({
   catalog,
   detections,
+  managedPresent = [],
   previousState = {},
   appVersion,
   reason = 'startup',
@@ -69,7 +81,7 @@ function planAutoInstall({
       return createCliProgress(cli, 'present')
     }
 
-    if (!forced && hasInstalledForVersion(previousState, cli.id, appVersion)) {
+    if (!forced && managedPresent[index] === true && hasInstalled(previousState, cli.id)) {
       return createCliProgress(
         cli,
         'skipped',
@@ -105,9 +117,8 @@ function hasFailedForVersion(state, id, appVersion) {
   return Boolean(attempt && attempt.version === appVersion && attempt.ok === false)
 }
 
-function hasInstalledForVersion(state, id, appVersion) {
-  const attempt = state?.[id]
-  return Boolean(attempt && attempt.version === appVersion && attempt.ok === true)
+function hasInstalled(state, id) {
+  return state?.[id]?.ok === true
 }
 
 function createCliProgress(cli, state, message = '') {

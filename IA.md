@@ -2329,3 +2329,59 @@ Os tamanhos de blocos já salvos num canvas existente não são alterados: a esc
 vale para blocos novos, porque reposicionar o que a pessoa já arrumou seria pior
 que o aperto. Telas menores que ~1000 px de largura caem no piso das faixas e
 ainda podem exigir arrasto manual.
+
+## [2026-08-29] CLI reinstalando a cada abertura
+
+### Contexto
+
+Relato de que as CLIs se instalam toda vez que o app abre. O disco mostrou que
+não era literalmente toda abertura — as instalações gerenciadas tinham data de
+23/08 e 28/08 —, mas havia dois defeitos que juntos produzem reinstalação
+repetida.
+
+### Causa
+
+1. **O registro de sucesso expirava a cada atualização do app.** O plano
+   guardava `{ version, ok: true }` e só pulava a instalação se a versão
+   gravada fosse igual à versão em execução. Como o projeto publica **uma
+   versão por push**, a verificação valia por poucas horas: o perfil real tinha
+   `claude` gravado em `0.1.55` e `gemini` em `0.1.86`, com o app já em
+   `0.1.103`. Amarrar a versão faz sentido para falha (uma versão nova pode
+   corrigir), não para sucesso.
+
+2. **O tempo limite da detecção era curto demais.** `<cli> --version` tinha 5 s,
+   e o Gemini CLI leva ~3 s numa máquina ociosa. A detecção roda logo depois da
+   abertura, quando a CPU está disputada: estourar o limite fazia a CLI passar
+   por ausente — e, sem a proteção do item 1, ser reinstalada.
+
+### O que foi feito
+
+- O sucesso deixa de expirar por versão. A prova de que a instalação continua
+  válida passa a ser o executável no disco (`managedPresent`): se ele sumiu,
+  reinstala; se está lá, não. A falha continua amarrada à versão.
+- Tempo limite de detecção de 5 s para 15 s, e uma segunda tentativa só para as
+  CLIs que pareceram ausentes na primeira — barata quando tudo foi detectado.
+- A detecção virou injetável no serviço, como já era a instalação, para o fluxo
+  poder ser exercitado em teste.
+
+### Validação
+
+- `npm test`: **825/825** (8 novos: 4 no plano, 4 no serviço). Os testes do
+  serviço reproduzem o caso relatado — estado gravado em versão antiga, app em
+  versão nova, executável presente, e nenhuma instalação disparada — e cobrem
+  detecção que só acerta na segunda tentativa, executável apagado e falha
+  registrada.
+- Os testes afirmam que a rodada chegou a planejar, para um "não instalou"
+  causado por ambiente (sem npm resolvido) não passar por aprovação.
+- `npm run lint`: 0 erros; `tsc -b` limpo.
+- Medições na máquina do relato: `claude --version` 0,01 s, `codex` 0,08 s,
+  `gemini` 3,04 s.
+
+### Limites
+
+Não foi possível observar uma reinstalação acontecendo ao vivo: ela depende de
+a detecção estourar o tempo, que é intermitente. A correção foi validada por
+teste sobre o estado real encontrado em disco, não por reprodução visual. O
+`claude.exe` dentro da pasta gerenciada chamou atenção mas foi descartado como
+falso alarme: é o único executável publicado pelo pacote e roda normalmente no
+Linux.

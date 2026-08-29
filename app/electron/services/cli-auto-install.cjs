@@ -42,6 +42,7 @@ const STARTUP_DELAY_MS = 4000
  * @param {string} options.appVersion
  * @param {boolean} options.isPackaged
  * @param {Function} [options.installPackage] - Injetável nos testes.
+ * @param {Function} [options.detect] - Injetável nos testes.
  * @returns {{ getStatus: () => object, run: (reason?: string) => Promise<object>, stop: () => void }}
  */
 function registerCliAutoInstallHandlers(getMainWindow, options) {
@@ -50,6 +51,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     appVersion,
     isPackaged,
     installPackage = installManagedPackage,
+    detect = detectCli,
   } = options
 
   const layout = getManagedCliLayout({ userData: appPaths.userData })
@@ -116,12 +118,11 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     setStatus({ state: 'checking', message: 'Verificando as CLIs de IA.', clis: [] })
 
     const catalog = getAutoInstallableClis(listOfficialAiClis())
-    const detections = await Promise.all(
-      catalog.map((cli) => detectCli(cli, createCliEnv())),
-    )
+    const detections = await detectWithSecondChance(catalog, detect)
     const { pending, progress } = planAutoInstall({
       catalog,
       detections,
+      managedPresent: catalog.map((cli) => hasManagedBinary(layout, cli)),
       previousState: readState(stateFilePath),
       appVersion,
       reason,
@@ -215,6 +216,41 @@ function updateCliProgress(progress, id, patch) {
 
 function createStatus({ state, message }) {
   return { state, message, clis: [], updatedAt: new Date().toISOString() }
+}
+
+/**
+ * Detecta, e tenta de novo só o que pareceu faltar.
+ *
+ * A detecção roda logo depois da abertura, quando a máquina está mais
+ * ocupada, e uma CLI lenta pode estourar o tempo limite e passar por
+ * ausente — o que faz o app reinstalar algo que já estava lá. A segunda
+ * chamada acontece com o app já assentado e custa nada quando tudo foi
+ * detectado de primeira.
+ */
+async function detectWithSecondChance(catalog, detect) {
+  const env = createCliEnv()
+  const first = await Promise.all(catalog.map((cli) => detect(cli, env)))
+
+  if (first.every((detection) => detection.detected)) {
+    return first
+  }
+
+  return Promise.all(
+    first.map((detection, index) =>
+      detection.detected ? detection : detect(catalog[index], env),
+    ),
+  )
+}
+
+/** O executável que instalamos continua no disco? */
+function hasManagedBinary(layout, cli) {
+  if (!cli.command) {
+    return false
+  }
+
+  return [cli.command, `${cli.command}.cmd`, `${cli.command}.exe`].some((candidate) =>
+    fs.existsSync(path.join(layout.packagesBin, candidate)),
+  )
 }
 
 function readState(stateFilePath) {

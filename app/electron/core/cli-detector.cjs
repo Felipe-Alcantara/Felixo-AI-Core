@@ -14,7 +14,16 @@ const platform = require('./platform/index.cjs')
 
 const execFileAsync = promisify(execFile)
 
-const DETECTION_TIMEOUT_MS = 5000
+/**
+ * Tempo limite de `<cli> --version`.
+ *
+ * Eram 5 s, apertado demais: o Gemini CLI leva ~3 s para responder numa
+ * máquina ociosa, e a detecção roda logo depois da abertura do app, quando a
+ * CPU está disputada. Estourar o limite fazia a CLI passar por ausente — e o
+ * instalador automático reinstalar o que já estava lá. O limite continua
+ * existindo para uma CLI travada não segurar a rotina.
+ */
+const DETECTION_TIMEOUT_MS = 15000
 
 /**
  * @typedef {object} CliInfo

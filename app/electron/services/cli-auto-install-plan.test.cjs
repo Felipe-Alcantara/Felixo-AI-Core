@@ -18,6 +18,11 @@ function detections(...detected) {
   return detected.map((value) => ({ detected: value }))
 }
 
+/** Executáveis que o app instalou e ainda estão no disco, na ordem do catálogo. */
+function managed(...present) {
+  return present
+}
+
 describe('cli-auto-install-plan', () => {
   it('does not put another ecosystem launcher in the npm auto-install queue', () => {
     const catalog = [
@@ -71,12 +76,59 @@ describe('cli-auto-install-plan', () => {
     const { pending, progress } = planAutoInstall({
       catalog: CATALOG,
       detections: detections(false, true, true),
+      managedPresent: managed(true, false, false),
       previousState: { codex: { version: '0.1.0', ok: true, message: 'instalado' } },
       appVersion: '0.1.0',
     })
 
     assert.deepEqual(pending, [])
     assert.equal(progress[0].state, 'skipped')
+  })
+
+  it('keeps a successful install valid after the app updates', () => {
+    // O app publica uma versão por push: amarrar o sucesso à versão fazia a
+    // CLI ser reinstalada na abertura seguinte a qualquer atualização.
+    const { pending, progress } = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(false, true, true),
+      managedPresent: managed(true, false, false),
+      previousState: { codex: { version: '0.1.55', ok: true, message: 'instalado' } },
+      appVersion: '0.1.103',
+    })
+
+    assert.deepEqual(pending, [])
+    assert.equal(progress[0].state, 'skipped')
+  })
+
+  it('reinstalls when the binary we installed is no longer on disk', () => {
+    const { pending } = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(false, true, true),
+      managedPresent: managed(false, false, false),
+      previousState: { codex: { version: '0.1.55', ok: true, message: 'instalado' } },
+      appVersion: '0.1.103',
+    })
+
+    assert.deepEqual(
+      pending.map((cli) => cli.id),
+      ['codex'],
+    )
+  })
+
+  it('a manual retry ignores the successful record', () => {
+    const { pending } = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(false, true, true),
+      managedPresent: managed(true, false, false),
+      previousState: { codex: { version: '0.1.103', ok: true } },
+      appVersion: '0.1.103',
+      reason: 'manual',
+    })
+
+    assert.deepEqual(
+      pending.map((cli) => cli.id),
+      ['codex'],
+    )
   })
 
   it('tries again in a new version of the app', () => {
