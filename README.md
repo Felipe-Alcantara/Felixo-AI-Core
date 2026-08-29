@@ -228,9 +228,11 @@ do app continua utilizável. A versão pode ser conferida com `openia --version`
 
 O painel **Limites e uso** (menu **Ferramentas** do canvas) reúne as contas
 detectadas de cada CLI instalada, com o consumo de cada janela, o horário do
-reset, a conta e o plano informados pela própria ferramenta. A conta é guardada
-como fingerprint e forma mascarada: nenhum token, cookie, chave ou senha é lido
-para o painel ou gravado por ele.
+reset, a conta e o plano informados pela própria ferramenta. O identificador da
+conta aparece inteiro, para dar para dizer qual linha é qual quando há mais de
+uma conta no mesmo provedor; quem separa as contas por dentro é um fingerprint
+SHA-256, não esse texto. Nenhum token, cookie, chave ou senha é lido para o
+painel ou gravado por ele.
 
 Cada número mostra de onde veio e **quando foi medido**, que nem sempre é quando
 o app leu — uma fonte que só é atualizada durante a sessão continua exibindo o

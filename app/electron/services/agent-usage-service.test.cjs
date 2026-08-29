@@ -458,6 +458,49 @@ test(
   },
 )
 
+test(
+  'conta gravada com identificador abreviado passa a mostrar o e-mail inteiro',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-display-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const identity = createIdentityFingerprint('claude', 'alice@example.com')
+
+    // Como as contas nasciam antes: fingerprint certo, exibição abreviada.
+    repository.createAccount({
+      id: 'claude-antiga',
+      providerId: 'claude',
+      label: 'Claude',
+      identityKey: identity.identityKey,
+      identityDisplay: 'a***@example.com',
+      identitySource: 'cli',
+    })
+
+    const service = createAgentUsageService({
+      repository,
+      probe: () => null,
+      listCatalog: async () => [],
+      runCommand: async () => ({
+        ok: true,
+        stdout: JSON.stringify({ loggedIn: true, email: 'alice@example.com' }),
+        stderr: '',
+      }),
+    })
+
+    try {
+      const result = await service.refresh()
+
+      assert.equal(result.accounts[0].identityDisplay, 'alice@example.com')
+      // O fingerprint não muda: é a mesma conta, só o texto exibido mudou.
+      assert.equal(result.accounts[0].identityKey, identity.identityKey)
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 function countAccountsByProvider(accounts) {
   return accounts.reduce((total, account) => {
     total[account.providerId] = (total[account.providerId] ?? 0) + 1

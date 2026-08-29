@@ -79,7 +79,7 @@ test('agent usage report parses generic quota fields only in quota paths', () =>
   ])
 })
 
-test('agent auth report creates a masked stable identity', () => {
+test('agent auth report shows the identity in full, with a stable fingerprint', () => {
   const result = parseAgentAuth(
     'claude',
     JSON.stringify({
@@ -92,8 +92,37 @@ test('agent auth report creates a masked stable identity', () => {
 
   assert.equal(result.authStatus, 'logged_in')
   assert.equal(result.account, 'alice@example.com')
-  assert.equal(result.identityDisplay, 'a***@example.com')
+  // Inteiro na tela: com duas contas do mesmo domínio, a forma abreviada saía
+  // igual para as duas e não dizia qual linha era qual.
+  assert.equal(result.identityDisplay, 'alice@example.com')
   assert.match(result.identityKey, /^[a-f0-9]{64}$/)
+})
+
+test('a mesma conta continua com o mesmo fingerprint, ainda que escrita diferente', () => {
+  const primeira = parseAgentAuth(
+    'claude',
+    JSON.stringify({ loggedIn: true, email: 'Alice@Example.com ' }),
+  )
+  const segunda = parseAgentAuth(
+    'claude',
+    JSON.stringify({ loggedIn: true, email: 'alice@example.com' }),
+  )
+
+  assert.equal(primeira.identityKey, segunda.identityKey)
+})
+
+test('contas diferentes no mesmo domínio ficam distinguíveis na tela', () => {
+  const uma = parseAgentAuth(
+    'claude',
+    JSON.stringify({ loggedIn: true, email: 'felipe.pessoal@gmail.com' }),
+  )
+  const outra = parseAgentAuth(
+    'claude',
+    JSON.stringify({ loggedIn: true, email: 'felipe.trabalho@gmail.com' }),
+  )
+
+  assert.notEqual(uma.identityDisplay, outra.identityDisplay)
+  assert.notEqual(uma.identityKey, outra.identityKey)
 })
 
 test('agent auth report never turns a redacted Openia key into an account identity', () => {

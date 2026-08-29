@@ -598,8 +598,8 @@ function AddAccountForm({
         <form onSubmit={submit} className="mt-2 space-y-2">
           <p className="text-[10px] leading-snug text-zinc-600">
             A conta em uso já é detectada sozinha. Cadastre aqui só uma segunda
-            conta do mesmo provider — o app guarda um fingerprint e uma forma
-            mascarada, nunca chave, token ou senha.
+            conta do mesmo provider — informe um identificador público, como o
+            e-mail; nunca chave, token ou senha.
           </p>
 
           <select

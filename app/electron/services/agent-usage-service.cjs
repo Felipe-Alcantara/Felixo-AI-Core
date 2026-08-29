@@ -603,6 +603,18 @@ function resolveObservedIdentity({
 
   const exact = accounts.find((account) => account.identityKey === auth.identityKey)
   if (exact) {
+    // Conta já vinculada pode ter sido gravada com outra forma de exibição —
+    // é o caso das que nasceram quando o painel mostrava o identificador
+    // abreviado. O fingerprint é o mesmo, então é a mesma conta: só o texto
+    // exibido é atualizado.
+    if (auth.identityDisplay && auth.identityDisplay !== exact.identityDisplay) {
+      repository.updateIdentity(exact.id, {
+        identityKey: exact.identityKey,
+        identityDisplay: auth.identityDisplay,
+        source: exact.identitySource ?? 'cli',
+      })
+    }
+
     return { kind: 'matched', targetId: exact.id }
   }
 

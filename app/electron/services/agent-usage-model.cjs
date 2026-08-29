@@ -270,7 +270,12 @@ function createIdentityFingerprint(providerId, identity) {
       .createHash('sha256')
       .update(`${providerId}:${normalizedIdentity}`, 'utf8')
       .digest('hex'),
-    identityDisplay: maskIdentity(identity),
+    // O identificador aparece inteiro: com duas contas do mesmo provedor no
+    // mesmo domínio, a forma mascarada saía igual para as duas
+    // (`f***@gmail.com` e `f***@gmail.com`) e não respondia a única pergunta
+    // que o painel precisa responder — qual linha é qual conta. Quem separa
+    // as contas por dentro continua sendo o fingerprint, não este texto.
+    identityDisplay: cleanString(identity, 160),
   }
 }
 
@@ -278,6 +283,11 @@ function normalizeIdentity(identity) {
   return typeof identity === 'string' ? identity.trim().toLowerCase() : ''
 }
 
+/**
+ * Forma abreviada do identificador. Deixou de ser o que o painel mostra — ver
+ * `createIdentityFingerprint` — e fica disponível para onde a identidade
+ * precise aparecer encurtada sem virar ambígua.
+ */
 function maskIdentity(identity) {
   const value = cleanString(identity, 160)
 

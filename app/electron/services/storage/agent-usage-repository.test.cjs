@@ -10,7 +10,7 @@ const { createAgentUsageRepository } = require('./agent-usage-repository.cjs')
 const { createIdentityFingerprint } = require('../agent-usage-model.cjs')
 
 test(
-  'agent usage repository persists account identity as a fingerprint and keeps samples separate',
+  'agent usage repository keeps a stable fingerprint, the readable identity and no secret',
   { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
   () => {
     const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-'))
@@ -60,7 +60,9 @@ test(
       assert.deepEqual(repository.getAccount(account.id), {
         ...account,
         identityKey: identity.identityKey,
-        identityDisplay: 'a***@example.com',
+        // A forma de exibição é decisão de `createIdentityFingerprint`; aqui o
+        // que importa é que o repositório guarda e devolve o que recebeu.
+        identityDisplay: identity.identityDisplay,
       })
       assert.equal(repository.getLatestSample(account.id).metrics[0].used, 0)
       assert.equal(repository.getLatestSample(account.id).errorMessage, 'Falha sem detalhes seguros.')
@@ -73,8 +75,13 @@ test(
           .prepare('SELECT * FROM agent_usage_samples')
           .all(),
       }
-      assert.doesNotMatch(JSON.stringify(rawRows), /alice@example\.com/)
+      // O identificador da conta é gravado inteiro, por decisão explícita:
+      // com duas contas do mesmo provedor, a forma abreviada não dizia qual
+      // linha era qual. O que continua proibido é segredo — chave, token,
+      // cookie ou senha não entram no banco em hipótese nenhuma.
+      assert.match(JSON.stringify(rawRows), /alice@example\.com/)
       assert.doesNotMatch(JSON.stringify(rawRows), /sk-never-persist-this/)
+      assert.doesNotMatch(JSON.stringify(rawRows), /sk-[a-z0-9-]+/i)
 
       assert.equal(repository.archiveAccount(account.id), true)
       assert.deepEqual(repository.listAccounts(), [])

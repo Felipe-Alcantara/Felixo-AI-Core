@@ -2501,3 +2501,42 @@ O arquivo dá o mesmo dado sem tocar em nada.
 Openia continua no intervalo: o saldo vem de chamada de rede e não tem arquivo
 a acompanhar. Entre sessões, Codex e Claude mostram o último valor conhecido
 marcado como antigo — o arquivo só muda quando um agente responde.
+
+## [2026-08-29] Identificador da conta aparece inteiro no painel
+
+### Contexto
+
+Com mais de uma conta no mesmo provedor, a forma abreviada não respondia a
+única pergunta que o painel precisa responder: qual linha é qual conta. Duas
+contas no mesmo domínio saíam idênticas na tela.
+
+### Decisão
+
+Perguntado ao dono do produto (via AskUserQuestion) se o identificador podia ser
+gravado no banco local ou apenas exibido: a resposta foi gravar. O que muda:
+
+- `createIdentityFingerprint` passa a devolver o identificador inteiro como
+  forma de exibição. Quem separa as contas por dentro continua sendo o
+  fingerprint SHA-256 — nada na lógica de vínculo mudou.
+- Conta já gravada com a forma abreviada é atualizada na primeira coleta em que
+  a CLI informa a identidade, comparando pelo fingerprint. Nenhuma conta é
+  duplicada por causa disso.
+- O teste do repositório que proibia o identificador em texto foi reescrito para
+  a garantia que continua valendo: **segredo nunca entra no banco**. Chave,
+  token, cookie e senha seguem barrados, agora com asserção extra contra
+  qualquer `sk-…`.
+- README e o texto do formulário do painel foram corrigidos: prometiam forma
+  mascarada.
+
+### Validação
+
+- `npm test`: **834/834**; `npm run test:frontend`: 689/689; `npm run lint`:
+  0 erros; `tsc -b` e build limpos.
+- App real: as duas contas aparecem com o endereço completo e o plano ao lado,
+  cada uma na sua linha, distinguíveis à primeira vista.
+
+### Limites
+
+O identificador passa a existir em texto no banco do perfil do app. Isso é
+deliberado e restrito ao identificador: continua não havendo token, cookie,
+chave ou senha gravados. Documentação e relatórios seguem sem dado pessoal.
