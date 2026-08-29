@@ -2,7 +2,12 @@
 
 const { ipcMain } = require('electron')
 const { toErrorResult } = require('./ipc-result.cjs')
+const path = require('node:path')
 const { createAgentUsageService } = require('./agent-usage-service.cjs')
+const { getAppPaths } = require('../core/app-paths.cjs')
+const {
+  createClaudeStatuslineService,
+} = require('./claude-statusline-service.cjs')
 
 /**
  * A superfície IPC do painel é pequena de propósito: listar, atualizar,
@@ -10,6 +15,9 @@ const { createAgentUsageService } = require('./agent-usage-service.cjs')
  */
 function registerAgentUsageIpcHandlers({
   service = createAgentUsageService(),
+  statusline = createClaudeStatuslineService({
+    baseDir: path.join(getAppPaths().userData, 'claude-statusline'),
+  }),
 } = {}) {
   ipcMain.handle('agent-usage:list', async () => {
     try {
@@ -42,6 +50,34 @@ function registerAgentUsageIpcHandlers({
       })
     } catch (error) {
       return toErrorResult(error, 'Não foi possível adicionar a conta de agente.')
+    }
+  })
+
+  // A coleta do Claude altera ~/.claude/settings.json, que é configuração da
+  // pessoa: só acontece por pedido explícito da interface.
+  ipcMain.handle('agent-usage:claude-statusline-status', async () => {
+    try {
+      return { ok: true, ...statusline.status() }
+    } catch (error) {
+      return toErrorResult(error, 'Não foi possível ler o estado da coleta.')
+    }
+  })
+
+  ipcMain.handle('agent-usage:enable-claude-statusline', async () => {
+    try {
+      const result = statusline.install()
+      return { ...result, ...statusline.status() }
+    } catch (error) {
+      return toErrorResult(error, 'Não foi possível ligar a coleta do Claude.')
+    }
+  })
+
+  ipcMain.handle('agent-usage:disable-claude-statusline', async () => {
+    try {
+      const result = statusline.uninstall()
+      return { ...result, ...statusline.status() }
+    } catch (error) {
+      return toErrorResult(error, 'Não foi possível desligar a coleta do Claude.')
     }
   })
 

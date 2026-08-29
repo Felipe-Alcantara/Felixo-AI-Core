@@ -1,9 +1,15 @@
 'use strict'
 
+const path = require('node:path')
 const {
   readCodexIdentity,
   readCodexLocalUsage,
 } = require('./agent-usage-codex-local.cjs')
+const { getAppPaths } = require('../core/app-paths.cjs')
+const { parseAgentUsage } = require('./agent-usage-report.cjs')
+const {
+  createClaudeStatuslineService,
+} = require('./claude-statusline-service.cjs')
 
 /**
  * Probes que leem quota de arquivos que a própria CLI já escreve na máquina.
@@ -18,7 +24,13 @@ const {
  */
 const LOCAL_PROBES = Object.freeze({
   'codex-rollout': readCodexProbe,
+  'claude-statusline': readClaudeStatuslineProbe,
 })
+
+/** Onde o script da status line grava o que captura. */
+function claudeStatuslineDir() {
+  return path.join(getAppPaths().userData, 'claude-statusline')
+}
 
 function readCodexProbe(options = {}) {
   const usage = readCodexLocalUsage(options)
@@ -31,6 +43,43 @@ function readCodexProbe(options = {}) {
     identity,
     plan: usage.plan ?? plan,
     message: usage.message,
+  }
+}
+
+/**
+ * Rate limit do Claude Code capturado pela status line. Sem a coleta ligada não
+ * há arquivo e o probe simplesmente não tem métrica — o painel continua
+ * mostrando a limitação, não um zero inventado.
+ */
+function readClaudeStatuslineProbe(options = {}) {
+  const service = createClaudeStatuslineService({
+    baseDir: options.claudeStatuslineDir ?? claudeStatuslineDir(),
+    ...options,
+  })
+  const capture = service.readCapture()
+
+  if (!capture) {
+    return {
+      ok: false,
+      collectedAt: null,
+      metrics: [],
+      identity: null,
+      plan: null,
+      message: null,
+    }
+  }
+
+  return {
+    ok: true,
+    collectedAt: capture.measuredAt,
+    // O formato publicado pela status line já é o que o parser oficial lê.
+    metrics: parseAgentUsage(
+      'claude',
+      JSON.stringify({ rate_limits: capture.rateLimits }),
+    ).metrics,
+    identity: null,
+    plan: null,
+    message: null,
   }
 }
 

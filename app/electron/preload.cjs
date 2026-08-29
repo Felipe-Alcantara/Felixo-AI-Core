@@ -169,6 +169,12 @@ contextBridge.exposeInMainWorld('felixo', {
     addAccount: (params) => ipcRenderer.invoke('agent-usage:add-account', params),
     removeAccount: (accountId) =>
       ipcRenderer.invoke('agent-usage:remove-account', accountId),
+    claudeStatuslineStatus: () =>
+      ipcRenderer.invoke('agent-usage:claude-statusline-status'),
+    enableClaudeStatusline: () =>
+      ipcRenderer.invoke('agent-usage:enable-claude-statusline'),
+    disableClaudeStatusline: () =>
+      ipcRenderer.invoke('agent-usage:disable-claude-statusline'),
   },
   systemDesign: {
     getConfig: () => ipcRenderer.invoke('system-design:get-config'),
