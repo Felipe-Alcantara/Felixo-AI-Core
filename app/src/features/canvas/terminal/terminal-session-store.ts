@@ -171,7 +171,19 @@ const CONTEXT_DELIVERY_WINDOW_MS = 30000
  * sequência, longa o bastante para cobrir a ida e volta ao processo principal.
  */
 const IMAGE_PASTE_DEDUPE_MS = 500
-const MAX_MULTILINE_INPUT_ROWS = 4
+
+/**
+ * Até onde subir atrás do começo da caixa de edição.
+ *
+ * Eram 4 linhas, e isso quebrava o Ctrl+A no Codex: ele mantém cada linha do
+ * que foi escrito, então o contexto inicial que o app digita no composer
+ * empurra o marcador para uma dúzia de linhas acima do cursor. (O Claude
+ * escapava porque colapsa texto longo em `[Pasted text #1 +6 lines]`, uma
+ * linha só.) O teto é a altura da janela, porque a caixa de edição não passa
+ * disso — e quem procura o marcador exige que ele esteja na borda esquerda,
+ * então subir mais não faz eleger saída antiga como entrada.
+ */
+const MAX_MULTILINE_INPUT_ROWS = 200
 
 type SessionOptions = {
   command?: string
@@ -1158,14 +1170,26 @@ export class TerminalSessionStore {
     const cursorRow = buffer.baseY + buffer.cursorY
 
     // Quebras visuais e lógicas deixam o cursor numa linha sem marcador. A
-    // busca limitada encontra o começo do composer sem alcançar a saída antiga.
-    const firstRow = Math.max(0, cursorRow - (MAX_MULTILINE_INPUT_ROWS - 1))
+    // janela cobre a caixa de edição inteira sem varrer o histórico: no máximo
+    // a altura da janela, que é o tamanho que o composer pode ter.
+    const searchRows = Math.min(MAX_MULTILINE_INPUT_ROWS, terminal.rows)
+    const firstRow = Math.max(0, cursorRow - (searchRows - 1))
     const lines: string[] = []
+    // `isWrapped` separa a quebra que o terminal fez da que a pessoa digitou:
+    // só a segunda vira `\n` no texto copiado.
+    const wrapped: boolean[] = []
     for (let row = firstRow; row <= cursorRow; row += 1) {
-      lines.push(buffer.getLine(row)?.translateToString(false) ?? '')
+      const line = buffer.getLine(row)
+      lines.push(line?.translateToString(false) ?? '')
+      wrapped.push(line?.isWrapped === true)
     }
 
-    const range = findMultiLineTypedInputRange(lines, lines.length - 1, buffer.cursorX)
+    const range = findMultiLineTypedInputRange(
+      lines,
+      lines.length - 1,
+      buffer.cursorX,
+      wrapped,
+    )
     if (!range) {
       return false
     }

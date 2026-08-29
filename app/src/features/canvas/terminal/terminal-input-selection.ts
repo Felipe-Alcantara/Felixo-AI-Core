@@ -87,11 +87,32 @@ export function findMultiLineTypedInputRange(
   lines: string[],
   cursorLine: number,
   cursorX: number,
+  /**
+   * Para cada linha, se ela é continuação da anterior por **quebra visual** —
+   * o terminal dobrou o texto porque acabou a largura, não porque a pessoa
+   * apertou Enter. Sem isso o texto copiado sai com quebras que ninguém
+   * digitou, e colar de volta muda o que foi escrito.
+   */
+  wrapped: boolean[] = [],
 ): MultiLineTypedInputRange | null {
-  // O prompt vem antes das continuações. Procurar de cima para baixo preserva
-  // um `>` ou `$` que a pessoa escreveu nas linhas seguintes.
-  for (let lineIndex = 0; lineIndex <= cursorLine; lineIndex += 1) {
-    if (!looksLikePromptLine(lines[lineIndex])) {
+  // Duas buscas, nesta ordem, porque os dois casos têm riscos opostos.
+  //
+  // A primeira sobe a partir do cursor atrás do marcador **na borda esquerda**
+  // da caixa de edição. É a que atende o composer alto: o Codex mantém cada
+  // linha do que foi escrito, então uma entrada longa empurra o `›` para bem
+  // acima do cursor. Como o padrão exige o marcador no início da linha, subir
+  // não corre o risco de casar com a saída antiga do programa.
+  //
+  // A segunda é a de cima para baixo, preservada para o shell: `$` e `#` são
+  // reconhecidos em qualquer posição, e aí procurar do topo é o que evita
+  // eleger como prompt um `$` que a pessoa escreveu numa continuação.
+  const startCandidates = [
+    findComposerStartLine(lines, cursorLine),
+    ...range(0, cursorLine),
+  ]
+
+  for (const lineIndex of startCandidates) {
+    if (lineIndex === null || !looksLikePromptLine(lines[lineIndex])) {
       continue
     }
 
@@ -109,9 +130,45 @@ export function findMultiLineTypedInputRange(
         const start = index === 0 ? range.start : continuationStart(line, range.start, hasFrame)
         return trimComposerLine(line.slice(start, end), hasFrame)
       })
-      .join('\n')
+      .reduce((joined, piece, index) => {
+        if (index === 0) {
+          return piece
+        }
+
+        return wrapped[lineIndex + index] ? joined + piece : `${joined}\n${piece}`
+      }, '')
 
     return { startLine: lineIndex, startColumn: range.start, text }
+  }
+
+  return null
+}
+
+/** Índices de `from` até `to`, inclusive. */
+function range(from: number, to: number): number[] {
+  const values = []
+  for (let value = from; value <= to; value += 1) {
+    values.push(value)
+  }
+  return values
+}
+
+/**
+ * A linha onde a caixa de edição começa: a mais próxima do cursor, subindo,
+ * com o marcador na borda esquerda.
+ *
+ * Só o marcador de TUI conta aqui (`❯`, `›`, `>`); `$` e `#` ficam de fora de
+ * propósito, porque eles aparecem no meio de texto comum e subir atrás deles
+ * acabaria elegendo uma linha de saída antiga como início da entrada.
+ */
+export function findComposerStartLine(
+  lines: string[],
+  cursorLine: number,
+): number | null {
+  for (let lineIndex = cursorLine; lineIndex >= 0; lineIndex -= 1) {
+    if (/^[\s│┃|]*[❯›>](?:\s|$)/.test(lines[lineIndex] ?? '')) {
+      return lineIndex
+    }
   }
 
   return null

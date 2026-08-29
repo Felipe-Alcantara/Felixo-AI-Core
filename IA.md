@@ -2385,3 +2385,54 @@ teste sobre o estado real encontrado em disco, não por reprodução visual. O
 `claude.exe` dentro da pasta gerenciada chamou atenção mas foi descartado como
 falso alarme: é o único executável publicado pelo pacote e roda normalmente no
 Linux.
+
+## [2026-08-29] Ctrl+A não selecionava a entrada no Codex
+
+### Contexto
+
+Relato de que o Ctrl+A não seleciona tudo no Codex. A função existe
+(`terminal-input-selection.ts`) e funcionava no Claude, então o defeito era
+específico do que o Codex desenha na tela.
+
+### Causa
+
+`MAX_MULTILINE_INPUT_ROWS = 4`: a busca pelo marcador de prompt olhava só
+quatro linhas acima do cursor. O Codex mantém **uma linha por linha escrita**,
+então uma entrada longa — como o próprio contexto inicial que o app digita no
+composer ao abrir o agente — empurra o `›` para uma dúzia de linhas acima. Sem
+marcador no alcance, a função devolvia "nada a selecionar" e o `0x01` seguia
+para o PTY.
+
+O Claude escapava por um detalhe da interface dele: texto longo vira
+`[Pasted text #1 +6 lines]`, uma linha só, sempre dentro das quatro.
+
+### O que foi feito
+
+- A janela de busca passa a ser a altura da janela do terminal, que é o tamanho
+  máximo que a caixa de edição pode ter.
+- Para não trocar um defeito por outro, a busca ficou em duas etapas:
+  `findComposerStartLine` sobe a partir do cursor atrás do marcador **na borda
+  esquerda** (`❯`, `›`, `>`), que é seguro de procurar longe porque não casa com
+  saída antiga; e a varredura de cima para baixo continua existindo para o
+  shell, onde `$` e `#` valem em qualquer posição e subir elegeria um `$`
+  digitado numa continuação.
+- O texto copiado passa a respeitar `isWrapped`: uma dobra feita pelo terminal
+  não vira `\n`.
+
+### Validação
+
+- `npm run test:frontend`: **689/689** (6 novos: composer alto do Codex, busca
+  para cima, saída antiga acima da caixa, `$` na continuação e as duas do
+  tratamento de dobra); `npm test`: 825/825; `npm run lint`: 0 erros.
+- App real com um agente Codex aberto: antes, nada era destacado; depois, o
+  texto inteiro fica destacado sem arrastar o `›` junto, e o Ctrl+C devolve o
+  conteúdo completo na área de transferência.
+
+### Limites
+
+O respeito à dobra vale para quebra automática do terminal, verificado por
+teste. Num TUI de tela cheia como o Codex ele não muda nada, e isso foi
+observado no app: quem decide onde quebrar é a própria CLI, que desenha cada
+linha como independente, então `isWrapped` é falso e o terminal não tem como
+saber quais quebras a pessoa digitou. O texto copiado de um composer alto sai
+com as quebras que aparecem na tela.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildClearInputSequence,
+  findComposerStartLine,
   findMultiLineTypedInputRange,
   findTypedInputRange,
   isDeleteSelectionKey,
@@ -210,5 +211,89 @@ describe('positionFromOffset', () => {
 
   it('acerta a virada exata da coluna', () => {
     expect(positionFromOffset(4, 80, 80)).toEqual({ row: 5, col: 0 })
+  })
+})
+
+describe('composer alto do Codex', () => {
+  /** Como o Codex desenha uma entrada longa: uma linha por linha escrita. */
+  const composerCodex = [
+    '› CONTEXTO ENTREGUE EM ARQUIVOS SOMENTE LEITURA',
+    '  Leia todos os arquivos abaixo antes de agir. Eles sao artefatos',
+    '  temporarios do Felixo AI Core, nao fazem parte do repositorio.',
+    '  Se precisar registrar progresso, use o scratchpad .md do canvas.',
+    '  Se algum caminho nao abrir por permissao, informe isso.',
+    '  - initial-context: "/tmp/felixo/contexto.txt"',
+    '  texto de teste para selecionar',
+  ]
+
+  it('acha o marcador acima das quatro linhas que a busca cobria', () => {
+    const range = findMultiLineTypedInputRange(
+      composerCodex,
+      composerCodex.length - 1,
+      composerCodex[composerCodex.length - 1].length,
+    )
+
+    expect(range?.startLine).toBe(0)
+    expect(range?.startColumn).toBe(2)
+    expect(range?.text.split('\n')).toHaveLength(7)
+    expect(range?.text).toMatch(/^CONTEXTO ENTREGUE/)
+    expect(range?.text).toMatch(/texto de teste para selecionar$/)
+  })
+
+  it('encontra o começo da caixa subindo a partir do cursor', () => {
+    expect(findComposerStartLine(composerCodex, composerCodex.length - 1)).toBe(0)
+    expect(findComposerStartLine(['sem marcador', 'nenhum aqui'], 1)).toBeNull()
+  })
+
+  it('não sobe além da caixa quando há saída antiga acima', () => {
+    // A saída do programa não pode ser eleita como início da entrada, mesmo
+    // agora que a janela de busca é grande.
+    const comSaida = [
+      'rodando testes: 12 passaram',
+      'arquivo alterado: src/app.ts',
+      '› o que eu escrevi',
+      '  continuando aqui',
+    ]
+
+    const range = findMultiLineTypedInputRange(comSaida, 3, comSaida[3].length)
+
+    expect(range?.startLine).toBe(2)
+    expect(range?.text).toBe('o que eu escrevi\ncontinuando aqui')
+  })
+
+  it('mantém o prompt do shell mesmo com um $ digitado na continuação', () => {
+    // O caso que a busca de cima para baixo protege: subir elegeria o `$` da
+    // segunda linha como prompt.
+    const shell = ['$ echo um', '  valor $ interno']
+
+    expect(findMultiLineTypedInputRange(shell, 1, shell[1].length)?.startLine).toBe(0)
+  })
+})
+
+describe('quebra visual não vira quebra de linha no texto copiado', () => {
+  const dobrado = [
+    '› uma frase que nao coube',
+    'na largura da janela',
+    '  e outra que a pessoa escreveu',
+  ]
+
+  it('cola de volta o que foi escrito, não o que o terminal desenhou', () => {
+    const range = findMultiLineTypedInputRange(
+      dobrado,
+      2,
+      dobrado[2].length,
+      // A segunda linha é dobra do terminal; a terceira, Enter da pessoa.
+      [false, true, false],
+    )
+
+    expect(range?.text).toBe(
+      'uma frase que nao coubena largura da janela\ne outra que a pessoa escreveu',
+    )
+  })
+
+  it('sem informação de dobra, cada linha continua sendo uma linha', () => {
+    const range = findMultiLineTypedInputRange(dobrado, 2, dobrado[2].length)
+
+    expect(range?.text.split('\n')).toHaveLength(3)
   })
 })
