@@ -8,6 +8,7 @@ const { getAppPaths } = require('../core/app-paths.cjs')
 const {
   createClaudeStatuslineService,
 } = require('./claude-statusline-service.cjs')
+const { createAgentUsageWatcher } = require('./agent-usage-watcher.cjs')
 
 /**
  * A superfície IPC do painel é pequena de propósito: listar, atualizar,
@@ -15,9 +16,10 @@ const {
  */
 function registerAgentUsageIpcHandlers({
   service = createAgentUsageService(),
-  statusline = createClaudeStatuslineService({
-    baseDir: path.join(getAppPaths().userData, 'claude-statusline'),
-  }),
+  statuslineDir = path.join(getAppPaths().userData, 'claude-statusline'),
+  statusline = createClaudeStatuslineService({ baseDir: statuslineDir }),
+  getMainWindow = () => null,
+  createWatcher = createAgentUsageWatcher,
 } = {}) {
   ipcMain.handle('agent-usage:list', async () => {
     try {
@@ -90,6 +92,32 @@ function registerAgentUsageIpcHandlers({
       return toErrorResult(error, 'Não foi possível remover a conta de agente.')
     }
   })
+
+  // Empurra a leitura nova assim que o arquivo muda, em vez de esperar a
+  // interface perguntar. Só a leitura local é refeita: a rodada completa
+  // depende dos comandos de autenticação, lentos demais para acompanhar
+  // consumo que muda em segundos.
+  const watcher = createWatcher({
+    claudeStatuslineDir: statuslineDir,
+    onChange: async (providerId) => {
+      try {
+        const dashboard = await service.refreshLocal(providerId)
+
+        if (!dashboard) {
+          return
+        }
+
+        getMainWindow()?.webContents?.send('agent-usage:changed', dashboard)
+      } catch {
+        // Uma leitura que falhou não derruba o observador: o arquivo seguinte
+        // volta a tentar.
+      }
+    },
+  })
+
+  watcher.start()
+
+  return { stopWatching: watcher.stop }
 }
 
 function requireString(value, message) {

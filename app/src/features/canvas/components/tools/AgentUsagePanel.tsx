@@ -29,11 +29,18 @@ type AgentUsagePanelProps = {
   toolsMenuOpen?: boolean
 }
 
+/**
+ * A consulta completa depende dos comandos de autenticação das CLIs, lentos o
+ * bastante (segundos cada) para não caberem num intervalo curto. Por isso o
+ * padrão é não repetir: o número novo chega por aviso do processo principal,
+ * assim que a CLI o escreve. O intervalo fica para o saldo do OpenRouter, que
+ * vem de rede e não tem arquivo a observar.
+ */
 const AUTO_REFRESH_OPTIONS = [
-  { value: 0, label: 'Manual' },
-  { value: 5, label: '5 min' },
-  { value: 15, label: '15 min' },
-  { value: 30, label: '30 min' },
+  { value: 0, label: 'Só ao vivo' },
+  { value: 5, label: '+ 5 min' },
+  { value: 15, label: '+ 15 min' },
+  { value: 30, label: '+ 30 min' },
 ]
 
 /**
@@ -54,6 +61,7 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
   const [autoRefreshMinutes, setAutoRefreshMinutes] = useState(0)
   const [isAddingAccount, setIsAddingAccount] = useState(false)
   const [statusline, setStatusline] = useState<ClaudeStatuslineState | null>(null)
+  const [liveAt, setLiveAt] = useState<Date | null>(null)
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -138,6 +146,17 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
     [load],
   )
 
+  // Aviso do processo principal: a CLI gravou um número novo. Chega sem custo
+  // de comando, então é o caminho que acompanha consumo mudando em segundos.
+  useEffect(() => {
+    return window.felixo?.agentUsage?.onChanged((next) => {
+      if (mounted.current) {
+        setDashboard(next)
+        setLiveAt(new Date())
+      }
+    })
+  }, [])
+
   useEffect(() => {
     if (autoRefreshMinutes <= 0) {
       return
@@ -191,8 +210,18 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
           Atualizar
         </button>
 
+        {liveAt && (
+          <span
+            title={`Última atualização ao vivo às ${liveAt.toLocaleTimeString('pt-BR')}`}
+            className="flex items-center gap-1 text-[10px] text-theme-success"
+          >
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-theme-success" />
+            ao vivo
+          </span>
+        )}
+
         <label className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500">
-          Automático
+          Reconsultar
           <select
             value={autoRefreshMinutes}
             onChange={(event) => setAutoRefreshMinutes(Number(event.target.value))}

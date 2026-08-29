@@ -2436,3 +2436,68 @@ observado no app: quem decide onde quebrar é a própria CLI, que desenha cada
 linha como independente, então `isWrapped` é falso e o terminal não tem como
 saber quais quebras a pessoa digitou. O texto copiado de um composer alto sai
 com as quebras que aparecem na tela.
+
+## [2026-08-29] Limites ao vivo, sem intervalo
+
+### Contexto
+
+Pedido para ver os limites em tempo real: o consumo muda em segundos e um
+intervalo de 5 minutos mostra número velho quase o tempo todo.
+
+### Por que encurtar o intervalo não resolveria
+
+Os comandos que a rodada completa executa são lentos. Medido nesta máquina:
+
+| comando | tempo |
+|---|---|
+| `claude auth status --json` | 12,3 s |
+| `codex login status` | 4,6 s |
+| `openia statusline` | 4,0 s |
+
+O que custa é a autenticação, não a quota — que sai de um arquivo em
+milissegundos. Repetir a rodada a cada poucos segundos gastaria processo e rede
+para reler o mesmo estado de login.
+
+### O que foi feito
+
+- `refreshLocal(providerId)`: releitura só do arquivo que a CLI escreve, sem
+  executar comando. Troca os números e o horário da medição; conta, plano e
+  estado de login continuam sendo os da última rodada completa, que é o que
+  eles são. Não grava amostra quando a leitura é igual à anterior.
+- `agent-usage-watcher.cjs` acompanha os arquivos e avisa o processo principal,
+  que empurra o painel novo para a interface. A interface passa a ter selo
+  "ao vivo" e o intervalo vira complemento (`Só ao vivo` por padrão), não o
+  mecanismo principal.
+- A vigilância é por `mtime`, não por `fs.watch`. Descoberta durante a
+  implementação: a máquina estava com **204 instâncias de inotify para um
+  limite de 128 por usuário**, e qualquer `fs.watch` novo falhava com `EMFILE`.
+  Um `stat` por segundo em dois caminhos custa microssegundos e não disputa
+  esse recurso. O rollout mais recente é redescoberto a cada 15 s, lendo só a
+  pasta do dia.
+
+### Sobre o `/status`
+
+O `/status` do Codex mostra os mesmos números que já lemos do rollout —
+conferido lado a lado: `88% restante` na semanal com reset em 4 Sep 12:28, que
+é o `12% usado` e o mesmo reset que o arquivo entrega. A diferença é que ele
+consulta na hora, enquanto o arquivo fica parado entre sessões. Não foi
+adotado porque é comando interativo: usá-lo exigiria digitar dentro da sessão
+de quem está trabalhando, poluindo a conversa, ou abrir uma sessão descartável.
+O arquivo dá o mesmo dado sem tocar em nada.
+
+### Validação
+
+- `npm test`: **831/831** (6 novos, sobre o acompanhamento por `mtime`,
+  incluindo o caso de `inotify` esgotado); `npm run test:frontend`: 689/689;
+  `npm run lint`: 0 erros.
+- App real com um agente Claude aberto e a coleta ligada: um prompt mínimo fez
+  o painel sair de "Indisponível" para **96% (5 h) e 86% (7 dias)** sozinho, sem
+  clicar em atualizar, e o número subiu de 95% para 96% enquanto a sessão
+  consumia. A configuração do Claude foi restaurada ao final e conferida
+  idêntica ao backup.
+
+### Limites
+
+Openia continua no intervalo: o saldo vem de chamada de rede e não tem arquivo
+a acompanhar. Entre sessões, Codex e Claude mostram o último valor conhecido
+marcado como antigo — o arquivo só muda quando um agente responde.

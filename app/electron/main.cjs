@@ -76,6 +76,7 @@ let textFileHandlers = null
 let storageDatabase = null
 let settingsRepository = null
 let cliAutoInstall = null
+let agentUsageWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -193,7 +194,10 @@ app.whenReady().then(() => {
     isPackaged: app.isPackaged,
   })
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
-  registerAgentUsageIpcHandlers({ service: agentUsageService })
+  agentUsageWatching = registerAgentUsageIpcHandlers({
+    service: agentUsageService,
+    getMainWindow,
+  })
 
   // Expõe a versão empacotada (definida pelo CI no release, não no
   // package.json versionado) para a interface conseguir mostrá-la.
@@ -241,6 +245,15 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  if (agentUsageWatching) {
+    try {
+      agentUsageWatching.stopWatching()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentUsageWatching = null
+  }
+
   if (cliAutoInstall) {
     try {
       cliAutoInstall.stop()

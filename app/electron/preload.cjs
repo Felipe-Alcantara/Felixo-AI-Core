@@ -175,6 +175,12 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('agent-usage:enable-claude-statusline'),
     disableClaudeStatusline: () =>
       ipcRenderer.invoke('agent-usage:disable-claude-statusline'),
+    // Empurrado pelo processo principal quando a CLI grava um número novo.
+    onChanged: (callback) => {
+      const handler = (_event, dashboard) => callback(dashboard)
+      ipcRenderer.on('agent-usage:changed', handler)
+      return () => ipcRenderer.removeListener('agent-usage:changed', handler)
+    },
   },
   systemDesign: {
     getConfig: () => ipcRenderer.invoke('system-design:get-config'),

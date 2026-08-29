@@ -521,6 +521,9 @@ declare global {
         claudeStatuslineStatus: () => Promise<ClaudeStatuslineState>
         enableClaudeStatusline: () => Promise<ClaudeStatuslineState>
         disableClaudeStatusline: () => Promise<ClaudeStatuslineState>
+        onChanged: (
+          callback: (dashboard: AgentUsageDashboard) => void,
+        ) => () => void
       }
       systemDesign?: {
         getConfig: () => Promise<

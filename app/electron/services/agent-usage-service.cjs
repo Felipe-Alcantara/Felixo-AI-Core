@@ -198,13 +198,132 @@ function createAgentUsageService({
     }
   }
 
+  /**
+   * Releitura barata, só do arquivo que a CLI escreve.
+   *
+   * Existe porque a rodada completa é lenta pelo motivo errado: quem custa é o
+   * comando de autenticação — medido nesta máquina, `claude auth status` leva
+   * ~12 s e `codex login status` ~4,6 s —, não a quota em si, que sai de um
+   * arquivo em milissegundos. Para acompanhar o consumo enquanto ele muda,
+   * relemos só o arquivo e trocamos os números; conta, plano e estado de login
+   * continuam sendo os da última rodada completa, que é o que eles são.
+   *
+   * Devolve `null` quando não há número novo para mostrar, para quem chama não
+   * gravar amostra nem avisar a interface à toa.
+   */
+  async function refreshLocal(providerId) {
+    const source = getAgentUsageSource(providerId)
+
+    if (!source?.localProbe) {
+      return null
+    }
+
+    const local = probe(source.localProbe)
+
+    if (!local?.metrics?.length) {
+      return null
+    }
+
+    const accounts = repository
+      .listAccounts()
+      .filter((account) => account.providerId === providerId)
+    const target = pickLocalTarget(accounts, providerId, local.identity)
+
+    if (!target) {
+      return null
+    }
+
+    const previous = repository.getLatestSample(target.id)
+
+    if (isSameLocalReading(previous, local)) {
+      return null
+    }
+
+    repository.saveSample({
+      id: randomUUID(),
+      accountId: target.id,
+      status: 'current',
+      sourceKind: source.usage.kind,
+      sourceLabel: source.usage.label,
+      sourceCommand: source.auth?.label ?? null,
+      sourceUrl: source.usage.docsUrl ?? null,
+      collectedAt: nowIso(now),
+      metrics: local.metrics,
+      observedIdentityKey: target.identityKey,
+      observedIdentityDisplay: target.identityDisplay,
+      errorMessage: null,
+      metadata: {
+        // Autenticação e plano vêm da última rodada completa: esta leitura não
+        // consultou a CLI e não tem como saber que eles mudaram.
+        ...(previous?.metadata ?? {}),
+        measuredAt: local.collectedAt ?? undefined,
+      },
+    })
+
+    return {
+      ok: true,
+      ...buildDashboard({
+        accounts: repository.listAccounts(),
+        catalog: await readCatalog(listCatalog),
+        repository,
+        now,
+        lastRefreshAt,
+      }),
+    }
+  }
+
   return {
     addAccount,
     getDashboard: list,
     list,
     refresh,
+    refreshLocal,
     removeAccount,
   }
+}
+
+/**
+ * A conta que recebe uma leitura local.
+ *
+ * Mesma regra da rodada completa: identidade bate, ou provider tem uma conta
+ * só. Com duas contas e nenhuma identidade, a amostra fica sem dono em vez de
+ * ir para a conta errada.
+ */
+function pickLocalTarget(accounts, providerId, identity) {
+  if (accounts.length === 0) {
+    return null
+  }
+
+  const fingerprint = identity
+    ? createIdentityFingerprint(providerId, identity)
+    : null
+
+  if (fingerprint) {
+    const matched = accounts.find(
+      (account) => account.identityKey === fingerprint.identityKey,
+    )
+
+    if (matched) {
+      return matched
+    }
+  }
+
+  return accounts.length === 1 ? accounts[0] : null
+}
+
+/** Nada mudou desde a última amostra: mesma medição, mesmos números. */
+function isSameLocalReading(previous, local) {
+  if (!previous) {
+    return false
+  }
+
+  const sameMeasurement =
+    (previous.metadata?.measuredAt ?? null) === (local.collectedAt ?? null)
+
+  return (
+    sameMeasurement &&
+    JSON.stringify(previous.metrics) === JSON.stringify(local.metrics)
+  )
 }
 
 async function collectProviderSnapshot({ providerId, runCommand, now, probe }) {
