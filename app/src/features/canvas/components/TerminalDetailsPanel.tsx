@@ -23,7 +23,14 @@ export function TerminalDetailsPanel({
   const agentSession = hasPersistedAssociation ? data.agentSession : metadata?.agentSession
 
   return (
-    <CanvasPanel title="Detalhes do terminal" icon={<Info size={15} />} onClose={onClose} toolsMenuOpen={toolsMenuOpen}>
+    <CanvasPanel
+      title="Detalhes do terminal"
+      icon={<Info size={15} />}
+      onClose={onClose}
+      panelId="terminal-details"
+      size="md"
+      toolsMenuOpen={toolsMenuOpen}
+    >
       <div className="space-y-3 text-xs text-zinc-300">
         <div className="flex items-center gap-2 text-sm font-medium text-emerald-200">
           <TerminalIcon size={14} />

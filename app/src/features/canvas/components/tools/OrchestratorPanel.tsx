@@ -130,7 +130,8 @@ export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelP
       title="Orquestrador"
       icon={<Network size={15} />}
       onClose={onClose}
-      widthClassName="w-[24rem]"
+      panelId="orchestrator"
+      size="md"
       toolsMenuOpen={toolsMenuOpen}
     >
       <LiveRuns />

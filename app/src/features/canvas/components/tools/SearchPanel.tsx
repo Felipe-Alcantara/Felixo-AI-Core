@@ -91,6 +91,7 @@ export function SearchPanel({
   return (
     <CanvasPanel
       title="Pesquisar"
+      panelId="search"
       icon={<Search size={15} />}
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}

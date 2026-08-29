@@ -273,6 +273,8 @@ export function ProjectsPanel({
     return (
       <CanvasPanel
         title={browsing.project.name}
+        panelId="project-browser"
+        size="md"
         icon={<FolderGit2 size={15} />}
         onClose={onClose}
         toolsMenuOpen={toolsMenuOpen}
@@ -359,6 +361,8 @@ export function ProjectsPanel({
       title="Projetos"
       icon={<FolderGit2 size={15} />}
       onClose={onClose}
+      panelId="projects"
+      size="md"
       toolsMenuOpen={toolsMenuOpen}
     >
       <button

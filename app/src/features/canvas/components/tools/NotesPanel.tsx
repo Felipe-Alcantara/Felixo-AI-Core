@@ -119,6 +119,7 @@ export function NotesPanel({
   return (
     <CanvasPanel
       title="Notas"
+      panelId="notes"
       icon={<Notebook size={15} />}
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}

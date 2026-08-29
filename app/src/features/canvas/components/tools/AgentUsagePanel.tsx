@@ -176,7 +176,8 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
       title="Limites e uso"
       icon={<Gauge size={15} />}
       onClose={onClose}
-      widthClassName="w-[26rem]"
+      panelId="agent-usage"
+      size="lg"
       toolsMenuOpen={toolsMenuOpen}
     >
       <div className="mb-3 flex items-center gap-2">

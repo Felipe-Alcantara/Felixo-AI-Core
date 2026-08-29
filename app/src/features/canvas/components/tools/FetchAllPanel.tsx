@@ -229,7 +229,8 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       title="Fetch All"
       icon={<RefreshCw size={15} />}
       onClose={onClose}
-      widthClassName="w-96"
+      panelId="fetch-all"
+      size="md"
       toolsMenuOpen={toolsMenuOpen}
     >
       {pendingRequest && (

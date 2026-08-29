@@ -2274,3 +2274,58 @@ O percentual do Claude só se move quando alguma sessão do Claude Code responde
 entre sessões vale o último valor conhecido, marcado como antigo. Gemini segue
 sem número enquanto a CLI não oferecer consulta não interativa. macOS e Windows
 não foram executados nativamente nesta máquina.
+
+## [2026-08-29] Painéis e blocos dimensionados pela tela, não por pixel fixo
+
+### Contexto
+
+Relato de que a interface fica apertada num notebook de 1366x768 (viewport útil
+de 1320x738). Medindo contra essa largura: o painel de prompts ocupava 672 px
+fixos (51% da tela), a gaveta do terminal 720, o QA logger 480, e um bloco de
+terminal nasce com 520x360 — metade da altura útil. Os números tinham sido
+escritos para monitor grande.
+
+### O que foi feito
+
+- `panel-sizing.ts` traduz porte de painel (`sm`/`md`/`lg`/`xl`) em fração do
+  viewport com piso e teto, reservando espaço para a barra de ferramentas e uma
+  faixa de canvas. Segue a forma dos helpers que a gaveta do terminal já usava
+  (`terminal-drawer-pin.ts`), em vez de criar um mecanismo paralelo: funções
+  puras, clamp que não inverte intervalo e preferência validada na leitura.
+
+- `CanvasPanel` deixou de receber largura em rem e passa a receber `panelId` e
+  `size`. Ganhou borda de arrasto na direita, com a largura lembrada por painel
+  e duplo clique para voltar ao sugerido. A altura deixou de ser `80vh` a partir
+  de 64 px do topo — o que em 768 px encostava nos dois extremos — e passa a
+  reservar topo e rodapé.
+
+- Enquanto a pessoa não arrasta, a largura acompanha o redimensionamento da
+  janela. Depois do arrasto vale a escolha dela, só trazida para dentro da faixa
+  quando a tela não comporta mais aquele tamanho — o caso de arrastar no monitor
+  grande e abrir no notebook.
+
+- Os blocos do canvas nascem com tamanho escalado pelo viewport
+  (`getDefaultNodeSize`), mantendo a proporção entre os tipos e com piso para
+  não nascerem ilegíveis.
+
+### Validação
+
+- `npm run test:frontend`: **683/683** (13 novos, sobre as funções puras de
+  dimensionamento); `npm test`: **818/818**; `npm run lint`: 0 erros; `tsc -b` e
+  `npm run build` limpos.
+- App real sob Xvfb em **1366x768**: painel de prompts de 672 → **528 px**,
+  altura 626 com rodapé livre, sobrando 624 px de canvas. Arrasto conferido
+  (largura muda, respeita o mínimo e persiste) e duplo clique devolvendo o
+  padrão com a preferência apagada. Bloco de nota nasce 182x132 em espaço de
+  canvas, contra 220x160 antes.
+- App em **1920x1080** para checar regressão na tela grande: o mesmo painel fica
+  com 700x945, contra 672x846 de antes — não encolheu.
+- A janela do Electron em si já se ajustava à área de trabalho (`centerBounds`),
+  então não precisou mudar.
+
+### Limites
+
+Os tamanhos de blocos já salvos num canvas existente não são alterados: a escala
+vale para blocos novos, porque reposicionar o que a pessoa já arrumou seria pior
+que o aperto. Telas menores que ~1000 px de largura caem no piso das faixas e
+ainda podem exigir arrasto manual.

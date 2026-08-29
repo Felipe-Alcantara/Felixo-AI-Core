@@ -2,6 +2,7 @@
 // hit-test de grupos e roteamento de arestas pelos lados mais próximos.
 import type { Node } from '@xyflow/react'
 import type { CanvasNodeType } from '../types'
+import { scaleNodeSize } from './panel-sizing'
 
 export const DEFAULT_SIZE: Record<
   CanvasNodeType,
@@ -12,6 +13,20 @@ export const DEFAULT_SIZE: Record<
   terminal: { width: 520, height: 360 },
   note: { width: 220, height: 160 },
   webpage: { width: 560, height: 420 },
+}
+
+/**
+ * Tamanho com que um bloco nasce, ajustado à tela.
+ *
+ * Os valores de `DEFAULT_SIZE` foram escritos para monitor grande: um terminal
+ * de 520x360 come metade da altura útil de um notebook de 768px. A escala
+ * mantém a proporção entre os tipos de bloco e só encolhe onde falta espaço.
+ */
+export function getDefaultNodeSize(
+  type: CanvasNodeType,
+  viewportWidth: number,
+): { width: number; height: number } {
+  return scaleNodeSize(DEFAULT_SIZE[type], viewportWidth)
 }
 
 const NODE_PLACEMENT_GAP = 32

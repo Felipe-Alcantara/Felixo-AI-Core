@@ -47,6 +47,7 @@ export function ModelsPanel({ onClose, toolsMenuOpen }: ModelsPanelProps) {
   return (
     <CanvasPanel
       title="Modelos"
+      panelId="models"
       icon={<LayoutList size={15} />}
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}

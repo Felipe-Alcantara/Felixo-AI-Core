@@ -121,6 +121,7 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
   return (
     <CanvasPanel
       title="Git"
+      panelId="git"
       icon={<GitBranch size={15} />}
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}

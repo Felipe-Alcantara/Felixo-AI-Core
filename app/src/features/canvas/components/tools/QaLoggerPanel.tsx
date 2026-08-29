@@ -55,7 +55,8 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
       title="QA Logger"
       icon={<Terminal size={15} />}
       onClose={onClose}
-      widthClassName="w-[30rem]"
+      panelId="qa-logger"
+      size="lg"
       toolsMenuOpen={toolsMenuOpen}
     >
       <div className="mb-2 flex items-center gap-2">

@@ -41,6 +41,7 @@ export function SettingsPanel({
   return (
     <CanvasPanel
       title="Configurações"
+      panelId="settings"
       icon={<Settings size={15} />}
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}

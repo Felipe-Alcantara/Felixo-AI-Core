@@ -103,7 +103,7 @@ import {
   saveCanvasEdge,
 } from '../services/canvas-storage'
 import {
-  DEFAULT_SIZE,
+  getDefaultNodeSize,
   findFreeNodePosition,
   findFreeNodePositionNearNode,
   findFreeNodePositions,
@@ -1205,7 +1205,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const addNode = useCallback(
     (type: CanvasNodeType, data?: Record<string, unknown>, position?: { x: number; y: number }) => {
       const id = `${type}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
-      const size = DEFAULT_SIZE[type]
+      const size = getDefaultNodeSize(type, window.innerWidth)
 
       const node: Node = {
         id,
@@ -1231,14 +1231,15 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
   const openWebpageFromTerminal = useCallback(
     (sourceId: string, url: string) => {
-      const position = findFreeNodePositionNearNode(nodes, sourceId, DEFAULT_SIZE.webpage)
+      const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
+      const position = findFreeNodePositionNearNode(nodes, sourceId, webpageSize)
       const id = addNode('webpage', { url }, position)
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
       const center = {
-        x: position.x + DEFAULT_SIZE.webpage.width / 2,
-        y: position.y + DEFAULT_SIZE.webpage.height / 2,
+        x: position.x + webpageSize.width / 2,
+        y: position.y + webpageSize.height / 2,
       }
       flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 350 })
     },
@@ -1423,7 +1424,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         return
       }
 
-      const size = DEFAULT_SIZE.terminal
+      const size = getDefaultNodeSize('terminal', window.innerWidth)
       const positions = findFreeNodePositions(
         nodes,
         optionsList.length,

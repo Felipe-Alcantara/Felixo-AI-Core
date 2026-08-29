@@ -282,7 +282,8 @@ export function PromptsPanel({
         title={detailPrompt.name}
         icon={<Sparkles size={15} />}
         onClose={onClose}
-        widthClassName="w-[42rem]"
+        panelId="prompt-detail"
+        size="xl"
         toolsMenuOpen={toolsMenuOpen}
       >
         <PromptDetailPanel
@@ -307,7 +308,8 @@ export function PromptsPanel({
       title="Prompts"
       icon={<Sparkles size={15} />}
       onClose={onClose}
-      widthClassName="w-[42rem]"
+      panelId="prompts"
+      size="xl"
       toolsMenuOpen={toolsMenuOpen}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">

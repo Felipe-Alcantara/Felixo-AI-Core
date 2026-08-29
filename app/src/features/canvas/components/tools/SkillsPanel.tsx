@@ -125,6 +125,7 @@ export function SkillsPanel({
   return (
     <CanvasPanel
       title="Skills"
+      panelId="skills"
       icon={<BrainCircuit size={15} />}
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}
