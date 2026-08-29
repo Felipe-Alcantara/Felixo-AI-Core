@@ -110,6 +110,11 @@ function parseAgentAuth(providerId, output) {
  */
 function parseAgentUsage(providerId, output) {
   const safeOutput = redactSecrets(String(output ?? '')).trim()
+
+  if (providerId === 'openia') {
+    return { metrics: parseOpeniaCredits(safeOutput) }
+  }
+
   const payload = parseStructuredPayload(safeOutput)
 
   if (!payload) {
@@ -256,6 +261,40 @@ function mergeAuthIdentity(providerId, auth, extra) {
     account: auth.account ?? extra.identity ?? null,
     plan: auth.plan ?? extra.plan ?? null,
   })
+}
+
+/**
+ * Lê a linha do `openia statusline`:
+ * `OpenRouter  usado $0.4210  ·  resta $4.58  (de $5.00)`.
+ *
+ * É texto porque é o que o launcher publica — ele consulta `/api/v1/credits`
+ * com a chave que guarda, e a chave nunca passa por aqui. Quando não há chave
+ * ou a consulta falha, o launcher responde em uma linha curta e conhecida:
+ * nesse caso não existe métrica, e nada é inventado.
+ */
+function parseOpeniaCredits(output) {
+  const values = [...output.matchAll(/\$\s*(\d+(?:[.,]\d+)?)/g)].map((match) =>
+    Number(match[1].replace(',', '.')),
+  )
+
+  if (values.length < 3 || values.some((value) => !Number.isFinite(value))) {
+    return []
+  }
+
+  const [used, remaining, total] = values
+
+  return [
+    {
+      key: 'credits',
+      label: 'Créditos da conta',
+      used,
+      limit: total,
+      remaining,
+      unit: 'US$',
+      precision: 'reported',
+      resetAt: null,
+    },
+  ]
 }
 
 function createAuthSnapshot(providerId, values) {

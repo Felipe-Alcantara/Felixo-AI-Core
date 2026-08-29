@@ -43,12 +43,15 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       command: 'claude',
       args: ['auth', 'status', '--json'],
     },
+    // Os percentuais só existem no payload da status line. O probe lê o que o
+    // script instalado pelo app capturou; sem a coleta ligada, não há número.
+    localProbe: 'claude-statusline',
     usage: {
       kind: 'assisted-event',
       label: 'Claude Code status line (rate_limits)',
       docsUrl: 'https://code.claude.com/docs/en/statusline',
       limitation:
-        'Os percentuais de rate limit são emitidos pela status line durante a sessão; auth status não contém esses números.',
+        'Os percentuais só chegam pela status line, durante a sessão. Ligue a coleta para o app registrar o script que os captura.',
     },
   },
   {
@@ -62,7 +65,7 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       label: 'Gemini CLI /stats model',
       docsUrl: 'https://geminicli.com/docs/reference/commands',
       limitation:
-        'A consulta de uso/quota é um comando da sessão interativa; a CLI não expõe uma consulta não interativa equivalente.',
+        'A quota só sai do /stats model dentro da sessão interativa: em modo não interativo (-p) a CLI não responde, e nada de quota é gravado em ~/.gemini.',
     },
   },
   {
@@ -76,12 +79,16 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       command: 'openia',
       args: ['key', 'status', '--json'],
     },
+    // `openia statusline` consulta /api/v1/credits com a chave que o próprio
+    // launcher guarda. A chave nunca passa pelo app: só a linha de saída.
     usage: {
-      kind: 'unsupported',
-      label: 'Openia/OpenRouter',
+      kind: 'cli-command',
+      label: 'openia statusline (/api/v1/credits)',
+      command: 'openia',
+      args: ['statusline'],
       docsUrl: 'https://github.com/Felipe-Alcantara/Openia',
       limitation:
-        'O launcher informa apenas o estado da chave; não há endpoint de quota integrado ao contrato do app.',
+        'O saldo vem da conta do OpenRouter pela chave ativa do launcher. Sem chave cadastrada não há o que consultar.',
     },
   },
 ])
@@ -102,7 +109,10 @@ function cloneSource(source) {
     auth: source.auth
       ? { ...source.auth, args: [...source.auth.args] }
       : null,
-    usage: { ...source.usage },
+    usage: {
+      ...source.usage,
+      ...(source.usage.args ? { args: [...source.usage.args] } : {}),
+    },
   }
 }
 

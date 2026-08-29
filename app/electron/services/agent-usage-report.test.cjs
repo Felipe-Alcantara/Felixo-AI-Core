@@ -108,3 +108,43 @@ test('agent auth report never turns a redacted Openia key into an account identi
   assert.equal(result.identityDisplay, null)
   assert.doesNotMatch(JSON.stringify(result), /sk-live-secret-value/)
 })
+
+test('agent usage report lê o saldo publicado pelo openia statusline', () => {
+  const result = parseAgentUsage(
+    'openia',
+    'OpenRouter  usado $0.4210  ·  resta $4.58  (de $5.00)',
+  )
+
+  assert.deepEqual(result.metrics, [
+    {
+      key: 'credits',
+      label: 'Créditos da conta',
+      used: 0.421,
+      limit: 5,
+      remaining: 4.58,
+      unit: 'US$',
+      precision: 'reported',
+      resetAt: null,
+    },
+  ])
+})
+
+test('agent usage report não inventa saldo quando o openia não tem chave', () => {
+  // As duas respostas curtas do launcher quando ele não consegue consultar.
+  assert.deepEqual(parseAgentUsage('openia', 'openia: sem chave').metrics, [])
+  assert.deepEqual(
+    parseAgentUsage('openia', 'openia: uso indisponível').metrics,
+    [],
+  )
+})
+
+test('agent usage report aceita saldo zerado do openia como zero', () => {
+  const [metric] = parseAgentUsage(
+    'openia',
+    'OpenRouter  usado $0.0000  ·  resta $0.00  (de $0.00)',
+  ).metrics
+
+  assert.equal(metric.used, 0)
+  assert.equal(metric.remaining, 0)
+  assert.equal(metric.limit, 0)
+})
