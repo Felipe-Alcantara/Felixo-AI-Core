@@ -20,6 +20,7 @@ import type {
   AgentUsageMetric,
   AgentUsageProviderGroup,
   AgentUsageSample,
+  ClaudeStatuslineState,
 } from '../../../shared/agent-usage/agent-usage'
 
 type AgentUsagePanelProps = {
@@ -52,6 +53,7 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [autoRefreshMinutes, setAutoRefreshMinutes] = useState(0)
   const [isAddingAccount, setIsAddingAccount] = useState(false)
+  const [statusline, setStatusline] = useState<ClaudeStatuslineState | null>(null)
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -105,6 +107,36 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
 
     return () => window.clearTimeout(timerId)
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void window.felixo?.agentUsage?.claudeStatuslineStatus().then((state) => {
+      if (!cancelled) {
+        setStatusline(state)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const toggleStatusline = useCallback(
+    async (enable: boolean) => {
+      const api = window.felixo?.agentUsage
+      const state = enable
+        ? await api?.enableClaudeStatusline()
+        : await api?.disableClaudeStatusline()
+
+      if (state) {
+        setStatusline(state)
+      }
+
+      await load(true)
+    },
+    [load],
+  )
 
   useEffect(() => {
     if (autoRefreshMinutes <= 0) {
@@ -192,6 +224,8 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
             key={group.id}
             group={group}
             onRemoveAccount={removeAccount}
+            statusline={group.id === 'claude' ? statusline : null}
+            onToggleStatusline={toggleStatusline}
           />
         ))}
       </div>
@@ -214,9 +248,14 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
 function ProviderCard({
   group,
   onRemoveAccount,
+  statusline,
+  onToggleStatusline,
 }: {
   group: AgentUsageProviderGroup
   onRemoveAccount: (accountId: string) => Promise<void>
+  /** Só o Claude tem coleta por status line; nos demais vem nulo. */
+  statusline: ClaudeStatuslineState | null
+  onToggleStatusline: (enable: boolean) => Promise<void>
 }) {
   return (
     <section className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
@@ -263,7 +302,75 @@ function ProviderCard({
           ))}
         </div>
       )}
+
+      {statusline && (
+        <ClaudeStatuslineControl
+          state={statusline}
+          onToggle={onToggleStatusline}
+        />
+      )}
     </section>
+  )
+}
+
+/**
+ * Liga e desliga a captura do rate limit do Claude.
+ *
+ * O botão existe porque a coleta escreve em `~/.claude/settings.json`, que é
+ * configuração da pessoa e não do app: isso se pede, não se faz por conta.
+ */
+function ClaudeStatuslineControl({
+  state,
+  onToggle,
+}: {
+  state: ClaudeStatuslineState
+  onToggle: (enable: boolean) => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+
+  async function toggle(enable: boolean) {
+    setBusy(true)
+    try {
+      await onToggle(enable)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!state.settingsReadable) {
+    return (
+      <p className="mt-2 text-[10px] leading-snug text-zinc-600">
+        Não foi possível ler ~/.claude/settings.json, então a coleta do rate
+        limit não pode ser ligada daqui.
+      </p>
+    )
+  }
+
+  if (state.conflictingStatusLine) {
+    return (
+      <p className="mt-2 text-[10px] leading-snug text-amber-300/80">
+        Você já tem uma status line configurada no Claude Code. O app não
+        sobrescreve a sua — remova-a para poder ligar a coleta aqui.
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void toggle(!state.installed)}
+        className="felixo-btn rounded-md bg-zinc-800 px-2 py-1 text-[10px] text-zinc-200 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+      >
+        {state.installed ? 'Desligar coleta' : 'Ligar coleta do rate limit'}
+      </button>
+      <span className="text-[10px] leading-snug text-zinc-600">
+        {state.installed
+          ? 'Atualiza a cada resposta de uma sessão do Claude Code.'
+          : 'Registra um script de status line no seu ~/.claude/settings.json.'}
+      </span>
+    </div>
   )
 }
 
@@ -344,9 +451,7 @@ function MetricBar({ metric }: { metric: AgentUsageMetric }) {
       <div className="flex items-baseline gap-2 text-[11px]">
         <span className="text-zinc-400">{metric.label}</span>
         <span className="ml-auto font-medium text-zinc-100">
-          {percent === null
-            ? formatAgentUsageNumber(metric.remaining ?? metric.used, metric.unit)
-            : `${formatAgentUsageNumber(metric.used, metric.unit)}`}
+          {formatMetricValue(metric)}
         </span>
       </div>
 
@@ -359,9 +464,42 @@ function MetricBar({ metric }: { metric: AgentUsageMetric }) {
         </div>
       )}
 
-      {reset && <p className="mt-0.5 text-[10px] text-zinc-600">{reset}</p>}
+      {(reset || remainingLabel(metric)) && (
+        <p className="mt-0.5 text-[10px] text-zinc-600">
+          {reset ?? remainingLabel(metric)}
+        </p>
+      )}
     </div>
   )
+}
+
+/**
+ * Em percentual o número já se explica sozinho. Em qualquer outra unidade,
+ * mostrar só o consumo deixaria a barra sem referência: a pessoa veria a barra
+ * quase cheia sem saber cheia de quê.
+ */
+function formatMetricValue(metric: AgentUsageMetric): string {
+  if (metric.used === null) {
+    return formatAgentUsageNumber(metric.remaining, metric.unit)
+  }
+
+  if (metric.unit === '%' || metric.limit === null) {
+    return formatAgentUsageNumber(metric.used, metric.unit)
+  }
+
+  return `${formatAgentUsageNumber(metric.used)} / ${formatAgentUsageNumber(
+    metric.limit,
+    metric.unit,
+  )}`
+}
+
+/** Só aparece quando não há reset para contar — não empilha duas linhas. */
+function remainingLabel(metric: AgentUsageMetric): string | null {
+  if (metric.remaining === null || metric.unit === '%') {
+    return null
+  }
+
+  return `Resta ${formatAgentUsageNumber(metric.remaining, metric.unit)}`
 }
 
 /** Verde até a metade, âmbar depois, vermelho quando o limite está perto. */

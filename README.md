@@ -43,8 +43,8 @@ Primeira versão funcional entregue:
 - Botão de parar para interromper processo em andamento
 - Canvas visual para organizar agentes, arquivos compartilhados, notas, grupos e páginas web (mini-navegador embutido)
 - Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
-- Painel **Limites e uso** para acompanhar contas de Codex, Claude, Gemini e Openia sem misturar identidades
-- Frontend organizado por feature em `app/src/features/chat/`
+- Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI
+- Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
 - Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL
 
@@ -226,17 +226,33 @@ do app continua utilizável. A versão pode ser conferida com `openia --version`
 
 ### Limites e uso por conta
 
-O painel **Limites e uso** reúne as contas detectadas de Codex, Claude, Gemini e
-Openia, preservando a identidade da conta e o histórico de amostras sem salvar
-tokens, cookies ou chaves. Cada número exibe a fonte e o horário da coleta;
-quando a CLI não oferece uma cota consultável sem interação, o painel informa
-**indisponível** ou mostra explicitamente o último valor conhecido como antigo.
+O painel **Limites e uso** (menu **Ferramentas** do canvas) reúne as contas
+detectadas de cada CLI instalada, com o consumo de cada janela, o horário do
+reset, a conta e o plano informados pela própria ferramenta. A conta é guardada
+como fingerprint e forma mascarada: nenhum token, cookie, chave ou senha é lido
+para o painel ou gravado por ele.
 
-As fontes oficiais disponíveis variam por CLI: Codex expõe estado de autenticação,
-Claude pode fornecer limites pelo evento `rate_limits` do status line, Gemini
-oferece estatísticas locais em `/stats model`, e Openia expõe o estado seguro da
-chave, mas não uma cota. A atualização manual é sempre controlada pelo app e a
-atualização automática pode ser configurada em intervalos de 5, 15 ou 30 minutos.
+Cada número mostra de onde veio e **quando foi medido**, que nem sempre é quando
+o app leu — uma fonte que só é atualizada durante a sessão continua exibindo o
+último valor conhecido, marcado como antigo em vez de apresentado como atual.
+Onde a CLI não oferece cota consultável sem interação, o painel diz isso por
+extenso, em vez de mostrar zero. A atualização manual é sempre controlada pelo
+app, e a automática pode ser configurada em intervalos de 5, 15 ou 30 minutos.
+
+O que cada CLI publica hoje:
+
+| CLI | Fonte | O que aparece |
+|-----|-------|---------------|
+| Codex | rollout da sessão em `~/.codex/sessions` | janela de 5 h, janela semanal, reset, créditos e plano |
+| Claude Code | status line (`rate_limits`), coleta opcional | janela de 5 h e semanal, com reset |
+| Openia | `openia statusline` (créditos da conta no OpenRouter) | usado, restante e total em US$ |
+| Gemini | — | sem cota: a consulta existe apenas no `/stats model` interativo |
+
+A coleta do Claude Code é **opcional e explícita**: pelo botão do painel, o app
+registra um script de status line no arquivo de configuração do Claude Code, que
+é onde os percentuais são publicados. O script preserva uma status line que já
+exista (recusa sobrescrever), continua imprimindo uma linha útil, e desligar a
+coleta devolve a configuração ao estado anterior.
 
 ## Como distribuir
 

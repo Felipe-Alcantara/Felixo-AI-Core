@@ -2197,10 +2197,10 @@ descontinuado e que suas funções precisam viver no canvas.
 - `npm run lint`: **0 erros**; seguem 3 avisos preexistentes em `TerminalNode.tsx`
   e `SearchPanel.tsx`.
 - `tsc -b` e `npm run build` limpos.
-- App real sob Xvfb: painel de limites mostrando Codex `f***@gmail.com` PLUS,
-  **27 % da janela de 5 h** e **12 % da semanal**, medido 20:44 / lido 23:29,
-  marcado como "Desatualizado"; Claude `f***@vitissouls.com` PRO sem número, com
-  a limitação por extenso. Orquestrador, QA Logger (eventos reais do backend) e
+- App real sob Xvfb: painel de limites mostrando a conta do Codex mascarada e o
+  plano, com **27 % da janela de 5 h** e **12 % da semanal**, horário de medição
+  distinto do de leitura e selo "Desatualizado"; o Claude aparece com conta e
+  plano, sem número, exibindo a limitação por extenso. Orquestrador, QA Logger (eventos reais do backend) e
   Configurações (tema + System Design com 32 documentos sincronizados)
   conferidos por screenshot.
 
@@ -2211,3 +2211,66 @@ line, que exigiria o app registrar um script no `~/.claude/settings.json`
 global — não feito, por alterar configuração fora do projeto. Gemini e Openia
 seguem sem fonte não interativa. A tela de chat continua no código e alcançável
 pelo botão "Chat"; a remoção não foi feita nesta rodada.
+
+## [2026-08-29] Quota real de Claude e Openia, e o que Gemini não entrega
+
+### Contexto
+
+Com o Codex já mostrando número real, o pedido foi estender a todos os
+providers. Investigar cada um antes de codar evitou prometer o que não existe.
+
+### O que cada fonte permitiu
+
+- **Claude Code** — nenhum comando publica quota. Confirmado numa sessão real
+  que o payload da status line traz `rate_limits.five_hour.used_percentage` e
+  `seven_day` com `resets_at`, mas **só depois da primeira chamada de API**: na
+  abertura da sessão o objeto não vem. O app passa a instalar, por pedido
+  explícito, um script de status line que grava esse objeto num arquivo lido
+  pelo painel. A instalação preserva o resto das configurações, recusa
+  sobrescrever uma status line já existente e restaura o estado anterior ao ser
+  desligada; o script continua imprimindo uma linha de status útil.
+
+- **Openia** — o launcher já tem `openia statusline`, que consulta
+  `/api/v1/credits`. Usar esse comando mantém a chave dentro do launcher: o app
+  lê apenas a linha de saída, no mesmo espírito do
+  [OpenRouter-Monitorator](https://github.com/Felipe-Alcantara/OpenRouter-Monitorator).
+  Para isso a fonte declarativa ganhou comando de uso próprio, separado do de
+  autenticação.
+
+- **Gemini** — sem fonte. `-p "/stats model"` não responde (encerrado por
+  tempo), não há quota em `~/.gemini` e as sessões gravadas não guardam
+  `usageMetadata`. O painel diz isso por extenso em vez de mostrar zero.
+
+### Dois defeitos encontrados rodando o app
+
+- CLI sem sessão aparecia com selo vermelho de **erro** e mensagem sobre
+  identidade. Não estar logado é ausência de dado, não falha: virou
+  indisponível, com a razão escrita.
+
+- Provider autenticado que não publica nome de conta tinha a métrica
+  **descartada**. A regra existe para não misturar histórico entre contas, e
+  esse risco só existe com duas ou mais contas no mesmo provider — com uma só,
+  a amostra é dela. Foi o caso do launcher que lê a chave do ambiente e não tem
+  nome de conta a publicar: número verdadeiro estava sendo jogado fora.
+
+Também passou a aparecer usado **e** limite nas métricas que não são
+percentuais; antes a barra ficava quase cheia sem dizer cheia de quê.
+
+### Validação
+
+- `npm test`: **818/818**; `npm run test:frontend`: **670/670**;
+  `npm run lint`: **0 erros** (seguem 3 avisos preexistentes); `tsc -b` e
+  `npm run build` limpos.
+- App real sob Xvfb, com as quatro CLIs: Codex e Claude com as duas janelas,
+  percentual, reset e selo de atualizado/desatualizado; Openia com créditos
+  usados, limite e restante; Gemini com a limitação por extenso.
+- Instalação e remoção da coleta do Claude conferidas no arquivo de
+  configuração: as demais chaves ficaram intactas e a remoção devolveu o
+  arquivo idêntico ao backup feito antes do teste.
+
+### Limites
+
+O percentual do Claude só se move quando alguma sessão do Claude Code responde;
+entre sessões vale o último valor conhecido, marcado como antigo. Gemini segue
+sem número enquanto a CLI não oferecer consulta não interativa. macOS e Windows
+não foram executados nativamente nesta máquina.

@@ -274,3 +274,18 @@ export function summarizeAgentUsage(
 
   return summary
 }
+
+/**
+ * Estado da coleta de rate limit do Claude Code.
+ *
+ * Ligar a coleta registra um script de status line em `~/.claude/settings.json`
+ * — configuração da pessoa, não do app —, então a interface precisa saber
+ * distinguir "desligado" de "existe outra status line configurada".
+ */
+export type ClaudeStatuslineState = {
+  ok?: boolean
+  installed: boolean
+  settingsReadable: boolean
+  conflictingStatusLine: boolean
+  message?: string
+}

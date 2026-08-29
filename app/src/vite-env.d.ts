@@ -26,8 +26,9 @@ import type {
 } from './features/canvas/types'
 import type {
   AgentUsageDashboard,
+  ClaudeStatuslineState,
   AgentUsageMutationResult,
-} from './features/chat/services/agent-usage'
+} from './features/shared/agent-usage/agent-usage'
 
 type DetectedRepo = { name: string; path: string }
 type DirectoryEntry = { name: string; isDirectory: boolean; path: string }
@@ -517,6 +518,9 @@ declare global {
           identityHint?: string
         }) => Promise<AgentUsageMutationResult>
         removeAccount: (accountId: string) => Promise<AgentUsageMutationResult>
+        claudeStatuslineStatus: () => Promise<ClaudeStatuslineState>
+        enableClaudeStatusline: () => Promise<ClaudeStatuslineState>
+        disableClaudeStatusline: () => Promise<ClaudeStatuslineState>
       }
       systemDesign?: {
         getConfig: () => Promise<
