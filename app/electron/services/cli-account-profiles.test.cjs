@@ -77,7 +77,10 @@ test('o caminho fica dentro do perfil do app, separado por CLI', () => {
   const dir = getProfileDir(USER_DATA, 'claude', PERFIL)
 
   assert.equal(dir, path.join(USER_DATA, 'cli-profiles', 'claude', PERFIL))
-  assert.ok(dir.startsWith(USER_DATA))
+  // Contenção, e não prefixo de string: no Windows o separador é outro, e
+  // comparar texto reprovava um caminho correto.
+  const relativo = path.relative(USER_DATA, dir)
+  assert.ok(relativo && !relativo.startsWith('..') && !path.isAbsolute(relativo))
 })
 
 test('só as CLIs medidas aceitam conta por terminal', () => {
