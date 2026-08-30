@@ -281,6 +281,11 @@ Como cada CLI isola o login (medido, não presumido):
 Remover uma conta apaga a pasta de login dela — manter credencial órfã seria
 pior que refazer o login.
 
+Cada conta cadastrada também vira uma linha própria no painel **Limites e uso**,
+com a quota lida da pasta dela — é assim que duas contas do mesmo provedor
+aparecem com números separados. Enquanto a conta não tiver sido usada, a linha
+diz isso em vez de mostrar zero.
+
 ## Como distribuir
 
 Build local:

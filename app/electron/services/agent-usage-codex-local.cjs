@@ -34,8 +34,12 @@ const NO_ROLLOUT_MESSAGE =
  *
  * @returns {{ok: boolean, collectedAt: string|null, metrics: Array, plan: string|null, message: string|null}}
  */
-function readCodexLocalUsage({ homeDir = os.homedir(), fileSystem = fs } = {}) {
-  const rollouts = listRecentRollouts(homeDir, fileSystem)
+function readCodexLocalUsage({
+  homeDir = os.homedir(),
+  codexHome,
+  fileSystem = fs,
+} = {}) {
+  const rollouts = listRecentRollouts(resolveCodexHome(homeDir, codexHome), fileSystem)
 
   for (const rollout of rollouts) {
     const event = readLastRateLimitEvent(rollout, fileSystem)
@@ -71,8 +75,12 @@ function readCodexLocalUsage({ homeDir = os.homedir(), fileSystem = fs } = {}) {
  * devolvido, não é persistido e não sai deste módulo; o e-mail vira fingerprint
  * SHA-256 e forma mascarada antes de chegar ao painel.
  */
-function readCodexIdentity({ homeDir = os.homedir(), fileSystem = fs } = {}) {
-  const authPath = path.join(homeDir, '.codex', 'auth.json')
+function readCodexIdentity({
+  homeDir = os.homedir(),
+  codexHome,
+  fileSystem = fs,
+} = {}) {
+  const authPath = path.join(resolveCodexHome(homeDir, codexHome), 'auth.json')
 
   let payload
   try {
@@ -122,9 +130,20 @@ function cleanClaim(value) {
     : null
 }
 
+/**
+ * A pasta que o Codex usa como casa.
+ *
+ * Uma conta cadastrada no app tem a própria (`CODEX_HOME` aponta direto para
+ * ela); sem conta escolhida vale o `~/.codex` de sempre. É o que permite ler a
+ * quota de cada conta separadamente, em vez de só a do login do sistema.
+ */
+function resolveCodexHome(homeDir, codexHome) {
+  return codexHome || path.join(homeDir, '.codex')
+}
+
 /** Rollouts existentes, do mais recente para o mais antigo pelo mtime. */
-function listRecentRollouts(homeDir, fileSystem) {
-  const sessionsDir = path.join(homeDir, '.codex', 'sessions')
+function listRecentRollouts(sessionsRoot, fileSystem) {
+  const sessionsDir = path.join(sessionsRoot, 'sessions')
 
   let entries
   try {

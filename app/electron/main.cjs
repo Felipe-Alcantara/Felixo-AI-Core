@@ -116,8 +116,21 @@ app.whenReady().then(() => {
     databaseDir: appPaths.database,
   })
   settingsRepository = createSettingsRepository(storageDatabase)
+  // A loja vem antes do serviço de uso: é ela que diz quais contas têm login
+  // próprio, e é da pasta de cada uma que a quota é lida.
+  const cliAccounts = createCliAccountStore({
+    userData: appPaths.userData,
+    safeStorage,
+  })
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,
+    listProfiles: () =>
+      cliAccounts.list().map((conta) => ({
+        id: conta.id,
+        providerId: conta.providerId,
+        label: conta.label,
+        probeOptions: cliAccounts.buildProbeOptions(conta.id),
+      })),
   })
 
   // Menu próprio ANTES da janela: sem ele vale o menu padrão do Electron, que
@@ -138,12 +151,6 @@ app.whenReady().then(() => {
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
   registerOpeniaIpcHandlers()
-  // As contas por terminal existem antes da PTY: é a loja que diz em qual
-  // login cada terminal nasce.
-  const cliAccounts = createCliAccountStore({
-    userData: appPaths.userData,
-    safeStorage,
-  })
   registerCliAccountIpcHandlers({ store: cliAccounts })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
     manager: new PtyProcessManager({

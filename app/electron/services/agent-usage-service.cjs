@@ -55,13 +55,21 @@ function createAgentUsageService({
   runCommand = runBufferedCommand,
   listCatalog = listOfficialCliCatalog,
   probe = runLocalProbe,
+  // Contas com login próprio. Cada uma tem pasta de credencial separada, então
+  // a quota delas é lida da pasta delas — não do login do sistema.
+  listProfiles = () => [],
 } = {}) {
   let refreshPromise = null
   let lastRefreshAt = null
 
   async function list() {
     const catalog = await readCatalog(listCatalog)
-    const accounts = ensureDiscoveredAccounts({ catalog, repository, now })
+    const accounts = ensureDiscoveredAccounts({
+      catalog,
+      repository,
+      now,
+      profiles: listProfiles(),
+    })
     return {
       ok: true,
       ...buildDashboard({
@@ -88,14 +96,20 @@ function createAgentUsageService({
 
   async function refreshInternal() {
     const catalog = await readCatalog(listCatalog)
-    const accounts = ensureDiscoveredAccounts({ catalog, repository, now })
+    const accounts = ensureDiscoveredAccounts({
+      catalog,
+      repository,
+      now,
+      profiles: listProfiles(),
+    })
     const catalogById = new Map(catalog.map((item) => [item.id, item]))
     const providerIds = [
       ...new Set(accounts.map((account) => account.providerId)),
     ]
 
-    const snapshots = await Promise.all(
-      providerIds.map((providerId) =>
+    const perfis = listProfiles()
+    const snapshots = await Promise.all([
+      ...providerIds.map((providerId) =>
         collectProviderSnapshot({
           providerId,
           runCommand,
@@ -103,11 +117,32 @@ function createAgentUsageService({
           probe,
         }),
       ),
-    )
+      // A conta com login próprio não precisa de adivinhação de identidade: a
+      // amostra vai para ela porque foi a pasta dela que produziu o número.
+      ...perfis.map((perfil) =>
+        collectProviderSnapshot({
+          providerId: perfil.providerId,
+          runCommand,
+          now,
+          probe,
+          probeOptions: perfil.probeOptions,
+          targetAccountId: perfil.id,
+        }),
+      ),
+    ])
+
+    const idsDePerfil = new Set(perfis.map((perfil) => perfil.id))
 
     for (const snapshot of snapshots) {
+      // A amostra do login do sistema não disputa as contas com login próprio:
+      // elas têm amostra endereçada. Sem esta exclusão, duas contas de perfil
+      // recém-criadas faziam a linha do sistema cair em "identidade ambígua".
       const providerAccounts = accounts.filter(
-        (account) => account.providerId === snapshot.providerId,
+        (account) =>
+          account.providerId === snapshot.providerId &&
+          (snapshot.targetAccountId
+            ? account.id === snapshot.targetAccountId
+            : !idsDePerfil.has(account.id)),
       )
 
       saveProviderSamples({
@@ -326,7 +361,14 @@ function isSameLocalReading(previous, local) {
   )
 }
 
-async function collectProviderSnapshot({ providerId, runCommand, now, probe }) {
+async function collectProviderSnapshot({
+  providerId,
+  runCommand,
+  now,
+  probe,
+  probeOptions,
+  targetAccountId,
+}) {
   const source = getAgentUsageSource(providerId)
   const collectedAt = nowIso(now)
 
@@ -344,12 +386,13 @@ async function collectProviderSnapshot({ providerId, runCommand, now, probe }) {
 
   // Leitura de arquivo que a CLI já escreveu: não custa processo nem rede, e é
   // o único caminho de quota em fontes que não respondem número por comando.
-  const local = source.localProbe ? probe(source.localProbe) : null
+  const local = source.localProbe ? probe(source.localProbe, probeOptions) : null
 
   if (!source.auth) {
     return {
       providerId,
       source,
+      targetAccountId,
       collectedAt,
       measuredAt: local?.collectedAt ?? null,
       commandOk: true,
@@ -391,6 +434,7 @@ async function collectProviderSnapshot({ providerId, runCommand, now, probe }) {
   return {
     providerId,
     source,
+    targetAccountId,
     collectedAt,
     // Quando o número vem de um arquivo, medição e leitura são momentos
     // diferentes. Os dois são guardados: `collectedAt` ordena as amostras da
@@ -454,7 +498,10 @@ function saveProviderSamples({
     repository,
   })
 
-  for (const account of accounts) {
+  const alvo = snapshot.targetAccountId
+  const destino = alvo ? accounts.filter((account) => account.id === alvo) : accounts
+
+  for (const account of destino) {
     const previous = repository.getLastAvailableSample(account.id)
     const base = createSampleBase({
       accountId: account.id,
@@ -477,6 +524,21 @@ function saveProviderSamples({
         ...base,
         status: 'unavailable',
         errorMessage: snapshot.source.usage.limitation,
+      })
+      continue
+    }
+
+    // Amostra de conta com login próprio: veio da pasta daquela conta, então
+    // a atribuição é certa por construção e não passa pela resolução de
+    // identidade — que existe para o caso oposto, o do login compartilhado.
+    if (alvo) {
+      repository.saveSample({
+        ...base,
+        status: sampleHasMetrics(snapshot) ? 'current' : 'unavailable',
+        metrics: snapshot.metrics,
+        errorMessage: sampleHasMetrics(snapshot)
+          ? null
+          : 'Esta conta ainda não tem número: abra um terminal nela para a CLI registrar o uso.',
       })
       continue
     }
@@ -656,7 +718,7 @@ function resolveObservedIdentity({
  * continua adicionando a segunda no formulário — automatizar isso exigiria
  * adivinhar identidade, que é justamente o que o contrato proíbe.
  */
-function ensureDiscoveredAccounts({ catalog, repository, now }) {
+function ensureDiscoveredAccounts({ catalog, repository, now, profiles = [] }) {
   const accounts = repository.listAccounts()
   const providersWithAccount = new Set(
     accounts.map((account) => account.providerId),
@@ -668,6 +730,29 @@ function ensureDiscoveredAccounts({ catalog, repository, now }) {
   )
 
   const created = []
+
+  // Cada conta com login próprio vira uma linha do painel, com o mesmo id do
+  // perfil: é esse id que liga a pasta de credencial à linha, sem depender de
+  // adivinhar identidade.
+  for (const perfil of profiles) {
+    if (accounts.some((account) => account.id === perfil.id)) {
+      continue
+    }
+
+    const createdAt = nowIso(now)
+    created.push(
+      repository.createAccount({
+        id: perfil.id,
+        providerId: perfil.providerId,
+        label: perfil.label,
+        identityKey: null,
+        identityDisplay: null,
+        identitySource: null,
+        createdAt,
+        updatedAt: createdAt,
+      }),
+    )
+  }
 
   for (const source of listAgentUsageSources()) {
     if (providersWithAccount.has(source.id) || !detected.has(source.id)) {

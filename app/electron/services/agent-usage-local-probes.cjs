@@ -33,6 +33,8 @@ function claudeStatuslineDir() {
 }
 
 function readCodexProbe(options = {}) {
+  // `codexHome` vem preenchido quando a leitura é de uma conta com login
+  // próprio; vazio, cai no `~/.codex` do login do sistema.
   const usage = readCodexLocalUsage(options)
   const { identity, plan } = readCodexIdentity(options)
 

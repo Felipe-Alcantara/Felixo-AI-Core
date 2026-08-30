@@ -246,8 +246,36 @@ function createCliAccountStore({
     })
   }
 
+  /**
+   * Onde o leitor de quota deve olhar para esta conta.
+   *
+   * O painel lia sempre o login do sistema; com login por conta, a quota de
+   * cada uma está na pasta dela. Só as CLIs que guardam quota em arquivo têm
+   * o que responder aqui.
+   */
+  function buildProbeOptions(accountId) {
+    const account = readStore().find((item) => item.id === accountId)
+
+    if (!account) {
+      return {}
+    }
+
+    const profileDir = getProfileDir(userData, account.providerId, account.id)
+
+    if (account.providerId === 'codex') {
+      return { codexHome: profileDir }
+    }
+
+    if (account.providerId === 'claude') {
+      return { claudeConfigDir: profileDir }
+    }
+
+    return {}
+  }
+
   return {
     buildEnv,
+    buildProbeOptions,
     canStoreSecret,
     create,
     forgetSecret,

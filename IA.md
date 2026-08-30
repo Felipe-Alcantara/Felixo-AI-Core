@@ -2693,3 +2693,47 @@ Conferido no app: conta criada pela interface, escolhida, e o processo do Codex
 nasceu com `CODEX_HOME` apontando para o perfil. Num perfil sem login, a CLI
 abre o próprio fluxo de entrada ("Sign in with ChatGPT"), sem consumir quota —
 o item que ficou em aberto no registro anterior.
+
+## [2026-08-30] Painel de limites lê a quota de cada conta
+
+### Contexto
+
+Ficou registrado como pendência: o painel lia sempre o login do sistema, então
+duas contas do mesmo provedor apareciam com o mesmo número — o oposto do que a
+coluna de contas prometia.
+
+### O que foi feito
+
+- O leitor do Codex passa a aceitar a pasta da conta (`codexHome`) em vez de
+  presumir `~/.codex`; sem ela, continua no login do sistema.
+- O serviço de uso varre as contas com login próprio e faz uma coleta por
+  pasta. A amostra é endereçada à conta pelo id, sem passar pela resolução de
+  identidade: a origem já diz de quem ela é.
+- Cada conta cadastrada vira uma linha do painel, criada com o mesmo id do
+  perfil — é esse id que liga a pasta de credencial à linha.
+- Conta ainda não usada mostra "abra um terminal nela para a CLI registrar o
+  uso", em vez de zero.
+
+### Regressão encontrada e corrigida na validação
+
+Com duas contas de perfil recém-criadas, a linha do login do sistema passou a
+exibir **Erro**: a resolução de identidade via três contas sem identidade e
+declarava ambiguidade. Contas com login próprio nunca recebem a amostra do
+sistema — elas têm amostra endereçada —, então passaram a ser excluídas dessa
+conta. Coberto por teste.
+
+### Validação
+
+- `npm test`: **853/853**; `npm run test:frontend`: 698/698; lint 0 erros;
+  `tsc -b` e build limpos.
+- App real: duas contas cadastradas aparecem como linhas próprias dizendo que
+  ainda não têm número, e a linha do login do sistema segue mostrando 27 % da
+  janela de 5 h e 12 % da semanal, sem o erro de ambiguidade.
+
+### Limites
+
+Falta uma segunda conta real autenticada para ver dois números diferentes lado
+a lado — o caminho está pronto e testado com pastas distintas, mas a
+confirmação final depende de alguém concluir o login. Para o Claude, a captura
+da status line ainda é única por app: ligar a captura à conta é o passo
+seguinte.

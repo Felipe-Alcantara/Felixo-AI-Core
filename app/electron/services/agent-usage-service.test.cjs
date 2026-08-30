@@ -501,6 +501,81 @@ test(
   },
 )
 
+test(
+  'cada conta com login próprio mostra a quota da pasta dela',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-perfis-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+
+    // Duas contas com login próprio, cada uma com um número diferente.
+    const perfis = [
+      { id: 'conta-pessoal', providerId: 'codex', label: 'pessoal', probeOptions: { codexHome: '/perfis/pessoal' } },
+      { id: 'conta-trabalho', providerId: 'codex', label: 'trabalho', probeOptions: { codexHome: '/perfis/trabalho' } },
+    ]
+    const porPasta = {
+      '/perfis/pessoal': 11,
+      '/perfis/trabalho': 77,
+    }
+
+    const service = createAgentUsageService({
+      repository,
+      listCatalog: async () => [],
+      listProfiles: () => perfis,
+      probe: (_id, options) => {
+        const usado = porPasta[options?.codexHome]
+
+        if (usado === undefined) {
+          return null
+        }
+
+        return {
+          ok: true,
+          collectedAt: '2026-08-30T00:00:00.000Z',
+          metrics: [
+            {
+              key: 'primary',
+              label: 'Últimas 5 h',
+              used: usado,
+              limit: 100,
+              remaining: 100 - usado,
+              unit: '%',
+              precision: 'reported',
+              resetAt: null,
+            },
+          ],
+          identity: null,
+          plan: 'plus',
+          message: null,
+        }
+      },
+      runCommand: async () => ({ ok: true, stdout: 'Logged in using ChatGPT', stderr: '' }),
+    })
+
+    try {
+      const resultado = await service.refresh()
+      const porConta = new Map(resultado.accounts.map((c) => [c.id, c]))
+
+      // O número de cada linha vem da pasta daquela conta — sem adivinhar
+      // identidade, porque a origem da amostra já diz de quem ela é.
+      assert.equal(porConta.get('conta-pessoal').latestSample.metrics[0].used, 11)
+      assert.equal(porConta.get('conta-trabalho').latestSample.metrics[0].used, 77)
+      assert.equal(porConta.get('conta-pessoal').label, 'pessoal')
+
+      // A linha do login do sistema não pode virar "identidade ambígua" só
+      // porque existem contas de perfil sem identidade ao lado dela.
+      const doSistema = resultado.accounts.find(
+        (c) => c.providerId === 'codex' && !c.id.startsWith('conta-'),
+      )
+      assert.notEqual(doSistema?.latestSample?.status, 'error')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 function countAccountsByProvider(accounts) {
   return accounts.reduce((total, account) => {
     total[account.providerId] = (total[account.providerId] ?? 0) + 1
