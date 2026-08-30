@@ -9,6 +9,21 @@ export type AgentUsageMetric = {
   resetAt: string | null
 }
 
+export type AgentUsageStatusDetailValue =
+  | string
+  | number
+  | boolean
+  | AgentUsageStatusDetailValue[]
+  | { [key: string]: AgentUsageStatusDetailValue }
+
+export type AgentUsageStatusDetails = {
+  [key: string]: AgentUsageStatusDetailValue
+}
+
+export type AgentUsageMetadata = {
+  [key: string]: string | number | boolean | AgentUsageStatusDetails
+}
+
 export type AgentUsageSample = {
   id: string
   accountId: string
@@ -16,6 +31,7 @@ export type AgentUsageSample = {
   sourceKind:
     | 'cli-command'
     | 'assisted-event'
+    | 'live-query'
     | 'local-execution'
     | 'manual'
     | 'unsupported'
@@ -27,7 +43,7 @@ export type AgentUsageSample = {
   observedIdentityKey: string | null
   observedIdentityDisplay: string | null
   errorMessage: string | null
-  metadata: Record<string, string | number | boolean>
+  metadata: AgentUsageMetadata
 }
 
 export type AgentUsageProvider = {
@@ -256,6 +272,16 @@ export function getAgentUsageMeasuredAt(
 export function getAgentUsagePlan(sample: AgentUsageSample | null): string | null {
   const plan = sample?.metadata?.plan
   return typeof plan === 'string' && plan.trim() ? plan.trim() : null
+}
+
+export function getAgentUsageStatusDetails(
+  sample: AgentUsageSample | null,
+): AgentUsageStatusDetails | null {
+  const details = sample?.metadata?.statusDetails
+
+  return details && typeof details === 'object' && !Array.isArray(details)
+    ? details
+    : null
 }
 
 export function summarizeAgentUsage(

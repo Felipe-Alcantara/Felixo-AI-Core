@@ -55,6 +55,9 @@ function createAgentUsageService({
   runCommand = runBufferedCommand,
   listCatalog = listOfficialCliCatalog,
   probe = runLocalProbe,
+  // Consulta interativa opcional. O processo principal injeta a implementação
+  // real; os testes e fontes sem uma tela de uso continuam sem abrir PTY.
+  queryLiveUsage = null,
   // Contas com login próprio. Cada uma tem pasta de credencial separada, então
   // a quota delas é lida da pasta delas — não do login do sistema.
   listProfiles = () => [],
@@ -115,6 +118,7 @@ function createAgentUsageService({
           runCommand,
           now,
           probe,
+          queryLiveUsage,
         }),
       ),
       // A conta com login próprio não precisa de adivinhação de identidade: a
@@ -126,7 +130,9 @@ function createAgentUsageService({
           now,
           probe,
           probeOptions: perfil.probeOptions,
+          profileEnv: perfil.profileEnv,
           targetAccountId: perfil.id,
+          queryLiveUsage,
         }),
       ),
     ])
@@ -234,14 +240,13 @@ function createAgentUsageService({
   }
 
   /**
-   * Releitura barata, só do arquivo que a CLI escreve.
+   * Releitura barata, só do arquivo que a CLI escreve, usada pelos fallbacks
+   * locais (e pelo watcher). O Claude usa o `/status` ao vivo na rodada
+   * explícita; esta função não substitui aquela consulta.
    *
-   * Existe porque a rodada completa é lenta pelo motivo errado: quem custa é o
-   * comando de autenticação — medido nesta máquina, `claude auth status` leva
-   * ~12 s e `codex login status` ~4,6 s —, não a quota em si, que sai de um
-   * arquivo em milissegundos. Para acompanhar o consumo enquanto ele muda,
-   * relemos só o arquivo e trocamos os números; conta, plano e estado de login
-   * continuam sendo os da última rodada completa, que é o que eles são.
+   * Para acompanhar o consumo enquanto ele muda, relemos só o arquivo e
+   * trocamos os números; conta, plano e estado de login continuam sendo os da
+   * última rodada completa, que é o que eles são.
    *
    * Devolve `null` quando não há número novo para mostrar, para quem chama não
    * gravar amostra nem avisar a interface à toa.
@@ -274,14 +279,16 @@ function createAgentUsageService({
       return null
     }
 
+    const localSource = getLocalUsageSource(providerId, source)
+
     repository.saveSample({
       id: randomUUID(),
       accountId: target.id,
       status: 'current',
-      sourceKind: source.usage.kind,
-      sourceLabel: source.usage.label,
+      sourceKind: localSource.kind,
+      sourceLabel: localSource.label,
       sourceCommand: source.auth?.label ?? null,
-      sourceUrl: source.usage.docsUrl ?? null,
+      sourceUrl: localSource.docsUrl ?? null,
       collectedAt: nowIso(now),
       metrics: local.metrics,
       observedIdentityKey: target.identityKey,
@@ -314,6 +321,19 @@ function createAgentUsageService({
     refresh,
     refreshLocal,
     removeAccount,
+  }
+}
+
+function getLocalUsageSource(providerId, source) {
+  if (providerId !== 'claude') {
+    return source.usage
+  }
+
+  return {
+    ...source.usage,
+    kind: 'assisted-event',
+    label: 'Claude Code status line (fallback local)',
+    docsUrl: 'https://code.claude.com/docs/en/statusline',
   }
 }
 
@@ -367,7 +387,9 @@ async function collectProviderSnapshot({
   now,
   probe,
   probeOptions,
+  profileEnv = {},
   targetAccountId,
+  queryLiveUsage,
 }) {
   const source = getAgentUsageSource(providerId)
   const collectedAt = nowIso(now)
@@ -408,7 +430,7 @@ async function collectProviderSnapshot({
       command: source.auth.command,
       args: [...source.auth.args],
       cwd: os.homedir(),
-      env: createCliEnv(),
+      env: createCommandEnv(profileEnv),
       timeoutMs: COMMAND_TIMEOUT_MS,
     })
   } catch {
@@ -421,15 +443,58 @@ async function collectProviderSnapshot({
     `${result?.stdout ?? ''}\n${result?.stderr ?? ''}`,
   )
 
+  const auth = mergeAuthIdentity(
+    providerId,
+    parseAgentAuth(providerId, safeOutput),
+    local,
+  )
+
+  // Claude só publica os percentuais no `/status` interativo. Quando a fonte
+  // declara uma consulta ao vivo, nunca misturamos um arquivo/statusline
+  // antigo com a rodada atual: se o PTY falhar, o sample vira erro e o painel
+  // pode mostrar explicitamente o último valor conhecido.
+  const liveQueryEnabled =
+    Boolean(source.liveQuery) && typeof queryLiveUsage === 'function'
+  let liveResult = null
+  if (
+    liveQueryEnabled &&
+    result?.ok === true &&
+    auth.authStatus !== 'logged_out'
+  ) {
+    try {
+      liveResult = await queryLiveUsage({
+        env: profileEnv,
+        cwd: os.tmpdir(),
+        timeoutMs: COMMAND_TIMEOUT_MS,
+      })
+    } catch {
+      liveResult = { ok: false, message: 'A consulta ao /status falhou.' }
+    }
+  }
+
   // Algumas CLIs devolvem quota na própria saída de auth; quando não devolvem,
   // vale o comando de uso declarado pela fonte, e só então a leitura local.
+  // A exceção é a consulta live: ela tem precedência e não aceita fallback
+  // silencioso para uma leitura velha.
   const authMetrics =
     result?.ok === true ? parseAgentUsage(providerId, safeOutput).metrics : []
-  const commandMetrics =
-    authMetrics.length > 0
+  const commandMetrics = liveQueryEnabled
+    ? liveResult?.ok === true
+      ? liveResult.metrics ?? []
+      : []
+    : authMetrics.length > 0
       ? authMetrics
-      : await runUsageCommand({ source, providerId, runCommand })
-  const metrics = commandMetrics.length > 0 ? commandMetrics : local?.metrics ?? []
+      : await runUsageCommand({ source, providerId, runCommand, profileEnv })
+  const metrics = liveQueryEnabled
+    ? commandMetrics
+    : commandMetrics.length > 0
+      ? commandMetrics
+      : local?.metrics ?? []
+  const liveQueryFailed =
+    liveQueryEnabled &&
+    auth.authStatus !== 'logged_out' &&
+    liveResult !== null &&
+    liveResult.ok !== true
 
   return {
     providerId,
@@ -440,11 +505,17 @@ async function collectProviderSnapshot({
     // diferentes. Os dois são guardados: `collectedAt` ordena as amostras da
     // rodada e `measuredAt` é o que envelhece o valor — sem isso um rate limit
     // de três horas atrás apareceria como se fosse de agora.
-    measuredAt: commandMetrics.length === 0 ? local?.collectedAt ?? null : null,
+    measuredAt: liveQueryEnabled
+      ? liveResult?.measuredAt ?? liveResult?.collectedAt ?? null
+      : commandMetrics.length === 0
+        ? local?.collectedAt ?? null
+        : null,
     commandOk: result?.ok === true,
-    auth: mergeAuthIdentity(providerId, parseAgentAuth(providerId, safeOutput), local),
+    auth,
     metrics,
-    queryFailed: result?.ok !== true,
+    queryFailed: result?.ok !== true || liveQueryFailed,
+    queryErrorMessage: liveQueryFailed ? liveResult?.message ?? null : null,
+    statusDetails: liveResult?.ok === true ? liveResult.details ?? null : null,
   }
 }
 
@@ -456,7 +527,7 @@ async function collectProviderSnapshot({
  * A falha aqui não derruba a rodada: sem métrica, o painel mostra o estado de
  * autenticação e a limitação, como em qualquer fonte sem número.
  */
-async function runUsageCommand({ source, providerId, runCommand }) {
+async function runUsageCommand({ source, providerId, runCommand, profileEnv = {} }) {
   if (source.usage.kind !== 'cli-command' || !source.usage.command) {
     return []
   }
@@ -467,7 +538,7 @@ async function runUsageCommand({ source, providerId, runCommand }) {
       command: source.usage.command,
       args: [...(source.usage.args ?? [])],
       cwd: os.homedir(),
-      env: createCliEnv(),
+      env: createCommandEnv(profileEnv),
       timeoutMs: COMMAND_TIMEOUT_MS,
     })
   } catch {
@@ -482,6 +553,10 @@ async function runUsageCommand({ source, providerId, runCommand }) {
     providerId,
     redactOutput(`${result.stdout ?? ''}\n${result.stderr ?? ''}`),
   ).metrics
+}
+
+function createCommandEnv(profileEnv = {}) {
+  return createCliEnv({ ...process.env, ...profileEnv })
 }
 
 function saveProviderSamples({
@@ -514,7 +589,7 @@ function saveProviderSamples({
       repository.saveSample({
         ...base,
         status: 'error',
-        errorMessage: CLI_QUERY_FAILED_MESSAGE,
+        errorMessage: snapshot.queryErrorMessage ?? CLI_QUERY_FAILED_MESSAGE,
       })
       continue
     }
@@ -649,6 +724,7 @@ function createSampleBase({
       limitation: snapshot.source.usage.limitation,
       measuredAt: snapshot.measuredAt ?? undefined,
       providerVersion: providerVersion ?? undefined,
+      statusDetails: snapshot.statusDetails ?? undefined,
     },
   }
 }

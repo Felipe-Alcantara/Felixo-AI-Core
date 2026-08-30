@@ -43,15 +43,17 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       command: 'claude',
       args: ['auth', 'status', '--json'],
     },
-    // Os percentuais só existem no payload da status line. O probe lê o que o
-    // script instalado pelo app capturou; sem a coleta ligada, não há número.
+    // O `/status` só existe dentro de uma sessão interativa com TTY. O serviço
+    // abre uma sessão descartável e consulta cada perfil com o ambiente dele;
+    // o probe continua como fallback para quem já optou pela status line.
+    liveQuery: 'claude-status',
     localProbe: 'claude-statusline',
     usage: {
-      kind: 'assisted-event',
-      label: 'Claude Code status line (rate_limits)',
-      docsUrl: 'https://code.claude.com/docs/en/statusline',
+      kind: 'live-query',
+      label: 'Claude Code /status (ao vivo)',
+      docsUrl: 'https://code.claude.com/docs/en/interactive-mode',
       limitation:
-        'Os percentuais só chegam pela status line, durante a sessão. Ligue a coleta para o app registrar o script que os captura.',
+        'O Claude só publica o limite dentro do /status de uma sessão interativa; a consulta ao vivo desta conta não retornou um número nesta rodada.',
     },
   },
   {

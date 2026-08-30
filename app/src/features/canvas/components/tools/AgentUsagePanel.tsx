@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, Gauge, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
 import {
   AGENT_USAGE_STATUS_CLASSES,
   agentUsagePercent,
@@ -30,14 +31,13 @@ type AgentUsagePanelProps = {
 }
 
 /**
- * A consulta completa depende dos comandos de autenticação das CLIs, lentos o
- * bastante (segundos cada) para não caberem num intervalo curto. Por isso o
- * padrão é não repetir: o número novo chega por aviso do processo principal,
- * assim que a CLI o escreve. O intervalo fica para o saldo do OpenRouter, que
- * vem de rede e não tem arquivo a observar.
+ * A consulta ao `/status` do Claude abre uma sessão PTY descartável por conta
+ * e perfil; por isso o painel consulta novamente ao abrir e no botão
+ * Atualizar. O intervalo é opcional para acompanhar uma sessão aberta sem
+ * reutilizar o cache da conta do sistema.
  */
 const AUTO_REFRESH_OPTIONS = [
-  { value: 0, label: 'Só ao vivo' },
+  { value: 0, label: 'Só ao abrir/atualizar' },
   { value: 5, label: '+ 5 min' },
   { value: 15, label: '+ 15 min' },
   { value: 30, label: '+ 30 min' },
@@ -51,6 +51,8 @@ const AUTO_REFRESH_OPTIONS = [
  * coleta em seguida, porque consultar as CLIs leva segundos e uma tela vazia
  * nesse intervalo passa a impressão de que a função não existe.
  *
+ * O Claude também expõe os dados completos e seguros do Status + Usage do
+ * `/status` dentro de cada linha, sem reaproveitar a sessão de outro perfil.
  * A regra da fonte continua valendo: número só aparece quando a CLI publicou —
  * ausência vira a limitação escrita por extenso, nunca zero.
  */
@@ -94,6 +96,9 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
       }
 
       setDashboard(result)
+      if (refreshNow) {
+        setLiveAt(new Date())
+      }
     } catch {
       if (mounted.current) {
         setStatusMessage('Não foi possível falar com o processo principal.')
@@ -417,8 +422,8 @@ function ClaudeStatuslineControl({
       </button>
       <span className="text-[10px] leading-snug text-zinc-600">
         {state.installed
-          ? 'Atualiza a cada resposta de uma sessão do Claude Code.'
-          : 'Registra um script de status line no seu ~/.claude/settings.json.'}
+          ? 'Fallback: atualiza a captura quando uma sessão responde.'
+          : 'Opcional: registra um fallback no seu ~/.claude/settings.json.'}
       </span>
     </div>
   )
@@ -442,6 +447,11 @@ function AccountRow({
     account.latestSample?.metrics.length
       ? account.latestSample
       : getLastKnownAgentUsage(account) ?? account.latestSample
+  const detailsSample = account.latestSample?.metadata.statusDetails
+    ? account.latestSample
+    : sample?.metadata.statusDetails
+      ? sample
+      : null
   const plan = getAgentUsagePlan(sample)
   const measuredAt = getAgentUsageMeasuredAt(sample)
 
@@ -486,10 +496,12 @@ function AccountRow({
       )}
 
       <p className="mt-2 text-[10px] leading-snug text-zinc-600">
-        {sourceLabel}
+        {sample?.sourceLabel ?? sourceLabel}
         {measuredAt && ` · medido ${formatAgentUsageDate(measuredAt)}`}
         {sample && ` · lido ${formatAgentUsageDate(sample.collectedAt)}`}
       </p>
+
+      <AgentUsageStatusDetailsView sample={detailsSample} />
     </div>
   )
 }

@@ -93,10 +93,9 @@ function registerAgentUsageIpcHandlers({
     }
   })
 
-  // Empurra a leitura nova assim que o arquivo muda, em vez de esperar a
-  // interface perguntar. Só a leitura local é refeita: a rodada completa
-  // depende dos comandos de autenticação, lentos demais para acompanhar
-  // consumo que muda em segundos.
+  // Mantém o fallback local atualizado assim que o arquivo muda, em vez de
+  // esperar a interface perguntar. A atualização ao vivo principal continua
+  // no refresh explícito do painel, que consulta o `/status` por conta/perfil.
   const watcher = createWatcher({
     claudeStatuslineDir: statuslineDir,
     onChange: async (providerId) => {

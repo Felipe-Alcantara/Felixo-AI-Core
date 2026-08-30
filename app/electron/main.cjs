@@ -62,6 +62,7 @@ const {
   registerOrchestratorSettingsIpcHandlers,
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
+const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
   registerAgentUsageIpcHandlers,
 } = require('./services/agent-usage-ipc-handlers.cjs')
@@ -124,12 +125,14 @@ app.whenReady().then(() => {
   })
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,
+    queryLiveUsage: queryClaudeUsage,
     listProfiles: () =>
       cliAccounts.list().map((conta) => ({
         id: conta.id,
         providerId: conta.providerId,
         label: conta.label,
         probeOptions: cliAccounts.buildProbeOptions(conta.id),
+        profileEnv: cliAccounts.buildEnv(conta.id),
       })),
   })
 

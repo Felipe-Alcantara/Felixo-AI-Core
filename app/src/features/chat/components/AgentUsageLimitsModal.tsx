@@ -12,6 +12,7 @@ import {
   groupAgentUsageAccounts,
   summarizeAgentUsage,
 } from '../../shared/agent-usage/agent-usage'
+import { AgentUsageStatusDetailsView } from '../../shared/agent-usage/AgentUsageStatusDetails'
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
@@ -74,7 +75,7 @@ export function AgentUsageLimitsModal({
     }
 
     const timerId = window.setTimeout(() => {
-      void loadDashboard(false)
+      void loadDashboard(false).then(() => loadDashboard(true))
     }, 0)
 
     return () => window.clearTimeout(timerId)
@@ -460,6 +461,10 @@ function AccountCard({
           </span>
         )}
       </div>
+
+      <AgentUsageStatusDetailsView
+        sample={latest?.metadata.statusDetails ? latest : metricsSample}
+      />
 
       {latest?.sourceUrl && (
         <a

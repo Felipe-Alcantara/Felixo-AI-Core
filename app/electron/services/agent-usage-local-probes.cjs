@@ -49,9 +49,9 @@ function readCodexProbe(options = {}) {
 }
 
 /**
- * Rate limit do Claude Code capturado pela status line. Sem a coleta ligada não
- * há arquivo e o probe simplesmente não tem métrica — o painel continua
- * mostrando a limitação, não um zero inventado.
+ * Fallback de rate limit do Claude Code capturado pela status line. A fonte
+ * principal é o `/status` ao vivo; este probe só entra quando a coleta
+ * opcional foi ligada ou quando uma leitura local chega pelo watcher.
  */
 function readClaudeStatuslineProbe(options = {}) {
   const service = createClaudeStatuslineService({

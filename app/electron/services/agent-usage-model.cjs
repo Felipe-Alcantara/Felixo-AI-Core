@@ -11,6 +11,7 @@ const VALID_SAMPLE_STATUSES = new Set([
 const VALID_SOURCE_KINDS = new Set([
   'cli-command',
   'assisted-event',
+  'live-query',
   'local-execution',
   'manual',
   'unsupported',
@@ -30,6 +31,10 @@ const SAFE_METADATA_KEYS = new Set([
   'window',
   'precision',
   'providerVersion',
+  // Dados seguros e estruturados que a consulta interativa do Claude publica
+  // no `/status` (Status + Usage). O normalizador abaixo mantém a allowlist
+  // também dentro deste objeto, sem deixar a saída crua chegar ao renderer.
+  'statusDetails',
 ])
 const SECRET_PATTERN =
   /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9])/i
@@ -174,6 +179,14 @@ function normalizeMetadata(metadata) {
       continue
     }
 
+    if (key === 'statusDetails') {
+      const details = normalizeStatusDetails(value)
+      if (details) {
+        normalized[key] = details
+      }
+      continue
+    }
+
     if (typeof value === 'boolean' || typeof value === 'number') {
       if (Number.isFinite(value)) {
         normalized[key] = value
@@ -182,6 +195,92 @@ function normalizeMetadata(metadata) {
   }
 
   return normalized
+}
+
+const STATUS_DETAIL_KEYS = new Set([
+  'status',
+  'usage',
+  'version',
+  'sessionName',
+  'sessionId',
+  'sessionKind',
+  'peerAddress',
+  'cwd',
+  'loginMethod',
+  'organization',
+  'email',
+  'web',
+  'model',
+  'settingSources',
+  'lines',
+  'sessionStats',
+  'totalCost',
+  'totalDurationApi',
+  'totalDurationWall',
+  'totalCodeChanges',
+  'usageByModel',
+  'currentSession',
+  'currentWeek',
+  'used',
+  'resetAt',
+  'resetText',
+  'promotion',
+  'explanation',
+  'attribution',
+  'activity',
+  'usageCredits',
+])
+
+/**
+ * Normaliza o subconjunto estruturado do `/status` sem aceitar chaves
+ * arbitrárias ou valores que pareçam segredo. Arrays são mantidos porque a
+ * CLI publica linhas de contribuição e estatísticas por modelo como texto.
+ */
+function normalizeStatusDetails(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 3) {
+    return null
+  }
+
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => normalizeStatusDetailValue(item, depth + 1))
+      .filter((item) => item !== null)
+      .slice(0, 64)
+    return items.length ? items : null
+  }
+
+  const normalized = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (!STATUS_DETAIL_KEYS.has(key) || SECRET_PATTERN.test(key)) {
+      continue
+    }
+
+    const safe = normalizeStatusDetailValue(item, depth + 1)
+    if (safe !== null) {
+      normalized[key] = safe
+    }
+  }
+
+  return Object.keys(normalized).length ? normalized : null
+}
+
+function normalizeStatusDetailValue(value, depth) {
+  if (typeof value === 'string') {
+    if (SECRET_PATTERN.test(value)) {
+      return null
+    }
+    return value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 500) || null
+  }
+
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  return normalizeStatusDetails(value, depth)
 }
 
 function normalizeNumber(value) {

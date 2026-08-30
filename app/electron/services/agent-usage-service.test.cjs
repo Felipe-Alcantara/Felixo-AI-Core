@@ -576,6 +576,114 @@ test(
   },
 )
 
+test(
+  'consulta o /status ao vivo e conserva os detalhes em cada perfil Claude',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-claude-live-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const perfis = [
+      {
+        id: 'claude-pessoal',
+        providerId: 'claude',
+        label: 'Claude pessoal',
+        profileEnv: { CLAUDE_CONFIG_DIR: '/perfis/pessoal' },
+      },
+      {
+        id: 'claude-trabalho',
+        providerId: 'claude',
+        label: 'Claude trabalho',
+        profileEnv: { CLAUDE_CONFIG_DIR: '/perfis/trabalho' },
+      },
+    ]
+    const liveCalls = []
+
+    const service = createAgentUsageService({
+      repository,
+      probe: () => null,
+      listCatalog: async () => [
+        {
+          id: 'claude',
+          name: 'Claude Code CLI',
+          provider: 'Anthropic',
+          command: 'claude',
+          detected: true,
+          version: '2.1.251',
+        },
+      ],
+      listProfiles: () => perfis,
+      runCommand: async ({ env }) => ({
+        ok: true,
+        stdout: JSON.stringify({
+          loggedIn: true,
+          email: env.CLAUDE_CONFIG_DIR.endsWith('pessoal')
+            ? 'pessoal@example.com'
+            : 'trabalho@example.com',
+          subscriptionType: 'pro',
+        }),
+        stderr: '',
+      }),
+      queryLiveUsage: async ({ env }) => {
+        const pessoal = env.CLAUDE_CONFIG_DIR.endsWith('pessoal')
+        liveCalls.push(env.CLAUDE_CONFIG_DIR)
+        return {
+          ok: true,
+          collectedAt: '2026-08-30T19:00:00.000Z',
+          measuredAt: '2026-08-30T19:00:00.000Z',
+          metrics: [
+            {
+              key: 'rate_limits.seven_day',
+              label: 'Janela de 7 dias',
+              used: pessoal ? 31 : 88,
+              limit: 100,
+              remaining: pessoal ? 69 : 12,
+              unit: '%',
+              precision: 'percentage',
+              resetAt: '2026-09-02T05:00:00.000Z',
+            },
+          ],
+          details: {
+            status: {
+              email: pessoal ? 'pessoal@example.com' : 'trabalho@example.com',
+              model: 'sonnet (claude-sonnet-5)',
+            },
+            usage: {
+              currentWeek: {
+                used: pessoal ? 31 : 88,
+                resetAt: '2026-09-02T05:00:00.000Z',
+              },
+              lines: [pessoal ? 'perfil pessoal' : 'perfil trabalho'],
+            },
+          },
+          message: null,
+        }
+      },
+    })
+
+    try {
+      const result = await service.refresh()
+      const accounts = new Map(result.accounts.map((account) => [account.id, account]))
+
+      assert.deepEqual(liveCalls.sort(), ['/perfis/pessoal', '/perfis/trabalho'])
+      assert.equal(accounts.get('claude-pessoal').latestSample.status, 'current')
+      assert.equal(accounts.get('claude-pessoal').latestSample.metrics[0].used, 31)
+      assert.equal(accounts.get('claude-trabalho').latestSample.metrics[0].used, 88)
+      assert.equal(
+        accounts.get('claude-pessoal').latestSample.metadata.statusDetails.status.email,
+        'pessoal@example.com',
+      )
+      assert.equal(
+        accounts.get('claude-trabalho').latestSample.metadata.statusDetails.usage.currentWeek.used,
+        88,
+      )
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 function countAccountsByProvider(accounts) {
   return accounts.reduce((total, account) => {
     total[account.providerId] = (total[account.providerId] ?? 0) + 1

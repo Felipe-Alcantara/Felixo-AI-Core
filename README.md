@@ -240,23 +240,34 @@ Cada número mostra de onde veio e **quando foi medido**, que nem sempre é quan
 o app leu — uma fonte que só é atualizada durante a sessão continua exibindo o
 último valor conhecido, marcado como antigo em vez de apresentado como atual.
 Onde a CLI não oferece cota consultável sem interação, o painel diz isso por
-extenso, em vez de mostrar zero. A atualização manual é sempre controlada pelo
-app, e a automática pode ser configurada em intervalos de 5, 15 ou 30 minutos.
+extenso, em vez de mostrar zero. A atualização do Claude abre uma sessão PTY
+descartável e executa o `/status` em tempo real para cada conta/perfil; por
+isso o painel não copia o limite do login do sistema para outra linha. O botão
+**Atualizar** repete a consulta, e a atualização automática pode ser
+configurada em intervalos de 5, 15 ou 30 minutos.
+
+No Claude Code, cada linha também traz **Dados completos do /status**: versão,
+sessão, peer, pasta, método de login, organização, e-mail, modelo, fontes de
+configuração, custo, duração, alterações, uso por modelo, janelas, resets,
+promoção, explicação/atribuição das últimas 24 horas e créditos de uso. Esses
+campos são extraídos e redigidos antes de serem armazenados; a saída bruta do
+terminal nunca vai para o renderer.
 
 O que cada CLI publica hoje:
 
 | CLI | Fonte | O que aparece |
 |-----|-------|---------------|
 | Codex | rollout da sessão em `~/.codex/sessions` | janela de 5 h, janela semanal, reset, créditos e plano |
-| Claude Code | status line (`rate_limits`), coleta opcional | janela de 5 h e semanal, com reset |
+| Claude Code | `/status` interativo ao vivo por conta/perfil | Status + Usage completos, janelas de 5 h e semanal, resets, estatísticas e atribuição |
 | Openia | `openia statusline` (créditos da conta no OpenRouter) | usado, restante e total em US$ |
 | Gemini | — | sem cota: a consulta existe apenas no `/stats model` interativo |
 
-A coleta do Claude Code é **opcional e explícita**: pelo botão do painel, o app
-registra um script de status line no arquivo de configuração do Claude Code, que
-é onde os percentuais são publicados. O script preserva uma status line que já
-exista (recusa sobrescrever), continua imprimindo uma linha útil, e desligar a
-coleta devolve a configuração ao estado anterior.
+A coleta de status line do Claude Code continua **opcional e explícita** e serve
+como fallback local: pelo botão do painel, o app registra um script no arquivo
+de configuração do Claude Code, preserva uma status line que já exista (recusa
+sobrescrever), continua imprimindo uma linha útil, e desligar a coleta devolve
+a configuração ao estado anterior. A consulta principal do painel não depende
+dessa instalação: ela usa o `/status` ao vivo.
 
 ### Conta por terminal
 
