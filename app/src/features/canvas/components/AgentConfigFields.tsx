@@ -1,5 +1,5 @@
-import { useId, useRef } from 'react'
-import { RotateCw } from 'lucide-react'
+import { useId, useRef, useState } from 'react'
+import { RotateCw, Trash2 } from 'lucide-react'
 import { SHELL_AGENT_VALUE, type AgentLaunchPreferences } from '../services/agent-launch-preferences'
 import { ADD_FOLDER_VALUE, type AgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 
@@ -93,27 +93,8 @@ export function AgentConfigFields({
         ))}
       </select>
 
-      {/* Conta só aparece quando há mais de uma para escolher: com uma conta
-          só, o campo seria uma pergunta com uma resposta possível. */}
-      {config.accounts.length > 0 && (
-        <>
-          <label htmlFor={`${prefixo}-account`} className={ROTULO}>
-            Conta
-          </label>
-          <select
-            id={`${prefixo}-account`}
-            value={config.accountId}
-            onChange={(event) => config.setAccountId(event.target.value)}
-            className={`${CAMPO} mb-3`}
-          >
-            <option value="">Login do sistema</option>
-            {config.accounts.map((conta) => (
-              <option key={conta.id} value={conta.id}>
-                {conta.label}
-              </option>
-            ))}
-          </select>
-        </>
+      {config.agentValue !== SHELL_AGENT_VALUE && (
+        <CampoConta prefixo={prefixo} config={config} />
       )}
 
       {config.agent && (
@@ -338,6 +319,137 @@ export function AgentConfigFields({
         ))}
         <option value={ADD_FOLDER_VALUE}>+ Adicionar pasta…</option>
       </select>
+    </>
+  )
+}
+
+/** Valor da opção que abre o cadastro de uma conta nova. */
+const NOVA_CONTA = '__nova__'
+
+/**
+ * Escolha da conta com que o terminal nasce, e o cadastro de contas novas.
+ *
+ * Os dois moram juntos porque é no momento de escolher que a pessoa descobre
+ * que a conta que ela quer ainda não existe — mandá-la para outra tela ali
+ * seria perder o passo.
+ */
+function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig }) {
+  const [criando, setCriando] = useState(false)
+  const [nome, setNome] = useState('')
+  const [chave, setChave] = useState('')
+  const [erro, setErro] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  const contaAtual = config.accounts.find((item) => item.id === config.accountId)
+  // Só o Openia guarda chave; os outros logam pela própria CLI no terminal.
+  const pedeChave = config.agentValue === 'openia'
+
+  async function criar() {
+    setSalvando(true)
+    setErro(null)
+
+    const resultado = await config.createAccount(nome, pedeChave ? chave : undefined)
+
+    setSalvando(false)
+
+    if (!resultado.ok) {
+      setErro(resultado.message)
+      return
+    }
+
+    setNome('')
+    setChave('')
+    setCriando(false)
+  }
+
+  return (
+    <>
+      <label htmlFor={`${prefixo}-account`} className={ROTULO}>
+        Conta
+      </label>
+      <div className="mb-3 flex items-center gap-1.5">
+        <select
+          id={`${prefixo}-account`}
+          value={config.accountId}
+          onChange={(event) => {
+            if (event.target.value === NOVA_CONTA) {
+              setCriando(true)
+              return
+            }
+            config.setAccountId(event.target.value)
+          }}
+          className={CAMPO}
+        >
+          <option value="">Login do sistema</option>
+          {config.accounts.map((conta) => (
+            <option key={conta.id} value={conta.id}>
+              {conta.label}
+            </option>
+          ))}
+          <option value={NOVA_CONTA}>+ Nova conta…</option>
+        </select>
+
+        {contaAtual && (
+          <button
+            type="button"
+            title={`Remover "${contaAtual.label}" e apagar o login dela`}
+            onClick={() => void config.removeAccount(contaAtual.id)}
+            className="felixo-btn-icon shrink-0 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-theme-error"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+
+      {criando && (
+        <div className="mb-3 rounded border border-white/10 bg-black/20 p-2">
+          <p className="mb-2 text-[11px] leading-snug text-zinc-500">
+            {pedeChave
+              ? 'A conta guarda a chave do OpenRouter, cifrada pelo sistema.'
+              : 'A conta começa sem login: a própria CLI conduz a entrada na primeira vez que você abrir um terminal nela.'}
+          </p>
+
+          <input
+            value={nome}
+            autoFocus
+            onChange={(event) => setNome(event.target.value)}
+            placeholder="Nome da conta (ex.: pessoal)"
+            className={`${CAMPO} mb-2`}
+          />
+
+          {pedeChave && (
+            <input
+              value={chave}
+              type="password"
+              onChange={(event) => setChave(event.target.value)}
+              placeholder="Chave do OpenRouter"
+              className={`${CAMPO} mb-2`}
+            />
+          )}
+
+          {erro && <p className="mb-2 text-[11px] text-theme-error">{erro}</p>}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={!nome.trim() || salvando}
+              onClick={() => void criar()}
+              className="felixo-btn flex-1 rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600 disabled:opacity-40"
+            >
+              {salvando ? 'Criando…' : 'Criar conta'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCriando(false)
+                setErro(null)
+              }}
+              className="felixo-btn rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/[0.06]"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

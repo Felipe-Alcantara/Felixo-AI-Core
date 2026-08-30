@@ -2674,3 +2674,22 @@ Causa: eu mantive instâncias do app de teste com agentes de IA reais abertas
 enquanto rodava build e suítes, numa máquina de 11 GB com swap cheio. Nenhum
 dado foi perdido. A validação desta feature foi refeita com terminal de shell e
 o app de teste fechado entre etapas.
+
+### Fechamento: cadastro de conta na interface (23:5x)
+
+A feature estava inutilizável na prática: havia o seletor, mas nenhum caminho
+para cadastrar a primeira conta — a lista sempre nasceria vazia. Fechado com
+`+ Nova conta…` dentro do próprio seletor, cadastro embutido (nome, e a chave
+quando o provedor é o Openia) e remoção pelo ícone ao lado.
+
+Achado ao validar pela interface: `buildTerminalNodeData` descartava o
+`accountId`, então o terminal aberto pelo botão nascia no login do sistema
+mesmo com a conta escolhida — o processo real não tinha `CODEX_HOME`. A conta
+passou a ser persistida no bloco do canvas, o que também atende o alerta da
+subtarefa de retomada: a sessão do provedor pertence à conta, então reabrir o
+canvas retoma na mesma.
+
+Conferido no app: conta criada pela interface, escolhida, e o processo do Codex
+nasceu com `CODEX_HOME` apontando para o perfil. Num perfil sem login, a CLI
+abre o próprio fluxo de entrada ("Sign in with ChatGPT"), sem consumir quota —
+o item que ficou em aberto no registro anterior.

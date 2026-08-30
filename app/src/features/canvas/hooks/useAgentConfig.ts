@@ -182,9 +182,68 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     return () => window.clearTimeout(timer)
   }, [agentValue, loadOpenia])
 
+  const providerId = agentValue === SHELL_AGENT_VALUE ? '' : agentValue
+
+  const carregarContas = useCallback(async () => {
+    if (!providerId) {
+      return [] as CliAccount[]
+    }
+
+    const resultado = await window.felixo?.cliAccounts?.list(providerId)
+    const lista = resultado?.ok ? (resultado.accounts ?? []) : []
+    setAccounts(lista)
+    return lista
+  }, [providerId])
+
+  /**
+   * Cria a conta e já a deixa escolhida — quem acabou de cadastrar quer abrir
+   * o terminal nela, não escolher de novo numa lista.
+   */
+  const createAccount = useCallback(
+    async (label: string, secret?: string) => {
+      if (!providerId) {
+        return { ok: false, message: 'Escolha um agente antes de criar a conta.' }
+      }
+
+      const criada = await window.felixo?.cliAccounts?.create({ providerId, label })
+
+      if (!criada?.ok || !criada.account) {
+        return { ok: false, message: criada?.message ?? 'Não foi possível criar a conta.' }
+      }
+
+      if (secret?.trim()) {
+        const guardada = await window.felixo?.cliAccounts?.setSecret({
+          accountId: criada.account.id,
+          secret: secret.trim(),
+        })
+
+        if (!guardada?.ok) {
+          // A conta existe, mas sem a chave ela não serve: desfaz para não
+          // deixar uma conta pela metade na lista.
+          await window.felixo?.cliAccounts?.remove(criada.account.id)
+          return { ok: false, message: guardada?.message ?? 'Não foi possível guardar a chave.' }
+        }
+      }
+
+      await carregarContas()
+      setAccountId(criada.account.id)
+      return { ok: true, message: null }
+    },
+    [carregarContas, providerId],
+  )
+
+  const removeAccount = useCallback(
+    async (id: string) => {
+      await window.felixo?.cliAccounts?.remove(id)
+      const lista = await carregarContas()
+      setAccountId((atual) => (lista.some((c) => c.id === atual) ? atual : ''))
+    },
+    [carregarContas],
+  )
+
   useEffect(() => {
     let cancelado = false
-    const provedor = agentValue === SHELL_AGENT_VALUE ? '' : agentValue
+    const provedor = providerId
 
     if (!provedor) {
       // O timeout tira o setState do corpo do efeito: sem ele o lint acusa
@@ -211,7 +270,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     return () => {
       cancelado = true
     }
-  }, [agentValue])
+  }, [providerId])
 
   const changeAgent = useCallback((valor: AgentLaunchPreferences['agentValue']) => {
     setAgentValue(valor)
@@ -448,6 +507,8 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     accountId,
     setAccountId,
     accounts,
+    createAccount,
+    removeAccount,
     prepareForLaunch,
     savePreferences,
     buildOptions,

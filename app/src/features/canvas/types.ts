@@ -88,6 +88,14 @@ export type TerminalNodeData = {
    * must stay interactive after it finishes instead of closing with it.
    */
   keepShellOpen?: boolean
+  /**
+   * Conta com login próprio em que este terminal nasceu.
+   *
+   * Fica persistida no bloco de propósito: a sessão do provedor pertence à
+   * conta, então reabrir o canvas precisa retomar na mesma — retomar noutra
+   * conta é pior do que abrir o seletor.
+   */
+  accountId?: string
   /** Start timestamp of the current PTY instance, persisted for reopen. */
   sessionStartedAt?: number
   /** Provider-owned conversation identity used only after exact compatibility checks. */
