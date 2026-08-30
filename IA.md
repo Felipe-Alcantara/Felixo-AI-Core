@@ -2540,3 +2540,65 @@ gravado no banco local ou apenas exibido: a resposta foi gravar. O que muda:
 O identificador passa a existir em texto no banco do perfil do app. Isso é
 deliberado e restrito ao identificador: continua não havendo token, cookie,
 chave ou senha gravados. Documentação e relatórios seguem sem dado pessoal.
+
+## [2026-08-29] Superfícies do canvas deixam de se cobrir
+
+### Contexto
+
+Pedido: as janelas do canvas nunca se sobreporem — sempre se redimensionarem.
+Medido antes de mexer, em 1320x738 com painel de prompts e gaveta abertos:
+
+| superfície | x | y | largura | altura |
+|---|---|---|---|---|
+| Barra de ferramentas | 16 | 16 | 144 | 553 |
+| Painel | 168 | 64 | 528 | 626 |
+| Mini Map | 508 | 16 | 202 | 152 |
+| Dock "Elementos" | 390 | 637 | 320 | 85 |
+| Gaveta do terminal | 731 | 45 | 585 | 690 |
+
+Duas sobreposições reais: o painel invadia o Mini Map (188x104 px) e o dock
+(306x53 px). Da gaveta escapava por 35 px, que sumiam ao primeiro arrasto.
+
+### Causa
+
+Cada superfície era dimensionada tendo o viewport inteiro como referência, sem
+saber que as outras existiam. Barra e painel ancoram à esquerda; gaveta, Mini
+Map e dock ancoram à direita — então elas se encontram no meio.
+
+### O que foi feito
+
+- `canvas-surfaces.ts` concentra a conta em funções puras: quanto sobra para
+  cada lado, qual é a área livre e que tamanho o Mini Map cabe ter.
+- Um contexto guarda quem está ocupando o quê. Cada superfície publica a
+  largura que usa e lê a das outras: crescer uma encolhe a outra, e o arrasto
+  para no piso em vez de invadir.
+- A largura do painel virou valor **derivado** do teto, não estado sincronizado
+  por efeito: a preferência arrastada continua guardada e volta inteira quando
+  a gaveta fecha.
+- A altura do painel para no topo do dock, que passou a publicar sua posição.
+- O Mini Map encolhe com o espaço livre e é a única superfície que pode sumir —
+  por ser a única cuja ausência não impede nenhuma ação.
+
+### Defeito encontrado no meio
+
+A gaveta calculava o limite mas aplicava a largura crua no estilo, então
+continuava passando por cima mesmo com a conta certa. Só apareceu porque a
+medição foi feita no app rodando, não no código.
+
+### Validação
+
+- `npm run test:frontend`: **698/698** (9 novos, sobre a repartição do espaço);
+  `npm test`: 834/834; `npm run lint`: 0 erros; `tsc -b` e build limpos.
+- App real, mesma tela de 1320x738, com painel, gaveta, dock e Mini Map
+  abertos ao mesmo tempo: painel 168→558 e 64→625; Mini Map 582→710 e 16→112;
+  dock 390→710 e 637→722. Nenhuma interseção, com 24 px de folga até o Mini Map
+  e 12 px até o dock. O painel encolheu sozinho de 528 para 390 por causa da
+  gaveta.
+
+### Limites
+
+Quando nem o piso de cada superfície cabe — tela muito estreita —, o piso
+vence e a sobreposição volta: é preferível a um painel de poucos pixels que não
+mostra nada. A regra vale para as superfícies flutuantes; blocos do canvas
+continuam livres para se sobrepor entre si, que é o comportamento esperado de
+um quadro.

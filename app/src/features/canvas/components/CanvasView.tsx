@@ -37,6 +37,9 @@ import {
   type NodeDataCacheEntry,
 } from '../services/node-data-cache'
 import { CanvasToolbar } from './CanvasToolbar'
+import { CanvasSurfacesProvider } from './CanvasSurfacesProvider'
+import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
+import { freeCanvasArea, miniMapSize } from '../services/canvas-surfaces'
 import { UpdateToast } from '../../updates/UpdateNotice'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
@@ -207,13 +210,22 @@ type CanvasViewProps = {
 export function CanvasView({ onOpenChat }: CanvasViewProps) {
   return (
     <TerminalSessionProvider>
-      <CanvasInner onOpenChat={onOpenChat} />
+      {/* A margem de 1rem de cada lado da coluna entra na conta: é espaço que
+          nenhuma outra superfície pode ocupar. */}
+      <CanvasSurfacesProvider toolbarWidth={TOOLBAR_COLUMN + 32}>
+        <CanvasInner onOpenChat={onOpenChat} />
+      </CanvasSurfacesProvider>
     </TerminalSessionProvider>
   )
 }
 
+/** Largura da coluna recolhida da barra de ferramentas (`w-36`). */
+const TOOLBAR_COLUMN = 144
+
 function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const store = useTerminalSessions()
+  const { occupancy, viewport } = useCanvasSurfaces()
+  const miniMap = miniMapSize(freeCanvasArea(viewport, occupancy).width)
   const {
     nodes,
     setNodes,
@@ -1829,23 +1841,31 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               in NotificationsMenu) sets this gap, so the minimap is pushed
               down by exactly as much space as the trigger actually occupies —
               never overlapped, however tall the notification list grows. */}
-          <MiniMap
-            pannable
-            zoomable
-            position="top-right"
-            className="!mr-4"
+          {/* O mapa é a única superfície que pode encolher até sumir: ele
+              ancora na direita da área livre, então é o primeiro a ser
+              coberto quando o painel da esquerda cresce, e é também o único
+              cuja ausência não impede nenhuma ação. */}
+          {miniMap && (
+            <MiniMap
+              pannable
+              zoomable
+              position="top-right"
+              className="!mr-4"
               style={{
                 // Notifications open horizontally to the left of the map,
                 // so the minimap does not need to be pushed down anymore.
                 marginTop: 16,
-                transition: 'margin-top 300ms ease',
+                transition: 'margin-top 300ms ease, width 200ms ease, height 200ms ease',
+                width: miniMap.width,
+                height: miniMap.height,
               }}
-            bgColor="#18181b"
-            maskColor="rgba(0, 0, 0, 0.6)"
-            nodeColor="#3f3f46"
-            nodeStrokeColor="#52525b"
-            nodeComponent={miniMapNode}
-          />
+              bgColor="#18181b"
+              maskColor="rgba(0, 0, 0, 0.6)"
+              nodeColor="#3f3f46"
+              nodeStrokeColor="#52525b"
+              nodeComponent={miniMapNode}
+            />
+          )}
         </ReactFlow>
       </div>
 

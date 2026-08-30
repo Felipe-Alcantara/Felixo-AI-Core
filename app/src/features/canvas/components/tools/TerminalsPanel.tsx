@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import type { Node } from '@xyflow/react'
+import { useCanvasSurfaces } from '../../hooks/canvas-surfaces-context'
 import {
   ChevronDown,
   ChevronUp,
@@ -382,19 +383,33 @@ export function TerminalsPanel({
     setDockElement(node)
   }, [])
 
+  const { reportDockTop } = useCanvasSurfaces()
+
   useEffect(() => {
-    if (!onHeightChange) return
     if (elements.length === 0 || !dockElement) {
-      onHeightChange(0)
+      onHeightChange?.(0)
+      // Sem dock não há piso: o painel da esquerda volta a usar a tela toda.
+      reportDockTop(Number.POSITIVE_INFINITY)
       return
     }
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (entry) onHeightChange(entry.contentRect.height)
-    })
+
+    const publicar = () => {
+      onHeightChange?.(dockElement.getBoundingClientRect().height)
+      // O topo do dock, e não a altura, é o que o painel da esquerda precisa
+      // saber para parar antes dele.
+      reportDockTop(dockElement.getBoundingClientRect().top)
+    }
+
+    publicar()
+    const observer = new ResizeObserver(publicar)
     observer.observe(dockElement)
-    return () => observer.disconnect()
-  }, [onHeightChange, elements.length, dockElement])
+    window.addEventListener('resize', publicar)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', publicar)
+    }
+  }, [onHeightChange, elements.length, dockElement, reportDockTop])
 
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {

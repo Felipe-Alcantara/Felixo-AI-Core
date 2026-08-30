@@ -20,6 +20,8 @@ import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import type { AgentSessionReference } from '../services/agent-session'
+import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
+import { drawerWidthLimit } from '../services/canvas-surfaces'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
@@ -111,6 +113,16 @@ export function TerminalDrawer({
   // Collapsed keeps the session running and the terminal mounted — the drawer
   // just shrinks to a rail, so reopening is instant and nothing is lost.
   const [collapsed, setCollapsed] = useState(() => readCollapsedPreference(localStorage))
+  const { occupancy, viewport, reportDrawerWidth } = useCanvasSurfaces()
+  // Teto vindo do que o painel da esquerda ocupa: os dois disputam a mesma
+  // largura, e crescer um encolhe o outro em vez de cobrir.
+  const widthLimit = drawerWidthLimit(viewport.width, occupancy, MIN_WIDTH)
+  // O listener de arrasto é montado uma vez só; o teto muda enquanto ele está
+  // vivo, então chega por ref em vez de remontar o listener a cada mudança.
+  const widthLimitRef = useRef(widthLimit)
+  useEffect(() => {
+    widthLimitRef.current = widthLimit
+  }, [widthLimit])
   const [maximized, setMaximized] = useState(false)
   const [handoffError, setHandoffError] = useState<string | undefined>()
   const [previewError, setPreviewError] = useState<string | undefined>()
@@ -189,7 +201,14 @@ export function TerminalDrawer({
     ? COLLAPSED_WIDTH
     : maximized
       ? Math.max(COLLAPSED_WIDTH, window.innerWidth - 120)
-      : width
+      : Math.min(width, widthLimit)
+
+  // Publica o que está ocupando de fato — inclusive recolhida e maximizada —
+  // para o painel da esquerda se ajustar a cada um desses estados.
+  useEffect(() => {
+    reportDrawerWidth(effectiveWidth)
+    return () => reportDrawerWidth(0)
+  }, [effectiveWidth, reportDrawerWidth])
 
   // Click outside the drawer closes it, unless pinned.
   useEffect(() => {
@@ -256,7 +275,12 @@ export function TerminalDrawer({
         return
       }
       const next = window.innerWidth - event.clientX
-      setWidth(clampDrawerWidth(next, window.innerWidth, MIN_WIDTH))
+      setWidth(
+        Math.min(
+          widthLimitRef.current,
+          clampDrawerWidth(next, window.innerWidth, MIN_WIDTH),
+        ),
+      )
     }
     const onMouseUp = () => {
       if (draggingRef.current) {
@@ -293,11 +317,12 @@ export function TerminalDrawer({
         closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
       }`}
       style={{
-        width: collapsed
-          ? `${COLLAPSED_WIDTH}px`
-          : maximized
-            ? 'max(44px, calc(100vw - 120px))'
-            : `min(${width}px, max(${COLLAPSED_WIDTH}px, calc(100vw - 200px)))`,
+        // `effectiveWidth` já vem limitado pelo que o painel da esquerda
+        // ocupa; usar a largura crua aqui era o que deixava a gaveta passar
+        // por cima dele mesmo depois de o limite ter sido calculado.
+        width: maximized
+          ? 'max(44px, calc(100vw - 120px))'
+          : `${effectiveWidth}px`,
         // Animate the collapse/maximize toggles, but never the resize drag —
         // the edge must track the pointer 1:1.
         transition: resizing ? undefined : 'width 560ms cubic-bezier(0.16,1,0.3,1)',

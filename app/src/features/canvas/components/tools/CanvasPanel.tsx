@@ -4,6 +4,7 @@ import { useExitAnimation } from '../../hooks/useExitAnimation'
 import { useResizablePanelWidth } from '../../hooks/useResizablePanelWidth'
 import { PANEL_EXIT_MS } from '../../services/animation-timing'
 import { getPanelMaxHeight, type PanelSize } from '../../services/panel-sizing'
+import { useCanvasSurfaces } from '../../hooks/canvas-surfaces-context'
 import { toolbarColumnOffset } from '../toolbar-flyout'
 
 type CanvasPanelProps = {
@@ -48,7 +49,14 @@ export function CanvasPanel({
 }: CanvasPanelProps) {
   const { closing, close } = useExitAnimation(PANEL_EXIT_MS, onClose)
   const { width, resizing, startResize, reset } = useResizablePanelWidth(panelId, size)
-  const maxHeight = useViewportPanelHeight()
+  const { dockTop } = useCanvasSurfaces()
+  const viewportHeight = useViewportPanelHeight()
+  // A altura para onde o dock "Elementos" começa: antes o painel passava por
+  // baixo dele e as duas superfícies disputavam os mesmos pixels.
+  const maxHeight = Math.max(
+    240,
+    Math.min(viewportHeight, dockTop - PANEL_TOP - DOCK_GAP),
+  )
 
   return (
     <div
@@ -92,6 +100,10 @@ export function CanvasPanel({
     </div>
   )
 }
+
+/** Deslocamento do topo (`top-16`) e folga até o dock, em pixels. */
+const PANEL_TOP = 64
+const DOCK_GAP = 12
 
 /** Acompanha a altura da janela para o painel nunca passar do rodapé. */
 function useViewportPanelHeight(): number {
