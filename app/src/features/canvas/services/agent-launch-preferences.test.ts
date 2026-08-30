@@ -37,6 +37,9 @@ describe('agent launch preferences', () => {
         yolo: true,
         projectId: 'project-a',
         planningFile: '/work/plans/release-plan.pdf',
+        // A conta escolhida também é preferência reutilizável: sem ela o campo
+        // voltava para "Login do sistema" a cada abertura.
+        accountId: 'conta-trabalho',
         openiaInterface: 'aichat',
         openiaModel: 'anthropic/claude-sonnet-4',
       },
@@ -50,6 +53,7 @@ describe('agent launch preferences', () => {
       yolo: true,
       projectId: 'project-a',
       planningFile: '/work/plans/release-plan.pdf',
+      accountId: 'conta-trabalho',
       openiaInterface: 'aichat',
       openiaModel: 'anthropic/claude-sonnet-4',
     })
@@ -76,6 +80,7 @@ describe('agent launch preferences', () => {
       planningFile: '',
       openiaInterface: 'orchat',
       openiaModel: '',
+      accountId: '',
     })
   })
 
@@ -86,6 +91,7 @@ describe('agent launch preferences', () => {
       model: '',
       effort: '',
       yolo: false,
+      accountId: '',
       projectId: '',
       planningFile: '',
       openiaInterface: 'openclaw',

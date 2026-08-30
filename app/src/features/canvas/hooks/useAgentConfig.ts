@@ -51,7 +51,10 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
   )
   // Contas com login próprio do provedor escolhido. Vazio = só o login do
   // sistema, que continua sendo o padrão.
-  const [accountId, setAccountId] = useState('')
+  const [accountId, setAccountId] = useState(inicial.accountId)
+  // A preferência é lida uma vez, na montagem: guardá-la em ref deixa o efeito
+  // com a lista de dependências certa sem reagir a uma leitura que não muda.
+  const contaSalvaRef = useRef(inicial.accountId)
   const [accounts, setAccounts] = useState<CliAccount[]>([])
   const [model, setModel] = useState(inicial.model)
   const [effort, setEffort] = useState(inicial.effort)
@@ -263,8 +266,16 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
 
       const lista = resultado?.ok ? (resultado.accounts ?? []) : []
       setAccounts(lista)
-      // Trocar de agente não pode manter a conta do agente anterior.
-      setAccountId((atual) => (lista.some((c) => c.id === atual) ? atual : ''))
+      setAccountId((atual) => {
+        if (lista.some((conta) => conta.id === atual)) {
+          return atual
+        }
+
+        // Reabrir o configurador volta para a última conta usada naquele
+        // agente; trocar de agente não arrasta a conta do agente anterior.
+        const salva = contaSalvaRef.current
+        return lista.some((conta) => conta.id === salva) ? salva : ''
+      })
     })
 
     return () => {
@@ -405,8 +416,9 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       planningFile,
       openiaInterface: openiaInterfaceRef.current,
       openiaModel: openiaModelRef.current,
+      accountId,
     })
-  }, [agentValue, effort, model, planningFile, projectId, yolo])
+  }, [accountId, agentValue, effort, model, planningFile, projectId, yolo])
 
   /** Traduz a configuração atual nas opções de abertura de um terminal. */
   const buildOptions = useCallback((): NewTerminalOptions => {

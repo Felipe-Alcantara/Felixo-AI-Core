@@ -20,6 +20,15 @@ export type AgentLaunchPreferences = {
   /** Interface e modelo do Openia; a chave nunca é persistida aqui. */
   openiaInterface: string
   openiaModel: string
+  /**
+   * Conta com login próprio escolhida por último. Só o id: a credencial mora
+   * na pasta do perfil, e nada dela passa por aqui.
+   *
+   * Sem isto o campo voltava para "Login do sistema" a cada vez que o
+   * configurador era reaberto, e quem trabalha numa conta secundária tinha de
+   * reescolher a cada terminal.
+   */
+  accountId: string
 }
 
 type StorageReader = Pick<Storage, 'getItem'>
@@ -34,6 +43,7 @@ const DEFAULT_PREFERENCES: AgentLaunchPreferences = {
   planningFile: '',
   openiaInterface: 'orchat',
   openiaModel: '',
+  accountId: '',
 }
 
 function getBrowserStorage(): Storage | undefined {
@@ -91,6 +101,7 @@ function normalizePreferences(
     planningFile: stringValue(value.planningFile),
     openiaInterface: stringValue(value.openiaInterface) || fallback.openiaInterface,
     openiaModel: stringValue(value.openiaModel),
+    accountId: stringValue(value.accountId),
   }
 }
 

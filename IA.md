@@ -2737,3 +2737,26 @@ a lado — o caminho está pronto e testado com pastas distintas, mas a
 confirmação final depende de alguém concluir o login. Para o Claude, a captura
 da status line ainda é única por app: ligar a captura à conta é o passo
 seguinte.
+
+### Correção: a conta escolhida não sobrevivia ao reabrir o configurador
+
+Relatado como "o perfil não preservou". A investigação separou duas coisas:
+
+- **O bloco do canvas preservou.** O nó persistido tinha
+  `accountId=3410ec1e…` e os processos em execução confirmavam
+  (`CODEX_HOME` apontando para a pasta do perfil, ao lado de outros no login
+  do sistema).
+- **O configurador não.** `AgentLaunchPreferences` guardava agente, modelo,
+  esforço, yolo, projeto e arquivo de planejamento — e não a conta. Ao reabrir,
+  o campo voltava para "Login do sistema", obrigando a reescolher a cada
+  terminal.
+
+A conta entrou na preferência reutilizável (só o id; a credencial continua na
+pasta do perfil) e é restaurada quando a lista daquele provedor chega — trocar
+de agente segue sem arrastar a conta do agente anterior.
+
+Conferido no app: conta escolhida, agente aberto, janela recarregada, e o campo
+voltou marcado em "trabalho". Também confirmado com credencial real que o
+login por conta funciona ponta a ponta: o perfil ficou com
+`felipethefeh@gmail.com` e o sistema com outra conta, ambos `plus`, sem logout
+entre eles.
