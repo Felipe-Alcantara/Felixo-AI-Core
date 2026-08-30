@@ -2760,3 +2760,45 @@ voltou marcado em "trabalho". Também confirmado com credencial real que o
 login por conta funciona ponta a ponta: o perfil ficou com
 `felipethefeh@gmail.com` e o sistema com outra conta, ambos `plus`, sem logout
 entre eles.
+
+## [2026-08-30] Remoção de perfis ficou explícita na interface
+
+### Contexto
+
+O relato seguinte à persistência da conta foi que não havia opção de remover.
+O fluxo existia, mas a ação era uma lixeira de 14 px, sem rótulo, quase sem
+contraste e só aparecia depois de selecionar um perfil — no estado inicial o
+campo mostrava apenas o login do sistema.
+
+### O que foi feito
+
+- O configurador passou a mostrar **Remover** ao lado do perfil selecionado,
+  com `aria-label`, estado de remoção e uma dica quando há perfis salvos mas o
+  login do sistema está selecionado.
+- A remoção pede confirmação, avisa que a pasta de login será apagada e que
+  terminais já abertos podem perder aquela autenticação. Falhas do IPC agora
+  aparecem no próprio formulário, e o hook não trata uma remoção recusada como
+  sucesso.
+- O painel **Limites e uso** também ganhou ação textual e acessível. Lá a
+  confirmação deixa explícito que **Remover do painel** arquiva somente o
+  histórico local; o perfil de login dos terminais não é apagado.
+- O contrato TypeScript do preload passou a declarar a mensagem de erro que o
+  IPC já devolvia. README explica as duas remoções para não misturar perfil de
+  login com histórico de quota.
+
+### Validação
+
+- `npm run build`: concluído com 708 módulos.
+- `npm run test:frontend`: **698/698**; `npm test`: **853/853**.
+- `npm run lint`: 0 erros; permanecem apenas os 3 avisos React já existentes.
+- Electron local sob Xvfb, em `userData` temporário: perfil Codex selecionado
+  mostrou o botão `Remover`; a confirmação aceita removeu a linha, o registro e
+  a pasta do perfil. O perfil real do usuário não foi usado.
+- `git diff --check`: limpo.
+
+### Limite
+
+A validação visual usou o driver Electron isolado porque nenhuma superfície do
+navegador estava conectada nesta sessão. A confirmação nativa foi exercitada no
+perfil temporário com uma decisão controlada pelo teste; não houve alteração em
+contas ou credenciais reais.

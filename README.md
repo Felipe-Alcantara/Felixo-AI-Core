@@ -263,8 +263,10 @@ coleta devolve a configuração ao estado anterior.
 Cada conta cadastrada ganha uma pasta de login própria dentro do perfil do app,
 e o terminal nasce autenticado nela. Não há logout entre contas: duas sessões
 da mesma CLI, em contas diferentes, rodam ao mesmo tempo. O campo **Conta**
-aparece no configurador do agente quando existe mais de uma conta para aquela
-CLI; o padrão continua sendo o login que você já tem no sistema.
+aparece no configurador de qualquer agente compatível; ele começa em **Login do
+sistema**, oferece **+ Nova conta…** e mostra o botão **Remover** depois que um
+perfil é selecionado. O padrão continua sendo o login que você já tem no
+sistema.
 
 O login em si é feito pela própria CLI, dentro do terminal, na primeira vez que
 você abre um perfil novo — o app não intermedeia credencial.
@@ -278,8 +280,11 @@ Como cada CLI isola o login (medido, não presumido):
 | Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig`, `.ssh` e `.npmrc` para o trabalho no repositório continuar funcionando |
 | Openia | `OPENROUTER_API_KEY` | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
 
-Remover uma conta apaga a pasta de login dela — manter credencial órfã seria
-pior que refazer o login.
+Remover uma conta pede confirmação e apaga a pasta de login dela — manter
+credencial órfã seria pior que refazer o login. Terminais já abertos podem
+perder esse login; a ação é separada de **Remover do painel**, que aparece em
+**Limites e uso** e arquiva somente o histórico local de uso, sem apagar o
+perfil de login.
 
 Cada conta cadastrada também vira uma linha própria no painel **Limites e uso**,
 com a quota lida da pasta dela — é assim que duas contas do mesmo provedor

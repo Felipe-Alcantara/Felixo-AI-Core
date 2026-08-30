@@ -523,7 +523,11 @@ declare global {
           account?: CliAccount
           message?: string
         }>
-        remove: (accountId: string) => Promise<{ ok: boolean; removed?: boolean }>
+        remove: (accountId: string) => Promise<{
+          ok: boolean
+          removed?: boolean
+          message?: string
+        }>
         setSecret: (params: { accountId: string; secret: string }) => Promise<{
           ok: boolean
           message?: string

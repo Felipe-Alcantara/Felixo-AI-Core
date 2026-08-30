@@ -338,7 +338,9 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
   const [nome, setNome] = useState('')
   const [chave, setChave] = useState('')
   const [erro, setErro] = useState<string | null>(null)
+  const [erroRemocao, setErroRemocao] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
+  const [removendo, setRemovendo] = useState(false)
   const contaAtual = config.accounts.find((item) => item.id === config.accountId)
   // Só o Openia guarda chave; os outros logam pela própria CLI no terminal.
   const pedeChave = config.agentValue === 'openia'
@@ -361,6 +363,36 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
     setCriando(false)
   }
 
+  async function remover() {
+    if (!contaAtual || removendo) {
+      return
+    }
+
+    const nomeDaConta = contaAtual.label
+    if (
+      !window.confirm(
+        `Remover a conta "${nomeDaConta}"? A pasta de login dela será apagada. ` +
+          'Terminais já abertos podem perder esse login.',
+      )
+    ) {
+      return
+    }
+
+    setRemovendo(true)
+    setErroRemocao(null)
+
+    try {
+      const resultado = await config.removeAccount(contaAtual.id)
+      if (!resultado.ok) {
+        setErroRemocao(resultado.message)
+      }
+    } catch {
+      setErroRemocao('Não foi possível remover a conta.')
+    } finally {
+      setRemovendo(false)
+    }
+  }
+
   return (
     <>
       <label htmlFor={`${prefixo}-account`} className={ROTULO}>
@@ -372,12 +404,14 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
           value={config.accountId}
           onChange={(event) => {
             if (event.target.value === NOVA_CONTA) {
+              setErroRemocao(null)
               setCriando(true)
               return
             }
+            setErroRemocao(null)
             config.setAccountId(event.target.value)
           }}
-          className={CAMPO}
+          className={`${CAMPO} min-w-0 flex-1`}
         >
           <option value="">Login do sistema</option>
           {config.accounts.map((conta) => (
@@ -392,13 +426,28 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
           <button
             type="button"
             title={`Remover "${contaAtual.label}" e apagar o login dela`}
-            onClick={() => void config.removeAccount(contaAtual.id)}
-            className="felixo-btn-icon shrink-0 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-theme-error"
+            aria-label={`Remover a conta "${contaAtual.label}"`}
+            onClick={() => void remover()}
+            disabled={removendo}
+            className="felixo-btn flex shrink-0 items-center gap-1 rounded bg-theme-error/10 px-2 py-1.5 text-[11px] text-theme-error hover:bg-theme-error/20 disabled:cursor-wait disabled:opacity-50"
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} aria-hidden="true" />
+            {removendo ? 'Removendo…' : 'Remover'}
           </button>
         )}
       </div>
+
+      {config.accounts.length > 0 && !contaAtual && !criando && (
+        <p className="-mt-2 mb-3 text-[11px] leading-snug text-zinc-600">
+          Selecione um perfil para abrir nele ou removê-lo.
+        </p>
+      )}
+
+      {erroRemocao && (
+        <p role="alert" className="-mt-2 mb-3 text-[11px] leading-snug text-theme-error">
+          {erroRemocao}
+        </p>
+      )}
 
       {criando && (
         <div className="mb-3 rounded border border-white/10 bg-black/20 p-2">

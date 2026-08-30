@@ -179,10 +179,30 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
   )
 
   const removeAccount = useCallback(
-    async (accountId: string) => {
-      const result = await window.felixo?.agentUsage?.removeAccount(accountId)
-      if (result?.ok && result.dashboard) {
-        setDashboard(result.dashboard)
+    async (account: AgentUsageAccount) => {
+      if (
+        !window.confirm(
+          `Remover a conta "${account.label}" do painel? O histórico de uso local ` +
+            'será apagado; o perfil de login dos terminais não será alterado.',
+        )
+      ) {
+        return
+      }
+
+      const api = window.felixo?.agentUsage
+      try {
+        const result = await api?.removeAccount(account.id)
+        if (!result?.ok) {
+          setStatusMessage(result?.message ?? 'Não foi possível remover a conta do painel.')
+          return
+        }
+
+        setStatusMessage(null)
+        if (result.dashboard) {
+          setDashboard(result.dashboard)
+        }
+      } catch {
+        setStatusMessage('Não foi possível remover a conta do painel.')
       }
     },
     [],
@@ -282,7 +302,7 @@ function ProviderCard({
   onToggleStatusline,
 }: {
   group: AgentUsageProviderGroup
-  onRemoveAccount: (accountId: string) => Promise<void>
+  onRemoveAccount: (account: AgentUsageAccount) => Promise<void>
   /** Só o Claude tem coleta por status line; nos demais vem nulo. */
   statusline: ClaudeStatuslineState | null
   onToggleStatusline: (enable: boolean) => Promise<void>
@@ -327,7 +347,7 @@ function ProviderCard({
               account={account}
               limitation={group.usageSource.limitation}
               sourceLabel={group.usageSource.label}
-              onRemove={() => void onRemoveAccount(account.id)}
+              onRemove={() => void onRemoveAccount(account)}
             />
           ))}
         </div>
@@ -444,10 +464,12 @@ function AccountRow({
         <button
           type="button"
           onClick={onRemove}
-          title="Remover conta do painel"
-          className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-600 hover:text-theme-error"
+          title={`Remover "${account.label}" do painel`}
+          aria-label={`Remover a conta "${account.label}" do painel`}
+          className="felixo-btn flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
         >
-          <Trash2 size={12} />
+          <Trash2 size={12} aria-hidden="true" />
+          Remover
         </button>
       </div>
 

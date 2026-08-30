@@ -237,9 +237,17 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
 
   const removeAccount = useCallback(
     async (id: string) => {
-      await window.felixo?.cliAccounts?.remove(id)
+      const removida = await window.felixo?.cliAccounts?.remove(id)
+      if (!removida?.ok || removida.removed !== true) {
+        return {
+          ok: false,
+          message: removida?.message ?? 'Não foi possível remover a conta.',
+        }
+      }
+
       const lista = await carregarContas()
       setAccountId((atual) => (lista.some((c) => c.id === atual) ? atual : ''))
+      return { ok: true, message: null }
     },
     [carregarContas],
   )
