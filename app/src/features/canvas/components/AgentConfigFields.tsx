@@ -93,6 +93,29 @@ export function AgentConfigFields({
         ))}
       </select>
 
+      {/* Conta só aparece quando há mais de uma para escolher: com uma conta
+          só, o campo seria uma pergunta com uma resposta possível. */}
+      {config.accounts.length > 0 && (
+        <>
+          <label htmlFor={`${prefixo}-account`} className={ROTULO}>
+            Conta
+          </label>
+          <select
+            id={`${prefixo}-account`}
+            value={config.accountId}
+            onChange={(event) => config.setAccountId(event.target.value)}
+            className={`${CAMPO} mb-3`}
+          >
+            <option value="">Login do sistema</option>
+            {config.accounts.map((conta) => (
+              <option key={conta.id} value={conta.id}>
+                {conta.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+
       {config.agent && (
         <>
           {config.agent.isLauncher ? (

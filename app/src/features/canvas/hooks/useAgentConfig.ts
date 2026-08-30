@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CliAccount } from '../../shared/types/cli-accounts'
 import {
   buildAgentArgs,
   describeLaunch,
@@ -48,6 +49,10 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
   const [agentValue, setAgentValue] = useState<AgentLaunchPreferences['agentValue']>(
     inicial.agentValue,
   )
+  // Contas com login próprio do provedor escolhido. Vazio = só o login do
+  // sistema, que continua sendo o padrão.
+  const [accountId, setAccountId] = useState('')
+  const [accounts, setAccounts] = useState<CliAccount[]>([])
   const [model, setModel] = useState(inicial.model)
   const [effort, setEffort] = useState(inicial.effort)
   const [yolo, setYolo] = useState(inicial.yolo)
@@ -176,6 +181,37 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     }, 0)
     return () => window.clearTimeout(timer)
   }, [agentValue, loadOpenia])
+
+  useEffect(() => {
+    let cancelado = false
+    const provedor = agentValue === SHELL_AGENT_VALUE ? '' : agentValue
+
+    if (!provedor) {
+      // O timeout tira o setState do corpo do efeito: sem ele o lint acusa
+      // renderização em cascata, e com razão.
+      const limpar = window.setTimeout(() => {
+        setAccounts([])
+        setAccountId('')
+      }, 0)
+
+      return () => window.clearTimeout(limpar)
+    }
+
+    void window.felixo?.cliAccounts?.list(provedor).then((resultado) => {
+      if (cancelado) {
+        return
+      }
+
+      const lista = resultado?.ok ? (resultado.accounts ?? []) : []
+      setAccounts(lista)
+      // Trocar de agente não pode manter a conta do agente anterior.
+      setAccountId((atual) => (lista.some((c) => c.id === atual) ? atual : ''))
+    })
+
+    return () => {
+      cancelado = true
+    }
+  }, [agentValue])
 
   const changeAgent = useCallback((valor: AgentLaunchPreferences['agentValue']) => {
     setAgentValue(valor)
@@ -323,6 +359,10 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       return { cwd: project?.path, label: customName || `Shell · ${place}` }
     }
 
+    // A conta escolhida acompanha o terminal desde o nascimento: é ela que
+    // decide em qual login a CLI abre.
+    const conta = accountId || undefined
+
     const choices = {
       agentId: agent.id,
       model: model || undefined,
@@ -340,6 +380,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       )
       const modelLabel = openiaModelRef.current ? ` · ${openiaModelRef.current}` : ''
       return {
+        accountId: conta,
         command: agent.command,
         args: launcherArgs ?? undefined,
         cwd: project?.path,
@@ -350,13 +391,25 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       }
     }
     return {
+      accountId: conta,
       command: agent.command,
       args: buildAgentArgs(choices) ?? undefined,
       cwd: project?.path,
       label: customName || `${describeLaunch(choices)} · ${place}`,
       planningFile: planningFile.trim() || undefined,
     }
-  }, [agent, effort, model, name, openiaInterfaces, planningFile, projectId, projects, yolo])
+  }, [
+    accountId,
+    agent,
+    effort,
+    model,
+    name,
+    openiaInterfaces,
+    planningFile,
+    projectId,
+    projects,
+    yolo,
+  ])
 
   return {
     agents,
@@ -392,6 +445,9 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     openiaError,
     refreshOpenia,
     saveOpeniaKey,
+    accountId,
+    setAccountId,
+    accounts,
     prepareForLaunch,
     savePreferences,
     buildOptions,

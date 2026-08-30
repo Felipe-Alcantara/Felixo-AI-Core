@@ -163,6 +163,13 @@ contextBridge.exposeInMainWorld('felixo', {
     get: () => ipcRenderer.invoke('agent-models:get'),
     refresh: () => ipcRenderer.invoke('agent-models:refresh'),
   },
+  // Contas por terminal: cada uma tem o próprio login, sem logout entre elas.
+  cliAccounts: {
+    list: (providerId) => ipcRenderer.invoke('cli-accounts:list', providerId),
+    create: (params) => ipcRenderer.invoke('cli-accounts:create', params),
+    remove: (accountId) => ipcRenderer.invoke('cli-accounts:remove', accountId),
+    setSecret: (params) => ipcRenderer.invoke('cli-accounts:set-secret', params),
+  },
   agentUsage: {
     list: () => ipcRenderer.invoke('agent-usage:list'),
     refresh: () => ipcRenderer.invoke('agent-usage:refresh'),

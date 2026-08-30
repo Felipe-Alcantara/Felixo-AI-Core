@@ -18,4 +18,9 @@ export type NewTerminalOptions = {
    * continuam no modo opaco do menu manual.
    */
   launchMode?: 'agent' | 'launcher'
+  /**
+   * Conta com login próprio escolhida no configurador. Cada conta tem a
+   * própria pasta de credencial, então duas convivem sem logout.
+   */
+  accountId?: string
 }

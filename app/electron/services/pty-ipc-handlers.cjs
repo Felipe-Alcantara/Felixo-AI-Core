@@ -44,6 +44,9 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         reuseExisting: Boolean(params.reuseExisting),
         fallbackCommand: params.fallbackCommand,
         keepShellOpen: Boolean(params.keepShellOpen),
+        // Conta escolhida no configurador do agente; ausente = login do
+        // sistema, que é o comportamento de antes desta feature.
+        accountId: typeof params.accountId === 'string' ? params.accountId : undefined,
         onData: (data) => send('pty:data', { sessionId, data }),
         onExit: (event) =>
           send('pty:exit', {

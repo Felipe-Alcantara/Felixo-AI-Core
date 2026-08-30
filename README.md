@@ -43,6 +43,7 @@ Primeira versão funcional entregue:
 - Botão de parar para interromper processo em andamento
 - Canvas visual para organizar agentes, arquivos compartilhados, notas, grupos e páginas web (mini-navegador embutido)
 - Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
+- **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
 - Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`
@@ -256,6 +257,29 @@ registra um script de status line no arquivo de configuração do Claude Code, q
 é onde os percentuais são publicados. O script preserva uma status line que já
 exista (recusa sobrescrever), continua imprimindo uma linha útil, e desligar a
 coleta devolve a configuração ao estado anterior.
+
+### Conta por terminal
+
+Cada conta cadastrada ganha uma pasta de login própria dentro do perfil do app,
+e o terminal nasce autenticado nela. Não há logout entre contas: duas sessões
+da mesma CLI, em contas diferentes, rodam ao mesmo tempo. O campo **Conta**
+aparece no configurador do agente quando existe mais de uma conta para aquela
+CLI; o padrão continua sendo o login que você já tem no sistema.
+
+O login em si é feito pela própria CLI, dentro do terminal, na primeira vez que
+você abre um perfil novo — o app não intermedeia credencial.
+
+Como cada CLI isola o login (medido, não presumido):
+
+| CLI | Isolamento | Observação |
+|-----|-----------|------------|
+| Codex | `CODEX_HOME` | variável dedicada |
+| Claude Code | `CLAUDE_CONFIG_DIR` | variável dedicada |
+| Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig`, `.ssh` e `.npmrc` para o trabalho no repositório continuar funcionando |
+| Openia | `OPENROUTER_API_KEY` | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
+
+Remover uma conta apaga a pasta de login dela — manter credencial órfã seria
+pior que refazer o login.
 
 ## Como distribuir
 

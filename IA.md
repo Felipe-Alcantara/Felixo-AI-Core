@@ -2602,3 +2602,75 @@ vence e a sobreposição volta: é preferível a um painel de poucos pixels que 
 mostra nada. A regra vale para as superfícies flutuantes; blocos do canvas
 continuam livres para se sobrepor entre si, que é o comportamento esperado de
 um quadro.
+
+## [2026-08-29] Conta por terminal: logins simultâneos sem logout
+
+### Contexto
+
+Pedido de estudar como as CLIs guardam login, para permitir contas simultâneas
+com escolha de qual conta abre cada terminal. A tarefa
+[Felixo AI Core — trocar entre múltiplas contas do Codex](https://app.notion.com/p/3c091f95497e814e8095dd43af228a97)
+já existia e previa o caminho `logout` → `login`, por isso gastava parágrafos
+com "não matar PTYs silenciosamente".
+
+### O que o estudo mediu
+
+| CLI | Onde guarda | Isolamento | Verificação |
+|-----|-------------|-----------|-------------|
+| Codex | `~/.codex/auth.json` | `CODEX_HOME` | `codex login status` responde "Not logged in" com a pasta isolada |
+| Claude Code | `~/.claude/.credentials.json` | `CLAUDE_CONFIG_DIR` | `claude auth status --json` devolve `loggedIn: false` |
+| Gemini | `~/.gemini/oauth_creds.json` | só `HOME` | `getGlobalGeminiDir()` usa `os.homedir()`; `GEMINI_CLI_HOME` só afeta settings.json, e com ele nada foi criado |
+| Openia | `keys.json` no site-packages | `OPENROUTER_API_KEY` | `load_api_key()` lê a env antes do store |
+
+Com pasta por conta **não existe logout**: as contas ficam autenticadas ao mesmo
+tempo e nenhum terminal em execução é afetado. Isso resolve melhor o pedido da
+tarefa do que o caminho que ela previa.
+
+### O que foi feito
+
+- `cli-account-profiles.cjs`: mapa declarativo de isolamento por CLI e a
+  montagem do ambiente. O caminho do perfil recusa identificador que escape da
+  pasta.
+- `cli-account-store.cjs`: registro das contas e das pastas de login. Remover a
+  conta apaga a pasta — credencial órfã é pior que refazer login. Perfil com
+  `HOME` próprio recebe cópia de `.gitconfig`, `.ssh` e `.npmrc`.
+- O spawn da PTY aceita `accountId` e mescla o ambiente da conta depois do
+  PATH; sem conta escolhida nada muda.
+- IPC, preload e o campo **Conta** no configurador do agente, visível só quando
+  há conta cadastrada para aquela CLI.
+
+### Decisões tomadas com o dono do produto
+
+Duas regras escritas na própria tarefa entravam em conflito com o pedido, e
+foram decididas por pergunta explícita:
+
+- **Ler credencial para descobrir identidade**: mantido. É a única fonte não
+  interativa que existe, e só as claims de identidade são lidas — nunca o
+  token.
+- **Guardar segredo no app**: passa a valer para o Openia, cifrado pelo
+  `safeStorage`. Quando o sistema não oferece criptografia real (backend
+  `basic`), a gravação é recusada com explicação, em vez de salvar em texto.
+
+### Validação
+
+- `npm test`: **852/852** (18 novos); `npm run test:frontend`: 698/698;
+  `npm run lint`: 0 erros; `tsc -b` e build limpos.
+- CLI real, três estados simultâneos: perfil vazio "Not logged in", perfil com
+  credencial "Logged in using ChatGPT", sistema "Logged in using ChatGPT".
+- App real, três terminais de **shell** abertos ao mesmo tempo pelo IPC de
+  verdade: cada um nasceu com o `CODEX_HOME` da sua conta, e o terceiro sem a
+  variável (login do sistema). Validado sem abrir agente de IA, de propósito.
+- Campo **Conta** conferido na interface, com "Login do sistema" como padrão.
+
+### Limites
+
+Falta o fluxo de login inicial dentro do terminal ser exercitado ponta a ponta
+com uma segunda conta real — não há uma segunda conta disponível para teste
+nesta máquina. O painel "Limites e uso" ainda lê o login do sistema; ligá-lo
+aos perfis é o passo seguinte natural.
+
+**Incidente da sessão:** o app instalado foi morto pelo OOM killer às 23:05.
+Causa: eu mantive instâncias do app de teste com agentes de IA reais abertas
+enquanto rodava build e suítes, numa máquina de 11 GB com swap cheio. Nenhum
+dado foi perdido. A validação desta feature foi refeita com terminal de shell e
+o app de teste fechado entre etapas.

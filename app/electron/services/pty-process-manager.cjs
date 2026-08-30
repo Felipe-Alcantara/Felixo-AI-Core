@@ -69,8 +69,9 @@ class PtyProcessManager {
    * @param {(command: string, env: Record<string, string>) => string | null} [dependencies.resolveCodexPath] - Injectable Codex resolver.
    * @param {() => boolean} [dependencies.isDebugSession] - Whether detailed local diagnostics are enabled.
    * @param {(options: object) => object | null} [dependencies.discoverAgentSession] - Provider history resolver.
+   * @param {(accountId: string) => Record<string, string>} [dependencies.buildAccountEnv] - Ambiente da conta escolhida.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -78,6 +79,8 @@ class PtyProcessManager {
     this.logger = logger ?? console
     this.resolveCodexPath = resolveCodexPath ?? resolveWindowsCodexPath
     this.isDebugSession = isDebugSession ?? (() => process.env.FELIXO_DEBUG_SESSION === '1')
+    // Sem loja de contas o terminal nasce no login do sistema, como antes.
+    this.buildAccountEnv = buildAccountEnv ?? (() => ({}))
     this.discoverAgentSession = discover
   }
 
@@ -128,7 +131,10 @@ class PtyProcessManager {
     }
 
     const spawnPty = this.resolveSpawnPty()
-    const env = createCliEnv()
+    // A conta escolhida entra por variável de ambiente, depois do PATH: é o
+    // que faz duas contas do mesmo provedor conviverem sem logout. Sem conta
+    // escolhida o objeto vem vazio e nada muda.
+    const env = { ...createCliEnv(), ...this.buildAccountEnv(options.accountId) }
     const args = Array.isArray(options.args) ? options.args : []
     const defaultShell = options.defaultShell || this.platform.getDefaultShell(env)
     const requestedCommand = options.command || defaultShell

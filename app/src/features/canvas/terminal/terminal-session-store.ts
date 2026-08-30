@@ -197,6 +197,11 @@ type SessionOptions = {
   fallbackCommand?: string
   /** Keeps the terminal interactive after the command exits (run-a-file). */
   keepShellOpen?: boolean
+  /**
+   * Conta com login próprio em que este terminal nasce. Ausente = o login do
+   * sistema, que é o comportamento de sempre.
+   */
+  accountId?: string
   /** Restored timestamp; omitted on restart so a fresh clock is created. */
   startedAt?: number
   /** Cria um bloco Página Web quando a pessoa abre um link do terminal. */
@@ -689,6 +694,7 @@ export class TerminalSessionStore {
         reuseExisting: true,
         fallbackCommand: options.fallbackCommand,
         keepShellOpen: options.keepShellOpen,
+        accountId: options.accountId,
       })
       .then((result) => {
         if (session.disposed) {

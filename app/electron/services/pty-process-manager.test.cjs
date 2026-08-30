@@ -875,3 +875,24 @@ test('lista as sessões vivas com o comando que cada uma pediu', () => {
 
   assert.deepEqual(manager.listarSessoesVivas(), [])
 })
+
+test('o terminal nasce na conta escolhida, e sem conta segue o login do sistema', () => {
+  const { spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({
+    spawnPty,
+    buildAccountEnv: (accountId) =>
+      accountId === 'conta-trabalho' ? { CODEX_HOME: '/perfis/trabalho' } : {},
+  })
+
+  try {
+    manager.spawn('sessao-a', { command: 'codex', accountId: 'conta-trabalho' })
+    manager.spawn('sessao-b', { command: 'codex' })
+
+    assert.equal(calls[0].options.env.CODEX_HOME, '/perfis/trabalho')
+    assert.equal(calls[1].options.env.CODEX_HOME, undefined)
+    // O PATH montado pelo app continua valendo nos dois casos.
+    assert.ok(calls[0].options.env.PATH && calls[1].options.env.PATH)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})

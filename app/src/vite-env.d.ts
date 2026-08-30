@@ -24,6 +24,7 @@ import type {
   FetchAllProgress,
   FetchAllSettings,
 } from './features/canvas/types'
+import type { CliAccount } from './features/shared/types/cli-accounts'
 import type {
   AgentUsageDashboard,
   ClaudeStatuslineState,
@@ -297,6 +298,7 @@ declare global {
           fallbackCommand?: string
           /** Keeps the terminal interactive after the command exits (run-a-file). */
           keepShellOpen?: boolean
+          accountId?: string
         }) => Promise<CliInvokeResult & { sessionId?: string; reused?: boolean }>
         write: (params: {
           sessionId: string
@@ -508,6 +510,24 @@ declare global {
       agentModels?: {
         get: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
         refresh: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
+      }
+      cliAccounts?: {
+        list: (providerId?: string) => Promise<{
+          ok: boolean
+          accounts?: CliAccount[]
+          secretStorage?: { ok: boolean; reason: string | null }
+          message?: string
+        }>
+        create: (params: { providerId: string; label: string }) => Promise<{
+          ok: boolean
+          account?: CliAccount
+          message?: string
+        }>
+        remove: (accountId: string) => Promise<{ ok: boolean; removed?: boolean }>
+        setSecret: (params: { accountId: string; secret: string }) => Promise<{
+          ok: boolean
+          message?: string
+        }>
       }
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>

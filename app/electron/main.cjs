@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, safeStorage } = require('electron')
 const path = require('node:path')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { instalarMenuDoApp } = require('./windows/app-menu.cjs')
@@ -7,6 +7,11 @@ const {
   registerOfficialCliAccountIpcHandlers,
 } = require('./services/official-cli-account-ipc-handlers.cjs')
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
+const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
+const { createCliAccountStore } = require('./services/cli-account-store.cjs')
+const {
+  registerCliAccountIpcHandlers,
+} = require('./services/cli-account-ipc-handlers.cjs')
 const { registerOpeniaIpcHandlers } = require('./services/openia-service.cjs')
 const {
   registerFileAttachmentIpcHandlers,
@@ -133,7 +138,18 @@ app.whenReady().then(() => {
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
   registerOpeniaIpcHandlers()
-  ptyHandlers = registerPtyIpcHandlers(getMainWindow)
+  // As contas por terminal existem antes da PTY: é a loja que diz em qual
+  // login cada terminal nasce.
+  const cliAccounts = createCliAccountStore({
+    userData: appPaths.userData,
+    safeStorage,
+  })
+  registerCliAccountIpcHandlers({ store: cliAccounts })
+  ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
+    manager: new PtyProcessManager({
+      buildAccountEnv: (accountId) => cliAccounts.buildEnv(accountId),
+    }),
+  })
   registerFileAttachmentIpcHandlers(appPaths)
   registerFileExportIpcHandlers(getMainWindow)
   const projectsHandlers = registerProjectsIpcHandlers(getMainWindow, {
