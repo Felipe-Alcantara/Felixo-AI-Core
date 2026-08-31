@@ -1,5 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const path = require('node:path')
 
 const benchmark = require('./fetch-all-scanner-benchmark.cjs')
 
@@ -7,7 +8,8 @@ test('a bancada do Fetch All exige uma raiz explícita e usa limites finitos', (
   assert.equal(benchmark.parseArgs([]).root, null)
   assert.equal(benchmark.parseArgs([]).iterations, 5)
   assert.equal(benchmark.parseArgs([]).concurrency, 16)
-  assert.equal(benchmark.parseArgs(['--root=/tmp/projetos']).root, '/tmp/projetos')
+  assert.equal(benchmark.parseArgs(['--root=/tmp/projetos']).root, path.resolve('/tmp/projetos'))
+  assert.equal(path.isAbsolute(benchmark.parseArgs(['--root=/tmp/projetos']).root), true)
   assert.throws(() => benchmark.parseArgs(['--iterations=21']), /iterations.*20/i)
   assert.throws(() => benchmark.parseArgs(['--concurrency=65']), /concurrency.*64/i)
 })
