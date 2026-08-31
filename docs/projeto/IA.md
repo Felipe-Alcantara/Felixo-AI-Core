@@ -2179,10 +2179,14 @@ posterior para uma linha suportada, antes de tratar este patch como solução
 de longo prazo. A [lista oficial de releases estáveis](https://releases.electronjs.org/release?channel=stable)
 deve orientar essa próxima migração.
 
-PUBLICAÇÃO: implementação pronta para commit, push e acompanhamento do CI e
-do release. Os identificadores remotos serão registrados nesta entrada após
-o gate de publicação. Nenhuma conta, chave ou credencial foi tocada.
+PUBLICAÇÃO: a implementação e este registro foram publicados no
+[commit c9ae351](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/c9ae351f4a16d7cb35f71cc7b446b6717613d59c). O [CI multi-SO
+33443389252](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33443389252)
+terminou verde em Ubuntu, macOS e Windows, e o [release workflow
+33443583904](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33443583904)
+publicou a [release v0.1.130](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.130)
+com 14 artefatos. Nenhuma conta, chave ou credencial foi tocada.
 
 Estado final: vulnerabilidades corrigidas no grafo completo e no npm que
-chega ao artefato distribuído; aguardando publicação remota e registro final
-na task e no relatório de hoje.
+chega ao artefato distribuído, publicada e registrada na task e no relatório
+de hoje.
