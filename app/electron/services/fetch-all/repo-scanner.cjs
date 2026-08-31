@@ -102,6 +102,21 @@ const MOUNT_COMMAND_TIMEOUT_MS = 10_000
 /** Espera curta de um worker ocioso enquanto outro ainda pode empilhar pastas. */
 const IDLE_WORKER_RETRY_MS = 5
 
+/**
+ * Escolhe a semântica de caminhos da plataforma simulada pelos testes.
+ *
+ * No processo real `path` já corresponde ao sistema operacional atual. Usar
+ * `path.win32` quando a plataforma é injetada como Windows permite testar
+ * letras de unidade e comparação case-insensitive em qualquer runner.
+ *
+ * @param {string} platform
+ * @param {object} [pathModule]
+ * @returns {object}
+ */
+function pathForPlatform(platform = process.platform, pathModule) {
+  return pathModule ?? (platform === 'win32' ? path.win32 : path.posix)
+}
+
 /** @returns {Promise<void>} */
 function scheduleRetry() {
   return delay(IDLE_WORKER_RETRY_MS)
@@ -184,21 +199,31 @@ function parseBsdMounts(lines) {
 /**
  * Lista todas as montagens do sistema; devolve vazio quando ilegível.
  *
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {object} [options.fsModule]
+ * @param {object} [options.fsPromises]
+ * @param {Function} [options.execFileAsync]
  * @returns {Promise<Array<{ mountPoint: string, filesystemType: string }>>}
  */
-async function listMounts() {
-  if (process.platform === 'win32') return []
+async function listMounts({
+  platform = process.platform,
+  fsModule = fs,
+  fsPromises = fsp,
+  execFileAsync: runCommand = execFileAsync,
+  procMountsPath = '/proc/mounts',
+  mountCommandTimeoutMs = MOUNT_COMMAND_TIMEOUT_MS,
+} = {}) {
+  if (platform === 'win32') return []
 
   try {
-    const procMounts = '/proc/mounts'
-
-    if (fs.existsSync(procMounts)) {
-      const content = await fsp.readFile(procMounts, 'utf8')
+    if (fsModule.existsSync(procMountsPath)) {
+      const content = await fsPromises.readFile(procMountsPath, 'utf8')
       return parseLinuxMounts(content.split(/\r?\n/))
     }
 
-    const { stdout } = await execFileAsync('mount', [], {
-      timeout: MOUNT_COMMAND_TIMEOUT_MS,
+    const { stdout } = await runCommand('mount', [], {
+      timeout: mountCommandTimeoutMs,
     })
 
     return parseBsdMounts(stdout.split(/\r?\n/))
@@ -215,14 +240,22 @@ async function listMounts() {
  * outro sistema, uma pasta de projeto que por acaso se chame "CloudStorage".
  *
  * @param {string} [usersRoot]
+ * @param {object} [options]
+ * @param {object} [options.fsModule]
+ * @param {object} [options.pathModule]
  * @returns {string[]}
  */
-function darwinCloudStoragePaths(usersRoot = '/Users') {
+function darwinCloudStoragePaths(usersRoot = '/Users', {
+  fsModule = fs,
+  pathModule,
+} = {}) {
   try {
-    return fs
+    const pathApi = pathForPlatform('darwin', pathModule)
+
+    return fsModule
       .readdirSync(usersRoot)
-      .map((entry) => path.join(usersRoot, entry, 'Library', 'CloudStorage'))
-      .filter((candidate) => fs.existsSync(candidate))
+      .map((entry) => pathApi.join(usersRoot, entry, 'Library', 'CloudStorage'))
+      .filter((candidate) => fsModule.existsSync(candidate))
   } catch {
     return []
   }
@@ -234,20 +267,42 @@ function darwinCloudStoragePaths(usersRoot = '/Users') {
  * No Windows devolve vazio: a seleção de discos já filtra por tipo de unidade.
  *
  * @param {Array<{ mountPoint: string, filesystemType: string }>} [mounts]
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {Function} [options.listMountsFn]
+ * @param {Function} [options.darwinCloudStoragePathsFn]
  * @returns {Promise<string[]>}
  */
-async function mountSkipPaths(mounts) {
-  if (process.platform === 'win32') return []
+async function mountSkipPaths(mounts, {
+  platform = process.platform,
+  listMountsFn = listMounts,
+  listMountsOptions,
+  darwinCloudStoragePathsFn = darwinCloudStoragePaths,
+  darwinUsersRoot = '/Users',
+  darwinCloudStorageOptions,
+} = {}) {
+  if (platform === 'win32') return []
 
-  const resolvedMounts = mounts ?? (await listMounts())
+  const resolvedMounts =
+    mounts ??
+    (await listMountsFn({
+      ...listMountsOptions,
+      platform,
+    }))
   const skips = resolvedMounts.length
     ? resolvedMounts
         .filter((mount) => isSkippedFilesystemType(mount.filesystemType))
         .map((mount) => mount.mountPoint)
     : [...FALLBACK_SKIP_PATHS]
 
-  if (process.platform === 'darwin') {
-    skips.push(...DARWIN_SKIP_PATHS, ...darwinCloudStoragePaths())
+  if (platform === 'darwin') {
+    skips.push(
+      ...DARWIN_SKIP_PATHS,
+      ...(await darwinCloudStoragePathsFn(
+        darwinUsersRoot,
+        darwinCloudStorageOptions,
+      )),
+    )
   }
 
   return [...new Set(skips)]
@@ -261,10 +316,12 @@ async function mountSkipPaths(mounts) {
  * partir de `/` pelos firmlinks, e listá-lo de novo duplicaria a varredura.
  *
  * @param {Array<{ mountPoint: string, filesystemType: string }>} mounts
+ * @param {object} [options]
+ * @param {string} [options.platform]
  * @returns {string[]}
  */
-function localMountPoints(mounts) {
-  const isDarwin = process.platform === 'darwin'
+function localMountPoints(mounts, { platform = process.platform } = {}) {
+  const isDarwin = platform === 'darwin'
   const points = mounts
     .filter(
       (mount) =>
@@ -282,11 +339,26 @@ function localMountPoints(mounts) {
 /**
  * Raízes de todos os discos locais (fixos e removíveis).
  *
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {object} [options.fsModule]
+ * @param {Function} [options.listMountsFn]
  * @returns {Promise<string[]>}
  */
-async function listLocalDrives() {
-  if (process.platform !== 'win32') {
-    return localMountPoints(await listMounts())
+async function listLocalDrives({
+  platform = process.platform,
+  fsModule = fs,
+  listMountsFn = listMounts,
+  listMountsOptions,
+} = {}) {
+  if (platform !== 'win32') {
+    return localMountPoints(
+      await listMountsFn({
+        ...listMountsOptions,
+        platform,
+      }),
+      { platform },
+    )
   }
 
   // Sem API do Windows disponível no processo principal do Electron sem
@@ -298,7 +370,7 @@ async function listLocalDrives() {
     .map((letter) => `${letter}:\\`)
     .filter((drive) => {
       try {
-        return fs.statSync(drive).isDirectory()
+        return fsModule.statSync(drive).isDirectory()
       } catch {
         return false
       }
@@ -309,28 +381,42 @@ async function listLocalDrives() {
  * Caminhos a varrer: os configurados ou, se não houver nenhum, todos os discos.
  *
  * @param {string[]} configuredRoots
+ * @param {object} [options]
+ * @param {Function} [options.listLocalDrivesFn]
  * @returns {Promise<string[]>}
  */
-async function resolveScanRoots(configuredRoots) {
+async function resolveScanRoots(configuredRoots, {
+  listLocalDrivesFn = listLocalDrives,
+  listLocalDrivesOptions,
+} = {}) {
   const roots = (configuredRoots ?? []).filter(
     (root) => typeof root === 'string' && root.trim(),
   )
 
-  return roots.length ? roots.map((root) => root.trim()) : listLocalDrives()
+  return roots.length
+    ? roots.map((root) => root.trim())
+    : listLocalDrivesFn(listLocalDrivesOptions)
 }
 
 /**
  * Normaliza um caminho para comparação de prefixo entre pastas.
  *
  * @param {string} value
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {object} [options.pathModule]
  * @returns {string}
  */
-function normalizeComparablePath(value) {
-  const resolved = path.resolve(String(value ?? ''))
+function normalizeComparablePath(value, {
+  platform = process.platform,
+  pathModule,
+} = {}) {
+  const pathApi = pathForPlatform(platform, pathModule)
+  const resolved = pathApi.resolve(String(value ?? ''))
   const trimmed =
     resolved.length > 1 ? resolved.replace(/[\\/]+$/, '') : resolved
 
-  return process.platform === 'win32' ? trimmed.toLowerCase() : trimmed
+  return platform === 'win32' ? trimmed.toLowerCase() : trimmed
 }
 
 /**
@@ -338,17 +424,21 @@ function normalizeComparablePath(value) {
  *
  * @param {string} candidate
  * @param {string} ancestor
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {object} [options.pathModule]
  * @returns {boolean}
  */
-function isInsidePath(candidate, ancestor) {
-  const normalizedCandidate = normalizeComparablePath(candidate)
-  const normalizedAncestor = normalizeComparablePath(ancestor)
+function isInsidePath(candidate, ancestor, options = {}) {
+  const pathApi = pathForPlatform(options.platform, options.pathModule)
+  const normalizedCandidate = normalizeComparablePath(candidate, options)
+  const normalizedAncestor = normalizeComparablePath(ancestor, options)
 
   if (normalizedCandidate === normalizedAncestor) return true
 
-  const prefix = normalizedAncestor.endsWith(path.sep)
+  const prefix = normalizedAncestor.endsWith(pathApi.sep)
     ? normalizedAncestor
-    : `${normalizedAncestor}${path.sep}`
+    : `${normalizedAncestor}${pathApi.sep}`
 
   return normalizedCandidate.startsWith(prefix)
 }
@@ -361,13 +451,17 @@ function isInsidePath(candidate, ancestor) {
  *
  * @param {string[]} repoPaths
  * @param {string[]} ignoredPaths
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {object} [options.pathModule]
  * @returns {string[]}
  */
-function filterIgnoredRepos(repoPaths, ignoredPaths) {
+function filterIgnoredRepos(repoPaths, ignoredPaths, options = {}) {
   if (!ignoredPaths?.length) return [...repoPaths]
 
   return repoPaths.filter(
-    (repoPath) => !ignoredPaths.some((ignored) => isInsidePath(repoPath, ignored)),
+    (repoPath) =>
+      !ignoredPaths.some((ignored) => isInsidePath(repoPath, ignored, options)),
   )
 }
 
@@ -383,6 +477,11 @@ function filterIgnoredRepos(repoPaths, ignoredPaths) {
  * @param {string[]} [options.excludeDirs] - Nomes de pasta podados (sem diferenciar maiúsculas).
  * @param {string[]} [options.ignoredPaths] - Caminhos absolutos que a pessoa mandou ignorar.
  * @param {string[]} [options.skipPaths] - Montagens virtuais/de rede; detectadas quando omitido.
+ * @param {string} [options.platform] - Plataforma usada pela varredura e pelos testes.
+ * @param {object} [options.pathModule] - Implementação de caminhos para fixtures.
+ * @param {object} [options.fsModule] - IO síncrono injetável para testes.
+ * @param {object} [options.fsPromises] - IO assíncrono injetável para testes.
+ * @param {Function} [options.mountSkipPathsFn] - Resolver de montagens ignoradas.
  * @param {number} [options.concurrency] - Listagens simultâneas de diretório.
  * @param {AbortSignal} [options.signal] - Cancela a varredura em andamento.
  * @param {(progress: { scannedDirs: number, foundRepos: number, currentPath: string }) => void} [options.onProgress]
@@ -393,24 +492,43 @@ async function findGitRepos({
   excludeDirs = DEFAULT_EXCLUDE_DIRS,
   ignoredPaths = [],
   skipPaths,
+  platform = process.platform,
+  pathModule,
+  fsModule = fs,
+  fsPromises = fsp,
+  mountSkipPathsFn = mountSkipPaths,
+  mountSkipPathsOptions,
   concurrency = 16,
   signal,
   onProgress,
 }) {
+  const pathApi = pathForPlatform(platform, pathModule)
+  const pathOptions = { platform, pathModule: pathApi }
   const excludes = new Set(excludeDirs.map((name) => name.toLowerCase()))
-  const resolvedSkips = skipPaths ?? (await mountSkipPaths())
+  const resolvedSkips =
+    skipPaths ??
+    (await mountSkipPathsFn(undefined, {
+      ...mountSkipPathsOptions,
+      platform,
+    }))
   const blockedPaths = new Set(
-    [...resolvedSkips, ...ignoredPaths].map(normalizeComparablePath),
+    [...resolvedSkips, ...ignoredPaths].map((value) =>
+      normalizeComparablePath(value, pathOptions),
+    ),
   )
 
   // Raízes aninhadas em outra raiz são descartadas: `/` já cobre `/home`, e
   // varrer as duas geraria trabalho repetido.
   const uniqueRoots = []
-  for (const root of roots.map((value) => path.resolve(value))) {
-    if (!fs.existsSync(root)) continue
-    if (uniqueRoots.some((existing) => isInsidePath(root, existing))) continue
+  for (const root of roots.map((value) => pathApi.resolve(value))) {
+    if (!fsModule.existsSync(root)) continue
+    if (uniqueRoots.some((existing) => isInsidePath(root, existing, pathOptions))) {
+      continue
+    }
     for (let index = uniqueRoots.length - 1; index >= 0; index -= 1) {
-      if (isInsidePath(uniqueRoots[index], root)) uniqueRoots.splice(index, 1)
+      if (isInsidePath(uniqueRoots[index], root, pathOptions)) {
+        uniqueRoots.splice(index, 1)
+      }
     }
     uniqueRoots.push(root)
   }
@@ -420,13 +538,14 @@ async function findGitRepos({
   let scannedDirs = 0
   let activeVisits = 0
 
-  const isBlocked = (dirPath) => blockedPaths.has(normalizeComparablePath(dirPath))
+  const isBlocked = (dirPath) =>
+    blockedPaths.has(normalizeComparablePath(dirPath, pathOptions))
 
   async function visit(dirPath) {
     let entries
 
     try {
-      entries = await fsp.readdir(dirPath, { withFileTypes: true })
+      entries = await fsPromises.readdir(dirPath, { withFileTypes: true })
     } catch {
       return // pasta sem permissão ou removida durante a varredura
     }
@@ -446,7 +565,7 @@ async function findGitRepos({
       if (entry.name === '.git') continue
       if (excludes.has(entry.name.toLowerCase())) continue
 
-      const childPath = path.join(dirPath, entry.name)
+      const childPath = pathApi.join(dirPath, entry.name)
 
       if (isBlocked(childPath)) continue
 

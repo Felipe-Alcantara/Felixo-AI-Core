@@ -1824,3 +1824,29 @@ descoberta de Node falharam no Windows com PATH sintético; não houve alteraç�
 em Python nesta entrega.
 
 Estado final: concluído quanto à task de segurança e pronto para commit/push.
+
+## Registro de Trabalho — 2026-08-31 (parte 21) — fixtures nativas do scanner do Fetch All
+
+PEDIDO: cobrir os caminhos nativos do scanner de projetos em Windows e macOS,
+sem depender dos discos reais do runner.
+
+FEITO: `repo-scanner.cjs` passou a aceitar plataforma, semântica de caminhos e
+IO injetáveis nas funções de inventário e comparação. A produção mantém os
+defaults nativos: letras de unidade no Windows, `/proc/mounts` ou `mount` no
+POSIX, exclusão de montagens virtuais/de rede, `/System/Volumes` e
+`Library/CloudStorage` no macOS. A varredura também recebe os adapters de
+filesystem e caminho, mantendo a comparação case-insensitive correta quando a
+plataforma simulada é Windows.
+
+TESTES: `repo-scanner.test.cjs` passou a usar fixtures para letras de unidade
+fixas/removíveis, fallback BSD, `/proc/mounts`, montagens de rede, exclusões
+macOS, CloudStorage, raízes POSIX e comparação Windows. Os testes provam que
+essas decisões não consultam discos reais; a suíte focada terminou com 21/21 e
+`npm test` com 878 testes, 868 aprovados, 10 skips e zero falhas.
+
+VALIDAÇÃO: `node --check` e ESLint dos arquivos do scanner passaram. Build,
+frontend e lint completos ficam no gate final desta entrega; o aviso de chunk
+grande e os 3 avisos React existentes continuam não bloqueantes.
+
+Estado final: implementação e cobertura concluídas; pronta para os gates,
+commit/push e atualização da task no Notion.

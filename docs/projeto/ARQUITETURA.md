@@ -50,6 +50,20 @@ fora nao atravessam a fronteira. Os IPCs de texto usam a mesma lista de raizes;
 um arquivo externo so entra por uma escolha explicita no seletor nativo, com
 concessao mantida em memoria durante a sessao.
 
+## Fetch All e inventario multiplataforma
+
+O scanner em `services/fetch-all/repo-scanner.cjs` separa a descoberta de
+raizes, montagens e poda da varredura de diretorios. No Windows ele testa as
+letras de todas as unidades e conserva as que respondem como diretorio,
+incluindo discos removiveis, mas nao unidades de rede. No Linux e no macOS ele
+le `/proc/mounts` ou a saida BSD de `mount`, descarta sistemas virtuais/de rede
+e, no macOS, nao repete `/System/Volumes` nem `Library/CloudStorage`.
+
+As funcoes aceitam plataforma, semantica de caminhos e IO injetaveis. Assim, a
+suíte cobre letras de unidade, comparacao case-insensitive, montagens,
+CloudStorage e exclusoes sem depender dos discos da maquina que executa os
+testes; a API de producao continua usando os adaptadores nativos por padrao.
+
 ## Canvas e terminais
 
 - `CanvasView` compõe o quadro e persiste nós e conexões.
