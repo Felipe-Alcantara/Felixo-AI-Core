@@ -232,6 +232,15 @@ O bloco não é dono desse arquivo: ele não cria nem apaga nada, só lê e grav
 
 No topo do bloco, o lápis alterna entre editar e visualizar. Em `.md`, `.markdown` e `.mdx` a visualização mostra o markdown formatado; em qualquer outro arquivo mostra o texto como está, em fonte monoespaçada, preservando indentação e quebras de linha — formatar markdown num `.py` comeria justamente a indentação, que ali é o programa.
 
+O preview de Markdown trata o conteúdo recebido de agentes, arquivos e
+histórico como externo: HTML bruto é sanitizado antes de virar interface, sem
+scripts, iframes ou atributos de evento. Links aceitam somente `http:`,
+`https:`, `mailto:` e âncoras locais. Imagens remotas ficam limitadas a
+`http:`/`https:`; uma imagem `data:` precisa ser rasterizada e ter no máximo
+2 MiB. Imagens relativas só viram `file://` quando o bloco tem o `baseDir` de
+um arquivo já autorizado; sem essa origem, o preview mostra o texto
+alternativo em vez de tentar acessar o disco.
+
 Por segurança, o app só abre arquivos que estejam dentro de um projeto registrado ou que você tenha escolhido no seletor. As escolhas do seletor valem enquanto o app estiver aberto: ao reabrir, um bloco apontando para fora dos projetos pede que você escolha o arquivo de novo.
 
 ### Nomes dos blocos

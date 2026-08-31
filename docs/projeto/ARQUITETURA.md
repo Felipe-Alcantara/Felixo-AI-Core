@@ -76,6 +76,23 @@ testes; a API de producao continua usando os adaptadores nativos por padrao.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos
   referenciados, mas não leva comandos ou caminhos dependentes da máquina.
 
+### Renderização segura de Markdown
+
+`MarkdownContent` recebe texto de agentes, arquivos e histórico como conteúdo
+não confiável. O pipeline mantém `remark-gfm` e os elementos visuais
+necessários, mas executa `rehypeRaw` seguido de um schema explícito do
+`rehype-sanitize`: HTML ativo, embeds, SVG, mídia e atributos de evento não
+chegam ao DOM. A transformação final de URLs repete a decisão no boundary do
+React: links ficam em `http:`, `https:`, `mailto:` ou âncoras; imagens remotas
+ficam em `http:`/`https:`; `data:` só aceita imagens raster base64 de até 2 MiB.
+
+Uma referência relativa de imagem só é convertida em `file://` quando o
+componente recebeu o `baseDir` derivado de um arquivo já autorizado pelo
+processo principal. Caminhos absolutos e esquemas `file:`, `javascript:` ou
+desconhecidos são recusados. A suíte testa o renderer estaticamente; a
+validação de execução em Electron deve ser registrada separadamente quando
+houver uma sessão gráfica disponível.
+
 ## Providers e contas
 
 Os providers entram por adapters e pelo registry de Terminal Adapters. A

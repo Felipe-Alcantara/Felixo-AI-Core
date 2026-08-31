@@ -17,9 +17,10 @@ import pythonLanguage from 'highlight.js/lib/languages/python'
 import typescriptLanguage from 'highlight.js/lib/languages/typescript'
 import xmlLanguage from 'highlight.js/lib/languages/xml'
 import rehypeRaw from 'rehype-raw'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { resolveMarkdownImageSrc } from './markdown-image-src'
+import { resolveMarkdownImageSrc, sanitizeMarkdownUrl } from './markdown-image-src'
 
 type MarkdownContentProps = {
   content: string
@@ -42,6 +43,97 @@ const highlightLanguageAliases: Record<string, string> = {
   shell: 'bash',
   ts: 'typescript',
   tsx: 'typescript',
+}
+
+/**
+ * Schema único para conteúdo vindo de agentes, arquivos e histórico.
+ *
+ * A lista mantém os elementos gerados pelo GFM e os componentes visuais que o
+ * canvas usa. Elementos ativos/embeddables ficam fora; protocolos de URL são
+ * repetidos aqui de forma explícita e a função `sanitizeMarkdownUrl` aplica a
+ * mesma política quando o AST já virou props React.
+ */
+const MARKDOWN_SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  tagNames: [
+    'a',
+    'b',
+    'blockquote',
+    'br',
+    'code',
+    'dd',
+    'del',
+    'details',
+    'div',
+    'dl',
+    'dt',
+    'em',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'hr',
+    'i',
+    'img',
+    'input',
+    'ins',
+    'kbd',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    'q',
+    'rp',
+    'rt',
+    'ruby',
+    's',
+    'samp',
+    'section',
+    'span',
+    'strike',
+    'strong',
+    'sub',
+    'summary',
+    'sup',
+    'table',
+    'tbody',
+    'td',
+    'tfoot',
+    'th',
+    'thead',
+    'tr',
+    'tt',
+    'ul',
+    'var',
+  ],
+  protocols: {
+    ...defaultSchema.protocols,
+    cite: ['http', 'https'],
+    href: ['http', 'https', 'mailto'],
+    longDesc: ['http', 'https'],
+    // `data:` só passa pelo AST para a segunda barreira aplicar o MIME e o
+    // limite de 2 MiB em `isSafeDataImage`.
+    src: ['http', 'https', 'data'],
+  },
+  strip: [
+    'script',
+    'style',
+    'iframe',
+    'object',
+    'embed',
+    'form',
+    'base',
+    'meta',
+    'link',
+    'svg',
+    'math',
+    'video',
+    'audio',
+    'source',
+    'track',
+  ],
 }
 
 hljs.registerLanguage('bash', bashLanguage)
@@ -193,8 +285,15 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
     img(props) {
       return <MarkdownImage {...props} baseDir={baseDir} />
     },
-    input(props) {
-      return <input {...props} className="mr-2 align-middle accent-orange-200" />
+    input({ checked, disabled, type }) {
+      return (
+        <input
+          checked={checked}
+          className="mr-2 align-middle accent-orange-200"
+          disabled={disabled}
+          type={type}
+        />
+      )
     },
     code({ children, className }) {
       return <code className={className}>{children}</code>
@@ -313,8 +412,12 @@ export function MarkdownContent({ content, baseDir }: MarkdownContentProps) {
     <div className="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100">
       <ReactMarkdown
         components={components}
-        rehypePlugins={[rehypeRaw]}
+        rehypePlugins={[
+          rehypeRaw,
+          [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
+        ]}
         remarkPlugins={[remarkGfm]}
+        urlTransform={sanitizeMarkdownUrl}
       >
         {normalizedContent}
       </ReactMarkdown>
