@@ -36,6 +36,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # requirements.txt is generated from requirements.in and contains the
+      # complete dependency graph plus hashes. Installing it here proves the
+      # lock works on every supported operating system and Python version.
+      - name: Install locked launcher requirements
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.txt
+
       # `-t .` sets the top-level directory to the repository root so the test
       # package can import `felixo_launcher` and its own `tests.support`.
       - name: Test launcher
@@ -44,6 +50,29 @@ jobs:
       - name: Check launcher starts without a menu
         shell: bash
         run: python start_app.py --help
+
+  python-dependency-audit:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install locked launcher requirements
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.txt
+
+      # Keep the scanner version explicit so a future pip-audit release cannot
+      # change the CI contract without a reviewed diff.
+      - name: Install pip-audit
+        run: python -m pip install --disable-pip-version-check pip-audit==2.10.1
+
+      - name: Audit locked requirements
+        run: python -m pip_audit --requirement requirements.txt --strict --progress-spinner off
 
   # Scripts que o workflow de Release usa (retry de HTTP 500 transitório,
   # decisão de "latest") — só bash, roda em ubuntu-latest porque é onde os

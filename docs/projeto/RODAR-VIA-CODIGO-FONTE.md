@@ -48,7 +48,7 @@ Sem argumentos, `start_app.py` abre um **menu interativo colorido** (biblioteca 
 | Ação do menu | O que faz |
 |---|---|
 | **Iniciar / Rodar** | Detecta Node/npm, instala dependências e sobe o app — desktop (Electron) ou preview web, a sua escolha. |
-| **Instalar / Setup** | Instala dependências Python (`requirements.txt`) e Node (`npm install`) sem abrir o app. |
+| **Instalar / Setup** | Instala dependências Python do lock (`requirements.txt`) e Node (`npm install`) sem abrir o app. |
 | **Configurar** | Ajusta, sem editar arquivo na mão, os overrides opcionais de ambiente: pasta do Node, pastas extras de CLI, modo de permissão de cada agente e branch do atalho explícito de atualização. Fica salvo em `.felixo-start-config.json` (gitignored). |
 | **Status / Sair** | Mostra Node detectado, se as dependências estão instaladas, branch/estado do Git e as configurações salvas; sai do menu. |
 
@@ -61,6 +61,20 @@ substituídos, mas continuam recuperáveis pelo reflog do Git. Se a atualizaçã
 falhar, o app não abre a versão antiga silenciosamente.
 
 O menu não trava o fluxo: se algo estiver faltando (Node, dependências), ele avisa e deixa você escolher como resolver.
+
+As dependências diretas do launcher ficam em `requirements.in`. O
+`requirements.txt` é o lock gerado pelo `uv`, com o grafo transitivo, versões
+exatas, hashes e marcadores que mantêm compatibilidade com Python 3.9 até
+3.13. O launcher sempre instala o lock; não edite esse arquivo manualmente.
+
+Para atualizar e auditar o lock:
+
+```bash
+uv pip compile --universal --python-version 3.9 --generate-hashes \
+  --upgrade --output-file requirements.txt requirements.in
+python3 -m pip install pip-audit==2.10.1
+python3 -m pip_audit --requirement requirements.txt --strict --progress-spinner off
+```
 
 No macOS, a detecção de Node cobre Apple Silicon e Intel, incluindo Homebrew (`/opt/homebrew/bin` e `/usr/local/bin`), MacPorts (`/opt/local/bin`), NVM, fnm, Volta, asdf, mise, nodenv, `PATH` atual e paths customizados. O launcher valida `node --version` e `npm --version` antes de instalar dependências, então instalações quebradas são puladas quando houver outro Node funcional disponível.
 

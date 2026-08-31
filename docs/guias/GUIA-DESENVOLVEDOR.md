@@ -29,6 +29,23 @@ cd Felixo-AI-Core/app
 npm install
 ```
 
+O launcher Python mantém suas dependências fora de `app/`: edite somente os
+pacotes diretos em `requirements.in` e regenere `requirements.txt` com `uv`.
+O lock contém versões transitivas exatas e hashes para instalação repetível em
+Python 3.9+:
+
+```bash
+uv pip compile --universal --python-version 3.9 --generate-hashes \
+  --upgrade --output-file requirements.txt requirements.in
+```
+
+O scanner usado pelo CI pode ser reproduzido localmente com:
+
+```bash
+python3 -m pip install pip-audit==2.10.1
+python3 -m pip_audit --requirement requirements.txt --strict --progress-spinner off
+```
+
 ### Rodando em modo dev
 
 ```bash
@@ -214,10 +231,13 @@ O arquivo `.github/workflows/ci.yml` roda em:
 - Pull requests
 - Push em `main`
 
-O job `launcher` testa Linux, Windows e macOS com Python 3.9 e 3.13. O job
-`release-scripts` valida os scripts Bash usados na publicação. O job `validate`
-testa o app nos três sistemas com Node 22, `npm test`, `npm run lint` e
-`npm run build`, além de verificar os arquivos de documentação vigentes.
+O job `launcher` instala o lock Python com `--require-hashes`, testa Linux,
+Windows e macOS com Python 3.9 e 3.13 e executa `start_app.py --help`. O job
+`python-dependency-audit` roda `pip-audit==2.10.1` contra o mesmo lock e falha
+se houver advisory ou erro de coleta. O job `release-scripts` valida os
+scripts Bash usados na publicação. O job `validate` testa o app nos três
+sistemas com Node 22, `npm test`, `npm run lint` e `npm run build`, além de
+verificar os arquivos de documentação vigentes.
 
 ---
 

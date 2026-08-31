@@ -162,7 +162,25 @@ cd Felixo-AI-Core
 py start_app.py
 ```
 
-O `start_app.py` instala dependências Python de `requirements.txt` (hoje `questionary` e `rich`, usadas pelo menu interativo) e dependências Node com `npm install` quando necessário.
+O `start_app.py` instala as dependências Python do lock `requirements.txt`
+(hoje `questionary`, `rich` e o grafo transitivo usado pelo menu) e as
+dependências Node com `npm install` quando necessário. O arquivo
+`requirements.in` contém somente as dependências diretas editáveis; o
+`requirements.txt` é gerado pelo `uv` com versões exatas, marcadores para o
+Python 3.9+ suportado e hashes de todas as distribuições. Não edite o lock
+diretamente.
+
+Para atualizar o lock de forma reproduzível, instale o `uv` e rode:
+
+```bash
+uv pip compile --universal --python-version 3.9 --generate-hashes \
+  --upgrade --output-file requirements.txt requirements.in
+python3 -m pip install pip-audit==2.10.1
+python3 -m pip_audit --requirement requirements.txt --strict --progress-spinner off
+```
+
+O CI instala o mesmo lock com `--require-hashes` em todos os sistemas e
+executa o `pip-audit` contra ele antes de aceitar a alteração.
 
 ### Se o Python for "externally managed" (macOS com Homebrew, Debian/Ubuntu)
 
