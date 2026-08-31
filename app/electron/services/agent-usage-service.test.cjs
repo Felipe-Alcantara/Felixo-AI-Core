@@ -598,12 +598,14 @@ test(
       },
     ]
     const liveCalls = []
-    const liveTimestamp = '2026-08-30T19:00:00.000Z'
-    const liveMeasurementAt = Date.parse(liveTimestamp)
+    const clock = {
+      value: Date.parse('2026-08-30T19:00:00.000Z'),
+    }
+    const liveTimestamp = () => new Date(clock.value).toISOString()
 
     const service = createAgentUsageService({
       repository,
-      now: () => liveMeasurementAt,
+      now: () => clock.value,
       probe: () => null,
       listCatalog: async () => [
         {
@@ -632,8 +634,8 @@ test(
         liveCalls.push(env.CLAUDE_CONFIG_DIR)
         return {
           ok: true,
-          collectedAt: liveTimestamp,
-          measuredAt: liveTimestamp,
+          collectedAt: liveTimestamp(),
+          measuredAt: liveTimestamp(),
           metrics: [
             {
               key: 'rate_limits.seven_day',
@@ -680,6 +682,18 @@ test(
         accounts.get('claude-trabalho').latestSample.metadata.statusDetails.usage.currentWeek.used,
         88,
       )
+
+      // A leitura ao vivo é atual no momento controlado da coleta; o mesmo
+      // sample precisa envelhecer quando o relógio avança além da janela.
+      clock.value += 16 * 60 * 1000
+      const staleResult = await service.list()
+      const staleAccounts = new Map(
+        staleResult.accounts.map((account) => [account.id, account]),
+      )
+
+      assert.equal(staleAccounts.get('claude-pessoal').latestSample.status, 'stale')
+      assert.equal(staleAccounts.get('claude-trabalho').latestSample.status, 'stale')
+      assert.equal(staleAccounts.get('claude-pessoal').lastKnownSample.metrics[0].used, 31)
     } finally {
       database.close()
       fs.rmSync(databaseDir, { recursive: true, force: true })

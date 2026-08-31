@@ -2948,3 +2948,26 @@ isso, regressões no renderer podiam passar em Ubuntu, Windows e macOS sem que o
 
 Concluído localmente; o CI multiplataforma será a confirmação remota antes da
 publicação da release.
+
+## Registro de Trabalho — 2026-08-31 (parte 22) — relógio determinístico no teste do `/status` ao vivo
+
+PEDIDO: corrigir o teste da consulta ao `/status` do Claude, que usava uma
+data fixa e podia envelhecer para `stale` conforme o relógio real avançasse.
+
+FEITO: o teste `consulta o /status ao vivo e conserva os detalhes em cada
+perfil Claude` passou a usar um relógio controlado e mutável. A coleta inicial
+é verificada como `current` nos perfis pessoal e de trabalho; depois o relógio
+é avançado 16 minutos e uma leitura separada verifica a transição dos dois
+perfis para `stale`, preservando o último valor conhecido.
+
+VALIDAÇÃO: o teste focado passou com 10/10; `npm test` terminou com 878/878,
+`npm run test:frontend` com 71 arquivos e 699 testes, `npm run lint` com zero
+erros e os 3 avisos React já existentes, `npm run build` com 709 módulos e
+`git diff --check` limpo. O `actionlint` não está instalado neste ambiente.
+
+LIMITE: a validação nativa de Windows e macOS continua pertencendo ao CI
+remoto; esta entrega altera somente a lógica determinística do teste e não o
+comportamento de produção.
+
+Estado final: cobertura de `current` e `stale` concluída, pronta para
+commit/push e acompanhamento do CI.
