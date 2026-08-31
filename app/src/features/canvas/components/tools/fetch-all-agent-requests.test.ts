@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentRequestAction,
+  applyAgentRequestResult,
   describeAgentRequest,
   formatRequestTime,
   pickPendingRequest,
@@ -79,6 +80,56 @@ describe('agentRequestAction', () => {
   it('não oferece nada enquanto uma passada está em andamento', () => {
     expect(agentRequestAction(PLANO, true)).toBe('aguardar')
     expect(agentRequestAction(null, true)).toBe('aguardar')
+  })
+})
+
+describe('applyAgentRequestResult', () => {
+  it('mantém o plano e mostra o diagnóstico quando a execução falha', () => {
+    expect(
+      applyAgentRequestResult(
+        {
+          ok: false,
+          message: 'O plano não tem nenhuma ação segura.',
+          resultado: { ok: false, message: 'O plano não tem nenhuma ação segura.' },
+        },
+        true,
+      ),
+    ).toEqual({
+      error: 'O plano não tem nenhuma ação segura.',
+      clearPlan: false,
+      results: null,
+      reportPath: '',
+    })
+  })
+
+  it('só limpa o plano depois de uma execução aceita e bem-sucedida', () => {
+    expect(
+      applyAgentRequestResult(
+        {
+          ok: true,
+          resultado: {
+            ok: true,
+            results: [],
+            reportPath: '/relatorios/fetch-all/execucao.md',
+          },
+        },
+        true,
+      ),
+    ).toEqual({
+      error: null,
+      clearPlan: true,
+      results: [],
+      reportPath: '/relatorios/fetch-all/execucao.md',
+    })
+  })
+
+  it('não altera o plano ao recusar o pedido', () => {
+    expect(applyAgentRequestResult({ ok: true }, false)).toEqual({
+      error: null,
+      clearPlan: false,
+      results: null,
+      reportPath: '',
+    })
   })
 })
 

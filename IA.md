@@ -2971,3 +2971,36 @@ comportamento de produção.
 
 Estado final: cobertura de `current` e `stale` concluída, pronta para
 commit/push e acompanhamento do CI.
+
+## Registro de Trabalho — 2026-08-31 (parte 23) — pedido do Fetch All só é aceito após execução bem-sucedida
+
+PEDIDO: corrigir o fluxo de confirmação do Fetch All para não marcar um pedido
+como aceito quando `service.execute` devolve uma falha esperada.
+
+CAUSA: `fetch-all-ipc-handlers.cjs` resolvia o pedido com `aceito: true` sem
+verificar `resultado.ok`. Assim, falhas como plano sem ação segura podiam tirar
+o pedido da fila; o painel também podia parecer concluído por limpar o plano
+após uma resposta IPC parcial.
+
+FEITO: o handler agora só chama `pedidos.resolver(..., { aceito: true })`
+quando `resultado.ok === true`. Em falhas, devolve `ok: false` com o diagnóstico
+e mantém o arquivo do pedido em `pendente`, permitindo corrigir o plano e
+tentar novamente. A UI usa a função pura `applyAgentRequestResult`: só atualiza
+resultados, relatório e limpa o plano após execução aceita e bem-sucedida.
+
+TESTES: criado teste real de registro IPC para provar que uma execução falha
+sem resolver o pedido nem tirá-lo da fila. A suíte frontend ganhou cobertura
+para falha, sucesso e recusa. Validação final local: `npm test` com 879/879,
+`npm run test:frontend` com 71 arquivos e 702/702 testes, lint sem erros (3
+avisos React preexistentes), build com 709 módulos e `git diff --check` limpo.
+
+DOCUMENTAÇÃO: `docs/guias/GUIA-USUARIO.md` agora descreve que falha mantém o
+pedido pendente e o plano disponível. Nenhum segredo ou dado externo foi
+introduzido.
+
+LIMITE: a validação nativa de Windows e macOS depende dos runners do CI remoto;
+`actionlint` não está instalado localmente. O comportamento de produção foi
+alterado somente no estado de confirmação do pedido; a execução segura continua
+dependendo do clique humano.
+
+Estado final: correção e cobertura concluídas, pronta para commit/push.

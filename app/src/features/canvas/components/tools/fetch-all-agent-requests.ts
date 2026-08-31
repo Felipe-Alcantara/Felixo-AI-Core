@@ -1,4 +1,4 @@
-import type { FetchAllAgentRequest, FetchAllPlan } from '../../types'
+import type { FetchAllActionResult, FetchAllAgentRequest, FetchAllPlan } from '../../types'
 
 /**
  * Como o pedido de um agente é anunciado para a pessoa.
@@ -54,4 +54,68 @@ export function agentRequestAction(
 ): 'aguardar' | 'varrer' | 'aplicar' {
   if (busy) return 'aguardar'
   return plan ? 'aplicar' : 'varrer'
+}
+
+type AgentRequestExecutionResult = {
+  ok?: boolean
+  message?: string
+  results?: FetchAllActionResult[]
+  reportPath?: string
+}
+
+type AgentRequestResponse = {
+  ok?: boolean
+  message?: string
+  resultado?: AgentRequestExecutionResult
+}
+
+export type AgentRequestUiUpdate = {
+  error: string | null
+  clearPlan: boolean
+  results: FetchAllActionResult[] | null
+  reportPath: string
+}
+
+/**
+ * Projeta a resposta do IPC no estado que o painel pode alterar.
+ *
+ * Uma confirmação humana não autoriza limpar o plano por si só: a execução
+ * precisa voltar com `resultado.ok === true`. Manter essa regra pura permite
+ * testá-la sem montar o painel inteiro e evita que uma resposta parcial do IPC
+ * deixe a interface parecendo concluída.
+ */
+export function applyAgentRequestResult(
+  result: AgentRequestResponse | null | undefined,
+  aceito: boolean,
+): AgentRequestUiUpdate {
+  const semExecucao = {
+    clearPlan: false,
+    results: null,
+    reportPath: '',
+  } satisfies Omit<AgentRequestUiUpdate, 'error'>
+
+  if (!result?.ok) {
+    return {
+      ...semExecucao,
+      error: result?.message ?? 'Falha ao responder o pedido do agente.',
+    }
+  }
+
+  if (!aceito) {
+    return { ...semExecucao, error: null }
+  }
+
+  if (result.resultado?.ok !== true) {
+    return {
+      ...semExecucao,
+      error: result.resultado?.message ?? 'Falha ao executar o plano.',
+    }
+  }
+
+  return {
+    error: null,
+    clearPlan: true,
+    results: result.resultado.results ?? [],
+    reportPath: result.resultado.reportPath ?? '',
+  }
 }

@@ -20,6 +20,7 @@ import {
 } from './fetch-all-plan'
 import {
   agentRequestAction,
+  applyAgentRequestResult,
   describeAgentRequest,
   formatRequestTime,
   pickPendingRequest,
@@ -185,13 +186,14 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       try {
         const result = await window.felixo?.fetchAll?.resolveRequest({ id, aceito })
         if (!mountedRef.current) return
-        if (!result?.ok) {
-          setError(result?.message ?? 'Falha ao responder o pedido do agente.')
+        const uiUpdate = applyAgentRequestResult(result, aceito)
+        if (uiUpdate.error) {
+          setError(uiUpdate.error)
           return
         }
-        if (aceito && result.resultado) {
-          setResults(result.resultado.results ?? [])
-          setReportPath(result.resultado.reportPath ?? '')
+        if (uiUpdate.clearPlan) {
+          setResults(uiUpdate.results ?? [])
+          setReportPath(uiUpdate.reportPath)
           // Mesmo motivo do botão de executar: o plano aplicado envelheceu.
           setPlan(null)
         }

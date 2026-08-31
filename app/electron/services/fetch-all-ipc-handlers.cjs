@@ -22,11 +22,12 @@ const REQUESTS_CHANNEL = 'fetch-all:agent-requests'
  * Registra os handlers e devolve o serviço criado.
  *
  * @param {() => import('electron').BrowserWindow | undefined} getMainWindow
- * @param {{ config: string, cache: string, reports: string }} appPaths
+ * @param {{ config: string, cache: string, reports: string, agentRequests: string }} appPaths
+ * @param {{ createService?: typeof createFetchAllService, createRequests?: typeof criarRepositorioDePedidos }} [dependencias]
  * @returns {object} O serviço, para os testes e o encerramento do app.
  */
-function registerFetchAllIpcHandlers(getMainWindow, appPaths) {
-  const service = createFetchAllService({
+function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {}) {
+  const service = (dependencias.createService ?? createFetchAllService)({
     appPaths,
     sendEvent: (event) => {
       const window = getMainWindow?.()
@@ -37,7 +38,9 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths) {
     },
   })
 
-  const pedidos = criarRepositorioDePedidos({ pasta: appPaths.agentRequests })
+  const pedidos = (dependencias.createRequests ?? criarRepositorioDePedidos)({
+    pasta: appPaths.agentRequests,
+  })
 
   // A pasta é observada em vez de consultada de tempos em tempos: um pedido é
   // raro, e uma varredura periódica gastaria disco o dia inteiro para descobrir
@@ -104,6 +107,24 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths) {
       // tela: o pedido do agente não traz plano nenhum: o dele veio de outro
       // processo e já está velho. Quem executa é o app, sobre o que a pessoa viu.
       const resultado = await service.execute({ autoCommit: pedido.comCommit === true })
+
+      // `execute` devolve falhas esperadas como resultado, em vez de lançar.
+      // Só tirar o pedido da fila depois de uma execução confirmadamente bem-
+      // sucedida evita anunciar como aceito algo que não aconteceu e mantém a
+      // pessoa capaz de corrigir o plano ou tentar novamente.
+      if (resultado?.ok !== true) {
+        return {
+          ok: false,
+          resolved: null,
+          resultado: resultado ?? {
+            ok: false,
+            message: 'A execução não foi concluída.',
+          },
+          message:
+            resultado?.message ??
+            'A execução não foi concluída; o pedido continua pendente.',
+        }
+      }
 
       return {
         resolved: pedidos.resolver(id, { aceito: true, resultado }),
