@@ -93,6 +93,11 @@ jobs:
       - name: Test
         run: npm test
 
+      # O reporter padrão do Vitest registra "Test Files" e "Tests" no log.
+      # Sem --passWithNoTests, uma coleta vazia falha o job em vez de ficar verde.
+      - name: Test frontend
+        run: npm run test:frontend
+
       - name: Lint
         run: npm run lint
 

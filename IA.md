@@ -2917,3 +2917,34 @@ grande e os 3 avisos React existentes continuam não bloqueantes.
 
 Estado final: implementação e cobertura concluídas; pronta para os gates,
 commit/push e atualização da task no Notion.
+## [2026-08-31] Suíte frontend incluída na matriz CI dos três sistemas
+
+### Contexto
+
+A auditoria multi-OS identificou que o job `Validate` executava `npm test`,
+lint e build, mas não executava o script separado `npm run test:frontend`. Com
+isso, regressões no renderer podiam passar em Ubuntu, Windows e macOS sem que os
+71 arquivos de teste Vitest fossem executados no merge.
+
+### O que foi feito
+
+- O workflow `.github/workflows/ci.yml` ganhou o passo explícito **Test
+  frontend** dentro do job `Validate`.
+- Como `Validate` já usa uma matriz de `ubuntu-latest`, `windows-latest` e
+  `macos-latest`, a suíte passa a ser executada nos três sistemas sem duplicar
+  lógica por plataforma.
+- O reporter padrão do Vitest registra no log a contagem de arquivos e testes;
+  a configuração não usa `--passWithNoTests`, portanto uma coleta vazia falha o
+  job em vez de produzir uma validação falsa.
+
+### Validação local
+
+- `npm run test:frontend`: **71 arquivos e 699 testes aprovados**.
+- A suíte usa `environment: 'node'` e não acessa rede por configuração.
+- README já documentava `npm run test:frontend` na sequência de validação; não
+  foi necessário alterar o contrato de uso local.
+
+### Estado
+
+Concluído localmente; o CI multiplataforma será a confirmação remota antes da
+publicação da release.
