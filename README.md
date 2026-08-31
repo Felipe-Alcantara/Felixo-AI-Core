@@ -305,6 +305,11 @@ Como cada CLI isola o login (medido, não presumido):
 | Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig`, `.ssh` e `.npmrc` para o trabalho no repositório continuar funcionando |
 | Openia | `OPENROUTER_API_KEY` | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
 
+Se um terminal for reiniciado pelo drawer lateral, o `accountId` e o provedor
+persistidos no bloco acompanham o novo PTY. Assim, o restart mantém o perfil
+selecionado; quando o bloco não tem `accountId`, ele continua usando o login do
+sistema.
+
 Remover uma conta pede confirmação e apaga a pasta de login dela — manter
 credencial órfã seria pior que refazer o login. Terminais já abertos podem
 perder esse login; a ação é separada de **Remover do painel**, que aparece em

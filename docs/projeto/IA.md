@@ -1868,3 +1868,17 @@ DOCUMENTAÇÃO: README, guia de usuário e arquitetura agora descrevem a limpeza
 LIMITE: a validação foi coberta por testes automatizados e pelos gates do Linux; a matriz de CI é responsável pela confirmação específica de Windows/macOS. Nenhuma conta, chave ou credencial real foi alterada.
 
 Estado final: implementação concluída e validada localmente; pronta para commit, push, acompanhamento do CI/release e registro da task no Notion.
+
+## Registro de Trabalho — 2026-08-31 (parte 23) — restart do drawer preserva a conta do terminal
+
+PEDIDO: executar a task “Felixo AI Core/Terminal — Preservar accountId ao reiniciar terminal pelo drawer”, originada no achado IMPORTANTE 3 da auditoria técnica semanal de 24–30/08/2026.
+
+CAUSA: `TerminalDrawer` já chamava `store.restart`, mas o tipo de `restartOptions` não declarava `accountId` e `providerId`. `CanvasView` também montava as opções do terminal expandido sem copiar esses campos do node. Ao reiniciar por esse caminho, o PTY recebia opções sem conta e caía no login do sistema, embora o bloco tivesse um perfil próprio.
+
+FEITO: o contrato do drawer agora carrega `accountId` e `providerId`; `CanvasView` copia os valores persistidos no node para o drawer, que os repassa intactos ao `TerminalSessionStore.restart` e, depois, à ponte `pty.spawn`. O caminho sem `accountId` continua deliberadamente sem ambiente de perfil e usa o login do sistema.
+
+TESTE: o harness do `TerminalSessionStore` passou a registrar os parâmetros de autenticação enviados à ponte. Foram adicionadas regressões para restart com perfil Claude selecionado e para restart sem `accountId`; ambas verificam o payload efetivo recebido pelo PTY.
+
+VALIDAÇÃO: teste focado `terminal-session-store.test.ts` — 25/25; suíte frontend — 72 arquivos e 706 testes; suíte backend — 887/887; `npx tsc --noEmit --pretty false`, `npm run build` (710 módulos) e `git diff --check` aprovados. `npm run lint` terminou sem erros, mantendo somente os 2 avisos preexistentes de dependências em `SearchPanel.tsx`.
+
+Estado final: implementação concluída e validada localmente; pronta para commit, push, acompanhamento do CI/release e registro da task no Notion.

@@ -77,6 +77,8 @@ type Harness = {
    * `deferSpawn`; nos demais casos o spawn já resolveu sozinho.
    */
   resolveSpawn: () => void
+  /** Opções de autenticação recebidas pela ponte, na ordem dos spawns. */
+  spawnRequests: Array<{ accountId?: string; providerId?: string }>
 }
 
 const SESSION_ID = 'terminal-1'
@@ -93,6 +95,7 @@ function createHarness(
   const dataListeners = new Set<(event: { sessionId: string; data: string }) => void>()
   const sessionListeners = new Set<(event: object) => void>()
   const spawnArgs: string[] = []
+  const spawnRequests: Array<{ accountId?: string; providerId?: string }> = []
 
   // Com `deferSpawn`, a resposta do `pty:spawn` fica pendurada até o teste
   // soltá-la, reproduzindo a ordem que o ConPTY impõe no Windows: a CLI pinta
@@ -117,8 +120,13 @@ function createHarness(
           sessionListeners.add(listener)
           return () => sessionListeners.delete(listener)
         },
-        spawn: async ({ args }: { args?: string[] }) => {
+        spawn: async ({
+          args,
+          accountId,
+          providerId,
+        }: { args?: string[]; accountId?: string; providerId?: string }) => {
           spawnArgs.splice(0, spawnArgs.length, ...(args ?? []))
+          spawnRequests.push({ accountId, providerId })
           await spawnGate
           return spawnResult
         },
@@ -160,6 +168,7 @@ function createHarness(
     writes,
     contextBodies,
     spawnArgs,
+    spawnRequests,
     feed: (data: string) => {
       for (const listener of dataListeners) {
         listener({ sessionId: PTY_SESSION_ID, data })
@@ -492,6 +501,39 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
       'codex-session-123',
     ])
     expect(harness.writes.some((data) => data.includes('/resume'))).toBe(false)
+  })
+
+  it('restart acionado pelo drawer preserva a conta selecionada', async () => {
+    harness = createHarness('')
+    harness.store.restart(SESSION_ID, {
+      command: 'claude',
+      args: ['--dangerously-skip-permissions'],
+      cwd: '/tmp',
+      accountId: 'claude-pessoal',
+      providerId: 'claude',
+    })
+    await wait(0)
+
+    expect(harness.spawnRequests.at(-1)).toEqual({
+      accountId: 'claude-pessoal',
+      providerId: 'claude',
+    })
+  })
+
+  it('restart acionado pelo drawer sem accountId mantém o login do sistema', async () => {
+    harness = createHarness('')
+    harness.store.restart(SESSION_ID, {
+      command: 'claude',
+      args: ['--dangerously-skip-permissions'],
+      cwd: '/tmp',
+      providerId: 'claude',
+    })
+    await wait(0)
+
+    expect(harness.spawnRequests.at(-1)).toEqual({
+      accountId: undefined,
+      providerId: 'claude',
+    })
   })
 
   it('ignora o drop quando a sessão já foi encerrada', async () => {

@@ -1646,6 +1646,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         cwd?: string
         initialText?: string
         handoffText?: string
+        accountId?: string
+        providerId?: string
         agentSession?: AgentSessionReference
       }
     | undefined
@@ -1883,6 +1885,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               ? undefined
               : expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
             sourceLabel: expandedTitle,
+            accountId: expandedNodeData?.accountId,
+            providerId: expandedNodeData?.providerId,
             agentSession: expandedNodeData?.agentSession,
             resumeAgentSession: expandedCanResumeAgentSession,
           }}

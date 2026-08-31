@@ -96,6 +96,12 @@ para comandos oficiais conhecidos. Uma resposta assíncrona de contas que já
 não corresponde ao agente visível é descartada por token, e a troca limpa a
 seleção anterior antes de iniciar nova consulta.
 
+O drawer lateral não cria um contrato paralelo de autenticação: ao reiniciar
+uma sessão expandida, `CanvasView` copia `accountId` e `providerId` do node para
+as opções do drawer, e o drawer repassa as mesmas opções ao
+`TerminalSessionStore.restart`. Sem `accountId`, o campo permanece ausente e o
+PTY segue o login do sistema.
+
 Quando a fonte responde, a coleta é marcada como atual e mostra o horário da
 medição. O Claude é consultado em uma sessão PTY descartável por conta/perfil e
 expõe os dados completos e redigidos do `/status`; Codex e Openia usam suas

@@ -45,6 +45,10 @@ type TerminalDrawerProps = {
     cwd?: string
     initialText?: string
     sourceLabel?: string
+    /** Conta cujo ambiente deve continuar valendo quando o drawer reiniciar. */
+    accountId?: string
+    /** Provedor da conta; acompanha o restart até a validação do PTY. */
+    providerId?: string
     agentSession?: AgentSessionReference
     resumeAgentSession?: boolean
   }
