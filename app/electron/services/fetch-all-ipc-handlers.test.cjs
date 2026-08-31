@@ -65,3 +65,38 @@ test('execução falha não resolve o pedido como aceito nem o tira da fila', as
     fs.rmSync(paths.root, { recursive: true, force: true })
   }
 })
+
+test('IPC repassa a confirmação do escopo e sua identidade ao serviço', async () => {
+  handlers.clear()
+  const paths = appPaths()
+  let received = null
+  const service = {
+    scan: async (params) => {
+      received = params
+      return { ok: true, plan: null }
+    },
+  }
+  const controller = registerFetchAllIpcHandlers(
+    () => undefined,
+    paths,
+    { createService: () => service },
+  )
+
+  try {
+    const result = await handlers.get('fetch-all:scan')(null, {
+      useCache: true,
+      confirmUnconfiguredScope: true,
+      scopeKey: 'escopo-da-tela',
+    })
+
+    assert.equal(result.ok, true)
+    assert.deepEqual(received, {
+      useCache: true,
+      confirmUnconfiguredScope: true,
+      scopeKey: 'escopo-da-tela',
+    })
+  } finally {
+    controller.pararDeObservarPedidos()
+    fs.rmSync(paths.root, { recursive: true, force: true })
+  }
+})

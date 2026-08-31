@@ -247,11 +247,24 @@ export type FetchAllActionResult = {
 }
 
 export type FetchAllSettings = {
-  /** Vazio significa "todos os discos locais". */
+  /** Vazio significa que a interface precisa pedir um escopo antes de varrer. */
   scanRoots: string[]
   excludeDirs: string[]
   ignoredPaths: string[]
   analyzeWorkers: number
+}
+
+/** Escopo calculado antes da varredura, incluindo a prévia de discos locais. */
+export type FetchAllScanScope = {
+  configured: string[]
+  /** Raízes efetivas; fica vazio enquanto uma configuração ampla aguarda confirmação. */
+  resolved: string[]
+  /** Discos locais candidatos quando não há raízes configuradas. */
+  available: string[]
+  requiresConfirmation: boolean
+  reason: string
+  expectedCost: string
+  scopeKey: string
 }
 
 /** Avanço da passada, publicado pelo processo principal enquanto ela roda. */

@@ -12,6 +12,11 @@ todo repositório git e classifica cada um. Ela está no seu PATH:
 felixo fetch-all varrer
 ```
 
+O comando usa as raízes configuradas no app. Se a configuração estiver vazia,
+ele não inicia uma varredura recursiva por conta própria: primeiro informe uma
+raiz no Fetch All ou use `--todos-discos` quando a varredura ampla tiver sido
+explicitamente autorizada.
+
 Isso **só lê**. O `fetch` mexe apenas nas referências dentro de `.git`; nenhum
 arquivo de trabalho é tocado. Pode rodar sem pedir permissão.
 
@@ -23,13 +28,16 @@ erro de fetch). Cada passada grava um relatório Markdown, e o caminho dele vem 
 saída — cite esse caminho quando resumir para a pessoa.
 
 ```bash
-felixo fetch-all varrer --cache   # reaproveita a lista da última varredura completa; não acha repositório novo
-felixo fetch-all varrer --json    # plano cru, para você processar em vez de ler
-felixo fetch-all estado           # o plano da última varredura, sem varrer de novo
+felixo fetch-all varrer --cache          # reutiliza cache somente se o escopo não mudou
+felixo fetch-all varrer --todos-discos   # confirma a varredura ampla sem raiz configurada
+felixo fetch-all varrer --json           # plano cru, para você processar em vez de ler
+felixo fetch-all estado                  # o plano da última varredura, sem varrer de novo
 ```
 
-Uma varredura completa percorre os discos e demora minutos. Se você só precisa
-saber o que já foi medido, use `estado`.
+Uma varredura completa de um volume pode visitar milhares de pastas e demorar
+minutos. Se você só precisa saber o que já foi medido, use `estado`. O cache
+também é invalidado quando raízes, exclusões, ignorados, montagens ou discos
+locais detectados mudam.
 
 ## O que você NÃO pode fazer
 

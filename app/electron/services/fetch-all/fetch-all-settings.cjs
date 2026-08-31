@@ -17,7 +17,7 @@ const MAX_ANALYZE_WORKERS = 32
 
 /** Configuração usada quando ainda não há nada salvo. */
 const DEFAULT_SETTINGS = Object.freeze({
-  /** Vazio significa "todos os discos locais". */
+  /** Vazio exige confirmação antes de considerar todos os discos locais. */
   scanRoots: [],
   excludeDirs: [...DEFAULT_EXCLUDE_DIRS],
   /** Caminhos absolutos que a pessoa mandou ignorar, com os repositórios dentro. */

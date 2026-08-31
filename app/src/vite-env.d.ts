@@ -22,6 +22,7 @@ import type {
   FetchAllAgentRequest,
   FetchAllPlan,
   FetchAllProgress,
+  FetchAllScanScope,
   FetchAllSettings,
 } from './features/canvas/types'
 import type { CliAccount } from './features/shared/types/cli-accounts'
@@ -711,12 +712,18 @@ declare global {
         getScope: () => Promise<{
           ok: boolean
           message?: string
-          scope?: { configured: string[]; resolved: string[]; available: string[] }
+          scope?: FetchAllScanScope
         }>
-        scan: (params?: { useCache?: boolean }) => Promise<{
+        scan: (params?: {
+          useCache?: boolean
+          confirmUnconfiguredScope?: boolean
+          scopeKey?: string
+        }) => Promise<{
           ok: boolean
           message?: string
           cancelled?: boolean
+          needsScopeConfirmation?: boolean
+          scope?: FetchAllScanScope
           plan?: FetchAllPlan
           scanMode?: string
         }>

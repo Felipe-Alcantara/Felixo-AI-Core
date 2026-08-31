@@ -84,3 +84,30 @@ Por isso este change centraliza o limite, cobre-o com teste e deixa o benchmark
 com `--check` como regressão reproduzível. Uma futura alteração adaptativa deve
 ser comparada contra este baseline e preservar input, output, foco, resize,
 fila de escrita, attach/detach e resume.
+
+## Benchmark do scanner do Fetch All
+
+O scanner também tem uma bancada reproduzível. A raiz é obrigatória para evitar
+que a própria medição inicie uma varredura da máquina inteira:
+
+```bash
+npm run benchmark:fetch-all -- \
+  --root="/caminho/explicitamente-escolhido" \
+  --iterations=5 --concurrency=16
+```
+
+Ela informa diretórios visitados, repositórios encontrados, concorrência e os
+percentis p50/p95 do tempo de cada passada. No checkout do AI Core em
+31/08/2026, com 5 passadas e concorrência 16, o resultado foi:
+
+| Escopo | Diretórios | Repositórios | Concorrência | p50 | p95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| raiz do checkout | 187 | 1 | 16 | 40,006 ms | 42,125 ms |
+
+Como referência da auditoria de 30/08/2026, uma raiz de trabalho maior mediu
+3.335 diretórios e 51 repositórios, com p95 de 289 ms na concorrência 16. O
+caso antigo de configuração vazia visitou aproximadamente 191.500 diretórios,
+encontrou 0 repositórios e continuou por mais de 30 s. Depois da barreira, a
+mesma configuração sem confirmação resolve 0 raízes e visita 0 diretórios; a
+prévia de discos é apenas metadata. A varredura ampla continua disponível só
+após confirmação explícita do escopo exibido.

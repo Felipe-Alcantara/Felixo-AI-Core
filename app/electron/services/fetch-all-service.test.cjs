@@ -7,6 +7,7 @@ const { execFileSync } = require('node:child_process')
 
 const { createFetchAllService, dropIgnoredFromPlan } = require('./fetch-all-service.cjs')
 const { REPO_STATES, buildStatus } = require('./fetch-all/repo-analyzer.cjs')
+const { findGitRepos } = require('./fetch-all/repo-scanner.cjs')
 const { buildSyncPlan } = require('./fetch-all/sync-planner.cjs')
 
 function git(cwd, ...args) {
@@ -36,7 +37,7 @@ function makeWorkspace() {
   return root
 }
 
-function makeService(events = []) {
+function makeService(events = [], scanner = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-paths-'))
   const appPaths = {
     config: path.join(base, 'config'),
@@ -48,7 +49,11 @@ function makeService(events = []) {
 
   return {
     appPaths,
-    service: createFetchAllService({ appPaths, sendEvent: (event) => events.push(event) }),
+    service: createFetchAllService({
+      appPaths,
+      sendEvent: (event) => events.push(event),
+      scanner,
+    }),
   }
 }
 
@@ -160,6 +165,100 @@ test('descreve o escopo da varredura para a interface', async () => {
   const scope = await service.describeScanScope()
 
   assert.deepEqual(scope.configured, [])
-  assert.ok(scope.resolved.length > 0)
+  assert.deepEqual(scope.resolved, [])
   assert.ok(scope.available.length > 0)
+  assert.equal(scope.requiresConfirmation, true)
+  assert.match(scope.reason, /bloqueada até confirmação explícita/)
+  assert.match(scope.expectedCost, /Alto/)
+  assert.equal(typeof scope.scopeKey, 'string')
+})
+
+test('configuração vazia não inicia varredura nem deixa o serviço ocupado', async () => {
+  const events = []
+  const { service } = makeService(events)
+
+  const result = await service.scan()
+
+  assert.equal(result.ok, false)
+  assert.equal(result.needsScopeConfirmation, true)
+  assert.equal(result.scope.requiresConfirmation, true)
+  assert.equal(service.getState().busy, false)
+  assert.equal(service.getState().plan, null)
+  assert.equal(events.at(-1).type, 'done')
+})
+
+test('escopo amplo só roda depois de confirmação explícita e encontra o baseline', async () => {
+  const workspace = makeWorkspace()
+  const { service } = makeService([], {
+    listLocalDrivesFn: async () => [workspace],
+    mountSkipPathsFn: async () => [],
+  })
+  const scope = await service.describeScanScope()
+
+  const result = await service.scan({
+    confirmUnconfiguredScope: true,
+    scopeKey: scope.scopeKey,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.plan.total, 2)
+  assert.equal(result.scope.requiresConfirmation, true)
+})
+
+test('uma mudança de montagem invalida a confirmação do escopo exibido', async () => {
+  const workspace = makeWorkspace()
+  let calls = 0
+  const { service } = makeService([], {
+    listLocalDrivesFn: async () => {
+      calls += 1
+      return calls === 1 ? [workspace] : [workspace, path.join(workspace, 'outro-disco')]
+    },
+  })
+  const scope = await service.describeScanScope()
+
+  const result = await service.scan({
+    confirmUnconfiguredScope: true,
+    scopeKey: scope.scopeKey,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.needsScopeConfirmation, true)
+  assert.notEqual(result.scope.scopeKey, scope.scopeKey)
+  assert.equal(service.getState().busy, false)
+})
+
+test('cancelar uma nova passada limpa o plano parcial e devolve o serviço a idle', async () => {
+  const workspace = makeWorkspace()
+  let scans = 0
+  let secondScanStarted
+  const started = new Promise((resolve) => {
+    secondScanStarted = resolve
+  })
+  const { service } = makeService([], {
+    mountSkipPathsFn: async () => [],
+    findGitReposFn: async (options) => {
+      scans += 1
+      if (scans === 1) return findGitRepos(options)
+
+      secondScanStarted()
+      return new Promise((resolve) => {
+        options.signal.addEventListener('abort', () => resolve([]), { once: true })
+      })
+    },
+  })
+
+  await service.saveSettings({ scanRoots: [workspace] })
+  await service.scan()
+  assert.equal(service.getState().plan.total, 2)
+
+  const pending = service.scan()
+  await started
+  assert.equal(service.cancel().cancelled, true)
+
+  const result = await pending
+
+  assert.equal(result.ok, true)
+  assert.equal(result.cancelled, true)
+  assert.equal(service.getState().busy, false)
+  assert.equal(service.getState().plan, null)
 })

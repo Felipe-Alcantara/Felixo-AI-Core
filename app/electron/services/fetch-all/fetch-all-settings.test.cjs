@@ -13,6 +13,7 @@ const {
   cacheMatchesRoots,
   cachedReposStillOnDisk,
   createScanCache,
+  createScanCacheKey,
   parseCache,
 } = require('./scan-cache.cjs')
 
@@ -96,6 +97,53 @@ test('o cache só vale para as mesmas raízes e descarta repositório apagado', 
   assert.equal(cacheMatchesRoots(loaded, ['/']), true)
   assert.equal(cacheMatchesRoots(loaded, ['/', '/mnt/dados']), false)
   assert.deepEqual(cachedReposStillOnDisk(loaded), [repoDir])
+})
+
+test('o cache invalida exclusões, ignorados, montagens e discos disponíveis diferentes', async () => {
+  const cache = createScanCache({ cacheDir: tempDir('felixo-cache-contexto-') })
+  const context = {
+    excludeDirs: ['node_modules', '.cache'],
+    ignoredPaths: ['/dados/antigos'],
+    skipPaths: ['/proc', '/run'],
+    availableRoots: ['/', '/mnt/dados'],
+  }
+
+  await cache.save(['/projetos'], ['/projetos/app'], context)
+  const loaded = await cache.load()
+
+  assert.equal(cacheMatchesRoots(loaded, ['/projetos'], context), true)
+  assert.equal(
+    cacheMatchesRoots(loaded, ['/projetos'], {
+      ...context,
+      excludeDirs: [...context.excludeDirs, 'tmp'],
+    }),
+    false,
+  )
+  assert.equal(
+    cacheMatchesRoots(loaded, ['/projetos'], {
+      ...context,
+      ignoredPaths: [],
+    }),
+    false,
+  )
+  assert.equal(
+    cacheMatchesRoots(loaded, ['/projetos'], {
+      ...context,
+      skipPaths: ['/proc', '/sys'],
+    }),
+    false,
+  )
+  assert.equal(
+    cacheMatchesRoots(loaded, ['/projetos'], {
+      ...context,
+      availableRoots: ['/', '/mnt/novo-disco'],
+    }),
+    false,
+  )
+  assert.notEqual(
+    loaded.cacheKey,
+    createScanCacheKey({ roots: ['/projetos'], ...context, availableRoots: [] }),
+  )
 })
 
 test('cache ausente ou ilegível devolve null em vez de quebrar a varredura', async () => {

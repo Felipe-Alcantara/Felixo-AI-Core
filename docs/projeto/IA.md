@@ -2190,3 +2190,56 @@ com 14 artefatos. Nenhuma conta, chave ou credencial foi tocada.
 Estado final: vulnerabilidades corrigidas no grafo completo e no npm que
 chega ao artefato distribuído, publicada e registrada na task e no relatório
 de hoje.
+
+## Registro de Trabalho — 2026-08-31 (parte 31) — Fetch All sem varredura implícita de disco inteiro
+
+PEDIDO: executar a task do Notion [“Felixo AI Core/Fetch All — Impedir
+varredura sem limite quando não há raízes configuradas”](https://app.notion.com/p/Felixo-AI-Core-Fetch-All-Impedir-varredura-sem-limite-quando-n-o-h-ra-zes-configuradas-3cd91f95497e818b9658fb3d21037c0d).
+
+DIAGNÓSTICO: `resolveScanRoots([])` tratava configuração vazia como autorização
+para chamar `listLocalDrives()`. No Linux, isso incluía `/`; uma execução real
+continuou por mais de 30 s, visitou aproximadamente 191.500 diretórios e não
+encontrou repositórios. O painel também não mostrava o escopo efetivo nem
+limpava o plano anterior quando uma nova passada era cancelada.
+
+FEITO: `resolveScanRoots` agora devolve `[]` por padrão quando não há raízes e
+só inventaria discos com `allowUnconfigured: true`. O serviço expõe, antes do
+I/O recursivo, raízes configuradas, raízes efetivas, discos locais disponíveis,
+motivo, custo esperado e uma `scopeKey`. O `FetchAllPanel` mostra essas
+informações, lista os caminhos candidatos e exige um clique explícito para
+registrar a confirmação do escopo amplo; a confirmação é vinculada à lista
+exibida e é invalidada se as montagens/discos mudarem. O IPC e a CLI preservam
+essa confirmação; o terminal oferece `--todos-discos` como opt-in explícito.
+
+CANCELAMENTO E CACHE: iniciar uma nova passada limpa o plano anterior; erro ou
+cancelamento termina em `idle`, descarta resultados parciais e mantém o botão
+de cancelar no estado ocupado. O cache ganhou versão e chave de ambiente que
+considera raízes, exclusões, caminhos ignorados, montagens podadas e discos
+locais detectados; portanto a varredura rápida não reutiliza resultado de outro
+escopo.
+
+TESTES: foram adicionados casos para a barreira de configuração vazia e o
+opt-in nos três SOs, confirmação rejeitada após mudança de montagem,
+cancelamento com limpeza do plano, encaminhamento IPC, cache contextual e a
+opção `--todos-discos`. A suíte backend passou com 917/917 testes; a suíte
+frontend passou com 74 arquivos e 721/721 testes; `npm run build` transformou
+716 módulos; `npm run lint` terminou sem erros, mantendo apenas os 2 avisos
+React preexistentes de `src/features/chat/components/SearchPanel.tsx`.
+
+BENCHMARK: a nova bancada `npm run benchmark:fetch-all` exige uma raiz
+explícita e mede diretórios, repositórios, concorrência, p50 e p95. No checkout
+em 31/08/2026, com 5 passadas e concorrência 16, mediu 187 diretórios, 1
+repositório, p50 de 40,006 ms e p95 de 42,125 ms. O baseline maior da auditoria
+registrou 3.335 diretórios, 51 repositórios e p95 de 289 ms na concorrência 16;
+o cenário antigo sem raiz visitou cerca de 191.500 diretórios, enquanto o
+novo caminho sem confirmação resolve 0 raízes e não entra no scanner.
+
+VALIDAÇÃO REAL: o Vite local subiu para a checagem visual, mas não havia
+navegador conectado nesta sessão para abrir o painel. A checagem visual fica
+registrada como pendência; não foi iniciada nenhuma varredura real de `/`.
+
+PUBLICAÇÃO: implementação e documentação local prontas para commit, push,
+acompanhamento do CI/release e registro final na task e no relatório de hoje.
+
+Estado final: correção implementada e validada por testes, build, lint e
+benchmark; aguardando publicação remota.

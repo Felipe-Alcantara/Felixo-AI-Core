@@ -75,7 +75,11 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {})
   )
 
   ipcMain.handle('fetch-all:scan', (_event, params) =>
-    service.scan({ useCache: params?.useCache === true }),
+    service.scan({
+      useCache: params?.useCache === true,
+      confirmUnconfiguredScope: params?.confirmUnconfiguredScope === true,
+      scopeKey: typeof params?.scopeKey === 'string' ? params.scopeKey : undefined,
+    }),
   )
 
   ipcMain.handle('fetch-all:execute', (_event, params) =>

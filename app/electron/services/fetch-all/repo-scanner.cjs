@@ -8,9 +8,10 @@
  * montagens virtuais/de rede — enumerar essas últimas custa I/O de rede e
  * nunca devolve um projeto local.
  *
- * Portabilidade: no Windows os discos vêm das letras de unidade; no Linux e no
- * macOS a varredura parte de `/` mais cada disco montado, lidos de
- * `/proc/mounts` ou da saída do comando `mount`.
+ * Portabilidade: no Windows os discos disponíveis vêm das letras de unidade;
+ * no Linux e no macOS são descobertos a partir de `/proc/mounts` ou da saída
+ * do comando `mount`. Essa descoberta é apenas um inventário até que a pessoa
+ * confirme uma varredura ampla; a varredura normal recebe raízes explícitas.
  */
 
 const fs = require('node:fs')
@@ -309,7 +310,7 @@ async function mountSkipPaths(mounts, {
 }
 
 /**
- * Raízes de varredura no POSIX: `/` mais cada disco/partição local.
+ * Discos locais disponíveis no POSIX: `/` mais cada disco/partição local.
  *
  * Ficam de fora montagens virtuais/de rede, `/boot` (nunca tem repositório da
  * pessoa) e, no macOS, tudo sob `/System` — o volume de dados já é alcançado a
@@ -378,14 +379,21 @@ async function listLocalDrives({
 }
 
 /**
- * Caminhos a varrer: os configurados ou, se não houver nenhum, todos os discos.
+ * Resolve os caminhos a varrer sem ativar uma varredura ampla por acidente.
+ *
+ * Quando não há raiz configurada, só devolve os discos locais se o chamador
+ * passar `allowUnconfigured: true`. A opção é deliberadamente explícita: o
+ * valor padrão não transforma configuração vazia em uma varredura recursiva de
+ * `/` (ou de todas as letras de unidade).
  *
  * @param {string[]} configuredRoots
  * @param {object} [options]
+ * @param {boolean} [options.allowUnconfigured] - Autoriza usar todos os discos descobertos.
  * @param {Function} [options.listLocalDrivesFn]
  * @returns {Promise<string[]>}
  */
 async function resolveScanRoots(configuredRoots, {
+  allowUnconfigured = false,
   listLocalDrivesFn = listLocalDrives,
   listLocalDrivesOptions,
 } = {}) {
@@ -393,9 +401,10 @@ async function resolveScanRoots(configuredRoots, {
     (root) => typeof root === 'string' && root.trim(),
   )
 
-  return roots.length
-    ? roots.map((root) => root.trim())
-    : listLocalDrivesFn(listLocalDrivesOptions)
+  if (roots.length) return roots.map((root) => root.trim())
+  if (!allowUnconfigured) return []
+
+  return listLocalDrivesFn(listLocalDrivesOptions)
 }
 
 /**

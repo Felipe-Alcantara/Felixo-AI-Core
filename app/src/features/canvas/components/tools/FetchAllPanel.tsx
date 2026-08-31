@@ -30,6 +30,7 @@ import type {
   FetchAllAgentRequest,
   FetchAllPlan,
   FetchAllProgress,
+  FetchAllScanScope,
   FetchAllSettings,
 } from '../../types'
 
@@ -56,6 +57,9 @@ const TONE_CLASSES = {
 export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
   const [plan, setPlan] = useState<FetchAllPlan | null>(null)
   const [settings, setSettings] = useState<FetchAllSettings | null>(null)
+  const [scope, setScope] = useState<FetchAllScanScope | null>(null)
+  const [scopeLoading, setScopeLoading] = useState(true)
+  const [confirmedScopeKey, setConfirmedScopeKey] = useState('')
   const [progress, setProgress] = useState<FetchAllProgress | null>(null)
   const [results, setResults] = useState<FetchAllActionResult[] | null>(null)
   const [reportPath, setReportPath] = useState('')
@@ -82,6 +86,28 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
     }
   }, [])
 
+  const loadScope = useCallback(async () => {
+    setScopeLoading(true)
+
+    try {
+      const result = await window.felixo?.fetchAll?.getScope()
+      if (!mountedRef.current) return
+
+      if (result?.ok && result.scope) {
+        setScope(result.scope)
+        setConfirmedScopeKey((current) =>
+          current === result.scope?.scopeKey ? current : '',
+        )
+      } else {
+        setScope(null)
+        setConfirmedScopeKey('')
+        setError(result?.message ?? 'Não foi possível calcular o escopo da varredura.')
+      }
+    } finally {
+      if (mountedRef.current) setScopeLoading(false)
+    }
+  }, [])
+
   // Retoma o que já existe: a varredura roda no processo principal e continua
   // viva mesmo com o painel fechado, então reabrir não pode zerar o plano.
   useEffect(() => {
@@ -89,13 +115,14 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       const [state] = await Promise.all([
         window.felixo?.fetchAll?.getState(),
         loadSettings(),
+        loadScope(),
       ])
       if (!mountedRef.current || !state?.ok) return
       setPlan(state.plan ?? null)
       setScanMode(state.scanMode ?? '')
       setBusy(Boolean(state.busy))
     })()
-  }, [loadSettings])
+  }, [loadScope, loadSettings])
 
   useEffect(
     () =>
@@ -127,6 +154,12 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
   const autoCommitCount = useMemo(() => countAutoCommitCandidates(plan), [plan])
   const canExecute = planHasSafeActions(plan, autoCommit)
   const progressLabel = describeProgress(progress)
+  const scopeConfirmed = Boolean(
+    scope?.requiresConfirmation && confirmedScopeKey === scope.scopeKey,
+  )
+  const scanAllowed = Boolean(
+    scope && (!scope.requiresConfirmation || scopeConfirmed),
+  )
 
   const scan = useCallback(async (useCache: boolean) => {
     setBusy(true)
@@ -134,11 +167,22 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
     setResults(null)
     setReportPath('')
     setConfirmingExecute(false)
+    setPlan(null)
+    setScanMode('')
 
     try {
-      const result = await window.felixo?.fetchAll?.scan({ useCache })
+      const result = await window.felixo?.fetchAll?.scan({
+        useCache,
+        confirmUnconfiguredScope: scopeConfirmed,
+        scopeKey: scopeConfirmed ? scope?.scopeKey : undefined,
+      })
       if (!mountedRef.current) return
-      if (!result?.ok) {
+      if (result?.scope) {
+        setScope(result.scope)
+        if (result.scope.scopeKey !== scope?.scopeKey) setConfirmedScopeKey('')
+      }
+      if (!result || !result.ok) {
+        if (result?.needsScopeConfirmation) setConfirmedScopeKey('')
         setError(result?.message ?? 'Falha ao varrer os discos.')
         return
       }
@@ -151,7 +195,14 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
         setProgress(null)
       }
     }
-  }, [])
+  }, [scope?.scopeKey, scopeConfirmed])
+
+  const confirmScope = useCallback(() => {
+    if (!scope?.requiresConfirmation || !scope.available.length) return
+
+    setError(null)
+    setConfirmedScopeKey(scope.scopeKey)
+  }, [scope])
 
   const execute = useCallback(async () => {
     setBusy(true)
@@ -262,9 +313,13 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
               <button
                 type="button"
                 onClick={() => void scan(false)}
-                disabled={busy}
+                disabled={busy || !scanAllowed}
                 className="felixo-btn flex-1 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
-                title="Varre para você revisar o plano antes de autorizar qualquer escrita"
+                title={
+                  scanAllowed
+                    ? 'Varre para você revisar o plano antes de autorizar qualquer escrita'
+                    : 'Confirme o escopo amplo exibido antes de iniciar a varredura'
+                }
               >
                 {busy ? 'Varrendo…' : 'Varrer para revisar'}
               </button>
@@ -281,13 +336,126 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
         </div>
       )}
 
+      {scopeLoading && (
+        <p className="mb-3 rounded bg-zinc-800/60 p-2 text-xs text-zinc-400">
+          Calculando o escopo disponível…
+        </p>
+      )}
+
+      {scope && (
+        <div
+          className={`mb-3 rounded border p-2.5 ${
+            scope.requiresConfirmation
+              ? 'border-amber-500/40 bg-amber-500/10'
+              : 'border-white/10 bg-zinc-800/60'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle
+              size={14}
+              className={`mt-0.5 shrink-0 ${
+                scope.requiresConfirmation ? 'text-amber-400' : 'text-zinc-400'
+              }`}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-zinc-200">Escopo da varredura</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                Escopo efetivo:{' '}
+                {scope.resolved.length
+                  ? `${scope.resolved.length} raiz(es) configurada(s)`
+                  : 'nenhuma raiz — a varredura está bloqueada'}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                {scope.reason}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                Custo esperado: {scope.expectedCost}
+              </p>
+            </div>
+          </div>
+
+          {scope.resolved.length > 0 && (
+            <div className="mt-2 rounded bg-zinc-950/30 px-2 py-1.5">
+              <p className="text-[11px] font-medium text-zinc-300">
+                Raízes configuradas
+              </p>
+              <ul className="mt-1 max-h-20 overflow-auto">
+                {scope.resolved.map((root) => (
+                  <li
+                    key={root}
+                    className="truncate text-[11px] text-zinc-500"
+                    title={root}
+                  >
+                    {root}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {scope.requiresConfirmation && (
+            <div className="mt-2">
+              <p className="text-[11px] font-medium text-zinc-300">
+                Discos locais disponíveis para confirmação ({scope.available.length})
+              </p>
+              {scope.available.length > 0 ? (
+                <ul className="mt-1 max-h-20 overflow-auto rounded bg-zinc-950/30 px-2 py-1.5">
+                  {scope.available.map((root) => (
+                    <li
+                      key={root}
+                      className="truncate text-[11px] text-zinc-500"
+                      title={root}
+                    >
+                      {root}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Nenhum disco local foi detectado.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={confirmScope}
+                disabled={busy || !scope.available.length}
+                className={`mt-2 w-full rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+                  scopeConfirmed
+                    ? 'bg-emerald-900/70 text-emerald-200 ring-1 ring-emerald-500/40 hover:bg-emerald-900'
+                    : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
+                }`}
+                title={
+                  scopeConfirmed
+                    ? 'A confirmação está registrada para a lista de discos exibida'
+                    : 'Autoriza nesta sessão a varredura dos discos locais exibidos'
+                }
+              >
+                {scopeConfirmed
+                  ? 'Escopo amplo confirmado nesta sessão'
+                  : 'Confirmar escopo amplo e habilitar varredura'}
+              </button>
+              {scopeConfirmed && (
+                <p className="mt-1 text-[11px] text-emerald-300/80">
+                  Confirmação registrada para este escopo. Se os discos mudarem, será
+                  necessário confirmar novamente.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mb-3 flex items-center gap-2">
         <button
           type="button"
           onClick={() => void scan(false)}
-          disabled={busy}
+          disabled={busy || !scanAllowed}
           className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
-          title="Varre todos os discos locais e faz fetch em cada repositório"
+          title={
+            scanAllowed
+              ? 'Varre o escopo exibido e faz fetch em cada repositório'
+              : 'Confirme o escopo amplo exibido antes de iniciar a varredura'
+          }
         >
           <Search size={14} />
           Varredura completa
@@ -295,9 +463,13 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
         <button
           type="button"
           onClick={() => void scan(true)}
-          disabled={busy}
+          disabled={busy || !scanAllowed}
           className="felixo-btn flex items-center gap-2 rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
-          title="Reaproveita a lista da última varredura completa (não encontra repositórios novos)"
+          title={
+            scanAllowed
+              ? 'Reaproveita a lista da última varredura completa (não encontra repositórios novos)'
+              : 'Confirme o escopo amplo exibido antes de iniciar a varredura'
+          }
         >
           <RotateCcw size={14} />
           Rápida

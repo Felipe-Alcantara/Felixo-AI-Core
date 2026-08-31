@@ -104,6 +104,28 @@ test('varrer --json entrega o plano cru com o caminho do relatório', async () =
   assert.equal(dados.reportPath, '/relatorios/fetch-all/2026.md')
 })
 
+test('--todos-discos registra a confirmação explícita do escopo amplo', async () => {
+  let recebido = null
+  const { deps } = dependencias({
+    servico: {
+      describeScanScope: async () => ({ scopeKey: 'escopo-atual' }),
+      scan: async (params) => {
+        recebido = params
+        return { ok: true, plan: PLANO, scanMode: 'completa (1 raiz)' }
+      },
+    },
+  })
+
+  const resultado = await executar(['fetch-all', 'varrer', '--todos-discos'], deps)
+
+  assert.equal(resultado.codigo, 0)
+  assert.deepEqual(recebido, {
+    useCache: false,
+    confirmUnconfiguredScope: true,
+    scopeKey: 'escopo-atual',
+  })
+})
+
 test('varredura que falha vira mensagem no stderr e código 1', async () => {
   const { deps } = dependencias({
     servico: { scan: async () => ({ ok: false, message: 'Já existe uma passada em andamento.' }) },

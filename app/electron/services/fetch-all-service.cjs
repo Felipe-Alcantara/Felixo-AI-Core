@@ -18,6 +18,7 @@ const {
   findGitRepos,
   isInsidePath,
   listLocalDrives,
+  mountSkipPaths,
   resolveScanRoots,
 } = require('./fetch-all/repo-scanner.cjs')
 const {
@@ -46,9 +47,16 @@ const PROGRESS_THROTTLE_MS = 150
  * @param {object} options
  * @param {{ config: string, cache: string, reports: string }} options.appPaths
  * @param {(event: object) => void} [options.sendEvent] - Publica o progresso na interface.
+ * @param {object} [options.scanner] - Adapters do scanner, usados pela suíte sem tocar nos discos reais.
  * @returns {object} A API usada pelos handlers de IPC.
  */
-function createFetchAllService({ appPaths, sendEvent }) {
+function createFetchAllService({ appPaths, sendEvent, scanner = {} }) {
+  const {
+    findGitReposFn = findGitRepos,
+    listLocalDrivesFn = listLocalDrives,
+    mountSkipPathsFn = mountSkipPaths,
+    resolveScanRootsFn = resolveScanRoots,
+  } = scanner
   const settingsStore = createFetchAllSettingsStore({ configDir: appPaths.config })
   const scanCache = createScanCache({ cacheDir: appPaths.cache })
 
@@ -106,6 +114,38 @@ function createFetchAllService({ appPaths, sendEvent }) {
     }
   }
 
+  /**
+   * Calcula o escopo que a interface pode mostrar antes de iniciar I/O recursivo.
+   *
+   * A lista de discos é uma prévia, não uma autorização. Quando a configuração
+   * está vazia, `resolved` permanece vazio até a confirmação explícita chegar ao
+   * método `scan`.
+   *
+   * @param {object} settings
+   * @returns {Promise<object>}
+   */
+  async function readScanScope(settings) {
+    const configured = [...settings.scanRoots]
+    const available = [...((await listLocalDrivesFn()) ?? [])]
+    const resolved = await resolveScanRootsFn(configured, {
+      allowUnconfigured: false,
+      listLocalDrivesFn: async () => available,
+    })
+    const requiresConfirmation = configured.length === 0
+
+    return {
+      configured,
+      resolved,
+      available,
+      requiresConfirmation,
+      reason: requiresConfirmation
+        ? 'Nenhuma raiz foi configurada; a varredura ampla está bloqueada até confirmação explícita.'
+        : 'A varredura usará somente as raízes configuradas explicitamente.',
+      expectedCost: describeExpectedCost(configured, resolved, available),
+      scopeKey: createScopeKey({ configured, resolved, available }),
+    }
+  }
+
   return {
     /** @returns {Promise<object>} */
     getSettings() {
@@ -123,16 +163,12 @@ function createFetchAllService({ appPaths, sendEvent }) {
     /**
      * Raízes que a varredura usaria agora, para a interface mostrar o escopo.
      *
-     * @returns {Promise<{ configured: string[], resolved: string[], available: string[] }>}
+     * @returns {Promise<object>}
      */
     async describeScanScope() {
       const settings = await settingsStore.load()
 
-      return {
-        configured: settings.scanRoots,
-        resolved: await resolveScanRoots(settings.scanRoots),
-        available: await listLocalDrives(),
-      }
+      return readScanScope(settings)
     },
 
     /**
@@ -184,9 +220,11 @@ function createFetchAllService({ appPaths, sendEvent }) {
      *
      * @param {object} [params]
      * @param {boolean} [params.useCache] - Reaproveita a lista da última varredura completa.
-     * @returns {Promise<{ ok: boolean, message?: string, plan?: object, scanMode?: string, cancelled?: boolean }>}
+     * @param {boolean} [params.confirmUnconfiguredScope] - Confirma a varredura ampla quando não há raízes configuradas.
+     * @param {string} [params.scopeKey] - Identidade do escopo mostrado na confirmação.
+     * @returns {Promise<{ ok: boolean, message?: string, plan?: object, scanMode?: string, cancelled?: boolean, needsScopeConfirmation?: boolean, scope?: object }>}
      */
-    async scan({ useCache = false } = {}) {
+    async scan({ useCache = false, confirmUnconfiguredScope = false, scopeKey } = {}) {
       if (isBusy()) {
         return { ok: false, message: 'Já existe uma passada em andamento.' }
       }
@@ -195,9 +233,54 @@ function createFetchAllService({ appPaths, sendEvent }) {
 
       try {
         const settings = await settingsStore.load()
-        const roots = await resolveScanRoots(settings.scanRoots)
+        const scope = await readScanScope(settings)
+
+        const confirmedScope =
+          !scope.requiresConfirmation ||
+          (confirmUnconfiguredScope === true &&
+            (scopeKey === undefined || scopeKey === scope.scopeKey))
+
+        if (!confirmedScope) {
+          return {
+            ok: false,
+            needsScopeConfirmation: true,
+            scope,
+            message: describeScopeConfirmation(scope),
+          }
+        }
+
+        const roots = scope.requiresConfirmation
+          ? await resolveScanRootsFn(settings.scanRoots, {
+              allowUnconfigured: true,
+              listLocalDrivesFn: async () => scope.available,
+            })
+          : scope.resolved
+
+        if (!roots.length) {
+          return {
+            ok: false,
+            scope,
+            message:
+              'Nenhuma raiz de varredura está disponível. Configure uma pasta ou conecte um disco local antes de tentar novamente.',
+          }
+        }
+
+        // Uma nova passada substitui a anterior. Não deixe a interface oferecer
+        // ações calculadas sobre um escopo que já está sendo refeito.
+        state.plan = null
+        state.scanMode = ''
+
+        const skipPaths = [...((await mountSkipPathsFn()) ?? [])]
+        const cacheContext = {
+          excludeDirs: settings.excludeDirs,
+          ignoredPaths: settings.ignoredPaths,
+          skipPaths,
+          availableRoots: scope.available,
+        }
         const cache = useCache ? await scanCache.load() : null
-        const useCachedRepos = Boolean(cache && cacheMatchesRoots(cache, roots))
+        const useCachedRepos = Boolean(
+          cache && cacheMatchesRoots(cache, roots, cacheContext),
+        )
 
         let repoPaths
         let scanMode
@@ -211,17 +294,18 @@ function createFetchAllService({ appPaths, sendEvent }) {
             true,
           )
 
-          repoPaths = await findGitRepos({
+          repoPaths = await findGitReposFn({
             roots,
             excludeDirs: settings.excludeDirs,
             ignoredPaths: settings.ignoredPaths,
+            skipPaths,
             signal,
             onProgress: (progress) => publishProgress({ type: 'scan', ...progress }),
           })
 
           if (signal.aborted) return { ok: true, cancelled: true }
 
-          await scanCache.save(roots, repoPaths)
+          await scanCache.save(roots, repoPaths, cacheContext)
           scanMode = `completa (${roots.length} raiz(es))`
         }
 
@@ -253,7 +337,7 @@ function createFetchAllService({ appPaths, sendEvent }) {
         state.plan = plan
         state.scanMode = scanMode
 
-        return { ok: true, plan, scanMode }
+        return { ok: true, plan, scanMode, scope }
       } catch (error) {
         return { ok: false, message: describeError(error, 'Falha ao varrer os discos.') }
       } finally {
@@ -396,6 +480,69 @@ function formatCacheDate(isoDate) {
 }
 
 /**
+ * Cria uma identidade estável para o escopo que a pessoa confirmou na tela.
+ *
+ * @param {{ configured: string[], resolved: string[], available: string[] }} scope
+ * @returns {string}
+ */
+function createScopeKey({ configured, resolved, available }) {
+  return JSON.stringify({
+    configured: [...configured].sort(),
+    resolved: [...resolved].sort(),
+    available: [...available].sort(),
+  })
+}
+
+/**
+ * Estima o custo antes de qualquer varredura recursiva.
+ *
+ * É uma classificação conservadora: uma raiz de volume pode conter milhares
+ * de pastas, então ela nunca é apresentada como uma operação pequena.
+ *
+ * @param {string[]} configured
+ * @param {string[]} resolved
+ * @param {string[]} available
+ * @returns {string}
+ */
+function describeExpectedCost(configured, resolved, available) {
+  if (!configured.length) {
+    return available.length
+      ? 'Alto: pode percorrer todos os discos locais, visitar milhares de pastas e levar minutos.'
+      : 'Indisponível: nenhum disco local foi detectado para estimar o custo.'
+  }
+
+  const includesVolumeRoot = resolved.some(
+    (root) => root === '/' || /^[A-Za-z]:[\\/]?$/.test(root),
+  )
+
+  return includesVolumeRoot
+    ? 'Alto: a raiz cobre um volume inteiro e pode visitar milhares de pastas.'
+    : `Limitado às ${resolved.length} raiz(es) configurada(s); o tempo depende do conteúdo delas.`
+}
+
+/**
+ * Texto mostrado quando a configuração vazia tenta iniciar sem confirmação.
+ *
+ * @param {{ available: string[] }} scope
+ * @returns {string}
+ */
+function describeScopeConfirmation(scope) {
+  if (!scope.available.length) {
+    return (
+      'Nenhuma raiz foi configurada e nenhum disco local foi detectado. Configure uma pasta de trabalho antes de iniciar a varredura.'
+    )
+  }
+
+  const visibleRoots = scope.available.slice(0, 3).join(', ')
+  const remaining = scope.available.length - 3
+  const suffix = remaining > 0 ? ` e mais ${remaining}` : ''
+
+  return (
+    `Nenhuma raiz foi configurada. Confirme explicitamente a varredura ampla no painel para usar ${visibleRoots}${suffix}; ${scope.expectedCost}`
+  )
+}
+
+/**
  * @param {unknown} error
  * @param {string} fallback
  * @returns {string}
@@ -407,5 +554,8 @@ function describeError(error, fallback) {
 module.exports = {
   DEFAULT_EXCLUDE_DIRS,
   createFetchAllService,
+  createScopeKey,
+  describeExpectedCost,
+  describeScopeConfirmation,
   dropIgnoredFromPlan,
 }

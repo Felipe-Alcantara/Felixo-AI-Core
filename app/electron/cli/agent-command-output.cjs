@@ -100,10 +100,12 @@ function contar(lista) {
 /** Texto de ajuda. É a primeira coisa que um agente lê ao descobrir o comando. */
 const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e reporta o que está fora de sincronia.
 
-  felixo fetch-all varrer [--cache] [--json]
+  felixo fetch-all varrer [--cache] [--json] [--todos-discos]
       Analisa os repositórios e imprime o plano. Só lê; não escreve em nada.
       --cache  reaproveita a lista de repositórios da última varredura completa.
       --json   imprime o plano cru, para processar em vez de ler.
+      --todos-discos  confirma explicitamente a varredura ampla quando não há
+                      raízes configuradas; sem esta opção, configure uma raiz.
 
   felixo fetch-all estado [--json]
       Mostra o plano da última varredura, sem varrer de novo.

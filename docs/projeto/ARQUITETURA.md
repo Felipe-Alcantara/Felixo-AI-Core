@@ -59,6 +59,18 @@ incluindo discos removiveis, mas nao unidades de rede. No Linux e no macOS ele
 le `/proc/mounts` ou a saida BSD de `mount`, descarta sistemas virtuais/de rede
 e, no macOS, nao repete `/System/Volumes` nem `Library/CloudStorage`.
 
+Uma configuracao vazia nao e mais um alias silencioso para `/`: `resolveScanRoots`
+devolve vazio por padrao e so inventaria os discos quando recebe a autorizacao
+explicita da passada. O servico expoe `describeScanScope` com raizes configuradas,
+raizes efetivas, discos candidatos, motivo, custo esperado e uma chave do escopo;
+o painel so envia a confirmacao ampla para a chave que a pessoa viu. Se a lista
+de montagens mudar antes do inicio, a chave deixa de coincidir e a confirmacao
+precisa ser refeita.
+
+O cache da varredura usa uma chave de ambiente composta por raizes, exclusoes,
+caminhos ignorados, montagens podadas e discos locais detectados. Uma lista
+obtida sob outro escopo nao pode virar uma varredura rapida por engano.
+
 As funcoes aceitam plataforma, semantica de caminhos e IO injetaveis. Assim, a
 suíte cobre letras de unidade, comparacao case-insensitive, montagens,
 CloudStorage e exclusoes sem depender dos discos da maquina que executa os

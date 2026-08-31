@@ -172,7 +172,7 @@ test('isSkippedFilesystemType pula virtuais e de rede, mas não ntfs-3g', () => 
   assert.equal(isSkippedFilesystemType('ext4'), false)
 })
 
-test('localMountPoints devolve / mais os discos locais, sem /boot nem virtuais', () => {
+test('localMountPoints lista / e os discos locais disponíveis, sem /boot nem virtuais', () => {
   const points = localMountPoints([
     { mountPoint: '/', filesystemType: 'ext4' },
     { mountPoint: '/proc', filesystemType: 'proc' },
@@ -245,7 +245,7 @@ test('resolveScanRoots usa os caminhos configurados quando existem', async () =>
   assert.deepEqual(await resolveScanRoots(['/tmp/um', '  ']), ['/tmp/um'])
 })
 
-test('resolveScanRoots permite inventariar drives por fixture', async () => {
+test('resolveScanRoots não consulta discos quando a configuração está vazia', async () => {
   let calls = 0
   const roots = await resolveScanRoots([], {
     listLocalDrivesFn: async () => {
@@ -254,8 +254,38 @@ test('resolveScanRoots permite inventariar drives por fixture', async () => {
     },
   })
 
+  assert.deepEqual(roots, [])
+  assert.equal(calls, 0)
+})
+
+test('resolveScanRoots só inventaria os discos com autorização explícita', async () => {
+  let calls = 0
+  const roots = await resolveScanRoots([], {
+    allowUnconfigured: true,
+    listLocalDrivesFn: async () => {
+      calls += 1
+      return ['C:\\', 'F:\\']
+    },
+  })
+
   assert.deepEqual(roots, ['C:\\', 'F:\\'])
   assert.equal(calls, 1)
+})
+
+test('resolveScanRoots mantém a barreira para configuração vazia nos três SOs', async () => {
+  for (const platform of ['linux', 'darwin', 'win32']) {
+    let calls = 0
+    const roots = await resolveScanRoots([], {
+      listLocalDrivesOptions: { platform },
+      listLocalDrivesFn: async () => {
+        calls += 1
+        return ['/']
+      },
+    })
+
+    assert.deepEqual(roots, [], platform)
+    assert.equal(calls, 0, platform)
+  }
 })
 
 test('isInsidePath reconhece a própria pasta e as de dentro, não as irmãs', () => {

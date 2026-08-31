@@ -132,7 +132,15 @@ async function executar(argumentos, dependencias = {}) {
     }
   }
 
-  const resultado = await servico.scan({ useCache: opcoes.cache === true })
+  const scanParams = { useCache: opcoes.cache === true }
+
+  if (opcoes['todos-discos'] === true) {
+    const scope = await servico.describeScanScope?.()
+    scanParams.confirmUnconfiguredScope = true
+    scanParams.scopeKey = scope?.scopeKey
+  }
+
+  const resultado = await servico.scan(scanParams)
 
   if (!resultado?.ok) {
     return {
