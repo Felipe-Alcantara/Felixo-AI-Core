@@ -1,10 +1,14 @@
 # Guia para Desenvolvedores
 
 Status: concluido.
+Última revisão: 2026-08-31.
 
 ## Objetivo
 
-Documentar como contribuir com o Felixo AI Core, entender a estrutura do projeto e seguir os padrões estabelecidos.
+Documentar como contribuir com o Felixo AI Core, entender a estrutura do
+projeto e seguir os padrões estabelecidos. O canvas é a superfície de produto
+vigente; o modo de chat permanece no código apenas como compatibilidade legada
+e não deve receber novos fluxos de produto.
 
 ---
 
@@ -15,7 +19,7 @@ Documentar como contribuir com o Felixo AI Core, entender a estrutura do projeto
 - Node.js ≥ 22.12.0 (definido em `.nvmrc`)
 - npm ≥ 10.x
 - Git ≥ 2.30
-- Python 3.8+ (opcional, para `start_app.py`)
+- Python 3.9+ (opcional, para `start_app.py`)
 
 ### Instalação
 
@@ -50,28 +54,30 @@ Felixo-AI-Core/
 │   │   ├── main.cjs              # Ponto de entrada do Electron
 │   │   ├── preload.cjs           # Bridge main↔renderer
 │   │   ├── services/             # Serviços do backend
-│   │   │   ├── adapters/         # Adapters de CLIs (claude, codex, gemini)
+│   │   │   ├── adapters/         # Adapters de CLIs e sessões estruturadas
 │   │   │   ├── mcp/              # MCP Layer (catálogo de tools)
 │   │   │   ├── orchestration/    # Orquestração multi-agente
 │   │   │   ├── orchestrator/     # Planner de execução
 │   │   │   ├── protocols/        # AgentEvent e protocolos
-│   │   │   └── providers/        # Registry de Terminal Adapters
+│   │   │   ├── providers/        # Registry de Terminal Adapters
+│   │   │   └── storage/          # Persistência SQLite e repositórios
 │   │   └── windows/              # Configuração de janelas
 │   ├── src/                      # Frontend (renderer)
-│   │   ├── features/             # Componentes React por feature
+│   │   ├── features/canvas/       # Produto principal: canvas e terminais PTY
+│   │   ├── features/chat/        # Modo legado, mantido para compatibilidade
+│   │   ├── features/shared/       # Tipos e serviços compartilhados
 │   │   ├── App.tsx               # Componente raiz
 │   │   ├── main.tsx              # Entry point React
 │   │   └── index.css             # Estilos globais + design tokens
 │   ├── public/                   # Assets estáticos
 │   ├── package.json              # Deps e scripts
 │   └── vite.config.ts            # Configuração Vite
-├── docs/                         # Documentação do projeto
-│   ├── Tasklists/                # Tasklists por data
-│   ├── arquitetura/              # Documentação de arquitetura
-│   ├── backend/                  # Docs do backend
-│   ├── frontend/                 # Docs do frontend
-│   ├── projeto/                  # Docs gerais do projeto
-│   └── relatorios/               # Relatórios diários
+├── felixo_launcher/              # Launcher Python e atualização do checkout
+├── tests/                        # Testes do launcher
+├── docs/                         # Documentação vigente
+│   ├── guias/                    # Guias de usuário e desenvolvimento
+│   ├── projeto/                  # Contexto, arquitetura e operação
+│   └── _legado/                  # Documentação histórica, não normativa
 ├── .github/workflows/            # CI e Release
 ├── start_app.py                  # Script de inicialização
 └── README.md                     # Visão geral
@@ -87,11 +93,13 @@ Felixo-AI-Core/
 | `npm run dev:web` | app/ | Inicia apenas Vite com limpeza coordenada |
 | `npm run build` | app/ | Compila TypeScript + Vite |
 | `npm run test` | app/ | Roda testes unitários |
+| `npm run test:frontend` | app/ | Roda a suíte Vitest do renderer |
 | `npm run lint` | app/ | Roda ESLint |
 | `npm run pack` | app/ | Gera build empacotado local |
 | `npm run dist:linux` | app/ | Gera instaladores Linux |
 | `npm run dist:win` | app/ | Gera instaladores Windows |
 | `npm run dist:mac` | app/ | Gera instaladores macOS |
+| `npm run publish:github` | app/ | Publica uma release pelo electron-builder; usar apenas no fluxo de release |
 
 ---
 
@@ -119,12 +127,12 @@ Corpo detalhado opcional.
 
 ### Escopos comuns
 
-`chat`, `terminal`, `orchestration`, `adapters`, `git`, `ui`, `theme`, `export`, `portability`, `ci`, `build`
+`canvas`, `terminal`, `orchestration`, `adapters`, `usage`, `accounts`, `git`, `ui`, `portability`, `ci`, `build` (`chat` só para manutenção legada)
 
 ### Exemplos
 
 ```
-feat(chat): add message export to markdown format
+feat(canvas): add live account usage panel
 fix(terminal): prevent duplicate events from persistent sessions
 docs(portability): document cross-platform path strategy
 refactor(adapters): extract common JSONL parsing to shared module
@@ -138,38 +146,43 @@ test(cli-detector): add version parsing edge cases
 | Branch | Propósito |
 |--------|----------|
 | `main` | Desenvolvimento ativo |
-| `production` | Branch de release — push gera build automático |
+| `production` | Branch legada/configurável usada apenas pelo atalho explícito `--update` |
 | `feature/*` | Features em desenvolvimento |
 | `fix/*` | Correções de bugs |
+| `docs/*` | Atualizações de documentação |
 
 ### Fluxo
 
 1. Criar branch a partir de `main`: `git checkout -b feature/nome-da-feature`
 2. Desenvolver, testar, commitar.
 3. Abrir PR para `main`.
-4. Após aprovação/merge, se pronto para release: merge `main` → `production`.
-5. Push em `production` dispara release automática.
+4. Após aprovação, fazer merge em `main`.
+5. O CI de `main` valida o commit; a conclusão verde aciona o workflow de release.
 
 ---
 
 ## Política de release
 
-- Push em `production` dispara o workflow `release.yml`.
+- Uma execução verde do CI para um commit em `main` dispara o workflow `release.yml`.
+- O workflow também aceita execução manual, mas exige o SHA exato de um commit que passou no CI.
 - O workflow gera builds para Linux, Windows e macOS.
-- Artefatos são publicados automaticamente no GitHub Releases.
+- O workflow cria primeiro uma pré-release, publica todos os artefatos e só então a promove para release normal.
 - Versão é gerada automaticamente: `{base_version}.{run_number}`.
 
-**Cuidado:** Push direto em `production` gera release. Sempre verifique o estado do código antes de enviar.
+**Cuidado:** a publicação altera o GitHub Releases e deve ocorrer somente pelo
+workflow validado. `npm run publish:github` não é um substituto para esse
+fluxo.
 
 ---
 
 ## Testes
 
-Os testes usam o test runner nativo do Node.js:
+Os testes são divididos entre backend Electron, renderer e launcher Python:
 
 ```bash
 cd app
 npm test
+npm run test:frontend
 ```
 
 Convenção de arquivos: `*.test.cjs` no mesmo diretório do módulo.
@@ -177,6 +190,12 @@ Convenção de arquivos: `*.test.cjs` no mesmo diretório do módulo.
 Exemplos:
 - `cli-detector.cjs` → `cli-detector.test.cjs`
 - `shell-adapter.cjs` → `shell-adapter.test.cjs`
+
+Para o launcher, rode na raiz do repositório:
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
 
 ### Conferir no app rodando
 
@@ -193,15 +212,12 @@ digitar no terminal de um agente e simular colagens.
 
 O arquivo `.github/workflows/ci.yml` roda em:
 - Pull requests
-- Push em `main` e `production`
+- Push em `main`
 
-Passos:
-1. Checkout
-2. Setup Node 22
-3. `npm ci`
-4. `npm test`
-5. `npm run lint`
-6. `npm run build`
+O job `launcher` testa Linux, Windows e macOS com Python 3.9 e 3.13. O job
+`release-scripts` valida os scripts Bash usados na publicação. O job `validate`
+testa o app nos três sistemas com Node 22, `npm test`, `npm run lint` e
+`npm run build`, além de verificar os arquivos de documentação vigentes.
 
 ---
 
@@ -210,9 +226,13 @@ Passos:
 Toda feature deve ser documentada em `/docs/`:
 
 1. **Antes de implementar:** criar plano se a feature alterar arquitetura.
-2. **Depois de implementar:** atualizar docs com comportamento real.
+2. **Depois de implementar:** atualizar docs com comportamento real no mesmo
+   commit coeso quando a mudança de comportamento exigir documentação.
 3. **Formato:** Markdown com `Status:` no topo (`concluido.`, `em desenvolvimento.`, `planejado.`).
-4. **Commit separado:** não misturar docs com implementação grande.
+4. **Histórico operacional:** acrescentar uma entrada datada ao `IA.md`; não
+   reescrever registros antigos nem deixar trabalho encerrado como "em andamento".
+5. **Produto atual:** novas telas, fluxos e exemplos devem tratar o canvas como
+   caminho principal; o chat só deve aparecer em documentação de compatibilidade.
 
 ---
 
@@ -222,7 +242,8 @@ Toda feature deve ser documentada em `/docs/`:
 2. Registrar no `app/electron/services/providers/terminal-adapter-registry.cjs`.
 3. Adicionar ao catálogo em `app/electron/core/cli-detector.cjs`.
 4. Criar testes unitários.
-5. Documentar em `/docs/adapters/` ou `/docs/backend/`.
+5. Documentar o comportamento em um guia vigente de `docs/` e atualizar o
+   índice de [`docs/README.md`](../README.md) se uma nova página for criada.
 
 ---
 

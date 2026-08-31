@@ -1,8 +1,24 @@
 # IA.md — Contexto Operacional do Felixo AI Core
 
-Status: em evolução ativa — canvas estilo n8n como produto principal.
+Status: em evolução ativa — canvas estilo n8n como produto principal; chat legado depreciado.
 
 > Este arquivo segue o template de contexto do padrão de qualidade (`TEMPLATE-CONTEXTO-IA`). O "Histórico de Evolução" mantém a trilha cronológica densa das fases; as seções fixas acima consolidam o estado atual.
+
+## Snapshot atual — 2026-08-31
+
+- O canvas é a superfície principal do produto: agentes em PTY real, arquivos,
+  notas, grupos, páginas web, ferramentas e conexões compartilhadas.
+- O modo de chat foi depreciado. Continua no código para compatibilidade com
+  sessões e exportações antigas; novas features e decisões devem apontar para
+  o canvas.
+- **Limites e uso** consulta fontes reais por conta/perfil, mostra dados
+  completos e redigidos do `/status` do Claude e deixa explícita a ausência de
+  cota quando o provider não publica uma.
+- A documentação vigente está em `README.md`, `docs/README.md`, `docs/guias/`
+  e `docs/projeto/`; `docs/_legado/` é apenas histórico.
+- A branch de desenvolvimento/release é `main`. O launcher ainda preserva o
+  `--update` explícito com branch configurável e o update silencioso da branch
+  atual.
 
 ## Protocolo de Encerramento
 
@@ -1753,3 +1769,35 @@ CORREÇÃO: o `bindMouseSelection` agora retém somente o `mousedown` primário 
 VALIDAÇÃO: `npm run test:frontend -- --run src/features/canvas/terminal/terminal-mouse-selection.test.ts` — 19/19; `git diff --check` limpo. `npm run build`, `npm run lint` e `npx tsc -b` foram iniciados, mas excederam o limite de execução do ambiente sem saída de erro; não houve validação manual com o app, xdotool ou mouse real.
 
 Estado final: concluído quanto à implementação e aos testes automatizados disponíveis; validação completa de build/lint e comportamento visual com mouse real pendente por limitação de tempo do ambiente.
+
+## Registro de Trabalho — 2026-08-31 (parte 19) — documentação canvas-first e gates sincronizados
+
+PEDIDO: atualizar todas as docs do AI Core considerando que o modo de chat foi
+defasado, registrar o trabalho e preparar a entrega.
+
+DECISÃO: o canvas é a superfície principal. O chat fica documentado como
+legado de compatibilidade para sessões e exportações antigas, sem novos fluxos
+de produto. A documentação pública continua sem caminhos privados,
+identificadores de contas ou credenciais.
+
+FEITO: README, índice de docs, guias de usuário e desenvolvedor, arquitetura,
+roadmap, política de versionamento e execução via código-fonte foram corrigidos
+para refletir a implementação atual. Foi criado `docs/projeto/ARQUITETURA.md`;
+`docs/_legado/` continua reservado ao histórico. Também foram corrigidos os
+fluxos de branch/update/release, `.env.example` e o gate de docs do CI. O
+roadmap passou a apontar oportunidades de contribuição em performance,
+multi-SO, provedores, orquestração e experiência de contribuição. O fixture do
+teste de uso ao vivo do Claude passou a usar relógio determinístico para não
+envelhecer artificialmente para `stale`; o `--help` e os comentários do
+launcher também foram alinhados à branch configurável do update explícito.
+
+VALIDAÇÃO: auditoria de links locais em 10 docs ativos sem referências
+quebradas; build com 709 módulos; `npm test` 859/859;
+`npm run test:frontend` 698/698; launcher Python 95/95; lint com 0 erros e os
+3 avisos React já existentes; `git diff --check` limpo. O build ainda informa o
+aviso conhecido de chunk JavaScript acima de 500 kB.
+
+LIMITE: nenhuma conta ou credencial real foi alterada. O release será gerado
+pelo workflow do GitHub após o push e acompanhado separadamente.
+
+Estado final: concluído e pronto para commit/push.

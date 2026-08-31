@@ -1,10 +1,14 @@
 # Rodar via Código-Fonte
 
 Status: concluido.
+Última revisão: 2026-08-31.
 
 ## Objetivo
 
-Documentar como qualquer pessoa pode clonar o repositório e rodar o Felixo AI Core em ambiente de desenvolvimento.
+Documentar como qualquer pessoa pode clonar o repositório e rodar o Felixo AI
+Core em ambiente de desenvolvimento. O app abre no canvas, que é a superfície
+vigente; o modo de chat está depreciado e fica disponível somente para
+compatibilidade com histórico legado.
 
 ---
 
@@ -45,7 +49,7 @@ Sem argumentos, `start_app.py` abre um **menu interativo colorido** (biblioteca 
 |---|---|
 | **Iniciar / Rodar** | Detecta Node/npm, instala dependências e sobe o app — desktop (Electron) ou preview web, a sua escolha. |
 | **Instalar / Setup** | Instala dependências Python (`requirements.txt`) e Node (`npm install`) sem abrir o app. |
-| **Configurar** | Ajusta, sem editar arquivo na mão, os overrides opcionais de ambiente: pasta do Node, pastas extras de CLI, modo de permissão de cada agente, branch de produção. Fica salvo em `.felixo-start-config.json` (gitignored). |
+| **Configurar** | Ajusta, sem editar arquivo na mão, os overrides opcionais de ambiente: pasta do Node, pastas extras de CLI, modo de permissão de cada agente e branch do atalho explícito de atualização. Fica salvo em `.felixo-start-config.json` (gitignored). |
 | **Status / Sair** | Mostra Node detectado, se as dependências estão instaladas, branch/estado do Git e as configurações salvas; sai do menu. |
 
 No macOS, ao escolher **Iniciar / Rodar**, o launcher pergunta se deve forçar a
@@ -86,15 +90,18 @@ npm run dev:web
 |---------|-----------|-----------|
 | `python3 start_app.py` | raiz | Abre o menu interativo (Iniciar/Instalar/Configurar/Status) |
 | `python3 start_app.py --web` | raiz | **Atalho sem menu**, para scripts/CI: inicia apenas preview web |
-| `python3 start_app.py --update` | raiz | **Atalho sem menu**: atualiza código da branch production |
+| `python3 start_app.py --update` | raiz | **Atalho sem menu**: faz `fetch` + `pull --ff-only` da branch definida para a atualização explícita (por padrão, `production`) |
 | `python3 start_app.py --skip-install` | raiz | **Atalho sem menu**: pula instalação de deps |
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas o Vite dev server com limpeza coordenada |
 | `npm run build` | app/ | Compila TypeScript + Vite bundle |
 | `npm run test` | app/ | Roda testes unitários |
+| `npm run test:frontend` | app/ | Roda os testes Vitest do renderer |
 | `npm run lint` | app/ | Roda ESLint |
 | `npm run pack` | app/ | Gera build empacotado local |
 | `npm run dist:linux` | app/ | Gera instaladores Linux |
+| `npm run dist:mac` | app/ | Gera instaladores macOS |
+| `npm run dist:win` | app/ | Gera instaladores Windows |
 
 ### Ciclo de vida do Vite no modo dev
 
@@ -160,8 +167,8 @@ python3 start_app.py
 | `FELIXO_SHELL` | Shell override para execução de comandos | `$SHELL` ou padrão do SO |
 | `FELIXO_NODE_BIN` | Diretório do Node.js override | auto-detectado |
 | `FELIXO_NODE_SEARCH_PATHS` | Diretórios extras para buscar Node/npm | vazio |
-| `FELIXO_PRODUCTION_BRANCH` | Branch de produção para `--update` | `production` |
-| `FELIXO_DISABLE_AUTO_UPDATE` | Desabilita auto-update | `0` |
+| `FELIXO_PRODUCTION_BRANCH` | Branch usada pelo `--update` explícito | `production` |
+| `FELIXO_AUTO_UPDATE` | Controla o update silencioso da branch atual (`off`, `0`, `false` ou `no` desabilita) | ligado |
 | `FELIXO_UPDATE_PRERELEASE` | Aceita pre-releases | `0` |
 | `FELIXO_UPDATE_CHANNEL` | Canal de update | vazio |
 
@@ -298,16 +305,31 @@ npm run build
 
 ## Atualização via código-fonte
 
-Para atualizar o app para a versão mais recente da branch `production`:
+O launcher tem dois caminhos diferentes. No uso normal, iniciar sem flags faz
+um `fetch` silencioso e tenta atualizar por fast-forward **a branch em que o
+checkout já está**; se houver alterações locais, divergência, falta de rede ou
+outro impedimento, o app abre sem interromper o trabalho.
+
+Para pedir explicitamente a branch configurada para esse atalho (por padrão,
+`production`), use:
 
 ```bash
 python3 start_app.py --update
 ```
 
 Isso executa:
-1. `git fetch origin production`
-2. `git pull --ff-only origin production`
+1. `git fetch origin <branch-configurada>`
+2. `git pull --ff-only origin <branch-configurada>`
 3. `npm install` (se o código mudou)
 4. Inicia o app
 
-**Nota:** Se houver alterações locais não commitadas, a atualização é bloqueada para proteger o trabalho do usuário.
+Também é possível selecionar outra branch sem alterar a configuração salva:
+
+```bash
+python3 start_app.py --update --branch main
+```
+
+**Nota:** Se houver alterações locais não commitadas, a atualização explícita é
+bloqueada para proteger o trabalho do usuário. `--no-auto-update` e
+`FELIXO_AUTO_UPDATE=off` só controlam o caminho silencioso; não desabilitam o
+`--update` explícito.

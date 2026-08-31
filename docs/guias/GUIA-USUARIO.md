@@ -1,9 +1,16 @@
 # Guia do Usuário Final - Felixo AI Core
 
 Status: concluido.
-Última revisão: 2026-08-04.
+Última revisão: 2026-08-31.
 
-Este guia é para quem quer instalar e usar o Felixo AI Core como aplicativo desktop. O Felixo centraliza CLIs de IA instaladas no seu computador, como Claude Code, Codex e Gemini, e oferece uma interface para conversar, selecionar projetos, acompanhar execução, usar notas, exportar chats e configurar o orquestrador.
+Este guia é para quem quer instalar e usar o Felixo AI Core como aplicativo
+desktop. O Felixo centraliza CLIs de IA instaladas no seu computador, como
+Claude Code, Codex e Gemini, e organiza agentes, arquivos, notas, projetos e
+ferramentas num canvas visual.
+
+O canvas é o modo principal e recomendado. O modo de chat foi depreciado e
+permanece acessível apenas para compatibilidade com sessões e exportações
+antigas; novos fluxos devem ser iniciados por blocos e terminais do canvas.
 
 ## 1. Modos de uso
 
@@ -11,6 +18,10 @@ O Felixo AI Core pode ser usado de duas formas:
 
 - **App instalado:** baixe um artefato em GitHub Releases e abra como aplicativo desktop. Este é o fluxo recomendado para usuários finais.
 - **Código-fonte:** clone o repositório e rode `python3 start_app.py`. Este fluxo é voltado para desenvolvimento, testes e contribuição.
+
+Em qualquer instalação, o app abre diretamente no canvas. O botão **Chat** da
+barra continua disponível para consultar uma sessão legada, mas não é a
+superfície indicada para iniciar trabalho novo.
 
 No modo instalado, o auto-update fica ativo apenas quando o app está empacotado. No modo código-fonte, o launcher tenta atualizar a branch atual antes de iniciar; no macOS, o prompt de atualização forçada vem confirmado por padrão. A atualização manual continua disponível com `python3 start_app.py --update`.
 
@@ -143,7 +154,7 @@ Se o comando funcionar no terminal, mas não no app, reinicie o Felixo. Em insta
 
 ### Modelos
 
-Na sidebar, use o botão de configuração em **Modelos** para abrir **Gerenciar modelos**.
+No canvas, abra **Ferramentas → Modelos** para abrir **Gerenciar modelos**.
 
 Você pode:
 
@@ -153,11 +164,11 @@ Você pode:
 - Abrir login oficial da CLI no terminal do sistema.
 - Adicionar uma CLI pelo comando, por exemplo `codex`, `claude` ou `gemini`.
 - Remover modelos cadastrados.
-- Clicar em um modelo na sidebar para configurar modelo do provider e effort quando o adapter suportar.
+- Clicar em um modelo no painel **Modelos** para configurar o modelo do provider e o effort quando o adapter suportar.
 
 ### Orquestrador
 
-Use **Orquestrador** na sidebar para ajustar:
+Abra **Ferramentas → Orquestrador** para ajustar:
 
 - modo de operação;
 - workflow padrão;
@@ -169,7 +180,7 @@ Use **Orquestrador** na sidebar para ajustar:
 
 ### Felixo
 
-Use **Felixo** no rodapé da sidebar para ajustar:
+Abra **Ferramentas → Configurações** para ajustar:
 
 - memórias globais do orquestrador;
 - tema visual;
@@ -183,8 +194,11 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 
   Ao navegar os arquivos de um projeto, **clicar num arquivo o abre num editor de terminal** para ler e editar ali mesmo. O editor é o do seu `$VISUAL`/`$EDITOR`, se você tiver um configurado; senão o app usa o primeiro que encontrar instalado (`nano`, `micro`, `vim`, `vi`; `notepad` no Windows). Passando o mouse sobre a linha aparecem duas ações extras: **rodar num terminal**, oferecida só em arquivos que o app sabe executar (`.py`, `.js`, `.ts`, `.sh`, `.ps1`, executáveis), e **abrir num bloco do canvas**, para deixar o arquivo visível enquanto você trabalha em outra coisa.
 - **Code:** veja status, branch, diff e commits recentes dos projetos ativos. O painel atual é read-only.
-- **Notas:** registre notas associadas ao uso do app/projetos.
-- **Exportar:** exporte chats em JSON compacto, Markdown ou texto simples.
+- **Notas:** registre notas associadas ao uso do app/projetos. Elas são a
+  superfície de memória recomendada no canvas; o modo de chat legado também
+  consegue consultar as notas persistidas.
+- **Exportar:** exporte sessões de chat legadas em JSON compacto, Markdown ou
+  texto simples.
 
 ### Abrir arquivos de texto no canvas
 
@@ -236,7 +250,7 @@ Ao arrastar uma conexão entre dois blocos de agentes, ambos recebem uma instru�
 
 O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que flutuam sobre o quadro sem escondê-lo: Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git, Fetch All e Configurações. Escolher uma ferramenta fecha o menu e abre o painel correspondente. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, as notificações continuam acessíveis ao lado do botão de expansão.
 
-- **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas compartilhadas com o modo chat, editáveis ali mesmo.
+- **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas, editáveis ali mesmo e também legíveis pelo modo de chat legado.
 - **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
 - **Fetch All** varre os discos locais atrás de todos os repositórios Git, faz `fetch` em cada um e monta um plano: o que só precisa de pull, o que precisa de push, o que tem pendência e o que já está atualizado. A varredura só lê. Pull (sempre `--ff-only`), push e o commit automático dos repositórios cuja única pendência é commitar acontecem num segundo passo, depois de você revisar o plano e confirmar — e o estado de cada repositório é conferido de novo imediatamente antes de qualquer escrita. Cada passada gera um relatório em Markdown na pasta de relatórios do app. A varredura **rápida** reaproveita a lista da última varredura completa (é mais rápida, mas não encontra repositórios novos), e o ícone ao lado de um repositório passa a **ignorar** aquela pasta nas próximas varreduras — a lista de ignoradas fica no rodapé do painel.
 
@@ -310,6 +324,7 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 ## 6. Limitações conhecidas
 
 - O app depende das CLIs externas estarem instaladas, autenticadas e acessíveis no `PATH`.
+- O modo de chat está depreciado: pode ser usado para compatibilidade e exportação de histórico, mas não recebe novos fluxos de produto; use o canvas para trabalho novo.
 - O auto-update silencioso também existe no launcher do código-fonte; no macOS, o prompt de atualização forçada vem confirmado por padrão. `npm run dev` direto não executa atualização Git.
 - No Linux, prefira AppImage para o fluxo de auto-update. `.deb` exige reinstalação/atualização tradicional.
 - **macOS bloqueia a primeira execução.** Os artefatos não são assinados nem notarizados, então o Gatekeeper barra o app até que ele seja liberado manualmente (ver a [seção de instalação para macOS](#macos)). Não há como evitar isso sem uma conta paga do Apple Developer Program.

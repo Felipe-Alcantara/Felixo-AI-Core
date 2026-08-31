@@ -598,9 +598,12 @@ test(
       },
     ]
     const liveCalls = []
+    const liveTimestamp = '2026-08-30T19:00:00.000Z'
+    const liveMeasurementAt = Date.parse(liveTimestamp)
 
     const service = createAgentUsageService({
       repository,
+      now: () => liveMeasurementAt,
       probe: () => null,
       listCatalog: async () => [
         {
@@ -629,8 +632,8 @@ test(
         liveCalls.push(env.CLAUDE_CONFIG_DIR)
         return {
           ok: true,
-          collectedAt: '2026-08-30T19:00:00.000Z',
-          measuredAt: '2026-08-30T19:00:00.000Z',
+          collectedAt: liveTimestamp,
+          measuredAt: liveTimestamp,
           metrics: [
             {
               key: 'rate_limits.seven_day',

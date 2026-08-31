@@ -103,10 +103,14 @@ jobs:
         shell: bash
         run: |
           required_docs=(
-            "../docs/projeto/STATUS-ATUAL.md"
+            "../docs/README.md"
+            "../docs/projeto/IA.md"
+            "../docs/projeto/ARQUITETURA.md"
             "../docs/projeto/ROADMAP.md"
-            "../docs/projeto/GUIA-DESENVOLVEDOR.md"
-            "../docs/projeto/GUIA-USUARIO-FINAL.md"
+            "../docs/projeto/POLITICA-VERSIONAMENTO.md"
+            "../docs/projeto/RODAR-VIA-CODIGO-FONTE.md"
+            "../docs/guias/GUIA-DESENVOLVEDOR.md"
+            "../docs/guias/GUIA-USUARIO.md"
           )
           missing=0
           for doc in "${required_docs[@]}"; do

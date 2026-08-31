@@ -41,12 +41,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--update",
         action="store_true",
-        help="Fast-forward this checkout from the production branch before starting.",
+        help=(
+            "Fast-forward this checkout from the configured explicit-update "
+            "branch before starting."
+        ),
     )
     parser.add_argument(
         "--branch",
         default=os.environ.get("FELIXO_PRODUCTION_BRANCH", "production"),
-        help="Production branch used with --update. Defaults to production.",
+        help="Branch used with --update. Defaults to production.",
     )
     parser.add_argument(
         "--no-auto-update",
@@ -128,8 +131,8 @@ def run_direct(args: argparse.Namespace) -> int:
 
     source_updated = False
     if args.update:
-        # Explicit `--update` keeps its old contract: it targets the production
-        # branch and a failure is a real failure worth stopping for.
+        # Explicit `--update` targets the configured branch and a failure is a
+        # real failure worth stopping for.
         update_code, source_updated = update_source_from_branch(args.branch, env)
         if update_code != 0:
             return update_code

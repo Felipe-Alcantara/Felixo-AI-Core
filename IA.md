@@ -2802,3 +2802,53 @@ A validação visual usou o driver Electron isolado porque nenhuma superfície d
 navegador estava conectada nesta sessão. A confirmação nativa foi exercitada no
 perfil temporário com uma decisão controlada pelo teste; não houve alteração em
 contas ou credenciais reais.
+
+## [2026-08-31] Documentação sincronizada com o estado atual do produto
+
+PEDIDO: atualizar todas as docs do AI Core considerando que o modo de chat foi
+defasado, registrar o trabalho e preparar a entrega.
+
+DECISÃO: o canvas é a experiência principal e recomendada. O chat permanece
+somente como superfície legada de compatibilidade para sessões e exportações
+antigas; não deve receber novos fluxos de produto. A documentação pública não
+inclui caminhos privados, identificadores de contas ou credenciais.
+
+FEITO:
+
+- README, índice de documentação, guia de usuário, guia de desenvolvedor,
+  arquitetura, roadmap, política de versionamento e execução via código-fonte
+  foram alinhados ao código atual.
+- A arquitetura vigente foi documentada em `docs/projeto/ARQUITETURA.md`; o
+  material obsoleto continua explicitamente arquivado em `docs/_legado/`.
+- O fluxo real de uso ao vivo foi registrado: consulta por conta/perfil,
+  detalhes completos e redigidos do `/status` do Claude, estados stale/error e
+  fallback opcional de statusline, sem inventar cotas ausentes.
+- Branches, atualização explícita/silenciosa, release após CI verde em `main`,
+  matriz de plataformas e variáveis de ambiente foram corrigidos nos docs e
+  no `.env.example`.
+- O roadmap antigo foi substituído por oportunidades atuais de contribuição,
+  com foco em performance, multi-SO, cobertura de provedores, orquestração e
+  experiência de contribuição.
+- O gate de documentação do CI passou a verificar somente arquivos ativos.
+- O `--help` e os comentários do launcher passaram a descrever a branch do
+  update explícito como configurável, sem sugerir que ela seja o gatilho de
+  release.
+- O fixture do teste de uso ao vivo do Claude passou a usar um relógio
+  determinístico, evitando que uma data fixa envelheça para `stale` conforme o
+  tempo passa.
+
+VALIDAÇÃO:
+
+- auditoria de links locais: 10 documentos ativos, todos resolvidos;
+- `npm run build`: concluído com 709 módulos; permanece o aviso conhecido de
+  chunk JavaScript acima de 500 kB;
+- `npm test`: 859/859; `npm run test:frontend`: 698/698;
+- testes do launcher Python: 95/95;
+- `npm run lint`: 0 erros e somente 3 avisos React já existentes;
+- `git diff --check`: limpo.
+
+LIMITE: esta entrega atualiza documentação e gates; não altera contas,
+credenciais nem o comportamento de produção. O release será publicado pelo
+workflow do GitHub após o push e acompanhado separadamente.
+
+Estado final: concluído e pronto para commit/push.

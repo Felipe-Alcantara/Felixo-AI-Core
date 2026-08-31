@@ -1,6 +1,6 @@
 # Felixo AI Core
 
-Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicação desktop para controlar, organizar e orquestrar múltiplas IAs, agentes, terminais, repositórios e fluxos de trabalho.
+Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicação desktop, orientada a canvas, para controlar, organizar e orquestrar múltiplas IAs, agentes, terminais, repositórios e fluxos de trabalho.
 
 > **Pare de trocar de IA. Comece a orquestrar.**
 
@@ -8,11 +8,16 @@ Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicaç
 
 ## O que é
 
-Uma aplicação desktop que centraliza, em uma única interface, as CLIs de IA que você já usa no terminal — Claude, Codex, Gemini e outros.
+Uma aplicação desktop que transforma as CLIs de IA que você já usa no terminal — Claude, Codex, Gemini e outros — em blocos de trabalho conectados num canvas visual.
+
+O canvas é a superfície principal e recomendada do produto. O modo de chat foi
+depreciado: continua acessível apenas como caminho legado para consultar ou
+exportar sessões antigas, mas novas funcionalidades e fluxos devem ser criados
+no canvas.
 
 O objetivo de longo prazo é evoluir para um sistema capaz de escolher modelos, coordenar agentes, manter memória persistente e executar pipelines inteligentes com base em custo, contexto e objetivo da tarefa.
 
-## Arquitetura alvo
+## Arquitetura atual
 
 O projeto agora segue uma arquitetura híbrida:
 
@@ -22,15 +27,18 @@ O projeto agora segue uma arquitetura híbrida:
 
 MCP não substitui as CLIs nem vira uma API universal de modelos. No Felixo AI Core, MCP é a camada de ferramentas; os modelos continuam entrando por adapters de terminal, APIs futuras ou modelos locais.
 
-Ver [Orquestrador Híbrido com MCP](./docs/arquitetura/ORQUESTRADOR-HIBRIDO-MCP.md).
+Veja a [visão da arquitetura atual](./docs/projeto/ARQUITETURA.md). A antiga
+[especificação do orquestrador híbrido com MCP](./docs/_legado/arquitetura/ORQUESTRADOR-HIBRIDO-MCP.md)
+fica preservada apenas como referência histórica.
 
 ---
 
 ## Status atual
 
-Primeira versão funcional entregue:
+Base funcional entregue:
 
-- Interface de chat com seletor visual de modelos/CLIs
+- Canvas visual como superfície principal, com agentes, arquivos, notas, grupos e páginas web
+- Modo de chat legado, mantido somente para compatibilidade com sessões e exportações antigas
 - Backend Electron executando CLIs reais em streaming
 - Adapters para `claude`, `codex` e `gemini`
 - Launcher Openia para as interfaces compatíveis com OpenRouter, sem duplicar seu catálogo de modelos
@@ -61,7 +69,7 @@ Primeira versão funcional entregue:
 | Estilos | Tailwind CSS 3 |
 | Ícones | lucide-react |
 | Tooling | ESLint 10, Node 25.9.0 via `.nvmrc` |
-| Testes | `node:test` nativo |
+| Testes | `node:test` nativo + Vitest |
 
 ---
 
@@ -73,7 +81,7 @@ Forma mais simples — abre o menu interativo onde você instala, configura e in
 python3 start_app.py
 ```
 
-No menu você tem: **Iniciar/Rodar** (app desktop ou preview web), **Instalar/Setup**, **Configurar** (CLIs, permissões dos agentes, branch de produção) e **Status/Sair**.
+No menu você tem: **Iniciar/Rodar** (app desktop ou preview web), **Instalar/Setup**, **Configurar** (CLIs, permissões dos agentes e branch usada pela atualização explícita) e **Status/Sair**.
 
 ### Atualização automática
 
@@ -125,7 +133,7 @@ Pré-requisitos:
 Linux/macOS:
 
 ```bash
-git clone -b production https://github.com/Felipe-Alcantara/Felixo-AI-Core.git
+git clone https://github.com/Felipe-Alcantara/Felixo-AI-Core.git
 cd Felixo-AI-Core
 python3 start_app.py
 ```
@@ -133,7 +141,7 @@ python3 start_app.py
 Windows PowerShell:
 
 ```powershell
-git clone -b production https://github.com/Felipe-Alcantara/Felixo-AI-Core.git
+git clone https://github.com/Felipe-Alcantara/Felixo-AI-Core.git
 cd Felixo-AI-Core
 py start_app.py
 ```
@@ -311,7 +319,11 @@ cd app
 npm run dist
 ```
 
-O workflow `.github/workflows/release.yml` publica instaladores para Linux, Windows e macOS quando houver push na branch `production`. O app empacotado verifica atualizações no início e periodicamente; quando encontra uma versão nova publicada no GitHub Releases, baixa automaticamente e instala ao fechar.
+O workflow `.github/workflows/release.yml` publica instaladores para Linux,
+Windows e macOS depois que o CI do commit em `main` passa (também pode ser
+acionado manualmente para um SHA já validado). O app empacotado verifica
+atualizações no início e periodicamente; quando encontra uma versão nova
+publicada no GitHub Releases, baixa automaticamente e instala ao fechar.
 
 Observações importantes:
 
@@ -332,6 +344,7 @@ Aplicação:
 ```bash
 cd app
 npm test
+npm run test:frontend
 npm run lint
 npm run build
 ```
@@ -357,7 +370,7 @@ O `start_app.py` na raiz é a porta de entrada (exigida pelo padrão de qualidad
 | `process` | Parar o app e limpar processos de execuções anteriores |
 | `node_deps` | Manter `app/node_modules` em dia com o `package.json` |
 | `python_deps` | Instalar as dependências Python do próprio launcher |
-| `git` | Atualizar o checkout a partir da branch de produção |
+| `git` | Atualizar o checkout com as regras de update da branch atual/explicita |
 | `runner` | Preparo de ambiente e o caminho sem menu (flags) |
 | `menu` | O menu interativo — interface principal do launcher |
 
