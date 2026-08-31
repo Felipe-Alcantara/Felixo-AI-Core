@@ -2236,10 +2236,21 @@ novo caminho sem confirmação resolve 0 raízes e não entra no scanner.
 
 VALIDAÇÃO REAL: o Vite local subiu para a checagem visual, mas não havia
 navegador conectado nesta sessão para abrir o painel. A checagem visual fica
-registrada como pendência; não foi iniciada nenhuma varredura real de `/`.
+registrada como limitação da sessão; não foi iniciada nenhuma varredura real de
+`/`.
 
-PUBLICAÇÃO: implementação e documentação local prontas para commit, push,
-acompanhamento do CI/release e registro final na task e no relatório de hoje.
+PUBLICAÇÃO: a implementação foi publicada no commit
+[`8b1bb7b`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/8b1bb7bca47b88f45df76ebd8cc12573946ddf52). O primeiro CI
+[`33447196380`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33447196380)
+revelou uma expectativa de caminho POSIX não portátil no novo teste; o ajuste
+foi publicado no commit
+[`6e3dcfb`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/6e3dcfb62a412c6223fca73976fd4d0d579f0d7c).
+O CI final
+[`33447565699`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33447565699)
+terminou verde nas matrizes Linux, macOS e Windows. O release
+[`v0.1.133`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.133),
+workflow [`33447760779`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33447760779),
+foi publicado com 14 artefatos para os três SOs.
 
-Estado final: correção implementada e validada por testes, build, lint e
-benchmark; aguardando publicação remota.
+Estado final: task concluída, correção implementada, testada, publicada e
+pronta para registro na task e no relatório de hoje.
