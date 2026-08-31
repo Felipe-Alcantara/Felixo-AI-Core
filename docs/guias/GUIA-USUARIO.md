@@ -203,6 +203,21 @@ Abra **Ferramentas → Configurações** para ajustar:
 
 As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma tela de cadastro de chaves de API.
 
+### Felixo System Design
+
+Em **Ferramentas → Configurações**, o bloco **Felixo System Design** sincroniza
+o repositório de padrões e mostra o índice usado pelos agentes. A sincronização
+de repositórios privados usa a autenticação segura já configurada no Git
+(credential helper, Keychain do macOS, Credential Manager do Windows ou
+equivalente). Não coloque usuário, senha, token ou parâmetro secreto na URL do
+repositório; quando uma configuração legada contém esse formato, o app remove
+essas partes antes de salvar e de chamar o Git.
+
+Se o clone, fetch ou reset falhar, a mensagem preserva a etapa, o código, o
+branch e o repositório sem a credencial. O stderr, cabeçalhos de autorização e
+a linha de comando completa não são persistidos no SQLite, enviados ao QA
+Logger nem devolvidos ao renderer.
+
 ### Projetos, Code, Notas e Exportação
 
 - **Projetos:** adicione um repositório individual ou detecte vários repositórios dentro de um workspace. A lista aparece em ordem alfabética, e o mesmo vale para os arquivos ao abrir um projeto (pastas primeiro). A ordenação ignora acento e maiúscula — `Álbum` fica junto de `alfa`, não no fim — e compara número por valor, então `projeto2` vem antes de `projeto10`.

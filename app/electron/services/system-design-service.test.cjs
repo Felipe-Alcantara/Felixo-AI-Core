@@ -1,8 +1,12 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const {
   createCloneArgs,
   parseMarkdownTitleAndSummary,
+  syncSystemDesignRepository,
 } = require('./system-design-service.cjs')
 
 test('parseMarkdownTitleAndSummary extracts h1 and first paragraph', () => {
@@ -54,6 +58,54 @@ test('os argumentos de clone preservam profundidade e branch', () => {
     'production',
     '--',
     'https://exemplo/repo.git',
+    'repo',
+  ])
+})
+
+test('sync usa URL sanitizada e propaga apenas erro Git redigido', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-service-'))
+  const token = `ghp_${'e'.repeat(30)}`
+  const repoUrl = `https://deploy:${token}@github.com/acme/private.git?token=${token}`
+  const calls = []
+  const gitError = new Error(
+    `Command failed: git clone ${repoUrl} repo\nfatal: token=${token}`,
+  )
+  gitError.code = 128
+  gitError.stderr = `fatal: Authentication failed for '${repoUrl}'\nAuthorization: Bearer ${token}`
+
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  await assert.rejects(
+    syncSystemDesignRepository({
+      repoUrl,
+      branch: 'main',
+      cacheDir,
+      repository: { save() {}, deleteMissing() { return 0 } },
+      executeGit: async (command, args, options) => {
+        calls.push({ command, args, options })
+        throw gitError
+      },
+    }),
+    (error) => {
+      assert.equal(error.name, 'GitSyncError')
+      assert.match(error.message, /Falha no Git durante clone/)
+      assert.match(error.message, /Código: 128/)
+      assert.doesNotMatch(error.message, new RegExp(token))
+      assert.doesNotMatch(error.message, /Command failed: git clone/)
+      return true
+    },
+  )
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].command, 'git')
+  assert.deepEqual(calls[0].args, [
+    'clone',
+    '--depth',
+    '1',
+    '--branch',
+    'main',
+    '--',
+    'https://github.com/acme/private.git',
     'repo',
   ])
 })

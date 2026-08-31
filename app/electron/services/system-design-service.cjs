@@ -5,6 +5,10 @@ const fsp = require('node:fs/promises')
 const path = require('node:path')
 const { execFile } = require('node:child_process')
 const { promisify } = require('node:util')
+const {
+  createRedactedGitError,
+  sanitizeGitRemoteUrl,
+} = require('./git-secret-redaction.cjs')
 
 const execFileAsync = promisify(execFile)
 
@@ -23,6 +27,7 @@ async function syncSystemDesignRepository({
   cacheDir,
   repository,
   logger,
+  executeGit = execFileAsync,
 }) {
   if (!cacheDir || typeof cacheDir !== 'string') {
     throw new Error('cacheDir e obrigatorio para sync do System Design.')
@@ -31,24 +36,58 @@ async function syncSystemDesignRepository({
     throw new Error('Repository de system-design invalido.')
   }
 
+  // Credenciais nunca devem entrar nos argumentos do processo Git. Repositórios
+  // privados usam o credential helper/keychain do sistema, não userinfo na URL.
+  repoUrl = sanitizeGitRemoteUrl(repoUrl)
+  const run = (cwd, args, context) =>
+    runGit(cwd, args, context, executeGit)
+
   await fsp.mkdir(cacheDir, { recursive: true })
   const repoPath = path.join(cacheDir, 'repo')
   const isFreshClone = !(await pathExists(path.join(repoPath, '.git')))
 
   if (isFreshClone) {
-    await runGit(cacheDir, createCloneArgs({ repoUrl, branch }))
+    await run(
+      cacheDir,
+      createCloneArgs({ repoUrl, branch }),
+      { stage: 'clone', repoUrl, branch },
+    )
   } else {
     try {
-      await runGit(repoPath, ['fetch', '--depth', '1', 'origin', branch])
-      await runGit(repoPath, ['reset', '--hard', `origin/${branch}`])
+      await run(
+        repoPath,
+        ['fetch', '--depth', '1', 'origin', branch],
+        { stage: 'fetch', repoUrl, branch },
+      )
+      await run(
+        repoPath,
+        ['reset', '--hard', `origin/${branch}`],
+        { stage: 'reset', repoUrl, branch },
+      )
     } catch (error) {
-      logger?.warn?.(`fetch falhou, tentando re-clone: ${describeError(error)}`)
+      logger?.warn?.(
+        `fetch falhou, tentando re-clone: ${describeError(error, {
+          stage: 'fetch',
+          repoUrl,
+          branch,
+        })}`,
+      )
       await fsp.rm(repoPath, { recursive: true, force: true })
-      await runGit(cacheDir, ['clone', '--depth', '1', '--branch', branch, repoUrl, 'repo'])
+      await run(
+        cacheDir,
+        ['clone', '--depth', '1', '--branch', branch, '--', repoUrl, 'repo'],
+        { stage: 're-clone', repoUrl, branch },
+      )
     }
   }
 
-  const headSha = (await runGit(repoPath, ['rev-parse', 'HEAD'])).trim()
+  const headSha = (
+    await run(
+      repoPath,
+      ['rev-parse', 'HEAD'],
+      { stage: 'ler o HEAD', repoUrl, branch },
+    )
+  ).trim()
   const documents = await collectDocuments(repoPath, headSha)
 
   for (const doc of documents) {
@@ -147,13 +186,17 @@ function createCloneArgs({ repoUrl, branch }) {
   return ['clone', '--depth', '1', '--branch', branch, '--', repoUrl, 'repo']
 }
 
-async function runGit(cwd, args) {
-  const { stdout } = await execFileAsync('git', args, {
-    cwd,
-    timeout: GIT_TIMEOUT_MS,
-    maxBuffer: MAX_BUFFER,
-  })
-  return stdout
+async function runGit(cwd, args, context = {}, executeGit = execFileAsync) {
+  try {
+    const { stdout } = await executeGit('git', args, {
+      cwd,
+      timeout: GIT_TIMEOUT_MS,
+      maxBuffer: MAX_BUFFER,
+    })
+    return stdout
+  } catch (error) {
+    throw createRedactedGitError(error, context)
+  }
 }
 
 async function pathExists(targetPath) {
@@ -165,8 +208,12 @@ async function pathExists(targetPath) {
   }
 }
 
-function describeError(error) {
-  return error instanceof Error ? error.message : String(error)
+function describeError(error, context = {}) {
+  if (error?.isRedactedGitError && typeof error.message === 'string') {
+    return error.message
+  }
+
+  return createRedactedGitError(error, context).message
 }
 
 module.exports = {

@@ -54,10 +54,25 @@ Base funcional entregue:
 - **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI
 - Preview de Markdown com sanitização de HTML/URLs externos, preservando GFM e imagens locais somente pela autorização do arquivo
+- Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
 - Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
 - Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL
+
+### Sincronização segura do Felixo System Design
+
+O guia obrigatório é sincronizado pelo processo principal com `git`, usando
+`execFile` sem shell. Repositórios privados continuam funcionando com o
+credential helper do Git, Keychain do macOS, Credential Manager do Windows ou
+outro mecanismo seguro configurado no sistema; não coloque usuário, senha ou
+token na URL do repositório. Se uma URL antiga contiver credenciais, o app as
+remove antes de persistir a configuração ou iniciar o Git.
+
+Falhas de clone/fetch/reset mostram somente a etapa, o código, o branch e o
+destino sem userinfo. Tokens, parâmetros sensíveis, cabeçalhos de autorização,
+stderr cru e a linha de comando completa são redigidos antes de `lastError`, do
+QA Logger e da resposta ao renderer.
 
 ---
 

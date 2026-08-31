@@ -15,6 +15,11 @@ const {
 } = require('./system-design-service.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
 const { toErrorResult } = require('./ipc-result.cjs')
+const {
+  createRedactedGitError,
+  sanitizeGitErrorText,
+  sanitizeGitRemoteUrl,
+} = require('./git-secret-redaction.cjs')
 
 const SYSTEM_DESIGN_CONFIG_KEY = 'system-design.config'
 
@@ -42,7 +47,7 @@ function normalizeConfig(value) {
       typeof value.enabled === 'boolean' ? value.enabled : base.enabled,
     repoUrl:
       typeof value.repoUrl === 'string' && value.repoUrl.trim()
-        ? value.repoUrl.trim()
+        ? sanitizeGitRemoteUrl(value.repoUrl)
         : base.repoUrl,
     branch:
       typeof value.branch === 'string' && value.branch.trim()
@@ -51,18 +56,36 @@ function normalizeConfig(value) {
     lastSha: typeof value.lastSha === 'string' ? value.lastSha : null,
     lastSyncedAt:
       typeof value.lastSyncedAt === 'string' ? value.lastSyncedAt : null,
-    lastError: typeof value.lastError === 'string' ? value.lastError : null,
+    lastError:
+      typeof value.lastError === 'string'
+        ? sanitizeGitErrorText(value.lastError) || null
+        : null,
   }
 }
 
 function registerSystemDesignIpcHandlers(appPaths, options = {}) {
+  const activeIpcMain = options.ipcMain ?? ipcMain
+  const syncRepository =
+    options.syncSystemDesignRepository ?? syncSystemDesignRepository
   const settingsRepository = createSettingsRepository(options.database)
   const systemDesignRepository = createSystemDesignRepository(options.database)
   const cacheDir = path.join(appPaths.config, 'system-design')
 
   function loadConfig() {
     const raw = settingsRepository.get(SYSTEM_DESIGN_CONFIG_KEY)
-    return normalizeConfig(raw)
+    const normalized = normalizeConfig(raw)
+
+    // Remove credenciais que possam ter sido gravadas por uma versão anterior
+    // assim que a configuração for lida, antes de ela chegar ao renderer.
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      (raw.repoUrl !== normalized.repoUrl || raw.lastError !== normalized.lastError)
+    ) {
+      settingsRepository.set(SYSTEM_DESIGN_CONFIG_KEY, normalized)
+    }
+
+    return normalized
   }
 
   function saveConfig(config) {
@@ -71,7 +94,7 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     return normalized
   }
 
-  ipcMain.handle('system-design:get-config', () => {
+  activeIpcMain.handle('system-design:get-config', () => {
     try {
       return { ok: true, config: loadConfig() }
     } catch (error) {
@@ -79,7 +102,7 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   })
 
-  ipcMain.handle('system-design:save-config', (_event, partial) => {
+  activeIpcMain.handle('system-design:save-config', (_event, partial) => {
     try {
       const current = loadConfig()
       const next = saveConfig({ ...current, ...partial })
@@ -89,7 +112,7 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   })
 
-  ipcMain.handle('system-design:list-documents', () => {
+  activeIpcMain.handle('system-design:list-documents', () => {
     try {
       return { ok: true, documents: systemDesignRepository.list() }
     } catch (error) {
@@ -97,7 +120,7 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   })
 
-  ipcMain.handle('system-design:get-document', (_event, documentPath) => {
+  activeIpcMain.handle('system-design:get-document', (_event, documentPath) => {
     try {
       const document = systemDesignRepository.get(documentPath)
       return document
@@ -108,10 +131,12 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   })
 
-  ipcMain.handle('system-design:sync', async () => {
+  activeIpcMain.handle('system-design:sync', async () => {
+    let current = null
+
     try {
-      const current = loadConfig()
-      const result = await syncSystemDesignRepository({
+      current = loadConfig()
+      const result = await syncRepository({
         repoUrl: current.repoUrl,
         branch: current.branch,
         cacheDir,
@@ -143,10 +168,16 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
         removedCount: result.removedCount,
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Falha desconhecida.'
+      const message = error?.isRedactedGitError
+        ? sanitizeGitErrorText(error.message)
+        : createRedactedGitError(error, {
+            stage: error?.stage ?? 'sincronização',
+            repoUrl: current?.repoUrl,
+            branch: current?.branch,
+          }).message
       try {
-        const current = loadConfig()
-        saveConfig({ ...current, lastError: message })
+        const latest = current ?? loadConfig()
+        saveConfig({ ...latest, lastError: message })
       } catch {
         // ignore
       }
@@ -159,7 +190,7 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   })
 
-  ipcMain.handle('system-design:reset-cache', () => {
+  activeIpcMain.handle('system-design:reset-cache', () => {
     try {
       const cleared = systemDesignRepository.clear()
       const current = loadConfig()

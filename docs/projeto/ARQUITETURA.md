@@ -93,6 +93,21 @@ desconhecidos são recusados. A suíte testa o renderer estaticamente; a
 validação de execução em Electron deve ser registrada separadamente quando
 houver uma sessão gráfica disponível.
 
+### Sincronização segura do Felixo System Design
+
+`system-design-service.cjs` executa `git` com `execFile` e argumentos
+separados, sem shell. Antes de persistir ou usar a configuração, o processo
+principal remove userinfo, parâmetros sensíveis e fragmentos de URLs de
+repositório. A autenticação de repositórios privados fica a cargo do
+credential helper do Git ou do gerenciador de credenciais do sistema; segredo
+embutido na URL não é um mecanismo suportado.
+
+Erros do Git passam por `git-secret-redaction.cjs` antes de qualquer `lastError`,
+evento do QA Logger ou resposta IPC. O diagnóstico mantém etapa, código,
+branch e destino seguro, usa stderr apenas depois da redação e elimina a linha
+de comando completa. A migração de configuração também regrava URLs e erros
+legados já sanitizados no SQLite.
+
 ## Providers e contas
 
 Os providers entram por adapters e pelo registry de Terminal Adapters. A
