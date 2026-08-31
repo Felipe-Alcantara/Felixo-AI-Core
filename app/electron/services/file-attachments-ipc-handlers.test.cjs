@@ -177,6 +177,9 @@ test('native context selection returns absolute paths and grants selected images
   await fs.writeFile(imagePath, Buffer.from([1, 2, 3]))
   await fs.writeFile(arbitraryPath, Buffer.from([4, 5, 6]))
   await fs.mkdir(selectedDir)
+  const resolvedImagePath = await fs.realpath(imagePath)
+  const resolvedArbitraryPath = await fs.realpath(arbitraryPath)
+  const resolvedSelectedDir = await fs.realpath(selectedDir)
 
   const handlers = new Map()
   const ipcMain = {
@@ -209,10 +212,10 @@ test('native context selection returns absolute paths and grants selected images
   assert.equal(filesResult.ok, true)
   assert.equal(filesResult.attachments.length, 2)
   assert.deepEqual(dialogOptions.properties, ['openFile', 'multiSelections'])
-  assert.equal(filesResult.attachments[0].path, imagePath)
+  assert.equal(filesResult.attachments[0].path, resolvedImagePath)
   assert.equal(filesResult.attachments[0].type, 'image/png')
   assert.equal(filesResult.attachments[1].type, 'application/octet-stream')
-  assert.equal(filesResult.attachments[1].path, arbitraryPath)
+  assert.equal(filesResult.attachments[1].path, resolvedArbitraryPath)
 
   const grantedReadResult = await readImage(null, {
     path: imagePath,
@@ -227,7 +230,7 @@ test('native context selection returns absolute paths and grants selected images
 
   assert.equal(directoryResult.ok, true)
   assert.deepEqual(dialogOptions.properties, ['openDirectory'])
-  assert.equal(directoryResult.attachments[0].path, selectedDir)
+  assert.equal(directoryResult.attachments[0].path, resolvedSelectedDir)
   assert.equal(directoryResult.attachments[0].isDirectory, true)
   assert.equal(directoryResult.attachments[0].type, 'inode/directory')
 })
