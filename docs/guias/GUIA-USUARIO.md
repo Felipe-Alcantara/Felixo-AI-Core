@@ -122,6 +122,7 @@ Perfis padrão atuais:
 - `Gemini CLI` com comando `gemini`.
 - `Codex App Server` com comando `codex app-server`.
 - `Gemini ACP` com comando `gemini --experimental-acp`.
+- `Openia` como launcher das interfaces compatíveis com OpenRouter.
 
 CLIs e ferramentas detectadas pelo app:
 
@@ -129,7 +130,9 @@ CLIs e ferramentas detectadas pelo app:
 - `git`, para operações Git e contexto de repositório.
 - `node` e `python3`, para runtimes auxiliares quando algum fluxo precisar deles.
 
-Autentique cada CLI no terminal, seguindo a documentação oficial do provider. O Felixo pode abrir o comando de login em um terminal do sistema, mas a configuração de chaves/API, login ou assinatura continua acontecendo na própria CLI ou no ambiente do sistema, não em uma tela de API keys dentro do Felixo.
+Autentique cada CLI no terminal, seguindo a documentação oficial do provider. O Felixo pode abrir o comando de login em um terminal do sistema, mas a configuração de chaves/API, login ou assinatura continua acontecendo na própria CLI ou no ambiente do sistema. A exceção é o launcher Openia: sua chave do OpenRouter é configurada no formulário do agente, sem ser exibida novamente ou armazenada no canvas.
+
+No configurador do Openia, **Login do sistema** usa a chave global do Openia. Ao escolher ou criar uma conta, a chave digitada fica cifrada e vinculada somente àquele perfil; uma conta sem chave não herda a chave global e é bloqueada antes da abertura do terminal. O campo mostra apenas se existe uma chave, nunca o valor dela. Se o sistema estiver sem chaveiro seguro, o Felixo recusa guardar a chave.
 
 Links oficiais úteis:
 
@@ -165,6 +168,12 @@ Você pode:
 - Adicionar uma CLI pelo comando, por exemplo `codex`, `claude` ou `gemini`.
 - Remover modelos cadastrados.
 - Clicar em um modelo no painel **Modelos** para configurar o modelo do provider e o effort quando o adapter suportar.
+
+Para o Openia, a configuração do agente consulta interfaces e modelos em tempo
+real. A validação da chave acontece novamente no momento de abrir o terminal:
+sem conta, consulta o login global; com conta, consulta a chave cifrada daquele
+perfil. Assim, trocar de perfil não reaproveita silenciosamente a credencial de
+outra origem.
 
 ### Orquestrador
 

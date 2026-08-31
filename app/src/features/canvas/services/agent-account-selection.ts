@@ -31,3 +31,34 @@ export function selectAccountFromList(
 
   return accounts.some((account) => account.id === savedAccountId) ? savedAccountId : ''
 }
+
+export type OpeniaKeyStatus = {
+  source: 'account' | 'system'
+  accountId?: string
+  configured: boolean
+}
+
+/**
+ * Escolhe a fonte de verdade da chave sem permitir fallback silencioso.
+ *
+ * Uma conta Openia selecionada só pode usar a chave guardada nela; a chave
+ * global do Openia vale exclusivamente quando a pessoa escolhe o login do
+ * sistema. Assim, conta sem chave não herda credencial de outra origem.
+ */
+export function resolveOpeniaKeyStatus(
+  accounts: readonly CliAccount[],
+  accountId: string,
+  systemConfigured: boolean,
+): OpeniaKeyStatus {
+  const normalizedAccountId = accountId.trim()
+  if (!normalizedAccountId) {
+    return { source: 'system', configured: systemConfigured === true }
+  }
+
+  const account = accounts.find((item) => item.id === normalizedAccountId)
+  return {
+    source: 'account',
+    accountId: normalizedAccountId,
+    configured: account?.providerId === 'openia' && account.secretConfigured === true,
+  }
+}

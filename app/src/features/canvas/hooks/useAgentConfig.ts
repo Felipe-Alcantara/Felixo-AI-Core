@@ -25,6 +25,7 @@ import {
   type OpeniaModel,
 } from '../services/openia-launch-config'
 import {
+  resolveOpeniaKeyStatus,
   selectAccountFromList,
   shouldApplyAccountListResult,
 } from '../services/agent-account-selection'
@@ -37,7 +38,6 @@ export const ADD_FOLDER_VALUE = '__add_folder__'
 type OpeniaLoadResult = {
   interfaces: OpeniaInterfaceDefinition[]
   models: OpeniaModel[]
-  configured?: boolean
 }
 
 /**
@@ -81,6 +81,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
   const openiaKeyConfiguredRef = useRef(false)
   const openiaLoadRef = useRef<Promise<OpeniaLoadResult> | null>(null)
   const accountListRequestRef = useRef(0)
+  const openiaKeyStatusRequestRef = useRef(0)
 
   // Modelos que as CLIs oferecem agora; cai na lista fixa se a descoberta não
   // trouxer nada, para o formulário nunca aparecer sem opções.
@@ -116,8 +117,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     const request = Promise.allSettled([
       bridge.listInterfaces(),
       bridge.listModels({ refresh: refreshModels }),
-      bridge.keyStatus(),
-    ]).then(([interfacesResult, modelsResult, keyResult]) => {
+    ]).then(([interfacesResult, modelsResult]) => {
       const errors: string[] = []
       const interfaces = interfacesResult.status === 'fulfilled' && interfacesResult.value.ok
         ? normalizeOpeniaInterfaces(interfacesResult.value.interfaces)
@@ -154,21 +154,8 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
         errors.push(modelsResult.value.message ?? 'Não foi possível carregar os modelos.')
       }
 
-      let configured: boolean | undefined
-      if (keyResult.status === 'fulfilled' && keyResult.value.ok) {
-        configured = keyResult.value.configured === true
-        openiaKeyConfiguredRef.current = configured
-        setOpeniaKeyConfiguredState(configured)
-      } else {
-        errors.push(
-          keyResult.status === 'fulfilled'
-            ? keyResult.value.message ?? 'Não foi possível consultar a chave do Openia.'
-            : 'Não foi possível consultar a chave do Openia.',
-        )
-      }
-
       setOpeniaError(errors.length > 0 ? errors.join(' ') : undefined)
-      return { interfaces, models, configured }
+      return { interfaces, models }
     }).finally(() => {
       setOpeniaLoading(false)
       if (openiaLoadRef.current === request) {
@@ -234,6 +221,69 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     setAccounts(lista)
     return lista
   }, [providerId])
+
+  /**
+   * Atualiza o indicador sem misturar a chave global com a conta escolhida.
+   * A lista traz apenas `secretConfigured`; o segredo continua no processo
+   * principal e nunca atravessa o IPC.
+   */
+  const syncOpeniaKeyStatus = useCallback(
+    async (availableAccounts: readonly CliAccount[] = accounts): Promise<boolean> => {
+      const requestId = ++openiaKeyStatusRequestRef.current
+      const selectedAccountId = accountIdRef.current.trim()
+
+      if (selectedAccountId) {
+        const resolved = resolveOpeniaKeyStatus(availableAccounts, selectedAccountId, false)
+        if (
+          requestId !== openiaKeyStatusRequestRef.current ||
+          accountIdRef.current.trim() !== selectedAccountId ||
+          providerIdRef.current !== 'openia'
+        ) {
+          return resolved.configured
+        }
+        openiaKeyConfiguredRef.current = resolved.configured
+        setOpeniaKeyConfiguredState(resolved.configured)
+        return resolved.configured
+      }
+
+      const bridge = window.felixo?.openia
+      if (!bridge) {
+        setOpeniaError('A integração do Openia não está disponível nesta versão do Felixo.')
+        return false
+      }
+
+      try {
+        const status = await bridge.keyStatus()
+        if (
+          requestId !== openiaKeyStatusRequestRef.current ||
+          accountIdRef.current.trim() !== '' ||
+          providerIdRef.current !== 'openia'
+        ) {
+          return false
+        }
+        const resolved = resolveOpeniaKeyStatus([], '', status.ok && status.configured === true)
+        openiaKeyConfiguredRef.current = resolved.configured
+        setOpeniaKeyConfiguredState(resolved.configured)
+        return resolved.configured
+      } catch {
+        if (
+          requestId === openiaKeyStatusRequestRef.current &&
+          accountIdRef.current.trim() === '' &&
+          providerIdRef.current === 'openia'
+        ) {
+          setOpeniaError('Não foi possível consultar a chave do Openia.')
+        }
+        return false
+      }
+    },
+    [accounts],
+  )
+
+  useEffect(() => {
+    if (agentValue !== 'openia') return undefined
+    void syncOpeniaKeyStatus(accounts)
+    return undefined
+  }, [accountId, accounts, agentValue, syncOpeniaKeyStatus])
 
   /**
    * Cria a conta e já a deixa escolhida — quem acabou de cadastrar quer abrir
@@ -343,6 +393,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     // Limpa antes de a nova lista chegar. Assim nenhum clique no mesmo ciclo
     // consegue carregar a conta do agente anterior para o novo processo.
     accountListRequestRef.current += 1
+    openiaKeyStatusRequestRef.current += 1
     providerIdRef.current = valor === SHELL_AGENT_VALUE ? '' : valor
     accountIdRef.current = ''
     setAccounts([])
@@ -353,13 +404,22 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
   }, [])
 
   const refreshOpenia = useCallback(() => {
-    void loadOpenia(true)
-  }, [loadOpenia])
+    void Promise.all([loadOpenia(true), carregarContas()]).then(([, lista]) => {
+      void syncOpeniaKeyStatus(lista)
+    })
+  }, [carregarContas, loadOpenia, syncOpeniaKeyStatus])
 
   const saveOpeniaKey = useCallback(async (): Promise<boolean> => {
-    const bridge = window.felixo?.openia
     const key = openiaKeyDraft.trim()
-    if (!bridge) {
+    const selectedAccountId = accountIdRef.current.trim()
+    const openiaBridge = window.felixo?.openia
+    const accountsBridge = window.felixo?.cliAccounts
+
+    if (selectedAccountId && !accountsBridge) {
+      setOpeniaError('A integração de contas do Openia não está disponível nesta versão do Felixo.')
+      return false
+    }
+    if (!selectedAccountId && !openiaBridge) {
       setOpeniaError('A integração do Openia não está disponível nesta versão do Felixo.')
       return false
     }
@@ -371,10 +431,20 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     setOpeniaSaving(true)
     setOpeniaError(undefined)
     try {
-      const result = await bridge.setKey({ name: 'felixo', key })
+      const result = selectedAccountId
+        ? await accountsBridge!.setSecret({ accountId: selectedAccountId, secret: key })
+        : await openiaBridge!.setKey({ name: 'felixo', key })
       if (!result.ok) {
-        setOpeniaError(result.message ?? 'Não foi possível salvar a chave no Openia.')
+        setOpeniaError(
+          result.message ??
+            (selectedAccountId
+              ? 'Não foi possível salvar a chave nesta conta do Openia.'
+              : 'Não foi possível salvar a chave no Openia.'),
+        )
         return false
+      }
+      if (selectedAccountId) {
+        await carregarContas()
       }
       openiaKeyConfiguredRef.current = true
       setOpeniaKeyConfiguredState(true)
@@ -388,7 +458,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     } finally {
       setOpeniaSaving(false)
     }
-  }, [openiaKeyDraft])
+  }, [carregarContas, openiaKeyDraft])
 
   /** Garante que a configuração da interface já foi feita antes de criar o node. */
   const prepareForLaunch = useCallback(async (): Promise<boolean> => {
@@ -434,7 +504,24 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       return saveOpeniaKey()
     }
 
-    if (openiaKeyConfiguredRef.current) return true
+    const selectedAccountId = accountIdRef.current.trim()
+    if (selectedAccountId) {
+      const freshAccounts = await carregarContas()
+      const selectedAccount = freshAccounts.find((item) => item.id === selectedAccountId)
+      const resolved = resolveOpeniaKeyStatus(freshAccounts, selectedAccountId, false)
+      openiaKeyConfiguredRef.current = resolved.configured
+      setOpeniaKeyConfiguredState(resolved.configured)
+
+      if (!selectedAccount) {
+        setOpeniaError('A conta selecionada não existe mais. Escolha outra conta ou use o login do sistema.')
+        return false
+      }
+      if (!resolved.configured) {
+        setOpeniaError('Configure a chave do OpenRouter nesta conta antes de abrir o Openia.')
+        return false
+      }
+      return true
+    }
 
     const bridge = window.felixo?.openia
     if (!bridge) {
@@ -443,9 +530,10 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     }
     try {
       const status = await bridge.keyStatus()
-      if (status.ok && status.configured) {
-        openiaKeyConfiguredRef.current = true
-        setOpeniaKeyConfiguredState(true)
+      const resolved = resolveOpeniaKeyStatus([], '', status.ok && status.configured === true)
+      openiaKeyConfiguredRef.current = resolved.configured
+      setOpeniaKeyConfiguredState(resolved.configured)
+      if (resolved.configured) {
         return true
       }
     } catch {
@@ -454,7 +542,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     }
     setOpeniaError('Configure a chave do OpenRouter na interface antes de abrir o Openia.')
     return false
-  }, [agent, loadOpenia, openiaInterfaces, openiaKeyDraft, openiaModels, projectId, projects, saveOpeniaKey])
+  }, [agent, carregarContas, loadOpenia, openiaInterfaces, openiaKeyDraft, openiaModels, projectId, projects, saveOpeniaKey])
 
   const changeModel = useCallback(
     (valor: string) => {

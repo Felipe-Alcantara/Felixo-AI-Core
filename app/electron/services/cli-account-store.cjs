@@ -60,9 +60,13 @@ function createCliAccountStore({
 
   function list(providerId) {
     const accounts = readStore()
-    return providerId
+    const secrets = accounts.some((account) => account.providerId === 'openia')
+      ? readSecrets()
+      : {}
+    const filtered = providerId
       ? accounts.filter((account) => account.providerId === providerId)
       : accounts
+    return filtered.map((account) => toPublicAccount(account, secrets))
   }
 
   function findAccount(accountId) {
@@ -93,6 +97,13 @@ function createCliAccountStore({
       return {
         ok: false,
         message: 'A conta selecionada pertence a outro provedor.',
+      }
+    }
+
+    if (account.providerId === 'openia' && !hasConfiguredSecret(account.id)) {
+      return {
+        ok: false,
+        message: 'A conta do Openia não tem uma chave configurada.',
       }
     }
 
@@ -194,10 +205,31 @@ function createCliAccountStore({
 
     try {
       const encrypted = fileSystem.readFileSync(secretsPath)
-      return JSON.parse(safeStorage.decryptString(encrypted))
+      const parsed = JSON.parse(safeStorage.decryptString(encrypted))
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
     } catch {
       return {}
     }
+  }
+
+  function hasConfiguredSecret(accountId) {
+    return hasSecretValue(readSecrets()[accountId])
+  }
+
+  function toPublicAccount(account, secrets) {
+    if (account.providerId !== 'openia') {
+      return account
+    }
+
+    return {
+      ...account,
+      // Nunca devolve a chave: o renderer só precisa saber se existe uma.
+      secretConfigured: hasSecretValue(secrets[account.id]),
+    }
+  }
+
+  function hasSecretValue(secret) {
+    return typeof secret === 'string' && secret.trim() !== ''
   }
 
   function writeSecrets(secrets) {
@@ -233,6 +265,11 @@ function createCliAccountStore({
   }
 
   function setSecret(accountId, secret) {
+    const account = findAccount(typeof accountId === 'string' ? accountId.trim() : '')
+    if (!account || account.providerId !== 'openia') {
+      throw new Error('A conta do Openia não existe.')
+    }
+
     const permitido = canStoreSecret()
 
     if (!permitido.ok) {
@@ -243,7 +280,7 @@ function createCliAccountStore({
       throw new Error('Informe a chave da conta.')
     }
 
-    writeSecrets({ ...readSecrets(), [accountId]: secret.trim() })
+    writeSecrets({ ...readSecrets(), [account.id]: secret.trim() })
   }
 
   function forgetSecret(accountId) {

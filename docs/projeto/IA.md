@@ -1882,3 +1882,43 @@ TESTE: o harness do `TerminalSessionStore` passou a registrar os parâmetros de 
 VALIDAÇÃO: teste focado `terminal-session-store.test.ts` — 25/25; suíte frontend — 72 arquivos e 706 testes; suíte backend — 887/887; `npx tsc --noEmit --pretty false`, `npm run build` (710 módulos) e `git diff --check` aprovados. `npm run lint` terminou sem erros, mantendo somente os 2 avisos preexistentes de dependências em `SearchPanel.tsx`.
 
 Estado final: implementação concluída e validada localmente; pronta para commit, push, acompanhamento do CI/release e registro da task no Notion.
+
+## Registro de Trabalho — 2026-08-31 (parte 24) — chave do Openia vinculada à conta no lançamento
+
+PEDIDO: executar a task do Notion “Felixo AI Core/Openia — Unificar a chave por conta do Openia com a validação de lançamento”.
+
+CAUSA: o configurador do canvas consultava apenas `openia.keyStatus()`, que
+representa a chave global, embora a loja de contas já pudesse preparar
+`OPENROUTER_API_KEY` para uma conta específica. Assim, uma conta válida podia
+ser recusada sem chave global, enquanto uma conta sem chave poderia só falhar
+tarde, depois de o PTY nascer.
+
+DECISÃO: a conta selecionada é a fonte exclusiva da chave. O login global só
+vale quando o configurador está em **Login do sistema**; nenhuma conta herda
+esse segredo silenciosamente.
+
+FEITO: a listagem de contas Openia agora devolve somente `secretConfigured`, um
+booleano seguro sem conteúdo de chave. O formulário grava a chave selecionada
+na loja cifrada da conta e continua usando `openia key set-stdin` apenas para o
+login global. `useAgentConfig` atualiza o indicador conforme a conta, relê a
+fonte antes do lançamento e cobre troca de perfil; `validateAccount` no
+processo principal bloqueia conta Openia sem chave antes de montar o ambiente ou
+criar o PTY. A interface também explica qual origem está ativa sem expor
+segredos.
+
+TESTE: regressões da resolução de fonte cobrem conta com chave, conta sem chave
+mesmo quando há chave global, login do sistema e troca entre perfis. A loja
+testa o booleano público sem vazamento da chave e a barreira que aceita a conta
+configurada e recusa a não configurada. Os gates passaram: `npm test` 889/889,
+`npm run test:frontend` — 72 arquivos e 708/708, `npx tsc --noEmit --pretty
+false`, `npm run build` (710 módulos), `npm run lint` sem erros e
+`git diff --check` limpo. O lint mantém somente os 2 avisos React preexistentes
+em `src/features/chat/components/SearchPanel.tsx`; o build mantém o aviso
+conhecido de chunk JavaScript acima de 500 kB.
+
+LIMITE: a chave global existente não é migrada automaticamente para uma conta;
+ela continua disponível somente no login do sistema. Nenhuma conta, chave ou
+credencial real foi alterada durante a validação.
+
+Estado final: implementação concluída e validada localmente; pronta para
+commit, push, acompanhamento do CI/release e registro da task no Notion.

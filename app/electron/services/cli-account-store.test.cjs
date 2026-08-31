@@ -175,6 +175,45 @@ test('a chave do Openia é guardada cifrada e chega ao ambiente', () => {
   }
 })
 
+test('lista somente o estado da chave do Openia, nunca a chave', () => {
+  const env = createEnvironment()
+
+  try {
+    const comChave = env.store.create({ providerId: 'openia', label: 'com chave' })
+    const semChave = env.store.create({ providerId: 'openia', label: 'sem chave' })
+    env.store.setSecret(comChave.id, 'sk-or-segredo-da-conta')
+
+    const contas = env.store.list('openia')
+    assert.equal(contas.find((conta) => conta.id === comChave.id)?.secretConfigured, true)
+    assert.equal(contas.find((conta) => conta.id === semChave.id)?.secretConfigured, false)
+    assert.doesNotMatch(JSON.stringify(contas), /sk-or-segredo-da-conta/)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('a barreira aceita Openia com chave e recusa conta sem chave', () => {
+  const env = createEnvironment()
+
+  try {
+    const semChave = env.store.create({ providerId: 'openia', label: 'sem chave' })
+    const comChave = env.store.create({ providerId: 'openia', label: 'com chave' })
+
+    assert.deepEqual(env.store.validateAccount(semChave.id, 'openia'), {
+      ok: false,
+      message: 'A conta do Openia não tem uma chave configurada.',
+    })
+
+    env.store.setSecret(comChave.id, 'sk-or-chave-de-teste')
+    assert.deepEqual(env.store.validateAccount(comChave.id, 'openia'), {
+      ok: true,
+      account: comChave,
+    })
+  } finally {
+    env.cleanup()
+  }
+})
+
 test('sem chaveiro real, gravar a chave é recusado em vez de salvar em texto', () => {
   const env = createEnvironment({ backend: 'basic' })
 

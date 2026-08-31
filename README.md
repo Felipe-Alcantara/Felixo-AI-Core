@@ -226,9 +226,13 @@ instalado, o botão de spawn já pode abrir a interface escolhida sem repetir a
 configuração no terminal. O botão de terminal do gerenciador continua abrindo o
 menu manual do Openia para quem quiser administrá-lo diretamente.
 
-O spawn usa `openia list --json` e `openia models --json`; a chave é enviada ao
-`openia key set-stdin felixo --json` exclusivamente por stdin, nunca como
-argumento, log, preferência do canvas ou dado do node. Em seguida o terminal já
+O spawn usa `openia list --json` e `openia models --json`. Sem uma conta
+selecionada, a chave do login do sistema é enviada ao
+`openia key set-stdin felixo --json` exclusivamente por stdin. Com uma conta
+selecionada, a chave é guardada cifrada no perfil daquela conta e chega ao
+processo somente como `OPENROUTER_API_KEY`; ela não é herdada do login do
+sistema nem compartilhada com outra conta. Em ambos os casos, nenhum segredo
+entra em argumento, log, preferência do canvas ou dado do node. O terminal já
 nasce com `openia run <interface> --provider --model <id> --dir <projeto>` (ou
 `--no-model`), sem o prompt de interface, modelo ou pasta. Se Python, `pip` ou o
 comando `openia` não estiverem disponíveis, o cartão informa a falha e o restante
@@ -288,7 +292,17 @@ perfil é selecionado. O padrão continua sendo o login que você já tem no
 sistema.
 
 O login em si é feito pela própria CLI, dentro do terminal, na primeira vez que
-você abre um perfil novo — o app não intermedeia credencial.
+você abre um perfil novo — o app não intermedeia credencial. A exceção é o
+Openia: a chave digitada no configurador é guardada cifrada pelo chaveiro do
+sistema. Sem conta selecionada ela atualiza o login global; com conta
+selecionada ela fica vinculada somente àquela conta.
+
+Para impedir que uma conta sem chave use acidentalmente a chave global, o
+configurador consulta a lista atual da conta, que só expõe o booleano
+`secretConfigured`. Antes de criar o PTY, o renderer consulta novamente o
+estado e o processo principal repete a validação; conta Openia sem chave é
+recusada antes do processo nascer. A chave nunca atravessa o renderer e o
+estado falso não revela o conteúdo do segredo.
 
 Ao trocar de agente no configurador, a conta e a lista anterior são limpas
 imediatamente; respostas assíncronas antigas não podem repopular o campo. O
@@ -303,7 +317,7 @@ Como cada CLI isola o login (medido, não presumido):
 | Codex | `CODEX_HOME` | variável dedicada |
 | Claude Code | `CLAUDE_CONFIG_DIR` | variável dedicada |
 | Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig`, `.ssh` e `.npmrc` para o trabalho no repositório continuar funcionando |
-| Openia | `OPENROUTER_API_KEY` | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
+| Openia | `OPENROUTER_API_KEY` por conta; chave global sem conta | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
 
 Se um terminal for reiniciado pelo drawer lateral, o `accountId` e o provedor
 persistidos no bloco acompanham o novo PTY. Assim, o restart mantém o perfil

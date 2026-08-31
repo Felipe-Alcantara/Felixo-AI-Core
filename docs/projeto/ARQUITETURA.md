@@ -88,6 +88,18 @@ controle da CLI/provider. O painel **Limites e uso** consulta as fontes que cada
 provider realmente publica, separa contas por fingerprint seguro e nunca
 transforma ausência de informação em zero.
 
+O Openia tem duas fontes de chave deliberadamente distintas: sem `accountId`, o
+login do sistema é consultado por `openia key status` e atualizado por
+`openia key set-stdin`; com `accountId`, a chave é lida da loja cifrada da
+conta e injetada apenas como `OPENROUTER_API_KEY` no processo filho. O renderer
+recebe somente `secretConfigured`, um booleano que indica presença, nunca o
+segredo. Não existe fallback implícito da conta para a chave global.
+
+Ao preparar o lançamento, `useAgentConfig` relê a lista da conta e confere essa
+fonte de verdade antes de liberar o spawn. A barreira do processo principal
+repete a mesma regra em `validateAccount`, de modo que uma conta Openia sem
+chave seja recusada antes de compor o ambiente ou criar o PTY.
+
 O `providerId` acompanha a configuração do renderer até o spawn. O IPC e o
 `PtyProcessManager` conferem a combinação `accountId`/provedor/comando antes de
 chamar `buildAccountEnv`; a loja repete a validação antes de devolver as

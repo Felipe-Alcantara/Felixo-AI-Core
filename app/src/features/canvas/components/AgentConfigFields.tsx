@@ -45,6 +45,7 @@ export function AgentConfigFields({
   const selectedOpeniaInterface = config.openiaInterfaces.find(
     (item) => item.key === config.openiaInterfaceKey,
   )
+  const openiaKeyUsesSelectedAccount = config.accountId.trim() !== ''
 
   const handleProjectChange = async (value: string) => {
     if (value !== ADD_FOLDER_VALUE) {
@@ -182,7 +183,13 @@ export function AgentConfigFields({
                   autoComplete="new-password"
                   value={config.openiaKeyDraft}
                   onChange={(event) => config.setOpeniaKeyDraft(event.target.value)}
-                  placeholder={config.openiaKeyConfigured ? 'Chave já configurada' : 'sk-or-…'}
+                  placeholder={
+                    config.openiaKeyConfigured
+                      ? openiaKeyUsesSelectedAccount
+                        ? 'Chave desta conta já configurada'
+                        : 'Chave do sistema já configurada'
+                      : 'sk-or-…'
+                  }
                   className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
                 />
                 <button
@@ -196,8 +203,12 @@ export function AgentConfigFields({
               </div>
               <p className="text-[11px] leading-relaxed text-zinc-500">
                 {config.openiaKeyConfigured
-                  ? 'Chave configurada no armazenamento do Openia. O Felixo não a lê nem a persiste.'
-                  : 'A chave será enviada diretamente ao Openia e não ficará no canvas nem no comando.'}
+                  ? openiaKeyUsesSelectedAccount
+                    ? 'Chave desta conta configurada no armazenamento cifrado do Felixo; ela só será usada neste perfil.'
+                    : 'Chave do login do sistema configurada no armazenamento do Openia.'
+                  : openiaKeyUsesSelectedAccount
+                    ? 'A chave será guardada cifrada nesta conta e nunca ficará no canvas, no comando ou nos logs.'
+                    : 'A chave será enviada ao armazenamento do Openia para o login do sistema e não ficará no canvas.'}
               </p>
               {config.openiaError && (
                 <p className="mt-2 text-[11px] leading-relaxed text-red-300">{config.openiaError}</p>
