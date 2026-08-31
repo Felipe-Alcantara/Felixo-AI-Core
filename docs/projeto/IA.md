@@ -1922,3 +1922,43 @@ credencial real foi alterada durante a validação.
 
 Estado final: implementação concluída e validada localmente; pronta para
 commit, push, acompanhamento do CI/release e registro da task no Notion.
+
+## Registro de Trabalho — 2026-08-31 (parte 25) — remoção de perfil não perde a conta quando a pasta falha
+
+PEDIDO: executar a task do Notion “Felixo AI Core/Contas — Corrigir remoção de
+perfis quando apagar a pasta falha”, originada no achado IMPORTANTE 1 da
+auditoria técnica semanal de 24–30/08/2026.
+
+CAUSA: `cli-account-store.remove` capturava qualquer erro do `rmSync` e seguia
+com `forgetSecret` e `writeStore`. Uma falha real de permissão, lock ou I/O
+apagava a conta do registro enquanto a pasta de login e a credencial ainda
+podiam permanecer no disco.
+
+FEITO: a remoção agora trata somente `ENOENT` como sucesso idempotente, para o
+caso em que a pasta já foi removida por fora. Qualquer outro erro interrompe a
+operação antes de esquecer a chave ou atualizar o registro, lança um diagnóstico
+sem caminho nem segredo e chega ao renderer como falha `{ ok: false }`. A
+interface já devolve essa mensagem ao painel e a conta permanece disponível para
+uma nova tentativa.
+
+TESTE: o store ganhou filesystem injetável e regressões para falha `EACCES`,
+confirmando que a pasta, o registro e a chave cifrada continuam preservados e
+que uma segunda tentativa funciona; outro caso confirma que `ENOENT` continua
+permitindo a remoção. Um teste de IPC verifica a resposta segura do canal
+`cli-accounts:remove`.
+
+DOCUMENTAÇÃO: README e guia do usuário explicam a regra `ENOENT`, a preservação
+da conta diante de falha real e a possibilidade de retry.
+
+VALIDAÇÃO: teste focado — 15/15; `npm test` — 892/892; `npm run test:frontend` —
+72 arquivos e 708/708; `npx tsc --noEmit --pretty false`; `npm run build` (710
+módulos); `npm run lint` sem erros; `git diff --check` limpo. O lint mantém
+somente os 2 avisos React preexistentes em `src/features/chat/components/SearchPanel.tsx`,
+e o build mantém o aviso conhecido de chunk JavaScript acima de 500 kB.
+
+LIMITE: a falha pode deixar a pasta intacta de propósito, para não separar a
+credencial da conta; depois de corrigir o bloqueio, a remoção deve ser repetida.
+Nenhuma conta ou credencial real foi alterada durante a validação.
+
+Estado final: implementação concluída e validada localmente; pronta para
+commit, push, acompanhamento do CI/release e registro da task no Notion.

@@ -134,6 +134,12 @@ Autentique cada CLI no terminal, seguindo a documentação oficial do provider. 
 
 No configurador do Openia, **Login do sistema** usa a chave global do Openia. Ao escolher ou criar uma conta, a chave digitada fica cifrada e vinculada somente àquele perfil; uma conta sem chave não herda a chave global e é bloqueada antes da abertura do terminal. O campo mostra apenas se existe uma chave, nunca o valor dela. Se o sistema estiver sem chaveiro seguro, o Felixo recusa guardar a chave.
 
+Ao remover uma conta, o Felixo pede confirmação e tenta apagar a pasta de login
+do perfil. Se essa pasta já tiver sido removida (`ENOENT`), a remoção continua;
+em qualquer outra falha, a conta e sua credencial são preservadas, um diagnóstico
+seguro é exibido e o botão pode ser tentado novamente depois de corrigir o
+bloqueio.
+
 Links oficiais úteis:
 
 - Claude Code: https://docs.anthropic.com/en/docs/claude-code/getting-started

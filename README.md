@@ -325,10 +325,12 @@ selecionado; quando o bloco não tem `accountId`, ele continua usando o login do
 sistema.
 
 Remover uma conta pede confirmação e apaga a pasta de login dela — manter
-credencial órfã seria pior que refazer o login. Terminais já abertos podem
-perder esse login; a ação é separada de **Remover do painel**, que aparece em
-**Limites e uso** e arquiva somente o histórico local de uso, sem apagar o
-perfil de login.
+credencial órfã seria pior que refazer o login. A pasta já ausente (`ENOENT`) é
+tratada como removida; se o sistema devolver qualquer outra falha, a conta e a
+credencial são preservadas, um diagnóstico seguro aparece na interface e a
+remoção pode ser tentada novamente. Terminais já abertos podem perder esse
+login; a ação é separada de **Remover do painel**, que aparece em **Limites e
+uso** e arquiva somente o histórico local de uso, sem apagar o perfil de login.
 
 Cada conta cadastrada também vira uma linha própria no painel **Limites e uso**,
 com a quota lida da pasta dela — é assim que duas contas do mesmo provedor

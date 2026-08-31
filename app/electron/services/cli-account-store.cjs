@@ -148,6 +148,11 @@ function createCliAccountStore({
    * Apagar é o certo aqui: o que está lá é credencial daquela conta, e manter
    * pasta órfã com token válido é pior que perder o login. A pessoa refaz o
    * login se recriar a conta.
+   *
+   * `ENOENT` é sucesso idempotente: a pasta pode ter sido removida por fora
+   * antes da confirmação. Qualquer outro erro interrompe a operação antes de
+   * esquecer a chave ou atualizar o registro, para que a conta continue
+   * disponível para uma nova tentativa.
    */
   function remove(accountId) {
     const accounts = readStore()
@@ -162,8 +167,14 @@ function createCliAccountStore({
         recursive: true,
         force: true,
       })
-    } catch {
-      // Pasta já removida por fora: seguir e limpar o registro mesmo assim.
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        const failure = new Error(
+          'Não foi possível apagar a pasta de login da conta. A conta e a credencial foram preservadas; corrija o bloqueio e tente novamente.',
+        )
+        failure.code = 'CLI_ACCOUNT_PROFILE_REMOVE_FAILED'
+        throw failure
+      }
     }
 
     forgetSecret(account.id)

@@ -18,7 +18,7 @@ function fakeSafeStorage(backend = 'kwallet') {
   }
 }
 
-function createEnvironment({ backend = 'kwallet', comHome = false } = {}) {
+function createEnvironment({ backend = 'kwallet', comHome = false, fileSystem = fs } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-contas-'))
   const userData = path.join(root, 'userData')
   const homeDir = path.join(root, 'home')
@@ -39,6 +39,7 @@ function createEnvironment({ backend = 'kwallet', comHome = false } = {}) {
     store: createCliAccountStore({
       userData,
       homeDir,
+      fileSystem,
       safeStorage: fakeSafeStorage(backend),
     }),
     cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
@@ -146,6 +147,80 @@ test('remover a conta apaga a pasta de login junto', () => {
     assert.equal(env.store.remove(conta.id), true)
     assert.equal(fs.existsSync(dir), false)
     assert.deepEqual(env.store.list('claude'), [])
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('falha ao apagar o perfil preserva conta e chave para nova tentativa', () => {
+  let falhar = true
+  const fileSystem = {
+    ...fs,
+    rmSync(...args) {
+      if (falhar) {
+        const error = new Error('EACCES: permission denied, /caminho/privado')
+        error.code = 'EACCES'
+        throw error
+      }
+
+      return fs.rmSync(...args)
+    },
+  }
+  const env = createEnvironment({ fileSystem })
+
+  try {
+    const conta = env.store.create({ providerId: 'openia', label: 'pessoal' })
+    env.store.setSecret(conta.id, 'sk-chave-preservada')
+    const dir = path.join(env.userData, 'cli-profiles', 'openia', conta.id)
+
+    assert.throws(
+      () => env.store.remove(conta.id),
+      (error) => {
+        assert.equal(error.code, 'CLI_ACCOUNT_PROFILE_REMOVE_FAILED')
+        assert.equal(
+          error.message,
+          'Não foi possível apagar a pasta de login da conta. A conta e a credencial foram preservadas; corrija o bloqueio e tente novamente.',
+        )
+        assert.doesNotMatch(error.message, /EACCES|privado|sk-chave-preservada/)
+        return true
+      },
+    )
+
+    assert.equal(fs.existsSync(dir), true)
+    assert.deepEqual(env.store.list('openia'), [
+      { ...conta, secretConfigured: true },
+    ])
+    assert.equal(
+      env.store.buildEnv(conta.id).OPENROUTER_API_KEY,
+      'sk-chave-preservada',
+    )
+
+    falhar = false
+    assert.equal(env.store.remove(conta.id), true)
+    assert.equal(fs.existsSync(dir), false)
+    assert.deepEqual(env.store.list('openia'), [])
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('pasta ausente com ENOENT continua permitindo a remoção', () => {
+  const fileSystem = {
+    ...fs,
+    rmSync(...args) {
+      fs.rmSync(...args)
+      const error = new Error('a pasta sumiu durante a remoção')
+      error.code = 'ENOENT'
+      throw error
+    },
+  }
+  const env = createEnvironment({ fileSystem })
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+
+    assert.equal(env.store.remove(conta.id), true)
+    assert.deepEqual(env.store.list('codex'), [])
   } finally {
     env.cleanup()
   }
