@@ -23,4 +23,6 @@ export type NewTerminalOptions = {
    * própria pasta de credencial, então duas convivem sem logout.
    */
   accountId?: string
+  /** Provedor da CLI; acompanha a conta até o boundary principal para validação. */
+  providerId?: string
 }

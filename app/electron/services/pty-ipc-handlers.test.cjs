@@ -56,7 +56,7 @@ function createFakeManager() {
   }
 }
 
-function setup() {
+function setup({ validateAccount } = {}) {
   handlers.clear()
   const sent = []
   const window = {
@@ -66,7 +66,7 @@ function setup() {
     },
   }
   const manager = createFakeManager()
-  const api = registerPtyIpcHandlers(() => window, { manager })
+  const api = registerPtyIpcHandlers(() => window, { manager, validateAccount })
   const invoke = (channel, params) => handlers.get(channel)(null, params)
 
   return { manager, sent, api, invoke }
@@ -125,6 +125,43 @@ test('pty:spawn returns an error result for a missing sessionId', () => {
     manager.calls.some((call) => call.method === 'spawn'),
     false,
   )
+})
+
+test('pty:spawn rejects a stale account before calling the manager', () => {
+  const { manager, invoke } = setup({
+    validateAccount: (accountId, providerId) => {
+      assert.equal(accountId, 'conta-codex')
+      assert.equal(providerId, 'claude')
+      return { ok: false, message: 'A conta selecionada pertence a outro provedor.' }
+    },
+  })
+
+  const result = invoke('pty:spawn', {
+    sessionId: 'term-stale-account',
+    command: 'claude',
+    accountId: 'conta-codex',
+  })
+
+  assert.deepEqual(result, {
+    ok: false,
+    message: 'A conta selecionada pertence a outro provedor.',
+  })
+  assert.equal(manager.calls.some((call) => call.method === 'spawn'), false)
+})
+
+test('pty:spawn rejects provider metadata incompatible with the command', () => {
+  const { manager, invoke } = setup()
+
+  const result = invoke('pty:spawn', {
+    sessionId: 'term-wrong-provider',
+    command: 'claude',
+    providerId: 'codex',
+    accountId: 'conta-codex',
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.message, /provedor incompatível/)
+  assert.equal(manager.calls.some((call) => call.method === 'spawn'), false)
 })
 
 test('pty:write forwards input to the manager', async () => {

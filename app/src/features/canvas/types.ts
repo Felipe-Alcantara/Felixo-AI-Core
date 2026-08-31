@@ -96,6 +96,8 @@ export type TerminalNodeData = {
    * conta é pior do que abrir o seletor.
    */
   accountId?: string
+  /** Provedor da CLI que criou este terminal; usado para validar a conta no PTY. */
+  providerId?: string
   /** Start timestamp of the current PTY instance, persisted for reopen. */
   sessionStartedAt?: number
   /** Provider-owned conversation identity used only after exact compatibility checks. */

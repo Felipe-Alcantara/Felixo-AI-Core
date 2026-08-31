@@ -1850,3 +1850,21 @@ grande e os 3 avisos React existentes continuam não bloqueantes.
 
 Estado final: implementação e cobertura concluídas; pronta para os gates,
 commit/push e atualização da task no Notion.
+
+## Registro de Trabalho — 2026-08-31 (parte 22) — ambiente de conta não fica stale ao trocar de agente
+
+PEDIDO: executar a task do Notion “Felixo AI Core/Agentes — Impedir ambiente de conta stale ao trocar de agente”, originada na auditoria de código de 24–30/08/2026.
+
+CAUSA: a configuração do canvas mantinha a conta anterior enquanto a listagem assíncrona do novo agente ainda não respondia. Em paralelo, o PTY recebia somente `accountId`; a ponte não verificava se a conta pertencia ao provedor do comando antes de compor o ambiente. Uma troca rápida podia, portanto, levar o ambiente de uma conta OpenRouter/Openia para Claude, Codex ou outra CLI.
+
+FEITO NO RENDERER: `useAgentConfig` limpa conta e lista imediatamente no `changeAgent`, invalida requisições anteriores por token e descarta respostas fora de ordem ou de outro provedor. A seleção só preserva uma conta que ainda existe na lista atual; callbacks tardios de criação/remoção também não conseguem reintroduzir seleção stale. O `providerId` acompanha as opções do terminal e é persistido no node, na sessão e na ponte preload.
+
+FEITO NO PROCESSO PRINCIPAL: `pty-account-validation.cjs` resolve o provedor do comando (inclusive shims/caminhos Windows), confere `providerId` explícito e valida `accountId` contra a loja antes de reutilizar sessão, montar ambiente ou chamar `spawnPty`. A validação acontece na entrada IPC e novamente no `PtyProcessManager`; contas de nodes antigos sem `providerId` usam a inferência segura pelo comando. Sem conta, o comportamento de login do sistema e shells arbitrários permanece intacto; com conta inexistente ou provedor incompatível, o PTY é recusado sem compor variáveis de ambiente.
+
+TESTE: regressões em três camadas — unidade da corrida assíncrona no frontend, validação de contrato/legado no backend e rejeição antes do ambiente/PTY no IPC e gerenciador. Os gates finais passaram: `npm test` 887/887, `npm run test:frontend` 704/704, `npx tsc --noEmit --pretty false`, `npm run build` (710 módulos), `npm run lint` com zero erros e `git diff --check` limpo. O lint ainda lista apenas os 2 avisos React já existentes em `src/features/chat/components/SearchPanel.tsx`; o build mantém o aviso conhecido de chunk JavaScript acima de 500 kB.
+
+DOCUMENTAÇÃO: README, guia de usuário e arquitetura agora descrevem a limpeza síncrona, a proteção contra respostas assíncronas antigas e a validação provider/conta/comando no boundary do PTY.
+
+LIMITE: a validação foi coberta por testes automatizados e pelos gates do Linux; a matriz de CI é responsável pela confirmação específica de Windows/macOS. Nenhuma conta, chave ou credencial real foi alterada.
+
+Estado final: implementação concluída e validada localmente; pronta para commit, push, acompanhamento do CI/release e registro da task no Notion.

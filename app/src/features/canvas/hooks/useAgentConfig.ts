@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
 import type { CliAccount } from '../../shared/types/cli-accounts'
 import {
   buildAgentArgs,
@@ -24,6 +24,10 @@ import {
   type OpeniaInterfaceDefinition,
   type OpeniaModel,
 } from '../services/openia-launch-config'
+import {
+  selectAccountFromList,
+  shouldApplyAccountListResult,
+} from '../services/agent-account-selection'
 
 export type AgentConfigProject = { id: string; name: string; path: string }
 
@@ -51,7 +55,8 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
   )
   // Contas com login próprio do provedor escolhido. Vazio = só o login do
   // sistema, que continua sendo o padrão.
-  const [accountId, setAccountId] = useState(inicial.accountId)
+  const accountIdRef = useRef(inicial.accountId)
+  const [accountId, setAccountIdState] = useState(inicial.accountId)
   // A preferência é lida uma vez, na montagem: guardá-la em ref deixa o efeito
   // com a lista de dependências certa sem reagir a uma leitura que não muda.
   const contaSalvaRef = useRef(inicial.accountId)
@@ -75,6 +80,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
   const openiaModelRef = useRef(inicial.openiaModel)
   const openiaKeyConfiguredRef = useRef(false)
   const openiaLoadRef = useRef<Promise<OpeniaLoadResult> | null>(null)
+  const accountListRequestRef = useRef(0)
 
   // Modelos que as CLIs oferecem agora; cai na lista fixa se a descoberta não
   // trouxer nada, para o formulário nunca aparecer sem opções.
@@ -186,13 +192,44 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
   }, [agentValue, loadOpenia])
 
   const providerId = agentValue === SHELL_AGENT_VALUE ? '' : agentValue
+  const providerIdRef = useRef(providerId)
+
+  useEffect(() => {
+    providerIdRef.current = providerId
+  }, [providerId])
+
+  const setAccountId = useCallback((value: SetStateAction<string>) => {
+    if (typeof value !== 'function') {
+      // A seleção do campo e o clique em abrir podem acontecer em eventos
+      // consecutivos antes de a renderização que contém o novo state. O ref
+      // evita que esse intervalo use a conta anterior.
+      accountIdRef.current = value
+    }
+    setAccountIdState((atual) => {
+      const proxima = typeof value === 'function' ? value(atual) : value
+      accountIdRef.current = proxima
+      return proxima
+    })
+  }, [])
 
   const carregarContas = useCallback(async () => {
     if (!providerId) {
       return [] as CliAccount[]
     }
 
+    const requestId = ++accountListRequestRef.current
     const resultado = await window.felixo?.cliAccounts?.list(providerId)
+    if (
+      !shouldApplyAccountListResult({
+        requestProviderId: providerId,
+        currentProviderId: providerIdRef.current,
+        requestId,
+        latestRequestId: accountListRequestRef.current,
+      })
+    ) {
+      return [] as CliAccount[]
+    }
+
     const lista = resultado?.ok ? (resultado.accounts ?? []) : []
     setAccounts(lista)
     return lista
@@ -229,10 +266,15 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       }
 
       await carregarContas()
+      // A conta pode ter sido criada enquanto o usuário trocava de agente;
+      // nesse caso ela existe, mas não pode virar a seleção do agente atual.
+      if (providerIdRef.current !== providerId) {
+        return { ok: true, message: null }
+      }
       setAccountId(criada.account.id)
       return { ok: true, message: null }
     },
-    [carregarContas, providerId],
+    [carregarContas, providerId, setAccountId],
   )
 
   const removeAccount = useCallback(
@@ -245,16 +287,20 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
         }
       }
 
+      const provedorDaOperacao = providerId
       const lista = await carregarContas()
+      if (providerIdRef.current !== provedorDaOperacao) {
+        return { ok: true, message: null }
+      }
       setAccountId((atual) => (lista.some((c) => c.id === atual) ? atual : ''))
       return { ok: true, message: null }
     },
-    [carregarContas],
+    [carregarContas, providerId, setAccountId],
   )
 
   useEffect(() => {
-    let cancelado = false
     const provedor = providerId
+    const requestId = ++accountListRequestRef.current
 
     if (!provedor) {
       // O timeout tira o setState do corpo do efeito: sem ele o lint acusa
@@ -268,30 +314,39 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     }
 
     void window.felixo?.cliAccounts?.list(provedor).then((resultado) => {
-      if (cancelado) {
+      if (
+        !shouldApplyAccountListResult({
+          requestProviderId: provedor,
+          currentProviderId: providerIdRef.current,
+          requestId,
+          latestRequestId: accountListRequestRef.current,
+        })
+      ) {
         return
       }
 
       const lista = resultado?.ok ? (resultado.accounts ?? []) : []
       setAccounts(lista)
-      setAccountId((atual) => {
-        if (lista.some((conta) => conta.id === atual)) {
-          return atual
-        }
-
-        // Reabrir o configurador volta para a última conta usada naquele
-        // agente; trocar de agente não arrasta a conta do agente anterior.
-        const salva = contaSalvaRef.current
-        return lista.some((conta) => conta.id === salva) ? salva : ''
-      })
+      setAccountId((atual) =>
+        selectAccountFromList(lista, atual, contaSalvaRef.current),
+      )
     })
 
     return () => {
-      cancelado = true
+      // O token é a guarda principal; o cleanup ainda invalida imediatamente
+      // uma resposta que esteja prestes a continuar a cadeia de microtasks.
+      accountListRequestRef.current += 1
     }
-  }, [providerId])
+  }, [providerId, setAccountId])
 
   const changeAgent = useCallback((valor: AgentLaunchPreferences['agentValue']) => {
+    // Limpa antes de a nova lista chegar. Assim nenhum clique no mesmo ciclo
+    // consegue carregar a conta do agente anterior para o novo processo.
+    accountListRequestRef.current += 1
+    providerIdRef.current = valor === SHELL_AGENT_VALUE ? '' : valor
+    accountIdRef.current = ''
+    setAccounts([])
+    setAccountIdState('')
     setAgentValue(valor)
     setModel('')
     setEffort('')
@@ -424,9 +479,9 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       planningFile,
       openiaInterface: openiaInterfaceRef.current,
       openiaModel: openiaModelRef.current,
-      accountId,
+      accountId: accountIdRef.current,
     })
-  }, [accountId, agentValue, effort, model, planningFile, projectId, yolo])
+  }, [agentValue, effort, model, planningFile, projectId, yolo])
 
   /** Traduz a configuração atual nas opções de abertura de um terminal. */
   const buildOptions = useCallback((): NewTerminalOptions => {
@@ -440,7 +495,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
 
     // A conta escolhida acompanha o terminal desde o nascimento: é ela que
     // decide em qual login a CLI abre.
-    const conta = accountId || undefined
+    const conta = accountIdRef.current || undefined
 
     const choices = {
       agentId: agent.id,
@@ -460,6 +515,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       const modelLabel = openiaModelRef.current ? ` · ${openiaModelRef.current}` : ''
       return {
         accountId: conta,
+        providerId: agent.id,
         command: agent.command,
         args: launcherArgs ?? undefined,
         cwd: project?.path,
@@ -471,6 +527,7 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
     }
     return {
       accountId: conta,
+      providerId: agent.id,
       command: agent.command,
       args: buildAgentArgs(choices) ?? undefined,
       cwd: project?.path,
@@ -478,7 +535,6 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       planningFile: planningFile.trim() || undefined,
     }
   }, [
-    accountId,
     agent,
     effort,
     model,

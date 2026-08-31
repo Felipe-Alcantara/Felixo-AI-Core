@@ -202,6 +202,8 @@ type SessionOptions = {
    * sistema, que é o comportamento de sempre.
    */
   accountId?: string
+  /** Provedor da CLI, para impedir ambiente de outra conta no boundary do PTY. */
+  providerId?: string
   /** Restored timestamp; omitted on restart so a fresh clock is created. */
   startedAt?: number
   /** Cria um bloco Página Web quando a pessoa abre um link do terminal. */
@@ -695,6 +697,7 @@ export class TerminalSessionStore {
         fallbackCommand: options.fallbackCommand,
         keepShellOpen: options.keepShellOpen,
         accountId: options.accountId,
+        providerId: options.providerId,
       })
       .then((result) => {
         if (session.disposed) {

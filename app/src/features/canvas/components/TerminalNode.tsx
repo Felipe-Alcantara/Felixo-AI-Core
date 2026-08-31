@@ -74,9 +74,10 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
       accountId: nodeData.accountId,
+      providerId: nodeData.providerId,
       agentSession: nodeData.agentSession,
       resumeAgentSession: nodeData.resumeAgentSession,
-      onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),
+      onAgentSession: (reference) => onAgentSession?.(id, reference),
       onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
   }, [
@@ -90,6 +91,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.initialTextReady,
     nodeData.fallbackCommand,
     nodeData.keepShellOpen,
+    nodeData.accountId,
+    nodeData.providerId,
     nodeData.agentSession,
     nodeData.resumeAgentSession,
     onAgentSession,
@@ -126,6 +129,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
       accountId: nodeData.accountId,
+      providerId: nodeData.providerId,
       agentSession: nodeData.agentSession,
       resumeAgentSession: canResume,
       onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),

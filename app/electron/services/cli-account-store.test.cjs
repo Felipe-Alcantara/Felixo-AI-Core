@@ -87,6 +87,32 @@ test('conta inexistente não força ambiente nenhum', () => {
 
   try {
     assert.deepEqual(env.store.buildEnv('nao-existe'), {})
+    // O terminal sem conta continua usando o login do sistema, mesmo quando
+    // o PTY já inferiu o provedor do comando.
+    assert.deepEqual(env.store.buildEnv(undefined, 'claude'), {})
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('valida a conta contra o provedor antes de montar o ambiente', () => {
+  const env = createEnvironment()
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+
+    assert.deepEqual(env.store.validateAccount(conta.id, 'codex'), {
+      ok: true,
+      account: conta,
+    })
+    assert.deepEqual(env.store.validateAccount(conta.id, 'claude'), {
+      ok: false,
+      message: 'A conta selecionada pertence a outro provedor.',
+    })
+    assert.throws(
+      () => env.store.buildEnv(conta.id, 'claude'),
+      /outro provedor/,
+    )
   } finally {
     env.cleanup()
   }

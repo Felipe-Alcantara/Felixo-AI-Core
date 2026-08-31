@@ -878,10 +878,13 @@ test('lista as sessões vivas com o comando que cada uma pediu', () => {
 
 test('o terminal nasce na conta escolhida, e sem conta segue o login do sistema', () => {
   const { spawnPty, calls } = createFakePty()
+  const environmentCalls = []
   const manager = new PtyProcessManager({
     spawnPty,
-    buildAccountEnv: (accountId) =>
-      accountId === 'conta-trabalho' ? { CODEX_HOME: '/perfis/trabalho' } : {},
+    buildAccountEnv: (accountId, providerId) => {
+      environmentCalls.push({ accountId, providerId })
+      return accountId === 'conta-trabalho' ? { CODEX_HOME: '/perfis/trabalho' } : {}
+    },
   })
 
   try {
@@ -892,7 +895,34 @@ test('o terminal nasce na conta escolhida, e sem conta segue o login do sistema'
     assert.equal(calls[1].options.env.CODEX_HOME, undefined)
     // O PATH montado pelo app continua valendo nos dois casos.
     assert.ok(calls[0].options.env.PATH && calls[1].options.env.PATH)
+    assert.deepEqual(environmentCalls, [
+      { accountId: 'conta-trabalho', providerId: 'codex' },
+      { accountId: undefined, providerId: 'codex' },
+    ])
   } finally {
     manager.killAll({ force: true })
   }
+})
+
+test('o PTY recusa conta incompatível antes de compor o ambiente', () => {
+  const { spawnPty, calls } = createFakePty()
+  let ambienteMontado = false
+  const manager = new PtyProcessManager({
+    spawnPty,
+    validateAccount: () => ({
+      ok: false,
+      message: 'A conta selecionada pertence a outro provedor.',
+    }),
+    buildAccountEnv: () => {
+      ambienteMontado = true
+      return { CODEX_HOME: '/perfis/nao-deveria-usar' }
+    },
+  })
+
+  assert.throws(
+    () => manager.spawn('sessao-invalida', { command: 'claude', accountId: 'conta-codex' }),
+    /outro provedor/,
+  )
+  assert.equal(ambienteMontado, false)
+  assert.equal(calls.length, 0)
 })

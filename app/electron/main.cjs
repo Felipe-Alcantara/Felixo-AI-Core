@@ -156,8 +156,13 @@ app.whenReady().then(() => {
   registerOpeniaIpcHandlers()
   registerCliAccountIpcHandlers({ store: cliAccounts })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
+    validateAccount: (accountId, providerId) =>
+      cliAccounts.validateAccount(accountId, providerId),
     manager: new PtyProcessManager({
-      buildAccountEnv: (accountId) => cliAccounts.buildEnv(accountId),
+      validateAccount: (accountId, providerId) =>
+        cliAccounts.validateAccount(accountId, providerId),
+      buildAccountEnv: (accountId, providerId) =>
+        cliAccounts.buildEnv(accountId, providerId),
     }),
   })
   registerFileAttachmentIpcHandlers(appPaths, { getMainWindow })

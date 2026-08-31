@@ -313,6 +313,8 @@ declare global {
           /** Keeps the terminal interactive after the command exits (run-a-file). */
           keepShellOpen?: boolean
           accountId?: string
+          /** Provider of the CLI; validated against the account in the main process. */
+          providerId?: string
         }) => Promise<CliInvokeResult & { sessionId?: string; reused?: boolean }>
         write: (params: {
           sessionId: string

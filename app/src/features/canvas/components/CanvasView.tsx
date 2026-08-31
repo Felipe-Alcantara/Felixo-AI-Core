@@ -1344,6 +1344,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         ...(options.args && options.args.length ? { args: options.args } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
         ...(options.accountId ? { accountId: options.accountId } : {}),
+        ...(options.providerId ? { providerId: options.providerId } : {}),
         ...(options.launchMode ? { launchMode: options.launchMode } : {}),
         ...(initialText && !options.handoffText ? { initialText } : {}),
         ...(options.handoffText ? { handoffText: initialText } : {}),

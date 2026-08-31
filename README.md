@@ -290,6 +290,12 @@ sistema.
 O login em si é feito pela própria CLI, dentro do terminal, na primeira vez que
 você abre um perfil novo — o app não intermedeia credencial.
 
+Ao trocar de agente no configurador, a conta e a lista anterior são limpas
+imediatamente; respostas assíncronas antigas não podem repopular o campo. O
+provedor acompanha o terminal até o processo principal, que confere comando,
+provedor e conta antes de montar o ambiente do PTY. Uma combinação stale é
+recusada sem iniciar processo nem expor o perfil errado.
+
 Como cada CLI isola o login (medido, não presumido):
 
 | CLI | Isolamento | Observação |

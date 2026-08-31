@@ -88,6 +88,14 @@ controle da CLI/provider. O painel **Limites e uso** consulta as fontes que cada
 provider realmente publica, separa contas por fingerprint seguro e nunca
 transforma ausência de informação em zero.
 
+O `providerId` acompanha a configuração do renderer até o spawn. O IPC e o
+`PtyProcessManager` conferem a combinação `accountId`/provedor/comando antes de
+chamar `buildAccountEnv`; a loja repete a validação antes de devolver as
+variáveis do perfil. Nodes antigos sem `providerId` inferem o provedor somente
+para comandos oficiais conhecidos. Uma resposta assíncrona de contas que já
+não corresponde ao agente visível é descartada por token, e a troca limpa a
+seleção anterior antes de iniciar nova consulta.
+
 Quando a fonte responde, a coleta é marcada como atual e mostra o horário da
 medição. O Claude é consultado em uma sessão PTY descartável por conta/perfil e
 expõe os dados completos e redigidos do `/status`; Codex e Openia usam suas

@@ -236,6 +236,7 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - Ao reiniciar o aplicativo, um terminal de agente que já existia recebe `/resume` seguido de Enter como primeira instrução, em vez do prompt inicial, para retomar a conversa anterior.
 - O prompt inicial de contexto (padrão de qualidade, identidade no canvas, arquivos ligados) é **digitado sem Enter**: ele fica na linha de entrada do agente esperando que você escreva o pedido depois dele, e vai junto quando você enviar. Só `/resume` e a passagem de responsabilidade são enviados sozinhos, porque carregam uma instrução de verdade.
 - Esse contexto é digitado quando a CLI mostra que a entrada dela está pronta, e não num tempo fixo depois da abertura — em agentes que abrem uma tela de aviso ou de confiança antes do prompt, ele espera essa tela ser respondida. Em modo yolo, o app responde sozinho o aviso do Claude Code, que aparece uma vez por máquina.
+- Ao trocar de agente no configurador, a conta e a lista do agente anterior são limpas imediatamente. Consultas antigas que terminarem depois são descartadas, e o processo principal ainda confere conta, provedor e comando antes de criar o PTY; uma combinação incompatível não inicia o terminal.
 
 ### Colar imagens em um agente
 

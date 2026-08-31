@@ -24,6 +24,7 @@ const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { discoverAgentSession } = require('./agent-session-discovery.cjs')
+const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
@@ -69,9 +70,10 @@ class PtyProcessManager {
    * @param {(command: string, env: Record<string, string>) => string | null} [dependencies.resolveCodexPath] - Injectable Codex resolver.
    * @param {() => boolean} [dependencies.isDebugSession] - Whether detailed local diagnostics are enabled.
    * @param {(options: object) => object | null} [dependencies.discoverAgentSession] - Provider history resolver.
-   * @param {(accountId: string) => Record<string, string>} [dependencies.buildAccountEnv] - Ambiente da conta escolhida.
+   * @param {(accountId: string, providerId?: string) => Record<string, string>} [dependencies.buildAccountEnv] - Ambiente da conta escolhida.
+   * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount] - Confere a conta antes de montar o ambiente.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -81,6 +83,7 @@ class PtyProcessManager {
     this.isDebugSession = isDebugSession ?? (() => process.env.FELIXO_DEBUG_SESSION === '1')
     // Sem loja de contas o terminal nasce no login do sistema, como antes.
     this.buildAccountEnv = buildAccountEnv ?? (() => ({}))
+    this.validateAccount = validateAccount
     this.discoverAgentSession = discover
   }
 
@@ -118,6 +121,17 @@ class PtyProcessManager {
     allowEmergencyShellFallback = true,
     useConpty,
   ) {
+    const accountValidation = validatePtyAccountSelection({
+      accountId: options.accountId,
+      providerId: options.providerId,
+      command: options.command,
+      validateAccount: this.validateAccount,
+    })
+
+    if (!accountValidation.ok) {
+      throw new Error(accountValidation.message)
+    }
+
     if (!isFallbackRetry && options.reuseExisting) {
       const existing = this.sessions.get(sessionId)
       if (existing) {
@@ -134,7 +148,10 @@ class PtyProcessManager {
     // A conta escolhida entra por variável de ambiente, depois do PATH: é o
     // que faz duas contas do mesmo provedor conviverem sem logout. Sem conta
     // escolhida o objeto vem vazio e nada muda.
-    const env = { ...createCliEnv(), ...this.buildAccountEnv(options.accountId) }
+    const env = {
+      ...createCliEnv(),
+      ...this.buildAccountEnv(options.accountId, accountValidation.providerId),
+    }
     const args = Array.isArray(options.args) ? options.args : []
     const defaultShell = options.defaultShell || this.platform.getDefaultShell(env)
     const requestedCommand = options.command || defaultShell

@@ -65,6 +65,40 @@ function createCliAccountStore({
       : accounts
   }
 
+  function findAccount(accountId) {
+    return readStore().find((account) => account.id === accountId) ?? null
+  }
+
+  /**
+   * Confere a conta escolhida contra o provedor que vai nascer no terminal.
+   *
+   * A checagem fica na loja para que nenhum boundary precise confiar apenas no
+   * objeto recebido do renderer antes de pedir o ambiente do perfil.
+   */
+  function validateAccount(accountId, providerId) {
+    if (typeof accountId !== 'string' || !accountId.trim()) {
+      return { ok: false, message: 'O identificador da conta é inválido.' }
+    }
+
+    if (typeof providerId !== 'string' || !providerId.trim()) {
+      return { ok: false, message: 'O identificador do provedor é inválido.' }
+    }
+
+    const account = findAccount(accountId.trim())
+    if (!account) {
+      return { ok: false, message: 'A conta selecionada não existe mais.' }
+    }
+
+    if (account.providerId !== providerId.trim()) {
+      return {
+        ok: false,
+        message: 'A conta selecionada pertence a outro provedor.',
+      }
+    }
+
+    return { ok: true, account }
+  }
+
   /**
    * Cria a conta e a pasta de login dela, ainda vazia. O login acontece na
    * primeira vez que um terminal nasce nesse perfil: a CLI percebe que não há
@@ -231,11 +265,19 @@ function createCliAccountStore({
    * Ambiente do terminal para a conta escolhida. O segredo sai daqui direto
    * para o processo filho, sem passar pelo renderer nem por log.
    */
-  function buildEnv(accountId) {
-    const account = readStore().find((item) => item.id === accountId)
+  function buildEnv(accountId, expectedProviderId) {
+    const account = findAccount(accountId)
+    const hasAccount = accountId !== undefined && accountId !== null && accountId !== ''
 
     if (!account) {
+      if (hasAccount && expectedProviderId) {
+        throw new Error('A conta selecionada não existe mais.')
+      }
       return {}
+    }
+
+    if (expectedProviderId && account.providerId !== expectedProviderId) {
+      throw new Error('A conta selecionada pertence a outro provedor.')
     }
 
     return buildProfileEnv({
@@ -283,6 +325,7 @@ function createCliAccountStore({
     remove,
     setSecret,
     storePath,
+    validateAccount,
   }
 }
 

@@ -12,11 +12,13 @@
 const { ipcMain } = require('electron')
 const { toErrorResult } = require('./ipc-result.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
+const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 
 /**
  * @param {() => (import('electron').BrowserWindow | null)} getMainWindow
  * @param {object} [dependencies]
  * @param {PtyProcessManager} [dependencies.manager] - Injectable for tests.
+ * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount]
  * @returns {{ manager: PtyProcessManager, dispose: () => void }}
  */
 function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
@@ -33,6 +35,17 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   ipcMain.handle('pty:spawn', (_event, params = {}) => {
     try {
       const sessionId = requireSessionId(params.sessionId)
+      const accountValidation = validatePtyAccountSelection({
+        accountId: params.accountId,
+        providerId: params.providerId,
+        command: params.command,
+        validateAccount: dependencies.validateAccount,
+      })
+
+      if (!accountValidation.ok) {
+        return accountValidation
+      }
+
       const reused = Boolean(params.reuseExisting && manager.has?.(sessionId))
 
       manager.spawn(sessionId, {
@@ -47,6 +60,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         // Conta escolhida no configurador do agente; ausente = login do
         // sistema, que é o comportamento de antes desta feature.
         accountId: typeof params.accountId === 'string' ? params.accountId : undefined,
+        providerId: accountValidation.providerId,
         onData: (data) => send('pty:data', { sessionId, data }),
         onExit: (event) =>
           send('pty:exit', {
