@@ -26,6 +26,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "publish:github": "npm run build && electron-builder --publish always",
+    "benchmark:terminal": "electron --no-sandbox --disable-gpu --js-flags=--expose-gc --enable-precise-memory-info scripts/terminal-scrollback-benchmark.cjs",
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",
     "test": "node --test \"electron/**/*.test.cjs\" \"scripts/**/*.test.cjs\"",

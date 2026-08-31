@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Felixo terminal scrollback benchmark</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        background: #0b0f14;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0b0f14;
+      }
+
+      #terminals {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        width: 100%;
+        height: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+
+      .terminal-host {
+        min-width: 0;
+        min-height: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="terminals"></main>
+    <script type="module">
+      import { Terminal } from '../node_modules/@xterm/xterm/lib/xterm.mjs'
+
+      const root = document.querySelector('#terminals')
+      const textEncoder = new TextEncoder()
+      const frameIntervals = []
+      const longTaskDurations = []
+      let previousFrameAt = null
+
+      function recordFrame(now) {
+        if (previousFrameAt !== null) {
+          frameIntervals.push(now - previousFrameAt)
+        }
+        previousFrameAt = now
+        window.requestAnimationFrame(recordFrame)
+      }
+
+      window.requestAnimationFrame(recordFrame)
+
+      if (
+        typeof PerformanceObserver !== 'undefined' &&
+        PerformanceObserver.supportedEntryTypes?.includes('longtask')
+      ) {
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            longTaskDurations.push(entry.duration)
+          }
+        })
+        observer.observe({ type: 'longtask', buffered: true })
+      }
+
+      function percentile(values, percentage) {
+        if (!values.length) return null
+        const sorted = [...values].sort((a, b) => a - b)
+        const index = (sorted.length - 1) * percentage
+        const lower = Math.floor(index)
+        const upper = Math.ceil(index)
+        const result = lower === upper
+          ? sorted[lower]
+          : sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower)
+        return Number(result.toFixed(3))
+      }
+
+      function summarize(values) {
+        const clean = values.filter((value) => Number.isFinite(value))
+        return {
+          count: clean.length,
+          p50: percentile(clean, 0.5),
+          p95: percentile(clean, 0.95),
+          max: clean.length ? Math.max(...clean) : null,
+        }
+      }
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms))
+      }
+
+      async function forceCollection() {
+        const collect = globalThis.gc
+        if (typeof collect !== 'function') return false
+        collect()
+        await sleep(25)
+        collect()
+        await sleep(25)
+        return true
+      }
+
+      function clearHosts() {
+        while (root.firstChild) root.removeChild(root.firstChild)
+      }
+
+      function makeLine(sessionIndex, lineIndex, lineWidth, longPromptChars, longEvery) {
+        if (longPromptChars > 0 && lineIndex % longEvery === 0) {
+          return `session-${sessionIndex} prompt-${lineIndex} ${'p'.repeat(longPromptChars)}`
+        }
+
+        const prefix = `session-${sessionIndex} output-${lineIndex} `
+        return prefix + 'x'.repeat(Math.max(0, lineWidth - prefix.length))
+      }
+
+      function makePayload(
+        sessionIndex,
+        firstLine,
+        lineCount,
+        lineWidth,
+        longPromptChars,
+        longEvery,
+      ) {
+        if (lineCount <= 0) return ''
+        let payload = ''
+        for (let offset = 0; offset < lineCount; offset += 1) {
+          payload += `${makeLine(
+            sessionIndex,
+            firstLine + offset,
+            lineWidth,
+            longPromptChars,
+            longEvery,
+          )}\r\n`
+        }
+        return payload
+      }
+
+      function writeTerminal(terminal, payload, writeDurations) {
+        const startedAt = performance.now()
+        return new Promise((resolve) => {
+          terminal.write(payload, () => {
+            writeDurations.push(performance.now() - startedAt)
+            resolve()
+          })
+        })
+      }
+
+      function createTerminal(scrollback, cols, rows) {
+        const host = document.createElement('div')
+        host.className = 'terminal-host'
+        root.appendChild(host)
+
+        const terminal = new Terminal({
+          convertEol: false,
+          cursorBlink: false,
+          scrollback,
+          cols,
+          rows,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          fontSize: 13,
+          theme: { background: '#0b0f14' },
+        })
+        terminal.open(host)
+        return { host, terminal }
+      }
+
+      function heapSnapshot() {
+        const memory = performance.memory
+        if (!memory) return null
+        return {
+          usedJsHeapBytes: memory.usedJSHeapSize,
+          totalJsHeapBytes: memory.totalJSHeapSize,
+          jsHeapLimitBytes: memory.jsHeapSizeLimit,
+        }
+      }
+
+      async function detachAndAttach(terminals) {
+        const startedAt = performance.now()
+        const detachedHosts = terminals.map(({ host }) => {
+          const replacement = document.createElement('div')
+          replacement.className = 'terminal-host'
+          root.replaceChild(replacement, host)
+          return replacement
+        })
+
+        terminals.forEach(({ terminal }, index) => {
+          detachedHosts[index].appendChild(terminal.element)
+        })
+
+        await new Promise((resolve) => window.requestAnimationFrame(resolve))
+
+        return performance.now() - startedAt
+      }
+
+      function disposeTerminals(terminals) {
+        const startedAt = performance.now()
+        for (const { terminal } of terminals) terminal.dispose()
+        return performance.now() - startedAt
+      }
+
+      async function runScenario(options) {
+        const {
+          count,
+          scrollback,
+          linesPerTerminal,
+          activeCount,
+          chunkLines,
+          lineWidth,
+          longPromptChars,
+          longEvery,
+          activeIntervalMs,
+          cols,
+          rows,
+        } = options
+
+        clearHosts()
+        await forceCollection()
+        frameIntervals.length = 0
+        longTaskDurations.length = 0
+        previousFrameAt = null
+
+        const heapBefore = heapSnapshot()
+
+        const terminals = []
+        const writeDurations = []
+        const firstOutputMs = Array(count).fill(null)
+        const linesWritten = Array(count).fill(0)
+        let outputBytes = 0
+
+        const createStartedAt = performance.now()
+        for (let index = 0; index < count; index += 1) {
+          terminals.push(createTerminal(scrollback, cols, rows))
+        }
+        const createMs = performance.now() - createStartedAt
+
+        await new Promise((resolve) => window.requestAnimationFrame(resolve))
+
+        const streamStartedAt = performance.now()
+        let activeRemaining = activeCount
+
+        // Idle sessions receive their complete retained history in one burst;
+        // active sessions receive small bursts separated by a timer. This
+        // keeps both the quiet-card and continuous-output cases in one run.
+        for (let index = activeCount; index < count; index += 1) {
+          const payload = makePayload(
+            index,
+            0,
+            linesPerTerminal,
+            lineWidth,
+            longPromptChars,
+            longEvery,
+          )
+          outputBytes += textEncoder.encode(payload).length
+          linesWritten[index] = linesPerTerminal
+          await writeTerminal(terminals[index].terminal, payload, writeDurations)
+          firstOutputMs[index] = performance.now() - streamStartedAt
+        }
+
+        const activeNextLine = Array(activeCount).fill(0)
+        while (activeRemaining > 0) {
+          activeRemaining = 0
+          const writes = []
+
+          for (let index = 0; index < activeCount; index += 1) {
+            const firstLine = activeNextLine[index]
+            const remaining = linesPerTerminal - firstLine
+            if (remaining <= 0) continue
+
+            activeRemaining += 1
+            const amount = Math.min(chunkLines, remaining)
+            const payload = makePayload(
+              index,
+              firstLine,
+              amount,
+              lineWidth,
+              longPromptChars,
+              longEvery,
+            )
+            activeNextLine[index] += amount
+            linesWritten[index] += amount
+            outputBytes += textEncoder.encode(payload).length
+            writes.push(
+              writeTerminal(terminals[index].terminal, payload, writeDurations).then(() => {
+                if (firstOutputMs[index] === null) {
+                  firstOutputMs[index] = performance.now() - streamStartedAt
+                }
+              }),
+            )
+          }
+
+          await Promise.all(writes)
+          if (activeRemaining > 0 && activeIntervalMs > 0) {
+            await sleep(activeIntervalMs)
+          }
+        }
+
+        const streamMs = performance.now() - streamStartedAt
+        await sleep(50)
+        const heapAfterStream = heapSnapshot()
+
+        const retainedRows = terminals.map(({ terminal }) => terminal.buffer.active.length)
+        const detachAttachMs = await detachAndAttach(terminals)
+        const closeMs = disposeTerminals(terminals)
+        terminals.length = 0
+
+        // A renderer restart creates fresh xterm instances and replays the
+        // suffix that can be restored from the active scrollback. Measuring it
+        // separately makes the reading/resume trade-off visible in the report.
+        clearHosts()
+        const resumeStartedAt = performance.now()
+        const resumed = []
+        let replayBytes = 0
+        const replayLines = Math.min(linesPerTerminal, scrollback)
+        for (let index = 0; index < count; index += 1) {
+          const resumedTerminal = createTerminal(scrollback, cols, rows)
+          resumed.push(resumedTerminal)
+          const firstLine = linesPerTerminal - replayLines
+          const payload = makePayload(
+            index,
+            firstLine,
+            replayLines,
+            lineWidth,
+            longPromptChars,
+            longEvery,
+          )
+          replayBytes += textEncoder.encode(payload).length
+          await writeTerminal(resumedTerminal.terminal, payload, writeDurations)
+        }
+        await sleep(25)
+        const resumeMs = performance.now() - resumeStartedAt
+        const resumedRows = resumed.map(({ terminal }) => terminal.buffer.active.length)
+        const resumedCloseMs = disposeTerminals(resumed)
+        resumed.length = 0
+        clearHosts()
+
+        const frameSummary = summarize(frameIntervals)
+        const longTaskSummary = summarize(longTaskDurations)
+        await forceCollection()
+        const heapAfterCleanup = heapSnapshot()
+
+        return {
+          count,
+          scrollback,
+          activeCount,
+          idleCount: count - activeCount,
+          linesPerTerminal,
+          outputBytes,
+          replayBytes,
+          replayLines,
+          linesWritten,
+          retainedRows,
+          resumedRows,
+          firstOutputMs: summarize(firstOutputMs),
+          writeMs: summarize(writeDurations),
+          frameMs: frameSummary,
+          longTaskMs: longTaskSummary,
+          createMs,
+          streamMs,
+          detachAttachMs,
+          closeMs,
+          resumeMs,
+          resumedCloseMs,
+          gcAvailable: typeof globalThis.gc === 'function',
+          heapBefore,
+          heapAfterStream,
+          heapAfterCleanup,
+          heap: heapAfterCleanup,
+        }
+      }
+
+      window.felixoTerminalScrollbackBenchmark = {
+        collectGarbage: forceCollection,
+        runScenario,
+      }
+    </script>
+  </body>
+</html>

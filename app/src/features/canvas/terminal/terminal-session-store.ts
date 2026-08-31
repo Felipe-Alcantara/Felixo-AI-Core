@@ -61,6 +61,7 @@ import {
   looksLikeApprovalPrompt,
   readInputLineState,
 } from './terminal-screen-state'
+import { TERMINAL_SCROLLBACK } from './terminal-scrollback'
 
 /**
  * Activity derived from the output stream:
@@ -434,7 +435,7 @@ export class TerminalSessionStore {
       // HMR/navigation can recreate the renderer while the Electron PTY keeps
       // running. A generous scrollback lets the replacement renderer restore
       // enough context for both review and responsibility handoff.
-      scrollback: 20_000,
+      scrollback: TERMINAL_SCROLLBACK,
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       fontSize: 13,
