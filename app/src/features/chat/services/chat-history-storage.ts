@@ -211,6 +211,9 @@ function normalizeContextAttachment(value: unknown): ContextAttachment | null {
     type,
     size,
   }
+  if (rawAttachment.isDirectory === true) {
+    attachment.isDirectory = true
+  }
   const path = normalizeString(rawAttachment.path)
   const previewUrl = normalizePreviewUrl(rawAttachment.previewUrl)
   const contentPreview = normalizeString(rawAttachment.contentPreview)

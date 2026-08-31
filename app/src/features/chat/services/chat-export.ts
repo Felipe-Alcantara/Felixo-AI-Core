@@ -119,6 +119,7 @@ function createJsonExport(
         path: attachment.path,
         type: attachment.type,
         size: attachment.size,
+        isDirectory: attachment.isDirectory,
       })),
       terminalSessions: params.terminalSessions.map((session) => ({
         sessionId: session.sessionId,

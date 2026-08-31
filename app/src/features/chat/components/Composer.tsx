@@ -5,7 +5,7 @@ import type {
   FormEvent,
   KeyboardEvent,
 } from 'react'
-import { Mic, Plus, Send, Square, X } from 'lucide-react'
+import { FolderOpen, Mic, Plus, Send, Square, X } from 'lucide-react'
 import type {
   ContextAttachment,
   Model,
@@ -208,6 +208,38 @@ export function Composer({
     onAddAttachments(nextAttachments)
   }
 
+  async function handlePickContext(mode: 'files' | 'directory') {
+    if (isStreaming) {
+      return
+    }
+
+    const pickContext = window.felixo?.files?.pickContext
+
+    if (!pickContext) {
+      if (mode === 'files') {
+        attachmentInputRef.current?.click()
+      }
+      return
+    }
+
+    const result = await pickContext({ mode }).catch(() => null)
+
+    if (!result?.ok) {
+      if (mode === 'files') {
+        attachmentInputRef.current?.click()
+      }
+      return
+    }
+
+    const nextAttachments = (result.attachments ?? [])
+      .map(createPickedContextAttachment)
+      .filter((attachment): attachment is ContextAttachment => Boolean(attachment))
+
+    if (nextAttachments.length > 0) {
+      onAddAttachments(nextAttachments)
+    }
+  }
+
   async function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     if (isStreaming) {
       return
@@ -278,13 +310,24 @@ export function Composer({
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <button
                 type="button"
-                title="Adicionar contexto"
-                onClick={() => attachmentInputRef.current?.click()}
+                title="Adicionar arquivos de qualquer tipo"
+                onClick={() => void handlePickContext('files')}
                 disabled={isStreaming}
                 className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <Plus size={17} aria-hidden="true" />
-                <span className="sr-only">Adicionar contexto</span>
+                <span className="sr-only">Adicionar arquivos</span>
+              </button>
+
+              <button
+                type="button"
+                title="Adicionar pasta inteira"
+                onClick={() => void handlePickContext('directory')}
+                disabled={isStreaming}
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+              >
+                <FolderOpen size={16} aria-hidden="true" />
+                <span className="sr-only">Adicionar pasta</span>
               </button>
 
               <select
@@ -470,11 +513,14 @@ async function createAttachment(file: File): Promise<ContextAttachment> {
   const filePath = window.felixo?.getFilePath?.(file) || undefined
   const isImage = isImageFile(file)
   const [savedImageAttachment, contentPreview, previewUrl] = await Promise.all([
-    !filePath && isImage ? saveImageAttachment(file) : Promise.resolve(null),
+    isImage ? saveImageAttachment(file) : Promise.resolve(null),
     createContentPreview(file),
     isImage ? createImagePreviewUrl(file) : Promise.resolve(undefined),
   ])
-  const path = filePath ?? savedImageAttachment?.filePath
+  // Images are copied into the app-owned attachment directory whenever the
+  // renderer can provide their bytes. Keeping that path first means the
+  // preview reader never needs to trust a renderer-supplied external path.
+  const path = savedImageAttachment?.filePath ?? filePath
 
   return {
     id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
@@ -485,6 +531,59 @@ async function createAttachment(file: File): Promise<ContextAttachment> {
     previewUrl,
     contentPreview,
   }
+}
+
+function createPickedContextAttachment(value: unknown): ContextAttachment | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const attachment = value as {
+    id?: unknown
+    name?: unknown
+    path?: unknown
+    type?: unknown
+    size?: unknown
+    isDirectory?: unknown
+  }
+  const path = typeof attachment.path === 'string' ? attachment.path : ''
+
+  if (!isAbsoluteFilePath(path)) {
+    return null
+  }
+
+  return {
+    id:
+      typeof attachment.id === 'string' && attachment.id
+        ? attachment.id
+        : crypto.randomUUID?.() || `${Date.now()}`,
+    name:
+      typeof attachment.name === 'string' && attachment.name
+        ? attachment.name
+        : getPathName(path),
+    path,
+    type:
+      typeof attachment.type === 'string' && attachment.type
+        ? attachment.type
+        : 'application/octet-stream',
+    size:
+      typeof attachment.size === 'number' && Number.isFinite(attachment.size)
+        ? Math.max(0, attachment.size)
+        : 0,
+    isDirectory: attachment.isDirectory === true,
+  }
+}
+
+function isAbsoluteFilePath(filePath: string) {
+  return (
+    filePath.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(filePath) ||
+    filePath.startsWith('\\\\')
+  )
+}
+
+function getPathName(filePath: string) {
+  return filePath.split(/[\\/]/).filter(Boolean).pop() || filePath
 }
 
 async function saveImageAttachment(file: File) {
@@ -652,6 +751,10 @@ function isImageFile(file: File) {
 }
 
 function isImageAttachment(attachment: ContextAttachment) {
+  if (attachment.isDirectory) {
+    return false
+  }
+
   return (
     attachment.type.startsWith('image/') ||
     /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(attachment.name)

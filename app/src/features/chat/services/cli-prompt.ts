@@ -82,7 +82,10 @@ export function createCliPrompt(
   const contextualProjectDiff = useLeanContext
     ? { added: [], removed: [] }
     : projectDiff
-  const contextualAttachments = useLeanContext ? [] : attachments
+  // An explicit attachment is always part of the current request, even when
+  // the text itself is a short greeting. Otherwise an attached file could be
+  // silently dropped before reaching the selected agent.
+  const contextualAttachments = attachments
   const allHistoryMessages = messages.filter((message) => message.content.trim())
   const historyMessages = allHistoryMessages.slice(-CONTEXT_MESSAGE_LIMIT)
   const historyOffset = allHistoryMessages.length - historyMessages.length
@@ -228,7 +231,9 @@ export function createCliPrompt(
       )
 
       if (attachment.path) {
-        lines.push(`    Caminho local: ${attachment.path}`)
+        lines.push(
+          `    Caminho absoluto local: ${formatAttachmentPath(attachment.path)}`,
+        )
       }
 
       if (attachment.contentPreview) {
@@ -279,12 +284,18 @@ function formatHistoryMessage(
       )
 
       if (attachment.path) {
-        lines.push(`    Caminho local: ${attachment.path}`)
+        lines.push(
+          `    Caminho absoluto local: ${formatAttachmentPath(attachment.path)}`,
+        )
       }
     }
   }
 
   return lines.join('\n')
+}
+
+function formatAttachmentPath(filePath: string) {
+  return JSON.stringify(filePath)
 }
 
 function resolveMessageModelLabel(message: ChatMessage, models: Model[]) {

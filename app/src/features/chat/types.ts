@@ -179,6 +179,7 @@ export type ContextAttachment = {
   path?: string
   type: string
   size: number
+  isDirectory?: boolean
   previewUrl?: string
   contentPreview?: string
 }

@@ -7,7 +7,7 @@ type ExpandedImage = {
   id: string
   name: string
   size: number
-  src: string
+  src?: string
   isLoadingOriginal: boolean
 }
 
@@ -25,13 +25,13 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
   }, [messages])
 
   function openImageAttachment(attachment: ContextAttachment) {
-    if (!attachment.previewUrl) {
-      return
-    }
-
     const shouldLoadOriginal = Boolean(
       attachment.path && window.felixo?.files?.readImageAttachment,
     )
+
+    if (!attachment.previewUrl && !shouldLoadOriginal) {
+      return
+    }
 
     setExpandedImage({
       id: attachment.id,
@@ -202,7 +202,8 @@ function MessageAttachments({
   return (
     <div className="mt-3 flex flex-col gap-2">
       {attachments.map((attachment) =>
-        isImageAttachment(attachment) && attachment.previewUrl ? (
+        isImageAttachment(attachment) &&
+        (Boolean(attachment.previewUrl) || Boolean(attachment.path)) ? (
           <figure
             key={attachment.id}
             className="overflow-hidden rounded-lg border border-sky-200/[0.12] bg-black/20"
@@ -213,11 +214,17 @@ function MessageAttachments({
               onClick={() => onOpenImage(attachment)}
               className="felixo-btn-icon group relative flex max-h-72 min-h-32 w-full items-center justify-center bg-black/20 outline-none focus:ring-2 focus:ring-sky-200/40"
             >
-              <img
-                src={attachment.previewUrl}
-                alt={attachment.name}
-                className="max-h-72 w-full object-contain"
-              />
+              {attachment.previewUrl ? (
+                <img
+                  src={attachment.previewUrl}
+                  alt={attachment.name}
+                  className="max-h-72 w-full object-contain"
+                />
+              ) : (
+                <span className="px-4 py-12 text-[11px] text-zinc-500">
+                  Imagem selecionada — clique para abrir
+                </span>
+              )}
               <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/60 text-zinc-200 opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
                 <Maximize2 size={14} aria-hidden="true" />
               </span>
@@ -306,11 +313,19 @@ function ImageLightbox({
         </header>
 
         <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-3">
-          <img
-            src={image.src}
-            alt={image.name}
-            className="max-h-[78vh] max-w-full object-contain"
-          />
+          {image.src ? (
+            <img
+              src={image.src}
+              alt={image.name}
+              className="max-h-[78vh] max-w-full object-contain"
+            />
+          ) : (
+            <span className="text-[12px] text-zinc-500">
+              {image.isLoadingOriginal
+                ? 'Carregando imagem...'
+                : 'Prévia indisponível para este caminho.'}
+            </span>
+          )}
         </div>
       </section>
     </div>
@@ -318,6 +333,10 @@ function ImageLightbox({
 }
 
 function isImageAttachment(attachment: ContextAttachment) {
+  if (attachment.isDirectory) {
+    return false
+  }
+
   return (
     attachment.type.startsWith('image/') ||
     /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(attachment.name)

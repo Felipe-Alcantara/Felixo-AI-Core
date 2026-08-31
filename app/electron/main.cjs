@@ -160,7 +160,7 @@ app.whenReady().then(() => {
       buildAccountEnv: (accountId) => cliAccounts.buildEnv(accountId),
     }),
   })
-  registerFileAttachmentIpcHandlers(appPaths)
+  registerFileAttachmentIpcHandlers(appPaths, { getMainWindow })
   registerFileExportIpcHandlers(getMainWindow)
   const projectsHandlers = registerProjectsIpcHandlers(getMainWindow, {
     database: storageDatabase,

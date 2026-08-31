@@ -9,22 +9,157 @@ const {
 } = require('./image-mime-types.cjs')
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+const CONTEXT_PICK_MODES = new Set(['files', 'directory'])
 
 function registerFileAttachmentIpcHandlers(appPaths, options = {}) {
   const { ipcMain = require('electron').ipcMain } = options
   const attachmentDir =
     options.attachmentDir ||
     path.join(appPaths.userData, 'clipboard-attachments')
+  const authorizedImagePaths = options.authorizedImagePaths || new Set()
+
+  ipcMain.handle('files:pick-context', async (_event, params) =>
+    pickContextAttachments(params, {
+      authorizedImagePaths,
+      getMainWindow: options.getMainWindow,
+      showOpenDialog: options.showOpenDialog,
+    }),
+  )
 
   ipcMain.handle('files:save-attachment', async (_event, params) =>
     saveAttachment(params, attachmentDir),
   )
   ipcMain.handle('files:read-image-attachment', async (_event, params) =>
-    readImageAttachment(params),
+    readImageAttachment(params, { attachmentDir, authorizedImagePaths }),
   )
   ipcMain.handle('files:save-clipboard-image', async () =>
     saveClipboardImage(attachmentDir, options),
   )
+}
+
+/**
+ * Opens the native picker for arbitrary files or one complete directory.
+ * The renderer receives metadata and an absolute path, never file contents.
+ * Image paths selected here are recorded in the main process before being
+ * returned, which makes the later preview read an explicit user grant.
+ *
+ * @param {object} params
+ * @param {'files'|'directory'} params.mode
+ * @param {object} options
+ * @param {Set<string>} options.authorizedImagePaths
+ * @param {Function} [options.getMainWindow]
+ * @param {Function} [options.showOpenDialog] - Injectable for tests.
+ */
+async function pickContextAttachments(params, options = {}) {
+  const mode = params?.mode
+
+  if (!CONTEXT_PICK_MODES.has(mode)) {
+    return { ok: false, message: 'Modo de selecao de contexto invalido.' }
+  }
+
+  const dialogOptions = {
+    title:
+      mode === 'directory'
+        ? 'Adicionar pasta ao contexto'
+        : 'Adicionar arquivos ao contexto',
+    properties:
+      mode === 'directory'
+        ? ['openDirectory']
+        : ['openFile', 'multiSelections'],
+  }
+
+  try {
+    const result = await showContextOpenDialog(dialogOptions, options)
+
+    if (result?.canceled || !Array.isArray(result?.filePaths)) {
+      return { ok: true, canceled: true, attachments: [] }
+    }
+
+    const attachments = []
+
+    for (const filePath of [...new Set(result.filePaths)]) {
+      const attachment = await describePickedContextPath(
+        filePath,
+        options.authorizedImagePaths,
+      )
+
+      if (attachment) {
+        attachments.push(attachment)
+      }
+    }
+
+    if (result.filePaths.length > 0 && attachments.length === 0) {
+      return {
+        ok: false,
+        message: 'Nao foi possivel acessar os caminhos selecionados.',
+      }
+    }
+
+    return { ok: true, canceled: false, attachments }
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao abrir o seletor de contexto.',
+    }
+  }
+}
+
+async function showContextOpenDialog(dialogOptions, options = {}) {
+  if (typeof options.showOpenDialog === 'function') {
+    return options.showOpenDialog(dialogOptions)
+  }
+
+  const { BrowserWindow, dialog } = require('electron')
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  const configuredWindow =
+    typeof options.getMainWindow === 'function'
+      ? options.getMainWindow()
+      : undefined
+  const window = focusedWindow || configuredWindow
+
+  if (window && !window.isDestroyed()) {
+    return dialog.showOpenDialog(window, dialogOptions)
+  }
+
+  return dialog.showOpenDialog(dialogOptions)
+}
+
+async function describePickedContextPath(filePath, authorizedImagePaths) {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return null
+  }
+
+  try {
+    const resolvedPath = await fs.realpath(filePath)
+    const stats = await fs.stat(resolvedPath)
+    const isDirectory = stats.isDirectory()
+
+    if (!isDirectory && !stats.isFile()) {
+      return null
+    }
+
+    const type = isDirectory
+      ? 'inode/directory'
+      : imageMimeTypeFromFileName(resolvedPath) || 'application/octet-stream'
+
+    if (!isDirectory && IMAGE_MIME_EXTENSIONS.has(type)) {
+      authorizedImagePaths?.add(resolvedPath)
+    }
+
+    return {
+      id: randomUUID(),
+      name: path.basename(resolvedPath) || resolvedPath,
+      path: resolvedPath,
+      type,
+      size: isDirectory ? 0 : stats.size,
+      isDirectory,
+    }
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -93,7 +228,7 @@ async function saveAttachment(params, attachmentDir) {
   }
 }
 
-async function readImageAttachment(params) {
+async function readImageAttachment(params, options = {}) {
   const filePath = typeof params?.path === 'string' ? params.path : ''
   const mimeType = resolveAttachmentMimeType(params)
 
@@ -110,7 +245,8 @@ async function readImageAttachment(params) {
   }
 
   try {
-    const stats = await fs.stat(filePath)
+    const authorizedPath = await resolveAuthorizedImagePath(filePath, options)
+    const stats = await fs.stat(authorizedPath)
 
     if (!stats.isFile()) {
       return { ok: false, message: 'Anexo nao e um arquivo.' }
@@ -123,7 +259,7 @@ async function readImageAttachment(params) {
       }
     }
 
-    const buffer = await fs.readFile(filePath)
+    const buffer = await fs.readFile(authorizedPath)
 
     return {
       ok: true,
@@ -142,18 +278,44 @@ async function readImageAttachment(params) {
   }
 }
 
-function resolveAttachmentMimeType(params) {
-  const mimeType = normalizeImageMimeType(params?.type)
+async function resolveAuthorizedImagePath(filePath, options = {}) {
+  const resolvedPath = await fs.realpath(filePath)
+  const authorizedImagePaths = options.authorizedImagePaths
 
-  if (IMAGE_MIME_EXTENSIONS.has(mimeType)) {
-    return mimeType
+  if (authorizedImagePaths?.has(resolvedPath)) {
+    return resolvedPath
   }
 
-  // Fall back to the extension: a path picked from disk often carries no
-  // declared type at all.
-  const name = typeof params?.name === 'string' ? params.name : params?.path
+  const attachmentDir =
+    typeof options.attachmentDir === 'string' ? options.attachmentDir : ''
 
-  return imageMimeTypeFromFileName(name) || mimeType
+  if (attachmentDir) {
+    const resolvedAttachmentDir = await fs.realpath(attachmentDir).catch(() => null)
+
+    if (resolvedAttachmentDir && isPathInside(resolvedAttachmentDir, resolvedPath)) {
+      return resolvedPath
+    }
+  }
+
+  throw new Error('Caminho da imagem nao autorizado.')
+}
+
+function isPathInside(rootPath, targetPath) {
+  const relativePath = path.relative(rootPath, targetPath)
+
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith(`..${path.sep}`) &&
+      relativePath !== '..' &&
+      !path.isAbsolute(relativePath))
+  )
+}
+
+function resolveAttachmentMimeType(params) {
+  // The path is the source of truth. Neither the renderer-controlled MIME
+  // type nor the renderer-controlled display name can turn a .txt (or an
+  // extensionless path) into an image read.
+  return imageMimeTypeFromFileName(params?.path)
 }
 
 function toBuffer(value) {
@@ -193,8 +355,12 @@ function sanitizeBaseName(value) {
 
 module.exports = {
   createAttachmentFileName,
+  describePickedContextPath,
+  isPathInside,
+  pickContextAttachments,
   readImageAttachment,
   registerFileAttachmentIpcHandlers,
+  resolveAuthorizedImagePath,
   saveAttachment,
   saveClipboardImage,
 }

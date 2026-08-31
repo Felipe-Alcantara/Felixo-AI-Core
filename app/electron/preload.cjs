@@ -206,6 +206,8 @@ contextBridge.exposeInMainWorld('felixo', {
     delete: (chatId) => ipcRenderer.invoke('chats:delete', chatId),
   },
   files: {
+    pickContext: (params) =>
+      ipcRenderer.invoke('files:pick-context', params),
     readImageAttachment: (params) =>
       ipcRenderer.invoke('files:read-image-attachment', params),
     saveAttachment: (params) => ipcRenderer.invoke('files:save-attachment', params),

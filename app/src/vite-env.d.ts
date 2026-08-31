@@ -111,6 +111,20 @@ type ReadImageAttachmentResult = CliInvokeResult & {
   size?: number
 }
 
+type PickedContextAttachment = {
+  id: string
+  name: string
+  path: string
+  type: string
+  size: number
+  isDirectory?: boolean
+}
+
+type PickContextResult = CliInvokeResult & {
+  canceled?: boolean
+  attachments?: PickedContextAttachment[]
+}
+
 /** Andamento da instalação automática das CLIs de IA. */
 type CliSetupStatus = {
   state: 'disabled' | 'idle' | 'checking' | 'installing' | 'done' | 'error'
@@ -588,6 +602,9 @@ declare global {
         delete: (chatId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       files?: {
+        pickContext: (params: {
+          mode: 'files' | 'directory'
+        }) => Promise<PickContextResult>
         readImageAttachment: (params: {
           path: string
           name?: string

@@ -121,7 +121,7 @@ describe('createCliPrompt', () => {
     expect(result).toBe('oi')
   })
 
-  it('uses lean context (no history/projects/attachments) for simple greetings', () => {
+  it('keeps explicit attachments while using lean context for simple greetings', () => {
     const history = [makeMessage({ id: 1, content: 'mensagem anterior relevante' })]
     const project: Project = { id: 'p1', name: 'Proj', path: '/tmp/proj' }
     const attachment: ContextAttachment = {
@@ -141,10 +141,12 @@ describe('createCliPrompt', () => {
       [attachment],
     )
 
-    // Lean context: providerDefaultInstructions/orchestration/history/projects/attachments are suppressed.
+    // Lean context still suppresses unrelated history/projects, but an
+    // explicit attachment must reach the selected agent.
     expect(result).not.toContain('Histórico da conversa')
     expect(result).not.toContain('Projetos com contexto ativo')
-    expect(result).not.toContain('Anexos de contexto')
+    expect(result).toContain('Anexos de contexto')
+    expect(result).toContain('file.txt')
     expect(result).not.toContain('Diretrizes de autonomia para Claude')
   })
 
@@ -280,8 +282,32 @@ describe('createCliPrompt', () => {
 
     expect(result).toContain('notas.txt')
     expect(result).toContain('2.0 KB')
-    expect(result).toContain('/tmp/notas.txt')
+    expect(result).toContain('Caminho absoluto local: "/tmp/notas.txt"')
     expect(result).toContain('conteudo de exemplo')
+  })
+
+  it('quotes and escapes every local attachment path for the receiving agent', () => {
+    const attachment: ContextAttachment = {
+      id: 'a1',
+      name: 'qualquer.bin',
+      type: 'application/octet-stream',
+      size: 1,
+      path: '/tmp/pasta com "aspas"/qualquer.bin',
+    }
+
+    const result = createCliPrompt(
+      [],
+      'analise o arquivo',
+      [claudeModel],
+      claudeModel,
+      [],
+      { added: [], removed: [] },
+      [attachment],
+    )
+
+    expect(result).toContain(
+      'Caminho absoluto local: "/tmp/pasta com \\"aspas\\"/qualquer.bin"',
+    )
   })
 
   it('injects the prompt-injection guard when attachments are present', () => {
