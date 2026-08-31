@@ -2131,3 +2131,58 @@ validada nesta conta.
 
 Estado final: correção implementada e validada localmente; pronta para commit,
 push, acompanhamento do CI/release e registro da task no Notion.
+
+## Registro de Trabalho — 2026-08-31 (parte 30) — vulnerabilidades do Electron e do npm empacotado
+
+PEDIDO: executar a task do Notion [“Felixo AI Core/Dependências — Corrigir
+vulnerabilidades do Electron e do npm empacotado”](https://app.notion.com/p/Felixo-AI-Core-Depend-ncias-Corrigir-vulnerabilidades-do-Electron-e-do-npm-empacotado-3cc91f95497e812ca5bcd487dda2240e).
+
+DIAGNÓSTICO: a auditoria inicial completa encontrava 8 vulnerabilidades
+(7 altas e 1 moderada), envolvendo Electron 41.3.0, `extract-zip`, a árvore
+do npm 11.19.0 empacotada em `build/npm-runtime`, além de `tar`,
+`brace-expansion`, `ip-address`, `undici` e `nanoid`. `npm audit --omit=dev`
+retornava zero e mascarava o risco porque o Electron, o npm e suas
+dependências são distribuídos com o app.
+
+FEITO: Electron foi atualizado para `^41.10.7`, o último patch disponível na
+linha 41 e dentro da faixa aceita pela task; a atualização substituiu o
+`extract-zip` vulnerável por `@electron-internal/extract-zip` `1.0.5`. O npm
+empacotado foi atualizado para `^11.19.1`, último npm 11 compatível com o
+contrato atual `node >=22.12.0`. A resolução do lockfile também atualizou o
+`tar` empacotado para `7.5.22`, `brace-expansion` para `5.0.9`,
+`ip-address` para `10.5.0`, `undici` para `6.28.0` e `nanoid` para `3.3.18`.
+O npm 12 não foi adotado porque suas versões atuais elevam o mínimo de Node
+além do contrato declarado pelo app.
+
+ABI E EMPACOTAMENTO: `node-pty` foi reconstruído para o Node local e para o
+ABI do Electron 41.10.7. O hook `beforePack` foi exercitado pelo
+`electron-builder --dir`; o artefato final em `release/linux-unpacked` contém
+`npm 11.19.1`, executa esse npm pelo binário do Electron e não contém o
+diretório legado `extract-zip`.
+
+AUDITORIA: `npm audit --json` completo terminou com 0 vulnerabilidades
+críticas, altas, moderadas ou baixas; a auditoria sem devDependencies também
+terminou com 0. O lockfile não deixou advisories residuais conhecidos.
+
+TESTE: `npm test` passou com 905/905 testes em 34 suítes; `npm run
+test:frontend` passou com 74 arquivos e 721/721 testes; typecheck e build
+passaram, transformando 716 módulos; `npm run lint` terminou sem erros e
+mantém apenas os 2 avisos React preexistentes de `SearchPanel.tsx`; o
+empacotamento Linux terminou com sucesso. O build continua exibindo o aviso
+conhecido de chunk JavaScript acima de 500 kB.
+
+SUPORTE: as [notas oficiais do Electron 41.10.7](https://github.com/electron/electron/releases/tag/v41.10.7)
+registram backports de Chromium/V8, mas também avisam que a linha 41.x
+entrou em fim de suporte. A versão foi mantida por exigência da task e para
+evitar uma migração major sem validação; deve ser aberta uma atualização
+posterior para uma linha suportada, antes de tratar este patch como solução
+de longo prazo. A [lista oficial de releases estáveis](https://releases.electronjs.org/release?channel=stable)
+deve orientar essa próxima migração.
+
+PUBLICAÇÃO: implementação pronta para commit, push e acompanhamento do CI e
+do release. Os identificadores remotos serão registrados nesta entrada após
+o gate de publicação. Nenhuma conta, chave ou credencial foi tocada.
+
+Estado final: vulnerabilidades corrigidas no grafo completo e no npm que
+chega ao artefato distribuído; aguardando publicação remota e registro final
+na task e no relatório de hoje.
