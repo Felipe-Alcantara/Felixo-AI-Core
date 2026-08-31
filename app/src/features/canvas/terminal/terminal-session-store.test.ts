@@ -503,6 +503,27 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
     expect(harness.writes.some((data) => data.includes('/resume'))).toBe(false)
   })
 
+  it('não passa o UUID persistido ao Gemini quando a retomada automática não é segura', async () => {
+    harness = createHarness('')
+    harness.store.restart(SESSION_ID, {
+      command: 'gemini',
+      args: ['--yolo'],
+      cwd: '/tmp',
+      resumeAgentSession: true,
+      agentSession: {
+        version: 1,
+        provider: 'gemini',
+        sessionId: 'gemini-session-123',
+        cwd: '/tmp',
+        capturedAt: 123,
+      },
+    })
+    await wait(0)
+
+    expect(harness.spawnArgs).toEqual(['--yolo'])
+    expect(harness.spawnArgs).not.toContain('gemini-session-123')
+  })
+
   it('restart acionado pelo drawer preserva a conta selecionada', async () => {
     harness = createHarness('')
     harness.store.restart(SESSION_ID, {

@@ -32,6 +32,15 @@ export function canResumeAgentSession(
   cwd: string | undefined,
   reference: AgentSessionReference | undefined,
 ): boolean {
+  // Gemini CLI 0.57's help only guarantees `latest` or a current numeric
+  // index. The UUID remains in the persisted reference, but using it here
+  // would make installations that enforce that public contract print
+  // "No previous sessions found" on installations that enforce that
+  // contract. Until the app can resolve the index from the exact account
+  // environment at launch, an honest manual fallback is safer than guessing
+  // an index (which can point to another conversation after a new session).
+  if (command === 'gemini') return false
+
   return Boolean(
     reference &&
       command === reference.provider &&
@@ -41,7 +50,15 @@ export function canResumeAgentSession(
   )
 }
 
-/** Builds the provider's documented resume invocation, without a prompt. */
+/**
+ * Builds the provider's documented resume invocation, without a prompt.
+ *
+ * Codex and Claude accept the persisted conversation ID. Gemini's current
+ * public CLI contract accepts `latest` or a dynamic list index instead; the
+ * canvas deliberately does not turn a persisted UUID into a guessed index.
+ * `canResumeAgentSession()` therefore rejects Gemini and the caller produces
+ * `buildResumeFallbackNotice()` instead.
+ */
 export function buildAgentResumeArgs(
   command: string | undefined,
   args: readonly string[] = [],
@@ -54,7 +71,6 @@ export function buildAgentResumeArgs(
     case 'codex':
       return ['resume', ...args, reference.sessionId]
     case 'claude':
-    case 'gemini':
       return ['--resume', reference.sessionId, ...args]
     default:
       return undefined
@@ -70,7 +86,9 @@ export function buildResumeFallbackNotice(
     `Provider associado: ${reference.provider}.`,
     cwd && cwd !== reference.cwd
       ? 'O diretório atual não coincide com o diretório da conversa; nenhum ID foi usado para evitar abrir a conversa errada.'
-      : 'A CLI não confirmou que esse ID está disponível nesta conta.',
+      : reference.provider === 'gemini'
+        ? 'A versão instalada do Gemini só documenta --resume com "latest" ou índice; o índice muda quando a lista de sessões muda, então nenhum índice foi adivinhado.'
+        : 'A CLI não confirmou que esse ID está disponível nesta conta.',
     `Use /resume para escolher manualmente no diretório ${cwd || reference.cwd}.`,
   ].join('\n')
 }

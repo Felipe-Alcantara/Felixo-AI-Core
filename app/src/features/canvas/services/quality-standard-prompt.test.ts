@@ -79,6 +79,28 @@ describe('resolveTerminalInitialText', () => {
     expect(result).toContain('nenhum ID foi usado')
   })
 
+  it('exibe fallback honesto para Gemini sem enviar UUID à CLI', () => {
+    const result = resolveTerminalInitialText({
+      isRestoredAgent: true,
+      qualityStandardEnabled: true,
+      qualityStandardPrompt: 'Follow the standard.',
+      hasCommand: true,
+      command: 'gemini',
+      cwd: '/repo',
+      agentSession: {
+        version: 1,
+        provider: 'gemini',
+        sessionId: 'gemini-session-123',
+        cwd: '/repo',
+        capturedAt: 1,
+      },
+    })
+
+    expect(result).toContain('índice muda')
+    expect(result).toContain('Use /resume')
+    expect(result).not.toBe(RESUME_INITIAL_TEXT)
+  })
+
   it('does not resume a restored PLAIN SHELL (no command) — "/resume" is an agent CLI slash command, and this function enforces that even if a caller mismarks isRestoredAgent', () => {
     const result = resolveTerminalInitialText({
       isRestoredAgent: true,

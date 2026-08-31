@@ -57,8 +57,26 @@ describe('sessão do agente do canvas', () => {
     ).toEqual(['--resume', 'codex-session-123', '--dangerously-skip-permissions'])
   })
 
+  it('não envia UUID persistido ao Gemini quando a CLI só documenta latest/índice', () => {
+    const geminiReference = { ...reference, provider: 'gemini' as const }
+
+    expect(canResumeAgentSession('gemini', '/repo', geminiReference)).toBe(false)
+    expect(
+      buildAgentResumeArgs('gemini', ['--yolo'], '/repo', geminiReference),
+    ).toBeUndefined()
+  })
+
   it('explica o fallback quando a associação não é segura', () => {
     expect(buildResumeFallbackNotice(reference, '/outro')).toContain('nenhum ID foi usado')
     expect(buildAgentResumeArgs('codex', [], '/outro', reference)).toBeUndefined()
+  })
+
+  it('explica o fallback específico da sintaxe atual do Gemini', () => {
+    expect(
+      buildResumeFallbackNotice(
+        { ...reference, provider: 'gemini' },
+        '/repo',
+      ),
+    ).toContain('índice muda')
   })
 })

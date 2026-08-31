@@ -2092,3 +2092,42 @@ PUBLICAÇÃO: a implementação foi publicada no commit [`3003222`](https://gith
 LIMITE: o lock foi resolvido contra o PyPI e deve ser regenerado a partir de `requirements.in` sempre que houver atualização de dependência, repetindo a auditoria. Os avisos de depreciação do Node.js 20 nas actions do GitHub são não bloqueantes e não pertencem a esta correção.
 
 Estado final: task concluída, dependências do launcher reproduzíveis, auditoria automatizada no CI, publicada e registrada.
+
+## Registro de Trabalho — 2026-08-31 (parte 29) — retomada segura de sessões do Gemini
+
+PEDIDO: executar a task do Notion “Felixo AI Core/Retomada — `--resume` do
+Gemini CLI não aceita mais UUID (mudança de versão)”.
+
+DIAGNÓSTICO: o `gemini` instalado (`0.57.0`) documenta `--resume` com
+`"latest"` ou índice numérico, enquanto a referência persistida pelo canvas
+é um UUID. A implementação local dessa versão ainda contém uma busca interna
+por UUID, mas a disponibilidade depende do projeto e do `HOME` exatos da
+conta; além disso, consultar `--list-sessions` no lançamento executa a geração
+de resumos e pode pedir autenticação. Converter um UUID em índice sem essa
+confirmação poderia abrir outra conversa.
+
+FEITO: `canResumeAgentSession` agora recusa a retomada automática do Gemini
+quando só há o UUID persistido, e `buildAgentResumeArgs` não deixa esse UUID
+chegar ao PTY. O canvas exibe um fallback explícito explicando que o índice
+muda com a lista de sessões e orienta a pessoa a usar `/resume` no diretório
+correto. Codex e Claude continuam usando seus IDs persistidos normalmente.
+Não foi feita uma consulta automática nem um palpite de índice.
+
+TESTE: regressões cobrem o resolvedor puro, o texto de fallback e o spawn real
+do `TerminalSessionStore`, confirmando que `gemini-session-123` não aparece nos
+argumentos. O teste focado passou com 51/51; `npm run test:frontend` passou com
+74 arquivos e 721/721 testes; `npm test` passou com 905/905; `npm run lint`
+terminou sem erros; `npm run build` transformou 716 módulos; e
+`git diff --check` ficou limpo. O lint mantém somente os 2 avisos React
+preexistentes em `src/features/chat/components/SearchPanel.tsx`, e o build
+mantém o aviso conhecido de chunk JavaScript acima de 500 kB.
+
+VALIDAÇÃO REAL: `gemini --help` e a versão instalada foram consultados. Uma
+tentativa controlada de `gemini --list-sessions` parou no prompt de
+autenticação do ambiente atual; nenhuma autenticação, conta, sessão ou
+credencial foi alterada. Por isso, a correção entrega o fallback honesto
+previsto pela task, em vez de afirmar uma retomada real que não pôde ser
+validada nesta conta.
+
+Estado final: correção implementada e validada localmente; pronta para commit,
+push, acompanhamento do CI/release e registro da task no Notion.
