@@ -2021,3 +2021,56 @@ externa em uma origem confiável. Nenhuma conta, chave ou credencial foi tocada.
 
 Estado final: correção implementada, testada no renderer real e pronta para o
 segundo push documental e acompanhamento do release.
+
+## Registro de Trabalho — 2026-08-31 (parte 27) — credenciais do Git não chegam aos erros persistidos
+
+PEDIDO: executar a task “Felixo AI Core/System Design — Redigir credenciais nos erros do Git antes de persistir”, originada no achado de segurança da auditoria de 30/08/2026.
+
+CAUSA: `system-design-service.cjs` executava `git` com URL e coletava erros
+de `execFile` que podiam repetir a linha de comando, a URL privada, o stderr e
+tokens. O handler IPC persistia `error.message` em `lastError`, no SQLite e no
+QA Logger, além de devolvê-lo ao renderer. Uma configuração antiga também podia
+manter userinfo de credencial na URL do repositório.
+
+FEITO: `git-secret-redaction.cjs` passou a ser a política compartilhada pelo
+System Design e pelo Fetch All. URLs são normalizadas antes de persistir ou
+chamar o Git, removendo userinfo, parâmetros sensíveis e fragmentos. Mensagens
+redigem userinfo, tokens conhecidos, parâmetros, cabeçalhos de autorização e
+argumentos sensíveis; linhas de comando completas são descartadas e o detalhe é
+compactado e limitado. O erro que atravessa o serviço carrega somente etapa,
+código, branch, destino seguro e stderr já redigido. O IPC aplica a mesma
+barreira ao SQLite, QA Logger e renderer e regrava configurações legadas já
+sanitizadas.
+
+AUTENTICAÇÃO PRIVADA: o fluxo de sucesso continua usando o credential helper
+do Git, Keychain do macOS, Credential Manager do Windows ou equivalente
+configurado no sistema. Credencial embutida na URL não é necessária nem
+suportada; a URL deve conter apenas o destino do repositório.
+
+TESTE: novas regressões cobrem URL com userinfo e query sensível, tokens,
+Bearer/Basic, cabeçalhos, stderr, linha de comando, persistência SQLite, QA
+Logger, resposta IPC, migração de configuração legada e a URL sanitizada que
+chega ao executor Git. O teste focado passou com 18/18 e `npm test` passou com
+900/900. `npm run test:frontend` passou com 73 arquivos e 716/716 testes;
+typecheck, lint e build também passaram (`715` módulos). O lint mantém somente
+os 2 avisos React preexistentes em `src/features/chat/components/SearchPanel.tsx`,
+e o build mantém o aviso conhecido de chunk JavaScript acima de 500 kB.
+
+DOCUMENTAÇÃO: README, guia de usuário e `docs/projeto/ARQUITETURA.md` agora
+descrevem a autenticação segura de repositórios privados, a normalização de
+URLs, o diagnóstico redigido e a migração de dados legados.
+
+PUBLICAÇÃO: a implementação foi publicada no commit
+`fb87526e95501e9b2dbabbdbec7f3b48c2d88c81`, com CI multi-SO
+`33420945011` concluído com sucesso e release pública `v0.1.124` pelo workflow
+`33421160893`, contendo os instaladores de Linux, macOS e Windows.
+
+LIMITE: nenhum segredo real foi usado ou alterado. A política remove formatos
+reconhecíveis e qualquer segredo fornecido na URL antes do Git, mas a
+autenticação efetiva continua dependendo da configuração segura do credential
+helper/gerenciador do sistema; URLs sem essa configuração falham sem expor a
+credencial. Dados históricos fora da configuração migrada não são reescritos
+automaticamente.
+
+Estado final: correção implementada, testada, publicada e pronta para o push
+documental desta entrada e o acompanhamento do release correspondente.
