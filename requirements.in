@@ -1,7 +1,7 @@
 # Direct Python dependencies used by start_app.py.
 #
 # Keep this file small and human-edited. The installable requirements.txt is
-# generated from it with pip-tools and contains the resolved transitive graph
+# generated from it with uv and contains the resolved transitive graph
 # plus hashes for reproducible installs.
 questionary>=2.0
 rich>=13.0

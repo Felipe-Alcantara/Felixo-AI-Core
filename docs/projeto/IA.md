@@ -2074,3 +2074,21 @@ automaticamente.
 
 Estado final: correção implementada, testada, publicada e pronta para o push
 documental desta entrada e o acompanhamento do release correspondente.
+
+## Registro de Trabalho — 2026-08-31 (parte 28) — lock do launcher Python e pip-audit
+
+PEDIDO: executar a task do Notion “Felixo AI Core/Python — Fixar dependências do launcher e automatizar pip-audit”, originada na auditoria de dependências, segurança, atualizações e otimizações de 30/08/2026.
+
+CAUSA: `requirements.txt` aceitava faixas abertas para `questionary` e `rich` e não fixava o grafo transitivo nem os hashes. O launcher podia resolver ambientes diferentes entre máquinas; o CI também não auditava esse conjunto.
+
+FEITO: `requirements.in` passou a conter apenas as dependências diretas editáveis. `requirements.txt` agora é um lock universal gerado pelo `uv`, com versões exatas, marcadores para Python 3.9+ e hashes das distribuições. A resolução preserva `prompt-toolkit`/`markdown-it-py` compatíveis com Python 3.9 e versões atuais em Python 3.10+. O launcher continua instalando o lock, incluindo os retries PEP 668 existentes.
+
+CI: a matriz do launcher instala `requirements.txt` com `--require-hashes` em Ubuntu, Windows e macOS, Python 3.9 e 3.13. O job `python-dependency-audit` instala `pip-audit==2.10.1` e audita o lock com `--strict`.
+
+TESTE: a instalação real via pip do lock com hashes passou em Python 3.9 e 3.12, com `pip check`; `start_app.py --help`, `compileall` e `git diff --check` passaram. A suíte do launcher passou com 98/98 testes. `pip-audit` retornou “No known vulnerabilities found”. A matriz remota confirmou instalação e execução em todos os três sistemas operacionais e nas versões Python 3.9/3.13.
+
+PUBLICAÇÃO: a implementação foi publicada no commit [`3003222`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/300322212d41f6819dc9c690ecc494e4720d70fb). O CI [`33432510778`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33432510778) terminou verde, incluindo o novo job de auditoria. O release [`v0.1.127`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.127), workflow [`33432726718`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33432726718), foi publicado com 14 artefatos para Linux, macOS e Windows.
+
+LIMITE: o lock foi resolvido contra o PyPI e deve ser regenerado a partir de `requirements.in` sempre que houver atualização de dependência, repetindo a auditoria. Os avisos de depreciação do Node.js 20 nas actions do GitHub são não bloqueantes e não pertencem a esta correção.
+
+Estado final: task concluída, dependências do launcher reproduzíveis, auditoria automatizada no CI, publicada e registrada.
