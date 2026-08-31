@@ -36,6 +36,20 @@ O processo principal continua responsável por processos, arquivos, Git,
 contas, banco e IPC. O renderer compõe a interface e não recebe acesso direto
 ao Node. O preload expõe somente os contratos necessários em `window.felixo`.
 
+## Autorizacao de caminhos locais
+
+Uma pasta de projeto so entra no banco depois de ser escolhida no seletor nativo
+ou alcancada por uma concessao nativa equivalente. O processo principal resolve
+o caminho por `realpath`, confirma que ele existe e e um diretorio, e recusa
+raizes do sistema e caminhos inventados pelo renderer.
+
+`projects:list-directory` e `projects:build-docs-index` aceitam apenas a raiz
+exata de um projeto registrado. Cada subcaminho e novamente resolvido e
+comparado com a raiz real, portanto `..` e links simbolicos que apontem para
+fora nao atravessam a fronteira. Os IPCs de texto usam a mesma lista de raizes;
+um arquivo externo so entra por uma escolha explicita no seletor nativo, com
+concessao mantida em memoria durante a sessao.
+
 ## Canvas e terminais
 
 - `CanvasView` compõe o quadro e persiste nós e conexões.

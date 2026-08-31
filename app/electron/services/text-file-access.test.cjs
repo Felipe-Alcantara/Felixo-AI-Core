@@ -43,6 +43,19 @@ test('um arquivo fora dos projetos e recusado enquanto ninguem o escolheu', () =
   assert.throws(() => criar().authorize(arquivoDeFora), /fora dos projetos/)
 })
 
+test('a raiz do sistema nao concede acesso a arquivos de texto', () => {
+  const systemRoot = path.parse(projeto).root
+  const access = createTextFileAccess({
+    listProjectRoots: () => [systemRoot],
+    realPath: fakeRealPath({
+      [systemRoot]: systemRoot,
+      [arquivoNoProjeto]: arquivoNoProjeto,
+    }),
+  })
+
+  assert.throws(() => access.authorize(arquivoNoProjeto), /fora dos projetos/)
+})
+
 test('escolher um arquivo no dialogo e o que o autoriza', () => {
   const access = criar()
 

@@ -8,6 +8,10 @@ const {
 const {
   createSettingsRepository,
 } = require('./storage/settings-repository.cjs')
+const {
+  createProjectPathAccess,
+  isPathInside,
+} = require('./projects-path-security.cjs')
 
 const ACTIVE_PROJECT_IDS_KEY = 'projects.activeIds'
 
@@ -22,74 +26,104 @@ const ACTIVE_PROJECT_IDS_KEY = 'projects.activeIds'
 const entryCollator = new Intl.Collator(undefined, { numeric: true })
 
 function registerProjectsIpcHandlers(getMainWindow, options = {}) {
-  const projectsRepository = options.database
+  const projectsRepository = options.projectsRepository ?? (options.database
     ? createProjectsRepository(options.database)
-    : null
-  const settingsRepository = options.database
+    : null)
+  const settingsRepository = options.settingsRepository ?? (options.database
     ? createSettingsRepository(options.database)
-    : null
-
-  ipcMain.handle('projects:pick-folder', async (_event) => {
-    const { BrowserWindow } = require('electron')
-    const win =
-      BrowserWindow.getFocusedWindow() ??
-      (typeof getMainWindow === 'function' ? getMainWindow() : getMainWindow)
-    const result = await dialog.showOpenDialog(win, {
-      properties: ['openDirectory'],
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths[0]
+    : null)
+  const projectIpcMain = options.ipcMain ?? ipcMain
+  const projectDialog = options.dialog ?? dialog
+  const getFocusedWindow =
+    options.getFocusedWindow ??
+    (() => require('electron').BrowserWindow.getFocusedWindow())
+  const projectPathAccess = createProjectPathAccess({
+    listProjectRoots: () =>
+      (projectsRepository?.list() ?? []).map((project) => project.path),
   })
 
-  ipcMain.handle('projects:detect-repos', (_event, folderPath) => {
+  projectIpcMain.handle('projects:pick-folder', async (_event) => {
+    const win =
+      getFocusedWindow() ??
+      (typeof getMainWindow === 'function' ? getMainWindow() : getMainWindow)
+    try {
+      const result = await projectDialog.showOpenDialog(win, {
+        properties: ['openDirectory'],
+      })
+      if (result.canceled || result.filePaths.length === 0) return null
+      return projectPathAccess.grantDirectory(result.filePaths[0])
+    } catch {
+      // Este canal devolve somente o caminho ou cancelamento; uma selecao
+      // invalida nao deve virar uma permissao silenciosa.
+      return null
+    }
+  })
+
+  projectIpcMain.handle('projects:detect-repos', (_event, folderPath) => {
     if (!folderPath || typeof folderPath !== 'string') return []
     try {
+      const selectedRoot = projectPathAccess.authorizeGrantedDirectory(folderPath)
+
       // If the selected folder is itself a repo, it IS the project — don't
       // descend into it (avoids picking up repos nested inside another repo,
       // e.g. a vendored standards repo).
-      if (hasGit(folderPath)) {
-        return [{ name: path.basename(folderPath), path: folderPath }]
+      if (hasGit(selectedRoot)) {
+        return [{ name: path.basename(selectedRoot), path: selectedRoot }]
       }
 
       // Otherwise it's a parent folder: register each direct child that is a
       // repo, one project per repo. Only the first level is scanned, so a repo
       // nested inside one of those children is never split out.
-      const entries = fs.readdirSync(folderPath, { withFileTypes: true })
+      const entries = fs.readdirSync(selectedRoot, { withFileTypes: true })
       return entries
-        .filter((e) => e.isDirectory() && hasGit(path.join(folderPath, e.name)))
-        .map((e) => ({ name: e.name, path: path.join(folderPath, e.name) }))
+        .filter((e) => e.isDirectory())
+        .map((e) => {
+          try {
+            const repoPath = projectPathAccess.authorizeGrantedDirectory(
+              path.join(selectedRoot, e.name),
+            )
+            return hasGit(repoPath) ? { name: e.name, path: repoPath } : null
+          } catch {
+            return null
+          }
+        })
+        .filter(Boolean)
     } catch {
       return []
     }
   })
 
-  ipcMain.handle('projects:list', () => {
+  projectIpcMain.handle('projects:list', () => {
     try {
       return {
         ok: true,
-        projects: projectsRepository?.list() ?? [],
+        projects: listAuthorizedProjects(),
       }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel carregar os projetos.')
     }
   })
 
-  ipcMain.handle('projects:save', (_event, project) => {
+  projectIpcMain.handle('projects:save', (_event, project) => {
     try {
       if (!projectsRepository) {
         throw new Error('Repositorio de projetos indisponivel.')
       }
 
+      const authorizedPath = projectPathAccess.authorizeProjectDirectory(
+        project?.path,
+      )
+
       return {
         ok: true,
-        project: projectsRepository.save(project),
+        project: projectsRepository.save({ ...project, path: authorizedPath }),
       }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel salvar o projeto.')
     }
   })
 
-  ipcMain.handle('projects:delete', (_event, projectId) => {
+  projectIpcMain.handle('projects:delete', (_event, projectId) => {
     try {
       if (!projectsRepository) {
         throw new Error('Repositorio de projetos indisponivel.')
@@ -104,7 +138,7 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
-  ipcMain.handle('projects:load-active-ids', () => {
+  projectIpcMain.handle('projects:load-active-ids', () => {
     try {
       const activeIds = settingsRepository?.get(ACTIVE_PROJECT_IDS_KEY)
 
@@ -117,7 +151,7 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
-  ipcMain.handle('projects:save-active-ids', (_event, projectIds) => {
+  projectIpcMain.handle('projects:save-active-ids', (_event, projectIds) => {
     try {
       if (!settingsRepository) {
         throw new Error('Repositorio de configuracoes indisponivel.')
@@ -143,14 +177,17 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
   // a terminal first. Resolves `subPath` relative to `rootPath` and rejects
   // anything that escapes it (defence against a stray `..` reaching outside
   // the folder the user actually picked).
-  ipcMain.handle('projects:list-directory', (_event, params) => {
+  projectIpcMain.handle('projects:list-directory', (_event, params) => {
     try {
       if (!params || typeof params.rootPath !== 'string') {
         return { ok: false, message: 'Caminho do projeto invalido.' }
       }
 
-      const { rootPath, targetPath } = resolvePathInside(
+      const registeredRoot = projectPathAccess.authorizeRegisteredRoot(
         params.rootPath,
+      )
+      const { rootPath, targetPath } = resolvePathInside(
+        registeredRoot,
         typeof params.subPath === 'string' ? params.subPath : '',
       )
 
@@ -159,8 +196,9 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
         .filter((entry) => !entry.name.startsWith('.') && entry.name !== 'node_modules')
         .map((entry) => {
           const entryPath = path.join(targetPath, entry.name)
+          let realEntryPath
           try {
-            const realEntryPath = fs.realpathSync(entryPath)
+            realEntryPath = fs.realpathSync(entryPath)
             if (!isPathInside(rootPath, realEntryPath)) {
               return null
             }
@@ -170,7 +208,7 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
           return {
             name: entry.name,
             isDirectory: entry.isDirectory(),
-            path: entryPath,
+            path: realEntryPath,
           }
         })
         .filter(Boolean)
@@ -193,26 +231,20 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
-  ipcMain.handle('projects:build-docs-index', (_event, params) => {
+  projectIpcMain.handle('projects:build-docs-index', (_event, params) => {
     try {
       if (!params || typeof params.projectPath !== 'string' || typeof params.docsDirectory !== 'string') {
         return { ok: false, message: 'Parametros invalidos para indexar docs.' }
       }
 
-      const projectPath = fs.realpathSync(path.resolve(params.projectPath))
-      const docsCandidate = path.resolve(projectPath, params.docsDirectory)
+      const projectPath = projectPathAccess.authorizeRegisteredRoot(
+        params.projectPath,
+      )
+      const { targetPath: docsPath, candidatePath: docsCandidate } =
+        resolvePathInsideOrMissing(projectPath, params.docsDirectory)
 
-      if (!isPathInside(projectPath, docsCandidate)) {
-        return { ok: false, message: 'Diretorio de docs fora do projeto.' }
-      }
-
-      if (!fs.existsSync(docsCandidate)) {
+      if (!docsPath) {
         return { ok: true, entries: [], docsPath: docsCandidate }
-      }
-
-      const docsPath = fs.realpathSync(docsCandidate)
-      if (!isPathInside(projectPath, docsPath)) {
-        return { ok: false, message: 'Diretorio de docs fora do projeto.' }
       }
 
       const MAX_FILES = 50
@@ -242,14 +274,34 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
+  function listAuthorizedProjects() {
+    const projects = projectsRepository?.list() ?? []
+    if (!Array.isArray(projects)) {
+      return []
+    }
+
+    return projects.flatMap((project) => {
+      try {
+        return [
+          {
+            ...project,
+            path: projectPathAccess.authorizeRegisteredRoot(project.path),
+          },
+        ]
+      } catch {
+        // Nao expoe ao renderer uma raiz legada que sumiu ou nunca foi valida.
+        return []
+      }
+    })
+  }
+
   return {
     /**
      * Raizes dos projetos registrados, para outro modulo decidir se um caminho
      * esta dentro de um projeto. Expoe so os caminhos, e nao o repositorio, para
      * que ninguem passe a gravar projetos por fora daqui.
      */
-    listProjectRoots: () =>
-      (projectsRepository?.list() ?? []).map((project) => project.path),
+    listProjectRoots: () => projectPathAccess.listProjectRoots(),
   }
 }
 
@@ -265,13 +317,36 @@ function resolvePathInside(rootPath, childPath = '') {
   return { rootPath: resolvedRoot, targetPath: resolvedTarget }
 }
 
-function isPathInside(rootPath, targetPath) {
-  const normalizedRoot = path.resolve(rootPath)
-  const normalizedTarget = path.resolve(targetPath)
-  return (
-    normalizedTarget === normalizedRoot ||
-    normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
-  )
+/** Resolve um filho existente; se faltar, valida a ultima pasta existente. */
+function resolvePathInsideOrMissing(rootPath, childPath = '') {
+  const resolvedRoot = fs.realpathSync(path.resolve(rootPath))
+  const candidatePath = path.resolve(resolvedRoot, childPath)
+
+  if (!isPathInside(resolvedRoot, candidatePath)) {
+    throw new Error('Diretorio fora do projeto.')
+  }
+
+  if (fs.existsSync(candidatePath)) {
+    const targetPath = fs.realpathSync(candidatePath)
+    if (!isPathInside(resolvedRoot, targetPath)) {
+      throw new Error('Diretorio fora do projeto.')
+    }
+    return { targetPath, candidatePath }
+  }
+
+  let existingAncestor = candidatePath
+  while (!fs.existsSync(existingAncestor)) {
+    const parent = path.dirname(existingAncestor)
+    if (parent === existingAncestor) break
+    existingAncestor = parent
+  }
+
+  const resolvedAncestor = fs.realpathSync(existingAncestor)
+  if (!isPathInside(resolvedRoot, resolvedAncestor)) {
+    throw new Error('Diretorio fora do projeto.')
+  }
+
+  return { targetPath: null, candidatePath }
 }
 
 function readFirstMeaningfulLine(filePath) {

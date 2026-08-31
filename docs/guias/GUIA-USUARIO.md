@@ -200,6 +200,12 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 - **Exportar:** exporte sessões de chat legadas em JSON compacto, Markdown ou
   texto simples.
 
+Para usar um arquivo de um projeto no canvas, a pasta precisa ter sido escolhida
+no seletor nativo de projetos. Caminhos digitados ou enviados por outro fluxo
+nao viram raizes de projeto; o app resolve a pasta real e bloqueia a raiz do
+disco, pastas inexistentes e links que saiam dela. Arquivos fora dos projetos
+continuam podendo ser escolhidos explicitamente pelo seletor de arquivos.
+
 ### Abrir arquivos de texto no canvas
 
 Um bloco de arquivo pode apontar para um arquivo que já existe no disco, para ler e editar sem sair do canvas. Duas formas de abrir:

@@ -1801,3 +1801,26 @@ LIMITE: nenhuma conta ou credencial real foi alterada. O release será gerado
 pelo workflow do GitHub após o push e acompanhado separadamente.
 
 Estado final: concluído e pronto para commit/push.
+
+## Registro de Trabalho — 2026-08-31 (parte 20) — autorização de caminhos nos IPCs de projetos
+
+PEDIDO: fechar a autorização de caminhos apontada pela auditoria de segurança
+de 30/08/2026.
+
+FEITO: `projects-path-security.cjs` passou a concentrar a concessão nativa,
+`realpath`, validação de diretório, bloqueio de raízes do sistema, contenção e
+rejeição de links simbólicos nas raízes persistidas. `projects:pick-folder`,
+`projects:detect-repos` e `projects:save` não aceitam mais uma raiz inventada
+pelo renderer. Listagem e indexação exigem a raiz registrada exata; os IPCs de
+texto recebem somente raízes sanitizadas e mantêm a concessão exata para um
+arquivo escolhido no seletor nativo. Testes IPC cobrem inexistente, raiz ampla,
+pasta externa, arquivo interno e link simbólico externo.
+
+VALIDAÇÃO: `npm test` — 868 testes, 858 aprovados, 10 skips e zero falhas;
+`npm run test:frontend` — 699/699; `npm run build` — 709 módulos; `npm run
+lint` — zero erros e os 3 avisos React já existentes; `git diff --check`
+limpo. O gate Python do launcher foi executado, mas 4 dos 95 testes de
+descoberta de Node falharam no Windows com PATH sintético; não houve alteração
+em Python nesta entrega.
+
+Estado final: concluído quanto à task de segurança e pronto para commit/push.

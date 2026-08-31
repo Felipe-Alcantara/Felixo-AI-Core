@@ -23,6 +23,10 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const {
+  isFilesystemRoot,
+  isPathInside,
+} = require('./projects-path-security.cjs')
 
 /**
  * @param {object} options
@@ -69,7 +73,11 @@ function createTextFileAccess({ listProjectRoots, realPath = defaultRealPath }) 
     }
 
     for (const root of listProjectRoots()) {
-      if (isPathInside(safeRealPath(root, realPath), resolved)) {
+      const resolvedRoot = safeRealPath(root, realPath)
+      if (
+        !isFilesystemRoot(resolvedRoot) &&
+        isPathInside(resolvedRoot, resolved)
+      ) {
         return resolved
       }
     }
@@ -109,16 +117,6 @@ function safeRealPath(rootPath, realPath) {
   } catch {
     return ''
   }
-}
-
-function isPathInside(rootPath, targetPath) {
-  if (!rootPath) {
-    return false
-  }
-
-  return (
-    targetPath === rootPath || targetPath.startsWith(`${rootPath}${path.sep}`)
-  )
 }
 
 function defaultRealPath(filePath) {

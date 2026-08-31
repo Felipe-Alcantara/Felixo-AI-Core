@@ -2852,3 +2852,42 @@ credenciais nem o comportamento de produção. O release será publicado pelo
 workflow do GitHub após o push e acompanhado separadamente.
 
 Estado final: concluído e pronto para commit/push.
+
+## Registro de Trabalho — 2026-08-31 (parte 20) — autorização de caminhos nos IPCs de projetos
+
+PEDIDO: fechar a autorização de caminhos apontada pela auditoria de segurança
+de 30/08/2026, impedindo que o renderer registre uma raiz inventada e use os
+IPCs de projetos para enumerar, ler ou gravar fora dela.
+
+IMPLEMENTAÇÃO: criado `app/electron/services/projects-path-security.cjs` para
+centralizar concessões nativas, `realpath`, validação de diretório, bloqueio de
+raiz do sistema, contenção e rejeição de links simbólicos nas raízes
+persistidas. `projects:pick-folder` agora concede somente uma pasta existente;
+`projects:detect-repos` e `projects:save` aceitam apenas essa concessão ou uma
+raiz já registrada. `projects:list` não expõe registros legados inválidos, e
+`projects:list-directory`/`projects:build-docs-index` exigem a raiz registrada
+exata antes de resolver subcaminhos. A lista sanitizada é compartilhada com os
+IPCs de texto, que continuam aceitando arquivos internos e concessões exatas
+feitas pelo seletor nativo.
+
+TESTES: adicionados testes IPC para raiz do sistema, caminho inexistente,
+concessão nativa, pasta externa inventada, arquivo interno, leitura/gravação,
+indexação e link simbólico externo. A validação focada terminou com 17 casos
+aprovados e 1 skip no Windows por privilégio de criação de symlink. O gate
+Electron terminou com `npm test`: 868 testes, 858 aprovados, 10 skips e zero
+falhas; `npm run test:frontend`: 699/699; `npm run build`: 709 módulos;
+`npm run lint`: zero erros e os 3 avisos React já existentes; `git diff
+--check`: limpo.
+
+DOCUMENTAÇÃO: atualizados `docs/projeto/ARQUITETURA.md` e
+`docs/guias/GUIA-USUARIO.md` com a fronteira de concessão e a contenção por
+realpath. Nenhuma conta, credencial ou arquivo de contexto temporário foi
+alterado.
+
+LIMITE: o gate `python -m unittest discover -s tests -t .` não ficou verde
+neste Windows: 95 testes tiveram 4 falhas nos cenários de descoberta de Node
+em ambientes sintéticos com PATH mínimo. Esses testes e o launcher Python não
+foram tocados nesta entrega; a falha fica registrada para tratamento separado.
+
+Estado final: concluído quanto à task de segurança e validado pelos gates do
+app; pronto para commit/push.

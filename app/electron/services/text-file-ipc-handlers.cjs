@@ -52,6 +52,8 @@ const TEXT_FILE_FILTERS = [
  */
 function registerTextFileIpcHandlers(getMainWindow, options = {}) {
   const access = createTextFileAccess({ listProjectRoots: options.listProjectRoots })
+  const fileIpcMain = options.ipcMain ?? ipcMain
+  const fileDialog = options.dialog ?? dialog
   /** filePath -> listener do fs.watchFile, para nao observar o mesmo arquivo duas vezes. */
   const watchers = new Map()
 
@@ -62,10 +64,10 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
     }
   }
 
-  ipcMain.handle('text-file:pick', async () => {
+  fileIpcMain.handle('text-file:pick', async () => {
     try {
       const window = getMainWindow()
-      const result = await dialog.showOpenDialog(window ?? undefined, {
+      const result = await fileDialog.showOpenDialog(window ?? undefined, {
         title: 'Abrir arquivo de texto no canvas',
         properties: ['openFile'],
         filters: TEXT_FILE_FILTERS,
@@ -85,7 +87,7 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
-  ipcMain.handle('text-file:read', async (_event, params = {}) => {
+  fileIpcMain.handle('text-file:read', async (_event, params = {}) => {
     try {
       const filePath = access.authorize(params.path)
       const stats = await fsp.stat(filePath)
@@ -109,7 +111,7 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
-  ipcMain.handle('text-file:write', async (_event, params = {}) => {
+  fileIpcMain.handle('text-file:write', async (_event, params = {}) => {
     try {
       const filePath = access.authorize(params.path)
       await fsp.writeFile(filePath, String(params.content ?? ''), 'utf8')
@@ -124,7 +126,7 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
    * registrado — a aba Projetos ja navega essas pastas. Devolve o caminho
    * resolvido, que e o que o bloco guarda.
    */
-  ipcMain.handle('text-file:open-in-project', (_event, params = {}) => {
+  fileIpcMain.handle('text-file:open-in-project', (_event, params = {}) => {
     try {
       const filePath = access.authorize(params.path)
       return { ok: true, path: filePath, name: path.basename(filePath) }
@@ -137,7 +139,7 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
    * Qual editor usar para abrir um arquivo num terminal. Resolvido aqui porque
    * depende de `process.env` e do PATH, que o renderer nao enxerga.
    */
-  ipcMain.handle('text-file:resolve-editor', () => {
+  fileIpcMain.handle('text-file:resolve-editor', () => {
     try {
       return resolveEditorCommand()
     } catch (error) {
@@ -145,7 +147,7 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
-  ipcMain.handle('text-file:watch', (_event, params = {}) => {
+  fileIpcMain.handle('text-file:watch', (_event, params = {}) => {
     try {
       const filePath = access.authorize(params.path)
 
@@ -163,7 +165,7 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
     }
   })
 
-  ipcMain.handle('text-file:unwatch', (_event, params = {}) => {
+  fileIpcMain.handle('text-file:unwatch', (_event, params = {}) => {
     try {
       // Sem `authorize`: parar de observar nunca expoe conteudo, e um arquivo
       // que saiu de um projeto registrado precisa poder ser desobservado.
