@@ -1962,3 +1962,62 @@ Nenhuma conta ou credencial real foi alterada durante a validação.
 
 Estado final: implementação concluída e validada localmente; pronta para
 commit, push, acompanhamento do CI/release e registro da task no Notion.
+
+## Registro de Trabalho — 2026-08-31 (parte 26) — sanitização de Markdown externo
+
+PEDIDO: executar a task “Felixo AI Core/Segurança — Sanitizar Markdown externo
+antes de renderizar HTML e URLs”, originada na auditoria de segurança de
+30/08/2026.
+
+CAUSA: `MarkdownContent` usava `rehypeRaw` sem um schema de sanitização, o
+renderer de links passava `href` diretamente e o resolver de imagens aceitava
+esquemas arbitrários. Conteúdo de agentes, arquivos e histórico podia,
+portanto, introduzir HTML, navegação ou carregamento de recursos sem uma
+política explícita.
+
+FEITO: o pipeline agora executa `rehypeRaw` seguido de `rehype-sanitize` com
+schema explícito, mantendo GFM e os elementos visuais necessários, mas
+removendo HTML ativo, embeds, SVG, mídia e atributos de evento. A transformação
+final `sanitizeMarkdownUrl` repete a política no boundary do React: links
+aceitam `http:`, `https:`, `mailto:` e âncoras; imagens remotas aceitam apenas
+`http:`/`https:`; `data:` fica limitado a imagens raster base64 de até 2 MiB.
+Referências relativas só viram `file://` quando há `baseDir` derivado de um
+arquivo já autorizado; caminhos absolutos, `file:`, `javascript:` e esquemas
+desconhecidos são recusados. O resolver também evita dupla codificação de
+caminhos com espaço/acento entregues já escapados pelo parser.
+
+TESTE: `MarkdownContent.test.ts` cobre HTML bruto, eventos, script, iframe,
+links perigosos e externos, imagens remotas/data/locais, fallback sem
+`baseDir` e preservação de task list, tabela e strikethrough GFM.
+`markdown-image-src.test.ts` cobre a política de protocolos, caminhos absolutos,
+data URI raster e limite de tamanho. A suíte focada passou com 18/18; a suíte
+frontend passou com 73 arquivos e 716/716 testes; `npm test` passou com 892/892;
+typecheck, lint e build passaram; `git diff --check` ficou limpo. O lint
+continua exibindo somente os 2 avisos React preexistentes de `SearchPanel.tsx`,
+e o build mantém o aviso conhecido de chunk acima de 500 kB.
+
+VALIDAÇÃO REAL: a janela do app foi iniciada em Electron 41 com renderer
+Chromium real e o componente foi montado em memória com conteúdo malicioso. O
+smoke confirmou `xssFlag=false`, zero `<script>`, `<iframe>`, atributos `on*`
+ou `href/src` perigosos, preservando o link e a imagem HTTPS legítimos. A
+execução não alterou arquivos do usuário; o perfil Electron temporário foi
+isolado. A cobertura automatizada do repositório continua sendo estática/SSR,
+enquanto o smoke cobriu a execução real do renderer.
+
+DOCUMENTAÇÃO: README, guia do usuário e `docs/projeto/ARQUITETURA.md` passaram
+a documentar a fronteira de sanitização, os protocolos aceitos, o limite de
+data images e a regra de `baseDir`.
+
+PUBLICAÇÃO: a implementação foi publicada no commit
+`109a679b2280fe696dcc5c32a69171f98e60a7d5`, com CI multi-SO
+`33416332453` e release `v0.1.122`/workflow `33416541676` concluídos com
+sucesso. O registro desta entrada documental foi acrescentado no commit
+subsequente e será publicado com o novo release após o gate remoto.
+
+LIMITE: o preview permite imagens HTTP/HTTPS remotas porque são uma capacidade
+visual existente; o código não faz download nem valida o conteúdo MIME real do
+servidor. A decisão restringe protocolo e data URI, mas não transforma uma URL
+externa em uma origem confiável. Nenhuma conta, chave ou credencial foi tocada.
+
+Estado final: correção implementada, testada no renderer real e pronta para o
+segundo push documental e acompanhamento do release.
