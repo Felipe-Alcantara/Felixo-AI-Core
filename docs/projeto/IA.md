@@ -2425,10 +2425,13 @@ ConPTY, o shell de login do macOS, a navegação por setas ou a passagem real de
 
 ### Validação
 
-No Linux, o gate focado passou com **5/5** testes em 3,6 s; a suíte completa
-`npm test` passou com **937/937**. ESLint dos arquivos alterados passou sem
-erros. A confirmação efetiva do ConPTY e do shell de login do macOS fica no
-CI nativo da matriz e será registrada junto do commit/release após o push.
+No Linux, o gate focado passou com **5/5** testes em 2,8 s; `npm test` passou
+com **932/932** testes unitários. A partir daqui, `npm test` descobre somente os
+testes Node unitários e `npm run test:native` mantém as duas integrações nativas
+isoladas, permitindo que a matriz confirme ConPTY e shell de login do macOS sem
+deixar o runner unitário pendurado quando um handle nativo demora a ser
+liberado. A confirmação efetiva dos três runners será registrada junto do
+commit/release após o push.
 
 Estado final: implementação concluída localmente, pronta para commit, push,
 acompanhamento do CI/release e encerramento da task no Notion.

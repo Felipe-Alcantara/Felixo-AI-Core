@@ -32,7 +32,8 @@
     "release:smoke": "node scripts/release-smoke.cjs",
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",
-    "test": "node --test \"electron/**/*.test.cjs\" \"scripts/**/*.test.cjs\"",
+    "test": "node scripts/run-node-unit-tests.cjs",
+    "test:native": "node --test electron/services/pty-write-queue.integration.test.cjs electron/services/claude-usage-query.integration.test.cjs",
     "test:frontend": "vitest run",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node scripts/start-electron.cjs"

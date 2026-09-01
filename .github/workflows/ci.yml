@@ -127,10 +127,7 @@ jobs:
       # próprio launch spec (Linux direto, macOS shell de login, Windows
       # cmd.exe/ConPTY).
       - name: Test native PTY integration
-        run: >-
-          node --test
-          electron/services/pty-write-queue.integration.test.cjs
-          electron/services/claude-usage-query.integration.test.cjs
+        run: npm run test:native
 
       # O reporter padrão do Vitest registra "Test Files" e "Tests" no log.
       # Sem --passWithNoTests, uma coleta vazia falha o job em vez de ficar verde.

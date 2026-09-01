@@ -229,9 +229,13 @@ Os testes são divididos entre backend Electron, renderer e launcher Python:
 ```bash
 cd app
 npm test
-node --test electron/services/pty-write-queue.integration.test.cjs electron/services/claude-usage-query.integration.test.cjs
+npm run test:native
 npm run test:frontend
 ```
+
+`npm test` descobre os `*.test.cjs` unitários de `electron/` e `scripts/` com um
+runner Node portável; as integrações `*.integration.test.cjs` são executadas
+por `npm run test:native`.
 
 Convenção de arquivos: `*.test.cjs` no mesmo diretório do módulo.
 

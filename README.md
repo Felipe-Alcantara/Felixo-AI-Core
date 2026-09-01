@@ -410,13 +410,14 @@ Aplicação:
 ```bash
 cd app
 npm test
-node --test electron/services/pty-write-queue.integration.test.cjs electron/services/claude-usage-query.integration.test.cjs
+npm run test:native
 npm run test:frontend
 npm run lint
 npm run build
 ```
 
-O segundo comando é o gate explícito de PTY nativa: ele inicia fixtures reais
+`npm test` executa os testes Node unitários; o segundo comando é o gate explícito
+de PTY nativa: ele inicia fixtures reais
 no runner atual e valida a fila de escrita, EOF, Unicode e a consulta
 interativa `/status` do Claude. A matriz do CI executa esse mesmo gate em
 Linux, macOS e Windows/ConPTY; incompatibilidade de shell ou do addon nativo
