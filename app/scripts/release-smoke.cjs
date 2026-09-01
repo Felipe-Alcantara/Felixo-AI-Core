@@ -304,7 +304,10 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
   fs.mkdirSync(userData, { recursive: true })
 
   const args = []
-  if (process.platform === 'linux' && process.getuid?.() === 0) {
+  // O smoke roda em um runner descartável e não abre conteúdo externo. O
+  // helper SUID do Chromium pode não sobreviver à extração do AppImage, e
+  // nesse caso o Electron encerra por sinal antes de executar o teste real.
+  if (process.platform === 'linux') {
     args.push('--no-sandbox')
   }
   args.push('--release-smoke')
@@ -330,9 +333,16 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
     throw createSmokeError(`O app empacotado nao iniciou: ${result.error}`, nativeErrors)
   }
 
-  if (result.code !== 0) {
+  if (result.code !== 0 || result.signal || result.timedOut) {
+    const outcome = result.timedOut
+      ? 'atingiu o timeout'
+      : `encerrou com codigo ${result.code ?? 'null'}${result.signal ? ` e sinal ${result.signal}` : ''}`
+    const diagnostics = [result.stderr, result.stdout]
+      .filter(Boolean)
+      .map((value) => sanitizeDiagnostic(value, temporaryRoot))
+      .join('\n')
     throw createSmokeError(
-      `O app empacotado encerrou com codigo ${result.code}.`,
+      `O app empacotado ${outcome}.${diagnostics ? ` Diagnostico: ${diagnostics}` : ''}`,
       nativeErrors,
     )
   }
