@@ -84,6 +84,19 @@ buscas completas por aresta e `nodes.find()` repetidos em cada terminal. O
 fixture de desempenho é opt-in com
 `$env:FELIXO_CONNECTION_BENCHMARK='1'; npx vitest run src/features/canvas/services/canvas-connection-index-benchmark.test.ts`.
 
+Para medir o renderer, a bancada `npm run benchmark:canvas-connections --
+--check --out=arquivo.json` abre uma rota controlada no Electron com ReactFlow
+real, React Profiler (`actualDuration`) e heap antes/depois de GC. Ela compara
+baseline e índice em 100, 500 e 1.000 nós, nos cinco cenários de render, drag,
+resize, criação/remoção de aresta e mudança de dados. O modo usa Vite de
+desenvolvimento para que o callback do Profiler exista; o resultado é uma
+tabela p50/p95 e um JSON com host, viewport, repetições, GC e limitações.
+`CanvasView` também possui uma fronteira opt-in em `?canvas-profiler=1`, que
+registra commits em `window.__felixoCanvasProfiler` sem adicionar overhead ao
+uso normal. A bancada não inicia PTYs nem acessa arquivos persistidos; por isso
+seus nós leves e a equivalência da projeção não substituem a validação visual
+manual de links, labels, prompts, retomada e remoção no Canvas real.
+
 ## Canvas e terminais
 
 - `CanvasView` compõe o quadro e persiste nós e conexões.

@@ -3051,3 +3051,44 @@ visual fica como ponto de atenção separado.
 
 Estado final: índice implementado e cobertura automatizada concluída; pronto
 para revisão/publicação e registro no Notion, com a limitação visual declarada.
+
+## Registro de Trabalho — 2026-09-01 (parte 23) — React Profiler e heap do índice do Canvas
+
+PEDIDO: medir o renderer real do Canvas em fixtures de 100, 500 e 1.000 nós,
+comparando baseline e índice nos cenários de render inicial, drag, resize,
+criação/remoção de aresta e mudança de dados.
+
+IMPLEMENTAÇÃO: adicionada a bancada Electron/Vite
+`app/scripts/canvas-connection-performance.cjs` e o harness de rota
+`?benchmark=canvas-connections`. O harness usa ReactFlow real, fixture com
+terminais, arquivos, grupos e notas, arestas arquivo↔terminal nas duas
+direções, pontas ausentes e aresta inválida. A coleta registra
+`actualDuration` do React Profiler, `performance.memory.usedJSHeapSize` antes e
+depois de GC, percentis p50/p95, metadados do host e JSON reprodutível. O
+Profiler do `CanvasView` real ficou opt-in em `?canvas-profiler=1`, gravando em
+`window.__felixoCanvasProfiler` sem custo no uso normal.
+
+RESULTADO: no Windows x64 (Node 24.18.0, Electron 41.10.7, 16 CPUs, viewport
+1.584×936), com uma passada de aquecimento e cinco repetições, o p95 melhorou
+nas 15 combinações. Os ganhos mínimo/máximo foram 5,96%/89,81%; em 1.000 nós,
+render inicial caiu de 269,92 ms para 131,66 ms e drag de 10,20 ms para 5,60
+ms. O delta de heap p95 do índice variou de -0,85 a +0,36 MiB contra o
+baseline, sem aumento material nesta coleta controlada.
+
+VALIDAÇÃO: `npm test` passou com 917 aprovados e 10 skips; `npm run
+test:frontend` passou com 729 aprovados e 1 skip; `npm run build` transformou
+721 módulos; `npm run lint` terminou sem erros, mantendo apenas os 2 avisos
+React preexistentes de `SearchPanel.tsx`; `git diff --check` ficou limpo. Os
+testes focados cobrem equivalência da projeção baseline/índice, fixtures,
+opt-in do Profiler e validação do runner.
+
+LIMITE: o harness renderiza nós leves para isolar o custo do índice; não inicia
+PTYs, não lê arquivos persistidos e não substitui uma sessão visual manual do
+Canvas real para links, nomes/labels, prompts iniciais, retomada do terminal e
+remoção de nós/arestas. O delta de heap não é snapshot de retenção; a bancada
+exige GC exposto pelo Electron e DOM não vazio, mas `onlyRenderVisibleElements`
+pode montar menos nós que o fixture.
+
+Estado final: instrumentação, medição real e documentação concluídas; pronta
+para publicação e registro da evidência na task do Notion, com a validação
+visual manual explicitamente pendente.

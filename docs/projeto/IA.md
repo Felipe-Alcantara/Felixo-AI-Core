@@ -2298,3 +2298,31 @@ foram alterados.
 
 Estado final: implementação e cobertura concluídas, com a limitação visual
 registrada para revisão posterior.
+
+## Registro de Trabalho — 2026-09-01 (parte 23) — medição do renderer do Canvas
+
+FEITO: criada a bancada `npm run benchmark:canvas-connections`, com rota
+controlada no Electron/Vite, React Profiler e heap/GC. A matriz usa 100, 500 e
+1.000 nós, 253, 1.253 e 2.503 arestas, cinco cenários, baseline/índice, um
+aquecimento, ordem alternada e cinco repetições. A projeção compartilhada foi
+conferida para garantir que o índice e o baseline renderizam os mesmos links,
+agentes e nomes de arquivos.
+
+RESULTADO: coleta Windows x64 de 01/09/2026 (Node 24.18.0, Electron 41.10.7,
+viewport 1.584×936) reduziu o p95 em todas as 15 combinações, entre 5,96% e
+89,81%. Em 1.000 nós, render inicial foi 269,92→131,66 ms e drag foi
+10,20→5,60 ms. O heap delta p95 ficou entre -0,85 e +0,36 MiB contra o
+baseline.
+
+INSTRUMENTAÇÃO: `CanvasView` aceita `?canvas-profiler=1` para registrar commits
+em `window.__felixoCanvasProfiler`, mas o Profiler não fica ativo por padrão.
+O harness é deliberadamente leve: usa ReactFlow real, porém não inicia PTYs nem
+acessa arquivos persistidos.
+
+VALIDAÇÃO: backend 917 aprovados/10 skips, frontend 729 aprovados/1 skip,
+build com 721 módulos, lint sem erros e `git diff --check` limpo. A tabela
+completa, o método e as limitações estão em `app/benchmarks/README.md`.
+
+LIMITE: a coleta não substitui a validação visual interativa de links,
+labels, prompts, retomada ou remoção no Canvas real; o delta de heap não é
+análise de retenção em sessão longa.

@@ -122,6 +122,7 @@ import {
   requestRepoDiagnosis,
 } from '../services/file-terminal-links'
 import { createCanvasConnectionIndex } from '../services/canvas-connection-index'
+import { CanvasProfilerBoundary } from '../services/canvas-performance-profiler.tsx'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import {
   buildTerminalHandoffPrompt,
@@ -212,7 +213,9 @@ export function CanvasView({ onOpenChat }: CanvasViewProps) {
       {/* A margem de 1rem de cada lado da coluna entra na conta: é espaço que
           nenhuma outra superfície pode ocupar. */}
       <CanvasSurfacesProvider toolbarWidth={TOOLBAR_COLUMN + 32}>
-        <CanvasInner onOpenChat={onOpenChat} />
+        <CanvasProfilerBoundary>
+          <CanvasInner onOpenChat={onOpenChat} />
+        </CanvasProfilerBoundary>
       </CanvasSurfacesProvider>
     </TerminalSessionProvider>
   )
