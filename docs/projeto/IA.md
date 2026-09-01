@@ -2254,3 +2254,37 @@ foi publicado com 14 artefatos para os três SOs.
 
 Estado final: task concluída, correção implementada, testada, publicada e
 pronta para registro na task e no relatório de hoje.
+## Registro de Trabalho — 2026-09-01 (parte 22) — índice de conexões do Canvas
+
+PEDIDO: reduzir o custo de renderização do Canvas, que repetia varreduras de
+`edges` e `nodes.find()` para cada terminal e arquivo.
+
+FEITO: criado `canvas-connection-index.ts`, com construção linear do mapa de
+nós, terminais, links arquivo↔terminal e nomes de arquivos por terminal.
+`CanvasView` usa a mesma instância, memoizada por `nodes`/`edges`, no
+`renderedNodes` e no efeito de resolução. Direções invertidas, deduplicação,
+hidratação, remoções e arestas inválidas têm cobertura em
+`canvas-connection-index.test.ts`; as ações pontuais continuam fora do hot
+path.
+
+BENCHMARK: o fixture opt-in mediu baseline versus índice em 100/500/1.000 nós
+e 252/1.252/2.502 arestas, nos cenários render, drag, resize, criação/remoção
+de aresta e mudança de dados. p50/p95 baseline → índice (ms):
+
+| nós | render | drag | resize | aresta | dados |
+|---:|---:|---:|---:|---:|---:|
+| 100 | 0,60/1,02 → 0,29/0,43 | 0,41/0,48 → 0,12/0,34 | 0,38/0,42 → 0,29/0,32 | 0,41/0,73 → 0,19/0,26 | 0,31/0,49 → 0,11/0,12 |
+| 500 | 5,18/6,25 → 1,53/1,69 | 4,34/6,00 → 1,10/1,39 | 4,72/5,08 → 1,02/1,51 | 7,08/8,34 → 1,49/1,61 | 9,65/10,28 → 1,62/1,64 |
+| 1.000 | 27,68/27,68 → 4,41/4,41 | 30,28/30,28 → 3,95/3,95 | 20,51/20,51 → 4,17/4,17 | 20,34/20,34 → 3,29/3,29 | 21,28/21,28 → 3,64/3,64 |
+
+VALIDAÇÃO: `npm test` 917 testes, 907 aprovados, 10 skips e zero falhas;
+`npm run test:frontend` 724 aprovados e 1 skip opt-in; build com 717 módulos;
+lint sem erros e os 2 avisos React existentes; `git diff --check` limpo.
+
+LIMITE: o benchmark mede a derivação do hot path e confirma equivalência, mas
+não substitui React Profiler/medição de heap nem uma sessão visual do app.
+Prompts, retomada e links continuam cobertos pelos contratos existentes e não
+foram alterados.
+
+Estado final: implementação e cobertura concluídas, com a limitação visual
+registrada para revisão posterior.

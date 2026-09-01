@@ -76,6 +76,14 @@ suíte cobre letras de unidade, comparacao case-insensitive, montagens,
 CloudStorage e exclusoes sem depender dos discos da maquina que executa os
 testes; a API de producao continua usando os adaptadores nativos por padrao.
 
+No canvas, `canvas-connection-index.ts` constrói uma vez os mapas de nós,
+terminais ligados a arquivos e nomes de arquivos ligados a terminais, dentro de
+um `useMemo` dependente de `nodes` e `edges`. O mesmo índice é usado pelo
+`renderedNodes` e pelo efeito que resolve os caminhos dos arquivos, eliminando
+buscas completas por aresta e `nodes.find()` repetidos em cada terminal. O
+fixture de desempenho é opt-in com
+`$env:FELIXO_CONNECTION_BENCHMARK='1'; npx vitest run src/features/canvas/services/canvas-connection-index-benchmark.test.ts`.
+
 ## Canvas e terminais
 
 - `CanvasView` compõe o quadro e persiste nós e conexões.

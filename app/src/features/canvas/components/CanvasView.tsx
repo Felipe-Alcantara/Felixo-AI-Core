@@ -119,10 +119,9 @@ import {
   agentLabelOf,
   announceFileNodeToTerminalNode,
   announceFileToTerminal,
-  getConnectedCanvasFileNames,
-  getLinkedAgentIds,
   requestRepoDiagnosis,
 } from '../services/file-terminal-links'
+import { createCanvasConnectionIndex } from '../services/canvas-connection-index'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import {
   buildTerminalHandoffPrompt,
@@ -246,6 +245,10 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   }, [nodes])
   const [edges, setEdges] = useEdgesState<Edge>([])
   const [edgesHydrated, setEdgesHydrated] = useState(false)
+  const connectionIndex = useMemo(
+    () => createCanvasConnectionIndex(nodes, edges),
+    [nodes, edges],
+  )
   const [terminalCanvasFilePaths, setTerminalCanvasFilePaths] = useState<
     Record<string, string[]>
   >({})
@@ -706,11 +709,11 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
     async function resolveConnectedCanvasFiles() {
       const nextPaths: Record<string, string[]> = {}
-      const terminalNodes = nodes.filter((node) => node.type === 'terminal')
+      const terminalNodes = connectionIndex.terminalNodes
 
       await Promise.all(
         terminalNodes.map(async (terminalNode) => {
-          const fileNames = getConnectedCanvasFileNames(terminalNode.id, nodes, edges)
+          const fileNames = connectionIndex.getConnectedCanvasFileNames(terminalNode.id)
           if (fileNames.length === 0) {
             return
           }
@@ -737,7 +740,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     return () => {
       cancelled = true
     }
-  }, [edges, edgesHydrated, nodes])
+  }, [connectionIndex, edgesHydrated])
 
   const updateNodeData = useCallback(
     (nodeId: string, patch: Record<string, unknown>) => {
@@ -936,8 +939,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
 
       if (node.type === 'file') {
-        const linkedIds = getLinkedAgentIds(node.id, edges)
-        const terminals = nodes.filter((item) => item.type === 'terminal')
+        const linkedIds = connectionIndex.getLinkedAgentIds(node.id)
+        const terminals = connectionIndex.terminalNodes
         const agentsSignature = terminals
           .map(
             (terminal) =>
@@ -980,7 +983,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
       if (node.type === 'terminal') {
         const quality = qualityStandard
-        const connectedFileNames = getConnectedCanvasFileNames(node.id, nodes, edges)
+        const connectedFileNames = connectionIndex.getConnectedCanvasFileNames(node.id)
         const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
         const initialTextReady = isTerminalInitialTextReady({
           restoredAgentsCaptured: restoredAgentTerminals.captured,
@@ -1078,7 +1081,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     return rendered
   }, [
     nodeDataCache,
-    edges,
+    connectionIndex,
     edgesHydrated,
     generateDiagnosis,
     linkAgentToFile,

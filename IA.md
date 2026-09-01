@@ -3004,3 +3004,50 @@ alterado somente no estado de confirmação do pedido; a execução segura conti
 dependendo do clique humano.
 
 Estado final: correção e cobertura concluídas, pronta para commit/push.
+
+## Registro de Trabalho — 2026-09-01 (parte 22) — índice de conexões do Canvas
+
+PEDIDO: reduzir o custo de renderização do Canvas, que resolvia links repetindo
+varreduras completas de `edges` e `nodes.find()` para cada terminal e cada
+arquivo.
+
+IMPLEMENTAÇÃO: criado `app/src/features/canvas/services/canvas-connection-index.ts`.
+`createCanvasConnectionIndex` constrói em uma passagem o mapa de nós, a lista
+de terminais, os terminais ligados por arquivo e os nomes de arquivos ligados
+por terminal. Arestas são aceitas em ambas as direções, nomes repetidos são
+deduplicados na ordem original e pontas ausentes/arestas entre tipos
+incompatíveis são ignoradas. `CanvasView` constrói o índice em `useMemo` quando
+`nodes` ou `edges` mudam e reutiliza a mesma instância no `renderedNodes` e no
+efeito que resolve caminhos de arquivos; ações pontuais continuam fora do hot
+path.
+
+TESTES: `canvas-connection-index.test.ts` cobre direções, arquivos repetidos,
+labels indiretos via lista de terminais, nós removidos, arestas inválidas,
+arquivos sem nome e reconstrução após remoção. O benchmark opt-in
+`canvas-connection-index-benchmark.test.ts` compara o algoritmo anterior com o
+índice em fixtures de 100, 500 e 1.000 nós, com 252, 1.252 e 2.502 arestas:
+
+| nós | cenário | baseline p50/p95 ms | índice p50/p95 ms |
+|---:|---|---:|---:|
+| 100 | render, drag, resize, aresta, dados | 0,60/1,02 · 0,41/0,48 · 0,38/0,42 · 0,41/0,73 · 0,31/0,49 | 0,29/0,43 · 0,12/0,34 · 0,29/0,32 · 0,19/0,26 · 0,11/0,12 |
+| 500 | render, drag, resize, aresta, dados | 5,18/6,25 · 4,34/6,00 · 4,72/5,08 · 7,08/8,34 · 9,65/10,28 | 1,53/1,69 · 1,10/1,39 · 1,02/1,51 · 1,49/1,61 · 1,62/1,64 |
+| 1.000 | render, drag, resize, aresta, dados | 27,68/27,68 · 30,28/30,28 · 20,51/20,51 · 20,34/20,34 · 21,28/21,28 | 4,41/4,41 · 3,95/3,95 · 4,17/4,17 · 3,29/3,29 · 3,64/3,64 |
+
+As medições foram feitas com `npx vitest run ...canvas-connection-index-benchmark.test.ts`
+e `FELIXO_CONNECTION_BENCHMARK=1`; os resultados conferiram a saída do
+baseline e do índice antes de cronometrar. O custo estrutural medido foi de
+20/100/200 conexões nomeadas nos três tamanhos; não foi feita medição confiável
+de bytes de heap porque o Vitest não oferece um React Profiler/GC controlado.
+
+VALIDAÇÃO: suíte focada do índice 3/3; benchmark 1/1; `npm test` 917 testes,
+907 aprovados, 10 skips e zero falhas; `npm run test:frontend` 724 aprovados e
+1 skip (benchmark opt-in); `npm run build` com 717 módulos; `npm run lint` sem
+erros e os 2 avisos React já existentes; `git diff --check` limpo.
+
+LIMITE: não houve sessão visual do app com React Profiler para separar commits
+de render em drag/resize nem validação manual de prompts, retomada ou links.
+Os testes de contrato do índice preservam esses dados, mas a confirmação
+visual fica como ponto de atenção separado.
+
+Estado final: índice implementado e cobertura automatizada concluída; pronto
+para revisão/publicação e registro no Notion, com a limitação visual declarada.
