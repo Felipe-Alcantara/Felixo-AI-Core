@@ -69,6 +69,7 @@ const {
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { createSettingsRepository } = require('./services/storage/settings-repository.cjs')
+const { createTerminalLogStore } = require('./services/terminal-log-store.cjs')
 const { initAppPaths } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
@@ -82,6 +83,7 @@ let contextFilesHandlers = null
 let textFileHandlers = null
 let storageDatabase = null
 let settingsRepository = null
+let terminalLogStore = null
 let cliAutoInstall = null
 let agentUsageWatching = null
 
@@ -135,6 +137,9 @@ app.whenReady().then(async () => {
     databaseDir: appPaths.database,
   })
   settingsRepository = createSettingsRepository(storageDatabase)
+  terminalLogStore = createTerminalLogStore({
+    directory: path.join(appPaths.logs, 'terminal-output'),
+  })
   // A loja vem antes do serviço de uso: é ela que diz quais contas têm login
   // próprio, e é da pasta de cada uma que a quota é lida.
   const cliAccounts = createCliAccountStore({
@@ -167,7 +172,7 @@ app.whenReady().then(async () => {
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
 
   registerQaLoggerIpcHandlers(getMainWindow)
-  registerCliIpcHandlers(getMainWindow)
+  registerCliIpcHandlers(getMainWindow, { terminalLogStore })
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
@@ -342,6 +347,13 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     textFileHandlers = null
+  }
+
+  const terminalLogStoreToClose = terminalLogStore
+  terminalLogStore = null
+
+  if (terminalLogStoreToClose) {
+    void terminalLogStoreToClose.dispose().catch(() => {})
   }
 
   const databaseToClose = storageDatabase

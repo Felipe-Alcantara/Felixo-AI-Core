@@ -32,6 +32,8 @@
     "publish:github": "npm run build && electron-builder --publish always",
     "benchmark:terminal": "electron --no-sandbox --disable-gpu --js-flags=--expose-gc --enable-precise-memory-info scripts/terminal-scrollback-benchmark.cjs",
     "benchmark:terminal:check": "npm run benchmark:terminal -- --scrollbacks=20000 --check",
+    "benchmark:terminal-output": "node scripts/terminal-output-performance.cjs",
+    "benchmark:terminal-output:check": "npm run benchmark:terminal-output -- --check",
     "benchmark:bundle": "electron --no-sandbox --disable-gpu scripts/bundle-load-benchmark.cjs",
     "benchmark:bundle:check": "npm run benchmark:bundle -- --check",
     "benchmark:canvas-connections": "node scripts/canvas-connection-performance.cjs",

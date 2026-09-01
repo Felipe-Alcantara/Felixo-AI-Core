@@ -113,6 +113,7 @@ npm run dev:web
 | `npm run build` | app/ | Typecheck incremental + Vite bundle |
 | `npm run benchmark:typecheck:check` | app/ | Mede cinco runs frios e cinco incrementais do typecheck |
 | `npm run benchmark:bundle:check` | app/ | Mede startup/menu no bundle e valida chunks relativos no Electron |
+| `npm run benchmark:terminal-output -- --check` | app/ | Mede retenção/renderização dos Logs da CLI no Electron |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run test:frontend` | app/ | Roda os testes Vitest do renderer |
 | `npm run lint` | app/ | Roda ESLint |
@@ -141,6 +142,32 @@ O benchmark mede tempo de parede e pico de RSS do comando real, valida cinco
 amostras de cada modo e move apenas seus próprios caches temporários. A
 otimização é de cache do compilador; ela não usa `noCheck`, não exclui fontes
 e não troca um typecheck por uma mera compilação Vite.
+
+### Logs da CLI do chat legado
+
+O chat está depreciado, mas seu painel de logs continua disponível para
+compatibilidade e exportação. O renderer agrupa eventos por
+`requestAnimationFrame` e retém no máximo 240 chunks/240.000 caracteres por
+sessão, além de limitar a visão de orquestração a 720 chunks. O processo
+principal grava o stream completo em JSONL temporário sob o `userData` do
+Electron; a exportação **Markdown para análise** consulta esse arquivo antes de
+montar o relatório. Limpar, reiniciar o app ou encerrá-lo remove esse arquivo.
+
+Para medir a mudança no renderer real, use Linux com Xvfb (Windows e macOS
+podem rodar o mesmo comando em uma sessão gráfica):
+
+```bash
+cd app
+xvfb-run -a npm run benchmark:terminal-output -- \
+  --iterations=3 --check --out=/tmp/felixo-terminal-output.json
+```
+
+O benchmark compara os mesmos fixtures curtos, longos, de alta frequência e
+de múltiplas sessões entre o baseline sem limite e a política atual. O relatório
+registra React Profiler p50/p95, latência de commit, DOM visível, heap após GC e
+RSS do renderer; cada modo é isolado em uma nova janela Electron e o
+`modeIsolation` fica registrado no JSON. O `--check` não inicia CLIs nem altera
+o canvas persistido.
 
 ### Ciclo de vida do Vite no modo dev
 

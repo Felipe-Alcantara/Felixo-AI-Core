@@ -180,6 +180,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
     startSession: startTerminalSession,
     markSessionStatus: markTerminalSessionStatus,
     clearSessions: clearTerminalSessions,
+    getCompleteSessions: getCompleteTerminalSessions,
   } = useTerminalOutput()
 
   const { state: systemDesignState } = useSystemDesignSettings()
@@ -721,6 +722,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
     format: ExportFormat,
     fileName: string,
   ) {
+    const terminalSessionsForExport = await getCompleteTerminalSessions()
     const result = await exportChat({
       format,
       fileName,
@@ -728,7 +730,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
       models,
       activeProjects,
       attachments: contextAttachments,
-      terminalSessions,
+      terminalSessions: terminalSessionsForExport,
     })
     if (!result.ok && !result.canceled) {
       window.alert(result.message ?? 'Nao foi possivel exportar o chat.')

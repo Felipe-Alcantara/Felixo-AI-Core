@@ -2560,3 +2560,35 @@ explícito no Windows, então o manager agora chama `kill()` nessa plataforma.
 drawer deixe processos ou handles ConPTY vivos. Validação local: manager
 43/43, `npm test` 933/933 e `npm run test:native` 5/5; a confirmação remota da
 matriz e do release permanece pendente neste ponto.
+
+## [2026-09-01] Retenção e renderização do histórico da CLI
+
+O histórico do chat legado passou a ter duas camadas. A camada visual é
+limitada por sessão a 240 chunks, 240.000 caracteres e 32.000 caracteres por
+chunk; a orquestração usa uma janela global de 720 eventos. Texto adjacente do
+mesmo item é coalescido, a cauda é mantida e a interface sinaliza o volume que
+ficou fora da janela. A fila do hook é agrupada por frame/timeout e os chunks
+imutáveis são memoizados, reduzindo cópias e renders desnecessários.
+
+Os eventos também são arquivados em JSONL temporário fora do estado React,
+com sequência, metadados, status e tamanho lógico. O IPC recupera o replay
+completo para a exportação de análise e permite limpar sessões ignoradas; o
+arquivo é rotacionado/limpo no início, no clear e no encerramento. Assim, a
+janela visual pode ser pequena sem fazer cópia, exportação ou diagnóstico
+perderem os eventos necessários.
+
+A bancada Electron mede baseline e atual com as mesmas fixtures (40; 600;
+2×320; 4×120), Profiler, latência p50/p95, DOM, heap após GC e RSS. O check
+pesado passou: na fixture longa foram retidos 240 de 527 chunks lógicos; na de
+alta frequência, 480 de 564; e a de quatro sessões reteve 428. Os maiores DOMs
+atuais foram 27/172/343/308 contra 27/377/404/308 no baseline. No run isolado
+da fixture longa, o p95 ficou 31,70 ms → 32,55 ms e o heap p95 2,95 MiB →
+1,94 MiB; a diferença de tempo é tratada como variância local, não como ganho
+universal. A exportação de análise mantém o histórico completo enquanto a
+execução está disponível.
+
+Validação local: `npm test` 951/951, `npm run test:frontend` 742 + 1 skip,
+`npm run test:native` 5/5, lint sem erros (2 warnings React preexistentes),
+`npm run typecheck:full`, build, testes do store/JSONL/runner e benchmark
+Electron `--check` passaram. CI/release multi-SO e o registro no Notion são os
+próximos passos do workflow.

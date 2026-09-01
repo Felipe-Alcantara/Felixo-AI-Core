@@ -1,55 +1,143 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TerminalOutputEvent } from '../types'
+import {
+  appendTerminalOutputToSession,
+  createTerminalOutputSession,
+  markTerminalOutputSessionStatus,
+} from './terminal-output-store'
+import type {
+  TerminalOutputSession,
+  TerminalOutputSessions,
+  TerminalSessionStatus,
+} from './terminal-output-store'
+export type {
+  TerminalOutputChunk,
+  TerminalOutputSession,
+  TerminalSessionStatus,
+} from './terminal-output-store'
 
-export type TerminalSessionStatus = 'running' | 'completed' | 'error' | 'stopped'
-
-export type TerminalOutputChunk = TerminalOutputEvent & {
-  id: number
-  createdAt: string
-}
-
-export type TerminalOutputSession = {
-  sessionId: string
-  parentThreadId?: string
-  chunks: TerminalOutputChunk[]
-  status: TerminalSessionStatus
-  startedAt: string
-  updatedAt: string
-  outputSize: number
-}
-
-type TerminalOutputSessions = Record<string, TerminalOutputSession>
 type ClearSessionsOptions = {
   ignoreSessionIds?: Array<string | null | undefined>
 }
-const textEncoder = new TextEncoder()
 
 export function useTerminalOutput() {
   const [sessionsById, setSessionsById] = useState<TerminalOutputSessions>({})
   const nextChunkId = useRef(1)
   const ignoredSessionIds = useRef<Set<string>>(new Set())
+  const sessionsRef = useRef<TerminalOutputSessions>({})
+  const pendingEventsRef = useRef<TerminalOutputEvent[]>([])
+  const flushHandleRef = useRef<number | null>(null)
+  const flushHandleKindRef = useRef<'animation' | 'timeout' | null>(null)
+  const historyAvailable = hasTerminalLogArchive()
+
+  const cancelScheduledFlush = useCallback(() => {
+    const handle = flushHandleRef.current
+
+    if (handle === null) {
+      return
+    }
+
+    if (
+      flushHandleKindRef.current === 'animation' &&
+      typeof window !== 'undefined'
+    ) {
+      window.cancelAnimationFrame(handle)
+    } else if (typeof window !== 'undefined') {
+      window.clearTimeout(handle)
+    }
+
+    flushHandleRef.current = null
+    flushHandleKindRef.current = null
+  }, [])
+
+  const flushPendingEvents = useCallback(() => {
+    cancelScheduledFlush()
+
+    const events = pendingEventsRef.current.splice(0)
+    if (events.length === 0) {
+      return
+    }
+
+    let nextSessions = sessionsRef.current
+
+    for (const event of events) {
+      const currentSession = nextSessions[event.sessionId]
+      const nextSession = appendTerminalOutputToSession(
+        currentSession,
+        event,
+        nextChunkId.current,
+        new Date().toISOString(),
+        historyAvailable,
+      )
+
+      if (
+        !currentSession ||
+        nextSession.totalChunkCount > currentSession.totalChunkCount
+      ) {
+        nextChunkId.current += 1
+      }
+
+      nextSessions = {
+        ...nextSessions,
+        [event.sessionId]: nextSession,
+      }
+    }
+
+    // O ref é a fonte síncrona para exportações disparadas antes de o React
+    // concluir o próximo render. Sem esta atualização, os últimos eventos de
+    // um stream em andamento poderiam ficar fora do arquivo exportado.
+    sessionsRef.current = nextSessions
+    setSessionsById(nextSessions)
+  }, [cancelScheduledFlush, historyAvailable])
+
+  const scheduleFlush = useCallback(() => {
+    if (flushHandleRef.current !== null || typeof window === 'undefined') {
+      return
+    }
+
+    if (typeof window.requestAnimationFrame === 'function') {
+      flushHandleKindRef.current = 'animation'
+      flushHandleRef.current = window.requestAnimationFrame(() => {
+        flushHandleRef.current = null
+        flushHandleKindRef.current = null
+        flushPendingEvents()
+      })
+      return
+    }
+
+    flushHandleKindRef.current = 'timeout'
+    flushHandleRef.current = window.setTimeout(() => {
+      flushHandleRef.current = null
+      flushHandleKindRef.current = null
+      flushPendingEvents()
+    }, 16)
+  }, [flushPendingEvents])
 
   const startSession = useCallback((sessionId: string, parentThreadId?: string) => {
+    flushPendingEvents()
     const now = new Date().toISOString()
     ignoredSessionIds.current.delete(sessionId)
 
-    setSessionsById((currentSessions) => {
-      const currentSession = currentSessions[sessionId]
+    const currentSession = sessionsRef.current[sessionId]
+    const nextSessions = {
+      ...sessionsRef.current,
+      [sessionId]: {
+        ...(currentSession ??
+          createTerminalOutputSession(
+            sessionId,
+            parentThreadId,
+            now,
+            historyAvailable,
+          )),
+        parentThreadId: parentThreadId ?? currentSession?.parentThreadId,
+        status: 'running' as const,
+        updatedAt: now,
+      },
+    }
 
-      return {
-        ...currentSessions,
-        [sessionId]: {
-          sessionId,
-          parentThreadId: parentThreadId ?? currentSession?.parentThreadId,
-          chunks: currentSession?.chunks ?? [],
-          status: 'running',
-          startedAt: currentSession?.startedAt ?? now,
-          updatedAt: now,
-          outputSize: currentSession?.outputSize ?? 0,
-        },
-      }
-    })
-  }, [])
+    sessionsRef.current = nextSessions
+    setSessionsById(nextSessions)
+  }, [flushPendingEvents, historyAvailable])
 
   const markSessionStatus = useCallback(
     (sessionId: string, status: TerminalSessionStatus) => {
@@ -57,35 +145,39 @@ export function useTerminalOutput() {
         return
       }
 
+      flushPendingEvents()
       const now = new Date().toISOString()
 
-      setSessionsById((currentSessions) => {
-        const currentSession = currentSessions[sessionId]
+      const nextSessions = {
+        ...sessionsRef.current,
+        [sessionId]: markTerminalOutputSessionStatus(
+          sessionsRef.current[sessionId],
+          sessionId,
+          status,
+          now,
+          historyAvailable,
+        ),
+      }
 
-        return {
-          ...currentSessions,
-          [sessionId]: {
-            sessionId,
-            parentThreadId: currentSession?.parentThreadId,
-            chunks: currentSession?.chunks ?? [],
-            status,
-            startedAt: currentSession?.startedAt ?? now,
-            updatedAt: now,
-            outputSize: currentSession?.outputSize ?? 0,
-          },
-        }
-      })
+      sessionsRef.current = nextSessions
+      setSessionsById(nextSessions)
     },
-    [],
+    [flushPendingEvents, historyAvailable],
   )
 
   const clearSessions = useCallback((options: ClearSessionsOptions = {}) => {
+    cancelScheduledFlush()
+    pendingEventsRef.current = []
     ignoredSessionIds.current = new Set(
       options.ignoreSessionIds?.filter((id): id is string => Boolean(id)) ?? [],
     )
+    sessionsRef.current = {}
     setSessionsById({})
+    void window.felixo?.cli?.clearTerminalLogs?.({
+      ignoreSessionIds: [...ignoredSessionIds.current],
+    })
     nextChunkId.current = 1
-  }, [])
+  }, [cancelScheduledFlush])
 
   const appendTerminalOutput = useCallback((event: TerminalOutputEvent) => {
     if (
@@ -95,57 +187,9 @@ export function useTerminalOutput() {
       return
     }
 
-    const now = new Date().toISOString()
-
-    setSessionsById((currentSessions) => {
-      const currentSession = currentSessions[event.sessionId]
-      const parentThreadId = event.parentThreadId ?? currentSession?.parentThreadId
-      const currentChunks = currentSession?.chunks ?? []
-      const lastChunk = currentChunks[currentChunks.length - 1]
-      const shouldMerge = shouldMergeTerminalOutput(lastChunk, event)
-      const chunk: TerminalOutputChunk = shouldMerge
-        ? {
-            ...lastChunk,
-            chunk: `${lastChunk.chunk}${event.chunk}`,
-            metadata: {
-              ...lastChunk.metadata,
-              ...event.metadata,
-            },
-          }
-        : {
-            ...event,
-            id: nextChunkId.current,
-            createdAt: now,
-          }
-      const chunks = shouldMerge
-        ? [...currentChunks.slice(0, -1), chunk]
-        : [...currentChunks, chunk]
-
-      if (!shouldMerge) {
-        nextChunkId.current += 1
-      }
-
-      const status = inferSessionStatusFromTerminalEvent(
-        event,
-        currentSession?.status,
-      )
-
-      return {
-        ...currentSessions,
-        [event.sessionId]: {
-          sessionId: event.sessionId,
-          parentThreadId,
-          chunks,
-          status,
-          startedAt: currentSession?.startedAt ?? now,
-          updatedAt: now,
-          outputSize:
-            (currentSession?.outputSize ?? 0) +
-            textEncoder.encode(event.chunk).length,
-        },
-      }
-    })
-  }, [])
+    pendingEventsRef.current.push(event)
+    scheduleFlush()
+  }, [scheduleFlush])
 
   useEffect(() => {
     const subscribe =
@@ -153,6 +197,24 @@ export function useTerminalOutput() {
 
     return subscribe?.(appendTerminalOutput)
   }, [appendTerminalOutput])
+
+  useEffect(() => {
+    sessionsRef.current = sessionsById
+  }, [sessionsById])
+
+  useEffect(() => {
+    return () => cancelScheduledFlush()
+  }, [cancelScheduledFlush])
+
+  const getCompleteSessions = useCallback(async () => {
+    flushPendingEvents()
+
+    const currentSessions = sessionsRef.current
+    const result = await window.felixo?.cli?.getTerminalLogs?.()
+    const archivedSessions = result?.ok ? result.sessions ?? [] : []
+
+    return mergeArchivedSessions(currentSessions, archivedSessions)
+  }, [flushPendingEvents])
 
   const sessions = useMemo(
     () =>
@@ -169,57 +231,46 @@ export function useTerminalOutput() {
     startSession,
     markSessionStatus,
     clearSessions,
+    getCompleteSessions,
   }
 }
 
-function inferSessionStatusFromTerminalEvent(
-  event: TerminalOutputEvent,
-  currentStatus: TerminalSessionStatus | undefined,
-): TerminalSessionStatus {
-  if (
-    currentStatus === 'completed' ||
-    currentStatus === 'error' ||
-    currentStatus === 'stopped'
-  ) {
-    return currentStatus
-  }
-
-  if (event.kind === 'error') {
-    return 'error'
-  }
-
-  if (event.kind === 'metrics' && event.title === 'Concluído') {
-    return 'completed'
-  }
-
-  if (
-    event.kind === 'lifecycle' &&
-    (event.title === 'Interrompido' || event.title === 'Thread reiniciada')
-  ) {
-    return 'stopped'
-  }
-
-  return 'running'
-}
-
-function shouldMergeTerminalOutput(
-  lastChunk: TerminalOutputChunk | undefined,
-  event: TerminalOutputEvent,
-) {
-  return (
-    event.kind === 'assistant' &&
-    lastChunk?.kind === 'assistant' &&
-    lastChunk.sessionId === event.sessionId &&
-    lastChunk.source === event.source &&
-    lastChunk.severity === event.severity &&
-    getStreamItemId(lastChunk.metadata) === getStreamItemId(event.metadata)
+function hasTerminalLogArchive() {
+  return Boolean(
+    typeof window !== 'undefined' && window.felixo?.cli?.getTerminalLogs,
   )
 }
 
-function getStreamItemId(
-  metadata: TerminalOutputEvent['metadata'] | undefined,
+function mergeArchivedSessions(
+  currentSessions: TerminalOutputSessions,
+  archivedSessions: Array<TerminalOutputSession>,
 ) {
-  const value = metadata?.streamItemId
+  const merged = new Map<string, TerminalOutputSession>()
 
-  return typeof value === 'string' ? value : ''
+  for (const session of archivedSessions) {
+    const currentSession = currentSessions[session.sessionId]
+    merged.set(session.sessionId, {
+      ...session,
+      parentThreadId: currentSession?.parentThreadId ?? session.parentThreadId,
+      status: currentSession?.status ?? session.status,
+      startedAt: currentSession?.startedAt ?? session.startedAt,
+      updatedAt: currentSession?.updatedAt ?? session.updatedAt,
+      outputSize: Math.max(
+        currentSession?.outputSize ?? 0,
+        session.outputSize,
+      ),
+      historyAvailable: true,
+    })
+  }
+
+  for (const session of Object.values(currentSessions)) {
+    if (!merged.has(session.sessionId)) {
+      merged.set(session.sessionId, session)
+    }
+  }
+
+  return [...merged.values()].sort(
+    (left, right) =>
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+  )
 }

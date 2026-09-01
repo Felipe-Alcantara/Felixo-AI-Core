@@ -382,6 +382,7 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 
 - O app depende das CLIs externas estarem instaladas, autenticadas e acessíveis no `PATH`.
 - O modo de chat está depreciado: pode ser usado para compatibilidade e exportação de histórico, mas não recebe novos fluxos de produto; use o canvas para trabalho novo.
+- No painel **Logs da CLI** do chat, a tela mostra uma janela limitada para permanecer navegável. A exportação **Markdown para análise** conserva o histórico completo da execução enquanto o app estiver aberto; limpar os logs ou encerrar o app remove esse arquivo temporário.
 - O auto-update silencioso também existe no launcher do código-fonte; no macOS, o prompt de atualização forçada vem confirmado por padrão. `npm run dev` direto não executa atualização Git.
 - No Linux, prefira AppImage para o fluxo de auto-update. `.deb` exige reinstalação/atualização tradicional.
 - **macOS bloqueia a primeira execução.** Os artefatos não são assinados nem notarizados, então o Gatekeeper barra o app até que ele seja liberado manualmente (ver a [seção de instalação para macOS](#macos)). Não há como evitar isso sem uma conta paga do Apple Developer Program.

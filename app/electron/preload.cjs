@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('cli:switch-official-account', params),
     orchestrationStatus: (params) =>
       ipcRenderer.invoke('cli:orchestration-status', params),
+    getTerminalLogs: () => ipcRenderer.invoke('cli:terminal-logs:get'),
+    clearTerminalLogs: (params) =>
+      ipcRenderer.invoke('cli:terminal-logs:clear', params),
     onStream: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('cli:stream', handler)

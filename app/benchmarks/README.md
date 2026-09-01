@@ -104,6 +104,57 @@ preservado, resume não vazio, ausência de regressão de resume e ganho de RSS
 nos cenários de 10/20 sessões. Se um SO falhar esse contrato, o artefato
 adaptativo não deve ser habilitado naquele release.
 
+## Logs da CLI no chat legado
+
+O painel `Logs da CLI` do chat é uma superfície diferente do xterm dos
+terminais do Canvas. Para não manter o stream inteiro no estado React, o
+processo principal grava os eventos normalizados em JSONL temporário em
+`<userData>/logs/terminal-output`. O renderer mantém apenas a janela necessária
+para a navegação:
+
+- até **240 chunks lógicos** e **240.000 caracteres** por sessão;
+- até **32.000 caracteres** de um chunk individual, preservando o final com um
+  marcador de truncamento;
+- até **720 chunks** combinados na visão de orquestração;
+- coalescência dos fragmentos contíguos do mesmo item `assistant` e atualização
+  agrupada por `requestAnimationFrame`.
+
+O contador e o aviso da UI distinguem o que está retido do que saiu da janela.
+Status, metadados de início e tamanho acumulado continuam sendo mantidos. O
+arquivo JSONL conserva o stream completo da execução atual, inclusive as
+entradas que saíram do renderer; a opção **Markdown para análise** lê esse
+arquivo antes de exportar. Limpar os logs, iniciar outra execução do app ou
+encerrar o app remove o arquivo temporário. Se o arquivo não estiver disponível
+(por exemplo, no preview web), a exportação declara que só possui a janela
+visual.
+
+### Como medir
+
+Com o Vite disponível, em Linux use um display virtual:
+
+```bash
+xvfb-run -a npm run benchmark:terminal-output -- \
+  --iterations=3 --check --out=/tmp/felixo-terminal-output.json
+```
+
+A bancada abre o `TerminalPanel` real no Electron e executa os mesmos fixtures
+curto, longo, de alta frequência e com quatro sessões nos dois modos. Ela coleta
+`actualDuration` e latência do commit do React em p50/p95, quantidade máxima de
+chunks no DOM, heap usado antes/depois de GC e working set (RSS) do renderer por
+modo. A carga controlada usa 40 eventos brutos no fixture curto, 600 no longo,
+2×320 no de alta frequência e 4×120 no de múltiplas sessões; o fixture longo
+ultrapassa deliberadamente a janela visual. Cada modo roda em uma nova janela
+Electron para evitar que o aquecimento de um modo contamine o RSS do outro. A
+comparação usa a mesma cadência de um evento por atualização para isolar
+retenção/coalescência de render; o batching de produção por frame é validado
+separadamente pelo hook e pelos testes do fixture.
+
+O relatório JSON registra a política, a carga, o host, os commits, a janela
+visível e as limitações da coleta. O modo `--check` falha se faltar Profiler,
+heap/GC, RSS, fixture ou se a janela atual montar mais de 720 chunks na visão
+de orquestração. Esse benchmark usa Vite de desenvolvimento para manter o
+Profiler observável e não inicia CLIs, PTYs nem altera dados persistidos.
+
 ## Benchmark do scanner do Fetch All
 
 O scanner também tem uma bancada reproduzível. A raiz é obrigatória para evitar

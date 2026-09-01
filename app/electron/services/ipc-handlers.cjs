@@ -81,6 +81,7 @@ const stoppedSessions = new Set()
 const cliThreadSessions = new Map()
 const terminalSessionParents = new Map()
 const modelAvailabilityRegistry = createModelAvailabilityRegistry()
+let terminalLogStore = null
 const persistentSessions = createPersistentCliSessionManager({
   cliManager,
   stoppedSessions,
@@ -89,7 +90,45 @@ const persistentSessions = createPersistentCliSessionManager({
   recordModelAvailabilityEvent,
 })
 
-function registerCliIpcHandlers(getMainWindow) {
+function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
+  terminalLogStore = dependencies.terminalLogStore ?? null
+
+  ipcMain.handle('cli:terminal-logs:get', async () => {
+    try {
+      return {
+        ok: true,
+        sessions: terminalLogStore ? await terminalLogStore.getSessions() : [],
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel carregar o historico completo da CLI.',
+        sessions: [],
+      }
+    }
+  })
+
+  ipcMain.handle('cli:terminal-logs:clear', async (_event, params) => {
+    try {
+      if (terminalLogStore) {
+        await terminalLogStore.clear(params)
+      }
+
+      return { ok: true }
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel limpar o historico da CLI.',
+      }
+    }
+  })
+
   ipcMain.handle('cli:send', (event, params) => {
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
 
@@ -994,6 +1033,8 @@ function sendTerminalEvents(webContents, sessionId, events) {
 }
 
 function sendTerminalOutput(webContents, event) {
+  terminalLogStore?.append(event)
+
   if (!webContents || webContents.isDestroyed()) {
     return
   }

@@ -122,6 +122,7 @@ Felixo-AI-Core/
 | `npm run dist:mac` | app/ | Gera instaladores macOS |
 | `npm run release:smoke` | app/ | Valida o artefato instalado no SO atual |
 | `npm run publish:github` | app/ | Publica uma release pelo electron-builder; usar apenas no fluxo de release |
+| `npm run benchmark:terminal-output -- --check` | app/ | Compara retenção/renderização dos Logs da CLI no renderer Electron |
 
 ---
 
@@ -150,6 +151,12 @@ Corpo detalhado opcional.
 ### Escopos comuns
 
 `canvas`, `terminal`, `orchestration`, `adapters`, `usage`, `accounts`, `git`, `ui`, `portability`, `ci`, `build` (`chat` só para manutenção legada)
+
+O chat está depreciado; mudanças nele devem preservar compatibilidade e
+exportação. O painel `Logs da CLI` mantém uma janela visual limitada, enquanto
+o processo principal guarda o stream completo em JSONL temporário para a
+exportação de análise. Para medir a mudança, use o benchmark de
+`terminal-output`; ele exige Electron e, no Linux, `xvfb-run`.
 
 ### Exemplos
 

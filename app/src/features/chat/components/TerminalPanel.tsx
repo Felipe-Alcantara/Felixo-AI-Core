@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ChevronRight, Terminal, Trash2 } from 'lucide-react'
 import type {
   TerminalOutputChunk,
   TerminalOutputSession,
   TerminalSessionStatus,
 } from '../hooks/useTerminalOutput'
+import {
+  getVisibleChars,
+  TERMINAL_OUTPUT_VISUAL_POLICY,
+  trimTerminalOutputChunks,
+} from '../hooks/terminal-output-store'
 
 type TerminalPanelProps = {
   sessions: TerminalOutputSession[]
   isOpen: boolean
   onToggleOpen: () => void
   onClear: () => void
+  initialViewMode?: 'orchestrator' | 'threads'
+  orchestratorWindowSize?: number
 }
 
 const MIN_WIDTH = 280
@@ -22,12 +29,12 @@ export function TerminalPanel({
   isOpen,
   onToggleOpen,
   onClear,
+  initialViewMode = 'threads',
+  orchestratorWindowSize = TERMINAL_OUTPUT_VISUAL_POLICY.maxOrchestratorChunks,
 }: TerminalPanelProps) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [dragging, setDragging] = useState(false)
-  const [viewMode, setViewMode] = useState<'orchestrator' | 'threads'>(
-    'threads',
-  )
+  const [viewMode, setViewMode] = useState<'orchestrator' | 'threads'>(initialViewMode)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true)
   const outputRef = useRef<HTMLDivElement>(null)
@@ -71,7 +78,7 @@ export function TerminalPanel({
     () => createGroupedSessionRows(visibleSessions),
     [visibleSessions],
   )
-  const orchestratorEntries = useMemo(
+  const allOrchestratorEntries = useMemo(
     () =>
       visibleSessions
         .flatMap((session) =>
@@ -85,10 +92,23 @@ export function TerminalPanel({
         .sort(
           (a, b) =>
             new Date(a.chunk.createdAt).getTime() -
-            new Date(b.chunk.createdAt).getTime(),
+              new Date(b.chunk.createdAt).getTime() ||
+            a.chunk.id - b.chunk.id,
         ),
     [visibleSessions],
   )
+  const orchestratorEntries = useMemo(
+    () =>
+      allOrchestratorEntries.length <=
+        orchestratorWindowSize
+        ? allOrchestratorEntries
+        : allOrchestratorEntries.slice(
+            -orchestratorWindowSize,
+          ),
+    [allOrchestratorEntries, orchestratorWindowSize],
+  )
+  const orchestratorEntriesDropped =
+    allOrchestratorEntries.length - orchestratorEntries.length
 
   const selectedThreadEntries = useMemo(
     () => selectedSession?.chunks ?? [],
@@ -308,7 +328,7 @@ export function TerminalPanel({
                         : 'Prompt não registrado'}
                     </span>
                     <span className="block truncate text-[10px] text-zinc-600">
-                      {formatStatus(session.status)} · {session.chunks.length} eventos ·{' '}
+                      {formatStatus(session.status)} · {formatSessionEventCount(session)} ·{' '}
                       {formatBytes(session.outputSize)}
                     </span>
                   </span>
@@ -346,6 +366,22 @@ export function TerminalPanel({
             onScroll={handleOutputScroll}
             className="h-full overflow-y-auto px-3 py-2 font-mono text-[11px] leading-relaxed"
           >
+            {viewMode === 'threads' && selectedSession && selectedSession.droppedChunkCount > 0 ? (
+              <HistoryWindowNotice session={selectedSession} />
+            ) : null}
+            {viewMode === 'orchestrator' &&
+              (orchestratorEntriesDropped > 0 ||
+                visibleSessions.some((session) => session.droppedChunkCount > 0)) && (
+                <div
+                  role="status"
+                  className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2 py-1.5 text-[10px] leading-relaxed text-amber-200"
+                >
+                  A orquestração mostra somente a janela visual mais recente de
+                  cada execução (até {TERMINAL_OUTPUT_VISUAL_POLICY.maxOrchestratorChunks}{' '}
+                  eventos no total). A exportação de análise mantém o histórico
+                  completo enquanto o app estiver aberto.
+                </div>
+              )}
             {viewMode === 'orchestrator' ? (
               orchestratorEntries.length === 0 ? (
                 <p className="text-zinc-600">Aguardando eventos da CLI.</p>
@@ -400,11 +436,16 @@ export function TerminalPanel({
   )
 }
 
-function TerminalChunk({ chunk }: { chunk: TerminalOutputChunk }) {
+const TerminalChunk = memo(function TerminalChunk({
+  chunk,
+}: {
+  chunk: TerminalOutputChunk
+}) {
   const metadata = formatMetadata(chunk)
 
   return (
     <div
+      data-terminal-output-chunk="true"
       title={chunk.source}
       className={getChunkClassName(chunk)}
     >
@@ -417,6 +458,11 @@ function TerminalChunk({ chunk }: { chunk: TerminalOutputChunk }) {
       <div className="whitespace-pre-wrap break-words text-[11px] normal-case tracking-normal">
         {chunk.chunk}
       </div>
+      {chunk.isTextTruncated && (
+        <div className="mt-1 text-[10px] text-amber-200/80">
+          Parte anterior deste evento está fora da janela visual.
+        </div>
+      )}
       {metadata.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {metadata.map((item) => (
@@ -429,6 +475,24 @@ function TerminalChunk({ chunk }: { chunk: TerminalOutputChunk }) {
           ))}
         </div>
       )}
+    </div>
+  )
+})
+
+function HistoryWindowNotice({ session }: { session: TerminalOutputSession }) {
+  const retained = session.chunks.length
+  const total = Math.max(session.totalChunkCount, retained)
+  const exportMessage = session.historyAvailable
+    ? 'A exportação de análise mantém o histórico completo enquanto o app estiver aberto.'
+    : 'O histórico completo não está disponível nesta execução.'
+
+  return (
+    <div
+      role="status"
+      className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2 py-1.5 text-[10px] leading-relaxed text-amber-200"
+    >
+      Exibindo os últimos {retained} de {total} eventos desta execução.{' '}
+      {exportMessage}
     </div>
   )
 }
@@ -474,6 +538,9 @@ function cloneTerminalSession(
   return {
     ...session,
     chunks: [...session.chunks],
+    startMetadata: session.startMetadata
+      ? { ...session.startMetadata }
+      : undefined,
   }
 }
 
@@ -481,9 +548,15 @@ function mergeTerminalSessions(
   parentSession: TerminalOutputSession,
   childSession: TerminalOutputSession,
 ): TerminalOutputSession {
-  const chunks = [...parentSession.chunks, ...childSession.chunks].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  const chunks = trimTerminalOutputChunks(
+    [...parentSession.chunks, ...childSession.chunks].sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
+        a.id - b.id,
+    ),
   )
+  const totalChunkCount =
+    parentSession.totalChunkCount + childSession.totalChunkCount
   const startedAt =
     new Date(parentSession.startedAt).getTime() <=
     new Date(childSession.startedAt).getTime()
@@ -502,6 +575,12 @@ function mergeTerminalSessions(
     startedAt,
     updatedAt,
     outputSize: parentSession.outputSize + childSession.outputSize,
+    totalChunkCount,
+    droppedChunkCount: Math.max(0, totalChunkCount - chunks.length),
+    visibleChars: getVisibleChars(chunks),
+    historyAvailable:
+      parentSession.historyAvailable && childSession.historyAvailable,
+    startMetadata: parentSession.startMetadata ?? childSession.startMetadata,
   }
 }
 
@@ -588,11 +667,24 @@ function extractSessionPrompt(session: TerminalOutputSession) {
 }
 
 function getSessionStartMetadata(session: TerminalOutputSession) {
+  if (session.startMetadata) {
+    return session.startMetadata
+  }
+
   const startChunk = session.chunks.find(
     (chunk) => chunk.kind === 'lifecycle' && chunk.metadata,
   )
 
   return startChunk?.metadata ?? null
+}
+
+function formatSessionEventCount(session: TerminalOutputSession) {
+  const retained = session.chunks.length
+  const total = Math.max(session.totalChunkCount, retained)
+
+  return session.droppedChunkCount > 0
+    ? `${retained}/${total} eventos visíveis`
+    : `${retained} eventos`
 }
 
 function getSessionRoleClassName(session: TerminalOutputSession) {

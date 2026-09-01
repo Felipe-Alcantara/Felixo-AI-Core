@@ -206,6 +206,10 @@ function createAnalysisMarkdownExport(
   const messages = params.messages.filter((item) => item.content.trim())
   const terminalSessions = sortTerminalSessionsForExport(params.terminalSessions)
   const terminalEventsCount = terminalSessions.reduce(
+    (count, session) => count + session.totalChunkCount,
+    0,
+  )
+  const terminalVisibleEventsCount = terminalSessions.reduce(
     (count, session) => count + session.chunks.length,
     0,
   )
@@ -219,7 +223,8 @@ function createAnalysisMarkdownExport(
     `- Mensagens do chat: ${messages.length}`,
     `- Entradas do QA Logger: ${qaLogSnapshot.entries.length}`,
     `- Sessoes de CLI: ${terminalSessions.length}`,
-    `- Eventos de CLI: ${terminalEventsCount}`,
+    `- Eventos logicos de CLI: ${terminalEventsCount}`,
+    `- Eventos visiveis de CLI: ${terminalVisibleEventsCount}`,
     `- Projetos ativos: ${params.activeProjects.length}`,
     `- Anexos de contexto: ${params.attachments.length}`,
     '',
@@ -351,7 +356,10 @@ function appendCliLogsSection(
       `- Status: ${session.status}`,
       `- Inicio: ${session.startedAt}`,
       `- Atualizado em: ${session.updatedAt}`,
-      `- Eventos: ${session.chunks.length}`,
+      `- Eventos logicos: ${session.totalChunkCount}`,
+      `- Eventos visiveis: ${session.chunks.length}`,
+      `- Eventos fora da janela visual: ${session.droppedChunkCount}`,
+      `- Historico completo disponivel: ${session.historyAvailable ? 'sim' : 'nao'}`,
       `- Tamanho acumulado: ${session.outputSize} B`,
     )
     if (session.parentThreadId) {

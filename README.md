@@ -39,6 +39,7 @@ Base funcional entregue:
 
 - Canvas visual como superfície principal, com agentes, arquivos, notas, grupos e páginas web
 - Modo de chat legado, mantido somente para compatibilidade com sessões e exportações antigas
+- Logs da CLI do chat com janela visual limitada, batching por frame e exportação de análise a partir do histórico completo da execução
 - Backend Electron executando CLIs reais em streaming
 - Adapters para `claude`, `codex` e `gemini`
 - Launcher Openia para as interfaces compatíveis com OpenRouter, sem duplicar seu catálogo de modelos

@@ -77,6 +77,30 @@ type CliInvokeResult = {
   message?: string
 }
 
+type TerminalLogChunk = TerminalOutputEvent & {
+  id: number
+  createdAt: string
+}
+
+type TerminalLogSession = {
+  sessionId: string
+  parentThreadId?: string
+  chunks: TerminalLogChunk[]
+  status: 'running' | 'completed' | 'error' | 'stopped'
+  startedAt: string
+  updatedAt: string
+  outputSize: number
+  totalChunkCount: number
+  droppedChunkCount: number
+  visibleChars: number
+  historyAvailable: boolean
+  startMetadata?: TerminalOutputEvent['metadata']
+}
+
+type TerminalLogsResult = CliInvokeResult & {
+  sessions?: TerminalLogSession[]
+}
+
 type OpeniaInterface = {
   key: string
   name: string
@@ -290,6 +314,10 @@ declare global {
           runId?: string
           threadId?: string
         }) => Promise<CliOrchestrationStatusResult>
+        getTerminalLogs: () => Promise<TerminalLogsResult>
+        clearTerminalLogs: (params?: {
+          ignoreSessionIds?: string[]
+        }) => Promise<CliInvokeResult>
         onStream: (callback: (event: CliStreamEvent) => void) => () => void
         onRawOutput: (callback: (event: TerminalOutputEvent) => void) => () => void
         onTerminalOutput: (callback: (event: TerminalOutputEvent) => void) => () => void

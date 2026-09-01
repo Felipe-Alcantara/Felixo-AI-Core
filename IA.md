@@ -3192,3 +3192,70 @@ VALIDAÇÃO: `npm run typecheck:full`, `npm run build`, `npm test` (943/943),
 `npm run lint` sem erros, `npm run pack`, smoke Linux e `git diff --check`
 passaram. A etapa seguinte é commit, push, CI/release multi-SO e registro da
 task como concluída no Notion.
+
+## Registro de Trabalho — 2026-09-01 (parte 26) — retenção dos Logs da CLI
+
+PEDIDO: controlar a retenção e a renderização do histórico da CLI no chat
+legado, mantendo a navegação responsiva, sem perder eventos necessários e com
+uma forma de exportar o histórico completo.
+
+DIAGNÓSTICO: `useTerminalOutput()` mantinha todos os chunks em estado React e
+copiava o array a cada evento. `TerminalPanel` achatava, ordenava e montava
+todo o histórico em cada render, sem limite visual nem arquivo de replay. Em
+alta frequência isso fazia a quantidade de nós DOM e a memória crescerem com
+o tempo da sessão.
+
+IMPLEMENTAÇÃO:
+
+- `terminal-output-store.ts` separa a política pura da UI: cada sessão mantém
+  no máximo 240 chunks, 240.000 caracteres e 32.000 caracteres por chunk; o
+  modo de orquestração mostra no máximo 720 eventos globais. Chunks de texto
+  adjacentes são coalescidos, a cauda é preservada e a UI informa quantos
+  eventos ficaram fora da janela visual.
+- `useTerminalOutput.ts` usa fila e flush por `requestAnimationFrame`/timeout,
+  preserva a identidade das sessões, mantém contadores lógicos e descarrega a
+  fila antes de exportar, limpar ou mudar o status.
+- `TerminalChunk` é memoizado e a lista da orquestração usa uma janela global;
+  seleção, clear, fim de sessão, cópia, exportação e diagnósticos continuam
+  usando o histórico lógico, não apenas os nós atualmente visíveis.
+- O processo principal grava os eventos em JSONL temporário por execução em
+  `<userData>/logs/terminal-output`, expõe leitura/limpeza por IPC e remove o
+  arquivo na inicialização, no clear e no encerramento. A exportação de análise
+  recupera o arquivo completo; o limite visual não apaga a evidência.
+- Foram adicionados fixtures curta (40), longa (600), alta frequência (2×320)
+  e múltiplas sessões (4×120), com baseline, Profiler React, latência de
+  commits, DOM, heap após GC e RSS em uma janela Electron nova por modo.
+
+MEDIÇÃO LOCAL: a matriz pesada controlada passou em `--check`. Na fixture
+longa, 602 eventos de entrada produziram 527 chunks lógicos: 240 ficaram na
+janela e 287 foram contabilizados fora dela. Na alta frequência, 644 eventos
+produziram 564 chunks em duas sessões: 480 visíveis e 84 fora da janela. Na
+fixture de quatro sessões, 488 eventos produziram 428 chunks, todos dentro do
+limite por sessão. O maior DOM atual foi 27/172/343/308 nós nas quatro
+fixtures, contra 27/377/404/308 no baseline.
+
+Um run isolado e controlado da fixture longa após a memoização mediu p95 de
+commit em 31,70 ms no baseline e 32,55 ms no atual, com delta de heap p95 de
+2,95 MiB para 1,94 MiB e DOM máximo de 177 para 172. Os tempos do run pesado
+variaram com a carga do Linux e a instabilidade de rede relatada durante a
+execução; por isso o resultado usado como evidência de desempenho é o run
+isolado, enquanto o `--check` garante invariantes de carga, identidade,
+Profiler, heap/GC e limites. Não há uma alegação de melhoria universal de
+latência a partir de uma única máquina.
+
+VALIDAÇÃO: `npm run lint` passou sem erros, mantendo somente os 2 warnings
+React preexistentes de `SearchPanel.tsx`; `npm run typecheck:full`, `npm test`
+(951/951), `npm run test:frontend` (742 aprovados + 1 skip),
+`npm run test:native` (5/5), `npm run build`, testes focados do store/arquivo
+JSONL/runner e o benchmark Electron com `--check` passaram. `git diff --check`
+também ficou limpo.
+
+LIMITE: o arquivo JSONL representa a execução atual e é limpo no ciclo de
+vida do app; não é armazenamento permanente de todas as sessões antigas. A
+exportação de análise é o mecanismo de histórico completo enquanto a execução
+está disponível. O benchmark mede Linux localmente; a confirmação nativa dos
+três SOs fica no CI e no release empacotado.
+
+Estado final: implementação, testes, instrumentação e documentação concluídas;
+pronta para commit, push, CI/release e registro da task como concluída no
+Notion.

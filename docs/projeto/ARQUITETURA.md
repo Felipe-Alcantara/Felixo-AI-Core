@@ -257,6 +257,35 @@ local para novos componentes do produto. Uma mudança que precise atravessar a
 compatibilidade deve manter o canvas como fonte da experiência e registrar o
 impacto no `IA.md`.
 
+### Retenção dos Logs da CLI
+
+O painel de logs do chat separa retenção visual de retenção para diagnóstico e
+exportação. `useTerminalOutput` agrupa os eventos recebidos por frame antes de
+atualizar o React e usa `terminal-output-store.ts` para manter, por sessão, até
+240 chunks lógicos e 240.000 caracteres; um chunk individual fica limitado a
+32.000 caracteres. A visão de orquestração aplica ainda uma janela global de
+720 chunks, evitando que múltiplas sessões produzam milhares de nós DOM. A UI
+exibe quantos chunks permanecem visíveis e quando há dados anteriores fora da
+janela.
+
+O processo principal recebe o mesmo evento antes de encaminhá-lo ao renderer e
+o grava em JSONL em `app.getPath('userData')/logs/terminal-output`. O arquivo é
+somente da execução atual do app: `clear` troca a geração e ignora eventos
+tardios das sessões limpas; a inicialização remove arquivos de sessão antigos;
+o encerramento remove o arquivo corrente. A exportação de análise consulta o
+arquivo completo, portanto a janela React não causa perda de conteúdo. Se a
+ponte Electron não existir ou falhar, a sessão informa que só a janela visual
+está disponível.
+
+O benchmark `npm run benchmark:terminal-output -- --check` monta o
+`TerminalPanel` real no Electron e compara baseline sem limite com a política
+atual nos fixtures curto, longo, de alta frequência e múltiplas sessões. Ele
+registra React Profiler p50/p95, latência de commit, DOM, heap pós-GC e RSS do
+renderer. O benchmark conserva a mesma cadência de entrada nos dois modos para
+isolar o ganho de retenção/render, usa uma nova janela por modo e declara essa
+isolação no relatório; o agrupamento por `requestAnimationFrame` é o caminho de
+produção e tem cobertura própria de unidade.
+
 ## Documentos relacionados
 
 - [`README.md`](../../README.md): entrada pública e capacidades observáveis.
