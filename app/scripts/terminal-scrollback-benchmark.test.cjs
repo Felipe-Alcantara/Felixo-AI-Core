@@ -9,6 +9,14 @@ test('a bancada usa os quatro tamanhos pedidos por padrão', () => {
 
   assert.deepEqual(options.counts, [1, 5, 10, 20])
   assert.deepEqual(options.scrollbacks, [5_000, 20_000])
+  assert.deepEqual(options.policies, ['current', 'adaptive'])
+  assert.equal(options.adaptiveScrollback, 5_000)
+  assert.equal(options.adaptiveThreshold, 10)
+})
+
+test('a bancada permite isolar a política e rejeita nomes desconhecidos', () => {
+  assert.deepEqual(benchmark.parseArgs(['--policies=adaptive']).policies, ['adaptive'])
+  assert.throws(() => benchmark.parseArgs(['--policies=current,other']), /policies/i)
 })
 
 test('a bancada rejeita cenários acima do teto controlado', () => {
@@ -49,6 +57,45 @@ test('o modo check valida que todos os cenários entregaram a carga', () => {
       timedOut: true,
     }],
   }), ['native count=20: timeout', 'native count=20: saída incompleta'])
+})
+
+test('o modo check detecta perda de identidade e regressão da política adaptativa', () => {
+  const base = {
+    phase: 'renderer-xterm',
+    policy: 'current',
+    count: 10,
+    scrollback: 20_000,
+    linesPerTerminal: 8_000,
+    linesWritten: [8_000],
+    resumedRows: [32],
+    lineIntegrity: [{ outputComplete: true, unexpectedGap: false }],
+    detachAttachPreserved: true,
+    resumeIntegrity: [{ outputComplete: true, unexpectedGap: false }],
+    resumeMs: 100,
+    rendererWorkingSetMiB: { p95: 100 },
+  }
+  const adaptive = {
+    ...base,
+    policy: 'adaptive',
+    scrollback: 5_000,
+    lineIntegrity: [{ outputComplete: false, unexpectedGap: true }],
+    resumeIntegrity: [{ outputComplete: false, unexpectedGap: true }],
+    resumeMs: 200,
+    rendererWorkingSetMiB: { p95: 99 },
+  }
+
+  assert.deepEqual(
+    benchmark.validateReport({
+      scenario: { adaptiveScrollback: 5_000, adaptiveThreshold: 10 },
+      results: [base, adaptive],
+    }),
+    [
+      'renderer count=10 scrollback=5000: identidade da saída perdida ou com lacuna inesperada',
+      'renderer count=10 scrollback=5000: resume perdeu o trecho final',
+      'adaptive count=10: não reduziu o RSS p95 do renderer em pelo menos 5%',
+      'adaptive count=10: resume regrediu mais de 25%',
+    ],
+  )
 })
 
 test('percentis são estáveis para amostras vazias, pares e ímpares', () => {

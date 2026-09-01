@@ -104,6 +104,11 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
   continuam executando em background quando o bloco é recolhido.
 - `TerminalSessionStore` mantém a sessão fora da árvore React para que mover o
   terminal entre o bloco e a gaveta não reinicie o processo.
+- O scrollback visual é adaptativo por sessão: 20.000 linhas até 9 terminais e
+  5.000 a partir de 10. `CanvasView` passa apenas o total renderizado; o dado
+  não é persistido e uma sessão viva não é redimensionada depois. O processo
+  principal mantém até 200.000 caracteres de replay para reanexar o renderer,
+  enquanto o snapshot expõe o rollover para a UI.
 - Arquivos `.md` do canvas vivem na área de dados do usuário e podem ser
   ligados a vários agentes. Eles são a memória compartilhada recomendada.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos

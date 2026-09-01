@@ -89,6 +89,7 @@ function createHarness(
   command = 'claude',
   contextFilesAvailable = true,
   deferSpawn = false,
+  terminalCount = 1,
 ): Harness {
   const writes: string[] = []
   const contextBodies: string[] = []
@@ -161,6 +162,7 @@ function createHarness(
         : ['--dangerously-skip-permissions'],
     cwd: '/tmp',
     initialText,
+    terminalCount,
   })
 
   return {
@@ -197,6 +199,31 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
   afterEach(() => {
     harness?.store.clear()
+  })
+
+  it('cria o xterm compacto quando o canvas já tem dez terminais', () => {
+    harness = createHarness('', 'claude', true, false, 10)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
+      limit: 5_000,
+      outputLines: 0,
+      historyTruncated: false,
+      replayLimitChars: 200_000,
+    })
+  })
+
+  it('marca quando a saída ultrapassa o buffer visual compacto', async () => {
+    harness = createHarness('', 'claude', true, false, 10)
+    const output = `${Array.from({ length: 5_001 }, (_, index) => `output-${index}`).join('\r\n')}\r\n`
+
+    harness.feed(output)
+    await wait(50)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
+      limit: 5_000,
+      outputLines: 5_001,
+      historyTruncated: true,
+    })
   })
 
   it('não escreve enquanto a CLI só emitiu sequências de escape', async () => {

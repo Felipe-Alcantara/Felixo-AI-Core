@@ -112,7 +112,7 @@
 
       function makeLine(sessionIndex, lineIndex, lineWidth, longPromptChars, longEvery) {
         if (longPromptChars > 0 && lineIndex % longEvery === 0) {
-          return `session-${sessionIndex} prompt-${lineIndex} ${'p'.repeat(longPromptChars)}`
+          return `session-${sessionIndex} output-${lineIndex} ${'p'.repeat(longPromptChars)}`
         }
 
         const prefix = `session-${sessionIndex} output-${lineIndex} `
@@ -202,6 +202,53 @@
         const startedAt = performance.now()
         for (const { terminal } of terminals) terminal.dispose()
         return performance.now() - startedAt
+      }
+
+      function readLineMarkers(terminal, sessionIndex) {
+        const markers = new Set()
+        const pattern = new RegExp(`session-${sessionIndex} output-(\\d+)`, 'g')
+        const buffer = terminal.buffer.active
+        for (let row = 0; row < buffer.length; row += 1) {
+          const line = buffer.getLine(row)
+          const text = line?.translateToString(true) ?? ''
+          for (const match of text.matchAll(pattern)) {
+            markers.add(Number(match[1]))
+          }
+        }
+        return [...markers].filter(Number.isFinite).sort((a, b) => a - b)
+      }
+
+      function inspectLineIntegrity(terminal, sessionIndex, expectedLines, firstExpectedLine = 0) {
+        const markers = readLineMarkers(terminal, sessionIndex)
+        const expectedLastLine = Math.max(firstExpectedLine, firstExpectedLine + expectedLines - 1)
+        const lastRetainedLine = markers.length ? markers[markers.length - 1] : null
+        const firstRetainedLine = markers.length ? markers[0] : null
+        let contiguousTailLines = 0
+        if (lastRetainedLine === expectedLastLine) {
+          const markerSet = new Set(markers)
+          for (let line = expectedLastLine; line >= firstExpectedLine && markerSet.has(line); line -= 1) {
+            contiguousTailLines += 1
+          }
+        }
+
+        const contiguousTailStart = expectedLastLine - contiguousTailLines + 1
+        const unexpectedGap = contiguousTailLines > 0 && markers.some(
+          (line) => line >= firstExpectedLine && line < contiguousTailStart,
+        )
+
+        return {
+          sessionIndex,
+          expectedLastLine,
+          firstRetainedLine,
+          lastRetainedLine,
+          retainedMarkerCount: markers.length,
+          contiguousTailLines,
+          outputComplete: lastRetainedLine === expectedLastLine && contiguousTailLines > 0,
+          // A marker before the contiguous suffix means a line disappeared in
+          // the middle of the buffer. Markers before the expected first line
+          // are ignored because visual rollover is intentional.
+          unexpectedGap,
+        }
       }
 
       async function runScenario(options) {
@@ -305,7 +352,19 @@
         const heapAfterStream = heapSnapshot()
 
         const retainedRows = terminals.map(({ terminal }) => terminal.buffer.active.length)
+        const lineIntegrity = terminals.map(({ terminal }, index) =>
+          inspectLineIntegrity(terminal, index, linesPerTerminal),
+        )
+        const markersBeforeDetach = terminals.map(({ terminal }, index) =>
+          readLineMarkers(terminal, index).join(','),
+        )
         const detachAttachMs = await detachAndAttach(terminals)
+        const markersAfterDetach = terminals.map(({ terminal }, index) =>
+          readLineMarkers(terminal, index).join(','),
+        )
+        const detachAttachPreserved = markersBeforeDetach.every(
+          (markers, index) => markers === markersAfterDetach[index],
+        )
         const closeMs = disposeTerminals(terminals)
         terminals.length = 0
 
@@ -335,6 +394,9 @@
         await sleep(25)
         const resumeMs = performance.now() - resumeStartedAt
         const resumedRows = resumed.map(({ terminal }) => terminal.buffer.active.length)
+        const resumeIntegrity = resumed.map(({ terminal }, index) =>
+          inspectLineIntegrity(terminal, index, replayLines, linesPerTerminal - replayLines),
+        )
         const resumedCloseMs = disposeTerminals(resumed)
         resumed.length = 0
         clearHosts()
@@ -355,7 +417,10 @@
           replayLines,
           linesWritten,
           retainedRows,
+          lineIntegrity,
+          detachAttachPreserved,
           resumedRows,
+          resumeIntegrity,
           firstOutputMs: summarize(firstOutputMs),
           writeMs: summarize(writeDurations),
           frameMs: frameSummary,

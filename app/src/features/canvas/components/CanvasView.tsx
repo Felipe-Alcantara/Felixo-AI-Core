@@ -937,6 +937,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const renderedNodes = useMemo(() => {
     const { reuseData, commit } = createNodeDataReuse(nodeDataCache)
     const terminalOrder = countTerminalOrder(nodes)
+    const terminalCount = terminalOrder.size
 
     const rendered = nodes.map((node) => {
       const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
@@ -1036,6 +1037,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               resumeAgentSession,
               isDirectOpenia,
               terminalIndex,
+              terminalCount,
             ],
             () => ({
               ...node.data,
@@ -1047,6 +1049,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
               initialTextReady,
               resumeAgentSession,
               terminalIndex,
+              terminalCount,
               onExpand: openTerminal,
               onDetails: setDetailsTerminalId,
               onSessionStarted: (nodeId: string, startedAt: number) =>
@@ -1655,6 +1658,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         accountId?: string
         providerId?: string
         agentSession?: AgentSessionReference
+        terminalCount?: number
       }
     | undefined
   const expandedTitle = expandedNodeData?.label ?? 'Terminal'
@@ -1895,6 +1899,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             providerId: expandedNodeData?.providerId,
             agentSession: expandedNodeData?.agentSession,
             resumeAgentSession: expandedCanResumeAgentSession,
+            terminalCount: expandedNodeData?.terminalCount,
           }}
           onPassResponsibility={(transcript) =>
             setHandoff({ sourceId: expandedTerminalId, transcript })

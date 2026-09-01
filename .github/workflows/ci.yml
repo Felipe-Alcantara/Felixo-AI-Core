@@ -134,6 +134,28 @@ jobs:
       - name: Test frontend
         run: npm run test:frontend
 
+      # O scrollback adaptativo só pode ser habilitado depois de medir a
+      # combinação real Electron + xterm + PTY nos três runners. O check usa
+      # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
+      # contra o baseline fixo de 20k. Linux precisa do display virtual; os
+      # outros dois runners abrem a mesma janela Electron nativamente.
+      - name: Benchmark terminal scrollback policy
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+          else
+            npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+          fi
+
+      - name: Upload terminal scrollback benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-scrollback-${{ matrix.os }}
+          path: app/terminal-scrollback-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
       - name: Lint
         run: npm run lint
 

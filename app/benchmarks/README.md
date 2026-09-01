@@ -8,9 +8,16 @@ terminais abertos:
 - `renderer-xterm`: buffers visuais xterm, escrita, frames, long tasks,
   attach/detach, fechamento e replay de resume.
 
-O histórico visual do xterm não é o mesmo que o replay persistido pelo processo
+O histórico visual do xterm não é o mesmo que o replay em memória do processo
 principal. Hoje o manager mantém até 200.000 caracteres para reanexar uma
-sessão, enquanto cada xterm nasce com `TERMINAL_SCROLLBACK = 20_000` linhas.
+sessão. O xterm usa 20.000 linhas até 9 terminais e 5.000 linhas quando um
+canvas já tem 10 ou mais terminais; o limite é escolhido quando a sessão nasce
+e não muda depois, para nunca apagar histórico existente silenciosamente.
+
+Quando o buffer visual rola além do limite, o terminal informa isso no cartão e
+na gaveta. Fechar e reabrir a sessão reaplica o replay vivo que o processo
+principal ainda mantém (até 200.000 caracteres); as ações Copiar e Handoff
+continuam deliberadamente limitadas ao trecho visual atualmente disponível.
 
 ## Como executar
 
@@ -27,6 +34,18 @@ xvfb-run -a npm run benchmark:terminal -- \
   --counts=1,5,10,20 --scrollbacks=5000,20000 \
   --lines=128 --native-lines=128 --check
 ```
+
+O `--check` padrão mede também a política adaptativa: compara o baseline fixo
+de 20.000 com o limite compacto nos cenários de 10 e 20 sessões. Além de
+contagem e resume, o check lê marcadores de identidade no xterm, verifica que o
+trecho final é contíguo e confirma que attach/detach não o modifica. Para
+validar o ganho de memória, use pelo menos uma carga maior que o limite
+compacto, por exemplo `--lines=8000`.
+
+No CI, o mesmo comando roda nos três runners suportados. Linux usa `xvfb-run`;
+Windows e macOS abrem o Electron nativamente. Os JSONs são publicados como
+artefatos do job para comparar p95 de RSS do renderer, latência de resume e
+qualquer diferença de retenção entre sistemas.
 
 Os limites das opções são deliberados: a bancada não aceita mais de 20
 sessões, 50.000 linhas de scrollback ou 30.000 linhas por sessão. A coleta de
@@ -72,18 +91,18 @@ processos Electron observados. Replay é agregado para todas as sessões.
 
 ## Decisão
 
-O limite de 20.000 permanece como contrato padrão. Ele preserva mais contexto
-para leitura e resume; reduzir globalmente para 5.000 diminuiria o custo, mas
-também faria o terminal perder 3.105 linhas visuais por sessão neste cenário.
-Os dados justificam investigar uma política adaptativa para 10 ou mais sessões,
-mas não justificam aplicá-la silenciosamente: ainda é preciso decidir o que a
-UI deve mostrar quando um terminal antigo fica fora do buffer e validar a
-restauração com sessões reais.
+A política adaptativa foi aplicada com 20.000 linhas para 1–9 terminais e
+5.000 linhas a partir de 10. O resultado do baseline anterior mostra por que a
+mudança é limitada ao cenário de carga: com 20 sessões, 5k reduziu o heap do
+renderer de 264,0 para 167,2 MiB e o RSS p95 do renderer de 663,1 para 557,1
+MiB, ao custo de 3.105 linhas visuais por terminal. A política conserva os
+20k em canvases pequenos e evita redimensionar sessões já iniciadas.
 
-Por isso este change centraliza o limite, cobre-o com teste e deixa o benchmark
-com `--check` como regressão reproduzível. Uma futura alteração adaptativa deve
-ser comparada contra este baseline e preservar input, output, foco, resize,
-fila de escrita, attach/detach e resume.
+O aceite só considera a política válida quando o `--check` comprova, no
+runner de cada SO, saída final completa, suffix contíguo, attach/detach
+preservado, resume não vazio, ausência de regressão de resume e ganho de RSS
+nos cenários de 10/20 sessões. Se um SO falhar esse contrato, o artefato
+adaptativo não deve ser habilitado naquele release.
 
 ## Benchmark do scanner do Fetch All
 

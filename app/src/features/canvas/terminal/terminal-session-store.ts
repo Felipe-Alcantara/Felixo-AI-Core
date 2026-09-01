@@ -61,7 +61,11 @@ import {
   looksLikeApprovalPrompt,
   readInputLineState,
 } from './terminal-screen-state'
-import { TERMINAL_SCROLLBACK } from './terminal-scrollback'
+import {
+  TERMINAL_REPLAY_BUFFER_CHARS,
+  terminalScrollbackForSessionCount,
+  type TerminalScrollbackStatus,
+} from './terminal-scrollback'
 
 /**
  * Activity derived from the output stream:
@@ -84,6 +88,8 @@ export type SessionSnapshot = {
   activity: SessionActivity
   /** Last lines of output, for the collapsed card preview. */
   previewLines: string[]
+  /** The actual visual-buffer limit and rollover state for this session. */
+  scrollback?: TerminalScrollbackStatus
   exitCode?: number
   message?: string
   /** File delivery failed; the session used the old inline fallback. */
@@ -212,6 +218,8 @@ type SessionOptions = {
   agentSession?: AgentSessionReference
   resumeAgentSession?: boolean
   onAgentSession?: (reference: AgentSessionReference) => void
+  /** Render-time total; never persisted in the canvas node. */
+  terminalCount?: number
 }
 
 type LinkMenuActions = {
@@ -307,6 +315,8 @@ type Session = {
   disposed: boolean
   startedAt: number
   receivedOutput: boolean
+  /** Logical line feeds received; used only to explain visual rollover. */
+  outputLineCount: number
   /**
    * A CLI já desenhou algo, não apenas emitiu bytes.
    *
@@ -393,6 +403,30 @@ type Session = {
   claudeBypassHandled: boolean
 }
 
+function countLineFeeds(data: string): number {
+  return (String(data).match(/\n/g) ?? []).length
+}
+
+function readScrollbackStatus(
+  terminal: Terminal,
+  outputLines: number,
+): TerminalScrollbackStatus {
+  const limit = Math.max(0, Math.floor(Number(terminal.options.scrollback) || 0))
+  const buffer = terminal.buffer.active
+
+  return {
+    retainedRows: buffer.length,
+    outputLines,
+    limit,
+    // Count logical output lines rather than `baseY`: xterm reaches a baseY of
+    // `scrollback` even when wrapped rows still fit exactly, which would show a
+    // false warning at the boundary. Agent output is line-oriented, and this
+    // conservative signal avoids claiming that the limit was exceeded early.
+    historyTruncated: outputLines > limit,
+    replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
+  }
+}
+
 /**
  * Owns terminal sessions independently of any React component, so a terminal
  * keeps running while its card is collapsed. The xterm DOM element is moved
@@ -432,10 +466,11 @@ export class TerminalSessionStore {
     const terminal = new Terminal({
       convertEol: false,
       cursorBlink: true,
-      // HMR/navigation can recreate the renderer while the Electron PTY keeps
-      // running. A generous scrollback lets the replacement renderer restore
-      // enough context for both review and responsibility handoff.
-      scrollback: TERMINAL_SCROLLBACK,
+      // A canvas with 10+ terminals gets the compact candidate. The decision is
+      // made once per xterm: changing this option later would discard old rows.
+      scrollback: terminalScrollbackForSessionCount(
+        options.terminalCount ?? this.sessions.size + 1,
+      ),
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       fontSize: 13,
@@ -494,7 +529,12 @@ export class TerminalSessionStore {
       terminal,
       fitAddon,
       listeners: this.listeners.get(id) ?? new Set(),
-      snapshot: { activity: 'starting', previewLines: [], generation },
+      snapshot: {
+        activity: 'starting',
+        previewLines: [],
+        scrollback: readScrollbackStatus(terminal, 0),
+        generation,
+      },
       idleTimer: null,
       offData: () => {},
       offExit: () => {},
@@ -502,6 +542,7 @@ export class TerminalSessionStore {
       disposed: false,
       startedAt: options.startedAt ?? Date.now(),
       receivedOutput: false,
+      outputLineCount: 0,
       paintedOutput: false,
       pendingWrites: 0,
       command: options.command,
@@ -546,6 +587,7 @@ export class TerminalSessionStore {
     session.offData = pty.onData((event) => {
       if (event.sessionId === session.ptySessionId) {
         session.receivedOutput ||= event.data.length > 0
+        session.outputLineCount += countLineFeeds(event.data)
         session.pendingWrites += 1
         this.handleCodexTrustPrompt(session, event.data)
         this.handleClaudeBypassWarning(session, event.data)
@@ -554,6 +596,10 @@ export class TerminalSessionStore {
           if (session.disposed) {
             return
           }
+
+          // Publish the rollover marker only when its state changes. Retaining
+          // metadata must not turn every PTY chunk into a React render.
+          this.syncScrollbackStatus(session)
 
           if (session.pendingWrites === 0 && session.pendingExit) {
             const pendingExit = session.pendingExit
@@ -1416,6 +1462,7 @@ export class TerminalSessionStore {
       activity: silentEarlyExit ? 'error' : 'exited',
       exitCode: event.exitCode,
       message,
+      scrollback: readScrollbackStatus(session.terminal, session.outputLineCount),
     })
   }
 
@@ -1457,7 +1504,10 @@ export class TerminalSessionStore {
         // that looks like a decision/approval screen gets its own state so
         // it's visually distinct from "finished a turn, ready for more".
         const activity = looksLikeApprovalPrompt(viewport) ? 'waiting_approval' : 'idle'
-        this.update(session, { activity })
+        this.update(session, {
+          activity,
+          scrollback: readScrollbackStatus(session.terminal, session.outputLineCount),
+        })
       } else {
         this.scheduleIdleCheck(session)
       }
@@ -1861,6 +1911,26 @@ export class TerminalSessionStore {
       listener(session.snapshot)
     }
     this.notifyAll()
+  }
+
+  /**
+   * Publishes the rollover marker at most once per state transition. Keeping
+   * `retainedRows` current during the idle transition is enough for the UI;
+   * while a CLI is streaming, React should continue to receive only activity
+   * transitions and not one update per output chunk.
+   */
+  private syncScrollbackStatus(session: Session): void {
+    const next = readScrollbackStatus(session.terminal, session.outputLineCount)
+    const previous = session.snapshot.scrollback
+    if (
+      previous &&
+      previous.limit === next.limit &&
+      previous.historyTruncated === next.historyTruncated
+    ) {
+      return
+    }
+
+    this.update(session, { scrollback: next })
   }
 
   private notifyAll(): void {

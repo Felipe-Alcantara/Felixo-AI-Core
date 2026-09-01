@@ -22,6 +22,7 @@ import {
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import type { SessionActivity } from '../terminal/terminal-session-store'
+import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
 import { repositoryLabel } from '../services/repository-grouping'
 import type { TerminalNodeData } from '../types'
 import {
@@ -77,6 +78,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       providerId: nodeData.providerId,
       agentSession: nodeData.agentSession,
       resumeAgentSession: nodeData.resumeAgentSession,
+      terminalCount: nodeData.terminalCount,
       onAgentSession: (reference) => onAgentSession?.(id, reference),
       onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
@@ -95,6 +97,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.providerId,
     nodeData.agentSession,
     nodeData.resumeAgentSession,
+    nodeData.terminalCount,
     onAgentSession,
     onOpenWebpage,
     nodeData.sessionStartedAt,
@@ -109,6 +112,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const repository = repositoryLabel(nodeData.cwd)
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
+  const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
   const isLive = activity !== 'exited' && activity !== 'error'
   const canResume = canResumeAgentSession(
     nodeData.command,
@@ -132,6 +136,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       providerId: nodeData.providerId,
       agentSession: nodeData.agentSession,
       resumeAgentSession: canResume,
+      terminalCount: nodeData.terminalCount,
       onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),
       onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
@@ -234,6 +239,15 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
             title={snapshot.contextWarning}
           >
             {snapshot.contextWarning}
+          </div>
+        )}
+        {scrollbackNotice && (
+          <div
+            role="status"
+            className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] leading-snug text-amber-200"
+            title={scrollbackNotice}
+          >
+            {scrollbackNotice}
           </div>
         )}
         <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">

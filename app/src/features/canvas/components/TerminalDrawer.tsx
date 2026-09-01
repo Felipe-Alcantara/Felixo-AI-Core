@@ -20,6 +20,7 @@ import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import type { AgentSessionReference } from '../services/agent-session'
+import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { drawerWidthLimit } from '../services/canvas-surfaces'
 import {
@@ -51,6 +52,8 @@ type TerminalDrawerProps = {
     providerId?: string
     agentSession?: AgentSessionReference
     resumeAgentSession?: boolean
+    /** Render-time total used only when this drawer creates a fresh xterm. */
+    terminalCount?: number
   }
   /**
    * Abre a escolha do agente que vai assumir o trabalho, levando o histórico
@@ -86,6 +89,7 @@ export function TerminalDrawer({
 }: TerminalDrawerProps) {
   const store = useTerminalSessions()
   const snapshot = useSessionSnapshot(sessionId)
+  const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
   const isLive = snapshot?.activity !== 'exited' && snapshot?.activity !== 'error'
   const restart = () => {
     if (isLive && !window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')) {
@@ -485,6 +489,11 @@ export function TerminalDrawer({
       {!collapsed && snapshot?.contextWarning && (
         <div className="border-b border-amber-500/20 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
           {snapshot.contextWarning}
+        </div>
+      )}
+      {!collapsed && scrollbackNotice && (
+        <div role="status" className="border-b border-amber-500/20 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+          {scrollbackNotice}
         </div>
       )}
       {!collapsed && handoffError && (

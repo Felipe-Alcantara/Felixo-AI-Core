@@ -25,6 +25,10 @@ const { performance } = require('node:perf_hooks')
 
 const DEFAULT_COUNTS = [1, 5, 10, 20]
 const DEFAULT_SCROLLBACKS = [5_000, 20_000]
+const DEFAULT_POLICIES = ['current', 'adaptive']
+const CURRENT_SCROLLBACK = 20_000
+const DEFAULT_ADAPTIVE_SCROLLBACK = 5_000
+const DEFAULT_ADAPTIVE_THRESHOLD = 10
 const DEFAULT_LINES_PER_TERMINAL = 8_000
 const DEFAULT_NATIVE_LINES_PER_TERMINAL = 2_000
 const DEFAULT_ACTIVE_INTERVAL_MS = 4
@@ -66,6 +70,7 @@ function summarize(values) {
 
 function validateReport(report) {
   const failures = []
+  const currentBaselines = new Map()
   for (const result of report.results ?? []) {
     if (result.phase === 'native-pty') {
       if (result.timedOut) {
@@ -78,19 +83,94 @@ function validateReport(report) {
     }
 
     if (result.phase === 'renderer-xterm') {
+      const label = `renderer count=${result.count} scrollback=${result.scrollback}`
       if (result.linesWritten?.some((lineCount) => lineCount < result.linesPerTerminal)) {
-        failures.push(
-          `renderer count=${result.count} scrollback=${result.scrollback}: saída incompleta`,
-        )
+        failures.push(`${label}: saída incompleta`)
       }
       if (result.resumedRows?.some((rowCount) => rowCount <= 0)) {
-        failures.push(
-          `renderer count=${result.count} scrollback=${result.scrollback}: resume vazio`,
-        )
+        failures.push(`${label}: resume vazio`)
+      }
+      if (result.lineIntegrity?.some((entry) => !entry.outputComplete || entry.unexpectedGap)) {
+        failures.push(`${label}: identidade da saída perdida ou com lacuna inesperada`)
+      }
+      if (result.detachAttachPreserved === false) {
+        failures.push(`${label}: attach/detach alterou o trecho visível`)
+      }
+      if (result.resumeIntegrity?.some((entry) => !entry.outputComplete || entry.unexpectedGap)) {
+        failures.push(`${label}: resume perdeu o trecho final`)
+      }
+
+      if (result.policy === 'current' && result.scrollback === CURRENT_SCROLLBACK) {
+        currentBaselines.set(result.count, result)
       }
     }
   }
+
+  const scenario = report.scenario ?? {}
+  const adaptiveThreshold = Number.isFinite(scenario.adaptiveThreshold)
+    ? scenario.adaptiveThreshold
+    : DEFAULT_ADAPTIVE_THRESHOLD
+  const adaptiveScrollback = Number.isFinite(scenario.adaptiveScrollback)
+    ? scenario.adaptiveScrollback
+    : DEFAULT_ADAPTIVE_SCROLLBACK
+
+  for (const result of report.results ?? []) {
+    if (result.phase !== 'renderer-xterm' || result.policy !== 'adaptive') continue
+
+    const expectedScrollback = result.count >= adaptiveThreshold
+      ? adaptiveScrollback
+      : CURRENT_SCROLLBACK
+    if (result.scrollback !== expectedScrollback) {
+      failures.push(
+        `adaptive count=${result.count}: limite ${result.scrollback} não segue ${expectedScrollback}`,
+      )
+    }
+
+    // A reduced run with fewer than one compact buffer of output can validate
+    // integrity but cannot prove a memory gain. Full CI runs use 8k lines and
+    // enter this comparison for the 10/20-session cases.
+    const baseline = currentBaselines.get(result.count)
+    const candidateRendererP95 = result.rendererWorkingSetMiB?.p95
+    const baselineRendererP95 = baseline?.rendererWorkingSetMiB?.p95
+    if (
+      baseline &&
+      result.count >= adaptiveThreshold &&
+      result.linesPerTerminal >= adaptiveScrollback &&
+      Number.isFinite(candidateRendererP95) &&
+      Number.isFinite(baselineRendererP95) &&
+      candidateRendererP95 >= baselineRendererP95 * 0.95
+    ) {
+      failures.push(
+        `adaptive count=${result.count}: não reduziu o RSS p95 do renderer em pelo menos 5%`,
+      )
+    }
+
+    if (
+      baseline &&
+      Number.isFinite(baseline.resumeMs) &&
+      baseline.resumeMs > 0 &&
+      Number.isFinite(result.resumeMs) &&
+      result.resumeMs > baseline.resumeMs * 1.25
+    ) {
+      failures.push(`adaptive count=${result.count}: resume regrediu mais de 25%`)
+    }
+  }
+
   return failures
+}
+
+function parsePolicies(value) {
+  if (value === undefined || value === '') return [...DEFAULT_POLICIES]
+  const parsed = String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+
+  if (!parsed.length || parsed.some((item) => !DEFAULT_POLICIES.includes(item))) {
+    throw new Error(`policies deve conter apenas: ${DEFAULT_POLICIES.join(', ')}.`)
+  }
+
+  return [...new Set(parsed)]
 }
 
 function parsePositiveList(value, fallback, maximum, label) {
@@ -120,6 +200,9 @@ function parseArgs(argv = []) {
   const options = {
     counts: DEFAULT_COUNTS,
     scrollbacks: DEFAULT_SCROLLBACKS,
+    policies: DEFAULT_POLICIES,
+    adaptiveScrollback: DEFAULT_ADAPTIVE_SCROLLBACK,
+    adaptiveThreshold: DEFAULT_ADAPTIVE_THRESHOLD,
     linesPerTerminal: DEFAULT_LINES_PER_TERMINAL,
     nativeLinesPerTerminal: DEFAULT_NATIVE_LINES_PER_TERMINAL,
     activeIntervalMs: DEFAULT_ACTIVE_INTERVAL_MS,
@@ -153,6 +236,27 @@ function parseArgs(argv = []) {
           DEFAULT_SCROLLBACKS,
           MAX_SCROLLBACK,
           'scrollbacks',
+        )
+        break
+      case 'policies':
+        options.policies = parsePolicies(value)
+        break
+      case 'adaptive-scrollback':
+        options.adaptiveScrollback = parseBoundedNumber(
+          value,
+          DEFAULT_ADAPTIVE_SCROLLBACK,
+          1,
+          MAX_SCROLLBACK,
+          'adaptive-scrollback',
+        )
+        break
+      case 'adaptive-threshold':
+        options.adaptiveThreshold = parseBoundedNumber(
+          value,
+          DEFAULT_ADAPTIVE_THRESHOLD,
+          1,
+          MAX_COUNT,
+          'adaptive-threshold',
         )
         break
       case 'lines':
@@ -549,7 +653,7 @@ function attachRendererDiagnostics(window) {
   })
 }
 
-async function benchmarkRendererScenario({ app, window, count, scrollback, ...options }) {
+async function benchmarkRendererScenario({ app, window, count, scrollback, policy, ...options }) {
   await executeRenderer(window, 'collectGarbage', {})
   const memorySamples = []
   const sample = () => memorySamples.push(rendererProcessMetrics(app, window))
@@ -577,6 +681,7 @@ async function benchmarkRendererScenario({ app, window, count, scrollback, ...op
 
   return {
     phase: 'renderer-xterm',
+    policy,
     ...result,
     rendererWorkingSetMiB: summarize(
       memorySamples
@@ -600,11 +705,14 @@ function printHelp() {
 Opções:
   --counts=1,5,10,20       quantidades de sessões (máx. ${MAX_COUNT})
   --scrollbacks=5000,20000 limites visuais comparados (máx. ${MAX_SCROLLBACK})
+  --policies=current,adaptive políticas medidas (default: ambas)
+  --adaptive-scrollback=5000 limite da política adaptativa em 10+ sessões
+  --adaptive-threshold=10  quantidade que ativa o limite compacto
   --lines=8000             linhas por sessão (máx. ${MAX_LINES_PER_TERMINAL})
   --native-lines=2000     linhas por PTY nativo (máx. ${MAX_NATIVE_LINES_PER_TERMINAL})
   --native-drain-ms=2000  janela para drenar dados após o processo sair
   --out=arquivo.json       salva o envelope JSON nesse caminho
-  --check                  falha se houver saída nativa incompleta ou resume vazio
+  --check                  falha se houver perda, resume vazio ou regressão
   --help                   mostra esta ajuda
 
 Em Linux, execute com xvfb: xvfb-run -a npm run benchmark:terminal
@@ -677,15 +785,37 @@ async function run(argv = process.argv.slice(2)) {
       )
     }
 
-    for (const scrollback of options.scrollbacks) {
+    if (options.policies.includes('current')) {
+      for (const scrollback of options.scrollbacks) {
+        for (const count of options.counts) {
+          console.log(`[benchmark] renderer xterm policy=current count=${count} scrollback=${scrollback}`)
+          results.push(
+            await benchmarkRendererScenario({
+              app,
+              window,
+              count,
+              scrollback,
+              policy: 'current',
+              ...options,
+            }),
+          )
+        }
+      }
+    }
+
+    if (options.policies.includes('adaptive')) {
       for (const count of options.counts) {
-        console.log(`[benchmark] renderer xterm count=${count} scrollback=${scrollback}`)
+        const scrollback = count >= options.adaptiveThreshold
+          ? options.adaptiveScrollback
+          : CURRENT_SCROLLBACK
+        console.log(`[benchmark] renderer xterm policy=adaptive count=${count} scrollback=${scrollback}`)
         results.push(
           await benchmarkRendererScenario({
             app,
             window,
             count,
             scrollback,
+            policy: 'adaptive',
             ...options,
           }),
         )
@@ -714,6 +844,9 @@ async function run(argv = process.argv.slice(2)) {
     scenario: {
       counts: options.counts,
       scrollbacks: options.scrollbacks,
+      policies: options.policies,
+      adaptiveScrollback: options.adaptiveScrollback,
+      adaptiveThreshold: options.adaptiveThreshold,
       linesPerTerminal: options.linesPerTerminal,
       nativeLinesPerTerminal: options.nativeLinesPerTerminal,
       activeIntervalMs: options.activeIntervalMs,
@@ -771,13 +904,18 @@ if (process.versions.electron && process.type === 'browser') {
 
 module.exports = {
   DEFAULT_COUNTS,
+  DEFAULT_POLICIES,
   DEFAULT_SCROLLBACKS,
+  DEFAULT_ADAPTIVE_SCROLLBACK,
+  DEFAULT_ADAPTIVE_THRESHOLD,
+  CURRENT_SCROLLBACK,
   MAX_COUNT,
   MAX_LINES_PER_TERMINAL,
   MAX_NATIVE_LINES_PER_TERMINAL,
   MAX_SCROLLBACK,
   buildEmitterCode,
   parseArgs,
+  parsePolicies,
   percentile,
   summarize,
   validateReport,

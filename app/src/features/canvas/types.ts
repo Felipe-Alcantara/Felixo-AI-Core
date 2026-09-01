@@ -111,6 +111,11 @@ export type TerminalNodeData = {
    * terminals open/close — never a stored, ever-growing counter.
    */
   terminalIndex?: number
+  /**
+   * Render-time total used by the adaptive scrollback policy; never persisted.
+   * Existing sessions keep the limit selected when they were created.
+   */
+  terminalCount?: number
 }
 
 /**
