@@ -66,7 +66,11 @@ let finalizado = false
 function finalizar() {
   if (finalizado) return
   finalizado = true
-  fs.writeFileSync(destino, entrada, 'utf8')
+  // Ctrl-Z/Enter pode deixar CRs de confirmação no buffer do ConPTY. Eles
+  // pertencem ao protocolo de término, não à carga que estamos conferindo.
+  const conteudo =
+    process.platform === 'win32' ? entrada.replace(/\r+$/g, '') : entrada
+  fs.writeFileSync(destino, conteudo, 'utf8')
   if (
     process.platform === 'win32' &&
     process.stdin.isTTY &&
