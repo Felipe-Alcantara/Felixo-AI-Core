@@ -421,7 +421,9 @@ de PTY nativa: ele inicia fixtures reais
 no runner atual e valida a fila de escrita, EOF, Unicode e a consulta
 interativa `/status` do Claude. A matriz do CI executa esse mesmo gate em
 Linux, macOS e Windows/ConPTY; incompatibilidade de shell ou do addon nativo
-falha com diagnóstico no log, em vez de ser ocultada por `skip`.
+falha com diagnóstico no log, em vez de ser ocultada por `skip`. O comando
+serializa as fixtures para não criar uma disputa artificial entre múltiplos
+handles ConPTY no mesmo runner.
 
 Launcher (`start_app.py`) — não precisa de Node nem de dependências instaladas:
 

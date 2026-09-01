@@ -243,7 +243,9 @@ O comando de integração de PTY deve ser executado no sistema que se quer
 validar: Linux usa o launch direto, macOS o shell de login e Windows o
 `cmd.exe` com ConPTY. As fixtures não usam credenciais nem rede e falham com
 diagnóstico explícito quando o shell ou `node-pty` não é compatível; não se
-deve transformar essa cobertura em `skip` por plataforma.
+deve transformar essa cobertura em `skip` por plataforma. O runner usa
+concorrência 1 para manter uma única fixture nativa ativa por vez; isso evita
+disputa artificial entre handles ConPTY sem reduzir a cobertura dos três SOs.
 
 Exemplos:
 - `cli-detector.cjs` → `cli-detector.test.cjs`
