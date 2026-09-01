@@ -55,6 +55,11 @@ function createFakePty() {
   return { fakePty, spawnPty, calls }
 }
 
+const fakePosixPlatform = {
+  name: 'linux',
+  getDefaultShell: () => '/bin/bash',
+}
+
 test('preserva a causa original quando a fábrica nativa da PTY falha', () => {
   const nativeError = new Error('node-pty: dlopen failed for arm64')
   const manager = new PtyProcessManager({
@@ -503,7 +508,7 @@ test('Windows keeps the terminal usable with a clean shell after every Codex fal
 
 test('force kill terminates immediately and drops the session', () => {
   const { fakePty, spawnPty } = createFakePty()
-  const manager = new PtyProcessManager({ spawnPty })
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
 
   manager.spawn('term-6', {})
   assert.equal(manager.kill('term-6', { force: true }), true)
@@ -529,7 +534,7 @@ test('Windows force kill omits the unsupported signal and drops the session', ()
 
 test('graceful kill sends SIGTERM but keeps the session until exit', () => {
   const { fakePty, spawnPty } = createFakePty()
-  const manager = new PtyProcessManager({ spawnPty })
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
 
   manager.spawn('term-7', {})
   assert.equal(manager.kill('term-7'), true)
@@ -597,7 +602,7 @@ test('re-spawning the same id replaces the previous session', () => {
     spawnCount += 1
     return (spawnCount === 1 ? first : second).spawnPty(...callArgs)
   }
-  const manager = new PtyProcessManager({ spawnPty })
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
 
   manager.spawn('term-9', {})
   manager.spawn('term-9', {})
