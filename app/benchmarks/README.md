@@ -249,3 +249,45 @@ painel pronto. A variação do p50 do menu é a animação fixa de 620 ms somada
 jitter de criação de processos; o p95 melhorou, e o caminho comum do canvas
 teve a redução principal no startup. O build final termina sem o aviso de chunk
 JavaScript acima de 500 kB.
+
+## Benchmark do typecheck
+
+Os projetos TypeScript do renderer usam `noEmit`, mas ainda precisam manter o
+typecheck completo. Sem `incremental: true`, o `tsc -b` gerava `.tsbuildinfo`
+mas considerava `src/App.js` e `vite.config.js` ausentes em toda execução,
+reabrindo os dois programas. Os tsconfigs agora declaram o incremental
+explicitamente, então o build mode reconhece o próprio `.tsbuildinfo` como
+saída observável e pula projetos sem entradas alteradas.
+
+Comandos:
+
+```bash
+npm run typecheck                  # caminho incremental usado pelo build
+npm run typecheck:full             # auditoria forçada dos dois projetos
+npm run benchmark:typecheck:check  # cinco frias + cinco incrementais
+```
+
+O benchmark executa o `tsc -b app/tsconfig.json` real, move somente caches
+próprios para um diretório temporário ao preparar cada amostra fria e mede
+tempo de parede e pico de RSS durante o processo. `--check` exige cinco
+amostras completas e código de saída zero; em plataformas sem consulta de RSS,
+o relatório informa `null` em vez de estimar memória.
+
+### Resultado reproduzível em 01/09/2026
+
+Linux x64, Node 25.9.0, TypeScript 6.0.3, cinco amostras por modo, percentil
+linear. O baseline foi medido com o mesmo `tsc -b` antes de declarar
+`incremental: true`; a versão atual mantém `noEmit`, `skipLibCheck`,
+`noUnusedLocals`, `noUnusedParameters` e os mesmos includes.
+
+| Modo | Baseline p50/p95 | Atual p50/p95 | RSS baseline p50/p95 | RSS atual p50/p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Frio | 51,41 / 54,67 s | 52,60 / 54,24 s | 673.060 / 683.753 KiB | 662.904 / 668.941 KiB |
+| Sem mudança (incremental) | 54,96 / 58,01 s | 0,80 / 0,93 s | 674.420 / 682.664 KiB | 72.364 / 72.650 KiB |
+
+O caminho repetido ficou aproximadamente 98,5% mais rápido e 89,3% menor em
+RSS. A execução fria não foi artificialmente acelerada nem deixou de validar
+tipos: o tempo p50 variou 2,3% dentro da medição local, o p95 caiu 0,8% e o
+RSS caiu 1,5% no p50 e 2,2% no p95. Quando uma verificação limpa for necessária,
+`npm run typecheck:full` usa `--force`; o CI e o build normal usam o cache
+seguro, sem `noCheck`, exclusões novas ou permissões mais frouxas.

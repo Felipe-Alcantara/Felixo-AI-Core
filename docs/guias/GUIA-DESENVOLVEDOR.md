@@ -108,7 +108,10 @@ Felixo-AI-Core/
 |---------|-----------|-----------|
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas Vite com limpeza coordenada |
-| `npm run build` | app/ | Compila TypeScript + Vite |
+| `npm run typecheck` | app/ | Executa `tsc -b` incremental nos projetos app/node |
+| `npm run typecheck:full` | app/ | Força o typecheck completo dos dois projetos |
+| `npm run build` | app/ | Typecheck incremental + Vite |
+| `npm run benchmark:typecheck:check` | app/ | Compara cinco execuções frias e cinco incrementais |
 | `npm run benchmark:bundle:check` | app/ | Mede o bundle de produção no Electron e valida chunks/assets |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run test:frontend` | app/ | Roda a suíte Vitest do renderer |
@@ -240,6 +243,34 @@ por `npm run test:native`.
 
 Convenção de arquivos: `*.test.cjs` no mesmo diretório do módulo.
 
+### Typecheck e cache incremental
+
+`tsconfig.app.json` e `tsconfig.node.json` mantêm o typecheck completo, mas
+declaram `incremental: true` e gravam os diagnósticos em
+`node_modules/.tmp/tsconfig.*.tsbuildinfo`. O build oficial usa `npm run
+typecheck`, que chama `tsc -b` e permite ao build mode pular um projeto quando
+nenhuma entrada mudou. Isso é diferente de `noCheck`: erros de tipo continuam
+sendo diagnosticados em toda entrada alterada e o CI segue falhando em erro.
+
+Para uma auditoria limpa, sem confiar no cache:
+
+```bash
+cd app
+npm run typecheck:full
+```
+
+Para reproduzir a medição de tempo e memória:
+
+```bash
+cd app
+npm run benchmark:typecheck:check -- --out=/tmp/felixo-typecheck.json
+```
+
+O relatório separa cinco execuções frias de cinco sem mudanças, exibe p50/p95
+de tempo e RSS e valida que os dois projetos retornaram código zero. A bancada
+move apenas os caches que ela mesma controla para `/tmp`; ela não remove código
+nem altera o escopo dos tsconfigs.
+
 O comando de integração de PTY deve ser executado no sistema que se quer
 validar: Linux usa o launch direto, macOS o shell de login e Windows o
 `cmd.exe` com ConPTY. As fixtures não usam credenciais nem rede e falham com
@@ -281,7 +312,10 @@ Windows e macOS com Python 3.9 e 3.13 e executa `start_app.py --help`. O job
 se houver advisory ou erro de coleta. O job `release-scripts` valida os
 scripts Bash usados na publicação. O job `validate` testa o app nos três
 sistemas com Node 22, `npm test`, `npm run lint` e `npm run build`, além de
-verificar os arquivos de documentação vigentes.
+verificar os arquivos de documentação vigentes. Como `npm run build` chama o
+typecheck incremental oficial, o CI reutiliza o cache quando o runner o tiver;
+uma auditoria forçada pode ser executada separadamente com
+`npm run typecheck:full` sem alterar o caminho de produção.
 
 ---
 

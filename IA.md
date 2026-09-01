@@ -3151,3 +3151,44 @@ macOS.
 
 Estado final: implementação e documentação concluídas; aguardando apenas o
 commit, push, CI/release e registro no Notion conforme o workflow do projeto.
+
+## Registro de Trabalho — 2026-09-01 (parte 25) — typecheck incremental
+
+PEDIDO: reduzir o tempo e a memória do typecheck do build do Felixo AI Core,
+sem relaxar a segurança de tipos, e deixar o resultado reproduzível para
+desenvolvimento local e CI.
+
+DIAGNÓSTICO: `tsconfig.app.json` e `tsconfig.node.json` tinham
+`tsBuildInfoFile`, mas não `incremental`. Como os dois projetos usam `noEmit`,
+o `tsc -b` considerava `src/App.js` e `vite.config.js` ausentes e reabria o
+programa inteiro em cada execução. Cinco runs frios do baseline ficaram em
+51,41/54,67 s p50/p95 e 673.060/683.753 KiB de RSS; cinco repetições que
+deveriam ser incrementais ficaram em 54,96/58,01 s e 674.420/682.664 KiB.
+
+IMPLEMENTAÇÃO:
+
+- `incremental: true` foi declarado nos dois tsconfigs, sem mudar includes,
+  `noEmit`, `skipLibCheck`, `noUnused*`, resolução de módulos ou regras de
+  diagnóstico.
+- `npm run build` continua usando `tsc -b` + Vite; `npm run typecheck` expõe o
+  caminho incremental e `npm run typecheck:full` força a auditoria completa.
+- `typecheck-performance.cjs` executa o `tsc -b` oficial, move só os caches
+  próprios para preparar cada run frio, mede RSS durante o processo e falha
+  com `--check` se faltarem amostras ou houver erro.
+- `typecheck-performance.test.cjs` adiciona quatro regressões para argumentos,
+  percentis, resumo e falhas; o benchmark nunca usa `noCheck`.
+
+RESULTADO LOCAL: cinco frios atuais ficaram em 52,60/54,24 s p50/p95 e
+662.904/668.941 KiB; cinco incrementais ficaram em 0,80/0,93 s e
+72.364/72.650 KiB. O caminho repetido caiu aproximadamente 98,5% em tempo e
+89,3% em RSS; o cold manteve a parede dentro da variância e reduziu memória.
+
+DOCUMENTAÇÃO: atualizados `app/benchmarks/README.md`,
+`docs/guias/GUIA-DESENVOLVEDOR.md`, `docs/projeto/RODAR-VIA-CODIGO-FONTE.md`,
+`docs/projeto/ARQUITETURA.md`, `docs/projeto/ROADMAP.md` e a própria IA.
+
+VALIDAÇÃO: `npm run typecheck:full`, `npm run build`, `npm test` (943/943),
+`npm run test:frontend` (734 + 1 skip), `npm run test:native` (5/5),
+`npm run lint` sem erros, `npm run pack`, smoke Linux e `git diff --check`
+passaram. A etapa seguinte é commit, push, CI/release multi-SO e registro da
+task como concluída no Notion.

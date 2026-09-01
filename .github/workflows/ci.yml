@@ -119,6 +119,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # O cache contém somente os tsbuildinfo do renderer. O tsc valida os
+      # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
+      # mudança de código nunca transforma um resultado antigo em verde.
+      - name: Restore TypeScript incremental cache
+        uses: actions/cache@v4
+        with:
+          path: app/node_modules/.tmp
+          key: typecheck-${{ runner.os }}-${{ hashFiles('app/package-lock.json', 'app/tsconfig*.json') }}
+          restore-keys: |
+            typecheck-${{ runner.os }}-
+
       - name: Test
         run: npm test
 

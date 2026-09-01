@@ -36,6 +36,21 @@ O processo principal continua responsável por processos, arquivos, Git,
 contas, banco e IPC. O renderer compõe a interface e não recebe acesso direto
 ao Node. O preload expõe somente os contratos necessários em `window.felixo`.
 
+## Typecheck e fronteiras de build
+
+O renderer é validado por dois projetos TypeScript referenciados: o projeto
+`app` inclui `src` com os tipos DOM/Vite, e o projeto `node` inclui somente
+`vite.config.ts` com os tipos Node. Ambos usam `noEmit`, `skipLibCheck` e as
+regras de uso seguro de tipos, e gravam o diagnóstico incremental em
+`node_modules/.tmp/tsconfig.*.tsbuildinfo`.
+
+O comando de build continua chamando `tsc -b` antes do Vite. A opção
+`incremental` explícita permite ao build mode reconhecer o `.tsbuildinfo` como
+saída observável mesmo sem emitir JavaScript; uma execução sem mudança salta
+os projetos e libera o heap do compilador. `npm run typecheck:full` usa
+`--force` para reproduzir uma verificação limpa quando necessário. Nenhuma
+fonte é excluída e o caminho incremental não usa `noCheck`.
+
 ## Autorizacao de caminhos locais
 
 Uma pasta de projeto so entra no banco depois de ser escolhida no seletor nativo

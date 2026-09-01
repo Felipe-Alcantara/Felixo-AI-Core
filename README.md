@@ -409,12 +409,18 @@ Aplicação:
 
 ```bash
 cd app
+npm run typecheck
 npm test
 npm run test:native
 npm run test:frontend
 npm run lint
 npm run build
 ```
+
+`npm run typecheck` usa o cache incremental do `tsc -b` sem relaxar a
+verificação. Para uma auditoria limpa dos dois projetos TypeScript, use
+`npm run typecheck:full`; para comparar cinco execuções frias e cinco
+incrementais, use `npm run benchmark:typecheck:check`.
 
 `npm test` executa os testes Node unitários; o segundo comando é o gate explícito
 de PTY nativa: ele inicia fixtures reais

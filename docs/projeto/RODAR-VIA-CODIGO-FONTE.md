@@ -108,7 +108,10 @@ npm run dev:web
 | `python3 start_app.py --skip-install` | raiz | **Atalho sem menu**: pula instalação de deps |
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas o Vite dev server com limpeza coordenada |
-| `npm run build` | app/ | Compila TypeScript + Vite bundle |
+| `npm run typecheck` | app/ | Executa `tsc -b` incremental nos projetos app/node |
+| `npm run typecheck:full` | app/ | Força o typecheck completo, ignorando o cache |
+| `npm run build` | app/ | Typecheck incremental + Vite bundle |
+| `npm run benchmark:typecheck:check` | app/ | Mede cinco runs frios e cinco incrementais do typecheck |
 | `npm run benchmark:bundle:check` | app/ | Mede startup/menu no bundle e valida chunks relativos no Electron |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run test:frontend` | app/ | Roda os testes Vitest do renderer |
@@ -117,6 +120,27 @@ npm run dev:web
 | `npm run dist:linux` | app/ | Gera instaladores Linux |
 | `npm run dist:mac` | app/ | Gera instaladores macOS |
 | `npm run dist:win` | app/ | Gera instaladores Windows |
+
+### Typecheck incremental
+
+O renderer continua sendo validado pelos dois projetos referenciados:
+`tsconfig.app.json` cobre `src` e `tsconfig.node.json` cobre
+`vite.config.ts`. Ambos mantêm `noEmit`, `skipLibCheck` e as regras de uso
+seguro de tipos, mas agora declaram `incremental: true`. O `tsc -b` consegue
+assim observar os arquivos `.tsbuildinfo` e não reprocessar projetos sem
+entradas alteradas.
+
+```bash
+cd app
+npm run typecheck                 # usado por npm run build
+npm run typecheck:full            # força os dois projetos
+npm run benchmark:typecheck:check # cinco frios + cinco incrementais
+```
+
+O benchmark mede tempo de parede e pico de RSS do comando real, valida cinco
+amostras de cada modo e move apenas seus próprios caches temporários. A
+otimização é de cache do compilador; ela não usa `noCheck`, não exclui fontes
+e não troca um typecheck por uma mera compilação Vite.
 
 ### Ciclo de vida do Vite no modo dev
 

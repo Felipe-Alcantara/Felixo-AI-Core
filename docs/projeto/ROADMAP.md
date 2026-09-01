@@ -70,6 +70,11 @@ contra o código antes de começar.
   para 191,73 KiB (60,37 KiB gzip) e o build deixou de emitir o aviso de chunk
   grande. O benchmark Electron continua sendo o guard de startup, primeira
   interação, assets relativos e primeiro painel.
+- ✅ Reduzir o custo repetido do typecheck: `tsc -b` agora observa o cache
+  incremental dos projetos `app` e `node`; cinco amostras locais reduziram o
+  caminho sem mudança de 54,96 s para 0,80 s p50 e o RSS de 674.420 KiB para
+  72.364 KiB. `npm run typecheck:full` permanece disponível para auditoria
+  forçada.
 - Evitar trabalho duplicado no carregamento inicial do canvas, painéis e
   catálogos sem transformar dados antigos em estado incorreto.
 

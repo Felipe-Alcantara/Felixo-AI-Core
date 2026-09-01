@@ -2501,6 +2501,51 @@ commit/release após o push.
 Estado final: implementação concluída localmente, pronta para commit, push,
 acompanhamento do CI/release e encerramento da task no Notion.
 
+## [2026-09-01] Typecheck incremental do build
+
+### Causa encontrada
+
+Os projetos `tsconfig.app.json` e `tsconfig.node.json` já declaravam
+`tsBuildInfoFile`, mas não declaravam `incremental`. Como ambos usam `noEmit`,
+o `tsc -b` encontrava o cache, porém considerava `src/App.js` e
+`vite.config.js` ausentes e reconstruía os projetos em todas as execuções.
+Isso mantinha o typecheck repetido na faixa de 51–58 s e perto de 670 MiB de
+RSS no ambiente local.
+
+### Implementação
+
+- `incremental: true` foi declarado nos dois tsconfigs, preservando `noEmit`,
+  `skipLibCheck`, os includes completos e todas as regras de segurança de
+  tipos.
+- O `npm run build` continua usando `tsc -b` antes do Vite; o build mode agora
+  reconhece os `.tsbuildinfo` como saída observável e salta projetos sem
+  entradas alteradas.
+- `npm run typecheck:full` usa `--force` para uma auditoria limpa, enquanto
+  `npm run typecheck` é o caminho incremental normal.
+- `typecheck-performance.cjs` mede o comando oficial em cinco execuções frias
+  e cinco incrementais, com p50/p95 de tempo e RSS, sem apagar caches ou
+  ocultar erros. Quatro testes cobrem argumentos, percentis, resumo e falhas.
+
+### Medição local
+
+Linux x64, Node 25.9.0, TypeScript 6.0.3, percentil linear:
+
+| Modo | Baseline p50/p95 | Atual p50/p95 | RSS baseline p50/p95 | RSS atual p50/p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Frio | 51,41 / 54,67 s | 52,60 / 54,24 s | 673.060 / 683.753 KiB | 662.904 / 668.941 KiB |
+| Sem mudança | 54,96 / 58,01 s | 0,80 / 0,93 s | 674.420 / 682.664 KiB | 72.364 / 72.650 KiB |
+
+O caminho sem mudança reduziu aproximadamente 98,5% do tempo e 89,3% do
+RSS. O cold permaneceu equivalente em parede, com queda de RSS e sem remoção
+de qualquer fonte da verificação.
+
+### Validação
+
+`npm run typecheck:full`, `npm run build`, `npm test` (943/943),
+`npm run test:frontend` (734 + 1 skip), `npm run test:native` (5/5), lint
+(0 erros, 2 avisos React preexistentes), `npm run pack` e o smoke do artefato
+Linux passaram. A confirmação multi-SO será registrada junto do CI/release.
+
 [2026-09-01] Correção complementar da integração nativa — o glob original de
 `npm test` incluía as fixtures `*.integration.test.cjs`, fazendo o job Windows
 ficar preso quando um handle ConPTY falhava durante a limpeza. A descoberta de
