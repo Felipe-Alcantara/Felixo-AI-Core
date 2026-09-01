@@ -25,9 +25,10 @@ const platform = require('../core/platform/index.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
 
 const TEMPO_LIMITE_MS = 15_000
-// A console do Windows confirma Ctrl-Z com Enter; POSIX produz EOF com
-// Ctrl-D quando a linha anterior já foi finalizada.
-const FIM_DE_ENTRADA = process.platform === 'win32' ? '\u001a\r' : '\u0004'
+// No Windows a fixture entra em modo raw para o marcador chegar como
+// caractere, sem depender da disciplina de linha do console ConPTY. POSIX
+// mantém Ctrl-D no modo canônico, que é o EOF nativo esperado pelo shell.
+const FIM_DE_ENTRADA = process.platform === 'win32' ? '\u001a' : '\u0004'
 
 /** Payload realista: tamanho de um prompt inicial grande, com acento e emoji. */
 function textoGrande(linhas = 700) {
@@ -60,10 +61,24 @@ function finalizar() {
   if (finalizado) return
   finalizado = true
   fs.writeFileSync(destino, entrada, 'utf8')
+  if (
+    process.platform === 'win32' &&
+    process.stdin.isTTY &&
+    typeof process.stdin.setRawMode === 'function'
+  ) {
+    process.stdin.setRawMode(false)
+  }
   process.stdin.pause()
   setImmediate(() => process.exit(0))
 }
 
+if (
+  process.platform === 'win32' &&
+  process.stdin.isTTY &&
+  typeof process.stdin.setRawMode === 'function'
+) {
+  process.stdin.setRawMode(true)
+}
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (dados) => {
   const texto = String(dados)
