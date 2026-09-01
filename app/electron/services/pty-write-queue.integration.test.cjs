@@ -25,10 +25,15 @@ const platform = require('../core/platform/index.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
 
 const TEMPO_LIMITE_MS = 15_000
-// No Windows a fixture entra em modo raw para o marcador chegar como
-// caractere, sem depender da disciplina de linha do console ConPTY. POSIX
-// mantém Ctrl-D no modo canônico, que é o EOF nativo esperado pelo shell.
-const FIM_DE_ENTRADA = process.platform === 'win32' ? '\u001a' : '\u0004'
+// No Windows a fixture entra em modo raw para Ctrl-Z chegar como caractere,
+// sem depender da disciplina de linha do console ConPTY. O marcador textual
+// vem logo depois como fallback para versões do console que consomem Ctrl-Z;
+// POSIX mantém Ctrl-D no modo canônico, que é o EOF nativo esperado pelo shell.
+const MARCADOR_DE_EOF_WINDOWS = '__FELIXO_EOF__'
+const FIM_DE_ENTRADA =
+  process.platform === 'win32'
+    ? `\u001a\r${MARCADOR_DE_EOF_WINDOWS}\r`
+    : '\u0004'
 
 /** Payload realista: tamanho de um prompt inicial grande, com acento e emoji. */
 function textoGrande(linhas = 700) {
@@ -54,6 +59,7 @@ function criarColetorDeEntrada(diretorio) {
 const fs = require('node:fs')
 
 const destino = process.argv[2]
+const MARCADOR_DE_EOF_WINDOWS = '__FELIXO_EOF__'
 let entrada = ''
 let finalizado = false
 
@@ -82,8 +88,11 @@ if (
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (dados) => {
   const texto = String(dados)
-  const recebeuFim = texto.includes('\u0004') || texto.includes('\u001a')
-  entrada += texto.replace(/[\u0004\u001a]/g, '')
+  const recebeuFim =
+    texto.includes('\u0004') ||
+    texto.includes('\u001a') ||
+    texto.includes(MARCADOR_DE_EOF_WINDOWS)
+  entrada += texto.replace(/[\u0004\u001a]/g, '').replaceAll(MARCADOR_DE_EOF_WINDOWS, '')
   if (recebeuFim) finalizar()
 })
 process.stdin.on('end', finalizar)
