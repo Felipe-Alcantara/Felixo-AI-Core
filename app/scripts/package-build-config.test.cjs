@@ -19,3 +19,11 @@ test('build.asarUnpack mantém node-pty fora do app.asar', () => {
     'build.asarUnpack deve incluir um padrão que desempacote node_modules/node-pty (ex.: "**/node_modules/node-pty/**")',
   )
 })
+
+test('build.afterPack restaura execução do helper POSIX do node-pty', () => {
+  assert.equal(
+    pkg.build?.afterPack,
+    'scripts/fix-native-pty-permissions.cjs',
+    'build.afterPack deve preparar a permissão do spawn-helper do node-pty',
+  )
+})

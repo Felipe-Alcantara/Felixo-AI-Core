@@ -25,6 +25,7 @@ const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { discoverAgentSession } = require('./agent-session-discovery.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
+const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
@@ -724,6 +725,20 @@ class PtyProcessManager {
   resolveSpawnPty() {
     if (this.injectedSpawnPty) {
       return this.injectedSpawnPty
+    }
+
+    // The npm package ships the macOS helper without execute permission. The
+    // afterPack hook fixes release artifacts; this idempotent check also keeps
+    // `npm run dev` working and is harmless when the bit is already present.
+    const helperState = ensureNodePtySpawnHelperExecutable({
+      platformName: this.platform.name,
+    })
+    if (!helperState.ok) {
+      this.warn('PTY: não foi possível preparar o spawn-helper nativo.', {
+        reason: 'pty-helper-permission',
+        platform: this.platform.name,
+        detail: helperState.reason,
+      })
     }
 
     const nodePty = require('node-pty')

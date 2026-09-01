@@ -16,6 +16,9 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
   cota quando o provider não publica uma.
 - A documentação vigente está em `README.md`, `docs/README.md`, `docs/guias/`
   e `docs/projeto/`; `docs/_legado/` é apenas histórico.
+- O empacotamento POSIX corrige a permissão do `spawn-helper` nativo do
+  `node-pty` antes de distribuir o app; sem isso, o terminal do macOS falha
+  com `pty_spawn_failed`/`posix_spawnp failed`.
 - A branch de desenvolvimento/release é `main`. O launcher ainda preserva o
   `--update` explícito com branch configurável e o update silencioso da branch
   atual.
@@ -2326,3 +2329,59 @@ completa, o método e as limitações estão em `app/benchmarks/README.md`.
 LIMITE: a coleta não substitui a validação visual interativa de links,
 labels, prompts, retomada ou remoção no Canvas real; o delta de heap não é
 análise de retenção em sessão longa.
+## [2026-09-01] PTY do macOS falhava no app empacotado por permissão do helper
+
+### Sintoma
+
+O app instalado no macOS mostrava `Camada de inicialização do PTY: não foi
+possível criar a sessão: pty_spawn_failed` ao abrir um terminal de agente. A
+mensagem correspondia ao `posix_spawnp failed` já observado anteriormente no
+runner macOS, mas o build continuava permitindo que o defeito chegasse ao
+usuário.
+
+### Causa
+
+`node-pty@1.1.0` distribui os binários
+`prebuilds/darwin-{arm64,x64}/spawn-helper` no tarball npm com modo `0644`.
+O projeto já mantinha `node-pty` fora do `app.asar`, porém o
+`electron-builder` preservava esse modo ao copiar o arquivo para
+`app.asar.unpacked`. O macOS consegue ler o binário, mas `posix_spawnp` exige
+que o helper tenha bit de execução; por isso nenhuma CLI chegava a iniciar.
+
+### Correção
+
+- `app/scripts/fix-native-pty-permissions.cjs` foi adicionado como hook
+  `afterPack`; ele procura os helpers no diretório realmente desempacotado e
+  restaura o modo executável antes da assinatura/distribuição.
+- `pty-native-assets.cjs` aplica a mesma correção de forma idempotente no
+  modo desenvolvimento e prefere o caminho `app.asar.unpacked` quando o app
+  já está empacotado.
+- O `asarUnpack` existente permanece obrigatório: a permissão correta não
+  resolve um executável que ainda esteja virtualizado dentro do asar.
+- O hook falha o build macOS se o helper não estiver presente, evitando
+  publicar outro instalador em que todo terminal quebre.
+
+### Evidência e validação
+
+- O tarball oficial de `node-pty@1.1.0` foi conferido: os helpers chegam como
+  `-rw-r--r--`.
+- `npm test`: **925/925** testes Electron/backend.
+- `npm run test:frontend`: **721/721** testes.
+- `npm run lint`: zero erros; permanecem somente os 2 avisos React anteriores
+  em `SearchPanel.tsx`.
+- `npm run build`: **716 módulos** transformados, com apenas o aviso conhecido
+  de chunk acima de 500 kB.
+- `npm run pack` Linux terminou com sucesso; no artefato real os dois helpers
+  Darwin em `resources/app.asar.unpacked` ficaram com modo **775**.
+- Testes específicos cobrem desenvolvimento, `afterPack`, app.asar,
+  plataforma Windows e a ausência de alteração quando o helper já é
+  executável.
+
+### Limite
+
+Esta máquina é Linux; a execução efetiva de uma PTY nativa dentro de um `.app`
+macOS depende do próximo job `macos-latest`/instalador publicado. A correção
+foi desenhada para o caminho do builder e o CI deve confirmar o artefato
+Darwin antes da distribuição.
+
+Estado final: correção pronta para commit, push e acompanhamento do CI/release.
