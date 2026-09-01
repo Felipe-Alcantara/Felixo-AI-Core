@@ -65,6 +65,7 @@ export function CanvasPanel({
         width,
         maxHeight,
       }}
+      data-felixo-canvas-panel={panelId}
       className={`absolute top-16 z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
         resizing
           ? ''

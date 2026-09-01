@@ -1,7 +1,7 @@
 # Rodar via Código-Fonte
 
 Status: concluido.
-Última revisão: 2026-08-31.
+Última revisão: 2026-09-01.
 
 ## Objetivo
 
@@ -109,6 +109,7 @@ npm run dev:web
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas o Vite dev server com limpeza coordenada |
 | `npm run build` | app/ | Compila TypeScript + Vite bundle |
+| `npm run benchmark:bundle:check` | app/ | Mede startup/menu no bundle e valida chunks relativos no Electron |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run test:frontend` | app/ | Roda os testes Vitest do renderer |
 | `npm run lint` | app/ | Roda ESLint |

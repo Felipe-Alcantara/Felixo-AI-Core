@@ -1,7 +1,7 @@
 # Guia para Desenvolvedores
 
 Status: concluido.
-Última revisão: 2026-08-31.
+Última revisão: 2026-09-01.
 
 ## Objetivo
 
@@ -109,6 +109,7 @@ Felixo-AI-Core/
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas Vite com limpeza coordenada |
 | `npm run build` | app/ | Compila TypeScript + Vite |
+| `npm run benchmark:bundle:check` | app/ | Mede o bundle de produção no Electron e valida chunks/assets |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run test:frontend` | app/ | Roda a suíte Vitest do renderer |
 | `npm run lint` | app/ | Roda ESLint |

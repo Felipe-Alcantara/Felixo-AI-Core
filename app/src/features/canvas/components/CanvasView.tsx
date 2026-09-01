@@ -1670,7 +1670,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const arrangeableCount = countArrangeableNodes(nodes)
 
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full" data-felixo-canvas-ready>
       <div ref={flowContainerRef} className="relative h-full min-w-0 flex-1">
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <CanvasToolbar

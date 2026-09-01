@@ -162,6 +162,27 @@ jobs:
       - name: Build renderer
         run: npm run build
 
+      # A divisão do bundle só é válida se os chunks relativos continuarem
+      # carregando no renderer real. O benchmark abre o dist em Electron,
+      # abre o menu de ferramentas e carrega Fetch All; Linux usa o mesmo
+      # display virtual da bancada de scrollback.
+      - name: Benchmark renderer bundle
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run benchmark:bundle:check -- --out=bundle-load-${{ matrix.os }}.json
+          else
+            npm run benchmark:bundle:check -- --out=bundle-load-${{ matrix.os }}.json
+          fi
+
+      - name: Upload renderer bundle benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-load-${{ matrix.os }}
+          path: app/bundle-load-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
       - name: Check documentation exists
         shell: bash
         run: |

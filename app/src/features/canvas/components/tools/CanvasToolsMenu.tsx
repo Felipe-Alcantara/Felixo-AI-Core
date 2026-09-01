@@ -24,6 +24,7 @@ import {
   toolbarFlyoutStyle,
   useToolbarFlyoutPosition,
 } from '../toolbar-flyout'
+import { preloadCanvasTool } from '../canvas-tool-preloaders'
 
 // 'terminals' is not here on purpose — the terminals dock is always visible
 // (see TerminalsPanel.tsx, rendered directly by CanvasView), not a panel you
@@ -153,6 +154,8 @@ export function CanvasToolsMenu({
             <button
               key={tool}
               type="button"
+              onPointerEnter={() => preloadCanvasTool(tool)}
+              onFocus={() => preloadCanvasTool(tool)}
               onClick={() => {
                 onSelect(tool)
                 resetPanel()

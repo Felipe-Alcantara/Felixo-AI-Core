@@ -197,3 +197,55 @@ testes e a bancada exige DOM não vazio; por usar `onlyRenderVisibleElements`,
 Para instrumentar o Canvas real sem deixar o Profiler ativo no uso normal,
 abra o app com `?canvas-profiler=1`; os commits ficam disponíveis em
 `window.__felixoCanvasProfiler`.
+
+## Benchmark do bundle inicial
+
+O build de produção usa carregamento sob demanda em três fronteiras:
+
+- `App` carrega `CanvasView` (superfície padrão) e `ChatWorkspace` (legado)
+  separadamente;
+- cada ferramenta do menu do canvas (`Fetch All`, uso, configurações, Git,
+  projetos e demais painéis) é um chunk próprio, com `Suspense` para loading e
+  um estado recuperável de erro;
+- o renderer Markdown e o runtime xterm/PTY também só entram quando uma nota,
+  arquivo, mensagem renderizada ou terminal realmente os exige.
+
+O foco ou a entrada do ponteiro em uma opção preaquece somente aquela opção.
+Abrir o menu não baixa todos os painéis. Os chunks são relativos (`base: './'`)
+para continuarem funcionando no `file://` usado pelo Electron empacotado.
+
+### Como executar
+
+Após `npm run build`, em Linux:
+
+```bash
+xvfb-run -a npm run benchmark:bundle:check -- \
+  --iterations=10 --out=bundle-load-local.json
+```
+
+O script dá a cada iteração um `userData` temporário, abre uma nova
+`BrowserWindow`, mede startup, abertura do menu e primeira ferramenta, além de
+inventariar bytes crus/gzip. Também confirma que o chunk de `Fetch All` não foi
+carregado no startup, que aparece depois da intenção de abrir a ferramenta e
+que todas as referências relativas a JS/CSS existem no `dist`.
+
+### Resultado reproduzível em 01/09/2026
+
+Linux x64 local, dez amostras, perfil Electron limpo por amostra. A bancada
+antiga foi recompilada no commit anterior (`a2efc42`) para a comparação.
+
+| Medida | Baseline | Bundle dividido | Variação |
+| --- | ---: | ---: | ---: |
+| Entry JS cru / gzip | 1.687,23 / 483,71 KiB | 191,73 / 60,37 KiB | −88,6% / −87,5% |
+| Arquivos JavaScript | 1 | 41 | chunks sob demanda |
+| Startup p50 / p95 | 1.868,065 / 2.250,549 ms | 1.588,362 / 2.193,116 ms | −15,0% / −2,6% |
+| Primeira interação — menu p50 / p95 | 656,519 / 741,861 ms | 685,680 / 731,206 ms | p95 −1,4% |
+| Fetch All no primeiro uso p50 / p95 | 78,501 / 152,519 ms | 431,662 / 593,429 ms | custo explícito do lazy load |
+
+O custo adicional do primeiro painel é intencional e fica isolado do startup:
+depois que o chunk é carregado, novas aberturas usam o módulo em cache. O
+benchmark verifica o comportamento sem aceitar o fallback de loading como
+painel pronto. A variação do p50 do menu é a animação fixa de 620 ms somada à
+jitter de criação de processos; o p95 melhorou, e o caminho comum do canvas
+teve a redução principal no startup. O build final termina sem o aviso de chunk
+JavaScript acima de 500 kB.

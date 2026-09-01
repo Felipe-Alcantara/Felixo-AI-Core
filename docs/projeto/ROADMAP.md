@@ -1,7 +1,7 @@
 # Felixo AI Core — Roadmap
 
 Status: em desenvolvimento.
-Última revisão: 2026-08-31.
+Última revisão: 2026-09-01.
 
 > Este arquivo descreve direção de produto e ideias de contribuição. O estado
 > entregue deve ser conferido no [`README.md`](../../README.md) e nos registros
@@ -65,8 +65,11 @@ contra o código antes de começar.
   ampla padrão pode visitar muitos diretórios antes de produzir um resultado.
 - Instrumentar tempo por etapa, volume de diretórios e consumo de memória,
   preservando progresso e cancelamento seguros.
-- Reduzir tempo de TypeScript/build e avaliar divisão do bundle principal, que
-  atualmente ainda pode gerar um aviso de arquivo JavaScript grande.
+- ✅ Dividir o bundle inicial por carregamento sob demanda: canvas/chat,
+  ferramentas, Markdown e runtime PTY têm fronteiras próprias; o entry caiu
+  para 191,73 KiB (60,37 KiB gzip) e o build deixou de emitir o aviso de chunk
+  grande. O benchmark Electron continua sendo o guard de startup, primeira
+  interação, assets relativos e primeiro painel.
 - Evitar trabalho duplicado no carregamento inicial do canvas, painéis e
   catálogos sem transformar dados antigos em estado incorreto.
 

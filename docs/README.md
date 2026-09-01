@@ -1,6 +1,6 @@
 # Documentação — Felixo AI Core
 
-Última revisão: 2026-08-31.
+Última revisão: 2026-09-01.
 
 Esta pasta reúne a documentação vigente do produto baseado no **canvas estilo
 n8n** (blocos visuais — terminais reais, notas, arquivos `.md` compartilhados,

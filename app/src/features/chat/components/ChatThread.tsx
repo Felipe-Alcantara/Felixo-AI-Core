@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Check, Copy, Maximize2, User, X } from 'lucide-react'
 import type { ChatMessage, ContextAttachment, Model } from '../types'
-import { MarkdownContent } from '../../shared/components/MarkdownContent'
+import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
 
 type ExpandedImage = {
   id: string
@@ -131,7 +131,7 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                       />
                     </>
                   ) : (
-                    <MarkdownContent content={message.content} />
+                    <DeferredMarkdownContent content={message.content} />
                   )}
                   <span>
                     {message.isStreaming && (

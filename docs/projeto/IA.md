@@ -25,6 +25,11 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 - O workflow de release valida o artefato real nos três SOs: PTY nativo,
   npm-runtime empacotado, instalação/atualização de CLI e persistência dos
   shims antes de promover a pré-release.
+- O bundle inicial é dividido por uso: canvas/chat, ferramentas do menu,
+  Markdown e runtime PTY entram por chunks relativos sob demanda. O entry da
+  compilação de 01/09/2026 ficou em 191,73 KiB cru (60,37 KiB gzip), sem o
+  aviso de chunk grande; o benchmark Electron guarda startup, menu, primeiro
+  painel e referências dos assets.
 
 ## Protocolo de Encerramento
 
@@ -157,6 +162,20 @@ npm run build
 [2026-04-29] Próximo passo: conectar `window.felixo.cli` ao estado do chat React, adicionando `cliType` aos modelos, mensagem assistente vazia, streaming incremental e botão de parar.
 
 ## Testes Importantes
+
+[2026-09-01] ✅ Bundle inicial sob demanda — `App` separa canvas e chat com
+`React.lazy`; cada ferramenta do canvas tem loader, prefetch seletivo por
+foco/ponteiro e fallback de loading/erro; Markdown e o runtime xterm/PTY
+também são adiados até o primeiro uso. `npm run benchmark:bundle:check` abre o
+`dist` em Electron com `userData` temporário, verifica que o Fetch All só
+aparece após o `import()`, confere 200 referências relativas sem ausência e
+registra bytes cru/gzip e percentis. Em dez amostras Linux, o entry caiu de
+1.687,23/483,71 KiB para 191,73/60,37 KiB; startup p50/p95 caiu de
+1.868,065/2.250,549 ms para 1.588,362/2.193,116 ms. A primeira interação
+(menu) ficou em 685,680/731,206 ms, com p95 abaixo dos 741,861 ms do baseline;
+o custo do primeiro painel é explicitamente separado e depois fica em cache.
+`npm run build`, `npm run lint` e o check do benchmark passaram; o build não
+emite mais aviso de chunk acima de 500 kB.
 
 [2026-09-01] ✅ Smoke de release nos três SOs — o instalador ou AppImage/DMG
 extraído é executado no runner nativo; o app abre em modo de validação, cria
@@ -314,6 +333,52 @@ OBS: Ainda sem auto-sync periódico — apenas no startup do app (via primeira l
 ## Histórico de Evolução
 
 > Registro cronológico denso das fases. Mantido como trilha auditável (decisões, bugs e validações na ordem em que aconteceram). As decisões estruturais consolidadas estão resumidas em "Decisões de Arquitetura" acima.
+
+## [2026-09-01] Bundle inicial dividido por carregamento sob demanda
+
+**Task:** reduzir o custo pago pelo primeiro carregamento do renderer sem
+quebrar o app empacotado, o fluxo canvas-first ou o caminho legado de chat.
+
+**Diagnóstico:** o build anterior transformava 721 módulos em um único entry de
+1.727,72 kB (1.687,23 KiB; 499,05 kB na saída do Vite, 483,71 KiB na bancada
+gzip), incluindo o canvas, todas as ferramentas, Markdown, xterm/PTY e chat.
+Isso também mantinha o alerta de chunk acima de 500 kB.
+
+**Implementação:** `App.tsx` passou a carregar `CanvasView` e
+`ChatWorkspace` com `React.lazy`. `CanvasToolPanels` passou a ter um loader
+independente para cada uma das 12 ferramentas. O ponteiro/foco aquece somente
+a opção apontada, e `Suspense`/error boundary mantém loading e erro visíveis no
+mesmo painel. `DeferredMarkdownContent` tira o parser e os realces de sintaxe
+do caminho inicial; `DeferredTerminalSessionStore` preserva o contrato dos
+componentes, mas adia o `TerminalSessionStore` até haver um terminal. O Vite
+continua em `base: './'`, portanto cada `import()` resolve dentro do
+`file://` do pacote.
+
+**Medição e proteção:** `app/scripts/bundle-load-benchmark.cjs` cria um
+`userData` temporário por amostra, abre o `dist` em nova `BrowserWindow`, mede
+startup e menu, mede o primeiro uso do Fetch All e lista bytes cru/gzip. O
+check exige o painel real depois do `import()`, garante que o chunk não entrou
+no startup e valida 200 referências relativas de JS/CSS; o CI executa a
+bancada depois do build em Linux, Windows e macOS. O JSON é ignorado pelo Git
+por ser resultado de medição local.
+
+**Resultado local:** dez amostras no Linux, comparadas com uma recompilação do
+commit `a2efc42`: entry 1.687,23/483,71 KiB → 191,73/60,37 KiB; startup p50/p95
+1.868,065/2.250,549 ms → 1.588,362/2.193,116 ms; menu p50/p95
+656,519/741,861 ms → 685,680/731,206 ms. O p50 do menu oscila em torno da
+animação fixa de 620 ms; o p95 caiu. O primeiro Fetch All leva
+431,662/593,429 ms p50/p95 no novo fluxo porque seu código deixa de ser pago
+no startup; a abertura seguinte reutiliza o módulo carregado.
+
+**Validação:** testes unitários do benchmark, `npm run build` sem alerta de
+chunk grande, `npm run lint` com apenas os dois avisos React preexistentes de
+`SearchPanel.tsx`, referências de assets sem ausências e benchmark Electron
+com dez amostras aprovado. Empacotamento/release continua coberto pelo job de
+release; a confirmação nos três runners fica como gate remoto antes de
+promover a versão.
+
+**Estado:** implementação, medição e documentação concluídas; aguardando o
+commit, push e validação do CI/release conforme o fluxo do projeto.
 
 [2026-06-18] PIVÔ — De chat mascarado para terminais interativos reais (node-pty + xterm.js).
 CONTEXTO: O caminho de mascarar o terminal como chat era instável porque `cross-spawn` usa pipes (não PTY); CLIs interativos detectam `isatty()=false` e se comportam de forma imprevisível, e o parser de stdout→chat era frágil. Nova essência do projeto: dashboard estilo n8n onde cada nó é um terminal de verdade, com o qual o humano interage direto. Orquestração permanece humana por ora (um passo de cada vez para não travar como antes).

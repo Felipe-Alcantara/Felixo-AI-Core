@@ -1,10 +1,32 @@
-import { useState } from 'react'
-import { ChatWorkspace } from './features/chat/components/ChatWorkspace'
-import { CanvasView } from './features/canvas/components/CanvasView'
+import { lazy, Suspense, useState } from 'react'
 import { useFocusRestore } from './features/shared/focus/useFocusRestore'
 import { ThemeProvider } from './features/shared/theme/ThemeProvider'
 
 type Screen = 'canvas' | 'chat'
+
+const CanvasView = lazy(() =>
+  import('./features/canvas/components/CanvasView').then(({ CanvasView: component }) => ({
+    default: component,
+  })),
+)
+
+const ChatWorkspace = lazy(() =>
+  import('./features/chat/components/ChatWorkspace').then(({ ChatWorkspace: component }) => ({
+    default: component,
+  })),
+)
+
+function ScreenLoading() {
+  return (
+    <div
+      className="flex h-full items-center justify-center bg-[var(--color-main-bg)] text-sm text-zinc-400"
+      role="status"
+      aria-live="polite"
+    >
+      Carregando workspace…
+    </div>
+  )
+}
 
 function App() {
   // The canvas is the primary screen; chat remains reachable via the toolbar's
@@ -22,12 +44,17 @@ function App() {
     // O tema envolve as duas telas: quem escolhe é o painel de configurações do
     // canvas, e a escolha não pode depender de qual tela está montada.
     <ThemeProvider>
-      <div className="relative h-screen overflow-hidden bg-[var(--color-main-bg)] text-zinc-50">
-        {screen === 'canvas' ? (
-          <CanvasView onOpenChat={() => setScreen('chat')} />
-        ) : (
-          <ChatWorkspace onBack={() => setScreen('canvas')} />
-        )}
+      <div
+        className="relative h-screen overflow-hidden bg-[var(--color-main-bg)] text-zinc-50"
+        data-felixo-app-shell
+      >
+        <Suspense fallback={<ScreenLoading />}>
+          {screen === 'canvas' ? (
+            <CanvasView onOpenChat={() => setScreen('chat')} />
+          ) : (
+            <ChatWorkspace onBack={() => setScreen('canvas')} />
+          )}
+        </Suspense>
       </div>
     </ThemeProvider>
   )

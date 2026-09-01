@@ -3092,3 +3092,62 @@ pode montar menos nós que o fixture.
 Estado final: instrumentação, medição real e documentação concluídas; pronta
 para publicação e registro da evidência na task do Notion, com a validação
 visual manual explicitamente pendente.
+
+## Registro de Trabalho — 2026-09-01 (parte 24) — bundle inicial sob demanda
+
+PEDIDO: dividir o bundle inicial do Felixo AI Core por carregamento sob demanda,
+mantendo o canvas como caminho principal, o chat apenas como compatibilidade e
+o funcionamento offline do artefato empacotado.
+
+DIAGNÓSTICO: o build anterior transformava 721 módulos em um único JavaScript
+de 1.727,72 kB (1.687,23 KiB; 483,71 KiB gzip medidos pela bancada), com o
+canvas, chat, todas as ferramentas, Markdown e xterm/PTY no entry. O Vite
+também emitia o alerta de chunk acima de 500 kB.
+
+IMPLEMENTAÇÃO:
+
+- `App.tsx` passou a carregar `CanvasView` e `ChatWorkspace` com `React.lazy`;
+  a tela inicial não paga pelo chat legado.
+- `CanvasToolPanels` ganhou loaders independentes para as 12 ferramentas.
+  `Suspense` mostra loading dentro do painel e um error boundary oferece
+  recuperação; foco/ponteiro preaquece somente a opção apontada.
+- `DeferredMarkdownContent` adia o parser/realces até a primeira prévia de
+  nota, arquivo ou mensagem. `DeferredTerminalSessionStore` mantém o contrato
+  síncrono dos nós e só importa xterm/PTY quando um terminal é necessário.
+- Os imports permanecem relativos com `base: './'`, preservando a resolução no
+  `file://` do Electron empacotado. O loader deixa um marcador observável para
+  a bancada sem alterar a experiência de produção.
+- `bundle-load-benchmark.cjs` e seus testes foram adicionados. Cada amostra
+  usa `userData` temporário, nova `BrowserWindow`, inventário cru/gzip,
+  startup, abertura do menu e primeiro painel. O check confirma o `import()`
+  do Fetch All, rejeita o fallback como painel pronto e resolve 200 referências
+  JS/CSS, sem assets ausentes. O CI executa isso após o build nos três SOs.
+
+RESULTADO LOCAL: dez amostras Linux comparadas com o baseline recompilado de
+`a2efc42`:
+
+| Medida | Baseline | Bundle dividido |
+| --- | ---: | ---: |
+| Entry JS cru / gzip | 1.687,23 / 483,71 KiB | 191,73 / 60,37 KiB |
+| Startup p50 / p95 | 1.868,065 / 2.250,549 ms | 1.588,362 / 2.193,116 ms |
+| Primeira interação — menu p50 / p95 | 656,519 / 741,861 ms | 685,680 / 731,206 ms |
+| Fetch All no primeiro uso p50 / p95 | 78,501 / 152,519 ms | 431,662 / 593,429 ms |
+
+O entry caiu 88,6% cru e 87,5% gzip; startup p50/p95 caiu 15,0%/2,6% e o
+p95 do menu caiu 1,4%. O primeiro Fetch All paga o custo esperado do chunk
+isolado, depois reutilizado em cache; essa diferença não é escondida pela
+bancada. O build final não emite alerta de chunk grande.
+
+DOCUMENTAÇÃO: atualizados `app/benchmarks/README.md`,
+`docs/projeto/ARQUITETURA.md`, `docs/projeto/ROADMAP.md`,
+`docs/projeto/IA.md`, `docs/README.md`, o guia de desenvolvimento e o guia de
+execução por código-fonte. O modo de chat permanece descrito como legado.
+
+VALIDAÇÃO: testes focados do benchmark 4/4, `npm run build` verde, `npm run
+lint` verde com apenas os 2 avisos React preexistentes de `SearchPanel.tsx`,
+benchmark Electron 10/10 aprovado e `git diff --check` limpo. Empacotamento e
+smoke de release seguem no gate remoto já existente para Linux, Windows e
+macOS.
+
+Estado final: implementação e documentação concluídas; aguardando apenas o
+commit, push, CI/release e registro no Notion conforme o workflow do projeto.

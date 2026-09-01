@@ -1,7 +1,7 @@
 # Arquitetura vigente — Felixo AI Core
 
 Status: concluido.
-Última revisão: 2026-08-31.
+Última revisão: 2026-09-01.
 
 ## Princípio do produto
 
@@ -113,6 +113,36 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
   ligados a vários agentes. Eles são a memória compartilhada recomendada.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos
   referenciados, mas não leva comandos ou caminhos dependentes da máquina.
+
+### Bundle e carregamento sob demanda
+
+O renderer de produção é carregado em camadas para que a tela inicial do
+canvas não pague pelo chat legado, pelas ferramentas raras ou pelos runtimes
+que ainda não podem ser usados:
+
+- `App` mantém `CanvasView` e `ChatWorkspace` como fronteiras `React.lazy`; o
+  canvas é o primeiro caminho e o chat só é carregado quando escolhido.
+- `CanvasToolPanels` usa um loader por ferramenta. Busca, projetos, notas,
+  modelos, prompts, skills, Git, Fetch All, Limites e uso, Orquestrador, QA e
+  Configurações ficam em chunks sob demanda, cada um com estado de loading e
+  erro recuperável. Foco ou ponteiro preaquece somente a opção apontada.
+- `DeferredTerminalSessionStore` mantém o contrato síncrono usado pelos nós,
+  mas importa `TerminalSessionStore` apenas quando existe uma sessão PTY para
+  iniciar/anexar. O runtime xterm/node-pty não entra no canvas vazio.
+- `DeferredMarkdownContent` deixa `MarkdownContent` (incluindo os realces de
+  sintaxe) para o primeiro preview de nota, arquivo ou mensagem. A
+  sanitização e as regras de URL permanecem no módulo original; a divisão não
+  altera a fronteira de segurança.
+
+O Vite usa `base: './'`, requisito para o Electron carregar `dist/index.html`
+por `file://`. O benchmark `npm run benchmark:bundle:check` abre o artefato
+real em novas janelas com `userData` temporário, mede startup/menu, registra
+bytes crus e gzip, confirma o `import()` do Fetch All e verifica todas as
+referências relativas de JS/CSS. O mesmo check roda depois do build no CI dos
+três sistemas. A compilação de 01/09/2026 gerou entry de 191,73 KiB cru
+(60,37 KiB gzip), 41 assets JavaScript e nenhum aviso de chunk acima de
+500 kB; os chunks grandes de PTY e Markdown permanecem isolados até serem
+necessários.
 
 ### Renderização segura de Markdown
 

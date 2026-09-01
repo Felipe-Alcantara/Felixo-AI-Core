@@ -9,7 +9,7 @@ import {
 import { Eye, Pencil } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { NOTE_COLORS, resolveNoteTheme } from './note-colors'
-import { MarkdownContent } from '../../shared/components/MarkdownContent'
+import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
 import type { NoteColor, NoteNodeData } from '../types'
 
 /**
@@ -77,7 +77,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
         <div className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto p-2">
           <div className="markdown-content rounded bg-zinc-900/90 p-3 text-sm text-zinc-100">
             {text.trim() ? (
-              <MarkdownContent content={text} />
+              <DeferredMarkdownContent content={text} />
             ) : (
               <span className="text-zinc-500">Nota vazia.</span>
             )}

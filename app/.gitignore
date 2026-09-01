@@ -25,4 +25,5 @@ release
 *.sw?
 
 # Recursos gerados no empacotamento (ver scripts/bundle-npm-runtime.cjs)
+bundle-load-*.json
 build

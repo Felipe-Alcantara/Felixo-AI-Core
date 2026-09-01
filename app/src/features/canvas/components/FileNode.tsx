@@ -18,7 +18,7 @@ import {
   Unlink,
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
-import { MarkdownContent } from '../../shared/components/MarkdownContent'
+import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
 import { dirnameOf } from '../../shared/components/markdown-image-src'
 import { resolvePreviewKind } from './file-node-preview'
 import { useFileNodeDocument } from '../hooks/useFileNodeDocument'
@@ -248,7 +248,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       ) : content.trim() ? (
         previewKind === 'markdown' ? (
           <div className="nodrag nowheel nopan markdown-content min-h-0 flex-1 overflow-auto p-3 text-sm">
-            <MarkdownContent baseDir={dirnameOf(absolutePath)} content={content} />
+            <DeferredMarkdownContent baseDir={dirnameOf(absolutePath)} content={content} />
           </div>
         ) : (
           // Texto puro preserva indentação e quebra de linha — num arquivo de

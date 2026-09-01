@@ -6,12 +6,15 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { TerminalSessionStore, type SessionSnapshot } from './terminal-session-store'
+import type {
+  SessionSnapshot,
+  TerminalSessionStoreApi,
+} from './terminal-session-api'
 import type { SessionMetadata } from './session-metadata'
 
-export const TerminalSessionContext = createContext<TerminalSessionStore | null>(null)
+export const TerminalSessionContext = createContext<TerminalSessionStoreApi | null>(null)
 
-export function useTerminalSessions(): TerminalSessionStore {
+export function useTerminalSessions(): TerminalSessionStoreApi {
   const store = useContext(TerminalSessionContext)
   if (!store) {
     throw new Error('useTerminalSessions must be used within TerminalSessionProvider.')
