@@ -61,13 +61,14 @@ test('resolves the unpacked macOS candidate when node-pty is inside app.asar', (
     arch: 'arm64',
     packageRoot: '/Applications/Felixo AI Core.app/Contents/Resources/app.asar/node_modules/node-pty',
   })
+  const normalizedCandidates = candidates.map((candidate) => candidate.split(path.sep).join('/'))
 
   assert.ok(
-    candidates.some((candidate) =>
+    normalizedCandidates.some((candidate) =>
       candidate.includes('app.asar.unpacked/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper'),
     ),
   )
-  assert.match(candidates[0], /app\.asar\.unpacked\/node_modules\/node-pty\/prebuilds\/darwin-arm64\/spawn-helper/)
+  assert.match(normalizedCandidates[0], /app\.asar\.unpacked\/node_modules\/node-pty\/prebuilds\/darwin-arm64\/spawn-helper/)
 })
 
 test('repairs the current node-pty package in development on macOS', () => {
