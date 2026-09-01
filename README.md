@@ -386,6 +386,11 @@ acionado manualmente para um SHA já validado). O app empacotado verifica
 atualizações no início e periodicamente; quando encontra uma versão nova
 publicada no GitHub Releases, baixa automaticamente e instala ao fechar.
 
+O workflow também valida cada instalador na própria matriz do Linux, Windows e
+macOS: abre o app empacotado, cria um PTY real, usa o npm-runtime que foi
+embarcado para instalar e atualizar uma CLI de teste e registra o resultado em
+`release-smoke-<plataforma>.json` junto dos artefatos da release.
+
 Observações importantes:
 
 - Usuários precisam ter as CLIs `codex`, `claude` e/ou `gemini` instaladas e autenticadas no próprio sistema; para usar o launcher Openia, precisam também de Python 3 e pip.

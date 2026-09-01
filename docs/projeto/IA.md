@@ -4,7 +4,7 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 
 > Este arquivo segue o template de contexto do padrão de qualidade (`TEMPLATE-CONTEXTO-IA`). O "Histórico de Evolução" mantém a trilha cronológica densa das fases; as seções fixas acima consolidam o estado atual.
 
-## Snapshot atual — 2026-08-31
+## Snapshot atual — 2026-09-01
 
 - O canvas é a superfície principal do produto: agentes em PTY real, arquivos,
   notas, grupos, páginas web, ferramentas e conexões compartilhadas.
@@ -19,6 +19,9 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 - A branch de desenvolvimento/release é `main`. O launcher ainda preserva o
   `--update` explícito com branch configurável e o update silencioso da branch
   atual.
+- O workflow de release valida o artefato real nos três SOs: PTY nativo,
+  npm-runtime empacotado, instalação/atualização de CLI e persistência dos
+  shims antes de promover a pré-release.
 
 ## Protocolo de Encerramento
 
@@ -151,6 +154,13 @@ npm run build
 [2026-04-29] Próximo passo: conectar `window.felixo.cli` ao estado do chat React, adicionando `cliType` aos modelos, mensagem assistente vazia, streaming incremental e botão de parar.
 
 ## Testes Importantes
+
+[2026-09-01] ✅ Smoke de release nos três SOs — o instalador ou AppImage/DMG
+extraído é executado no runner nativo; o app abre em modo de validação, cria
+uma sessão real com `node-pty` e o `npm-runtime` embarcado instala/atualiza uma
+CLI local, confere PATH, permissões, prefixo privado e persistência. O JSON
+`release-smoke-<plataforma>.json` registra tamanho, startup, erro nativo e
+resultado; o job só permite promover a release depois dos três smoke tests.
 
 [2026-08-13] ✅ Instalação automática das CLIs oficiais — o app instalado detecta `claude`, `codex` e `gemini`, instala apenas o que falta em um prefixo privado dentro de `userData`, usando Node/npm empacotados, e exibe progresso/erro com retry no canvas. Suítes: Electron/Node 619 testes, frontend 451 testes, build TypeScript/Vite aprovado e ESLint aprovado após ignorar os artefatos gerados `build/` e `release/`.
 

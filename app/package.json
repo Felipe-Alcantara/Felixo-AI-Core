@@ -28,6 +28,7 @@
     "publish:github": "npm run build && electron-builder --publish always",
     "benchmark:terminal": "electron --no-sandbox --disable-gpu --js-flags=--expose-gc --enable-precise-memory-info scripts/terminal-scrollback-benchmark.cjs",
     "benchmark:fetch-all": "node scripts/fetch-all-scanner-benchmark.cjs",
+    "release:smoke": "node scripts/release-smoke.cjs",
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",
     "test": "node --test \"electron/**/*.test.cjs\" \"scripts/**/*.test.cjs\"",

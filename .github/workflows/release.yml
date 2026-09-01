@@ -157,6 +157,21 @@ jobs:
         shell: bash
         run: npx electron-builder --publish never
 
+      - name: Install Linux virtual display
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+
+      - name: Validate installed release artifact
+        shell: bash
+        run: |
+          smoke=(node scripts/release-smoke.cjs --release-dir release --report "release/release-smoke-${RUNNER_OS}.json")
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a --server-args="-screen 0 1280x720x24" "${smoke[@]}"
+          else
+            "${smoke[@]}"
+          fi
+
       - name: Upload installers
         shell: bash
         run: |

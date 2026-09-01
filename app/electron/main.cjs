@@ -73,6 +73,7 @@ const { initAppPaths } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
+const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
 
 let mainWindow = null
 let ptyHandlers = null
@@ -86,6 +87,12 @@ let agentUsageWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
+const RELEASE_SMOKE_ARG = '--release-smoke'
+const isReleaseSmoke = process.argv.includes(RELEASE_SMOKE_ARG)
+
+if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {
+  app.setPath('userData', process.env.FELIXO_RELEASE_SMOKE_USER_DATA)
+}
 
 function handleFileOpen(filePath) {
   if (!filePath || typeof filePath !== 'string') return
@@ -111,7 +118,18 @@ app.on('open-file', (event, filePath) => {
 const cliArg = process.argv.find((arg) => SUPPORTED_EXTENSIONS.has(path.extname(arg).toLowerCase()))
 if (cliArg) pendingFilePath = cliArg
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (isReleaseSmoke) {
+    try {
+      await runPackagedReleaseSmoke({ app })
+      app.exit(0)
+    } catch (error) {
+      console.error('[felixo] release smoke falhou:', error)
+      app.exit(1)
+    }
+    return
+  }
+
   const appPaths = initAppPaths()
   storageDatabase = createStorageDatabase({
     databaseDir: appPaths.database,

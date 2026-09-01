@@ -116,6 +116,7 @@ Felixo-AI-Core/
 | `npm run dist:linux` | app/ | Gera instaladores Linux |
 | `npm run dist:win` | app/ | Gera instaladores Windows |
 | `npm run dist:mac` | app/ | Gera instaladores macOS |
+| `npm run release:smoke` | app/ | Valida o artefato instalado no SO atual |
 | `npm run publish:github` | app/ | Publica uma release pelo electron-builder; usar apenas no fluxo de release |
 
 ---
@@ -191,6 +192,35 @@ workflow validado. `npm run publish:github` não é um substituto para esse
 fluxo.
 
 ---
+
+### Smoke do artefato de release
+
+Depois de `electron-builder --publish never`, o workflow instala ou extrai o
+artefato real do sistema e executa `npm run release:smoke`. O smoke:
+
+- abre o executável empacotado em modo de validação e cria uma sessão PTY real
+  com `node-pty`;
+- localiza o `npm-cli.js` em `resources/npm-runtime`, instala e atualiza uma CLI
+  local de fixture sem rede e sem tocar no npm global da máquina;
+- confere o PATH, os shims `node`/`npm`, permissões POSIX ou `.cmd` no Windows,
+  prefixo privado e persistência entre processos;
+- grava tamanho do artefato, tempo até o app ficar pronto, resultado do PTY,
+  versão do npm e diagnósticos nativos em
+  `release/release-smoke-<plataforma>.json`.
+
+Para reproduzir no checkout, gere um artefato para o SO atual e rode:
+
+```bash
+cd app
+npm run build
+npx electron-builder --publish never
+npm run release:smoke -- --release-dir release --keep-temp
+```
+
+No Linux sem sessão gráfica, envolva o comando com `xvfb-run -a`. O workflow
+executa essa validação na matriz dos três sistemas antes de permitir que a
+pré-release seja promovida; o JSON do smoke sobe junto dos artefatos da
+release para deixar o resultado auditável.
 
 ## Testes
 
