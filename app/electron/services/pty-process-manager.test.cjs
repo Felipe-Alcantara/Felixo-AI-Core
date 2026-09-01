@@ -513,6 +513,20 @@ test('force kill terminates immediately and drops the session', () => {
   assert.equal(manager.kill('missing'), false)
 })
 
+test('Windows force kill omits the unsupported signal and drops the session', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakeWin32Platform,
+  })
+
+  manager.spawn('term-win-kill', {})
+  assert.equal(manager.kill('term-win-kill', { force: true }), true)
+
+  assert.deepEqual(fakePty.kills, [undefined])
+  assert.equal(manager.has('term-win-kill'), false)
+})
+
 test('graceful kill sends SIGTERM but keeps the session until exit', () => {
   const { fakePty, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })

@@ -751,7 +751,14 @@ class PtyProcessManager {
    */
   safeKill(ptyProcess, signal) {
     try {
-      ptyProcess.kill(signal)
+      // node-pty rejects an explicit signal on Windows. Passing SIGKILL here
+      // used to be swallowed by this guard, leaving ConPTY handles and child
+      // processes alive after a timeout or a drawer restart.
+      if (this.platform.name === 'win32') {
+        ptyProcess.kill()
+      } else {
+        ptyProcess.kill(signal)
+      }
     } catch {
       // The PTY may already be gone; treating kill as idempotent keeps the
       // lifecycle predictable for callers.

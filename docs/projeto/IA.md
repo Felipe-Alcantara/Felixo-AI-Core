@@ -2435,3 +2435,18 @@ commit/release após o push.
 
 Estado final: implementação concluída localmente, pronta para commit, push,
 acompanhamento do CI/release e encerramento da task no Notion.
+
+[2026-09-01] Correção complementar da integração nativa — o glob original de
+`npm test` incluía as fixtures `*.integration.test.cjs`, fazendo o job Windows
+ficar preso quando um handle ConPTY falhava durante a limpeza. A descoberta de
+testes Node foi isolada em `scripts/run-node-unit-tests.cjs`; as integrações
+passaram a `npm run test:native`, com concorrência 1. A fixture Windows usa
+modo raw para Ctrl-Z, aceita um marcador de EOF quando o console consome o
+controle e remove somente os CRs de confirmação do protocolo.
+
+Também corrigido `PtyProcessManager.safeKill`: `node-pty` não aceita sinal
+explícito no Windows, então o manager agora chama `kill()` nessa plataforma.
+`pty-process-manager.test.cjs` cobre a regressão e evita que timeout/restart do
+drawer deixe processos ou handles ConPTY vivos. Validação local: manager
+43/43, `npm test` 933/933 e `npm run test:native` 5/5; a confirmação remota da
+matriz e do release permanece pendente neste ponto.
