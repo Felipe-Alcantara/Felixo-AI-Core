@@ -190,11 +190,19 @@ function isPlatformInstaller(candidate) {
 
 function compareArtifacts(left, right) {
   const preferredArch = process.arch === 'arm64' ? 'arm64' : 'x64'
-  const leftPreferred = path.basename(left).toLowerCase().includes(`-${preferredArch}.`)
-  const rightPreferred = path.basename(right).toLowerCase().includes(`-${preferredArch}.`)
+  const leftPreferred = hasArchitecture(left, preferredArch)
+  const rightPreferred = hasArchitecture(right, preferredArch)
 
   if (leftPreferred !== rightPreferred) return leftPreferred ? -1 : 1
   return left.localeCompare(right)
+}
+
+function hasArchitecture(candidate, architecture) {
+  const name = path.basename(candidate).toLowerCase()
+  const aliases = architecture === 'arm64'
+    ? ['arm64']
+    : ['x64', 'x86_64', 'amd64']
+  return aliases.some((alias) => new RegExp(`(?:^|[-_.])${alias}(?:[-_.]|$)`).test(name))
 }
 
 function getArtifactKind(candidate) {
@@ -353,7 +361,7 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
   fs.mkdirSync(installRoot, { recursive: true })
   fs.writeFileSync(userConfig, '', 'utf8')
 
-  const layout = createCliLayout(installRoot)
+  const layout = createCliLayout(installRoot, process.platform)
   const npmEnv = createNpmSmokeEnv({ installRoot, userConfig, npmCache })
   const npmArgs = (extra) => [
     npmCliPath,
@@ -463,13 +471,16 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
   }
 }
 
-function createCliLayout(installRoot) {
-  const packagesBin = process.platform === 'win32'
+function createCliLayout(installRoot, platformName = process.platform) {
+  const packagesRoot = platformName === 'win32'
+    ? installRoot
+    : path.join(installRoot, 'lib')
+  const packagesBin = platformName === 'win32'
     ? installRoot
     : path.join(installRoot, 'bin')
   const runtimeBin = path.join(installRoot, 'runtime-bin')
 
-  return { root: installRoot, packagesBin, runtimeBin }
+  return { root: installRoot, packagesRoot, packagesBin, runtimeBin, platformName }
 }
 
 function createNpmSmokeEnv({ installRoot, userConfig, npmCache }) {
@@ -501,11 +512,11 @@ function createCliPathEnv({ layout, baseEnv }) {
 }
 
 async function runInstalledCli({ layout, env, cwd, timeoutMs }) {
-  const command = process.platform === 'win32' ? `${CLI_COMMAND_NAME}.cmd` : CLI_COMMAND_NAME
+  const command = layout.platformName === 'win32' ? `${CLI_COMMAND_NAME}.cmd` : CLI_COMMAND_NAME
   return runChild(command, [], {
     cwd,
     env,
-    shell: process.platform === 'win32',
+    shell: layout.platformName === 'win32',
     timeoutMs,
     windowsHide: true,
   })
@@ -609,7 +620,7 @@ function writeCliFixture(sourceDir, version) {
 }
 
 function readInstalledPackage(layout) {
-  const packagePath = path.join(layout.root, 'node_modules', CLI_PACKAGE_NAME, 'package.json')
+  const packagePath = path.join(layout.packagesRoot, 'node_modules', CLI_PACKAGE_NAME, 'package.json')
   if (!pathExists(packagePath)) throw new Error('O pacote da CLI nao foi persistido no prefixo.')
   return JSON.parse(fs.readFileSync(packagePath, 'utf8'))
 }

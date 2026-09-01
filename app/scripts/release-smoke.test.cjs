@@ -68,16 +68,46 @@ test('resolves macOS resources below the .app bundle', () => {
 
 test('creates the platform-specific managed CLI layout', () => {
   const installRoot = path.resolve('felixo-cli-smoke')
-  const layout = createCliLayout(installRoot)
+  for (const [platformName, packagesRoot, packagesBin] of [
+    ['win32', installRoot, installRoot],
+    ['darwin', path.join(installRoot, 'lib'), path.join(installRoot, 'bin')],
+  ]) {
+    const layout = createCliLayout(installRoot, platformName)
 
-  assert.equal(layout.root, installRoot)
-  assert.equal(layout.runtimeBin, path.join(installRoot, 'runtime-bin'))
-  assert.equal(
-    layout.packagesBin,
-    process.platform === 'win32'
-      ? installRoot
-      : path.join(installRoot, 'bin'),
-  )
+    assert.equal(layout.root, installRoot)
+    assert.equal(layout.packagesRoot, packagesRoot)
+    assert.equal(layout.packagesBin, packagesBin)
+    assert.equal(layout.runtimeBin, path.join(installRoot, 'runtime-bin'))
+  }
+})
+
+test('prefers the host-compatible Linux x86_64 alias over arm64', () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-artifact-test-'))
+  try {
+    const extension = process.platform === 'win32'
+      ? '.exe'
+      : process.platform === 'darwin'
+        ? '.dmg'
+        : '.AppImage'
+    const hostArch = process.arch === 'arm64' ? 'arm64' : 'x86_64'
+    const hostArtifact = path.join(
+      temporaryRoot,
+      `Felixo-AI-Core-0.1.1-${process.platform}-${hostArch}${extension}`,
+    )
+    const foreignArtifact = path.join(
+      temporaryRoot,
+      `Felixo-AI-Core-0.1.1-${process.platform}-${hostArch === 'arm64' ? 'x86_64' : 'arm64'}${extension}`,
+    )
+    fs.writeFileSync(hostArtifact, '')
+    fs.writeFileSync(foreignArtifact, '')
+
+    assert.equal(
+      path.basename(resolveReleaseArtifact({ releaseDir: temporaryRoot })),
+      path.basename(hostArtifact),
+    )
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true })
+  }
 })
 
 test('records only native loading diagnostics', () => {
