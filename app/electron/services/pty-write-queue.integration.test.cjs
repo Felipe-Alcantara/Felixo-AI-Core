@@ -25,7 +25,9 @@ const platform = require('../core/platform/index.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
 
 const TEMPO_LIMITE_MS = 15_000
-const FIM_DE_ENTRADA = process.platform === 'win32' ? '\u001a' : '\u0004'
+// A console do Windows confirma Ctrl-Z com Enter; POSIX produz EOF com
+// Ctrl-D quando a linha anterior já foi finalizada.
+const FIM_DE_ENTRADA = process.platform === 'win32' ? '\u001a\r' : '\u0004'
 
 /** Payload realista: tamanho de um prompt inicial grande, com acento e emoji. */
 function textoGrande(linhas = 700) {
@@ -125,6 +127,25 @@ function esperarSaida(saida, identificador) {
   return Promise.race([saida, limite]).finally(() => clearTimeout(timer))
 }
 
+async function removerDiretorioTemporario(diretorio) {
+  const errosRepetiveis = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY'])
+  const tentativas = process.platform === 'win32' ? 20 : 1
+
+  for (let tentativa = 0; tentativa < tentativas; tentativa += 1) {
+    try {
+      fs.rmSync(diretorio, { recursive: true, force: true })
+      return
+    } catch (error) {
+      const podeTentarDeNovo =
+        process.platform === 'win32' &&
+        errosRepetiveis.has(error?.code) &&
+        tentativa < tentativas - 1
+      if (!podeTentarDeNovo) throw error
+      await new Promise((resolver) => setTimeout(resolver, 100))
+    }
+  }
+}
+
 async function executarColeta({ nomeSessao, payload, depois }) {
   conferirRunnerNativo()
   const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-native-'))
@@ -174,7 +195,7 @@ async function executarColeta({ nomeSessao, payload, depois }) {
     return fs.readFileSync(destino, 'utf8')
   } finally {
     manager.kill(nomeSessao, { force: true })
-    fs.rmSync(diretorio, { recursive: true, force: true })
+    await removerDiretorioTemporario(diretorio)
   }
 }
 

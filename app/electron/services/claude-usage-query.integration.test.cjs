@@ -197,6 +197,25 @@ function esperarEncerramento(opcao) {
   })
 }
 
+async function removerDiretorioTemporario(diretorio) {
+  const errosRepetiveis = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY'])
+  const tentativas = process.platform === 'win32' ? 20 : 1
+
+  for (let tentativa = 0; tentativa < tentativas; tentativa += 1) {
+    try {
+      fs.rmSync(diretorio, { recursive: true, force: true })
+      return
+    } catch (error) {
+      const podeTentarDeNovo =
+        process.platform === 'win32' &&
+        errosRepetiveis.has(error?.code) &&
+        tentativa < tentativas - 1
+      if (!podeTentarDeNovo) throw error
+      await new Promise((resolver) => setTimeout(resolver, 100))
+    }
+  }
+}
+
 test('consulta o /status do Claude por PTY nativa e navega até Usage', async () => {
   conferirRunnerNativo()
   const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-claude-native-'))
@@ -303,6 +322,6 @@ test('consulta o /status do Claude por PTY nativa e navega até Usage', async ()
     }
     await esperarEncerramento(exitPromise)
     nodePty.spawn = originalSpawn
-    fs.rmSync(diretorio, { recursive: true, force: true })
+    await removerDiretorioTemporario(diretorio)
   }
 })
