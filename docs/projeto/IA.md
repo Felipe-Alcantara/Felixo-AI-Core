@@ -2385,3 +2385,50 @@ foi desenhada para o caminho do builder e o CI deve confirmar o artefato
 Darwin antes da distribuição.
 
 Estado final: correção pronta para commit, push e acompanhamento do CI/release.
+
+## [2026-09-01] Cobertura nativa do /status do Claude e da fila de escrita nos três SOs
+
+### Lacuna investigada
+
+A auditoria multi-OS havia encontrado duas coberturas incompletas: a fila de
+escrita atravessava uma PTY real apenas no Linux e pulava Windows/macOS por
+usar `/bin/sh` + `cat`; a consulta de limites do Claude exercitava somente um
+PTY falso, no adapter do sistema atual. Assim, a suíte não verificava o
+ConPTY, o shell de login do macOS, a navegação por setas ou a passagem real de
+`CLAUDE_CONFIG_DIR`.
+
+### Implementação
+
+- `pty-write-queue.integration.test.cjs` agora cria uma fixture Node temporária
+  e passa pelo `PtyProcessManager` e `node-pty` reais. O launch spec nativo é
+  exercitado em cada runner: execução direta no Linux, shell de login no macOS
+  e `cmd.exe`/ConPTY no Windows.
+- A fixture cobre payload grande com centenas de linhas, acentos, emoji,
+  marcador posterior para verificar FIFO, EOF e uma linha delimitada abaixo do
+  limite canônico do terminal. Os timeouts são sempre limpos e o processo é
+  encerrado no `finally`, evitando que a suíte fique viva por 20 segundos após
+  um teste já concluído.
+- `claude-usage-query.integration.test.cjs` instala um shim `claude`/`claude.cmd`
+  temporário, sem rede e sem credenciais reais. O processo filho usa modo raw,
+  responde a `/status`, registra as setas de navegação e publica um quadro
+  sintético Status/Usage. O teste verifica os percentuais, detalhes, perfil,
+  `CLAUDE_CODE_SKIP_PROMPT_HISTORY`, `CLAUDE_CONFIG_DIR` e o launch da
+  plataforma.
+- A consulta nativa também prepara o `spawn-helper` do `node-pty` no macOS,
+  o mesmo cuidado já aplicado ao terminal do Canvas; sem essa etapa o helper
+  pode chegar do tarball npm sem permissão de execução e falhar em
+  `posix_spawnp`.
+- O CI ganhou um passo nomeado para executar explicitamente as duas integrações
+  na matriz Linux/macOS/Windows. Não há `skip` por sistema: ausência de
+  `ComSpec`, shell ou addon compatível produz diagnóstico explícito e falha o
+  runner.
+
+### Validação
+
+No Linux, o gate focado passou com **5/5** testes em 3,6 s; a suíte completa
+`npm test` passou com **937/937**. ESLint dos arquivos alterados passou sem
+erros. A confirmação efetiva do ConPTY e do shell de login do macOS fica no
+CI nativo da matriz e será registrada junto do commit/release após o push.
+
+Estado final: implementação concluída localmente, pronta para commit, push,
+acompanhamento do CI/release e encerramento da task no Notion.

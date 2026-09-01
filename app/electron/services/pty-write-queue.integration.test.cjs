@@ -1,20 +1,18 @@
 'use strict'
 
 /**
- * Teste de integração com PTY **de verdade**: o payload grande precisa chegar
- * inteiro ao processo filho.
+ * Integração da fila com uma PTY nativa, executada pelo runner do próprio SO.
  *
- * Os testes de unidade da fila usam um `escrever` falso — eles provam o
- * fatiamento, a ordem e o dreno, mas não provam que o dado atravessa uma PTY.
- * E o bug era exatamente perda em trânsito: `write()` aceitava e o outro lado
- * recebia menos do que foi mandado, em silêncio.
+ * Os testes de unidade usam um `escrever` falso — eles provam fatiamento,
+ * ordem e dreno, mas não provam que o texto atravessa o buffer da PTY. Este
+ * arquivo passa pelo `PtyProcessManager` e pelo `node-pty` reais, inicia o
+ * Node por meio do launch spec da plataforma e confere o arquivo que o
+ * processo filho recebeu.
  *
- * Aqui o texto passa pelo `PtyProcessManager` real, pelo `node-pty` real, e é
- * gravado em arquivo pelo `cat` do outro lado. O que o arquivo contém é o que o
- * processo filho de fato recebeu.
- *
- * Cobertura honesta: isto roda em POSIX e prova o mecanismo. **Não** prova o
- * ConPTY do Windows, que é onde o sintoma apareceu — ver o `IA.md`.
+ * O mesmo teste é executado na matriz Linux, macOS e Windows. No Windows o
+ * comando explícito passa pelo `cmd.exe`/ConPTY; no macOS passa pelo shell de
+ * login; no Linux roda diretamente. Não há `skip` por plataforma: um runner
+ * incompatível precisa falhar com a causa visível no log do CI.
  */
 
 const assert = require('node:assert/strict')
@@ -23,7 +21,11 @@ const os = require('node:os')
 const path = require('node:path')
 const { test } = require('node:test')
 
+const platform = require('../core/platform/index.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
+
+const TEMPO_LIMITE_MS = 15_000
+const FIM_DE_ENTRADA = process.platform === 'win32' ? '\u001a' : '\u0004'
 
 /** Payload realista: tamanho de um prompt inicial grande, com acento e emoji. */
 function textoGrande(linhas = 700) {
@@ -35,161 +37,195 @@ function textoGrande(linhas = 700) {
   return `${corpo.join('\n')}\n`
 }
 
-const ehWindows = process.platform === 'win32'
-const ehMacos = process.platform === 'darwin'
-const motivoSkipPosix = ehWindows
-  ? 'usa cat/sh; no Windows o caminho é outro'
-  : ehMacos
-    ? 'o runner macOS do GitHub falha em posix_spawnp antes de criar uma PTY; a fila continua coberta por testes unitários'
-    : false
+/**
+ * Cria no diretório temporário um processo que coleta stdin e termina quando o
+ * terminal entrega EOF. O controle é aceito como fallback porque ConPTY pode
+ * repassá-lo como caractere em vez de transformar a tecla em `end`.
+ */
+function criarColetorDeEntrada(diretorio) {
+  const script = path.join(diretorio, 'coletor-pty.cjs')
+  fs.writeFileSync(
+    script,
+    String.raw`'use strict'
 
-test(
-  'payload grande chega INTEIRO ao processo filho por uma PTY real',
-  { skip: motivoSkipPosix },
-  async () => {
-    const destino = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-')),
-      'recebido.txt',
+const fs = require('node:fs')
+
+const destino = process.argv[2]
+let entrada = ''
+let finalizado = false
+
+function finalizar() {
+  if (finalizado) return
+  finalizado = true
+  fs.writeFileSync(destino, entrada, 'utf8')
+  process.stdin.pause()
+  setImmediate(() => process.exit(0))
+}
+
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', (dados) => {
+  const texto = String(dados)
+  const recebeuFim = texto.includes('\u0004') || texto.includes('\u001a')
+  entrada += texto.replace(/[\u0004\u001a]/g, '')
+  if (recebeuFim) finalizar()
+})
+process.stdin.on('end', finalizar)
+process.stdin.resume()
+`,
+    'utf8',
+  )
+  return script
+}
+
+function conferirRunnerNativo() {
+  assert.ok(
+    ['linux', 'darwin', 'win32'].includes(process.platform),
+    `[PTY nativa] runner incompatível: ${process.platform}; esperado Linux, macOS ou Windows`,
+  )
+
+  if (process.platform === 'win32') {
+    const shell = process.env.ComSpec || process.env.COMSPEC
+    assert.ok(
+      shell,
+      '[PTY nativa] Windows sem ComSpec/COMSPEC; não é possível validar cmd.exe/ConPTY',
     )
-    const manager = new PtyProcessManager()
-    const payload = textoGrande()
+    assert.ok(
+      fs.existsSync(shell),
+      `[PTY nativa] shell do Windows não encontrado: ${shell}`,
+    )
+    return
+  }
 
-    const encerrou = new Promise((resolve) => {
-      manager.spawn('teste-integracao', {
-        command: '/bin/sh',
-        args: ['-c', `cat > ${JSON.stringify(destino)}`],
-        cwd: os.tmpdir(),
+  if (process.platform === 'darwin') {
+    const shell = platform.getDefaultShell(process.env)
+    assert.ok(
+      shell,
+      '[PTY nativa] macOS sem shell padrão; não é possível validar o launch spec',
+    )
+    assert.ok(
+      fs.existsSync(shell),
+      `[PTY nativa] shell do macOS não encontrado: ${shell}`,
+    )
+  }
+}
+
+function esperarSaida(saida, identificador) {
+  let timer
+  const limite = new Promise((_, rejeitar) => {
+    timer = setTimeout(() => {
+      rejeitar(
+        new Error(
+          `[PTY nativa] ${identificador} não encerrou em ${TEMPO_LIMITE_MS} ms ` +
+            `no runner ${process.platform}`,
+        ),
+      )
+    }, TEMPO_LIMITE_MS)
+  })
+
+  return Promise.race([saida, limite]).finally(() => clearTimeout(timer))
+}
+
+async function executarColeta({ nomeSessao, payload, depois }) {
+  conferirRunnerNativo()
+  const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-native-'))
+  const destino = path.join(diretorio, 'recebido.txt')
+  const coletor = criarColetorDeEntrada(diretorio)
+  const manager = new PtyProcessManager()
+  let resolverSaida
+  const encerrou = new Promise((resolver) => {
+    resolverSaida = resolver
+  })
+
+  try {
+    try {
+      manager.spawn(nomeSessao, {
+        command: process.execPath,
+        args: [coletor, destino],
+        cwd: diretorio,
         cols: 120,
         rows: 30,
-        onExit: resolve,
+        onExit: resolverSaida,
       })
-    })
+    } catch (error) {
+      const detalhe = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `[PTY nativa] fixture incompatível no ${process.platform}: ${detalhe}`,
+        { cause: error },
+      )
+    }
 
-    manager.write('teste-integracao', payload)
-    // Espera o dreno antes do EOF: mandar Ctrl-D com a carga ainda saindo
-    // truncaria a entrada — é o mesmo erro de "aceito ≠ entregue".
-    await manager.aguardarEscritas('teste-integracao')
-    manager.write('teste-integracao', '')
+    assert.equal(manager.write(nomeSessao, payload), true)
+    if (depois) {
+      assert.equal(manager.write(nomeSessao, depois), true)
+    }
 
-    await Promise.race([
-      encerrou,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('o cat não encerrou a tempo')), 20000),
-      ),
-    ])
+    // EOF só pode sair depois do dreno. Caso contrário ele pode ser processado
+    // antes do último bloco e o processo filho encerra com a carga truncada.
+    await manager.aguardarEscritas(nomeSessao)
+    assert.equal(manager.write(nomeSessao, FIM_DE_ENTRADA), true)
 
-    const recebido = fs.readFileSync(destino, 'utf8')
-    // A PTY normaliza \n em \r\n na entrada; comparar o conteúdo, não os bytes
-    // de fim de linha, que não são o objeto do teste.
-    const normalizar = (texto) => texto.replace(/\r\n/g, '\n')
-
+    const evento = await esperarSaida(encerrou, nomeSessao)
     assert.equal(
-      normalizar(recebido).length,
-      payload.length,
-      `chegou truncado: ${normalizar(recebido).length} de ${payload.length} caracteres`,
-    )
-    assert.equal(normalizar(recebido), payload)
-
-    manager.dispose?.()
-  },
-)
-
-test(
-  'emoji não é partido ao atravessar a PTY',
-  { skip: motivoSkipPosix },
-  async () => {
-    const destino = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-')),
-      'emoji.txt',
-    )
-    const manager = new PtyProcessManager()
-    // Muitos emoji, com quebras de linha como num prompt real: se o corte
-    // fosse por unidade UTF-16, um par surrogate quebraria no limite do bloco.
-    const payload = `${Array.from({ length: 120 }, () => '🔥👍🚀'.repeat(10)).join('\n')}\n`
-
-    const encerrou = new Promise((resolve) => {
-      manager.spawn('teste-emoji', {
-        command: '/bin/sh',
-        args: ['-c', `cat > ${JSON.stringify(destino)}`],
-        cwd: os.tmpdir(),
-        cols: 120,
-        rows: 30,
-        onExit: resolve,
-      })
-    })
-
-    manager.write('teste-emoji', payload)
-    await manager.aguardarEscritas('teste-emoji')
-    manager.write('teste-emoji', '')
-
-    await Promise.race([
-      encerrou,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('o cat não encerrou a tempo')), 20000),
-      ),
-    ])
-
-    const recebido = fs.readFileSync(destino, 'utf8').replace(/\r\n/g, '\n')
-
-    assert.equal(recebido, payload)
-    assert.ok(!recebido.includes('�'), 'apareceu caractere de substituição')
-
-    manager.dispose?.()
-  },
-)
-
-
-test(
-  'LIMITE CONHECIDO: linha unica acima de 4096 bytes e cortada pelo proprio tty',
-  { skip: motivoSkipPosix },
-  async () => {
-    // Isto NAO e defeito da fila: em modo canonico o tty tem um buffer de linha
-    // (MAX_CANON, 4096 bytes) e descarta o excedente de uma linha sem quebra.
-    // Medido: 14.401 bytes numa linha só chegaram como 4.096, com o corte
-    // caindo no meio de um emoji.
-    //
-    // Fica registrado como fronteira, e não como bug, porque nenhum prompt real
-    // tem essa forma — a maior linha do prompt padrão tem 745 bytes. Se um dia
-    // alguém gerar uma linha gigante (um transcript de handoff sem quebras, por
-    // exemplo), o sintoma vai ser este, e o conserto é outro: bracketed paste
-    // ou garantir que o consumidor esteja em modo raw.
-    const destino = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-')),
-      'linha-gigante.txt',
-    )
-    const manager = new PtyProcessManager()
-    const payload = `${'a'.repeat(14000)}\n`
-
-    const encerrou = new Promise((resolve) => {
-      manager.spawn('teste-linha-gigante', {
-        command: '/bin/sh',
-        args: ['-c', `cat > ${JSON.stringify(destino)}`],
-        cwd: os.tmpdir(),
-        cols: 120,
-        rows: 30,
-        onExit: resolve,
-      })
-    })
-
-    manager.write('teste-linha-gigante', payload)
-    await manager.aguardarEscritas('teste-linha-gigante')
-    manager.write('teste-linha-gigante', '\u0004')
-
-    await Promise.race([
-      encerrou,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('o cat não encerrou a tempo')), 20000),
-      ),
-    ])
-
-    const recebido = fs.readFileSync(destino, 'utf8')
-
-    assert.equal(
-      Buffer.byteLength(recebido),
-      4096,
-      'o limite do tty mudou — reavaliar a nota acima',
+      evento?.exitCode,
+      0,
+      `[PTY nativa] processo coletor encerrou com código ${evento?.exitCode}`,
     )
 
-    manager.dispose?.()
-  },
-)
+    return fs.readFileSync(destino, 'utf8')
+  } finally {
+    manager.kill(nomeSessao, { force: true })
+    fs.rmSync(diretorio, { recursive: true, force: true })
+  }
+}
+
+function normalizarQuebras(texto) {
+  return String(texto).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
+test('runner expõe shell compatível com a fixture de PTY nativa', () => {
+  conferirRunnerNativo()
+})
+
+test('payload grande chega inteiro e o marcador posterior preserva a ordem', async () => {
+  const payload = textoGrande()
+  const marcador = '__FELIXO_DEPOIS_DA_CARGA__\n'
+  const recebido = await executarColeta({
+    nomeSessao: 'teste-pty-carga-grande',
+    payload,
+    depois: marcador,
+  })
+
+  assert.equal(
+    normalizarQuebras(recebido),
+    payload + marcador,
+    'a PTY não pode perder a carga nem deixar a escrita posterior passar na frente',
+  )
+})
+
+test('emoji não é partido ao atravessar a PTY nativa', async () => {
+  const payload = `${Array.from(
+    { length: 120 },
+    () => '🔥👍🚀'.repeat(10),
+  ).join('\n')}\n`
+  const recebido = await executarColeta({
+    nomeSessao: 'teste-pty-emoji',
+    payload,
+  })
+
+  const normalizado = normalizarQuebras(recebido)
+  assert.equal(normalizado, payload)
+  assert.ok(!normalizado.includes('�'), 'apareceu caractere de substituição')
+})
+
+test('linha grande com quebra chega intacta nos três terminais nativos', async () => {
+  // Mantém a linha abaixo dos limites canônicos conhecidos de POSIX e do
+  // ConPTY. A fronteira de uma linha sem quebra é do terminal, não da fila;
+  // prompts reais usam quebras e precisam desta garantia uniforme.
+  const payload = `${'a'.repeat(700)}\n`
+  const recebido = await executarColeta({
+    nomeSessao: 'teste-pty-linha-delimitada',
+    payload,
+  })
+
+  assert.equal(normalizarQuebras(recebido), payload)
+})

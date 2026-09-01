@@ -9,6 +9,7 @@ const {
   resolvePtyCommand,
   resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
+const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_STARTUP_FALLBACK_MS = 8_000
@@ -205,7 +206,7 @@ function createClaudeUsageQuery({
       }
 
       try {
-        const factory = spawnPty ?? loadNodePtySpawn()
+        const factory = spawnPty ?? loadNodePtySpawn(platformAdapter.name)
         ptyProcess = factory(launch.command, launch.args, {
           name: 'xterm-256color',
           cols: DEFAULT_COLS,
@@ -279,7 +280,20 @@ function createClaudeUsageQuery({
 
 const queryClaudeUsage = createClaudeUsageQuery()
 
-function loadNodePtySpawn() {
+function loadNodePtySpawn(platformName = process.platform) {
+  // A consulta de Usage cria uma PTY própria, fora do PtyProcessManager. Ela
+  // precisa preparar o mesmo helper que o terminal do Canvas prepara: o
+  // tarball do node-pty pode trazer o spawn-helper do macOS sem bit executável,
+  // e nesse caso `posix_spawnp` falha antes de a CLI emitir qualquer saída.
+  if (platformName === 'darwin') {
+    const helperState = ensureNodePtySpawnHelperExecutable({ platformName })
+    if (!helperState.ok) {
+      throw new Error(
+        `não foi possível preparar o helper nativo do node-pty: ${helperState.reason}`,
+      )
+    }
+  }
+
   return require('node-pty').spawn
 }
 
