@@ -3368,3 +3368,64 @@ gerados pela matriz; módulos de runtime não foram removidos por heurística.
 
 Estado final: implementação e validação local concluídas; pronta para commit,
 push, CI/release e registro da task como concluída no Notion.
+
+## 02/09/2026 — Contexto inicial não chegava quando o Claude Code pedia confiança na pasta (achado pelo usuário)
+
+O usuário relatou: abriu um terminal de agente pelo Felixo AI Core numa pasta
+nova e a sessão começou sem nenhum dos prompts de contexto inicial, e
+suspeitou do prompt de permissão que aparece na primeira vez que uma pasta é
+aberta. Investiguei e reproduzi ao vivo, com `node-pty` nesta máquina,
+`claude --dangerously-skip-permissions` numa pasta que o Claude Code nunca
+tinha visto: a flag do modo yolo pula a aprovação de ferramenta, mas **não**
+pula a checagem "Quick safety check: Is this a project you created or one
+you trust?" — o código do terminal assumia o contrário (havia comentário e
+teste dizendo explicitamente "a folder trust dialog, which yolo mode never
+shows").
+
+Duas causas se somavam:
+
+1. Essa checagem não numera as opções ("No, exit" / "Yes, I trust this
+   folder"), ao contrário do aviso de bypass ("1. No, exit" / "2. Yes, I
+   accept"). O filtro que existia (`MENU_ITEM`) só reconhecia item numerado,
+   então `hasClaudeInteractivePrompt` lia a linha selecionada do menu como se
+   fosse texto já digitado no composer e dava o REPL como pronto na hora — o
+   texto de contexto era escrito dentro do próprio menu de decisão.
+2. Mesmo sem essa confusão, o fallback de emergência de `scheduleInitialText`
+   ignorava por completo se a tela era um diálogo de decisão reconhecido:
+   passado o teto (60s para CLI conhecida, 10s para desconhecida), ele
+   forçava a escrita de qualquer jeito, então a mesma classe de bug valeria
+   para qualquer tela de decisão futura, de qualquer CLI.
+
+Corrigido nos dois pontos: `terminal-screen-state.ts` ganhou
+`UNNUMBERED_DECISION_OPTION` (aplicado em `hasClaudeInteractivePrompt` e
+`hasCodexInteractivePrompt`) e `isClaudeTrustPrompt`; `scheduleInitialText`
+agora nunca considera pronto nem aciona o fallback de emergência enquanto
+`looksLikeApprovalPrompt` reconhecer a tela como uma decisão parada — vale
+para qualquer CLI, não só Claude. Em modo yolo a nova checagem é aceita
+sozinha (`handleClaudeTrustPrompt` + `acceptClaudeDecisionScreen`,
+generalizado do antigo `acceptClaudeBypassWarning`); fora do modo yolo a
+pessoa decide, e o app só para de forçar texto por cima do menu.
+
+MEDIDO: 5 testes novos em `terminal-screen-state.test.ts`
+(`isClaudeTrustPrompt`) e 5 em `terminal-session-store.test.ts`, incluindo um
+que espera de verdade os 10s do fallback de uma CLI sem leitor de linha de
+entrada dedicado (`gemini`) parada num prompt de decisão genérico, para
+provar que a tela de decisão barra a escrita mesmo passado o teto de
+emergência. `npm run typecheck` limpo; `npm run test:frontend`: 752
+aprovados, 1 skip opt-in pré-existente; `npm test` do backend Electron: 953
+aprovados, 0 falhas (inalterado — a mudança é só no renderer); `npm run
+lint`: 0 erros, 2 avisos React pré-existentes; `npm run build` ok. O texto
+real da tela de confiança foi capturado ao vivo com `node-pty` nesta máquina
+antes da correção, para não adivinhar a redação.
+
+LIMITE: não testado com o Claude Code rodando fora do modo yolo pedindo essa
+mesma checagem numa sessão real do Felixo AI Core (só via o harness com
+bytes capturados) — o comportamento sem `--dangerously-skip-permissions` é
+"parar de forçar escrita", não "responder sozinho", então o risco de uma
+correção errada ali é menor.
+
+Commit [e57446e](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/e57446e),
+rebaseado e enviado a `origin/main`.
+
+Estado final: investigação, correção, testes e documentação concluídos;
+commit enviado.
