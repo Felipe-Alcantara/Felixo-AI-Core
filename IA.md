@@ -3429,3 +3429,64 @@ rebaseado e enviado a `origin/main`.
 
 Estado final: investigação, correção, testes e documentação concluídos;
 commit enviado.
+
+## 02/09/2026 — "Limites e uso" mostrava as CLIs de IA como não instaladas neste PC (achado pelo usuário)
+
+O usuário relatou que o painel "Limites e uso" mostrava Claude Code CLI,
+Codex CLI, Gemini CLI e Openia como "não instalada" nesta máquina, mesmo
+todas instaladas e funcionando (a própria sessão que investigou o bug é uma
+delas). Reproduzi ao vivo chamando `detectCli()` com o ambiente real do
+processo — sem simular nada — e achei duas causas, as duas expostas só
+quando a CLI foi instalada via `npm install -g` no Windows (o caminho do
+instalador automático do próprio app, e o mais comum para quem instala na
+mão):
+
+1. `getExecutableExtensions()` (`platform/win32.cjs`) testava a extensão
+   vazia (`''`) **antes** de `.cmd`. O npm cria, para cada CLI, três
+   arquivos com o mesmo nome base: o shim POSIX sem extensão (`claude`),
+   `claude.cmd` e `claude.ps1`. O resolvedor de comando sempre achava o shim
+   POSIX primeiro e devolvia esse caminho — mas `detectCli()` só liga
+   `shell: true` para um caminho terminado em `.cmd`/`.bat`, então o
+   `execFile` tentava rodar um script Unix como binário nativo do Windows e
+   falhava.
+2. Mesmo corrigindo (1) e resolvendo o `.cmd` certo, `execFile` com
+   `shell: true` no Windows concatena comando e argumentos crus para o
+   `cmd.exe /c` **sem citar** o caminho. Um perfil de usuário do Windows com
+   espaço no nome — como "Felipe Martins", nesta máquina — quebra o comando
+   ao meio: o `cmd.exe` só reconhece o pedaço antes do espaço. Numa conta
+   sem espaço no nome o mesmo código passa batido, o que explica o painel
+   funcionar numa outra máquina do usuário e não nesta.
+
+Corrigido em `cli-detector.cjs` (cita o executável entre aspas antes de
+rodar via shell) e `platform/win32.cjs` (extensões reais antes de `''`).
+
+MEDIDO: antes da correção, as quatro CLIs de IA reportavam
+`detected: false` chamando `detectCli()` de verdade nesta máquina. Depois:
+`claude` 2.1.258, `codex` 0.152.1, `gemini` 0.57.0 e `openia` 0.1.0, todas
+`detected: true` com a versão certa. 2 testes novos em
+`cli-detector.test.cjs` (um prova que `.cmd` vence o shim POSIX quando os
+dois existem; outro prova a citação do caminho ponta a ponta com um fake de
+`cmd.exe` que só reconhece o comando citado). `npm test`: 962 aprovados, 0
+falhas, 2 skips pré-existentes alheios. `npm run lint`: 0 erros, 2 avisos
+React pré-existentes.
+
+Commit [3d3c68d](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/3d3c68d),
+rebaseado e enviado a `origin/main`.
+
+Na mesma sessão, investigando um relato anterior do usuário ("Uma linha por
+pasta" empilhando dois blocos do mesmo repositório em vez de lado a lado),
+achei e corrigi dado obsoleto no banco local: um clone duplicado em
+`C:\Users\Felipe Martins\Felixo-AI-Core-task` (git limpo, sem commit
+próprio, apagado com segurança) e sete registros (`projects` e
+`canvas_nodes`) ainda apontando para `E:\Programação\Github\Felixo-AI-Core`,
+caminho que não existe mais desde que o repositório foi reorganizado para
+`P:\...\Repositórios\Meus repositórios\Felixo-AI-Core`. Corrigido com
+backup prévio do `felixo.sqlite` (dois arquivos `.bak-*` na pasta
+`database/` do userData) e sem fechar o app — o app aceita escrita no banco
+com ele aberto, o que evitou o risco de a correção matar esta própria sessão
+(ela roda como um dos terminais do canvas). Não gerou commit porque é dado
+de usuário, não código.
+
+Estado final: os dois relatos do usuário nesta sessão (agrupamento do
+canvas e detecção de CLI) foram investigados, reproduzidos ao vivo,
+corrigidos e validados; nenhum ficou pendente.
