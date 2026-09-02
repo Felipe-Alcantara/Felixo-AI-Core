@@ -1,6 +1,33 @@
 
 ---
 
+## [2026-09-02] Lote de patches/minors sem misturar majors
+
+**Task.** Atualizar as dependências dentro das faixas declaradas, mantendo
+Electron 41, Tailwind 3, TypeScript 6 e `@types/node` na série 25.
+
+**Lote aplicado.** `package.json` e `package-lock.json` receberam 18 updates
+diretos: React/React DOM 19.2.8, tipos React 19.2.18/19.2.5, xYFlow 12.11.6,
+Highlight.js 11.12.0, Lucide 1.39.0, `@electron/rebuild` 4.2.0, plugin React
+6.1.1, Autoprefixer 10.5.4, ESLint 10.9.1, refresh 0.5.6, globals 17.12.0,
+PostCSS 8.5.26, typescript-eslint 8.69.0, Vite 8.2.2, Vitest 4.1.11 e
+`@types/node` 25.9.5. Os majors Electron 44, Tailwind 4, TypeScript 7 e
+`@types/node` 26 ficaram fora.
+
+**Revisão.** As notas oficiais foram conferidas por grupo: correções de RSC,
+store e ícones no runtime/UI; correções de parser/grammars e CSS; e correções
+de compilação, diagnósticos, lint, concorrência e mocks no toolchain.
+
+**Validação.** `npm test` passou 983/983, testes nativos 5/5, frontend 760
+passou + 1 ignorado, lint sem erros (2 warnings preexistentes), build e
+`git diff --check` passaram. Após o lote, `npm audit --omit=dev` permaneceu
+com zero vulnerabilidades; o audit completo manteve somente advisories
+dev-only não críticos.
+
+**Estado final.** Implementação e validação local concluídas; a publicação
+remota e o acompanhamento do CI/release fazem parte do fechamento operacional
+desta task.
+
 ## [2026-09-02] Política contínua de dependências, SBOM e inventário do instalador
 
 **Task.** Automatizar a auditoria npm completa e comparativa de produção, a

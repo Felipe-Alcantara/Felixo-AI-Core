@@ -167,6 +167,15 @@ npm run build
 
 ## Testes Importantes
 
+[2026-09-02] ✅ Lote de patches/minors sem misturar majors — `package.json` e
+`package-lock.json` atualizaram 18 dependências dentro das faixas declaradas,
+mantendo Electron 41.10.7, Tailwind 3.4.19, TypeScript 6.0.3 e `@types/node`
+25.9.5. As notas oficiais de React, xYFlow, Highlight.js, Lucide, Electron
+rebuild, Vite, Vitest, ESLint, typescript-eslint, PostCSS e plugins relacionados
+foram revisadas por grupo. `npm test`: 983/983; testes nativos: 5/5;
+frontend: 760 passados + 1 ignorado; lint sem erros; build e `git diff --check`
+passaram. Nenhum major entrou neste lote.
+
 [2026-09-01] ✅ Bundle inicial sob demanda — `App` separa canvas e chat com
 `React.lazy`; cada ferramenta do canvas tem loader, prefetch seletivo por
 foco/ponteiro e fallback de loading/erro; Markdown e o runtime xterm/PTY
