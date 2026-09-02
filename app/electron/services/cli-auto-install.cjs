@@ -242,13 +242,25 @@ async function detectWithSecondChance(catalog, detect) {
   )
 }
 
-/** O executável que instalamos continua no disco? */
+/**
+ * O executável que instalamos continua no disco?
+ *
+ * No Windows o nome no disco não é o `command` puro: o catálogo declara em
+ * `windowsAliases` as extensões que aquela CLI realmente usa (`.cmd`, `.exe`
+ * e, para a Codex/openia, `.ps1`). Ignorar isso faria o app achar que o
+ * binário sumiu e reinstalar uma CLI que já está lá.
+ */
 function hasManagedBinary(layout, cli) {
   if (!cli.command) {
     return false
   }
 
-  return [cli.command, `${cli.command}.cmd`, `${cli.command}.exe`].some((candidate) =>
+  const candidatos =
+    cli.windowsAliases?.length > 0
+      ? [cli.command, ...cli.windowsAliases]
+      : [cli.command, `${cli.command}.cmd`, `${cli.command}.exe`]
+
+  return candidatos.some((candidate) =>
     fs.existsSync(path.join(layout.packagesBin, candidate)),
   )
 }
@@ -294,4 +306,5 @@ function getErrorMessage(error, fallback) {
 
 module.exports = {
   registerCliAutoInstallHandlers,
+  hasManagedBinary,
 }

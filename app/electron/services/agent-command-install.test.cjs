@@ -114,34 +114,42 @@ test('no Windows o comando vira .cmd e não recebe chmod', () => {
   )
 })
 
-test('o comando instalado roda de verdade e responde a ajuda', (t) => {
+/**
+ * Executa o shim instalado como um terminal faria: no POSIX o arquivo já é o
+ * executável; no Windows o `.cmd` só roda de verdade passado pelo `cmd.exe`
+ * (`cmd /c`), que é como o `child_process` do Node resolve um `.cmd` sem
+ * `shell: true`.
+ */
+function executarShim(caminho, args = []) {
   if (process.platform === 'win32') {
-    t.skip('shim POSIX não se aplica ao Windows')
-    return
+    return execFileSync('cmd.exe', ['/d', '/s', '/c', caminho, ...args], {
+      encoding: 'utf8',
+      windowsVerbatimArguments: true,
+    })
   }
 
+  return execFileSync(caminho, args, { encoding: 'utf8' })
+}
+
+test('o comando instalado roda de verdade e responde a ajuda', () => {
   const binDir = path.join(pastaTemporaria(), 'bin')
   const { caminho } = instalarComandoDoAgente({
     binDir,
     execPath: process.execPath,
     entrypoint: path.join(__dirname, '..', 'cli', 'felixo.cjs'),
     userData: path.join(binDir, 'profile'),
-    plataforma: 'linux',
+    plataforma: process.platform,
   })
 
   // Executa o shim como um terminal executaria: é a única forma de provar que
   // o arquivo gerado é mesmo um comando, e não um texto bem formatado.
-  const saida = execFileSync(caminho, [], { encoding: 'utf8' })
+  const saida = executarShim(caminho)
 
   assert.match(saida, /felixo fetch-all/)
   assert.match(saida, /pedir-execucao/)
 })
 
 test('o shim executado grava pedidos no userData recebido do app', () => {
-  if (process.platform === 'win32') {
-    return
-  }
-
   const root = pastaTemporaria()
   const binDir = path.join(root, 'bin')
   const userData = path.join(root, 'Felixo AI Core profile')
@@ -150,12 +158,10 @@ test('o shim executado grava pedidos no userData recebido do app', () => {
     execPath: process.execPath,
     entrypoint: path.join(__dirname, '..', 'cli', 'felixo.cjs'),
     userData,
-    plataforma: 'linux',
+    plataforma: process.platform,
   })
 
-  const saida = execFileSync(caminho, ['fetch-all', 'pedir-execucao'], {
-    encoding: 'utf8',
-  })
+  const saida = executarShim(caminho, ['fetch-all', 'pedir-execucao'])
   const arquivos = fs.readdirSync(path.join(userData, 'agent-requests'))
 
   assert.match(saida, /Pedido registrado:/)

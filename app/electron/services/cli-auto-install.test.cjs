@@ -19,23 +19,30 @@ Module._load = function patchedLoad(request, parent, isMain) {
 }
 const {
   registerCliAutoInstallHandlers,
+  hasManagedBinary,
 } = require('./cli-auto-install.cjs')
 Module._load = originalLoad
+const { getManagedCliLayout } = require('../core/managed-cli-paths.cjs')
 
 /**
  * Monta um perfil isolado com o layout que o app usa em disco.
+ *
+ * Usa `getManagedCliLayout` — o mesmo cálculo do código de produção — em vez
+ * de montar a pasta na mão: no Windows os executáveis ficam direto em
+ * `clis`, não em `clis/bin`, e um fixture que ignorasse isso pulava o cenário
+ * real em vez de testá-lo (era o que os quatro testes abaixo faziam).
  *
  * `managedClis` são as CLIs cujo executável já está lá — a prova de que a
  * instalação anterior continua valendo.
  */
 function createProfile({ managedClis = [], state = {} } = {}) {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-auto-install-'))
-  const binDir = path.join(userData, 'clis', 'bin')
-  fs.mkdirSync(binDir, { recursive: true })
+  const layout = getManagedCliLayout({ userData })
+  fs.mkdirSync(layout.packagesBin, { recursive: true })
   fs.mkdirSync(path.join(userData, 'config'), { recursive: true })
 
   for (const cli of managedClis) {
-    fs.writeFileSync(path.join(binDir, cli), '#!/bin/sh\n', 'utf8')
+    fs.writeFileSync(path.join(layout.packagesBin, cli), '#!/bin/sh\n', 'utf8')
   }
 
   fs.writeFileSync(
@@ -90,7 +97,6 @@ function detectedOnly(ids) {
 
 test(
   'atualizar o app não faz reinstalar a CLI que já foi instalada',
-  { skip: process.platform === 'win32' ? 'layout de bin difere no Windows' : false },
   async () => {
     // O caso relatado: o app publica uma versão por push, então o registro de
     // sucesso amarrado à versão nunca valia na abertura seguinte.
@@ -120,7 +126,6 @@ test(
 
 test(
   'uma detecção que falha e acerta na segunda tentativa não gera instalação',
-  { skip: process.platform === 'win32' ? 'layout de bin difere no Windows' : false },
   async () => {
     // A detecção roda logo depois da abertura e uma CLI lenta estoura o tempo
     // limite; sem a segunda chance ela passava por ausente e era reinstalada.
@@ -148,7 +153,6 @@ test(
 
 test(
   'reinstala quando o executável que instalamos sumiu do disco',
-  { skip: process.platform === 'win32' ? 'layout de bin difere no Windows' : false },
   async () => {
     const profile = createProfile({
       managedClis: [],
@@ -170,9 +174,24 @@ test(
   },
 )
 
+test('reconhece o binário instalado pelo alias que o contrato declara (.ps1 incluído)', () => {
+  // A openia declara .ps1 em `windowsAliases` porque o launcher instala assim
+  // no Windows; sem ler o alias do catálogo, o app achava que sumiu e
+  // reinstalava uma CLI que já estava lá.
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-alias-'))
+  const layout = getManagedCliLayout({ userData })
+  fs.mkdirSync(layout.packagesBin, { recursive: true })
+  fs.writeFileSync(path.join(layout.packagesBin, 'openia.ps1'), '', 'utf8')
+
+  const cli = { command: 'openia', windowsAliases: ['openia.exe', 'openia.cmd', 'openia.ps1'] }
+
+  assert.equal(hasManagedBinary(layout, cli), true)
+
+  fs.rmSync(userData, { recursive: true, force: true })
+})
+
 test(
   'a falha registrada continua valendo só para a versão em que aconteceu',
-  { skip: process.platform === 'win32' ? 'layout de bin difere no Windows' : false },
   async () => {
     const profile = createProfile({
       state: { gemini: { version: '0.1.103', ok: false, message: 'sem rede' } },

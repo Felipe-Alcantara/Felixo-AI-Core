@@ -51,6 +51,10 @@ function construirShimWindows({ execPath, entrypoint, userData }) {
     '@echo off',
     'rem Gerado pelo Felixo AI Core. Edicoes aqui sao sobrescritas.',
     'setlocal',
+    // Sem isto o cmd.exe le o .cmd (gravado em UTF-8) na code page ANSI da
+    // maquina e corrompe qualquer acento no caminho — e o caminho real de
+    // instalacao tem acento ("Programacao/Repositorios").
+    'chcp 65001 >nul',
     ...(userData ? [`set "FELIXO_USER_DATA_DIR=${escaparValorWindows(userData)}"`] : []),
     'set ELECTRON_RUN_AS_NODE=1',
     `"${execPath}" "${entrypoint}" %*`,

@@ -52,13 +52,50 @@ describe('managed-cli-installer', () => {
       platformName: 'linux',
     })
 
-    assert.equal(env.PATH.split(path.delimiter)[0], LAYOUT.runtimeBin)
+    assert.equal(env.PATH.split(path.posix.delimiter)[0], LAYOUT.runtimeBin)
     assert.equal(env.ELECTRON_RUN_AS_NODE, '1')
   })
 
   // Um `.npmrc` com `prefix` configurado mandaria os pacotes para fora da
   // pasta do app, justamente onde eles poderiam sobrescrever a instalacao
   // que a pessoa ja tinha.
+  // No Windows o npm precisa de um shell explicito para rodar os scripts de
+  // instalacao (`.cmd`/`.bat` dos pacotes): sem isso alguns pacotes falham
+  // silenciosamente porque o npm nao sabe qual shell usar para executa-los.
+  it('sets npm_config_script_shell to cmd.exe on Windows', () => {
+    const env = createManagedInstallEnv({
+      layout: LAYOUT,
+      baseEnv: { Path: 'C:\\Windows\\System32', ComSpec: 'C:\\Windows\\System32\\cmd.exe' },
+      platformName: 'win32',
+    })
+
+    assert.equal(env.npm_config_script_shell, 'C:\\Windows\\System32\\cmd.exe')
+  })
+
+  it('does not set npm_config_script_shell outside Windows', () => {
+    const env = createManagedInstallEnv({
+      layout: LAYOUT,
+      baseEnv: { PATH: '/usr/bin' },
+      platformName: 'linux',
+    })
+
+    assert.equal(env.npm_config_script_shell, undefined)
+  })
+
+  // No Windows o PATH some do ambiente e vira `Path` (case-insensitive), e o
+  // separador de entradas e `;`, nao `:` — um codigo que so soubesse ler
+  // `PATH`/`:` deixaria a instalacao sem o node/npm do app na frente.
+  it('prepends the runtime bin to Path using the Windows separator', () => {
+    const env = createManagedInstallEnv({
+      layout: LAYOUT,
+      baseEnv: { Path: 'C:\\Windows\\System32;C:\\Windows' },
+      platformName: 'win32',
+    })
+
+    assert.deepEqual(env.PATH.split(';').slice(0, 1), [LAYOUT.runtimeBin])
+    assert.ok(env.PATH.includes('C:\\Windows\\System32'))
+  })
+
   it('pins the prefix so user npm config cannot redirect the install', () => {
     const env = createManagedInstallEnv({
       layout: LAYOUT,

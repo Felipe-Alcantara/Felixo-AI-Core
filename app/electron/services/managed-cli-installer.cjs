@@ -65,10 +65,16 @@ function createManagedInstallEnv({
   baseEnv = process.env,
   platformName = platformAdapter.name,
 }) {
+  // Usa o adaptador da plataforma pedida, não o do processo real: os testes
+  // fixam `platformName` para descrever a máquina Windows/Linux/macOS que
+  // estão simulando, e isso só vale se a chave do PATH e o separador de
+  // entradas também seguirem essa escolha, não o SO onde a suíte roda.
+  const adapter = platformAdapter.getAdapter(platformName)
+  const platformPath = platformName === 'win32' ? path.win32 : path.posix
   const env = createNodeEnv(createCliEnv(baseEnv))
-  const pathKey = platformAdapter.getPathEnvKey(env)
+  const pathKey = adapter.getPathEnvKey(env)
 
-  env[pathKey] = [layout.runtimeBin, env[pathKey]].filter(Boolean).join(path.delimiter)
+  env[pathKey] = [layout.runtimeBin, env[pathKey]].filter(Boolean).join(platformPath.delimiter)
 
   if (pathKey !== 'PATH') {
     env.PATH = env[pathKey]
