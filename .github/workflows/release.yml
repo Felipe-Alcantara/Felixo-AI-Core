@@ -171,14 +171,14 @@ jobs:
       # mesmo empacotamento que será enviado. Ele comprova o npm-runtime fora
       # do asar, além de listar os pacotes presentes no app.asar.
       - name: Inventory packaged application
-        run: node scripts/package-inventory.cjs --release-dir release --out "release/package-inventory-${RUNNER_OS}.json"
+        run: node scripts/package-inventory.cjs --release-dir release --out "release/package-inventory-${{ matrix.os }}.json"
 
       - name: Upload packaged inventory report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: package-inventory-${{ matrix.os }}
-          path: app/release/package-inventory-${{ runner.os }}.json
+          path: app/release/package-inventory-${{ matrix.os }}.json
           if-no-files-found: error
 
       - name: Install Linux virtual display
@@ -189,7 +189,7 @@ jobs:
       - name: Validate installed release artifact
         shell: bash
         run: |
-          smoke=(node scripts/release-smoke.cjs --release-dir release --report "release/release-smoke-${RUNNER_OS}.json")
+          smoke=(node scripts/release-smoke.cjs --release-dir release --report "release/release-smoke-${{ matrix.os }}.json")
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             xvfb-run -a --server-args="-screen 0 1280x720x24" "${smoke[@]}"
           else
@@ -201,7 +201,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-smoke-${{ matrix.os }}
-          path: app/release/release-smoke-${{ runner.os }}.json
+          path: app/release/release-smoke-${{ matrix.os }}.json
           if-no-files-found: ignore
 
       - name: Upload installers
