@@ -270,6 +270,9 @@ declare global {
         electron?: string
         node?: string
       }
+      windowFocus?: {
+        onChange: (callback: (focused: boolean) => void) => () => void
+      }
       getFilePath?: (file: File) => string
       /** Versão empacotada do app (a do CI, não a do package.json versionado). */
       getVersion?: () => Promise<string>

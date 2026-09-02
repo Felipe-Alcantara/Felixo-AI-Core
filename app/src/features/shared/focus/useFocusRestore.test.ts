@@ -6,8 +6,13 @@ import type { Focusable } from './focus-restore'
  * Bancada com um DOM de mentira: o que importa aqui é a fiação dos eventos —
  * quem é ouvido, em que ordem o foco é lido, e se a limpeza solta tudo.
  */
-function criarBancada(visibilityState: DocumentVisibilityState = 'visible') {
+function criarBancada(
+  visibilityState: DocumentVisibilityState = 'visible',
+  comFocoNativo = false,
+) {
   const ouvintes = new Map<string, Set<(event: unknown) => void>>()
+  const ouvintesDeFocoNativo = new Set<(focado: boolean) => void>()
+  const eventosDeJanela: string[] = []
   const quadros: Array<() => void> = []
   const body = { nodeName: 'BODY' } as unknown as HTMLElement
 
@@ -37,6 +42,13 @@ function criarBancada(visibilityState: DocumentVisibilityState = 'visible') {
       removeEventListener: remover('win'),
     } as unknown as AmbienteDeFoco['janela'],
     agendarQuadro: (callback) => quadros.push(callback),
+    emitirEventoDeJanela: (tipo) => eventosDeJanela.push(tipo),
+  }
+  if (comFocoNativo) {
+    ambiente.ouvirFocoNativo = (callback) => {
+      ouvintesDeFocoNativo.add(callback)
+      return () => ouvintesDeFocoNativo.delete(callback)
+    }
   }
 
   const lembradoRef: { current: Focusable | null } = { current: null }
@@ -52,6 +64,11 @@ function criarBancada(visibilityState: DocumentVisibilityState = 'visible') {
         ouvinte(event)
       }
     },
+    dispararFocoNativo: (focado: boolean) => {
+      for (const ouvinte of ouvintesDeFocoNativo) {
+        ouvinte(focado)
+      }
+    },
     /** Roda os quadros pendentes, como o navegador faria. */
     rodarQuadros: () => {
       const pendentes = quadros.splice(0, quadros.length)
@@ -59,6 +76,8 @@ function criarBancada(visibilityState: DocumentVisibilityState = 'visible') {
     },
     contarOuvintes: () =>
       Array.from(ouvintes.values()).reduce((total, grupo) => total + grupo.size, 0),
+    contarOuvintesDeFocoNativo: () => ouvintesDeFocoNativo.size,
+    eventosDeJanela,
   }
 }
 
@@ -120,6 +139,52 @@ describe('instalarRestauracaoDeFoco', () => {
     bancada.documento.activeElement = alvo as unknown as Element
 
     bancada.disparar('win:focus')
+    bancada.rodarQuadros()
+
+    expect(vezesFocado()).toBe(1)
+  })
+
+  it('lembra o activeElement quando o blur nativo não emite focusout', () => {
+    const bancada = criarBancada('visible', true)
+    const { alvo } = alvoFocavel()
+    bancada.documento.activeElement = alvo as unknown as Element
+
+    bancada.dispararFocoNativo(false)
+
+    expect(bancada.lembradoRef.current).toBe(alvo)
+  })
+
+  it('restaura um campo depois do retorno pelo foco nativo da janela', () => {
+    const bancada = criarBancada('visible', true)
+    const { alvo, vezesFocado } = alvoFocavel()
+    bancada.documento.activeElement = alvo as unknown as Element
+
+    bancada.dispararFocoNativo(false)
+    bancada.documento.activeElement = null
+    bancada.dispararFocoNativo(true)
+    bancada.rodarQuadros()
+
+    expect(vezesFocado()).toBe(1)
+  })
+
+  it('reenvia o blur nativo para limpar estados de teclado dos consumidores', () => {
+    const bancada = criarBancada('visible', true)
+    const { alvo } = alvoFocavel()
+    bancada.documento.activeElement = alvo as unknown as Element
+
+    bancada.dispararFocoNativo(false)
+
+    expect(bancada.eventosDeJanela).toEqual(['blur'])
+  })
+
+  it('não agenda duas restaurações quando DOM e BrowserWindow avisam o retorno', () => {
+    const bancada = criarBancada('visible', true)
+    const { alvo, vezesFocado } = alvoFocavel()
+    bancada.disparar('doc:focusout', { target: alvo })
+    bancada.documento.activeElement = null
+
+    bancada.disparar('win:focus')
+    bancada.dispararFocoNativo(true)
     bancada.rodarQuadros()
 
     expect(vezesFocado()).toBe(1)
@@ -189,5 +254,14 @@ describe('instalarRestauracaoDeFoco', () => {
     bancada.parar()
 
     expect(bancada.contarOuvintes()).toBe(0)
+  })
+
+  it('solta também o ouvinte de foco nativo na limpeza', () => {
+    const bancada = criarBancada('visible', true)
+    expect(bancada.contarOuvintesDeFocoNativo()).toBe(1)
+
+    bancada.parar()
+
+    expect(bancada.contarOuvintesDeFocoNativo()).toBe(0)
   })
 })

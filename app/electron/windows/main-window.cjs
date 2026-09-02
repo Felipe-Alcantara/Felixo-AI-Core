@@ -3,6 +3,7 @@ const { rendererBuildPath } = require('../core/paths.cjs')
 const { mainWindowOptions } = require('../core/window-options.cjs')
 const { denyExternalWindowOpen } = require('../services/external-links.cjs')
 const { registerWindowZoomShortcuts } = require('../services/window-zoom-shortcuts.cjs')
+const { registerWindowFocusBridge } = require('../services/window-focus-bridge.cjs')
 const { registerWebviewLifecycle } = require('../services/webview-lifecycle.cjs')
 const { registrarGuardaDeFechamento } = require('./close-guard.cjs')
 const {
@@ -60,6 +61,7 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
   )
   const mainWindow = new BrowserWindow({ ...mainWindowOptions, ...state.bounds })
 
+  registerWindowFocusBridge(mainWindow)
   applyWindowState(mainWindow, state)
   registerWindowStatePersistence(mainWindow, settingsRepository)
 

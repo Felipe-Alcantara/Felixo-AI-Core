@@ -1,11 +1,20 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
+const WINDOW_FOCUS_CHANNEL = 'window:focus-state'
+
 contextBridge.exposeInMainWorld('felixo', {
   platform: process.platform,
   versions: {
     chrome: process.versions.chrome,
     electron: process.versions.electron,
     node: process.versions.node,
+  },
+  windowFocus: {
+    onChange: (callback) => {
+      const handler = (_event, focused) => callback(Boolean(focused))
+      ipcRenderer.on(WINDOW_FOCUS_CHANNEL, handler)
+      return () => ipcRenderer.removeListener(WINDOW_FOCUS_CHANNEL, handler)
+    },
   },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
   getVersion: () => ipcRenderer.invoke('app:get-version'),

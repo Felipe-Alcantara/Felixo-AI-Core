@@ -1,6 +1,44 @@
 
 ---
 
+## [2026-09-02] Foco nativo perdido deixava teclado preso após troca de aplicativo
+
+**Sintoma relatado.** Depois que outra janela roubava o foco — com maior
+frequência ao clicar fora do Felixo — alguns campos paravam de receber entrada.
+`Alt+Tab` às vezes parecia corrigir o estado, e o indício mais forte era
+`Shift` e `Espaço` deixarem de funcionar até reabrir o app.
+
+**Causa confirmada no Linux/X11 com KWin.** Um clique real em outra janela
+gerava `blur` e `focus` na `BrowserWindow` do Electron, mas não gerava
+`window.blur`, `window.focus` nem `document.focusout` no renderer. O
+`document.activeElement` continuava apontando para o input/textarea que estava
+em uso. Assim, o `useFocusRestore` anterior não recebia o sinal para lembrar o
+campo; além disso, o React Flow mantinha o conjunto interno de teclas
+pressionadas porque seu reset depende de `window.blur`. Uma perda de `keyup`
+nesse intervalo explica o estado de modificador preso observado em `Shift` e
+as combinações que envolvem `Espaço`.
+
+**Correção.** `window-focus-bridge.cjs` encaminha o foco nativo pelo processo
+principal e pelo preload. O hook agora captura o `activeElement` no blur
+nativo, reemite `window.blur` para limpar estados de teclado dos consumidores e
+reancora o campo no retorno com `blur()` + `focus()`. A restauração é
+coalescida quando DOM e BrowserWindow avisam o mesmo retorno e continua sem
+roubar o foco de um campo diferente que tenha assumido o controle.
+
+**Validação.** A matriz manual isolada percorreu os campos habilitados de chat,
+modais, canvas, nós e ferramentas, incluindo inputs, textareas, selects,
+números e checkboxes; cada controle manteve foco e recebeu a tecla de teste
+após o ciclo nativo. O input de arquivo oculto e o campo de qualidade
+desabilitado foram identificados como não editáveis. No Electron isolado, a
+ponte entregou `[false, true]`, o textarea passou por `focus → blur → focus` e
+o `window.blur` sintético foi observado. `npm test`: 973 testes verdes;
+`npm run test:frontend`: 760 verdes e 1 ignorado; `npm run build` e `npm run
+lint` passaram (2 avisos preexistentes no `SearchPanel.tsx`). A repetição do
+clique externo por `xdotool` ficou indisponível depois que o ambiente físico
+entrou no bloqueio de tela; a transição nativa já havia sido observada antes
+do bloqueio e foi reproduzida diretamente pela `BrowserWindow` após a
+correção.
+
 ## [2026-08-17] Biblioteca de skills, catálogo de prompts e o manifesto no spawn
 
 **Contexto.** Uma sessão longa de trabalho real (operar o Notion, auditar
