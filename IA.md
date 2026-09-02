@@ -3541,3 +3541,51 @@ enviado a `origin/main`.
 
 Estado final: investigação e correção concluídas e documentadas; validação
 do sintoma em uso real depende do usuário confirmar depois.
+
+## 02/09/2026 — App instalado "bugava" quando o agente mexia no código-fonte clonado, mesmo rodando a versão instalada (achado pelo usuário)
+
+O usuário relatou usar o próprio Felixo AI Core instalado para programar o
+Felixo AI Core, e às vezes, quando um agente mexia no código-fonte clonado,
+a instância instalada "dava umas bugadas" como se tivesse virado a versão
+rodando do código-fonte — suspeitando de algo relacionado a "localhost".
+
+Achei a causa raiz sem precisar reproduzir o sintoma exato: o Electron
+calcula `app.getPath('userData')` só a partir de `app.name` (o `name` do
+`package.json`), sem olhar `isPackaged`. `npm run dev` (o que um agente roda
+para testar uma mudança do código-fonte) e o app instalado resolviam para a
+**mesma pasta** — mesmo `felixo.sqlite`, mesmo estado de canvas, mesmo Local
+Storage do Chromium. Com os dois processos do Electron vivos ao mesmo tempo,
+escrevendo no mesmo banco, a instância instalada passava a se comportar como
+a de desenvolvimento porque, em boa parte, estava mesmo operando sobre o
+estado que a outra também mexia — o "localhost" da suspeita do usuário era
+sintoma correto de outro processo do Electron por perto, só que a colisão de
+verdade era no userData, não numa URL.
+
+(A skill `rodar-app` já tinha essa preocupação documentada — "sem
+`--user-data-dir`, o app de teste abre em cima do canvas real... e mexe nos
+agentes e configurações de quem usa a máquina" — mas isso só cobria o
+lançamento via Playwright daquela skill; `npm run dev` chamado direto, do
+jeito que um agente normalmente testa uma mudança, ficava sem essa proteção.)
+
+Corrigido: `resolveDevUserDataOverride` (nova função pura em
+`app-paths.cjs`), chamada no topo de `main.cjs` antes de qualquer outro uso
+de `app.getPath`. Fora de app empacotado e fora do smoke test de release
+(que já tem isolamento próprio), o modo dev passa a usar `<pasta-real>-dev`
+— a menos que `FELIXO_USER_DATA_DIR` já aponte pra outro lugar, o mesmo
+override que o smoke test e o comando `felixo` standalone já respeitam.
+
+MEDIDO: rodei `npm run dev` de verdade nesta máquina (via
+`start-electron.cjs --dev`) e conferi que `felixo-ai-core-dev/` nasceu com
+banco, canvas, config e Local Storage próprios, separado de
+`felixo-ai-core/` — a pasta real do app instalado ficou intocada. 6 testes
+novos em `app-paths.test.cjs`. `npm test`: 968 aprovados, 0 falhas, 2 skips
+pré-existentes alheios. `npm run lint`: 0 erros.
+
+Commit [2ef067b](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/2ef067b),
+enviado a `origin/main`. Como o processo main do Electron não passa por
+build/empacotamento (`.cjs` puro), o fix vale a partir do próximo
+`npm run dev` — não depende de instalar uma versão nova do app.
+
+Estado final: causa raiz confirmada por análise de código e reprodução ao
+vivo da isolação (não do sintoma "bugado" em si, que só acontece com dois
+processos concorrendo — mas a causa da concorrência está eliminada).
