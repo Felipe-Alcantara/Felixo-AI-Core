@@ -3259,3 +3259,59 @@ três SOs fica no CI e no release empacotado.
 Estado final: implementação, testes, instrumentação e documentação concluídas;
 pronta para commit, push, CI/release e registro da task como concluída no
 Notion.
+
+## 02/09/2026 — Auto-instalação, shim do agente e ambiente do instalador testados de verdade no Windows
+
+Achado IMPORTANTE 4 da auditoria multi-OS de 30/08/2026: quatro cenários de
+`cli-auto-install.test.cjs` eram pulados no Windows porque o fixture criava
+`userData/clis/bin`, layout que só existe no POSIX (o Windows instala direto
+em `userData/clis`). O shim do agente só executava de verdade em POSIX, e o
+teste do ambiente do instalador só fixava PATH estilo Linux.
+
+Rodando os três arquivos de teste num Windows real (não simulado), em vez de
+só ajustar o fixture apareceram três bugs de produção reais:
+
+- O shim `.cmd` (`agent-command-install.cjs`) é lido pelo `cmd.exe` na code
+  page ANSI da máquina; sem `chcp 65001`, qualquer acento no caminho de
+  instalação ("Programação/Repositórios") saía corrompido — reproduzido ao
+  vivo: `node cli/felixo.cjs` respondia certo, mas o `.cmd` gerado, executado
+  via `cmd.exe /c`, dava `Cannot find module` com o caminho ilegível.
+- `hasManagedBinary` (`cli-auto-install.cjs`) ignorava os `windowsAliases`
+  do catálogo — a Openia declara `.ps1` além de `.cmd`/`.exe` — e reinstalaria
+  uma CLI cujo binário só existe com essa extensão.
+- `createManagedInstallEnv` (`managed-cli-installer.cjs`) calculava a chave
+  do PATH e o separador de entradas pelo `process.platform` real do host, não
+  pelo `platformName` simulado no teste — um teste que dizia "Windows" ainda
+  usava `:` se rodasse num host Linux/macOS, e vice-versa.
+
+O que foi feito: `cli-auto-install.test.cjs` passou a montar o perfil com
+`getManagedCliLayout` (o mesmo cálculo de produção) em vez de montar a pasta
+na mão, removendo os quatro `skip` de Windows. `agent-command-install.test.cjs`
+passou a executar o shim de verdade nos dois SOs — no Windows, via
+`cmd.exe /d /s /c` — removendo o skip da ajuda e o retorno vazio do teste de
+persistência do pedido no `userData`. `managed-cli-installer.cjs` ganhou
+`getAdapter(platformName)` e `path.win32`/`path.posix` explícitos em vez do
+adaptador/`path.delimiter` do host real; `managed-cli-installer.test.cjs`
+ganhou testes de `npm_config_script_shell` (cmd.exe no Windows, ausente fora
+dele) e do separador `;` do PATH.
+
+MEDIDO: os quatro cenários de `cli-auto-install.test.cjs` e os dois testes de
+execução real do shim passam sem skip/retorno vazio num Windows real (não
+CI simulado). `npm test`: 953 aprovados, 0 falhas, 2 skips alheios a este
+trabalho (`node:sqlite` indisponível neste runtime — o achado do PTY nativo
+Windows/macOS, item 2 da auditoria, tem task própria e não faz parte deste
+diff). `npm run lint`: 0 erros, 2 avisos React pré-existentes em
+`SearchPanel.tsx`. `git diff --check` limpo. Commit
+[ef4eb57](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/ef4eb57),
+rebaseado e enviado a `origin/main`.
+
+LIMITE: a suíte não foi rodada em CI Windows nesta sessão (só localmente,
+neste Windows real); o CI nativo dos três SOs valida na próxima execução do
+workflow. Não abri task nova porque o escopo pedido — os três arquivos e os
+quatro/dois cenários listados no aceite — foi cumprido integralmente; os
+bugs de produção encontrados foram corrigidos junto, não deixados como
+pendência.
+
+Estado final: implementação, testes e documentação concluídos; commit
+enviado; registro do relatório e da task no Notion em andamento nesta mesma
+sessão.
