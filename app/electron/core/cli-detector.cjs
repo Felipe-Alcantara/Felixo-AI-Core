@@ -159,13 +159,19 @@ async function detectCli(cliInfo, env, options = {}) {
         ? resolvePath(command, env, { platform: adapter.name })
         : null
       const executable = commandPath || command
-      const { stdout, stderr } = await execute(executable, [cliInfo.versionFlag], {
+      const useShell = adapter.name === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
+      // `execFile` com `shell: true` no Windows concatena o comando cru para o
+      // `cmd.exe /c` em vez de citá-lo — sem aspas, um caminho com espaço (ex.:
+      // "C:\Users\Felipe Martins\...") quebra ao meio e cmd.exe tenta rodar só
+      // o pedaço antes do espaço. Medido ao vivo: `claude`/`codex` instaladas
+      // via npm reportavam "não instalada" só numa conta cujo nome de usuário
+      // do Windows tem espaço.
+      const commandToRun = useShell ? `"${executable}"` : executable
+      const { stdout, stderr } = await execute(commandToRun, [cliInfo.versionFlag], {
         timeout: DETECTION_TIMEOUT_MS,
         env: env || process.env,
         windowsHide: true,
-        ...(adapter.name === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
-          ? { shell: true }
-          : {}),
+        ...(useShell ? { shell: true } : {}),
       })
 
       const output = (stdout || stderr || '').trim()

@@ -138,6 +138,27 @@ describe('cli-detector', () => {
 
       assert.equal(result, 'C:\\Users\\me\\npm\\codex.cmd')
     })
+
+    // Bug real, medido ao vivo: o npm cria, para cada CLI instalada
+    // globalmente no Windows, três arquivos com o mesmo nome base — o shim
+    // POSIX sem extensão (`codex`), `codex.cmd` e `codex.ps1`. Com os dois
+    // presentes, o resolvedor tinha que preferir o `.cmd` (executável de
+    // verdade), não o shim POSIX (que o `execFile` não sabe rodar direto no
+    // Windows) — antes da correção, ele devolvia o shim sem extensão porque
+    // testava `''` antes de `.cmd`.
+    it('prefere o .cmd ao shim POSIX sem extensão quando os dois existem', () => {
+      const existentes = new Set([
+        'C:\\Users\\me\\npm\\codex',
+        'C:\\Users\\me\\npm\\codex.cmd',
+        'C:\\Users\\me\\npm\\codex.ps1',
+      ])
+      const result = resolveCommandPath('codex', { PATH: 'C:\\Users\\me\\npm' }, {
+        platform: 'win32',
+        exists: (candidate) => existentes.has(candidate),
+      })
+
+      assert.equal(result, 'C:\\Users\\me\\npm\\codex.cmd')
+    })
   })
 
   it('resolves and executes a Windows .cmd shim before reporting it missing', async () => {
@@ -154,8 +175,42 @@ describe('cli-detector', () => {
     })
 
     assert.equal(result.detected, true)
-    assert.equal(calls[0].command, 'C:\\Users\\me\\npm\\codex.cmd')
+    // Citado entre aspas: é isto que evita o `cmd.exe` cortar o comando no
+    // primeiro espaço do caminho (ver o teste abaixo com usuário "com espaço").
+    assert.equal(calls[0].command, '"C:\\Users\\me\\npm\\codex.cmd"')
     assert.equal(calls[0].options.shell, true)
     assert.equal(result.version, '1.2.3')
+  })
+
+  // Bug real, medido ao vivo nesta máquina: `execFile` com `shell: true` no
+  // Windows concatena comando e argumentos crus para o `cmd.exe /c` em vez de
+  // citá-los. Sem aspas, um caminho de perfil com espaço no nome de usuário —
+  // como o desta máquina, "Felipe Martins" — quebra ao meio, e o `cmd.exe`
+  // tenta rodar só o pedaço antes do espaço. É exatamente o caso que fazia
+  // Claude/Codex/Gemini aparecerem como "não instalada" nesta máquina, mesmo
+  // instaladas, enquanto funcionava numa conta sem espaço no nome.
+  it('cita o caminho antes de rodar via shell, para sobreviver a espaço no perfil do usuário', async () => {
+    const caminhoComEspaco = 'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\claude.cmd'
+
+    // Simula o `cmd.exe /c` real: sem aspas, ele só vê o pedaço do comando até
+    // o primeiro espaço — o resto vira argumento solto, e o comando não bate
+    // com nada executável.
+    const cmdExeFake = async (command) => {
+      if (command !== `"${caminhoComEspaco}"`) {
+        throw new Error(`comando não reconhecido: ${command}`)
+      }
+      return { stdout: '2.1.258 (Claude Code)' }
+    }
+
+    const result = await detectCli(SUPPORTED_CLIS.find((cli) => cli.command === 'claude'), {
+      PATH: 'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm',
+    }, {
+      platformName: 'win32',
+      resolvePath: () => caminhoComEspaco,
+      execute: cmdExeFake,
+    })
+
+    assert.equal(result.detected, true)
+    assert.equal(result.version, '2.1.258')
   })
 })

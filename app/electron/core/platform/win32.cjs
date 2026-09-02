@@ -136,9 +136,23 @@ function createTerminalLaunchPlan({ command, args }) {
   }
 }
 
-/** @returns {string[]} */
+/**
+ * Ordem em que testamos as extensões de um comando no Windows.
+ *
+ * `''` fica por último de propósito: o npm cria, para cada CLI instalada
+ * globalmente, três arquivos com o mesmo nome base — `claude` (shim POSIX,
+ * sem extensão), `claude.cmd` e `claude.ps1`. Com `''` primeiro, o resolvedor
+ * achava o shim POSIX antes do `.cmd` e devolvia esse caminho; `detectCli` só
+ * liga `shell: true` para caminho terminado em `.cmd`/`.bat`, então o
+ * `execFile` tentava rodar um script Unix como binário nativo do Windows e
+ * falhava — a CLI aparecia como "não instalada" mesmo instalada de verdade
+ * (medido ao vivo: `claude`/`codex`/`gemini` instaladas via npm, todas
+ * reportando `detected: false`).
+ *
+ * @returns {string[]}
+ */
 function getExecutableExtensions() {
-  return ['', '.exe', '.cmd', '.bat', '.ps1']
+  return ['.exe', '.cmd', '.bat', '.ps1', '']
 }
 
 /**
