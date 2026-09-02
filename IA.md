@@ -3624,7 +3624,40 @@ que fazer" da task. O teste prova que o mecanismo do fix funciona quando o
 foco do SO muda de verdade (não só quando `activeElement` zera), mas não
 substitui o uso real pedido.
 
-Estado final: mecanismo do fix validado ao vivo (3/3 ciclos); task permanece
-"Aguardando resposta" — segue dependendo de confirmação do usuário em uso
-real (Windows/macOS/Linux com desktop de verdade) pra fechar o critério de
-aceite.
+Estado final (revisto na entrada seguinte): mecanismo do fix validado ao vivo
+no ambiente Xvfb sem window manager (3/3 ciclos) — mas essa validação **não
+reproduziu** o sintoma real, como a entrada abaixo mostra poucos minutos
+depois.
+
+## 02/09/2026 — Confirmação negativa em uso real: 2dfa56f e 1436c9f não corrigiram o bug de foco (clicar no campo não restaura)
+
+Poucas horas depois de 1436c9f, Felipe topou de novo com o sintoma em **uso
+real** (não teste) e corrigiu a leitura da entrada anterior: o bug acontece em
+todos os SOs e nunca foi corrigido de verdade — a reprodução em Xvfb sem
+window manager (entrada acima) simplesmente não alcançou o caminho real do
+bug.
+
+MEDIDO (relato coletado por pergunta interativa, não suposição): SO Linux;
+gatilho foi trocar de janela/app (alt-tab) e voltar; **clicar direto no campo
+de digitação NÃO restaurou** — só o padrão antigo do bug (minimizar/reabrir
+ou reiniciar) destrava.
+
+Esse dado muda o diagnóstico: as duas correções existentes
+(`focus-restore.ts`/`useFocusRestore.ts`) atuam sobre *restauração automática
+de foco* quando a janela do SO volta. Um clique manual do usuário no campo já
+dispara `focus()` nativo do navegador por conta própria, **independente**
+dessa lógica. Se nem clicar resolve, a causa provavelmente não está (só) em
+"quem tem o foco do DOM" — é mais provável que seja um estado da aplicação
+que trava a entrada de teclado mesmo com o elemento certo focado (listener
+desanexado, sessão do terminal/PTY numa aba "morta", alguma flag que só volta
+ao desmontar/remontar o componente — o que minimizar+reabrir faz de fato).
+
+Task de confirmação fechada como Concluída (documentação e confirmação real
+entregues, ainda que o resultado seja negativo). Investigação de causa raiz
+que falta virou task nova, separada, prioridade Alta/Urgente:
+[Felixo AI Core/Foco — Investigar causa raiz da trava de input após alt-tab](https://app.notion.com/p/Felixo-AI-Core-Foco-Investigar-causa-raiz-da-trava-de-input-ap-s-alt-tab-clique-n-o-restaura-cor-3cf91f95497e811e8d76d69db9055e3b).
+
+Estado final: bug confirmado **não corrigido**; causa raiz ainda desconhecida.
+Próximo passo é reproduzir com desktop Linux real (window manager de verdade,
+não Xvfb headless) e instrumentar `useFocusRestore`/xterm no momento do
+travamento — ver a task nova para o plano completo.
