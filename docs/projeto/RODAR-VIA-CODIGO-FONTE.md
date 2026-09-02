@@ -1,7 +1,7 @@
 # Rodar via Código-Fonte
 
 Status: concluido.
-Última revisão: 2026-09-01.
+Última revisão: 2026-09-02.
 
 ## Objetivo
 
@@ -112,6 +112,7 @@ npm run dev:web
 | `npm run typecheck:full` | app/ | Força o typecheck completo, ignorando o cache |
 | `npm run build` | app/ | Typecheck incremental + Vite bundle |
 | `npm run benchmark:typecheck:check` | app/ | Mede cinco runs frios e cinco incrementais do typecheck |
+| `npm run benchmark:npm-runtime:check` | app/ | Mede poda, tamanho e smoke do npm do instalador |
 | `npm run benchmark:bundle:check` | app/ | Mede startup/menu no bundle e valida chunks relativos no Electron |
 | `npm run benchmark:terminal-output -- --check` | app/ | Mede retenção/renderização dos Logs da CLI no Electron |
 | `npm run test` | app/ | Roda testes unitários |
@@ -142,6 +143,25 @@ O benchmark mede tempo de parede e pico de RSS do comando real, valida cinco
 amostras de cada modo e move apenas seus próprios caches temporários. A
 otimização é de cache do compilador; ela não usa `noCheck`, não exclui fontes
 e não troca um typecheck por uma mera compilação Vite.
+
+### npm-runtime do instalador
+
+O app empacotado leva uma árvore de npm própria para conseguir instalar as
+CLIs quando o usuário não tem Node/npm. Para medir a árvore e o fluxo completo
+sem rede:
+
+```bash
+cd app
+npm run benchmark:npm-runtime:check -- \
+  --iterations=3 --out=/tmp/felixo-npm-runtime.json
+```
+
+A bancada compara a política anterior com a atual, mede bytes descompactados,
+arquivos e um `tar.gz` portátil, e executa startup, primeira instalação e
+atualização no Electron em um prefixo/cache temporários. A fixture local
+confirma `--offline`, lifecycle scripts, PATH, prefixo, permissões e
+persistência entre processos. O CI roda o mesmo check em Linux, Windows e
+macOS; o `release-smoke` mede a árvore que efetivamente entrou no artefato.
 
 ### Logs da CLI do chat legado
 

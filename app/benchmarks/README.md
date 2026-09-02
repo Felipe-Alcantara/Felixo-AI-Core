@@ -342,3 +342,69 @@ tipos: o tempo p50 variou 2,3% dentro da medição local, o p95 caiu 0,8% e o
 RSS caiu 1,5% no p50 e 2,2% no p95. Quando uma verificação limpa for necessária,
 `npm run typecheck:full` usa `--force`; o CI e o build normal usam o cache
 seguro, sem `noCheck`, exclusões novas ou permissões mais frouxas.
+
+## Benchmark do npm-runtime do instalador
+
+O instalador precisa levar uma árvore própria do npm porque o usuário pode não
+ter Node/npm instalado. O hook `scripts/bundle-npm-runtime.cjs` copia essa
+árvore para `resources/npm-runtime/npm`; ele mantém `bin`, `lib`,
+`package.json`, dependências de produção e arquivos auxiliares necessários ao
+`node-gyp`, mas não leva documentação, mapas de source e diretórios de testes,
+exemplos, fixtures, benchmarks, coverage ou `.github`.
+
+### Como executar
+
+```bash
+npm run benchmark:npm-runtime -- \
+  --iterations=3 --check --out=/tmp/felixo-npm-runtime.json
+```
+
+O relatório compara duas cópias do mesmo `app/node_modules/npm`:
+
+- `baseline`: a política anterior, que removia apenas `docs`, `man` e
+  Markdown;
+- `current`: a política usada pelo `beforePack`, com a poda conservadora dos
+  artefatos que não são carregados pelo npm em produção.
+
+Para cada política a bancada mede bytes descompactados, quantidade de
+arquivos e um `tar.gz` portátil com `mtime` fixo. Também abre o `npm-cli.js`
+com o binário do Electron (`ELECTRON_RUN_AS_NODE=1`) e mede startup, primeira
+instalação e atualização em um prefixo/cache descartáveis. A fixture é local e
+usa `--offline`; seus scripts de ciclo de vida, binário via PATH, prefixo,
+permissões POSIX/Windows e persistência entre processos são conferidos sem
+alterar o npm global ou usar credenciais.
+
+O `--check` falha se a política atual não reduzir bytes e arquivos ou se
+qualquer uma das duas políticas deixar de instalar/atualizar a fixture. O
+benchmark não impõe um ganho artificial de tempo: startup e instalação são
+registrados por SO, enquanto a decisão de aceitar a poda exige redução de
+artefato e smoke funcional completo.
+
+No CI, o check roda depois do `npm ci` em Ubuntu, Windows e macOS e publica um
+JSON por runner. Depois do empacotamento, `release-smoke-<SO>.json` mede ainda
+o tamanho da árvore que realmente foi para `resources/npm-runtime` e os
+tempos do npm dentro do artefato; o relatório é publicado como artefato do
+workflow de release.
+
+### Resultado reproduzível em 02/09/2026
+
+Linux x64, Node 25.9.0, Electron 41.10.7 e npm 11.19.1, três repetições por
+política. O tamanho é lógico (soma dos bytes dos arquivos); o tarball serve
+para comparação estável do conteúdo, não é o formato final do instalador.
+
+| Medida | Baseline | Política atual | Variação |
+| --- | ---: | ---: | ---: |
+| Arquivos | 1.557 | 1.527 | −30 (−1,93%) |
+| Runtime descompactado | 8,47 MiB | 8,41 MiB | −67.388 B (−0,76%) |
+| Runtime `tar.gz` | 2,20 MiB | 2,16 MiB | −46.686 B (−2,02%) |
+| Startup p50 / p95 | 361,935 / 400,447 ms | 396,303 / 403,559 ms | medido; p95 +0,78% |
+| Primeira instalação p50 / p95 | 1.071,468 / 1.336,693 ms | 1.073,195 / 1.347,825 ms | medido; dentro da variância |
+| Atualização p50 / p95 | 1.091,226 / 1.154,682 ms | 1.099,577 / 1.110,710 ms | medido; p95 −3,81% |
+
+O ganho é deliberadamente conservador: os 30 arquivos retirados são testes,
+exemplos e um PNG de exemplo. Não foram removidos módulos por nome, arquivos
+JavaScript/JSON/Python ou a árvore do `node-gyp`, porque o npm pode carregá-los
+dinamicamente durante instalação de uma CLI. O smoke local passou nas duas
+políticas com instalação e atualização offline, lifecycle, PATH, prefixo,
+permissões e persistência; os valores de Windows e macOS ficam nos JSONs da
+matriz CI/release.

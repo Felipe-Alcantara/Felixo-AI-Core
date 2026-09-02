@@ -362,6 +362,7 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
 }
 
 async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, timeoutMs }) {
+  const runtimeRoot = path.join(resourcesPath, 'npm-runtime', 'npm')
   const npmCliPath = path.join(resourcesPath, 'npm-runtime', 'npm', 'bin', 'npm-cli.js')
   const sourceDir = path.join(temporaryRoot, 'cli-source')
   const installRoot = path.join(temporaryRoot, 'cli-install')
@@ -382,6 +383,7 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
     '--loglevel=error',
   ]
 
+  const startupStartedAt = Date.now()
   const versionResult = await runPackagedNode({
     executable,
     args: [npmCliPath, '--version'],
@@ -390,10 +392,12 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
     timeoutMs,
   })
   assertCommandSuccess(versionResult, 'O npm empacotado nao respondeu.')
+  const startupMs = Date.now() - startupStartedAt
   const npmVersion = findVersion(`${versionResult.stdout}\n${versionResult.stderr}`)
   if (!npmVersion) throw new Error('A versao do npm empacotado nao foi identificada.')
 
   writeCliFixture(sourceDir, '1.0.0')
+  const firstInstallStartedAt = Date.now()
   const firstInstall = await runPackagedNode({
     executable,
     args: npmArgs(['install', '--global', '--prefix', installRoot, sourceDir]),
@@ -402,6 +406,7 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
     timeoutMs,
   })
   assertCommandSuccess(firstInstall, 'A instalacao da CLI pelo npm empacotado falhou.')
+  const firstInstallMs = Date.now() - firstInstallStartedAt
 
   const runtime = ensureManagedCliRuntime({
     layout,
@@ -422,6 +427,7 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
   assertOutput(firstRun, 'FELIXO_RELEASE_CLI_1.0.0', 'A CLI instalada nao executou pelo runtime.')
 
   writeCliFixture(sourceDir, '2.0.0')
+  const updateStartedAt = Date.now()
   const update = await runPackagedNode({
     executable,
     args: npmArgs(['install', '--global', '--prefix', installRoot, '--force', sourceDir]),
@@ -430,6 +436,7 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
     timeoutMs,
   })
   assertCommandSuccess(update, 'A atualizacao da CLI pelo npm empacotado falhou.')
+  const updateMs = Date.now() - updateStartedAt
 
   const secondPackage = readInstalledPackage(layout)
   const secondBin = findInstalledBin(layout)
@@ -468,6 +475,15 @@ async function runBundledNpmSmoke({ executable, resourcesPath, temporaryRoot, ti
   return {
     ok: true,
     npmVersion,
+    runtime: {
+      files: countFiles(runtimeRoot),
+      unpackedBytes: measurePath(runtimeRoot),
+    },
+    timings: {
+      startupMs,
+      firstInstallMs,
+      updateMs,
+    },
     packageName: CLI_PACKAGE_NAME,
     installedVersion: firstPackage.version,
     updatedVersion: secondPackage.version,
@@ -750,6 +766,16 @@ function measurePath(candidate) {
   if (!stat.isDirectory() || stat.isSymbolicLink()) return stat.size
   return safeReadDirectory(candidate).reduce(
     (total, entry) => total + measurePath(path.join(candidate, entry.name)),
+    0,
+  )
+}
+
+function countFiles(candidate) {
+  if (!pathExists(candidate)) return 0
+  const stat = fs.lstatSync(candidate)
+  if (!stat.isDirectory() || stat.isSymbolicLink()) return stat.isFile() ? 1 : 0
+  return safeReadDirectory(candidate).reduce(
+    (total, entry) => total + countFiles(path.join(candidate, entry.name)),
     0,
   )
 }

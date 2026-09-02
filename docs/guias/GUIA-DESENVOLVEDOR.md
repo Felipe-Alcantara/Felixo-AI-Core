@@ -1,7 +1,7 @@
 # Guia para Desenvolvedores
 
 Status: concluido.
-Última revisão: 2026-09-01.
+Última revisão: 2026-09-02.
 
 ## Objetivo
 
@@ -112,6 +112,7 @@ Felixo-AI-Core/
 | `npm run typecheck:full` | app/ | Força o typecheck completo dos dois projetos |
 | `npm run build` | app/ | Typecheck incremental + Vite |
 | `npm run benchmark:typecheck:check` | app/ | Compara cinco execuções frias e cinco incrementais |
+| `npm run benchmark:npm-runtime:check` | app/ | Compara tamanho e smoke do npm levado ao instalador |
 | `npm run benchmark:bundle:check` | app/ | Mede o bundle de produção no Electron e valida chunks/assets |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run test:frontend` | app/ | Roda a suíte Vitest do renderer |
@@ -215,9 +216,25 @@ artefato real do sistema e executa `npm run release:smoke`. O smoke:
   local de fixture sem rede e sem tocar no npm global da máquina;
 - confere o PATH, os shims `node`/`npm`, permissões POSIX ou `.cmd` no Windows,
   prefixo privado e persistência entre processos;
-- grava tamanho do artefato, tempo até o app ficar pronto, resultado do PTY,
-  versão do npm e diagnósticos nativos em
+- grava tamanho do artefato, tamanho/quantidade de arquivos do
+  `npm-runtime`, startup do npm, tempos de primeira instalação/atualização,
+  tempo até o app ficar pronto, resultado do PTY, versão do npm e diagnósticos
+  nativos em
   `release/release-smoke-<plataforma>.json`.
+
+Para medir a árvore antes de empacotar, use a comparação offline entre a
+política anterior e a atual:
+
+```bash
+cd app
+npm run benchmark:npm-runtime:check -- \
+  --iterations=3 --out=/tmp/felixo-npm-runtime.json
+```
+
+O CI repete o check em Linux, Windows e macOS. A fixture usa o binário do
+Electron como Node, um prefixo descartável, lifecycle scripts, PATH e uma
+fonte local; nenhuma CLI ou credencial da máquina é alterada. O relatório do
+release confirma depois o tamanho da árvore que entrou no instalador real.
 
 Para reproduzir no checkout, gere um artefato para o SO atual e rode:
 

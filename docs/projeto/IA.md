@@ -2592,3 +2592,58 @@ Validação local: `npm test` 951/951, `npm run test:frontend` 742 + 1 skip,
 `npm run typecheck:full`, build, testes do store/JSONL/runner e benchmark
 Electron `--check` passaram. CI/release multi-SO e o registro no Notion são os
 próximos passos do workflow.
+
+## Registro de Trabalho — 2026-09-02 (parte 24) — tamanho e custo do npm-runtime do instalador
+
+PEDIDO: executar a task do Notion [“Felixo AI Core/Performance — Medir e
+reduzir o npm-runtime no instalador”](https://app.notion.com/p/Felixo-AI-Core-Performance-Medir-e-reduzir-o-npm-runtime-no-instalador-3cc91f95497e81bc8283eb354c823b89).
+
+DIAGNÓSTICO: o hook `beforePack` copiava a árvore de `npm 11.19.1` para
+`build/npm-runtime`, removendo apenas `docs`, `man` e Markdown. O projeto não
+media quantidade/bytes do recurso, compactação, startup nem primeira
+instalação do npm no Electron, e o smoke não informava o tamanho do runtime
+efetivamente presente no artefato.
+
+IMPLEMENTAÇÃO:
+
+- `bundle-npm-runtime.cjs` passou a exportar a política anterior para
+  comparação e a política atual, que remove apenas documentação, source maps e
+  diretórios não runtime: `test(s)`, `__tests__`, `example(s)`, `fixture(s)`,
+  benchmarks, coverage, snapshots, `.github` e `.nyc_output`;
+- a cópia mantém `bin/npm-cli.js`, `lib`, `package.json`, dependências de
+  produção e o Python/arquivos auxiliares do `node-gyp`; nenhuma remoção de
+  módulo de runtime é inferida por nome;
+- `npm-runtime-performance.cjs` cria JSON por SO com bytes descompactados,
+  arquivos, `tar.gz` portátil com mtime fixo, startup, primeira instalação e
+  atualização. O smoke local offline executa lifecycle, PATH, prefixo,
+  permissões e persistência em cada política;
+- o CI roda `npm run benchmark:npm-runtime:check -- --iterations=2` na matriz
+  Ubuntu/Windows/macOS e sobe um relatório por runner; o workflow de release
+  sobe também o JSON do smoke do instalador;
+- `release-smoke.cjs` registra `runtime.files`, `runtime.unpackedBytes` e
+  `timings` do npm, mantendo o artefato e os dados do usuário descartáveis.
+
+MEDIÇÃO LOCAL: Linux x64, Node 25.9.0, Electron 41.10.7 e npm 11.19.1, três
+repetições. Baseline → atual: 1.557 → 1.527 arquivos; 8.882.285 → 8.814.897
+bytes descompactados (−67.388 B, −0,76%); 2.310.946 → 2.264.260 bytes
+`tar.gz` (−46.686 B, −2,02%). No último run, startup p50/p95: 361,935/400,447
+→ 396,303/403,559 ms; primeira instalação: 1.071,468/1.336,693 →
+1.073,195/1.347,825 ms; atualização: 1.091,226/1.154,682 →
+1.099,577/1.110,710 ms. O tempo fica registrado para acompanhamento e não é
+tratado como uma melhoria universal de uma única máquina.
+
+VALIDAÇÃO: `npm test` 958/958, `npm run test:frontend` 742 aprovados + 1
+skip, `npm run test:native` 5/5, typecheck completo, build, lint sem erros
+(somente os 2 warnings React preexistentes), testes focados, benchmark com
+`--check`, `npm run pack`, smoke de `release/linux-unpacked` e `git diff
+--check` passaram. O smoke empacotado mediu runtime de 1.527 arquivos e
+8.814.897 bytes, startup 415 ms, primeira instalação 941 ms, atualização
+1.017 ms, PTY, PATH, permissões, prefixo e persistência válidos.
+
+LIMITE: `tar.gz` é uma métrica comparável do conteúdo e não o formato final de
+cada instalador. A confirmação dos valores específicos de Windows e macOS
+fica nos JSONs da matriz CI/release.
+
+Estado final: implementação, medição, validação e documentação concluídas;
+pronta para commit, push, acompanhamento do CI/release e encerramento da task
+no Notion.

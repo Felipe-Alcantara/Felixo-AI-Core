@@ -390,7 +390,11 @@ publicada no GitHub Releases, baixa automaticamente e instala ao fechar.
 O workflow também valida cada instalador na própria matriz do Linux, Windows e
 macOS: abre o app empacotado, cria um PTY real, usa o npm-runtime que foi
 embarcado para instalar e atualizar uma CLI de teste e registra o resultado em
-`release-smoke-<plataforma>.json` junto dos artefatos da release.
+`release-smoke-<plataforma>.json` junto dos artefatos da release. Esse JSON
+também registra a quantidade/bytes do npm-runtime e os tempos de startup,
+primeira instalação e atualização; o benchmark `npm run
+benchmark:npm-runtime:check` compara a árvore anterior e a política atual em
+cada SO antes do empacotamento.
 
 Observações importantes:
 
@@ -422,6 +426,13 @@ npm run build
 verificação. Para uma auditoria limpa dos dois projetos TypeScript, use
 `npm run typecheck:full`; para comparar cinco execuções frias e cinco
 incrementais, use `npm run benchmark:typecheck:check`.
+
+O instalador leva um `npm-runtime` próprio para instalar CLIs sem Node/npm
+externo. A política de empacotamento remove apenas documentação e artefatos de
+desenvolvimento comprovadamente não runtime; compare-a com a política anterior
+e valide instalação/atualização offline nos três SOs com
+`npm run benchmark:npm-runtime:check` dentro de `app/`. O smoke do release
+também registra o tamanho do runtime e os tempos do npm no artefato real.
 
 `npm test` executa os testes Node unitários; o segundo comando é o gate explícito
 de PTY nativa: ele inicia fixtures reais

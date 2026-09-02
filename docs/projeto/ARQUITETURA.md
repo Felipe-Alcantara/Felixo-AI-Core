@@ -1,7 +1,7 @@
 # Arquitetura vigente — Felixo AI Core
 
 Status: concluido.
-Última revisão: 2026-09-01.
+Última revisão: 2026-09-02.
 
 ## Princípio do produto
 
@@ -158,6 +158,30 @@ três sistemas. A compilação de 01/09/2026 gerou entry de 191,73 KiB cru
 (60,37 KiB gzip), 41 assets JavaScript e nenhum aviso de chunk acima de
 500 kB; os chunks grandes de PTY e Markdown permanecem isolados até serem
 necessários.
+
+### npm-runtime do instalador
+
+Como o app instalado precisa instalar CLIs sem depender de Node/npm do usuário,
+o `beforePack` copia `app/node_modules/npm` para o recurso externo
+`resources/npm-runtime/npm`. A cópia preserva `bin/npm-cli.js`, `lib`,
+`package.json`, dependências de produção e os arquivos Python/auxiliares do
+`node-gyp`; comandos npm são carregados dinamicamente e não permitem uma lista
+manual frágil de módulos.
+
+A política remove somente documentação, source maps e diretórios reconhecidos
+como não runtime (`test`, `tests`, `__tests__`, `example(s)`, `fixture(s)`,
+`benchmark(s)`, `coverage`, `.github`, snapshots e `.nyc_output`). O benchmark
+`npm run benchmark:npm-runtime:check` compara essa política à cópia anterior,
+mede tamanho descompactado e `tar.gz`, startup, primeira instalação e
+atualização, e exercita a mesma árvore com Electron em um prefixo/cache
+descartáveis offline. O smoke instala uma fixture com lifecycle, verifica
+PATH, shims, permissões e persistência; o release smoke também registra o
+tamanho do runtime que realmente entrou no artefato e seus tempos de npm.
+
+O check roda nos três SOs no CI. A poda só é aceita quando reduz o artefato e
+mantém instalação/atualização, comportamento offline, permissões e prefixo;
+não há remoção baseada em adivinhar quais módulos JavaScript o npm poderá
+carregar futuramente.
 
 ### Renderização segura de Markdown
 
