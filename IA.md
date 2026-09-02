@@ -3589,3 +3589,42 @@ build/empacotamento (`.cjs` puro), o fix vale a partir do próximo
 Estado final: causa raiz confirmada por análise de código e reprodução ao
 vivo da isolação (não do sintoma "bugado" em si, que só acontece com dois
 processos concorrendo — mas a causa da concorrência está eliminada).
+
+## 02/09/2026 — Reprodução ao vivo do ciclo de perda/retorno de foco do SO, para validar 1436c9f
+
+A correção de foco em [1436c9f](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/1436c9f)
+(mesmo dia, entrada acima) foi enviada sem reprodução ao vivo — só análise de
+código — porque reproduzir exige trocar o foco entre janelas do SO, algo fora
+do alcance de jsdom. Task do Notion pedia confirmação em uso real.
+
+Não dá pra simular "uso real de vários dias" numa sessão, mas dá pra reproduzir
+o mecanismo exato do bug (perda e retorno de foco no nível do SO, sem clique)
+com a skill `rodar-app`: Electron real sob Xvfb, dirigido por
+`xdotool windowfocus` (muda o foco de input do X de verdade, não é evento
+sintético de CDP) e `xdotool key` (tecla real entregue à janela, não
+`page.keyboard`).
+
+MEDIDO: com o terminal do agente focado, troquei o foco do X para uma segunda
+janela (`xclock`) e de volta para a janela do Felixo — **sem** clicar nem
+chamar `.focus()` manualmente — e mandei uma tecla real logo em seguida. Repeti
+3 vezes com variações: (1) troca simples com espera de ~1s antes da tecla, (2)
+troca rápida sem espera, (3) `windowunmap`/`windowmap` (mais próximo de
+minimizar/restaurar) + troca de foco. **Nas 3, o caractere digitado chegou no
+campo do terminal**, sem precisar de clique — evidência de que o
+`blur()`+`focus()` de `useFocusRestore` está de fato reancorando o teclado
+depois do ciclo de foco do SO, no caminho que a lacuna original não cobria.
+
+LIMITAÇÃO (declarada, não escondida): isso não é o critério de aceite da task
+— que pede confirmação do usuário depois de uso real numa sessão de trabalho
+normal, em possivelmente mais de um SO. O ambiente daqui é Linux/Xvfb **sem
+window manager**, então `xdotool windowfocus` é uma chamada direta a
+`XSetInputFocus`, sem o compositor/WM de um desktop de verdade no meio — e é
+Linux, não o Windows que motivou a correção original nem o macOS pedido no "o
+que fazer" da task. O teste prova que o mecanismo do fix funciona quando o
+foco do SO muda de verdade (não só quando `activeElement` zera), mas não
+substitui o uso real pedido.
+
+Estado final: mecanismo do fix validado ao vivo (3/3 ciclos); task permanece
+"Aguardando resposta" — segue dependendo de confirmação do usuário em uso
+real (Windows/macOS/Linux com desktop de verdade) pra fechar o critério de
+aceite.
