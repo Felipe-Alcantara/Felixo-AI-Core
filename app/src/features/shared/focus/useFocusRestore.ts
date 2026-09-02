@@ -35,6 +35,14 @@ export function instalarRestauracaoDeFoco(
     agendarQuadro(() => {
       const lembrado = lembradoRef.current
       if (devePedirFoco(lembrado, documento.activeElement, documento)) {
+        // `blur()` antes do `focus()`, mesmo quando o elemento já é o
+        // `activeElement`: um `focus()` sozinho num elemento que o DOM já
+        // considera focado costuma ser ignorado (nem dispara o evento), e é
+        // exatamente esse caso — "ainda focado" na leitura do JS, mas surdo
+        // pro teclado de verdade — que faltava cobrir. O ciclo completo é o
+        // que reproduz, de propósito, o que minimizar/restaurar fazia de
+        // graça no Windows.
+        lembrado?.blur()
         lembrado?.focus()
       }
     })

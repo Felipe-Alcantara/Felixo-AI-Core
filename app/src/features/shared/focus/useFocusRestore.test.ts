@@ -69,6 +69,7 @@ function alvoFocavel() {
     focus: () => {
       focado += 1
     },
+    blur: () => {},
   }
   return { alvo, vezesFocado: () => focado }
 }
@@ -81,6 +82,42 @@ describe('instalarRestauracaoDeFoco', () => {
     // A pessoa estava digitando no terminal e o app perdeu o foco.
     bancada.disparar('doc:focusout', { target: alvo })
     bancada.documento.activeElement = null
+
+    bancada.disparar('win:focus')
+    bancada.rodarQuadros()
+
+    expect(vezesFocado()).toBe(1)
+  })
+
+  it('faz um ciclo completo de blur+focus, não só focus', () => {
+    // O `focus()` sozinho num elemento que o DOM já considera focado costuma
+    // ser ignorado — é o ciclo completo que reproduz o que o minimizar do
+    // Windows fazia de graça e destrava o roteamento nativo de teclado.
+    const bancada = criarBancada()
+    const ordem: string[] = []
+    const alvo = {
+      isConnected: true,
+      blur: () => ordem.push('blur'),
+      focus: () => ordem.push('focus'),
+    }
+
+    bancada.disparar('doc:focusout', { target: alvo })
+    bancada.documento.activeElement = null
+
+    bancada.disparar('win:focus')
+    bancada.rodarQuadros()
+
+    expect(ordem).toEqual(['blur', 'focus'])
+  })
+
+  it('restaura mesmo quando o navegador não limpou o activeElement (fora do ciclo de minimizar do Windows)', () => {
+    const bancada = criarBancada()
+    const { alvo, vezesFocado } = alvoFocavel()
+
+    bancada.disparar('doc:focusout', { target: alvo })
+    // O Chromium não zerou o activeElement desta vez — continua sendo o
+    // próprio elemento lembrado, mas o teclado de verdade já parou de chegar.
+    bancada.documento.activeElement = alvo as unknown as Element
 
     bancada.disparar('win:focus')
     bancada.rodarQuadros()

@@ -4,7 +4,7 @@ import { deveLembrarFoco, devePedirFoco, type Focusable } from './focus-restore'
 const documento = { body: { nodeName: 'BODY' } as unknown as HTMLElement }
 
 function elemento(isConnected = true): Focusable {
-  return { isConnected, focus: () => {} }
+  return { isConnected, focus: () => {}, blur: () => {} }
 }
 
 describe('deveLembrarFoco', () => {
@@ -39,6 +39,16 @@ describe('devePedirFoco', () => {
     // Um modal abriu e autofocou seu campo: quem chegou por último manda.
     const outro = {} as Element
     expect(devePedirFoco(elemento(), outro, documento)).toBe(false)
+  })
+
+  it('devolve o foco mesmo quando o lembrado ainda é o activeElement', () => {
+    // Fora do ciclo de minimizar/restaurar do Windows (notificação do SO por
+    // cima da janela, troca de app sem minimizar, a maioria dos casos fora do
+    // Windows), o Chromium às vezes não limpa `activeElement` — ele continua
+    // apontando pro mesmo elemento mesmo com o roteamento nativo de teclado já
+    // quebrado. Recusar aqui era deixar esse caso sem conserto nenhum.
+    const lembrado = elemento()
+    expect(devePedirFoco(lembrado, lembrado as unknown as Element, documento)).toBe(true)
   })
 
   it('não faz nada sem elemento lembrado', () => {

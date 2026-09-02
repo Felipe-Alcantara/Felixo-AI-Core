@@ -14,7 +14,7 @@
  */
 
 /** Elemento que sabemos como focar de volta. */
-export type Focusable = Pick<HTMLElement, 'isConnected' | 'focus'>
+export type Focusable = Pick<HTMLElement, 'isConnected' | 'focus' | 'blur'>
 
 /**
  * Se um elemento merece ser lembrado como "quem tinha o foco".
@@ -42,9 +42,19 @@ export function deveLembrarFoco(
  *
  * - O elemento saiu do documento (o modal fechou, o nó foi removido). Focar um
  *   nó órfão não faz nada e ainda deixaria o `<body>` focado.
- * - Alguma outra coisa já assumiu o foco enquanto a janela voltava — um modal
- *   que abriu, um campo que se autofocou. Quem chegou por último manda; roubar
- *   o foco dele seria o mesmo bug, invertido.
+ * - Alguma outra coisa, DIFERENTE do lembrado, já assumiu o foco enquanto a
+ *   janela voltava — um modal que abriu, um campo que se autofocou. Quem
+ *   chegou por último manda; roubar o foco dele seria o mesmo bug, invertido.
+ *
+ * O terceiro caso — `ativo` já é o próprio `lembrado` — conta como "sim,
+ * restaura": em alguns disparos (notificação do SO por cima da janela,
+ * troca de app sem minimizar, e em geral fora do Windows) o Chromium não
+ * limpa `activeElement` para `null`/`body` como no minimizar; ele continua
+ * apontando pro mesmo elemento, mas o roteamento nativo de teclado já
+ * quebrou do mesmo jeito. Reancorar mesmo assim é o que reproduz o ciclo
+ * completo de blur+focus que o minimizar/restaurar do Windows disparava de
+ * graça — ver `instalarRestauracaoDeFoco`, que faz `blur()` antes do
+ * `focus()` bem por isso.
  */
 export function devePedirFoco(
   lembrado: Focusable | null,
@@ -55,9 +65,9 @@ export function devePedirFoco(
     return false
   }
 
-  // `null` acontece quando o documento inteiro está sem foco — exatamente o
-  // caso que este módulo existe para consertar.
-  if (ativo && ativo !== documento.body) {
+  // `null` acontece quando o documento inteiro está sem foco — o caso
+  // original que este módulo existe para consertar.
+  if (ativo && ativo !== documento.body && (ativo as unknown as Focusable) !== lembrado) {
     return false
   }
 
