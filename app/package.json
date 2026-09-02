@@ -40,6 +40,7 @@
     "benchmark:bundle:check": "npm run benchmark:bundle -- --check",
     "benchmark:canvas-connections": "node scripts/canvas-connection-performance.cjs",
     "benchmark:fetch-all": "node scripts/fetch-all-scanner-benchmark.cjs",
+    "inventory:package": "node scripts/package-inventory.cjs",
     "release:smoke": "node scripts/release-smoke.cjs",
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",

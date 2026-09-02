@@ -394,7 +394,8 @@ embarcado para instalar e atualizar uma CLI de teste e registra o resultado em
 também registra a quantidade/bytes do npm-runtime e os tempos de startup,
 primeira instalação e atualização; o benchmark `npm run
 benchmark:npm-runtime:check` compara a árvore anterior e a política atual em
-cada SO antes do empacotamento.
+cada SO antes do empacotamento. O inventário `package-inventory-<plataforma>.json`
+é anexado à execução e à release para permitir conferir o conteúdo distribuído.
 
 Observações importantes:
 
@@ -433,6 +434,26 @@ desenvolvimento comprovadamente não runtime; compare-a com a política anterior
 e valide instalação/atualização offline nos três SOs com
 `npm run benchmark:npm-runtime:check` dentro de `app/`. O smoke do release
 também registra o tamanho do runtime e os tempos do npm no artefato real.
+
+### Auditoria de dependências e SBOM
+
+O CI executa separadamente o `npm audit` completo e `npm audit --omit=dev`, gera
+um SBOM CycloneDX e inventaria o `app.asar` junto do `npm-runtime` que realmente
+entra no pacote. A árvore de produção precisa estar sem vulnerabilidades e o
+grafo completo não pode conter advisories críticos; advisories não críticos de
+ferramentas continuam registrados para as atualizações do Dependabot. O launcher
+Python também é auditado com `pip-audit` e publica seu SBOM.
+
+Para repetir localmente:
+
+```bash
+cd app
+npm audit --json
+npm audit --omit=dev --json
+npm sbom --package-lock-only --sbom-format=cyclonedx --sbom-type=application
+npm run pack
+npm run inventory:package -- --release-dir release --out build/dependency-policy/package-inventory.json
+```
 
 `npm test` executa os testes Node unitários; o segundo comando é o gate explícito
 de PTY nativa: ele inicia fixtures reais

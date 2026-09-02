@@ -46,6 +46,34 @@ python3 -m pip install pip-audit==2.10.1
 python3 -m pip_audit --requirement requirements.txt --strict --progress-spinner off
 ```
 
+### Política de dependências e SBOM
+
+O job `dependency-policy` do CI mantém quatro evidências separadas para o app
+Electron: `npm audit` do grafo completo, `npm audit --omit=dev` da árvore de
+produção, SBOM npm em CycloneDX e inventário do app empacotado. O grafo completo
+inclui ferramentas e o `npm-runtime` distribuído; advisories não críticos nessa
+árvore ficam registrados para atualização, enquanto um advisory crítico bloqueia
+o job. Qualquer vulnerabilidade na árvore de produção também bloqueia.
+
+Para reproduzir a parte npm localmente:
+
+```bash
+cd app
+npm audit --json
+npm audit --omit=dev --json
+npm sbom --package-lock-only --sbom-format=cyclonedx --sbom-type=application
+npm run pack
+npm run inventory:package -- --release-dir release --out build/dependency-policy/package-inventory.json
+```
+
+O `npm audit` completo pode retornar código diferente de zero quando encontrar
+advisories de desenvolvimento; o CI preserva esse código junto do JSON e aplica
+o gate de criticidade no validador. O comparativo `--omit=dev` é o gate de
+execução. O job `python-dependency-audit` mantém o `pip-audit` estrito do lock e
+também publica um SBOM CycloneDX do launcher. O `.github/dependabot.yml` separa
+atualizações de segurança, patch/minor agrupadas e majors individuais; cada
+trilha deve passar pelos mesmos gates antes de entrar em `main`.
+
 ### Rodando em modo dev
 
 ```bash
@@ -113,6 +141,7 @@ Felixo-AI-Core/
 | `npm run build` | app/ | Typecheck incremental + Vite |
 | `npm run benchmark:typecheck:check` | app/ | Compara cinco execuções frias e cinco incrementais |
 | `npm run benchmark:npm-runtime:check` | app/ | Compara tamanho e smoke do npm levado ao instalador |
+| `npm run inventory:package` | app/ | Lista o `app.asar`, pacotes e `npm-runtime` presentes no artefato |
 | `npm run benchmark:bundle:check` | app/ | Mede o bundle de produção no Electron e valida chunks/assets |
 | `npm run test` | app/ | Roda testes unitários |
 | `npm run test:frontend` | app/ | Roda a suíte Vitest do renderer |
@@ -330,16 +359,23 @@ O arquivo `.github/workflows/ci.yml` roda em:
 - Pull requests
 - Push em `main`
 
-O job `launcher` instala o lock Python com `--require-hashes`, testa Linux,
-Windows e macOS com Python 3.9 e 3.13 e executa `start_app.py --help`. O job
-`python-dependency-audit` roda `pip-audit==2.10.1` contra o mesmo lock e falha
-se houver advisory ou erro de coleta. O job `release-scripts` valida os
-scripts Bash usados na publicação. O job `validate` testa o app nos três
-sistemas com Node 22, `npm test`, `npm run lint` e `npm run build`, além de
-verificar os arquivos de documentação vigentes. Como `npm run build` chama o
-typecheck incremental oficial, o CI reutiliza o cache quando o runner o tiver;
-uma auditoria forçada pode ser executada separadamente com
-`npm run typecheck:full` sem alterar o caminho de produção.
+O job `dependency-policy` instala o lock npm, registra o audit completo e o
+comparativo `--omit=dev`, gera o SBOM CycloneDX, empacota o app e valida o
+inventário de `app.asar` e `npm-runtime`. O gate bloqueia vulnerabilidades na
+árvore de produção, advisories críticos no grafo completo e qualquer relatório
+ausente ou inválido; advisories completos não críticos permanecem disponíveis
+como evidência e aviso para as trilhas do Dependabot. O job `launcher` instala o
+lock Python com `--require-hashes`, testa Linux, Windows e macOS com Python 3.9
+e 3.13 e executa `start_app.py --help`. O job `python-dependency-audit` roda
+`pip-audit==2.10.1` contra o mesmo lock, falha se houver advisory ou erro de
+coleta e publica o SBOM do launcher. O job `release-scripts` valida os scripts
+Bash usados na publicação. O job `validate` testa o app nos três sistemas com
+Node 22, `npm test`, `npm run lint` e `npm run build`, além de verificar os
+arquivos de documentação vigentes. Como `npm run build` chama o typecheck
+incremental oficial, o CI reutiliza o cache quando o runner o tiver; uma
+auditoria forçada pode ser executada separadamente com `npm run typecheck:full`
+sem alterar o caminho de produção. O workflow de Release repete o inventário
+no diretório produzido em cada SO e anexa o JSON à execução e à release.
 
 ---
 

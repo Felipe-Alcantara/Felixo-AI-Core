@@ -4,7 +4,7 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 
 > Este arquivo segue o template de contexto do padrão de qualidade (`TEMPLATE-CONTEXTO-IA`). O "Histórico de Evolução" mantém a trilha cronológica densa das fases; as seções fixas acima consolidam o estado atual.
 
-## Snapshot atual — 2026-09-01
+## Snapshot atual — 2026-09-02
 
 - O canvas é a superfície principal do produto: agentes em PTY real, arquivos,
   notas, grupos, páginas web, ferramentas e conexões compartilhadas.
@@ -25,6 +25,10 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 - O workflow de release valida o artefato real nos três SOs: PTY nativo,
   npm-runtime empacotado, instalação/atualização de CLI e persistência dos
   shims antes de promover a pré-release.
+- O CI mantém uma política de dependências reproduzível: audit npm completo e
+  `--omit=dev` separados, SBOM CycloneDX, `pip-audit` com SBOM do launcher e
+  inventário do `app.asar`/`npm-runtime` de cada pacote. O Dependabot separa
+  segurança, patch/minor agrupados e majors individuais.
 - O bundle inicial é dividido por uso: canvas/chat, ferramentas do menu,
   Markdown e runtime PTY entram por chunks relativos sob demanda. O entry da
   compilação de 01/09/2026 ficou em 191,73 KiB cru (60,37 KiB gzip), sem o
@@ -333,6 +337,37 @@ OBS: Ainda sem auto-sync periódico — apenas no startup do app (via primeira l
 ## Histórico de Evolução
 
 > Registro cronológico denso das fases. Mantido como trilha auditável (decisões, bugs e validações na ordem em que aconteceram). As decisões estruturais consolidadas estão resumidas em "Decisões de Arquitetura" acima.
+
+## [2026-09-02] Política contínua de dependências, SBOM e inventário do instalador
+
+**Task.** Automatizar a auditoria npm completa e comparativa de produção, a
+auditoria do launcher Python, os SBOMs e a comprovação do conteúdo que chega ao
+instalador, além de separar as atualizações do Dependabot por risco.
+
+**Implementação.** O CI preserva os JSONs e códigos de saída de `npm audit`,
+produz o SBOM CycloneDX do lock e empacota o app antes de validá-lo.
+`package-inventory.cjs` lista os manifestos dentro do `app.asar`, mede recursos
+desempacotados e exige o `resources/npm-runtime/npm` real, com tamanho, hash e
+versão. O Release gera o mesmo inventário em cada runner. O Dependabot separa
+updates de segurança, patch/minor agrupados e majors individuais para npm,
+Python e GitHub Actions.
+
+**Decisão de gate.** Advisories não críticos da árvore completa continuam
+visíveis para atualização, mas qualquer crítico bloqueia. O comparativo
+`npm audit --omit=dev` é o gate obrigatório de produção; falha de execução, SBOM
+inválido, inventário ausente ou `npm-runtime` vazio também bloqueiam. O
+`pip-audit --strict` mantém o mesmo rigor para o lock Python.
+
+**Validação local.** Os testes focados passaram 9/9; os relatórios reais
+registraram 4 advisories não críticos no grafo completo, zero na produção e 759
+componentes no SBOM npm. `npm run pack` passou e o inventário confirmou duas
+variantes Linux presentes no diretório local, com 3.084 arquivos do
+`npm-runtime`. PyYAML validou os três YAMLs alterados e ESLint não encontrou
+erros nos scripts.
+
+**Estado final.** Implementação, testes e documentação concluídos; a publicação
+remota e o acompanhamento do CI/release fazem parte do fechamento operacional
+desta task.
 
 ## [2026-09-01] Bundle inicial dividido por carregamento sob demanda
 

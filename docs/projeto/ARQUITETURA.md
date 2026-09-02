@@ -181,7 +181,9 @@ tamanho do runtime que realmente entrou no artefato e seus tempos de npm.
 O check roda nos três SOs no CI. A poda só é aceita quando reduz o artefato e
 mantém instalação/atualização, comportamento offline, permissões e prefixo;
 não há remoção baseada em adivinhar quais módulos JavaScript o npm poderá
-carregar futuramente.
+carregar futuramente. Depois do empacotamento, `package-inventory.cjs` registra
+o hash e os pacotes do `app.asar`, mede os recursos desempacotados e comprova a
+presença do `resources/npm-runtime/npm` com seu manifesto e tamanho.
 
 ### Renderização segura de Markdown
 

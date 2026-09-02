@@ -167,6 +167,20 @@ jobs:
         shell: bash
         run: npx electron-builder --publish never
 
+      # O inventário é produzido a partir do diretório unpacked gerado pelo
+      # mesmo empacotamento que será enviado. Ele comprova o npm-runtime fora
+      # do asar, além de listar os pacotes presentes no app.asar.
+      - name: Inventory packaged application
+        run: node scripts/package-inventory.cjs --release-dir release --out "release/package-inventory-${RUNNER_OS}.json"
+
+      - name: Upload packaged inventory report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-inventory-${{ matrix.os }}
+          path: app/release/package-inventory-${{ runner.os }}.json
+          if-no-files-found: error
+
       - name: Install Linux virtual display
         if: runner.os == 'Linux'
         shell: bash

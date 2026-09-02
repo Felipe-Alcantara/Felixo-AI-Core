@@ -7,6 +7,87 @@ on:
       - main
 
 jobs:
+  dependency-policy:
+    name: Dependency policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare policy reports
+        shell: bash
+        run: mkdir -p build/dependency-policy
+
+      # O relatório completo inclui devDependencies porque Electron, npm e
+      # parte da árvore que chega ao instalador vivem nesse grupo. O status do
+      # comando é guardado: advisories ficam visíveis sem impedir a coleta dos
+      # outros relatórios; o gate abaixo bloqueia críticos.
+      - name: Audit npm dependency graph (complete)
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > build/dependency-policy/npm-audit-full.json
+          status=$?
+          printf '%s\n' "$status" > build/dependency-policy/npm-audit-full.exit
+          set -e
+
+      # Este comparativo representa somente o que o npm considera produção.
+      # Ele é um gate separado porque o resultado não pode substituir o audit
+      # completo: Electron e npm são devDependencies, mas são distribuídos.
+      - name: Audit npm dependency graph (omit dev, required gate)
+        shell: bash
+        run: |
+          set +e
+          npm audit --omit=dev --json > build/dependency-policy/npm-audit-production.json
+          status=$?
+          printf '%s\n' "$status" > build/dependency-policy/npm-audit-production.exit
+          set -e
+
+      - name: Generate npm SBOM
+        run: npm sbom --package-lock-only --sbom-format=cyclonedx --sbom-type=application > build/dependency-policy/npm-sbom.cdx.json
+
+      # O empacotamento executa o mesmo beforePack do release e torna o
+      # npm-runtime observável no artefato, em vez de inventariar somente o
+      # package-lock.
+      - name: Build unpacked application
+        run: npm run pack
+
+      - name: Inventory packaged application
+        run: npm run inventory:package -- --release-dir release --out build/dependency-policy/package-inventory.json
+
+      - name: Verify dependency policy gates
+        run: >-
+          node scripts/verify-dependency-policy.cjs
+          --full build/dependency-policy/npm-audit-full.json
+          --full-exit build/dependency-policy/npm-audit-full.exit
+          --production build/dependency-policy/npm-audit-production.json
+          --production-exit build/dependency-policy/npm-audit-production.exit
+          --npm-sbom build/dependency-policy/npm-sbom.cdx.json
+          --inventory build/dependency-policy/package-inventory.json
+
+      - name: Upload npm policy reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-policy-npm
+          path: app/build/dependency-policy
+          if-no-files-found: error
+
   # The launcher is what every operating system runs first, so it gets its own
   # matrix. It has no Node/npm dependency to install, which keeps this job fast
   # enough to catch cross-platform setup regressions before the heavier build.
@@ -71,8 +152,42 @@ jobs:
       - name: Install pip-audit
         run: python -m pip install --disable-pip-version-check pip-audit==2.10.1
 
-      - name: Audit locked requirements
-        run: python -m pip_audit --requirement requirements.txt --strict --progress-spinner off
+      - name: Audit locked requirements and generate SBOM
+        shell: bash
+        run: |
+          mkdir -p app/build/dependency-policy
+          set +e
+          python -m pip_audit \
+            --requirement requirements.txt \
+            --strict \
+            --progress-spinner off \
+            --format json \
+            --output app/build/dependency-policy/pip-audit.json
+          audit_status=$?
+          printf '%s\n' "$audit_status" > app/build/dependency-policy/pip-audit.exit
+          python -m pip_audit \
+            --requirement requirements.txt \
+            --strict \
+            --progress-spinner off \
+            --format cyclonedx-json \
+            --output app/build/dependency-policy/pip-sbom.cdx.json
+          sbom_status=$?
+          printf '%s\n' "$sbom_status" > app/build/dependency-policy/pip-sbom.exit
+          set -e
+          if [ "$audit_status" -ne 0 ]; then
+            exit "$audit_status"
+          fi
+          if [ "$sbom_status" -ne 0 ]; then
+            exit "$sbom_status"
+          fi
+
+      - name: Upload Python policy reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-policy-python
+          path: app/build/dependency-policy/pip-*
+          if-no-files-found: error
 
   # Scripts que o workflow de Release usa (retry de HTTP 500 transitório,
   # decisão de "latest") — só bash, roda em ubuntu-latest porque é onde os

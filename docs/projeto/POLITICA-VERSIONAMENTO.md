@@ -94,7 +94,9 @@ sendo uma possível melhoria, não uma etapa obrigatória do fluxo atual.
 ## Fluxo de publicação de versão
 
 1. O desenvolvedor abre uma branch de trabalho e envia um PR para `main`.
-2. O CI valida launcher, scripts de release e app nos três sistemas.
+2. O CI valida a política de dependências (audit npm completo e de produção,
+   SBOM e inventário do pacote), o launcher, os scripts de release e o app nos
+   três sistemas.
 3. Depois de um CI verde para um commit em `main`, `release.yml` cria a
    pré-release, publica os artefatos de Linux, Windows e macOS e a promove.
 4. Um `workflow_dispatch` pode repetir a publicação, mas exige o SHA exato de

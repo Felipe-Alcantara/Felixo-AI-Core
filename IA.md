@@ -1,6 +1,37 @@
 
 ---
 
+## [2026-09-02] Política contínua de dependências, SBOM e inventário do instalador
+
+**Task.** Automatizar a auditoria npm completa e comparativa de produção, a
+auditoria do launcher Python, os SBOMs e a comprovação do conteúdo que chega ao
+instalador, além de separar as atualizações do Dependabot por risco.
+
+**Implementação.** O CI preserva os JSONs e códigos de saída de `npm audit`,
+produz o SBOM CycloneDX do lock e empacota o app antes de validá-lo.
+`package-inventory.cjs` lista os manifestos dentro do `app.asar`, mede recursos
+desempacotados e exige o `resources/npm-runtime/npm` real, com tamanho, hash e
+versão. O Release gera o mesmo inventário em cada runner. O Dependabot separa
+updates de segurança, patch/minor agrupados e majors individuais para npm,
+Python e GitHub Actions.
+
+**Decisão de gate.** Advisories não críticos da árvore completa continuam
+visíveis para atualização, mas qualquer crítico bloqueia. O comparativo
+`npm audit --omit=dev` é o gate obrigatório de produção; falha de execução, SBOM
+inválido, inventário ausente ou `npm-runtime` vazio também bloqueiam. O
+`pip-audit --strict` mantém o mesmo rigor para o lock Python.
+
+**Validação local.** Os testes focados passaram 9/9; os relatórios reais
+registraram 4 advisories não críticos no grafo completo, zero na produção e 759
+componentes no SBOM npm. `npm run pack` passou e o inventário confirmou duas
+variantes Linux presentes no diretório local, com 3.084 arquivos do
+`npm-runtime`. PyYAML validou os três YAMLs alterados e ESLint não encontrou
+erros nos scripts.
+
+**Estado final.** Implementação, testes e documentação concluídos; a publicação
+remota e o acompanhamento do CI/release fazem parte do fechamento operacional
+desta task.
+
 ## [2026-09-02] Foco nativo perdido deixava teclado preso após troca de aplicativo
 
 **Sintoma relatado.** Depois que outra janela roubava o foco — com maior

@@ -1,0 +1,87 @@
+version: 2
+
+# Cada ecossistema tem três trilhas deliberadamente independentes:
+# security (pode atualizar qualquer faixa), patch/minor rotineiro e major.
+# Os majors não são agrupados: cada PR mantém um breaking change isolado e
+# passa pelos gates da CI antes de qualquer publicação.
+updates:
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+      day: monday
+      time: '04:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+    commit-message:
+      prefix: deps
+      include: scope
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+      npm-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+        patterns:
+          - '*'
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '04:15'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - python
+    commit-message:
+      prefix: deps
+      include: scope
+    groups:
+      pip-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+      pip-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+        patterns:
+          - '*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '04:30'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+      actions-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+        patterns:
+          - '*'
