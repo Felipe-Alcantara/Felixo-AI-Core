@@ -3490,3 +3490,54 @@ de usuário, não código.
 Estado final: os dois relatos do usuário nesta sessão (agrupamento do
 canvas e detecção de CLI) foram investigados, reproduzidos ao vivo,
 corrigidos e validados; nenhum ficou pendente.
+
+## 02/09/2026 — Input travava depois que algo tirava o foco do app, mesmo já tendo sido "corrigido" antes (achado pelo usuário)
+
+O usuário relatou que o bug do input travando (não aceita mais digitação até
+minimizar e reabrir o app), que já tinha sido corrigido em 24/08
+([2dfa56f](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/2dfa56f)),
+"voltou a incomodar recentemente" em qualquer campo de escrita, em todos os
+SOs, com qualquer gatilho (trocar de app, notificação do SO, ou algo dentro
+do próprio app).
+
+Não achei uma regressão de código — nenhuma edição tocou
+`app/src/features/shared/focus/` desde a correção original, e busquei por
+`.focus()` novos adicionados no período: nenhum interfere com o mecanismo.
+O que achei foi uma lacuna na correção original: `devePedirFoco` só
+restaurava o foco quando `document.activeElement` virava `null`/`body` —
+exatamente o que o Chromium faz ao minimizar/restaurar no Windows, o
+cenário que motivou a correção de 24/08. Fora desse caminho específico
+(notificação do SO por cima da janela, trocar de app sem minimizar, e em
+geral fora do Windows), o Chromium às vezes **não** zera o `activeElement`
+— ele continua apontando pro mesmo elemento, mesmo com o roteamento nativo
+de teclado já quebrado — e a função lia isso como "já tem alguém com foco,
+não mexe" e desistia.
+
+Corrigido: `devePedirFoco` agora também restaura quando `activeElement` já
+é o próprio elemento lembrado; `useFocusRestore` faz `blur()` antes do
+`focus()` (um `focus()` sozinho num elemento que o DOM já considera focado
+costuma ser ignorado — é o ciclo completo que reproduz de propósito o que
+minimizar/restaurar fazia de graça no Windows).
+
+MEDIDO: 3 testes novos (1 na decisão pura, 2 na instalação dos ouvintes,
+incluindo a ordem blur→focus e a restauração quando o activeElement não
+mudou); os 16 testes existentes continuam passando sem alteração de
+comportamento no caminho já coberto. `npm run typecheck` limpo;
+`npm run test:frontend`: 755 aprovados, 1 skip pré-existente;
+`npm run lint`: 0 erros; `npm run build` ok.
+
+LIMITE, declarado ao usuário: o gatilho de fundo é uma peculiaridade de foco
+nativo do Chromium/SO que teste de unidade não alcança. Não consegui
+reproduzir o sintoma ao vivo (precisaria de troca real de foco entre
+janelas do SO, em várias plataformas) — a correção é raciocinada a partir
+do próprio comentário da correção original ("o que resolve é o ciclo
+completo de blur+focus") e cobre uma lacuna real e verificável na lógica,
+mas só o uso real confirma se resolve o sintoma reportado. Pedido
+explicitamente ao usuário para confirmar em uso real, sobretudo fora do
+Windows.
+
+Commit [1436c9f](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/1436c9f),
+enviado a `origin/main`.
+
+Estado final: investigação e correção concluídas e documentadas; validação
+do sintoma em uso real depende do usuário confirmar depois.
