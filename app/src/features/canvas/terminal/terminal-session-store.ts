@@ -57,6 +57,7 @@ import {
   cleanPrompt,
   isBusyScreen,
   isClaudeBypassPermissionsWarning,
+  isClaudeTrustPrompt,
   isCodexTrustPrompt,
   looksLikeApprovalPrompt,
   readInputLineState,
@@ -401,6 +402,8 @@ type Session = {
   codexTrustHandled: boolean
   claudeBypassBuffer: string
   claudeBypassHandled: boolean
+  claudeTrustBuffer: string
+  claudeTrustHandled: boolean
 }
 
 function countLineFeeds(data: string): number {
@@ -572,6 +575,8 @@ export class TerminalSessionStore {
       codexTrustHandled: false,
       claudeBypassBuffer: '',
       claudeBypassHandled: false,
+      claudeTrustBuffer: '',
+      claudeTrustHandled: false,
     }
     createdSession = session
     this.listeners.set(id, session.listeners)
@@ -591,6 +596,7 @@ export class TerminalSessionStore {
         session.pendingWrites += 1
         this.handleCodexTrustPrompt(session, event.data)
         this.handleClaudeBypassWarning(session, event.data)
+        this.handleClaudeTrustPrompt(session, event.data)
         terminal.write(event.data, () => {
           session.pendingWrites -= 1
           if (session.disposed) {
@@ -1544,16 +1550,29 @@ export class TerminalSessionStore {
 
       const elapsed = Date.now() - waitStartedAt
       const quietFor = Date.now() - session.lastMeaningfulAt
+      const viewport = readViewport(session.terminal)
       // A pergunta que importa é "a linha de entrada da CLI já existe?", e não
       // "faz quanto tempo que a tela não muda": uma CLI inicializando, um aviso
       // do modo yolo e um REPL esperando texto ficam igualmente quietos, e só um
       // dos três lê o que escrevemos. Para a CLI que não sabemos ler, resta o
       // silêncio como sinal — com teto bem mais curto, porque é um palpite.
-      const inputLine = readInputLineState(session.command, readViewport(session.terminal))
+      const inputLine = readInputLineState(session.command, viewport)
+      // Uma tela de decisão reconhecida (confiança na pasta, aviso do modo
+      // yolo, aprovação de ferramenta) nunca aceita texto livre, então nem o
+      // palpite de silêncio nem o fallback de emergência contam enquanto ela
+      // estiver parada aí — por mais que o relógio já tenha estourado. Sem
+      // isto, medido ao vivo: o Claude Code para na checagem de confiança de
+      // workspace mesmo com `--dangerously-skip-permissions` (a flag pula
+      // aprovação de ferramenta, não esta tela), e o contexto inicial era
+      // digitado dentro do menu "No, exit / Yes, I trust this folder" em vez
+      // de na entrada do REPL — a sessão começava sem contexto nenhum.
+      const blockedByDecisionScreen = looksLikeApprovalPrompt(viewport)
       const processLooksReady =
+        !blockedByDecisionScreen &&
         session.paintedOutput &&
         (inputLine ? inputLine.ready : quietFor >= INITIAL_TEXT_READY_QUIET_MS)
       const fallbackReady =
+        !blockedByDecisionScreen &&
         elapsed >= (inputLine ? INITIAL_TEXT_INPUT_WAIT_MS : INITIAL_TEXT_MAX_WAIT_MS)
 
       // A PTY sobe muito antes de a CLI chegar no prompt: até lá, cada volta só
@@ -1861,19 +1880,63 @@ export class TerminalSessionStore {
 
     session.claudeBypassHandled = true
     this.clearInitialTextTimer(session)
-    this.acceptClaudeBypassWarning(session)
+    this.acceptClaudeDecisionScreen(session, isClaudeBypassPermissionsWarning)
     this.scheduleInitialText(session, POST_ACCEPT_INITIAL_TEXT_DELAY_MS)
   }
 
   /**
-   * Responde o aviso do modo yolo: desce para "2. Yes, I accept" e confirma.
+   * A Claude Code mostra esta checagem de confiança de workspace na primeira
+   * vez que abre uma pasta que ela nunca viu — inclusive em modo yolo
+   * (`--dangerously-skip-permissions`), medido ao vivo: a flag pula a
+   * aprovação de ferramenta, não esta tela. Sem tratá-la à parte, o fallback
+   * de `scheduleInitialText` acabava digitando o contexto inicial dentro
+   * deste menu, e a sessão começava sem contexto nenhum.
+   *
+   * Só responde sozinho em modo yolo: fora dele, a pessoa está olhando o
+   * terminal e é ela quem decide confiar ou não numa pasta nova — não é uma
+   * decisão para o app tomar em silêncio.
+   */
+  private handleClaudeTrustPrompt(session: Session, data: string): void {
+    if (
+      session.command !== 'claude' ||
+      !session.args.includes('--dangerously-skip-permissions') ||
+      session.claudeTrustHandled ||
+      !data
+    ) {
+      return
+    }
+
+    session.claudeTrustBuffer = (
+      session.claudeTrustBuffer + data
+    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
+
+    if (!isClaudeTrustPrompt(session.claudeTrustBuffer)) {
+      return
+    }
+
+    session.claudeTrustHandled = true
+    this.clearInitialTextTimer(session)
+    this.acceptClaudeDecisionScreen(session, isClaudeTrustPrompt)
+    this.scheduleInitialText(session, POST_ACCEPT_INITIAL_TEXT_DELAY_MS)
+  }
+
+  /**
+   * Responde uma tela de decisão do Claude cuja seleção começa na primeira
+   * opção ("No, exit"): desce uma linha e confirma. Serve tanto para o aviso
+   * do modo bypass quanto para a checagem de confiança na pasta — as duas
+   * usam a mesma navegação, só o texto muda, e é o texto (`isStillShowing`)
+   * que decide se a tela ainda está lá.
    *
    * As duas teclas vão em escritas separadas porque juntas não funcionam — a CLI
    * ignora a confirmação e o aviso fica na tela. E o resultado é reconferido pela
    * tela, não pelo relógio: enquanto o aviso continuar visível, a tecla se
    * perdeu no redesenho e vale reenviar.
    */
-  private acceptClaudeBypassWarning(session: Session, attempt = 1): void {
+  private acceptClaudeDecisionScreen(
+    session: Session,
+    isStillShowing: (viewport: string) => boolean,
+    attempt = 1,
+  ): void {
     if (attempt > SCREEN_ACCEPT_ATTEMPTS) {
       return
     }
@@ -1882,10 +1945,10 @@ export class TerminalSessionStore {
       if (session.disposed) {
         return
       }
-      // Na primeira tentativa o aviso acabou de ser reconhecido no stream, e o
+      // Na primeira tentativa a tela acabou de ser reconhecida no stream, e o
       // xterm pode ainda não ter desenhado; a partir da segunda, a tela já é
       // fonte confiável de "o aceite passou ou não".
-      if (attempt > 1 && !isClaudeBypassPermissionsWarning(readViewport(session.terminal))) {
+      if (attempt > 1 && !isStillShowing(readViewport(session.terminal))) {
         return
       }
 
@@ -1895,7 +1958,7 @@ export class TerminalSessionStore {
           return
         }
         void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: '\r' })
-        this.acceptClaudeBypassWarning(session, attempt + 1)
+        this.acceptClaudeDecisionScreen(session, isStillShowing, attempt + 1)
       }, KEY_SEQUENCE_DELAY_MS)
     }, SCREEN_ACCEPT_DELAY_MS)
   }

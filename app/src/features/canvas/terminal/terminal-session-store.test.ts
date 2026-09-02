@@ -35,6 +35,22 @@ const BYPASS_WARNING = [
   '  Enter to confirm · Esc to cancel',
 ].join('\r\n')
 
+/**
+ * Checagem de confiança de workspace, que a CLI mostra na primeira vez que
+ * abre uma pasta nova — inclusive em modo yolo. Capturada ao vivo com
+ * `claude --dangerously-skip-permissions` numa pasta nunca aberta antes: a
+ * flag pula a aprovação de ferramenta, não esta tela.
+ */
+const TRUST_PROMPT = [
+  '─'.repeat(60),
+  '  Accessing workspace: /tmp/projeto-novo',
+  '  Quick safety check: Is this a project you created or one you trust?',
+  "  Claude Code'll be able to read, edit, and execute files here.",
+  '  ❯ No, exit',
+  '    Yes, I trust this folder',
+  '  Enter to confirm · Esc to cancel',
+].join('\r\n')
+
 /** REPL pronto, com a sugestão que a CLI desenha na entrada vazia. */
 const READY_PROMPT = [
   '  Claude Code v2.1.227',
@@ -285,6 +301,74 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     await wait(1600)
 
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
+  }, 15000)
+
+  // Bug real: a checagem de confiança de workspace aparece mesmo em modo
+  // yolo (`--dangerously-skip-permissions`), e o código antes assumia que o
+  // modo yolo a dispensava — o contexto inicial era digitado dentro deste
+  // menu de "No, exit / Yes, I trust this folder" e a sessão começava sem
+  // contexto nenhum. Ver `isClaudeTrustPrompt`.
+  it('não escreve o contexto dentro da checagem de confiança de workspace', async () => {
+    harness = createHarness()
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(TRUST_PROMPT)
+
+    await wait(2200)
+
+    expect(contextWrites(harness.writes)).toEqual([])
+  }, 10000)
+
+  it('aceita a checagem de confiança de workspace escolhendo "Yes, I trust this folder"', async () => {
+    harness = createHarness()
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(TRUST_PROMPT)
+
+    await wait(600)
+
+    // Seta para baixo e Enter em escritas separadas: a seleção começa em
+    // "No, exit", e as duas teclas juntas a CLI ignora.
+    expect(harness.writes).toContain('\x1b[B')
+    expect(harness.writes).toContain('\r')
+    expect(harness.writes.indexOf('\x1b[B')).toBeLessThan(harness.writes.indexOf('\r'))
+  }, 10000)
+
+  it('reenvia o aceite enquanto a checagem de confiança continuar na tela', async () => {
+    harness = createHarness()
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(TRUST_PROMPT)
+
+    // A tela nunca sai da checagem: as teclas se perderam no redesenho.
+    await wait(1600)
+
+    expect(harness.writes.filter((data) => data === '\x1b[B').length).toBeGreaterThan(1)
+  }, 10000)
+
+  it('escreve o contexto quando o REPL sobe depois da checagem de confiança', async () => {
+    harness = createHarness()
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(TRUST_PROMPT)
+    await wait(1500)
+    expect(contextWrites(harness.writes)).toEqual([])
+
+    // A pessoa (ou o aceite automático) confiou na pasta: o REPL subiu.
+    harness.feed('\x1b[2J\x1b[H')
+    harness.feed(READY_PROMPT)
+    await wait(1600)
+
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
+  }, 15000)
+
+  it('não força o contexto num prompt de decisão nem depois do prazo de emergência de uma CLI desconhecida', async () => {
+    // `gemini` não tem leitor de linha de entrada dedicado (INPUT_LINE_READERS),
+    // então cai no teto genérico de 10s — o mesmo caminho que, sem a checagem
+    // de tela de decisão, digitava o contexto dentro de qualquer menu parado.
+    harness = createHarness(CONTEXT, 'gemini')
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(['Apply this change?', '❯ 1. Yes', '  2. No'].join('\r\n'))
+
+    await wait(10400)
+
+    expect(contextWrites(harness.writes)).toEqual([])
   }, 15000)
 
   it('escreve no Codex assim que o compositor aparece, sem esperar silêncio extra', async () => {

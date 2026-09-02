@@ -82,6 +82,19 @@ const CODEX_INPUT_LINE = /^[\s│┃|]*›\s*(.*)$/
 /** Item de menu numerado (`1. No, exit`): a tela é uma decisão, não a entrada. */
 const MENU_ITEM = /^\d+[.)]\s/
 
+/**
+ * Opção de decisão sem número (`No, exit`, `Yes, I trust this folder`): mesma
+ * ideia do `MENU_ITEM`, para a checagem de confiança de workspace do Claude
+ * Code, que não numera as opções.
+ *
+ * Sem isto, essa linha selecionada passava pelo filtro do `MENU_ITEM` — que só
+ * pega item numerado — e `hasClaudeInteractivePrompt` a lia como se fosse
+ * texto já digitado no composer ("No, exit"), fazendo o texto de contexto ser
+ * escrito na tela de decisão em vez de esperar o REPL.
+ */
+const UNNUMBERED_DECISION_OPTION =
+  /^(?:yes|no|sim|não|allow|deny|approve|aprovar|negar)\b/i
+
 /** Sugestão que o Claude desenha quando a entrada está vazia: `Try "..."`. */
 const CLAUDE_INPUT_SUGGESTION = /^try\b[^"'“]*["'“]/i
 
@@ -109,12 +122,12 @@ function readInputLines(viewport: string, marker: RegExp): string[] {
  * nunca era reconhecida e o contexto só saía no fim da espera de emergência,
  * que é o "Codex demora muito pra receber os prompts".
  *
- * Item de menu numerado não conta: a tela de confiança na pasta usa o mesmo
- * marcador (`› 1. Yes, continue`) e é uma decisão, não a entrada.
+ * Item de menu, numerado ou não, não conta: a tela de confiança na pasta usa
+ * o mesmo marcador (`› 1. Yes, continue`) e é uma decisão, não a entrada.
  */
 export function hasCodexInteractivePrompt(viewport: string): boolean {
   return readInputLines(viewport, CODEX_INPUT_LINE).some(
-    (content) => !MENU_ITEM.test(content),
+    (content) => !MENU_ITEM.test(content) && !UNNUMBERED_DECISION_OPTION.test(content),
   )
 }
 
@@ -141,12 +154,13 @@ export function hasEmptyCodexInput(viewport: string): boolean {
  *
  * A pergunta aqui é só se o REPL está de pé, e não se a entrada está vazia:
  * quanto menos suposição sobre a redação da tela, menos chance de esperar para
- * sempre por um formato que mudou de versão. Menu numerado não conta, porque aí
- * a tela é um diálogo de decisão, não a entrada.
+ * sempre por um formato que mudou de versão. Item de menu não conta, numerado
+ * (`1. No, exit`) ou não (`No, exit`, da checagem de confiança de workspace) —
+ * nos dois casos a tela é um diálogo de decisão, não a entrada.
  */
 export function hasClaudeInteractivePrompt(viewport: string): boolean {
   return readInputLines(viewport, CLAUDE_INPUT_LINE).some(
-    (content) => !MENU_ITEM.test(content),
+    (content) => !MENU_ITEM.test(content) && !UNNUMBERED_DECISION_OPTION.test(content),
   )
 }
 
@@ -237,14 +251,35 @@ export function isCodexTrustPrompt(text: string): boolean {
  *     ❯ 1. No, exit
  *       2. Yes, I accept
  *
- * Não é a tela de confiança na pasta ("Do you trust the files in this
- * folder?"): essa o modo yolo pula justamente porque já dispensa aprovação.
- * Confundir as duas foi o que fez o texto de contexto ser digitado dentro deste
- * aviso — a opção selecionada aqui é "No, exit", então quem aceita precisa
- * mover a seleção antes de confirmar.
+ * É uma tela diferente da checagem de confiança na pasta
+ * (`isClaudeTrustPrompt`) — as duas usam a mesma navegação (a seleção começa
+ * em "No, exit"), mas o texto é outro, e confundir as duas foi o que fez o
+ * texto de contexto ser digitado dentro do aviso errado.
  */
 export function isClaudeBypassPermissionsWarning(text: string): boolean {
   const compact = compactWords(text)
 
   return compact.includes('bypasspermissionsmode') && compact.includes('yesiaccept')
+}
+
+/**
+ * Checagem de confiança de workspace que o Claude Code mostra na primeira vez
+ * que abre uma pasta nunca vista por ele, mesmo sob
+ * `--dangerously-skip-permissions`:
+ *
+ *     Accessing workspace: <caminho>
+ *     Quick safety check: Is this a project you created or one you trust?
+ *     ...
+ *     ❯ No, exit
+ *       Yes, I trust this folder
+ *
+ * Medido ao vivo (`claude --dangerously-skip-permissions` numa pasta nova):
+ * a flag pula a aprovação de ferramenta, não esta tela — o código antes
+ * assumia o contrário, e o fallback de `scheduleInitialText` acabava
+ * digitando o contexto inicial dentro deste menu em vez de esperar o REPL.
+ */
+export function isClaudeTrustPrompt(text: string): boolean {
+  const compact = compactWords(text)
+
+  return compact.includes('trustthisfolder') && compact.includes('noexit')
 }

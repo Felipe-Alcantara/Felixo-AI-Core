@@ -7,6 +7,7 @@ import {
   hasEmptyCodexInput,
   isBusyScreen,
   isClaudeBypassPermissionsWarning,
+  isClaudeTrustPrompt,
   isCodexTrustPrompt,
   looksLikeApprovalPrompt,
   readInputLineState,
@@ -170,11 +171,11 @@ describe('telas reais do Claude Code (capturadas da CLI 2.1.227)', () => {
       expect(isClaudeBypassPermissionsWarning(READY_PROMPT)).toBe(false)
     })
 
-    it('does not fire on the folder trust dialog, which yolo mode never shows', () => {
+    it('does not fire on the workspace trust dialog — a different screen, handled by isClaudeTrustPrompt', () => {
       const screen = [
-        'Do you trust the files in this folder?',
-        '❯ 1. Yes, proceed',
-        '  2. No, exit',
+        'Quick safety check: Is this a project you created or one you trust?',
+        '❯ No, exit',
+        '  Yes, I trust this folder',
       ].join('\n')
 
       expect(isClaudeBypassPermissionsWarning(screen)).toBe(false)
@@ -184,6 +185,40 @@ describe('telas reais do Claude Code (capturadas da CLI 2.1.227)', () => {
       expect(
         isClaudeBypassPermissionsWarning('Do you trust the contents of this directory?'),
       ).toBe(false)
+    })
+  })
+
+  describe('isClaudeTrustPrompt', () => {
+    // Texto real, capturado com `claude --dangerously-skip-permissions` numa
+    // pasta nunca aberta antes: a flag não pula esta tela.
+    const TRUST_PROMPT = [
+      'Accessing workspace: C:\\Users\\pessoa\\projeto',
+      'Quick safety check: Is this a project you created or one you trust?',
+      "Claude Code'll be able to read, edit, and execute files here.",
+      '❯ No, exit',
+      '  Yes, I trust this folder',
+      'Enter to confirm · Esc to cancel',
+    ].join('\n')
+
+    it('detects the workspace trust question', () => {
+      expect(isClaudeTrustPrompt(TRUST_PROMPT)).toBe(true)
+    })
+
+    it('sees through ANSI formatting and line breaks', () => {
+      const screen = '\x1b[1mYes, I trust this\x1b[0m folder\n❯ No, exit'
+      expect(isClaudeTrustPrompt(screen)).toBe(true)
+    })
+
+    it('does not fire on the ready prompt', () => {
+      expect(isClaudeTrustPrompt(READY_PROMPT)).toBe(false)
+    })
+
+    it('does not fire on the bypass permissions warning', () => {
+      expect(isClaudeTrustPrompt(BYPASS_WARNING)).toBe(false)
+    })
+
+    it('does not fire on the Codex trust wording', () => {
+      expect(isClaudeTrustPrompt('Do you trust the contents of this directory?')).toBe(false)
     })
   })
 
