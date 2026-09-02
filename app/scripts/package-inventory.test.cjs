@@ -10,6 +10,7 @@ const asar = require('@electron/asar')
 const {
   buildInventory,
   measureTree,
+  normalizeArchiveEntry,
   parseArgs,
 } = require('./package-inventory.cjs')
 
@@ -60,6 +61,13 @@ test('parseArgs resolve os caminhos nomeados', () => {
   assert.equal(options.help, false)
   assert.equal(options.releaseDir, path.resolve('release-fixture'))
   assert.equal(options.out, path.resolve('build/inventory.json'))
+})
+
+test('normalizeArchiveEntry torna caminhos ASAR do Windows portáveis', () => {
+  assert.equal(
+    normalizeArchiveEntry('\\node_modules\\fixture-package\\package.json'),
+    'node_modules/fixture-package/package.json',
+  )
 })
 
 test('buildInventory lista app.asar, pacotes e npm-runtime empacotado', async () => {

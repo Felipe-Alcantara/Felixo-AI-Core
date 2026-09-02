@@ -159,6 +159,10 @@ function packageRecord(relativePath, packageJson) {
   }
 }
 
+function normalizeArchiveEntry(entry) {
+  return entry.replaceAll('\\', '/').replace(/^\/+/, '')
+}
+
 function collectPackageRecordsFromDirectory(root) {
   if (!isDirectory(root)) return []
 
@@ -196,8 +200,14 @@ function collectPackageRecordsFromAsar(asarPath) {
   }
 
   const records = []
-  for (const entry of entries.filter((candidate) => candidate.endsWith('/package.json') || candidate === '/package.json')) {
-    const archiveEntry = entry.replace(/^\/+/, '')
+  for (const entry of entries) {
+    const normalizedEntry = normalizeArchiveEntry(entry)
+    if (normalizedEntry !== 'package.json' && !normalizedEntry.endsWith('/package.json')) continue
+
+    // O asar usa o separador nativo do runner ao listar/ler. A saída pública
+    // continua com `/`, mas a extração recebe o caminho original para
+    // funcionar também no Windows.
+    const archiveEntry = entry.replace(/^[\\/]+/, '')
     let packageJson
     try {
       packageJson = JSON.parse(asar.extractFile(asarPath, archiveEntry).toString('utf8'))
@@ -207,7 +217,7 @@ function collectPackageRecordsFromAsar(asarPath) {
     if (!packageJson || typeof packageJson !== 'object' || Array.isArray(packageJson)) {
       throw new Error(`Manifesto inválido em ${path.basename(asarPath)}:${entry}`)
     }
-    records.push(packageRecord(archiveEntry, packageJson))
+    records.push(packageRecord(normalizedEntry, packageJson))
   }
 
   return records.sort((left, right) => left.path.localeCompare(right.path))
@@ -426,6 +436,7 @@ module.exports = {
   findNpmRuntime,
   findUnpackedApps,
   measureTree,
+  normalizeArchiveEntry,
   parseArgs,
   sha256File,
 }
