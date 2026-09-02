@@ -3661,3 +3661,54 @@ Estado final: bug confirmado **não corrigido**; causa raiz ainda desconhecida.
 Próximo passo é reproduzir com desktop Linux real (window manager de verdade,
 não Xvfb headless) e instrumentar `useFocusRestore`/xterm no momento do
 travamento — ver a task nova para o plano completo.
+
+## 02/09/2026 — Por que o Claude Code não mostra barra de rolagem e o Codex mostra: comportamento das CLIs, não bug do Felixo
+
+Task do Notion: usuário relatou que um bloco de terminal rodando Claude Code
+nunca mostra barra de rolagem, enquanto um bloco rodando Codex mostra.
+Investigação anterior (sem reprodução) já achara que não há nenhum código em
+`app/src/features/canvas/terminal/` que diferencie CSS/opções do xterm.js por
+`command` — a suspeita era comportamento das próprias CLIs (hipótese 1 da
+task), não confirmada.
+
+MEDIDO ao vivo com a skill `rodar-app` (Electron real sob Xvfb, não mock):
+abri um terminal Claude Code e um Codex reais lado a lado no canvas, deixei os
+dois chegarem ao prompt (sem gastar crédito à toa), e mandei o **mesmo prompt
+determinístico** pros dois ("liste os números de 1 a 150, um por linha") —
+saída grande o bastante pra estourar uma tela (~40 linhas visíveis num
+`.xterm-viewport` de 690px).
+
+- **Claude Code:** medi `.xterm-viewport.scrollHeight` vs `clientHeight` em 8
+  amostras a cada 0,4s durante toda a geração — **sempre `690 === 690`**,
+  nunca havia overflow, do início ao fim. Confirmado visualmente: nenhum
+  indício de scrollbar em nenhum frame, mesmo com 150 linhas geradas.
+
+- **Codex:** o mesmo prompt, medido e fotografado durante a geração, mostrou
+  **overflow real** (`scrollHeight > clientHeight`) com uma **barra de
+  rolagem funcional visível** (thumb parcial, arrastável) enquanto o texto
+  ainda estava saindo. Ao terminar, o Codex limpa/redesenha a tela final e a
+  barra some (`690 === 690` de novo) — mas durante a geração, que é quando o
+  usuário mais notaria, ela aparece de verdade.
+
+CAUSA: já existe evidência capturada nesta base de código (fixture real de
+`terminal-session-store.test.ts`, CLI 2.1.227) de que o Claude Code entra no
+**alternate screen buffer** do terminal (`\x1b[?1049h`) logo no boot — modo
+usado por apps de tela cheia (vim, tmux, htop) que faz `xterm.js` tratar
+`buffer.active` como um buffer de tamanho fixo, sem scrollback real (é assim
+que o próprio xterm.js já documenta a diferença, ver comentário em
+`terminal-buffer-reader.ts:54-63`). O Codex, pelo que a medição mostra, usa o
+buffer normal enquanto está imprimindo (por isso overflow real durante o
+streaming) e só limpa/redesenha por cima ao terminar. As duas CLIs usam a
+mesma configuração do `xterm.js` e o mesmo CSS global (`div::-webkit-scrollbar`
+em `index.css`) — a diferença nasce inteiramente de como cada CLI externa
+gerencia sua própria tela, não de nada que o Felixo decide.
+
+Task fechada como **Concluída sem código** — confirma a hipótese 1 do
+relato original, exatamente o desfecho que o próprio critério de aceite da
+task previa para esse caso ("se for das CLIs externas: registrado como
+limitação conhecida, task fechada sem código"). Não há pendência: nenhuma
+task nova aberta, porque não sobrou trabalho de causa raiz do Felixo — é
+comportamento de terceiros.
+
+Estado final: causa raiz identificada e reproduzida ao vivo (não só
+hipótese); nenhuma correção de código cabe aqui.
