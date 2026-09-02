@@ -71,7 +71,13 @@ function createManagedInstallEnv({
   // entradas também seguirem essa escolha, não o SO onde a suíte roda.
   const adapter = platformAdapter.getAdapter(platformName)
   const platformPath = platformName === 'win32' ? path.win32 : path.posix
-  const env = createNodeEnv(createCliEnv(baseEnv))
+  // `createCliEnv` usa o adaptador do processo atual. Quando a suíte descreve
+  // outro SO, recalculá-lo aqui misturaria delimitadores e ainda poderia
+  // substituir `Path` por um `PATH` vazio do host. No app real os dois nomes
+  // são iguais; no cenário simulado, o ambiente recebido já é a fonte fiel.
+  const cliEnv =
+    platformName === platformAdapter.name ? createCliEnv(baseEnv) : { ...baseEnv }
+  const env = createNodeEnv(cliEnv)
   const pathKey = adapter.getPathEnvKey(env)
 
   env[pathKey] = [layout.runtimeBin, env[pathKey]].filter(Boolean).join(platformPath.delimiter)
