@@ -70,7 +70,7 @@ const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { createSettingsRepository } = require('./services/storage/settings-repository.cjs')
 const { createTerminalLogStore } = require('./services/terminal-log-store.cjs')
-const { initAppPaths } = require('./core/app-paths.cjs')
+const { initAppPaths, resolveDevUserDataOverride } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
@@ -94,6 +94,17 @@ const isReleaseSmoke = process.argv.includes(RELEASE_SMOKE_ARG)
 
 if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {
   app.setPath('userData', process.env.FELIXO_RELEASE_SMOKE_USER_DATA)
+}
+
+// Sem isto, `npm run dev` e o app instalado escrevem no mesmo `felixo.sqlite`
+// — ver o porquê em `resolveDevUserDataOverride`.
+const devUserDataOverride = resolveDevUserDataOverride({
+  isPackaged: app.isPackaged,
+  isReleaseSmoke,
+  defaultUserData: app.getPath('userData'),
+})
+if (devUserDataOverride) {
+  app.setPath('userData', devUserDataOverride)
 }
 
 function handleFileOpen(filePath) {

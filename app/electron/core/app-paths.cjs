@@ -140,6 +140,57 @@ function getAppPaths(options = {}) {
 }
 
 /**
+ * Decide se o processo em modo desenvolvimento (`npm run dev`) deve usar uma
+ * pasta de `userData` própria, separada da que o app instalado usa.
+ *
+ * O Electron calcula `app.getPath('userData')` só a partir de `app.name` (o
+ * `name` do `package.json`), sem olhar `isPackaged` — então, sem isto,
+ * `npm run dev` e o app instalado apontam para o MESMO `felixo.sqlite` e o
+ * mesmo estado de canvas. Quem usa o app instalado para programar o próprio
+ * app (um agente testando uma mudança do código-fonte clonado com
+ * `npm run dev` enquanto a instalação continua aberta) via dois processos do
+ * Electron vivos ao mesmo tempo escrevendo no mesmo banco — a instância
+ * instalada passa a se comportar como a de desenvolvimento porque, em boa
+ * parte, está mesmo operando sobre o estado que a outra também mexe.
+ *
+ * `FELIXO_USER_DATA_DIR` continua valendo por cima disto — o mesmo override
+ * que o smoke test de release e o comando `felixo` standalone já respeitam.
+ *
+ * @param {object} options
+ * @param {boolean} options.isPackaged - `app.isPackaged` do processo atual.
+ * @param {boolean} [options.isReleaseSmoke] - Já tem isolamento próprio; não
+ *   duplica a decisão aqui.
+ * @param {string} options.defaultUserData - O que `app.getPath('userData')`
+ *   devolveria sem nenhum override — a base para o sufixo `-dev`.
+ * @param {Record<string, string>} [options.environment]
+ * @returns {string | null} O caminho a passar para `app.setPath('userData',
+ *   ...)`, ou `null` quando não há nada a fazer (app empacotado, smoke de
+ *   release, ou já isolado por overriddenUserData explícito).
+ */
+function resolveDevUserDataOverride({
+  isPackaged,
+  isReleaseSmoke = false,
+  defaultUserData,
+  environment = process.env,
+}) {
+  if (isPackaged || isReleaseSmoke) {
+    return null
+  }
+
+  const overridden =
+    typeof environment[USER_DATA_ENV_KEY] === 'string' ? environment[USER_DATA_ENV_KEY].trim() : ''
+  if (overridden) {
+    return overridden
+  }
+
+  if (typeof defaultUserData !== 'string' || !defaultUserData) {
+    throw new Error('resolveDevUserDataOverride requer defaultUserData.')
+  }
+
+  return `${defaultUserData}-dev`
+}
+
+/**
  * Ensure a directory exists, creating it recursively if needed.
  * Safe to call on paths that already exist.
  *
@@ -213,4 +264,5 @@ module.exports = {
   getAppPaths,
   getCacheBase,
   initAppPaths,
+  resolveDevUserDataOverride,
 }

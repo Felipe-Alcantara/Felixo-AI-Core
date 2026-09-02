@@ -11,6 +11,7 @@ const {
   getCacheBase,
   APP_NAME,
   USER_DATA_ENV_KEY,
+  resolveDevUserDataOverride,
 } = require('./app-paths.cjs')
 
 const mockUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-paths-'))
@@ -155,6 +156,71 @@ describe('app-paths', () => {
   describe('APP_NAME', () => {
     it('is felixo-ai-core', () => {
       assert.strictEqual(APP_NAME, 'felixo-ai-core')
+    })
+  })
+
+  describe('resolveDevUserDataOverride()', () => {
+    const DEFAULT = 'C:\\Users\\alguem\\AppData\\Roaming\\felixo-ai-core'
+
+    it('isola o modo dev numa pasta irmã com sufixo -dev', () => {
+      // Sem isto, `npm run dev` e o app instalado apontam para a mesma pasta
+      // — o Electron calcula `userData` só a partir de `app.name`, sem olhar
+      // `isPackaged` — e os dois processos brigam pelo mesmo felixo.sqlite.
+      const result = resolveDevUserDataOverride({
+        isPackaged: false,
+        defaultUserData: DEFAULT,
+        environment: {},
+      })
+
+      assert.strictEqual(result, `${DEFAULT}-dev`)
+    })
+
+    it('não mexe no app empacotado — é ele quem deve usar a pasta real', () => {
+      const result = resolveDevUserDataOverride({
+        isPackaged: true,
+        defaultUserData: DEFAULT,
+        environment: {},
+      })
+
+      assert.strictEqual(result, null)
+    })
+
+    it('não duplica isolamento do smoke test de release, que já tem o dele', () => {
+      const result = resolveDevUserDataOverride({
+        isPackaged: false,
+        isReleaseSmoke: true,
+        defaultUserData: DEFAULT,
+        environment: {},
+      })
+
+      assert.strictEqual(result, null)
+    })
+
+    it('respeita FELIXO_USER_DATA_DIR quando alguém pede um lugar específico', () => {
+      const escolhido = 'C:\\lugar\\especifico'
+      const result = resolveDevUserDataOverride({
+        isPackaged: false,
+        defaultUserData: DEFAULT,
+        environment: { [USER_DATA_ENV_KEY]: escolhido },
+      })
+
+      assert.strictEqual(result, escolhido)
+    })
+
+    it('ignora FELIXO_USER_DATA_DIR em branco e cai no sufixo -dev', () => {
+      const result = resolveDevUserDataOverride({
+        isPackaged: false,
+        defaultUserData: DEFAULT,
+        environment: { [USER_DATA_ENV_KEY]: '   ' },
+      })
+
+      assert.strictEqual(result, `${DEFAULT}-dev`)
+    })
+
+    it('reclama sem defaultUserData quando precisa dele de verdade', () => {
+      assert.throws(() =>
+        resolveDevUserDataOverride({ isPackaged: false, defaultUserData: '', environment: {} }),
+      )
     })
   })
 })
