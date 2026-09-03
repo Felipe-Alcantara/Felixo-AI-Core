@@ -3917,3 +3917,52 @@ instrumentação, testes e documentação concluídos; task pronta para commit,
 push, acompanhamento do CI/release e encerramento no Notion. A limitação de
 snapshots de produção permanece explicitamente delimitada para eventual task
 separada, sem bloquear esta entrega.
+
+## Registro de Trabalho — 2026-09-03 — troca entre múltiplas contas Codex sem perder o canvas
+
+PEDIDO: executar a task [Felixo AI Core — trocar entre múltiplas contas do
+Codex dentro do app sem perder o canvas](https://app.notion.com/p/3c091f95497e814e8095dd43af228a97).
+
+ESTADO ENCONTRADO: a implementação já estava no `main` e cobre o caminho
+reaberto da task. O configurador do canvas lista o login do sistema e os
+perfis cadastrados, permite criar/selecionar/remover uma conta, persiste
+`accountId`/`providerId` no node e reaproveita esses campos no restart do
+drawer. Para o Codex, cada perfil nasce com `CODEX_HOME` próprio; a CLI é
+responsável por criar e manter a credencial. Assim, duas contas podem existir
+simultaneamente sem logout global e sem encerrar PTYs silenciosamente.
+
+VALIDAÇÃO AUTOMATIZADA: os testes focados de perfis, IPC e PTY passaram com
+39/39 casos; os testes de uso por conta, isolamento e histórico passaram com
+19/19; a suíte Node completa passou com 994/994; a suíte frontend passou com
+763/763, além de 1 skip intencional; `npm run test:native` passou com 5/5;
+typecheck completo, build, lint e empacotamento Linux também passaram. O lint
+terminou sem erros e manteve somente os 2 avisos React preexistentes do
+`SearchPanel`.
+
+VALIDAÇÃO DO PACOTE: `release/linux-unpacked` foi iniciado pelo Electron real
+em `userData` descartável. O smoke passou às 10:51 BRT e durou 16,00 s:
+startup de 3.021 ms, PTY nativa com marcador de sucesso, npm-runtime 11.19.1
+com 1.527 arquivos, instalação/atualização offline de fixture e persistência
+dos shims. Não houve erro nativo.
+
+VALIDAÇÃO VISUAL: DevTools iniciou uma instância isolada do app, abriu
+**Configurar novo agente**, cadastrou duas contas Codex fictícias (`teste-a` e
+`teste-b`) via IPC, mudou o provedor para Codex e selecionou a segunda conta.
+O DOM exibiu as duas opções e o botão **Remover**; o canvas continuou montado.
+Nenhum agente foi lançado e nenhuma credencial real foi lida, criada ou
+alterada. A instância e o `userData` temporário foram encerrados/removidos ao
+final.
+
+LIMITE DE ACEITE: não é possível afirmar a validação manual com duas contas
+Codex reais em um pacote instalado no macOS/Windows a partir deste host Linux:
+não há segunda conta autorizada disponível e não há esses sistemas nativos
+para executar. Também não se promete que uma conversa interna já aberta mude
+de identidade no meio do processo; quando a CLI exigir novo processo, o
+restart é explícito, conserva o node, diretório, histórico e perfil escolhido,
+mas a continuidade interna depende do contrato da própria CLI.
+
+Estado final: implementação existente revalidada, documentação funcional
+confirmada e smoke do pacote concluído; pronta para commit, push,
+acompanhamento do CI/release e encerramento da task. A evidência manual
+multi-SO com duas contas reais fica como follow-up separado, sem bloquear esta
+entrega.
