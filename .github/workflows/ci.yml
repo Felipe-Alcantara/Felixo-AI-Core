@@ -249,6 +249,22 @@ jobs:
           path: app/npm-runtime-${{ matrix.os }}.json
           if-no-files-found: ignore
 
+      # Esta bancada compara o npm-runtime com pnpm/Yarn e mede Corepack como
+      # ponte de bootstrap. Alternativas indisponíveis no runner não bloqueiam
+      # a matriz, mas qualquer alternativa encontrada que falhe no smoke deixa
+      # o job vermelho. O JSON registra a disponibilidade por sistema.
+      - name: Benchmark package-manager alternatives
+        shell: bash
+        run: npm run benchmark:package-managers -- --iterations=2 --check --out=package-manager-alternatives-${{ matrix.os }}.json
+
+      - name: Upload package-manager alternatives benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-manager-alternatives-${{ matrix.os }}
+          path: app/package-manager-alternatives-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
       # O cache contém somente os tsbuildinfo do renderer. O tsc valida os
       # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
       # mudança de código nunca transforma um resultado antigo em verde.

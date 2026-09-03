@@ -2719,3 +2719,76 @@ dentro da variância registrada. Documentação detalhada, comandos e limitaçõ
 estão em `app/benchmarks/README.md` e `ARQUITETURA.md`. A coleta de heap usa
 `performance.memory` e não substitui snapshot DevTools com webviews e CLIs
 reais; esse limite foi registrado para eventual investigação específica.
+
+## Registro de Trabalho — 2026-09-03 — avaliar alternativa ao npm-runtime do instalador
+
+PEDIDO: executar a task [Felixo AI Core/Arquitetura — Avaliar alternativa ao
+npm embutido sem perder a instalação de CLIs](https://app.notion.com/p/Felixo-AI-Core-Arquitetura-Avaliar-alternativa-ao-npm-embutido-sem-perder-a-instala-o-de-CLIs-3cc91f95497e81e99473da3d6facda1).
+
+DIAGNÓSTICO: o app instala CLIs oficiais sem depender de Node/npm do usuário,
+usando `app/node_modules/npm` empacotado, prefixo isolado em `userData/clis`,
+shims `node`/`npm` apontando para o Electron e PATH controlado. Portanto, uma
+troca por pnpm, Yarn ou Corepack precisa conservar instalação/atualização,
+binários, permissões, offline, perfis isolados e CLIs com dependências nativas;
+alterar somente o `package.json` não seria uma avaliação suficiente.
+
+IMPLEMENTAÇÃO:
+
+- `app/scripts/package-manager-alternatives-performance.cjs` passou a
+  comparar o npm-runtime atual, pnpm, Yarn Classic, Yarn moderno e Corepack.
+  A bancada usa versões controladas pelo Corepack, prefixos/cache/store
+  descartáveis, um `tar.gz` local, o modo Node do Electron e sem alterar
+  instalações globais;
+- o npm reutiliza a bancada de runtime existente. pnpm é exercitado com
+  `global-dir` e `PNPM_HOME/bin`; Yarn Classic com `global-folder` e
+  `prefix/bin`; ambos validam instalação, atualização, prefixo, PATH, shim,
+  execução e versão da CLI. O fixture usa `--ignore-scripts` para não executar
+  código externo; scripts nativos de CLIs oficiais ficaram explicitamente como
+  gate de migração;
+- Yarn moderno é medido no runtime/startup e sondado com `global add`; sua
+  falha esperada é registrada porque PnP/`dlx` não equivale ao global install
+  persistente requerido pelo launcher. Corepack é medido como ponte, com
+  runtime próprio e bootstrap frio/quente dos gerenciadores;
+- o script aceita `--check` e `--strict`, grava JSON sem caminhos privados e
+  tem testes unitários para parsing, medição, recomendação e validação;
+- `app/package.json`, `ci.yml`, README, guia do desenvolvedor, guia de execução,
+  arquitetura e catálogo de benchmarks documentam o comando. CI executa a
+  comparação na matriz Ubuntu/Windows/macOS e publica um JSON por runner;
+- a bancada do npm passou a exportar somente as funções necessárias para
+  reutilização, sem mudar a política de empacotamento nem o caminho de
+  produção.
+
+MEDIÇÃO LOCAL: Linux x64, Node 25.9.0, Electron 41.10.7, duas repetições.
+O npm 11.19.1 mediu 1.527 arquivos, 8.814.897 bytes descompactados e
+2.264.260 bytes em `tar.gz`; startup p50/p95 de 2.093,213/2.786,998 ms,
+primeira CLI 2.857,103/2.925,176 ms e atualização 3.391,189/3.666,694 ms.
+pnpm 11.25.0 mediu 456 arquivos, 20.297.574 bytes e 5.084.086 bytes
+comprimidos; startup direto 4.317,236 ms, primeira CLI p50/p95
+11.677,711/12.243,780 ms e atualização 11.542,162/12.322,060 ms. Yarn
+Classic 1.22.22 mediu 12 arquivos, 5.340.738 bytes e 1.248.008 bytes
+comprimidos; startup 1.463,817 ms, primeira CLI 5.282,926/5.672,203 ms e
+atualização 5.086,890/5.115,949 ms. Yarn moderno 4.10.3 mediu 2 arquivos,
+2.990.376 bytes e 1.057.416 comprimidos, mas não ofereceu global install.
+Corepack 0.34.6 mediu 54 arquivos, 1.040.114 bytes e 229.072 comprimidos;
+bootstrap frio ficou entre 2.681,567 e 8.203,432 ms, com aquecimento entre
+823,922 e 2.527,011 ms.
+
+DECISÃO: manter o npm-runtime. pnpm funcionou, porém foi aproximadamente 2,3x
+maior descompactado que o npm e muito mais lento no fixture; Yarn Classic foi
+menor, mas exige layout/política global próprios; Yarn moderno não atende ao
+contrato de instalação; Corepack adiciona versões, cache e bootstrap/rede, sem
+eliminar os artefatos dos gerenciadores. O resultado não autoriza remover o
+npm-runtime.
+
+VALIDAÇÃO: testes da nova bancada (4/4), lint focado e execução real Linux com
+`--iterations=1 --check` e `--iterations=2 --check` passaram; npm, pnpm e Yarn
+Classic instalaram/atualizaram a fixture e executaram os binários, e Yarn
+moderno falhou no `global add` de forma esperada. A matriz CI passa a repetir o
+check nos três SOs. Ficam como gates futuros: CLIs oficiais reais, lifecycle e
+dependências nativas, rede/proxy/offline, memória, artefato empacotado e
+confirmação nativa em Windows/macOS; esses pontos não bloqueiam esta avaliação
+arquitetural.
+
+Estado final: investigação, bancada reproduzível, recomendação, testes e
+documentação concluídos; pendente apenas commit, push, acompanhamento do CI e
+registro/encerramento da task no Notion conforme o workflow.

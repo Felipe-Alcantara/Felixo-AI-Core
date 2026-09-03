@@ -487,3 +487,71 @@ dinamicamente durante instalação de uma CLI. O smoke local passou nas duas
 políticas com instalação e atualização offline, lifecycle, PATH, prefixo,
 permissões e persistência; os valores de Windows e macOS ficam nos JSONs da
 matriz CI/release.
+
+## Avaliação de alternativas ao npm-runtime
+
+Esta bancada responde à pergunta arquitetural de trocar o npm embutido sem
+perder a instalação automática das CLIs. Ela não altera o runtime do produto.
+O comando usa a bancada do npm para a política atual e, para pnpm e Yarn
+Classic, cria em diretórios temporários um pacote local `tar.gz`, um prefixo,
+um cache/store e os shims `node` do Electron. Cada alternativa é executada sem
+rede depois do bootstrap do gerenciador; são conferidos instalação, atualização,
+prefixo, binário no PATH, execução e isolamento. O `--ignore-scripts` torna a
+comparação segura, portanto scripts nativos de CLIs reais continuam sendo um
+gate de migração separado.
+
+```bash
+npm run benchmark:package-managers -- \
+  --iterations=2 --check --out=/tmp/felixo-package-managers.json
+```
+
+O relatório JSON não grava caminhos da máquina nem saída ilimitada de processos.
+Ele separa cinco papéis:
+
+| Candidato | O que é medido | Limite importante |
+| --- | --- | --- |
+| npm-runtime | árvore embutida, startup, instalação e atualização offline | é o contrato já exercitado por CLIs oficiais, lifecycle, PATH, permissões e persistência |
+| pnpm | runtime, bootstrap Corepack, startup e global add/update em `global-dir` + `PNPM_HOME/bin` | exige política própria de store, `PNPM_HOME`, scripts de build e cache offline |
+| Yarn Classic | runtime, bootstrap Corepack, startup e `global add/update` em prefix/global-folder | mantém global install, mas não usa o layout nem os comandos de prefixo do npm |
+| Yarn moderno | runtime, bootstrap e prova do comando global | PnP/`dlx` não fornece o global install npm-style que o launcher atual exige |
+| Corepack | seu próprio runtime e bootstrap frio/quente de versões fixas | é uma ponte; não substitui os artefatos/cache dos gerenciadores nem remove a política de rede |
+
+### Resultado reproduzível em 03/09/2026
+
+Linux x64, Node 25.9.0, Electron 41.10.7, duas repetições de instalação e
+atualização. Os bytes são a soma lógica da distribuição do gerenciador; o
+`tar.gz` portátil é uma referência comparável, não o formato final do
+instalador. O startup das alternativas é uma execução direta de `--version`;
+o npm tem p50/p95 da bancada própria. Os números de instalação são p50/p95.
+
+| Candidato | Versão | Arquivos / descompactado / `tar.gz` | Startup | Primeira CLI | Atualização |
+| --- | --- | ---: | ---: | ---: | ---: |
+| npm-runtime | 11.19.1 | 1.527 / 8,41 MiB / 2,16 MiB | 2.093 / 2.787 ms | 2.857 / 2.925 ms | 3.391 / 3.667 ms |
+| pnpm | 11.25.0 | 456 / 19,36 MiB / 4,85 MiB | 4.317 ms | 11.678 / 12.244 ms | 11.542 / 12.322 ms |
+| Yarn Classic | 1.22.22 | 12 / 5,09 MiB / 1,19 MiB | 1.464 ms | 5.283 / 5.672 ms | 5.087 / 5.116 ms |
+| Yarn moderno | 4.10.3 | 2 / 2,85 MiB / 1,01 MiB | 1.509 ms | não aplicável | não aplicável |
+| Corepack | 0.34.6 | 54 / 1016,0 KiB / 223,7 KiB | bootstrap frio: 2.682–8.203 ms | depende do gerenciador | depende do gerenciador |
+
+O pnpm foi funcional, mas levou cerca de 2,3 vezes o tamanho descompactado do
+npm e teve instalação/atualização mais lentas nesta máquina. Yarn Classic foi
+menor que o npm, porém ainda precisou de uma hierarquia global própria e ficou
+mais lento na instalação. Yarn moderno confirmou a incompatibilidade: em um
+diretório sem projeto, `yarn global add` falhou de forma esperada; o fluxo
+documentado é `yarn dlx`/projeto, que não mantém a CLI no prefixo isolado do
+app. Corepack exigiu download no primeiro uso em cache vazia; um produto
+offline teria de fixar versão/hash e distribuir ou pré-popular esse cache.
+
+A decisão desta task é **manter o npm-runtime**. A alternativa não é aprovada
+por ser menor em um único aspecto: ela precisa preservar instalação global de
+CLIs oficiais, atualização, binários, shims, permissões, isolamento por
+`userData`, lifecycle nativo, funcionamento offline e os três sistemas
+operacionais. Uma migração futura só pode começar depois de fixar versões e
+hashes, repetir o smoke em Linux/Windows/macOS com o artefato empacotado e
+medir CLIs reais, memória, proxy e primeiro uso sem rede.
+
+Referências de comportamento: [npm install global](https://docs.npmjs.com/cli/v11/commands/npm-install/), [pnpm install offline](https://pnpm.io/cli/install), [pnpm setup e PNPM_HOME](https://pnpm.io/cli/setup), [Yarn Classic global](https://classic.yarnpkg.com/lang/en/docs/cli/global/), [Yarn moderno `dlx`](https://yarnpkg.com/cli/dlx), [PnP do Yarn](https://yarnpkg.com/features/pnp) e [Corepack](https://github.com/nodejs/corepack#offline-workflow).
+
+No CI, `ci.yml` executa `--check` na matriz Ubuntu/Windows/macOS e publica um
+JSON por runner. A ausência de um gerenciador opcional fica explícita como
+`unavailable`; se ele estiver presente e falhar no smoke, o job falha. `--strict`
+fica disponível para uma bancada que exija pnpm e Yarn Classic no host.

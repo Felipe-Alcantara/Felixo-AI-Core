@@ -813,9 +813,14 @@ if (require.main === module) {
 
 module.exports = {
   buildComparison,
+  benchmarkPolicy,
   measureTree,
+  measureCompressedBytes,
   parseArgs,
   percentile,
+  resolveElectronExecutable,
+  runInstallScenario,
   summarize,
   validateReport,
+  NPM_RUNTIME_POLICIES,
 }

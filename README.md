@@ -435,6 +435,16 @@ e valide instalação/atualização offline nos três SOs com
 `npm run benchmark:npm-runtime:check` dentro de `app/`. O smoke do release
 também registra o tamanho do runtime e os tempos do npm no artefato real.
 
+Para avaliar uma substituição sem mudar o produto, use
+`npm run benchmark:package-managers -- --check` em `app/`. A bancada mede o
+npm-runtime, pnpm, Yarn Classic, Yarn moderno e Corepack em prefixos
+descartáveis, com bootstrap e fixtures locais; publica um JSON por SO no CI.
+O resultado Linux de 03/09/2026 manteve o npm como recomendação: pnpm foi
+funcional, mas maior e mais lento; Yarn Classic preservou global install com
+layout próprio; Yarn moderno não ofereceu o global install exigido; e Corepack
+adicionou bootstrap/cache. Nenhuma migração deve ocorrer sem repetir o smoke
+com CLIs reais, scripts nativos, cache offline e os três sistemas.
+
 ### Auditoria de dependências e SBOM
 
 O CI executa separadamente o `npm audit` completo e `npm audit --omit=dev`, gera

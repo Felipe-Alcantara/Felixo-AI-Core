@@ -113,6 +113,7 @@ npm run dev:web
 | `npm run build` | app/ | Typecheck incremental + Vite bundle |
 | `npm run benchmark:typecheck:check` | app/ | Mede cinco runs frios e cinco incrementais do typecheck |
 | `npm run benchmark:npm-runtime:check` | app/ | Mede poda, tamanho e smoke do npm do instalador |
+| `npm run benchmark:package-managers -- --check` | app/ | Compara npm-runtime, pnpm, Yarn e bootstrap Corepack |
 | `npm run benchmark:bundle:check` | app/ | Mede startup/menu no bundle e valida chunks relativos no Electron |
 | `npm run benchmark:terminal-output -- --check` | app/ | Mede retenção/renderização dos Logs da CLI no Electron |
 | `npm run test` | app/ | Roda testes unitários |
@@ -162,6 +163,25 @@ atualização no Electron em um prefixo/cache temporários. A fixture local
 confirma `--offline`, lifecycle scripts, PATH, prefixo, permissões e
 persistência entre processos. O CI roda o mesmo check em Linux, Windows e
 macOS; o `release-smoke` mede a árvore que efetivamente entrou no artefato.
+
+### Alternativas ao npm-runtime
+
+Para medir pnpm, Yarn Classic, Yarn moderno e Corepack na mesma máquina:
+
+```bash
+cd app
+npm run benchmark:package-managers -- \
+  --iterations=2 --check --out=/tmp/felixo-package-managers.json
+```
+
+O script baixa apenas versões controladas pelo Corepack, usa fixtures locais e
+faz toda instalação em diretórios temporários. O resultado separa o custo do
+runtime, startup, bootstrap frio/quente, primeira CLI e atualização. Yarn
+moderno é marcado como não compatível com o modelo de instalação global do
+launcher; ausência de um gerenciador opcional é registrada no JSON. O CI roda
+essa comparação na matriz dos três SOs. A recomendação vigente é manter o
+npm-runtime até validar versões/hash, cache offline, scripts nativos e CLIs
+oficiais no artefato real.
 
 ### Logs da CLI do chat legado
 

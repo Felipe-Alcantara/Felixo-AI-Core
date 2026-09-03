@@ -141,6 +141,7 @@ Felixo-AI-Core/
 | `npm run build` | app/ | Typecheck incremental + Vite |
 | `npm run benchmark:typecheck:check` | app/ | Compara cinco execuções frias e cinco incrementais |
 | `npm run benchmark:npm-runtime:check` | app/ | Compara tamanho e smoke do npm levado ao instalador |
+| `npm run benchmark:package-managers -- --check` | app/ | Compara npm-runtime, pnpm, Yarn e bootstrap Corepack em prefixos descartáveis |
 | `npm run inventory:package` | app/ | Lista o `app.asar`, pacotes e `npm-runtime` presentes no artefato |
 | `npm run benchmark:bundle:check` | app/ | Mede o bundle de produção no Electron e valida chunks/assets |
 | `npm run test` | app/ | Roda testes unitários |
@@ -233,6 +234,26 @@ workflow validado. `npm run publish:github` não é um substituto para esse
 fluxo.
 
 ---
+
+### Avaliação de alternativas ao npm-runtime
+
+Para reproduzir a decisão arquitetural sem alterar o npm global, execute:
+
+```bash
+cd app
+npm run benchmark:package-managers -- \
+  --iterations=2 --check --out=/tmp/felixo-package-managers.json
+```
+
+A bancada mede o runtime, bootstrap Corepack, startup, instalação e
+atualização de uma CLI local em prefixos descartáveis. pnpm usa seu
+`global-dir`/`PNPM_HOME`, Yarn Classic usa `global-folder`/`prefix`, e Yarn
+moderno é apenas sondado porque não oferece o `global add` exigido pelo
+launcher. O fixture não executa scripts de terceiros; CLIs oficiais com
+dependências nativas, rede bloqueada e os três sistemas operacionais devem ser
+validados antes de qualquer migração. O CI executa o check na matriz e publica
+um JSON por SO. A recomendação atual, baseada no resultado Linux de
+03/09/2026, é manter o npm-runtime.
 
 ### Smoke do artefato de release
 

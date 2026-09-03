@@ -210,6 +210,32 @@ carregar futuramente. Depois do empacotamento, `package-inventory.cjs` registra
 o hash e os pacotes do `app.asar`, mede os recursos desempacotados e comprova a
 presença do `resources/npm-runtime/npm` com seu manifesto e tamanho.
 
+### Avaliação de gerenciadores alternativos
+
+O launcher instala CLIs em `userData/clis` sem exigir Node/npm do usuário. Por
+isso, substituir npm não é uma troca de dependência isolada: o novo gerenciador
+teria de reproduzir prefixo privado, binários no PATH, shims `node`, atualização,
+permissões, isolamento por perfil, modo offline e comportamento de CLIs com
+dependências nativas em Linux, Windows e macOS.
+
+`scripts/package-manager-alternatives-performance.cjs` deixa essa hipótese
+reproduzível sem mudar a produção. Ele reaproveita o smoke do npm-runtime e
+mede pnpm, Yarn Classic e Yarn moderno após bootstrap controlado por Corepack.
+pnpm é exercitado com `global-dir` + `PNPM_HOME/bin`; Yarn Classic com
+`global-folder` + `prefix/bin`; Yarn moderno somente prova a ausência do
+comando global npm-style. O fixture é local e offline, e as alternativas usam
+`--ignore-scripts`; CLIs oficiais reais e scripts nativos são um gate separado.
+
+O resultado Linux de 03/09/2026 foi: npm 11.19.1 com 8,41 MiB descompactado,
+startup p50 de 2.093 ms e primeira CLI p50 de 2.857 ms; pnpm 11.25.0 com
+19,36 MiB, startup de 4.317 ms e primeira CLI de 11.678 ms; Yarn Classic
+1.22.22 com 5,09 MiB, startup de 1.464 ms e primeira CLI de 5.283 ms. Yarn
+moderno 4.10.3 não ofereceu global install; Corepack 0.34.6 precisou de
+bootstrap frio de até 8.203 ms e cache/versionamento próprio. A recomendação
+é manter o npm-runtime até que versões/hash, cache offline, scripts nativos,
+matriz dos três SOs e smoke no instalador real sejam validados. O CI publica
+um JSON da comparação por runner.
+
 ### Renderização segura de Markdown
 
 `MarkdownContent` recebe texto de agentes, arquivos e histórico como conteúdo
