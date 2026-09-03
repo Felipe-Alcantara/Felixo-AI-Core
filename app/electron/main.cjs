@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain, safeStorage } = require('electron')
 const path = require('node:path')
+const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { instalarMenuDoApp } = require('./windows/app-menu.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
@@ -95,6 +96,18 @@ let pendingFilePath = null
 // argumento para compatibilidade e usa esta flag de ambiente como sinal
 // autoritativo, antes de qualquer acesso ao perfil normal da pessoa.
 const isReleaseSmoke = isReleaseSmokeProcess()
+const devtoolsPort = Number.parseInt(process.env.FELIXO_DEVTOOLS_PORT ?? '', 10)
+
+// O Chromium só aceita a porta de depuração antes de ficar pronto. A flag é
+// exclusiva da instância que o `felixo devtools` criou; o app normal não abre
+// nenhuma porta adicional.
+if (Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535) {
+  app.commandLine.appendSwitch('remote-debugging-port', String(devtoolsPort))
+  // Em alguns desktops Windows a janela oculta não chega a pintar pelo GPU e
+  // `Page.captureScreenshot` fica esperando indefinidamente. Esta instância é
+  // só de automação, então rasterização por software é o fallback seguro.
+  app.commandLine.appendSwitch('disable-gpu')
+}
 
 if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {
   app.setPath('userData', process.env.FELIXO_RELEASE_SMOKE_USER_DATA)
@@ -185,6 +198,24 @@ app.whenReady().then(async () => {
 
   mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository })
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
+
+  // CDP alcança o renderer, não o processo main. A ponte abaixo só nasce na
+  // instância DevTools, que usa userData isolado e porta local aleatória. Ela
+  // fornece captura nativa (que funciona mesmo quando a janela não pinta pelo
+  // compositor Windows) e uma avaliação limitada, sem `require`/`process`.
+  if (Number.isInteger(devtoolsPort) && devtoolsPort > 0) {
+    ipcMain.handle('devtools:capture-page', async () => {
+      const target = getMainWindow()
+      if (!target || target.isDestroyed()) throw new Error('Janela DevTools indisponível.')
+      return (await target.webContents.capturePage()).toDataURL()
+    })
+    ipcMain.handle('devtools:main-eval', (_event, expression) => {
+      if (typeof expression !== 'string' || expression.length > 20_000) {
+        throw new Error('Expressão DevTools inválida.')
+      }
+      return vm.runInNewContext(expression, { app, BrowserWindow, mainWindow }, { timeout: 1_000 })
+    })
+  }
 
   registerQaLoggerIpcHandlers(getMainWindow)
   registerCliIpcHandlers(getMainWindow, { terminalLogStore })

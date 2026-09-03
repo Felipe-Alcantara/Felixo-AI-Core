@@ -201,6 +201,15 @@ export function buildCanvasTerminalInitialText(
 
   const sections = [basePrompt]
 
+  // Disponível para qualquer CLI que o canvas abra, não só para agentes que
+  // conhecem a antiga skill Playwright. É só um ponteiro: a sessão de UI fica
+  // isolada por padrão e o agente decide se a tarefa realmente pede isso.
+  if (!basePrompt.includes('felixo devtools')) {
+    sections.push(
+      'Para rodar e inspecionar o Felixo AI Core em segundo plano, use `felixo devtools --help`. O padrão cria perfil isolado e janela invisível; `--real-profile` é excepcional e protegido.',
+    )
+  }
+
   if (!basePrompt.includes('Contexto do canvas:')) {
     sections.push(CANVAS_CONTEXT_PROMPT)
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPlanningFileInstruction,
+  buildCanvasTerminalInitialText,
   composeTerminalInitialText,
   isTerminalInitialTextReady,
   RESUME_INITIAL_TEXT,
@@ -228,6 +229,15 @@ describe('terminal initial-text readiness', () => {
         resolvedCanvasFileCount: 1,
       }),
     ).toBe(true)
+  })
+})
+
+describe('discovery of the generic DevTools CLI', () => {
+  it('informs every new terminal about the isolated UI runner', () => {
+    const text = buildCanvasTerminalInitialText('Siga o padrão.')
+
+    expect(text).toContain('felixo devtools --help')
+    expect(text).toContain('perfil isolado')
   })
 })
 

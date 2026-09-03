@@ -3808,6 +3808,25 @@ comportamento de terceiros.
 
 Estado final: causa raiz identificada e reproduzida ao vivo (não só
 hipótese); nenhuma correção de código cabe aqui.
+## 03/09/2026 — DevTools isolado para agentes
+
+Criado `felixo devtools`, uma CLI que abre uma instância Electron destacada com
+CDP, perfil temporário e janela invisível. Cada ação (`screenshot`, `click`,
+`type`, `press`, `text`, `eval` e `main`) conecta, age e desconecta, sem tmux ou
+REPL vivo. O perfil real só entra por `--real-profile`; a inicialização recusa
+quando os arquivos de singleton indicam uma instância existente.
+
+No Windows, `Page.screenshot` ficou bloqueado para janela oculta mesmo com GPU
+desligado. A captura passou a usar `webContents.capturePage()` por uma ponte IPC
+que só existe quando a instância DevTools está ativa; o app normal não expõe
+porta CDP nem essa ponte. Validação real: `launch`, PNG de 32 KB, avaliação
+restrita no main e `quit`, todos no perfil isolado.
+
+A skill `rodar-app`, o guia de desenvolvimento e o contexto inicial dos novos
+terminais passaram a apontar para `felixo devtools --help`. O driver Xvfb legado
+permanece documentado apenas para testes de teclado ou clipboard físico que CDP
+não representa.
+
 ## 03/09/2026 — Smoke de release do Windows não entrava no modo isolado
 
 Ao executar o instalador NSIS num diretório temporário, o executável empacotado abriu o app normal, usando o `userData` real, e não criou o `app-status.json` do smoke. A causa é que o bootstrap do Electron/Chromium no Windows pode consumir um switch desconhecido como `--release-smoke` antes que ele apareça em `process.argv` do processo main.

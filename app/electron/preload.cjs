@@ -18,6 +18,16 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
   getVersion: () => ipcRenderer.invoke('app:get-version'),
+  // Esta ponte só existe na instância isolada iniciada por `felixo devtools`.
+  // Não é carregada pelo app normal nem pela instância com perfil real.
+  ...(process.env.FELIXO_DEVTOOLS_PORT
+    ? {
+        devtools: {
+          capturePage: () => ipcRenderer.invoke('devtools:capture-page'),
+          mainEval: (expression) => ipcRenderer.invoke('devtools:main-eval', expression),
+        },
+      }
+    : {}),
   cli: {
     send: (params) => ipcRenderer.invoke('cli:send', params),
     stop: (params) => ipcRenderer.invoke('cli:stop', params),

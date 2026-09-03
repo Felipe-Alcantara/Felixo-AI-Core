@@ -36,6 +36,15 @@ O processo principal continua responsável por processos, arquivos, Git,
 contas, banco e IPC. O renderer compõe a interface e não recebe acesso direto
 ao Node. O preload expõe somente os contratos necessários em `window.felixo`.
 
+## DevTools isolado
+
+`felixo devtools` é a superfície de automação de UI para qualquer agente. O
+subcomando inicia Electron destacado com `userData` temporário, janela invisível
+e CDP em porta local aleatória; cada ação conecta, executa e desconecta. A ponte
+de captura e avaliação do processo principal só existe nessa instância, nunca no
+app normal. `--real-profile` é uma exceção explícita e recusa iniciar quando os
+arquivos de singleton indicam que o perfil já está em uso.
+
 ## Typecheck e fronteiras de build
 
 O renderer é validado por dois projetos TypeScript referenciados: o projeto

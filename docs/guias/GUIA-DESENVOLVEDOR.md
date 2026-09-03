@@ -345,11 +345,26 @@ python3 -m unittest discover -s tests -t .
 ### Conferir no app rodando
 
 Teste verde não é a mesma coisa que funcionar na tela. Para abrir o app de
-verdade e interagir com ele — inclusive sem servidor gráfico, em CI ou por um
-agente —, use a skill em [`.claude/skills/rodar-app/`](../../.claude/skills/rodar-app/SKILL.md).
-Ela abre o Electron sob xvfb com dados isolados (não encosta no canvas real de
-quem está usando a máquina) e expõe comandos para clicar, tirar screenshot,
-digitar no terminal de um agente e simular colagens.
+verdade e interagir com ele em segundo plano, use o CLI `felixo devtools`, que
+qualquer agente consegue chamar:
+
+```bash
+cd app
+felixo devtools launch
+felixo devtools screenshot --out ../tmp/felixo.png
+felixo devtools click-text Agente
+felixo devtools quit
+```
+
+Ele usa CDP em uma instância Electron destacada, com `userData` temporário e
+janela invisível por padrão. `--real-profile` é excepcional e recusa iniciar se
+o perfil aparentar já estar em uso. O CLI expõe `buttons`, `text`, `click`,
+`type`, `press`, `eval` e `main` em chamadas curtas; `screenshot` usa a captura
+nativa do Electron para funcionar também quando a janela oculta não pinta pelo
+GPU no Windows. Em CI Linux sem display, Xvfb continua sendo o fallback do
+ambiente. A skill [`.claude/skills/rodar-app/`](../../.claude/skills/rodar-app/SKILL.md)
+aponta para esse fluxo e preserva o driver legado somente para casos de teclado
+ou clipboard físico que CDP não representa.
 
 ---
 

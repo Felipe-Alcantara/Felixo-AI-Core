@@ -270,6 +270,10 @@ declare global {
         electron?: string
         node?: string
       }
+      devtools?: {
+        capturePage: () => Promise<string>
+        mainEval: (expression: string) => Promise<unknown>
+      }
       windowFocus?: {
         onChange: (callback: (focused: boolean) => void) => () => void
       }

@@ -8,6 +8,9 @@ const mainWindowOptions = {
   resizable: true,
   maximizable: true,
   fullscreenable: true,
+  // O DevTools abre uma segunda instância para automação. Ela continua sendo
+  // uma BrowserWindow real, apenas não é mostrada na área de trabalho.
+  show: process.env.FELIXO_DEVTOOLS_HEADLESS !== '1',
   useContentSize: false,
   backgroundColor: '#09090b',
   title: 'Felixo AI Core',

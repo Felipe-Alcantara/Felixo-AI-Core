@@ -9,3 +9,7 @@ test('main window keeps vscode-like resize controls enabled', () => {
   assert.ok(mainWindowOptions.minWidth >= 720)
   assert.ok(mainWindowOptions.minHeight >= 500)
 })
+
+test('main window is visible by default outside the isolated DevTools process', () => {
+  assert.equal(mainWindowOptions.show, true)
+})

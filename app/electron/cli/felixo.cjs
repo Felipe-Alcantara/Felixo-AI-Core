@@ -25,6 +25,7 @@ const { createFetchAllService } = require('../services/fetch-all-service.cjs')
 const { criarRepositorioDePedidos } = require('../services/fetch-all/agent-requests.cjs')
 const { loadAgentScanState, saveAgentScanState } = require('./agent-scan-state.cjs')
 const { AJUDA, formatarPlano } = require('./agent-command-output.cjs')
+const { executarDevtools, AJUDA_DEVTOOLS } = require('./felixo-devtools.cjs')
 
 /**
  * Interpreta a linha de comando.
@@ -67,6 +68,9 @@ const VERBOS = ['varrer', 'estado', 'pedir-execucao', 'ver-pedido']
  * @returns {Promise<{ saida: string, erro?: string, codigo: number }>}
  */
 async function executar(argumentos, dependencias = {}) {
+  if (argumentos[0] === 'devtools') {
+    return executarDevtools(argumentos.slice(1), dependencias.devtools)
+  }
   const {
     criarServico = () => criarServicoPadrao(),
     criarPedidos = () => criarRepositorioDePedidos({ pasta: getAppPaths().agentRequests }),
@@ -79,7 +83,7 @@ async function executar(argumentos, dependencias = {}) {
   const { ferramenta, verbo, argumento, opcoes } = interpretarArgumentos(argumentos)
 
   if (ferramenta !== 'fetch-all' || !VERBOS.includes(verbo)) {
-    return { saida: AJUDA, codigo: ferramenta || verbo ? 2 : 0 }
+    return { saida: `${AJUDA}\n\n${AJUDA_DEVTOOLS}`, codigo: ferramenta || verbo ? 2 : 0 }
   }
 
   if (verbo === 'pedir-execucao') {
