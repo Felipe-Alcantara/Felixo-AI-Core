@@ -37,6 +37,12 @@ test('interpreta as opções do DevTools sem transformar texto em flag', () => {
   })
 })
 
+test('aceita --help diretamente depois de devtools', async () => {
+  const result = await executarDevtools(['--help'])
+  assert.equal(result.codigo, 0)
+  assert.match(result.saida, /felixo devtools/)
+})
+
 test('recusa perfil real quando os arquivos de singleton indicam app em uso', async () => {
   const env = setup()
   const profile = path.join(env.root, 'real')

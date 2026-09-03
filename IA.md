@@ -3827,6 +3827,35 @@ terminais passaram a apontar para `felixo devtools --help`. O driver Xvfb legado
 permanece documentado apenas para testes de teclado ou clipboard físico que CDP
 não representa.
 
+## Revalidação — 03/09/2026 — DevTools genérico para agentes
+
+A task do `felixo devtools` foi revalidada no Linux com o app real em uma sessão
+isolada. Durante a conferência apareceu uma falha no contrato documentado:
+`felixo devtools --help` era rejeitado pelo parser, embora fosse o comando
+indicado no contexto de todo terminal. O parser passou a aceitar essa forma e
+ganhou teste de regressão; a documentação continua apontando para o comando
+genérico, sem depender de uma Skill específica de agente.
+
+Validação manual realizada entre 11:30:50 e 11:32 BRT, aproximadamente 2
+minutos: `launch` sem janela visível, `status`, `windows`, `screenshot` nativo
+de 33.924 bytes, `click-text Buscar`, `type`, `eval`, `main`, `press Escape` e
+`quit`. A expressão no processo principal retornou `felixo-ai-core`; depois do
+`quit`, `status` não encontrou sessão e o perfil temporário não permaneceu em
+`/tmp`.
+
+Gates desta revalidação: Node 995/995, frontend 763 aprovados e 1 skip
+intencional, lint com 0 erros e os 2 avisos React preexistentes de
+`SearchPanel`, typecheck completo, build, pack e `git diff --check`. O pacote
+Linux foi regenerado e a captura foi conferida visualmente. Nenhum perfil real,
+credencial, canvas do usuário ou processo externo foi tocado.
+
+Commit: `fix(devtools): aceitar ajuda global no CLI`.
+
+Limitação mantida: a prova interativa manual em macOS e Windows ainda depende
+de máquinas desses sistemas; os contratos e a CI multi-SO continuam sendo a
+evidência automatizada disponível. Essa prova foi separada em follow-up, sem
+deixar esta task aberta.
+
 ## 03/09/2026 — Smoke de release do Windows não entrava no modo isolado
 
 Ao executar o instalador NSIS num diretório temporário, o executável empacotado abriu o app normal, usando o `userData` real, e não criou o `app-status.json` do smoke. A causa é que o bootstrap do Electron/Chromium no Windows pode consumir um switch desconhecido como `--release-smoke` antes que ele apareça em `process.argv` do processo main.

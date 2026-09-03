@@ -33,6 +33,7 @@ Por padrão a sessão usa um userData temporário e uma janela invisível. --rea
 
 function parseArgs(args) {
   const options = { visible: false, realProfile: false, port: null, out: '' }
+  if (args[0] === '--help') return { command: 'help', positional: [], options }
   const positional = []
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index]
