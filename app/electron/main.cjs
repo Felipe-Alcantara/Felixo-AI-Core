@@ -72,6 +72,7 @@ const { createSettingsRepository } = require('./services/storage/settings-reposi
 const { createTerminalLogStore } = require('./services/terminal-log-store.cjs')
 const { initAppPaths, resolveDevUserDataOverride } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
+const { isReleaseSmokeProcess } = require('./core/release-smoke-mode.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
@@ -89,8 +90,11 @@ let agentUsageWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
-const RELEASE_SMOKE_ARG = '--release-smoke'
-const isReleaseSmoke = process.argv.includes(RELEASE_SMOKE_ARG)
+// Em apps empacotados no Windows, switches desconhecidos podem ser consumidos
+// pelo bootstrap do Chromium e não chegar a `process.argv`. O runner mantém o
+// argumento para compatibilidade e usa esta flag de ambiente como sinal
+// autoritativo, antes de qualquer acesso ao perfil normal da pessoa.
+const isReleaseSmoke = isReleaseSmokeProcess()
 
 if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {
   app.setPath('userData', process.env.FELIXO_RELEASE_SMOKE_USER_DATA)

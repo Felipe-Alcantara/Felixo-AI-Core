@@ -3808,3 +3808,12 @@ comportamento de terceiros.
 
 Estado final: causa raiz identificada e reproduzida ao vivo (não só
 hipótese); nenhuma correção de código cabe aqui.
+## 03/09/2026 — Smoke de release do Windows não entrava no modo isolado
+
+Ao executar o instalador NSIS num diretório temporário, o executável empacotado abriu o app normal, usando o `userData` real, e não criou o `app-status.json` do smoke. A causa é que o bootstrap do Electron/Chromium no Windows pode consumir um switch desconhecido como `--release-smoke` antes que ele apareça em `process.argv` do processo main.
+
+Corrigido: o runner continua enviando o argumento por compatibilidade, mas agora também fornece `FELIXO_RELEASE_SMOKE=1`. A decisão de entrar no modo de smoke foi isolada em `electron/core/release-smoke-mode.cjs`, para que o app reconheça tanto o argumento legado quanto a variável de ambiente antes de tocar no perfil normal.
+
+MEDIDO: 3 testes unitários novos para os dois sinais e para valores não autorizados; os testes de contrato do `release-smoke` também passaram (10/10).
+
+O pacote local não pôde ser regenerado nesse checkout porque `fs.cpSync` ficou preso ao copiar o staging ignorado `app/build/npm-runtime` no volume Windows mapeado; a árvore do builder foi encerrada depois de ficar sem progresso. A release pública de 02/09/2026 passou a validação de artefato instalado nos runners `windows-latest` e `macos-latest`; a correção acima ainda precisa ser incluída no próximo build desses runners.

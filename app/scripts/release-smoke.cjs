@@ -317,6 +317,7 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
     cwd: appRoot,
     env: {
       ...process.env,
+      FELIXO_RELEASE_SMOKE: '1',
       FELIXO_RELEASE_SMOKE_USER_DATA: userData,
       FELIXO_RELEASE_SMOKE_STATUS_FILE: statusFile,
       FELIXO_DISABLE_AUTO_UPDATE: '1',
