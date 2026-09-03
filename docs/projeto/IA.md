@@ -2691,3 +2691,31 @@ fica nos JSONs da matriz CI/release.
 Estado final: implementação, medição, validação e documentação concluídas;
 pronta para commit, push, acompanhamento do CI/release e encerramento da task
 no Notion.
+
+## Registro de Trabalho — 2026-09-03 — Canvas: degradação e ciclo de vida no Linux
+
+A task de performance foi investigada com as bancadas de PTY/xterm e React
+Flow. Em Linux x64 (4 CPUs, 11,6 GiB, Electron 41.10.7), 20 terminais com
+8.000 linhas e scrollback de 20k chegaram a 706,0 MiB de RSS p95 do renderer,
+264,20 MiB de delta de heap do stream e resume de 8,09s. O limite adaptativo
+de 5k reduziu esses números para 565,4 MiB, 180,08 MiB e 4,59s, mantendo
+saída, identidade, attach/detach e resume íntegros. O heap pós-GC retornou
+próximo da linha de base; a carga explica a degradação observada, sem provar um
+vazamento global.
+
+A causa concreta encontrada foi o caminho genérico de remoção do React Flow:
+ele persistia a exclusão, mas podia deixar a sessão do terminal viva. A nova
+fronteira `releaseRemovedCanvasNodes` libera PTY/xterm/listeners/timers dos
+terminais removidos uma única vez, sem carregar o runtime lazy para outros
+tipos de nó. A geração de limpeza do `DeferredTerminalSessionStore` evita que
+um `ensure` atrasado recrie uma sessão após `clear`. Testes unitários cobrem os
+dois contratos e o gate de scrollback usa delta de heap quando o RSS do
+renderer compartilhado está contaminado.
+
+A bancada React Flow real também foi executada com 1.000 nós e 2.503 arestas;
+o índice reduziu p95 em criação/remoção de aresta (59,70 → 14,38 ms) e mudança
+de dados (61,90 → 12,31 ms), enquanto render inicial, drag e resize ficaram
+dentro da variância registrada. Documentação detalhada, comandos e limitações
+estão em `app/benchmarks/README.md` e `ARQUITETURA.md`. A coleta de heap usa
+`performance.memory` e não substitui snapshot DevTools com webviews e CLIs
+reais; esse limite foi registrado para eventual investigação específica.

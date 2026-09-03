@@ -110,6 +110,47 @@ test('percentis são estáveis para amostras vazias, pares e ímpares', () => {
   })
 })
 
+test('o gate usa o delta de heap quando o RSS foi contaminado pelo renderer compartilhado', () => {
+  const base = {
+    phase: 'renderer-xterm',
+    policy: 'current',
+    count: 10,
+    scrollback: 20_000,
+    linesPerTerminal: 8_000,
+    linesWritten: [8_000],
+    resumedRows: [32],
+    lineIntegrity: [{ outputComplete: true, unexpectedGap: false }],
+    detachAttachPreserved: true,
+    resumeIntegrity: [{ outputComplete: true, unexpectedGap: false }],
+    resumeMs: 100,
+    // RSS is intentionally worse in the candidate, as can happen after a
+    // previous scenario kept Chromium pages in its working set.
+    rendererWorkingSetMiB: { p95: 200 },
+    heapBefore: { usedJsHeapBytes: 1_000 },
+    heapAfterStream: { usedJsHeapBytes: 11_000 },
+  }
+  const adaptive = {
+    ...base,
+    policy: 'adaptive',
+    scrollback: 5_000,
+    rendererWorkingSetMiB: { p95: 300 },
+    heapBefore: { usedJsHeapBytes: 2_000 },
+    heapAfterStream: { usedJsHeapBytes: 10_000 },
+  }
+
+  assert.equal(
+    benchmark.heapStreamDeltaBytes(adaptive),
+    8_000,
+  )
+  assert.deepEqual(
+    benchmark.validateReport({
+      scenario: { adaptiveScrollback: 5_000, adaptiveThreshold: 10 },
+      results: [base, adaptive],
+    }),
+    [],
+  )
+})
+
 test('o emissor nativo não injeta valores fora dos parâmetros do cenário', () => {
   const source = benchmark.buildEmitterCode({
     lines: 10,

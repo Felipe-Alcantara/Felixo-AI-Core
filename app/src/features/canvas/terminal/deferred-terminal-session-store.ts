@@ -35,6 +35,12 @@ type PendingSessionListener = {
 export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   private realStore: TerminalSessionStoreApi | null = null
   private loading: Promise<TerminalSessionStoreApi> | null = null
+  /**
+   * Invalidates `ensure()` calls queued before a bulk canvas reset. Without
+   * this boundary, clearing while the lazy runtime was importing could let a
+   * late card mount recreate a session after the canvas was already empty.
+   */
+  private clearGeneration = 0
   private pendingAllListeners = new Set<PendingListener>()
   private pendingSessionListeners = new Map<string, Set<PendingSessionListener>>()
 
@@ -83,7 +89,11 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   }
 
   ensure(id: string, options: SessionOptions = {}): void {
-    this.runDeferred((store) => store.ensure(id, options))
+    const generation = this.clearGeneration
+    this.runDeferred((store) => {
+      if (generation !== this.clearGeneration) return
+      store.ensure(id, options)
+    })
   }
 
   attach(id: string, container: HTMLElement): void {
@@ -170,6 +180,21 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   }
 
   clear(): void {
-    this.realStore?.clear()
+    const generation = ++this.clearGeneration
+    if (this.realStore) {
+      this.realStore.clear()
+      return
+    }
+
+    // Do not start the lazy runtime just to clear an empty canvas. If an
+    // import is already in flight, however, queue the clear after its pending
+    // actions so sessions created before the reset are released as well.
+    if (this.loading) {
+      this.runDeferred((store) => {
+        if (generation === this.clearGeneration) {
+          store.clear()
+        }
+      })
+    }
   }
 }

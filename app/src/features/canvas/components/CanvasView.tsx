@@ -122,6 +122,7 @@ import {
   requestRepoDiagnosis,
 } from '../services/file-terminal-links'
 import { createCanvasConnectionIndex } from '../services/canvas-connection-index'
+import { releaseRemovedCanvasNodes } from '../services/canvas-node-removal'
 import { CanvasProfilerBoundary } from '../services/canvas-performance-profiler.tsx'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import {
@@ -1149,19 +1150,23 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         return next
       })
 
-      for (const change of changes) {
-        if (change.type === 'remove') {
-          removeNode(change.id)
-          // The node's terminal is gone, so any notification pointing at it
-          // would otherwise linger unread forever: it still counts toward the
-          // badge but the panel hides it (it only lists live terminal nodes).
-          setNotificationHistory((current) =>
-            current.filter((notification) => notification.nodeId !== change.id),
-          )
-        }
+      const sessionNodeIds = new Set(
+        nodesRef.current.filter((node) => node.type === 'terminal').map((node) => node.id),
+      )
+      const removedNodeIds = releaseRemovedCanvasNodes(
+        changes,
+        sessionNodeIds,
+        (nodeId) => store.remove(nodeId),
+        removeNode,
+      )
+      if (removedNodeIds.length > 0) {
+        const removedIds = new Set(removedNodeIds)
+        setNotificationHistory((current) =>
+          current.filter((notification) => !removedIds.has(notification.nodeId)),
+        )
       }
     },
-    [setNodes, persistNode, removeNode],
+    [setNodes, persistNode, removeNode, setNotificationHistory, store],
   )
 
   const onEdgesChange = useCallback(

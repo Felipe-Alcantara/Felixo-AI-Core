@@ -68,6 +68,13 @@ function summarize(values) {
   }
 }
 
+function heapStreamDeltaBytes(result) {
+  const before = result?.heapBefore?.usedJsHeapBytes
+  const afterStream = result?.heapAfterStream?.usedJsHeapBytes
+  if (!Number.isFinite(before) || !Number.isFinite(afterStream)) return null
+  return afterStream - before
+}
+
 function validateReport(report) {
   const failures = []
   const currentBaselines = new Map()
@@ -130,18 +137,34 @@ function validateReport(report) {
     // integrity but cannot prove a memory gain. Full CI runs use 8k lines and
     // enter this comparison for the 10/20-session cases.
     const baseline = currentBaselines.get(result.count)
-    const candidateRendererP95 = result.rendererWorkingSetMiB?.p95
-    const baselineRendererP95 = baseline?.rendererWorkingSetMiB?.p95
+    const candidateHeapDelta = heapStreamDeltaBytes(result)
+    const baselineHeapDelta = heapStreamDeltaBytes(baseline)
+    const hasHeapDelta =
+      Number.isFinite(candidateHeapDelta) && Number.isFinite(baselineHeapDelta)
+    // O renderer é compartilhado entre os cenários deste relatório. Depois
+    // de um cenário pesado, o working set do Chromium pode não devolver as
+    // páginas ao SO mesmo com GC, então o RSS absoluto é uma comparação
+    // contaminada. O delta de heap antes→stream é a métrica comparável do
+    // trabalho do cenário; relatórios antigos sem esses campos continuam
+    // usando o RSS como fallback.
+    const candidateMemoryMetric = hasHeapDelta
+      ? candidateHeapDelta
+      : result.rendererWorkingSetMiB?.p95
+    const baselineMemoryMetric = hasHeapDelta
+      ? baselineHeapDelta
+      : baseline?.rendererWorkingSetMiB?.p95
     if (
       baseline &&
       result.count >= adaptiveThreshold &&
       result.linesPerTerminal >= adaptiveScrollback &&
-      Number.isFinite(candidateRendererP95) &&
-      Number.isFinite(baselineRendererP95) &&
-      candidateRendererP95 >= baselineRendererP95 * 0.95
+      Number.isFinite(candidateMemoryMetric) &&
+      Number.isFinite(baselineMemoryMetric) &&
+      candidateMemoryMetric >= baselineMemoryMetric * 0.95
     ) {
       failures.push(
-        `adaptive count=${result.count}: não reduziu o RSS p95 do renderer em pelo menos 5%`,
+        hasHeapDelta
+          ? `adaptive count=${result.count}: não reduziu o delta de heap do stream em pelo menos 5%`
+          : `adaptive count=${result.count}: não reduziu o RSS p95 do renderer em pelo menos 5%`,
       )
     }
 
@@ -918,5 +941,6 @@ module.exports = {
   parsePolicies,
   percentile,
   summarize,
+  heapStreamDeltaBytes,
   validateReport,
 }

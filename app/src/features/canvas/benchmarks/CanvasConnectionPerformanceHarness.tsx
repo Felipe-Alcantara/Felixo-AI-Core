@@ -19,6 +19,7 @@ import {
   type NodeProps,
   type NodeTypes,
 } from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
 import {
   CanvasProfilerBoundary,
 } from '../services/canvas-performance-profiler.tsx'

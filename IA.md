@@ -3836,3 +3836,84 @@ Corrigido: o runner continua enviando o argumento por compatibilidade, mas agora
 MEDIDO: 3 testes unitários novos para os dois sinais e para valores não autorizados; os testes de contrato do `release-smoke` também passaram (10/10).
 
 O pacote local não pôde ser regenerado nesse checkout porque `fs.cpSync` ficou preso ao copiar o staging ignorado `app/build/npm-runtime` no volume Windows mapeado; a árvore do builder foi encerrada depois de ficar sem progresso. A release pública de 02/09/2026 passou a validação de artefato instalado nos runners `windows-latest` e `macos-latest`; a correção acima ainda precisa ser incluída no próximo build desses runners.
+## Registro de Trabalho — 2026-09-03 — degradação do Canvas no Linux
+
+PEDIDO: executar a task [Felixo AI Core/Performance — reproduzir e perfilar a
+degradação do canvas no Linux](https://app.notion.com/p/Felixo-AI-Core-Performance-reproduzir-e-perfilar-a-degrada-o-do-canvas-no-Linux-3c791f95497e81ce97ddc545fa0df6ff?source=copy_link), separando custo esperado de carga, retenção de recursos e regressão de interação.
+
+CONTEXTO E MÉTODO: a investigação aproveitou as bancadas existentes de PTY
+nativo, xterm e React Flow. A matriz de terminal executa em Electron isolado
+com Xvfb e mede entrega de bytes, RSS dos PTYs, RSS do renderer e da aplicação,
+heap JavaScript, frames, long tasks, attach/detach, fechamento e retomada. A
+bancada de conexões usa React Flow real com 1.000 nós e 2.503 arestas,
+incluindo terminais, arquivos, grupos e notas. A coleta foi feita em processos
+limpos para separar o efeito do scrollback do working set que Chromium pode
+reter entre cenários.
+
+REPRODUÇÃO LINUX: host Linux x64, kernel `7.0.0-30-generic`, 4 CPUs, 11,6
+GiB de RAM, Node 24.18.0, Electron 41.10.7 e xterm 6.0.0. A rodada fixa de
+20.000 linhas começou às 09:20:34 BRT e durou 1m11,75s; a adaptativa de 5.000
+linhas começou às 09:21:57 e durou 59,54s. Com 20 terminais e 8.000 linhas,
+20k produziu 264,20 MiB de delta de heap do stream, 706,0 MiB de RSS p95 do
+renderer, 1.054,2 MiB de RSS agregado, 150,0 ms de frame p95, 401 ms de long
+task p95 e resume de 8,09s. Com 5k, os valores foram 180,08 MiB, 565,4 MiB,
+914,7 MiB, 158,4 ms, 266,5 ms e 4,59s; 8.137 linhas ficaram retidas no modo
+fixo contra 5.032 no adaptativo. A saída, identidade, attach/detach e resume
+passaram nos dois modos. O heap pós-GC voltou para 33,26 MiB e 6,96 MiB,
+respectivamente, o que reproduz degradação por carga, mas não prova por si só
+um vazamento global.
+
+DIAGNÓSTICO: a remoção genérica do React Flow persistia a exclusão por
+`removeNode`, porém não liberava a sessão do `TerminalSessionStore`. O caminho
+de seleção, teclado ou `deleteElements` podia portanto deixar PTY, xterm,
+listeners e timers vivos; o botão próprio do terminal já fazia a limpeza. Foi
+encontrada também uma corrida em que `clear` durante o carregamento lazy podia
+permitir que um `ensure` atrasado recriasse uma sessão depois de o canvas estar
+vazio.
+
+IMPLEMENTAÇÃO:
+
+- `app/src/features/canvas/services/canvas-node-removal.ts` centraliza a
+  liberação dos ids removidos, deduplica mudanças em lote, libera somente
+  terminais no store e mantém a remoção persistida para qualquer tipo de nó;
+- `CanvasView.tsx` usa essa fronteira para todos os caminhos de remoção e
+  também descarta o histórico de notificações dos nós removidos;
+- `deferred-terminal-session-store.ts` adiciona uma geração de limpeza que
+  invalida `ensure` enfileirado e não carrega o runtime lazy apenas para limpar
+  um canvas vazio;
+- os testes novos cobrem liberação idempotente de terminal, remoção mista e a
+  corrida `ensure`/`clear`;
+- o gate do benchmark passou a comparar o delta de heap durante o stream quando
+  disponível, mantendo RSS como fallback para relatórios antigos. O harness do
+  React Flow passou a carregar seu CSS oficial, removendo um aviso que podia
+  poluir a medição.
+
+MEDIÇÃO DO ÍNDICE: a rodada React Flow de 1.000 nós e 2.503 arestas começou às
+09:33:11 BRT e durou 3m52,13s. Baseline → índice: render inicial
+2.102,37 → 1.959,59 ms; drag 57,62 → 98,57 ms; resize 69,09 → 75,67 ms;
+criação/remoção de aresta 59,70 → 14,38 ms; mudança de dados 61,90 → 12,31
+ms. O heap não teve aumento material; drag e resize foram tratados como
+variância local, não como ganho. O smoke pós-correção, sem aviso de CSS, foi
+executado às 09:38:05 e durou 16,75s.
+
+VALIDAÇÃO: testes focados do ciclo de vida, testes do gate em Node, typecheck
+completo, lint, build, benchmark de terminal com `--check`, benchmark do
+React Flow com `--check`, `git diff --check` e os smoke/gates de empacotamento
+foram executados conforme a etapa de publicação. O check final da matriz de
+terminal, com 10/20 sessões, 6.000 linhas e políticas atual/adaptativa, ocorreu
+às 09:44:10 e durou 2m10,45s; saída, identidade, attach/detach, resume e
+redução de heap passaram.
+
+LIMITAÇÕES: o benchmark xterm não inicia CLIs reais nem webviews; o fixture do
+React Flow usa nós leves e não substitui uma sessão de produção com providers,
+window manager e guests Chromium. A evidência de heap usa
+`performance.memory` antes/depois de GC exposto, não snapshots DevTools de uma
+sessão longa. Assim, o caminho PTY/xterm de remoção foi corrigido e coberto,
+mas não é correto declarar ausência de retenção dentro de webviews ou de uma
+sessão real de provider sem uma bancada específica.
+
+Estado final: investigação, reprodução, correção de ciclo de vida,
+instrumentação, testes e documentação concluídos; task pronta para commit,
+push, acompanhamento do CI/release e encerramento no Notion. A limitação de
+snapshots de produção permanece explicitamente delimitada para eventual task
+separada, sem bloquear esta entrega.

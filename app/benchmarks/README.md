@@ -38,9 +38,13 @@ xvfb-run -a npm run benchmark:terminal -- \
 O `--check` padrão mede também a política adaptativa: compara o baseline fixo
 de 20.000 com o limite compacto nos cenários de 10 e 20 sessões. Além de
 contagem e resume, o check lê marcadores de identidade no xterm, verifica que o
-trecho final é contíguo e confirma que attach/detach não o modifica. Para
-validar o ganho de memória, use pelo menos uma carga maior que o limite
-compacto, por exemplo `--lines=8000`.
+trecho final é contíguo e confirma que attach/detach não o modifica. Quando o
+relatório contém `heapBefore` e `heapAfterStream`, o ganho de memória é
+validado pelo delta de heap durante o stream. Isso evita um falso negativo
+quando o working set do Chromium fica retido entre cenários no mesmo renderer;
+relatórios antigos continuam usando RSS como fallback. Para validar o ganho de
+memória, use pelo menos uma carga maior que o limite compacto, por exemplo
+`--lines=8000`.
 
 No CI, o mesmo comando roda nos três runners suportados. Linux usa `xvfb-run`;
 Windows e macOS abrem o Electron nativamente. Os JSONs são publicados como
@@ -100,9 +104,84 @@ MiB, ao custo de 3.105 linhas visuais por terminal. A política conserva os
 
 O aceite só considera a política válida quando o `--check` comprova, no
 runner de cada SO, saída final completa, suffix contíguo, attach/detach
-preservado, resume não vazio, ausência de regressão de resume e ganho de RSS
-nos cenários de 10/20 sessões. Se um SO falhar esse contrato, o artefato
+preservado, resume não vazio, ausência de regressão de resume e ganho de heap
+nos cenários de 10/20 sessões. O RSS continua publicado como evidência
+observacional do custo do processo. Se um SO falhar esse contrato, o artefato
 adaptativo não deve ser habilitado naquele release.
+
+## Degradação do Canvas no Linux
+
+A investigação de 03/09/2026 separou duas perguntas que costumavam aparecer
+misturadas: quanto custa manter muitos terminais vivos e se a remoção de um
+bloco deixa recursos retidos. A bancada de scrollback mede PTYs nativos e
+xterm em um Electron isolado; a bancada do índice mede o React Flow real com
+uma fixture de nós e arestas. Nenhuma delas altera o canvas persistido do
+usuário.
+
+Para repetir a matriz de terminal em Linux com display virtual:
+
+```bash
+xvfb-run -a npm run benchmark:terminal -- \
+  --counts=10,20 --scrollbacks=20000 --policies=current \
+  --lines=8000 --native-lines=128 --sample-interval-ms=500 \
+  --out=/tmp/felixo-canvas-linux-current-8k.json
+
+xvfb-run -a npm run benchmark:terminal -- \
+  --counts=10,20 --scrollbacks=20000 --policies=adaptive \
+  --lines=8000 --native-lines=128 --sample-interval-ms=500 \
+  --out=/tmp/felixo-canvas-linux-adaptive-8k.json
+```
+
+Os dois comandos foram executados em processos limpos, no Linux x64 com
+kernel `7.0.0-30-generic`, 4 CPUs, 11,6 GiB de RAM, Node 24.18.0, Electron
+41.10.7 e xterm 6.0.0. `heap Δ stream` é o heap usado depois da carga menos o
+heap usado antes dela; o heap após limpeza foi coletado depois de GC exposto
+pelo Electron. O RSS é p95 do working set do renderer, e `app RSS` soma os
+processos Electron observados.
+
+| Política | Sessões | Scrollback | Linhas retidas | Heap Δ stream | Renderer RSS p95 | App RSS p95 | Frame p95 | Long task p95 | Resume |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Atual | 10 | 20k | 8.137 | 151,33 MiB | 490,2 MiB | 841,5 MiB | 50,1 ms | 506 ms | 3,67 s |
+| Atual | 20 | 20k | 8.137 | 264,20 MiB | 706,0 MiB | 1.054,2 MiB | 150,0 ms | 401 ms | 8,09 s |
+| Adaptativa | 10 | 5k | 5.032 | 91,94 MiB | 432,3 MiB | 783,0 MiB | 66,7 ms | 410,85 ms | 2,28 s |
+| Adaptativa | 20 | 5k | 5.032 | 180,08 MiB | 565,4 MiB | 914,7 MiB | 158,4 ms | 266,5 ms | 4,59 s |
+
+Com 20 terminais, o limite adaptativo reduziu o RSS p95 do renderer em 19,9%,
+o RSS agregado em 13,2%, o delta de heap do stream em 31,8% e o resume em
+43,2%. A saída, a identidade das linhas, o attach/detach e o resume foram
+preservados; a redução para 5.000 linhas é intencional e o replay do processo
+principal continua limitado a 200.000 caracteres. O resultado reproduz a
+degradação por carga acumulada, mas o heap pós-GC próximo da linha de base não
+prova, sozinho, um vazamento.
+
+A inspeção do ciclo de vida encontrou uma retenção concreta: a exclusão
+genérica pelo React Flow chamava `removeNode` para persistência, mas não
+chamava `TerminalSessionStore.remove`. Assim, excluir por seleção/teclado podia
+deixar PTY, xterm, listeners e timers vivos, enquanto o botão próprio do
+terminal já fazia a limpeza. `releaseRemovedCanvasNodes` agora é a fronteira
+única do caminho de remoção: deduplica mudanças, libera somente ids de
+terminal e remove o dado persistido para todos os tipos. O
+`DeferredTerminalSessionStore` também invalida `ensure` enfileirado durante um
+`clear`, impedindo que uma sessão lazy reapareça depois de limpar o canvas.
+
+No React Flow real, a matriz de 03/09/2026 usou 1.000 nós e 2.503 arestas,
+incluindo terminais, arquivos, grupos e notas. O p95 baseline → índice foi:
+render inicial 2.102,37 → 1.959,59 ms; drag 57,62 → 98,57 ms; resize
+69,09 → 75,67 ms; criação/remoção de aresta 59,70 → 14,38 ms; mudança de
+dados 61,90 → 12,31 ms. A fixture confirmou a projeção do índice e não
+mostrou aumento material de heap; drag e resize ficaram sujeitos à variância
+local e não são tratados como ganho. O harness passou a carregar o CSS do
+React Flow para que a medição não dependa de um aviso de estilo ausente.
+
+Validação associada: os testes focados do ciclo de vida e do benchmark, os
+testes do gate em Node, typecheck, build, lint e os smoke/benchmarks Electron.
+O harness de xterm não cria webviews nem inicia CLIs reais; o harness do React
+Flow usa nós leves. A coleta usa `performance.memory` antes/depois de GC, não
+um snapshot DevTools de uma sessão de produção com webviews, providers e
+window manager real. Portanto, a investigação fecha o caminho de terminal e
+remoção identificado, mas não declara ausência de retenção dentro de guests
+webview ou de uma sessão real de provider; esse cenário deve ser tratado em
+uma tarefa específica se voltar a ser necessário.
 
 ## Logs da CLI no chat legado
 

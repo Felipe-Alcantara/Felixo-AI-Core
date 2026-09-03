@@ -138,6 +138,22 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos
   referenciados, mas não leva comandos ou caminhos dependentes da máquina.
 
+A remoção de um nó é também uma fronteira de ciclo de vida. `CanvasView` passa
+as mudanças do React Flow por `releaseRemovedCanvasNodes`: ids de terminal são
+liberados no `TerminalSessionStore` e todos os ids removidos seguem para a
+persistência, com deduplicação para operações em lote. Isso cobre seleção,
+teclado e `deleteElements`, além do botão próprio do terminal, sem carregar o
+runtime lazy para nós que não possuem PTY. O `DeferredTerminalSessionStore`
+invalida `ensure` enfileirado durante um `clear`, para que um mount atrasado não
+recrie uma sessão depois de o canvas ter sido limpo.
+
+A investigação de degradação no Linux reproduziu o custo esperado de muitos
+buffers xterm e encontrou esse caminho de remoção que podia deixar PTY, xterm,
+listeners e timers vivos. A matriz e os limites de interpretação estão
+registrados em [`app/benchmarks/README.md`](../../app/benchmarks/README.md); a
+bancada de xterm usa `performance.memory` antes/depois de GC e não substitui
+snapshot DevTools de uma sessão real com webviews e providers.
+
 ### Bundle e carregamento sob demanda
 
 O renderer de produção é carregado em camadas para que a tela inicial do
