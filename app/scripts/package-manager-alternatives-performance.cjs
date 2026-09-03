@@ -319,11 +319,12 @@ function pickLastOutputLine(result) {
     .at(-1) || null
 }
 
-function findPackageManifest(root, packageName, maxEntries = 20_000) {
+function findPackageManifest(root, packageName, expectedVersion = null, maxEntries = 20_000) {
   if (!pathExists(root)) return null
 
   const queue = [root]
   const visited = new Set()
+  let fallback = null
   let inspected = 0
 
   while (queue.length > 0 && inspected < maxEntries) {
@@ -350,7 +351,12 @@ function findPackageManifest(root, packageName, maxEntries = 20_000) {
       if (entry.isFile() && entry.name === 'package.json') {
         try {
           const manifest = JSON.parse(fs.readFileSync(child, 'utf8'))
-          if (manifest.name === packageName) return { manifest, path: child }
+          if (manifest.name === packageName) {
+            if (!expectedVersion || manifest.version === expectedVersion) {
+              return { manifest, path: child }
+            }
+            fallback ||= { manifest, path: child }
+          }
         } catch {
           // O diretório ainda pode conter outros pacotes válidos.
         }
@@ -360,7 +366,7 @@ function findPackageManifest(root, packageName, maxEntries = 20_000) {
     }
   }
 
-  return null
+  return fallback
 }
 
 function findExecutablePath(binDir) {
@@ -383,6 +389,7 @@ function normalizeError(result, temporaryRoot) {
     .replaceAll(temporaryRoot, '<temp>')
     .replaceAll(process.cwd(), '<repo>')
     .replaceAll(os.homedir(), '<home>')
+    .replaceAll('/private<temp>', '<temp>')
   return text.slice(-1_000) || `exit code ${result.code}`
 }
 
@@ -483,7 +490,7 @@ async function installWithPnpm({ manager, executable, archivePath, version, samp
     env: environment,
     timeoutMs: options.timeoutMs,
   })
-  const manifest = findPackageManifest(globalDir, CLI_PACKAGE_NAME)
+  const manifest = findPackageManifest(globalDir, CLI_PACKAGE_NAME, version)
   const smoke = executablePath
     ? await runProcess(executablePath, [], {
       cwd: sampleRoot,
@@ -565,7 +572,7 @@ async function installWithYarnClassic({ manager, executable, archivePath, versio
     env: environment,
     timeoutMs: options.timeoutMs,
   })
-  const manifest = findPackageManifest(globalFolder, CLI_PACKAGE_NAME)
+  const manifest = findPackageManifest(globalFolder, CLI_PACKAGE_NAME, version)
   const smoke = executablePath
     ? await runProcess(executablePath, [], {
       cwd: sampleRoot,
@@ -1098,6 +1105,7 @@ if (require.main === module) {
 
 module.exports = {
   buildRecommendation,
+  findPackageManifest,
   measureTree,
   parseArgs,
   validateReport,

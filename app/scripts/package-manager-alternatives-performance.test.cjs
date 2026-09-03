@@ -42,6 +42,26 @@ test('a medição de árvore conta bytes sem seguir a forma do pacote', () => {
   }
 })
 
+test('a busca do manifesto prefere a versão atual no store', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-package-manager-manifest-'))
+  try {
+    for (const [folder, version] of [['a-old', '1.0.0'], ['b-current', '1.1.0']]) {
+      const packageRoot = path.join(root, folder)
+      fs.mkdirSync(packageRoot)
+      fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({
+        name: 'fixture-cli',
+        version,
+      }))
+    }
+    assert.equal(
+      benchmark.findPackageManifest(root, 'fixture-cli', '1.1.0').manifest.version,
+      '1.1.0',
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('a decisão registra por que npm continua sendo o runtime padrão', () => {
   const report = {
     candidates: {
