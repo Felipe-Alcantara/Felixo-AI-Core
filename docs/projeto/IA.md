@@ -2792,3 +2792,45 @@ arquitetural.
 Estado final: investigação, bancada reproduzível, recomendação, testes e
 documentação concluídos; pendente apenas commit, push, acompanhamento do CI e
 registro/encerramento da task no Notion conforme o workflow.
+
+## Registro de Trabalho — 2026-09-04 (parte 26) — memória e custo operacional no artefato
+
+PEDIDO: executar a task do Notion [“Felixo AI Core/Performance — Medir memória e custo operacional do gerenciador alternativo no artefato”](https://app.notion.com/p/Felixo-AI-Core-Performance-Medir-mem-ria-e-custo-operacional-do-gerenciador-alternativo-no-artefat-3d091f95497e81d98a65ff105f1c4e44?source=copy_link).
+
+DIAGNÓSTICO: a bancada arquitetural já comparava bootstrap, tamanho, instalação
+e atualização, mas não media RSS, CPU, árvore de processos, I/O, concorrência
+de agentes nem crescimento persistente no prefixo do gerenciador que saiu no
+artefato.
+
+IMPLEMENTAÇÃO:
+
+- `app/scripts/package-manager-operational-performance.cjs` é a bancada
+  complementar; preserva a avaliação arquitetural existente em
+  `package-manager-alternatives-performance.cjs` e mede o `npm-runtime` em
+  `release/*/resources/npm-runtime`, com fallback explícito ao runtime da fonte,
+  contra pnpm, Yarn clássico e a rota Corepack disponíveis no host;
+- cada cenário usa fixture local offline, prefixos por agente, caches,
+  configuração e `HOME/USERPROFILE` temporários, com instalações frias e
+  repetições quentes concorrentes para 1/2/5/10 agentes;
+- o relatório sanitizado guarda p50/p95 de duração, RSS, CPU, processos/árvore,
+  I/O, arquivos e bytes no disco frio/quente, crescimento persistente, deltas
+  contra npm e gate de 120 s, 512 MiB RSS, 64 processos e 512 MiB de disco;
+- a checagem Windows usa identidade do processo (nome/data de criação) para
+  rejeitar PID reciclado como falso órfão. O CI e o release publicam JSON de
+  custo operacional, sem substituir o smoke de compatibilidade já existente.
+
+VALIDAÇÃO LOCAL: `node --test scripts/package-manager-operational-performance.test.cjs`
+passou 11/11; `node --check scripts/package-manager-operational-performance.cjs`
+e `git diff --check` passaram. O benchmark completo
+`npm run benchmark:package-managers:performance:check -- --iterations=2 --agents=1,2,5,10`
+passou em Windows x64, com 16 cenários, npm-runtime 11.19.1 do artefato
+desempacotado local e pnpm 10.28.0. Máximos: npm cold/hot p95 5.499/5.847 s e
+RSS 123,2/131,8 MiB; pnpm 2.910/2.755 s e RSS 131,5/115,8 MiB; disco
+40.354/22.136 B; crescimento frio→quente 0 B; processos 4/3; órfãos 0. A
+recomendação automática foi `avaliar-pnpm`, sujeita à decisão humana.
+
+LIMITE: Yarn clássico e Corepack ficaram indisponíveis neste host. O runner
+mede o gerenciador e a CLI fixture, não abre renderer/canvas/terminal nem mede
+energia; esses sinais dependem dos benchmarks Electron/release-smoke. A matriz
+CI/release é necessária para confirmar os três sistemas operacionais e o
+artefato produzido limpo.

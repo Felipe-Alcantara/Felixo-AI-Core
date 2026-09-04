@@ -70,6 +70,26 @@ jobs:
       - name: Inventory packaged application
         run: npm run inventory:package -- --release-dir release --out build/dependency-policy/package-inventory.json
 
+      # Mede o custo do gerenciador que realmente foi copiado para o unpacked
+      # (e não o npm do runner). O --check transforma ausência de métricas,
+      # falha funcional ou violação de budget em gate; alternativas ausentes
+      # ficam registradas no JSON sem tornar o job dependente delas.
+      - name: Benchmark package managers in packaged application
+        shell: bash
+        run: >-
+          npm run benchmark:package-managers:check --
+          --iterations=2
+          --agents=1,2,5,10
+          --out=build/dependency-policy/package-managers.json
+
+      - name: Benchmark package-manager operational cost in packaged application
+        shell: bash
+        run: >-
+          npm run benchmark:package-managers:performance:check --
+          --iterations=2
+          --agents=1,2,5,10
+          --out=build/dependency-policy/package-manager-operational.json
+
       - name: Verify dependency policy gates
         run: >-
           node scripts/verify-dependency-policy.cjs
@@ -263,6 +283,18 @@ jobs:
         with:
           name: package-manager-alternatives-${{ matrix.os }}
           path: app/package-manager-alternatives-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+      - name: Benchmark package-manager operational cost
+        shell: bash
+        run: npm run benchmark:package-managers:performance:check -- --iterations=2 --agents=1,2,5,10 --out=package-manager-operational-${{ matrix.os }}.json
+
+      - name: Upload package-manager operational benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-manager-operational-${{ matrix.os }}
+          path: app/package-manager-operational-${{ matrix.os }}.json
           if-no-files-found: ignore
 
       # O cache contém somente os tsbuildinfo do renderer. O tsc valida os

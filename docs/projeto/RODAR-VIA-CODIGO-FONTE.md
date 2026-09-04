@@ -183,6 +183,32 @@ essa comparação na matriz dos três SOs. A recomendação vigente é manter o
 npm-runtime até validar versões/hash, cache offline, scripts nativos e CLIs
 oficiais no artefato real.
 
+### Custo operacional no artefato
+
+Para medir memória, CPU, processos, I/O e disco do gerenciador que executa uma
+fixture local, use a bancada complementar. Depois de gerar o unpacked, ela
+prefere `release/*/resources/npm-runtime`; sem artefato, registra
+`source-runtime` explicitamente:
+
+```bash
+cd app
+npm run benchmark:package-managers:performance:check -- \
+  --iterations=2 --agents=1,2,5,10 \
+  --out=build/package-manager-operational.json
+```
+
+Cada agente recebe prefixo, cache, configuração e `HOME/USERPROFILE` próprios,
+executa instalação offline fria e repetição quente em paralelo. O JSON
+sanitizado registra p50/p95 de duração, RSS, CPU, árvore de processos, I/O,
+arquivos/bytes em disco frio/quente e crescimento persistente, além de deltas
+contra o `npm-runtime`. O `--check` aplica 120 s de p95, 512 MiB de RSS, 64
+processos e 512 MiB de disco; Yarn/Corepack ausentes são registrados sem tocar
+no ambiente do usuário. A responsividade do renderer/canvas/terminal e energia
+ficam fora deste runner e devem ser combinadas com os benchmarks Electron.
+
+O CI publica a medição Linux após o empacotamento; o workflow de release repete
+o gate no unpacked real de Linux, Windows e macOS e sobe um JSON por sistema.
+
 ### Logs da CLI do chat legado
 
 O chat está depreciado, mas seu painel de logs continua disponível para

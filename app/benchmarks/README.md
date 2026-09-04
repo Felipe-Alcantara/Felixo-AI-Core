@@ -465,6 +465,40 @@ o tamanho da árvore que realmente foi para `resources/npm-runtime` e os
 tempos do npm dentro do artefato; o relatório é publicado como artefato do
 workflow de release.
 
+## Custo operacional de gerenciadores alternativos
+
+`scripts/package-manager-operational-performance.cjs` mede o custo operacional
+de uma fixture de CLI local nos gerenciadores detectados no `PATH`. O `npm-runtime`
+vem de `release/*/resources/npm-runtime` quando o diretório existe; fora de um
+artefato, o relatório marca a origem como `source-runtime`.
+
+```bash
+npm run benchmark:package-managers:performance:check -- \
+  --iterations=2 --agents=1,2,5,10 \
+  --out=build/package-manager-alternatives.json
+```
+
+Cada cenário usa um prefixo por agente e cache temporário, executa a instalação
+offline em paralelo e repete a mesma operação no prefixo já preenchido para
+representar o caminho quente. São registrados p50/p95 de duração, RSS, CPU,
+árvore de processos, I/O de processo quando o SO fornece a métrica, arquivos e
+bytes em disco antes/depois da repetição quente e o crescimento persistente.
+O JSON inclui deltas contra o `npm-runtime`, ranking de
+alternativas elegíveis e os budgets do gate: 120 s de p95, 512 MiB de RSS, 64
+processos e 512 MiB em disco.
+
+O escopo é o gerenciador e a CLI de fixture; o runner não abre o renderer nem
+mede responsividade do canvas/terminal ou energia. Esses sinais continuam no
+`release-smoke`/benchmarks Electron e devem ser combinados ao analisar uma
+migração.
+
+`--check` exige que o npm-runtime esteja disponível, que todas as fases fria e
+quente tenham terminado com sucesso e que as métricas não estejam ausentes ou
+fora dos budgets. pnpm, Yarn ou Corepack ausentes são mantidos no relatório como
+`available: false`; isso permite comparar os três sistemas operacionais sem
+instalar ou alterar gerenciadores do usuário. O CI e o workflow de release
+publicam um relatório por artefato/SO.
+
 ### Resultado reproduzível em 02/09/2026
 
 Linux x64, Node 25.9.0, Electron 41.10.7 e npm 11.19.1, três repetições por

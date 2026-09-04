@@ -300,6 +300,30 @@ executa essa validação na matriz dos três sistemas antes de permitir que a
 pré-release seja promovida; o JSON do smoke sobe junto dos artefatos da
 release para deixar o resultado auditável.
 
+### Benchmark operacional de gerenciadores
+
+Depois de gerar um unpacked (`npm run pack` ou `npx electron-builder
+--publish never`), compare o `npm-runtime` que foi empacotado com alternativas
+disponíveis no sistema:
+
+```bash
+cd app
+npm run benchmark:package-managers:performance:check -- \
+  --iterations=2 --agents=1,2,5,10 \
+  --out=build/package-manager-alternatives.json
+```
+
+O runner `package-manager-operational-performance.cjs` mede instalação fria e
+repetição quente em prefixos isolados, sem rede,
+credenciais ou escrita global. O relatório JSON sanitizado separa npm-runtime,
+pnpm, Yarn e Corepack por disponibilidade e modo de instalação; registra p50/p95
+de tempo, RSS, CPU, I/O, processos e crescimento em disco, além da comparação
+com npm e um ranking dentro dos budgets do check. A descoberta automática usa
+`release/*/resources/npm-runtime` quando presente; caso contrário, identifica
+que a execução veio do código-fonte. O CI guarda o relatório Linux no job de
+dependências e o workflow de release repete o gate no artefato real dos três
+sistemas operacionais.
+
 ## Testes
 
 Os testes são divididos entre backend Electron, renderer e launcher Python:

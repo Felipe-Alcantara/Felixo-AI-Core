@@ -181,6 +181,44 @@ jobs:
           path: app/release/package-inventory-${{ matrix.os }}.json
           if-no-files-found: error
 
+      # A bancada roda sobre o npm-runtime desempacotado pelo mesmo
+      # electron-builder que será publicado. Cada SO entrega seu JSON
+      # sanitizado e o --check bloqueia a publicação se houver falha ou
+      # ultrapassagem dos budgets de tempo, memória, processos ou disco.
+      - name: Benchmark package managers in release artifact
+        shell: bash
+        run: >-
+          node scripts/package-manager-alternatives-performance.cjs
+          --check
+          --iterations=2
+          --agents=1,2,5,10
+          --out="release/package-manager-alternatives-${{ matrix.os }}.json"
+
+      - name: Upload package manager benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-manager-alternatives-${{ matrix.os }}
+          path: app/release/package-manager-alternatives-${{ matrix.os }}.json
+          if-no-files-found: error
+
+      - name: Benchmark package-manager operational cost in release artifact
+        shell: bash
+        run: >-
+          node scripts/package-manager-operational-performance.cjs
+          --check
+          --iterations=2
+          --agents=1,2,5,10
+          --out="release/package-manager-operational-${{ matrix.os }}.json"
+
+      - name: Upload package-manager operational benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-manager-operational-${{ matrix.os }}
+          path: app/release/package-manager-operational-${{ matrix.os }}.json
+          if-no-files-found: error
+
       - name: Install Linux virtual display
         if: runner.os == 'Linux'
         shell: bash

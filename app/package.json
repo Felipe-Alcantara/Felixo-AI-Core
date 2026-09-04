@@ -27,6 +27,8 @@
     "benchmark:npm-runtime:check": "npm run benchmark:npm-runtime -- --check",
     "benchmark:package-managers": "node scripts/package-manager-alternatives-performance.cjs",
     "benchmark:package-managers:check": "npm run benchmark:package-managers -- --check",
+    "benchmark:package-managers:performance": "node scripts/package-manager-operational-performance.cjs",
+    "benchmark:package-managers:performance:check": "npm run benchmark:package-managers:performance -- --check",
     "build": "npm run typecheck && vite build",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
