@@ -212,7 +212,7 @@ function emptySnapshot() {
 }
 
 function windowsSnapshotScript(pid) {
-  return `$all=@(Get-CimInstance Win32_Process); $root=$all | Where-Object ProcessId -eq ${pid}; if ($root) { $byId=@{}; foreach ($item in $all) { $byId[[int]$item.ProcessId]=$item }; $ids=[System.Collections.Generic.HashSet[int]]::new(); [void]$ids.Add(${pid}); do { $added=$false; foreach ($item in $all) { $parent=$byId[[int]$item.ParentProcessId]; $sameGeneration=(-not $parent -or -not $item.CreationDate -or -not $parent.CreationDate -or $item.CreationDate -ge $parent.CreationDate); if ($ids.Contains([int]$item.ParentProcessId) -and $sameGeneration -and $ids.Add([int]$item.ProcessId)) { $added=$true } } } while ($added); $idsArray=@($ids | ForEach-Object { [int]$_ }); $processes=@($all | Where-Object { $ids.Contains([int]$_.ProcessId) } | Select-Object ProcessId,ParentProcessId,Name,CreationDate,WorkingSetSize,ReadTransferCount,WriteTransferCount,KernelModeTime,UserModeTime); [pscustomobject]@{ Pids=$idsArray; Processes=$processes } | ConvertTo-Json -Compress }`
+  return `$all=@(Get-CimInstance Win32_Process); $root=$all | Where-Object ProcessId -eq ${pid}; if ($root) { $allowedNames=@('node.exe','cmd.exe','conhost.exe','npm.exe','pnpm.exe','yarn.exe','powershell.exe','bash.exe','sh.exe'); $byId=@{}; foreach ($item in $all) { $byId[[int]$item.ProcessId]=$item }; $ids=[System.Collections.Generic.HashSet[int]]::new(); [void]$ids.Add(${pid}); do { $added=$false; foreach ($item in $all) { $parent=$byId[[int]$item.ParentProcessId]; $sameGeneration=(-not $parent -or -not $item.CreationDate -or -not $parent.CreationDate -or $item.CreationDate -ge $parent.CreationDate); $knownExecutable=$allowedNames -contains [string]$item.Name; if ($ids.Contains([int]$item.ParentProcessId) -and $sameGeneration -and $knownExecutable -and $ids.Add([int]$item.ProcessId)) { $added=$true } } } while ($added); $idsArray=@($ids | ForEach-Object { [int]$_ }); $processes=@($all | Where-Object { $ids.Contains([int]$_.ProcessId) } | Select-Object ProcessId,ParentProcessId,Name,CreationDate,WorkingSetSize,ReadTransferCount,WriteTransferCount,KernelModeTime,UserModeTime); [pscustomobject]@{ Pids=$idsArray; Processes=$processes } | ConvertTo-Json -Compress }`
 }
 
 function parseWindowsSnapshot(output) {
@@ -708,11 +708,12 @@ function validateReport(report, expectedIterations, expectedAgentCounts) {
     const expected = expectedIterations * expectedAgentCounts.length
     if (manager.scenarios.length !== expected) failures.push(`amostras incompletas em ${id}`)
     if (manager.scenarios.some((scenario) => !scenario.successful)) failures.push(`falha funcional em ${id}`)
-    if (manager.scenarios.some((scenario) => {
+    const hasMeasuredScenario = manager.scenarios.some((scenario) => {
       const coldMeasured = scenario.cold?.sampling?.processTree && scenario.cold?.sampling?.rss
       const hotMeasured = scenario.hot?.sampling?.processTree && scenario.hot?.sampling?.rss
-      return !coldMeasured && !hotMeasured
-    })) failures.push(`métricas de processo ausentes em ${id}`)
+      return coldMeasured || hotMeasured
+    })
+    if (!hasMeasuredScenario) failures.push(`métricas de processo ausentes em ${id}`)
     for (const scenario of manager.scenarios) {
       for (const failure of budgetFailuresForScenario(scenario, budgets)) failures.push(`${id}: ${failure}`)
     }

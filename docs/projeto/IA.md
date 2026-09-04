@@ -2816,8 +2816,9 @@ IMPLEMENTAÇÃO:
   I/O, arquivos e bytes no disco frio/quente, crescimento persistente, deltas
   contra npm e gate de 120 s, 512 MiB RSS, 64 processos e 512 MiB de disco;
 - a checagem Windows usa identidade do processo (nome/data de criação) para
-  rejeitar PID reciclado como falso órfão. O CI e o release publicam JSON de
-  custo operacional, sem substituir o smoke de compatibilidade já existente.
+  rejeitar PID reciclado como falso órfão, filtra executáveis fora da árvore
+  lançada e repete uma vez falhas transitórias. O CI e o release publicam JSON
+  de custo operacional, sem substituir o smoke de compatibilidade já existente.
 
 VALIDAÇÃO LOCAL: `node --test scripts/package-manager-operational-performance.test.cjs`
 passou 11/11; `node --check scripts/package-manager-operational-performance.cjs`

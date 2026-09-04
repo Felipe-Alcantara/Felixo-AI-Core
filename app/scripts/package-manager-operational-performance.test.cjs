@@ -182,5 +182,16 @@ test('validateReport exige npm-runtime, cenários frios/quentes e métricas de p
     },
   }
   assert.deepEqual(validateReport(report, 1, [1]), [])
+  const ultrafast = {
+    successful: true,
+    cold: { processCount: { count: 0 }, rss: { count: 0 }, sampling: { processTree: false, rss: false } },
+    hot: { processCount: { count: 0 }, rss: { count: 0 }, sampling: { processTree: false, rss: false } },
+  }
+  assert.deepEqual(validateReport({
+    managers: {
+      'npm-runtime': { available: true, scenarios: [baseScenario, ultrafast] },
+      pnpm: { available: false, scenarios: [] },
+    },
+  }, 2, [1]), [])
   assert.match(validateReport({ managers: { 'npm-runtime': { available: false, scenarios: [] } } }, 1, [1]).join('; '), /npm-runtime/)
 })

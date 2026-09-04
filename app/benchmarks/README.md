@@ -493,8 +493,10 @@ mede responsividade do canvas/terminal ou energia. Esses sinais continuam no
 migração.
 
 `--check` exige que o npm-runtime esteja disponível, que todas as fases fria e
-quente tenham terminado com sucesso e que as métricas não estejam ausentes ou
-fora dos budgets. pnpm, Yarn ou Corepack ausentes são mantidos no relatório como
+quente terminem com sucesso, que cada gerenciador disponível tenha ao menos uma
+fase com RSS/árvore observada e que os budgets não sejam excedidos. Fases
+ultracurtas que terminam antes da coleta ficam marcadas como indisponíveis no
+JSON, sem serem convertidas em zero. pnpm, Yarn ou Corepack ausentes são mantidos no relatório como
 `available: false`; isso permite comparar os três sistemas operacionais sem
 instalar ou alterar gerenciadores do usuário. O CI e o workflow de release
 publicam um relatório por artefato/SO.
