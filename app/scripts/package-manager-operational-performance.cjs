@@ -132,7 +132,8 @@ function findPackagedRuntime(releaseRoot = path.join(APP_ROOT, 'release')) {
 function measureTree(root) {
   if (!fs.existsSync(root)) return { files: 0, bytes: 0 }
   const stat = fs.lstatSync(root)
-  if (!stat.isDirectory() || stat.isSymbolicLink()) return { files: stat.isFile() ? 1 : 0, bytes: stat.size }
+  if (stat.isSymbolicLink()) return { files: 0, bytes: 0 }
+  if (!stat.isDirectory()) return { files: stat.isFile() ? 1 : 0, bytes: stat.size }
   return fs.readdirSync(root, { withFileTypes: true }).reduce((total, entry) => {
     const child = measureTree(path.join(root, entry.name))
     return { files: total.files + child.files, bytes: total.bytes + child.bytes }
