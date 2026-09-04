@@ -79,7 +79,6 @@ jobs:
         run: >-
           npm run benchmark:package-managers:check --
           --iterations=2
-          --agents=1,2,5,10
           --out=build/dependency-policy/package-managers.json
 
       - name: Benchmark package-manager operational cost in packaged application

@@ -191,7 +191,6 @@ jobs:
           node scripts/package-manager-alternatives-performance.cjs
           --check
           --iterations=2
-          --agents=1,2,5,10
           --out="release/package-manager-alternatives-${{ matrix.os }}.json"
 
       - name: Upload package manager benchmark
