@@ -101,7 +101,7 @@ jobs:
 
       - name: Upload npm policy reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dependency-policy-npm
           path: app/build/dependency-policy
@@ -202,7 +202,7 @@ jobs:
 
       - name: Upload Python policy reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dependency-policy-python
           path: app/build/dependency-policy/pip-*
@@ -262,7 +262,7 @@ jobs:
 
       - name: Upload npm runtime benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-runtime-${{ matrix.os }}
           path: app/npm-runtime-${{ matrix.os }}.json
@@ -278,7 +278,7 @@ jobs:
 
       - name: Upload package-manager alternatives benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-manager-alternatives-${{ matrix.os }}
           path: app/package-manager-alternatives-${{ matrix.os }}.json
@@ -290,7 +290,7 @@ jobs:
 
       - name: Upload package-manager operational benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-manager-operational-${{ matrix.os }}
           path: app/package-manager-operational-${{ matrix.os }}.json
@@ -338,7 +338,7 @@ jobs:
 
       - name: Upload terminal scrollback benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terminal-scrollback-${{ matrix.os }}
           path: app/terminal-scrollback-${{ matrix.os }}.json
@@ -365,7 +365,7 @@ jobs:
 
       - name: Upload renderer bundle benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bundle-load-${{ matrix.os }}
           path: app/bundle-load-${{ matrix.os }}.json
