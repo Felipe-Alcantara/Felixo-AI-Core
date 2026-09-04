@@ -2835,3 +2835,19 @@ mede o gerenciador e a CLI fixture, não abre renderer/canvas/terminal nem mede
 energia; esses sinais dependem dos benchmarks Electron/release-smoke. A matriz
 CI/release é necessária para confirmar os três sistemas operacionais e o
 artefato produzido limpo.
+
+## Registro de Trabalho — 2026-09-04 (parte 27) — estabilização da medição
+
+O primeiro CI da bancada revelou duas falhas de integração que foram corrigidas
+antes do fechamento: `measureTree` contabilizava o tamanho do link simbólico,
+embora devesse ignorá-lo sem seguir o alvo, e o teardown do Windows ainda podia
+expor por cerca de 750 ms um filho `cmd/node` terminado. A coleta agora ignora
+links e repete a consulta de identidade após a janela de teardown; um processo
+persistente continua sendo reportado. Também removi `--agents` das chamadas do
+benchmark arquitetural legado, mantendo essa carga somente na bancada
+operacional que a suporta.
+
+Validação local após os ajustes: 11/11 testes da bancada, sintaxe e diff limpo;
+16 cenários Windows x64 passaram para npm-runtime e pnpm com `--check`, sem
+órfãos. O CI intermediário identificou o caso Yarn Classic com 10 agentes; a
+nova execução deve ser a referência para confirmar a matriz e o artefato.

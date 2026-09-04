@@ -273,11 +273,20 @@ function sameProcessIdentity(expected, current) {
 async function findOrphans(samples) {
   const identities = new Map(samples.flatMap((sample) => (sample.processIdentities ?? []).map((identity) => [identity.pid, identity])))
   const pids = [...new Set(samples.flatMap((sample) => sample.pids))]
-  if (process.platform === 'win32' && identities.size) {
-    const current = await currentWindowsProcessIdentities(pids)
-    if (current) return pids.filter((pid) => sameProcessIdentity(identities.get(pid), current.get(pid)))
+  const check = async () => {
+    if (process.platform === 'win32' && identities.size) {
+      const current = await currentWindowsProcessIdentities(pids)
+      if (current) return pids.filter((pid) => sameProcessIdentity(identities.get(pid), current.get(pid)))
+    }
+    return pids.filter(processStillRunning)
   }
-  return pids.filter(processStillRunning)
+  const orphans = await check()
+  if (process.platform !== 'win32' || orphans.length === 0) return orphans
+  // Windows can emit `close` while a short-lived cmd/node child is still
+  // leaving the process table. Recheck after teardown has settled, while
+  // retaining identity checks so a genuinely persistent child still fails.
+  await new Promise((resolve) => setTimeout(resolve, 750))
+  return check()
 }
 
 function processSnapshot(pid, { platform = process.platform, execFileSyncImpl = execFileSync } = {}) {
