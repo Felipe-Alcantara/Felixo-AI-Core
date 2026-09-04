@@ -2851,3 +2851,42 @@ Validação local após os ajustes: 11/11 testes da bancada, sintaxe e diff limp
 16 cenários Windows x64 passaram para npm-runtime e pnpm com `--check`, sem
 órfãos. O CI intermediário identificou o caso Yarn Classic com 10 agentes; a
 nova execução deve ser a referência para confirmar a matriz e o artefato.
+
+## Registro de Trabalho — 2026-09-04 (parte 28) — CI e artefatos finais
+
+A execução de referência confirmou a bancada no artefato produzido, não apenas
+no checkout. O commit [98b5e27](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/98b5e27be9f3045056c0a577d9150606fc496118)
+passou no [CI multi-SO](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33845253343)
+em Linux, macOS e Windows. O [release workflow](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/33846335610)
+também passou em todos os jobs e publicou a [v0.1.187](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.187)
+como Latest, com 26 assets, inventário do empacotamento e smoke do instalador
+nos três sistemas.
+
+O inventário confirmou `npm-runtime` fora do `app.asar`, com npm 11.19.1:
+1.527 arquivos e 8.813.796 bytes no Linux arm64/x64 e macOS arm64, e 1.554
+arquivos e 8.827.803 bytes no Windows x64. A bancada operacional repetiu duas
+iterações, instalação fria/quente e 1/2/5/10 agentes para cada gerenciador
+disponível: 16 cenários por SO, 48 cenários de gerenciador no total, todos
+bem-sucedidos, sem órfãos e com crescimento frio→quente de 0 B. Todos os
+budgets passaram: p95 de instalação abaixo de 120 s, RSS abaixo de 512 MiB,
+árvore abaixo de 64 processos e disco abaixo de 512 MiB.
+
+Nos resultados finais, o npm teve p95 frio/quente máximo de 1.467/1.473 ms no
+Linux, 1.673/1.473 ms no macOS e 9.334/8.749 ms no Windows. O Yarn Classic
+teve 961/1.027 ms, 963/984 ms e 14.834/13.152 ms, respectivamente; o RSS p95
+permaneceu abaixo de 149 MiB e o disco máximo foi 61 KiB. A recomendação
+automática foi `avaliar-yarn-classic` nos três SOs por menor média de p95, mas a
+decisão de migração continua humana: o npm-runtime permanece no caminho de
+produção até a validação das CLIs oficiais, dependências nativas, lifecycle,
+cache e rollback. pnpm/Corepack foram registrados como indisponíveis nessa
+rota de release, sem transformar ausência em sucesso silencioso; a comparação
+arquitetural anterior continua sendo a referência para esses candidatos.
+
+Os 11 testes focados e a sintaxe do runner passaram localmente. O benchmark
+operacional foi executado com perfis temporários, fixture local offline,
+prefix/cache/configuração isolados e sanitização; não tocou userData,
+credenciais ou instalação global reais. Renderer/canvas, latência de interação,
+energia/bateria e sessões reais de provider não fazem parte desta medição. O
+profiler/heap do Canvas e a sessão Linux longa já têm tasks próprias; a
+correlação direta entre instalação e responsividade/energia foi aberta como
+follow-up separado.
