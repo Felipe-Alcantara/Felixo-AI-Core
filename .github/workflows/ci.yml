@@ -300,7 +300,7 @@ jobs:
       # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
       # mudança de código nunca transforma um resultado antigo em verde.
       - name: Restore TypeScript incremental cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: app/node_modules/.tmp
           key: typecheck-${{ runner.os }}-${{ hashFiles('app/package-lock.json', 'app/tsconfig*.json') }}
