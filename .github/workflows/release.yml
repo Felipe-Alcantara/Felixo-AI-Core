@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload packaged inventory report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-inventory-${{ matrix.os }}
           path: app/release/package-inventory-${{ matrix.os }}.json
@@ -195,7 +195,7 @@ jobs:
 
       - name: Upload package manager benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-manager-alternatives-${{ matrix.os }}
           path: app/release/package-manager-alternatives-${{ matrix.os }}.json
@@ -212,7 +212,7 @@ jobs:
 
       - name: Upload package-manager operational benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-manager-operational-${{ matrix.os }}
           path: app/release/package-manager-operational-${{ matrix.os }}.json
@@ -235,7 +235,7 @@ jobs:
 
       - name: Upload release smoke report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-smoke-${{ matrix.os }}
           path: app/release/release-smoke-${{ matrix.os }}.json
