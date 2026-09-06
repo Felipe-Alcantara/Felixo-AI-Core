@@ -23,6 +23,9 @@ const {
 } = require('./cli-auto-install.cjs')
 Module._load = originalLoad
 const { getManagedCliLayout } = require('../core/managed-cli-paths.cjs')
+const { getPinnedInstallTarget } = require('../core/managed-cli-manifest.cjs')
+
+const GEMINI_PINNED = getPinnedInstallTarget('gemini')
 
 /**
  * Monta um perfil isolado com o layout que o app usa em disco.
@@ -167,7 +170,7 @@ test(
       assertPlanned(await service.run('startup'))
       service.stop()
 
-      assert.deepEqual(installed, ['@google/gemini-cli'])
+      assert.deepEqual(installed, [GEMINI_PINNED])
     } finally {
       profile.cleanup()
     }
@@ -212,7 +215,7 @@ test(
       })
       assertPlanned(await versaoNova.service.run('startup'))
       versaoNova.service.stop()
-      assert.deepEqual(versaoNova.installed, ['@google/gemini-cli'])
+      assert.deepEqual(versaoNova.installed, [GEMINI_PINNED])
     } finally {
       profile.cleanup()
     }

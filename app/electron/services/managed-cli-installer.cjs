@@ -101,27 +101,130 @@ function createManagedInstallEnv({
 }
 
 /**
- * Instala um pacote npm na pasta gerenciada.
+ * Monta os argumentos do npm para consultar o hash publicado de um pacote,
+ * sem baixar nem instalar nada.
  *
  * @param {object} options
- * @param {string} options.npmPackage - Pacote a instalar.
+ * @param {string} options.npmCliPath
+ * @param {string} options.npmPackage
+ * @returns {string[]}
+ */
+function createNpmViewIntegrityArgs({ npmCliPath, npmPackage }) {
+  return [npmCliPath, 'view', npmPackage, 'dist.integrity']
+}
+
+/**
+ * Confere, contra o registry, se o hash do pacote pinado no manifesto ainda
+ * é o mesmo antes de deixar o npm baixar e extrair qualquer coisa.
+ *
+ * Isso é defesa em profundidade, não substituição da verificação que o
+ * próprio npm já faz ao instalar (ele recusa um tarball cujo hash não bate
+ * com o que o registry anunciou). O que este passo cobre é o cenário em que
+ * o registry passa a anunciar, para a mesma versão pinada, um hash diferente
+ * do que foi revisado e commitado no manifesto — sinal de pacote alterado ou
+ * de registry comprometido, que o npm sozinho aceitaria como válido.
+ *
+ * @param {object} options
+ * @param {string} options.npmPackage - Já com a versão pinada, ex.: `pkg@1.2.3`.
+ * @param {string} options.expectedIntegrity - Hash esperado, do manifesto.
+ * @param {string} options.npmCliPath
+ * @param {string} options.nodeExecutable
+ * @param {Record<string, string>} options.env
+ * @param {string} options.cwd
+ * @param {Function} [options.spawn]
+ * @param {number} [options.timeoutMs]
+ * @returns {Promise<{ ok: boolean, message: string, output: string }>}
+ */
+async function verifyManagedPackageIntegrity({
+  npmPackage,
+  expectedIntegrity,
+  npmCliPath,
+  nodeExecutable,
+  env,
+  cwd,
+  spawn = spawnChildProcess,
+  timeoutMs = INSTALL_TIMEOUT_MS,
+}) {
+  const args = createNpmViewIntegrityArgs({ npmCliPath, npmPackage })
+
+  const result = await runCommand({
+    command: nodeExecutable,
+    args,
+    env,
+    cwd,
+    spawn,
+    timeoutMs,
+    successMessage: `Hash de ${npmPackage} consultado.`,
+    failureMessage: `Nao foi possivel consultar o hash de ${npmPackage}.`,
+  })
+
+  if (!result.ok) {
+    return result
+  }
+
+  const actualIntegrity = result.output.trim()
+
+  if (actualIntegrity !== expectedIntegrity) {
+    return {
+      ok: false,
+      message: `Hash de ${npmPackage} divergiu do manifesto — instalacao recusada.`,
+      output: actualIntegrity,
+    }
+  }
+
+  return { ok: true, message: `Hash de ${npmPackage} confere com o manifesto.`, output: actualIntegrity }
+}
+
+/**
+ * Instala um pacote npm na pasta gerenciada.
+ *
+ * Quando `expectedIntegrity` é passado, o hash é conferido contra o registry
+ * **antes** de qualquer download/extração — hash divergente cancela a
+ * instalacao e devolve falha, sem chegar a chamar `npm install`. Sem
+ * `expectedIntegrity` (pacote fora do manifesto), o comportamento é o
+ * mesmo de antes: instala sem checagem prévia de hash.
+ *
+ * @param {object} options
+ * @param {string} options.npmPackage - Pacote a instalar (idealmente já `pkg@versao`).
  * @param {string} options.npmCliPath - `npm-cli.js` empacotado.
  * @param {string} options.nodeExecutable - Binário que roda como Node.
  * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} options.layout
+ * @param {string} [options.expectedIntegrity] - Hash esperado, do manifesto.
  * @param {(line: string) => void} [options.onLog]
  * @param {Function} [options.spawn] - Injetável nos testes.
  * @param {number} [options.timeoutMs]
  * @returns {Promise<{ ok: boolean, message: string, output: string }>}
  */
-function installManagedPackage({
+async function installManagedPackage({
   npmPackage,
   npmCliPath,
   nodeExecutable,
   layout,
+  expectedIntegrity,
   onLog,
   spawn = spawnChildProcess,
   timeoutMs = INSTALL_TIMEOUT_MS,
 }) {
+  const env = createManagedInstallEnv({ layout })
+
+  if (expectedIntegrity) {
+    const integrityCheck = await verifyManagedPackageIntegrity({
+      npmPackage,
+      expectedIntegrity,
+      npmCliPath,
+      nodeExecutable,
+      env,
+      cwd: layout.root,
+      spawn,
+      timeoutMs,
+    })
+
+    if (!integrityCheck.ok) {
+      onLog?.(integrityCheck.output)
+      return integrityCheck
+    }
+  }
+
   const args = createNpmInstallArgs({
     npmCliPath,
     npmPackage,
@@ -131,7 +234,7 @@ function installManagedPackage({
   return runCommand({
     command: nodeExecutable,
     args,
-    env: createManagedInstallEnv({ layout }),
+    env,
     cwd: layout.root,
     onLog,
     spawn,
@@ -208,5 +311,7 @@ module.exports = {
   INSTALL_TIMEOUT_MS,
   createManagedInstallEnv,
   createNpmInstallArgs,
+  createNpmViewIntegrityArgs,
   installManagedPackage,
+  verifyManagedPackageIntegrity,
 }

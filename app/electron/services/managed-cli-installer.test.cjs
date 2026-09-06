@@ -6,7 +6,9 @@ const { EventEmitter } = require('node:events')
 const {
   createManagedInstallEnv,
   createNpmInstallArgs,
+  createNpmViewIntegrityArgs,
   installManagedPackage,
+  verifyManagedPackageIntegrity,
 } = require('./managed-cli-installer.cjs')
 
 const LAYOUT = {
@@ -132,6 +134,111 @@ describe('managed-cli-installer', () => {
     assert.equal(result.ok, false)
     assert.match(result.message, /Nao foi possivel instalar/)
     assert.match(result.output, /ENOTFOUND/)
+  })
+
+  it('builds a plain "npm view dist.integrity" query, without touching disk', () => {
+    const args = createNpmViewIntegrityArgs({
+      npmCliPath: '/opt/app/resources/npm/bin/npm-cli.js',
+      npmPackage: '@anthropic-ai/claude-code@2.1.263',
+    })
+
+    assert.deepEqual(args, [
+      '/opt/app/resources/npm/bin/npm-cli.js',
+      'view',
+      '@anthropic-ai/claude-code@2.1.263',
+      'dist.integrity',
+    ])
+  })
+
+  it('confirms integrity when the registry hash matches the manifest', async () => {
+    const result = await verifyManagedPackageIntegrity({
+      npmPackage: '@google/gemini-cli@0.58.0',
+      expectedIntegrity: 'sha512-abc==',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      env: {},
+      cwd: LAYOUT.root,
+      spawn: () => createFakeChild({ stdout: 'sha512-abc==\n' }),
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.output, 'sha512-abc==')
+  })
+
+  it('refuses a diverging hash instead of trusting the registry blindly', async () => {
+    const result = await verifyManagedPackageIntegrity({
+      npmPackage: '@google/gemini-cli@0.58.0',
+      expectedIntegrity: 'sha512-abc==',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      env: {},
+      cwd: LAYOUT.root,
+      spawn: () => createFakeChild({ stdout: 'sha512-outro==\n' }),
+    })
+
+    assert.equal(result.ok, false)
+    assert.match(result.message, /divergiu do manifesto/)
+    assert.equal(result.output, 'sha512-outro==')
+  })
+
+  it('never spawns npm install when the pinned hash diverges', async () => {
+    const spawnCalls = []
+    const spawn = (command, args) => {
+      spawnCalls.push(args[1]) // 'view' ou 'install'
+      return createFakeChild({ stdout: 'sha512-outro==\n' })
+    }
+
+    const result = await installManagedPackage({
+      npmPackage: '@google/gemini-cli@0.58.0',
+      expectedIntegrity: 'sha512-abc==',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn,
+    })
+
+    assert.equal(result.ok, false)
+    assert.deepEqual(spawnCalls, ['view'])
+  })
+
+  it('installs normally when the pinned hash matches, checking before installing', async () => {
+    const spawnCalls = []
+    const spawn = (command, args) => {
+      const stdout = args[1] === 'view' ? 'sha512-abc==\n' : 'added 1 package'
+      spawnCalls.push(args[1])
+      return createFakeChild({ stdout })
+    }
+
+    const result = await installManagedPackage({
+      npmPackage: '@google/gemini-cli@0.58.0',
+      expectedIntegrity: 'sha512-abc==',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn,
+    })
+
+    assert.equal(result.ok, true)
+    assert.deepEqual(spawnCalls, ['view', 'install'])
+  })
+
+  it('skips the hash check for a package outside the manifest (no expectedIntegrity)', async () => {
+    const spawnCalls = []
+    const spawn = (command, args) => {
+      spawnCalls.push(args[1])
+      return createFakeChild({ stdout: 'added 1 package' })
+    }
+
+    const result = await installManagedPackage({
+      npmPackage: '@google/gemini-cli',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn,
+    })
+
+    assert.equal(result.ok, true)
+    assert.deepEqual(spawnCalls, ['install'])
   })
 
   it('gives up after the timeout instead of hanging the setup forever', async () => {

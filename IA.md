@@ -4068,3 +4068,55 @@ arquitetural.
 Estado final: investigação, bancada reproduzível, recomendação, testes e
 documentação concluídos; pendente apenas commit, push, acompanhamento do CI e
 registro/encerramento da task no Notion conforme o workflow.
+
+## 06/09/2026 — Pin de versão e verificação de hash na instalação automática das CLIs
+
+CONTEXTO: a instalação automática (`cli-auto-install.cjs` → `managed-cli-installer.cjs`)
+sempre rodava `npm install --global` sem versão fixa — instalava o `latest` do
+momento, sem checar hash contra nada. Investigado em 05/09/2026 (task de origem
+"Fixar versão, hash e cache offline do gerenciador de CLIs"); esta entrada
+implementa os dois primeiros pontos (pin de versão e verificação de hash).
+Cache offline por perfil e a prova de isolamento entre perfis continuam em
+subtasks separadas, ainda não implementadas.
+
+O QUE MUDOU:
+- `electron/core/managed-cli-manifest.cjs` (novo): manifesto com versão exata e
+  hash `sha512` (campo `dist.integrity` do registry) de `@openai/codex`,
+  `@anthropic-ai/claude-code` e `@google/gemini-cli`, capturados em 06/09/2026.
+  `getPinnedInstallTarget(id)` devolve `pacote@versao-exata`.
+- `electron/services/managed-cli-installer.cjs`: `installManagedPackage` aceita
+  `expectedIntegrity` e, quando presente, roda `npm view <pacote> dist.integrity`
+  **antes** de instalar — hash divergente cancela a instalação sem chegar a
+  chamar `npm install`. Sem `expectedIntegrity` o comportamento é o de antes
+  (pacote fora do manifesto não trava).
+- `electron/services/cli-auto-install.cjs`: busca a entrada do manifesto pelo
+  `cli.id` e passa `pacote@versao` + `expectedIntegrity` ao instalador.
+- `official-cli-catalog.cjs` (instrução manual mostrada à pessoa) foi
+  **deliberadamente não tocado** — continua instalando `latest`, porque é o
+  comando que a documentação oficial de cada CLI manda rodar; o pin vale só
+  para a instalação automática e silenciosa do app.
+
+O QUE NÃO FOI FEITO E POR QUÊ: a verificação de hash checa contra o registry
+via `npm view`, não contra um hash vendorizado localmente — é defesa em
+profundidade sobre o que o próprio npm já confere ao instalar (ele já recusa
+tarball com hash diferente do anunciado), não substituição disso. Cache
+offline por perfil (subtask separada) ainda decide se o binário instalado é
+por perfil ou compartilhado — este pin não presume uma resposta.
+
+VALIDAÇÃO: `node --test` nos quatro arquivos afetados — 28/28 testes passando,
+incluindo os seis novos (query de hash sem tocar disco, hash batendo, hash
+divergindo, `npm install` nunca chamado quando o hash diverge, ordem
+view→install quando bate, e pacote fora do manifesto seguindo sem checagem).
+`node -c` confirmou a sintaxe dos três arquivos `.cjs` alterados/criados.
+`npm run lint`/`npm run build` **não foram rodados nesta sessão**: a máquina
+ficou com menos de 200MB de RAM livre e swap saturado logo depois que um
+`npm run pack` anterior (nesta mesma sessão, para outra task) derrubou por
+OOM o processo real do Felixo AI Core que estava aberto — rodar outro build
+pesado em seguida repetiria o risco. Fica como limitação declarada: falta
+rodar lint e o build completo do TypeScript antes do próximo merge que mexer
+nesses arquivos.
+
+Estado final: pin de versão e verificação de hash implementados e testados
+(testes leves, `node --test`); lint e build completo pendentes por limitação
+de memória da máquina nesta sessão — não bloqueiam o commit porque os
+arquivos alterados são `.cjs` fora do project reference do `tsc`.

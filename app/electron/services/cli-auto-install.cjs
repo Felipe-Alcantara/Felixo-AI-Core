@@ -19,6 +19,7 @@ const { ipcMain } = require('electron')
 const { detectCli } = require('../core/cli-detector.cjs')
 const { listOfficialAiClis } = require('../core/official-cli-catalog.cjs')
 const { getManagedCliLayout } = require('../core/managed-cli-paths.cjs')
+const { getManagedCliManifestEntry } = require('../core/managed-cli-manifest.cjs')
 const { getNodeExecutable, resolveNpmCliPath } = require('../core/node-runtime.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { ensureManagedCliRuntime } = require('./managed-cli-runtime.cjs')
@@ -156,8 +157,17 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         clis: progress,
       })
 
+      // A instalação automática pina versão e hash pelo manifesto — ao
+      // contrário do comando manual do catálogo, que segue `latest` porque é
+      // o que a documentação oficial de cada CLI instrui a pessoa a rodar.
+      // CLI fora do manifesto (ainda não revisada) cai para o pacote solto:
+      // perde o pin, não trava a instalação.
+      const manifestEntry = getManagedCliManifestEntry(cli.id)
       const result = await installPackage({
-        npmPackage: cli.install.npmPackage,
+        npmPackage: manifestEntry
+          ? `${manifestEntry.npmPackage}@${manifestEntry.version}`
+          : cli.install.npmPackage,
+        expectedIntegrity: manifestEntry?.integrity,
         npmCliPath,
         nodeExecutable: getNodeExecutable(),
         layout,
