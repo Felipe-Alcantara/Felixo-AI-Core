@@ -118,6 +118,16 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
   felixo fetch-all ver-pedido <id> [--json]
       Diz se um pedido já foi confirmado, recusado ou continua esperando.
 
+  felixo browser open <url> [--embedded] [--json]
+      Pede ao app para abrir uma página no navegador do sistema. Com
+      --embedded, a página vira um bloco Webpage persistido no canvas.
+
+  felixo browser status <id> [--json]
+      Mostra o desfecho de um pedido de abertura.
+
+  Também são aceitos os equivalentes em português: navegador abrir,
+  navegador ver-pedido e --embutido.
+
 ${AVISO_ESCRITA}`
 
 module.exports = {

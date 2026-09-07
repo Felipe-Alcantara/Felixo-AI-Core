@@ -53,6 +53,9 @@ const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
 const {
+  registerAgentBrowserIpcHandlers,
+} = require('./services/agent-browser-ipc-handlers.cjs')
+const {
   instalarComandoDoAgente: installAgentCommand,
 } = require('./services/agent-command-install.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
@@ -88,6 +91,7 @@ let settingsRepository = null
 let terminalLogStore = null
 let cliAutoInstall = null
 let agentUsageWatching = null
+let agentBrowserWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -287,6 +291,7 @@ app.whenReady().then(async () => {
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
   registerFetchAllIpcHandlers(getMainWindow, appPaths)
+  agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths)
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
@@ -345,6 +350,15 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  if (agentBrowserWatching) {
+    try {
+      agentBrowserWatching.pararDeObservarPedidos()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentBrowserWatching = null
+  }
+
   if (agentUsageWatching) {
     try {
       agentUsageWatching.stopWatching()

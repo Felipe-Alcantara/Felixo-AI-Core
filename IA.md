@@ -4138,3 +4138,37 @@ IMPLEMENTAÇÃO:
 VALIDAÇÃO: 27/27 testes focados passaram (`managed-cli-health`, `cli-auto-install`, `cli-auto-install-plan` e `managed-cli-manifest`); `node --check` passou nos módulos alterados; ESLint focado passou sem avisos; `git diff --check` passou. A ausência foi reproduzida com um prefixo temporário que contém o executável do Codex, mas não o pacote nativo, sem tocar a instalação global nem credenciais reais.
 
 LIMITE: ainda falta validar a recuperação contra um artefato empacotado completo em cada runner do CI e acompanhar o release; a suíte e o pipeline serão a prova final de empacotamento e compatibilidade multi-SO. O caminho manual `official-cli-service` continua separado do instalador automático gerenciado e não foi alterado nesta task.
+
+## Registro de Trabalho — 2026-09-07 — agentes abrem páginas pelo app
+
+CONTEXTO: o agente que roda no terminal do canvas consegue ler a saída da CLI,
+mas não tem uma chamada de volta para o processo principal do Electron. A task
+do Fetch All já havia criado a fila local `userData/agent-requests`; criar um
+socket ou um segundo transporte só repetiria a mesma fronteira e aumentaria a
+superfície de segurança.
+
+DECISÃO: reutilizar a fila existente com a intenção fechada `abrir-pagina`.
+`felixo browser open <url>` pede abertura no navegador externo; `--embedded`
+(ou `navegador abrir ... --embutido`) pede um bloco Webpage persistido no
+canvas. Somente URLs `http:` e `https:` atravessam a validação. O consumidor
+externo chama o mesmo `shell.openExternal` usado pelo handler de links do app;
+o consumidor embutido envia um evento pelo preload, que o CanvasView transforma
+em nó e posiciona numa área livre. O Fetch All filtra sua própria intenção e
+continua exigindo confirmação para escrita.
+
+IMPLEMENTAÇÃO: o repositório de pedidos ganhou normalização de URL/modo e
+filtro por ação; o observador de arquivos passou a ser compartilhado por Fetch
+All e pelo consumidor de navegador; a CLI ganhou `browser`/`navegador`, status
+do pedido e a skill `abrir-paginas-no-navegador`. O preload mantém uma pequena
+fila de eventos para não perder uma abertura embutida se ela chegar antes da
+montagem do React.
+
+VALIDAÇÃO LOCAL: 33 testes Node focados passaram; `npx vite build`, ESLint
+focado e `git diff --check` passaram. A suíte Node completa encontrou falhas de
+ambiente já fora desta alteração (Electron instalado sem o binário, criação de
+symlink recusada pelo Windows e um benchmark de RSS); o `tsc` também encontrou
+declarações ausentes na árvore local de `node_modules`, enquanto o build Vite
+concluiu normalmente.
+
+Estado final: implementação, skill, testes e documentação concluídos; falta
+somente commit, push, CI/release e registro final na task/relatório.

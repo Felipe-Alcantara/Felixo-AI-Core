@@ -56,6 +56,9 @@ function interpretarArgumentos(argumentos) {
 
 /** Verbos aceitos. Lista fechada: nada de escrita mora aqui. */
 const VERBOS = ['varrer', 'estado', 'pedir-execucao', 'ver-pedido']
+const FERRAMENTAS_BROWSER = ['browser', 'navegador']
+const VERBOS_BROWSER_ABRIR = ['open', 'abrir']
+const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 
 /**
  * Executa o comando e devolve o que imprimir e com qual código de saída.
@@ -81,6 +84,59 @@ async function executar(argumentos, dependencias = {}) {
   } = dependencias
 
   const { ferramenta, verbo, argumento, opcoes } = interpretarArgumentos(argumentos)
+
+  if (FERRAMENTAS_BROWSER.includes(ferramenta)) {
+    if (VERBOS_BROWSER_ABRIR.includes(verbo)) {
+      if (!argumento) {
+        return { saida: '', erro: 'Informe a URL da página a abrir.', codigo: 2 }
+      }
+
+      try {
+        const pedido = criarPedidos().registrar('abrir-pagina', {
+          url: argumento,
+          modo: opcoes.embedded === true || opcoes.embutido === true ? 'embutido' : 'externo',
+          origem: diretorioAtual(),
+        })
+
+        if (opcoes.json === true) {
+          return { saida: JSON.stringify({ ok: true, pedido }, null, 2), codigo: 0 }
+        }
+
+        return {
+          saida: [
+            `Pedido registrado: ${pedido.id}`,
+            `URL: ${pedido.url}`,
+            `Destino: ${pedido.modo}`,
+            '',
+            'O app vai atender o pedido pela fila compartilhada com o Fetch All.',
+            `Para acompanhar: felixo browser status ${pedido.id}`,
+          ].join('\n'),
+          codigo: 0,
+        }
+      } catch (error) {
+        return {
+          saida: '',
+          erro: error instanceof Error ? error.message : 'Nao foi possivel registrar o pedido.',
+          codigo: 2,
+        }
+      }
+    }
+
+    if (VERBOS_BROWSER_STATUS.includes(verbo)) {
+      const pedido = argumento ? criarPedidos().ler(argumento) : null
+
+      if (!pedido) {
+        return { saida: '', erro: `Pedido nao encontrado: ${argumento || '(sem id)'}`, codigo: 1 }
+      }
+
+      return {
+        saida: opcoes.json ? JSON.stringify(pedido, null, 2) : descreverPedido(pedido),
+        codigo: 0,
+      }
+    }
+
+    return { saida: `${AJUDA}\n\n${AJUDA_DEVTOOLS}`, codigo: 2 }
+  }
 
   if (ferramenta !== 'fetch-all' || !VERBOS.includes(verbo)) {
     return { saida: `${AJUDA}\n\n${AJUDA_DEVTOOLS}`, codigo: ferramenta || verbo ? 2 : 0 }
@@ -247,6 +303,9 @@ function descreverPedido(pedido) {
 
   return [
     `Pedido ${pedido.id}`,
+    pedido.acao ? `  ação: ${pedido.acao}` : null,
+    pedido.acao === 'abrir-pagina' ? `  url: ${pedido.url}` : null,
+    pedido.acao === 'abrir-pagina' ? `  destino: ${pedido.modo}` : null,
     `  estado: ${pedido.estado} (${estados[pedido.estado] ?? 'desconhecido'})`,
     `  pedido em: ${pedido.pedidoEm}`,
     pedido.resolvidoEm ? `  resolvido em: ${pedido.resolvidoEm}` : null,

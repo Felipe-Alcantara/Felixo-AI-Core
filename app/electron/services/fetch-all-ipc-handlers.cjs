@@ -7,13 +7,13 @@
  * nunca uma exceção atravessando o IPC.
  */
 
-const fs = require('node:fs')
-
 const { ipcMain } = require('electron')
 const { createFetchAllService } = require('./fetch-all-service.cjs')
 const { criarRepositorioDePedidos } = require('./fetch-all/agent-requests.cjs')
+const { observeAgentRequests } = require('./agent-request-watcher.cjs')
 
 const PROGRESS_CHANNEL = 'fetch-all:progress'
+const FETCH_ALL_REQUEST_ACTION = 'executar-plano'
 
 /** Avisa a interface que um agente deixou um pedido esperando confirmação. */
 const REQUESTS_CHANNEL = 'fetch-all:agent-requests'
@@ -46,11 +46,13 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {})
   // raro, e uma varredura periódica gastaria disco o dia inteiro para descobrir
   // que continua vazia. Se o sistema não suportar observação, o painel ainda
   // lista os pedidos ao abrir — só não acende sozinho.
-  const observador = observarPedidos(appPaths.agentRequests, () => {
+  const observador = observeAgentRequests(appPaths.agentRequests, () => {
     const window = getMainWindow?.()
 
     if (window && !window.isDestroyed()) {
-      window.webContents.send(REQUESTS_CHANNEL, { requests: pedidos.listarPendentes() })
+      window.webContents.send(REQUESTS_CHANNEL, {
+        requests: pedidos.listarPendentes({ acao: FETCH_ALL_REQUEST_ACTION }),
+      })
     }
   })
 
@@ -90,7 +92,7 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {})
 
   ipcMain.handle('fetch-all:list-requests', () =>
     guard('Falha ao ler os pedidos dos agentes.', async () => ({
-      requests: pedidos.listarPendentes(),
+      requests: pedidos.listarPendentes({ acao: FETCH_ALL_REQUEST_ACTION }),
     })),
   )
 
@@ -99,7 +101,11 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {})
       const id = readPath(params?.id)
       const pedido = id ? pedidos.ler(id) : null
 
-      if (!pedido || pedido.estado !== 'pendente') {
+      if (
+        !pedido ||
+        pedido.estado !== 'pendente' ||
+        pedido.acao !== FETCH_ALL_REQUEST_ACTION
+      ) {
         return { resolved: null, message: 'Esse pedido não está mais pendente.' }
       }
 
@@ -160,27 +166,6 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {})
   })
 
   return { ...service, pedidos, pararDeObservarPedidos: () => observador?.close() }
-}
-
-/**
- * Observa a pasta de pedidos e avisa a cada mudança.
- *
- * @param {string} pasta
- * @param {() => void} aoMudar
- * @returns {import('node:fs').FSWatcher|null}
- */
-function observarPedidos(pasta, aoMudar) {
-  try {
-    fs.mkdirSync(pasta, { recursive: true })
-    const observador = fs.watch(pasta, { persistent: false }, () => aoMudar())
-
-    // Um erro do observador (pasta removida, limite do sistema) não pode
-    // derrubar o processo principal por causa de um recurso opcional.
-    observador.on('error', () => {})
-    return observador
-  } catch {
-    return null
-  }
 }
 
 /**

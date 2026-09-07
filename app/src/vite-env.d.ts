@@ -483,6 +483,9 @@ declare global {
           communityEnabled?: boolean
           hiddenBuiltinIds?: string[]
         }) => Promise<CliInvokeResult>
+        onAgentBrowserOpen: (
+          callback: (data: { requestId: string; url: string }) => void,
+        ) => () => void
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>

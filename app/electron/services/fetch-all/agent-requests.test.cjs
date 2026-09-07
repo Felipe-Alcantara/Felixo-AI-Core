@@ -39,6 +39,35 @@ test('comCommit só é verdadeiro quando vem exatamente true', () => {
   }
 })
 
+test('abrir-pagina aceita apenas URL web e os dois destinos fechados', () => {
+  assert.deepEqual(normalizarPedido('abrir-pagina', {
+    url: ' https://example.com/docs ',
+    modo: 'embutido',
+  }), {
+    acao: 'abrir-pagina',
+    comCommit: false,
+    url: 'https://example.com/docs',
+    modo: 'embutido',
+  })
+
+  assert.deepEqual(normalizarPedido('abrir-pagina', {
+    url: 'http://localhost:4173',
+  }), {
+    acao: 'abrir-pagina',
+    comCommit: false,
+    url: 'http://localhost:4173',
+    modo: 'externo',
+  })
+
+  for (const url of ['file:///tmp/a', 'javascript:alert(1)', 'data:text/html,oi', 'nao-e-url']) {
+    assert.throws(() => normalizarPedido('abrir-pagina', { url }), /URL http/)
+  }
+  assert.throws(
+    () => normalizarPedido('abrir-pagina', { url: 'https://example.com', modo: 'janela' }),
+    /Modo de abertura/,
+  )
+})
+
 test('registrar grava o pedido pendente e listarPendentes o devolve', () => {
   const pasta = pastaTemporaria()
   const repositorio = criarRepositorioDePedidos({ pasta })
@@ -50,6 +79,22 @@ test('registrar grava o pedido pendente e listarPendentes o devolve', () => {
   assert.deepEqual(
     repositorio.listarPendentes().map((item) => item.id),
     [pedido.id],
+  )
+})
+
+test('listarPendentes pode separar consumidores da mesma fila', () => {
+  const pasta = pastaTemporaria()
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const fetchAll = repositorio.registrar('executar-plano')
+  const browser = repositorio.registrar('abrir-pagina', { url: 'https://example.com' })
+
+  assert.deepEqual(
+    repositorio.listarPendentes({ acao: 'executar-plano' }).map((item) => item.id),
+    [fetchAll.id],
+  )
+  assert.deepEqual(
+    repositorio.listarPendentes({ acao: 'abrir-pagina' }).map((item) => item.id),
+    [browser.id],
   )
 })
 
