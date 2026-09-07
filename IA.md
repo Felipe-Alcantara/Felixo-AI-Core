@@ -4120,3 +4120,21 @@ Estado final: pin de versão e verificação de hash implementados e testados
 (testes leves, `node --test`); lint e build completo pendentes por limitação
 de memória da máquina nesta sessão — não bloqueiam o commit porque os
 arquivos alterados são `.cjs` fora do project reference do `tsc`.
+
+## Registro de Trabalho — 2026-09-07 — dependência opcional ausente ao instalar Codex no Windows
+
+CONTEXTO: a task [Felixo AI Core/Agentes — corrigir erro ao criar perfis do Codex (dependência opcional ausente no Windows)](https://app.notion.com/p/Felixo-AI-Core-Agentes-corrigir-erro-ao-criar-perfis-do-Codex-depend-ncia-opcional-ausente-no-Win-3d491f95497e8127bdf2df563c7a96bb) registrou que `@openai/codex` podia terminar a instalação com sucesso no npm, mas falhar depois com `Missing optional dependency @openai/codex-win32-x64`.
+
+CAUSA CONFIRMADA: `npm view @openai/codex@0.153.4 optionalDependencies --json` lista pacotes nativos separados por sistema e arquitetura. O instalador não tinha verificação pós-instalação; portanto, um código de saída 0 do npm era tratado como instalação pronta mesmo quando o pacote nativo do Windows não existia.
+
+IMPLEMENTAÇÃO:
+
+- `app/electron/core/managed-cli-manifest.cjs` declara os pacotes `@openai/codex-win32-x64` e `@openai/codex-win32-arm64` por plataforma/arquitetura, preservando o pin do Codex já existente;
+- `app/electron/services/managed-cli-health.cjs` verifica a presença do `package.json` da dependência exigida no prefixo gerenciado e preserva a mensagem acionável emitida pelo Codex;
+- `app/electron/services/cli-auto-install.cjs` deixa de considerar suficiente a existência do executável, repete uma instalação aparentemente bem-sucedida quando a dependência opcional está ausente e grava falha detalhada quando a segunda tentativa também não resolve;
+- `app/electron/services/cli-auto-install-plan.cjs` inclui o detalhe da falha na mensagem principal do status, que é o texto mostrado pelo aviso da interface. O retry IPC existente (`clis:retry-setup`) continua disponível para uma nova tentativa manual;
+- testes de saúde, instalação automática e resumo cobrem ausência inicial, recuperação na segunda tentativa e erro persistente.
+
+VALIDAÇÃO: 27/27 testes focados passaram (`managed-cli-health`, `cli-auto-install`, `cli-auto-install-plan` e `managed-cli-manifest`); `node --check` passou nos módulos alterados; ESLint focado passou sem avisos; `git diff --check` passou. A ausência foi reproduzida com um prefixo temporário que contém o executável do Codex, mas não o pacote nativo, sem tocar a instalação global nem credenciais reais.
+
+LIMITE: ainda falta validar a recuperação contra um artefato empacotado completo em cada runner do CI e acompanhar o release; a suíte e o pipeline serão a prova final de empacotamento e compatibilidade multi-SO. O caminho manual `official-cli-service` continua separado do instalador automático gerenciado e não foi alterado nesta task.

@@ -2934,3 +2934,11 @@ observadas numa rodada completa da suíte (symlink sem permissão em
 `package-inventory.test.cjs`, RSS de processo real em
 `package-manager-operational-performance.test.cjs`, e mais 4 suítes com
 efeitos colaterais de ambiente) são pré-existentes e alheias a este fix.
+
+## [2026-09-07] Fix: instalação gerenciada do Codex sem dependência opcional nativa no Windows
+
+A task [Felixo AI Core/Agentes — corrigir erro ao criar perfis do Codex (dependência opcional ausente no Windows)](https://app.notion.com/p/Felixo-AI-Core-Agentes-corrigir-erro-ao-criar-perfis-do-Codex-depend-ncia-opcional-ausente-no-Win-3d491f95497e8127bdf2df563c7a96bb) apontou que o npm podia terminar com código 0 sem materializar `@openai/codex-win32-x64`, deixando a criação de perfis falhar só quando a CLI era executada.
+
+O manifesto gerenciado passou a declarar os pacotes nativos do Codex para Windows x64/arm64. O novo `managed-cli-health.cjs` verifica o `package.json` do pacote esperado dentro do prefixo do app. A instalação automática usa essa verificação tanto para validar uma instalação anterior quanto logo após instalar: se a primeira tentativa aparenta sucesso mas o pacote falta, uma segunda instalação é executada automaticamente. Se a ausência persistir, o status inclui a mensagem original do Codex (`Missing optional dependency ... Reinstall Codex: npm install -g @openai/codex@latest`), e o retry já existente da interface continua disponível.
+
+Os testes cobrem o prefixo incompleto, a recuperação na segunda tentativa e a falha persistente; o resumo do status também foi testado para não esconder o diagnóstico. A validação local focada passou com 27/27 testes, sintaxe, ESLint e `git diff --check`. O teste usa diretório temporário e simula Windows sem modificar a instalação global ou credenciais. A confirmação em artefato empacotado e nos três runners fica para o CI/release desta entrega.

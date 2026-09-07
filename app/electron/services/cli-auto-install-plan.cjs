@@ -136,9 +136,14 @@ function summarizeAutoInstall(progress) {
   const installed = progress.filter((item) => item.state === 'installed')
 
   if (failed.length > 0) {
+    const details = failed
+      .map((item) => item.message)
+      .filter(Boolean)
+      .join(' ')
+
     return {
       state: 'error',
-      message: `Nao foi possivel instalar: ${failed.map((item) => item.name).join(', ')}.`,
+      message: `Nao foi possivel instalar: ${failed.map((item) => item.name).join(', ')}.${details ? ` ${details}` : ''}`,
     }
   }
 

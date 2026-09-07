@@ -24,6 +24,7 @@ const { getNodeExecutable, resolveNpmCliPath } = require('../core/node-runtime.c
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { ensureManagedCliRuntime } = require('./managed-cli-runtime.cjs')
 const { installManagedPackage } = require('./managed-cli-installer.cjs')
+const { verifyManagedCliInstallation } = require('./managed-cli-health.cjs')
 const {
   allDetected,
   getAutoInstallableClis,
@@ -44,6 +45,10 @@ const STARTUP_DELAY_MS = 4000
  * @param {boolean} options.isPackaged
  * @param {Function} [options.installPackage] - Injetável nos testes.
  * @param {Function} [options.detect] - Injetável nos testes.
+ * @param {Function} [options.verifyInstallation] - Injetável nos testes.
+ * @param {string} [options.platformName]
+ * @param {string} [options.arch]
+ * @param {typeof fs} [options.fileSystem]
  * @returns {{ getStatus: () => object, run: (reason?: string) => Promise<object>, stop: () => void }}
  */
 function registerCliAutoInstallHandlers(getMainWindow, options) {
@@ -53,6 +58,10 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     isPackaged,
     installPackage = installManagedPackage,
     detect = detectCli,
+    verifyInstallation = verifyManagedCliInstallation,
+    platformName = process.platform,
+    arch = process.arch,
+    fileSystem = fs,
   } = options
 
   const layout = getManagedCliLayout({ userData: appPaths.userData })
@@ -123,7 +132,14 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     const { pending, progress } = planAutoInstall({
       catalog,
       detections,
-      managedPresent: catalog.map((cli) => hasManagedBinary(layout, cli)),
+      managedPresent: catalog.map((cli) =>
+        hasManagedInstallation(layout, cli, {
+          verifyInstallation,
+          platformName,
+          arch,
+          fileSystem,
+        }),
+      ),
       previousState: readState(stateFilePath),
       appVersion,
       reason,
@@ -163,14 +179,23 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       // CLI fora do manifesto (ainda não revisada) cai para o pacote solto:
       // perde o pin, não trava a instalação.
       const manifestEntry = getManagedCliManifestEntry(cli.id)
-      const result = await installPackage({
-        npmPackage: manifestEntry
-          ? `${manifestEntry.npmPackage}@${manifestEntry.version}`
-          : cli.install.npmPackage,
-        expectedIntegrity: manifestEntry?.integrity,
-        npmCliPath,
-        nodeExecutable: getNodeExecutable(),
-        layout,
+      const npmPackage = manifestEntry
+        ? `${manifestEntry.npmPackage}@${manifestEntry.version}`
+        : cli.install.npmPackage
+      const result = await installAndVerifyManagedCli({
+        cli,
+        installPackage,
+        verifyInstallation,
+        platformName,
+        arch,
+        fileSystem,
+        installOptions: {
+          expectedIntegrity: manifestEntry?.integrity,
+          npmPackage,
+          npmCliPath,
+          nodeExecutable: getNodeExecutable(),
+          layout,
+        },
       })
 
       updateCliProgress(progress, cli.id, {
@@ -275,6 +300,125 @@ function hasManagedBinary(layout, cli) {
   )
 }
 
+/**
+ * O executável sozinho não prova que a CLI está pronta: o Codex também
+ * depende de um pacote nativo opcional específico da plataforma.
+ *
+ * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} layout
+ * @param {{ id: string }} cli
+ * @param {object} [options]
+ * @returns {boolean}
+ */
+function hasManagedInstallation(
+  layout,
+  cli,
+  {
+    verifyInstallation = verifyManagedCliInstallation,
+    platformName = process.platform,
+    arch = process.arch,
+    fileSystem = fs,
+  } = {},
+) {
+  if (!hasManagedBinary(layout, cli)) {
+    return false
+  }
+
+  return verifyInstallation({
+    providerId: cli.id,
+    layout,
+    platformName,
+    arch,
+    fileSystem,
+  }).ok
+}
+
+/**
+ * O npm pode declarar sucesso e ainda deixar uma optionalDependency do Codex
+ * ausente. Repetir uma vez corrige a falha transitória; se não corrigir, o
+ * erro original continua na mensagem que chega à interface.
+ */
+async function installAndVerifyManagedCli({
+  cli,
+  installPackage,
+  installOptions,
+  verifyInstallation = verifyManagedCliInstallation,
+  platformName = process.platform,
+  arch = process.arch,
+  fileSystem = fs,
+}) {
+  const install = () => installPackage(installOptions)
+  const firstResult = await install()
+
+  if (!firstResult.ok) {
+    return firstResult
+  }
+
+  const firstVerification = verifyInstallation({
+    providerId: cli.id,
+    layout: installOptions.layout,
+    platformName,
+    arch,
+    fileSystem,
+  })
+
+  if (firstVerification.ok) {
+    return firstResult
+  }
+
+  const retryResult = await install()
+
+  if (!retryResult.ok) {
+    return {
+      ...retryResult,
+      message: `${firstVerification.message} A reinstalação automática falhou: ${retryResult.message}`,
+      output: combineInstallOutput(
+        firstResult.output,
+        firstVerification.message,
+        retryResult.output,
+      ),
+    }
+  }
+
+  const secondVerification = verifyInstallation({
+    providerId: cli.id,
+    layout: installOptions.layout,
+    platformName,
+    arch,
+    fileSystem,
+  })
+
+  if (secondVerification.ok) {
+    return {
+      ...retryResult,
+      message: `${cli.name} instalada após uma reinstalação automática.`,
+      output: combineInstallOutput(
+        firstResult.output,
+        firstVerification.message,
+        retryResult.output,
+      ),
+    }
+  }
+
+  return {
+    ...retryResult,
+    ok: false,
+    message: `${secondVerification.message ?? firstVerification.message} A reinstalação automática terminou, mas a instalação continua incompleta.`,
+    output: combineInstallOutput(
+      firstResult.output,
+      firstVerification.message,
+      retryResult.output,
+      secondVerification.message,
+    ),
+  }
+}
+
+function combineInstallOutput(...parts) {
+  return parts
+    .filter((part) => String(part ?? '').trim())
+    .join('\n')
+    .slice(-12000)
+}
+
 function readState(stateFilePath) {
   try {
     return JSON.parse(fs.readFileSync(stateFilePath, 'utf8'))
@@ -317,4 +461,6 @@ function getErrorMessage(error, fallback) {
 module.exports = {
   registerCliAutoInstallHandlers,
   hasManagedBinary,
+  hasManagedInstallation,
+  installAndVerifyManagedCli,
 }

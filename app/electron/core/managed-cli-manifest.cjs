@@ -22,6 +22,15 @@ const MANAGED_CLI_MANIFEST = Object.freeze({
   codex: Object.freeze({
     npmPackage: '@openai/codex',
     version: '0.153.4',
+    // O pacote principal delega o executável nativo a uma dependência
+    // opcional diferente por plataforma/arquitetura. No Windows, npm pode
+    // terminar com código 0 sem materializar essa dependência.
+    platformPackages: Object.freeze({
+      win32: Object.freeze({
+        x64: '@openai/codex-win32-x64',
+        arm64: '@openai/codex-win32-arm64',
+      }),
+    }),
     // Capturado em 06/09/2026 via `npm view @openai/codex@0.153.4 dist.integrity`.
     integrity:
       'sha512-wbHDmit7S/YvBGVX1DQmk13xtWblZ2cApeJ/pB7xDZ10Cna+DZc5ij7f0F4OxdsXN4FW1oLT48OpogUI1+8Y2w==',
@@ -44,10 +53,28 @@ const MANAGED_CLI_MANIFEST = Object.freeze({
 
 /**
  * @param {string} providerId
- * @returns {{ npmPackage: string, version: string, integrity: string } | null}
+ * @returns {{ npmPackage: string, version: string, integrity: string, platformPackages?: Record<string, Record<string, string>> } | null}
  */
 function getManagedCliManifestEntry(providerId) {
   return MANAGED_CLI_MANIFEST[providerId] ?? null
+}
+
+/**
+ * Pacote nativo que precisa existir para uma instalação gerenciada funcionar
+ * na plataforma/arquitetura atual.
+ *
+ * @param {string} providerId
+ * @param {object} [options]
+ * @param {string} [options.platformName]
+ * @param {string} [options.arch]
+ * @returns {string | null}
+ */
+function getManagedCliPlatformPackage(
+  providerId,
+  { platformName = process.platform, arch = process.arch } = {},
+) {
+  const entry = getManagedCliManifestEntry(providerId)
+  return entry?.platformPackages?.[platformName]?.[arch] ?? null
 }
 
 /**
@@ -65,5 +92,6 @@ function getPinnedInstallTarget(providerId) {
 module.exports = {
   MANAGED_CLI_MANIFEST,
   getManagedCliManifestEntry,
+  getManagedCliPlatformPackage,
   getPinnedInstallTarget,
 }

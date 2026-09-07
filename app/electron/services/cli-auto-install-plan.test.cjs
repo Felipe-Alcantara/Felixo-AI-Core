@@ -171,11 +171,16 @@ describe('cli-auto-install-plan', () => {
     const summary = summarizeAutoInstall([
       { name: 'Codex CLI', state: 'present' },
       { name: 'Claude Code CLI', state: 'installed' },
-      { name: 'Gemini CLI', state: 'failed' },
+      {
+        name: 'Gemini CLI',
+        state: 'failed',
+        message: 'Missing optional dependency @example/native. Reinstall a CLI.',
+      },
     ])
 
     assert.equal(summary.state, 'error')
     assert.match(summary.message, /Gemini CLI/)
+    assert.match(summary.message, /Missing optional dependency @example\/native/)
   })
 
   it('stays quiet when there was nothing to install', () => {
