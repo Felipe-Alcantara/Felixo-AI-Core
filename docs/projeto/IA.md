@@ -2890,3 +2890,47 @@ energia/bateria e sessões reais de provider não fazem parte desta medição. O
 profiler/heap do Canvas e a sessão Linux longa já têm tasks próprias; a
 correlação direta entre instalação e responsividade/energia foi aberta como
 follow-up separado.
+
+## [2026-09-02] Fix: "Limites e uso" mostrava CLIs de IA instaladas como "não instalada" em perfil Windows com espaço no nome
+
+Bug relatado pelo usuário ("Limites de uso também não está funcionando neste
+PC"), reproduzido ao vivo chamando `detectCli()` com o ambiente real desta
+máquina: Claude Code, Codex, Gemini e Openia apareciam com `detected: false`
+mesmo instaladas via npm. Duas causas, ambas só expostas quando o npm instala
+a CLI globalmente no Windows:
+
+1. `getExecutableExtensions()` (`win32.cjs`) testava a extensão vazia (`''`)
+   antes de `.cmd`. O npm cria três arquivos por CLI — o shim POSIX sem
+   extensão, `.cmd` e `.ps1` — e o resolvedor sempre achava o shim POSIX
+   primeiro. `detectCli` só liga `shell: true` para caminho terminado em
+   `.cmd`/`.bat`, então o `execFile` tentava rodar o script Unix como binário
+   nativo do Windows e falhava.
+2. Mesmo resolvendo o `.cmd` certo, `execFile` com `shell: true` no Windows
+   concatena comando e argumentos crus para o `cmd.exe /c` sem citar o
+   caminho. Um perfil de usuário com espaço no nome — "Felipe Martins" nesta
+   máquina — quebra o comando ao meio: o `cmd.exe` só reconhece o pedaço antes
+   do espaço. Numa conta sem espaço no nome o mesmo código passava batido, o
+   que explica o app funcionar noutra máquina e não nesta ("neste PC" no
+   relato do usuário era o sintoma certo).
+
+Corrigido em `3d3c68d`: `getExecutableExtensions()` agora testa as extensões
+reais antes de `''`; `detectCli()` cita o executável entre aspas antes de
+rodar via shell. Dois testes novos em `cli-detector.test.cjs` cobrem os dois
+bugs (extensão vencendo o shim POSIX; citação sobrevivendo a espaço no
+caminho); o teste existente que checava a chamada ao shell foi atualizado
+para esperar o caminho citado.
+
+Reverificado nesta sessão após a correção: `claude` (2.1.260), `gemini`
+(0.57.0) e `openia` (0.1.0) agora reportam `detected: true` com a versão
+correta nesta máquina. `codex` continua `detected: false`, mas por causa
+raiz diferente e legítima — o pacote `@openai/codex` instalado aqui está sem
+a dependência opcional `@openai/codex-win32-x64` (`codex --version` falha
+com "Missing optional dependency", fora do escopo deste fix; reinstalar com
+`npm install -g @openai/codex@latest` resolve). `ollama` reporta
+`detected: false` porque genuinamente não está instalado nesta máquina
+(`where ollama` não encontra nada). `npm test` no diretório `app/` roda
+limpo para o escopo tocado (`cli-detector.test.cjs`, 20/20); as 6 falhas
+observadas numa rodada completa da suíte (symlink sem permissão em
+`package-inventory.test.cjs`, RSS de processo real em
+`package-manager-operational-performance.test.cjs`, e mais 4 suítes com
+efeitos colaterais de ambiente) são pré-existentes e alheias a este fix.
