@@ -59,6 +59,7 @@ import {
   isClaudeBypassPermissionsWarning,
   isClaudeTrustPrompt,
   isCodexTrustPrompt,
+  isCodexUpdateExitBanner,
   looksLikeApprovalPrompt,
   readInputLineState,
 } from './terminal-screen-state'
@@ -400,10 +401,17 @@ type Session = {
   lastImagePasteAt: number
   codexTrustBuffer: string
   codexTrustHandled: boolean
+  /** Últimos bytes de saída do Codex, para reconhecer na saída do processo
+   * (`finishExit`) se ele acabou de se auto-atualizar. */
+  codexUpdateBuffer: string
   claudeBypassBuffer: string
   claudeBypassHandled: boolean
   claudeTrustBuffer: string
   claudeTrustHandled: boolean
+  /** Opções de lançamento originais, guardadas para relançar sozinho após um
+   * auto-update do Codex — ver `finishExit`. `startedAt` não entra: um
+   * relançamento sempre ganha um relógio novo. */
+  launchOptions: SessionOptions
 }
 
 function countLineFeeds(data: string): number {
@@ -573,10 +581,12 @@ export class TerminalSessionStore {
       lastImagePasteAt: 0,
       codexTrustBuffer: '',
       codexTrustHandled: false,
+      codexUpdateBuffer: '',
       claudeBypassBuffer: '',
       claudeBypassHandled: false,
       claudeTrustBuffer: '',
       claudeTrustHandled: false,
+      launchOptions: options,
     }
     createdSession = session
     this.listeners.set(id, session.listeners)
@@ -597,6 +607,7 @@ export class TerminalSessionStore {
         this.handleCodexTrustPrompt(session, event.data)
         this.handleClaudeBypassWarning(session, event.data)
         this.handleClaudeTrustPrompt(session, event.data)
+        this.trackCodexUpdateBanner(session, event.data)
         terminal.write(event.data, () => {
           session.pendingWrites -= 1
           if (session.disposed) {
@@ -1456,6 +1467,37 @@ export class TerminalSessionStore {
     // serves no live session. The main process also removes stale leftovers at
     // startup for crashes and renderer resets that bypass this callback.
     void window.felixo?.contextFiles?.release({ sessionId: session.ptySessionId })
+
+    if (
+      session.command === 'codex' &&
+      event.exitCode === 0 &&
+      isCodexUpdateExitBanner(session.codexUpdateBuffer)
+    ) {
+      // O Codex se auto-atualiza via npm e sai sozinho (código 0) só depois de
+      // avisar "Please restart Codex" — sem isto, o bloco ficava "encerrado"
+      // no canvas até alguém notar e clicar em reiniciar à mão. Relança com as
+      // mesmas opções de sempre, como o botão de reiniciar faria.
+      //
+      // `agentSession` usa o valor ao vivo da sessão, não o instantâneo de
+      // `launchOptions` guardado no primeiro `ensure()`: se a conversa já
+      // avançou (novo `onSession`) antes do auto-update chegar, retomar do
+      // instantâneo antigo reabriria uma conversa mais velha do que a que
+      // estava de pé. Com uma referência de sessão, o relançamento retoma a
+      // conversa em vez de recomeçar do zero — daí também não reenviar
+      // `initialText`, que é a instrução de largada de uma sessão nova.
+      // `startedAt` fica de fora para o relógio da sessão começar do zero.
+      const agentSession = session.agentSession ?? session.launchOptions.agentSession
+      const resumeAgentSession = Boolean(agentSession)
+      this.restart(session.id, {
+        ...session.launchOptions,
+        startedAt: undefined,
+        agentSession,
+        resumeAgentSession,
+        initialText: resumeAgentSession ? undefined : session.launchOptions.initialText,
+      })
+      return
+    }
+
     const silentEarlyExit =
       Boolean(session.command) &&
       !session.receivedOutput &&
@@ -1847,6 +1889,23 @@ export class TerminalSessionStore {
     }, SCREEN_ACCEPT_DELAY_MS)
 
     this.scheduleInitialText(session, POST_ACCEPT_INITIAL_TEXT_DELAY_MS)
+  }
+
+  /**
+   * Guarda os últimos bytes de saída do Codex numa janela rolante, só para
+   * `finishExit` reconhecer se o banner de auto-update ("Please restart
+   * Codex") apareceu pouco antes do processo terminar. Diferente dos outros
+   * `handle*`, não reage no ato — o auto-update não pede uma tecla, só um
+   * relançamento depois que o processo já morreu sozinho.
+   */
+  private trackCodexUpdateBanner(session: Session, data: string): void {
+    if (session.command !== 'codex' || !data) {
+      return
+    }
+
+    session.codexUpdateBuffer = (
+      session.codexUpdateBuffer + data
+    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
   }
 
   /**
