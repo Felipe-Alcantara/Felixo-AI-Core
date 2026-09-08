@@ -299,7 +299,7 @@ function createHarness(): E2EHarness {
           contextBodies.push(content)
           return {
             ok: true,
-            path: `/tmp/felixo-e2e-context-${contextBodies.length}.txt`,
+            name: `felixo-context-${contextBodies.length}-initial-context.txt`,
           }
         },
         release: async () => ({ ok: true }),

@@ -26,6 +26,7 @@ const { criarRepositorioDePedidos } = require('../services/fetch-all/agent-reque
 const { loadAgentScanState, saveAgentScanState } = require('./agent-scan-state.cjs')
 const { AJUDA, formatarPlano } = require('./agent-command-output.cjs')
 const { executarDevtools, AJUDA_DEVTOOLS } = require('./felixo-devtools.cjs')
+const { executarContexto } = require('./context-command.cjs')
 
 /**
  * Interpreta a linha de comando.
@@ -57,6 +58,7 @@ function interpretarArgumentos(argumentos) {
 /** Verbos aceitos. Lista fechada: nada de escrita mora aqui. */
 const VERBOS = ['varrer', 'estado', 'pedir-execucao', 'ver-pedido']
 const FERRAMENTAS_BROWSER = ['browser', 'navegador']
+const FERRAMENTAS_CONTEXT = ['context', 'contexto']
 const VERBOS_BROWSER_ABRIR = ['open', 'abrir']
 const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 
@@ -73,6 +75,9 @@ const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 async function executar(argumentos, dependencias = {}) {
   if (argumentos[0] === 'devtools') {
     return executarDevtools(argumentos.slice(1), dependencias.devtools)
+  }
+  if (FERRAMENTAS_CONTEXT.includes(argumentos[0])) {
+    return executarContexto(argumentos.slice(1), dependencias.contexto)
   }
   const {
     criarServico = () => criarServicoPadrao(),

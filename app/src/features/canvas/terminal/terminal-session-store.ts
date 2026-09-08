@@ -1694,10 +1694,10 @@ export class TerminalSessionStore {
     const parts = kind === 'initial-context'
       ? splitInitialContext(split.text)
       : [{ kind, content: split.text }]
-    const deliveredFiles: Array<{ path: string; kind: ContextFileKind }> = []
+    const deliveredFiles: Array<{ name: string; kind: ContextFileKind }> = []
 
     for (const part of parts) {
-      let result: { ok?: boolean; path?: string } | undefined
+      let result: { ok?: boolean; name?: string } | undefined
       try {
         result = await window.felixo?.contextFiles?.write({
           sessionId: session.ptySessionId,
@@ -1713,10 +1713,13 @@ export class TerminalSessionStore {
         result = undefined
       }
 
-      if (!result?.ok || !result.path) {
+      // A path returned by an older bridge is deliberately not enough: paths
+      // are the multi-OS bug this channel is fixing. The prompt must carry only
+      // the stable artifact name, which the active `felixo` shim resolves.
+      if (!result?.ok || !result.name) {
         return this.contextDeliveryFallback(session, text, kind)
       }
-      deliveredFiles.push({ path: result.path, kind: part.kind })
+      deliveredFiles.push({ name: result.name, kind: part.kind })
     }
 
     this.update(session, { contextWarning: undefined })

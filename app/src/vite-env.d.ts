@@ -602,7 +602,7 @@ declare global {
           kind?: string
           source?: string
           content: string
-        }) => Promise<CliInvokeResult & { path?: string; name?: string; bytes?: number }>
+        }) => Promise<CliInvokeResult & { name?: string; bytes?: number; path?: string }>
         release: (params: { sessionId: string }) => Promise<CliInvokeResult & { removed?: number }>
       }
       /**

@@ -125,13 +125,26 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
   felixo browser status <id> [--json]
       Mostra o desfecho de um pedido de abertura.
 
+  felixo context read <nome-do-artefato>
+      Lê um artefato temporário pelo nome portátil. Também aceito:
+      felixo contexto ler <nome-do-artefato>.
+
   Também são aceitos os equivalentes em português: navegador abrir,
   navegador ver-pedido e --embutido.
 
 ${AVISO_ESCRITA}`
 
+/** Ajuda do leitor portátil de artefatos temporários de contexto. */
+const AJUDA_CONTEXT = `felixo context read <nome-do-artefato>
+    Lê um artefato temporário somente leitura criado pelo Felixo no perfil
+    ativo. O nome é portátil entre Linux, macOS e Windows; não use nem peça
+    um caminho absoluto de outra máquina ou perfil.
+
+Também aceito em português: felixo contexto ler <nome-do-artefato>.`
+
 module.exports = {
   AJUDA,
+  AJUDA_CONTEXT,
   AVISO_ESCRITA,
   descreverRepositorio,
   formatarPlano,

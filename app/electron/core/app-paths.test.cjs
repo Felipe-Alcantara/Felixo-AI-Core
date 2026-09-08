@@ -11,6 +11,7 @@ const {
   getCacheBase,
   APP_NAME,
   USER_DATA_ENV_KEY,
+  resolveDefaultUserData,
   resolveDevUserDataOverride,
 } = require('./app-paths.cjs')
 
@@ -96,6 +97,45 @@ describe('app-paths', () => {
       assert.equal(paths.userData, userData)
       assert.equal(paths.agentRequests, path.join(userData, 'agent-requests'))
       assert.equal(paths.bin, path.join(userData, 'bin'))
+    })
+
+    it('resolves the native fallback layout for Linux, macOS and Windows', () => {
+      assert.equal(
+        resolveDefaultUserData({ platformName: 'linux', homeDir: '/home/alguem', environment: {} }),
+        '/home/alguem/.config/felixo-ai-core',
+      )
+      assert.equal(
+        resolveDefaultUserData({ platformName: 'linux', homeDir: '/home/alguem', environment: { XDG_CONFIG_HOME: '/dados/config' } }),
+        '/dados/config/felixo-ai-core',
+      )
+      assert.equal(
+        resolveDefaultUserData({ platformName: 'darwin', homeDir: '/Users/alguem', environment: {} }),
+        '/Users/alguem/Library/Application Support/felixo-ai-core',
+      )
+      assert.equal(
+        resolveDefaultUserData({ platformName: 'win32', homeDir: 'C:\\Users\\alguem', environment: {} }),
+        'C:\\Users\\alguem\\AppData\\Roaming\\felixo-ai-core',
+      )
+      assert.equal(
+        resolveDefaultUserData({ platformName: 'win32', homeDir: 'C:\\Users\\alguem', environment: { APPDATA: 'D:\\AppData' } }),
+        'D:\\AppData\\felixo-ai-core',
+      )
+    })
+
+    it('applies the native fallback to getAppPaths when Electron is unavailable', () => {
+      const paths = getAppPaths({
+        electronApp: null,
+        platformName: 'darwin',
+        homeDir: '/Users/alguem',
+        environment: {},
+      })
+
+      assert.equal(paths.platform, 'darwin')
+      assert.equal(paths.userData, '/Users/alguem/Library/Application Support/felixo-ai-core')
+      assert.equal(
+        paths.contextFiles,
+        '/Users/alguem/Library/Application Support/felixo-ai-core/context-deliveries',
+      )
     })
   })
 

@@ -4,7 +4,7 @@ import {
   buildInlineFallback,
   contextFileKindForPrompt,
   isAgentCliCommand,
-  quoteContextFilePath,
+  quoteContextFileName,
   splitInitialContext,
 } from './context-file-delivery'
 
@@ -20,8 +20,8 @@ describe('context-file-delivery', () => {
     expect(contextFileKindForPrompt('contexto permanente')).toBe('initial-context')
   })
 
-  it('quotes a path containing a double quote without changing its value', () => {
-    expect(quoteContextFilePath('/tmp/um"arquivo.txt')).toBe('"/tmp/um\\"arquivo.txt"')
+  it('quotes an artifact name containing a double quote without adding a path', () => {
+    expect(quoteContextFileName('felixo-context-um"arquivo.txt')).toBe('"felixo-context-um\\"arquivo.txt"')
   })
 
   it('separates generated startup sections without rewriting their bodies', () => {
@@ -44,14 +44,16 @@ describe('context-file-delivery', () => {
   it('lists every delivered file and preserves submission on the compact reference', () => {
     const reference = buildContextFileReferences(
       [
-        { kind: 'initial-context', path: '/tmp/context one.txt' },
-        { kind: 'handoff', path: '/tmp/context two.txt' },
+        { kind: 'initial-context', name: 'felixo-context-1-initial-context.txt' },
+        { kind: 'handoff', name: 'felixo-context-2-handoff.txt' },
       ],
       true,
     )
 
-    expect(reference).toContain('initial-context: "/tmp/context one.txt"')
-    expect(reference).toContain('handoff: "/tmp/context two.txt"')
+    expect(reference).toContain('initial-context: "felixo-context-1-initial-context.txt"')
+    expect(reference).toContain('handoff: "felixo-context-2-handoff.txt"')
+    expect(reference).toContain('felixo context read "felixo-context-1-initial-context.txt"')
+    expect(reference).not.toContain('/tmp/')
     expect(reference).toContain('não fazem parte do repositório')
     expect(reference.endsWith('\r')).toBe(true)
   })

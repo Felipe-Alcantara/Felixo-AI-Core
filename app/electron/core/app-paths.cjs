@@ -43,6 +43,8 @@ function tryLoadElectronApp() {
  * @param {object} [options] - Optional overrides for testing.
  * @param {object} [options.electronApp] - Electron app object override.
  * @param {Record<string, string>} [options.environment] - Environment override.
+ * @param {string} [options.platformName] - Platform override for tests.
+ * @param {string} [options.homeDir] - Home directory override for tests.
  * @returns {{
  *   userData: string,
  *   config: string,
@@ -68,7 +70,7 @@ function getAppPaths(options = {}) {
   const electronApp = options.electronApp || tryLoadElectronApp()
   const environment = options.environment || process.env
   const isPackaged = electronApp?.isPackaged ?? false
-  const platform = process.platform
+  const runtimePlatform = options.platformName || process.platform
 
   // `ELECTRON_RUN_AS_NODE=1` deliberately makes `require('electron').app`
   // unavailable in the `felixo` shim. The main process passes this path to the
@@ -80,7 +82,11 @@ function getAppPaths(options = {}) {
       : ''
   const userData = electronApp
     ? electronApp.getPath('userData')
-    : overriddenUserData || path.join(os.homedir(), '.config', APP_NAME)
+    : overriddenUserData || resolveDefaultUserData({
+        platformName: runtimePlatform,
+        homeDir: options.homeDir || os.homedir(),
+        environment,
+      })
 
   const logs = safeGetPath(electronApp, 'logs', path.join(userData, 'logs'))
   const cache = safeGetPath(
@@ -135,8 +141,45 @@ function getAppPaths(options = {}) {
     assets,
     appRoot,
     isPackaged,
-    platform,
+    platform: runtimePlatform,
   }
+}
+
+/**
+ * Resolve the native user-data base used when Electron is unavailable.
+ *
+ * The standalone `felixo` shim runs with Electron disabled. Falling back to a
+ * Linux-only `~/.config` path there made a context created on macOS or Windows
+ * look like it belonged to another machine/profile. Keep this resolver pure so
+ * the three layouts can be tested without pretending that the host OS changed.
+ *
+ * @param {object} [options]
+ * @param {string} [options.platformName]
+ * @param {string} [options.homeDir]
+ * @param {Record<string, string>} [options.environment]
+ * @returns {string}
+ */
+function resolveDefaultUserData({
+  platformName = process.platform,
+  homeDir = os.homedir(),
+  environment = process.env,
+} = {}) {
+  const configured = (name) => {
+    const value = environment?.[name]
+    return typeof value === 'string' ? value.trim() : ''
+  }
+
+  if (platformName === 'win32') {
+    const appData = configured('APPDATA')
+    return path.win32.join(appData || path.win32.join(homeDir, 'AppData', 'Roaming'), APP_NAME)
+  }
+
+  if (platformName === 'darwin') {
+    return path.posix.join(homeDir, 'Library', 'Application Support', APP_NAME)
+  }
+
+  const configHome = configured('XDG_CONFIG_HOME') || path.posix.join(homeDir, '.config')
+  return path.posix.join(configHome, APP_NAME)
 }
 
 /**
@@ -264,5 +307,6 @@ module.exports = {
   getAppPaths,
   getCacheBase,
   initAppPaths,
+  resolveDefaultUserData,
   resolveDevUserDataOverride,
 }

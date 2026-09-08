@@ -13,11 +13,10 @@ const fsp = require('node:fs/promises')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { toErrorResult } = require('./ipc-result.cjs')
+const { CONTEXT_FILE_PREFIX } = require('../core/context-file-contract.cjs')
 
 const STALE_CONTEXT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const MAX_CONTEXT_BYTES = 32 * 1024 * 1024
-const CONTEXT_FILE_PREFIX = 'felixo-context-'
-
 function requireText(value, fieldName) {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new Error(`${fieldName} precisa ser um texto não vazio.`)
@@ -122,7 +121,13 @@ async function writeContextFile(baseDir, params = {}, now = new Date()) {
     await fsp.rm(tempPath, { force: true }).catch(() => {})
     throw error
   }
-  return { sessionId, filename, path: filePath, bytes: Buffer.byteLength(content, 'utf8') }
+  return {
+    sessionId,
+    filename,
+    name: filename,
+    path: filePath,
+    bytes: Buffer.byteLength(content, 'utf8'),
+  }
 }
 
 function registerContextFilesIpcHandlers(appPaths) {

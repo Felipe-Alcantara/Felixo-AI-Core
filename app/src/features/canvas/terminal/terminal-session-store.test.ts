@@ -161,7 +161,7 @@ function createHarness(
           contextBodies.push(content)
           return {
             ok: true,
-            path: `/tmp/felixo-context-${contextBodies.length}.txt`,
+            name: `felixo-context-${contextBodies.length}-initial-context.txt`,
           }
         },
         release: async () => ({ ok: true }),
@@ -301,6 +301,9 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     await wait(1600)
 
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
+    const [reference] = contextWrites(harness.writes)
+    expect(reference).toContain('felixo context read "felixo-context-1-initial-context.txt"')
+    expect(reference).not.toMatch(/(?:\/Users|[A-Za-z]:\\|\/home\/|\/tmp\/)/)
   }, 15000)
 
   // Bug real: a checagem de confiança de workspace aparece mesmo em modo

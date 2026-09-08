@@ -364,10 +364,14 @@ o app os cria fora do repositório para entregar prompts longos sem digitá-los
 inteiros na PTY, remove-os quando a sessão termina e limpa sobras com mais de
 24 horas na inicialização. Eles não são os scratchpads editáveis de
 `canvas-files/` e não devem ser versionados.
-Se o processo do app não conseguir criar um arquivo, o terminal volta ao
-fallback inline e mostra um aviso; uma restrição de leitura imposta pela CLI
-é reportada pela própria instrução entregue ao agente, porque o app não tem
-como observar a sandbox de cada CLI.
+Para funcionar quando o contexto atravessa Linux, macOS ou Windows, a
+referência enviada ao terminal contém somente o nome do artefato e o comando
+`felixo context read "<nome>"` (também `felixo contexto ler "<nome>"`). O
+comando resolve a pasta nativa do perfil Felixo ativo; caminhos absolutos de
+outra máquina/perfil não devem ser copiados nem usados. Se a leitura falhar,
+o agente deve informar o nome e o erro exatos, sem trocar silenciosamente pelo
+artefato "equivalente" de outra sessão. Se o processo do app não conseguir
+criar o arquivo, o terminal volta ao fallback inline e mostra um aviso.
 
 Arquivos e pastas úteis:
 

@@ -32,13 +32,12 @@ export function contextFileKindForPrompt(text: string): ContextFileKind {
 }
 
 /**
- * Quotes the displayed path without changing the path that the agent must
- * open. The quotes matter on macOS and Windows, where the user-data path can
- * contain spaces; keeping the raw value inside the same line also helps tools
- * that expect an absolute path rather than a shell-escaped token.
+ * Quotes the opaque artifact name used by `felixo context read`. It is not a
+ * filesystem path: the active Felixo command resolves the native user-data
+ * directory for the current OS/profile.
  */
-export function quoteContextFilePath(filePath: string): string {
-  return `"${String(filePath).replaceAll('"', '\\"')}"`
+export function quoteContextFileName(fileName: string): string {
+  return `"${String(fileName).replaceAll('"', '\\"')}"`
 }
 
 /**
@@ -99,15 +98,19 @@ export function splitInitialContext(text: string): ContextFilePart[] {
 }
 
 export function buildContextFileReferences(
-  files: Array<{ path: string; kind: ContextFileKind }>,
+  files: Array<{ name: string; kind: ContextFileKind }>,
   submitted: boolean,
 ): string {
   const lines = [
     'CONTEXTO ENTREGUE EM ARQUIVOS SOMENTE LEITURA',
     'Leia todos os arquivos abaixo antes de agir. Eles são artefatos temporários do Felixo AI Core, não fazem parte do repositório, não devem ser editados nem versionados.',
     'Se precisar registrar progresso, use o scratchpad .md compartilhado do canvas — estes arquivos não são o scratchpad.',
-    'Se algum caminho não abrir por permissão, informe isso; o app exibirá o fallback inline quando detectar a falha de criação/entrega.',
-    ...files.map(({ path, kind }) => `- ${kind}: ${quoteContextFilePath(path)}`),
+    'Os nomes abaixo são portáveis entre Linux, macOS e Windows; não use caminhos absolutos de outra máquina ou perfil.',
+    'Leia cada artefato pelo comando do Felixo e, se ele falhar, informe o nome e o erro exatos — não substitua por outro artefato equivalente.',
+    ...files.flatMap(({ name, kind }) => [
+      `- ${kind}: ${quoteContextFileName(name)}`,
+      `  Leia com: felixo context read ${quoteContextFileName(name)}`,
+    ]),
   ]
   const reference = lines.join('\n')
   return submitted ? toSubmittedTerminalText(reference) : reference

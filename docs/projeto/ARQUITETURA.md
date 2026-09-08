@@ -346,6 +346,17 @@ apresentados como indisponíveis ou sem informação.
 | `context-deliveries` | artefatos temporários somente leitura para prompts longos |
 | `logs` e QA Logger | diagnóstico local da sessão e das execuções |
 
+### Entrega de contexto entre sistemas operacionais
+
+O processo principal ainda grava cada artefato dentro do `userData` nativo e
+mantém a retenção por sessão/24 horas. A diferença importante está no contrato
+da referência enviada à PTY: ela leva o nome gerado (`felixo-context-...txt`),
+nunca o caminho absoluto da máquina que criou o arquivo. O agente lê o conteúdo
+com `felixo context read "<nome>"` (ou `felixo contexto ler "<nome>"`); o shim
+instalado pelo próprio app resolve o `userData` ativo no Linux, macOS ou
+Windows. Nome inválido, traversal, arquivo ausente e erro de permissão são
+falhas explícitas; o agente não deve escolher outro artefato silenciosamente.
+
 Os caminhos são resolvidos pelo `app.getPath('userData')`, não ficam dentro do
 repositório do usuário e não devem ser documentados com caminhos privados ou
 credenciais reais.

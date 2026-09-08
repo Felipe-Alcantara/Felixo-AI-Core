@@ -40,6 +40,7 @@ test('writes an immutable, identifiable context artifact with the body intact', 
     const stat = await fsp.stat(result.path)
 
     assert.match(result.filename, new RegExp(`^${CONTEXT_FILE_PREFIX}.*-handoff\\.txt$`))
+    assert.equal(result.name, result.filename)
     assert.match(content, /CONTEXTO ENTREGUE PELO FELIXO AI CORE/)
     assert.match(content, /Regime: somente leitura/)
     assert.match(content, /canvas multiagente/)

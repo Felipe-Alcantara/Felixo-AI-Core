@@ -4371,3 +4371,40 @@ VALIDAÇÃO FINAL: 9 testes focados Notion, typecheck, lint, build, 5 testes
 nativos, 771 testes frontend, 1.048 testes totais e `git diff --check` passaram.
 Não houve uso de token real nem alegação de validação visual quando o navegador
 não estava disponível.
+
+## [2026-09-08] Correção multiSO na entrega de artefatos de contexto
+
+**Diagnóstico:** o contrato anterior enviava para a PTY o caminho absoluto do
+`context-deliveries` do processo que criou o arquivo. Quando o contexto era
+retomado em outro sistema operacional, perfil ou máquina, o agente recebia
+referências como `/Users/...` que não existiam na sessão atual e podia trocar
+silenciosamente o artefato por um fallback equivalente.
+
+**Implementação:**
+
+- `TerminalSessionStore` agora entrega somente o nome gerado do artefato e
+  orienta `felixo context read "<nome>"`; o alias `felixo contexto ler` também
+  funciona. Nenhum caminho absoluto é serializado no prompt.
+- `context-command.cjs` resolve o diretório do perfil ativo pelo shim
+  multiplataforma, lê somente nomes com prefixo/sufixo do contrato e rejeita
+  caminhos, traversal e arquivos fora do namespace de contexto. Arquivo
+  ausente retorna erro explícito, sem sugerir outro artefato.
+- O fallback Node-only de `app-paths.cjs` passou a usar o layout nativo de
+  Linux (`XDG_CONFIG_HOME`), macOS (`Library/Application Support`) e Windows
+  (`APPDATA`), em vez de assumir `~/.config` em todo sistema.
+- O contrato de nome foi separado de módulos Electron para que o leitor
+  standalone funcione no runtime empacotado com `ELECTRON_RUN_AS_NODE=1`.
+- Guia do usuário e arquitetura registram a regra de não transportar caminhos
+  absolutos entre SOs/perfis.
+
+**Validação local:** 53 testes nativos focados, 44 testes frontend focados,
+`npm run typecheck`, `npm run lint` (0 erros; 2 avisos preexistentes em
+`SearchPanel.tsx`), `npm run test:frontend` (771 passaram, 1 ignorado),
+`npm test` (1.056 passaram) e `npm run build` passaram. A validação manual em
+um host macOS/Windows ainda depende dos runners de CI/release; os layouts foram
+cobertos por testes determinísticos e o shim continua sendo o resolvedor do
+perfil nativo em cada host.
+
+**ESTADO NO PONTO DO REGISTRO:** implementação, documentação e gates locais
+concluídos; commit, push, CI/release e atualização da task no Notion ficam para
+o fechamento desta execução.

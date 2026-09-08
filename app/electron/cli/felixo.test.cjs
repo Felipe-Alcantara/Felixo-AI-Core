@@ -105,6 +105,26 @@ test('sem argumento nenhum, imprime a ajuda com sucesso', async () => {
   assert.match(resultado.saida, /varrer/)
 })
 
+test('roteia a leitura de contexto sem inicializar o Fetch All', async () => {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-context-route-'))
+  const nome = 'felixo-context-1-route.txt'
+  fs.writeFileSync(path.join(pasta, nome), 'contexto do teste', 'utf8')
+
+  try {
+    const resultado = await executar(['contexto', 'ler', nome], {
+      contexto: { getContextDir: () => pasta },
+      criarServico: () => {
+        throw new Error('o Fetch All não deve ser inicializado')
+      },
+    })
+
+    assert.equal(resultado.codigo, 0)
+    assert.equal(resultado.saida, 'contexto do teste')
+  } finally {
+    fs.rmSync(pasta, { recursive: true, force: true })
+  }
+})
+
 test('varrer imprime o plano, o relatório e o aviso de escrita', async () => {
   let estadoGravado = null
   const { deps } = dependencias({
