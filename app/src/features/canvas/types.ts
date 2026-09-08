@@ -1,6 +1,12 @@
 import type { AgentSessionReference } from './services/agent-session'
 
-export type CanvasNodeType = 'terminal' | 'note' | 'group' | 'file' | 'webpage'
+export type CanvasNodeType =
+  | 'terminal'
+  | 'note'
+  | 'group'
+  | 'file'
+  | 'webpage'
+  | 'notionTasks'
 
 export type GroupNodeData = {
   label?: string

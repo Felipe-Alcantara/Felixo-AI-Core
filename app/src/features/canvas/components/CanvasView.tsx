@@ -28,6 +28,7 @@ import { NoteNode } from './NoteNode'
 import { GroupNode } from './GroupNode'
 import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
+import { NotionTasksNode } from './NotionTasksNode'
 import { TerminalDrawer } from './TerminalDrawer'
 import { TerminalDetailsPanel } from './TerminalDetailsPanel'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
@@ -976,7 +977,12 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         }
       }
 
-      if (node.type === 'note' || node.type === 'group' || node.type === 'webpage') {
+      if (
+        node.type === 'note' ||
+        node.type === 'group' ||
+        node.type === 'webpage' ||
+        node.type === 'notionTasks'
+      ) {
         return {
           ...withHandle,
           data: reuseData(node.id, [node.data], () => ({
@@ -1254,6 +1260,27 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     },
     [nodes, setNodes, persistNode, visibleCanvasBounds],
   )
+
+  /** Abre as tarefas como um bloco real do grafo, não como painel flutuante. */
+  const openNotionTasksNode = useCallback(() => {
+    const existing = nodes.find((node) => node.type === 'notionTasks')
+    if (existing) {
+      focusNode(existing.id)
+      return
+    }
+
+    const size = getDefaultNodeSize('notionTasks', window.innerWidth)
+    const position = findFreeNodePosition(nodes, size, visibleCanvasBounds())
+    const id = addNode('notionTasks', { label: 'Tarefas Notion' }, position)
+    setNodes((current) =>
+      current.map((node) => ({ ...node, selected: node.id === id })),
+    )
+    flowInstanceRef.current?.setCenter(
+      position.x + size.width / 2,
+      position.y + size.height / 2,
+      { zoom: 0.8, duration: 400 },
+    )
+  }, [addNode, focusNode, nodes, setNodes, visibleCanvasBounds])
 
   const openWebpageFromTerminal = useCallback(
     (sourceId: string, url: string) => {
@@ -1672,6 +1699,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       group: GroupNode,
       file: FileNode,
       webpage: WebpageNode,
+      notionTasks: NotionTasksNode,
     }),
     [],
   )
@@ -1707,9 +1735,14 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <CanvasToolbar
         activeTool={activeTool}
-        onSelectTool={(tool) =>
+        onSelectTool={(tool) => {
+          if (tool === 'notionTasks') {
+            setActiveTool(null)
+            openNotionTasksNode()
+            return
+          }
           setActiveTool((current) => (current === tool ? null : tool))
-        }
+        }}
         onToolsMenuOpenChange={setToolsMenuOpen}
         updatePresentation={updates.presentation}
         onInstallUpdate={updates.install}

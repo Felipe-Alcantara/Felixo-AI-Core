@@ -17,6 +17,7 @@ import {
   GripVertical,
   Group,
   Loader2,
+  ListTodo,
   MessagesSquare,
   Send,
   StickyNote,
@@ -85,6 +86,7 @@ const TYPE_ICON: Record<CanvasNodeType, typeof TerminalIcon> = {
   file: FileText,
   group: Group,
   webpage: Globe,
+  notionTasks: ListTodo,
 }
 
 function elementTitle(node: Node<CanvasNodeData>) {

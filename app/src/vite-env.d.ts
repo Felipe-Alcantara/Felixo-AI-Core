@@ -54,7 +54,7 @@ type PersistedCanvasEdge = {
 
 type PersistedCanvasNode = {
   id: string
-  type: 'terminal' | 'note' | 'group' | 'file' | 'webpage'
+  type: 'terminal' | 'note' | 'group' | 'file' | 'webpage' | 'notionTasks'
   parentId?: string | null
   position: { x: number; y: number }
   width?: number | null

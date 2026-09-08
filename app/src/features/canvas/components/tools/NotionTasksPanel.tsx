@@ -29,6 +29,8 @@ import type {
 type NotionTasksPanelProps = {
   onClose: () => void
   toolsMenuOpen?: boolean
+  /** Renderiza somente o conteúdo para o bloco persistente do Canvas. */
+  embedded?: boolean
 }
 
 type TaskDraft = {
@@ -45,7 +47,7 @@ const inputClass =
 const buttonClass =
   'felixo-btn flex items-center justify-center gap-1.5 rounded bg-zinc-700 px-2 py-1.5 text-xs text-zinc-100 hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50'
 
-export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelProps) {
+export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: NotionTasksPanelProps) {
   const api = window.felixo?.notion
   const [connections, setConnections] = useState<NotionConnection[]>([])
   const [secureStorage, setSecureStorage] = useState<{ ok: boolean; reason: string | null } | null>(null)
@@ -319,17 +321,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
 
   const selectedConnection = connections.find((connection) => connection.id === connectionId) || null
 
-  return (
-    <CanvasPanel
-      title="Tarefas Notion"
-      icon={<ListTodo size={15} />}
-      panelId="notion-tasks"
-      size="xl"
-      variant="workspace"
-      onClose={onClose}
-      toolsMenuOpen={toolsMenuOpen}
-    >
-      <div className="min-h-full text-xs text-zinc-300">
+  const content = (
+    <div className="min-h-full text-xs text-zinc-300">
         <header className="flex flex-wrap items-center gap-3 border-b border-white/10 pb-3">
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Workspace / database</p>
@@ -542,6 +535,23 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
           </>
         )}
       </div>
+  )
+
+  if (embedded) {
+    return content
+  }
+
+  return (
+    <CanvasPanel
+      title="Tarefas Notion"
+      icon={<ListTodo size={15} />}
+      panelId="notion-tasks"
+      size="xl"
+      variant="workspace"
+      onClose={onClose}
+      toolsMenuOpen={toolsMenuOpen}
+    >
+      {content}
     </CanvasPanel>
   )
 }

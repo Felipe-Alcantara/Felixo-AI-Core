@@ -2989,3 +2989,22 @@ ESLint nos dois componentes e 22/22 testes de `panel-sizing` e
 um artefato no Ubuntu e `AttachConsole failed` no teste nativo de PTY do
 Windows — enquanto macOS, política de dependências e launchers passaram; isso
 não está relacionado ao código desta UX.
+
+## [2026-09-08] Correção: tarefas do Notion como bloco real do Canvas
+
+A primeira versão da UX ampla ainda era montada como `CanvasPanel` absoluto.
+Visualmente ocupava a área central, mas continuava sendo uma superfície
+flutuante; por isso a lista não podia ser arrastada, redimensionada ou
+reencontrada como um bloco do Canvas.
+
+O clique em `Ferramentas > Tarefas Notion` agora cria ou focaliza um nó
+`notionTasks` no React Flow. O bloco é persistido junto dos demais nós,
+possui cabeçalho de arraste, redimensionador, alças de conexão e remoção pelo
+Canvas. A tabela, configuração, busca, filtros e operações CRUD do Notion
+foram preservadas no conteúdo incorporado do nó. O repositório Electron e o
+schema TypeScript também aceitam o novo tipo ao salvar/carregar e exportar o
+Canvas.
+
+Validação local: `npx tsc -b --pretty false`, `npx vite build`, ESLint dos
+arquivos alterados, 30/30 testes focados de geometria/superfícies e 9/9 testes
+do repositório de nós passaram.
