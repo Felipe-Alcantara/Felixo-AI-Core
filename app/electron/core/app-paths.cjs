@@ -71,6 +71,11 @@ function getAppPaths(options = {}) {
   const environment = options.environment || process.env
   const isPackaged = electronApp?.isPackaged ?? false
   const runtimePlatform = options.platformName || process.platform
+  // Tests and release smoke checks can resolve a target platform while they
+  // execute on another host. Use the target platform's path semantics for
+  // every path derived from userData; otherwise a Windows runner would turn
+  // a simulated macOS `/Users/...` profile into `\\Users\\...`.
+  const platformPath = runtimePlatform === 'win32' ? path.win32 : path.posix
 
   // `ELECTRON_RUN_AS_NODE=1` deliberately makes `require('electron').app`
   // unavailable in the `felixo` shim. The main process passes this path to the
@@ -88,35 +93,35 @@ function getAppPaths(options = {}) {
         environment,
       })
 
-  const logs = safeGetPath(electronApp, 'logs', path.join(userData, 'logs'))
+  const logs = safeGetPath(electronApp, 'logs', platformPath.join(userData, 'logs'))
   const cache = safeGetPath(
     electronApp,
     'sessionData',
-    path.join(getCacheBase(), APP_NAME),
+    platformPath.join(getCacheBase(), APP_NAME),
   )
-  const temp = path.join(os.tmpdir(), APP_NAME)
+  const temp = platformPath.join(os.tmpdir(), APP_NAME)
 
-  const config = path.join(userData, 'config')
-  const database = path.join(userData, 'database')
-  const exports = path.join(userData, 'exports')
-  const notes = path.join(userData, 'notes')
-  const reports = path.join(userData, 'reports')
+  const config = platformPath.join(userData, 'config')
+  const database = platformPath.join(userData, 'database')
+  const exports = platformPath.join(userData, 'exports')
+  const notes = platformPath.join(userData, 'notes')
+  const reports = platformPath.join(userData, 'reports')
   // Shared markdown files that canvas file-blocks render and agents edit.
-  const canvasFiles = path.join(userData, 'canvas-files')
+  const canvasFiles = platformPath.join(userData, 'canvas-files')
   // Short-lived, read-only payloads delivered to agent terminals. This is a
   // separate channel from canvas-files, whose Markdown files are live and
   // intentionally editable scratchpads.
-  const contextFiles = path.join(userData, 'context-deliveries')
+  const contextFiles = platformPath.join(userData, 'context-deliveries')
   // Skill library shipped with the app, materialized here so the agent can
   // read it and the person can edit it without rebuilding anything.
-  const skills = path.join(userData, 'skills')
+  const skills = platformPath.join(userData, 'skills')
   // Pedidos que um agente deixa para o app executar depois da confirmação da
   // pessoa. É um canal deliberadamente burro — arquivo numa pasta — porque o
   // agente só precisa PEDIR; quem escreve no disco continua sendo o app, com
   // um clique humano no meio.
-  const agentRequests = path.join(userData, 'agent-requests')
+  const agentRequests = platformPath.join(userData, 'agent-requests')
   // Onde mora o comando `felixo` exposto no PATH dos terminais do canvas.
-  const bin = path.join(userData, 'bin')
+  const bin = platformPath.join(userData, 'bin')
 
   const appRoot = path.join(__dirname, '..')
   const assets = isPackaged
