@@ -4,6 +4,8 @@ const NOTION_API_VERSION = '2026-03-11'
 const DEFAULT_BASE_URL = 'https://api.notion.com'
 const MAX_PAGE_SIZE = 100
 const MAX_QUERY_PAGES = 20
+const MAX_CONTENT_DEPTH = 8
+const MAX_CONTENT_BLOCKS = 1_000
 
 class NotionClientError extends Error {
   constructor(message, { status = null, code = 'notion_error', retryAfter = null } = {}) {
@@ -182,6 +184,48 @@ function createNotionClient({
     return { tasks, nextCursor: cursor || null }
   }
 
+  async function listBlockChildren(blockId) {
+    const id = requireId(blockId, 'página')
+    const blocks = []
+    let cursor = undefined
+
+    for (let page = 0; page < MAX_QUERY_PAGES; page += 1) {
+      const payload = await request(
+        `/v1/blocks/${encodeURIComponent(id)}/children?page_size=${MAX_PAGE_SIZE}${cursor ? `&start_cursor=${encodeURIComponent(cursor)}` : ''}`,
+      )
+      blocks.push(...(Array.isArray(payload.results) ? payload.results : []))
+      if (!payload.has_more || !payload.next_cursor) break
+      cursor = payload.next_cursor
+    }
+
+    return blocks
+  }
+
+  async function getPageContent(pageId) {
+    const rootId = requireId(pageId, 'página')
+    const state = { blockCount: 0 }
+
+    async function renderChildren(blocks, depth) {
+      const lines = []
+      for (const block of blocks) {
+        if (!block || state.blockCount >= MAX_CONTENT_BLOCKS) break
+        state.blockCount += 1
+
+        const line = renderBlock(block, depth)
+        if (line) lines.push(line)
+
+        if (block.has_children === true && depth < MAX_CONTENT_DEPTH) {
+          const children = await listBlockChildren(block.id)
+          const childContent = await renderChildren(children, depth + 1)
+          if (childContent) lines.push(childContent)
+        }
+      }
+      return lines.join('\n')
+    }
+
+    return renderChildren(await listBlockChildren(rootId), 0)
+  }
+
   async function createTask({ dataSourceId, schema, task } = {}) {
     const sourceId = requireId(dataSourceId, 'data source')
     const properties = buildPageProperties(schema, task, { create: true })
@@ -216,6 +260,7 @@ function createNotionClient({
 
   return {
     createTask,
+    getPageContent,
     getCurrentUser,
     getDataSource,
     getDatabase,
@@ -224,6 +269,53 @@ function createNotionClient({
     resolveDataSource,
     updateTask,
     archiveTask,
+  }
+}
+
+function renderBlock(block, depth) {
+  const type = typeof block?.type === 'string' ? block.type : ''
+  const payload = block?.[type] && typeof block[type] === 'object' ? block[type] : {}
+  const text = readRichText(payload.rich_text)
+  const indent = '  '.repeat(depth)
+
+  switch (type) {
+    case 'heading_1':
+      return `# ${text}`.trim()
+    case 'heading_2':
+      return `## ${text}`.trim()
+    case 'heading_3':
+      return `### ${text}`.trim()
+    case 'bulleted_list_item':
+      return `${indent}- ${text}`.trimEnd()
+    case 'numbered_list_item':
+      return `${indent}1. ${text}`.trimEnd()
+    case 'to_do':
+      return `${indent}- [${payload.checked === true ? 'x' : ' '}] ${text}`.trimEnd()
+    case 'toggle':
+      return `${indent}▸ ${text}`.trimEnd()
+    case 'quote':
+      return `> ${text}`.trim()
+    case 'callout':
+      return text ? `💡 ${text}` : ''
+    case 'code':
+      return text ? `\`\`\`${payload.language || ''}\n${text}\n\`\`\`` : ''
+    case 'divider':
+      return '---'
+    case 'image':
+      return `Imagem${readRichText(payload.caption) ? `: ${readRichText(payload.caption)}` : ''}`
+    case 'bookmark':
+    case 'link_preview':
+      return payload.url ? String(payload.url) : text
+    case 'child_page':
+      return `Página: ${payload.title || 'Sem título'}`
+    case 'child_database':
+      return `Database: ${payload.title || 'Sem título'}`
+    case 'table_row':
+      return Array.isArray(payload.cells)
+        ? `| ${payload.cells.map((cell) => readRichText(cell)).join(' | ')} |`
+        : ''
+    default:
+      return text
   }
 }
 
@@ -460,5 +552,6 @@ module.exports = {
   isCompletedLabel,
   normalizeDataSourceSummary,
   normalizePage,
+  renderBlock,
   readPropertyValue,
 }

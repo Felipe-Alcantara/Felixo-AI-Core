@@ -138,6 +138,7 @@ contextBridge.exposeInMainWorld('felixo', {
     listDatabases: (input) => ipcRenderer.invoke('notion:databases:list', input),
     getSchema: (input) => ipcRenderer.invoke('notion:database:schema', input),
     listTasks: (input) => ipcRenderer.invoke('notion:tasks:list', input),
+    getTaskContent: (input) => ipcRenderer.invoke('notion:tasks:content', input),
     createTask: (input) => ipcRenderer.invoke('notion:tasks:create', input),
     updateTask: (input) => ipcRenderer.invoke('notion:tasks:update', input),
     archiveTask: (input) => ipcRenderer.invoke('notion:tasks:archive', input),

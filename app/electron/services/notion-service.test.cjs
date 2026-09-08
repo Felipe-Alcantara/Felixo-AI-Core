@@ -54,6 +54,23 @@ test('serviço preserva o vínculo da fonte de dados com o database pai', async 
   assert.equal(result.databases[0].databaseId, 'database-1')
 })
 
+test('serviço carrega o conteúdo do corpo de uma tarefa', async () => {
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: fakeCache({ tasks: [], schema: {}, fetchedAt: null }),
+    clientFactory: () => ({
+      getPageContent: async (pageId) => {
+        assert.equal(pageId, 'page-1')
+        return '## Conteúdo da nota'
+      },
+    }),
+  })
+
+  const result = await service.getTaskContent({ connectionId: 'connection-1', pageId: 'page-1' })
+
+  assert.deepEqual(result, { pageId: 'page-1', content: '## Conteúdo da nota' })
+})
+
 function fakeStore() {
   return {
     canStoreSecret: () => ({ ok: true, reason: null }),

@@ -3008,3 +3008,22 @@ Canvas.
 Validação local: `npx tsc -b --pretty false`, `npx vite build`, ESLint dos
 arquivos alterados, 30/30 testes focados de geometria/superfícies e 9/9 testes
 do repositório de nós passaram.
+
+## [2026-09-08] Correção: expandir tarefas do Notion com o conteúdo da página
+
+A consulta da database do Notion devolve propriedades da tarefa, mas não
+devolve o corpo da página. A expansão usava apenas o campo `rich_text` da
+propriedade de descrição e mostrava `Sem descrição` quando a nota tinha
+conteúdo em blocos.
+
+O cliente Notion agora lê `/v1/blocks/{page_id}/children` sob demanda, pagina
+os resultados e percorre blocos aninhados com limite de profundidade e
+quantidade. Títulos, listas, checkboxes, toggles, citações, callouts, código,
+divisores, links, imagens, tabelas e páginas filhas recebem uma representação
+textual segura para o renderer.
+
+O fluxo foi exposto por serviço, IPC e preload como
+`notion:tasks:content`/`getTaskContent`. O painel carrega o corpo ao expandir,
+mantém fallback para a propriedade de texto, sinaliza carregamento/erro e
+permite tentar novamente sem esconder o link para o Notion. Foram adicionados
+testes para extração de blocos aninhados e para o serviço de conteúdo da tarefa.

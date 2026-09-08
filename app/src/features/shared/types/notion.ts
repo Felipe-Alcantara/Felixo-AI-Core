@@ -74,3 +74,10 @@ export type NotionTasksResult = {
   fromCache?: boolean
   hasMore?: boolean
 }
+
+export type NotionTaskContentResult = {
+  ok: boolean
+  message?: string
+  pageId?: string
+  content?: string
+}

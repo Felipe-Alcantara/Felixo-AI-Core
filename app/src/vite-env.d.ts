@@ -38,6 +38,7 @@ import type {
   NotionSchemaProperty,
   NotionSchemaResult,
   NotionTask,
+  NotionTaskContentResult,
   NotionTasksResult,
 } from './features/shared/types/notion'
 
@@ -484,6 +485,10 @@ declare global {
           search?: string
           status?: 'all' | 'open' | 'done'
         }) => Promise<NotionTasksResult>
+        getTaskContent: (input: {
+          connectionId: string
+          pageId: string
+        }) => Promise<NotionTaskContentResult>
         createTask: (input: {
           connectionId: string
           databaseId?: string

@@ -83,6 +83,66 @@ test('cliente Notion usa a versão atual, pagina fontes e normaliza tarefas', as
   assert.equal(task.status, 'To Do')
 })
 
+test('cliente lê o conteúdo da página e dos blocos aninhados', async () => {
+  const requests = []
+  const responses = [
+    {
+      object: 'list',
+      has_more: false,
+      results: [
+        {
+          id: 'heading-1',
+          type: 'heading_2',
+          heading_2: { rich_text: [{ plain_text: 'Contexto' }] },
+        },
+        {
+          id: 'list-1',
+          type: 'bulleted_list_item',
+          has_children: true,
+          bulleted_list_item: { rich_text: [{ plain_text: 'Item pai' }] },
+        },
+        {
+          id: 'todo-1',
+          type: 'to_do',
+          to_do: { checked: true, rich_text: [{ plain_text: 'Revisar' }] },
+        },
+        {
+          id: 'quote-1',
+          type: 'quote',
+          quote: { rich_text: [{ plain_text: 'Uma observação' }] },
+        },
+      ],
+    },
+    {
+      object: 'list',
+      has_more: false,
+      results: [
+        {
+          id: 'child-1',
+          type: 'bulleted_list_item',
+          bulleted_list_item: { rich_text: [{ plain_text: 'Item filho' }] },
+        },
+      ],
+    },
+  ]
+
+  const client = createNotionClient({
+    token: 'secret-test-token',
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options })
+      return fakeResponse(200, responses.shift())
+    },
+  })
+
+  const content = await client.getPageContent('page-1')
+
+  assert.equal(content, '## Contexto\n- Item pai\n  - Item filho\n- [x] Revisar\n> Uma observação')
+  assert.equal(requests.length, 2)
+  assert.match(requests[0].url, /\/v1\/blocks\/page-1\/children\?page_size=100$/)
+  assert.match(requests[1].url, /\/v1\/blocks\/list-1\/children\?page_size=100$/)
+  assert.equal(requests[0].options.headers['Notion-Version'], '2026-03-11')
+})
+
 test('cliente constrói propriedades genéricas para criar e atualizar tarefas', () => {
   const schema = {
     Name: { id: 'name', name: 'Name', type: 'title' },

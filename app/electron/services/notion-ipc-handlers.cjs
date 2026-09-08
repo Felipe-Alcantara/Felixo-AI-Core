@@ -40,6 +40,9 @@ function registerNotionIpcHandlers({
   ipc.handle('notion:tasks:list', (_event, input) =>
     guard(() => service.listTasks(input || {})),
   )
+  ipc.handle('notion:tasks:content', (_event, input) =>
+    guard(() => service.getTaskContent(input || {})),
+  )
   ipc.handle('notion:tasks:create', (_event, input) =>
     guard(() => service.createTask(input || {})),
   )

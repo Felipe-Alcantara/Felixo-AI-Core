@@ -133,6 +133,14 @@ function createNotionService({
     }
   }
 
+  async function getTaskContent({ connectionId, pageId } = {}) {
+    const content = await clientFor(connectionId).getPageContent(pageId)
+    return {
+      pageId,
+      content,
+    }
+  }
+
   async function createTask({ connectionId, databaseId, dataSourceId, task } = {}) {
     const schemaResult = await getSchema({ connectionId, databaseId, dataSourceId })
     const sourceId = schemaResult.database.dataSourceId
@@ -185,6 +193,7 @@ function createNotionService({
     archiveTask,
     createTask,
     getSchema,
+    getTaskContent,
     listConnections,
     listDatabases,
     listTasks,

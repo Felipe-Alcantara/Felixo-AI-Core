@@ -42,6 +42,12 @@ type TaskDraft = {
   text: string
 }
 
+type TaskContentState = {
+  status: 'loading' | 'loaded' | 'error'
+  content: string
+  message?: string
+}
+
 const inputClass =
   'w-full rounded border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-sky-500/70'
 const buttonClass =
@@ -71,6 +77,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showTaskComposer, setShowTaskComposer] = useState(false)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [taskContentById, setTaskContentById] = useState<Record<string, TaskContentState>>({})
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft())
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -146,6 +153,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       setTasks([])
       return
     }
+    setTaskContentById({})
+    setExpandedTaskId(null)
     setBusy(true)
     setError(null)
     const result = await api.listTasks({
@@ -317,6 +326,53 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     setEditingId(null)
     setDraft(emptyDraft())
     setShowTaskComposer(false)
+  }
+
+  const loadTaskContent = useCallback(async (task: NotionTask) => {
+    const fallback = task.text.trim()
+    if (!api || !connectionId) {
+      setTaskContentById((current) => ({
+        ...current,
+        [task.id]: { status: 'loaded', content: fallback },
+      }))
+      return
+    }
+
+    setTaskContentById((current) => ({
+      ...current,
+      [task.id]: { status: 'loading', content: fallback },
+    }))
+
+    const result = await api.getTaskContent({ connectionId, pageId: task.id })
+    if (!result.ok) {
+      setTaskContentById((current) => ({
+        ...current,
+        [task.id]: {
+          status: 'error',
+          content: fallback,
+          message: result.message || 'Não foi possível carregar o conteúdo da página.',
+        },
+      }))
+      return
+    }
+
+    setTaskContentById((current) => ({
+      ...current,
+      [task.id]: {
+        status: 'loaded',
+        content: result.content?.trim() || fallback,
+      },
+    }))
+  }, [api, connectionId])
+
+  function toggleTaskDetails(task: NotionTask) {
+    const isExpanded = expandedTaskId === task.id
+    setExpandedTaskId(isExpanded ? null : task.id)
+    if (isExpanded) return
+
+    const existing = taskContentById[task.id]
+    if (existing?.status === 'loading' || existing?.status === 'loaded') return
+    void loadTaskContent(task)
   }
 
   const selectedConnection = connections.find((connection) => connection.id === connectionId) || null
@@ -503,8 +559,10 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                     {tasks.length === 0 ? (
                       <tr><td colSpan={6} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
                     ) : tasks.map((task) => {
-                      const hasDetails = Boolean(task.text || task.url)
+                      const hasDetails = true
                       const isExpanded = expandedTaskId === task.id
+                      const taskContent = taskContentById[task.id]
+                      const detailText = taskContent?.content || task.text
                       return (
                         <Fragment key={task.id}>
                           <tr className={`group border-b border-white/[0.07] align-middle last:border-0 hover:bg-white/[0.035] ${task.completed ? 'text-zinc-500' : 'text-zinc-300'}`}>
@@ -513,7 +571,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                             </td>
                             <td className="px-3 py-2.5">
                               <div className="flex min-w-0 items-center gap-1">
-                                {hasDetails ? <button type="button" className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200" onClick={() => setExpandedTaskId((current) => current === task.id ? null : task.id)} aria-label={isExpanded ? `Recolher ${task.title}` : `Ver detalhes de ${task.title}`} title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button> : <span className="w-[19px] shrink-0" />}
+                                {hasDetails ? <button type="button" className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200" onClick={() => toggleTaskDetails(task)} aria-label={isExpanded ? `Recolher ${task.title}` : `Ver detalhes de ${task.title}`} title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button> : <span className="w-[19px] shrink-0" />}
                                 <span className={`min-w-0 flex-1 truncate font-medium ${task.completed ? 'line-through' : 'text-zinc-100'}`} title={task.title}>{task.title}</span>
                                 {task.url && <a className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-white/10 hover:text-sky-300 group-hover:opacity-100" href={task.url} target="_blank" rel="noreferrer" aria-label={`Abrir ${task.title}`} title="Abrir no Notion"><ExternalLink size={13} /></a>}
                               </div>
@@ -523,7 +581,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                             <td className="px-3 py-2.5"><span className="flex items-center gap-1 text-[11px] text-zinc-400">{task.dueDate ? <><CalendarDays size={12} className="text-zinc-600" /> {formatShortDate(task.dueDate)}</> : '—'}</span></td>
                             <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-sky-300 disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
                           </tr>
-                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6} className="px-12 pb-3 pt-1"><div className="max-w-4xl whitespace-pre-wrap break-words text-[11px] leading-5 text-zinc-400">{task.text || 'Sem descrição.'}{task.url && <a className="mt-2 flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a>}</div></td></tr>}
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-2 text-[11px] leading-5 text-zinc-400">{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="whitespace-pre-wrap break-words">{detailText}</div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-amber-300"><span>{taskContent.message}</span><button type="button" className="text-sky-300 underline hover:text-sky-200" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <a className="flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a>}</div></td></tr>}
                         </Fragment>
                       )
                     })}
