@@ -2942,3 +2942,22 @@ A task [Felixo AI Core/Agentes — corrigir erro ao criar perfis do Codex (depen
 O manifesto gerenciado passou a declarar os pacotes nativos do Codex para Windows x64/arm64. O novo `managed-cli-health.cjs` verifica o `package.json` do pacote esperado dentro do prefixo do app. A instalação automática usa essa verificação tanto para validar uma instalação anterior quanto logo após instalar: se a primeira tentativa aparenta sucesso mas o pacote falta, uma segunda instalação é executada automaticamente. Se a ausência persistir, o status inclui a mensagem original do Codex (`Missing optional dependency ... Reinstall Codex: npm install -g @openai/codex@latest`), e o retry já existente da interface continua disponível.
 
 Os testes cobrem o prefixo incompleto, a recuperação na segunda tentativa e a falha persistente; o resumo do status também foi testado para não esconder o diagnóstico. A validação local focada passou com 27/27 testes, sintaxe, ESLint e `git diff --check`. O teste usa diretório temporário e simula Windows sem modificar a instalação global ou credenciais. A confirmação em artefato empacotado e nos três runners fica para o CI/release desta entrega.
+
+## [2026-09-08] Operação: destravar atualização local do app Linux
+
+O app em execução estava em `v0.1.199` e mostrava apenas o indicador
+`Falha ao atualizar`. A investigação confirmou que a instalação local era o
+pacote Debian em `/opt/Felixo AI Core`, com `resources/package-type=deb`; a
+release `v0.1.209` estava íntegra e continha o `.deb` e os manifestos esperados.
+
+Para destravar a máquina sem encerrar a sessão atual, baixei o artefato oficial
+`Felixo-AI-Core-0.1.209-linux-amd64.deb`, confirmei `100.891.844` bytes e
+validei o SHA-512 publicado
+`+Kxzzl8eICMva63Pc9rJjsGdpGaO0KsyHJhp54FlDMjS41NTM64TaMHHUcipri2krs6cgRtMsJcKyQwxY4KOmA==`.
+A instalação via `pkexec dpkg --install` terminou com sucesso e o `dpkg` agora
+reporta `felixo-ai-core 0.1.209` como instalado. O processo já aberto continua
+carregando a versão antiga em memória; fechar e reabrir o app é necessário para
+confirmar visualmente a nova versão e repetir o check do updater.
+
+Não houve alteração de código-fonte nem novo deploy nesta operação. O estado
+pré-existente `M app/package.json` foi preservado sem edição.
