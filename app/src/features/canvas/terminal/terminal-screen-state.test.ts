@@ -9,6 +9,7 @@ import {
   isClaudeBypassPermissionsWarning,
   isClaudeTrustPrompt,
   isCodexTrustPrompt,
+  isCodexUpdateExitBanner,
   looksLikeApprovalPrompt,
   readInputLineState,
 } from './terminal-screen-state'
@@ -127,6 +128,37 @@ describe('isCodexTrustPrompt', () => {
 
   it('does not fire on a normal approval prompt', () => {
     expect(isCodexTrustPrompt('Do you want to proceed? 1. Yes')).toBe(false)
+  })
+})
+
+describe('isCodexUpdateExitBanner', () => {
+  it('detects the self-update banner Codex prints before exiting', () => {
+    expect(isCodexUpdateExitBanner('🎉Update ran successfully! Please restart Codex.')).toBe(
+      true,
+    )
+  })
+
+  it('sees through the surrounding update log lines', () => {
+    const screen = [
+      'Updating Codex via `npm install -g @openai/codex`...',
+      'added 2 packages in 5m',
+      '',
+      '🎉Update ran successfully! Please restart Codex.',
+    ].join('\n')
+
+    expect(isCodexUpdateExitBanner(screen)).toBe(true)
+  })
+
+  it('does not fire on the update starting, before it finishes', () => {
+    expect(
+      isCodexUpdateExitBanner('Updating Codex via `npm install -g @openai/codex`...'),
+    ).toBe(false)
+  })
+
+  it('does not fire on ordinary output mentioning a restart', () => {
+    expect(isCodexUpdateExitBanner('Restart the dev server to pick up the change.')).toBe(
+      false,
+    )
   })
 })
 

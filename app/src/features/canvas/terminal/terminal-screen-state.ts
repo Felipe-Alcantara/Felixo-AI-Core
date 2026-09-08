@@ -230,6 +230,18 @@ export function readInputLineState(
   return command ? INPUT_LINE_READERS[command]?.(viewport) : undefined
 }
 
+/**
+ * Banner que o Codex mostra ao terminar de se auto-atualizar via npm
+ * ("🎉Update ran successfully! Please restart Codex."). A CLI já baixou a
+ * versão nova mas só a carrega num processo novo — por isso ela mesma
+ * encerra em seguida (código de saída 0), esperando ser relançada.
+ */
+export function isCodexUpdateExitBanner(text: string): boolean {
+  const compact = compactWords(text)
+
+  return compact.includes('updateransuccessfully') && compact.includes('restartcodex')
+}
+
 /** Diálogo do Codex que pergunta se a pasta é confiável. */
 export function isCodexTrustPrompt(text: string): boolean {
   const compact = compactWords(text)
