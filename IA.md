@@ -4309,3 +4309,36 @@ concluídos; commit, push, CI/release, atualização das sete subtasks e
 encerramento da task pai ficam para o fechamento deste ciclo. Pendências de
 hardware/credencial real devem virar follow-ups no Notion, não deixar a task
 pai aberta depois de a aceitação implementada ser registrada.
+
+## Retificação de Trabalho — 2026-09-08 — correções emergenciais do painel Notion
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core. Início da retificação: 09:35.
+
+CORREÇÕES:
+
+- O painel consumia tipos Notion que estavam declarados apenas no módulo de
+  ambiente; eles foram movidos para `src/features/shared/types/notion.ts` e
+  importados explicitamente, eliminando os `TS2304` reproduzidos no
+  typecheck.
+- Os três carregamentos automáticos do painel foram agendados fora do ciclo
+  síncrono de efeitos, com limpeza do timer; isso elimina os erros de lint de
+  atualização de estado dentro do `useEffect` e evita disparos após desmontagem.
+- `notion-service` deixou de re-normalizar data sources já normalizados, e o
+  vínculo `dataSourceId`/database pai passou a ser preservado; uma regressão
+  cobre o caso.
+
+VALIDAÇÃO EM 10:08: `node --test` dos serviços Notion passou 9/9; `npm run
+typecheck` passou; `npm run lint` passou com os dois avisos preexistentes de
+`SearchPanel.tsx`; `npm run build` passou com 2.473 módulos; `npm run
+test:native` passou 5/5; `npm run test:frontend` passou 771 testes com 1
+ignorado; `npm test` passou 1.048/1.048 testes; `git diff --check` será
+revalidado antes do commit.
+
+LIMITE DE ACEITAÇÃO: tentei abrir o app web local para a validação visual e
+dos inputs, mas o navegador embutido estava indisponível (`browsers.list()`
+vazio). Portanto não invento teste manual com token Notion; a confirmação
+visual/E2E em app real fica como follow-up aberto no Notion. O teste automatizado
+não toca em credenciais reais.
+
+ESTADO: código e gates locais prontos; commit, push, CI/release e registros no
+Notion ainda serão concluídos neste ciclo.
