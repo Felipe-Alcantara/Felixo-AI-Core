@@ -61,7 +61,17 @@ function createProfile({ managedClis = [], state = {} } = {}) {
   }
 }
 
-function createRunner(profile, { detect, appVersion = '0.1.103' }) {
+function createRunner(
+  profile,
+  {
+    detect,
+    appVersion = '0.1.103',
+    installPackage,
+    verifyInstallation,
+    platformName = process.platform,
+    arch = process.arch,
+  },
+) {
   const installed = []
 
   const service = registerCliAutoInstallHandlers(() => null, {
@@ -69,10 +79,15 @@ function createRunner(profile, { detect, appVersion = '0.1.103' }) {
     appVersion,
     isPackaged: true,
     detect,
-    installPackage: async ({ npmPackage }) => {
-      installed.push(npmPackage)
-      return { ok: true, message: `${npmPackage} instalado.`, output: '' }
-    },
+    platformName,
+    arch,
+    ...(verifyInstallation ? { verifyInstallation } : {}),
+    installPackage:
+      installPackage ??
+      (async ({ npmPackage }) => {
+        installed.push(npmPackage)
+        return { ok: true, message: `${npmPackage} instalado.`, output: '' }
+      }),
   })
 
   return { service, installed }
@@ -96,6 +111,12 @@ function assertPlanned(status) {
 /** Só o que importa para o plano; o resto do catálogo não é usado aqui. */
 function detectedOnly(ids) {
   return async (cli) => ({ detected: ids.includes(cli.id), version: '1.0.0' })
+}
+
+function writePackage(layout, packageName) {
+  const packageDir = path.join(layout.root, 'node_modules', ...packageName.split('/'))
+  fs.mkdirSync(packageDir, { recursive: true })
+  fs.writeFileSync(path.join(packageDir, 'package.json'), '{}', 'utf8')
 }
 
 test(
@@ -148,6 +169,95 @@ test(
       service.stop()
 
       assert.deepEqual(installed, [])
+    } finally {
+      profile.cleanup()
+    }
+  },
+)
+
+test(
+  'detecta o Codex incompleto e repete a instalação automaticamente',
+  async () => {
+    const profile = createProfile({
+      // O executável existe e o estado anterior diz que deu certo, mas a
+      // optionalDependency nativa não existe: esse é o estado observado no
+      // Windows quando o npm termina com código 0 cedo demais.
+      managedClis: ['codex.cmd'],
+      state: {
+        codex: { version: '0.1.102', ok: true, message: 'Codex instalado' },
+      },
+    })
+    const codexPackage = '@openai/codex-win32-x64'
+    let installCount = 0
+
+    try {
+      const { service, installed } = createRunner(profile, {
+        detect: detectedOnly(['claude', 'gemini']),
+        platformName: 'win32',
+        arch: 'x64',
+        installPackage: async ({ npmPackage, layout }) => {
+          installed.push(npmPackage)
+          installCount += 1
+
+          if (installCount === 2) {
+            writePackage(layout, codexPackage)
+            fs.writeFileSync(path.join(layout.packagesBin, 'codex.cmd'), '', 'utf8')
+          }
+
+          return {
+            ok: true,
+            message: `${npmPackage} instalado (tentativa ${installCount}).`,
+            output: '',
+          }
+        },
+      })
+
+      const status = await service.run('startup')
+      service.stop()
+
+      assert.equal(status.state, 'done')
+      assert.deepEqual(installed, [
+        getPinnedInstallTarget('codex'),
+        getPinnedInstallTarget('codex'),
+      ])
+      assert.match(
+        status.clis.find((item) => item.id === 'codex').message,
+        /reinstalação automática/,
+      )
+    } finally {
+      profile.cleanup()
+    }
+  },
+)
+
+test(
+  'mostra o erro real quando a reinstalação do Codex continua incompleta',
+  async () => {
+    const profile = createProfile({
+      managedClis: ['codex.cmd'],
+      state: {
+        codex: { version: '0.1.102', ok: true, message: 'Codex instalado' },
+      },
+    })
+
+    try {
+      const { service, installed } = createRunner(profile, {
+        detect: detectedOnly(['claude', 'gemini']),
+        platformName: 'win32',
+        arch: 'x64',
+      })
+
+      const status = await service.run('startup')
+      service.stop()
+
+      assert.equal(status.state, 'error')
+      assert.equal(installed.length, 2)
+      assert.match(status.message, /Missing optional dependency @openai\/codex-win32-x64/)
+      assert.match(status.message, /npm install -g @openai\/codex@latest/)
+      assert.match(
+        status.clis.find((item) => item.id === 'codex').message,
+        /instalação continua incompleta/,
+      )
     } finally {
       profile.cleanup()
     }

@@ -1,6 +1,21 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 const WINDOW_FOCUS_CHANNEL = 'window:focus-state'
+const AGENT_BROWSER_CHANNEL = 'agent-browser:open-webpage'
+const pendingAgentBrowserEvents = []
+const agentBrowserListeners = new Set()
+
+// The main process may deliver an embedded request at did-finish-load, before
+// React has mounted CanvasView and subscribed. Keep that small event in the
+// isolated preload bridge until the renderer registers its listener.
+ipcRenderer.on(AGENT_BROWSER_CHANNEL, (_event, data) => {
+  if (agentBrowserListeners.size === 0) {
+    pendingAgentBrowserEvents.push(data)
+    return
+  }
+
+  for (const listener of agentBrowserListeners) listener(data)
+})
 
 contextBridge.exposeInMainWorld('felixo', {
   platform: process.platform,
@@ -18,6 +33,10 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
   getVersion: () => ipcRenderer.invoke('app:get-version'),
+  graphics: {
+    getConfig: () => ipcRenderer.invoke('graphics:get-config'),
+    setMode: (mode) => ipcRenderer.invoke('graphics:set-mode', mode),
+  },
   // Esta ponte só existe na instância isolada iniciada por `felixo devtools`.
   // Não é carregada pelo app normal nem pela instância com perfil real.
   ...(process.env.FELIXO_DEVTOOLS_PORT
@@ -134,6 +153,13 @@ contextBridge.exposeInMainWorld('felixo', {
     setSkills: (skills) => ipcRenderer.invoke('canvas:set-skills', skills),
     listAvailableSkills: () => ipcRenderer.invoke('canvas:list-available-skills'),
     setSkillsSettings: (params) => ipcRenderer.invoke('canvas:set-skills-settings', params),
+    onAgentBrowserOpen: (callback) => {
+      agentBrowserListeners.add(callback)
+      while (pendingAgentBrowserEvents.length > 0) {
+        callback(pendingAgentBrowserEvents.shift())
+      }
+      return () => agentBrowserListeners.delete(callback)
+    },
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),

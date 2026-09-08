@@ -7,7 +7,81 @@
     <title>app</title>
   </head>
   <body>
+    <!--
+      This fallback is deliberately plain HTML: it remains visible when a
+      renderer chunk fails before React mounts or when a weak machine takes too
+      long to paint. The button reloads only the renderer, not the Electron
+      process and its live PTYs.
+    -->
+    <div id="boot-fallback" role="status" aria-live="polite">
+      <strong>Felixo AI Core</strong>
+      <span id="boot-fallback-message">Carregando a interface…</span>
+      <button id="boot-retry" type="button">Recarregar interface</button>
+    </div>
     <div id="root"></div>
+    <style>
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+        background: #09090b;
+      }
+
+      #boot-fallback {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.7rem;
+        padding: 1.5rem;
+        color: #f4f4f5;
+        background: #09090b;
+        font: 14px/1.5 system-ui, sans-serif;
+        text-align: center;
+      }
+
+      #boot-fallback strong {
+        font-size: 1.05rem;
+      }
+
+      #boot-fallback-message {
+        max-width: 28rem;
+        color: #a1a1aa;
+      }
+
+      #boot-retry {
+        margin-top: 0.6rem;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.55rem 1rem;
+        color: #09090b;
+        background: #f4f4f5;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+      }
+
+      html[data-felixo-app-ready='true'] #boot-fallback {
+        display: none;
+      }
+    </style>
+    <script>
+      document.getElementById('boot-retry')?.addEventListener('click', () => {
+        window.location.reload()
+      })
+
+      window.setTimeout(() => {
+        if (document.documentElement.dataset.felixoAppReady === 'true') return
+        const message = document.getElementById('boot-fallback-message')
+        if (message) {
+          message.textContent =
+            'A interface demorou para pintar. Tente recarregar somente a interface.'
+        }
+      }, 8000)
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -46,6 +46,38 @@ test('interpretarArgumentos separa verbo de opção', () => {
   })
 })
 
+test('browser open registra intenções externas e embutidas na fila compartilhada', async () => {
+  const { pasta, deps } = dependencias()
+
+  const externo = await executar(['browser', 'open', 'https://example.com'], deps)
+  const embutido = await executar(
+    ['navegador', 'abrir', 'http://localhost:4173', '--embutido'],
+    deps,
+  )
+
+  assert.equal(externo.codigo, 0)
+  assert.match(externo.saida, /Pedido registrado/)
+  assert.match(externo.saida, /Destino: externo/)
+  assert.equal(embutido.codigo, 0)
+  assert.match(embutido.saida, /Destino: embutido/)
+
+  const pedidos = criarRepositorioDePedidos({ pasta }).listarPendentes({ acao: 'abrir-pagina' })
+  assert.equal(pedidos.length, 2)
+  const pedidoExterno = pedidos.find((pedido) => pedido.url === 'https://example.com')
+  const pedidoEmbutido = pedidos.find((pedido) => pedido.url === 'http://localhost:4173')
+  assert.equal(pedidoExterno?.url, 'https://example.com')
+  assert.equal(pedidoEmbutido?.modo, 'embutido')
+})
+
+test('browser open recusa protocolo que nao e web', async () => {
+  const { deps } = dependencias()
+
+  const resultado = await executar(['browser', 'open', 'file:///tmp/segredo'], deps)
+
+  assert.equal(resultado.codigo, 2)
+  assert.match(resultado.erro, /URL http/)
+})
+
 test('nenhum verbo de escrita existe no comando', () => {
   // A garantia é estrutural: se alguém acrescentar 'pull'/'push'/'commit' à
   // lista, este teste cai antes de o agente conseguir chamar.

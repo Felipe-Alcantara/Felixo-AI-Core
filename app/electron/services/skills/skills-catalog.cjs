@@ -25,6 +25,12 @@ const BUILTIN_SKILLS = [
       'Descobrir quais repositorios git da maquina estao fora de sincronia com `felixo fetch-all`, e pedir a sincronizacao sem executa-la: pull/push/commit continuam dependendo de confirmacao da pessoa no painel.',
   },
   {
+    slug: 'abrir-paginas-no-navegador',
+    name: 'Abrir páginas no navegador pelo app',
+    description:
+      'Pedir ao Felixo AI Core para abrir uma URL http(s) no navegador externo ou como um bloco Webpage persistido no canvas, usando `felixo browser` e a fila compartilhada com o Fetch All.',
+  },
+  {
     slug: 'notion-operacoes',
     name: 'Operar o Notion sem estragar nada',
     description:

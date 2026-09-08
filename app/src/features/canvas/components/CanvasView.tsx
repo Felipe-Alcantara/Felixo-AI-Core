@@ -1272,6 +1272,33 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     [addNode, nodes, setNodes],
   )
 
+  const openWebpageFromAgent = useCallback(
+    (url: string) => {
+      const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
+      const position = findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
+      const id = addNode('webpage', { url }, position)
+      setNodes((current) =>
+        current.map((node) => ({ ...node, selected: node.id === id })),
+      )
+      const center = {
+        x: position.x + webpageSize.width / 2,
+        y: position.y + webpageSize.height / 2,
+      }
+      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 350 })
+    },
+    [addNode, nodes, setNodes, visibleCanvasBounds],
+  )
+
+  useEffect(() => {
+    const unsubscribe = window.felixo?.canvas?.onAgentBrowserOpen?.(({ url }) => {
+      if (typeof url === 'string' && url.trim()) {
+        openWebpageFromAgent(url)
+      }
+    })
+
+    return () => unsubscribe?.()
+  }, [openWebpageFromAgent])
+
   useEffect(() => {
     addNodeRef.current = openWebpageFromTerminal
   }, [openWebpageFromTerminal])

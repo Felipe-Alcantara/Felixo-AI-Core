@@ -6,6 +6,7 @@ const assert = require('node:assert/strict')
 const {
   MANAGED_CLI_MANIFEST,
   getManagedCliManifestEntry,
+  getManagedCliPlatformPackage,
   getPinnedInstallTarget,
 } = require('./managed-cli-manifest.cjs')
 
@@ -31,6 +32,30 @@ describe('managed-cli-manifest', () => {
     const entry = MANAGED_CLI_MANIFEST.gemini
 
     assert.equal(getPinnedInstallTarget('gemini'), `${entry.npmPackage}@${entry.version}`)
+  })
+
+  it('declara o pacote nativo do Codex por plataforma e arquitetura', () => {
+    assert.equal(
+      getManagedCliPlatformPackage('codex', {
+        platformName: 'win32',
+        arch: 'x64',
+      }),
+      '@openai/codex-win32-x64',
+    )
+    assert.equal(
+      getManagedCliPlatformPackage('codex', {
+        platformName: 'win32',
+        arch: 'arm64',
+      }),
+      '@openai/codex-win32-arm64',
+    )
+    assert.equal(
+      getManagedCliPlatformPackage('codex', {
+        platformName: 'linux',
+        arch: 'x64',
+      }),
+      null,
+    )
   })
 
   it('nunca aponta para uma versão solta ("latest" implícito)', () => {

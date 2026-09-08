@@ -2,6 +2,7 @@ import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
+import { GraphicsRecoverySection } from '../../shared/graphics/GraphicsRecoverySection'
 import { SystemDesignSettingsSection } from '../../shared/system-design/SystemDesignSettingsSection'
 
 type FelixoSettingsModalProps = {
@@ -264,6 +265,8 @@ function FelixoSettingsDialog({
               <Metric label="Automações" value={`${automationsCount}`} />
             </div>
           </section>
+
+          <GraphicsRecoverySection />
 
           <SystemDesignSettingsSection />
 

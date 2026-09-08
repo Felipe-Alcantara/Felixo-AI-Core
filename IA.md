@@ -4120,3 +4120,120 @@ Estado final: pin de versão e verificação de hash implementados e testados
 (testes leves, `node --test`); lint e build completo pendentes por limitação
 de memória da máquina nesta sessão — não bloqueiam o commit porque os
 arquivos alterados são `.cjs` fora do project reference do `tsc`.
+
+## Registro de Trabalho — 2026-09-07 — dependência opcional ausente ao instalar Codex no Windows
+
+CONTEXTO: a task [Felixo AI Core/Agentes — corrigir erro ao criar perfis do Codex (dependência opcional ausente no Windows)](https://app.notion.com/p/Felixo-AI-Core-Agentes-corrigir-erro-ao-criar-perfis-do-Codex-depend-ncia-opcional-ausente-no-Win-3d491f95497e8127bdf2df563c7a96bb) registrou que `@openai/codex` podia terminar a instalação com sucesso no npm, mas falhar depois com `Missing optional dependency @openai/codex-win32-x64`.
+
+CAUSA CONFIRMADA: `npm view @openai/codex@0.153.4 optionalDependencies --json` lista pacotes nativos separados por sistema e arquitetura. O instalador não tinha verificação pós-instalação; portanto, um código de saída 0 do npm era tratado como instalação pronta mesmo quando o pacote nativo do Windows não existia.
+
+IMPLEMENTAÇÃO:
+
+- `app/electron/core/managed-cli-manifest.cjs` declara os pacotes `@openai/codex-win32-x64` e `@openai/codex-win32-arm64` por plataforma/arquitetura, preservando o pin do Codex já existente;
+- `app/electron/services/managed-cli-health.cjs` verifica a presença do `package.json` da dependência exigida no prefixo gerenciado e preserva a mensagem acionável emitida pelo Codex;
+- `app/electron/services/cli-auto-install.cjs` deixa de considerar suficiente a existência do executável, repete uma instalação aparentemente bem-sucedida quando a dependência opcional está ausente e grava falha detalhada quando a segunda tentativa também não resolve;
+- `app/electron/services/cli-auto-install-plan.cjs` inclui o detalhe da falha na mensagem principal do status, que é o texto mostrado pelo aviso da interface. O retry IPC existente (`clis:retry-setup`) continua disponível para uma nova tentativa manual;
+- testes de saúde, instalação automática e resumo cobrem ausência inicial, recuperação na segunda tentativa e erro persistente.
+
+VALIDAÇÃO: 27/27 testes focados passaram (`managed-cli-health`, `cli-auto-install`, `cli-auto-install-plan` e `managed-cli-manifest`); `node --check` passou nos módulos alterados; ESLint focado passou sem avisos; `git diff --check` passou. A ausência foi reproduzida com um prefixo temporário que contém o executável do Codex, mas não o pacote nativo, sem tocar a instalação global nem credenciais reais.
+
+LIMITE: ainda falta validar a recuperação contra um artefato empacotado completo em cada runner do CI e acompanhar o release; a suíte e o pipeline serão a prova final de empacotamento e compatibilidade multi-SO. O caminho manual `official-cli-service` continua separado do instalador automático gerenciado e não foi alterado nesta task.
+
+## Registro de Trabalho — 2026-09-07 — agentes abrem páginas pelo app
+
+CONTEXTO: o agente que roda no terminal do canvas consegue ler a saída da CLI,
+mas não tem uma chamada de volta para o processo principal do Electron. A task
+do Fetch All já havia criado a fila local `userData/agent-requests`; criar um
+socket ou um segundo transporte só repetiria a mesma fronteira e aumentaria a
+superfície de segurança.
+
+DECISÃO: reutilizar a fila existente com a intenção fechada `abrir-pagina`.
+`felixo browser open <url>` pede abertura no navegador externo; `--embedded`
+(ou `navegador abrir ... --embutido`) pede um bloco Webpage persistido no
+canvas. Somente URLs `http:` e `https:` atravessam a validação. O consumidor
+externo chama o mesmo `shell.openExternal` usado pelo handler de links do app;
+o consumidor embutido envia um evento pelo preload, que o CanvasView transforma
+em nó e posiciona numa área livre. O Fetch All filtra sua própria intenção e
+continua exigindo confirmação para escrita.
+
+IMPLEMENTAÇÃO: o repositório de pedidos ganhou normalização de URL/modo e
+filtro por ação; o observador de arquivos passou a ser compartilhado por Fetch
+All e pelo consumidor de navegador; a CLI ganhou `browser`/`navegador`, status
+do pedido e a skill `abrir-paginas-no-navegador`. O preload mantém uma pequena
+fila de eventos para não perder uma abertura embutida se ela chegar antes da
+montagem do React.
+
+VALIDAÇÃO LOCAL: 33 testes Node focados passaram; `npx vite build`, ESLint
+focado e `git diff --check` passaram. A suíte Node completa encontrou falhas de
+ambiente já fora desta alteração (Electron instalado sem o binário, criação de
+symlink recusada pelo Windows e um benchmark de RSS); o `tsc` também encontrou
+declarações ausentes na árvore local de `node_modules`, enquanto o build Vite
+concluiu normalmente.
+
+Estado final: implementação, skill, testes e documentação concluídos; falta
+somente commit, push, CI/release e registro final na task/relatório.
+
+## Registro de Trabalho — 2026-09-07 — contexto inicial do Canvas sem submissão automática
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core. Início do ciclo: 23:18. A task
+solicita validar o prompt inicial como contexto, sem Enter automático, em um E2E
+multi-SO para os caminhos shell, launcher, Openia, Claude, Codex e Gemini.
+
+IMPLEMENTAÇÃO:
+
+- `app/src/features/canvas/terminal/canvas-context-e2e.test.ts` conecta o
+  `TerminalSessionStore` real ao `PtyProcessManager` real e injeta somente um
+  PTY fake determinístico. O fake registra cada escrita, separa contexto,
+  prompt e Enter, não autentica nenhuma CLI e não executa processo externo;
+- o E2E verifica que a referência de contexto chega uma vez e sem `\r`/`\n`,
+  que ela nunca vira execução, e que a tarefa só executa depois da ação
+  explícita. Também verifica flags reais, `cwd`, conta/provedor, reidratação
+  no reload, prontidão de conexões/arquivos e resume compatível/fallback
+  identificável;
+- `ci.yml` executa a proteção nos runners Ubuntu/Windows/macOS e publica um
+  JSON sanitizado por SO, mesmo quando a etapa falha. README e a documentação
+  de benchmarks registram o comando, a matriz e o limite da validação visual
+  com app empacotado e CLI real.
+
+VALIDAÇÃO LOCAL: `npm run test:canvas-context` passou 4/4; a execução com
+reporter JSON passou 4/4 e gerou artefato sem conteúdo de prompt, arquivo ou
+credencial; `npm run typecheck`, `npm run test:frontend` (767 passaram, 1
+ignorado), `npm run test:native` (5/5), `npm run lint` (0 erros, 2 avisos
+preexistentes em `SearchPanel.tsx`) e `npm run build` passaram. `npm test`
+terminou com 986/995 testes passando e 8 falhas ambientais: Electron sem o
+binário porque as dependências locais foram instaladas offline sem scripts,
+ConPTY sem `AttachConsole` neste runner, symlink bloqueado pelo Windows e
+fixtures locais de descoberta/perfil Codex; nenhuma falha aponta para os
+arquivos desta alteração.
+
+LIMITE: a execução local não abre CLI autenticada nem comprova o Canvas visual
+empacotado. Essa matriz real permanece pendente de runner/fixture segura e foi
+documentada como pendência, sem converter ausência de autenticação em sucesso.
+
+Estado no ponto do registro: implementação, teste, documentação e gates locais
+prontos; commit, push, CI/release e registro final no Notion ainda serão feitos
+no fechamento desta task.
+
+ATUALIZAÇÃO DE CI — após o push, o Ubuntu encontrou uma flutuação preexistente
+no teste `electron/cli/felixo.test.cjs`: duas requisições consecutivas podiam
+receber o mesmo milissegundo e a listagem de arquivos não garantia a ordem que
+o teste assumia. A asserção foi tornada determinística procurando cada URL,
+sem alterar o repositório de produção. O teste focado passou 17/17; o CI novo
+ainda aguarda o rerun multi-SO antes do encerramento.
+
+## Registro de Trabalho — 2026-09-08 — tela preta constante em PCs mais fracos
+
+CONTEXTO: a task [Felixo AI Core/Performance — investigar tela preta constante em PCs mais fracos](https://app.notion.com/p/Felixo-AI-Core-Performance-investigar-tela-preta-constante-em-PCs-mais-fracos-3d491f95497e81f099e3ef3d8553e7c8) solicita uma recuperação sem reiniciar o aplicativo inteiro e uma investigação do fallback `disable-gpu` já usado pela automação DevTools.
+
+IMPLEMENTAÇÃO:
+
+- `app/electron/core/graphics-mode.cjs` resolve `auto`, `hardware` e `software` com precedência de argumento, ambiente e perfil persistido. Em modo automático, Windows com até 4 GiB de RAM ativa rasterização por software; nos demais casos a GPU continua preservada. O `disable-gpu` é aplicado antes de `app.whenReady()` e o estado é exposto no QA Logger;
+- o preload e os painéis de Configurações do Canvas e do chat permitem consultar o estado e salvar manualmente o modo gráfico para a próxima abertura;
+- `app/index.html` ganhou um fallback estático visível antes do React montar, com recarga apenas do renderer; `RendererRecoveryBoundary` cobre falhas de renderização e mantém o processo principal/PTYs vivos;
+- o guia do usuário documenta o caminho de recuperação e a escolha de modo compatível.
+
+VALIDAÇÃO LOCAL: `node --test electron/core/graphics-mode.test.cjs` passou 5/5; `npm run typecheck` passou; `npm run lint` terminou sem erros e manteve apenas os dois avisos preexistentes de dependências em `SearchPanel.tsx`; `npm run test:frontend` passou 767 testes, com 1 ignorado; `npm run build` concluiu com 2472 módulos transformados; `git diff --check` passou. `npm test` terminou com 991 testes passando, 8 falhas e 1 ignorado, todas falhas ambientais já conhecidas (binário Electron ausente, fixture local de descoberta/perfil, processo PTY e symlink bloqueado no Windows).
+
+LIMITE: o ambiente atual não possui um PC fraco que reproduza a tela preta e também não conseguiu iniciar o binário Electron local; portanto a aceitação de teste em uma máquina reproduzível ainda está pendente. O modo automático é deliberadamente conservador — memória baixa no Windows — e deve ser confrontado com o hardware reproduzível antes de encerrar a task.
+
+Estado: implementação e gates locais prontos; task permanece em andamento aguardando validação manual em hardware reproduzível.

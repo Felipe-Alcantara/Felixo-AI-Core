@@ -53,6 +53,9 @@ const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
 const {
+  registerAgentBrowserIpcHandlers,
+} = require('./services/agent-browser-ipc-handlers.cjs')
+const {
   instalarComandoDoAgente: installAgentCommand,
 } = require('./services/agent-command-install.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
@@ -74,6 +77,10 @@ const { createTerminalLogStore } = require('./services/terminal-log-store.cjs')
 const { initAppPaths, resolveDevUserDataOverride } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { isReleaseSmokeProcess } = require('./core/release-smoke-mode.cjs')
+const {
+  persistGraphicsMode,
+  resolveGraphicsProfile,
+} = require('./core/graphics-mode.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
@@ -88,6 +95,7 @@ let settingsRepository = null
 let terminalLogStore = null
 let cliAutoInstall = null
 let agentUsageWatching = null
+let agentBrowserWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -103,10 +111,6 @@ const devtoolsPort = Number.parseInt(process.env.FELIXO_DEVTOOLS_PORT ?? '', 10)
 // nenhuma porta adicional.
 if (Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535) {
   app.commandLine.appendSwitch('remote-debugging-port', String(devtoolsPort))
-  // Em alguns desktops Windows a janela oculta não chega a pintar pelo GPU e
-  // `Page.captureScreenshot` fica esperando indefinidamente. Esta instância é
-  // só de automação, então rasterização por software é o fallback seguro.
-  app.commandLine.appendSwitch('disable-gpu')
 }
 
 if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {
@@ -122,6 +126,35 @@ const devUserDataOverride = resolveDevUserDataOverride({
 })
 if (devUserDataOverride) {
   app.setPath('userData', devUserDataOverride)
+}
+
+// A aceleração precisa ser decidida antes de `app.whenReady()`. O modo padrão
+// preserva o GPU; só o heurístico explícito de Windows com pouca memória ou a
+// escolha manual de modo compatível ativa rasterização por software. DevTools
+// continua sempre seguro para captura de janela oculta.
+const graphicsProfile = resolveGraphicsProfile({
+  userDataPath: app.getPath('userData'),
+})
+const useSoftwareRendering =
+  (Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535) ||
+  graphicsProfile.useSoftwareRendering
+if (useSoftwareRendering) {
+  app.commandLine.appendSwitch('disable-gpu')
+}
+
+function graphicsStatus() {
+  return {
+    mode: graphicsProfile.mode,
+    softwareRenderingActive: useSoftwareRendering,
+    automatic: graphicsProfile.automatic,
+    automaticLowEnd: graphicsProfile.automaticLowEnd,
+    reason: graphicsProfile.reason,
+    source: graphicsProfile.source,
+    platform: graphicsProfile.platform,
+    totalMemoryBytes: graphicsProfile.totalMemoryBytes,
+    cpuCount: graphicsProfile.cpuCount,
+    persistedMode: graphicsProfile.persistedMode,
+  }
 }
 
 function handleFileOpen(filePath) {
@@ -198,6 +231,32 @@ app.whenReady().then(async () => {
 
   mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository })
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
+
+  ipcMain.handle('graphics:get-config', () => ({
+    ok: true,
+    config: graphicsStatus(),
+  }))
+  ipcMain.handle('graphics:set-mode', (_event, mode) => {
+    try {
+      const savedMode = persistGraphicsMode({
+        userDataPath: app.getPath('userData'),
+        mode,
+      })
+
+      return {
+        ok: true,
+        mode: savedMode,
+        requiresRestart: true,
+        message:
+          'Modo gráfico salvo. Ele será aplicado na próxima abertura do Felixo.',
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : 'Não foi possível salvar o modo gráfico.',
+      }
+    }
+  })
 
   // CDP alcança o renderer, não o processo main. A ponte abaixo só nasce na
   // instância DevTools, que usa userData isolado e porta local aleatória. Ela
@@ -287,6 +346,7 @@ app.whenReady().then(async () => {
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
   registerFetchAllIpcHandlers(getMainWindow, appPaths)
+  agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths)
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
@@ -330,6 +390,7 @@ app.whenReady().then(async () => {
         database: storageDatabase.path,
         isPackaged: appPaths.isPackaged,
         platform: appPaths.platform,
+        graphics: graphicsStatus(),
       },
     })
   })
@@ -345,6 +406,15 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  if (agentBrowserWatching) {
+    try {
+      agentBrowserWatching.pararDeObservarPedidos()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentBrowserWatching = null
+  }
+
   if (agentUsageWatching) {
     try {
       agentUsageWatching.stopWatching()

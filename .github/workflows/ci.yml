@@ -322,6 +322,23 @@ jobs:
       - name: Test frontend
         run: npm run test:frontend
 
+      # Protege a fronteira contexto versus submissão em todos os três
+      # runners, sem iniciar CLIs autenticadas: o teste usa o store e o
+      # manager reais com um PTY fake determinístico.
+      - name: Test Canvas initial context E2E
+        run: >-
+          npm run test:canvas-context --
+          --reporter=json
+          --outputFile=build/canvas-context-e2e-${{ matrix.os }}.json
+
+      - name: Upload Canvas initial context E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canvas-context-e2e-${{ matrix.os }}
+          path: app/build/canvas-context-e2e-${{ matrix.os }}.json
+          if-no-files-found: warn
+
       # O scrollback adaptativo só pode ser habilitado depois de medir a
       # combinação real Electron + xterm + PTY nos três runners. O check usa
       # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
