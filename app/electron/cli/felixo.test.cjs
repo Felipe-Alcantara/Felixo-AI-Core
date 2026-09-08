@@ -1,5 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -120,6 +121,52 @@ test('roteia a leitura de contexto sem inicializar o Fetch All', async () => {
 
     assert.equal(resultado.codigo, 0)
     assert.equal(resultado.saida, 'contexto do teste')
+  } finally {
+    fs.rmSync(pasta, { recursive: true, force: true })
+  }
+})
+
+test('lê contexto mesmo quando o módulo opcional de DevTools não está empacotado', () => {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-context-packaged-'))
+  const nome = 'felixo-context-1-packaged.txt'
+  fs.writeFileSync(path.join(pasta, nome), 'contexto empacotado', 'utf8')
+
+  const script = `
+    const Module = require('node:module')
+    const originalLoad = Module._load
+    Module._load = function (request, parent, isMain) {
+      if (request.includes('scripts/dev-runner.cjs') && parent?.filename?.endsWith('felixo-devtools.cjs')) {
+        const error = new Error('simulated missing dev-runner.cjs')
+        error.code = 'MODULE_NOT_FOUND'
+        throw error
+      }
+      return originalLoad.call(this, request, parent, isMain)
+    }
+
+    const { executar } = require(process.env.FELIXO_CLI)
+    executar(['context', 'read', process.env.FELIXO_CONTEXT_NAME], {
+      contexto: { getContextDir: () => process.env.FELIXO_CONTEXT_DIR },
+    }).then((result) => {
+      process.stdout.write(JSON.stringify(result))
+    }).catch((error) => {
+      process.stderr.write(error.stack || String(error))
+      process.exitCode = 1
+    })
+  `
+
+  try {
+    const child = spawnSync(process.execPath, ['-e', script], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        FELIXO_CLI: path.join(__dirname, 'felixo.cjs'),
+        FELIXO_CONTEXT_DIR: pasta,
+        FELIXO_CONTEXT_NAME: nome,
+      },
+    })
+
+    assert.equal(child.status, 0, child.stderr)
+    assert.deepEqual(JSON.parse(child.stdout), { saida: 'contexto empacotado', codigo: 0 })
   } finally {
     fs.rmSync(pasta, { recursive: true, force: true })
   }

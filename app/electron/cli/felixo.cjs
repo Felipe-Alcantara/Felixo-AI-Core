@@ -25,8 +25,36 @@ const { createFetchAllService } = require('../services/fetch-all-service.cjs')
 const { criarRepositorioDePedidos } = require('../services/fetch-all/agent-requests.cjs')
 const { loadAgentScanState, saveAgentScanState } = require('./agent-scan-state.cjs')
 const { AJUDA, formatarPlano } = require('./agent-command-output.cjs')
-const { executarDevtools, AJUDA_DEVTOOLS } = require('./felixo-devtools.cjs')
 const { executarContexto } = require('./context-command.cjs')
+
+/**
+ * O DevTools usa scripts de desenvolvimento que não existem no app empacotado.
+ * Ele só pode ser carregado quando esse subcomando for solicitado; um import
+ * no topo faria até `felixo context read` falhar antes de ser roteado.
+ *
+ * @returns {{ AJUDA_DEVTOOLS: string, executarDevtools: Function }}
+ */
+function carregarDevtools() {
+  return require('./felixo-devtools.cjs')
+}
+
+const AJUDA_DEVTOOLS_FALLBACK = `felixo devtools — automação da instância de desenvolvimento.
+
+O subcomando DevTools não está disponível nesta instalação empacotada.`
+
+/**
+ * A ajuda geral continua disponível mesmo quando os scripts opcionais de
+ * desenvolvimento não foram incluídos no pacote de produção.
+ *
+ * @returns {string}
+ */
+function obterAjudaDevtools() {
+  try {
+    return carregarDevtools().AJUDA_DEVTOOLS
+  } catch {
+    return AJUDA_DEVTOOLS_FALLBACK
+  }
+}
 
 /**
  * Interpreta a linha de comando.
@@ -74,7 +102,16 @@ const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
  */
 async function executar(argumentos, dependencias = {}) {
   if (argumentos[0] === 'devtools') {
-    return executarDevtools(argumentos.slice(1), dependencias.devtools)
+    try {
+      const { executarDevtools } = carregarDevtools()
+      return executarDevtools(argumentos.slice(1), dependencias.devtools)
+    } catch (error) {
+      return {
+        saida: '',
+        erro: `O comando DevTools não está disponível nesta instalação. ${error?.message ?? ''}`.trim(),
+        codigo: 1,
+      }
+    }
   }
   if (FERRAMENTAS_CONTEXT.includes(argumentos[0])) {
     return executarContexto(argumentos.slice(1), dependencias.contexto)
@@ -140,11 +177,11 @@ async function executar(argumentos, dependencias = {}) {
       }
     }
 
-    return { saida: `${AJUDA}\n\n${AJUDA_DEVTOOLS}`, codigo: 2 }
+    return { saida: `${AJUDA}\n\n${obterAjudaDevtools()}`, codigo: 2 }
   }
 
   if (ferramenta !== 'fetch-all' || !VERBOS.includes(verbo)) {
-    return { saida: `${AJUDA}\n\n${AJUDA_DEVTOOLS}`, codigo: ferramenta || verbo ? 2 : 0 }
+    return { saida: `${AJUDA}\n\n${obterAjudaDevtools()}`, codigo: ferramenta || verbo ? 2 : 0 }
   }
 
   if (verbo === 'pedir-execucao') {
