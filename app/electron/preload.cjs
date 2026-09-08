@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
   getVersion: () => ipcRenderer.invoke('app:get-version'),
+  graphics: {
+    getConfig: () => ipcRenderer.invoke('graphics:get-config'),
+    setMode: (mode) => ipcRenderer.invoke('graphics:set-mode', mode),
+  },
   // Esta ponte só existe na instância isolada iniciada por `felixo devtools`.
   // Não é carregada pelo app normal nem pela instância com perfil real.
   ...(process.env.FELIXO_DEVTOOLS_PORT

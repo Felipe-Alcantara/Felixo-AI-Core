@@ -280,6 +280,30 @@ declare global {
       getFilePath?: (file: File) => string
       /** Versão empacotada do app (a do CI, não a do package.json versionado). */
       getVersion?: () => Promise<string>
+      graphics?: {
+        getConfig: () => Promise<{
+          ok: boolean
+          config?: {
+            mode: 'auto' | 'hardware' | 'software'
+            softwareRenderingActive: boolean
+            automatic: boolean
+            automaticLowEnd: boolean
+            reason: string
+            source: string
+            platform: string
+            totalMemoryBytes: number | null
+            cpuCount: number | null
+            persistedMode: 'auto' | 'hardware' | 'software' | null
+          }
+          message?: string
+        }>
+        setMode: (mode: 'auto' | 'hardware' | 'software') => Promise<{
+          ok: boolean
+          mode?: 'auto' | 'hardware' | 'software'
+          requiresRestart?: boolean
+          message?: string
+        }>
+      }
       cli?: {
         send: (params: {
           sessionId: string

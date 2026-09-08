@@ -4220,3 +4220,20 @@ receber o mesmo milissegundo e a listagem de arquivos não garantia a ordem que
 o teste assumia. A asserção foi tornada determinística procurando cada URL,
 sem alterar o repositório de produção. O teste focado passou 17/17; o CI novo
 ainda aguarda o rerun multi-SO antes do encerramento.
+
+## Registro de Trabalho — 2026-09-08 — tela preta constante em PCs mais fracos
+
+CONTEXTO: a task [Felixo AI Core/Performance — investigar tela preta constante em PCs mais fracos](https://app.notion.com/p/Felixo-AI-Core-Performance-investigar-tela-preta-constante-em-PCs-mais-fracos-3d491f95497e81f099e3ef3d8553e7c8) solicita uma recuperação sem reiniciar o aplicativo inteiro e uma investigação do fallback `disable-gpu` já usado pela automação DevTools.
+
+IMPLEMENTAÇÃO:
+
+- `app/electron/core/graphics-mode.cjs` resolve `auto`, `hardware` e `software` com precedência de argumento, ambiente e perfil persistido. Em modo automático, Windows com até 4 GiB de RAM ativa rasterização por software; nos demais casos a GPU continua preservada. O `disable-gpu` é aplicado antes de `app.whenReady()` e o estado é exposto no QA Logger;
+- o preload e os painéis de Configurações do Canvas e do chat permitem consultar o estado e salvar manualmente o modo gráfico para a próxima abertura;
+- `app/index.html` ganhou um fallback estático visível antes do React montar, com recarga apenas do renderer; `RendererRecoveryBoundary` cobre falhas de renderização e mantém o processo principal/PTYs vivos;
+- o guia do usuário documenta o caminho de recuperação e a escolha de modo compatível.
+
+VALIDAÇÃO LOCAL: `node --test electron/core/graphics-mode.test.cjs` passou 5/5; `npm run typecheck` passou; `npm run lint` terminou sem erros e manteve apenas os dois avisos preexistentes de dependências em `SearchPanel.tsx`; `npm run test:frontend` passou 767 testes, com 1 ignorado; `npm run build` concluiu com 2472 módulos transformados; `git diff --check` passou. `npm test` terminou com 991 testes passando, 8 falhas e 1 ignorado, todas falhas ambientais já conhecidas (binário Electron ausente, fixture local de descoberta/perfil, processo PTY e symlink bloqueado no Windows).
+
+LIMITE: o ambiente atual não possui um PC fraco que reproduza a tela preta e também não conseguiu iniciar o binário Electron local; portanto a aceitação de teste em uma máquina reproduzível ainda está pendente. O modo automático é deliberadamente conservador — memória baixa no Windows — e deve ser confrontado com o hardware reproduzível antes de encerrar a task.
+
+Estado: implementação e gates locais prontos; task permanece em andamento aguardando validação manual em hardware reproduzível.

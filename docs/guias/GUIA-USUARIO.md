@@ -396,6 +396,18 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 
 Verifique se o instalador veio da página oficial de Releases, se o antivírus não colocou o executável em quarentena e se o SmartScreen permitiu a execução.
 
+**A janela abre preta ou a interface não termina de carregar.**
+
+Abra **Ferramentas > Configurações > Renderização e recuperação**. O modo
+**Automático** preserva a aceleração da GPU e ativa o fallback de software
+automaticamente em Windows com pouca memória. Se o driver antigo continuar
+causando a tela preta, escolha **Modo compatível (sem GPU)** e clique em
+**Salvar modo gráfico**; a escolha vale a partir da próxima abertura do app.
+
+Se a interface já estiver visível, o botão **Recarregar interface** recarrega
+somente o renderer, mantendo o processo principal e os terminais abertos. Isso
+permite recuperar a tela sem encerrar o aplicativo inteiro.
+
 **O app não abre no Linux.**
 
 Se estiver usando AppImage, confirme a permissão de execução com `chmod +x Felixo-AI-Core-*.AppImage`.
