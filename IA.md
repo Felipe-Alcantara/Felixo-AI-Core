@@ -4213,3 +4213,10 @@ documentada como pendência, sem converter ausência de autenticação em sucess
 Estado no ponto do registro: implementação, teste, documentação e gates locais
 prontos; commit, push, CI/release e registro final no Notion ainda serão feitos
 no fechamento desta task.
+
+ATUALIZAÇÃO DE CI — após o push, o Ubuntu encontrou uma flutuação preexistente
+no teste `electron/cli/felixo.test.cjs`: duas requisições consecutivas podiam
+receber o mesmo milissegundo e a listagem de arquivos não garantia a ordem que
+o teste assumia. A asserção foi tornada determinística procurando cada URL,
+sem alterar o repositório de produção. O teste focado passou 17/17; o CI novo
+ainda aguarda o rerun multi-SO antes do encerramento.

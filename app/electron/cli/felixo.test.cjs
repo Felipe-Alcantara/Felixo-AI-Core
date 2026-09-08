@@ -63,8 +63,10 @@ test('browser open registra intenções externas e embutidas na fila compartilha
 
   const pedidos = criarRepositorioDePedidos({ pasta }).listarPendentes({ acao: 'abrir-pagina' })
   assert.equal(pedidos.length, 2)
-  assert.equal(pedidos[0].url, 'https://example.com')
-  assert.equal(pedidos[1].modo, 'embutido')
+  const pedidoExterno = pedidos.find((pedido) => pedido.url === 'https://example.com')
+  const pedidoEmbutido = pedidos.find((pedido) => pedido.url === 'http://localhost:4173')
+  assert.equal(pedidoExterno?.url, 'https://example.com')
+  assert.equal(pedidoEmbutido?.modo, 'embutido')
 })
 
 test('browser open recusa protocolo que nao e web', async () => {
