@@ -1,13 +1,20 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   Check,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
   Database,
+  ExternalLink,
   KeyRound,
   ListTodo,
   Pencil,
   Plus,
   RefreshCw,
   Save,
+  Search,
+  Settings2,
+  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react'
@@ -47,6 +54,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
   const [profileId, setProfileId] = useState('default')
   const [token, setToken] = useState('')
   const [showConnectionForm, setShowConnectionForm] = useState(false)
+  const [showWorkspaceSettings, setShowWorkspaceSettings] = useState(false)
   const [databaseQuery, setDatabaseQuery] = useState('')
   const [databases, setDatabases] = useState<NotionDatabase[]>([])
   const [dataSourceId, setDataSourceId] = useState('')
@@ -59,6 +67,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
   const [busy, setBusy] = useState(false)
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [showTaskComposer, setShowTaskComposer] = useState(false)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft())
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -218,6 +228,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
   async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!api || !connectionId || !dataSourceId || !draft.title.trim()) return
+    const wasEditing = Boolean(editingId)
     setBusy(true)
     setError(null)
     const result = editingId
@@ -238,8 +249,9 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
       return
     }
     setEditingId(null)
+    setShowTaskComposer(false)
     setDraft(emptyDraft())
-    setMessage(editingId ? 'Tarefa atualizada no Notion.' : 'Tarefa criada no Notion.')
+    setMessage(wasEditing ? 'Tarefa atualizada no Notion.' : 'Tarefa criada no Notion.')
     await loadTasks()
   }
 
@@ -274,12 +286,15 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
       setError(result.message || 'Não foi possível arquivar a tarefa.')
       return
     }
+    setExpandedTaskId((current) => (current === task.id ? null : current))
     setMessage('Tarefa enviada para a lixeira do Notion.')
     await loadTasks()
   }
 
   function editTask(task: NotionTask) {
     setEditingId(task.id)
+    setShowTaskComposer(true)
+    setExpandedTaskId(null)
     setDraft({
       title: task.title,
       completed: task.completed,
@@ -290,6 +305,18 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
     })
   }
 
+  function startCreatingTask() {
+    setEditingId(null)
+    setDraft(emptyDraft())
+    setShowTaskComposer(true)
+  }
+
+  function cancelTaskComposer() {
+    setEditingId(null)
+    setDraft(emptyDraft())
+    setShowTaskComposer(false)
+  }
+
   const selectedConnection = connections.find((connection) => connection.id === connectionId) || null
 
   return (
@@ -297,169 +324,223 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen }: NotionTasksPanelPro
       title="Tarefas Notion"
       icon={<ListTodo size={15} />}
       panelId="notion-tasks"
-      size="md"
+      size="xl"
+      variant="workspace"
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}
     >
-      <div className="space-y-3 text-xs text-zinc-300">
-        <section className="space-y-2 rounded border border-white/10 bg-zinc-950/40 p-2.5">
-          <div className="flex items-center gap-2">
-            <KeyRound size={14} className="text-sky-300" />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-zinc-100">Conexão própria</p>
-              <p className="text-[11px] text-zinc-500">O token fica cifrado e nunca chega ao renderer.</p>
+      <div className="min-h-full text-xs text-zinc-300">
+        <header className="flex flex-wrap items-center gap-3 border-b border-white/10 pb-3">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Workspace / database</p>
+            <div className="flex min-w-0 items-center gap-2">
+              <Database size={16} className="shrink-0 text-violet-300" />
+              {databases.length > 0 ? (
+                <select
+                  className="min-w-0 max-w-[34rem] flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-none"
+                  value={dataSourceId}
+                  onChange={(event) => setDataSourceId(event.target.value)}
+                  aria-label="Database Notion"
+                >
+                  <option value="">Selecione uma database</option>
+                  {databases.map((database) => <option key={database.id} value={database.id}>{database.name}</option>)}
+                </select>
+              ) : (
+                <span className="truncate text-sm font-medium text-zinc-100">{selectedDatabase?.name || 'Selecione uma database'}</span>
+              )}
             </div>
-            <button type="button" className={buttonClass} onClick={() => setShowConnectionForm((value) => !value)}>
-              {showConnectionForm ? <X size={13} /> : <Plus size={13} />}
-              {showConnectionForm ? 'Fechar' : 'Adicionar'}
-            </button>
-          </div>
-
-          {secureStorage && !secureStorage.ok && (
-            <p className="rounded bg-amber-950/60 px-2 py-1.5 text-[11px] text-amber-200">
-              {secureStorage.reason}
+            <p className="mt-1 truncate text-[11px] text-zinc-500">
+              {selectedConnection?.label || 'Nenhuma conexão selecionada'}
+              {selectedDatabase ? ` · ${selectedDatabase.id}` : ''}
             </p>
-          )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              className="felixo-btn flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
+              onClick={() => setShowWorkspaceSettings((value) => !value)}
+              aria-expanded={showWorkspaceSettings}
+            >
+              <Settings2 size={14} /> Configurar
+              <ChevronDown size={13} className={showWorkspaceSettings ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
+            {connectionId && dataSourceId && (
+              <button
+                type="button"
+                className="felixo-btn flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+                onClick={startCreatingTask}
+                disabled={busy}
+              >
+                <Plus size={14} /> Nova tarefa
+              </button>
+            )}
+          </div>
+        </header>
 
-          {showConnectionForm && (
-            <div className="space-y-2 border-t border-white/10 pt-2">
-              <input
-                className={inputClass}
-                value={connectionLabel}
-                onChange={(event) => setConnectionLabel(event.target.value)}
-                placeholder="Nome da conexão"
-                aria-label="Nome da conexão Notion"
-              />
-              <input
-                className={inputClass}
-                value={profileId}
-                onChange={(event) => setProfileId(event.target.value)}
-                placeholder="Perfil (opcional)"
-                aria-label="Perfil da conexão Notion"
-              />
-              <input
-                className={inputClass}
-                type="password"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder={selectedConnection?.hasToken ? 'Token configurado — deixe vazio para manter' : 'Token interno ou pessoal do Notion'}
-                autoComplete="new-password"
-                aria-label="Token do Notion"
-              />
-              <button type="button" className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded bg-sky-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50" onClick={() => void saveConnection()} disabled={busy || secureStorage?.ok === false}>
-                <Save size={13} /> Guardar conexão
-              </button>
+        {showWorkspaceSettings && (
+          <section className="mt-3 grid gap-3 rounded-lg border border-white/10 bg-zinc-950/45 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]" aria-label="Configuração do Notion">
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center gap-2">
+                <KeyRound size={14} className="text-sky-300" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-zinc-100">Conexão</p>
+                  <p className="text-[11px] text-zinc-500">O token fica cifrado e não chega ao renderer.</p>
+                </div>
+                <button type="button" className="felixo-btn flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5" onClick={() => setShowConnectionForm((value) => !value)}>
+                  {showConnectionForm ? <X size={12} /> : <Plus size={12} />}
+                  {showConnectionForm ? 'Fechar' : 'Adicionar'}
+                </button>
+              </div>
+              {connections.length > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  <select className={`${inputClass} h-8 min-w-0 flex-1`} value={connectionId} onChange={(event) => setConnectionId(event.target.value)} aria-label="Conexão Notion">
+                    {connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.label}{connection.hasToken ? '' : ' · sem token'}</option>)}
+                  </select>
+                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-emerald-300 disabled:opacity-50" onClick={() => void testConnection()} disabled={busy || !selectedConnection?.hasToken} aria-label="Testar conexão" title="Testar conexão"><Check size={14} /></button>
+                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void removeConnection()} disabled={busy} aria-label="Remover conexão" title="Remover conexão"><Trash2 size={14} /></button>
+                </div>
+              ) : <p className="rounded border border-dashed border-white/10 px-2 py-2 text-[11px] text-zinc-500">Adicione uma conexão para começar e compartilhe a database no Notion com ela.</p>}
             </div>
-          )}
 
-          {connections.length > 0 ? (
-            <div className="flex items-center gap-1.5">
-              <select className={`${inputClass} min-w-0 flex-1`} value={connectionId} onChange={(event) => setConnectionId(event.target.value)} aria-label="Conexão Notion">
-                {connections.map((connection) => (
-                  <option key={connection.id} value={connection.id}>
-                    {connection.label}{connection.hasToken ? '' : ' · sem token'}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-emerald-300 disabled:opacity-50" onClick={() => void testConnection()} disabled={busy || !selectedConnection?.hasToken} aria-label="Testar conexão" title="Testar conexão">
-                <Check size={14} />
-              </button>
-              <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void removeConnection()} disabled={busy} aria-label="Remover conexão" title="Remover conexão">
-                <Trash2 size={14} />
-              </button>
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center gap-2">
+                <Database size={14} className="text-violet-300" />
+                <p className="font-medium text-zinc-100">Database compartilhada</p>
+                <button type="button" className="felixo-btn-icon ml-auto rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadDatabases()} disabled={busy || !connectionId} aria-label="Atualizar tabelas" title="Atualizar tabelas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
+              </div>
+              <div className="flex gap-1.5">
+                <input className={`${inputClass} h-8 min-w-0 flex-1`} value={databaseQuery} onChange={(event) => setDatabaseQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadDatabases() }} placeholder="Filtrar tabelas compartilhadas" aria-label="Buscar database Notion" />
+                <button type="button" className={`${buttonClass} h-8`} onClick={() => void loadDatabases()} disabled={busy}><RefreshCw size={13} /> Buscar</button>
+              </div>
+              {selectedDatabase && <p className="truncate text-[11px] text-zinc-500">Fonte: {selectedDatabase.name} · {selectedDatabase.id}</p>}
             </div>
-          ) : (
-            <p className="text-[11px] text-zinc-500">Adicione uma conexão para começar. Depois compartilhe a database no Notion com ela.</p>
-          )}
-        </section>
 
-        {connections.length > 0 && (
-          <section className="space-y-2 rounded border border-white/10 bg-zinc-950/40 p-2.5">
-            <div className="flex items-center gap-2">
-              <Database size={14} className="text-violet-300" />
-              <p className="font-medium text-zinc-100">Workspace e database</p>
-              <button type="button" className="felixo-btn-icon ml-auto rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadDatabases()} disabled={busy || !connectionId} aria-label="Atualizar tabelas" title="Atualizar tabelas">
-                <RefreshCw size={14} className={busy ? 'animate-spin' : ''} />
-              </button>
-            </div>
-            <div className="flex gap-1.5">
-              <input className={`${inputClass} min-w-0 flex-1`} value={databaseQuery} onChange={(event) => setDatabaseQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadDatabases() }} placeholder="Filtrar tabelas compartilhadas" aria-label="Buscar database Notion" />
-              <button type="button" className={buttonClass} onClick={() => void loadDatabases()} disabled={busy}><RefreshCw size={13} /> Buscar</button>
-            </div>
-            <select className={inputClass} value={dataSourceId} onChange={(event) => setDataSourceId(event.target.value)} aria-label="Database Notion">
-              <option value="">Selecione uma database</option>
-              {databases.map((database) => <option key={database.id} value={database.id}>{database.name}</option>)}
-            </select>
-            {selectedDatabase && <p className="text-[11px] text-zinc-500">Fonte: {selectedDatabase.name} · {selectedDatabase.id}</p>}
+            {showConnectionForm && (
+              <div className="space-y-2 border-t border-white/10 pt-3 lg:col-span-2">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <input className={`${inputClass} h-8`} value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Nome da conexão" aria-label="Nome da conexão Notion" />
+                  <input className={`${inputClass} h-8`} value={profileId} onChange={(event) => setProfileId(event.target.value)} placeholder="Perfil (opcional)" aria-label="Perfil da conexão Notion" />
+                  <input className={`${inputClass} h-8`} type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder={selectedConnection?.hasToken ? 'Token configurado — deixe vazio para manter' : 'Token do Notion'} autoComplete="new-password" aria-label="Token do Notion" />
+                </div>
+                <div className="flex items-center gap-2">
+                  {secureStorage && !secureStorage.ok && <p className="min-w-0 flex-1 rounded bg-amber-950/60 px-2 py-1.5 text-[11px] text-amber-200">{secureStorage.reason}</p>}
+                  <button type="button" className="felixo-btn ml-auto flex items-center gap-1.5 rounded-md bg-sky-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50" onClick={() => void saveConnection()} disabled={busy || secureStorage?.ok === false}><Save size={13} /> Guardar conexão</button>
+                </div>
+              </div>
+            )}
           </section>
         )}
 
-        {connectionId && dataSourceId && (
-          <>
-            <section className="space-y-2 rounded border border-white/10 bg-zinc-950/40 p-2.5">
-              <div className="flex gap-1.5">
-                <input className={`${inputClass} min-w-0 flex-1`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar nas tarefas" aria-label="Buscar tarefas Notion" />
-                <select className={`${inputClass} w-28`} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} aria-label="Filtrar estado">
-                  <option value="all">Todas</option>
-                  <option value="open">Abertas</option>
-                  <option value="done">Concluídas</option>
-                </select>
-                <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy} aria-label="Sincronizar tarefas" title="Sincronizar tarefas">
-                  <RefreshCw size={14} className={busy ? 'animate-spin' : ''} />
-                </button>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-zinc-500">
-                <span>{stale ? 'Snapshot local desatualizado' : fetchedAt ? `Sincronizado ${formatDate(fetchedAt)}` : 'Ainda não sincronizado'}</span>
-                <span>{tasks.length} tarefa(s)</span>
-              </div>
-            </section>
-
-            <form className="space-y-2 rounded border border-white/10 bg-zinc-950/40 p-2.5" onSubmit={(event) => void submitTask(event)}>
-              <div className="flex items-center gap-2">
-                <p className="font-medium text-zinc-100">{editingId ? 'Editar tarefa' : 'Nova tarefa'}</p>
-                {editingId && <button type="button" className="felixo-btn ml-auto text-[11px] text-zinc-400 hover:text-zinc-100" onClick={() => { setEditingId(null); setDraft(emptyDraft()) }}>Cancelar</button>}
-              </div>
-              <input className={inputClass} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Título" aria-label="Título da tarefa" required />
-              <div className="grid grid-cols-2 gap-1.5">
-                <select className={inputClass} value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))} aria-label="Estado da tarefa">
-                  <option value="">Estado (automático)</option>
-                  {statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
-                <input className={inputClass} type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} aria-label="Prazo da tarefa" />
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inputClass} value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} placeholder="Prioridade (se houver)" aria-label="Prioridade da tarefa" />
-                <label className="flex items-center gap-2 rounded border border-white/10 px-2 text-xs text-zinc-300"><input type="checkbox" checked={draft.completed} onChange={(event) => setDraft((current) => ({ ...current, completed: event.target.checked }))} /> Concluída</label>
-              </div>
-              <textarea className={`${inputClass} min-h-14 resize-y`} value={draft.text} onChange={(event) => setDraft((current) => ({ ...current, text: event.target.value }))} placeholder="Descrição (se a tabela tiver texto)" aria-label="Descrição da tarefa" />
-              <button type="submit" className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50" disabled={busy}><Save size={13} /> {editingId ? 'Salvar alterações' : 'Criar tarefa'}</button>
-            </form>
-
-            <ul className="space-y-1" aria-live="polite">
-              {tasks.length === 0 ? <li className="rounded border border-dashed border-white/10 px-2 py-4 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</li> : tasks.map((task) => (
-                <li key={task.id} className={`group rounded border border-white/10 bg-zinc-800/50 p-2 ${task.completed ? 'opacity-70' : ''}`}>
-                  <div className="flex items-start gap-2">
-                    <button type="button" className={`felixo-btn-icon mt-0.5 rounded p-1 ${task.completed ? 'bg-emerald-700 text-white' : 'bg-zinc-700 text-zinc-400 hover:text-white'} disabled:opacity-50`} onClick={() => void toggleTask(task)} disabled={busyTaskId === task.id} aria-label={task.completed ? `Reabrir ${task.title}` : `Concluir ${task.title}`} title={task.completed ? 'Reabrir' : 'Concluir'}>
-                      <Check size={13} />
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <p className={`break-words text-xs font-medium text-zinc-100 ${task.completed ? 'line-through' : ''}`}>{task.title}</p>
-                      <p className="mt-0.5 break-words text-[10px] text-zinc-500">{[task.status, task.priority, task.dueDate].filter(Boolean).join(' · ') || 'Sem estado ou metadados reconhecidos'}</p>
-                      {task.text && <p className="mt-1 whitespace-pre-wrap break-words text-[11px] text-zinc-400">{task.text}</p>}
-                    </div>
-                    <div className="flex shrink-0 gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-                      <button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-sky-300 disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button>
-                      <button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </>
+        {secureStorage && !secureStorage.ok && !showWorkspaceSettings && (
+          <p className="mt-3 rounded bg-amber-950/60 px-2.5 py-2 text-[11px] text-amber-200">{secureStorage.reason}</p>
+        )}
+        {(message || error) && (
+          <div className="mt-3 space-y-1.5">
+            {message && <p className="rounded bg-emerald-950/60 px-2.5 py-2 text-[11px] text-emerald-200" role="status">{message}</p>}
+            {error && <p className="rounded bg-red-950/60 px-2.5 py-2 text-[11px] text-red-200" role="alert">{error}</p>}
+          </div>
         )}
 
-        {message && <p className="rounded bg-emerald-950/60 px-2 py-1.5 text-[11px] text-emerald-200" role="status">{message}</p>}
-        {error && <p className="rounded bg-red-950/60 px-2 py-1.5 text-[11px] text-red-200" role="alert">{error}</p>}
+        {!connectionId || !dataSourceId ? (
+          <div className="flex min-h-[19rem] flex-col items-center justify-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10 text-violet-300"><ListTodo size={22} /></div>
+            <h2 className="mt-3 text-sm font-medium text-zinc-100">Sua lista do Notion aparece aqui</h2>
+            <p className="mt-1 max-w-sm text-xs leading-5 text-zinc-500">Configure uma conexão e escolha uma database para abrir as tarefas em uma tabela, como no Notion.</p>
+            <button type="button" className="felixo-btn mt-4 flex items-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5" onClick={() => setShowWorkspaceSettings(true)}><Settings2 size={13} /> Configurar agora</button>
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-medium text-zinc-100">Todas as tarefas</h2>
+                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{tasks.length}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-500">{stale ? 'Snapshot local desatualizado' : fetchedAt ? `Sincronizado ${formatDate(fetchedAt)}` : 'Ainda não sincronizado'}</p>
+              </div>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5 sm:flex-none">
+                <label className="relative min-w-[13rem] flex-1 sm:w-56 sm:flex-none">
+                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar tarefas" aria-label="Buscar tarefas Notion" />
+                </label>
+                <div className="flex h-8 items-center rounded-md border border-white/10 bg-zinc-950/50 p-0.5" role="group" aria-label="Filtrar estado">
+                  {([['all', 'Todas'], ['open', 'Abertas'], ['done', 'Concluídas']] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`rounded px-2 py-1 text-[11px] ${statusFilter === value ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`} onClick={() => setStatusFilter(value)}>{label}</button>
+                  ))}
+                </div>
+                <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
+                <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={() => setShowWorkspaceSettings(true)} aria-label="Mostrar filtros e configuração" title="Filtros e configuração"><SlidersHorizontal size={14} /></button>
+              </div>
+            </div>
+
+            {showTaskComposer && (
+              <form className="mt-3 space-y-3 rounded-lg border border-white/10 bg-zinc-950/50 p-3" onSubmit={(event) => void submitTask(event)}>
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1"><p className="font-medium text-zinc-100">{editingId ? 'Editar tarefa' : 'Nova tarefa'}</p><p className="text-[11px] text-zinc-500">Os campos seguem as propriedades reconhecidas pela database.</p></div>
+                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={cancelTaskComposer} aria-label="Fechar editor" title="Fechar editor"><X size={14} /></button>
+                </div>
+                <div className="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_minmax(9rem,1fr)_auto]">
+                  <input className={`${inputClass} h-9`} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Título" aria-label="Título da tarefa" required />
+                  <select className={`${inputClass} h-9`} value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))} aria-label="Estado da tarefa"><option value="">Estado (automático)</option>{statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+                  <input className={`${inputClass} h-9`} type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} aria-label="Prazo da tarefa" />
+                  <label className="flex h-9 items-center gap-2 rounded border border-white/10 px-2 text-xs text-zinc-300"><input type="checkbox" checked={draft.completed} onChange={(event) => setDraft((current) => ({ ...current, completed: event.target.checked }))} /> Concluída</label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input className={`${inputClass} h-9 min-w-[12rem] flex-1`} value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} placeholder="Prioridade (se houver)" aria-label="Prioridade da tarefa" />
+                  <textarea className={`${inputClass} min-h-9 min-w-[18rem] flex-[2] resize-y`} value={draft.text} onChange={(event) => setDraft((current) => ({ ...current, text: event.target.value }))} placeholder="Descrição (se a tabela tiver texto)" aria-label="Descrição da tarefa" />
+                </div>
+                <div className="flex justify-end gap-2"><button type="button" className="felixo-btn rounded-md px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={cancelTaskComposer}>Cancelar</button><button type="submit" className="felixo-btn flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50" disabled={busy}><Save size={13} /> {editingId ? 'Salvar alterações' : 'Criar tarefa'}</button></div>
+              </form>
+            )}
+
+            <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/35">
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full border-collapse text-xs" aria-label="Tarefas do Notion">
+                  <thead className="bg-white/[0.03] text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                    <tr className="border-b border-white/10">
+                      <th className="w-12 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>
+                      <th className="min-w-[22rem] px-3 py-2 font-medium" scope="col">Tarefa</th>
+                      <th className="w-36 px-3 py-2 font-medium" scope="col">Estado</th>
+                      <th className="w-32 px-3 py-2 font-medium" scope="col">Prioridade</th>
+                      <th className="w-36 px-3 py-2 font-medium" scope="col">Prazo</th>
+                      <th className="w-24 px-3 py-2 text-right font-medium" scope="col"><span className="sr-only">Ações</span></th>
+                    </tr>
+                  </thead>
+                  <tbody aria-live="polite">
+                    {tasks.length === 0 ? (
+                      <tr><td colSpan={6} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
+                    ) : tasks.map((task) => {
+                      const hasDetails = Boolean(task.text || task.url)
+                      const isExpanded = expandedTaskId === task.id
+                      return (
+                        <Fragment key={task.id}>
+                          <tr className={`group border-b border-white/[0.07] align-middle last:border-0 hover:bg-white/[0.035] ${task.completed ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                            <td className="px-3 py-2.5">
+                              <button type="button" className={`felixo-btn-icon flex h-5 w-5 items-center justify-center rounded-full border ${task.completed ? 'border-emerald-500/50 bg-emerald-700 text-white' : 'border-zinc-600 text-transparent hover:border-zinc-400'} disabled:opacity-50`} onClick={() => void toggleTask(task)} disabled={busyTaskId === task.id} aria-label={task.completed ? `Reabrir ${task.title}` : `Concluir ${task.title}`} title={task.completed ? 'Reabrir' : 'Concluir'}><Check size={12} /></button>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex min-w-0 items-center gap-1">
+                                {hasDetails ? <button type="button" className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200" onClick={() => setExpandedTaskId((current) => current === task.id ? null : task.id)} aria-label={isExpanded ? `Recolher ${task.title}` : `Ver detalhes de ${task.title}`} title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button> : <span className="w-[19px] shrink-0" />}
+                                <span className={`min-w-0 flex-1 truncate font-medium ${task.completed ? 'line-through' : 'text-zinc-100'}`} title={task.title}>{task.title}</span>
+                                {task.url && <a className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-white/10 hover:text-sky-300 group-hover:opacity-100" href={task.url} target="_blank" rel="noreferrer" aria-label={`Abrir ${task.title}`} title="Abrir no Notion"><ExternalLink size={13} /></a>}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5"><span className={`inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(task)}`}>{task.completed ? 'Concluída' : task.status || 'Sem estado'}</span></td>
+                            <td className="px-3 py-2.5"><span className="truncate text-[11px] text-zinc-400">{task.priority || '—'}</span></td>
+                            <td className="px-3 py-2.5"><span className="flex items-center gap-1 text-[11px] text-zinc-400">{task.dueDate ? <><CalendarDays size={12} className="text-zinc-600" /> {formatShortDate(task.dueDate)}</> : '—'}</span></td>
+                            <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-sky-300 disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
+                          </tr>
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6} className="px-12 pb-3 pt-1"><div className="max-w-4xl whitespace-pre-wrap break-words text-[11px] leading-5 text-zinc-400">{task.text || 'Sem descrição.'}{task.url && <a className="mt-2 flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a>}</div></td></tr>}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{tasks.length} tarefa(s) exibida(s)</span><span>{stale ? 'Dados locais' : 'Notion conectado'}</span></div>
+            </div>
+          </>
+        )}
       </div>
     </CanvasPanel>
   )
@@ -472,4 +553,15 @@ function emptyDraft(): TaskDraft {
 function formatDate(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+function formatShortDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
+}
+
+function statusBadgeClass(task: NotionTask): string {
+  if (task.completed) return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+  if (!task.status) return 'border-zinc-500/25 bg-zinc-500/10 text-zinc-400'
+  return 'border-violet-500/25 bg-violet-500/10 text-violet-300'
 }

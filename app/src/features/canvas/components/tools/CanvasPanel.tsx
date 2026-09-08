@@ -19,6 +19,8 @@ type CanvasPanelProps = {
   panelId: string
   /** Porte do painel; a largura real sai dele e do tamanho da tela. */
   size?: PanelSize
+  /** Superfície ampla para ferramentas que trabalham como uma página, como a tabela do Notion. */
+  variant?: 'panel' | 'workspace'
   /** Widens the toolbar column, so the panel slides further right to clear it. */
   toolsMenuOpen?: boolean
 }
@@ -45,34 +47,52 @@ export function CanvasPanel({
   children,
   panelId,
   size = 'sm',
+  variant = 'panel',
   toolsMenuOpen = false,
 }: CanvasPanelProps) {
   const { closing, close } = useExitAnimation(PANEL_EXIT_MS, onClose)
   const { width, resizing, startResize, reset } = useResizablePanelWidth(panelId, size)
-  const { dockTop } = useCanvasSurfaces()
+  const { dockTop, reportPanelWidth, viewport } = useCanvasSurfaces()
+  const isWorkspace = variant === 'workspace'
   const viewportHeight = useViewportPanelHeight()
   // A altura para onde o dock "Elementos" começa: antes o painel passava por
   // baixo dele e as duas superfícies disputavam os mesmos pixels.
   const maxHeight = Math.max(
     240,
-    Math.min(viewportHeight, dockTop - PANEL_TOP - DOCK_GAP),
+    Math.min(
+      viewportHeight,
+      dockTop - (isWorkspace ? WORKSPACE_TOP : PANEL_TOP) - DOCK_GAP,
+    ),
   )
+
+  useEffect(() => {
+    if (!isWorkspace) return undefined
+    const workspaceWidth = Math.max(
+      0,
+      viewport.width - toolbarColumnOffset(toolsMenuOpen) - WORKSPACE_SIDE_GAP * 2,
+    )
+    reportPanelWidth(workspaceWidth)
+    return () => reportPanelWidth(0)
+  }, [isWorkspace, reportPanelWidth, toolsMenuOpen, viewport.width])
 
   return (
     <div
       style={{
         left: `calc(1rem + ${toolbarColumnOffset(toolsMenuOpen)}px)`,
-        width,
+        width: isWorkspace ? undefined : width,
+        right: isWorkspace ? `${WORKSPACE_SIDE_GAP}px` : undefined,
         maxHeight,
       }}
       data-felixo-canvas-panel={panelId}
-      className={`absolute top-16 z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
+      className={`absolute z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl ${
+        isWorkspace ? 'top-4 rounded-xl' : 'top-16 rounded-lg'
+      } ${
         resizing
           ? ''
           : 'transition-[left] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
       } ${closing ? 'felixo-anim-panel-out' : 'felixo-anim-panel-in'}`}
     >
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+      <div className={`flex items-center justify-between border-b border-white/10 ${isWorkspace ? 'px-4 py-3' : 'px-3 py-2'}`}>
         <span className="flex items-center gap-2 text-sm font-medium text-zinc-100">
           {icon}
           {title}
@@ -86,18 +106,20 @@ export function CanvasPanel({
           <X size={15} />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-3">{children}</div>
+      <div className={`min-h-0 flex-1 overflow-auto ${isWorkspace ? 'p-4' : 'p-3'}`}>{children}</div>
 
       {/* Borda de arrasto. O duplo clique devolve a largura sugerida para a
           tela atual, que é a saída de quem arrastou longe demais. */}
-      <div
-        onMouseDown={startResize}
-        onDoubleClick={reset}
-        title="Arraste para redimensionar; dois cliques para o tamanho padrão"
-        className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize ${
-          resizing ? 'bg-white/20' : 'hover:bg-white/10'
-        }`}
-      />
+      {!isWorkspace && (
+        <div
+          onMouseDown={startResize}
+          onDoubleClick={reset}
+          title="Arraste para redimensionar; dois cliques para o tamanho padrão"
+          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize ${
+            resizing ? 'bg-white/20' : 'hover:bg-white/10'
+          }`}
+        />
+      )}
     </div>
   )
 }
@@ -105,6 +127,8 @@ export function CanvasPanel({
 /** Deslocamento do topo (`top-16`) e folga até o dock, em pixels. */
 const PANEL_TOP = 64
 const DOCK_GAP = 12
+const WORKSPACE_TOP = 16
+const WORKSPACE_SIDE_GAP = 16
 
 /** Acompanha a altura da janela para o painel nunca passar do rodapé. */
 function useViewportPanelHeight(): number {

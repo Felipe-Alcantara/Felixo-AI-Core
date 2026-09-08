@@ -2961,3 +2961,31 @@ confirmar visualmente a nova versão e repetir o check do updater.
 
 Não houve alteração de código-fonte nem novo deploy nesta operação. O estado
 pré-existente `M app/package.json` foi preservado sem edição.
+
+## [2026-09-08] UX: tarefas do Notion abertas como workspace no Canvas
+
+O painel de tarefas do Notion estava funcional, mas apresentava conexão,
+seleção de database, filtros, criação e todas as tarefas empilhados numa coluna
+estreita. Isso tornava a superfície mais parecida com um formulário do que com
+uma view do Notion.
+
+`CanvasPanel` agora aceita a variante `workspace`; ela ocupa a área ampla do
+Canvas sem cobrir a coluna de ferramentas, preserva o redimensionamento das
+outras superfícies e esconde a alça de arrasto quando a ferramenta trabalha
+como página. `NotionTasksPanel` usa essa variante e foi reorganizado para:
+
+- mostrar a database e a conexão como cabeçalho/breadcrumb;
+- manter conexão, database e credenciais dentro de `Configurar` recolhível;
+- abrir criação/edição somente quando `Nova tarefa` ou `Editar` for acionado;
+- renderizar as tarefas numa tabela compacta com colunas de título, estado,
+  prioridade, prazo e ações, incluindo detalhes expansíveis e link para o
+  Notion;
+- manter sincronização, filtro por estado, busca, conclusão, edição e lixeira.
+
+Validação local desta mudança: `npx tsc -b --pretty false`, `npx vite build`,
+ESLint nos dois componentes e 22/22 testes de `panel-sizing` e
+`canvas-surfaces` passaram. O CI do commit anterior de documentação
+(`34252730074`) terminou com falhas ambientais conhecidas — `403` ao finalizar
+um artefato no Ubuntu e `AttachConsole failed` no teste nativo de PTY do
+Windows — enquanto macOS, política de dependências e launchers passaram; isso
+não está relacionado ao código desta UX.
