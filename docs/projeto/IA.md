@@ -3046,3 +3046,19 @@ resposta continha 22 propriedades de schema e os campos preenchidos da tarefa
 real foram encontrados antes da renderização. Validação local: TypeScript,
 Vite, ESLint, 30/30 testes focados de Canvas, 8/8 testes do cliente/serviço
 Notion e `git diff --check` passaram.
+
+## [2026-09-08] Correção: renderizar Markdown no corpo das notas Notion
+
+Depois da inclusão das propriedades, o corpo das notas ainda aparecia como
+texto literal: marcadores como `##`, `- [ ]`, links e blocos de código eram
+mostrados sem a formatação visual esperada.
+
+O detalhe expandido agora reutiliza `DeferredMarkdownContent`, o mesmo renderer
+sanitizado usado pelas notas e arquivos Markdown do Canvas. Assim, títulos,
+listas, checkboxes, links, citações, tabelas, código e ênfase são renderizados
+como Markdown, mantendo o conteúdo da página seguro e a seção de propriedades
+separada acima do corpo.
+
+Validação local: TypeScript, ESLint, build Vite com 2.474 módulos, 30/30
+testes focados de Canvas, 8/8 testes do cliente/serviço Notion e
+`git diff --check` passaram.
