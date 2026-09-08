@@ -4172,3 +4172,44 @@ concluiu normalmente.
 
 Estado final: implementação, skill, testes e documentação concluídos; falta
 somente commit, push, CI/release e registro final na task/relatório.
+
+## Registro de Trabalho — 2026-09-07 — contexto inicial do Canvas sem submissão automática
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core. Início do ciclo: 23:18. A task
+solicita validar o prompt inicial como contexto, sem Enter automático, em um E2E
+multi-SO para os caminhos shell, launcher, Openia, Claude, Codex e Gemini.
+
+IMPLEMENTAÇÃO:
+
+- `app/src/features/canvas/terminal/canvas-context-e2e.test.ts` conecta o
+  `TerminalSessionStore` real ao `PtyProcessManager` real e injeta somente um
+  PTY fake determinístico. O fake registra cada escrita, separa contexto,
+  prompt e Enter, não autentica nenhuma CLI e não executa processo externo;
+- o E2E verifica que a referência de contexto chega uma vez e sem `\r`/`\n`,
+  que ela nunca vira execução, e que a tarefa só executa depois da ação
+  explícita. Também verifica flags reais, `cwd`, conta/provedor, reidratação
+  no reload, prontidão de conexões/arquivos e resume compatível/fallback
+  identificável;
+- `ci.yml` executa a proteção nos runners Ubuntu/Windows/macOS e publica um
+  JSON sanitizado por SO, mesmo quando a etapa falha. README e a documentação
+  de benchmarks registram o comando, a matriz e o limite da validação visual
+  com app empacotado e CLI real.
+
+VALIDAÇÃO LOCAL: `npm run test:canvas-context` passou 4/4; a execução com
+reporter JSON passou 4/4 e gerou artefato sem conteúdo de prompt, arquivo ou
+credencial; `npm run typecheck`, `npm run test:frontend` (767 passaram, 1
+ignorado), `npm run test:native` (5/5), `npm run lint` (0 erros, 2 avisos
+preexistentes em `SearchPanel.tsx`) e `npm run build` passaram. `npm test`
+terminou com 986/995 testes passando e 8 falhas ambientais: Electron sem o
+binário porque as dependências locais foram instaladas offline sem scripts,
+ConPTY sem `AttachConsole` neste runner, symlink bloqueado pelo Windows e
+fixtures locais de descoberta/perfil Codex; nenhuma falha aponta para os
+arquivos desta alteração.
+
+LIMITE: a execução local não abre CLI autenticada nem comprova o Canvas visual
+empacotado. Essa matriz real permanece pendente de runner/fixture segura e foi
+documentada como pendência, sem converter ausência de autenticação em sucesso.
+
+Estado no ponto do registro: implementação, teste, documentação e gates locais
+prontos; commit, push, CI/release e registro final no Notion ainda serão feitos
+no fechamento desta task.

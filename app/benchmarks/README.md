@@ -591,3 +591,44 @@ No CI, `ci.yml` executa `--check` na matriz Ubuntu/Windows/macOS e publica um
 JSON por runner. A ausência de um gerenciador opcional fica explícita como
 `unavailable`; se ele estiver presente e falhar no smoke, o job falha. `--strict`
 fica disponível para uma bancada que exija pnpm e Yarn Classic no host.
+
+## E2E do contexto inicial do Canvas
+
+Esta bancada protege a fronteira entre **digitar contexto** e **submeter uma
+tarefa**. Ela usa o `TerminalSessionStore` real conectado ao
+`PtyProcessManager` real; somente o factory do PTY é substituído por um processo
+fake determinístico, sem CLI externa, login ou credencial. O fake registra cada
+escrita que o manager entrega e classifica contexto, prompt explícito e Enter.
+
+```bash
+npm run test:canvas-context
+```
+
+O teste cobre shell, launcher opaco, Openia direto, Claude, Codex e Gemini. As
+flags são construídas pelos mesmos builders usados pelo Canvas. O aceite exige,
+para cada caminho com contexto, exatamente uma referência sem `\r`/`\n` final,
+nenhuma execução causada por essa referência e um prompt explícito posterior.
+Também cobre reidratação do mesmo node, preservação de `accountId`/`providerId`
+e `cwd`, prontidão condicionada a conexões/arquivos e resume compatível/fallback
+identificável.
+
+O comando registra no log do runner a plataforma, Node/Electron disponíveis e a
+ordem/quantidade das escritas. Ele é seguro para a matriz de desenvolvimento:
+
+| Camada | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Store + manager + PTY fake | `npm run test:canvas-context` | mesmo comando | mesmo comando |
+| App empacotado + Canvas visual com CLI real | pendente de runner/fixture segura | pendente de runner/fixture segura | pendente de runner/fixture segura |
+
+Na matriz CI, o mesmo comando também grava um JSON sanitizado em `build/` e o
+publica como artefato por sistema operacional, inclusive quando o job falha.
+Esse relatório contém somente o resultado do Vitest; não contém prompt,
+credencial ou conteúdo de arquivo.
+
+O teste não promete que uma CLI real esteja autenticada e não abre prompt de
+login. A validação visual de um Canvas empacotado com cada CLI real continua
+fora deste gate: o workflow de release atual valida o artefato e o PTY básico,
+mas ainda não injeta este cenário no renderer empacotado. Ela depende de um
+runner de CI/release e de uma fixture de sessão não pessoal; se um runner não
+estiver disponível, o bloqueio deve ser publicado no artefato do runner, nunca
+convertido em um falso sucesso local.

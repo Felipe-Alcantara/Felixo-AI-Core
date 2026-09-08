@@ -419,6 +419,7 @@ npm run typecheck
 npm test
 npm run test:native
 npm run test:frontend
+npm run test:canvas-context
 npm run lint
 npm run build
 ```
