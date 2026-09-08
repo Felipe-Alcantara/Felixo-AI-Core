@@ -4408,3 +4408,20 @@ perfil nativo em cada host.
 **ESTADO NO PONTO DO REGISTRO:** implementação, documentação e gates locais
 concluídos; commit, push, CI/release e atualização da task no Notion ficam para
 o fechamento desta execução.
+
+## Fechamento de Trabalho — 2026-09-08 — correção multiSO publicada
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core.
+
+- A correção de implementação foi publicada nos commits `8b3e5d9` e
+  `ee3be0a`. O segundo corrige a conversão indevida de caminhos POSIX quando o
+  runner Windows simula o layout do macOS.
+- A CI `34241745594` passou em Ubuntu, macOS e Windows, além da política de
+  dependências, auditorias e lançadores.
+- A release `v0.1.208` passou build, smoke test e upload dos três alvos:
+  https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.208
+- A task de contexto no Notion foi relida, recebeu este fechamento e permaneceu
+  em `Etapa: Concluída`.
+- Validação local final: 53 testes nativos focados, 44 testes frontend
+  focados, typecheck, lint, suíte frontend, 1.056 testes totais, build e
+  `git diff --check` passaram.
