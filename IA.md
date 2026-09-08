@@ -4342,3 +4342,32 @@ não toca em credenciais reais.
 
 ESTADO: código e gates locais prontos; commit, push, CI/release e registros no
 Notion ainda serão concluídos neste ciclo.
+
+## Fechamento de Trabalho — 2026-09-08 — publicação e rastreabilidade do painel Notion
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core. Janela completa: 09:35–10:50
+(75 min).
+
+FECHAMENTO:
+
+- O commit de código `58be0fc` foi publicado em `main`; a correção de
+  documentação/IA ficou no commit `2d61d27`. O worktree terminou limpo e
+  alinhado com `origin/main`.
+- A CI do SHA de código (`34230176706`) passou. A release foi despachada
+  explicitamente sobre esse SHA validado, e os jobs de Ubuntu, Windows e macOS
+  passaram com smoke dos artefatos. A versão publicada é `v0.1.205`:
+  https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.205
+- A CI posterior do commit somente-documentação (`34230343800`) foi repetida
+  no runner Windows e falhou no teste nativo de PTY por `AttachConsole failed`
+  / ConPTY, com Linux e macOS verdes. A falha é ambiental e não altera o SHA
+  de código já validado e publicado; não foi mascarada por mudança de teste.
+- O relatório diário de 08/09/2026 foi atualizado sem duplicar a linha, com
+  evidências, release, limitação do navegador e próximos passos. A task-mãe
+  foi marcada `Concluída`; as seis fatias de implementação ficaram
+  `Concluída`; a subtask de validação ficou `Aguardando resposta` para o smoke
+  manual autenticado/foco-input, pois o Browser in-app não tinha sessão.
+
+VALIDAÇÃO FINAL: 9 testes focados Notion, typecheck, lint, build, 5 testes
+nativos, 771 testes frontend, 1.048 testes totais e `git diff --check` passaram.
+Não houve uso de token real nem alegação de validação visual quando o navegador
+não estava disponível.
