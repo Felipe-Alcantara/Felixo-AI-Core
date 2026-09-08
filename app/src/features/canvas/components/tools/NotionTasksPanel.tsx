@@ -563,6 +563,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       const isExpanded = expandedTaskId === task.id
                       const taskContent = taskContentById[task.id]
                       const detailText = taskContent?.content || task.text
+                      const properties = getTaskProperties(task, schema)
                       return (
                         <Fragment key={task.id}>
                           <tr className={`group border-b border-white/[0.07] align-middle last:border-0 hover:bg-white/[0.035] ${task.completed ? 'text-zinc-500' : 'text-zinc-300'}`}>
@@ -581,7 +582,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                             <td className="px-3 py-2.5"><span className="flex items-center gap-1 text-[11px] text-zinc-400">{task.dueDate ? <><CalendarDays size={12} className="text-zinc-600" /> {formatShortDate(task.dueDate)}</> : '—'}</span></td>
                             <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-sky-300 disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
                           </tr>
-                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-2 text-[11px] leading-5 text-zinc-400">{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="whitespace-pre-wrap break-words">{detailText}</div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-amber-300"><span>{taskContent.message}</span><button type="button" className="text-sky-300 underline hover:text-sky-200" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <a className="flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a>}</div></td></tr>}
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="whitespace-pre-wrap break-words">{detailText}</div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-amber-300"><span>{taskContent.message}</span><button type="button" className="text-sky-300 underline hover:text-sky-200" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <a className="flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a>}</div></td></tr>}
                         </Fragment>
                       )
                     })}
@@ -626,6 +627,40 @@ function formatDate(value: string): string {
 function formatShortDate(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
+}
+
+function getTaskProperties(task: NotionTask, schema: Record<string, NotionSchemaProperty>) {
+  const names = [...new Set([...Object.keys(schema), ...Object.keys(task.fields || {})])]
+  return names
+    .map((name) => {
+      const definition = schema[name]
+      const value = task.fields?.[name]
+      return {
+        name,
+        type: definition?.type || 'unknown',
+        value: formatPropertyValue(value),
+      }
+    })
+    .filter((property) => property.type !== 'title' && property.value)
+}
+
+function formatPropertyValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return ''
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    return value.map((item) => formatPropertyValue(item)).filter(Boolean).join(', ')
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    for (const key of ['name', 'plain_text', 'title', 'content', 'start', 'url', 'id']) {
+      const candidate = record[key]
+      if (typeof candidate === 'string' && candidate) return candidate
+    }
+    return Object.values(record).map((item) => formatPropertyValue(item)).filter(Boolean).join(', ')
+  }
+  return String(value)
 }
 
 function statusBadgeClass(task: NotionTask): string {

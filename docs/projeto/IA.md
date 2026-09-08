@@ -3027,3 +3027,22 @@ O fluxo foi exposto por serviço, IPC e preload como
 mantém fallback para a propriedade de texto, sinaliza carregamento/erro e
 permite tentar novamente sem esconder o link para o Notion. Foram adicionados
 testes para extração de blocos aninhados e para o serviço de conteúdo da tarefa.
+
+## [2026-09-08] Correção: exibir propriedades das tarefas do Notion no Canvas
+
+As páginas expandidas já carregavam o corpo da nota, mas a UI mostrava apenas
+as colunas resumidas de título, etapa, prioridade e prazo. Com isso, as demais
+propriedades retornadas pela database pareciam não ter sido sincronizadas.
+
+A expansão agora exibe uma seção `Propriedades` com todos os campos não vazios
+da combinação entre o schema da database e `task.fields`, mantendo o título na
+coluna principal. O formatter trata valores textuais, booleanos, listas,
+datas, URLs, selects/status, rich text e relações sem quebrar quando o Notion
+devolve uma forma diferente de objeto.
+
+Foi feito smoke test contra a database real usando a conexão principal
+descriptografada apenas em memória, sem imprimir nem persistir a chave. A
+resposta continha 22 propriedades de schema e os campos preenchidos da tarefa
+real foram encontrados antes da renderização. Validação local: TypeScript,
+Vite, ESLint, 30/30 testes focados de Canvas, 8/8 testes do cliente/serviço
+Notion e `git diff --check` passaram.
