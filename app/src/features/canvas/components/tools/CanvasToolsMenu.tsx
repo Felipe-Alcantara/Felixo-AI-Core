@@ -9,6 +9,7 @@ import {
   Network,
   GitBranch,
   LayoutList,
+  ListTodo,
   type LucideIcon,
   Notebook,
   RefreshCw,
@@ -41,6 +42,7 @@ export type CanvasTool =
   | 'skills'
   | 'git'
   | 'fetchAll'
+  | 'notionTasks'
   | 'agentUsage'
   | 'orchestrator'
   | 'qaLogger'
@@ -56,6 +58,7 @@ const TOOLS: ToolEntry[] = [
   { tool: 'skills', label: 'Skills', icon: BrainCircuit },
   { tool: 'git', label: 'Git', icon: GitBranch },
   { tool: 'fetchAll', label: 'Fetch All', icon: RefreshCw },
+  { tool: 'notionTasks', label: 'Tarefas Notion', icon: ListTodo },
   { tool: 'agentUsage', label: 'Limites e uso', icon: Gauge },
   { tool: 'orchestrator', label: 'Orquestrador', icon: Network },
   { tool: 'qaLogger', label: 'QA Logger', icon: Terminal },

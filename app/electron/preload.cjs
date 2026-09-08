@@ -128,6 +128,20 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (note) => ipcRenderer.invoke('notes:save', note),
     delete: (noteId) => ipcRenderer.invoke('notes:delete', noteId),
   },
+  notion: {
+    listConnections: () => ipcRenderer.invoke('notion:connections:list'),
+    saveConnection: (input) => ipcRenderer.invoke('notion:connections:save', input),
+    removeConnection: (connectionId) =>
+      ipcRenderer.invoke('notion:connections:remove', connectionId),
+    testConnection: (connectionId) =>
+      ipcRenderer.invoke('notion:connections:test', connectionId),
+    listDatabases: (input) => ipcRenderer.invoke('notion:databases:list', input),
+    getSchema: (input) => ipcRenderer.invoke('notion:database:schema', input),
+    listTasks: (input) => ipcRenderer.invoke('notion:tasks:list', input),
+    createTask: (input) => ipcRenderer.invoke('notion:tasks:create', input),
+    updateTask: (input) => ipcRenderer.invoke('notion:tasks:update', input),
+    archiveTask: (input) => ipcRenderer.invoke('notion:tasks:archive', input),
+  },
   canvas: {
     list: () => ipcRenderer.invoke('canvas:list'),
     save: (node) => ipcRenderer.invoke('canvas:save', node),

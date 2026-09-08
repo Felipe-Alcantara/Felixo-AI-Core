@@ -36,6 +36,29 @@ O processo principal continua responsável por processos, arquivos, Git,
 contas, banco e IPC. O renderer compõe a interface e não recebe acesso direto
 ao Node. O preload expõe somente os contratos necessários em `window.felixo`.
 
+### Tarefas do Notion no Canvas
+
+O painel `Tarefas Notion` usa uma integração nativa no processo principal; ele
+não abre o `notion-workspace-app` nem reutiliza o conector `notion-tasks`. Cada
+pessoa cadastra a própria conexão e escolhe uma `data_source` compartilhada
+com ela. O token fica somente em `config/notion-connection-secrets.bin`,
+cifrado pelo `safeStorage`; o JSON público ao lado guarda apenas rótulo,
+perfil, timestamps e o indicador `hasToken`.
+
+O cliente REST usa a versão oficial `2026-03-11`, descobre data sources pelo
+endpoint de busca, consulta schema/páginas com paginação limitada e executa
+criar, editar, concluir/reabrir e enviar para a lixeira. Timeouts, 429 e erros
+transitórios têm retry limitado; mensagens de erro nunca devolvem token ou
+corpo cru ao renderer. O cache SQLite (`notion_task_cache` e
+`notion_sync_state`) é isolado por conexão + data source: uma falha de rede
+devolve o último snapshot como `stale`, sem anunciar uma alteração como salva
+antes da confirmação do Notion.
+
+O preload expõe somente dados normalizados e a ferramenta é carregada sob
+demanda, junto com as outras ferramentas do canvas. O painel mostra a origem
+da sincronização, filtros por texto/estado, seleção de tabelas compartilhadas,
+formulário guiado pelo schema reconhecido e confirmação antes de arquivar.
+
 ## DevTools isolado
 
 `felixo devtools` é a superfície de automação de UI para qualquer agente. O
@@ -163,9 +186,10 @@ que ainda não podem ser usados:
 - `App` mantém `CanvasView` e `ChatWorkspace` como fronteiras `React.lazy`; o
   canvas é o primeiro caminho e o chat só é carregado quando escolhido.
 - `CanvasToolPanels` usa um loader por ferramenta. Busca, projetos, notas,
-  modelos, prompts, skills, Git, Fetch All, Limites e uso, Orquestrador, QA e
-  Configurações ficam em chunks sob demanda, cada um com estado de loading e
-  erro recuperável. Foco ou ponteiro preaquece somente a opção apontada.
+  modelos, prompts, skills, Git, Fetch All, Tarefas Notion, Limites e uso,
+  Orquestrador, QA e Configurações ficam em chunks sob demanda, cada um com
+  estado de loading e erro recuperável. Foco ou ponteiro preaquece somente a
+  opção apontada.
 - `DeferredTerminalSessionStore` mantém o contrato síncrono usado pelos nós,
   mas importa `TerminalSessionStore` apenas quando existe uma sessão PTY para
   iniciar/anexar. O runtime xterm/node-pty não entra no canvas vazio.

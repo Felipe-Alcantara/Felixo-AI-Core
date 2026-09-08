@@ -4237,3 +4237,75 @@ VALIDAÇÃO LOCAL: `node --test electron/core/graphics-mode.test.cjs` passou 5/5
 LIMITE: o ambiente atual não possui um PC fraco que reproduza a tela preta e também não conseguiu iniciar o binário Electron local; portanto a aceitação de teste em uma máquina reproduzível ainda está pendente. O modo automático é deliberadamente conservador — memória baixa no Windows — e deve ser confrontado com o hardware reproduzível antes de encerrar a task.
 
 Estado: implementação e gates locais prontos; task permanece em andamento aguardando validação manual em hardware reproduzível.
+
+## Registro de Trabalho — 2026-09-08 — tarefas do Notion dentro do Canvas
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core. Início do ciclo: 09:05. Task:
+[Felixo AI Core/Canvas — renderizar e manipular a task list do Notion dentro do app](https://app.notion.com/p/Felixo-AI-Core-Canvas-renderizar-e-manipular-a-task-list-do-Notion-dentro-do-app-3d491f95497e81259fb0de34bb569178).
+A especificação confirmava a arquitetura nativa, conexão própria por usuário,
+cache local e o escopo de listar, filtrar, criar, editar, concluir/reabrir e
+arquivar tarefas. As sete subtasks da task foram lidas antes da implementação.
+
+DECISÕES E INVESTIGAÇÃO:
+
+- A integração ficou nativa no Electron, sem embed do `notion-workspace-app` e
+  sem reaproveitar credenciais do conector `notion-tasks`. A pessoa cadastra o
+  próprio token e só vê data sources que o Notion compartilhou com essa conexão.
+- A API oficial atual separa database de data source desde `2025-09-03` e a
+  versão adotada é `2026-03-11`: busca, resolve schema, pagina consultas e usa
+  `in_trash` para arquivar conforme a documentação atual do Notion.
+- O token nunca atravessa preload/renderer, logs, cache ou resposta IPC. A
+  metadata pública fica em `config/notion-connections.json`; o segredo fica em
+  `config/notion-connection-secrets.bin`, cifrado por `safeStorage`, com recusa
+  explícita quando o Linux só oferece o backend `basic`.
+- O cache SQLite usa `notion_task_cache` e `notion_sync_state`, sempre com a
+  chave composta por conexão + data source. Falha de rede retorna o snapshot
+  marcado como `stale`; uma alteração só é anunciada como salva depois de a API
+  do Notion confirmar.
+
+IMPLEMENTAÇÃO:
+
+- `electron/services/notion-client.cjs`: cliente HTTP sem dependência externa,
+  timeout, retry limitado para 429/5xx, paginação limitada, descoberta de
+  tabelas, schema genérico, normalização de propriedades e CRUD de páginas;
+  `NotionClientError` converte status em mensagens acionáveis sem ecoar corpo
+  ou token.
+- `electron/services/notion-connection-store.cjs`: cadastro/edição/teste/
+  remoção por perfil, metadados públicos separados do segredo e permissões
+  privadas nos arquivos.
+- `electron/services/storage/migrations/011_notion_task_cache.sql` e
+  `storage/notion-cache-repository.cjs`: snapshot, timestamps, estado de sync,
+  erro sanitizado, isolamento de conexões e atualização/remoção após mutações.
+- `electron/services/notion-service.cjs` e `notion-ipc-handlers.cjs`: fronteira
+  principal com contratos `{ ok, message }`, seleção de database/data source,
+  cache resiliente e operações de conexão/tarefas; `preload.cjs` expõe somente
+  dados normalizados.
+- `NotionTasksPanel.tsx` entrou como ferramenta lazy do Canvas: configuração
+  de conexão, busca de tabelas compartilhadas, filtros, indicação de snapshot
+  stale, criação/edição, concluir/reabrir e confirmação de envio à lixeira.
+  O painel é carregado somente quando aberto pelo menu Ferramentas.
+- README e `docs/projeto/ARQUITETURA.md` registram a fronteira de segurança,
+  o modelo de cache e o carregamento sob demanda.
+
+VALIDAÇÃO LOCAL:
+
+- `node --test` nos testes focados do cliente, store, cache e serviço Notion:
+  8/8 passaram; cobrem paginação, headers/versionamento, schema/propriedades,
+  retry/redação de erro, separação do token, backend basic, isolamento de
+  cache e fallback stale/offline.
+- `npm run typecheck`, `npm run lint -- --no-warn-ignored`,
+  `npm run test:frontend`, `npm run build` e `git diff --check` passaram. A
+  suíte frontend terminou sem falha; o build transformou 2.473 módulos e
+  gerou o chunk lazy `NotionTasksPanel`; a integração não adiciona dependência
+  nova de npm.
+- `npm test` passou 1.048/1.048 testes, sem cancelamentos, skips ou falhas.
+- Smoke no app real via DevTools passou: a ferramenta `Tarefas Notion` aparece
+  no menu, abre o painel, renderiza a configuração de conexão e é registrada
+  no marcador de ferramentas lazy (`notionTasks`). O teste não inventa token:
+  a validação contra uma database Notion compartilhada real continua manual.
+
+ESTADO NO PONTO DO REGISTRO: implementação, documentação e gates locais
+concluídos; commit, push, CI/release, atualização das sete subtasks e
+encerramento da task pai ficam para o fechamento deste ciclo. Pendências de
+hardware/credencial real devem virar follow-ups no Notion, não deixar a task
+pai aberta depois de a aceitação implementada ser registrada.

@@ -31,6 +31,15 @@ import type {
   ClaudeStatuslineState,
   AgentUsageMutationResult,
 } from './features/shared/agent-usage/agent-usage'
+import type {
+  NotionConnection,
+  NotionDatabaseResult,
+  NotionListResult,
+  NotionSchemaProperty,
+  NotionSchemaResult,
+  NotionTask,
+  NotionTasksResult,
+} from './features/shared/types/notion'
 
 type DetectedRepo = { name: string; path: string }
 type DirectoryEntry = { name: string; isDirectory: boolean; path: string }
@@ -444,6 +453,63 @@ declare global {
         list: () => Promise<CliInvokeResult & { notes?: unknown[] }>
         save: (note: ProjectNote) => Promise<CliInvokeResult>
         delete: (noteId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      notion?: {
+        listConnections: () => Promise<NotionListResult>
+        saveConnection: (input: {
+          id?: string
+          label: string
+          profileId?: string
+          token?: string
+        }) => Promise<CliInvokeResult & { connection?: NotionConnection }>
+        removeConnection: (connectionId: string) => Promise<
+          CliInvokeResult & { removed?: boolean }
+        >
+        testConnection: (connectionId: string) => Promise<
+          CliInvokeResult & { connection?: NotionConnection; identity?: string | null }
+        >
+        listDatabases: (input: {
+          connectionId: string
+          query?: string
+        }) => Promise<NotionDatabaseResult>
+        getSchema: (input: {
+          connectionId: string
+          databaseId?: string
+          dataSourceId?: string
+        }) => Promise<NotionSchemaResult>
+        listTasks: (input: {
+          connectionId: string
+          databaseId?: string
+          dataSourceId?: string
+          search?: string
+          status?: 'all' | 'open' | 'done'
+        }) => Promise<NotionTasksResult>
+        createTask: (input: {
+          connectionId: string
+          databaseId?: string
+          dataSourceId?: string
+          task: {
+            title: string
+            completed?: boolean
+            status?: string
+            dueDate?: string
+            priority?: string
+            text?: string
+          }
+        }) => Promise<CliInvokeResult & { task?: NotionTask; schema?: Record<string, NotionSchemaProperty>; dataSourceId?: string }>
+        updateTask: (input: {
+          connectionId: string
+          pageId: string
+          databaseId?: string
+          dataSourceId?: string
+          changes: Partial<Pick<NotionTask, 'title' | 'completed' | 'status' | 'dueDate' | 'priority' | 'text'>>
+        }) => Promise<CliInvokeResult & { task?: NotionTask; schema?: Record<string, NotionSchemaProperty>; dataSourceId?: string }>
+        archiveTask: (input: {
+          connectionId: string
+          pageId: string
+          databaseId?: string
+          dataSourceId?: string
+        }) => Promise<CliInvokeResult & { id?: string; archived?: boolean; dataSourceId?: string }>
       }
       canvas?: {
         list: () => Promise<CliInvokeResult & { nodes?: PersistedCanvasNode[] }>

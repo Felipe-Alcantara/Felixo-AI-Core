@@ -63,6 +63,11 @@ export const loadFetchAllPanel = () =>
     markToolLoaded('fetchAll')
     return { default: FetchAllPanel }
   })
+export const loadNotionTasksPanel = () =>
+  import('./tools/NotionTasksPanel').then(({ NotionTasksPanel }) => {
+    markToolLoaded('notionTasks')
+    return { default: NotionTasksPanel }
+  })
 export const loadAgentUsagePanel = () =>
   import('./tools/AgentUsagePanel').then(({ AgentUsagePanel }) => {
     markToolLoaded('agentUsage')

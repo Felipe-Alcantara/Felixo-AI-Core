@@ -13,6 +13,7 @@ import {
   LazyFetchAllPanel,
   LazyGitPanel,
   LazyModelsPanel,
+  LazyNotionTasksPanel,
   LazyNotesPanel,
   LazyOrchestratorPanel,
   LazyProjectsPanel,
@@ -58,6 +59,7 @@ const TOOL_LABELS: Record<CanvasTool, string> = {
   skills: 'Skills',
   git: 'Git',
   fetchAll: 'Fetch All',
+  notionTasks: 'Tarefas Notion',
   agentUsage: 'Limites e uso',
   orchestrator: 'Orquestrador',
   qaLogger: 'QA Logger',
@@ -233,6 +235,8 @@ export function CanvasToolPanels({
         return <LazyGitPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
       case 'fetchAll':
         return <LazyFetchAllPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+      case 'notionTasks':
+        return <LazyNotionTasksPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
       case 'agentUsage':
         return <LazyAgentUsagePanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
       case 'orchestrator':

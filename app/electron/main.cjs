@@ -52,6 +52,7 @@ const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
 const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
+const { registerNotionIpcHandlers } = require('./services/notion-ipc-handlers.cjs')
 const {
   registerAgentBrowserIpcHandlers,
 } = require('./services/agent-browser-ipc-handlers.cjs')
@@ -95,6 +96,7 @@ let settingsRepository = null
 let terminalLogStore = null
 let cliAutoInstall = null
 let agentUsageWatching = null
+let notionHandlers = null
 let agentBrowserWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
@@ -346,6 +348,10 @@ app.whenReady().then(async () => {
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
   registerFetchAllIpcHandlers(getMainWindow, appPaths)
+  notionHandlers = registerNotionIpcHandlers({
+    appPaths,
+    database: storageDatabase,
+  })
   agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths)
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
@@ -423,6 +429,8 @@ app.on('before-quit', () => {
     }
     agentUsageWatching = null
   }
+
+  notionHandlers = null
 
   if (cliAutoInstall) {
     try {
