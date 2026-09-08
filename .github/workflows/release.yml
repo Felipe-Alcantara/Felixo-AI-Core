@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout validated commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 
@@ -124,7 +124,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # workflow_run roda no contexto do branch padrão, não no commit que
           # disparou o CI. Sem fixar o SHA, o release publicaria o topo de
@@ -284,7 +284,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 
