@@ -144,7 +144,7 @@ jobs:
       # Reaproveita o diagnóstico incremental salvo pelo CI do mesmo SO. O
       # tsc ainda confere as entradas; cache antigo apenas força reconstrução.
       - name: Restore TypeScript incremental cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: app/node_modules/.tmp
           key: typecheck-${{ runner.os }}-${{ hashFiles('app/package-lock.json', 'app/tsconfig*.json') }}
