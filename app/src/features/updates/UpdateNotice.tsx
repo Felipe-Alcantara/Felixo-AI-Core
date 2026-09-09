@@ -96,6 +96,36 @@ export function AppVersionBadge({ version }: { version: string | null }) {
   )
 }
 
+/**
+ * Botão "Verificar atualizações", visível quando não há nada em andamento
+ * (`presentation.canCheck`). Existe porque o app já verifica sozinho a cada
+ * dez minutos, mas sem ele a única forma de checar na hora era esperar — o
+ * indicador de status fica escondido de propósito quando está tudo em dia.
+ */
+export function CheckUpdateButton({
+  presentation,
+  onCheck,
+}: {
+  presentation: UpdatePresentation
+  onCheck: () => void
+}) {
+  if (!presentation.canCheck) {
+    return null
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onCheck}
+      className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-slate-500 transition hover:bg-white/10 hover:text-slate-300"
+      title="Verificar se há uma atualização disponível agora"
+    >
+      <RefreshCw size={13} aria-hidden />
+      Verificar atualizações
+    </button>
+  )
+}
+
 type UpdateToastProps = {
   presentation: UpdatePresentation
   dismissed: boolean
