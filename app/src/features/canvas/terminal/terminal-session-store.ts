@@ -20,6 +20,7 @@ import {
 import {
   buildClearInputSequence,
   findMultiLineTypedInputRange,
+  isComposingKeyEvent,
   isDeleteSelectionKey,
   isNewlineShortcut,
   isSelectInputShortcut,
@@ -659,6 +660,12 @@ export class TerminalSessionStore {
     // Returning false stops xterm's default handling so it doesn't also emit a
     // CR via onData, which would submit.
     terminal.attachCustomKeyEventHandler((event) => {
+      // Ver `isComposingKeyEvent`: sair antes de qualquer atalho, sem tocar em
+      // nada, deixa o xterm.js tratar sozinho um acento composto ou IME em
+      // andamento.
+      if (isComposingKeyEvent(event)) {
+        return true
+      }
       if (event.type === 'keydown') {
         // Tecla de verdade, vinda do teclado: daqui em diante a linha de entrada
         // tem dono. É o sinal mais confiável para isso — ao contrário do
