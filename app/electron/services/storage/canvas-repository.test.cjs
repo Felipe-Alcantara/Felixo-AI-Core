@@ -117,6 +117,47 @@ test('canvas repository persists group nodes and child parentId', () => {
   }
 })
 
+test('canvas repository persists webpage and notionTasks nodes across a restart', () => {
+  // Regressão: 'webpage' e 'notionTasks' foram adicionados ao tipo
+  // CanvasNodeType e ao NODE_TYPES do repositório, mas nenhuma migração
+  // alargou o CHECK da coluna `type` — o insert falhava silenciosamente (o
+  // wrapper do renderer trata a escrita como best-effort) e o bloco sumia do
+  // canvas no próximo início do app. Reabrir a conexão simula o restart.
+  const databaseDir = createTempDir('felixo-canvas-webpage-notion-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    repository.save({
+      id: 'webpage-1',
+      type: 'webpage',
+      position: { x: 10, y: 10 },
+      data: { url: 'https://example.com' },
+    })
+    repository.save({
+      id: 'notion-1',
+      type: 'notionTasks',
+      position: { x: 200, y: 10 },
+      data: { label: 'Tarefas Notion' },
+    })
+    database.close()
+
+    const reopened = createStorageDatabase({ databaseDir })
+    const reopenedRepository = createCanvasRepository(reopened)
+    const nodes = reopenedRepository.list()
+
+    assert.deepEqual(
+      nodes.map((node) => node.type).sort(),
+      ['notionTasks', 'webpage'],
+    )
+
+    reopened.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
 test('canvas repository stores, lists and soft-deletes edges', () => {
   const databaseDir = createTempDir('felixo-canvas-edges-')
 
