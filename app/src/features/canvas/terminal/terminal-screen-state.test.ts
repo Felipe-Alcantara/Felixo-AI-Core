@@ -34,6 +34,18 @@ describe('isBusyScreen', () => {
     expect(isBusyScreen('esc to interrupt')).toBe(true)
   })
 
+  it('recognizes the elapsed-time/token-count banner regardless of the rotating verb', () => {
+    // Verbo real visto ao vivo ("Meandering") que não está em nenhuma lista
+    // fixa — o Claude Code sorteia entre dezenas deles. Sem "esc to
+    // interrupt" na mesma linha capturada: é a estrutura tempo · tokens que
+    // precisa carregar a detecção sozinha.
+    expect(
+      isBusyScreen('Meandering… (4m 5s · 14.5k tokens · thinking with high effort)'),
+    ).toBe(true)
+    expect(isBusyScreen('Percolating… (7s · 812 tokens)')).toBe(true)
+    expect(isBusyScreen('Herding cats (23s • 2.1k tokens • esc to interrupt)')).toBe(true)
+  })
+
   it('does not treat a settled prompt as busy', () => {
     expect(isBusyScreen('> ')).toBe(false)
   })

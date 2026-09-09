@@ -36,15 +36,25 @@ const CONFIRMATION_PHRASE =
 
 /**
  * Faixa persistente de "ainda trabalhando", ex.: "Working (7s • esc to
- * interrupt)".
+ * interrupt)" ou "Meandering… (4m 5s · 14.5k tokens · thinking with high
+ * effort)".
  *
  * Os dígitos são removidos por ELAPSED_TIMER antes da comparação de assinatura
  * usada para decidir ocioso vs. ocupado; sem esta checagem direta contra a
  * tela, uma CLI parada nessa faixa (só o contador correndo, sem linhas novas)
  * seria lida como "nada mudou" e apareceria como ociosa enquanto ainda trabalha.
+ *
+ * Não depende de uma lista de verbos: o Claude Code sorteia o verbo dessa
+ * faixa ("Meandering", "Pondering", "Percolating"…, closed set que muda a
+ * cada versão) e "esc to interrupt" nem sempre aparece na mesma linha
+ * capturada do viewport — visto ao vivo numa sessão real, faixa sem nenhum
+ * verbo da lista antiga e sem a dica de interrupção, o que fazia o agente
+ * aparecer como ocioso/aprovação pendente enquanto ainda trabalhava. O que
+ * não muda entre verbos é a estrutura decorativa ao lado — tempo decorrido e
+ * contagem de tokens entre parênteses —, então é nela que a checagem se apoia.
  */
 const BUSY_INDICATOR =
-  /\b(working|aguardando|thinking|pensando|running|executando|processing|processando)\b.*(esc to interrupt|interrupt)|esc to interrupt/i
+  /esc to interrupt|\(\s*(?:\d+\s*m\s*)?\d+\s*s\s*[·•]\s*[\d.,]+\s*k?\s*tokens?\b/i
 
 /** Remove ANSI e colapsa espaços, para comparação de texto renderizado. */
 export function cleanPrompt(text: string): string {
