@@ -826,7 +826,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
             <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/35">
               <div className="overflow-x-auto">
-                <table className="min-w-[760px] w-full border-collapse text-xs" aria-label="Tarefas do Notion">
+                <table className="min-w-[760px] w-full table-fixed border-collapse text-xs" aria-label="Tarefas do Notion">
                   <thead className="bg-white/[0.03] text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                     <tr className="border-b border-white/10">
                       <th className="w-12 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>
