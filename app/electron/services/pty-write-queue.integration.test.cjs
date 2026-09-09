@@ -23,7 +23,6 @@ const { test } = require('node:test')
 
 const platform = require('../core/platform/index.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
-const { criarSpawnPtyEstavelNoWindows } = require('./pty-native-test-support.cjs')
 
 const TEMPO_LIMITE_MS = 15_000
 // No Windows a fixture entra em modo raw para Ctrl-Z chegar como caractere,
@@ -180,7 +179,7 @@ async function executarColeta({ nomeSessao, payload, depois }) {
   const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-native-'))
   const destino = path.join(diretorio, 'recebido.txt')
   const coletor = criarColetorDeEntrada(diretorio)
-  const manager = new PtyProcessManager({ spawnPty: criarSpawnPtyEstavelNoWindows() })
+  const manager = new PtyProcessManager()
   let resolverSaida
   const encerrou = new Promise((resolver) => {
     resolverSaida = resolver
