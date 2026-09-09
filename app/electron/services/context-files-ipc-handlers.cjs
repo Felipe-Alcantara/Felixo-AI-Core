@@ -14,6 +14,7 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const { toErrorResult } = require('./ipc-result.cjs')
 const { CONTEXT_FILE_PREFIX } = require('../core/context-file-contract.cjs')
+const { caminhoDoComando } = require('./agent-command-install.cjs')
 
 const STALE_CONTEXT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const MAX_CONTEXT_BYTES = 32 * 1024 * 1024
@@ -133,6 +134,15 @@ async function writeContextFile(baseDir, params = {}, now = new Date()) {
 function registerContextFilesIpcHandlers(appPaths) {
   const baseDir = appPaths.contextFiles
   const filesBySession = new Map()
+  // Caminho absoluto do shim `felixo` desta instância. Devolvido ao lado do
+  // arquivo para que o prompt possa mandar o agente rodar o executável exato
+  // em vez de digitar o nome nu do comando: uma função de shell com o mesmo
+  // nome (instalada por outra ferramenta no .bashrc/.zshrc da pessoa) vence
+  // o PATH silenciosamente, e "felixo context read" acaba rodando outra
+  // coisa — visto em relato real de agente que leu o arquivo certo só depois
+  // de descobrir, por conta própria, que "felixo" ali era outro comando.
+  const commandPath =
+    typeof appPaths.bin === 'string' && appPaths.bin ? caminhoDoComando(appPaths.bin) : undefined
 
   void cleanupStaleContextFiles(baseDir).catch(() => {})
 
@@ -145,7 +155,7 @@ function registerContextFilesIpcHandlers(appPaths) {
         filesBySession.set(result.sessionId, files)
       }
       files.add(result.path)
-      return { ok: true, path: result.path, name: result.filename, bytes: result.bytes }
+      return { ok: true, path: result.path, name: result.filename, bytes: result.bytes, commandPath }
     } catch (error) {
       return toErrorResult(error, 'Não foi possível criar o arquivo temporário de contexto.')
     }

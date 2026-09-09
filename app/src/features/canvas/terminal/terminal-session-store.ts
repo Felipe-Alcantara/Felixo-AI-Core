@@ -1695,9 +1695,12 @@ export class TerminalSessionStore {
       ? splitInitialContext(split.text)
       : [{ kind, content: split.text }]
     const deliveredFiles: Array<{ name: string; kind: ContextFileKind }> = []
+    // Mesmo caminho em toda escrita desta sessão (é o shim da instância, não
+    // varia por arquivo); guardamos o primeiro que a ponte devolver.
+    let commandPath: string | undefined
 
     for (const part of parts) {
-      let result: { ok?: boolean; name?: string } | undefined
+      let result: { ok?: boolean; name?: string; commandPath?: string } | undefined
       try {
         result = await window.felixo?.contextFiles?.write({
           sessionId: session.ptySessionId,
@@ -1720,10 +1723,11 @@ export class TerminalSessionStore {
         return this.contextDeliveryFallback(session, text, kind)
       }
       deliveredFiles.push({ name: result.name, kind: part.kind })
+      commandPath ??= result.commandPath
     }
 
     this.update(session, { contextWarning: undefined })
-    return buildContextFileReferences(deliveredFiles, Boolean(split.submit))
+    return buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath)
   }
 
   private contextDeliveryFallback(
