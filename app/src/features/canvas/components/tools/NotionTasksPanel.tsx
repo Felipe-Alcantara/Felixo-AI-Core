@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Clock,
   Copy,
   Database,
   ExternalLink,
@@ -61,6 +62,8 @@ type TaskContentState = {
   message?: string
 }
 
+const AUTO_SYNC_INTERVAL_MS = 60_000
+
 const inputClass =
   'w-full rounded border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-sky-500/70'
 const buttonClass =
@@ -89,6 +92,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const [viewDraft, setViewDraft] = useState(() => emptyViewDraft())
   const [stale, setStale] = useState(false)
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true)
   const [busy, setBusy] = useState(false)
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -187,14 +191,24 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     return () => window.clearTimeout(timer)
   }, [connectionId, loadDatabases])
 
-  const loadTasks = useCallback(async () => {
+  /**
+   * `silent` é usado pela sincronização automática em segundo plano: mantém o
+   * detalhe expandido e o conteúdo já carregado de uma tarefa (não reseta a
+   * leitura em andamento) e não liga o spinner de "carregando" — só atualiza
+   * a lista por baixo. Uma sincronização manual (botão, busca, troca de
+   * database) continua limpando os dois, como sempre.
+   */
+  const loadTasks = useCallback(async (options: { silent?: boolean } = {}) => {
+    const { silent = false } = options
     if (!api || !connectionId || !dataSourceId) {
       setTasks([])
       return
     }
-    setTaskContentById({})
-    setExpandedTaskId(null)
-    setBusy(true)
+    if (!silent) {
+      setTaskContentById({})
+      setExpandedTaskId(null)
+      setBusy(true)
+    }
     setError(null)
     const result = await api.listTasks({
       connectionId,
@@ -202,16 +216,20 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       search,
       status: activeView.statusFilter,
     })
-    setBusy(false)
+    if (!silent) {
+      setBusy(false)
+    }
     if (!result.ok) {
-      setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
+      if (!silent) {
+        setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
+      }
       return
     }
     setTasks(result.tasks || [])
     setSchema(result.schema || {})
     setStale(result.stale === true)
     setFetchedAt(result.fetchedAt || null)
-    if (result.stale) {
+    if (result.stale && !silent) {
       setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
     }
   }, [api, connectionId, dataSourceId, search, activeView.statusFilter])
@@ -223,6 +241,26 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     const timer = window.setTimeout(() => void loadTasks(), 0)
     return () => window.clearTimeout(timer)
   }, [connectionId, dataSourceId, loadTasks])
+
+  // Sincronização automática: revalida a lista com o Notion a cada minuto,
+  // sem interromper o que a pessoa está fazendo (detalhe aberto, busca
+  // digitada). Uma chamada em andamento não empilha outra.
+  useEffect(() => {
+    if (!autoSyncEnabled || !connectionId || !dataSourceId) return undefined
+    let cancelled = false
+    let inFlight = false
+    const interval = window.setInterval(() => {
+      if (inFlight || cancelled) return
+      inFlight = true
+      void loadTasks({ silent: true }).finally(() => {
+        inFlight = false
+      })
+    }, AUTO_SYNC_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [autoSyncEnabled, connectionId, dataSourceId, loadTasks])
 
   async function saveConnection() {
     if (!api) return
@@ -625,6 +663,16 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar tarefas" aria-label="Buscar tarefas Notion" />
                 </label>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
+                <button
+                  type="button"
+                  className={`felixo-btn-icon rounded-md border p-1.5 ${autoSyncEnabled ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' : 'border-white/10 text-zinc-500 hover:bg-white/5 hover:text-zinc-100'}`}
+                  onClick={() => setAutoSyncEnabled((value) => !value)}
+                  aria-pressed={autoSyncEnabled}
+                  aria-label={autoSyncEnabled ? 'Desligar sincronização automática' : 'Ligar sincronização automática (a cada minuto)'}
+                  title={autoSyncEnabled ? 'Sincronização automática ligada (a cada 1 min) — clique para desligar' : 'Sincronização automática desligada — clique para ligar'}
+                >
+                  <Clock size={14} />
+                </button>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={() => setShowWorkspaceSettings(true)} aria-label="Mostrar filtros e configuração" title="Filtros e configuração"><SlidersHorizontal size={14} /></button>
               </div>
             </div>
