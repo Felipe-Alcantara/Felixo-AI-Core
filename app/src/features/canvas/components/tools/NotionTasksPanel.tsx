@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Columns3,
   Copy,
   Database,
   ExternalLink,
@@ -28,6 +29,7 @@ import type {
   NotionSchemaProperty,
   NotionTask,
 } from '../../../shared/types/notion'
+import { readVisibleColumns, saveVisibleColumns } from '../../services/notion-table-columns'
 import {
   BUILT_IN_VIEWS,
   createViewId,
@@ -86,6 +88,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const [tasks, setTasks] = useState<NotionTask[]>([])
   const [search, setSearch] = useState('')
   const [viewsVersion, setViewsVersion] = useState(0)
+  const [columnsVersion, setColumnsVersion] = useState(0)
+  const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [activeViewId, setActiveViewId] = useState<string>(BUILT_IN_VIEWS[0].id)
   const [showViewBuilder, setShowViewBuilder] = useState(false)
   const [editingViewId, setEditingViewId] = useState<string | null>(null)
@@ -124,6 +128,29 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   }, [schema])
 
   const filterableProperties = useMemo(() => listFilterableProperties(schema), [schema])
+
+  // Propriedades que podem virar coluna extra na tabela: qualquer uma da
+  // database, menos o título (que já é a coluna "Tarefa").
+  const columnableProperties = useMemo(
+    () => Object.values(schema).filter((property) => property.type !== 'title').map((property) => property.name),
+    [schema],
+  )
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- columnsVersion força reler o localStorage após persistVisibleColumns
+  const visibleColumns = useMemo(() => readVisibleColumns(connectionId, dataSourceId).filter((name) => columnableProperties.includes(name)), [connectionId, dataSourceId, columnableProperties, columnsVersion])
+
+  function persistVisibleColumns(next: string[]) {
+    saveVisibleColumns(connectionId, dataSourceId, next)
+    setColumnsVersion((value) => value + 1)
+  }
+
+  function toggleColumn(name: string) {
+    persistVisibleColumns(
+      visibleColumns.includes(name)
+        ? visibleColumns.filter((current) => current !== name)
+        : [...visibleColumns, name],
+    )
+  }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- viewsVersion força reler o localStorage após persistCustomViews
   const customViews = useMemo(() => readCustomViews(connectionId, dataSourceId), [connectionId, dataSourceId, viewsVersion])
@@ -673,6 +700,35 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                 >
                   <Clock size={14} />
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className={`felixo-btn-icon rounded-md border p-1.5 ${visibleColumns.length > 0 ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
+                    onClick={() => setShowColumnPicker((value) => !value)}
+                    aria-expanded={showColumnPicker}
+                    aria-label="Escolher colunas da tabela"
+                    title="Escolher quais propriedades aparecem como coluna, sem precisar expandir a tarefa"
+                  >
+                    <Columns3 size={14} />
+                  </button>
+                  {showColumnPicker && (
+                    <div className="absolute right-0 top-[calc(100%+0.375rem)] z-10 w-64 rounded-lg border border-white/10 bg-zinc-900 p-2 shadow-xl">
+                      <p className="mb-1.5 px-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Colunas da tabela</p>
+                      {columnableProperties.length === 0 ? (
+                        <p className="px-1 py-1 text-[11px] text-zinc-500">Esta database não tem outras propriedades.</p>
+                      ) : (
+                        <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                          {columnableProperties.map((name) => (
+                            <label key={name} className="flex items-center gap-2 rounded px-1 py-1 text-[11px] text-zinc-300 hover:bg-white/5">
+                              <input type="checkbox" checked={visibleColumns.includes(name)} onChange={() => toggleColumn(name)} />
+                              <span className="truncate" title={name}>{name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={() => setShowWorkspaceSettings(true)} aria-label="Mostrar filtros e configuração" title="Filtros e configuração"><SlidersHorizontal size={14} /></button>
               </div>
             </div>
@@ -778,18 +834,21 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       <th className="w-36 px-3 py-2 font-medium" scope="col">Estado</th>
                       <th className="w-32 px-3 py-2 font-medium" scope="col">Prioridade</th>
                       <th className="w-36 px-3 py-2 font-medium" scope="col">Prazo</th>
+                      {visibleColumns.map((name) => (
+                        <th key={name} className="min-w-[9rem] px-3 py-2 font-medium" scope="col" title={name}>{name}</th>
+                      ))}
                       <th className="w-24 px-3 py-2 text-right font-medium" scope="col"><span className="sr-only">Ações</span></th>
                     </tr>
                   </thead>
                   <tbody aria-live="polite">
                     {visibleTasks.length === 0 ? (
-                      <tr><td colSpan={6} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
+                      <tr><td colSpan={6 + visibleColumns.length} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
                     ) : visibleTasks.map((task) => {
                       const hasDetails = true
                       const isExpanded = expandedTaskId === task.id
                       const taskContent = taskContentById[task.id]
                       const detailText = taskContent?.content || task.text
-                      const properties = getTaskProperties(task, schema)
+                      const properties = getTaskProperties(task, schema, visibleColumns)
                       return (
                         <Fragment key={task.id}>
                           <tr className={`group border-b border-white/[0.07] align-middle last:border-0 hover:bg-white/[0.035] ${task.completed ? 'text-zinc-500' : 'text-zinc-300'}`}>
@@ -806,9 +865,12 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                             <td className="px-3 py-2.5"><span className={`inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(task)}`}>{task.completed ? 'Concluída' : task.status || 'Sem estado'}</span></td>
                             <td className="px-3 py-2.5"><span className="truncate text-[11px] text-zinc-400">{task.priority || '—'}</span></td>
                             <td className="px-3 py-2.5"><span className="flex items-center gap-1 text-[11px] text-zinc-400">{task.dueDate ? <><CalendarDays size={12} className="text-zinc-600" /> {formatShortDate(task.dueDate)}</> : '—'}</span></td>
+                            {visibleColumns.map((name) => (
+                              <td key={name} className="px-3 py-2.5"><span className="block truncate text-[11px] text-zinc-400" title={formatPropertyValue(task.fields?.[name])}>{formatPropertyValue(task.fields?.[name]) || '—'}</span></td>
+                            ))}
                             <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-sky-300 disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
                           </tr>
-                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/[0.08] bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-amber-300"><span>{taskContent.message}</span><button type="button" className="text-sky-300 underline hover:text-sky-200" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-emerald-400" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6 + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/[0.08] bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-amber-300"><span>{taskContent.message}</span><button type="button" className="text-sky-300 underline hover:text-sky-200" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-emerald-400" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
                         </Fragment>
                       )
                     })}
@@ -859,7 +921,15 @@ function formatShortDate(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
 }
 
-function getTaskProperties(task: NotionTask, schema: Record<string, NotionSchemaProperty>) {
+/**
+ * Propriedades a listar no detalhe expandido. `hiddenNames` tira as que já
+ * aparecem como coluna na tabela (Colunas), pra não repetir a informação.
+ */
+function getTaskProperties(
+  task: NotionTask,
+  schema: Record<string, NotionSchemaProperty>,
+  hiddenNames: string[] = [],
+) {
   const names = [...new Set([...Object.keys(schema), ...Object.keys(task.fields || {})])]
   return names
     .map((name) => {
@@ -871,7 +941,7 @@ function getTaskProperties(task: NotionTask, schema: Record<string, NotionSchema
         value: formatPropertyValue(value),
       }
     })
-    .filter((property) => property.type !== 'title' && property.value)
+    .filter((property) => property.type !== 'title' && property.value && !hiddenNames.includes(property.name))
 }
 
 function formatPropertyValue(value: unknown): string {
