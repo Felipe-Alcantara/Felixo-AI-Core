@@ -26,6 +26,17 @@ import type {
   NotionSchemaProperty,
   NotionTask,
 } from '../../../shared/types/notion'
+import {
+  BUILT_IN_VIEWS,
+  createViewId,
+  filterTasksByView,
+  isBuiltInView,
+  listFilterableProperties,
+  readCustomViews,
+  saveCustomViews,
+  type NotionStatusScope,
+  type NotionTaskView,
+} from '../../services/notion-task-views'
 
 type NotionTasksPanelProps = {
   onClose: () => void
@@ -70,7 +81,11 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const [schema, setSchema] = useState<Record<string, NotionSchemaProperty>>({})
   const [tasks, setTasks] = useState<NotionTask[]>([])
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'done'>('all')
+  const [viewsVersion, setViewsVersion] = useState(0)
+  const [activeViewId, setActiveViewId] = useState<string>(BUILT_IN_VIEWS[0].id)
+  const [showViewBuilder, setShowViewBuilder] = useState(false)
+  const [editingViewId, setEditingViewId] = useState<string | null>(null)
+  const [viewDraft, setViewDraft] = useState(() => emptyViewDraft())
   const [stale, setStale] = useState(false)
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -101,6 +116,27 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     }
     return [...values]
   }, [schema])
+
+  const filterableProperties = useMemo(() => listFilterableProperties(schema), [schema])
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- viewsVersion força reler o localStorage após persistCustomViews
+  const customViews = useMemo(() => readCustomViews(connectionId, dataSourceId), [connectionId, dataSourceId, viewsVersion])
+  const views = useMemo<NotionTaskView[]>(() => [...BUILT_IN_VIEWS, ...customViews], [customViews])
+  const activeView = views.find((view) => view.id === activeViewId) || BUILT_IN_VIEWS[0]
+
+  // Reseta a visualização ativa ao trocar de conexão/database, sem depender de um efeito (ver
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  const dataScopeKey = `${connectionId}::${dataSourceId}`
+  const [lastDataScopeKey, setLastDataScopeKey] = useState(dataScopeKey)
+  if (dataScopeKey !== lastDataScopeKey) {
+    setLastDataScopeKey(dataScopeKey)
+    setActiveViewId(BUILT_IN_VIEWS[0].id)
+  }
+
+  function persistCustomViews(next: NotionTaskView[]) {
+    saveCustomViews(connectionId, dataSourceId, next)
+    setViewsVersion((value) => value + 1)
+  }
 
   const loadConnections = useCallback(async () => {
     if (!api) {
@@ -162,7 +198,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       connectionId,
       dataSourceId,
       search,
-      status: statusFilter,
+      status: activeView.statusFilter,
     })
     setBusy(false)
     if (!result.ok) {
@@ -176,7 +212,9 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     if (result.stale) {
       setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
     }
-  }, [api, connectionId, dataSourceId, search, statusFilter])
+  }, [api, connectionId, dataSourceId, search, activeView.statusFilter])
+
+  const visibleTasks = useMemo(() => filterTasksByView(tasks, activeView), [tasks, activeView])
 
   useEffect(() => {
     if (!connectionId || !dataSourceId) return undefined
@@ -327,6 +365,65 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     setEditingId(null)
     setDraft(emptyDraft())
     setShowTaskComposer(false)
+  }
+
+  function startCreatingView() {
+    setEditingViewId(null)
+    setViewDraft(emptyViewDraft())
+    setShowViewBuilder(true)
+  }
+
+  function startEditingView(view: NotionTaskView) {
+    setEditingViewId(view.id)
+    setViewDraft({
+      name: view.name,
+      statusFilter: view.statusFilter,
+      property: view.propertyFilters[0]?.property || filterableProperties[0]?.name || '',
+      values: view.propertyFilters[0]?.values || [],
+    })
+    setShowViewBuilder(true)
+  }
+
+  function cancelViewBuilder() {
+    setEditingViewId(null)
+    setViewDraft(emptyViewDraft())
+    setShowViewBuilder(false)
+  }
+
+  function toggleViewDraftValue(value: string) {
+    setViewDraft((current) => ({
+      ...current,
+      values: current.values.includes(value)
+        ? current.values.filter((item) => item !== value)
+        : [...current.values, value],
+    }))
+  }
+
+  function submitViewBuilder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const name = viewDraft.name.trim()
+    if (!name) return
+    const propertyFilters = viewDraft.property && viewDraft.values.length > 0
+      ? [{ property: viewDraft.property, values: viewDraft.values }]
+      : []
+    const view: NotionTaskView = {
+      id: editingViewId && !isBuiltInView(editingViewId) ? editingViewId : createViewId(),
+      name,
+      statusFilter: viewDraft.statusFilter,
+      propertyFilters,
+    }
+    const next = editingViewId
+      ? customViews.map((current) => (current.id === editingViewId ? view : current))
+      : [...customViews, view]
+    persistCustomViews(next)
+    setActiveViewId(view.id)
+    cancelViewBuilder()
+  }
+
+  function deleteView(view: NotionTaskView) {
+    if (!window.confirm(`Excluir a visualização “${view.name}”? Isso não afeta as tarefas no Notion.`)) return
+    persistCustomViews(customViews.filter((current) => current.id !== view.id))
+    if (activeViewId === view.id) setActiveViewId(BUILT_IN_VIEWS[0].id)
   }
 
   const loadTaskContent = useCallback(async (task: NotionTask) => {
@@ -503,8 +600,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-medium text-zinc-100">Todas as tarefas</h2>
-                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{tasks.length}</span>
+                  <h2 className="text-sm font-medium text-zinc-100">{activeView.name}</h2>
+                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{visibleTasks.length}</span>
                 </div>
                 <p className="mt-1 text-[11px] text-zinc-500">{stale ? 'Snapshot local desatualizado' : fetchedAt ? `Sincronizado ${formatDate(fetchedAt)}` : 'Ainda não sincronizado'}</p>
               </div>
@@ -513,15 +610,81 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
                   <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar tarefas" aria-label="Buscar tarefas Notion" />
                 </label>
-                <div className="flex h-8 items-center rounded-md border border-white/10 bg-zinc-950/50 p-0.5" role="group" aria-label="Filtrar estado">
-                  {([['all', 'Todas'], ['open', 'Abertas'], ['done', 'Concluídas']] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={`rounded px-2 py-1 text-[11px] ${statusFilter === value ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`} onClick={() => setStatusFilter(value)}>{label}</button>
-                  ))}
-                </div>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={() => setShowWorkspaceSettings(true)} aria-label="Mostrar filtros e configuração" title="Filtros e configuração"><SlidersHorizontal size={14} /></button>
               </div>
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-b border-white/10 pb-2" role="tablist" aria-label="Visualizações de tarefas">
+              {views.map((view) => {
+                const isActive = view.id === activeViewId
+                const editable = !isBuiltInView(view.id)
+                return (
+                  <div key={view.id} className={`group flex items-center gap-1 rounded-md px-1 ${isActive ? 'bg-zinc-700' : 'hover:bg-white/5'}`}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      className={`rounded px-1.5 py-1 text-[11px] ${isActive ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
+                      onClick={() => setActiveViewId(view.id)}
+                      title={editable && view.propertyFilters[0] ? `${view.propertyFilters[0].property}: ${view.propertyFilters[0].values.join(', ')}` : undefined}
+                    >
+                      {view.name}
+                    </button>
+                    {editable && (
+                      <span className="hidden items-center gap-0.5 group-hover:flex">
+                        <button type="button" className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-sky-300" onClick={() => startEditingView(view)} aria-label={`Editar visualização ${view.name}`} title="Editar visualização"><Pencil size={11} /></button>
+                        <button type="button" className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-red-300" onClick={() => deleteView(view)} aria-label={`Excluir visualização ${view.name}`} title="Excluir visualização"><Trash2 size={11} /></button>
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+              <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={startCreatingView} aria-label="Criar nova visualização" title="Criar visualização com filtro avançado"><Plus size={12} /> Nova visualização</button>
+            </div>
+
+            {showViewBuilder && (
+              <form className="mt-3 space-y-3 rounded-lg border border-white/10 bg-zinc-950/50 p-3" onSubmit={submitViewBuilder}>
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1"><p className="font-medium text-zinc-100">{editingViewId ? 'Editar visualização' : 'Nova visualização'}</p><p className="text-[11px] text-zinc-500">Filtra tarefas por uma propriedade da database, como “Repositório” no Notion.</p></div>
+                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={cancelViewBuilder} aria-label="Fechar editor de visualização" title="Fechar"><X size={14} /></button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input className={`${inputClass} h-9`} value={viewDraft.name} onChange={(event) => setViewDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Nome da visualização" aria-label="Nome da visualização" required />
+                  <select className={`${inputClass} h-9`} value={viewDraft.statusFilter} onChange={(event) => setViewDraft((current) => ({ ...current, statusFilter: event.target.value as NotionStatusScope }))} aria-label="Estado incluído na visualização">
+                    <option value="all">Todos os estados</option>
+                    <option value="open">Só abertas</option>
+                    <option value="done">Só concluídas</option>
+                  </select>
+                </div>
+                {filterableProperties.length > 0 ? (
+                  <div className="space-y-2">
+                    <select
+                      className={`${inputClass} h-9`}
+                      value={viewDraft.property}
+                      onChange={(event) => setViewDraft((current) => ({ ...current, property: event.target.value, values: [] }))}
+                      aria-label="Propriedade para filtrar"
+                    >
+                      <option value="">Sem filtro por propriedade</option>
+                      {filterableProperties.map((property) => <option key={property.name} value={property.name}>{property.name}</option>)}
+                    </select>
+                    {viewDraft.property && (
+                      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Valores de ${viewDraft.property}`}>
+                        {filterableProperties.find((property) => property.name === viewDraft.property)?.options.map((option) => {
+                          const checked = viewDraft.values.includes(option)
+                          return (
+                            <button key={option} type="button" className={`rounded-full border px-2.5 py-1 text-[11px] ${checked ? 'border-sky-500/60 bg-sky-500/15 text-sky-200' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`} onClick={() => toggleViewDraftValue(option)}>{option}</button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded border border-dashed border-white/10 px-2 py-2 text-[11px] text-zinc-500">Esta database não tem propriedades do tipo seleção para filtrar (select, multi-select ou status).</p>
+                )}
+                <div className="flex justify-end gap-2"><button type="button" className="felixo-btn rounded-md px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={cancelViewBuilder}>Cancelar</button><button type="submit" className="felixo-btn flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"><Save size={13} /> {editingViewId ? 'Salvar alterações' : 'Criar visualização'}</button></div>
+              </form>
+            )}
 
             {showTaskComposer && (
               <form className="mt-3 space-y-3 rounded-lg border border-white/10 bg-zinc-950/50 p-3" onSubmit={(event) => void submitTask(event)}>
@@ -557,9 +720,9 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                     </tr>
                   </thead>
                   <tbody aria-live="polite">
-                    {tasks.length === 0 ? (
+                    {visibleTasks.length === 0 ? (
                       <tr><td colSpan={6} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
-                    ) : tasks.map((task) => {
+                    ) : visibleTasks.map((task) => {
                       const hasDetails = true
                       const isExpanded = expandedTaskId === task.id
                       const taskContent = taskContentById[task.id]
@@ -590,7 +753,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{tasks.length} tarefa(s) exibida(s)</span><span>{stale ? 'Dados locais' : 'Notion conectado'}</span></div>
+              <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{visibleTasks.length} tarefa(s) exibida(s)</span><span>{stale ? 'Dados locais' : 'Notion conectado'}</span></div>
             </div>
           </>
         )}
@@ -618,6 +781,10 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
 function emptyDraft(): TaskDraft {
   return { title: '', completed: false, status: '', dueDate: '', priority: '', text: '' }
+}
+
+function emptyViewDraft(): { name: string; statusFilter: NotionStatusScope; property: string; values: string[] } {
+  return { name: '', statusFilter: 'all', property: '', values: [] }
 }
 
 function formatDate(value: string): string {
