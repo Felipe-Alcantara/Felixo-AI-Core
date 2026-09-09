@@ -22,6 +22,7 @@ const {
   createClaudeUsageQuery,
   parseClaudeUsageOutput,
 } = require('./claude-usage-query.cjs')
+const { criarSpawnPtyEstavelNoWindows } = require('./pty-native-test-support.cjs')
 
 const NOW = Date.parse('2026-08-30T19:00:00.000Z')
 const TEMPO_LIMITE_MS = 15_000
@@ -241,7 +242,11 @@ test('consulta o /status do Claude por PTY nativa e navega até Usage', async ()
     nativeExit = resolver
   })
 
-  const originalSpawn = nodePty.spawn
+  // No Windows, força o backend do ConPTY baseado em DLL: evita o kill() que
+  // bifurca conpty_console_list_agent.js (ver pty-native-test-support.cjs)
+  // e crasha com STATUS_HEAP_CORRUPTION nos runners do CI.
+  const spawnEstavel = criarSpawnPtyEstavelNoWindows()
+  const originalSpawn = spawnEstavel ?? nodePty.spawn
   nodePty.spawn = (file, args, options) => {
     launch = { file, args, options }
     ptyProcess = originalSpawn(file, args, options)
