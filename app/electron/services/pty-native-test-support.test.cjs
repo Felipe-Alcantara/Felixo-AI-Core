@@ -64,7 +64,10 @@ test('taskkill que lança (processo já morto) não propaga o erro — ainda dev
 test('criarKillPtyEstavelNoWindows devolve uma função pronta pra injetar em PtyProcessManager', () => {
   const kill = criarKillPtyEstavelNoWindows()
   assert.equal(typeof kill, 'function')
-  // Fora do Windows (onde este teste roda) devolve false — quem chama cai de
-  // volta no kill() nativo, como o safeKill() de produção já espera.
-  assert.equal(kill({ pid: 4242 }, 'SIGKILL'), false)
+  // O comportamento real por plataforma já está coberto (com platformName
+  // injetado) nos testes acima; aqui só provamos que a fábrica devolve algo
+  // chamável com a assinatura (ptyProcess, signal) que PtyProcessManager
+  // espera de `killPtyProcess`, sem depender de rodar exatamente no Windows
+  // ou fora dele — este arquivo roda nos três SOs do CI.
+  assert.equal(typeof kill({ pid: 4242 }, 'SIGKILL'), 'boolean')
 })
