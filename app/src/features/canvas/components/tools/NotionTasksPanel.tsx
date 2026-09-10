@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   Check,
   CalendarDays,
@@ -46,6 +46,7 @@ import {
   hasUsableCachedSnapshot,
   type PanelSyncStatus,
 } from '../../services/notion-sync-status'
+import { createRefreshCoordinator, targetChanged } from '../../services/notion-refresh-coordinator'
 
 type NotionTasksPanelProps = {
   onClose: () => void
@@ -225,6 +226,16 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     return () => window.clearTimeout(timer)
   }, [connectionId, loadDatabases])
 
+  // Nunca deixa dois loadTasks() rodarem em paralelo (manual, timer, busca,
+  // troca de filtro disputando ao mesmo tempo) — ver notion-refresh-coordinator.ts.
+  const refreshCoordinatorRef = useRef(createRefreshCoordinator())
+  // Sempre reflete a conexão/tabela SELECIONADA agora, pra uma resposta que
+  // chega depois de uma troca de tabela poder se reconhecer como obsoleta.
+  const activeTargetRef = useRef({ connectionId, dataSourceId })
+  useEffect(() => {
+    activeTargetRef.current = { connectionId, dataSourceId }
+  }, [connectionId, dataSourceId])
+
   /**
    * `silent` é usado pela sincronização automática em segundo plano: mantém o
    * detalhe expandido e o conteúdo já carregado de uma tarefa (não reseta a
@@ -232,65 +243,80 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
    * a lista por baixo. Uma sincronização manual (botão, busca, troca de
    * database) continua limpando os dois, como sempre.
    */
-  const loadTasks = useCallback(async (options: { silent?: boolean } = {}) => {
+  const loadTasks = useCallback((options: { silent?: boolean } = {}) => {
     const { silent = false } = options
-    if (!api || !connectionId || !dataSourceId) {
-      setTasks([])
-      setSyncStatus('idle')
-      return
-    }
-    if (!silent) {
-      setTaskContentById({})
-      setExpandedTaskId(null)
-    }
-    setError(null)
+    const targetConnectionId = connectionId
+    const targetDataSourceId = dataSourceId
 
-    // Fase 1 (stale-while-revalidate, lado "stale"): mostra o snapshot local
-    // na hora, sem esperar a rede. Um refresh silencioso (auto-sync) pula
-    // isto — a lista já exibida É o snapshot mais recente que se tem.
-    let hasLocalSnapshot = false
-    if (!silent) {
-      const cachedResult = await api.getCachedTasks({
-        connectionId,
-        dataSourceId,
+    return refreshCoordinatorRef.current.trigger(async () => {
+      if (!api || !targetConnectionId || !targetDataSourceId) {
+        setTasks([])
+        setSyncStatus('idle')
+        return
+      }
+      // Uma resposta cujo alvo já não é mais a tabela selecionada é
+      // descartada silenciosamente — nunca sobrescreve o que já apareceu
+      // de uma tabela nova selecionada nesse meio tempo.
+      const isStale = () => targetChanged(
+        { connectionId: targetConnectionId, dataSourceId: targetDataSourceId },
+        activeTargetRef.current,
+      )
+
+      if (!silent) {
+        setTaskContentById({})
+        setExpandedTaskId(null)
+      }
+      setError(null)
+
+      // Fase 1 (stale-while-revalidate, lado "stale"): mostra o snapshot local
+      // na hora, sem esperar a rede. Um refresh silencioso (auto-sync) pula
+      // isto — a lista já exibida É o snapshot mais recente que se tem.
+      let hasLocalSnapshot = false
+      if (!silent) {
+        const cachedResult = await api.getCachedTasks({
+          connectionId: targetConnectionId,
+          dataSourceId: targetDataSourceId,
+          search,
+          status: activeView.statusFilter,
+        })
+        if (isStale()) return
+        hasLocalSnapshot = hasUsableCachedSnapshot(cachedResult)
+        if (hasLocalSnapshot) {
+          setTasks(cachedResult.tasks || [])
+          setSchema(cachedResult.schema || {})
+          setFetchedAt(cachedResult.fetchedAt || null)
+        }
+      }
+      // Só bloqueia a UI (spinner de carregamento cheio) quando não há nada
+      // local pra mostrar enquanto se espera a rede — o caso raro de primeira
+      // visita a uma tabela nunca sincronizada antes.
+      setBusy(!silent && !hasLocalSnapshot)
+      setSyncStatus('syncing')
+
+      // Fase 2: revalida com a rede de verdade, em segundo plano quando já
+      // havia um snapshot local exibido.
+      const result = await api.listTasks({
+        connectionId: targetConnectionId,
+        dataSourceId: targetDataSourceId,
         search,
         status: activeView.statusFilter,
       })
-      hasLocalSnapshot = hasUsableCachedSnapshot(cachedResult)
-      if (hasLocalSnapshot) {
-        setTasks(cachedResult.tasks || [])
-        setSchema(cachedResult.schema || {})
-        setFetchedAt(cachedResult.fetchedAt || null)
+      if (isStale()) return
+      setBusy(false)
+      setSyncStatus(decideSyncStatusAfterNetwork(result, hasLocalSnapshot))
+      if (!result.ok) {
+        if (!silent) {
+          setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
+        }
+        return
       }
-    }
-    // Só bloqueia a UI (spinner de carregamento cheio) quando não há nada
-    // local pra mostrar enquanto se espera a rede — o caso raro de primeira
-    // visita a uma tabela nunca sincronizada antes.
-    setBusy(!silent && !hasLocalSnapshot)
-    setSyncStatus('syncing')
-
-    // Fase 2: revalida com a rede de verdade, em segundo plano quando já
-    // havia um snapshot local exibido.
-    const result = await api.listTasks({
-      connectionId,
-      dataSourceId,
-      search,
-      status: activeView.statusFilter,
+      setTasks(result.tasks || [])
+      setSchema(result.schema || {})
+      setFetchedAt(result.fetchedAt || null)
+      if (result.stale && !silent) {
+        setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
+      }
     })
-    setBusy(false)
-    setSyncStatus(decideSyncStatusAfterNetwork(result, hasLocalSnapshot))
-    if (!result.ok) {
-      if (!silent) {
-        setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
-      }
-      return
-    }
-    setTasks(result.tasks || [])
-    setSchema(result.schema || {})
-    setFetchedAt(result.fetchedAt || null)
-    if (result.stale && !silent) {
-      setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
-    }
   }, [api, connectionId, dataSourceId, search, activeView.statusFilter])
 
   const visibleTasks = useMemo(() => filterTasksByView(tasks, activeView), [tasks, activeView])
@@ -303,22 +329,14 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
   // Sincronização automática: revalida a lista com o Notion a cada minuto,
   // sem interromper o que a pessoa está fazendo (detalhe aberto, busca
-  // digitada). Uma chamada em andamento não empilha outra.
+  // digitada). O coordinator (dentro de loadTasks) já garante que isto nunca
+  // roda em paralelo com um load manual ou outro tick — só entra na fila.
   useEffect(() => {
     if (!autoSyncEnabled || !connectionId || !dataSourceId) return undefined
-    let cancelled = false
-    let inFlight = false
     const interval = window.setInterval(() => {
-      if (inFlight || cancelled) return
-      inFlight = true
-      void loadTasks({ silent: true }).finally(() => {
-        inFlight = false
-      })
+      void loadTasks({ silent: true })
     }, AUTO_SYNC_INTERVAL_MS)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
+    return () => window.clearInterval(interval)
   }, [autoSyncEnabled, connectionId, dataSourceId, loadTasks])
 
   async function saveConnection() {
