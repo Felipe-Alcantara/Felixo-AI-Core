@@ -56,6 +56,7 @@ async function main(argv = process.argv.slice(2)) {
     })
     report.startupMs = appResult.startupMs
     report.pty = appResult.status.pty
+    report.contextDelivery = appResult.status.contextDelivery
     report.nativeErrors = appResult.nativeErrors
     report.appVersion = appResult.status.appVersion
 
@@ -144,6 +145,7 @@ function createEmptyReport() {
     installed: null,
     startupMs: null,
     pty: null,
+    contextDelivery: null,
     npmRuntime: null,
     nativeErrors: [],
     result: 'failed',
@@ -348,9 +350,9 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
     )
   }
 
-  if (!status?.pty?.ok || !status.userDataWritable) {
+  if (!status?.pty?.ok || !status.userDataWritable || !status?.contextDelivery?.ok) {
     throw createSmokeError(
-      'O app empacotado encerrou sem validar PTY e userData.',
+      'O app empacotado encerrou sem validar PTY, userData e a entrega de contexto.',
       nativeErrors,
     )
   }

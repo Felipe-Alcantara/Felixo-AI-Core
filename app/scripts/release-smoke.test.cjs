@@ -125,20 +125,50 @@ test('records only native loading diagnostics', () => {
   )
 })
 
+function simulateContextReads(script, contextFilesDir) {
+  const readCalls = [...script.matchAll(/felixo context read "(.+)"/g)].map((match) => match[1])
+  let output = ''
+  for (const name of readCalls) {
+    const filePath = path.join(contextFilesDir, name)
+    if (fs.existsSync(filePath)) {
+      output += fs.readFileSync(filePath, 'utf8')
+    } else {
+      output += `Artefato de contexto não encontrado: ${name}. Não substitua por outro artefato; informe este nome e o erro exato.\n`
+    }
+  }
+  return `${output}FELIXO_RELEASE_CONTEXT_DONE\n`
+}
+
 test('packaged app smoke uses the real-process status contract', async () => {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-app-test-'))
   const statusFile = path.join(temporaryRoot, 'status.json')
   const userData = path.join(temporaryRoot, 'user-data')
 
+  // `runPackagedReleaseSmoke` reusa o mesmo manager para duas fases — o PTY
+  // cru e a entrega de contexto — cada uma com o seu próprio marcador de
+  // conclusão. Para a fase de contexto, o fake lê os arquivos reais gravados
+  // em `userData/context-deliveries` (o mesmo caminho que `writeContextFile`
+  // usou) em vez de ecoar um texto fixo: prova que o teste de contrato segue
+  // amarrado ao conteúdo real, e não a uma string fabricada de propósito. A
+  // profundidade byte-a-byte plena mora em `electron/release-smoke.test.cjs`,
+  // que roda o shim de verdade.
   class FakePtyManager {
-    spawn(_sessionId, options) {
+    spawn(sessionId, options) {
+      const isContextSession = sessionId.startsWith('release-smoke-context-')
       queueMicrotask(() => {
-        options.onData('FELIXO_RELEASE_PTY_OK\r\n')
+        if (isContextSession) {
+          options.onData(this.contextOutput || '')
+        } else {
+          options.onData('FELIXO_RELEASE_PTY_OK\r\n')
+        }
         options.onExit({ exitCode: 0 })
       })
     }
 
-    write() {
+    write(sessionId, script) {
+      if (sessionId.startsWith('release-smoke-context-')) {
+        this.contextOutput = simulateContextReads(script, path.join(userData, 'context-deliveries'))
+      }
       return true
     }
 
@@ -163,6 +193,10 @@ test('packaged app smoke uses the real-process status contract', async () => {
     assert.equal(status.appVersion, '0.1.999')
     assert.equal(status.userDataWritable, true)
     assert.equal(status.pty.ok, true)
+    assert.equal(status.contextDelivery.ok, true)
+    assert.equal(status.contextDelivery.files.length, 2)
+    assert.ok(status.contextDelivery.files.every((file) => file.readExactly === true))
+    assert.equal(status.contextDelivery.missingArtifactReported, true)
     assert.equal(JSON.parse(fs.readFileSync(statusFile, 'utf8')).pty.marker, 'FELIXO_RELEASE_PTY_OK')
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
