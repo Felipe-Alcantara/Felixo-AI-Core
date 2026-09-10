@@ -84,6 +84,7 @@ const {
 } = require('./core/graphics-mode.cjs')
 const {
   clearGraphicsRecommendation,
+  dismissGraphicsRecommendation,
   evaluateGpuAfterReady,
   readGraphicsRecommendation,
 } = require('./core/graphics-recommendation.cjs')
@@ -294,7 +295,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('graphics:dismiss-recommendation', () => {
     const userDataPath = app.getPath('userData')
     const hadRecommendation = Boolean(readGraphicsRecommendation(userDataPath))
-    clearGraphicsRecommendation(userDataPath)
+    // Não só limpa — lembra qual sinal foi recusado, pra um boot seguinte
+    // com o MESMO problema não voltar a incomodar (só um sinal diferente
+    // justifica perguntar de novo).
+    dismissGraphicsRecommendation(userDataPath)
     if (hadRecommendation) {
       logQaEvent({
         level: 'info',

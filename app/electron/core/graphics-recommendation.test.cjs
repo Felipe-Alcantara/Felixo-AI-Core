@@ -5,8 +5,10 @@ const test = require('node:test')
 
 const {
   clearGraphicsRecommendation,
+  dismissGraphicsRecommendation,
   evaluateGpuAfterReady,
   persistGraphicsRecommendation,
+  readDismissedSignal,
   readGraphicsRecommendation,
 } = require('./graphics-recommendation.cjs')
 
@@ -174,4 +176,106 @@ test('evaluateGpuAfterReady: getGPUFeatureStatus que lança não derruba o app n
   // Recomendação de um boot anterior continua valendo — uma falha de
   // consulta não é evidência de que o problema sumiu.
   assert.notEqual(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('recomendação recusada: o MESMO sinal não volta a incomodar no próximo boot', async () => {
+  const fileSystem = fakeFileSystem()
+  const featureStatus = { gpu_compositing: 'blocklisted', webgl: 'enabled', rasterization: 'enabled' }
+
+  // Boot 1: detecta e persiste.
+  const boot1 = await evaluateGpuAfterReady({ userDataPath: '/perfil', getGPUFeatureStatus: () => featureStatus, fileSystem })
+  assert.equal(boot1.recommended, true)
+
+  // A pessoa recusa (equivalente ao IPC graphics:dismiss-recommendation).
+  dismissGraphicsRecommendation('/perfil', fileSystem)
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+  assert.deepEqual(readDismissedSignal('/perfil', fileSystem), ['gpu_compositing'])
+
+  // Boot 2: MESMO sinal (o driver continua exatamente igual) — fica quieto,
+  // não persiste recomendação nova nenhuma.
+  const boot2 = await evaluateGpuAfterReady({ userDataPath: '/perfil', getGPUFeatureStatus: () => featureStatus, fileSystem })
+  assert.equal(boot2.recommended, false)
+  assert.equal(boot2.dismissed, true)
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('recomendação recusada: um sinal DIFERENTE volta a perguntar', async () => {
+  const fileSystem = fakeFileSystem()
+
+  const boot1 = await evaluateGpuAfterReady({
+    userDataPath: '/perfil',
+    getGPUFeatureStatus: () => ({ gpu_compositing: 'blocklisted', webgl: 'enabled', rasterization: 'enabled' }),
+    fileSystem,
+  })
+  assert.equal(boot1.recommended, true)
+  dismissGraphicsRecommendation('/perfil', fileSystem)
+
+  // Boot 2: agora é o webgl que quebrou também — sinal diferente do que foi
+  // recusado (['gpu_compositing'] !== ['gpu_compositing','webgl']).
+  const boot2 = await evaluateGpuAfterReady({
+    userDataPath: '/perfil',
+    getGPUFeatureStatus: () => ({ gpu_compositing: 'blocklisted', webgl: 'disabled_off', rasterization: 'enabled' }),
+    fileSystem,
+  })
+  assert.equal(boot2.recommended, true)
+  assert.deepEqual(readGraphicsRecommendation('/perfil', fileSystem).disabledFeatures, ['gpu_compositing', 'webgl'])
+})
+
+test('sinal de GPU incompatível NUNCA sobrescreve a escolha manual da pessoa (só sugere)', async () => {
+  const fileSystem = fakeFileSystem()
+  const { resolveGraphicsProfile } = require('./graphics-mode.cjs')
+
+  // A pessoa escolheu manualmente "GPU normal" (hardware) mesmo sabendo do
+  // risco — o modo persistido continua sendo exatamente esse, mesmo depois
+  // de detectar e recomendar o compatível.
+  const perfilAntes = resolveGraphicsProfile({
+    argv: [], environment: {}, userDataPath: '', platformName: 'linux',
+    totalMemoryBytes: 16 * 1024 * 1024 * 1024, cpuCount: 8,
+  })
+  assert.equal(perfilAntes.mode, 'auto') // sem persisted mode ainda, é o baseline
+
+  const resultado = await evaluateGpuAfterReady({
+    userDataPath: '/perfil',
+    getGPUFeatureStatus: () => ({ gpu_compositing: 'blocklisted' }),
+    alreadyUsingSoftwareRendering: false, // ex.: modo manual 'hardware', GPU ligada nesta sessão
+    fileSystem,
+  })
+
+  // Recomenda — mas isso é só um arquivo de sugestão separado. O modo
+  // gráfico em si (o que resolveGraphicsProfile realmente aplicaria) nunca
+  // é tocado por evaluateGpuAfterReady — só persistGraphicsMode() (chamado
+  // manualmente via graphics:set-mode) muda isso.
+  assert.equal(resultado.recommended, true)
+  assert.equal(fileSystem.files.has('graphics-mode.json'), false)
+})
+
+test('precedência de graphics-mode.cjs (CLI > env > persisted > default) continua intacta', () => {
+  const { resolveGraphicsProfile } = require('./graphics-mode.cjs')
+
+  const porCli = resolveGraphicsProfile({
+    argv: ['--felixo-graphics-mode=software'],
+    environment: { FELIXO_GRAPHICS_MODE: 'hardware' },
+    userDataPath: '',
+    platformName: 'linux',
+    totalMemoryBytes: 16 * 1024 * 1024 * 1024,
+  })
+  assert.equal(porCli.mode, 'software')
+  assert.equal(porCli.source, 'cli')
+})
+
+test('recomendação aceita: persistGraphicsMode grava o que o próximo boot vai ler', () => {
+  const { persistGraphicsMode, resolveGraphicsProfile } = require('./graphics-mode.cjs')
+  const fileSystem = fakeFileSystem()
+
+  // Equivalente ao clique em "Usar modo compatível": graphics:set-mode('software').
+  persistGraphicsMode({ userDataPath: '/perfil', mode: 'software', fileSystem })
+
+  // Próximo boot: resolveGraphicsProfile lê exatamente esse modo persistido.
+  const proximoBoot = resolveGraphicsProfile({
+    argv: [], environment: {}, userDataPath: '/perfil', platformName: 'win32',
+    totalMemoryBytes: 16 * 1024 * 1024 * 1024, fileSystem,
+  })
+  assert.equal(proximoBoot.mode, 'software')
+  assert.equal(proximoBoot.useSoftwareRendering, true)
+  assert.equal(proximoBoot.source, 'profile')
 })

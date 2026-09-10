@@ -5,6 +5,10 @@ const path = require('node:path')
 const { detectGpuIncompatibility } = require('./graphics-signal.cjs')
 
 const GRAPHICS_RECOMMENDATION_FILE = 'graphics-recommendation.json'
+// Lembra qual sinal a pessoa já recusou, pra um boot seguinte com o MESMO
+// problema (driver continua igual) não voltar a incomodar — só um sinal
+// genuinamente diferente (outra feature desligada) justifica perguntar de novo.
+const GRAPHICS_DISMISSED_SIGNAL_FILE = 'graphics-dismissed-signal.json'
 
 /**
  * @module graphics-recommendation
@@ -60,6 +64,54 @@ function clearGraphicsRecommendation(userDataPath, fileSystem = fs) {
   }
 }
 
+function getDismissedSignalPath(userDataPath) {
+  if (typeof userDataPath !== 'string' || !userDataPath.trim()) return null
+  return path.join(userDataPath, GRAPHICS_DISMISSED_SIGNAL_FILE)
+}
+
+function readDismissedSignal(userDataPath, fileSystem = fs) {
+  const filePath = getDismissedSignalPath(userDataPath)
+  if (!filePath) return null
+  try {
+    const payload = JSON.parse(fileSystem.readFileSync(filePath, 'utf8'))
+    return Array.isArray(payload?.disabledFeatures) ? payload.disabledFeatures : null
+  } catch {
+    return null
+  }
+}
+
+function persistDismissedSignal({ userDataPath, disabledFeatures, fileSystem = fs }) {
+  const filePath = getDismissedSignalPath(userDataPath)
+  if (!filePath) return
+  fileSystem.mkdirSync(path.dirname(filePath), { recursive: true })
+  fileSystem.writeFileSync(
+    filePath,
+    `${JSON.stringify({ disabledFeatures }, null, 2)}\n`,
+    'utf8',
+  )
+}
+
+/** Mesmo conjunto de features, independente da ordem. */
+function sameFeatureSet(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+  const sortedA = [...a].sort()
+  const sortedB = [...b].sort()
+  return sortedA.every((feature, index) => feature === sortedB[index])
+}
+
+/**
+ * Recusa a recomendação pendente (a pessoa escolheu "manter GPU normal"):
+ * limpa a recomendação em si e grava qual sinal foi recusado, pra
+ * `evaluateGpuAfterReady` não voltar a incomodar com o MESMO problema.
+ */
+function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
+  const current = readGraphicsRecommendation(userDataPath, fileSystem)
+  clearGraphicsRecommendation(userDataPath, fileSystem)
+  if (current) {
+    persistDismissedSignal({ userDataPath, disabledFeatures: current.disabledFeatures, fileSystem })
+  }
+}
+
 /**
  * Roda DEPOIS de `app.whenReady()` — é o primeiro momento em que
  * `app.getGPUFeatureStatus()` existe. Nunca aplica `disable-gpu` na sessão
@@ -110,6 +162,13 @@ async function evaluateGpuAfterReady({
     return { evaluated: true, recommended: false }
   }
 
+  // Mesmo sinal que a pessoa já recusou explicitamente — fica quieto. Só um
+  // sinal DIFERENTE (outra feature quebrou) justifica perguntar de novo.
+  const dismissedFeatures = readDismissedSignal(userDataPath, fileSystem)
+  if (dismissedFeatures && sameFeatureSet(dismissedFeatures, signal.disabledFeatures)) {
+    return { evaluated: true, recommended: false, dismissed: true }
+  }
+
   const recommendation = persistGraphicsRecommendation({
     userDataPath,
     reason: signal.reason,
@@ -121,10 +180,14 @@ async function evaluateGpuAfterReady({
 }
 
 module.exports = {
+  GRAPHICS_DISMISSED_SIGNAL_FILE,
   GRAPHICS_RECOMMENDATION_FILE,
   clearGraphicsRecommendation,
+  dismissGraphicsRecommendation,
   evaluateGpuAfterReady,
+  getDismissedSignalPath,
   getRecommendationPath,
   persistGraphicsRecommendation,
+  readDismissedSignal,
   readGraphicsRecommendation,
 }
