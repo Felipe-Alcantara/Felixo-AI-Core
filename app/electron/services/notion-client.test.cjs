@@ -261,6 +261,78 @@ test('cliente lê o estado atual de uma página com GET, sem alterar nada', asyn
   assert.equal(task.title, 'Título remoto')
 })
 
+test('nenhum status de erro do Notion (nem o payload da resposta) vaza o token na mensagem', async () => {
+  const TOKEN = 'secret_jamais_deveria_aparecer'
+  const cenarios = [
+    { status: 401, payload: { object: 'error', code: 'unauthorized', message: `token ${TOKEN} inválido` } },
+    { status: 403, payload: { object: 'error', code: 'restricted_resource', message: `Bearer ${TOKEN}` } },
+    { status: 404, payload: { object: 'error', code: 'object_not_found', message: TOKEN } },
+    { status: 409, payload: { object: 'error', code: 'conflict_error', message: TOKEN } },
+    { status: 429, payload: { object: 'error', code: 'rate_limited', message: TOKEN } },
+    { status: 500, payload: { object: 'error', code: 'internal_server_error', message: TOKEN } },
+    { status: 400, payload: { object: 'error', code: 'validation_error', message: TOKEN } },
+    { status: 400, payload: { object: 'error', code: 'algo_desconhecido', message: TOKEN } },
+  ]
+
+  for (const cenario of cenarios) {
+    const client = createNotionClient({
+      token: TOKEN,
+      maxRetries: 0,
+      fetchImpl: async () => fakeResponse(cenario.status, cenario.payload),
+    })
+
+    await assert.rejects(
+      () => client.getCurrentUser(),
+      (error) => {
+        assert.ok(error instanceof NotionClientError, `status ${cenario.status} deveria lançar NotionClientError`)
+        assert.doesNotMatch(
+          error.message,
+          new RegExp(TOKEN),
+          `status ${cenario.status}: a mensagem de erro não pode conter o token`,
+        )
+        return true
+      },
+    )
+  }
+})
+
+test('falha de rede (fetch lança) e timeout (AbortError) também nunca vazam o token', async () => {
+  const TOKEN = 'secret_de_rede_jamais_deveria_aparecer'
+
+  const clienteQueFalha = createNotionClient({
+    token: TOKEN,
+    maxRetries: 0,
+    fetchImpl: async () => {
+      throw new Error(`falha de socket carregando Bearer ${TOKEN}`)
+    },
+  })
+  await assert.rejects(
+    () => clienteQueFalha.getCurrentUser(),
+    (error) => {
+      assert.doesNotMatch(error.message, new RegExp(TOKEN))
+      return true
+    },
+  )
+
+  const clienteQueExpira = createNotionClient({
+    token: TOKEN,
+    maxRetries: 0,
+    fetchImpl: async () => {
+      const erro = new Error(`abortado: Authorization Bearer ${TOKEN}`)
+      erro.name = 'AbortError'
+      throw erro
+    },
+  })
+  await assert.rejects(
+    () => clienteQueExpira.getCurrentUser(),
+    (error) => {
+      assert.doesNotMatch(error.message, new RegExp(TOKEN))
+      assert.equal(error.code, 'timeout')
+      return true
+    },
+  )
+})
+
 test('cliente redige falhas e repete respostas transitórias', async () => {
   const requests = []
   let call = 0
