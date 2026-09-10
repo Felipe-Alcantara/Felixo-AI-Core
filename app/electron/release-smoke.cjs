@@ -72,6 +72,14 @@ async function runPackagedReleaseSmoke({
 
       status.contextDelivery = await runContextCatalogSmoke({ app, manager, cwd: ptyCwd })
       writeStatus()
+      if (!status.contextDelivery.ok) {
+        // `writeStatus()` já colocou o `rawOutputPreview` completo no arquivo
+        // de status — o `Error` lançado aqui fica curto de propósito, porque
+        // `scripts/release-smoke.cjs` trunca o diagnóstico do processo a 2000
+        // caracteres e um preview de 4000 não sobrevive junto com o resto do
+        // stack trace.
+        throw new Error('A entrega de catálogo empacotada falhou; ver contextDelivery no relatório JSON.')
+      }
     } finally {
       manager.killAll({ force: true })
       removeTemporaryDirectory(ptyCwd)
@@ -246,26 +254,20 @@ async function runContextCatalogSmoke({ app, manager, cwd }) {
 
   const missingArtifactReported =
     normalizedOutput.includes('Artefato de contexto não encontrado') && normalizedOutput.includes(missingName)
-
-  if (perFile.some((file) => !file.readExactly)) {
-    // O conteúdo da fixture não é privado (gerado por este próprio smoke);
-    // incluir um recorte real no erro é o que permite diagnosticar uma
-    // divergência de codificação/PTY sem precisar reproduzi-la às cegas —
-    // já foi necessário uma vez, nesta mesma função (ver commit e65341f).
-    const preview = normalizedOutput.slice(-4_000)
-    throw new Error(
-      `O shim empacotado não devolveu algum artefato byte a byte. Saída (últimos 4000 chars, normalizada): ${JSON.stringify(preview)}`,
-    )
-  }
-  if (!missingArtifactReported) {
-    throw new Error('O shim empacotado não reportou o artefato ausente como esperado.')
-  }
+  const ok = perFile.every((file) => file.readExactly) && missingArtifactReported
 
   return {
-    ok: true,
+    ok,
     shimInstalled: install.caminho,
     files: perFile,
     missingArtifactReported,
+    // O conteúdo da fixture não é privado (gerado por este próprio smoke); um
+    // recorte cru só entra no relatório quando algo falhou, e vai no objeto de
+    // status (não no `Error` lançado) para sobreviver ao truncamento de 2000
+    // caracteres que `scripts/release-smoke.cjs` aplica ao diagnóstico do
+    // processo — foi exatamente isso que escondeu a evidência da primeira
+    // tentativa de diagnosticar esta função (ver commit ff41575).
+    ...(ok ? {} : { rawOutputPreview: normalizedOutput.slice(-4_000) }),
   }
 }
 

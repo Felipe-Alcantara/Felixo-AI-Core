@@ -84,7 +84,7 @@ test('prova a entrega de catálogo de ponta a ponta: escreve, instala o shim e l
   assert.ok(fs.existsSync(resultado.shimInstalled))
 })
 
-test('falha alto e claro quando o artefato ausente não é reportado pelo shim', async () => {
+test('reporta ok:false com preview cru quando o artefato ausente não é reportado pelo shim', async () => {
   const root = pastaTemporaria()
   const userData = path.join(root, 'profile')
   fs.mkdirSync(path.join(userData, 'context-deliveries'), { recursive: true })
@@ -114,10 +114,52 @@ test('falha alto e claro quando o artefato ausente não é reportado pelo shim',
     },
   }
 
+  const resultado = await runContextCatalogSmoke({ app: fakeApp, manager: managerMudo, cwd: root })
+
+  assert.equal(resultado.ok, false)
+  assert.equal(resultado.missingArtifactReported, false)
+  assert.ok(typeof resultado.rawOutputPreview === 'string' && resultado.rawOutputPreview.length > 0)
+})
+
+test('runPackagedReleaseSmoke lança quando a entrega de contexto reporta ok:false', async () => {
+  const root = pastaTemporaria()
+  const statusFile = path.join(root, 'status.json')
+  const userData = path.join(root, 'profile')
+
+  class FakePtyManager {
+    spawn(sessionId, options) {
+      const marker = sessionId.startsWith('release-smoke-context-')
+        ? 'FELIXO_RELEASE_CONTEXT_DONE'
+        : 'FELIXO_RELEASE_PTY_OK'
+      queueMicrotask(() => {
+        options.onData(`${marker}\r\n`)
+        options.onExit({ exitCode: 0 })
+      })
+    }
+
+    write() {
+      return true
+    }
+
+    aguardarEscritas() {
+      return Promise.resolve()
+    }
+
+    killAll() {}
+  }
+
   await assert.rejects(
-    () => runContextCatalogSmoke({ app: fakeApp, manager: managerMudo, cwd: root }),
-    /não devolveu algum artefato byte a byte|não reportou o artefato ausente/,
+    () => require('./release-smoke.cjs').runPackagedReleaseSmoke({
+      app: { isPackaged: true, getVersion: () => '0.1.999', getPath: () => userData },
+      statusFile,
+      PtyManager: FakePtyManager,
+    }),
+    /entrega de catálogo empacotada falhou/,
   )
+
+  const status = JSON.parse(fs.readFileSync(statusFile, 'utf8'))
+  assert.equal(status.contextDelivery.ok, false)
+  assert.ok(typeof status.contextDelivery.rawOutputPreview === 'string')
 })
 
 test('sobrevive à tradução \\n → \\r\\n de um PTY real, sem reprovar um corpo intacto', async () => {
