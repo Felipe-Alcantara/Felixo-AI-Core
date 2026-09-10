@@ -37,7 +37,24 @@ export function GraphicsRecoverySection() {
   }
 
   useEffect(() => {
-    void loadConfig()
+    let cancelled = false
+    const bridge = window.felixo?.graphics
+    if (!bridge) return
+
+    void bridge
+      .getConfig()
+      .then((result) => {
+        if (cancelled || !result.ok || !result.config) return
+        setMode(result.config.mode)
+        setConfig(result.config)
+      })
+      .catch(() => {
+        if (!cancelled) setMessage('Não foi possível ler o modo gráfico atual.')
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function saveMode() {
