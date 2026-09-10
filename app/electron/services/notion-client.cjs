@@ -177,7 +177,16 @@ function createNotionClient({
           ? payload.results.map((pageResult) => normalizePage(pageResult, currentSchema)).filter(Boolean)
           : []),
       )
-      if (!payload.has_more || !payload.next_cursor) break
+      // `cursor` só deve sobreviver ao laço quando a paginação foi
+      // INTERROMPIDA pelo teto de páginas com mais dado esperando — se
+      // `has_more` já veio false, a paginação terminou de verdade e o
+      // cursor da página anterior tem que ser esquecido; sem isto,
+      // `nextCursor` ficava com um cursor obsoleto e um `listTasks` de
+      // tabela paginada nunca reportava `hasMore: false` de verdade.
+      if (!payload.has_more || !payload.next_cursor) {
+        cursor = undefined
+        break
+      }
       cursor = payload.next_cursor
     }
 

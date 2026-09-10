@@ -171,6 +171,70 @@ test('cliente constrói propriedades genéricas para criar e atualizar tarefas',
   assert.deepEqual(properties.Due, { date: { start: '2026-09-08' } })
 })
 
+test('queryTasks segue next_cursor por várias páginas e agrega tudo numa lista só', async () => {
+  const requestBodies = []
+  const responses = [
+    {
+      object: 'list',
+      has_more: true,
+      next_cursor: 'cursor-pagina-2',
+      results: [{ object: 'page', id: 'page-1', url: null, properties: {} }],
+    },
+    {
+      object: 'list',
+      has_more: true,
+      next_cursor: 'cursor-pagina-3',
+      results: [{ object: 'page', id: 'page-2', url: null, properties: {} }],
+    },
+    {
+      object: 'list',
+      has_more: false,
+      next_cursor: null,
+      results: [{ object: 'page', id: 'page-3', url: null, properties: {} }],
+    },
+  ]
+  const client = createNotionClient({
+    token: 'secret-test-token',
+    fetchImpl: async (_url, options) => {
+      requestBodies.push(JSON.parse(options.body))
+      return fakeResponse(200, responses.shift())
+    },
+  })
+
+  const result = await client.queryTasks({ dataSourceId: 'source-1', schema: {} })
+
+  assert.deepEqual(result.tasks.map((task) => task.id), ['page-1', 'page-2', 'page-3'])
+  // nextCursor some (null) porque a paginação terminou sozinha — has_more
+  // virou false antes do teto de páginas, não porque foi truncada.
+  assert.equal(result.nextCursor, null)
+  assert.equal(requestBodies.length, 3)
+  assert.equal(requestBodies[0].start_cursor, undefined)
+  assert.equal(requestBodies[1].start_cursor, 'cursor-pagina-2')
+  assert.equal(requestBodies[2].start_cursor, 'cursor-pagina-3')
+})
+
+test('queryTasks para no teto de páginas e devolve o cursor restante em vez de rodar pra sempre', async () => {
+  let requestCount = 0
+  const client = createNotionClient({
+    token: 'secret-test-token',
+    fetchImpl: async () => {
+      requestCount += 1
+      return fakeResponse(200, {
+        object: 'list',
+        has_more: true,
+        next_cursor: `cursor-${requestCount}`,
+        results: [{ object: 'page', id: `page-${requestCount}`, url: null, properties: {} }],
+      })
+    },
+  })
+
+  const result = await client.queryTasks({ dataSourceId: 'source-1', schema: {}, maxPages: 2 })
+
+  assert.equal(requestCount, 2)
+  assert.equal(result.tasks.length, 2)
+  assert.equal(result.nextCursor, 'cursor-2')
+})
+
 test('cliente lê o estado atual de uma página com GET, sem alterar nada', async () => {
   const requests = []
   const schema = { Name: { id: 'name', name: 'Name', type: 'title' } }

@@ -1,7 +1,29 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 const { createNotionService, filterTasks, normalizeSchema } = require('./notion-service.cjs')
+const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
+const { createNotionCacheRepository } = require('./storage/notion-cache-repository.cjs')
+
+/**
+ * Bancada com repositório de cache REAL (SQLite temporário), não o fake em
+ * memória — pros cenários fim-a-fim (paginação sobrevivendo a revalidação,
+ * duas janelas concorrentes) onde o comportamento real de
+ * replaceSnapshot/upsertTask (a transação delete-then-insert) importa de
+ * verdade, não só a forma da chamada.
+ */
+function withRealCache(run) {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-notion-service-'))
+  const database = createStorageDatabase({ databaseDir })
+  const cache = createNotionCacheRepository(database)
+  return Promise.resolve(run(cache)).finally(() => {
+    database.close()
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  })
+}
 
 test('serviço Notion devolve cache quando a sincronização falha e sinaliza stale', async () => {
   const task = { id: 'page-1', title: 'Offline', completed: false, fields: {} }
@@ -265,6 +287,125 @@ test('removeConnection não toca o cache quando não havia nada pra remover', as
   assert.equal(result.removed, false)
   assert.deepEqual(clearedConnections, [])
 })
+
+test('cache paginado sobrevive a uma revalidação em segundo plano — a tabela encolheu, o cache reflete o novo tamanho, sem órfão', () =>
+  withRealCache(async (cache) => {
+    // Primeira sincronização: 3 páginas de 1 tarefa cada (queryTasks já
+    // agrega tudo numa única chamada — ver notion-client.test.cjs).
+    const paginas = [
+      { tasks: [{ id: 'page-1', title: 'Um', completed: false, fields: {} }, { id: 'page-2', title: 'Dois', completed: false, fields: {} }, { id: 'page-3', title: 'Três', completed: false, fields: {} }], nextCursor: null },
+      // Revalidação seguinte: a tabela encolheu (page-2 foi arquivada/apagada no Notion).
+      { tasks: [{ id: 'page-1', title: 'Um', completed: false, fields: {} }, { id: 'page-3', title: 'Três (editada)', completed: false, fields: {} }], nextCursor: null },
+    ]
+    const service = createNotionService({
+      connectionStore: fakeStore(),
+      cacheRepository: cache,
+      clientFactory: () => ({
+        resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+        queryTasks: async () => paginas.shift(),
+      }),
+      now: () => '2026-09-10T12:00:00.000Z',
+    })
+
+    const primeira = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.deepEqual(primeira.tasks.map((t) => t.id).sort(), ['page-1', 'page-2', 'page-3'])
+
+    const segunda = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.deepEqual(segunda.tasks.map((t) => t.id).sort(), ['page-1', 'page-3'])
+    // page-2 não fica órfão no cache depois da revalidação.
+    assert.equal(segunda.tasks.some((t) => t.id === 'page-2'), false)
+    assert.equal(segunda.tasks.find((t) => t.id === 'page-3').title, 'Três (editada)')
+
+    // Uma leitura de cache isolada (getCachedTasks, sem rede) confirma o
+    // mesmo estado — o SQLite realmente não guardou o page-2 antigo.
+    const cached = service.getCachedTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.deepEqual(cached.tasks.map((t) => t.id).sort(), ['page-1', 'page-3'])
+  }))
+
+test('duas janelas na mesma tarefa: a segunda escrita detecta o conflito da primeira, nunca sobrescreve', () =>
+  withRealCache(async (cache) => {
+    // Estado remoto simulado, que MUDA quando updateTask roda de verdade —
+    // diferente dos testes de conflito da fatia 3 (fixture estática), aqui
+    // o "servidor" reage às escritas, como duas janelas reais disputando.
+    let remoto = { id: 'page-1', title: 'Original', completed: false, fields: {}, updatedAt: '2026-09-10T12:00:00.000Z' }
+    const service = createNotionService({
+      connectionStore: fakeStore(),
+      cacheRepository: cache,
+      clientFactory: () => ({
+        resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+        getTask: async () => remoto,
+        updateTask: async ({ changes }) => {
+          remoto = { ...remoto, ...changes, updatedAt: '2026-09-10T12:05:00.000Z' }
+          return remoto
+        },
+      }),
+      now: () => '2026-09-10T12:05:01.000Z',
+    })
+
+    // As duas janelas abriram a mesma tarefa vendo o mesmo updatedAt.
+    const updatedAtVistoPorAmbas = remoto.updatedAt
+
+    // Janela B salva primeiro — sem conflito, era a versão vigente.
+    const resultadoB = await service.updateTask({
+      connectionId: 'connection-1',
+      dataSourceId: 'source-1',
+      pageId: 'page-1',
+      changes: { title: 'Editado pela janela B' },
+      expectedUpdatedAt: updatedAtVistoPorAmbas,
+    })
+    assert.equal(resultadoB.conflict, false)
+    assert.equal(resultadoB.task.title, 'Editado pela janela B')
+
+    // Janela A tenta salvar depois, ainda com o updatedAt de quando abriu —
+    // o remoto já mudou (a escrita da janela B). Rejeição segura.
+    const resultadoA = await service.updateTask({
+      connectionId: 'connection-1',
+      dataSourceId: 'source-1',
+      pageId: 'page-1',
+      changes: { title: 'Editado pela janela A' },
+      expectedUpdatedAt: updatedAtVistoPorAmbas,
+    })
+    assert.equal(resultadoA.conflict, true)
+    // A mudança da janela B continua valendo — A nunca a sobrescreveu.
+    assert.equal(resultadoA.task.title, 'Editado pela janela B')
+    assert.equal(remoto.title, 'Editado pela janela B')
+  }))
+
+test('rede intermitente: falha, sucesso, falha de novo — cada leitura reflete o estado real do momento', () =>
+  withRealCache(async (cache) => {
+    const comportamentos = [
+      async () => { throw new Error('offline 1') },
+      async () => ({ tasks: [{ id: 'page-1', title: 'Sincronizada', completed: false, fields: {} }], nextCursor: null }),
+      async () => { throw new Error('offline 2') },
+    ]
+    const service = createNotionService({
+      connectionStore: fakeStore(),
+      cacheRepository: cache,
+      clientFactory: () => ({
+        resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+        queryTasks: async () => comportamentos.shift()(),
+      }),
+      now: () => '2026-09-10T12:00:00.000Z',
+    })
+
+    // 1ª tentativa: falha, sem cache ainda — não tem pra onde cair, propaga o erro.
+    await assert.rejects(
+      () => service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' }),
+      /offline 1/,
+    )
+
+    // 2ª tentativa: rede volta, sincroniza de verdade.
+    const sucesso = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.equal(sucesso.syncStatus, 'success')
+    assert.deepEqual(sucesso.tasks.map((t) => t.id), ['page-1'])
+
+    // 3ª tentativa: rede cai de novo, mas agora há cache — cai pro
+    // snapshot salvo em vez de propagar o erro, e sinaliza stale.
+    const stale = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.equal(stale.syncStatus, 'stale')
+    assert.deepEqual(stale.tasks.map((t) => t.id), ['page-1'])
+    assert.match(stale.message, /offline 2/)
+  }))
 
 function fakeStore() {
   return {
