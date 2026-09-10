@@ -305,6 +305,12 @@ declare global {
             totalMemoryBytes: number | null
             cpuCount: number | null
             persistedMode: 'auto' | 'hardware' | 'software' | null
+            /** Sugestão pendente, detectada num boot anterior por sinal real de GPU — null quando não há nenhuma. */
+            recommendation: {
+              reason: 'gpu-feature-disabled'
+              disabledFeatures: string[]
+              detectedAt: string | null
+            } | null
           }
           message?: string
         }>
@@ -314,6 +320,8 @@ declare global {
           requiresRestart?: boolean
           message?: string
         }>
+        /** Descarta a recomendação pendente sem mudar o modo gráfico. */
+        dismissRecommendation: () => Promise<{ ok: boolean }>
       }
       cli?: {
         send: (params: {

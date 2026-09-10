@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('felixo', {
   graphics: {
     getConfig: () => ipcRenderer.invoke('graphics:get-config'),
     setMode: (mode) => ipcRenderer.invoke('graphics:set-mode', mode),
+    dismissRecommendation: () => ipcRenderer.invoke('graphics:dismiss-recommendation'),
   },
   // Esta ponte só existe na instância isolada iniciada por `felixo devtools`.
   // Não é carregada pelo app normal nem pela instância com perfil real.

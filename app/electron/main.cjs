@@ -83,6 +83,7 @@ const {
   resolveGraphicsProfile,
 } = require('./core/graphics-mode.cjs')
 const {
+  clearGraphicsRecommendation,
   evaluateGpuAfterReady,
   readGraphicsRecommendation,
 } = require('./core/graphics-recommendation.cjs')
@@ -258,9 +259,22 @@ app.whenReady().then(async () => {
   }))
   ipcMain.handle('graphics:set-mode', (_event, mode) => {
     try {
-      const savedMode = persistGraphicsMode({
-        userDataPath: app.getPath('userData'),
-        mode,
+      const userDataPath = app.getPath('userData')
+      const hadRecommendation = Boolean(readGraphicsRecommendation(userDataPath))
+      const savedMode = persistGraphicsMode({ userDataPath, mode })
+      // Uma escolha explícita de modo — seja aceitando o compatível ou
+      // mantendo/trocando pra outro — resolve qualquer recomendação
+      // pendente. Sem isto ela continuaria aparecendo depois de já decidida.
+      clearGraphicsRecommendation(userDataPath)
+      logQaEvent({
+        level: 'info',
+        scope: 'graphics:recommendation',
+        message: hadRecommendation
+          ? savedMode === 'software'
+            ? 'accepted'
+            : 'overridden-with-other-mode'
+          : 'manual-mode-change',
+        details: { mode: savedMode },
       })
 
       return {
@@ -276,6 +290,19 @@ app.whenReady().then(async () => {
         message: error instanceof Error ? error.message : 'Não foi possível salvar o modo gráfico.',
       }
     }
+  })
+  ipcMain.handle('graphics:dismiss-recommendation', () => {
+    const userDataPath = app.getPath('userData')
+    const hadRecommendation = Boolean(readGraphicsRecommendation(userDataPath))
+    clearGraphicsRecommendation(userDataPath)
+    if (hadRecommendation) {
+      logQaEvent({
+        level: 'info',
+        scope: 'graphics:recommendation',
+        message: 'dismissed',
+      })
+    }
+    return { ok: true }
   })
 
   // CDP alcança o renderer, não o processo main. A ponte abaixo só nasce na
