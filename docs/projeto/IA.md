@@ -3062,3 +3062,87 @@ separada acima do corpo.
 Validação local: TypeScript, ESLint, build Vite com 2.474 módulos, 30/30
 testes focados de Canvas, 8/8 testes do cliente/serviço Notion e
 `git diff --check` passaram.
+
+## [2026-09-10] Prova operacional real: entrega de catálogo de contexto no app empacotado, nos três SOs
+
+Task: [Felixo AI Core/Prompts — validar entrega real dos catálogos em app
+empacotado nos três SOs](https://app.notion.com/p/Felixo-AI-Core-Prompts-validar-entrega-real-dos-cat-logos-em-app-empacotado-nos-tr-s-SOs-3d691f95497e8107b59ce45d8f25c488).
+O smoke de release já provava PTY real e npm empacotado dentro do binário
+publicado (`electron/release-smoke.cjs`, `scripts/release-smoke.cjs`, rodado
+pela matriz de Release em ubuntu-latest/windows-latest/macos-latest); faltava
+a mesma prova para o contrato de entrega de catálogo — shim `felixo`
+instalado por este entrypoint empacotado → arquivo real gravado por
+`writeContextFile()` → `felixo context read <nome>` → corpo de volta byte a
+byte, incluindo o caso "artefato não encontrado".
+
+Em vez de um harness novo, estendi `runPackagedReleaseSmoke()`: escreve dois
+artefatos `catalog-prompt` reais (markdown, acentuação, emoji, newline duplo
+— simulando a "combinação ordenada" que `context-file-delivery.ts` monta
+quando entrega vários prompts juntos), instala o shim de verdade apontando
+para o próprio entrypoint empacotado, e roda `felixo context read` dentro de
+um PTY real (mesmo `PtyProcessManager` do canvas) — inclusive uma quarta
+leitura contra um nome inexistente, para provar o erro "Artefato de contexto
+não encontrado".
+
+A primeira tentativa (push `97e7977`) reprovou nos três SOs, e cada rodada
+seguinte revelou uma causa real e diferente, sempre medida no log/relatório
+JSON da própria matriz, nunca suposta:
+
+1. Um PTY POSIX (termios `onlcr`) e o ConPTY do Windows traduzem `\n` para
+   `\r\n` na leitura — a comparação byte a byte precisa normalizar isso antes
+   de comparar contra o arquivo (gravado com `\n` puro).
+2. O runner `windows-latest` usa PowerShell 7 (`pwsh.exe`) como shell padrão
+   (o adaptador win32 prefere pwsh quando existe). O PSReadLine e o ConPTY
+   intercalam sequências ANSI/VT de posição de cursor e cor NO MEIO do texto
+   impresso quando uma linha excede a largura do terminal — não só no fim.
+   Um `Error` com um recorte da saída real foi necessário para enxergar isso
+   (o diagnóstico do processo é truncado a 2000 caracteres por
+   `scripts/release-smoke.cjs`; o recorte teve que viajar pelo arquivo de
+   status, não pelo `Error` lançado, para sobreviver).
+3. Mesmo sem ANSI, uma linha mais longa que as 80 colunas padrão do PTY
+   ainda reflui: o ConPTY insere um `\n` de verdade no ponto de quebra e
+   duplica o caractere anterior a ele. Corrigido abrindo a sessão de smoke de
+   contexto com `cols: 1000`.
+4. Mesmo com largura suficiente, o PRIMEIRO comando executado num shell
+   pwsh/ConPTY recém-aberto perde linhas em branco — um artefato de
+   inicialização do console, não do shim nem do arquivo (a mesma leitura,
+   repetida como segundo comando, chega intacta). Corrigido com uma leitura
+   de aquecimento descartável antes da sequência que o smoke realmente
+   verifica.
+
+A captura real do run que expôs a causa 2 foi salva como fixture —
+`app/electron/__fixtures__/release-smoke-windows-conpty-sample.txt` — e um
+teste prova a normalização contra essa evidência real, não uma reprodução
+aproximada. `.gitattributes` marca esse arquivo `-text` porque os `\r`/`\n`
+nele são dado, não fim de linha.
+
+**Resultado final, medido na matriz de Release (run 34440446169), publicado
+como release v0.1.246:** os três SOs terminaram com `result: "passed"` e
+`contextDelivery: { ok: true, missingArtifactReported: true, files: [dois
+byte-exact] }` — confirmado lendo os três `release-smoke-<os>.json` baixados
+da run, não só o resumo verde do workflow.
+
+**Limitação declarada, não escondida:** o botão Inserir/combinar do canvas e
+a submissão com exatamente um Enter são comportamento do renderer
+(`terminal-session-store.ts`), fora do alcance de um PTY isolado do processo
+principal — seguem cobertos só por unidade (`terminal-session-store.test.ts`).
+O mesmo vale para os quatro cenários de falha do item 5 da task (sessão
+encerrada, permissão negada, falha de `pty:write`) fora do caso "artefato
+ausente", que este smoke já cobre de ponta a ponta. Abri
+[Felixo AI Core/Prompts — validar o botão Inserir/combinar e os cenários de
+falha da entrega de catálogo dentro do app
+empacotado](https://app.notion.com/p/Felixo-AI-Core-Prompts-validar-o-bot-o-Inserir-combinar-e-os-cen-rios-de-falha-da-entrega-de-cat-l-3d791f95497e811cb5cdfc72cac7cb5b)
+como a subtask que cobre especificamente esse gap.
+
+Empacotamento local (`npm run pack`) segue bloqueado nesta máquina Windows
+por um defeito de `fs.cpSync` alheio a este trabalho
+(`bundleNpmRuntime()` falha copiando `node_modules/npm` com "EPERM/The
+operation completed successfully", reproduzido isoladamente antes de tocar
+qualquer arquivo desta task) — por isso toda a validação packaged real
+aconteceu via a matriz de CI, não localmente.
+
+Testes: 12/12 em `electron/release-smoke.test.cjs` (dois novos casos usam a
+mesma técnica de `agent-command-install.test.cjs` — rodar o shim de verdade
+via `child_process`, sem `node-pty`, para provar o caminho de produção num
+teste unitário) e `scripts/release-smoke.test.cjs` (7/7). `npm run lint` e
+`npm run typecheck` limpos (2 avisos React pré-existentes, alheios).
