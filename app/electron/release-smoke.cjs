@@ -230,14 +230,22 @@ async function runContextCatalogSmoke({ app, manager, cwd }) {
   })
 
   const output = await runContextReadsInPty({ manager, cwd, names: [...writtenFiles.map((f) => f.name), missingName] })
+  // Um PTY POSIX (termios `onlcr`) e o ConPTY do Windows traduzem cada `\n`
+  // que o processo filho escreve para `\r\n` na leitura — é a camada de
+  // terminal, não o conteúdo. `writeContextFile` grava com `\n` puro, então
+  // comparar sem normalizar reprovaria toda entrega de mais de uma linha,
+  // mesmo com o corpo intacto. Medido ao vivo: os três SOs da matriz de
+  // Release falharam aqui antes desta normalização.
+  const normalizedOutput = output.replace(/\r\n/g, '\n')
 
   const perFile = writtenFiles.map((file) => ({
     kind: 'catalog-prompt',
     bytes: file.bytes,
-    readExactly: output.includes(file.expectedContent),
+    readExactly: normalizedOutput.includes(file.expectedContent),
   }))
 
-  const missingArtifactReported = output.includes('Artefato de contexto não encontrado') && output.includes(missingName)
+  const missingArtifactReported =
+    normalizedOutput.includes('Artefato de contexto não encontrado') && normalizedOutput.includes(missingName)
 
   if (perFile.some((file) => !file.readExactly)) {
     throw new Error('O shim empacotado não devolveu algum artefato byte a byte.')

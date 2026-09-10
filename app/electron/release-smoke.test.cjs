@@ -119,3 +119,55 @@ test('falha alto e claro quando o artefato ausente não é reportado pelo shim',
     /não devolveu algum artefato byte a byte|não reportou o artefato ausente/,
   )
 })
+
+test('sobrevive à tradução \\n → \\r\\n de um PTY real, sem reprovar um corpo intacto', async () => {
+  // Bug medido ao vivo na matriz de Release: um PTY POSIX (termios `onlcr`) e
+  // o ConPTY do Windows convertem cada `\n` que o processo filho escreve para
+  // `\r\n` na leitura. `writeContextFile` grava com `\n` puro; sem normalizar
+  // a saída do PTY antes de comparar, os três SOs reprovavam uma entrega cujo
+  // corpo estava, na verdade, intacto. Este fake reproduz exatamente essa
+  // tradução — algo que o teste com `execFileSync` (acima) não reproduz,
+  // porque um processo comum não passa pela disciplina de linha de um PTY.
+  const root = pastaTemporaria()
+  const userData = path.join(root, 'profile')
+  const contextFiles = path.join(userData, 'context-deliveries')
+  fs.mkdirSync(contextFiles, { recursive: true })
+
+  const fakeApp = {
+    getPath: (name) => (name === 'userData' ? userData : root),
+    isPackaged: true,
+  }
+
+  const managerComOnlcr = {
+    spawn(_sessionId, options) {
+      this.onExit = options.onExit
+      this.onData = options.onData
+    },
+    write(_sessionId, script) {
+      const nomes = [...script.matchAll(/felixo context read "(.+)"/g)].map((m) => m[1])
+      let saida = ''
+      for (const nome of nomes) {
+        const caminho = path.join(contextFiles, nome)
+        const corpo = fs.existsSync(caminho)
+          ? fs.readFileSync(caminho, 'utf8')
+          : `Artefato de contexto não encontrado: ${nome}. Não substitua por outro artefato; informe este nome e o erro exato.`
+        // A "tradução onlcr": todo \n vira \r\n, como um PTY de verdade entrega.
+        saida += corpo.replace(/\n/g, '\r\n')
+      }
+      queueMicrotask(() => {
+        this.onData(`${saida}\r\nFELIXO_RELEASE_CONTEXT_DONE\r\n`)
+        this.onExit({ exitCode: 0 })
+      })
+      return true
+    },
+    aguardarEscritas() {
+      return Promise.resolve()
+    },
+  }
+
+  const resultado = await runContextCatalogSmoke({ app: fakeApp, manager: managerComOnlcr, cwd: root })
+
+  assert.equal(resultado.ok, true)
+  assert.ok(resultado.files.every((file) => file.readExactly === true))
+  assert.equal(resultado.missingArtifactReported, true)
+})
