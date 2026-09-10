@@ -1,4 +1,4 @@
-export type RefreshRunner = () => Promise<void>
+export type RefreshRunner<T = void> = () => Promise<T>
 
 /**
  * Coordena chamadas de refresh concorrentes (load manual, timer de
@@ -16,15 +16,17 @@ export type RefreshRunner = () => Promise<void>
  * garantindo que a PRÓXIMA chamada nunca fica bloqueada atrás de uma
  * anterior nem dispara em paralelo com ela.
  */
-export function createRefreshCoordinator() {
-  let latestRun: RefreshRunner | null = null
+export function createRefreshCoordinator<T = void>() {
+  let latestRun: RefreshRunner<T> | null = null
   // A promise compartilhada pelo ciclo em andamento — todo `trigger` chamado
   // enquanto ela existe recebe a MESMA promise de volta, então quem chama
   // sempre sabe quando a sincronização de verdade (a sua, ou uma mais nova
-  // que a superou) terminou, em vez de um "aceito" vazio e imediato.
-  let runningCycle: Promise<void> | null = null
+  // que a superou) terminou, em vez de um "aceito" vazio e imediato — e
+  // recebe o resultado real de QUALQUER runner que tiver sido o último a
+  // rodar (útil pro auto-sync decidir backoff a partir do resultado).
+  let runningCycle: Promise<T> | null = null
 
-  function trigger(run: RefreshRunner): Promise<void> {
+  function trigger(run: RefreshRunner<T>): Promise<T> {
     latestRun = run
     if (runningCycle) return runningCycle
     runningCycle = runLoop().finally(() => {
@@ -33,12 +35,16 @@ export function createRefreshCoordinator() {
     return runningCycle
   }
 
-  async function runLoop(): Promise<void> {
+  async function runLoop(): Promise<T> {
+    let result: T | undefined
     while (latestRun) {
       const current = latestRun
       latestRun = null
-      await current()
+      result = await current()
     }
+    // `trigger` só chama `runLoop` depois de atribuir `latestRun`, então o
+    // laço sempre roda pelo menos uma vez — `result` nunca fica indefinido.
+    return result as T
   }
 
   return { trigger }

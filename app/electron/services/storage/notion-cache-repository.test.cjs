@@ -53,3 +53,49 @@ test('cache Notion isola conexões/fontes e recupera snapshot stale', () => {
     fs.rmSync(databaseDir, { recursive: true, force: true })
   }
 })
+
+test('clearConnection apaga todas as tabelas em cache de uma conexão, sem afetar outras conexões', () => {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-notion-cache-'))
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const cache = createNotionCacheRepository(database)
+
+    // A mesma conexão foi usada com duas tabelas diferentes ao longo do tempo.
+    cache.replaceSnapshot({
+      connectionId: 'connection-a',
+      dataSourceId: 'source-1',
+      schema: {},
+      tasks: [{ id: 'page-1', title: 'Tarefa 1', completed: false, fields: {} }],
+      fetchedAt: '2026-09-10T12:00:00.000Z',
+    })
+    cache.replaceSnapshot({
+      connectionId: 'connection-a',
+      dataSourceId: 'source-2',
+      schema: {},
+      tasks: [{ id: 'page-2', title: 'Tarefa 2', completed: false, fields: {} }],
+      fetchedAt: '2026-09-10T12:00:00.000Z',
+    })
+    cache.replaceSnapshot({
+      connectionId: 'connection-b',
+      dataSourceId: 'source-1',
+      schema: {},
+      tasks: [{ id: 'page-3', title: 'Tarefa de outra conexão', completed: false, fields: {} }],
+      fetchedAt: '2026-09-10T12:00:00.000Z',
+    })
+
+    cache.clearConnection({ connectionId: 'connection-a' })
+
+    assert.deepEqual(cache.readSnapshot({ connectionId: 'connection-a', dataSourceId: 'source-1' }).tasks, [])
+    assert.equal(cache.readSnapshot({ connectionId: 'connection-a', dataSourceId: 'source-1' }).status, 'idle')
+    assert.deepEqual(cache.readSnapshot({ connectionId: 'connection-a', dataSourceId: 'source-2' }).tasks, [])
+    // A outra conexão continua intacta.
+    assert.deepEqual(
+      cache.readSnapshot({ connectionId: 'connection-b', dataSourceId: 'source-1' }).tasks,
+      [{ id: 'page-3', title: 'Tarefa de outra conexão', completed: false, fields: {} }],
+    )
+
+    database.close()
+  } finally {
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  }
+})

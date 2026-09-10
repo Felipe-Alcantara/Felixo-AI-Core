@@ -234,6 +234,38 @@ test('updateTask rejeita com segurança quando a versão remota mudou — nunca 
   assert.deepEqual(cache.readSnapshot().tasks, [remoteTaskAgora])
 })
 
+test('removeConnection limpa o cache da conexão quando a remoção acontece de verdade', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  const clearedConnections = []
+  cache.clearConnection = ({ connectionId }) => clearedConnections.push(connectionId)
+  const service = createNotionService({
+    connectionStore: { ...fakeStore(), remove: () => true },
+    cacheRepository: cache,
+    clientFactory: () => ({}),
+  })
+
+  const result = service.removeConnection('connection-1')
+
+  assert.equal(result.removed, true)
+  assert.deepEqual(clearedConnections, ['connection-1'])
+})
+
+test('removeConnection não toca o cache quando não havia nada pra remover', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  const clearedConnections = []
+  cache.clearConnection = ({ connectionId }) => clearedConnections.push(connectionId)
+  const service = createNotionService({
+    connectionStore: { ...fakeStore(), remove: () => false },
+    cacheRepository: cache,
+    clientFactory: () => ({}),
+  })
+
+  const result = service.removeConnection('connection-inexistente')
+
+  assert.equal(result.removed, false)
+  assert.deepEqual(clearedConnections, [])
+})
+
 function fakeStore() {
   return {
     canStoreSecret: () => ({ ok: true, reason: null }),
@@ -258,5 +290,6 @@ function fakeCache(initial) {
       return snapshot
     },
     deleteTask() {},
+    clearConnection() {},
   }
 }

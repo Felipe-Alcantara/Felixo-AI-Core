@@ -47,6 +47,7 @@ import {
   type PanelSyncStatus,
 } from '../../services/notion-sync-status'
 import { createRefreshCoordinator, targetChanged } from '../../services/notion-refresh-coordinator'
+import { nextAutoSyncDelayMs } from '../../services/notion-sync-backoff'
 
 type NotionTasksPanelProps = {
   onClose: () => void
@@ -70,7 +71,6 @@ type TaskContentState = {
   message?: string
 }
 
-const AUTO_SYNC_INTERVAL_MS = 60_000
 
 const inputClass =
   'w-full rounded border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-sky-500/70'
@@ -232,7 +232,9 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
   // Nunca deixa dois loadTasks() rodarem em paralelo (manual, timer, busca,
   // troca de filtro disputando ao mesmo tempo) — ver notion-refresh-coordinator.ts.
-  const refreshCoordinatorRef = useRef(createRefreshCoordinator())
+  // O tipo devolvido (PanelSyncStatus) é o que o auto-sync usa pra decidir
+  // o backoff — undefined quando a resposta foi descartada por obsoleta.
+  const refreshCoordinatorRef = useRef(createRefreshCoordinator<PanelSyncStatus | undefined>())
   // Sempre reflete a conexão/tabela SELECIONADA agora, pra uma resposta que
   // chega depois de uma troca de tabela poder se reconhecer como obsoleta.
   const activeTargetRef = useRef({ connectionId, dataSourceId })
@@ -252,11 +254,11 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     const targetConnectionId = connectionId
     const targetDataSourceId = dataSourceId
 
-    return refreshCoordinatorRef.current.trigger(async () => {
+    return refreshCoordinatorRef.current.trigger(async (): Promise<PanelSyncStatus | undefined> => {
       if (!api || !targetConnectionId || !targetDataSourceId) {
         setTasks([])
         setSyncStatus('idle')
-        return
+        return 'idle'
       }
       // Uma resposta cujo alvo já não é mais a tabela selecionada é
       // descartada silenciosamente — nunca sobrescreve o que já apareceu
@@ -283,7 +285,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
           search,
           status: activeView.statusFilter,
         })
-        if (isStale()) return
+        if (isStale()) return undefined
         hasLocalSnapshot = hasUsableCachedSnapshot(cachedResult)
         if (hasLocalSnapshot) {
           setTasks(cachedResult.tasks || [])
@@ -305,14 +307,15 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
         search,
         status: activeView.statusFilter,
       })
-      if (isStale()) return
+      if (isStale()) return undefined
       setBusy(false)
-      setSyncStatus(decideSyncStatusAfterNetwork(result, hasLocalSnapshot))
+      const finalStatus = decideSyncStatusAfterNetwork(result, hasLocalSnapshot)
+      setSyncStatus(finalStatus)
       if (!result.ok) {
         if (!silent) {
           setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
         }
-        return
+        return finalStatus
       }
       setTasks(result.tasks || [])
       setSchema(result.schema || {})
@@ -320,6 +323,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       if (result.stale && !silent) {
         setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
       }
+      return finalStatus
     })
   }, [api, connectionId, dataSourceId, search, activeView.statusFilter])
 
@@ -331,16 +335,37 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     return () => window.clearTimeout(timer)
   }, [connectionId, dataSourceId, loadTasks])
 
-  // Sincronização automática: revalida a lista com o Notion a cada minuto,
-  // sem interromper o que a pessoa está fazendo (detalhe aberto, busca
-  // digitada). O coordinator (dentro de loadTasks) já garante que isto nunca
-  // roda em paralelo com um load manual ou outro tick — só entra na fila.
+  // Sincronização automática: revalida a lista com o Notion em segundo
+  // plano, sem interromper o que a pessoa está fazendo (detalhe aberto,
+  // busca digitada). O coordinator (dentro de loadTasks) já garante que
+  // isto nunca roda em paralelo com um load manual ou outro tick — só entra
+  // na fila. Backoff exponencial: cada falha consecutiva dobra o intervalo
+  // até o teto (ver notion-sync-backoff.ts), pra não bater na rede no mesmo
+  // ritmo enquanto ela está indisponível; reseta no primeiro sucesso.
   useEffect(() => {
     if (!autoSyncEnabled || !connectionId || !dataSourceId) return undefined
-    const interval = window.setInterval(() => {
-      void loadTasks({ silent: true })
-    }, AUTO_SYNC_INTERVAL_MS)
-    return () => window.clearInterval(interval)
+    let cancelled = false
+    let consecutiveFailures = 0
+    let timerId: number | undefined
+
+    const scheduleNext = () => {
+      if (cancelled) return
+      timerId = window.setTimeout(tick, nextAutoSyncDelayMs(consecutiveFailures))
+    }
+    const tick = () => {
+      if (cancelled) return
+      void loadTasks({ silent: true }).then((status) => {
+        if (cancelled) return
+        consecutiveFailures = status === 'success' ? 0 : consecutiveFailures + 1
+        scheduleNext()
+      })
+    }
+
+    scheduleNext()
+    return () => {
+      cancelled = true
+      if (timerId !== undefined) window.clearTimeout(timerId)
+    }
   }, [autoSyncEnabled, connectionId, dataSourceId, loadTasks])
 
   async function saveConnection() {

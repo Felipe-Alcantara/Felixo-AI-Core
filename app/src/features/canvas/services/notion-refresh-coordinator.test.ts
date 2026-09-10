@@ -10,6 +10,33 @@ function deferred<T>() {
 }
 
 describe('createRefreshCoordinator', () => {
+  it('devolve o resultado real do runner — não só um "aceito" vazio', async () => {
+    const coordinator = createRefreshCoordinator<string>()
+    const result = await coordinator.trigger(async () => 'success')
+    expect(result).toBe('success')
+  })
+
+  it('dedupe: o resultado devolvido reflete o runner mais recente, não o primeiro', async () => {
+    const coordinator = createRefreshCoordinator<string>()
+    const first = deferred<void>()
+    const runA = vi.fn(async () => {
+      await first.promise
+      return 'a'
+    })
+    const runB = vi.fn(async () => 'b')
+
+    const triggerA = coordinator.trigger(runA)
+    const triggerB = coordinator.trigger(runB)
+
+    first.resolve()
+    const [resultA, resultB] = await Promise.all([triggerA, triggerB])
+
+    // Mesmo runner "vencedor" (B) pra quem chamou A e quem chamou B — os
+    // dois esperam o mesmo ciclo, que terminou executando B por último.
+    expect(resultA).toBe('b')
+    expect(resultB).toBe('b')
+  })
+
   it('executa um único trigger normalmente', async () => {
     const coordinator = createRefreshCoordinator()
     const run = vi.fn(async () => {})

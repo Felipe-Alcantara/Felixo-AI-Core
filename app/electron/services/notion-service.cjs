@@ -33,7 +33,17 @@ function createNotionService({
   }
 
   function removeConnection(connectionId) {
-    return { removed: connectionStore.remove(connectionId) }
+    const removed = connectionStore.remove(connectionId)
+    if (removed && typeof connectionId === 'string' && connectionId.trim()) {
+      try {
+        cacheRepository.clearConnection({ connectionId })
+      } catch {
+        // A remoção da conexão já aconteceu; um cache órfão residual não é
+        // motivo pra reportar falha nessa operação — a próxima leitura desse
+        // connectionId simplesmente não encontrará credencial nenhuma.
+      }
+    }
+    return { removed }
   }
 
   async function testConnection(connectionId) {

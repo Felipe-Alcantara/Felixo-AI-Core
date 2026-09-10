@@ -174,8 +174,23 @@ function createNotionCacheRepository(database) {
       .run(key.connectionId, key.dataSourceId)
   }
 
+  /**
+   * Limpa TODAS as tabelas em cache de uma conexão, independente de qual
+   * data_source_id — usada quando a conexão é removida. `clear()` sozinha
+   * não bastava: uma conexão pode ter sido usada com várias tabelas ao
+   * longo do tempo, e remover a conexão sem isto deixava lixo órfão no
+   * SQLite (linhas de notion_task_cache/notion_sync_state que nenhum
+   * connectionId válido referencia mais).
+   */
+  function clearConnection({ connectionId }) {
+    const id = normalizeId(connectionId, 'connection')
+    connection.prepare(`DELETE FROM notion_task_cache WHERE connection_id = ?`).run(id)
+    connection.prepare(`DELETE FROM notion_sync_state WHERE connection_id = ?`).run(id)
+  }
+
   return {
     clear,
+    clearConnection,
     deleteTask,
     markSyncError,
     readSnapshot,
