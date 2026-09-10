@@ -407,6 +407,46 @@ test('rede intermitente: falha, sucesso, falha de novo — cada leitura reflete 
     assert.match(stale.message, /offline 2/)
   }))
 
+test('serviço nunca cruza o token de uma conexão pra outra ao consultar a rede', () =>
+  withRealCache(async (cache) => {
+    const credenciais = {
+      'connection-a': 'token_secreto_A',
+      'connection-b': 'token_secreto_B',
+    }
+    const tokensUsados = []
+    const service = createNotionService({
+      connectionStore: {
+        ...fakeStore(),
+        getCredential: (connectionId) => ({ connection: { id: connectionId }, token: credenciais[connectionId] }),
+      },
+      cacheRepository: cache,
+      clientFactory: ({ token }) => {
+        tokensUsados.push(token)
+        return {
+          resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+          queryTasks: async () => ({
+            tasks: [{ id: 'page-1', title: `Tarefa vista com ${token}`, completed: false, fields: {} }],
+            nextCursor: null,
+          }),
+        }
+      },
+      now: () => '2026-09-10T12:00:00.000Z',
+    })
+
+    const resultadoA = await service.listTasks({ connectionId: 'connection-a', dataSourceId: 'source-1' })
+    const resultadoB = await service.listTasks({ connectionId: 'connection-b', dataSourceId: 'source-1' })
+
+    assert.deepEqual(tokensUsados, ['token_secreto_A', 'token_secreto_B'])
+    assert.match(resultadoA.tasks[0].title, /token_secreto_A/)
+    assert.match(resultadoB.tasks[0].title, /token_secreto_B/)
+    // Nenhum token aparece em texto no resultado devolvido pro IPC/renderer
+    // além do que a própria fixture de teste colocou de propósito no título
+    // (simulando conteúdo real da tarefa) — o CAMPO token em si nunca existe
+    // no payload de retorno do serviço.
+    assert.equal('token' in resultadoA, false)
+    assert.equal('token' in resultadoB, false)
+  }))
+
 function fakeStore() {
   return {
     canStoreSecret: () => ({ ok: true, reason: null }),

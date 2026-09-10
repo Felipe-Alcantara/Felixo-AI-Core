@@ -43,6 +43,58 @@ test('loja Notion separa metadados públicos do token cifrado', () => {
   }
 })
 
+test('loja isola completamente duas conexões da mesma pessoa — token, metadados e remoção não vazam entre elas', () => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-notion-store-multi-'))
+  try {
+    const ids = ['connection-a', 'connection-b']
+    let nextId = 0
+    const store = createNotionConnectionStore({
+      userData,
+      safeStorage: fakeSafeStorage(),
+      idFactory: () => ids[nextId++],
+      now: () => '2026-09-10T12:00:00.000Z',
+    })
+
+    store.save({ label: 'Conta pessoal', profileId: 'felipe', token: 'token_secreto_A' })
+    store.save({ label: 'Conta do trabalho', profileId: 'felipe', token: 'token_secreto_B' })
+
+    // Cada conexão só devolve o PRÓPRIO token, nunca o da outra.
+    assert.equal(store.getCredential('connection-a').token, 'token_secreto_A')
+    assert.equal(store.getCredential('connection-b').token, 'token_secreto_B')
+
+    // A listagem pública nunca inclui nenhum dos dois tokens em texto — nem
+    // por engano cruzado (o token de B aparecendo na entrada de A ou vice-versa).
+    const listagem = store.list()
+    assert.equal(listagem.length, 2)
+    const listagemTexto = JSON.stringify(listagem)
+    assert.equal(listagemTexto.includes('token_secreto_A'), false)
+    assert.equal(listagemTexto.includes('token_secreto_B'), false)
+    assert.deepEqual(listagem.map((c) => c.hasToken), [true, true])
+
+    // Nenhum arquivo em disco (metadados nem segredo cifrado) contém o
+    // texto plano de NENHUM dos dois tokens.
+    const storeFileTexto = fs.readFileSync(store.storePath, 'utf8')
+    const secretsFileTexto = fs.readFileSync(store.secretsPath, 'utf8')
+    for (const token of ['token_secreto_A', 'token_secreto_B']) {
+      assert.equal(storeFileTexto.includes(token), false)
+      assert.equal(secretsFileTexto.includes(token), false)
+    }
+
+    // Atualizar só o rótulo de A não toca o token de B nem o expõe.
+    store.save({ id: 'connection-a', label: 'Conta pessoal (renomeada)' })
+    assert.equal(store.getCredential('connection-b').token, 'token_secreto_B')
+
+    // Remover A não apaga nem corrompe o token de B — a conexão B continua
+    // 100% funcional depois.
+    assert.equal(store.remove('connection-a'), true)
+    assert.equal(store.getCredential('connection-a'), null)
+    assert.equal(store.getCredential('connection-b').token, 'token_secreto_B')
+    assert.deepEqual(store.list().map((c) => c.id), ['connection-b'])
+  } finally {
+    fs.rmSync(userData, { recursive: true, force: true })
+  }
+})
+
 test('loja recusa salvar quando o chaveiro não é cifrado', () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-notion-store-basic-'))
   try {
