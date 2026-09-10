@@ -568,6 +568,69 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(harness.releaseCalls).toEqual([])
   }, 10000)
 
+  it('preserva Unicode, Markdown e quebras de linha do catálogo ponta a ponta', async () => {
+    harness = createHarness(CONTEXT, 'codex', true)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const prompt = [
+      '## Título com acentuação: café, ação, emoji 🚀',
+      '',
+      '- item com **negrito** e `código`',
+      '- segunda linha\ncom quebra explícita',
+      '',
+      '> citação em bloco',
+    ].join('\n')
+
+    const result = await harness.store.sendText(SESSION_ID, `${prompt}\r`, {
+      kind: 'catalog-prompt',
+    })
+
+    expect(result).toEqual({ delivered: true })
+    const body = harness.contextBodies.at(-1) ?? ''
+    expect(body).toContain('café, ação, emoji 🚀')
+    expect(body).toContain('**negrito**')
+    expect(body).toContain('`código`')
+    expect(body).toContain('segunda linha\ncom quebra explícita')
+    expect(body).toContain('> citação em bloco')
+  }, 10000)
+
+  it('aguarda o dreno da PTY antes de resolver — não confirma cedo demais', async () => {
+    harness = createHarness(CONTEXT, 'codex', true)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    let releaseDrain: (() => void) | undefined
+    const drainGate = new Promise<void>((resolve) => {
+      releaseDrain = resolve
+    })
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { write: (params: { data: string }) => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.write = async (params) => {
+      harness!.writes.push(params.data)
+      await drainGate
+      return { ok: true, delivered: true }
+    }
+
+    let settled = false
+    const pending = harness.store.sendText(SESSION_ID, 'catálogo\r', { kind: 'catalog-prompt' })
+    void pending.then(() => {
+      settled = true
+    })
+
+    await wait(50)
+    expect(settled).toBe(false) // ainda preso no dreno — não pode ter confirmado
+
+    releaseDrain?.()
+    const result = await pending
+    expect(settled).toBe(true)
+    expect(result).toEqual({ delivered: true })
+  }, 10000)
+
   it('não escreve enquanto o Codex pergunta se a pasta é confiável', async () => {
     harness = createHarness(CONTEXT, 'codex')
     harness.feed(BOOT_ESCAPES)
