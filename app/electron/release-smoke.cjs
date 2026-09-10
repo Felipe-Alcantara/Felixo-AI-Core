@@ -248,7 +248,14 @@ async function runContextCatalogSmoke({ app, manager, cwd }) {
     normalizedOutput.includes('Artefato de contexto não encontrado') && normalizedOutput.includes(missingName)
 
   if (perFile.some((file) => !file.readExactly)) {
-    throw new Error('O shim empacotado não devolveu algum artefato byte a byte.')
+    // O conteúdo da fixture não é privado (gerado por este próprio smoke);
+    // incluir um recorte real no erro é o que permite diagnosticar uma
+    // divergência de codificação/PTY sem precisar reproduzi-la às cegas —
+    // já foi necessário uma vez, nesta mesma função (ver commit e65341f).
+    const preview = normalizedOutput.slice(-4_000)
+    throw new Error(
+      `O shim empacotado não devolveu algum artefato byte a byte. Saída (últimos 4000 chars, normalizada): ${JSON.stringify(preview)}`,
+    )
   }
   if (!missingArtifactReported) {
     throw new Error('O shim empacotado não reportou o artefato ausente como esperado.')
