@@ -192,6 +192,33 @@ function runRealPty({ manager, cwd }) {
  * @param {string} options.cwd
  * @returns {Promise<object>}
  */
+const ANSI_SEQUENCE = /\x1b(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-9;?]*[a-zA-Z])/g
+
+/**
+ * Reconstitui o texto que um processo filho realmente escreveu a partir do
+ * que um PTY interativo devolve — removendo duas traduções de terminal que
+ * não são conteúdo, medidas ao vivo na matriz de Release antes desta função
+ * existir (ver commits e65341f e o que a introduziu):
+ *
+ * 1. Um PTY POSIX (termios `onlcr`) e o ConPTY do Windows traduzem cada `\n`
+ *    que o processo filho escreve para `\r\n` na leitura pelo lado master.
+ * 2. No shell padrão do runner Windows (PowerShell 7 via `pwsh.exe` — o
+ *    adaptador win32 prefere pwsh quando ele existe, e o runner do GitHub
+ *    tem), o PSReadLine redesenha o prompt/realce de sintaxe e o ConPTY
+ *    reflui linhas mais longas que a largura do terminal: os dois intercalam
+ *    sequências de escape ANSI/VT (posição de cursor, cor, título da janela)
+ *    NO MEIO do próprio texto impresso — não no fim, no meio de uma palavra.
+ *    `electron/__fixtures__/release-smoke-windows-conpty-sample.txt` é a
+ *    captura real de um run que reprovou por isso (34436218790): sem remover
+ *    essas sequências antes de comparar, qualquer corpo com mais de uma
+ *    linha reprovava, mesmo intacto.
+ *
+ * @param {string} rawOutput
+ * @returns {string}
+ */
+function normalizePtyTextOutput(rawOutput) {
+  return String(rawOutput).replace(ANSI_SEQUENCE, '').replace(/\r\n/g, '\n')
+}
 async function runContextCatalogSmoke({ app, manager, cwd }) {
   const appPaths = getAppPaths({ electronApp: app })
 
@@ -238,13 +265,7 @@ async function runContextCatalogSmoke({ app, manager, cwd }) {
   })
 
   const output = await runContextReadsInPty({ manager, cwd, names: [...writtenFiles.map((f) => f.name), missingName] })
-  // Um PTY POSIX (termios `onlcr`) e o ConPTY do Windows traduzem cada `\n`
-  // que o processo filho escreve para `\r\n` na leitura — é a camada de
-  // terminal, não o conteúdo. `writeContextFile` grava com `\n` puro, então
-  // comparar sem normalizar reprovaria toda entrega de mais de uma linha,
-  // mesmo com o corpo intacto. Medido ao vivo: os três SOs da matriz de
-  // Release falharam aqui antes desta normalização.
-  const normalizedOutput = output.replace(/\r\n/g, '\n')
+  const normalizedOutput = normalizePtyTextOutput(output)
 
   const perFile = writtenFiles.map((file) => ({
     kind: 'catalog-prompt',
@@ -368,6 +389,7 @@ function getErrorMessage(error) {
 module.exports = {
   CONTEXT_SMOKE_MARKER,
   PTY_MARKER,
+  normalizePtyTextOutput,
   runContextCatalogSmoke,
   runContextReadsInPty,
   runPackagedReleaseSmoke,

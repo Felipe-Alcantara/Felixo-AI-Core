@@ -7,7 +7,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
-const { runContextCatalogSmoke } = require('./release-smoke.cjs')
+const { runContextCatalogSmoke, normalizePtyTextOutput } = require('./release-smoke.cjs')
 
 function pastaTemporaria() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-test-'))
@@ -212,4 +212,33 @@ test('sobrevive à tradução \\n → \\r\\n de um PTY real, sem reprovar um cor
   assert.equal(resultado.ok, true)
   assert.ok(resultado.files.every((file) => file.readExactly === true))
   assert.equal(resultado.missingArtifactReported, true)
+})
+
+test('reconstitui o texto de verdade a partir de uma captura real do runner Windows (PowerShell + ConPTY)', () => {
+  // Fixture não inventada: é o `rawOutputPreview` de verdade que a matriz de
+  // Release publicou no run 34436218790, antes desta normalização existir —
+  // ver electron/__fixtures__/release-smoke-windows-conpty-sample.txt. Prova
+  // que a correção resolve o caso real, não uma reprodução aproximada dele.
+  const capturaReal = fs.readFileSync(
+    path.join(__dirname, '__fixtures__', 'release-smoke-windows-conpty-sample.txt'),
+    'utf8',
+  )
+
+  const normalizado = normalizePtyTextOutput(capturaReal)
+
+  assert.ok(
+    normalizado.includes('Acentuação: ação, avaliação, coração, é, ê, ã, ç.\nEmoji: 🚀 ✅ 🧪'),
+    'o primeiro corpo deveria reaparecer contíguo, sem sequência ANSI no meio',
+  )
+  assert.ok(
+    normalizado.includes(
+      'Esta é a SEGUNDA parte; a ordem de leitura importa para a "combinação ordenada".',
+    ),
+    'o segundo corpo deveria reaparecer contíguo, sem sequência ANSI no meio',
+  )
+  assert.ok(
+    normalizado.includes('Artefato de contexto não encontrado: felixo-context-0-'),
+    'o erro de artefato ausente deveria sobreviver à normalização',
+  )
+  assert.ok(!normalizado.includes('\x1b'), 'nenhuma sequência de escape deveria sobrar')
 })

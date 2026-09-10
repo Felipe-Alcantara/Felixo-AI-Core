@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Captura crua de terminal (PTY) usada como fixture de teste: os \r e \n dela
+# são DADOS (linha 1 tem \n puro, outras trechos já têm \r\n do próprio
+# ConPTY), não metadados de fim de linha. Normalização de CRLF/LF no checkout
+# mudaria os bytes que o teste lê e invalidaria a evidência real do bug que
+# ela documenta.
+app/electron/__fixtures__/*.txt -text
