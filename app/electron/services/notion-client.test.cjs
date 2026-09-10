@@ -171,6 +171,32 @@ test('cliente constrói propriedades genéricas para criar e atualizar tarefas',
   assert.deepEqual(properties.Due, { date: { start: '2026-09-08' } })
 })
 
+test('cliente lê o estado atual de uma página com GET, sem alterar nada', async () => {
+  const requests = []
+  const schema = { Name: { id: 'name', name: 'Name', type: 'title' } }
+  const client = createNotionClient({
+    token: 'secret-test-token',
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options })
+      return fakeResponse(200, {
+        object: 'page',
+        id: 'page-1',
+        url: 'https://notion.so/page-1',
+        last_edited_time: '2026-09-10T10:00:00.000Z',
+        properties: { Name: { title: [{ plain_text: 'Título remoto' }] } },
+      })
+    },
+  })
+
+  const task = await client.getTask({ pageId: 'page-1', schema })
+
+  assert.equal(requests.length, 1)
+  assert.match(requests[0].url, /\/v1\/pages\/page-1$/)
+  assert.equal(requests[0].options.method || 'GET', 'GET')
+  assert.equal(task.updatedAt, '2026-09-10T10:00:00.000Z')
+  assert.equal(task.title, 'Título remoto')
+})
+
 test('cliente redige falhas e repete respostas transitórias', async () => {
   const requests = []
   let call = 0

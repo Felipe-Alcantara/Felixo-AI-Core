@@ -249,6 +249,17 @@ function createNotionClient({
     return normalizePage(page, schema)
   }
 
+  /**
+   * Leitura direta de uma página, sem alterar nada — usada pra checar a
+   * versão remota (`last_edited_time`) antes de aplicar um PATCH, já que a
+   * API do Notion não expõe ETag/If-Match para escrita condicional.
+   */
+  async function getTask({ pageId, schema } = {}) {
+    const id = requireId(pageId, 'page')
+    const page = await request(`/v1/pages/${encodeURIComponent(id)}`)
+    return normalizePage(page, schema)
+  }
+
   async function archiveTask(pageId) {
     const id = requireId(pageId, 'page')
     await request(`/v1/pages/${encodeURIComponent(id)}`, {
@@ -264,6 +275,7 @@ function createNotionClient({
     getCurrentUser,
     getDataSource,
     getDatabase,
+    getTask,
     listAccessibleDataSources,
     queryTasks,
     resolveDataSource,

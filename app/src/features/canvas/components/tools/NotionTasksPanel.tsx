@@ -108,6 +108,10 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const [busy, setBusy] = useState(false)
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  // updatedAt da tarefa no momento em que a edição começou — enviado como
+  // expectedUpdatedAt pro serviço recusar a escrita se a versão remota
+  // mudou nesse meio tempo, em vez de sobrescrever silenciosamente.
+  const [editingUpdatedAt, setEditingUpdatedAt] = useState<string | null>(null)
   const [showTaskComposer, setShowTaskComposer] = useState(false)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [taskContentById, setTaskContentById] = useState<Record<string, TaskContentState>>({})
@@ -404,6 +408,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
           dataSourceId,
           pageId: editingId,
           changes: draft,
+          expectedUpdatedAt: editingUpdatedAt,
         })
       : await api.createTask({
           connectionId,
@@ -415,7 +420,17 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       setError(result.message || 'Não foi possível salvar a tarefa.')
       return
     }
+    if (result.conflict) {
+      // Rejeição segura: a versão remota mudou desde que a edição começou.
+      // Nada foi escrito no Notion; recarrega a lista (o cache já tem a
+      // versão atual) e deixa a pessoa decidir se edita de novo com o dado
+      // fresco em vez de perder a mudança concorrente em silêncio.
+      setError(result.message || 'Esta tarefa foi alterada no Notion. Revise antes de salvar de novo.')
+      await loadTasks()
+      return
+    }
     setEditingId(null)
+    setEditingUpdatedAt(null)
     setShowTaskComposer(false)
     setDraft(emptyDraft())
     setMessage(wasEditing ? 'Tarefa atualizada no Notion.' : 'Tarefa criada no Notion.')
@@ -431,10 +446,16 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       dataSourceId,
       pageId: task.id,
       changes: { completed: !task.completed },
+      expectedUpdatedAt: task.updatedAt,
     })
     setBusyTaskId(null)
     if (!result.ok) {
       setError(result.message || 'Não foi possível alterar o estado da tarefa.')
+      return
+    }
+    if (result.conflict) {
+      setError(result.message || 'Esta tarefa foi alterada no Notion. Revise antes de tentar de novo.')
+      await loadTasks()
       return
     }
     await loadTasks()
@@ -460,6 +481,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
   function editTask(task: NotionTask) {
     setEditingId(task.id)
+    setEditingUpdatedAt(task.updatedAt)
     setShowTaskComposer(true)
     setExpandedTaskId(null)
     setDraft({
@@ -474,12 +496,14 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
   function startCreatingTask() {
     setEditingId(null)
+    setEditingUpdatedAt(null)
     setDraft(emptyDraft())
     setShowTaskComposer(true)
   }
 
   function cancelTaskComposer() {
     setEditingId(null)
+    setEditingUpdatedAt(null)
     setDraft(emptyDraft())
     setShowTaskComposer(false)
   }

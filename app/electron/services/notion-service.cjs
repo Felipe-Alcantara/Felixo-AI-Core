@@ -182,10 +182,53 @@ function createNotionService({
     return { task: created, schema: schemaResult.schema, dataSourceId: sourceId }
   }
 
-  async function updateTask({ connectionId, pageId, databaseId, dataSourceId, changes } = {}) {
+  /**
+   * `expectedUpdatedAt` é o `updatedAt` (last_edited_time) que a pessoa via
+   * quando começou a editar — o snapshot local que a mudança parte dela.
+   * Quando informado, checa a versão remota ANTES do PATCH: a API do Notion
+   * não tem escrita condicional (sem ETag/If-Match), então a única forma de
+   * não sobrescrever uma edição concorrente feita direto no Notion é ler de
+   * novo e comparar. Em conflito, rejeita com segurança (não aplica o PATCH)
+   * e devolve a versão remota atual pra pessoa decidir — nunca sobrescreve
+   * silenciosamente. Sem `expectedUpdatedAt`, mantém o comportamento antigo
+   * (aplica direto), pra não quebrar chamadas que ainda não migraram.
+   */
+  async function updateTask({
+    connectionId,
+    pageId,
+    databaseId,
+    dataSourceId,
+    changes,
+    expectedUpdatedAt,
+  } = {}) {
     const schemaResult = await getSchema({ connectionId, databaseId, dataSourceId })
     const sourceId = schemaResult.database.dataSourceId
-    const updated = await clientFor(connectionId).updateTask({
+    const client = clientFor(connectionId)
+
+    if (typeof expectedUpdatedAt === 'string' && expectedUpdatedAt) {
+      const remote = await client.getTask({ pageId, schema: schemaResult.schema })
+      if (remote.updatedAt !== expectedUpdatedAt) {
+        // A cópia local está desatualizada — atualiza o cache com a versão
+        // remota de verdade (evita repetir o mesmo conflito falso numa
+        // segunda tentativa) e rejeita sem tocar no Notion.
+        cacheRepository.upsertTask({
+          connectionId,
+          dataSourceId: sourceId,
+          schema: schemaResult.schema,
+          task: remote,
+          fetchedAt: now(),
+        })
+        return {
+          conflict: true,
+          task: remote,
+          schema: schemaResult.schema,
+          dataSourceId: sourceId,
+          message: 'Esta tarefa foi alterada no Notion desde a última leitura. Revise a versão atual antes de salvar de novo.',
+        }
+      }
+    }
+
+    const updated = await client.updateTask({
       pageId,
       schema: schemaResult.schema,
       changes,
@@ -197,7 +240,7 @@ function createNotionService({
       task: updated,
       fetchedAt: now(),
     })
-    return { task: updated, schema: schemaResult.schema, dataSourceId: sourceId }
+    return { task: updated, schema: schemaResult.schema, dataSourceId: sourceId, conflict: false }
   }
 
   async function archiveTask({ connectionId, pageId, databaseId, dataSourceId } = {}) {

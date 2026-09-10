@@ -140,6 +140,100 @@ test('serviço carrega o conteúdo do corpo de uma tarefa', async () => {
   assert.deepEqual(result, { pageId: 'page-1', content: '## Conteúdo da nota' })
 })
 
+test('updateTask aplica a mudança direto quando não há expectedUpdatedAt (compatibilidade)', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  let updateCalled = false
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({
+      resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+      getTask: async () => { throw new Error('getTask não deveria ser chamado sem expectedUpdatedAt') },
+      updateTask: async () => {
+        updateCalled = true
+        return { id: 'page-1', title: 'Editada', completed: false, fields: {}, updatedAt: '2026-09-10T10:00:00.000Z' }
+      },
+    }),
+    now: () => '2026-09-10T10:00:01.000Z',
+  })
+
+  const result = await service.updateTask({
+    connectionId: 'connection-1',
+    dataSourceId: 'source-1',
+    pageId: 'page-1',
+    changes: { title: 'Editada' },
+  })
+
+  assert.equal(updateCalled, true)
+  assert.equal(result.conflict, false)
+  assert.equal(result.task.title, 'Editada')
+})
+
+test('updateTask aplica a mudança quando expectedUpdatedAt bate com a versão remota', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  let updateCalled = false
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({
+      resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+      getTask: async () => ({ id: 'page-1', title: 'Antiga', completed: false, fields: {}, updatedAt: '2026-09-10T10:00:00.000Z' }),
+      updateTask: async () => {
+        updateCalled = true
+        return { id: 'page-1', title: 'Editada', completed: false, fields: {}, updatedAt: '2026-09-10T10:05:00.000Z' }
+      },
+    }),
+    now: () => '2026-09-10T10:05:01.000Z',
+  })
+
+  const result = await service.updateTask({
+    connectionId: 'connection-1',
+    dataSourceId: 'source-1',
+    pageId: 'page-1',
+    changes: { title: 'Editada' },
+    expectedUpdatedAt: '2026-09-10T10:00:00.000Z',
+  })
+
+  assert.equal(updateCalled, true)
+  assert.equal(result.conflict, false)
+  assert.equal(result.task.title, 'Editada')
+})
+
+test('updateTask rejeita com segurança quando a versão remota mudou — nunca sobrescreve', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  let updateCalled = false
+  const remoteTaskAgora = { id: 'page-1', title: 'Mudada por outra pessoa', completed: true, fields: {}, updatedAt: '2026-09-10T10:03:00.000Z' }
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({
+      resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+      getTask: async () => remoteTaskAgora,
+      updateTask: async () => {
+        updateCalled = true
+        throw new Error('updateTask não deveria ser chamado em conflito')
+      },
+    }),
+    now: () => '2026-09-10T10:05:01.000Z',
+  })
+
+  const result = await service.updateTask({
+    connectionId: 'connection-1',
+    dataSourceId: 'source-1',
+    pageId: 'page-1',
+    changes: { title: 'Minha edição' },
+    expectedUpdatedAt: '2026-09-10T10:00:00.000Z',
+  })
+
+  assert.equal(updateCalled, false)
+  assert.equal(result.conflict, true)
+  assert.deepEqual(result.task, remoteTaskAgora)
+  assert.match(result.message, /alterada no Notion/)
+  // O cache foi atualizado com a versão remota real, pra não repetir o
+  // mesmo falso conflito numa segunda tentativa.
+  assert.deepEqual(cache.readSnapshot().tasks, [remoteTaskAgora])
+})
+
 function fakeStore() {
   return {
     canStoreSecret: () => ({ ok: true, reason: null }),
@@ -158,7 +252,11 @@ function fakeCache(initial) {
     markSyncError({ error }) { snapshot = { ...snapshot, status: 'error', lastError: error.message }; return snapshot },
     readSnapshot() { return snapshot },
     replaceSnapshot() { return snapshot },
-    upsertTask() { return snapshot },
+    upsertTask({ task }) {
+      const rest = snapshot.tasks.filter((existing) => existing.id !== task.id)
+      snapshot = { ...snapshot, tasks: [...rest, task] }
+      return snapshot
+    },
     deleteTask() {},
   }
 }

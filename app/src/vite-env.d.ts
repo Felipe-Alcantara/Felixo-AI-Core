@@ -510,14 +510,28 @@ declare global {
             priority?: string
             text?: string
           }
-        }) => Promise<CliInvokeResult & { task?: NotionTask; schema?: Record<string, NotionSchemaProperty>; dataSourceId?: string }>
+        }) => Promise<CliInvokeResult & { task?: NotionTask; schema?: Record<string, NotionSchemaProperty>; dataSourceId?: string; conflict?: boolean }>
         updateTask: (input: {
           connectionId: string
           pageId: string
           databaseId?: string
           dataSourceId?: string
           changes: Partial<Pick<NotionTask, 'title' | 'completed' | 'status' | 'dueDate' | 'priority' | 'text'>>
-        }) => Promise<CliInvokeResult & { task?: NotionTask; schema?: Record<string, NotionSchemaProperty>; dataSourceId?: string }>
+          /**
+           * O `updatedAt` da tarefa como a pessoa a viu antes de editar.
+           * Quando informado, o processo principal recusa o PATCH (sem
+           * sobrescrever) se a versão remota mudou desde então.
+           */
+          expectedUpdatedAt?: string | null
+        }) => Promise<
+          CliInvokeResult & {
+            task?: NotionTask
+            schema?: Record<string, NotionSchemaProperty>
+            dataSourceId?: string
+            /** true quando a versão remota mudou e o PATCH foi recusado — `task` aqui é a versão remota atual, não o resultado da edição. */
+            conflict?: boolean
+          }
+        >
         archiveTask: (input: {
           connectionId: string
           pageId: string
