@@ -264,7 +264,21 @@ async function runContextCatalogSmoke({ app, manager, cwd }) {
     userData: appPaths.userData,
   })
 
-  const output = await runContextReadsInPty({ manager, cwd, names: [...writtenFiles.map((f) => f.name), missingName] })
+  // O PRIMEIRO comando executado num shell recém-aberto (`pwsh`/ConPTY) é
+  // instável: linhas em branco somem só nessa primeira execução, mesmo com
+  // largura suficiente (`cols`) e sem sequência ANSI de sobra. Medido ao vivo
+  // (runs 34437923645 e 34439214148): a mesma leitura, repetida como segundo
+  // comando, chega intacta — é um artefato de inicialização do console, não
+  // do shim nem do arquivo. Um `felixo context read` de aquecimento (nome
+  // real, saída descartada — `.includes()` mais abaixo só precisa achar UMA
+  // ocorrência correta, e a de aquecimento nunca é a única) absorve essa
+  // instabilidade antes das leituras que o teste realmente verifica.
+  const warmupName = writtenFiles[0].name
+  const output = await runContextReadsInPty({
+    manager,
+    cwd,
+    names: [warmupName, ...writtenFiles.map((f) => f.name), missingName],
+  })
   const normalizedOutput = normalizePtyTextOutput(output)
 
   const perFile = writtenFiles.map((file) => ({
