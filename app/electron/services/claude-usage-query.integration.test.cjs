@@ -22,6 +22,7 @@ const {
   createClaudeUsageQuery,
   parseClaudeUsageOutput,
 } = require('./claude-usage-query.cjs')
+const { encerrarPtyDeFormaEstavelNoWindows } = require('./pty-native-test-support.cjs')
 
 const NOW = Date.parse('2026-08-30T19:00:00.000Z')
 const TEMPO_LIMITE_MS = 15_000
@@ -315,10 +316,15 @@ test('consulta o /status do Claude por PTY nativa e navega até Usage', async ()
     // receber a mesma saída em uma chamada independente.
     assert.equal(parseClaudeUsageOutput(STATUS_OUTPUT, { now: () => NOW }).metrics.length, 2)
   } finally {
-    try {
-      ptyProcess?.kill?.()
-    } catch {
-      // O processo pode já ter sido encerrado pelo timeout/resultado.
+    // Ver pty-native-test-support.cjs: contorna um bug do node-pty no kill()
+    // nativo do Windows (crash de AttachConsole ou vazamento de handle,
+    // dependendo do backend), sem mudar nada do spawn/launch spec real.
+    if (!encerrarPtyDeFormaEstavelNoWindows(ptyProcess)) {
+      try {
+        ptyProcess?.kill?.()
+      } catch {
+        // O processo pode já ter sido encerrado pelo timeout/resultado.
+      }
     }
     await esperarEncerramento(exitPromise)
     nodePty.spawn = originalSpawn

@@ -73,8 +73,13 @@ class PtyProcessManager {
    * @param {(options: object) => object | null} [dependencies.discoverAgentSession] - Provider history resolver.
    * @param {(accountId: string, providerId?: string) => Record<string, string>} [dependencies.buildAccountEnv] - Ambiente da conta escolhida.
    * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount] - Confere a conta antes de montar o ambiente.
+   * @param {(ptyProcess: PtyHandle, signal: string) => boolean} [dependencies.killPtyProcess] - Substitui a
+   *   forma de encerrar o processo nativo em `safeKill`; devolver `false` cai
+   *   de volta em `ptyProcess.kill(...)`. Existe só para os testes nativos do
+   *   Windows contornarem um bug do `node-pty` (ver pty-native-test-support.cjs);
+   *   produção nunca passa isto.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, killPtyProcess } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -85,6 +90,7 @@ class PtyProcessManager {
     // Sem loja de contas o terminal nasce no login do sistema, como antes.
     this.buildAccountEnv = buildAccountEnv ?? (() => ({}))
     this.validateAccount = validateAccount
+    this.killPtyProcess = killPtyProcess ?? null
     this.discoverAgentSession = discover
   }
 
@@ -751,6 +757,9 @@ class PtyProcessManager {
    */
   safeKill(ptyProcess, signal) {
     try {
+      if (this.killPtyProcess && this.killPtyProcess(ptyProcess, signal)) {
+        return
+      }
       // node-pty rejects an explicit signal on Windows. Passing SIGKILL here
       // used to be swallowed by this guard, leaving ConPTY handles and child
       // processes alive after a timeout or a drawer restart.
