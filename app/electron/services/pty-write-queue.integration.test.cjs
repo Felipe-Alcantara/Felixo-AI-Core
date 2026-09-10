@@ -23,7 +23,6 @@ const { test } = require('node:test')
 
 const platform = require('../core/platform/index.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
-const { criarKillPtyEstavelNoWindows } = require('./pty-native-test-support.cjs')
 
 const TEMPO_LIMITE_MS = 15_000
 // No Windows a fixture entra em modo raw para Ctrl-Z chegar como caractere,
@@ -180,10 +179,7 @@ async function executarColeta({ nomeSessao, payload, depois }) {
   const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-native-'))
   const destino = path.join(diretorio, 'recebido.txt')
   const coletor = criarColetorDeEntrada(diretorio)
-  // Ver pty-native-test-support.cjs: contorna um bug do node-pty no kill()
-  // nativo do Windows (crash de AttachConsole ou vazamento de handle,
-  // dependendo do backend), sem mudar nada do spawn/launch spec real.
-  const manager = new PtyProcessManager({ killPtyProcess: criarKillPtyEstavelNoWindows() })
+  const manager = new PtyProcessManager()
   let resolverSaida
   const encerrou = new Promise((resolver) => {
     resolverSaida = resolver

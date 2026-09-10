@@ -532,41 +532,6 @@ test('Windows force kill omits the unsupported signal and drops the session', ()
   assert.equal(manager.has('term-win-kill'), false)
 })
 
-test('killPtyProcess injetado substitui o kill() nativo quando devolve true', () => {
-  const { fakePty, spawnPty } = createFakePty()
-  const chamadas = []
-  const manager = new PtyProcessManager({
-    spawnPty,
-    platform: fakeWin32Platform,
-    killPtyProcess: (ptyProcess, signal) => {
-      chamadas.push({ pid: ptyProcess.pid, signal })
-      return true
-    },
-  })
-
-  manager.spawn('term-kill-override', {})
-  assert.equal(manager.kill('term-kill-override', { force: true }), true)
-
-  // kill() do fake nunca foi chamado — quem "matou" foi só a substituição.
-  assert.deepEqual(fakePty.kills, [])
-  assert.deepEqual(chamadas, [{ pid: fakePty.pid, signal: 'SIGKILL' }])
-  assert.equal(manager.has('term-kill-override'), false)
-})
-
-test('killPtyProcess injetado que devolve false cai de volta no kill() nativo', () => {
-  const { fakePty, spawnPty } = createFakePty()
-  const manager = new PtyProcessManager({
-    spawnPty,
-    platform: fakePosixPlatform,
-    killPtyProcess: () => false,
-  })
-
-  manager.spawn('term-kill-fallback', {})
-  assert.equal(manager.kill('term-kill-fallback', { force: true }), true)
-
-  assert.deepEqual(fakePty.kills, ['SIGKILL'])
-})
-
 test('graceful kill sends SIGTERM but keeps the session until exit', () => {
   const { fakePty, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
