@@ -70,6 +70,27 @@ function createNotionService({
     }
   }
 
+  /**
+   * Leitura local instantânea, sem tocar a rede — o lado "stale" de
+   * stale-while-revalidate. `NotionTasksPanel` chama isto primeiro pra
+   * renderizar o snapshot salvo na hora, antes de `listTasks` (que fala com
+   * a API) resolver em segundo plano.
+   */
+  function getCachedTasks({ connectionId, databaseId, dataSourceId, search = '', status = 'all' } = {}) {
+    const sourceId = requireSourceId(dataSourceId || databaseId)
+    const cached = cacheRepository.readSnapshot({ connectionId, dataSourceId: sourceId })
+    const hasCache = cached.tasks.length > 0
+
+    return {
+      tasks: filterTasks(cached.tasks, { search, status }),
+      schema: cached.schema,
+      dataSourceId: sourceId,
+      fetchedAt: cached.fetchedAt,
+      hasCache,
+      syncStatus: hasCache ? 'stale' : 'empty',
+    }
+  }
+
   async function listTasks({
     connectionId,
     databaseId,
@@ -104,6 +125,7 @@ function createNotionService({
         fetchedAt,
         stale: false,
         fromCache: false,
+        syncStatus: 'success',
         hasMore: Boolean(result.nextCursor),
       }
     } catch (error) {
@@ -127,6 +149,7 @@ function createNotionService({
         fetchedAt: cached.fetchedAt,
         stale: true,
         fromCache: true,
+        syncStatus: 'stale',
         message: error instanceof Error ? error.message : 'A lista está desatualizada.',
         hasMore: false,
       }
@@ -192,6 +215,7 @@ function createNotionService({
   return {
     archiveTask,
     createTask,
+    getCachedTasks,
     getSchema,
     getTaskContent,
     listConnections,

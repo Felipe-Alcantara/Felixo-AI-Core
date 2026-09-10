@@ -40,6 +40,12 @@ function registerNotionIpcHandlers({
   ipc.handle('notion:tasks:list', (_event, input) =>
     guard(() => service.listTasks(input || {})),
   )
+  // Leitura local, sem rede — o "stale" de stale-while-revalidate. `guard`
+  // continua async por uniformidade de contrato, mas `getCachedTasks` em si
+  // não aguarda nada de I/O remoto.
+  ipc.handle('notion:tasks:cached', (_event, input) =>
+    guard(() => service.getCachedTasks(input || {})),
+  )
   ipc.handle('notion:tasks:content', (_event, input) =>
     guard(() => service.getTaskContent(input || {})),
   )

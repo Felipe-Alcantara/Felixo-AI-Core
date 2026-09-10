@@ -63,6 +63,15 @@ export type NotionSchemaResult = {
   schema?: Record<string, NotionSchemaProperty>
 }
 
+/**
+ * Estado real de sincronização, além do boolean `stale` legado (mantido só
+ * por compatibilidade): `success` veio da rede agora; `stale` é cache local
+ * (rede indisponível, ou ainda não revalidado); `empty` é cache vazio (sem
+ * dado local pra mostrar enquanto a rede não responde); `error` é erro sem
+ * nenhum dado utilizável, nem remoto nem local.
+ */
+export type NotionSyncStatus = 'success' | 'stale' | 'empty' | 'error'
+
 export type NotionTasksResult = {
   ok: boolean
   message?: string
@@ -73,6 +82,18 @@ export type NotionTasksResult = {
   stale?: boolean
   fromCache?: boolean
   hasMore?: boolean
+  syncStatus?: NotionSyncStatus
+}
+
+export type NotionCachedTasksResult = {
+  ok: boolean
+  message?: string
+  tasks?: NotionTask[]
+  schema?: Record<string, NotionSchemaProperty>
+  dataSourceId?: string
+  fetchedAt?: string | null
+  hasCache?: boolean
+  syncStatus?: NotionSyncStatus
 }
 
 export type NotionTaskContentResult = {

@@ -32,6 +32,7 @@ import type {
   AgentUsageMutationResult,
 } from './features/shared/agent-usage/agent-usage'
 import type {
+  NotionCachedTasksResult,
   NotionConnection,
   NotionDatabaseResult,
   NotionListResult,
@@ -485,6 +486,14 @@ declare global {
           search?: string
           status?: 'all' | 'open' | 'done'
         }) => Promise<NotionTasksResult>
+        /** Leitura local instantânea (sem rede) — o lado "stale" do SWR. */
+        getCachedTasks: (input: {
+          connectionId: string
+          databaseId?: string
+          dataSourceId?: string
+          search?: string
+          status?: 'all' | 'open' | 'done'
+        }) => Promise<NotionCachedTasksResult>
         getTaskContent: (input: {
           connectionId: string
           pageId: string

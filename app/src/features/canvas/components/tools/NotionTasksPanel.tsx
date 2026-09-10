@@ -41,6 +41,11 @@ import {
   type NotionStatusScope,
   type NotionTaskView,
 } from '../../services/notion-task-views'
+import {
+  decideSyncStatusAfterNetwork,
+  hasUsableCachedSnapshot,
+  type PanelSyncStatus,
+} from '../../services/notion-sync-status'
 
 type NotionTasksPanelProps = {
   onClose: () => void
@@ -94,7 +99,9 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const [showViewBuilder, setShowViewBuilder] = useState(false)
   const [editingViewId, setEditingViewId] = useState<string | null>(null)
   const [viewDraft, setViewDraft] = useState(() => emptyViewDraft())
-  const [stale, setStale] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<PanelSyncStatus>('idle')
+  const stale = syncStatus === 'stale'
+  const syncing = syncStatus === 'syncing'
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -229,23 +236,49 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     const { silent = false } = options
     if (!api || !connectionId || !dataSourceId) {
       setTasks([])
+      setSyncStatus('idle')
       return
     }
     if (!silent) {
       setTaskContentById({})
       setExpandedTaskId(null)
-      setBusy(true)
     }
     setError(null)
+
+    // Fase 1 (stale-while-revalidate, lado "stale"): mostra o snapshot local
+    // na hora, sem esperar a rede. Um refresh silencioso (auto-sync) pula
+    // isto — a lista já exibida É o snapshot mais recente que se tem.
+    let hasLocalSnapshot = false
+    if (!silent) {
+      const cachedResult = await api.getCachedTasks({
+        connectionId,
+        dataSourceId,
+        search,
+        status: activeView.statusFilter,
+      })
+      hasLocalSnapshot = hasUsableCachedSnapshot(cachedResult)
+      if (hasLocalSnapshot) {
+        setTasks(cachedResult.tasks || [])
+        setSchema(cachedResult.schema || {})
+        setFetchedAt(cachedResult.fetchedAt || null)
+      }
+    }
+    // Só bloqueia a UI (spinner de carregamento cheio) quando não há nada
+    // local pra mostrar enquanto se espera a rede — o caso raro de primeira
+    // visita a uma tabela nunca sincronizada antes.
+    setBusy(!silent && !hasLocalSnapshot)
+    setSyncStatus('syncing')
+
+    // Fase 2: revalida com a rede de verdade, em segundo plano quando já
+    // havia um snapshot local exibido.
     const result = await api.listTasks({
       connectionId,
       dataSourceId,
       search,
       status: activeView.statusFilter,
     })
-    if (!silent) {
-      setBusy(false)
-    }
+    setBusy(false)
+    setSyncStatus(decideSyncStatusAfterNetwork(result, hasLocalSnapshot))
     if (!result.ok) {
       if (!silent) {
         setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
@@ -254,7 +287,6 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     }
     setTasks(result.tasks || [])
     setSchema(result.schema || {})
-    setStale(result.stale === true)
     setFetchedAt(result.fetchedAt || null)
     if (result.stale && !silent) {
       setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
@@ -682,14 +714,16 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   <h2 className="text-sm font-medium text-zinc-100">{activeView.name}</h2>
                   <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{visibleTasks.length}</span>
                 </div>
-                <p className="mt-1 text-[11px] text-zinc-500">{stale ? 'Snapshot local desatualizado' : fetchedAt ? `Sincronizado ${formatDate(fetchedAt)}` : 'Ainda não sincronizado'}</p>
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  {syncing ? 'Revalidando com o Notion…' : stale ? 'Snapshot local desatualizado' : fetchedAt ? `Sincronizado ${formatDate(fetchedAt)}` : 'Ainda não sincronizado'}
+                </p>
               </div>
               <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5 sm:flex-none">
                 <label className="relative min-w-[13rem] flex-1 sm:w-56 sm:flex-none">
                   <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
                   <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar tarefas" aria-label="Buscar tarefas Notion" />
                 </label>
-                <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
+                <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy || syncing} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy || syncing ? 'animate-spin' : ''} /></button>
                 <button
                   type="button"
                   className={`felixo-btn-icon rounded-md border p-1.5 ${autoSyncEnabled ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' : 'border-white/10 text-zinc-500 hover:bg-white/5 hover:text-zinc-100'}`}
@@ -877,7 +911,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{visibleTasks.length} tarefa(s) exibida(s)</span><span>{stale ? 'Dados locais' : 'Notion conectado'}</span></div>
+              <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{visibleTasks.length} tarefa(s) exibida(s)</span><span>{syncing ? 'Sincronizando…' : stale ? 'Dados locais' : 'Notion conectado'}</span></div>
             </div>
           </>
         )}

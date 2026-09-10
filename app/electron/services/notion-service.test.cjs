@@ -18,8 +18,77 @@ test('serviço Notion devolve cache quando a sincronização falha e sinaliza st
   const result = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
   assert.equal(result.stale, true)
   assert.equal(result.fromCache, true)
+  assert.equal(result.syncStatus, 'stale')
   assert.deepEqual(result.tasks, [task])
   assert.equal(cache.error, 'Sem internet')
+})
+
+test('listTasks sinaliza syncStatus:success quando a rede responde', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({
+      resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+      queryTasks: async () => ({ tasks: [{ id: 'page-1', title: 'Nova', completed: false, fields: {} }], nextCursor: null }),
+    }),
+    now: () => '2026-09-09T10:00:00.000Z',
+  })
+
+  const result = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+  assert.equal(result.syncStatus, 'success')
+  assert.equal(result.stale, false)
+})
+
+test('getCachedTasks lê o snapshot local sem tocar a rede, e sinaliza stale quando há dado', async () => {
+  const task = { id: 'page-1', title: 'Offline', completed: false, fields: {} }
+  const cache = fakeCache({ tasks: [task], schema: { Name: { type: 'title' } }, fetchedAt: '2026-09-08T12:00:00.000Z' })
+  let clientBuilt = false
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => {
+      clientBuilt = true
+      throw new Error('getCachedTasks não deveria construir um client de rede')
+    },
+  })
+
+  const result = service.getCachedTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+  assert.equal(clientBuilt, false)
+  assert.equal(result.hasCache, true)
+  assert.equal(result.syncStatus, 'stale')
+  assert.deepEqual(result.tasks, [task])
+  assert.equal(result.fetchedAt, '2026-09-08T12:00:00.000Z')
+})
+
+test('getCachedTasks sinaliza empty quando não há snapshot salvo', () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({}),
+  })
+
+  const result = service.getCachedTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+  assert.equal(result.hasCache, false)
+  assert.equal(result.syncStatus, 'empty')
+  assert.deepEqual(result.tasks, [])
+})
+
+test('getCachedTasks aplica o mesmo filtro de busca/status que listTasks', () => {
+  const tasks = [
+    { id: 'a', title: 'Abrir', completed: false, status: 'To Do', fields: {} },
+    { id: 'b', title: 'Fechar', completed: true, status: 'Done', fields: {} },
+  ]
+  const cache = fakeCache({ tasks, schema: {}, fetchedAt: '2026-09-08T12:00:00.000Z' })
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({}),
+  })
+
+  const result = service.getCachedTasks({ connectionId: 'connection-1', dataSourceId: 'source-1', status: 'done' })
+  assert.deepEqual(result.tasks, [tasks[1]])
 })
 
 test('serviço normaliza esquema e filtra tarefas sem expor credencial', () => {
