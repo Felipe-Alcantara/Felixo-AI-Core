@@ -1446,6 +1446,17 @@ export class TerminalSessionStore {
     // in-place animation; otherwise a waiting agent would look busy forever.
     const signature = computeSignature(session.terminal)
     if (signature !== session.lastSignature) {
+      // Diagnóstico temporário (ver task "detectar trabalhando sem depender
+      // do verbo sorteado", 09/09/2026): o badge "trabalhando" ficou grudado
+      // com o terminal visivelmente parado (só shells em segundo plano). Este
+      // log mostra o que exatamente mudou na assinatura pra manter a sessão
+      // "trabalhando" — abra o DevTools (Ctrl+Shift+I), procure por
+      // "[felixo:signature]" e mande a próxima ocorrência. Remover depois de
+      // diagnosticado.
+      console.log('[felixo:signature]', session.id, {
+        antes: session.lastSignature.slice(0, 300),
+        depois: signature.slice(0, 300),
+      })
       session.lastSignature = signature
       session.lastMeaningfulAt = Date.now()
       session.paintedOutput = true
