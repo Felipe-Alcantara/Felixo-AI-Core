@@ -407,6 +407,63 @@ test('rede intermitente: falha, sucesso, falha de novo — cada leitura reflete 
     assert.match(stale.message, /offline 2/)
   }))
 
+test('cortar a rede DEPOIS de um sync bem-sucedido: snapshot stale legível; restaurar a rede: reflete a atualização de verdade', () =>
+  withRealCache(async (cache) => {
+    const comportamentos = [
+      // 1) sync inicial, com a rede disponível.
+      async () => ({ tasks: [{ id: 'page-1', title: 'Antes de cortar a rede', completed: false, fields: {} }], nextCursor: null }),
+      // 2) rede cortada DEPOIS do sync acima (não durante) — vários ticks
+      // de auto-sync em segundo plano, todos falhando.
+      async () => { throw new Error('rede cortada') },
+      async () => { throw new Error('rede cortada') },
+      // 3) rede restaurada, com dado NOVO no Notion (não é só o cache ecoando).
+      async () => ({ tasks: [{ id: 'page-1', title: 'Depois de restaurar a rede', completed: true, fields: {} }], nextCursor: null }),
+    ]
+    const service = createNotionService({
+      connectionStore: fakeStore(),
+      cacheRepository: cache,
+      clientFactory: () => ({
+        resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+        queryTasks: async () => comportamentos.shift()(),
+      }),
+      now: () => '2026-09-10T12:00:00.000Z',
+    })
+
+    const inicial = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.equal(inicial.syncStatus, 'success')
+    assert.equal(inicial.tasks[0].title, 'Antes de cortar a rede')
+
+    // Rede cortada: cada tentativa cai pro cache, syncStatus:'stale', e o
+    // snapshot continua o MESMO de antes do corte — legível, não vazio,
+    // não corrompido, com a mensagem de erro explicando a causa.
+    for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+      const stale = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+      assert.equal(stale.syncStatus, 'stale')
+      assert.equal(stale.tasks[0].title, 'Antes de cortar a rede')
+      assert.match(stale.message, /rede cortada/)
+
+      // O lado "stale" do stale-while-revalidate (a leitura local que o
+      // painel usa pra renderizar na hora, sem esperar a rede) mostra
+      // exatamente o mesmo snapshot legível — não fica vazio nem desatualizado
+      // de um jeito diferente da leitura de rede-com-fallback.
+      const cachedApenas = service.getCachedTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+      assert.equal(cachedApenas.hasCache, true)
+      assert.equal(cachedApenas.tasks[0].title, 'Antes de cortar a rede')
+    }
+
+    // Rede restaurada: a PRÓXIMA sincronização reflete o dado atualizado de
+    // verdade, não fica presa no snapshot antigo.
+    const recuperado = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.equal(recuperado.syncStatus, 'success')
+    assert.equal(recuperado.tasks[0].title, 'Depois de restaurar a rede')
+    assert.equal(recuperado.tasks[0].completed, true)
+
+    // E a leitura local (fase 1) também já reflete o dado novo — o cache
+    // foi substituído de verdade, não só remendado.
+    const cachedDepois = service.getCachedTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.equal(cachedDepois.tasks[0].title, 'Depois de restaurar a rede')
+  }))
+
 test('serviço nunca cruza o token de uma conexão pra outra ao consultar a rede', () =>
   withRealCache(async (cache) => {
     const credenciais = {
