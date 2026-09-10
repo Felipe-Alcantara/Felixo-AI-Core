@@ -23,27 +23,33 @@ const DEFAULT_TIMEOUT = 15_000
 
 const AJUDA_DEVTOOLS = `felixo devtools — dirige uma instância isolada e invisível do Felixo AI Core.
 
-  felixo devtools launch [--visible] [--real-profile] [--port N]
+  felixo devtools launch [--visible] [--real-profile] [--port N] [--packaged <executável>]
   felixo devtools status | screenshot [--out arquivo] | buttons | windows | quit
   felixo devtools click <seletor> | click-text <texto> | type <texto> | press <tecla>
   felixo devtools text [seletor] | eval <expressão JavaScript> | main <expressão JavaScript>
 
-Por padrão a sessão usa um userData temporário e uma janela invisível. --real-profile
-é deliberadamente excepcional e é recusado se o perfil aparentar estar em uso.`
+Por padrão a sessão usa um userData temporário e uma janela invisível, e sobe da fonte
+(o mesmo \`electron .\` do \`npm run dev\`, contra o Vite dev server). --real-profile é
+deliberadamente excepcional e é recusado se o perfil aparentar estar em uso.
+
+--packaged <executável> dirige o BINÁRIO EMPACOTADO no lugar da fonte — sem servidor
+Vite, carregando o \`dist\` real do instalador/CI. É o que prova UI clicada dentro do
+artefato que a pessoa de fato instala, não de uma aproximação de desenvolvimento.`
 
 function parseArgs(args) {
-  const options = { visible: false, realProfile: false, port: null, out: '' }
+  const options = { visible: false, realProfile: false, port: null, out: '', packaged: '' }
   if (args[0] === '--help') return { command: 'help', positional: [], options }
   const positional = []
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index]
     if (value === '--visible') options.visible = true
     else if (value === '--real-profile') options.realProfile = true
-    else if (value === '--port' || value === '--out') {
+    else if (value === '--port' || value === '--out' || value === '--packaged') {
       const next = args[++index]
       if (!next) throw new Error(`${value} exige um valor.`)
       if (value === '--port') options.port = Number(next)
-      else options.out = next
+      else if (value === '--out') options.out = next
+      else options.packaged = next
     } else if (value.startsWith('--')) {
       throw new Error(`Opção desconhecida: ${value}`)
     } else positional.push(value)
@@ -115,6 +121,24 @@ async function ensureVite(deps = {}) {
   return { pid: child.pid ?? null, reused: false }
 }
 function electronPath() { return require('electron') }
+/**
+ * Confere que o caminho aponta para um executável de verdade antes de tentar
+ * abrir a sessão — sem isso, um caminho errado só falharia depois, no timeout
+ * de `waitForCdp`, sem dizer o motivo real (executável ausente/errado).
+ */
+function requirePackagedExecutable(execPath, deps = {}) {
+  const fileSystem = deps.fs ?? fs
+  let stats
+  try {
+    stats = fileSystem.statSync(execPath)
+  } catch {
+    throw new Error(`--packaged: executável não encontrado em "${execPath}".`)
+  }
+  if (!stats.isFile() && !stats.isDirectory()) {
+    throw new Error(`--packaged: "${execPath}" não é um arquivo executável.`)
+  }
+  return execPath
+}
 async function launch(options, deps = {}) {
   const old = readState(deps)
   if (old?.pid && isProcessAlive(old.pid, deps)) throw new Error('Já existe uma sessão DevTools ativa. Use `felixo devtools status` ou `quit`.')
@@ -125,11 +149,26 @@ async function launch(options, deps = {}) {
     throw new Error('O perfil real parece estar em uso por outra instância. Feche o app antes de usar --real-profile.')
   }
   const userData = options.realProfile ? realUserData : path.join(STATE_DIR, `profile-${randomUUID()}`)
-  const vite = await ensureVite(deps)
-  const env = { ...process.env, ...(deps.env ?? {}), VITE_DEV_SERVER_URL: 'http://127.0.0.1:5173', FELIXO_DEVTOOLS_PORT: String(port), FELIXO_USER_DATA_DIR: userData, FELIXO_DEVTOOLS_HEADLESS: options.visible ? '0' : '1' }
+  const packaged = options.packaged ? requirePackagedExecutable(options.packaged, deps) : ''
+
+  // --packaged dirige o binário real: sem Vite (o dist já está dentro do
+  // pacote) e sem VITE_DEV_SERVER_URL (a flag que o main process usa para
+  // saber se está em modo desenvolvimento — presente, ele tentaria abrir o
+  // dev server que não existe ali).
+  const vite = packaged ? { pid: null, reused: true } : await ensureVite(deps)
+  const env = {
+    ...process.env,
+    ...(deps.env ?? {}),
+    ...(packaged ? {} : { VITE_DEV_SERVER_URL: 'http://127.0.0.1:5173' }),
+    FELIXO_DEVTOOLS_PORT: String(port),
+    FELIXO_USER_DATA_DIR: userData,
+    FELIXO_DEVTOOLS_HEADLESS: options.visible ? '0' : '1',
+  }
   delete env.ELECTRON_RUN_AS_NODE
-  const child = createDetached(deps.electronPath ?? electronPath(), ['.'], { cwd: deps.appDir ?? APP_DIR, env }, deps)
-  const state = { pid: child.pid, port, userData, realProfile: options.realProfile, vitePid: vite.pid, createdAt: new Date().toISOString() }
+  const child = packaged
+    ? createDetached(packaged, [], { cwd: deps.appDir ?? APP_DIR, env }, deps)
+    : createDetached(deps.electronPath ?? electronPath(), ['.'], { cwd: deps.appDir ?? APP_DIR, env }, deps)
+  const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid: vite.pid, createdAt: new Date().toISOString() }
   writeState(state, deps)
   try {
     await (deps.waitForCdp ?? waitForCdp)(port)
@@ -163,14 +202,14 @@ function killTree(pid, deps = {}) {
     return true
   } catch { return false }
 }
-function formatState(state, alive) { return [`sessão: ${alive ? 'ativa' : 'encerrada'}`, `pid: ${state.pid}`, `porta CDP: ${state.port}`, `perfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}`, `iniciada: ${state.createdAt}`].join('\n') }
+function formatState(state, alive) { return [`sessão: ${alive ? 'ativa' : 'encerrada'}`, `pid: ${state.pid}`, `porta CDP: ${state.port}`, `perfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}`, `origem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}`, `iniciada: ${state.createdAt}`].join('\n') }
 async function executarDevtools(args, deps = {}) {
   let parsed
   try { parsed = parseArgs(args) } catch (error) { return { saida: '', erro: error.message, codigo: 2 } }
   const { command, positional, options } = parsed
   try {
     if (!command || command === 'help' || command === '--help') return { saida: AJUDA_DEVTOOLS, codigo: 0 }
-    if (command === 'launch') { const state = await launch(options, deps); return { saida: `Sessão DevTools ativa na porta ${state.port}.\nPerfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}.`, codigo: 0 } }
+    if (command === 'launch') { const state = await launch(options, deps); return { saida: `Sessão DevTools ativa na porta ${state.port}.\nPerfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}.\nOrigem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}.`, codigo: 0 } }
     const state = readState(deps)
     if (command === 'status') return state ? { saida: formatState(state, isProcessAlive(state.pid, deps)), codigo: isProcessAlive(state.pid, deps) ? 0 : 1 } : { saida: 'Nenhuma sessão DevTools registrada.', codigo: 1 }
     if (command === 'quit') {
@@ -193,4 +232,4 @@ async function executarDevtools(args, deps = {}) {
   } catch (error) { return { saida: '', erro: error?.message ?? 'Falha no DevTools.', codigo: 1 } }
 }
 
-module.exports = { AJUDA_DEVTOOLS, STATE_FILE, executarDevtools, findFreePort, formatState, isProcessAlive, parseArgs, profileLooksInUse, readState, waitForCdp, writeState }
+module.exports = { AJUDA_DEVTOOLS, STATE_FILE, executarDevtools, findFreePort, formatState, isProcessAlive, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }

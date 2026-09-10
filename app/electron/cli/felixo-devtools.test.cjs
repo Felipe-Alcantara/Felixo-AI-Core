@@ -7,9 +7,11 @@ const os = require('node:os')
 const path = require('node:path')
 const {
   executarDevtools,
+  formatState,
   parseArgs,
   profileLooksInUse,
   readState,
+  requirePackagedExecutable,
 } = require('./felixo-devtools.cjs')
 
 function setup() {
@@ -30,11 +32,80 @@ function setup() {
 
 test('interpreta as opções do DevTools sem transformar texto em flag', () => {
   assert.deepEqual(parseArgs(['launch', '--visible', '--port', '9223']), {
-    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '' },
+    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '', packaged: '' },
   })
   assert.deepEqual(parseArgs(['click-text', 'Abrir', 'agente']), {
-    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '' },
+    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '', packaged: '' },
   })
+})
+
+test('parseArgs reconhece --packaged com o mesmo formato de --port/--out', () => {
+  assert.deepEqual(parseArgs(['launch', '--packaged', '/opt/Felixo AI Core/felixo-ai-core']), {
+    command: 'launch',
+    positional: [],
+    options: { visible: false, realProfile: false, port: null, out: '', packaged: '/opt/Felixo AI Core/felixo-ai-core' },
+  })
+})
+
+test('requirePackagedExecutable recusa um caminho que não existe, antes de tentar abrir', () => {
+  const env = setup()
+  assert.throws(
+    () => requirePackagedExecutable(path.join(env.root, 'nao-existe'), env),
+    /executável não encontrado/,
+  )
+})
+
+test('requirePackagedExecutable aceita um caminho real', () => {
+  const env = setup()
+  const exe = path.join(env.root, 'felixo-ai-core')
+  fs.writeFileSync(exe, '')
+  assert.equal(requirePackagedExecutable(exe, env), exe)
+})
+
+test('launch --packaged sobe o binário real, sem Vite e sem VITE_DEV_SERVER_URL', async () => {
+  const env = setup()
+  const exe = path.join(env.root, 'felixo-ai-core')
+  fs.writeFileSync(exe, '')
+  let viteChamado = false
+  const result = await executarDevtools(['launch', '--port', '9333', '--packaged', exe], {
+    ...env,
+    getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
+    probeVite: async () => {
+      viteChamado = true
+      return { status: 'felixo' }
+    },
+    appDir: env.root,
+    spawn(command, args, options) {
+      assert.equal(command, exe)
+      assert.deepEqual(args, [])
+      assert.equal('VITE_DEV_SERVER_URL' in options.env, false)
+      assert.equal(options.env.FELIXO_DEVTOOLS_PORT, '9333')
+      return { pid: 5555, unref() {} }
+    },
+    waitForCdp: async (port) => assert.equal(port, 9333),
+  })
+  assert.equal(result.codigo, 0)
+  assert.equal(viteChamado, false)
+  const state = readState(env)
+  assert.equal(state.pid, 5555)
+  assert.equal(state.packaged, exe)
+  assert.match(formatState(state, true), /origem: empacotado/)
+})
+
+test('launch sem --packaged continua subindo da fonte, com origem "fonte (dev)"', async () => {
+  const env = setup()
+  const result = await executarDevtools(['launch', '--port', '9333'], {
+    ...env,
+    getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
+    probeVite: async () => ({ status: 'felixo' }),
+    electronPath: 'electron-falso',
+    appDir: env.root,
+    spawn: () => ({ pid: 4321, unref() {} }),
+    waitForCdp: async () => {},
+  })
+  assert.equal(result.codigo, 0)
+  assert.match(result.saida, /Origem: fonte \(dev\)/)
+  assert.equal(readState(env).packaged, null)
 })
 
 test('aceita --help diretamente depois de devtools', async () => {
