@@ -4,7 +4,7 @@ import { CanvasPanel } from './CanvasPanel'
 import type { CanvasSkill } from '../../types'
 
 /** Result of activating a skill, so the panel can show the right feedback. */
-export type SkillActivationResult = 'sent' | 'copied'
+export type SkillActivationResult = 'sent' | 'copied' | 'failed'
 
 type SkillsPanelProps = {
   /** Sends the skill to the expanded terminal, or copies it as a fallback. */
@@ -117,7 +117,9 @@ export function SkillsPanel({
     setFeedbackText(
       result === 'sent'
         ? 'Enviada ao terminal aberto.'
-        : 'Sem terminal aberto — copiada para a área de transferência.',
+        : result === 'copied'
+          ? 'Sem terminal aberto — copiada para a área de transferência.'
+          : 'O terminal não confirmou o recebimento. Tente novamente.',
     )
     window.setTimeout(() => setFeedbackId((id) => (id === skill.id ? null : id)), 2500)
   }

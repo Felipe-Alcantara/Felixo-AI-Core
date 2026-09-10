@@ -118,11 +118,13 @@ export function PromptsPanel({
   const insertPrompt = async (prompt: AutomationDefinition) => {
     const result = await onInsertPrompt(prompt.prompt)
     setFeedbackId(prompt.id)
-    setFeedbackIsError(false)
+    setFeedbackIsError(result === 'failed')
     setFeedbackText(
       result === 'sent'
         ? 'Inserido no terminal aberto.'
-        : 'Sem terminal aberto — copiado para a área de transferência.',
+        : result === 'copied'
+          ? 'Sem terminal aberto — copiado para a área de transferência.'
+          : 'O terminal não confirmou o recebimento. Tente novamente.',
     )
     window.setTimeout(() => setFeedbackId((id) => (id === prompt.id ? null : id)), 2500)
   }
@@ -141,11 +143,13 @@ export function PromptsPanel({
     if (!combined) return
     const result = await onInsertPrompt(combined)
     setFeedbackId('combined')
-    setFeedbackIsError(false)
+    setFeedbackIsError(result === 'failed')
     setFeedbackText(
       result === 'sent'
         ? `${selectedPrompts.length} prompts combinados e enviados.`
-        : `${selectedPrompts.length} prompts combinados e copiados.`,
+        : result === 'copied'
+          ? `${selectedPrompts.length} prompts combinados e copiados.`
+          : 'O terminal não confirmou o recebimento. Tente novamente.',
     )
     window.setTimeout(() => setFeedbackId((id) => (id === 'combined' ? null : id)), 2500)
   }
