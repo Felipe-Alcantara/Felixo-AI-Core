@@ -82,6 +82,10 @@ const {
   persistGraphicsMode,
   resolveGraphicsProfile,
 } = require('./core/graphics-mode.cjs')
+const {
+  evaluateGpuAfterReady,
+  readGraphicsRecommendation,
+} = require('./core/graphics-recommendation.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
@@ -156,6 +160,10 @@ function graphicsStatus() {
     totalMemoryBytes: graphicsProfile.totalMemoryBytes,
     cpuCount: graphicsProfile.cpuCount,
     persistedMode: graphicsProfile.persistedMode,
+    // Sugestão baseada em sinal real de GPU (detectada num boot anterior,
+    // depois de app.whenReady() — não dá pra saber isso antes). Só uma
+    // recomendação pendente de aceite; nunca é o modo já aplicado.
+    recommendation: readGraphicsRecommendation(app.getPath('userData')),
   }
 }
 
@@ -194,6 +202,16 @@ app.whenReady().then(async () => {
     }
     return
   }
+
+  // Só agora (depois de whenReady) app.getGPUFeatureStatus() existe de
+  // verdade. Não bloqueia o boot (sem await aqui) nem afeta a sessão
+  // corrente — só persiste uma recomendação pra próxima abertura mostrar,
+  // se houver sinal real de driver/GPU recusado pelo Chromium.
+  evaluateGpuAfterReady({
+    userDataPath: app.getPath('userData'),
+    getGPUFeatureStatus: () => app.getGPUFeatureStatus(),
+    alreadyUsingSoftwareRendering: useSoftwareRendering,
+  }).catch(() => {})
 
   const appPaths = initAppPaths()
   storageDatabase = createStorageDatabase({
