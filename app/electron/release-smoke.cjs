@@ -330,6 +330,15 @@ function runContextReadsInPty({ manager, cwd, names }) {
     try {
       manager.spawn(sessionId, {
         cwd,
+        // Bem além de qualquer linha real da fixture (a mais longa do
+        // cabeçalho de buildContextFileContent tem ~150 colunas). Nas 80
+        // colunas padrão, o ConPTY do Windows reflui a linha e RESSINTETIZA
+        // o ponto de quebra — inserindo um \n de verdade e reescrevendo o
+        // caractere anterior à quebra — o que corrompe uma comparação
+        // byte-a-byte mesmo depois de remover sequências ANSI/VT. Medido ao
+        // vivo (run 34437923645): "...trabalhado e" \n "e não deve...", com
+        // o "e" duplicado exatamente no ponto de quebra.
+        cols: 1000,
         onData: (data) => {
           output = `${output}${String(data)}`.slice(-200_000)
         },
