@@ -95,6 +95,10 @@ type Harness = {
   resolveSpawn: () => void
   /** Opções de autenticação recebidas pela ponte, na ordem dos spawns. */
   spawnRequests: Array<{ accountId?: string; providerId?: string }>
+  /** Nomes dos arquivos de contexto "criados" pela ponte, na ordem de escrita. */
+  contextFileNames: string[]
+  /** sessionId de cada chamada a `contextFiles.release`, na ordem em que ocorreram. */
+  releaseCalls: string[]
 }
 
 const SESSION_ID = 'terminal-1'
@@ -113,6 +117,8 @@ function createHarness(
   const sessionListeners = new Set<(event: object) => void>()
   const spawnArgs: string[] = []
   const spawnRequests: Array<{ accountId?: string; providerId?: string }> = []
+  const contextFileNames: string[] = []
+  const releaseCalls: string[] = []
 
   // Com `deferSpawn`, a resposta do `pty:spawn` fica pendurada até o teste
   // soltá-la, reproduzindo a ordem que o ConPTY impõe no Windows: a CLI pinta
@@ -149,6 +155,7 @@ function createHarness(
         },
         write: async ({ data }: { data: string }) => {
           writes.push(data)
+          return { ok: true, delivered: true }
         },
         resize: async () => {},
         kill: async () => {},
@@ -159,12 +166,14 @@ function createHarness(
             return { ok: false, message: 'simulated context directory failure' }
           }
           contextBodies.push(content)
-          return {
-            ok: true,
-            name: `felixo-context-${contextBodies.length}-initial-context.txt`,
-          }
+          const name = `felixo-context-${contextBodies.length}-initial-context.txt`
+          contextFileNames.push(name)
+          return { ok: true, name }
         },
-        release: async () => ({ ok: true }),
+        release: async ({ sessionId }: { sessionId: string }) => {
+          releaseCalls.push(sessionId)
+          return { ok: true }
+        },
       },
     },
   }
@@ -187,6 +196,8 @@ function createHarness(
     contextBodies,
     spawnArgs,
     spawnRequests,
+    contextFileNames,
+    releaseCalls,
     feed: (data: string) => {
       for (const listener of dataListeners) {
         listener({ sessionId: PTY_SESSION_ID, data })
@@ -433,6 +444,191 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(fallback).toContain('catálogo começo')
     expect(fallback).toContain('catálogo fim')
     expect(fallback).not.toContain('trecho do meio do histórico omitido')
+  }, 10000)
+
+  it('sendText devolve delivered:true quando a PTY confirma a escrita', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: true })
+  }, 10000)
+
+  it('sendText devolve delivered:false quando a PTY rejeita a escrita', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { write: () => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.write = async () => ({ ok: false, erro: 'sessão fechada' })
+
+    const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: false, reason: 'rejected', message: 'sessão fechada' })
+  }, 10000)
+
+  it('sendText devolve delivered:false quando o IPC de escrita lança', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { write: () => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.write = async () => {
+      throw new Error('ponte indisponível')
+    }
+
+    const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: false, reason: 'error', message: 'ponte indisponível' })
+  }, 10000)
+
+  it('sendText devolve delivered:false sem terminal correspondente', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+
+    const result = await harness.store.sendText('inexistente', 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: false, reason: 'no-session' })
+  })
+
+  it('duas chamadas de sendText na mesma sessão são serializadas, nunca intercaladas', async () => {
+    // Dois cliques (duplo clique burlando o botão desabilitado, ou dois
+    // painéis distintos mandando pra mesma sessão ao mesmo tempo) não podem
+    // interleave a escrita na PTY. `sendChain` já garante isso; este teste
+    // prova a ordem observável em vez de só confiar na leitura do código.
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const first = harness.store.sendText(SESSION_ID, 'primeiro\r', { kind: 'catalog-prompt' })
+    const second = harness.store.sendText(SESSION_ID, 'segundo\r', { kind: 'catalog-prompt' })
+    const [firstResult, secondResult] = await Promise.all([first, second])
+
+    expect(firstResult).toEqual({ delivered: true })
+    expect(secondResult).toEqual({ delivered: true })
+    // A escrita do segundo texto só aparece depois da do primeiro — nunca
+    // fragmentos dos dois textos intercalados no mesmo write.
+    const primeiroIndex = harness.writes.findIndex((data) => data.includes('primeiro'))
+    const segundoIndex = harness.writes.findIndex((data) => data.includes('segundo'))
+    expect(primeiroIndex).toBeGreaterThanOrEqual(0)
+    expect(segundoIndex).toBeGreaterThan(primeiroIndex)
+  }, 10000)
+
+  it('retry após falha não apaga o artefato de outra entrega da mesma sessão', async () => {
+    // `contextFiles.release` limpa TODOS os arquivos da sessão de uma vez —
+    // se um retry o chamasse, apagaria também artefatos de envios anteriores
+    // bem-sucedidos que ainda podem estar em uso. sendText nunca deve chamar
+    // release; quem chama é só dispose/restart da sessão.
+    harness = createHarness(CONTEXT, 'codex', true)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    let shouldFail = true
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { write: (params: { data: string }) => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.write = async (params) => {
+      harness!.writes.push(params.data)
+      if (shouldFail) return { ok: false, erro: 'sessão fechada' }
+      return { ok: true, delivered: true }
+    }
+
+    // A entrega do texto inicial do boot já grava seu próprio arquivo; a
+    // contagem daqui em diante é relativa, não absoluta.
+    const filesBeforeAttempts = harness.contextFileNames.length
+
+    const failedAttempt = await harness.store.sendText(SESSION_ID, 'catálogo\r', {
+      kind: 'catalog-prompt',
+    })
+    expect(failedAttempt).toEqual({ delivered: false, reason: 'rejected', message: 'sessão fechada' })
+    expect(harness.contextFileNames.length).toBe(filesBeforeAttempts + 1)
+
+    shouldFail = false
+    const retryAttempt = await harness.store.sendText(SESSION_ID, 'catálogo\r', {
+      kind: 'catalog-prompt',
+    })
+    expect(retryAttempt).toEqual({ delivered: true })
+
+    // O retry escreveu um SEGUNDO artefato, com nome distinto do primeiro —
+    // não reaproveitou nem apagou o da tentativa que falhou.
+    expect(harness.contextFileNames.length).toBe(filesBeforeAttempts + 2)
+    const [failedName, retryName] = harness.contextFileNames.slice(filesBeforeAttempts)
+    expect(failedName).not.toBe(retryName)
+    expect(harness.releaseCalls).toEqual([])
+  }, 10000)
+
+  it('preserva Unicode, Markdown e quebras de linha do catálogo ponta a ponta', async () => {
+    harness = createHarness(CONTEXT, 'codex', true)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const prompt = [
+      '## Título com acentuação: café, ação, emoji 🚀',
+      '',
+      '- item com **negrito** e `código`',
+      '- segunda linha\ncom quebra explícita',
+      '',
+      '> citação em bloco',
+    ].join('\n')
+
+    const result = await harness.store.sendText(SESSION_ID, `${prompt}\r`, {
+      kind: 'catalog-prompt',
+    })
+
+    expect(result).toEqual({ delivered: true })
+    const body = harness.contextBodies.at(-1) ?? ''
+    expect(body).toContain('café, ação, emoji 🚀')
+    expect(body).toContain('**negrito**')
+    expect(body).toContain('`código`')
+    expect(body).toContain('segunda linha\ncom quebra explícita')
+    expect(body).toContain('> citação em bloco')
+  }, 10000)
+
+  it('aguarda o dreno da PTY antes de resolver — não confirma cedo demais', async () => {
+    harness = createHarness(CONTEXT, 'codex', true)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    let releaseDrain: (() => void) | undefined
+    const drainGate = new Promise<void>((resolve) => {
+      releaseDrain = resolve
+    })
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { write: (params: { data: string }) => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.write = async (params) => {
+      harness!.writes.push(params.data)
+      await drainGate
+      return { ok: true, delivered: true }
+    }
+
+    let settled = false
+    const pending = harness.store.sendText(SESSION_ID, 'catálogo\r', { kind: 'catalog-prompt' })
+    void pending.then(() => {
+      settled = true
+    })
+
+    await wait(50)
+    expect(settled).toBe(false) // ainda preso no dreno — não pode ter confirmado
+
+    releaseDrain?.()
+    const result = await pending
+    expect(settled).toBe(true)
+    expect(result).toEqual({ delivered: true })
   }, 10000)
 
   it('não escreve enquanto o Codex pergunta se a pasta é confiável', async () => {

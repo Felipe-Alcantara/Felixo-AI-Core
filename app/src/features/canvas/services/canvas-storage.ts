@@ -36,9 +36,17 @@ export async function saveCanvasNode(node: PersistedCanvasNode): Promise<void> {
   }
 
   try {
-    await bridge.save(node)
-  } catch {
-    // Persistence is best-effort; the in-memory canvas remains usable.
+    const result = await bridge.save(node)
+    // A rejected write (e.g. a node type the stored schema doesn't accept
+    // yet) must not vanish silently: the block would keep working for this
+    // session and disappear on the next launch, with nothing in the console
+    // to explain why. Persistence stays best-effort — the canvas remains
+    // usable in-memory — but the failure is now visible for debugging.
+    if (!result?.ok) {
+      console.error('[canvas] Falha ao salvar o nó', node.id, node.type, result?.message)
+    }
+  } catch (error) {
+    console.error('[canvas] Falha ao salvar o nó', node.id, node.type, error)
   }
 }
 

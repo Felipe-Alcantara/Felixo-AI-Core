@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
 import { TerminalMenu } from './TerminalMenu'
-import { AppVersionBadge, UpdateIndicator } from '../../updates/UpdateNotice'
+import { AppVersionBadge, CheckUpdateButton, UpdateIndicator } from '../../updates/UpdateNotice'
 import { CliSetupIndicator } from '../../setup/CliSetupNotice'
 import { useAppVersion } from '../../updates/useAppVersion'
 import type { UpdatePresentation } from '../../updates/update-presentation'
@@ -345,6 +345,7 @@ export function CanvasToolbar({
             onInstall={onInstallUpdate}
             onRetry={onCheckUpdate}
           />
+          <CheckUpdateButton presentation={updatePresentation} onCheck={onCheckUpdate} />
           <CliSetupIndicator />
           <AppVersionBadge version={appVersion} />
         </div>

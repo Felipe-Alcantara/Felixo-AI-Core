@@ -21,6 +21,24 @@ const path = require('node:path')
 const NOME_DO_COMANDO = 'felixo'
 
 /**
+ * Caminho absoluto do shim instalado por `instalarComandoDoAgente`, no
+ * mesmo `binDir`/plataforma. Existe para quem precisa do arquivo exato em
+ * vez de confiar na resolução de comando do shell — que também escolhe entre
+ * função de shell, alias e `PATH`, nessa ordem. Uma função de shell chamada
+ * "felixo" (por exemplo, instalada por outra ferramenta no `.bashrc`/`.zshrc`
+ * da pessoa) sempre vence o `PATH`, então digitar o nome nu do comando pode
+ * silenciosamente rodar outra coisa. Ver `context-files-ipc-handlers.cjs`.
+ *
+ * @param {string} binDir - pasta do comando (`appPaths.bin`).
+ * @param {string} [plataforma] - `process.platform`.
+ * @returns {string}
+ */
+function caminhoDoComando(binDir, plataforma = process.platform) {
+  const windows = plataforma === 'win32'
+  return path.join(binDir, windows ? `${NOME_DO_COMANDO}.cmd` : NOME_DO_COMANDO)
+}
+
+/**
  * Conteúdo do shim POSIX.
  *
  * `exec` de propósito: o shim não precisa sobreviver ao comando, e sem ele
@@ -105,7 +123,7 @@ function instalarComandoDoAgente(opcoes) {
   } = opcoes
 
   const windows = plataforma === 'win32'
-  const caminho = path.join(binDir, windows ? `${NOME_DO_COMANDO}.cmd` : NOME_DO_COMANDO)
+  const caminho = caminhoDoComando(binDir, plataforma)
   const conteudo = windows
     ? construirShimWindows({ execPath, entrypoint, userData })
     : construirShimPosix({ execPath, entrypoint, userData })
@@ -140,6 +158,7 @@ function instalarComandoDoAgente(opcoes) {
 module.exports = {
   NOME_DO_COMANDO,
   aspasPosix,
+  caminhoDoComando,
   construirShimPosix,
   construirShimWindows,
   instalarComandoDoAgente,

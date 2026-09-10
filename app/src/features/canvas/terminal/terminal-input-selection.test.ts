@@ -4,6 +4,7 @@ import {
   findComposerStartLine,
   findMultiLineTypedInputRange,
   findTypedInputRange,
+  isComposingKeyEvent,
   isDeleteSelectionKey,
   isNewlineShortcut,
   isSelectInputShortcut,
@@ -174,6 +175,16 @@ describe('isNewlineShortcut', () => {
 
   it('ignora outras teclas com Shift', () => {
     expect(isNewlineShortcut(keyEvent({ key: 'a', shiftKey: true }))).toBe(false)
+  })
+})
+
+describe('isComposingKeyEvent', () => {
+  it('reconhece um evento no meio de uma composição de acento/IME', () => {
+    expect(isComposingKeyEvent(keyEvent({ key: 'ã', isComposing: true }))).toBe(true)
+  })
+
+  it('ignora uma tecla normal, fora de composição', () => {
+    expect(isComposingKeyEvent(keyEvent({ key: 'a' }))).toBe(false)
   })
 })
 

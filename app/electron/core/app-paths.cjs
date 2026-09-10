@@ -221,14 +221,25 @@ function resolveDevUserDataOverride({
   defaultUserData,
   environment = process.env,
 }) {
-  if (isPackaged || isReleaseSmoke) {
+  if (isReleaseSmoke) {
     return null
   }
 
+  // O override explícito vence ANTES da checagem de `isPackaged` — a
+  // docstring desta função já prometia isso ("continua valendo por cima
+  // disto"), mas o código voltava `null` cedo demais para o app empacotado
+  // e nunca chegava a olhar `environment`. Bug real, medido ao vivo: `felixo
+  // devtools launch --packaged` (que pede exatamente este isolamento)
+  // conectava ao perfil REAL de quem roda o comando, porque não havia
+  // caminho nenhum para o override chegar ao app empacotado.
   const overridden =
     typeof environment[USER_DATA_ENV_KEY] === 'string' ? environment[USER_DATA_ENV_KEY].trim() : ''
   if (overridden) {
     return overridden
+  }
+
+  if (isPackaged) {
+    return null
   }
 
   if (typeof defaultUserData !== 'string' || !defaultUserData) {

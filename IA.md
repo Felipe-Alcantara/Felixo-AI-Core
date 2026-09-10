@@ -4425,3 +4425,86 @@ AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core.
 - Validação local final: 53 testes nativos focados, 44 testes frontend
   focados, typecheck, lint, suíte frontend, 1.056 testes totais, build e
   `git diff --check` passaram.
+
+## [2026-09-09] Notion Tasks: filtros, sincronização, colunas — e um episódio de correção revertida
+
+**Task.** Uma sequência de pedidos diretos do usuário sobre o painel de Tarefas Notion
+do Canvas, mais um bug real relatado ("o bloco do Notion some ao reabrir o app"), mais
+um pedido de UI de atualização, mais uma investigação de confiabilidade do canal de
+contexto entre agentes.
+
+**Implementação, em ordem cronológica:**
+
+1. **Filtros avançados e visualizações personalizadas** (`13dd39d`) — o painel só tinha
+   Todas/Abertas/Concluídas fixas; agora dá pra criar visualizações nomeadas filtrando
+   por qualquer propriedade de seleção da database (ex.: "Repositório"), editáveis e
+   persistidas por conexão+database. Módulo novo `notion-task-views.ts` com 8 testes.
+2. **Botão de copiar link da tarefa** (`9173e91`) — no detalhe expandido, ao lado de
+   "Abrir página no Notion", copia a URL via `navigator.clipboard` com feedback visual.
+3. **Bug real: bloco Notion/Página Web sumindo ao reabrir o app** (`40b79bc`) — causa
+   raiz encontrada consultando o SQLite real do usuário: `canvas_nodes.type` tinha um
+   `CHECK` que nunca foi alargado para os tipos `'webpage'` e `'notionTasks'` quando
+   entraram no código; todo `INSERT` desses dois tipos falhava, e o erro era engolido em
+   silêncio pelo wrapper best-effort do renderer. Corrigido com a migração 012 (recria a
+   tabela com o `CHECK` certo, padrão já usado nas migrações 006/007) mais log de erro
+   quando uma escrita falha, e um teste de regressão que salva os dois tipos, fecha e
+   reabre a conexão SQLite de verdade. Validado rodando a migração contra uma cópia do
+   banco de produção do usuário.
+4. **Sincronização automática a cada minuto** (`b39a253`) — revalida a lista com o
+   Notion em segundo plano sem fechar detalhe expandido nem empilhar chamada; botão de
+   relógio liga/desliga.
+5. **Seletor de colunas na tabela** (`c86691e`) — escolher quais propriedades da
+   database aparecem como coluna, sem precisar expandir cada tarefa; escolha persistida
+   por database.
+6. **Botão de verificar atualizações sempre acessível** (`82db97a`) — o indicador de
+   atualização ficava escondido quando o app já estava em dia, sem forma de checar na
+   hora; `UpdatePresentation` ganhou `canCheck`, true só em `'idle'`.
+7. **Episódio revertido: tentativa de corrigir causa raiz do flake `AttachConsole` no
+   CI** (`e3eea0e`, revertido em `1fa44a6`) — o CI bateu duas vezes seguidas no mesmo
+   teste nativo de PTY no Windows (`AttachConsole failed`, já catalogado). Investigado o
+   log real: o processo do arquivo de teste crashava com `STATUS_HEAP_CORRUPTION`
+   porque `PtyHandle.kill()` bifurca um agente que chama `AttachConsole` quando o
+   node-pty não carrega a `conpty.dll`. Corrigido forçando `useConptyDll: true` nos dois
+   testes afetados (escopo só teste, nenhum caminho de produção mudou) — o crash parou
+   de fato, mas ao rodar de verdade no CI o mesmo passo que antes falhava em segundos
+   ficou mais de 11 minutos sem terminar: hipótese é que o `kill()` do backend DLL só
+   libera um handle dentro de um listener de dado que nunca dispara se o processo
+   filho já parou de produzir saída. Um travamento longo é pior que um flake rápido e
+   recuperável para quem precisa publicar — o run foi cancelado, a correção revertida,
+   e a hipótese registrada na task do Notion para quem tentar de novo com mais cuidado
+   (não forçar `useConptyDll: true` sem também garantir que o handle fecha depois do
+   `kill()`).
+8. **Causa raiz real da queixa "agentes não conseguem ler o contexto"** (`f68c4b7`) —
+   não era perfil trocado nem prompt injection: um instalador de outro produto do mesmo
+   autor (Felixo System Design) injeta uma **função de shell** chamada `felixo` no
+   `.bashrc`/`.zshrc` de quem instala, para sincronizar aquele repositório. Em bash/zsh
+   uma função de shell sempre vence a resolução por `PATH`, então `felixo context read
+   ...` rodava essa outra ferramenta em silêncio, sem erro nenhum — confirmado por
+   relato real de um agente que só conseguiu ler o artefato depois de descobrir o
+   conflito sozinho. Corrigido sem tocar no outro repositório: o handler
+   `context-file:write` agora devolve `commandPath` (o caminho absoluto do shim desta
+   instância), e a instrução de contexto manda o agente rodar esse caminho exato em vez
+   do nome nu, com aviso explícito do motivo. Sem o caminho (ponte antiga), cai de volta
+   no nome nu — nada muda para quem não tem o conflito.
+
+**Validação, por entrega:** `npm run build` (tsc -b + vite) e `eslint` limpos em toda
+entrega; suíte do canvas subiu de 641 para 646 testes ao longo do dia sem regressão;
+testes nativos de PTY (`node --test`) e do repositório de canvas (`canvas-repository.test.cjs`)
+verdes, incluindo os casos novos que provam cada bug antes/depois da correção (o teste de
+`webpage`/`notionTasks` falha sem a migração 012 e passa com ela — confirmado manualmente
+removendo e devolvendo o arquivo da migração).
+
+**Deploy:** todos os oito commits foram publicados e validados por CI antes de qualquer
+entrega ser marcada concluída — quatro precisaram de um `rerun` no flake conhecido de
+`AttachConsole`/benchmark do runner Windows (ambiental, não relacionado ao código), com a
+causa de cada falha lida no log antes de rerodar, nunca presumida. Releases confirmadas:
+`v0.1.220` (1–2), `v0.1.221` (3), `v0.1.222` (4), `v0.1.223` (5), `v0.1.226` (6),
+`v0.1.230` (7 revertido + a limpeza) e `v0.1.231` (8):
+https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.231
+
+**Estado final.** As oito entregas foram registradas como tasks individuais no Notion
+(sete concluídas, uma — validação manual do botão "Copiar link" no app real — deixada
+aberta de propósito, porque o driver de automação não reproduz clipboard real do SO). A
+tentativa revertida do `AttachConsole` ficou registrada como pendência real, não como
+sucesso disfarçado, com a hipótese da causa do travamento documentada para quem
+retomar.

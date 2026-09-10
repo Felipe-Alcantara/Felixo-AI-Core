@@ -53,6 +53,19 @@ export type UpdatePresentation = {
   progress: number | null
   /** Urgência, para o componente escolher a cor. */
   tone: 'neutral' | 'info' | 'success' | 'error'
+  /**
+   * Se vale oferecer um botão "verificar atualizações" sempre visível, fora
+   * do indicador.
+   *
+   * Só quando o app já está atualizado ('idle'): a verificação automática
+   * roda a cada dez minutos, e sem isso não há como pedir uma checagem na
+   * hora sem esperar. Nos demais estados já há uma ação equivalente (o
+   * indicador some, mostra progresso, ou já oferece "tentar de novo" no
+   * erro) — oferecer os dois ao mesmo tempo duplicaria o botão. 'disabled'
+   * fica de fora de propósito: rodando do código-fonte o updater não age, e
+   * um botão que não faz nada é pior que a ausência dele.
+   */
+  canCheck: boolean
 }
 
 const HIDDEN: UpdatePresentation = {
@@ -65,6 +78,7 @@ const HIDDEN: UpdatePresentation = {
   canRetry: false,
   progress: null,
   tone: 'neutral',
+  canCheck: false,
 }
 
 /**
@@ -81,11 +95,15 @@ export function presentUpdateStatus(
   const version = status.version ? `Versão ${status.version}` : 'Nova versão'
 
   switch (status.state) {
-    // 'disabled' é o app rodando do código-fonte, onde o updater não age;
-    // 'idle' é "já está atualizado". Nenhum dos dois é notícia.
+    // 'disabled' é o app rodando do código-fonte, onde o updater não age —
+    // nenhuma notícia, e nenhum botão de verificar (não há o que checar).
     case 'disabled':
-    case 'idle':
       return HIDDEN
+
+    // 'idle' é "já está atualizado": nenhuma notícia, mas verificar de novo
+    // na hora continua fazendo sentido em vez de esperar os dez minutos.
+    case 'idle':
+      return { ...HIDDEN, canCheck: true }
 
     // Verificar é rotina (a cada dez minutos): fica no indicador para quem
     // olhar, mas nunca vira aviso flutuante.
@@ -106,6 +124,7 @@ export function presentUpdateStatus(
         toastDescription: 'O download começou e roda em segundo plano.',
         canInstall: false,
         canRetry: false,
+        canCheck: false,
         progress: 0,
         tone: 'info',
       }
@@ -123,6 +142,7 @@ export function presentUpdateStatus(
             : `${percent}% concluído. Pode continuar trabalhando.`,
         canInstall: false,
         canRetry: false,
+        canCheck: false,
         progress: percent,
         tone: 'info',
       }
@@ -138,6 +158,7 @@ export function presentUpdateStatus(
           'Reinicie para usar agora, ou ela será instalada ao fechar o app.',
         canInstall: true,
         canRetry: false,
+        canCheck: false,
         progress: 100,
         tone: 'success',
       }

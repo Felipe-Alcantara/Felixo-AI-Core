@@ -14,6 +14,10 @@ import type { AutomationDefinition, AutomationScope } from '../../../shared/type
 import type { SkillActivationResult } from './SkillsPanel'
 import { composeSelectedPrompts } from '../../services/prompt-composition'
 import {
+  describeCombinedInsertFeedback,
+  describeSingleInsertFeedback,
+} from '../../services/prompt-delivery-feedback'
+import {
   createCustomAutomation,
   CUSTOM_AUTOMATION_TEXT_REQUIRED,
 } from '../../services/custom-automation-creation'
@@ -60,6 +64,9 @@ export function PromptsPanel({
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackIsError, setFeedbackIsError] = useState(false)
+  // Id ('combined' for the multi-select send) currently awaiting sendText's
+  // real confirmation — never assumed "sent" before the PTY actually replied.
+  const [pendingId, setPendingId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
@@ -116,15 +123,22 @@ export function PromptsPanel({
     : null
 
   const insertPrompt = async (prompt: AutomationDefinition) => {
-    const result = await onInsertPrompt(prompt.prompt)
+    setPendingId(prompt.id)
+    let result: SkillActivationResult
+    try {
+      result = await onInsertPrompt(prompt.prompt)
+    } finally {
+      setPendingId((id) => (id === prompt.id ? null : id))
+    }
+    const feedback = describeSingleInsertFeedback(result)
     setFeedbackId(prompt.id)
-    setFeedbackIsError(false)
-    setFeedbackText(
-      result === 'sent'
-        ? 'Inserido no terminal aberto.'
-        : 'Sem terminal aberto — copiado para a área de transferência.',
-    )
-    window.setTimeout(() => setFeedbackId((id) => (id === prompt.id ? null : id)), 2500)
+    setFeedbackIsError(feedback.isError)
+    setFeedbackText(feedback.text)
+    // Um erro fica visível até a pessoa tentar de novo (ou trocar de prompt);
+    // um sucesso soma-se ao "Feito" temporário, como já era.
+    if (result !== 'failed') {
+      window.setTimeout(() => setFeedbackId((id) => (id === prompt.id ? null : id)), 2500)
+    }
   }
 
   const togglePrompt = (promptId: string) => {
@@ -139,15 +153,20 @@ export function PromptsPanel({
   const insertSelected = async () => {
     const combined = composeSelectedPrompts(selectedPrompts)
     if (!combined) return
-    const result = await onInsertPrompt(combined)
+    setPendingId('combined')
+    let result: SkillActivationResult
+    try {
+      result = await onInsertPrompt(combined)
+    } finally {
+      setPendingId((id) => (id === 'combined' ? null : id))
+    }
+    const feedback = describeCombinedInsertFeedback(result, selectedPrompts.length)
     setFeedbackId('combined')
-    setFeedbackIsError(false)
-    setFeedbackText(
-      result === 'sent'
-        ? `${selectedPrompts.length} prompts combinados e enviados.`
-        : `${selectedPrompts.length} prompts combinados e copiados.`,
-    )
-    window.setTimeout(() => setFeedbackId((id) => (id === 'combined' ? null : id)), 2500)
+    setFeedbackIsError(feedback.isError)
+    setFeedbackText(feedback.text)
+    if (result !== 'failed') {
+      window.setTimeout(() => setFeedbackId((id) => (id === 'combined' ? null : id)), 2500)
+    }
   }
 
   const persistAutomation = useCallback(async (automation: AutomationDefinition) => {
@@ -411,11 +430,23 @@ export function PromptsPanel({
           <button
             type="button"
             onClick={() => void insertSelected()}
-            disabled={selectedPrompts.length === 0}
+            disabled={selectedPrompts.length === 0 || pendingId === 'combined'}
             className="felixo-btn flex items-center gap-1 rounded bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {feedbackId === 'combined' ? <Check size={13} /> : <SendHorizontal size={13} />}
-            {feedbackId === 'combined' ? 'Feito' : 'Enviar conjunto'}
+            {pendingId === 'combined' ? (
+              <SendHorizontal size={13} className="animate-pulse" />
+            ) : feedbackId === 'combined' && !feedbackIsError ? (
+              <Check size={13} />
+            ) : (
+              <SendHorizontal size={13} />
+            )}
+            {pendingId === 'combined'
+              ? 'Enviando…'
+              : feedbackId === 'combined' && !feedbackIsError
+                ? 'Feito'
+                : feedbackId === 'combined' && feedbackIsError
+                  ? 'Tentar de novo'
+                  : 'Enviar conjunto'}
           </button>
         </div>
         {feedbackId === 'combined' && (
@@ -439,6 +470,8 @@ export function PromptsPanel({
           const isOverridden = isPreset && overridesById.has(prompt.id)
           const isFreeCustom = !isPreset
           const inserted = feedbackId === prompt.id && !feedbackIsError
+          const failed = feedbackId === prompt.id && feedbackIsError
+          const isPending = pendingId === prompt.id
 
           return (
             <li key={prompt.id} className="rounded bg-zinc-800/60 p-2">
@@ -483,13 +516,28 @@ export function PromptsPanel({
                 <button
                   type="button"
                   onClick={() => void insertPrompt(prompt)}
-                  className="felixo-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
-                  title="Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)"
+                  disabled={isPending}
+                  className="felixo-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  title={
+                    failed
+                      ? 'O terminal não confirmou o recebimento — clique para tentar de novo'
+                      : 'Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)'
+                  }
                 >
-                  {inserted ? (
+                  {isPending ? (
+                    <>
+                      <SendHorizontal size={13} className="animate-pulse" />
+                      Enviando…
+                    </>
+                  ) : inserted ? (
                     <>
                       <Check size={13} className="text-emerald-400" />
                       Feito
+                    </>
+                  ) : failed ? (
+                    <>
+                      <CircleAlert size={13} className="text-red-400" />
+                      Tentar de novo
                     </>
                   ) : (
                     <>

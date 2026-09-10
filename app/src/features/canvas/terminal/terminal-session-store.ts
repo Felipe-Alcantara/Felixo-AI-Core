@@ -20,6 +20,7 @@ import {
 import {
   buildClearInputSequence,
   findMultiLineTypedInputRange,
+  isComposingKeyEvent,
   isDeleteSelectionKey,
   isNewlineShortcut,
   isSelectInputShortcut,
@@ -112,6 +113,18 @@ export type TerminalTranscript = {
   /** Text currently available in xterm's active scrollback buffer. */
   text: string
 }
+
+/**
+ * Real outcome of `sendText`, replacing the old "fire and forget, assume it
+ * worked" contract. `pty.write` can reject or report `delivered: false` (PTY
+ * closed, IPC error, drain failure) and the caller needs to know that instead
+ * of a false "sent" — this is the base fix for the catalog-delivery
+ * reliability bug: callers built on top of this can now show pending/error
+ * states instead of a fake success.
+ */
+export type SendTextResult =
+  | { delivered: true }
+  | { delivered: false; reason: 'no-session' | 'rejected' | 'error'; message?: string }
 
 type SessionListener = (snapshot: SessionSnapshot) => void
 
@@ -659,6 +672,12 @@ export class TerminalSessionStore {
     // Returning false stops xterm's default handling so it doesn't also emit a
     // CR via onData, which would submit.
     terminal.attachCustomKeyEventHandler((event) => {
+      // Ver `isComposingKeyEvent`: sair antes de qualquer atalho, sem tocar em
+      // nada, deixa o xterm.js tratar sozinho um acento composto ou IME em
+      // andamento.
+      if (isComposingKeyEvent(event)) {
+        return true
+      }
       if (event.type === 'keydown') {
         // Tecla de verdade, vinda do teclado: daqui em diante a linha de entrada
         // tem dono. É o sinal mais confiável para isso — ao contrário do
@@ -1174,34 +1193,73 @@ export class TerminalSessionStore {
     id: string,
     text: string,
     options: { kind?: ContextFileKind } = {},
-  ): Promise<void> {
+  ): Promise<SendTextResult> {
     const session = this.sessions.get(id)
     if (!session || session.disposed || !text) {
-      return
+      return { delivered: false, reason: 'no-session' }
     }
 
+    let outcome: SendTextResult = { delivered: false, reason: 'error' }
+
     const delivery = session.sendChain.then(async () => {
-      if (session.disposed) return
+      if (session.disposed) {
+        outcome = { delivered: false, reason: 'no-session' }
+        return
+      }
 
       const delivered = await this.deliverContextText(
         session,
         text,
         options.kind ?? 'catalog-prompt',
       )
-      if (session.disposed) return
+      if (session.disposed) {
+        outcome = { delivered: false, reason: 'no-session' }
+        return
+      }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: delivered })
+      let ptyResult: { ok?: boolean; delivered?: boolean; erro?: string } | undefined
+      try {
+        ptyResult = await window.felixo?.pty?.write({
+          sessionId: session.ptySessionId,
+          data: delivered,
+        })
+      } catch (error) {
+        outcome = {
+          delivered: false,
+          reason: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        }
+        return
+      }
+
+      if (!ptyResult?.ok || ptyResult.delivered === false) {
+        outcome = {
+          delivered: false,
+          reason: 'rejected',
+          message: ptyResult?.erro,
+        }
+        return
+      }
+
       session.inputTouched = true
       const prompt = cleanPrompt(delivered)
       if (prompt) {
         this.update(session, { lastPrompt: prompt })
       }
+      outcome = { delivered: true }
     })
 
     // Keep the chain alive after one failed delivery. A transient IPC failure
     // must not permanently disable later prompts for this session.
     session.sendChain = delivery.catch(() => {})
-    await delivery.catch(() => {})
+    await delivery.catch((error) => {
+      outcome = {
+        delivered: false,
+        reason: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      }
+    })
+    return outcome
   }
 
   /**
@@ -1439,6 +1497,17 @@ export class TerminalSessionStore {
     // in-place animation; otherwise a waiting agent would look busy forever.
     const signature = computeSignature(session.terminal)
     if (signature !== session.lastSignature) {
+      // Diagnóstico temporário (ver task "detectar trabalhando sem depender
+      // do verbo sorteado", 09/09/2026): o badge "trabalhando" ficou grudado
+      // com o terminal visivelmente parado (só shells em segundo plano). Este
+      // log mostra o que exatamente mudou na assinatura pra manter a sessão
+      // "trabalhando" — abra o DevTools (Ctrl+Shift+I), procure por
+      // "[felixo:signature]" e mande a próxima ocorrência. Remover depois de
+      // diagnosticado.
+      console.log('[felixo:signature]', session.id, {
+        antes: session.lastSignature.slice(0, 300),
+        depois: signature.slice(0, 300),
+      })
       session.lastSignature = signature
       session.lastMeaningfulAt = Date.now()
       session.paintedOutput = true
@@ -1695,9 +1764,12 @@ export class TerminalSessionStore {
       ? splitInitialContext(split.text)
       : [{ kind, content: split.text }]
     const deliveredFiles: Array<{ name: string; kind: ContextFileKind }> = []
+    // Mesmo caminho em toda escrita desta sessão (é o shim da instância, não
+    // varia por arquivo); guardamos o primeiro que a ponte devolver.
+    let commandPath: string | undefined
 
     for (const part of parts) {
-      let result: { ok?: boolean; name?: string } | undefined
+      let result: { ok?: boolean; name?: string; commandPath?: string } | undefined
       try {
         result = await window.felixo?.contextFiles?.write({
           sessionId: session.ptySessionId,
@@ -1720,10 +1792,11 @@ export class TerminalSessionStore {
         return this.contextDeliveryFallback(session, text, kind)
       }
       deliveredFiles.push({ name: result.name, kind: part.kind })
+      commandPath ??= result.commandPath
     }
 
     this.update(session, { contextWarning: undefined })
-    return buildContextFileReferences(deliveredFiles, Boolean(split.submit))
+    return buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath)
   }
 
   private contextDeliveryFallback(

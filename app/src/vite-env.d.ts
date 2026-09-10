@@ -607,7 +607,20 @@ declare global {
           kind?: string
           source?: string
           content: string
-        }) => Promise<CliInvokeResult & { name?: string; bytes?: number; path?: string }>
+        }) => Promise<
+          CliInvokeResult & {
+            name?: string
+            bytes?: number
+            path?: string
+            /**
+             * Caminho absoluto do shim `felixo` desta instância. O nome nu do
+             * comando pode ser sequestrado por uma função de shell de outra
+             * ferramenta no `.bashrc`/`.zshrc` da pessoa (vence o PATH em
+             * bash/zsh); o caminho absoluto ignora essa resolução.
+             */
+            commandPath?: string
+          }
+        >
         release: (params: { sessionId: string }) => Promise<CliInvokeResult & { removed?: number }>
       }
       /**

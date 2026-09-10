@@ -24,18 +24,30 @@ describe('presentUpdateStatus', () => {
     expect(presentation.showToast).toBe(false)
   })
 
-  it('não mostra nada quando o app já está atualizado', () => {
+  it('não mostra nada quando o app já está atualizado, mas oferece verificar de novo', () => {
     const presentation = presentUpdateStatus(status('idle'))
 
     expect(presentation.showIndicator).toBe(false)
     expect(presentation.showToast).toBe(false)
+    expect(presentation.canCheck).toBe(true)
   })
 
-  it('não mostra nada rodando do código-fonte, onde o updater não age', () => {
+  it('não mostra nada nem oferece verificar rodando do código-fonte, onde o updater não age', () => {
     const presentation = presentUpdateStatus(status('disabled'))
 
     expect(presentation.showIndicator).toBe(false)
     expect(presentation.showToast).toBe(false)
+    expect(presentation.canCheck).toBe(false)
+  })
+
+  it('não oferece verificar sem a ponte do Electron', () => {
+    expect(presentUpdateStatus(null).canCheck).toBe(false)
+  })
+
+  it('não oferece o botão de verificar nos demais estados, que já têm sua própria ação', () => {
+    for (const state of ['checking', 'available', 'downloading', 'downloaded', 'error'] as const) {
+      expect(presentUpdateStatus(status(state)).canCheck).toBe(false)
+    }
   })
 
   it('mostra a verificação só no indicador, nunca como aviso', () => {

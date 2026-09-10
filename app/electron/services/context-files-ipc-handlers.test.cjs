@@ -131,6 +131,47 @@ test('IPC release removes all files registered for one session only', async () =
   }
 })
 
+test('write devolve o caminho absoluto do comando desta instância, quando conhecido', async () => {
+  // Regressão: pedir pro agente rodar só o nome nu "felixo" deixa a
+  // resolução a cargo do shell — e uma função de shell com esse mesmo nome
+  // (instalada por outra ferramenta) vence o PATH silenciosamente. O caminho
+  // absoluto elimina a ambiguidade.
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cmd-'))
+  const binDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-bin-'))
+  const controller = registerContextFilesIpcHandlers({ contextFiles: baseDir, bin: binDir })
+
+  try {
+    const write = handlers.get('context-file:write')
+    const result = await write(null, { sessionId: 'canvas:first', content: 'corpo' })
+
+    assert.equal(
+      result.commandPath,
+      path.join(binDir, process.platform === 'win32' ? 'felixo.cmd' : 'felixo'),
+    )
+  } finally {
+    await controller.dispose()
+    await fsp.rm(baseDir, { recursive: true, force: true })
+    await fsp.rm(binDir, { recursive: true, force: true })
+  }
+})
+
+test('write não quebra quando a pasta do comando (bin) não é conhecida', async () => {
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-nobin-'))
+  const controller = registerContextFilesIpcHandlers({ contextFiles: baseDir })
+
+  try {
+    const write = handlers.get('context-file:write')
+    const result = await write(null, { sessionId: 'canvas:first', content: 'corpo' })
+
+    assert.equal(result.commandPath, undefined)
+  } finally {
+    await controller.dispose()
+    await fsp.rm(baseDir, { recursive: true, force: true })
+  }
+})
+
 test('the generated header is stable and identifies read-only delivery', () => {
   const content = buildContextFileContent({
     kind: 'catalog-prompt',

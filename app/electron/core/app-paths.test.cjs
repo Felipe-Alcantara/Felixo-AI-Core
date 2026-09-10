@@ -225,6 +225,21 @@ describe('app-paths', () => {
       assert.strictEqual(result, null)
     })
 
+    it('respeita FELIXO_USER_DATA_DIR mesmo no app empacotado, quando pedido explicitamente', () => {
+      // Regressão medida ao vivo: `felixo devtools launch --packaged` pede
+      // exatamente este isolamento, mas o código antigo voltava `null` cedo
+      // demais para `isPackaged: true` e nunca chegava a olhar `environment`
+      // — uma sessão "isolada" abria o perfil REAL de quem rodou o comando.
+      const escolhido = 'C:\\perfil\\isolado-do-devtools'
+      const result = resolveDevUserDataOverride({
+        isPackaged: true,
+        defaultUserData: DEFAULT,
+        environment: { [USER_DATA_ENV_KEY]: escolhido },
+      })
+
+      assert.strictEqual(result, escolhido)
+    })
+
     it('não duplica isolamento do smoke test de release, que já tem o dele', () => {
       const result = resolveDevUserDataOverride({
         isPackaged: false,

@@ -1,4 +1,5 @@
 import type {
+  SendTextResult,
   SessionListener,
   SessionOptions,
   SessionSnapshot,
@@ -116,7 +117,7 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
     id: string,
     text: string,
     options: { kind?: ContextFileKind } = {},
-  ): Promise<void> {
+  ): Promise<SendTextResult> {
     return this.load().then((store) => store.sendText(id, text, options))
   }
 

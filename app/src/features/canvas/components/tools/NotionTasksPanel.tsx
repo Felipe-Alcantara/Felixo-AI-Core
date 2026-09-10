@@ -4,6 +4,9 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Clock,
+  Columns3,
+  Copy,
   Database,
   ExternalLink,
   KeyRound,
@@ -26,6 +29,18 @@ import type {
   NotionSchemaProperty,
   NotionTask,
 } from '../../../shared/types/notion'
+import { readVisibleColumns, saveVisibleColumns } from '../../services/notion-table-columns'
+import {
+  BUILT_IN_VIEWS,
+  createViewId,
+  filterTasksByView,
+  isBuiltInView,
+  listFilterableProperties,
+  readCustomViews,
+  saveCustomViews,
+  type NotionStatusScope,
+  type NotionTaskView,
+} from '../../services/notion-task-views'
 
 type NotionTasksPanelProps = {
   onClose: () => void
@@ -49,6 +64,8 @@ type TaskContentState = {
   message?: string
 }
 
+const AUTO_SYNC_INTERVAL_MS = 60_000
+
 const inputClass =
   'w-full rounded border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-sky-500/70'
 const buttonClass =
@@ -70,15 +87,23 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const [schema, setSchema] = useState<Record<string, NotionSchemaProperty>>({})
   const [tasks, setTasks] = useState<NotionTask[]>([])
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'done'>('all')
+  const [viewsVersion, setViewsVersion] = useState(0)
+  const [columnsVersion, setColumnsVersion] = useState(0)
+  const [showColumnPicker, setShowColumnPicker] = useState(false)
+  const [activeViewId, setActiveViewId] = useState<string>(BUILT_IN_VIEWS[0].id)
+  const [showViewBuilder, setShowViewBuilder] = useState(false)
+  const [editingViewId, setEditingViewId] = useState<string | null>(null)
+  const [viewDraft, setViewDraft] = useState(() => emptyViewDraft())
   const [stale, setStale] = useState(false)
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true)
   const [busy, setBusy] = useState(false)
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showTaskComposer, setShowTaskComposer] = useState(false)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [taskContentById, setTaskContentById] = useState<Record<string, TaskContentState>>({})
+  const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null)
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft())
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -101,6 +126,50 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     }
     return [...values]
   }, [schema])
+
+  const filterableProperties = useMemo(() => listFilterableProperties(schema), [schema])
+
+  // Propriedades que podem virar coluna extra na tabela: qualquer uma da
+  // database, menos o título (que já é a coluna "Tarefa").
+  const columnableProperties = useMemo(
+    () => Object.values(schema).filter((property) => property.type !== 'title').map((property) => property.name),
+    [schema],
+  )
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- columnsVersion força reler o localStorage após persistVisibleColumns
+  const visibleColumns = useMemo(() => readVisibleColumns(connectionId, dataSourceId).filter((name) => columnableProperties.includes(name)), [connectionId, dataSourceId, columnableProperties, columnsVersion])
+
+  function persistVisibleColumns(next: string[]) {
+    saveVisibleColumns(connectionId, dataSourceId, next)
+    setColumnsVersion((value) => value + 1)
+  }
+
+  function toggleColumn(name: string) {
+    persistVisibleColumns(
+      visibleColumns.includes(name)
+        ? visibleColumns.filter((current) => current !== name)
+        : [...visibleColumns, name],
+    )
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- viewsVersion força reler o localStorage após persistCustomViews
+  const customViews = useMemo(() => readCustomViews(connectionId, dataSourceId), [connectionId, dataSourceId, viewsVersion])
+  const views = useMemo<NotionTaskView[]>(() => [...BUILT_IN_VIEWS, ...customViews], [customViews])
+  const activeView = views.find((view) => view.id === activeViewId) || BUILT_IN_VIEWS[0]
+
+  // Reseta a visualização ativa ao trocar de conexão/database, sem depender de um efeito (ver
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  const dataScopeKey = `${connectionId}::${dataSourceId}`
+  const [lastDataScopeKey, setLastDataScopeKey] = useState(dataScopeKey)
+  if (dataScopeKey !== lastDataScopeKey) {
+    setLastDataScopeKey(dataScopeKey)
+    setActiveViewId(BUILT_IN_VIEWS[0].id)
+  }
+
+  function persistCustomViews(next: NotionTaskView[]) {
+    saveCustomViews(connectionId, dataSourceId, next)
+    setViewsVersion((value) => value + 1)
+  }
 
   const loadConnections = useCallback(async () => {
     if (!api) {
@@ -149,40 +218,76 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     return () => window.clearTimeout(timer)
   }, [connectionId, loadDatabases])
 
-  const loadTasks = useCallback(async () => {
+  /**
+   * `silent` é usado pela sincronização automática em segundo plano: mantém o
+   * detalhe expandido e o conteúdo já carregado de uma tarefa (não reseta a
+   * leitura em andamento) e não liga o spinner de "carregando" — só atualiza
+   * a lista por baixo. Uma sincronização manual (botão, busca, troca de
+   * database) continua limpando os dois, como sempre.
+   */
+  const loadTasks = useCallback(async (options: { silent?: boolean } = {}) => {
+    const { silent = false } = options
     if (!api || !connectionId || !dataSourceId) {
       setTasks([])
       return
     }
-    setTaskContentById({})
-    setExpandedTaskId(null)
-    setBusy(true)
+    if (!silent) {
+      setTaskContentById({})
+      setExpandedTaskId(null)
+      setBusy(true)
+    }
     setError(null)
     const result = await api.listTasks({
       connectionId,
       dataSourceId,
       search,
-      status: statusFilter,
+      status: activeView.statusFilter,
     })
-    setBusy(false)
+    if (!silent) {
+      setBusy(false)
+    }
     if (!result.ok) {
-      setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
+      if (!silent) {
+        setError(result.message || 'Não foi possível carregar as tarefas do Notion.')
+      }
       return
     }
     setTasks(result.tasks || [])
     setSchema(result.schema || {})
     setStale(result.stale === true)
     setFetchedAt(result.fetchedAt || null)
-    if (result.stale) {
+    if (result.stale && !silent) {
       setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
     }
-  }, [api, connectionId, dataSourceId, search, statusFilter])
+  }, [api, connectionId, dataSourceId, search, activeView.statusFilter])
+
+  const visibleTasks = useMemo(() => filterTasksByView(tasks, activeView), [tasks, activeView])
 
   useEffect(() => {
     if (!connectionId || !dataSourceId) return undefined
     const timer = window.setTimeout(() => void loadTasks(), 0)
     return () => window.clearTimeout(timer)
   }, [connectionId, dataSourceId, loadTasks])
+
+  // Sincronização automática: revalida a lista com o Notion a cada minuto,
+  // sem interromper o que a pessoa está fazendo (detalhe aberto, busca
+  // digitada). Uma chamada em andamento não empilha outra.
+  useEffect(() => {
+    if (!autoSyncEnabled || !connectionId || !dataSourceId) return undefined
+    let cancelled = false
+    let inFlight = false
+    const interval = window.setInterval(() => {
+      if (inFlight || cancelled) return
+      inFlight = true
+      void loadTasks({ silent: true }).finally(() => {
+        inFlight = false
+      })
+    }, AUTO_SYNC_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [autoSyncEnabled, connectionId, dataSourceId, loadTasks])
 
   async function saveConnection() {
     if (!api) return
@@ -329,6 +434,65 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
     setShowTaskComposer(false)
   }
 
+  function startCreatingView() {
+    setEditingViewId(null)
+    setViewDraft(emptyViewDraft())
+    setShowViewBuilder(true)
+  }
+
+  function startEditingView(view: NotionTaskView) {
+    setEditingViewId(view.id)
+    setViewDraft({
+      name: view.name,
+      statusFilter: view.statusFilter,
+      property: view.propertyFilters[0]?.property || filterableProperties[0]?.name || '',
+      values: view.propertyFilters[0]?.values || [],
+    })
+    setShowViewBuilder(true)
+  }
+
+  function cancelViewBuilder() {
+    setEditingViewId(null)
+    setViewDraft(emptyViewDraft())
+    setShowViewBuilder(false)
+  }
+
+  function toggleViewDraftValue(value: string) {
+    setViewDraft((current) => ({
+      ...current,
+      values: current.values.includes(value)
+        ? current.values.filter((item) => item !== value)
+        : [...current.values, value],
+    }))
+  }
+
+  function submitViewBuilder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const name = viewDraft.name.trim()
+    if (!name) return
+    const propertyFilters = viewDraft.property && viewDraft.values.length > 0
+      ? [{ property: viewDraft.property, values: viewDraft.values }]
+      : []
+    const view: NotionTaskView = {
+      id: editingViewId && !isBuiltInView(editingViewId) ? editingViewId : createViewId(),
+      name,
+      statusFilter: viewDraft.statusFilter,
+      propertyFilters,
+    }
+    const next = editingViewId
+      ? customViews.map((current) => (current.id === editingViewId ? view : current))
+      : [...customViews, view]
+    persistCustomViews(next)
+    setActiveViewId(view.id)
+    cancelViewBuilder()
+  }
+
+  function deleteView(view: NotionTaskView) {
+    if (!window.confirm(`Excluir a visualização “${view.name}”? Isso não afeta as tarefas no Notion.`)) return
+    persistCustomViews(customViews.filter((current) => current.id !== view.id))
+    if (activeViewId === view.id) setActiveViewId(BUILT_IN_VIEWS[0].id)
+  }
+
   const loadTaskContent = useCallback(async (task: NotionTask) => {
     const fallback = task.text.trim()
     if (!api || !connectionId) {
@@ -365,6 +529,18 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       },
     }))
   }, [api, connectionId])
+
+  async function copyTaskLink(task: NotionTask) {
+    if (!task.url) return
+    try {
+      await navigator.clipboard.writeText(task.url)
+    } catch {
+      setError(`Não foi possível copiar o link automaticamente. Copie manualmente: ${task.url}`)
+      return
+    }
+    setCopiedTaskId(task.id)
+    window.setTimeout(() => setCopiedTaskId((current) => (current === task.id ? null : current)), 1500)
+  }
 
   function toggleTaskDetails(task: NotionTask) {
     const isExpanded = expandedTaskId === task.id
@@ -503,8 +679,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-medium text-zinc-100">Todas as tarefas</h2>
-                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{tasks.length}</span>
+                  <h2 className="text-sm font-medium text-zinc-100">{activeView.name}</h2>
+                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{visibleTasks.length}</span>
                 </div>
                 <p className="mt-1 text-[11px] text-zinc-500">{stale ? 'Snapshot local desatualizado' : fetchedAt ? `Sincronizado ${formatDate(fetchedAt)}` : 'Ainda não sincronizado'}</p>
               </div>
@@ -513,15 +689,120 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
                   <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar tarefas" aria-label="Buscar tarefas Notion" />
                 </label>
-                <div className="flex h-8 items-center rounded-md border border-white/10 bg-zinc-950/50 p-0.5" role="group" aria-label="Filtrar estado">
-                  {([['all', 'Todas'], ['open', 'Abertas'], ['done', 'Concluídas']] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={`rounded px-2 py-1 text-[11px] ${statusFilter === value ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`} onClick={() => setStatusFilter(value)}>{label}</button>
-                  ))}
-                </div>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
+                <button
+                  type="button"
+                  className={`felixo-btn-icon rounded-md border p-1.5 ${autoSyncEnabled ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' : 'border-white/10 text-zinc-500 hover:bg-white/5 hover:text-zinc-100'}`}
+                  onClick={() => setAutoSyncEnabled((value) => !value)}
+                  aria-pressed={autoSyncEnabled}
+                  aria-label={autoSyncEnabled ? 'Desligar sincronização automática' : 'Ligar sincronização automática (a cada minuto)'}
+                  title={autoSyncEnabled ? 'Sincronização automática ligada (a cada 1 min) — clique para desligar' : 'Sincronização automática desligada — clique para ligar'}
+                >
+                  <Clock size={14} />
+                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className={`felixo-btn-icon rounded-md border p-1.5 ${visibleColumns.length > 0 ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
+                    onClick={() => setShowColumnPicker((value) => !value)}
+                    aria-expanded={showColumnPicker}
+                    aria-label="Escolher colunas da tabela"
+                    title="Escolher quais propriedades aparecem como coluna, sem precisar expandir a tarefa"
+                  >
+                    <Columns3 size={14} />
+                  </button>
+                  {showColumnPicker && (
+                    <div className="absolute right-0 top-[calc(100%+0.375rem)] z-10 w-64 rounded-lg border border-white/10 bg-zinc-900 p-2 shadow-xl">
+                      <p className="mb-1.5 px-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Colunas da tabela</p>
+                      {columnableProperties.length === 0 ? (
+                        <p className="px-1 py-1 text-[11px] text-zinc-500">Esta database não tem outras propriedades.</p>
+                      ) : (
+                        <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                          {columnableProperties.map((name) => (
+                            <label key={name} className="flex items-center gap-2 rounded px-1 py-1 text-[11px] text-zinc-300 hover:bg-white/5">
+                              <input type="checkbox" checked={visibleColumns.includes(name)} onChange={() => toggleColumn(name)} />
+                              <span className="truncate" title={name}>{name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={() => setShowWorkspaceSettings(true)} aria-label="Mostrar filtros e configuração" title="Filtros e configuração"><SlidersHorizontal size={14} /></button>
               </div>
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-b border-white/10 pb-2" role="tablist" aria-label="Visualizações de tarefas">
+              {views.map((view) => {
+                const isActive = view.id === activeViewId
+                const editable = !isBuiltInView(view.id)
+                return (
+                  <div key={view.id} className={`group flex items-center gap-1 rounded-md px-1 ${isActive ? 'bg-zinc-700' : 'hover:bg-white/5'}`}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      className={`rounded px-1.5 py-1 text-[11px] ${isActive ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
+                      onClick={() => setActiveViewId(view.id)}
+                      title={editable && view.propertyFilters[0] ? `${view.propertyFilters[0].property}: ${view.propertyFilters[0].values.join(', ')}` : undefined}
+                    >
+                      {view.name}
+                    </button>
+                    {editable && (
+                      <span className="hidden items-center gap-0.5 group-hover:flex">
+                        <button type="button" className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-sky-300" onClick={() => startEditingView(view)} aria-label={`Editar visualização ${view.name}`} title="Editar visualização"><Pencil size={11} /></button>
+                        <button type="button" className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-red-300" onClick={() => deleteView(view)} aria-label={`Excluir visualização ${view.name}`} title="Excluir visualização"><Trash2 size={11} /></button>
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+              <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={startCreatingView} aria-label="Criar nova visualização" title="Criar visualização com filtro avançado"><Plus size={12} /> Nova visualização</button>
+            </div>
+
+            {showViewBuilder && (
+              <form className="mt-3 space-y-3 rounded-lg border border-white/10 bg-zinc-950/50 p-3" onSubmit={submitViewBuilder}>
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1"><p className="font-medium text-zinc-100">{editingViewId ? 'Editar visualização' : 'Nova visualização'}</p><p className="text-[11px] text-zinc-500">Filtra tarefas por uma propriedade da database, como “Repositório” no Notion.</p></div>
+                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={cancelViewBuilder} aria-label="Fechar editor de visualização" title="Fechar"><X size={14} /></button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input className={`${inputClass} h-9`} value={viewDraft.name} onChange={(event) => setViewDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Nome da visualização" aria-label="Nome da visualização" required />
+                  <select className={`${inputClass} h-9`} value={viewDraft.statusFilter} onChange={(event) => setViewDraft((current) => ({ ...current, statusFilter: event.target.value as NotionStatusScope }))} aria-label="Estado incluído na visualização">
+                    <option value="all">Todos os estados</option>
+                    <option value="open">Só abertas</option>
+                    <option value="done">Só concluídas</option>
+                  </select>
+                </div>
+                {filterableProperties.length > 0 ? (
+                  <div className="space-y-2">
+                    <select
+                      className={`${inputClass} h-9`}
+                      value={viewDraft.property}
+                      onChange={(event) => setViewDraft((current) => ({ ...current, property: event.target.value, values: [] }))}
+                      aria-label="Propriedade para filtrar"
+                    >
+                      <option value="">Sem filtro por propriedade</option>
+                      {filterableProperties.map((property) => <option key={property.name} value={property.name}>{property.name}</option>)}
+                    </select>
+                    {viewDraft.property && (
+                      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Valores de ${viewDraft.property}`}>
+                        {filterableProperties.find((property) => property.name === viewDraft.property)?.options.map((option) => {
+                          const checked = viewDraft.values.includes(option)
+                          return (
+                            <button key={option} type="button" className={`rounded-full border px-2.5 py-1 text-[11px] ${checked ? 'border-sky-500/60 bg-sky-500/15 text-sky-200' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`} onClick={() => toggleViewDraftValue(option)}>{option}</button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded border border-dashed border-white/10 px-2 py-2 text-[11px] text-zinc-500">Esta database não tem propriedades do tipo seleção para filtrar (select, multi-select ou status).</p>
+                )}
+                <div className="flex justify-end gap-2"><button type="button" className="felixo-btn rounded-md px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={cancelViewBuilder}>Cancelar</button><button type="submit" className="felixo-btn flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"><Save size={13} /> {editingViewId ? 'Salvar alterações' : 'Criar visualização'}</button></div>
+              </form>
+            )}
 
             {showTaskComposer && (
               <form className="mt-3 space-y-3 rounded-lg border border-white/10 bg-zinc-950/50 p-3" onSubmit={(event) => void submitTask(event)}>
@@ -545,7 +826,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
             <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/35">
               <div className="overflow-x-auto">
-                <table className="min-w-[760px] w-full border-collapse text-xs" aria-label="Tarefas do Notion">
+                <table className="min-w-[760px] w-full table-fixed border-collapse text-xs" aria-label="Tarefas do Notion">
                   <thead className="bg-white/[0.03] text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                     <tr className="border-b border-white/10">
                       <th className="w-12 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>
@@ -553,18 +834,21 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       <th className="w-36 px-3 py-2 font-medium" scope="col">Estado</th>
                       <th className="w-32 px-3 py-2 font-medium" scope="col">Prioridade</th>
                       <th className="w-36 px-3 py-2 font-medium" scope="col">Prazo</th>
+                      {visibleColumns.map((name) => (
+                        <th key={name} className="min-w-[9rem] px-3 py-2 font-medium" scope="col" title={name}>{name}</th>
+                      ))}
                       <th className="w-24 px-3 py-2 text-right font-medium" scope="col"><span className="sr-only">Ações</span></th>
                     </tr>
                   </thead>
                   <tbody aria-live="polite">
-                    {tasks.length === 0 ? (
-                      <tr><td colSpan={6} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
-                    ) : tasks.map((task) => {
+                    {visibleTasks.length === 0 ? (
+                      <tr><td colSpan={6 + visibleColumns.length} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
+                    ) : visibleTasks.map((task) => {
                       const hasDetails = true
                       const isExpanded = expandedTaskId === task.id
                       const taskContent = taskContentById[task.id]
                       const detailText = taskContent?.content || task.text
-                      const properties = getTaskProperties(task, schema)
+                      const properties = getTaskProperties(task, schema, visibleColumns)
                       return (
                         <Fragment key={task.id}>
                           <tr className={`group border-b border-white/[0.07] align-middle last:border-0 hover:bg-white/[0.035] ${task.completed ? 'text-zinc-500' : 'text-zinc-300'}`}>
@@ -581,16 +865,19 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                             <td className="px-3 py-2.5"><span className={`inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(task)}`}>{task.completed ? 'Concluída' : task.status || 'Sem estado'}</span></td>
                             <td className="px-3 py-2.5"><span className="truncate text-[11px] text-zinc-400">{task.priority || '—'}</span></td>
                             <td className="px-3 py-2.5"><span className="flex items-center gap-1 text-[11px] text-zinc-400">{task.dueDate ? <><CalendarDays size={12} className="text-zinc-600" /> {formatShortDate(task.dueDate)}</> : '—'}</span></td>
+                            {visibleColumns.map((name) => (
+                              <td key={name} className="px-3 py-2.5"><span className="block truncate text-[11px] text-zinc-400" title={formatPropertyValue(task.fields?.[name])}>{formatPropertyValue(task.fields?.[name]) || '—'}</span></td>
+                            ))}
                             <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-sky-300 disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
                           </tr>
-                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/[0.08] bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-amber-300"><span>{taskContent.message}</span><button type="button" className="text-sky-300 underline hover:text-sky-200" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <a className="flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a>}</div></td></tr>}
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6 + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/[0.08] bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-amber-300"><span>{taskContent.message}</span><button type="button" className="text-sky-300 underline hover:text-sky-200" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-sky-300 hover:text-sky-200" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-emerald-400" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
                         </Fragment>
                       )
                     })}
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{tasks.length} tarefa(s) exibida(s)</span><span>{stale ? 'Dados locais' : 'Notion conectado'}</span></div>
+              <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{visibleTasks.length} tarefa(s) exibida(s)</span><span>{stale ? 'Dados locais' : 'Notion conectado'}</span></div>
             </div>
           </>
         )}
@@ -620,6 +907,10 @@ function emptyDraft(): TaskDraft {
   return { title: '', completed: false, status: '', dueDate: '', priority: '', text: '' }
 }
 
+function emptyViewDraft(): { name: string; statusFilter: NotionStatusScope; property: string; values: string[] } {
+  return { name: '', statusFilter: 'all', property: '', values: [] }
+}
+
 function formatDate(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
@@ -630,7 +921,15 @@ function formatShortDate(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
 }
 
-function getTaskProperties(task: NotionTask, schema: Record<string, NotionSchemaProperty>) {
+/**
+ * Propriedades a listar no detalhe expandido. `hiddenNames` tira as que já
+ * aparecem como coluna na tabela (Colunas), pra não repetir a informação.
+ */
+function getTaskProperties(
+  task: NotionTask,
+  schema: Record<string, NotionSchemaProperty>,
+  hiddenNames: string[] = [],
+) {
   const names = [...new Set([...Object.keys(schema), ...Object.keys(task.fields || {})])]
   return names
     .map((name) => {
@@ -642,7 +941,7 @@ function getTaskProperties(task: NotionTask, schema: Record<string, NotionSchema
         value: formatPropertyValue(value),
       }
     })
-    .filter((property) => property.type !== 'title' && property.value)
+    .filter((property) => property.type !== 'title' && property.value && !hiddenNames.includes(property.name))
 }
 
 function formatPropertyValue(value: unknown): string {

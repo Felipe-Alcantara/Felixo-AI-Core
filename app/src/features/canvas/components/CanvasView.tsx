@@ -901,8 +901,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     async (skill: CanvasSkill): Promise<SkillActivationResult> => {
       const prompt = buildSkillActivationPrompt(skill)
       if (expandedTerminalId) {
-        store.sendText(expandedTerminalId, prompt, { kind: 'skill-prompt' })
-        return 'sent'
+        const result = await store.sendText(expandedTerminalId, prompt, { kind: 'skill-prompt' })
+        return result.delivered ? 'sent' : 'failed'
       }
       await navigator.clipboard?.writeText(prompt)
       return 'copied'
@@ -915,10 +915,10 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const insertPrompt = useCallback(
     async (prompt: string): Promise<SkillActivationResult> => {
       if (expandedTerminalId) {
-        store.sendText(expandedTerminalId, toSubmittedTerminalText(prompt), {
+        const result = await store.sendText(expandedTerminalId, toSubmittedTerminalText(prompt), {
           kind: 'catalog-prompt',
         })
-        return 'sent'
+        return result.delivered ? 'sent' : 'failed'
       }
       await navigator.clipboard?.writeText(prompt)
       return 'copied'

@@ -97,19 +97,34 @@ export function splitInitialContext(text: string): ContextFilePart[] {
   }]
 }
 
+/**
+ * @param commandPath - Caminho absoluto do shim `felixo` desta instância
+ *   (`window.felixo.contextFiles.write(...).commandPath`). Quando presente,
+ *   a instrução manda rodar esse caminho exato em vez do nome nu "felixo":
+ *   em bash/zsh uma FUNÇÃO de shell com esse nome — instalada por outra
+ *   ferramenta no `.bashrc`/`.zshrc` da pessoa — vence a resolução do PATH
+ *   silenciosamente, e o agente acaba rodando o comando errado sem erro
+ *   nenhum (visto em relato real: um agente só percebeu porque foi conferir
+ *   `felixo --help` por conta própria). Sem o caminho (ponte antiga, web
+ *   preview), cai de volta no nome nu.
+ */
 export function buildContextFileReferences(
   files: Array<{ name: string; kind: ContextFileKind }>,
   submitted: boolean,
+  commandPath?: string,
 ): string {
+  const command = commandPath ? quoteContextFileName(commandPath) : 'felixo'
   const lines = [
     'CONTEXTO ENTREGUE EM ARQUIVOS SOMENTE LEITURA',
     'Leia todos os arquivos abaixo antes de agir. Eles são artefatos temporários do Felixo AI Core, não fazem parte do repositório, não devem ser editados nem versionados.',
     'Se precisar registrar progresso, use o scratchpad .md compartilhado do canvas — estes arquivos não são o scratchpad.',
     'Os nomes abaixo são portáveis entre Linux, macOS e Windows; não use caminhos absolutos de outra máquina ou perfil.',
-    'Leia cada artefato pelo comando do Felixo e, se ele falhar, informe o nome e o erro exatos — não substitua por outro artefato equivalente.',
+    commandPath
+      ? 'Leia cada artefato com o comando no caminho exato indicado abaixo, não com o nome nu "felixo": outro comando de mesmo nome pode existir no seu shell (função de .bashrc/.zshrc de outra ferramenta) e venceria a resolução do PATH sem aviso, lendo o arquivo errado. Se mesmo assim falhar, informe o nome e o erro exatos — não substitua por outro artefato equivalente.'
+      : 'Leia cada artefato pelo comando do Felixo e, se ele falhar, informe o nome e o erro exatos — não substitua por outro artefato equivalente.',
     ...files.flatMap(({ name, kind }) => [
       `- ${kind}: ${quoteContextFileName(name)}`,
-      `  Leia com: felixo context read ${quoteContextFileName(name)}`,
+      `  Leia com: ${command} context read ${quoteContextFileName(name)}`,
     ]),
   ]
   const reference = lines.join('\n')

@@ -56,6 +56,7 @@ async function main(argv = process.argv.slice(2)) {
     })
     report.startupMs = appResult.startupMs
     report.pty = appResult.status.pty
+    report.contextDelivery = appResult.status.contextDelivery
     report.nativeErrors = appResult.nativeErrors
     report.appVersion = appResult.status.appVersion
 
@@ -74,6 +75,13 @@ async function main(argv = process.argv.slice(2)) {
       ...report.nativeErrors,
       ...(Array.isArray(error?.nativeErrors) ? error.nativeErrors : []),
     ])
+    // O app pode ter escrito pty/contextDelivery no arquivo de status antes
+    // de sair com falha — sem isto, um diagnóstico como o
+    // `rawOutputPreview` da entrega de catálogo nunca chega ao relatório
+    // publicado quando é justamente uma falha que precisamos investigar.
+    if (error?.status?.pty) report.pty = error.status.pty
+    if (error?.status?.contextDelivery) report.contextDelivery = error.status.contextDelivery
+    if (error?.status?.appVersion) report.appVersion = error.status.appVersion
   } finally {
     if (temporaryRoot && !options.keepTemp) {
       removeTemporaryDirectory(temporaryRoot)
@@ -144,6 +152,7 @@ function createEmptyReport() {
     installed: null,
     startupMs: null,
     pty: null,
+    contextDelivery: null,
     npmRuntime: null,
     nativeErrors: [],
     result: 'failed',
@@ -331,7 +340,7 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
   )
 
   if (result.error) {
-    throw createSmokeError(`O app empacotado nao iniciou: ${result.error}`, nativeErrors)
+    throw createSmokeError(`O app empacotado nao iniciou: ${result.error}`, nativeErrors, status)
   }
 
   if (result.code !== 0 || result.signal || result.timedOut) {
@@ -342,16 +351,24 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
       .filter(Boolean)
       .map((value) => sanitizeDiagnostic(value, temporaryRoot))
       .join('\n')
+    // O processo saiu com falha antes de devolver o controle aqui — o `status`
+    // já lido do arquivo (inclusive um `contextDelivery.rawOutputPreview` de
+    // diagnóstico) precisa viajar com o erro, ou o relatório final publicado
+    // como artefato de CI fica com "contextDelivery": null mesmo quando o app
+    // já tinha escrito a evidência real antes de sair. Foi exatamente isso
+    // que aconteceu na primeira tentativa desta correção (run 34435106910).
     throw createSmokeError(
       `O app empacotado ${outcome}.${diagnostics ? ` Diagnostico: ${diagnostics}` : ''}`,
       nativeErrors,
+      status,
     )
   }
 
-  if (!status?.pty?.ok || !status.userDataWritable) {
+  if (!status?.pty?.ok || !status.userDataWritable || !status?.contextDelivery?.ok) {
     throw createSmokeError(
-      'O app empacotado encerrou sem validar PTY e userData.',
+      'O app empacotado encerrou sem validar PTY, userData e a entrega de contexto.',
       nativeErrors,
+      status,
     )
   }
 
@@ -855,9 +872,10 @@ function extractNativeErrors(value) {
   )
 }
 
-function createSmokeError(message, nativeErrors) {
+function createSmokeError(message, nativeErrors, status = null) {
   const error = new Error(message)
   error.nativeErrors = nativeErrors
+  error.status = status
   return error
 }
 

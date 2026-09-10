@@ -58,6 +58,32 @@ describe('context-file-delivery', () => {
     expect(reference.endsWith('\r')).toBe(true)
   })
 
+  it('usa o caminho absoluto do comando quando a ponte devolve um, em vez do nome nu', () => {
+    // Regressão: uma função de shell de outra ferramenta com o mesmo nome
+    // "felixo" (instalada no .bashrc/.zshrc da pessoa) vence o PATH em
+    // bash/zsh — o nome nu roda o comando errado, sem erro nenhum.
+    const reference = buildContextFileReferences(
+      [{ kind: 'catalog-prompt', name: 'felixo-context-1-catalog-prompt.txt' }],
+      false,
+      '/opt/Felixo AI Core/bin/felixo',
+    )
+
+    expect(reference).toContain(
+      'Leia com: "/opt/Felixo AI Core/bin/felixo" context read "felixo-context-1-catalog-prompt.txt"',
+    )
+    expect(reference).not.toMatch(/Leia com: felixo context read/)
+    expect(reference).toContain('outro comando de mesmo nome pode existir no seu shell')
+  })
+
+  it('cai no nome nu "felixo" quando a ponte não devolve o caminho do comando', () => {
+    const reference = buildContextFileReferences(
+      [{ kind: 'catalog-prompt', name: 'felixo-context-1-catalog-prompt.txt' }],
+      false,
+    )
+
+    expect(reference).toContain('Leia com: felixo context read "felixo-context-1-catalog-prompt.txt"')
+  })
+
   it('marks inline fallback visibly', () => {
     expect(buildInlineFallback('corpo\r')).toMatch(/^AVISO DO FELIXO AI CORE/)
     expect(buildInlineFallback('corpo\r').endsWith('\r')).toBe(true)

@@ -299,3 +299,19 @@ export function buildClearInputSequence(visualLineCount: number): string {
   const ctrlU = '\x15'.repeat(Math.max(1, visualLineCount))
   return `${ctrlU}\x0b`
 }
+
+/**
+ * Se este evento é parte de uma composição de teclado em andamento — acento
+ * composto (til, agudo, circunflexo, comum em teclado ABNT) ou qualquer IME.
+ *
+ * `attachCustomKeyEventHandler` do xterm.js vê cada evento físico dessa
+ * sequência, não só o caractere final composto. Um atalho nosso que reage a
+ * uma dessas teclas no meio da composição — mesmo devolvendo `true` depois de
+ * mexer em algum estado — arrisca o xterm.js perder o pedaço que ele mesmo
+ * precisa ver inteiro para montar o caractere, cortando ou embaralhando a
+ * letra acentuada. Sair antes de qualquer atalho quando `isComposing` é
+ * verdadeiro deixa o xterm.js tratar a composição sozinho, sem interferência.
+ */
+export function isComposingKeyEvent(event: KeyboardEvent): boolean {
+  return event.isComposing === true
+}

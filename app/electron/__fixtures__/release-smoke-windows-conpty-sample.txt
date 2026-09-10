@@ -1,0 +1,53 @@
+[?9001h[?1004h[?25l[2J[m[H]0;Administrator: C:\Program Files\PowerShell\7\pwsh.exe[?25hPS C:\Users\runneradmin\AppData\Local\Temp\felixo-release-pty-d53Zd2> [?25l[93mf[?25h[m[?25l[1;69H> [93mfelixo [37mcontext read [36m"felixo-context-1789013937063-04bb5366-500d-463f-bab4-eb0735e7e8da-catalog-prompt.txt"
+[?25h[?25l[m# CONTEXTO ENTREGUE PELO FELIXO AI CORE[6;1H- Tipo: catalog-prompt
+- Origem: release-smoke
+- Gerado em: 2026-09-10T04:18:57.063Z
+- Regime: somente leitura; não edite este arquivo.
+- Este caminho é um artefato temporário do app, não é o repositório trabalhado e não deve entrar em commit.
+- Este é um canvas multiagente: outros agentes podem estar trabalhando em paralelo. Registre decisões no scratchpad compartilhado do canvas, quando houver um.[15;1H## Como usar
+Leia este arquivo antes de agir. O corpo abaixo é o contexto entregue pelo app; preserve o conteúdo e valide comandos, caminhos, segredos e decisões contra o estado real do projeto.[20;1H## Corpo do contexto
+## Prompt individual — parte 1 da combinação[23;1HAcentuação: ação, avaliação, coração, é, ê, ã, ç.
+Emoji: 🚀 ✅ 🧪[?25h
+
+Linha em branco acima prova que o corpo não foi colapsado.
+
+PS C:\Users\runneradmin\AppData\Local\Temp\felixo-release-pty-d53Zd2> [93mfelixo [37mcon[?25l[m
+[37m[23;80Hntext read [36m"felixo-context-1789013937066-70c7126f-65a9-42d7-826a-aa973852d699-cat[m
+[36m[23;80Htalog-prompt.txt"[64C[m
+[37m>>[1C[?25h[m
+[?25l# CONTEXTO ENTREGUE PELO FELIXO AI CORE
+
+- Tipo: catalog-prompt
+- Origem: release-smoke
+- Gerado em: 2026-09-10T04:18:57.066Z
+- Regime: somente leitura; não edite este arquivo.
+- Este caminho é um artefato temporário do app, não é o repositório trabalhado e
+[23;80He não deve entrar em commit.
+- Este é um canvas multiagente: outros agentes podem estar trabalhando em parale
+[23;80Helo. Registre decisões no scratchpad compartilhado do canvas, quando houver um.  [24;79H[?25h
+
+## Como usar
+Leia este arquivo antes de agir. O corpo abaixo é o contexto entregue pelo app; 
+[23;80H preserve o conteúdo e valide comandos, caminhos, segredos e decisões contra o es
+[23;80Hstado real do projeto.
+
+## Corpo do contexto
+## Segundo prompt — parte 2 da combinação
+
+Esta é a SEGUNDA parte; a ordem de leitura importa para a "combinação ordenada".[24;80H
+
+PS C:\Users\runneradmin\AppData\Local\Temp\felixo-release-pty-d53Zd2> [93mfelixo [37mcon[?25l[m
+[37m[23;80Hntext read [36m"felixo-context-0-db00be4b-4162-4033-9e65-fb0e207d0bbf-catalog-prompt.[m
+[36m[23;80H.txt"[76C[m
+[37m>>[1C[?25h[m
+Artefato de contexto não encontrado: felixo-context-0-db00be4b-4162-4033-9e65-fb
+[23;80Hb0e207d0bbf-catalog-prompt.txt. Não substitua por outro artefato; informe este no
+[23;80Home e o erro exato.
+PS C:\Users\runneradmin\AppData\Local\Temp\felixo-release-pty-d53Zd2> [93mecho [37mFELIX[?25l[m
+[37m[23;80HXO_RELEASE_CONTEXT_DO[60C[m
+[93m[22;71Hecho [37mFELIXO_RELEASE_CONTEXT_DONE
+>>[1C[?25h[m
+FELIXO_RELEASE_CONTEXT_DONE
+PS C:\Users\runneradmin\AppData\Local\Temp\felixo-release-pty-d53Zd2> [?25l
+[92m[23;71Hexit[37m
+>>[1C[?25h[m
