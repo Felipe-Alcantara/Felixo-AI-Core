@@ -149,6 +149,7 @@ function createHarness(
         },
         write: async ({ data }: { data: string }) => {
           writes.push(data)
+          return { ok: true, delivered: true }
         },
         resize: async () => {},
         kill: async () => {},
@@ -434,6 +435,59 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(fallback).toContain('catálogo fim')
     expect(fallback).not.toContain('trecho do meio do histórico omitido')
   }, 10000)
+
+  it('sendText devolve delivered:true quando a PTY confirma a escrita', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: true })
+  }, 10000)
+
+  it('sendText devolve delivered:false quando a PTY rejeita a escrita', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { write: () => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.write = async () => ({ ok: false, erro: 'sessão fechada' })
+
+    const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: false, reason: 'rejected', message: 'sessão fechada' })
+  }, 10000)
+
+  it('sendText devolve delivered:false quando o IPC de escrita lança', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    ;(
+      globalThis as unknown as {
+        window: { felixo: { pty: { write: () => Promise<unknown> } } }
+      }
+    ).window.felixo.pty.write = async () => {
+      throw new Error('ponte indisponível')
+    }
+
+    const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: false, reason: 'error', message: 'ponte indisponível' })
+  }, 10000)
+
+  it('sendText devolve delivered:false sem terminal correspondente', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+
+    const result = await harness.store.sendText('inexistente', 'olá\r', { kind: 'catalog-prompt' })
+
+    expect(result).toEqual({ delivered: false, reason: 'no-session' })
+  })
 
   it('não escreve enquanto o Codex pergunta se a pasta é confiável', async () => {
     harness = createHarness(CONTEXT, 'codex')

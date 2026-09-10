@@ -114,6 +114,18 @@ export type TerminalTranscript = {
   text: string
 }
 
+/**
+ * Real outcome of `sendText`, replacing the old "fire and forget, assume it
+ * worked" contract. `pty.write` can reject or report `delivered: false` (PTY
+ * closed, IPC error, drain failure) and the caller needs to know that instead
+ * of a false "sent" — this is the base fix for the catalog-delivery
+ * reliability bug: callers built on top of this can now show pending/error
+ * states instead of a fake success.
+ */
+export type SendTextResult =
+  | { delivered: true }
+  | { delivered: false; reason: 'no-session' | 'rejected' | 'error'; message?: string }
+
 type SessionListener = (snapshot: SessionSnapshot) => void
 
 /** Ms of output silence after which a running session is considered idle. */
@@ -1181,34 +1193,73 @@ export class TerminalSessionStore {
     id: string,
     text: string,
     options: { kind?: ContextFileKind } = {},
-  ): Promise<void> {
+  ): Promise<SendTextResult> {
     const session = this.sessions.get(id)
     if (!session || session.disposed || !text) {
-      return
+      return { delivered: false, reason: 'no-session' }
     }
 
+    let outcome: SendTextResult = { delivered: false, reason: 'error' }
+
     const delivery = session.sendChain.then(async () => {
-      if (session.disposed) return
+      if (session.disposed) {
+        outcome = { delivered: false, reason: 'no-session' }
+        return
+      }
 
       const delivered = await this.deliverContextText(
         session,
         text,
         options.kind ?? 'catalog-prompt',
       )
-      if (session.disposed) return
+      if (session.disposed) {
+        outcome = { delivered: false, reason: 'no-session' }
+        return
+      }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: delivered })
+      let ptyResult: { ok?: boolean; delivered?: boolean; erro?: string } | undefined
+      try {
+        ptyResult = await window.felixo?.pty?.write({
+          sessionId: session.ptySessionId,
+          data: delivered,
+        })
+      } catch (error) {
+        outcome = {
+          delivered: false,
+          reason: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        }
+        return
+      }
+
+      if (!ptyResult?.ok || ptyResult.delivered === false) {
+        outcome = {
+          delivered: false,
+          reason: 'rejected',
+          message: ptyResult?.erro,
+        }
+        return
+      }
+
       session.inputTouched = true
       const prompt = cleanPrompt(delivered)
       if (prompt) {
         this.update(session, { lastPrompt: prompt })
       }
+      outcome = { delivered: true }
     })
 
     // Keep the chain alive after one failed delivery. A transient IPC failure
     // must not permanently disable later prompts for this session.
     session.sendChain = delivery.catch(() => {})
-    await delivery.catch(() => {})
+    await delivery.catch((error) => {
+      outcome = {
+        delivered: false,
+        reason: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      }
+    })
+    return outcome
   }
 
   /**

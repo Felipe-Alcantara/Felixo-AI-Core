@@ -46,6 +46,18 @@ export type SessionOptions = {
 export type SessionListener = (snapshot: SessionSnapshot) => void
 
 /**
+ * Real outcome of `sendText`, replacing the old "fire and forget, assume it
+ * worked" contract. `pty.write` can reject or report `delivered: false` (PTY
+ * closed, IPC error, drain failure) and the caller needs to know that instead
+ * of a false "sent" — this is the base fix for the catalog-delivery
+ * reliability bug: callers built on top of this can now show pending/error
+ * states instead of a fake success.
+ */
+export type SendTextResult =
+  | { delivered: true }
+  | { delivered: false; reason: 'no-session' | 'rejected' | 'error'; message?: string }
+
+/**
  * Runtime surface shared by the canvas and the real xterm-backed store.
  * Keeping this contract free of the concrete store lets the canvas render
  * before the PTY implementation is downloaded.
@@ -61,7 +73,7 @@ export type TerminalSessionStoreApi = {
     id: string,
     text: string,
     options?: { kind?: ContextFileKind },
-  ) => Promise<void>
+  ) => Promise<SendTextResult>
   copy: (id: string) => Promise<string>
   getTranscript: (id: string) => TerminalTranscript
   getShellHistory: (id: string) => TerminalTranscript
