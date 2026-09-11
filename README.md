@@ -288,8 +288,10 @@ Cada número mostra de onde veio e **quando foi medido**, que nem sempre é quan
 o app leu — uma fonte que só é atualizada durante a sessão continua exibindo o
 último valor conhecido, marcado como antigo em vez de apresentado como atual.
 Onde a CLI não oferece cota consultável sem interação, o painel diz isso por
-extenso, em vez de mostrar zero. A atualização do Claude abre uma sessão PTY
-descartável e executa o `/status` em tempo real para cada conta/perfil; por
+extenso, em vez de mostrar zero. As fontes declaradas com consulta ao vivo são
+executadas em cada atualização e por conta/perfil: o Codex usa o
+`account/rateLimits/read` do app-server autenticado, o Claude abre uma sessão
+PTY descartável e executa o `/status`, e o Openia chama seu `statusline`. Por
 isso o painel não copia o limite do login do sistema para outra linha. O botão
 **Atualizar** repete a consulta, e a atualização automática pode ser
 configurada em intervalos de 5, 15 ou 30 minutos.
@@ -305,10 +307,10 @@ O que cada CLI publica hoje:
 
 | CLI | Fonte | O que aparece |
 |-----|-------|---------------|
-| Codex | rollout da sessão em `~/.codex/sessions` | janela de 5 h, janela semanal, reset, créditos e plano |
+| Codex | `account/rateLimits/read` ao vivo no app-server por conta/perfil; rollout local só como fallback | janela de 5 h, janela semanal, reset, créditos e plano |
 | Claude Code | `/status` interativo ao vivo por conta/perfil | Status + Usage completos, janelas de 5 h e semanal, resets, estatísticas e atribuição |
-| Openia | `openia statusline` (créditos da conta no OpenRouter) | usado, restante e total em US$ |
-| Gemini | — | sem cota: a consulta existe apenas no `/stats model` interativo |
+| Openia | `openia statusline` ao vivo (créditos da conta no OpenRouter) | usado, restante e total em US$ |
+| Gemini | — | sem endpoint não interativo seguro: a quota só existe no `/stats model` interativo e fica explicitamente indisponível |
 
 A coleta de status line do Claude Code continua **opcional e explícita** e serve
 como fallback local: pelo botão do painel, o app registra um script no arquivo

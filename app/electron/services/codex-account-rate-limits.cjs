@@ -20,7 +20,8 @@ const { createCliEnv } = require('./cli-process-manager.cjs')
  *
  * Verificado manualmente nesta máquina (11/09/2026, Codex CLI 0.154.0): o
  * handshake `initialize` + `account/rateLimits/read` devolve, entre outros
- * campos, `rateLimitResetCredits: { availableCount, credits: [...] }` — com
+ * campos, as janelas atuais (`rateLimits.primary/secondary`) e
+ * `rateLimitResetCredits: { availableCount, credits: [...] }` — com
  * `credits[].status` em `available`/`redeeming`/`redeemed`/`unknown`.
  */
 
@@ -56,13 +57,21 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
       serverErrorMessage: 'O app-server do Codex recusou a consulta de limites.',
       normalizeResult: (result) => {
         const summary = result?.rateLimitResetCredits ?? null
+        const collectedAt = new Date(now()).toISOString()
+        const credits = Array.isArray(summary?.credits)
+          ? summary.credits.map(toResetCredit)
+          : []
+        const availableCount =
+          typeof summary?.availableCount === 'number' ? summary.availableCount : 0
         return {
-          collectedAt: new Date(now()).toISOString(),
-          availableCount:
-            typeof summary?.availableCount === 'number' ? summary.availableCount : 0,
-          credits: Array.isArray(summary?.credits)
-            ? summary.credits.map(toResetCredit)
-            : [],
+          collectedAt,
+          measuredAt: collectedAt,
+          metrics: toRateLimitMetrics(result?.rateLimits),
+          availableCount,
+          credits,
+          details: {
+            usageCredits: { availableCount, credits },
+          },
           message: null,
         }
       },
@@ -292,6 +301,78 @@ function toResetCredit(credit) {
     grantedAt: toIsoFromEpochSeconds(credit?.grantedAt),
     expiresAt: toIsoFromEpochSeconds(credit?.expiresAt),
   }
+}
+
+function toRateLimitMetrics(rateLimits) {
+  const metrics = []
+
+  for (const [key, window] of [
+    ['primary', rateLimits?.primary],
+    ['secondary', rateLimits?.secondary],
+  ]) {
+    const used = toFiniteNumber(window?.usedPercent)
+    if (used === null) {
+      continue
+    }
+
+    metrics.push({
+      key: `rate_limits.${key}`,
+      label: describeRateLimitWindow(window?.windowDurationMins, key),
+      used,
+      limit: 100,
+      remaining: Math.max(0, Math.round((100 - used) * 100) / 100),
+      unit: '%',
+      precision: 'reported',
+      resetAt: toIsoFromEpochSeconds(window?.resetsAt),
+    })
+  }
+
+  const credits = rateLimits?.credits
+  if (credits?.unlimited !== true) {
+    const balance = toFiniteNumber(credits?.balance)
+    if (balance !== null) {
+      metrics.push({
+        key: 'credits',
+        label: 'Créditos avulsos',
+        used: null,
+        limit: null,
+        remaining: balance,
+        unit: null,
+        precision: 'reported',
+        resetAt: null,
+      })
+    }
+  }
+
+  return metrics
+}
+
+function describeRateLimitWindow(minutes, fallbackKey) {
+  const value = toFiniteNumber(minutes)
+  if (value === null || value <= 0) {
+    return fallbackKey === 'primary' ? 'Janela principal' : 'Janela secundária'
+  }
+
+  if (value % (60 * 24) === 0) {
+    const days = value / (60 * 24)
+    return days === 1 ? 'Últimas 24 h' : `Últimos ${days} dias`
+  }
+
+  if (value % 60 === 0) {
+    const hours = value / 60
+    return hours === 1 ? 'Última 1 h' : `Últimas ${hours} h`
+  }
+
+  return `Últimos ${value} min`
+}
+
+function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  const number = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(number) ? number : null
 }
 
 function normalizeOptionalId(value) {

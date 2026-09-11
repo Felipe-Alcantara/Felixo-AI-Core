@@ -702,6 +702,164 @@ test(
 )
 
 test(
+  'consulta ao vivo cada provider que declara uma fonte, não só o Claude',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-all-live-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const liveCalls = []
+    const failures = []
+
+    for (const [id, providerId, label] of [
+      ['codex-live', 'codex', 'Codex ao vivo'],
+      ['claude-live', 'claude', 'Claude ao vivo'],
+      ['openia-live', 'openia', 'Openia ao vivo'],
+    ]) {
+      repository.createAccount({ id, providerId, label })
+    }
+
+    const service = createAgentUsageService({
+      repository,
+      now: () => Date.parse('2026-09-11T12:00:00.000Z'),
+      probe: () => null,
+      listCatalog: async () => [
+        { id: 'codex', name: 'Codex CLI', provider: 'OpenAI', command: 'codex', detected: true },
+        { id: 'claude', name: 'Claude Code CLI', provider: 'Anthropic', command: 'claude', detected: true },
+        { id: 'openia', name: 'Openia', provider: 'OpenRouter', command: 'openia', detected: true },
+      ],
+      runCommand: async ({ command, args }) => {
+        if (command === 'openia' && args.includes('statusline')) {
+          return {
+            ok: true,
+            stdout: 'OpenRouter  usado $1.25  ·  resta $3.75  (de $5.00)',
+            stderr: '',
+          }
+        }
+
+        if (command === 'openia') {
+          return { ok: true, stdout: JSON.stringify({ configured: true, active: 'principal' }), stderr: '' }
+        }
+
+        if (command === 'claude') {
+          return { ok: true, stdout: JSON.stringify({ loggedIn: true, email: 'claude@example.com' }), stderr: '' }
+        }
+
+        return { ok: true, stdout: 'Logged in using ChatGPT', stderr: '' }
+      },
+      queryLiveUsage: {
+        'codex-rate-limits': async () => {
+          liveCalls.push('codex')
+          return {
+            ok: true,
+            collectedAt: '2026-09-11T12:00:00.000Z',
+            measuredAt: '2026-09-11T12:00:00.000Z',
+            metrics: [
+              {
+                key: 'rate_limits.primary',
+                label: 'Últimas 5 h',
+                used: 12,
+                limit: 100,
+                remaining: 88,
+                unit: '%',
+                precision: 'reported',
+                resetAt: '2026-09-11T17:00:00.000Z',
+              },
+            ],
+            details: { usageCredits: { availableCount: 1, credits: [] } },
+            message: null,
+          }
+        },
+        'claude-status': async () => {
+          liveCalls.push('claude')
+          return {
+            ok: true,
+            collectedAt: '2026-09-11T12:00:00.000Z',
+            measuredAt: '2026-09-11T12:00:00.000Z',
+            metrics: [
+              {
+                key: 'rate_limits.seven_day',
+                label: 'Janela de 7 dias',
+                used: 21,
+                limit: 100,
+                remaining: 79,
+                unit: '%',
+                precision: 'reported',
+                resetAt: '2026-09-18T12:00:00.000Z',
+              },
+            ],
+            details: null,
+            message: null,
+          }
+        },
+      },
+      onLiveQueryFailure: (failure) => failures.push(failure),
+    })
+
+    try {
+      const result = await service.refresh()
+      const accounts = new Map(result.accounts.map((account) => [account.id, account]))
+
+      assert.deepEqual(liveCalls.sort(), ['claude', 'codex'])
+      assert.deepEqual(failures, [])
+      assert.equal(accounts.get('codex-live').latestSample.status, 'current')
+      assert.equal(accounts.get('codex-live').latestSample.sourceKind, 'live-query')
+      assert.equal(accounts.get('codex-live').latestSample.metrics[0].used, 12)
+      assert.equal(accounts.get('claude-live').latestSample.status, 'current')
+      assert.equal(accounts.get('claude-live').latestSample.sourceKind, 'live-query')
+      assert.equal(accounts.get('claude-live').latestSample.metrics[0].used, 21)
+      assert.equal(accounts.get('openia-live').latestSample.status, 'current')
+      assert.equal(accounts.get('openia-live').latestSample.sourceKind, 'live-query')
+      assert.equal(accounts.get('openia-live').latestSample.metrics[0].remaining, 3.75)
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'falha de consulta ao vivo do Openia também chega ao observador genérico',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-openia-live-fail-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const failures = []
+    repository.createAccount({ id: 'openia-live-fail', providerId: 'openia', label: 'Openia' })
+
+    const service = createAgentUsageService({
+      repository,
+      probe: () => null,
+      listCatalog: async () => [
+        { id: 'openia', name: 'Openia', provider: 'OpenRouter', command: 'openia', detected: true },
+      ],
+      runCommand: async ({ args }) => {
+        if (args.includes('statusline')) {
+          return { ok: false, stdout: '', stderr: 'falha simulada' }
+        }
+        return { ok: true, stdout: JSON.stringify({ configured: true }), stderr: '' }
+      },
+      onLiveQueryFailure: (failure) => failures.push(failure),
+    })
+
+    try {
+      const result = await service.refresh()
+      const account = result.accounts.find((item) => item.id === 'openia-live-fail')
+
+      assert.equal(failures.length, 1)
+      assert.equal(failures[0].providerId, 'openia')
+      assert.equal(failures[0].targetAccountId ?? null, null)
+      assert.match(failures[0].message, /Openia/)
+      assert.equal(account.latestSample.status, 'error')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
   'consulta ao vivo falhando aciona onLiveQueryFailure com a mensagem, sem derrubar a coleta',
   { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
   async () => {

@@ -236,7 +236,10 @@ app.whenReady().then(async () => {
   })
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,
-    queryLiveUsage: queryClaudeUsage,
+    queryLiveUsage: {
+      'claude-status': queryClaudeUsage,
+      'codex-rate-limits': queryCodexRateLimits,
+    },
     queryResetCredits: queryCodexRateLimits,
     consumeResetCreditQuery: consumeCodexRateLimitReset,
     // Task Limites (mais reportado no Mac): "às vezes falha, sem motivo
@@ -246,7 +249,7 @@ app.whenReady().then(async () => {
       logQaEvent({
         level: 'warn',
         scope: 'agent-usage:live-query',
-        message: message ?? 'A consulta ao /status falhou sem mensagem.',
+        message: message ?? 'A consulta ao uso ao vivo falhou sem mensagem.',
         details: { providerId, targetAccountId, platform: platformName },
       })
     },

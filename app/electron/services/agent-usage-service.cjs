@@ -55,8 +55,10 @@ function createAgentUsageService({
   runCommand = runBufferedCommand,
   listCatalog = listOfficialCliCatalog,
   probe = runLocalProbe,
-  // Consulta interativa opcional. O processo principal injeta a implementação
-  // real; os testes e fontes sem uma tela de uso continuam sem abrir PTY.
+  // Consultas ao vivo por capacidade declarada. Pode ser uma função única
+  // (compatibilidade com testes/fonte única) ou um mapa como
+  // `{ 'claude-status': queryClaudeUsage, 'codex-rate-limits': ... }`.
+  // Cada conta ainda recebe o ambiente do próprio perfil.
   queryLiveUsage = null,
   // Consulta opcional aos resets bancados do Codex (ver
   // codex-account-rate-limits.cjs) — só chamada pra fontes que declaram
@@ -70,7 +72,7 @@ function createAgentUsageService({
   // "às vezes falha, mais no Mac" (task Limites) não tinha nenhum rastro
   // gravado — sem isso, a próxima falha real também vira "sem motivo
   // aparente" em vez de virar evidência. Nunca recebe saída crua do PTY, só
-  // a mensagem já redigida que `queryLiveUsage` produz.
+  // a mensagem já redigida que a consulta produz.
   onLiveQueryFailure = null,
   // Contas com login próprio. Cada uma tem pasta de credencial separada, então
   // a quota delas é lida da pasta delas — não do login do sistema.
@@ -412,6 +414,15 @@ function createAgentUsageService({
 }
 
 function getLocalUsageSource(providerId, source) {
+  if (providerId === 'codex') {
+    return {
+      ...source.usage,
+      kind: 'local-execution',
+      label: 'Codex rollout da sessão (fallback local)',
+      docsUrl: 'https://developers.openai.com/codex/cli',
+    }
+  }
+
   if (providerId !== 'claude') {
     return source.usage
   }
@@ -538,34 +549,51 @@ async function collectProviderSnapshot({
     local,
   )
 
-  // Claude só publica os percentuais no `/status` interativo. Quando a fonte
-  // declara uma consulta ao vivo, nunca misturamos um arquivo/statusline
-  // antigo com a rodada atual: se o PTY falhar, o sample vira erro e o painel
-  // pode mostrar explicitamente o último valor conhecido.
+  // Uma fonte ao vivo nunca mistura arquivo/statusline antigo com a rodada
+  // atual: se a consulta falhar, o sample vira erro e o painel pode mostrar
+  // explicitamente o último valor conhecido. A consulta `usage-command` usa
+  // o comando oficial da própria fonte; as demais vêm do mapa injetado.
+  const liveQueryFunction = resolveLiveQuery(queryLiveUsage, source.liveQuery)
   const liveQueryEnabled =
-    Boolean(source.liveQuery) && typeof queryLiveUsage === 'function'
+    source.liveQuery === 'usage-command' || Boolean(liveQueryFunction)
   let liveResult = null
   if (
     liveQueryEnabled &&
     result?.ok === true &&
     auth.authStatus !== 'logged_out'
   ) {
-    try {
-      liveResult = await queryLiveUsage({
-        env: profileEnv,
-        cwd: os.tmpdir(),
-        timeoutMs: COMMAND_TIMEOUT_MS,
+    if (source.liveQuery === 'usage-command') {
+      liveResult = await runLiveUsageCommand({
+        source,
+        providerId,
+        runCommand,
+        profileEnv,
+        now,
       })
-    } catch {
-      liveResult = { ok: false, message: 'A consulta ao /status falhou.' }
+    } else if (liveQueryFunction) {
+      try {
+        liveResult = await liveQueryFunction({
+          env: profileEnv,
+          cwd: os.tmpdir(),
+          timeoutMs: COMMAND_TIMEOUT_MS,
+        })
+      } catch {
+        liveResult = {
+          ok: false,
+          message: `A consulta ao vivo de ${source.name} falhou.`,
+        }
+      }
     }
   }
 
-  // O Codex também conhece créditos de reset bancados no app-server. A
-  // consulta é opcional e declarada pela fonte, como a consulta live do
-  // Claude; uma falha aqui não invalida a quota que veio do rollout.
+  // O Codex devolve quota e créditos bancados na mesma leitura do app-server.
+  // O caminho separado continua como fallback para testes/fontes que só
+  // declaram `resetCreditsQuery`; nunca abrimos dois processos para a mesma
+  // conta quando a leitura ao vivo já trouxe os resets.
   const resetCreditsQueryEnabled =
-    Boolean(source.resetCreditsQuery) && typeof queryResetCredits === 'function'
+    Boolean(source.resetCreditsQuery) &&
+    typeof queryResetCredits === 'function' &&
+    !liveQueryEnabled
   let resetCreditsResult = null
   if (
     resetCreditsQueryEnabled &&
@@ -606,10 +634,9 @@ async function collectProviderSnapshot({
     liveResult !== null &&
     liveResult.ok !== true
 
-  // Só existe pra deixar rastro de uma falha que hoje é "às vezes, sem
-  // motivo aparente" (mais relatada no Mac) — `liveResult.message` já é a
-  // string estática que `queryClaudeUsage` produz em `fail()`, nunca saída
-  // crua do PTY. Erro do próprio observador nunca derruba a coleta.
+  // O observador vale para toda consulta ao vivo (Codex, Claude e comandos
+  // declarados por fonte), não só para o PTY do Claude. `message` já é uma
+  // string estática produzida pelo adaptador; nunca registramos stdout/stderr.
   if (liveQueryFailed && typeof onLiveQueryFailure === 'function') {
     try {
       onLiveQueryFailure({
@@ -623,9 +650,19 @@ async function collectProviderSnapshot({
     }
   }
 
+  const snapshotSource = liveQueryEnabled
+    ? {
+        ...source,
+        usage: {
+          ...source.usage,
+          kind: 'live-query',
+        },
+      }
+    : source
+
   return {
     providerId,
-    source,
+    source: snapshotSource,
     targetAccountId,
     collectedAt,
     // Quando o número vem de um arquivo, medição e leitura são momentos
@@ -701,6 +738,74 @@ async function runUsageCommand({ source, providerId, runCommand, profileEnv = {}
     providerId,
     redactOutput(`${result.stdout ?? ''}\n${result.stderr ?? ''}`),
   ).metrics
+}
+
+async function runLiveUsageCommand({
+  source,
+  providerId,
+  runCommand,
+  profileEnv = {},
+  now,
+}) {
+  let result
+  try {
+    result = await runCommand({
+      command: source.usage.command,
+      args: [...(source.usage.args ?? [])],
+      cwd: os.homedir(),
+      env: createCommandEnv(profileEnv),
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    })
+  } catch {
+    return {
+      ok: false,
+      collectedAt: null,
+      measuredAt: null,
+      metrics: [],
+      details: null,
+      message: `A consulta ao uso ao vivo de ${source.name} falhou.`,
+    }
+  }
+
+  if (result?.ok !== true) {
+    return {
+      ok: false,
+      collectedAt: null,
+      measuredAt: null,
+      metrics: [],
+      details: null,
+      message: `A consulta ao uso ao vivo de ${source.name} falhou.`,
+    }
+  }
+
+  const metrics = parseAgentUsage(
+    providerId,
+    redactOutput(`${result.stdout ?? ''}\n${result.stderr ?? ''}`),
+  ).metrics
+  const measuredAt = nowIso(now)
+
+  return {
+    ok: true,
+    collectedAt: measuredAt,
+    measuredAt,
+    metrics,
+    details: null,
+    message: null,
+  }
+}
+
+function resolveLiveQuery(queryLiveUsage, liveQueryName) {
+  if (typeof queryLiveUsage === 'function') {
+    return queryLiveUsage
+  }
+
+  if (!queryLiveUsage || typeof queryLiveUsage !== 'object' || !liveQueryName) {
+    return null
+  }
+
+  return typeof queryLiveUsage[liveQueryName] === 'function'
+    ? queryLiveUsage[liveQueryName]
+    : null
 }
 
 function createCommandEnv(profileEnv = {}) {

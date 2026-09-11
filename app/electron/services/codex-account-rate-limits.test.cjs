@@ -15,6 +15,7 @@ const {
  * `account/rateLimits/read` com o payload configurado.
  */
 function fakeCodexAppServer({
+  rateLimits,
   rateLimitResetCredits,
   consumeOutcome = 'reset',
   errorOnRead = null,
@@ -46,7 +47,7 @@ function fakeCodexAppServer({
 
           child.stdout.emit(
             'data',
-            `${JSON.stringify({ id: message.id, result: { rateLimitResetCredits } })}\n`,
+            `${JSON.stringify({ id: message.id, result: { rateLimits, rateLimitResetCredits } })}\n`,
           )
         })
       }
@@ -81,6 +82,19 @@ function fakeCodexAppServer({
 
 test('devolve os resets disponíveis do Codex a partir do app-server', async () => {
   const child = fakeCodexAppServer({
+    rateLimits: {
+      primary: {
+        usedPercent: 23,
+        windowDurationMins: 300,
+        resetsAt: 1_800_000_000,
+      },
+      secondary: {
+        usedPercent: 67,
+        windowDurationMins: 10_080,
+        resetsAt: 1_800_100_000,
+      },
+      credits: { balance: '4.5', unlimited: false },
+    },
     rateLimitResetCredits: {
       availableCount: 2,
       credits: [
@@ -111,6 +125,33 @@ test('devolve os resets disponíveis do Codex a partir do app-server', async () 
   assert.equal(result.credits[0].status, 'available')
   assert.equal(result.credits[0].grantedAt, new Date(1_788_499_787 * 1000).toISOString())
   assert.equal(result.collectedAt, '2026-09-11T15:00:00.000Z')
+  assert.deepEqual(
+    result.metrics.map(({ key, used, remaining, resetAt }) => ({
+      key,
+      used,
+      remaining,
+      resetAt,
+    })),
+    [
+      {
+        key: 'rate_limits.primary',
+        used: 23,
+        remaining: 77,
+        resetAt: new Date(1_800_000_000 * 1000).toISOString(),
+      },
+      {
+        key: 'rate_limits.secondary',
+        used: 67,
+        remaining: 33,
+        resetAt: new Date(1_800_100_000 * 1000).toISOString(),
+      },
+      { key: 'credits', used: null, remaining: 4.5, resetAt: null },
+    ],
+  )
+  assert.deepEqual(result.details.usageCredits, {
+    availableCount: 2,
+    credits: result.credits,
+  })
 
   // Nunca deve existir nenhuma chamada ao método que gasta o reset de verdade.
   assert.ok(

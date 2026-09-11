@@ -20,22 +20,23 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       command: 'codex',
       args: ['login', 'status'],
     },
-    // A quota não vem do comando: `codex login status` só diz que existe
-    // sessão. Quem tem o número é o rollout que a própria CLI grava em
-    // ~/.codex/sessions — daí o probe local.
+    // `codex login status` só confirma a sessão. A fonte primária de quota é
+    // o app-server autenticado (`account/rateLimits/read`); o rollout local
+    // continua como fallback de identidade/último valor conhecido.
     localProbe: 'codex-rollout',
     // Resets bancados ("banked resets"): crédito único que zera a janela
     // antes do tempo, concedido pela OpenAI. Não existe em nenhum arquivo
     // local — só o app-server da própria CLI, já autenticado, sabe. Ver
     // codex-account-rate-limits.cjs para o porquê. A leitura é somente
     // leitura; o consumo é um fluxo separado e protegido por confirmação.
+    liveQuery: 'codex-rate-limits',
     resetCreditsQuery: 'codex-app-server',
     usage: {
-      kind: 'local-execution',
-      label: 'Codex rollout da sessão (rate_limits)',
+      kind: 'live-query',
+      label: 'Codex limites ao vivo (app-server)',
       docsUrl: 'https://developers.openai.com/codex/cli',
       limitation:
-        'O número vem do último rate_limits que a CLI gravou no rollout da sessão; entre sessões ele permanece como último valor conhecido.',
+        'A quota vem do app-server autenticado; se ele não responder, a rodada fica explicitamente indisponível e o último valor conhecido permanece separado.',
     },
   },
   {
@@ -89,8 +90,9 @@ const AGENT_USAGE_SOURCES = Object.freeze([
     },
     // `openia statusline` consulta /api/v1/credits com a chave que o próprio
     // launcher guarda. A chave nunca passa pelo app: só a linha de saída.
+    liveQuery: 'usage-command',
     usage: {
-      kind: 'cli-command',
+      kind: 'live-query',
       label: 'openia statusline (/api/v1/credits)',
       command: 'openia',
       args: ['statusline'],
