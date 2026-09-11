@@ -25,6 +25,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
+import { DrawingNode } from './DrawingNode'
 import { GroupNode } from './GroupNode'
 import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
@@ -1696,6 +1697,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     () => ({
       terminal: TerminalNode,
       note: NoteNode,
+      drawing: DrawingNode,
       group: GroupNode,
       file: FileNode,
       webpage: WebpageNode,
@@ -1838,6 +1840,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         nodes={nodes}
         onFocusNode={focusNode}
         onAddNote={() => addNode('note', { text: '' })}
+        onAddDrawing={() => addNode('drawing', { strokes: '' })}
         onProjectsChanged={reloadProjects}
         onRemoveFolder={removeProjectFolder}
         onRunFile={runFileInTerminal}

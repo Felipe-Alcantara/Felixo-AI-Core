@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Node } from '@xyflow/react'
-import { Notebook, Plus, StickyNote, Trash2 } from 'lucide-react'
+import { Notebook, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import type { CanvasNodeData } from '../../types'
 
@@ -20,6 +20,8 @@ type NotesPanelProps = {
   onFocusNode: (nodeId: string) => void
   /** Creates a new note block on the canvas. */
   onAddNote: () => void
+  /** Creates a new lightweight freehand drawing block on the canvas. */
+  onAddDrawing: () => void
   onClose: () => void
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
@@ -38,6 +40,7 @@ export function NotesPanel({
   nodes,
   onFocusNode,
   onAddNote,
+  onAddDrawing,
   onClose,
   toolsMenuOpen,
 }: NotesPanelProps) {
@@ -45,6 +48,7 @@ export function NotesPanel({
   const saveTimers = useRef(new Map<string, number>())
 
   const canvasNotes = nodes.filter((node) => node.type === 'note')
+  const canvasDrawings = nodes.filter((node) => node.type === 'drawing')
 
   useEffect(() => {
     let cancelled = false
@@ -161,6 +165,48 @@ export function NotesPanel({
                         {data.text}
                       </span>
                     )}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <div className="my-3 border-t border-white/10" />
+
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+          Desenhos no canvas
+        </span>
+        <button
+          type="button"
+          onClick={onAddDrawing}
+          className="felixo-btn flex items-center gap-1 rounded bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-600"
+        >
+          <Plus size={13} />
+          Novo desenho
+        </button>
+      </div>
+
+      {canvasDrawings.length === 0 ? (
+        <p className="mb-3 text-sm text-zinc-500">Nenhum bloco de desenho no canvas.</p>
+      ) : (
+        <ul className="mb-3 flex flex-col gap-1">
+          {canvasDrawings.map((node) => {
+            const data = node.data ?? {}
+            const title = data.label || 'Desenho sem título'
+            return (
+              <li key={node.id}>
+                <button
+                  type="button"
+                  onClick={() => onFocusNode(node.id)}
+                  className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                  title="Centralizar este desenho no canvas"
+                >
+                  <Pencil size={14} className="mt-0.5 shrink-0 text-sky-300/80" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-zinc-100">{title}</span>
                   </span>
                 </button>
               </li>

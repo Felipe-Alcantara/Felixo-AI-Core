@@ -7,6 +7,7 @@ export type CanvasNodeType =
   | 'file'
   | 'webpage'
   | 'notionTasks'
+  | 'drawing'
 
 export type GroupNodeData = {
   label?: string
@@ -147,6 +148,28 @@ export type NoteNodeData = {
 }
 
 /**
+ * Traço livre e leve, sem dependência nova: um punhado de caminhos SVG
+ * (`<path d="M x y L x y ...">`), cada um com a cor/espessura escolhida na
+ * hora do desenho. Guardado como string JSON (não array tipado) pelo mesmo
+ * motivo do resto do canvas — `CanvasNodeData` é uma intersecção plana de
+ * todos os tipos de node, então cada campo precisa ser serializável sem
+ * ambiguidade com os campos dos outros tipos.
+ */
+export type DrawingStroke = {
+  /** Atributo `d` de um `<path>` SVG, já pronto pra desenhar. */
+  d: string
+  color: string
+  /** Espessura em px no espaço de coordenadas do próprio desenho. */
+  width: number
+}
+
+export type DrawingNodeData = {
+  /** `JSON.stringify(DrawingStroke[])`; vazio/ausente é uma tela em branco. */
+  strokes?: string
+  label?: string
+}
+
+/**
  * The user's explicit ordering of the blocks, set by dragging rows in the
  * "Elementos" dock. It decides both the dock's list order and each terminal's
  * "#N" badge, and is persisted per node — the storage layer lists nodes by
@@ -164,6 +187,7 @@ export type CanvasNodeData = TerminalNodeData &
   GroupNodeData &
   FileNodeData &
   WebpageNodeData &
+  DrawingNodeData &
   OrderedNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */

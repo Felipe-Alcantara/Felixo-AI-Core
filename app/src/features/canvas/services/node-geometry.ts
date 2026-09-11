@@ -14,6 +14,7 @@ export const DEFAULT_SIZE: Record<
   note: { width: 220, height: 160 },
   webpage: { width: 560, height: 420 },
   notionTasks: { width: 1040, height: 680 },
+  drawing: { width: 360, height: 280 },
 }
 
 /**

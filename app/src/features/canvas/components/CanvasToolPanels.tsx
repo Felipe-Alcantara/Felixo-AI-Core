@@ -36,6 +36,8 @@ type CanvasToolPanelsProps = {
   onFocusNode: (nodeId: string) => void
   /** Creates a new note block on the canvas (same flow as the toolbar button). */
   onAddNote: () => void
+  /** Creates a new lightweight freehand drawing block on the canvas. */
+  onAddDrawing: () => void
   onProjectsChanged: () => void
   /** Unregisters a folder from the shared projects list — nothing leaves disk. */
   onRemoveFolder: (projectId: string) => Promise<boolean>
@@ -169,6 +171,7 @@ export function CanvasToolPanels({
   nodes,
   onFocusNode,
   onAddNote,
+  onAddDrawing,
   onProjectsChanged,
   onRemoveFolder,
   onRunFile,
@@ -209,6 +212,7 @@ export function CanvasToolPanels({
             nodes={nodes}
             onFocusNode={onFocusNode}
             onAddNote={onAddNote}
+            onAddDrawing={onAddDrawing}
             onClose={onClose}
             toolsMenuOpen={toolsMenuOpen}
           />

@@ -19,6 +19,7 @@ import {
   Loader2,
   ListTodo,
   MessagesSquare,
+  Pencil,
   Send,
   StickyNote,
   Terminal as TerminalIcon,
@@ -83,6 +84,7 @@ const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
 const TYPE_ICON: Record<CanvasNodeType, typeof TerminalIcon> = {
   terminal: TerminalIcon,
   note: StickyNote,
+  drawing: Pencil,
   file: FileText,
   group: Group,
   webpage: Globe,
