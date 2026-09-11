@@ -233,6 +233,17 @@ app.whenReady().then(async () => {
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,
     queryLiveUsage: queryClaudeUsage,
+    // Task Limites (mais reportado no Mac): "às vezes falha, sem motivo
+    // aparente" não tinha nenhum log — sem isso, a próxima falha real
+    // continua sem evidência pra fechar a causa raiz.
+    onLiveQueryFailure: ({ providerId, targetAccountId, platform: platformName, message }) => {
+      logQaEvent({
+        level: 'warn',
+        scope: 'agent-usage:live-query',
+        message: message ?? 'A consulta ao /status falhou sem mensagem.',
+        details: { providerId, targetAccountId, platform: platformName },
+      })
+    },
     listProfiles: () =>
       cliAccounts.list().map((conta) => ({
         id: conta.id,

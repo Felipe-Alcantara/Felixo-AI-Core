@@ -58,6 +58,12 @@ function createAgentUsageService({
   // Consulta interativa opcional. O processo principal injeta a implementação
   // real; os testes e fontes sem uma tela de uso continuam sem abrir PTY.
   queryLiveUsage = null,
+  // Observador opcional de falha da consulta ao vivo. Existe porque o sintoma
+  // "às vezes falha, mais no Mac" (task Limites) não tinha nenhum rastro
+  // gravado — sem isso, a próxima falha real também vira "sem motivo
+  // aparente" em vez de virar evidência. Nunca recebe saída crua do PTY, só
+  // a mensagem já redigida que `queryLiveUsage` produz.
+  onLiveQueryFailure = null,
   // Contas com login próprio. Cada uma tem pasta de credencial separada, então
   // a quota delas é lida da pasta delas — não do login do sistema.
   listProfiles = () => [],
@@ -119,6 +125,7 @@ function createAgentUsageService({
           now,
           probe,
           queryLiveUsage,
+          onLiveQueryFailure,
         }),
       ),
       // A conta com login próprio não precisa de adivinhação de identidade: a
@@ -133,6 +140,7 @@ function createAgentUsageService({
           profileEnv: perfil.profileEnv,
           targetAccountId: perfil.id,
           queryLiveUsage,
+          onLiveQueryFailure,
         }),
       ),
     ])
@@ -390,6 +398,7 @@ async function collectProviderSnapshot({
   profileEnv = {},
   targetAccountId,
   queryLiveUsage,
+  onLiveQueryFailure,
 }) {
   const source = getAgentUsageSource(providerId)
   const collectedAt = nowIso(now)
@@ -495,6 +504,23 @@ async function collectProviderSnapshot({
     auth.authStatus !== 'logged_out' &&
     liveResult !== null &&
     liveResult.ok !== true
+
+  // Só existe pra deixar rastro de uma falha que hoje é "às vezes, sem
+  // motivo aparente" (mais relatada no Mac) — `liveResult.message` já é a
+  // string estática que `queryClaudeUsage` produz em `fail()`, nunca saída
+  // crua do PTY. Erro do próprio observador nunca derruba a coleta.
+  if (liveQueryFailed && typeof onLiveQueryFailure === 'function') {
+    try {
+      onLiveQueryFailure({
+        providerId,
+        targetAccountId,
+        platform: process.platform,
+        message: liveResult?.message ?? null,
+      })
+    } catch {
+      // Ver comentário acima: observador nunca pode quebrar a coleta.
+    }
+  }
 
   return {
     providerId,

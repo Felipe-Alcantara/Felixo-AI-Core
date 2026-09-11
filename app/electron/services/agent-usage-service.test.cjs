@@ -701,6 +701,141 @@ test(
   },
 )
 
+test(
+  'consulta ao vivo falhando aciona onLiveQueryFailure com a mensagem, sem derrubar a coleta',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    // Task Limites — corrigir inconsistência do Claude no monitor de limites
+    // (mais comum no Mac): o sintoma "às vezes falha, sem motivo aparente"
+    // não deixava rastro nenhum. Este teste trava que uma falha da consulta
+    // ao vivo sempre soa o observador — é o que vira log de QA em produção.
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-claude-live-fail-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const falhas = []
+
+    const service = createAgentUsageService({
+      repository,
+      now: () => Date.parse('2026-09-11T12:00:00.000Z'),
+      probe: () => null,
+      listCatalog: async () => [
+        {
+          id: 'claude',
+          name: 'Claude Code CLI',
+          provider: 'Anthropic',
+          command: 'claude',
+          detected: true,
+          version: '2.1.251',
+        },
+      ],
+      listProfiles: () => [
+        {
+          id: 'claude-pessoal',
+          providerId: 'claude',
+          label: 'Claude pessoal',
+          profileEnv: { CLAUDE_CONFIG_DIR: '/perfis/pessoal' },
+        },
+      ],
+      runCommand: async () => ({
+        ok: true,
+        stdout: JSON.stringify({ loggedIn: true, email: 'pessoal@example.com', subscriptionType: 'pro' }),
+        stderr: '',
+      }),
+      queryLiveUsage: async () => ({
+        ok: false,
+        collectedAt: null,
+        measuredAt: null,
+        metrics: [],
+        details: null,
+        message: 'A consulta ao /status do Claude excedeu o tempo limite.',
+      }),
+      onLiveQueryFailure: (info) => falhas.push(info),
+    })
+
+    try {
+      const result = await service.refresh()
+      const conta = result.accounts.find((account) => account.id === 'claude-pessoal')
+
+      // A rodada consulta o provider 'claude' duas vezes — uma pra conta do
+      // sistema (sem `targetAccountId`) e uma pra conta de perfil — e as duas
+      // usam a consulta ao vivo, então as duas disparam o observador.
+      assert.equal(falhas.length, 2)
+      const doPerfil = falhas.find((falha) => falha.targetAccountId === 'claude-pessoal')
+      assert.ok(doPerfil, 'esperava uma falha registrada pra conta de perfil')
+      assert.equal(doPerfil.providerId, 'claude')
+      assert.equal(doPerfil.message, 'A consulta ao /status do Claude excedeu o tempo limite.')
+      assert.equal(typeof doPerfil.platform, 'string')
+
+      // A falha do observador de log nunca pode ser confundida com a falha
+      // da coleta em si: a conta continua reportando o estado real (erro),
+      // não vira exceção não tratada.
+      assert.equal(conta?.latestSample?.status, 'error')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'onLiveQueryFailure quebrando não derruba a coleta',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-claude-live-fail-observer-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+
+    const service = createAgentUsageService({
+      repository,
+      now: () => Date.parse('2026-09-11T12:00:00.000Z'),
+      probe: () => null,
+      listCatalog: async () => [
+        {
+          id: 'claude',
+          name: 'Claude Code CLI',
+          provider: 'Anthropic',
+          command: 'claude',
+          detected: true,
+          version: '2.1.251',
+        },
+      ],
+      listProfiles: () => [
+        {
+          id: 'claude-pessoal',
+          providerId: 'claude',
+          label: 'Claude pessoal',
+          profileEnv: { CLAUDE_CONFIG_DIR: '/perfis/pessoal' },
+        },
+      ],
+      runCommand: async () => ({
+        ok: true,
+        stdout: JSON.stringify({ loggedIn: true, email: 'pessoal@example.com', subscriptionType: 'pro' }),
+        stderr: '',
+      }),
+      queryLiveUsage: async () => ({
+        ok: false,
+        collectedAt: null,
+        measuredAt: null,
+        metrics: [],
+        details: null,
+        message: 'falha simulada',
+      }),
+      onLiveQueryFailure: () => {
+        throw new Error('logger quebrado')
+      },
+    })
+
+    try {
+      const result = await service.refresh()
+      const conta = result.accounts.find((account) => account.id === 'claude-pessoal')
+      assert.equal(conta?.latestSample?.status, 'error')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 function countAccountsByProvider(accounts) {
   return accounts.reduce((total, account) => {
     total[account.providerId] = (total[account.providerId] ?? 0) + 1
