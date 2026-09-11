@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CanvasSurfacesContext } from '../hooks/canvas-surfaces-context'
 import { dockReservedBottom, freeCanvasArea, miniMapSize } from '../services/canvas-surfaces'
+import { detectLiveLayoutClamp } from '../services/layout-invariants'
 
 /**
  * Mantém quem está ocupando qual pedaço da tela do canvas.
@@ -47,6 +48,40 @@ export function CanvasSurfacesProvider({
     (top: number) => setDockTop((current) => (current === top ? current : top)),
     [],
   )
+
+  // Diagnóstico do clamp: só a transição pra um estado clampado vira log —
+  // nunca a cada render (o comentário na task de origem foi explícito sobre
+  // isso). `lastLoggedRule` guarda a regra do último clamp já registrado;
+  // sair do clamp zera, então reentrar mais tarde na MESMA regra loga de
+  // novo (é uma ocorrência nova, não a mesma).
+  const lastLoggedRuleRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const occupancy = { toolbar: toolbarWidth, panel, drawer }
+    const clamp = detectLiveLayoutClamp({ viewport, occupancy, dockTop })
+
+    if (!clamp) {
+      lastLoggedRuleRef.current = null
+      return
+    }
+
+    if (lastLoggedRuleRef.current === clamp.rule) {
+      return
+    }
+
+    lastLoggedRuleRef.current = clamp.rule
+    void window.felixo?.qaLogger
+      ?.log({
+        level: 'warn',
+        scope: 'canvas:layout-clamp',
+        message: clamp.detail,
+        details: { rule: clamp.rule, viewport, occupancy, dockTop },
+      })
+      .catch(() => {
+        // Falha ao gravar o log não pode derrubar o layout em si — na pior
+        // das hipóteses, esta ocorrência específica fica sem registro.
+      })
+  }, [dockTop, drawer, panel, toolbarWidth, viewport])
 
   const value = useMemo(() => {
     const occupancy = { toolbar: toolbarWidth, panel, drawer }

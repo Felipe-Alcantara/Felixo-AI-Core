@@ -357,6 +357,7 @@ contextBridge.exposeInMainWorld('felixo', {
   qaLogger: {
     getEntries: () => ipcRenderer.invoke('qa-logger:get'),
     clear: () => ipcRenderer.invoke('qa-logger:clear'),
+    log: (entry) => ipcRenderer.invoke('qa-logger:log', entry),
     onEntry: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('qa-logger:entry', handler)

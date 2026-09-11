@@ -9,3 +9,10 @@ export type QaLogEntry = {
   message: string
   details: unknown
 }
+
+/**
+ * O que o renderer manda ao gravar um evento (`window.felixo.qaLogger.log`)
+ * — sem `id`/`createdAt`, que o processo principal atribui na hora de
+ * gravar.
+ */
+export type QaLogEntryInput = Omit<QaLogEntry, 'id' | 'createdAt'>

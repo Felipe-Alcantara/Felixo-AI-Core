@@ -11,6 +11,7 @@ import type {
   ProjectNote,
   OrchestrationStreamEvent,
   QaLogEntry,
+  QaLogEntryInput,
   StreamEvent,
   SystemDesignConfig,
   SystemDesignDocument,
@@ -971,6 +972,7 @@ declare global {
       qaLogger?: {
         getEntries: () => Promise<QaLogEntry[]>
         clear: () => Promise<CliInvokeResult>
+        log: (entry: QaLogEntryInput) => Promise<QaLogEntry>
         onEntry: (callback: (entry: QaLogEntry) => void) => () => void
         onCleared: (callback: () => void) => () => void
       }

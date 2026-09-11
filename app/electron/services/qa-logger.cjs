@@ -13,6 +13,13 @@ function registerQaLoggerIpcHandlers(getWindow) {
     sendQaLoggerEvent('qa-logger:cleared', null)
     return { ok: true }
   })
+  // O renderer nunca tinha como escrever no log — só ler (getEntries/onEntry).
+  // Diagnósticos que só fazem sentido observados no processo do canvas (ex.:
+  // clamp de layout, medido de verdade contra o DOM) precisavam desse
+  // caminho. `entry` chega do renderer: nunca confiar cegamente em `level`
+  // (normalizeLevel já valida) nem deixar `scope`/`message` virarem algo
+  // maior que uma string.
+  ipcMain.handle('qa-logger:log', (_event, entry) => logQaEvent(entry ?? {}))
 }
 
 function logQaEvent(entry) {

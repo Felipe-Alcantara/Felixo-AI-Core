@@ -151,7 +151,7 @@ export type StreamEvent =
 
 // O tipo do log do backend mora em shared/; re-exportado para os imports
 // existentes continuarem valendo.
-export type { QaLogEntry } from '../shared/types/qa-log'
+export type { QaLogEntry, QaLogEntryInput } from '../shared/types/qa-log'
 
 export type ChatMessage = {
   id: number

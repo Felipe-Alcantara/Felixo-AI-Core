@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   COMBINED_FLOOR_WIDTH,
   checkWorstCaseLayout,
+  detectLiveLayoutClamp,
   isWorstCaseLayoutSafe,
 } from './layout-invariants'
 
@@ -51,5 +52,69 @@ describe('pior caso simultâneo (barra + painel + gaveta + dock cheio) nunca sob
     expect(violations.map((violation) => violation.rule)).toEqual([
       'barra+painel+gaveta-cabem-na-largura',
     ])
+  })
+})
+
+describe('diagnóstico do estado ao vivo (detectLiveLayoutClamp)', () => {
+  it('painel sozinho, folgado, nunca é clamp', () => {
+    expect(
+      detectLiveLayoutClamp({
+        viewport: { width: 1366, height: 768 },
+        occupancy: { toolbar: 176, panel: 300, drawer: 0 },
+        dockTop: Number.POSITIVE_INFINITY,
+      }),
+    ).toBeNull()
+  })
+
+  it('painel e gaveta abertos de verdade, sem caber, é clamp real', () => {
+    const clamp = detectLiveLayoutClamp({
+      viewport: { width: 700, height: 768 },
+      occupancy: { toolbar: 176, panel: 260, drawer: 300 },
+      dockTop: Number.POSITIVE_INFINITY,
+    })
+
+    expect(clamp?.rule).toBe('painel+gaveta-sobrepostos-de-verdade')
+  })
+
+  it('gaveta sozinha (sem painel), mesmo apertada, não é o clamp de painel+gaveta', () => {
+    // Só a gaveta ocupando quase tudo não é o cenário "os dois disputando":
+    // não há painel pra disputar espaço.
+    expect(
+      detectLiveLayoutClamp({
+        viewport: { width: 400, height: 768 },
+        occupancy: { toolbar: 176, panel: 0, drawer: 300 },
+        dockTop: Number.POSITIVE_INFINITY,
+      }),
+    ).toBeNull()
+  })
+
+  it('painel espremido pelo dock (altura), sem gaveta, é clamp real', () => {
+    const clamp = detectLiveLayoutClamp({
+      viewport: { width: 1366, height: 500 },
+      occupancy: { toolbar: 176, panel: 300, drawer: 0 },
+      dockTop: 150, // dock cobrindo quase tudo, painel fica sem altura útil
+    })
+
+    expect(clamp?.rule).toBe('painel-esquerdo-espremido-pelo-dock')
+  })
+
+  it('sem dock (dockTop infinito), painel nunca é espremido por ele', () => {
+    expect(
+      detectLiveLayoutClamp({
+        viewport: { width: 1366, height: 500 },
+        occupancy: { toolbar: 176, panel: 300, drawer: 0 },
+        dockTop: Number.POSITIVE_INFINITY,
+      }),
+    ).toBeNull()
+  })
+
+  it('painel fechado (largura 0) nunca é clamp, mesmo com dock baixo', () => {
+    expect(
+      detectLiveLayoutClamp({
+        viewport: { width: 1366, height: 500 },
+        occupancy: { toolbar: 176, panel: 0, drawer: 0 },
+        dockTop: 150,
+      }),
+    ).toBeNull()
   })
 })

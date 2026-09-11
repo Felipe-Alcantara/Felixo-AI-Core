@@ -168,3 +168,54 @@ export const COMBINED_FLOOR_WIDTH = TOOLBAR_WIDTH + PANEL_MIN_WIDTH + DRAWER_MIN
 
 /** Nunca é zero: abaixo disto o canvas não teria faixa visível nenhuma. */
 export const MIN_GUARANTEED_CANVAS_STRIP = MIN_CANVAS_STRIP
+
+/** Abaixo disto, um painel esticado até o dock já não mostra conteúdo útil. */
+const MIN_USABLE_PANEL_HEIGHT = 160
+
+export type LiveLayoutSnapshot = {
+  viewport: LayoutViewport
+  /** Larguras REAIS ocupadas agora — não o pior caso plausível. */
+  occupancy: SurfaceOccupancy
+  /** `dockTop` medido de verdade (`Infinity` quando o dock não existe). */
+  dockTop: number
+}
+
+/**
+ * Diagnóstico do estado AO VIVO (não o pior caso hipotético de
+ * `checkWorstCaseLayout`) — pra saber se o clamp que o código já faz
+ * silenciosamente (painel/gaveta no piso, painel esticado até o dock) está
+ * acontecendo agora de verdade, e por quê.
+ *
+ * Devolve no máximo UMA violação (a mais relevante) — é pra virar um evento
+ * de log na transição, não uma lista de tudo que está no limite.
+ */
+export function detectLiveLayoutClamp({
+  viewport,
+  occupancy,
+  dockTop,
+}: LiveLayoutSnapshot): LayoutInvariantViolation | null {
+  // Painel e gaveta abertos ao mesmo tempo, de verdade, sem caber — a
+  // sobreposição intencional documentada em COMBINED_FLOOR_WIDTH acontecendo
+  // agora, não hipoteticamente.
+  const horizontalTotal = occupancy.toolbar + occupancy.panel + occupancy.drawer
+  if (occupancy.panel > 0 && occupancy.drawer > 0 && horizontalTotal > viewport.width) {
+    return {
+      rule: 'painel+gaveta-sobrepostos-de-verdade',
+      detail: `barra ${occupancy.toolbar}px + painel ${occupancy.panel}px + gaveta ${occupancy.drawer}px = ${horizontalTotal}px, viewport ${viewport.width}px`,
+    }
+  }
+
+  // Painel esquerdo aberto e esticado até o dock, com o dock ocupando tanto
+  // que sobra menos altura do que dá pra usar.
+  if (occupancy.panel > 0 && Number.isFinite(dockTop)) {
+    const panelMaxHeight = dockTop - PANEL_TO_DOCK_GAP
+    if (panelMaxHeight < MIN_USABLE_PANEL_HEIGHT) {
+      return {
+        rule: 'painel-esquerdo-espremido-pelo-dock',
+        detail: `altura disponível ${Math.round(panelMaxHeight)}px, abaixo do piso ${MIN_USABLE_PANEL_HEIGHT}px (dockTop=${Math.round(dockTop)}, viewport.height=${viewport.height})`,
+      }
+    }
+  }
+
+  return null
+}
