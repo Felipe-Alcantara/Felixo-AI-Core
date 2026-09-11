@@ -38,6 +38,8 @@ type CanvasToolPanelsProps = {
   onAddNote: () => void
   /** Creates a new lightweight freehand drawing block on the canvas. */
   onAddDrawing: () => void
+  /** Creates a new full Excalidraw drawing block on the canvas (lazy-loaded). */
+  onAddExcalidrawDrawing: () => void
   onProjectsChanged: () => void
   /** Unregisters a folder from the shared projects list — nothing leaves disk. */
   onRemoveFolder: (projectId: string) => Promise<boolean>
@@ -172,6 +174,7 @@ export function CanvasToolPanels({
   onFocusNode,
   onAddNote,
   onAddDrawing,
+  onAddExcalidrawDrawing,
   onProjectsChanged,
   onRemoveFolder,
   onRunFile,
@@ -213,6 +216,7 @@ export function CanvasToolPanels({
             onFocusNode={onFocusNode}
             onAddNote={onAddNote}
             onAddDrawing={onAddDrawing}
+            onAddExcalidrawDrawing={onAddExcalidrawDrawing}
             onClose={onClose}
             toolsMenuOpen={toolsMenuOpen}
           />

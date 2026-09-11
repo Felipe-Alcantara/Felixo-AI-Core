@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Node } from '@xyflow/react'
-import { Notebook, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react'
+import { Notebook, Pencil, PenTool, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import type { CanvasNodeData } from '../../types'
 
@@ -22,6 +22,8 @@ type NotesPanelProps = {
   onAddNote: () => void
   /** Creates a new lightweight freehand drawing block on the canvas. */
   onAddDrawing: () => void
+  /** Creates a new full Excalidraw drawing block on the canvas (lazy-loaded). */
+  onAddExcalidrawDrawing: () => void
   onClose: () => void
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
@@ -41,6 +43,7 @@ export function NotesPanel({
   onFocusNode,
   onAddNote,
   onAddDrawing,
+  onAddExcalidrawDrawing,
   onClose,
   toolsMenuOpen,
 }: NotesPanelProps) {
@@ -49,6 +52,7 @@ export function NotesPanel({
 
   const canvasNotes = nodes.filter((node) => node.type === 'note')
   const canvasDrawings = nodes.filter((node) => node.type === 'drawing')
+  const canvasExcalidrawDrawings = nodes.filter((node) => node.type === 'excalidrawDrawing')
 
   useEffect(() => {
     let cancelled = false
@@ -205,6 +209,49 @@ export function NotesPanel({
                   title="Centralizar este desenho no canvas"
                 >
                   <Pencil size={14} className="mt-0.5 shrink-0 text-sky-300/80" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-zinc-100">{title}</span>
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <div className="my-3 border-t border-white/10" />
+
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+          Desenhos Excalidraw no canvas
+        </span>
+        <button
+          type="button"
+          onClick={onAddExcalidrawDrawing}
+          className="felixo-btn flex items-center gap-1 rounded bg-violet-700 px-2 py-1 text-xs font-medium text-white hover:bg-violet-600"
+          title="Modo avançado: formas, texto, setas — carrega o Excalidraw sob demanda"
+        >
+          <Plus size={13} />
+          Novo (Excalidraw)
+        </button>
+      </div>
+
+      {canvasExcalidrawDrawings.length === 0 ? (
+        <p className="mb-3 text-sm text-zinc-500">Nenhum bloco Excalidraw no canvas.</p>
+      ) : (
+        <ul className="mb-3 flex flex-col gap-1">
+          {canvasExcalidrawDrawings.map((node) => {
+            const data = node.data ?? {}
+            const title = data.label || 'Desenho Excalidraw sem título'
+            return (
+              <li key={node.id}>
+                <button
+                  type="button"
+                  onClick={() => onFocusNode(node.id)}
+                  className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                  title="Centralizar este desenho no canvas"
+                >
+                  <PenTool size={14} className="mt-0.5 shrink-0 text-violet-300/80" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-zinc-100">{title}</span>
                   </span>

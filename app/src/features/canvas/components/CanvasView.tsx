@@ -26,6 +26,7 @@ import '@xyflow/react/dist/style.css'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { DrawingNode } from './DrawingNode'
+import { ExcalidrawDrawingNode } from './ExcalidrawDrawingNode'
 import { GroupNode } from './GroupNode'
 import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
@@ -1698,6 +1699,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       terminal: TerminalNode,
       note: NoteNode,
       drawing: DrawingNode,
+      excalidrawDrawing: ExcalidrawDrawingNode,
       group: GroupNode,
       file: FileNode,
       webpage: WebpageNode,
@@ -1841,6 +1843,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onFocusNode={focusNode}
         onAddNote={() => addNode('note', { text: '' })}
         onAddDrawing={() => addNode('drawing', { strokes: '' })}
+        onAddExcalidrawDrawing={() => addNode('excalidrawDrawing', { scene: '' })}
         onProjectsChanged={reloadProjects}
         onRemoveFolder={removeProjectFolder}
         onRunFile={runFileInTerminal}

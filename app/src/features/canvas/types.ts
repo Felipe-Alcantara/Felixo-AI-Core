@@ -8,6 +8,7 @@ export type CanvasNodeType =
   | 'webpage'
   | 'notionTasks'
   | 'drawing'
+  | 'excalidrawDrawing'
 
 export type GroupNodeData = {
   label?: string
@@ -170,6 +171,23 @@ export type DrawingNodeData = {
 }
 
 /**
+ * Modo avançado, estilo Excalidraw de verdade: formas, texto, setas, cores,
+ * tudo que a lib oferece. `@excalidraw/excalidraw` só entra no bundle quando
+ * um node deste tipo existe e é montado — `ExcalidrawDrawingNode.tsx` carrega
+ * a lib via `React.lazy`, então quem nunca abre este node não paga o download.
+ */
+export type ExcalidrawDrawingNodeData = {
+  /**
+   * `JSON.stringify({ elements, appState })` — o retorno de `onChange` do
+   * Excalidraw, guardando só o que é serializável e relevante pra reabrir a
+   * mesma cena (sem `files`/imagens por ora: ficaria pesado demais pro
+   * storage por node; documentado como follow-up caso vire pedido real).
+   */
+  scene?: string
+  label?: string
+}
+
+/**
  * The user's explicit ordering of the blocks, set by dragging rows in the
  * "Elementos" dock. It decides both the dock's list order and each terminal's
  * "#N" badge, and is persisted per node — the storage layer lists nodes by
@@ -188,6 +206,7 @@ export type CanvasNodeData = TerminalNodeData &
   FileNodeData &
   WebpageNodeData &
   DrawingNodeData &
+  ExcalidrawDrawingNodeData &
   OrderedNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */

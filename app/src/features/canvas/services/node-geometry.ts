@@ -15,6 +15,7 @@ export const DEFAULT_SIZE: Record<
   webpage: { width: 560, height: 420 },
   notionTasks: { width: 1040, height: 680 },
   drawing: { width: 360, height: 280 },
+  excalidrawDrawing: { width: 760, height: 560 },
 }
 
 /**
