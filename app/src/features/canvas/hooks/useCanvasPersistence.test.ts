@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   sortByOrderIndex,
+  toFlowNode,
   toPersistedNode,
   withOrderIndex,
 } from './useCanvasPersistence'
-import type { CanvasNodeData, PersistedCanvasNode } from '../types'
+import type { CanvasNodeData, CanvasNodeType, PersistedCanvasNode } from '../types'
 
-function node(id: string, data: CanvasNodeData = {}): PersistedCanvasNode {
-  return { id, type: 'terminal', position: { x: 0, y: 0 }, data }
+function node(
+  id: string,
+  data: CanvasNodeData = {},
+  type: CanvasNodeType = 'terminal',
+): PersistedCanvasNode {
+  return { id, type, position: { x: 0, y: 0 }, data }
 }
 
 describe('sortByOrderIndex', () => {
@@ -99,5 +104,52 @@ describe('canvas persistence boundaries', () => {
 
     expect(persisted.data.initialText).toBe('standing instruction')
     expect(persisted.data.handoffText).toBeUndefined()
+  })
+
+  // Fatia 3 da task Canvas Excalidraw: os dois nodes de desenho usam formatos
+  // deliberadamente separados — o leve guarda um JSON de traços simples, o
+  // Excalidraw guarda a cena nativa dele — mas o caminho de ida e volta pelo
+  // storage é o mesmo bridge genérico dos outros node types, então o que
+  // importa testar é que nenhum dos dois campos se perde no round-trip.
+  it('round-trips o desenho leve (drawing) entre sessões', () => {
+    const strokes = JSON.stringify([{ d: 'M 0 0 L 10 10', color: '#f4f4f5', width: 2 }])
+    const flowNode = toFlowNode(node('d1', { strokes, label: 'Rabisco' }, 'drawing'))
+
+    expect(flowNode.data.strokes).toBe(strokes)
+
+    const persisted = toPersistedNode({ ...flowNode, data: { ...flowNode.data, strokes } })
+    expect(persisted.type).toBe('drawing')
+    expect(persisted.data.strokes).toBe(strokes)
+  })
+
+  it('round-trips a cena do Excalidraw (excalidrawDrawing) entre sessões', () => {
+    const scene = JSON.stringify({
+      elements: [{ id: 'el1', type: 'rectangle' }],
+      appState: { viewBackgroundColor: '#ffffff' },
+    })
+    const flowNode = toFlowNode(node('e1', { scene, label: 'Diagrama' }, 'excalidrawDrawing'))
+
+    expect(flowNode.data.scene).toBe(scene)
+
+    const persisted = toPersistedNode(flowNode)
+    expect(persisted.type).toBe('excalidrawDrawing')
+    expect(persisted.data.scene).toBe(scene)
+  })
+
+  it('nunca persiste o onDataChange injetado nos nodes de desenho', () => {
+    // `onDataChange` não é um campo formal de `CanvasNodeData` — é injetado em
+    // runtime pelo CanvasView (ver `updateNodeData`), do mesmo jeito pros
+    // outros node types. O cast espelha isso; o que o teste garante é que
+    // `stripFunctions` some com ele antes de gravar.
+    const dataWithHandler = { strokes: '[]', onDataChange: () => {} } as unknown as CanvasNodeData
+    const persisted = toPersistedNode({
+      id: 'd2',
+      type: 'drawing',
+      position: { x: 0, y: 0 },
+      data: dataWithHandler,
+    })
+
+    expect(persisted.data.strokes).toBe('[]')
+    expect((persisted.data as Record<string, unknown>).onDataChange).toBeUndefined()
   })
 })

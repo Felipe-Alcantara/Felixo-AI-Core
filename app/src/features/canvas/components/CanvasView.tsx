@@ -983,7 +983,9 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         node.type === 'note' ||
         node.type === 'group' ||
         node.type === 'webpage' ||
-        node.type === 'notionTasks'
+        node.type === 'notionTasks' ||
+        node.type === 'drawing' ||
+        node.type === 'excalidrawDrawing'
       ) {
         return {
           ...withHandle,
