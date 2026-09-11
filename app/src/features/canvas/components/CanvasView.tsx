@@ -1791,6 +1791,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         notificationCount={notificationCount}
         onToggle={() => setNotificationsOpen((open) => !open)}
         onHeightChange={setNotificationsTriggerHeight}
+        minimapWidth={miniMap?.width ?? null}
       >
         {(ready, panelRef) => (
           <NotificationsPanel

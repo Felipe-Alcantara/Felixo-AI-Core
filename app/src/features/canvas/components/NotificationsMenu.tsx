@@ -4,6 +4,13 @@ import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
 
 const BUTTON_HEIGHT_AND_GAP = 52
 
+/** Margem direita do próprio Mini Map (`!mr-4` em CanvasView.tsx). */
+const MINIMAP_RIGHT_MARGIN = 16
+/** Folga entre o sino e a borda esquerda do Mini Map. */
+const BELL_TO_MINIMAP_GAP = 12
+/** Deslocamento quando não há Mini Map pra clarear (sumiu por falta de espaço). */
+const BELL_OFFSET_WITHOUT_MINIMAP = MINIMAP_RIGHT_MARGIN + BELL_TO_MINIMAP_GAP
+
 type NotificationsMenuProps = {
   open: boolean
   notificationCount: number
@@ -14,6 +21,14 @@ type NotificationsMenuProps = {
    *  space instead of guessing a fixed offset that breaks once the panel's
    *  own content (e.g. a growing notification list) makes it taller. */
   onHeightChange?: (height: number) => void
+  /**
+   * Largura atual do Mini Map (`miniMapSize(...).width`), ou `null` quando
+   * ele sumiu por falta de espaço. Antes o sino usava um deslocamento fixo
+   * (228px) calibrado pro tamanho padrão do mapa — se ele encolhesse ou
+   * sumisse, o gap entre os dois só crescia (nunca sobrepôs, mas também
+   * nunca acompanhou o mapa de verdade).
+   */
+  minimapWidth?: number | null
 }
 
 /** Bell trigger anchored to the canvas container, above the minimap.
@@ -28,6 +43,7 @@ export function NotificationsMenu({
   onToggle,
   children,
   onHeightChange,
+  minimapWidth = null,
 }: NotificationsMenuProps) {
   const {
     panelReady,
@@ -72,8 +88,16 @@ export function NotificationsMenu({
     onToggle()
   }
 
+  const rightOffset =
+    minimapWidth != null
+      ? minimapWidth + MINIMAP_RIGHT_MARGIN + BELL_TO_MINIMAP_GAP
+      : BELL_OFFSET_WITHOUT_MINIMAP
+
   return (
-    <div className="absolute right-[228px] top-4 z-40 inline-block">
+    <div
+      className="absolute top-4 z-40 inline-block transition-[right] duration-200 ease-out"
+      style={{ right: rightOffset }}
+    >
       <button
         type="button"
         onClick={toggle}
