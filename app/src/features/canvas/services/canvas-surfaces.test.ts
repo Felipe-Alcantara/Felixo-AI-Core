@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MIN_CANVAS_STRIP,
+  dockReservedBottom,
   drawerWidthLimit,
   freeCanvasArea,
   miniMapSize,
@@ -97,5 +98,24 @@ describe('Mini Map', () => {
   it('some quando nem o tamanho mínimo cabe', () => {
     expect(miniMapSize(100)).toBeNull()
     expect(miniMapSize(0)).toBeNull()
+  })
+})
+
+describe('reserva de rodapé do dock "Elementos"', () => {
+  // Bug real confirmado numa captura de tela em 760px de largura: um node
+  // recém-criado nascia atrás do dock porque só 40px fixos eram reservados,
+  // não a altura real dele.
+  it('reserva a altura real do dock, medida do topo dele até o fim do container', () => {
+    expect(dockReservedBottom(700, 580)).toBe(120)
+  })
+
+  it('nunca reserva negativo quando o dock mediu abaixo do fim do container', () => {
+    expect(dockReservedBottom(700, 750)).toBe(0)
+  })
+
+  it('sem medida real (dockTop infinito, dock nunca reportou ou está colapsado), reserva zero', () => {
+    // Melhor não reservar nada do que reservar um número inventado — o dock
+    // colapsado praticamente não ocupa espaço mesmo.
+    expect(dockReservedBottom(700, Number.POSITIVE_INFINITY)).toBe(0)
   })
 })

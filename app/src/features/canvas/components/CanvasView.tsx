@@ -42,7 +42,7 @@ import {
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasSurfacesProvider } from './CanvasSurfacesProvider'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
-import { freeCanvasArea, miniMapSize } from '../services/canvas-surfaces'
+import { dockReservedBottom, freeCanvasArea, miniMapSize } from '../services/canvas-surfaces'
 import { UpdateToast } from '../../updates/UpdateNotice'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
@@ -230,7 +230,7 @@ const TOOLBAR_COLUMN = 144
 
 function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const store = useTerminalSessions()
-  const { occupancy, viewport } = useCanvasSurfaces()
+  const { occupancy, viewport, dockTop } = useCanvasSurfaces()
   const miniMap = miniMapSize(freeCanvasArea(viewport, occupancy).width)
   const {
     nodes,
@@ -1225,10 +1225,16 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     }
 
     const bounds = container.getBoundingClientRect()
+    // O dock "Elementos" flutua por cima do canvas; sem descontar a altura
+    // real dele aqui, `findFreeNodePosition` só reserva os 40px fixos de
+    // `VIEWPORT_PLACEMENT_PADDING` (pensados pro dock vazio/colapsado) e um
+    // node novo nasce atrás do dock quando ele cresce com vários elementos —
+    // sobreposição confirmada numa captura de tela em 760px de largura.
+    const reservedBottom = dockReservedBottom(bounds.bottom, dockTop)
     const topLeft = flowInstance.screenToFlowPosition({ x: bounds.left, y: bounds.top })
     const bottomRight = flowInstance.screenToFlowPosition({
       x: bounds.right,
-      y: bounds.bottom,
+      y: bounds.bottom - reservedBottom,
     })
     return {
       x: topLeft.x,
@@ -1236,7 +1242,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       width: bottomRight.x - topLeft.x,
       height: bottomRight.y - topLeft.y,
     }
-  }, [])
+  }, [dockTop])
 
   const addNode = useCallback(
     (type: CanvasNodeType, data?: Record<string, unknown>, position?: { x: number; y: number }) => {

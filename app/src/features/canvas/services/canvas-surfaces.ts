@@ -90,6 +90,28 @@ const MINIMAP_DEFAULT = { width: 200, height: 150 }
 const MINIMAP_MIN = { width: 96, height: 72 }
 const MINIMAP_MARGIN = 32
 
+/**
+ * Altura, em pixels de tela, que o dock "Elementos" ocupa por cima do
+ * canvas agora — a partir do topo real dele (`dockTop`, medido via
+ * `getBoundingClientRect`, nunca estimado) até o fim do container do canvas.
+ *
+ * Existe porque um node novo era posicionado com uma margem fixa de 40px de
+ * rodapé (pensada pra quando o dock está vazio/colapsado): com vários
+ * elementos, o dock cresce até 60vh de altura e o node nascia atrás dele —
+ * sobreposição real, medida numa captura de tela em 760px de largura.
+ * `dockTop = Infinity` (dock nunca mediu, ou está colapsado) devolve 0: sem
+ * medida real, é mais seguro não reservar nada do que reservar demais.
+ */
+export function dockReservedBottom(
+  containerBottom: number,
+  dockTop: number,
+): number {
+  if (!Number.isFinite(dockTop)) {
+    return 0
+  }
+  return Math.max(0, containerBottom - dockTop)
+}
+
 export function miniMapSize(
   freeWidth: number,
 ): { width: number; height: number } | null {
