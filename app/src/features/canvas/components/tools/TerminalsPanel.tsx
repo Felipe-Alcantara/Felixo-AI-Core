@@ -66,11 +66,6 @@ type TerminalsPanelProps = {
    * canvas node order. Ids, not indices: the dock renders a filtered view of
    * `nodes`, so its row indices are not guaranteed to be node array indices. */
   onReorder: (nodeId: string, targetId: string, edge: 'before' | 'after') => void
-  /** Reports this dock's real rendered height (puck or expanded list, either
-   *  way) every time it changes, so other floating panels anchored to the
-   *  same bottom-right corner — or growing down toward it, like the
-   *  notifications panel — can cap themselves before reaching it. */
-  onHeightChange?: (height: number) => void
 }
 
 const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
@@ -129,7 +124,6 @@ export function TerminalsPanel({
   onFocusNode,
   onExpandNode,
   onReorder,
-  onHeightChange,
 }: TerminalsPanelProps) {
   const elements = useMemo(() => nodes.filter((node) => node.type != null), [nodes])
   const dockGroups = useMemo(() => groupDockElements(elements), [elements])
@@ -393,18 +387,18 @@ export function TerminalsPanel({
 
   useEffect(() => {
     if (elements.length === 0 || !dockElement) {
-      onHeightChange?.(0)
-      // Sem dock não há piso: o painel da esquerda volta a usar a tela toda.
+      // Sem dock não há piso: o painel da esquerda volta a usar a tela toda,
+      // e a altura derivada (`dockHeight` no provider) some junto.
       reportDockTop(Number.POSITIVE_INFINITY)
       return
     }
 
-    const publicar = () => {
-      onHeightChange?.(dockElement.getBoundingClientRect().height)
-      // O topo do dock, e não a altura, é o que o painel da esquerda precisa
-      // saber para parar antes dele.
-      reportDockTop(dockElement.getBoundingClientRect().top)
-    }
+    // O topo do dock é a única medida publicada — a altura que outras
+    // superfícies precisam reservar (notificações, posicionamento de node)
+    // é derivada dele (`viewport.height - dockTop`) no próprio provider, em
+    // vez de um segundo `ResizeObserver` medindo a mesma coisa por um canal
+    // separado.
+    const publicar = () => reportDockTop(dockElement.getBoundingClientRect().top)
 
     publicar()
     const observer = new ResizeObserver(publicar)
@@ -415,7 +409,7 @@ export function TerminalsPanel({
       observer.disconnect()
       window.removeEventListener('resize', publicar)
     }
-  }, [onHeightChange, elements.length, dockElement, reportDockTop])
+  }, [elements.length, dockElement, reportDockTop])
 
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {

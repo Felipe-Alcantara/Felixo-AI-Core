@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { CanvasSurfacesContext } from '../hooks/canvas-surfaces-context'
+import { dockReservedBottom, freeCanvasArea, miniMapSize } from '../services/canvas-surfaces'
 
 /**
  * Mantém quem está ocupando qual pedaço da tela do canvas.
@@ -47,26 +48,35 @@ export function CanvasSurfacesProvider({
     [],
   )
 
-  const value = useMemo(
-    () => ({
-      occupancy: { toolbar: toolbarWidth, panel, drawer },
+  const value = useMemo(() => {
+    const occupancy = { toolbar: toolbarWidth, panel, drawer }
+    // Distância do topo do dock até o fim do viewport: a mesma medida que
+    // `dockReservedBottom` usa pra não deixar um node novo nascer atrás do
+    // dock, aqui vira a altura que outras superfícies (notificações) também
+    // precisam reservar — uma leitura só de `dockTop`, não uma segunda
+    // medição via ResizeObserver como existia antes.
+    const dockHeight = dockReservedBottom(viewport.height, dockTop)
+
+    return {
+      occupancy,
       viewport,
       reportPanelWidth,
       reportDrawerWidth,
       dockTop,
       reportDockTop,
-    }),
-    [
-      dockTop,
-      drawer,
-      panel,
-      reportDockTop,
-      reportDrawerWidth,
-      reportPanelWidth,
-      toolbarWidth,
-      viewport,
-    ],
-  )
+      dockHeight,
+      minimap: miniMapSize(freeCanvasArea(viewport, occupancy).width),
+    }
+  }, [
+    dockTop,
+    drawer,
+    panel,
+    reportDockTop,
+    reportDrawerWidth,
+    reportPanelWidth,
+    toolbarWidth,
+    viewport,
+  ])
 
   return (
     <CanvasSurfacesContext.Provider value={value}>

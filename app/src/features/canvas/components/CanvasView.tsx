@@ -42,7 +42,7 @@ import {
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasSurfacesProvider } from './CanvasSurfacesProvider'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
-import { dockReservedBottom, freeCanvasArea, miniMapSize } from '../services/canvas-surfaces'
+import { dockReservedBottom } from '../services/canvas-surfaces'
 import { UpdateToast } from '../../updates/UpdateNotice'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
@@ -230,8 +230,9 @@ const TOOLBAR_COLUMN = 144
 
 function CanvasInner({ onOpenChat }: CanvasViewProps) {
   const store = useTerminalSessions()
-  const { occupancy, viewport, dockTop } = useCanvasSurfaces()
-  const miniMap = miniMapSize(freeCanvasArea(viewport, occupancy).width)
+  // dockHeight e minimap já vêm prontos do provider — computados uma vez a
+  // partir de occupancy/viewport internamente, não recalculados aqui.
+  const { dockTop, dockHeight, minimap: miniMap } = useCanvasSurfaces()
   const {
     nodes,
     setNodes,
@@ -280,12 +281,11 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   // NotificationsMenu), not guessed — a fixed offset broke as soon as the
   // notification list grew past whatever number was hardcoded here.
   const [, setNotificationsTriggerHeight] = useState(52)
-  // Same idea for the bottom-right "Elementos" dock: both it and the
-  // notifications panel are independent floating panels that can each grow
-  // tall enough to reach the other (dock grows up from the bottom, panel
-  // grows down from the top) — measuring the dock's real height lets the
-  // panel cap itself before the two ever collide.
-  const [terminalsDockHeight, setTerminalsDockHeight] = useState(0)
+  // A altura do dock "Elementos" (pra notificações caberem antes de
+  // encostar nele) vem de `dockHeight`, derivada de `dockTop` no provider —
+  // não é medida de novo aqui. Um segundo `ResizeObserver` em TerminalsPanel
+  // reportando a mesma coisa por um canal `onHeightChange` separado existia
+  // antes; unificado nesta task.
   const sessionSnapshots = useSessionSnapshots()
   const actionableNotificationIds = useMemo(
     () => getActionRequiredNodeIds(nodes, sessionSnapshots),
@@ -1800,7 +1800,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             open={notificationsOpen}
             ready={ready}
             panelRef={panelRef}
-            reservedBottomSpace={terminalsDockHeight > 0 ? terminalsDockHeight + 32 : 0}
+            reservedBottomSpace={dockHeight > 0 ? dockHeight + 32 : 0}
             soundEnabled={notificationSoundEnabled}
             onSoundEnabledChange={setNotificationSoundEnabled}
             volume={notificationVolume}
@@ -1887,7 +1887,6 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         onFocusNode={focusNode}
         onExpandNode={openTerminal}
         onReorder={reorderNodes}
-        onHeightChange={setTerminalsDockHeight}
       />
 
         <ReactFlow
