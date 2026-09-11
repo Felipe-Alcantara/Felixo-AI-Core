@@ -4508,3 +4508,37 @@ aberta de propósito, porque o driver de automação não reproduz clipboard rea
 tentativa revertida do `AttachConsole` ficou registrada como pendência real, não como
 sucesso disfarçado, com a hipótese da causa do travamento documentada para quem
 retomar.
+
+## Fechamento de Trabalho — 2026-09-11 — limites por conta consultados ao vivo em todos os providers suportados
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core.
+
+**Contexto da sessão.** A task principal do Notion (`3d491f95-497e-818f-acdc-f0b2e7e1c22a`, "Felixo AI Core/Limites — mostrar os resets disponíveis nas contas Codex") foi relida antes das alterações. A task relacionada (`3ce91f95-497e-81b3-b3fd-cd7b4a5c931d`) exige incluir Openia e Gemini sem inventar dados nem misturar o último valor conhecido. Durante a continuação, o usuário corrigiu o escopo: a consulta ao vivo e o log de falha não poderiam ficar descritos como exclusivos do Claude.
+
+**Implementação publicada, em ordem:**
+
+1. O commit `2ee57bf058b42b73bce1222478a199abc3d725d6` implementou os resets bancados do Codex por conta: leitura somente via `account/rateLimits/read`, quantidade, título, tipo, descrição, data de concessão, validade e estado; botão **Usar reset** com confirmação nativa; consumo separado via `account/rateLimitResetCredit/consume`, chave de idempotência gerada no processo principal e releitura posterior. O renderer não recebe ambiente de perfil nem segredo. O armazenamento passou a ordenar empates por `rowid DESC`, evitando que uma amostra antiga vencesse a leitura mais recente.
+2. O commit `1267e5f75661a4592f0725523c049e97f87742aa` generalizou a capacidade `liveQuery` por fonte declarada. O Codex agora usa o app-server autenticado para as janelas primary/secondary e créditos, o Claude usa o PTY descartável do `/status`, e o Openia usa `openia statusline` para consultar os créditos do OpenRouter. A coleta é executada por conta/perfil, com o ambiente isolado de cada perfil; o Codex não abre uma segunda consulta de resets quando a leitura ao vivo já trouxe os créditos.
+3. `onLiveQueryFailure` passou a ser um observador genérico para qualquer provider/fonte ao vivo. As mensagens são estáticas e seguras; stdout/stderr bruto não entra no sample nem no log QA. Há regressão específica para falha do Openia, além da cobertura do Claude e do mapa Codex/Claude/Openia.
+4. Gemini permanece explicitamente indisponível no painel automático: a CLI instalada (`0.57.0`) não oferece endpoint não interativo de quota, e `/stats model` só existe na sessão interativa. Não foi criado TTY oculto nem foi inventado zero/limite; a limitação continua visível, conforme a task relacionada.
+5. README foi atualizado para documentar as fontes ao vivo e o fallback local do rollout do Codex. A fonte local do Codex, quando usada pelo watcher, recebe o rótulo explícito de fallback para não se passar por consulta atual.
+
+**Validação local final:**
+
+- Testes focados de uso, Codex, IPC e repository: **26/26 pass**.
+- Suíte frontend: **828 pass, 1 skipped**, 89 arquivos.
+- `npm run typecheck`: pass.
+- `npm run build`: pass; apenas avisos já esperados de chunks grandes.
+- `npm run lint`: 0 erros e 2 warnings preexistentes em `SearchPanel.tsx` (`inputRef`/`setQuery` ausentes na lista de dependências).
+- Suíte Node completa: **1.086 pass, 7 fail, 0 skipped, 1.093 testes**. Os sete failures são ambientais e repetem o erro `Electron failed to install correctly` nos testes que carregam Electron; nenhuma tentativa destrutiva de apagar/reinstalar `node_modules/electron` foi feita.
+- Consulta real somente leitura do Codex foi executada sem expor resposta bruta: `ok=true`, chaves de métrica `rate_limits.primary`, `rate_limits.secondary` e `credits`, `availableCount=3`, `creditCount=3`, sem método de consumo e sem stdout/stderr retornados.
+- `git diff --check`: pass.
+
+**CI e release:**
+
+- A primeira execução da entrega de resets (`34621744951`) terminou com falha somente no benchmark Windows de custo operacional: `yarn-classic` detectou processos órfãos. O log foi lido; não era falha do código de limites.
+- A execução final do commit generalizado passou em todas as matrizes, incluindo Ubuntu, macOS, Windows, política de dependências, SBOM, auditoria Python, launchers e scripts de release: `34623826128` — https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/34623826128
+- O workflow de release validou os três artefatos — Linux, macOS e Windows — e publicou `v0.1.288`: `34624579478` — https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/34624579478; release: https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.288
+- Nenhum reset real foi consumido durante testes, consulta real ou release.
+
+**Estado final da implementação.** O código funcional está em `1267e5f`; a consulta ao vivo e a auditoria de falhas são por provider/fonte suportada, não só Claude. Este fechamento é o registro append-only da entrega e será publicado separadamente. A task de validação manual multi-conta/multi-SO (`3ce91f95-497e-81b3-b3fd-cd7b4a5c931d`) permanece aberta para validação no app instalado, sem duplicação.
