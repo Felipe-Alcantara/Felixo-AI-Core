@@ -22,12 +22,17 @@ const path = require('node:path')
 
 const LINUX_DESKTOP_FILE_APP_ID = 'felixo-ai-core'
 
+// O destino é sempre Linux, não importa em qual SO o processo Node/Electron
+// que está CHAMANDO esta função roda (ex.: o CI roda a suíte inteira de
+// testes também no runner windows-latest) — path.join() usaria `\` lá e
+// produziria um caminho que o Linux nunca aceitaria. path.posix.join()
+// garante `/` sempre, como o XDG Base Directory espera.
 function getLinuxAutostartDesktopPath({ homeDir = os.homedir(), environment = process.env } = {}) {
   const configHome =
     typeof environment.XDG_CONFIG_HOME === 'string' && environment.XDG_CONFIG_HOME.trim()
       ? environment.XDG_CONFIG_HOME.trim()
-      : path.join(homeDir, '.config')
-  return path.join(configHome, 'autostart', `${LINUX_DESKTOP_FILE_APP_ID}.desktop`)
+      : path.posix.join(homeDir, '.config')
+  return path.posix.join(configHome, 'autostart', `${LINUX_DESKTOP_FILE_APP_ID}.desktop`)
 }
 
 /**
@@ -71,7 +76,7 @@ function setLinuxAutostartEnabled({ enabled, execPath, homeDir, environment, fil
           message: 'Caminho do executável indisponível — não dá pra gravar o autostart.',
         }
       }
-      fileSystem.mkdirSync(path.dirname(filePath), { recursive: true })
+      fileSystem.mkdirSync(path.posix.dirname(filePath), { recursive: true })
       fileSystem.writeFileSync(filePath, buildDesktopFileContent(execPath), { encoding: 'utf8', mode: 0o644 })
     } else {
       fileSystem.rmSync(filePath, { force: true })
