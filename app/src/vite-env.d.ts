@@ -323,6 +323,19 @@ declare global {
         /** Descarta a recomendação pendente sem mudar o modo gráfico. */
         dismissRecommendation: () => Promise<{ ok: boolean }>
       }
+      autostart?: {
+        getConfig: () => Promise<{
+          ok: boolean
+          /** `supported: false` no Linux — o Electron não tem API nativa lá. */
+          config?: { supported: boolean; enabled: boolean }
+        }>
+        setEnabled: (enabled: boolean) => Promise<{
+          ok: boolean
+          supported: boolean
+          enabled: boolean
+          message?: string
+        }>
+      }
       cli?: {
         send: (params: {
           sessionId: string

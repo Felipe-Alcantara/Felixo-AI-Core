@@ -7,6 +7,7 @@ import {
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
 } from '../../services/file-link-prompt'
 import { DEFAULT_QUALITY_STANDARD_PROMPT } from '../../services/quality-standard-prompt'
+import { AutoStartSection } from '../../../shared/autostart/AutoStartSection'
 import { GraphicsRecoverySection } from '../../../shared/graphics/GraphicsRecoverySection'
 import { SystemDesignSettingsSection } from '../../../shared/system-design/SystemDesignSettingsSection'
 import { useAppTheme } from '../../../shared/theme/theme-context'
@@ -54,6 +55,10 @@ export function SettingsPanel({
       <div className="my-3 border-t border-white/10" />
 
       <GraphicsRecoverySection />
+
+      <div className="my-3 border-t border-white/10" />
+
+      <AutoStartSection />
 
       <div className="my-3 border-t border-white/10" />
 

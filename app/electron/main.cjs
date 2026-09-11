@@ -88,6 +88,7 @@ const {
   evaluateGpuAfterReady,
   readGraphicsRecommendation,
 } = require('./core/graphics-recommendation.cjs')
+const { getAutoStartStatus, setAutoStartEnabled } = require('./core/autostart.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
@@ -307,6 +308,26 @@ app.whenReady().then(async () => {
       })
     }
     return { ok: true }
+  })
+
+  ipcMain.handle('autostart:get-config', () => ({
+    ok: true,
+    config: getAutoStartStatus({ getLoginItemSettings: () => app.getLoginItemSettings() }),
+  }))
+  ipcMain.handle('autostart:set-enabled', (_event, enabled) => {
+    const result = setAutoStartEnabled({
+      enabled: Boolean(enabled),
+      setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
+      // Só usado no Linux (escreve o .desktop com o caminho real do
+      // executável instalado, não o binário genérico do Electron em dev).
+      execPath: app.getPath('exe'),
+    })
+    logQaEvent({
+      level: result.ok ? 'info' : 'warn',
+      scope: 'autostart:set-enabled',
+      message: result.ok ? (result.enabled ? 'enabled' : 'disabled') : result.message,
+    })
+    return result
   })
 
   // CDP alcança o renderer, não o processo main. A ponte abaixo só nasce na

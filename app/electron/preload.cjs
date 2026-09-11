@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('felixo', {
     setMode: (mode) => ipcRenderer.invoke('graphics:set-mode', mode),
     dismissRecommendation: () => ipcRenderer.invoke('graphics:dismiss-recommendation'),
   },
+  autostart: {
+    getConfig: () => ipcRenderer.invoke('autostart:get-config'),
+    setEnabled: (enabled) => ipcRenderer.invoke('autostart:set-enabled', enabled),
+  },
   // Esta ponte só existe na instância isolada iniciada por `felixo devtools`.
   // Não é carregada pelo app normal nem pela instância com perfil real.
   ...(process.env.FELIXO_DEVTOOLS_PORT
