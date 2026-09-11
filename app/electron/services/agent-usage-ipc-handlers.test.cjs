@@ -28,6 +28,10 @@ test('agent usage IPC validates input and forwards only normalized parameters', 
       calls.push(['remove', id])
       return { ok: true, removed: true }
     },
+    consumeResetCredit: async (params) => {
+      calls.push(['consume', params])
+      return { ok: true, consumed: true }
+    },
   }
   registerAgentUsageIpcHandlers({ service })
 
@@ -49,4 +53,20 @@ test('agent usage IPC validates input and forwards only normalized parameters', 
   const removed = await handlers.get('agent-usage:remove-account')({}, ' account-1 ')
   assert.equal(removed.ok, true)
   assert.deepEqual(calls[1], ['remove', 'account-1'])
+
+  const consumed = await handlers.get('agent-usage:consume-reset-credit')({}, {
+    accountId: ' account-1 ',
+    creditId: ' credit-1 ',
+  })
+  assert.equal(consumed.ok, true)
+  assert.deepEqual(calls[2], [
+    'consume',
+    { accountId: 'account-1', creditId: 'credit-1' },
+  ])
+
+  const invalidConsume = await handlers.get('agent-usage:consume-reset-credit')({}, {
+    accountId: 'account-1',
+  })
+  assert.equal(invalidConsume.ok, false)
+  assert.equal(calls.length, 3)
 })

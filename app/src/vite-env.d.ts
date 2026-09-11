@@ -757,6 +757,10 @@ declare global {
           identityHint?: string
         }) => Promise<AgentUsageMutationResult>
         removeAccount: (accountId: string) => Promise<AgentUsageMutationResult>
+        consumeResetCredit: (params: {
+          accountId: string
+          creditId: string
+        }) => Promise<AgentUsageMutationResult>
         claudeStatuslineStatus: () => Promise<ClaudeStatuslineState>
         enableClaudeStatusline: () => Promise<ClaudeStatuslineState>
         disableClaudeStatusline: () => Promise<ClaudeStatuslineState>

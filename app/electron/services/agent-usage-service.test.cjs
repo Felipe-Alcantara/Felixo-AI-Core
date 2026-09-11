@@ -836,6 +836,168 @@ test(
   },
 )
 
+test(
+  'consulta os resets bancados só para a fonte declarada e os preserva nos detalhes seguros',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-reset-credits-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const resetCalls = []
+
+    repository.createAccount({
+      id: 'codex-reset-account',
+      providerId: 'codex',
+      label: 'Codex com reset',
+    })
+
+    const service = createAgentUsageService({
+      repository,
+      now: () => Date.parse('2026-09-11T12:00:00.000Z'),
+      probe: () => null,
+      listCatalog: async () => [
+        {
+          id: 'codex',
+          name: 'Codex CLI',
+          provider: 'OpenAI',
+          command: 'codex',
+          detected: true,
+          version: '0.154.0',
+        },
+      ],
+      runCommand: async () => ({
+        ok: true,
+        stdout: 'Logged in using ChatGPT',
+        stderr: '',
+      }),
+      queryResetCredits: async (options) => {
+        resetCalls.push(options)
+        return {
+          ok: true,
+          availableCount: 2,
+          credits: [
+            {
+              id: 'credit-1',
+              title: 'Full reset (Weekly + 5 hr)',
+              description: 'Crédito de teste',
+              status: 'available',
+              grantedAt: '2026-09-11T10:00:00.000Z',
+              expiresAt: '2026-10-11T10:00:00.000Z',
+            },
+          ],
+        }
+      },
+    })
+
+    try {
+      const result = await service.refresh()
+      const sample = result.accounts[0].latestSample
+
+      assert.equal(resetCalls.length, 1)
+      assert.equal(resetCalls[0].timeoutMs, 30_000)
+      assert.equal(sample.metadata.statusDetails.usageCredits.availableCount, 2)
+      assert.equal(
+        sample.metadata.statusDetails.usageCredits.credits[0].title,
+        'Full reset (Weekly + 5 hr)',
+      )
+      assert.equal(sample.status, 'unavailable')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'usa o reset da conta correta e relê a quantidade depois do consumo',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-consume-reset-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const resetReads = []
+    const consumeCalls = []
+
+    repository.createAccount({
+      id: 'codex-consume-account',
+      providerId: 'codex',
+      label: 'Codex principal',
+    })
+
+    const service = createAgentUsageService({
+      repository,
+      now: () => Date.parse('2026-09-11T12:00:00.000Z'),
+      probe: () => null,
+      listCatalog: async () => [
+        {
+          id: 'codex',
+          name: 'Codex CLI',
+          provider: 'OpenAI',
+          command: 'codex',
+          detected: true,
+          version: '0.154.0',
+        },
+      ],
+      runCommand: async () => ({
+        ok: true,
+        stdout: 'Logged in using ChatGPT',
+        stderr: '',
+      }),
+      queryResetCredits: async () => {
+        resetReads.push(true)
+        return resetReads.length === 1
+          ? {
+              ok: true,
+              availableCount: 1,
+              credits: [
+                {
+                  id: 'credit-for-principal',
+                  status: 'available',
+                  title: 'Full reset',
+                  grantedAt: '2026-09-11T10:00:00.000Z',
+                  expiresAt: '2026-10-11T10:00:00.000Z',
+                },
+              ],
+            }
+          : { ok: true, availableCount: 0, credits: [] }
+      },
+      consumeResetCreditQuery: async (options) => {
+        consumeCalls.push(options)
+        return {
+          ok: true,
+          consumed: true,
+          outcome: 'reset',
+          message: 'Reset aplicado com sucesso.',
+        }
+      },
+    })
+
+    try {
+      await service.refresh()
+      const result = await service.consumeResetCredit({
+        accountId: 'codex-consume-account',
+        creditId: 'credit-for-principal',
+      })
+
+      assert.equal(result.ok, true)
+      assert.equal(result.consumed, true)
+      assert.equal(consumeCalls.length, 1)
+      assert.deepEqual(consumeCalls[0], {
+        env: {},
+        creditId: 'credit-for-principal',
+        timeoutMs: 30_000,
+      })
+      assert.equal(
+        result.dashboard.accounts[0].latestSample.metadata.statusDetails.usageCredits.availableCount,
+        0,
+      )
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 function countAccountsByProvider(accounts) {
   return accounts.reduce((total, account) => {
     total[account.providerId] = (total[account.providerId] ?? 0) + 1

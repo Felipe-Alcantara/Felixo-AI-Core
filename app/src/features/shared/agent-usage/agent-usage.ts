@@ -20,6 +20,21 @@ export type AgentUsageStatusDetails = {
   [key: string]: AgentUsageStatusDetailValue
 }
 
+export type AgentUsageResetCredit = {
+  id: string | null
+  resetType: string | null
+  title: string | null
+  description: string | null
+  status: string
+  grantedAt: string | null
+  expiresAt: string | null
+}
+
+export type AgentUsageResetCredits = {
+  availableCount: number
+  credits: AgentUsageResetCredit[]
+}
+
 export type AgentUsageMetadata = {
   [key: string]: string | number | boolean | AgentUsageStatusDetails
 }
@@ -282,6 +297,67 @@ export function getAgentUsageStatusDetails(
   return details && typeof details === 'object' && !Array.isArray(details)
     ? details
     : null
+}
+
+/**
+ * Extrai o resumo de resets bancados sem expor ao componente a árvore
+ * genérica de detalhes. A lista pode ser menor que `availableCount`: a CLI
+ * documenta que o backend pode limitar a quantidade de linhas retornadas.
+ */
+export function getAgentUsageResetCredits(
+  sample: AgentUsageSample | null,
+): AgentUsageResetCredits | null {
+  const details = getAgentUsageStatusDetails(sample)
+  const usageCredits = details?.usageCredits
+
+  if (!isStatusDetailRecord(usageCredits)) {
+    return null
+  }
+
+  const availableCount =
+    typeof usageCredits.availableCount === 'number' &&
+    Number.isFinite(usageCredits.availableCount)
+      ? Math.max(0, Math.floor(usageCredits.availableCount))
+      : 0
+  const credits = Array.isArray(usageCredits.credits)
+    ? usageCredits.credits
+        .filter(isStatusDetailRecord)
+        .map((credit) => ({
+          id: optionalDetailString(credit.id),
+          resetType: optionalDetailString(credit.resetType),
+          title: optionalDetailString(credit.title),
+          description: optionalDetailString(credit.description),
+          status:
+            optionalDetailString(credit.status) ?? 'unknown',
+          grantedAt: optionalDetailString(credit.grantedAt),
+          expiresAt: optionalDetailString(credit.expiresAt),
+        }))
+    : []
+
+  return { availableCount, credits }
+}
+
+export function formatAgentUsageResetCreditStatus(status: string): string {
+  return {
+    available: 'Disponível',
+    redeeming: 'Em processamento',
+    redeemed: 'Já usado',
+    unknown: 'Status não informado',
+  }[status] ?? status
+}
+
+export function formatAgentUsageResetCreditType(resetType: string | null): string {
+  return resetType === 'codexRateLimits' ? 'Limites do Codex' : resetType ?? 'Tipo não informado'
+}
+
+function isStatusDetailRecord(
+  value: AgentUsageStatusDetailValue | undefined,
+): value is { [key: string]: AgentUsageStatusDetailValue } {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function optionalDetailString(value: AgentUsageStatusDetailValue | undefined): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
 }
 
 export function summarizeAgentUsage(

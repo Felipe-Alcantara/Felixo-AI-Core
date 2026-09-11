@@ -4,10 +4,13 @@ import {
   formatAgentUsageMetric,
   formatAgentUsageNumber,
   formatAgentUsageReset,
+  formatAgentUsageResetCreditStatus,
+  formatAgentUsageResetCreditType,
   formatAgentUsageSource,
   getAccountStatus,
   getAgentUsageMeasuredAt,
   getAgentUsagePlan,
+  getAgentUsageResetCredits,
   groupAgentUsageAccounts,
   summarizeAgentUsage,
 } from './agent-usage'
@@ -193,6 +196,46 @@ describe('metadados da amostra', () => {
     expect(getAgentUsagePlan(withPlan)).toBe('plus')
     expect(getAgentUsagePlan(sample('current', []))).toBeNull()
     expect(getAgentUsagePlan(null)).toBeNull()
+  })
+
+  it('separa a contagem de resets dos detalhes individuais por conta', () => {
+    const withCredits = sample('unavailable')
+    withCredits.metadata = {
+      statusDetails: {
+        usageCredits: {
+          availableCount: 3,
+          credits: [
+            {
+              id: 'credit-1',
+              resetType: 'codexRateLimits',
+              title: 'Full reset',
+              description: 'Crédito de teste',
+              status: 'available',
+              grantedAt: '2026-09-11T10:00:00.000Z',
+              expiresAt: '2026-10-11T10:00:00.000Z',
+            },
+          ],
+        },
+      },
+    }
+
+    expect(getAgentUsageResetCredits(withCredits)).toEqual({
+      availableCount: 3,
+      credits: [
+        {
+          id: 'credit-1',
+          resetType: 'codexRateLimits',
+          title: 'Full reset',
+          description: 'Crédito de teste',
+          status: 'available',
+          grantedAt: '2026-09-11T10:00:00.000Z',
+          expiresAt: '2026-10-11T10:00:00.000Z',
+        },
+      ],
+    })
+    expect(formatAgentUsageResetCreditStatus('available')).toBe('Disponível')
+    expect(formatAgentUsageResetCreditType('codexRateLimits')).toBe('Limites do Codex')
+    expect(getAgentUsageResetCredits(sample('current'))).toBeNull()
   })
 })
 

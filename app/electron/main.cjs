@@ -69,6 +69,10 @@ const {
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
+  consumeCodexRateLimitReset,
+  queryCodexRateLimits,
+} = require('./services/codex-account-rate-limits.cjs')
+const {
   registerAgentUsageIpcHandlers,
 } = require('./services/agent-usage-ipc-handlers.cjs')
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
@@ -233,6 +237,8 @@ app.whenReady().then(async () => {
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,
     queryLiveUsage: queryClaudeUsage,
+    queryResetCredits: queryCodexRateLimits,
+    consumeResetCreditQuery: consumeCodexRateLimitReset,
     // Task Limites (mais reportado no Mac): "às vezes falha, sem motivo
     // aparente" não tinha nenhum log — sem isso, a próxima falha real
     // continua sem evidência pra fechar a causa raiz.

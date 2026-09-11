@@ -13,9 +13,11 @@ import {
   summarizeAgentUsage,
 } from '../../shared/agent-usage/agent-usage'
 import { AgentUsageStatusDetailsView } from '../../shared/agent-usage/AgentUsageStatusDetails'
+import { AgentUsageResetCreditsView } from '../../shared/agent-usage/AgentUsageResetCredits'
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
+  AgentUsageMutationResult,
   AgentUsageProviderGroup,
 } from '../../shared/agent-usage/agent-usage'
 
@@ -164,6 +166,39 @@ export function AgentUsageLimitsModal({
     }
   }
 
+  async function handleUseResetCredit(
+    account: AgentUsageAccount,
+    creditId: string,
+  ): Promise<AgentUsageMutationResult> {
+    const api = window.felixo?.agentUsage
+    if (!api) {
+      return { ok: false, message: 'Este painel só está disponível no app desktop.' }
+    }
+
+    setLoading(true)
+    setStatusMessage(null)
+    try {
+      const result = await api.consumeResetCredit({
+        accountId: account.id,
+        creditId,
+      })
+      if (!result.ok) {
+        setStatusMessage(result.message ?? 'Não foi possível usar o reset desta conta.')
+      }
+      setDashboard(result.dashboard ?? result)
+      return result
+    } catch {
+      const result = {
+        ok: false,
+        message: 'Não foi possível comunicar com o processo principal.',
+      }
+      setStatusMessage(result.message)
+      return result
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-5 backdrop-blur-sm"
@@ -254,6 +289,7 @@ export function AgentUsageLimitsModal({
                   key={group.id}
                   group={group}
                   onRemoveAccount={handleRemoveAccount}
+                  onUseResetCredit={handleUseResetCredit}
                 />
               ))}
               {groups.length === 0 && (
@@ -337,9 +373,14 @@ export function AgentUsageLimitsModal({
 function ProviderSection({
   group,
   onRemoveAccount,
+  onUseResetCredit,
 }: {
   group: AgentUsageProviderGroup
   onRemoveAccount: (account: AgentUsageAccount) => void
+  onUseResetCredit: (
+    account: AgentUsageAccount,
+    creditId: string,
+  ) => Promise<AgentUsageMutationResult>
 }) {
   return (
     <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
@@ -382,6 +423,7 @@ function ProviderSection({
               key={account.id}
               account={account}
               onRemove={() => onRemoveAccount(account)}
+              onUseResetCredit={(creditId) => onUseResetCredit(account, creditId)}
             />
           ))
         )}
@@ -393,15 +435,18 @@ function ProviderSection({
 function AccountCard({
   account,
   onRemove,
+  onUseResetCredit,
 }: {
   account: AgentUsageAccount
   onRemove: () => void
+  onUseResetCredit: (creditId: string) => Promise<AgentUsageMutationResult>
 }) {
   const status = getAccountStatus(account)
   const latest = account.latestSample
   const lastKnown = getLastKnownAgentUsage(account)
   const metricsSample = latest?.metrics.length ? latest : lastKnown
   const isLastKnown = Boolean(metricsSample && metricsSample.id !== latest?.id)
+  const detailsSample = latest?.metadata.statusDetails ? latest : metricsSample
 
   return (
     <article className="rounded-xl border border-white/[0.07] bg-[#1a1a19]/70 p-3">
@@ -462,8 +507,21 @@ function AccountCard({
         )}
       </div>
 
+      <AgentUsageResetCreditsView
+        sample={detailsSample}
+        showUnavailable={account.providerId === 'codex'}
+        canUse={
+          account.providerId === 'codex' &&
+          detailsSample?.id === latest?.id &&
+          latest?.status !== 'stale' &&
+          latest?.status !== 'error'
+        }
+        onUse={onUseResetCredit}
+      />
+
       <AgentUsageStatusDetailsView
-        sample={latest?.metadata.statusDetails ? latest : metricsSample}
+        sample={detailsSample}
+        excludeKeys={['usageCredits']}
       />
 
       {latest?.sourceUrl && (

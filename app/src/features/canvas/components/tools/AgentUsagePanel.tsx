@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, Gauge, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { AgentUsageResetCreditsView } from '../../../shared/agent-usage/AgentUsageResetCredits'
 import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
 import {
   AGENT_USAGE_STATUS_CLASSES,
@@ -18,6 +19,7 @@ import {
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
+  AgentUsageMutationResult,
   AgentUsageMetric,
   AgentUsageProviderGroup,
   AgentUsageSample,
@@ -213,6 +215,47 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
     [],
   )
 
+  const useResetCredit = useCallback(
+    async (
+      account: AgentUsageAccount,
+      creditId: string,
+    ): Promise<AgentUsageMutationResult> => {
+      const api = window.felixo?.agentUsage
+      if (!api) {
+        return { ok: false, message: 'Este painel só funciona no app desktop.' }
+      }
+
+      try {
+        const result = await api.consumeResetCredit({
+          accountId: account.id,
+          creditId,
+        })
+        if (!result.ok) {
+          setStatusMessage(result.message ?? 'Não foi possível usar o reset desta conta.')
+          if (result.dashboard) {
+            setDashboard(result.dashboard)
+          }
+          return result
+        }
+
+        setStatusMessage(result.message ?? 'Reset aplicado com sucesso.')
+        if (result.dashboard) {
+          setDashboard(result.dashboard)
+        }
+        setLiveAt(new Date())
+        return result
+      } catch {
+        const result = {
+          ok: false,
+          message: 'Não foi possível comunicar com o processo principal.',
+        }
+        setStatusMessage(result.message)
+        return result
+      }
+    },
+    [],
+  )
+
   const hasContent = groups.length > 0
 
   return (
@@ -279,6 +322,7 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
             key={group.id}
             group={group}
             onRemoveAccount={removeAccount}
+            onUseResetCredit={useResetCredit}
             statusline={group.id === 'claude' ? statusline : null}
             onToggleStatusline={toggleStatusline}
           />
@@ -303,11 +347,16 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
 function ProviderCard({
   group,
   onRemoveAccount,
+  onUseResetCredit,
   statusline,
   onToggleStatusline,
 }: {
   group: AgentUsageProviderGroup
   onRemoveAccount: (account: AgentUsageAccount) => Promise<void>
+  onUseResetCredit: (
+    account: AgentUsageAccount,
+    creditId: string,
+  ) => Promise<AgentUsageMutationResult>
   /** Só o Claude tem coleta por status line; nos demais vem nulo. */
   statusline: ClaudeStatuslineState | null
   onToggleStatusline: (enable: boolean) => Promise<void>
@@ -353,6 +402,7 @@ function ProviderCard({
               limitation={group.usageSource.limitation}
               sourceLabel={group.usageSource.label}
               onRemove={() => void onRemoveAccount(account)}
+              onUseResetCredit={(creditId) => onUseResetCredit(account, creditId)}
             />
           ))}
         </div>
@@ -434,11 +484,13 @@ function AccountRow({
   limitation,
   sourceLabel,
   onRemove,
+  onUseResetCredit,
 }: {
   account: AgentUsageAccount
   limitation: string
   sourceLabel: string
   onRemove: () => void
+  onUseResetCredit: (creditId: string) => Promise<AgentUsageMutationResult>
 }) {
   const status = getAccountStatus(account)
   // Com a fonte fora do ar o painel não apaga o que já sabia: mostra o último
@@ -501,7 +553,22 @@ function AccountRow({
         {sample && ` · lido ${formatAgentUsageDate(sample.collectedAt)}`}
       </p>
 
-      <AgentUsageStatusDetailsView sample={detailsSample} />
+      <AgentUsageResetCreditsView
+        sample={detailsSample}
+        showUnavailable={account.providerId === 'codex'}
+        canUse={
+          account.providerId === 'codex' &&
+          detailsSample?.id === account.latestSample?.id &&
+          account.latestSample?.status !== 'stale' &&
+          account.latestSample?.status !== 'error'
+        }
+        onUse={onUseResetCredit}
+      />
+
+      <AgentUsageStatusDetailsView
+        sample={detailsSample}
+        excludeKeys={['usageCredits']}
+      />
     </div>
   )
 }

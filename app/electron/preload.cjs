@@ -245,6 +245,8 @@ contextBridge.exposeInMainWorld('felixo', {
     addAccount: (params) => ipcRenderer.invoke('agent-usage:add-account', params),
     removeAccount: (accountId) =>
       ipcRenderer.invoke('agent-usage:remove-account', accountId),
+    consumeResetCredit: (params) =>
+      ipcRenderer.invoke('agent-usage:consume-reset-credit', params),
     claudeStatuslineStatus: () =>
       ipcRenderer.invoke('agent-usage:claude-statusline-status'),
     enableClaudeStatusline: () =>

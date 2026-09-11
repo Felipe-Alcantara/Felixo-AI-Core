@@ -36,6 +36,14 @@ const DETAIL_LABELS: Record<string, string> = {
   attribution: 'Atribuição',
   activity: 'Fatores das últimas 24 h',
   usageCredits: 'Créditos de uso',
+  availableCount: 'Resets disponíveis',
+  credits: 'Resets bancados',
+  title: 'Título',
+  description: 'Descrição',
+  resetType: 'Tipo de reset',
+  grantedAt: 'Concedido em',
+  expiresAt: 'Expira em',
+  id: 'Identificador',
 }
 
 /**
@@ -45,11 +53,20 @@ const DETAIL_LABELS: Record<string, string> = {
  */
 export function AgentUsageStatusDetailsView({
   sample,
+  excludeKeys = [],
 }: {
   sample: AgentUsageSample | null
+  excludeKeys?: string[]
 }) {
   const details = getAgentUsageStatusDetails(sample)
   if (!details) {
+    return null
+  }
+
+  const visibleDetails = Object.fromEntries(
+    Object.entries(details).filter(([key]) => !excludeKeys.includes(key)),
+  )
+  if (Object.keys(visibleDetails).length === 0) {
     return null
   }
 
@@ -59,7 +76,7 @@ export function AgentUsageStatusDetailsView({
         Dados completos do /status
       </summary>
       <div className="mt-2 border-t border-white/[0.06] pt-2">
-        <DetailValue value={details} />
+        <DetailValue value={visibleDetails} />
       </div>
     </details>
   )

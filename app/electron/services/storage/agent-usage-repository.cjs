@@ -180,7 +180,7 @@ function createAgentUsageRepository(database) {
           `SELECT *
            FROM agent_usage_samples
            WHERE account_id = ?
-           ORDER BY collected_at DESC, id DESC
+           ORDER BY collected_at DESC, rowid DESC
            LIMIT ?`,
         )
         .all(requireString(accountId, 'ID da conta de agente invalido.'), limit)
@@ -194,7 +194,7 @@ function createAgentUsageRepository(database) {
           `SELECT *
            FROM agent_usage_samples
            WHERE account_id = ?
-           ORDER BY collected_at DESC, id DESC
+           ORDER BY collected_at DESC, rowid DESC
            LIMIT 1`,
         )
         .get(requireString(accountId, 'ID da conta de agente invalido.'))
@@ -210,7 +210,7 @@ function createAgentUsageRepository(database) {
            WHERE account_id = ?
              AND status IN ('current', 'stale')
              AND metrics_json != '[]'
-           ORDER BY collected_at DESC, id DESC
+           ORDER BY collected_at DESC, rowid DESC
            LIMIT 1`,
         )
         .get(requireString(accountId, 'ID da conta de agente invalido.'))

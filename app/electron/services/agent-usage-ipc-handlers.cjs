@@ -93,6 +93,20 @@ function registerAgentUsageIpcHandlers({
     }
   })
 
+  ipcMain.handle('agent-usage:consume-reset-credit', async (_event, params = {}) => {
+    try {
+      return await service.consumeResetCredit({
+        accountId: requireString(
+          params?.accountId,
+          'ID da conta de agente inválido.',
+        ),
+        creditId: requireString(params?.creditId, 'ID do reset inválido.'),
+      })
+    } catch (error) {
+      return toErrorResult(error, 'Não foi possível usar o reset da conta.')
+    }
+  })
+
   // Mantém o fallback local atualizado assim que o arquivo muda, em vez de
   // esperar a interface perguntar. A atualização ao vivo principal continua
   // no refresh explícito do painel, que consulta o `/status` por conta/perfil.

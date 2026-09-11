@@ -24,6 +24,12 @@ const AGENT_USAGE_SOURCES = Object.freeze([
     // sessão. Quem tem o número é o rollout que a própria CLI grava em
     // ~/.codex/sessions — daí o probe local.
     localProbe: 'codex-rollout',
+    // Resets bancados ("banked resets"): crédito único que zera a janela
+    // antes do tempo, concedido pela OpenAI. Não existe em nenhum arquivo
+    // local — só o app-server da própria CLI, já autenticado, sabe. Ver
+    // codex-account-rate-limits.cjs para o porquê. A leitura é somente
+    // leitura; o consumo é um fluxo separado e protegido por confirmação.
+    resetCreditsQuery: 'codex-app-server',
     usage: {
       kind: 'local-execution',
       label: 'Codex rollout da sessão (rate_limits)',

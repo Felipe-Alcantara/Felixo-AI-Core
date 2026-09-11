@@ -58,6 +58,14 @@ function createAgentUsageService({
   // Consulta interativa opcional. O processo principal injeta a implementação
   // real; os testes e fontes sem uma tela de uso continuam sem abrir PTY.
   queryLiveUsage = null,
+  // Consulta opcional aos resets bancados do Codex (ver
+  // codex-account-rate-limits.cjs) — só chamada pra fontes que declaram
+  // `resetCreditsQuery`. Estritamente leitura; nunca consome um reset.
+  queryResetCredits = null,
+  // Ação explícita do botão "Usar reset". Só é chamada depois da confirmação
+  // no renderer e depois de conferir, no processo principal, que o crédito
+  // pertence à última leitura disponível desta conta.
+  consumeResetCreditQuery = null,
   // Observador opcional de falha da consulta ao vivo. Existe porque o sintoma
   // "às vezes falha, mais no Mac" (task Limites) não tinha nenhum rastro
   // gravado — sem isso, a próxima falha real também vira "sem motivo
@@ -126,6 +134,7 @@ function createAgentUsageService({
           probe,
           queryLiveUsage,
           onLiveQueryFailure,
+          queryResetCredits,
         }),
       ),
       // A conta com login próprio não precisa de adivinhação de identidade: a
@@ -141,6 +150,7 @@ function createAgentUsageService({
           targetAccountId: perfil.id,
           queryLiveUsage,
           onLiveQueryFailure,
+          queryResetCredits,
         }),
       ),
     ])
@@ -248,6 +258,74 @@ function createAgentUsageService({
   }
 
   /**
+   * Resgata um crédito de reset para uma conta específica.
+   *
+   * O renderer nunca recebe o ambiente do perfil. Para contas isoladas, o
+   * mesmo perfil que produziu a leitura é usado no consumo; para a conta do
+   * sistema, o ambiente fica vazio e a CLI usa o login padrão.
+   */
+  async function consumeResetCredit({ accountId, creditId } = {}) {
+    const normalizedAccountId = requireString(
+      accountId,
+      'ID da conta de agente inválido.',
+    )
+    const normalizedCreditId = requireOpaqueId(
+      creditId,
+      'ID do reset inválido.',
+    )
+    const account = repository.getAccount(normalizedAccountId)
+
+    if (!account) {
+      throw new Error('Conta de agente não encontrada.')
+    }
+
+    const source = getAgentUsageSource(account.providerId)
+    if (!source?.resetCreditsQuery || typeof consumeResetCreditQuery !== 'function') {
+      throw new Error('Este provider não permite usar resets pelo painel.')
+    }
+
+    const latest = repository.getLatestSample(account.id)
+    const credits = latest?.metadata?.statusDetails?.usageCredits?.credits
+    const credit = Array.isArray(credits)
+      ? credits.find((item) => item?.id === normalizedCreditId)
+      : null
+
+    if (!credit || credit.status !== 'available') {
+      throw new Error(
+        'Este reset não está mais disponível. Atualize os limites antes de tentar novamente.',
+      )
+    }
+
+    const profile = listProfiles().find((item) => item.id === account.id)
+    let result
+    try {
+      result = await consumeResetCreditQuery({
+        env: profile?.profileEnv ?? {},
+        creditId: normalizedCreditId,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+      })
+    } catch {
+      result = { ok: false, message: 'Não foi possível usar o reset do Codex.' }
+    }
+
+    // Uma resposta negativa também merece releitura: outro terminal pode ter
+    // resgatado o crédito entre a renderização e o clique.
+    const dashboard = await refresh()
+
+    return {
+      ok: result?.ok === true,
+      consumed: result?.consumed === true,
+      outcome: result?.outcome ?? null,
+      message:
+        result?.message ??
+        (result?.ok === true
+          ? 'Reset aplicado com sucesso.'
+          : 'Não foi possível usar o reset.'),
+      dashboard,
+    }
+  }
+
+  /**
    * Releitura barata, só do arquivo que a CLI escreve, usada pelos fallbacks
    * locais (e pelo watcher). O Claude usa o `/status` ao vivo na rodada
    * explícita; esta função não substitui aquela consulta.
@@ -329,6 +407,7 @@ function createAgentUsageService({
     refresh,
     refreshLocal,
     removeAccount,
+    consumeResetCredit,
   }
 }
 
@@ -399,6 +478,7 @@ async function collectProviderSnapshot({
   targetAccountId,
   queryLiveUsage,
   onLiveQueryFailure,
+  queryResetCredits,
 }) {
   const source = getAgentUsageSource(providerId)
   const collectedAt = nowIso(now)
@@ -481,6 +561,27 @@ async function collectProviderSnapshot({
     }
   }
 
+  // O Codex também conhece créditos de reset bancados no app-server. A
+  // consulta é opcional e declarada pela fonte, como a consulta live do
+  // Claude; uma falha aqui não invalida a quota que veio do rollout.
+  const resetCreditsQueryEnabled =
+    Boolean(source.resetCreditsQuery) && typeof queryResetCredits === 'function'
+  let resetCreditsResult = null
+  if (
+    resetCreditsQueryEnabled &&
+    result?.ok === true &&
+    auth.authStatus !== 'logged_out'
+  ) {
+    try {
+      resetCreditsResult = await queryResetCredits({
+        env: profileEnv,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+      })
+    } catch {
+      resetCreditsResult = { ok: false }
+    }
+  }
+
   // Algumas CLIs devolvem quota na própria saída de auth; quando não devolvem,
   // vale o comando de uso declarado pela fonte, e só então a leitura local.
   // A exceção é a consulta live: ela tem precedência e não aceita fallback
@@ -541,8 +642,29 @@ async function collectProviderSnapshot({
     metrics,
     queryFailed: result?.ok !== true || liveQueryFailed,
     queryErrorMessage: liveQueryFailed ? liveResult?.message ?? null : null,
-    statusDetails: liveResult?.ok === true ? liveResult.details ?? null : null,
+    statusDetails: mergeStatusDetails({
+      liveDetails: liveResult?.ok === true ? liveResult.details ?? null : null,
+      resetCreditsResult,
+    }),
   }
+}
+
+function mergeStatusDetails({ liveDetails, resetCreditsResult }) {
+  const details =
+    liveDetails && typeof liveDetails === 'object' && !Array.isArray(liveDetails)
+      ? { ...liveDetails }
+      : {}
+
+  if (resetCreditsResult?.ok === true) {
+    details.usageCredits = {
+      availableCount: resetCreditsResult.availableCount,
+      credits: Array.isArray(resetCreditsResult.credits)
+        ? resetCreditsResult.credits
+        : [],
+    }
+  }
+
+  return Object.keys(details).length > 0 ? details : null
 }
 
 /**
@@ -1032,6 +1154,14 @@ function requireString(value, message) {
     throw new Error(message)
   }
   return value.trim()
+}
+
+function requireOpaqueId(value, message) {
+  const normalized = requireString(value, message)
+  if (normalized.length > 256 || /[\u0000-\u001f\u007f]/.test(normalized)) {
+    throw new Error(message)
+  }
+  return normalized
 }
 
 function normalizeInput(value, maxLength, { optional = false } = {}) {

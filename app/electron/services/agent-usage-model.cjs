@@ -229,6 +229,17 @@ const STATUS_DETAIL_KEYS = new Set([
   'attribution',
   'activity',
   'usageCredits',
+  // Campos da resposta somente leitura `account/rateLimits/read` do Codex.
+  // Ficam na mesma árvore segura do `/status` para o renderer não receber a
+  // resposta JSON crua do app-server.
+  'availableCount',
+  'credits',
+  'id',
+  'resetType',
+  'title',
+  'description',
+  'grantedAt',
+  'expiresAt',
 ])
 
 /**

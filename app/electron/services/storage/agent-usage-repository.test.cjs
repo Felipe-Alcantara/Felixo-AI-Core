@@ -67,6 +67,28 @@ test(
       assert.equal(repository.getLatestSample(account.id).metrics[0].used, 0)
       assert.equal(repository.getLatestSample(account.id).errorMessage, 'Falha sem detalhes seguros.')
 
+      repository.saveSample({
+        id: 'sample-alice-newer',
+        accountId: account.id,
+        status: 'unavailable',
+        sourceKind: 'cli-command',
+        sourceLabel: 'codex login status',
+        sourceCommand: 'codex login status',
+        sourceUrl: 'https://developers.openai.com/codex/cli',
+        collectedAt: '2026-08-28T12:01:00.000Z',
+        metrics: [],
+        observedIdentityKey: identity.identityKey,
+        observedIdentityDisplay: identity.identityDisplay,
+        errorMessage: 'A leitura mais recente não trouxe métrica.',
+        metadata: { authStatus: 'logged_in', identityMatched: true },
+      })
+
+      assert.equal(
+        repository.getLatestSample(account.id).id,
+        'sample-alice-newer',
+        'coleta com mesmo timestamp deve desempatar pela ordem de inserção',
+      )
+
       const rawRows = {
         accounts: database.connection
           .prepare('SELECT * FROM agent_usage_accounts')
