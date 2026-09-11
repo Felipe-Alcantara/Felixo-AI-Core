@@ -99,6 +99,24 @@ test(
           stderr: '',
         }
       },
+      // A sessão do sistema só autentica como alice; a rodada compartilha
+      // este mesmo snapshot entre alice E bob (nenhum dos dois tem
+      // `targetAccountId`). Os resets bancados são dela — não podem
+      // aparecer sob a conta do bob só porque as duas dividem a rodada.
+      queryResetCredits: async () => ({
+        ok: true,
+        availableCount: 1,
+        credits: [
+          {
+            id: 'credit-alice',
+            title: 'Full reset (Weekly + 5 hr)',
+            description: 'Reset da alice',
+            status: 'available',
+            grantedAt: '2026-08-20T00:00:00.000Z',
+            expiresAt: '2026-09-20T00:00:00.000Z',
+          },
+        ],
+      }),
     })
 
     try {
@@ -123,6 +141,22 @@ test(
       assert.match(accounts.get('codex-bob').latestSample.errorMessage, /outra conta/)
       assert.equal(accounts.get('claude-account').latestSample.status, 'current')
       assert.equal(accounts.get('claude-account').latestSample.metrics[0].used, 25)
+
+      // Bug real encontrado em produção em 11/09/2026: a mesma rodada de
+      // login do sistema é compartilhada entre alice e bob quando nenhum dos
+      // dois tem `targetAccountId`. Os resets bancados (statusDetails) são
+      // de alice — bob nunca pode herdá-los, mesmo estando com status 'error'
+      // por identidade errada. Herdar isso mostraria o crédito (e o botão de
+      // usá-lo) de uma conta na tela da outra.
+      assert.equal(
+        accounts.get('codex-alice').latestSample.metadata.statusDetails?.usageCredits
+          ?.availableCount,
+        1,
+      )
+      assert.equal(
+        accounts.get('codex-bob').latestSample.metadata.statusDetails,
+        undefined,
+      )
 
       nowValue.value += 16 * 60 * 1000
       const stale = await service.list()

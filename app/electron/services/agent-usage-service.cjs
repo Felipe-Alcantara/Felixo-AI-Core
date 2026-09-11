@@ -867,6 +867,7 @@ function saveProviderSamples({
         errorMessage: sampleHasMetrics(snapshot)
           ? null
           : 'Esta conta ainda não tem número: abra um terminal nela para a CLI registrar o uso.',
+        metadata: withStatusDetails(base.metadata, snapshot),
       })
       continue
     }
@@ -938,6 +939,7 @@ function saveProviderSamples({
         status: 'current',
         metrics: snapshot.metrics,
         errorMessage: null,
+        metadata: withStatusDetails(base.metadata, snapshot),
       })
       continue
     }
@@ -946,8 +948,21 @@ function saveProviderSamples({
       ...base,
       status: previous ? 'stale' : 'unavailable',
       errorMessage: snapshot.source.usage.limitation,
+      // Chegou até aqui só quem já passou pela checagem de `attributable`
+      // acima — sem métrica ao vivo, mas os resets bancados (por exemplo)
+      // continuam sendo desta conta de verdade.
+      metadata: withStatusDetails(base.metadata, snapshot),
     })
   }
+}
+
+/** Só quem já recebeu `metrics: snapshot.metrics` (identidade resolvida pra
+ * esta conta) pode ganhar `statusDetails` de volta — ver o comentário em
+ * `createSampleBase`. */
+function withStatusDetails(metadata, snapshot) {
+  return snapshot.statusDetails
+    ? { ...metadata, statusDetails: snapshot.statusDetails }
+    : metadata
 }
 
 function createSampleBase({
@@ -977,7 +992,14 @@ function createSampleBase({
       limitation: snapshot.source.usage.limitation,
       measuredAt: snapshot.measuredAt ?? undefined,
       providerVersion: providerVersion ?? undefined,
-      statusDetails: snapshot.statusDetails ?? undefined,
+      // `statusDetails` (inclui os resets bancados do Codex) NÃO entra aqui.
+      // Uma rodada sem `targetAccountId` (login do sistema) compartilha o
+      // mesmo snapshot entre TODAS as contas do provider em `destino` — se
+      // ele viesse por padrão, uma conta com identidade não resolvida
+      // (`error`/mismatch) mostraria dados/sessão de OUTRA conta, com botão
+      // de consumir reset incluso. Cada branch de `saveProviderSamples` que
+      // já atribui `metrics: snapshot.metrics` a esta conta específica
+      // adiciona `statusDetails` de volta explicitamente — nunca aqui.
     },
   }
 }
