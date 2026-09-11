@@ -4542,3 +4542,14 @@ AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core.
 - Nenhum reset real foi consumido durante testes, consulta real ou release.
 
 **Estado final da implementação.** O código funcional está em `1267e5f`; a consulta ao vivo e a auditoria de falhas são por provider/fonte suportada, não só Claude. Este fechamento é o registro append-only da entrega e será publicado separadamente. A task de validação manual multi-conta/multi-SO (`3ce91f95-497e-81b3-b3fd-cd7b4a5c931d`) permanece aberta para validação no app instalado, sem duplicação.
+
+## Ajuste operacional de publicação — 2026-09-11
+
+O CI do fechamento (`34625708924`) falhou inicialmente apenas no teste nativo de
+PTY do Windows com `AttachConsole failed`; o rerun do job concluiu verde. Na
+publicação seguinte, os três builds e as validações dos artefatos passaram, mas o
+upload Linux da release prévia `v0.1.290` recebeu HTTP 422 porque os jobs paralelos
+tentaram enviar o diagnóstico interno `builder-debug.yml` com o mesmo nome. O
+asset não é necessário para atualização do usuário e é gerado por cada matriz.
+O workflow de release foi ajustado para não publicar esse diagnóstico compartilhado,
+mantendo instaladores, manifests, inventários, benchmarks e smoke reports sem colisão.
