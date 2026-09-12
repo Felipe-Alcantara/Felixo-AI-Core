@@ -4626,3 +4626,54 @@ reidratação) — só o cenário relatado (painel+gaveta), que já explicava o 
 `3d991f95-497e-8186-91ec-e0fb313445db` (Concluída). Relatório diário de
 12/09/2026 (`3d991f95-497e-8181-a489-e542a9cd1a5a`) complementado com as três
 entregas.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — instalação real de Codex/Claude/Gemini no CI
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+**Contexto.** Fatia 5/5 de "Release CI — relatório versionado de instalação real das
+CLIs por SO/CLI/cenário" dependia das fatias 1-4, ainda não implementadas. Perguntado
+ao Felipe (`AskUserQuestion`) — escolheu implementar as 4 fatias de instalação de uma
+vez nesta sessão, em vez de seguir a ordem uma a uma ou pular pra outra pendência.
+
+**`f6cbab1` (PR #23) — ci: instala Codex/Claude/Gemini de verdade nos 3 SOs.** Workflow
+novo `.github/workflows/official-cli-install.yml`: matriz 3 SOs × 3 CLIs oficiais
+(`@openai/codex`, `@anthropic-ai/claude-code`, `@google/gemini-cli` — os mesmos
+pacotes que `official-cli-catalog.cjs` já declara pro botão "Instalar" do app), 9 jobs
+fazendo `npm install -g` real (não benchmark sintético), validação de `--version`,
+reinstalar, atualizar (`@latest`), downgrade pra penúltima versão semver estável
+(confirmando que a versão reportada muda de verdade) e remover (confirmando que o
+comando some do PATH). Não é gate obrigatório de PR — depende do npm registry e dos
+publishers de terceiros — roda em push em `main`, `workflow_dispatch` e `schedule`
+semanal.
+
+**Dois bugs reais, achados e corrigidos ao vivo durante a validação na PR** (não
+hipotéticos — os 3 jobs de Codex falharam de verdade na primeira rodada):
+1. `@openai/codex` publica centenas de variantes por plataforma como versões próprias
+   no mesmo pacote (`0.155.0-alpha.3-win32-arm64` etc.), fora de ordem cronológica. A
+   escolha ingênua de "penúltima versão" pegava uma dessas, não instalável no runner
+   atual (`EBADPLATFORM`). Corrigido filtrando para semver estável (`^\d+\.\d+\.\d+$`)
+   antes de escolher.
+2. No Windows, embutir o JSON inteiro de versões (centenas de entradas) como argumento
+   de `node -e` estourou o limite de linha de comando do shell (`Argument list too
+   long`, exit 126). Corrigido lendo o JSON por stdin em vez de por argumento.
+
+**Validação.** PR #23: 9/9 jobs de instalação `success` na rodada final, mais os 13
+checks do CI principal (incluindo os 4 `Validate`, todos `success`). Mergeado por
+squash, branch apagada. `c7bad84` removeu o trigger `pull_request` temporário (usado
+só pra validar antes do merge, já que `workflow_dispatch` só fica disponível depois do
+arquivo existir no branch padrão) — confirmado registrado após o merge disparando
+`workflow_dispatch` manualmente em `main`.
+
+**O que não foi feito.** Login interativo de cada CLI fica de fora por desenho — sem
+fixture/conta de teste dedicada, simular quebraria a premissa de "instalação real". A
+fatia 5/5 (consolidar os resultados num relatório versionado JSON+markdown) ficou
+desbloqueada mas não implementada — fora do escopo que o Felipe pediu explicitamente.
+
+**Tasks no Notion.** As 4 fatias marcadas Concluída:
+`3d991f95-497e-81c6-90cd-ec602212a211` (Codex),
+`3d991f95-497e-8194-850d-f6fbac161b8f` (Claude),
+`3d991f95-497e-81c1-9927-e20605a40a0e` (Gemini),
+`3d991f95-497e-8174-a407-c11d9e875006` (ciclo de vida). A fatia 5/5
+(`3d991f95-497e-8102-8eeb-d2beb869e42e`) complementada como desbloqueada, permanece
+`Entrada`. Relatório diário de 12/09/2026 complementado.
