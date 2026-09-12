@@ -1,0 +1,126 @@
+name: Instalação real das CLIs oficiais
+
+# Cobre as fatias 1-4 de "Release — Rodar instalação real de Codex/Claude/Gemini
+# no CI multi-SO (não só benchmark sintético)". Roda `npm install -g` de verdade
+# (não um benchmark sintético) para as três CLIs oficiais, nos três SOs, e
+# exercita reinstalar/atualizar/downgrade/remover. Não é gate obrigatório de PR
+# (depende do npm registry e dos publishers de terceiros, fora do nosso
+# controle) — roda em push em main e sob demanda, e fica visível como
+# workflow separado do CI principal.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/official-cli-install.yml
+  workflow_dispatch:
+  schedule:
+    # Segunda-feira 09:00 UTC — detecta quebra de instalação por publicação nova
+    # das CLIs de terceiros sem depender de alguém lembrar de rodar manualmente.
+    - cron: '0 9 * * 1'
+
+jobs:
+  install-cli:
+    name: Instalar ${{ matrix.cli.name }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+        cli:
+          - name: Codex
+            npmPackage: '@openai/codex'
+            bin: codex
+          - name: Claude Code
+            npmPackage: '@anthropic-ai/claude-code'
+            bin: claude
+          - name: Gemini CLI
+            npmPackage: '@google/gemini-cli'
+            bin: gemini
+
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      # Instala de verdade (não simula, não lê metadado do npm só de leitura):
+      # é o mesmo comando que official-cli-catalog.cjs declara para o botão
+      # "Instalar" do app (npm install -g <pacote>).
+      - name: Instalar de verdade (npm install -g)
+        shell: bash
+        run: npm install -g "${{ matrix.cli.npmPackage }}"
+
+      - name: Validar --version
+        shell: bash
+        run: |
+          version=$("${{ matrix.cli.bin }}" --version)
+          echo "versão instalada: $version"
+          if [ -z "$version" ]; then
+            echo "::error::${{ matrix.cli.bin }} --version não devolveu nada"
+            exit 1
+          fi
+
+      # Reinstalar por cima da mesma versão precisa continuar funcional — é o
+      # caminho que um usuário toma clicando "Reinstalar" no app sem trocar de
+      # versão.
+      - name: Reinstalar (mesma versão)
+        shell: bash
+        run: |
+          npm install -g "${{ matrix.cli.npmPackage }}"
+          "${{ matrix.cli.bin }}" --version
+
+      # "Atualizar" no catálogo do app é o mesmo comando de instalação apontado
+      # para @latest — replica isso aqui em vez de inventar um fluxo próprio.
+      - name: Atualizar (@latest)
+        shell: bash
+        run: |
+          npm install -g "${{ matrix.cli.npmPackage }}@latest"
+          "${{ matrix.cli.bin }}" --version
+
+      # Downgrade: descobre a penúltima versão publicada (não hardcoded, para
+      # não empedrar o workflow quando a CLI publicar de novo) e confirma que a
+      # versão reportada de fato muda — sem isso o teste "passaria" mesmo que o
+      # downgrade não tivesse efeito nenhum.
+      - name: Downgrade (penúltima versão publicada)
+        shell: bash
+        run: |
+          set -e
+          versions=$(npm view "${{ matrix.cli.npmPackage }}" versions --json)
+          previous=$(node -e "const v = $versions; console.log(Array.isArray(v) ? v[v.length - 2] : '')")
+          if [ -z "$previous" ]; then
+            echo "::warning::sem versão anterior publicada para downgrade — pulando"
+            exit 0
+          fi
+          before=$("${{ matrix.cli.bin }}" --version)
+          npm install -g "${{ matrix.cli.npmPackage }}@${previous}"
+          after=$("${{ matrix.cli.bin }}" --version)
+          echo "antes: $before / alvo: $previous / depois: $after"
+          if [ "$before" = "$after" ]; then
+            echo "::error::--version não mudou após downgrade para $previous"
+            exit 1
+          fi
+
+      - name: Remover
+        shell: bash
+        run: |
+          npm uninstall -g "${{ matrix.cli.npmPackage }}"
+
+      - name: Confirmar remoção (comando não deve mais existir)
+        shell: bash
+        run: |
+          if command -v "${{ matrix.cli.bin }}" >/dev/null 2>&1; then
+            echo "::error::${{ matrix.cli.bin }} ainda resolve no PATH depois do uninstall"
+            exit 1
+          fi
+          echo "removido: ${{ matrix.cli.bin }} não resolve mais no PATH"
+
+      # Login interativo (OAuth/API key de cada provedor) fica de fora por
+      # desenho: não há fixture/conta de teste dedicada, e simular quebraria a
+      # premissa de "instalação real" com uma sessão falsa. Documentado como
+      # limitação explícita — ver task "Release CI — relatório versionado de
+      # instalação real das CLIs por SO/CLI/cenário".
