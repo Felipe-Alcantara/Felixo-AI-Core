@@ -52,6 +52,66 @@ function getManagedCliLayout({
 }
 
 /**
+ * @typedef {object} OfflineCacheLayout
+ * @property {string} root - Pasta do cache offline para esta combinação exata.
+ */
+
+/**
+ * Segmento seguro pra virar pedaço de caminho: só o que o app já conhece
+ * (id de provider, plataforma, arquitetura, versão semver) passa — nenhum
+ * dado vindo de fora (nome de pacote arbitrário, resposta de registry)
+ * deveria chegar aqui sem validação.
+ */
+function isSafeCacheSegment(value) {
+  return typeof value === 'string' && /^[a-z0-9][a-z0-9.-]{0,63}$/i.test(value)
+}
+
+/**
+ * Onde fica o cache offline de uma CLI gerida pelo app — decisão registrada
+ * em `docs/projeto/ARQUITETURA.md` ("Cache offline do gerenciador de
+ * CLIs"): o cache é **compartilhado entre perfis** da mesma CLI (só
+ * login/credencial é isolado por perfil, em `cli-account-profiles.cjs`) —
+ * o binário não carrega segredo, então isolar por perfil só multiplicaria
+ * disco e tempo de instalação sem ganho de segurança real. Por isso esta
+ * função não recebe `profileId`: separa só por provider, plataforma,
+ * arquitetura e versão — o suficiente pra nunca servir um binário
+ * incompatível ou de outra CLI, e pouco o bastante pra caber uma vez só no
+ * disco por versão instalada.
+ *
+ * @param {object} options
+ * @param {string} options.userData - Pasta de dados do usuário.
+ * @param {string} options.providerId - Ex.: "codex", "claude", "gemini".
+ * @param {string} options.version - Versão exata do pacote (ex.: "2.1.263").
+ * @param {string} [options.platformName]
+ * @param {string} [options.arch]
+ * @returns {OfflineCacheLayout}
+ */
+function getOfflineCacheLayout({
+  userData,
+  providerId,
+  version,
+  platformName = process.platform,
+  arch = process.arch,
+}) {
+  if (!userData) {
+    throw new Error('getOfflineCacheLayout requer userData.')
+  }
+  if (!isSafeCacheSegment(providerId)) {
+    throw new Error('getOfflineCacheLayout requer um providerId válido.')
+  }
+  if (!isSafeCacheSegment(version)) {
+    throw new Error('getOfflineCacheLayout requer uma version válida.')
+  }
+
+  const platformPath = platformName === 'win32' ? path.win32 : path.posix
+  const platformArch = `${platformName}-${arch}`
+
+  return {
+    root: platformPath.join(userData, 'cli-cache', providerId, platformArch, version),
+  }
+}
+
+/**
  * Pastas que devem entrar no PATH das CLIs, na ordem de prioridade.
  *
  * Elas entram **depois** das do sistema: se a pessoa já instalou a CLI por
@@ -73,4 +133,5 @@ module.exports = {
   MANAGED_ROOT_ENV_KEY,
   getManagedCliLayout,
   getManagedCliPathCandidates,
+  getOfflineCacheLayout,
 }

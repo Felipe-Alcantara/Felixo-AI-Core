@@ -336,6 +336,37 @@ expõe os dados completos e redigidos do `/status`; Codex e Openia usam suas
 fontes locais/oficiais disponíveis; providers sem cota consultável são
 apresentados como indisponíveis ou sem informação.
 
+## Cache offline do gerenciador de CLIs
+
+Decisão registrada em 12/09/2026, fatia 1/5 de "Arquitetura — Desenhar e
+implementar cache offline por perfil para o gerenciador de CLIs": **o cache
+é compartilhado entre perfis da mesma CLI**, não isolado por perfil. Só
+login/credencial é isolado (seção acima, `cli-account-profiles.cjs`); o
+binário instalado não carrega segredo nenhum, então isolar o cache por
+perfil só multiplicaria espaço em disco e tempo de instalação para N
+contas do mesmo provider, sem ganho de segurança real. `getManagedCliLayout`
+continua sem `profileId` por isso — decisão deliberada, não lacuna.
+
+`getOfflineCacheLayout` (`managed-cli-paths.cjs`) separa o cache por
+`provider/plataforma-arquitetura/versão`
+(`userData/cli-cache/<provider>/<platform>-<arch>/<version>/`) — o
+suficiente pra nunca servir um binário incompatível ou de outra CLI/versão,
+e pouco o bastante pra caber uma vez só por versão instalada. A pasta
+`cli-cache` nunca cruza com `cli-profiles` (onde vive a credencial):
+são árvores irmãs dentro do `userData`, sem sobreposição de caminho —
+coberto por teste (`managed-cli-paths.test.cjs`).
+
+Isso é só o layout — a instalação (`managed-cli-installer.cjs`) ainda
+não lê nem escreve nesse cache; ela continua chamando `npm install
+--global` contra o registry a cada vez. O restante da task-mãe fatia o que
+falta: política de expurgo/LRU e estados inválidos (fatia 2/5), garantia
+formal de que nenhum segredo pode ser escrito ali (fatia 3/5, parcialmente
+coberta agora pelo teste de não sobreposição), integração com verificação
+de hash antes de servir do cache (fatia 4/5, bloqueada pela task irmã de
+hash/integridade, ainda sem implementação), e os testes fim a fim de
+instalação offline (fatia 5/5, que só faz sentido depois das anteriores
+existirem de verdade).
+
 ## Persistência e comunicação
 
 | Área | Responsabilidade |
