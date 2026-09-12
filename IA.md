@@ -4873,3 +4873,24 @@ sem plano escrito) é grande demais pra encarar de uma vez, o Felipe pediu fatia
 garantia de não guardar segredo, integração com hash/integridade, testes fim a fim),
 com a ordem de dependência real entre elas documentada. Nenhum código escrito —
 puramente organização do trabalho pendente.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — layout do cache offline + pin/hash reconfirmados
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Sessão longa autorizada pelo Felipe pra varrer todas as tasks-mãe e filhas pendentes
+vistas hoje, sem pausas. `systemd-inhibit` ativado pra evitar suspensão da máquina.
+
+**`a0eaed6` (PR #29) — fatia 1/5 do cache offline.** `getOfflineCacheLayout`
+(`managed-cli-paths.cjs`) separa por provider/plataforma-arquitetura/versão, nunca
+por perfil — decisão perguntada ao Felipe (cache compartilhado, só login isolado).
+9 testes novos. Decisão registrada em `docs/projeto/ARQUITETURA.md`.
+
+**Reconfirmação de trabalho já publicado em 06/09 (commit `16dc4bc`):** as tasks
+"Fixar versão exata do npm-runtime e das CLIs geridas" e "Verificar hash/integridade"
+tinham código pronto e testado, mas ficaram sem `Etapa=Concluída` só porque o lint
+não tinha rodado (memória insuficiente na máquina naquele dia). Rodado agora:
+`eslint` limpo, `npm test` 1155/1155, `tsc -b` limpo — ambas marcadas Concluída. Duas
+lacunas menores (versão do npm-runtime não entra no manifesto; sem verificação
+pós-instalação) viraram uma task nova de baixa prioridade
+(`3d991f95-497e-8104-9365-e5c6dd0c1f2d`), sem bloquear o fechamento.
