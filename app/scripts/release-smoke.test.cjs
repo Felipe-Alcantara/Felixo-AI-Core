@@ -14,6 +14,7 @@ const {
   getPackagedResourcesPath,
   parseArgs,
   resolveReleaseArtifact,
+  simulateQuarantine,
 } = require('./release-smoke.cjs')
 const { runPackagedReleaseSmoke } = require('../electron/release-smoke.cjs')
 
@@ -32,8 +33,25 @@ test('parseArgs accepts an explicit release artifact and report', () => {
       report: 'out/smoke.json',
       keepTemp: true,
       timeoutMs: 5000,
+      simulateQuarantine: false,
     },
   )
+})
+
+test('parseArgs aceita --simulate-quarantine', () => {
+  const options = parseArgs(['--simulate-quarantine'])
+  assert.equal(options.simulateQuarantine, true)
+})
+
+test('simulateQuarantine se declara não simulado fora do macOS', () => {
+  if (process.platform === 'darwin') return
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-quarantine-'))
+  try {
+    const result = simulateQuarantine(temporaryRoot)
+    assert.deepEqual(result, { simulated: false, reason: 'plataforma nao e macOS' })
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true })
+  }
 })
 
 test('finds the packaged app root without depending on the host output folder name', () => {
