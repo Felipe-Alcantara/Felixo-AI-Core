@@ -4894,3 +4894,19 @@ não tinha rodado (memória insuficiente na máquina naquele dia). Rodado agora:
 lacunas menores (versão do npm-runtime não entra no manifesto; sem verificação
 pós-instalação) viraram uma task nova de baixa prioridade
 (`3d991f95-497e-8104-9365-e5c6dd0c1f2d`), sem bloquear o fechamento.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — isolamento de credencial entre perfis provado
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task "Release — Provar isolamento de binário/cache entre perfis" desbloqueada pela
+decisão de cache compartilhado (fatia 1/5 do cache offline). Escopo mudou: binário/
+cache compartilhado por design não precisa de isolamento; o que restava provar era
+login/credencial simultâneo entre dois perfis, nunca testado explicitamente para
+esse cenário.
+
+`9db9bac` (PR #31): 3 testes em `cli-account-profiles.test.cjs` — pasta de
+credencial nunca se sobrepõe entre dois perfis simultâneos; env de um nunca
+referencia o diretório do outro; caminho do binário/cache é idêntico pros dois
+perfis (documentado em código executável). `npm test` 1158/1158. PR #31: 13/13
+`success`. Mergeada, branch apagada (local e remota). Task Concluída.
