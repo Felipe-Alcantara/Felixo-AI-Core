@@ -48,6 +48,10 @@ async function main(argv = process.argv.slice(2)) {
       bytes: measurePath(prepared.appRoot),
     }
 
+    if (options.simulateQuarantine) {
+      report.gatekeeper = simulateQuarantine(prepared.appRoot)
+    }
+
     const appResult = await runPackagedApp({
       appRoot: prepared.appRoot,
       executable: prepared.executable,
@@ -105,6 +109,7 @@ function parseArgs(argv) {
     report: null,
     keepTemp: false,
     timeoutMs: SMOKE_TIMEOUT_MS,
+    simulateQuarantine: false,
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -112,6 +117,11 @@ function parseArgs(argv) {
 
     if (argument === '--keep-temp') {
       options.keepTemp = true
+      continue
+    }
+
+    if (argument === '--simulate-quarantine') {
+      options.simulateQuarantine = true
       continue
     }
 
@@ -150,6 +160,7 @@ function createEmptyReport() {
     installMode: null,
     artifact: null,
     installed: null,
+    gatekeeper: null,
     startupMs: null,
     pty: null,
     contextDelivery: null,
@@ -290,6 +301,72 @@ function prepareDmgArtifact({ artifactPath, temporaryRoot }) {
   } finally {
     runBestEffort('hdiutil', ['detach', mountPoint], { cwd: temporaryRoot })
   }
+}
+
+/**
+ * Marca a árvore empacotada com o atributo estendido que o macOS grava de
+ * verdade em todo arquivo baixado por um app quarantine-aware (Safari,
+ * curl com --xattr, Finder AirDrop). Um build do CI nunca ganha esse
+ * atributo sozinho — sem simular, o smoke test nunca passa pelo mesmo
+ * caminho que o usuário final passa na primeira abertura.
+ *
+ * `spctl`/`codesign` são a fonte de verdade do veredito do Gatekeeper —
+ * são a MESMA checagem que o Finder roda ao dar duplo clique, então o
+ * resultado é real, não uma aproximação. Um app não assinado/não
+ * notarizado (como o nosso hoje — ver aviso já publicado em release.yml)
+ * é esperado ser REJEITADO aqui; isso não falha o smoke test — falharia
+ * silenciosamente esconder essa realidade fingindo que passou.
+ *
+ * O spawn direto do executável (como `runPackagedApp` já faz) roda por
+ * fora do LaunchServices, então não é bloqueado por Gatekeeper mesmo com
+ * quarentena presente — é o comportamento real de rodar o binário depois
+ * que o usuário já passou pelo aviso (ou rodou o `xattr -dr` documentado).
+ * O relatório registra os dois fatos lado a lado, sem confundir um com o
+ * outro.
+ */
+function simulateQuarantine(appRoot) {
+  if (process.platform !== 'darwin') {
+    return { simulated: false, reason: 'plataforma nao e macOS' }
+  }
+
+  const quarantineValue = '0083;00000000;Google Chrome;|com.google.Chrome'
+  const result = {
+    simulated: false,
+    xattrApplied: false,
+    spctl: null,
+    codesign: null,
+  }
+
+  try {
+    runChecked('xattr', ['-w', 'com.apple.quarantine', quarantineValue, appRoot])
+    result.xattrApplied = true
+    result.simulated = true
+  } catch (error) {
+    result.xattrError = sanitizeDiagnostic(error)
+    return result
+  }
+
+  const spctl = spawnSync('spctl', ['-a', '-vv', '--type', 'execute', appRoot], {
+    encoding: 'utf8',
+    timeout: 30_000,
+  })
+  result.spctl = {
+    exitCode: spctl.status,
+    accepted: spctl.status === 0,
+    detail: sanitizeDiagnostic([spctl.stdout, spctl.stderr].filter(Boolean).join('\n')),
+  }
+
+  const codesignResult = spawnSync('codesign', ['-dv', '--verbose=4', appRoot], {
+    encoding: 'utf8',
+    timeout: 30_000,
+  })
+  result.codesign = {
+    exitCode: codesignResult.status,
+    signed: codesignResult.status === 0,
+    detail: sanitizeDiagnostic([codesignResult.stdout, codesignResult.stderr].filter(Boolean).join('\n')),
+  }
+
+  return result
 }
 
 function createPreparedArtifact(appRoot, installMode) {
@@ -939,6 +1016,7 @@ module.exports = {
   resolveReleaseArtifact,
   runBundledNpmSmoke,
   sanitizeDiagnostic,
+  simulateQuarantine,
 }
 
 if (require.main === module) {
