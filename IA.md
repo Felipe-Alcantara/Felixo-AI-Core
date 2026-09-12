@@ -4677,3 +4677,38 @@ desbloqueada mas não implementada — fora do escopo que o Felipe pediu explici
 `3d991f95-497e-8174-a407-c11d9e875006` (ciclo de vida). A fatia 5/5
 (`3d991f95-497e-8102-8eeb-d2beb869e42e`) complementada como desbloqueada, permanece
 `Entrada`. Relatório diário de 12/09/2026 complementado.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — fatia 5/5: relatório consolidado da instalação real de CLIs
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+**Contexto.** Fatia 5/5, desbloqueada pelo merge de #23. Cada job da matriz passou a
+gravar o próprio resultado (`result.json`, um cenário por linha: instalar, validar
+`--version`, reinstalar, atualizar, downgrade, remover, confirmar remoção, login
+interativo) via passos `if: always()` que leem `steps.<id>.outcome`.
+
+**`d47f3e3` (PR #24) — job `report`.** Roda depois de `install-cli` com
+`if: always()` (mesmo se algum job de instalação falhar), baixa os 9 artifacts
+`cli-install-result-<os>-<cli-id>` e consolida em `cli-install-report.json`
+(`{run_id, generated_at, commit, jobs: [...]}`) e `cli-install-report.md` (tabela
+SO×CLI×cenário), publicados juntos no artifact `cli-install-report`.
+
+**Bug real, achado e corrigido ao vivo na primeira rodada da PR:** os labels das
+CLIs no nome do artifact tinham espaço (`Claude Code`, `Gemini CLI`), virando pasta
+com espaço depois do download; `for f in $files` sem aspas fatiava o caminho no meio
+(`results/cli-install-result-macos-latest-Claude` + `Code/result.json` como dois
+arquivos inexistentes — `jq: error: Could not open file`). Corrigido adicionando um
+`id` sem espaço por CLI (`codex`/`claude-code`/`gemini-cli`) para o nome do artifact,
+e trocando o word-splitting por `mapfile` + array com aspas no job `report`.
+
+**Validação.** Baixei o artifact `cli-install-report` do run final e li o conteúdo
+de verdade (não só confiei no job verde): 9 jobs, 8 cenários cada, com versão real
+reportada em cada transição (ex.: Claude Code macOS `2.1.269` → downgrade pra
+`2.1.268`), e o cenário `login interativo` presente em todos como `not_applicable`
+com o motivo. PR #24: 9/9 jobs de instalação + `report` `success`, mais os 13 checks
+do CI principal, todos `success`. Mergeada por squash, branch apagada. `2f8c816`
+removeu o trigger `pull_request` temporário.
+
+**Estado final.** As 5 fatias e a task-mãe "Release — Rodar instalação real de
+Codex/Claude/Gemini no CI multi-SO" foram todas marcadas Concluída. Nenhuma PR
+aberta e nenhuma branch além de `main` no repositório ao final da sessão.
