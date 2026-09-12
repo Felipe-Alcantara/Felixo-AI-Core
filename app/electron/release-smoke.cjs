@@ -441,7 +441,19 @@ function createPtyWorkingDirectory() {
   // não bug deste helper.
   const mkdirTarget = toWindowsExtendedLengthPath(nested)
   fs.mkdirSync(mkdirTarget, { recursive: true })
-  return fs.mkdtempSync(path.join(mkdirTarget, 'felixo-release-pty-')).replace(/^\\\\\?\\/, '')
+  const tempDir = fs.mkdtempSync(path.join(mkdirTarget, 'felixo-release-pty-'))
+
+  // Investigação pontual (task "investigar suporte real a path longo"):
+  // CreateProcessW recebe `lpCurrentDirectory` como está — sem essa flag,
+  // devolvemos o cwd "normal" (sem prefixo), que é o que falhou com o erro
+  // 267. Com ela, mantemos o prefixo `\\?\` até o cwd que chega no
+  // node-pty, para medir de verdade se CreateProcessW honra o prefixo
+  // nesse parâmetro específico (documentação da Microsoft é inconsistente
+  // sobre isso) — sem essa medição, qualquer resposta seria chute.
+  if (process.env.FELIXO_RELEASE_SMOKE_LONG_PATH_PREFIXED === '1') {
+    return tempDir
+  }
+  return tempDir.replace(/^\\\\\?\\/, '')
 }
 
 function toWindowsExtendedLengthPath(target) {
