@@ -110,6 +110,19 @@ function createManagedInstallEnv({
     env.npm_config_script_shell = env.ComSpec || 'cmd.exe'
   }
 
+  // Fatia 3/5 de "cache offline por perfil": defesa em profundidade — a
+  // instalação gerenciada roda no processo principal, nunca dentro da PTY de
+  // uma conta, então não deveria herdar credencial nenhuma. Mas
+  // `createCliEnv` clona `baseEnv` (`process.env` por padrão) inteiro, sem
+  // filtrar; se alguma dessas chaves algum dia acabar setada no processo
+  // principal por engano, ela vazaria pro ambiente do `npm install` e,
+  // por extensão, pro cache offline que ele escreve. Removidas
+  // explicitamente aqui, não confiando em "isso nunca deveria acontecer".
+  delete env.CODEX_HOME
+  delete env.CLAUDE_CONFIG_DIR
+  delete env.OPENROUTER_API_KEY
+  delete env.FELIXO_REAL_HOME
+
   return env
 }
 

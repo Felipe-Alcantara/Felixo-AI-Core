@@ -74,6 +74,42 @@ describe('managed-cli-installer', () => {
     assert.ok(args.indexOf('--prefer-offline') < args.indexOf('@anthropic-ai/claude-code'))
   })
 
+  // Fatia 3/5 de "cache offline por perfil": auditoria com teste, não
+  // afirmação — confirma que o ambiente da instalação gerenciada (a mesma
+  // que escreve no cache offline) nunca carrega nenhuma das variáveis de
+  // credencial/login por conta que cli-account-profiles.cjs usa. Login vive
+  // isolado num processo completamente separado (o próprio PTY da CLI,
+  // depois de instalada) — a instalação nunca deveria nem ver essas chaves.
+  it('o ambiente da instalação gerenciada nunca carrega credencial de conta', () => {
+    const CHAVES_DE_CREDENCIAL = [
+      'CODEX_HOME',
+      'CLAUDE_CONFIG_DIR',
+      'OPENROUTER_API_KEY',
+      'FELIXO_REAL_HOME',
+    ]
+
+    const env = createManagedInstallEnv({
+      layout: LAYOUT,
+      baseEnv: {
+        PATH: '/usr/bin',
+        // Simula o processo principal já ter essas variáveis setadas por
+        // outra sessão (cenário realista: terminais de contas diferentes
+        // rodando ao mesmo tempo) — a instalação não deveria herdá-las.
+        CODEX_HOME: '/home/pessoa/.config/felixo-ai-core/cli-profiles/codex/perfil-x',
+        CLAUDE_CONFIG_DIR: '/home/pessoa/.config/felixo-ai-core/cli-profiles/claude/perfil-y',
+        OPENROUTER_API_KEY: 'segredo-de-teste',
+      },
+      platformName: 'linux',
+    })
+
+    for (const chave of CHAVES_DE_CREDENCIAL) {
+      assert.ok(
+        !(chave in env),
+        `env da instalação não deveria carregar ${chave}`,
+      )
+    }
+  })
+
   // O npm precisa de um `node` para rodar os scripts de instalacao dos
   // pacotes, e numa maquina sem Node o unico disponivel e o atalho do app —
   // por isso ele vem na frente aqui, ao contrario do PATH normal das CLIs.
