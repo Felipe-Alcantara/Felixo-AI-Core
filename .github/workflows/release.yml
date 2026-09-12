@@ -317,6 +317,32 @@ jobs:
           path: app/release/release-smoke-longpath-${{ matrix.os }}.json
           if-no-files-found: ignore
 
+      # TEMPORÁRIO — investigação pontual da task "investigar suporte real a
+      # path longo no Windows": mede se CreateProcessW (dentro do node-pty)
+      # honra o prefixo de path estendido \\?\ no parâmetro
+      # lpCurrentDirectory, ou se essa é uma limitação real do próprio
+      # node-pty sem solução no nosso lado. Removido depois da medição,
+      # vire ela permanente ou não.
+      - name: "[investigação] node-pty com cwd prefixado (Windows)"
+        if: runner.os == 'Windows'
+        shell: bash
+        continue-on-error: true
+        env:
+          FELIXO_RELEASE_SMOKE_LONG_PATH: '1'
+          FELIXO_RELEASE_SMOKE_LONG_PATH_PREFIXED: '1'
+        run: |
+          node scripts/release-smoke.cjs \
+            --release-dir release \
+            --report "release/release-smoke-longpath-prefixed-${{ matrix.os }}.json"
+
+      - name: "[investigação] Upload do relatório (cwd prefixado)"
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-longpath-prefixed-${{ matrix.os }}
+          path: app/release/release-smoke-longpath-prefixed-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
       - name: Upload installers
         shell: bash
         run: |
