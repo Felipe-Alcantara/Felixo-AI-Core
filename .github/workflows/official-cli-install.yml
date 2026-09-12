@@ -97,7 +97,15 @@ jobs:
         run: |
           set -e
           versions=$(npm view "${{ matrix.cli.npmPackage }}" versions --json)
-          previous=$(node -e "const v = $versions; console.log(Array.isArray(v) ? v[v.length - 2] : '')")
+          # Algumas CLIs (Codex) publicam variantes por plataforma como
+          # versões próprias no mesmo pacote (ex.: "0.155.0-alpha.3-win32-arm64"),
+          # fora de ordem cronológica e não instaláveis neste runner — filtra
+          # para semver estável (X.Y.Z puro) antes de escolher a penúltima.
+          previous=$(node -e "
+            const v = $versions
+            const stable = (Array.isArray(v) ? v : []).filter((x) => /^\d+\.\d+\.\d+\$/.test(x))
+            console.log(stable.length >= 2 ? stable[stable.length - 2] : '')
+          ")
           if [ -z "$previous" ]; then
             echo "::warning::sem versão anterior publicada para downgrade — pulando"
             exit 0
