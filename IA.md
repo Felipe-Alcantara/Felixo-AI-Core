@@ -4754,3 +4754,46 @@ esta task focou no gap específico de Gatekeeper/quarentena. Update/restart repe
 sob quarentena fica como possível extensão futura.
 
 **Tasks no Notion.** `3d991f95-497e-8150-ae7e-c575c3747e27` marcada Concluída.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — node-pty no Windows: ACL, cmd.exe e falha real em path longo
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+**Contexto.** Task "Release — validar node-pty empacotado no Windows
+(ACL/path longo/shell)". Três coberturas novas no smoke de release, só Windows:
+`captureWindowsAcl` (icacls no executável e no `pty.node`, incondicional), shell
+forçado via `FELIXO_RELEASE_SMOKE_SHELL=cmd.exe`, e `cwd` de path longo via
+`FELIXO_RELEASE_SMOKE_LONG_PATH=1` (nesta última, criado com o prefixo estendido
+`\\?\` para contornar o MAX_PATH clássico já na criação do diretório de teste —
+achado durante o próprio desenvolvimento: sem o prefixo, até `mkdirSync` falha).
+
+**PR #26 (`5edc99d`).** Primeira rodada de CI quebrou de propósito — não no
+achado que a task buscava, mas num bug real no meu próprio teste unitário
+(`mkdirSync` sem `\\?\` batendo no MAX_PATH já na criação, não só no spawn).
+Corrigido, segunda rodada 13/13 `success`.
+
+**Evidência real, do release de produção `v0.1.311` (run `34707819390`):**
+- **ACL: sem bloqueio.** `icacls` no executável e no `pty.node` mostram
+  `BUILTIN\Administrators:(F)` e `<usuário>:(F)` — controle total.
+- **cmd.exe: funciona igual ao padrão** (`pty.ok: true`, mesmo comportamento do
+  PowerShell).
+- **Path longo: QUEBRA DE VERDADE.** `Cannot create process, error code: 267`
+  (`ERROR_DIRECTORY`) — o `WindowsPtyAgent` nativo do node-pty não abre sessão
+  quando o `cwd` passa dos 260 caracteres do MAX_PATH clássico, mesmo o
+  diretório existindo de verdade no disco (criado com o prefixo `\\?\`).
+  Achado real, com stack trace completo capturado.
+
+**Validação.** `node --test electron/release-smoke.test.cjs
+scripts/release-smoke.test.cjs` 18/18 pass (6 novos). `npm test` completo
+1148/1148. PR #26: 13/13 `success` (após o fix do próprio teste). Mergeada por
+squash, branch apagada (local e remota — limpeza extra pedida pelo Felipe hoje:
+branches de PRs já mergeadas anteriormente na sessão tinham ficado só
+localmente, corrigido).
+
+**Pendência aberta.** node-pty falhar mudo em `cwd` longo é uma decisão de
+produto (Trilha B: mitigar no app vs. avisar o usuário vs. documentar como
+limitação conhecida), não uma escolha técnica única — task nova criada:
+`3d991f95-497e-81f5-8823-e7717058a874` ("Terminal — decidir tratamento para
+node-pty falhando em cwd com path longo no Windows"), linkada à task de origem.
+
+**Tasks no Notion.** `3d991f95-497e-8106-a0ce-d09608ba7b35` marcada Concluída.
