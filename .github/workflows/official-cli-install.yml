@@ -37,13 +37,16 @@ jobs:
           - windows-latest
           - macos-latest
         cli:
-          - name: Codex
+          - id: codex
+            name: Codex
             npmPackage: '@openai/codex'
             bin: codex
-          - name: Claude Code
+          - id: claude-code
+            name: Claude Code
             npmPackage: '@anthropic-ai/claude-code'
             bin: claude
-          - name: Gemini CLI
+          - id: gemini-cli
+            name: Gemini CLI
             npmPackage: '@google/gemini-cli'
             bin: gemini
 
@@ -232,7 +235,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cli-install-result-${{ matrix.os }}-${{ matrix.cli.name }}
+          name: cli-install-result-${{ matrix.os }}-${{ matrix.cli.id }}
           path: result.json
           if-no-files-found: warn
 
@@ -257,10 +260,14 @@ jobs:
         run: |
           set -e
           date_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          files=$(find results -name result.json | sort)
+          # Array, não word-splitting: nome de artifact/pasta pode ter
+          # espaço (já teve — "Claude Code", "Gemini CLI" — antes do id
+          # sem espaço nos labels dos jobs), e "for f in $files" sem aspas
+          # quebrava o caminho no meio.
+          mapfile -t files < <(find results -name result.json | sort)
 
           jq -s --arg run "${{ github.run_id }}" --arg date "$date_utc" --arg sha "${{ github.sha }}" \
-            '{run_id: $run, generated_at: $date, commit: $sha, jobs: .}' $files > cli-install-report.json
+            '{run_id: $run, generated_at: $date, commit: $sha, jobs: .}' "${files[@]}" > cli-install-report.json
 
           {
             echo "# Relatório de instalação real das CLIs oficiais"
@@ -274,7 +281,7 @@ jobs:
             echo
             echo "| SO | CLI | Instalar | Reinstalar | Atualizar | Downgrade | Remover |"
             echo "| --- | --- | --- | --- | --- | --- | --- |"
-            for f in $files; do
+            for f in "${files[@]}"; do
               jq -r '
                 def s(name): (.scenarios[] | select(.name | startswith(name)) | .outcome) // "—";
                 [.os, .cli, s("instalar"), s("reinstalar"), s("atualizar"), s("downgrade"), s("remover")] | @tsv
