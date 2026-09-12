@@ -4712,3 +4712,45 @@ removeu o trigger `pull_request` temporário.
 **Estado final.** As 5 fatias e a task-mãe "Release — Rodar instalação real de
 Codex/Claude/Gemini no CI multi-SO" foram todas marcadas Concluída. Nenhuma PR
 aberta e nenhuma branch além de `main` no repositório ao final da sessão.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — node-pty sob quarentena real do Gatekeeper no macOS
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+**Contexto.** Task "Release — validar node-pty empacotado no macOS
+(Gatekeeper/quarentena/assinatura)". Um build do CI nunca ganha o atributo
+`com.apple.quarantine` sozinho — só quem baixa o artefato de verdade (Safari, curl
+`--xattr`, AirDrop) ganha. O smoke existente (`release-smoke.cjs`, já rodava em todo
+release) nunca passava pelo mesmo caminho que o usuário final passa na primeira
+abertura.
+
+**`cf22b5c` (PR #25).** `release-smoke.cjs` ganhou `--simulate-quarantine`: aplica o
+xattr real na árvore empacotada e roda `spctl -a -vv --type execute` +
+`codesign -dv --verbose=4` — a MESMA checagem que o Finder faz ao dar duplo clique.
+Passo novo em `release.yml`, só macOS, `continue-on-error` (é evidência, não gate —
+um app não notarizado é esperado ser rejeitado, e esconder isso atrás de um "passou"
+seria pior do que declarar).
+
+**Evidência real, do release de produção `v0.1.309` (run `34705095491`), lida do
+artifact `release-smoke-quarantine-macos-latest`:**
+- Gatekeeper (`spctl`) **REJEITOU** o app sob quarentena — `"code has no resources
+  but signature indicates they must be present"` — confirma que a assinatura ad-hoc
+  atual (sem notarização) não passa, batendo com o aviso já publicado para usuários
+  (`xattr -dr com.apple.quarantine`).
+- `codesign`: `Signature=adhoc`, `TeamIdentifier=not set` — sem notarização, como
+  esperado.
+- **node-pty funcionou (`pty.ok: true`)** mesmo com quarentena + Gatekeeper
+  rejeitando — achado real: o spawn direto do executável roda por fora do
+  LaunchServices, então não é bloqueado; só a abertura via Finder dispara a
+  checagem que rejeita.
+
+**Validação.** PR #25: 13/13 checks `success`. Testes locais:
+`node --test scripts/release-smoke.test.cjs` 9/9 pass (2 novos), `npm test` completo
+1144/1144. Mergeado por squash, branch apagada.
+
+**O que não foi feito.** O roteiro completo de update + 2 restarts do piloto Linux
+x64 não foi replicado no macOS — o smoke existente já cobre instalação limpa + PTY;
+esta task focou no gap específico de Gatekeeper/quarentena. Update/restart repetido
+sob quarentena fica como possível extensão futura.
+
+**Tasks no Notion.** `3d991f95-497e-8150-ae7e-c575c3747e27` marcada Concluída.
