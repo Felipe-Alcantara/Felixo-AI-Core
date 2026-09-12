@@ -227,6 +227,26 @@ class PtyProcessManager {
         ...(useConpty === false ? { useConpty: false } : {}),
       })
     } catch (error) {
+      if (isWindowsLongPathFailure(error, cwd, this.platform.name)) {
+        // Medido ao vivo em 12/09/2026 (release-smoke, v0.1.311): o
+        // WindowsPtyAgent nativo do node-pty recusa abrir sessão quando o
+        // cwd passa do MAX_PATH clássico (260 caracteres) — "Cannot create
+        // process, error code: 267" — mesmo a pasta existindo de verdade no
+        // disco. Sem esta checagem o usuário só via "não foi possível criar
+        // a sessão", sem entender por quê. O comprimento é informação
+        // segura de expor (não vaza o caminho em si).
+        this.reportLayer(
+          options,
+          'inicialização do PTY',
+          `A pasta de trabalho tem um caminho longo demais para o Windows abrir um terminal aqui (${cwd.length} caracteres, limite prático é ~260). Mova o projeto para um caminho mais curto.`,
+          'pty-spawn-error-long-path',
+        )
+        throw new Error(
+          `Camada de inicialização do PTY: cwd excede o limite de caminho do Windows (${cwd.length} caracteres).`,
+          { cause: error },
+        )
+      }
+
       this.reportLayer(
         options,
         'inicialização do PTY',
@@ -1015,6 +1035,29 @@ function getDefaultPtyShellArgs(command, adapter) {
  * @param {unknown} requested
  * @returns {string}
  */
+
+/** MAX_PATH clássico do Windows. Acima disto, WinAPIs sem o prefixo `\\?\` recusam o caminho. */
+const WIN32_MAX_PATH = 260
+
+/**
+ * Distingue a falha real de path longo (medida ao vivo: `error code: 267`,
+ * `ERROR_DIRECTORY`, vindo do `WindowsPtyAgent` nativo) de qualquer outra
+ * falha de spawn — sem essa distinção, um cwd comprido por coincidência
+ * junto de um erro não relacionado geraria um aviso enganoso.
+ *
+ * @param {unknown} error
+ * @param {string} cwd
+ * @param {string} platformName
+ * @returns {boolean}
+ */
+function isWindowsLongPathFailure(error, cwd, platformName) {
+  if (platformName !== 'win32' || typeof cwd !== 'string' || cwd.length < WIN32_MAX_PATH) {
+    return false
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return /error code:\s*267\b/i.test(message) || /ERROR_DIRECTORY/i.test(message)
+}
+
 function resolveWorkingDirectory(requested) {
   const fallback = os.homedir()
   if (typeof requested !== 'string' || !requested.trim()) {
@@ -1083,8 +1126,10 @@ module.exports = {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
+  WIN32_MAX_PATH,
   createPtyLaunchSpec,
   getDefaultPtyShellArgs,
+  isWindowsLongPathFailure,
   resolvePtyCommand,
   resolveWorkingDirectory,
   resolveWindowsCodexPath,
