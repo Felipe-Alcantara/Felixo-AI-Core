@@ -4860,3 +4860,16 @@ remota).
 **Tasks no Notion.** `3d991f95-497e-8151-bbbf-d27b48fef0ea` marcada Concluída — a
 conclusão negativa e bem fundamentada é o entregável, exatamente como o critério de
 aceite da própria task previa.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — fatiamento da arquitetura de cache offline por perfil
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task "Release — Provar isolamento de binário/cache entre perfis" reconfirmada
+bloqueada — sem mudança desde a checagem de 08:07 de hoje. Como sua dependência raiz
+("Arquitetura — Desenhar e implementar cache offline por perfil", esforço "Dias",
+sem plano escrito) é grande demais pra encarar de uma vez, o Felipe pediu fatiamento.
+5 subtasks executáveis criadas (layout de diretórios, expurgo/estados inválidos,
+garantia de não guardar segredo, integração com hash/integridade, testes fim a fim),
+com a ordem de dependência real entre elas documentada. Nenhum código escrito —
+puramente organização do trabalho pendente.
