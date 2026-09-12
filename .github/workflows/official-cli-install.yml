@@ -1,6 +1,6 @@
 name: Instalação real das CLIs oficiais
 
-# Cobre as fatias 1-4 de "Release — Rodar instalação real de Codex/Claude/Gemini
+# Cobre as fatias 1-5 de "Release — Rodar instalação real de Codex/Claude/Gemini
 # no CI multi-SO (não só benchmark sintético)". Roda `npm install -g` de verdade
 # (não um benchmark sintético) para as três CLIs oficiais, nos três SOs, e
 # exercita reinstalar/atualizar/downgrade/remover. Não é gate obrigatório de PR
@@ -11,6 +11,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - .github/workflows/official-cli-install.yml
+  # Temporário só para validar nesta PR antes do merge — removido no commit
+  # seguinte.
+  pull_request:
     paths:
       - .github/workflows/official-cli-install.yml
   workflow_dispatch:
@@ -32,13 +37,16 @@ jobs:
           - windows-latest
           - macos-latest
         cli:
-          - name: Codex
+          - id: codex
+            name: Codex
             npmPackage: '@openai/codex'
             bin: codex
-          - name: Claude Code
+          - id: claude-code
+            name: Claude Code
             npmPackage: '@anthropic-ai/claude-code'
             bin: claude
-          - name: Gemini CLI
+          - id: gemini-cli
+            name: Gemini CLI
             npmPackage: '@google/gemini-cli'
             bin: gemini
 
@@ -48,14 +56,37 @@ jobs:
         with:
           node-version: 22.x
 
+      # Cada job grava o próprio resultado incrementalmente em result.json
+      # (um cenário por linha registrado, mesmo quando um passo anterior
+      # falha) — é a matéria-prima que o job "report" consolida no fim,
+      # fatia 5/5. Sem segredo nenhum aqui: só nome de CLI/SO, versão e
+      # outcome do passo.
+      - name: Iniciar registro do resultado
+        shell: bash
+        run: |
+          jq -n --arg cli "${{ matrix.cli.name }}" --arg os "${{ matrix.os }}" --arg pkg "${{ matrix.cli.npmPackage }}" \
+            '{cli: $cli, os: $os, npmPackage: $pkg, scenarios: []}' > result.json
+
       # Instala de verdade (não simula, não lê metadado do npm só de leitura):
       # é o mesmo comando que official-cli-catalog.cjs declara para o botão
       # "Instalar" do app (npm install -g <pacote>).
       - name: Instalar de verdade (npm install -g)
+        id: install
         shell: bash
-        run: npm install -g "${{ matrix.cli.npmPackage }}"
+        run: |
+          npm install -g "${{ matrix.cli.npmPackage }}"
+          echo "version=$("${{ matrix.cli.bin }}" --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Registrar — instalar
+        if: always()
+        shell: bash
+        run: |
+          jq --arg outcome "${{ steps.install.outcome }}" --arg version "${{ steps.install.outputs.version }}" \
+            '.scenarios += [{name: "instalar", outcome: $outcome, version: $version}]' result.json > tmp.json && mv tmp.json result.json
 
       - name: Validar --version
+        id: validate
+        if: always()
         shell: bash
         run: |
           version=$("${{ matrix.cli.bin }}" --version)
@@ -65,28 +96,55 @@ jobs:
             exit 1
           fi
 
+      - name: Registrar — validar --version
+        if: always()
+        shell: bash
+        run: |
+          jq --arg outcome "${{ steps.validate.outcome }}" \
+            '.scenarios += [{name: "validar --version", outcome: $outcome}]' result.json > tmp.json && mv tmp.json result.json
+
       # Reinstalar por cima da mesma versão precisa continuar funcional — é o
       # caminho que um usuário toma clicando "Reinstalar" no app sem trocar de
       # versão.
       - name: Reinstalar (mesma versão)
+        id: reinstall
+        if: always()
         shell: bash
         run: |
           npm install -g "${{ matrix.cli.npmPackage }}"
-          "${{ matrix.cli.bin }}" --version
+          echo "version=$("${{ matrix.cli.bin }}" --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Registrar — reinstalar
+        if: always()
+        shell: bash
+        run: |
+          jq --arg outcome "${{ steps.reinstall.outcome }}" --arg version "${{ steps.reinstall.outputs.version }}" \
+            '.scenarios += [{name: "reinstalar (mesma versão)", outcome: $outcome, version: $version}]' result.json > tmp.json && mv tmp.json result.json
 
       # "Atualizar" no catálogo do app é o mesmo comando de instalação apontado
       # para @latest — replica isso aqui em vez de inventar um fluxo próprio.
       - name: Atualizar (@latest)
+        id: update
+        if: always()
         shell: bash
         run: |
           npm install -g "${{ matrix.cli.npmPackage }}@latest"
-          "${{ matrix.cli.bin }}" --version
+          echo "version=$("${{ matrix.cli.bin }}" --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Registrar — atualizar
+        if: always()
+        shell: bash
+        run: |
+          jq --arg outcome "${{ steps.update.outcome }}" --arg version "${{ steps.update.outputs.version }}" \
+            '.scenarios += [{name: "atualizar (@latest)", outcome: $outcome, version: $version}]' result.json > tmp.json && mv tmp.json result.json
 
       # Downgrade: descobre a penúltima versão publicada (não hardcoded, para
       # não empedrar o workflow quando a CLI publicar de novo) e confirma que a
       # versão reportada de fato muda — sem isso o teste "passaria" mesmo que o
       # downgrade não tivesse efeito nenhum.
       - name: Downgrade (penúltima versão publicada)
+        id: downgrade
+        if: always()
         shell: bash
         run: |
           set -e
@@ -106,25 +164,47 @@ jobs:
               console.log(stable.length >= 2 ? stable[stable.length - 2] : '')
             })
           ")
+          echo "target=$previous" >> "$GITHUB_OUTPUT"
           if [ -z "$previous" ]; then
             echo "::warning::sem versão anterior publicada para downgrade — pulando"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           before=$("${{ matrix.cli.bin }}" --version)
           npm install -g "${{ matrix.cli.npmPackage }}@${previous}"
           after=$("${{ matrix.cli.bin }}" --version)
           echo "antes: $before / alvo: $previous / depois: $after"
+          echo "version=$after" >> "$GITHUB_OUTPUT"
           if [ "$before" = "$after" ]; then
             echo "::error::--version não mudou após downgrade para $previous"
             exit 1
           fi
 
-      - name: Remover
+      - name: Registrar — downgrade
+        if: always()
         shell: bash
         run: |
-          npm uninstall -g "${{ matrix.cli.npmPackage }}"
+          outcome="${{ steps.downgrade.outcome }}"
+          if [ "${{ steps.downgrade.outputs.skipped }}" = "true" ]; then outcome="skipped"; fi
+          jq --arg outcome "$outcome" --arg target "${{ steps.downgrade.outputs.target }}" --arg version "${{ steps.downgrade.outputs.version }}" \
+            '.scenarios += [{name: "downgrade (penúltima versão)", outcome: $outcome, target: $target, version: $version}]' result.json > tmp.json && mv tmp.json result.json
+
+      - name: Remover
+        id: remove
+        if: always()
+        shell: bash
+        run: npm uninstall -g "${{ matrix.cli.npmPackage }}"
+
+      - name: Registrar — remover
+        if: always()
+        shell: bash
+        run: |
+          jq --arg outcome "${{ steps.remove.outcome }}" \
+            '.scenarios += [{name: "remover", outcome: $outcome}]' result.json > tmp.json && mv tmp.json result.json
 
       - name: Confirmar remoção (comando não deve mais existir)
+        id: remove-confirm
+        if: always()
         shell: bash
         run: |
           if command -v "${{ matrix.cli.bin }}" >/dev/null 2>&1; then
@@ -133,8 +213,92 @@ jobs:
           fi
           echo "removido: ${{ matrix.cli.bin }} não resolve mais no PATH"
 
+      - name: Registrar — confirmar remoção
+        if: always()
+        shell: bash
+        run: |
+          jq --arg outcome "${{ steps.remove-confirm.outcome }}" \
+            '.scenarios += [{name: "confirmar remoção", outcome: $outcome}]' result.json > tmp.json && mv tmp.json result.json
+
       # Login interativo (OAuth/API key de cada provedor) fica de fora por
       # desenho: não há fixture/conta de teste dedicada, e simular quebraria a
-      # premissa de "instalação real" com uma sessão falsa. Documentado como
-      # limitação explícita — ver task "Release CI — relatório versionado de
-      # instalação real das CLIs por SO/CLI/cenário".
+      # premissa de "instalação real" com uma sessão falsa. Registrado no
+      # relatório consolidado como limitação explícita, não como cenário
+      # testado.
+      - name: Registrar — login interativo (não testado, limitação declarada)
+        if: always()
+        shell: bash
+        run: |
+          jq '.scenarios += [{name: "login interativo", outcome: "not_applicable", detail: "sem fixture/conta de teste dedicada — simular quebraria a premissa de instalação real"}]' result.json > tmp.json && mv tmp.json result.json
+
+      - name: Publicar resultado deste job
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-install-result-${{ matrix.os }}-${{ matrix.cli.id }}
+          path: result.json
+          if-no-files-found: warn
+
+  # Fatia 5/5: consolida os 9 result.json das fatias 1-4 num relatório
+  # versionado único (JSON + markdown), publicado como artifact — sem
+  # segredo nenhum, só nome de CLI/SO/versão/outcome por cenário.
+  report:
+    name: Relatório consolidado
+    needs: install-cli
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar todos os resultados
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-install-result-*
+          path: results
+          merge-multiple: false
+
+      - name: Consolidar em relatório único (JSON + markdown)
+        shell: bash
+        run: |
+          set -e
+          date_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Array, não word-splitting: nome de artifact/pasta pode ter
+          # espaço (já teve — "Claude Code", "Gemini CLI" — antes do id
+          # sem espaço nos labels dos jobs), e "for f in $files" sem aspas
+          # quebrava o caminho no meio.
+          mapfile -t files < <(find results -name result.json | sort)
+
+          jq -s --arg run "${{ github.run_id }}" --arg date "$date_utc" --arg sha "${{ github.sha }}" \
+            '{run_id: $run, generated_at: $date, commit: $sha, jobs: .}' "${files[@]}" > cli-install-report.json
+
+          {
+            echo "# Relatório de instalação real das CLIs oficiais"
+            echo
+            echo "Gerado em $date_utc, run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}), commit \`${{ github.sha }}\`."
+            echo
+            echo "Login interativo de cada CLI (OAuth/API key) não é testado aqui — sem"
+            echo "fixture/conta de teste dedicada, e simular quebraria a premissa de"
+            echo "\"instalação real\" com uma sessão falsa. Ver cenário \`login interativo\`"
+            echo "em cada job abaixo."
+            echo
+            echo "| SO | CLI | Instalar | Reinstalar | Atualizar | Downgrade | Remover |"
+            echo "| --- | --- | --- | --- | --- | --- | --- |"
+            for f in "${files[@]}"; do
+              jq -r '
+                def s(name): (.scenarios[] | select(.name | startswith(name)) | .outcome) // "—";
+                [.os, .cli, s("instalar"), s("reinstalar"), s("atualizar"), s("downgrade"), s("remover")] | @tsv
+              ' "$f" | awk -F'\t' '{printf "| %s | %s | %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, $5, $6, $7}'
+            done
+            echo
+            echo "Detalhe por versão (instalada/reinstalada/atualizada/downgrade) está no"
+            echo "\`cli-install-report.json\` anexado a este mesmo artifact."
+          } > cli-install-report.md
+
+          cat cli-install-report.md
+
+      - name: Publicar relatório consolidado
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-install-report
+          path: |
+            cli-install-report.json
+            cli-install-report.md
+          if-no-files-found: error
