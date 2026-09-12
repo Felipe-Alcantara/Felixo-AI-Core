@@ -430,8 +430,23 @@ function createPtyWorkingDirectory() {
   while (nested.length < 240) {
     nested = path.join(nested, segment)
   }
-  fs.mkdirSync(nested, { recursive: true })
-  return fs.mkdtempSync(path.join(nested, 'felixo-release-pty-'))
+
+  // MAX_PATH clássico (260 caracteres) bloqueia `mkdirSync` sem o prefixo de
+  // path estendido `\\?\` no Windows — independe de "LongPathsEnabled"
+  // estar habilitado no registro do runner (medido ao vivo: sem o prefixo,
+  // ENOENT mesmo criando um diretório por vez com `recursive: true`). Cria
+  // com o prefixo, mas devolve o caminho normal: é o que um cwd de verdade
+  // parece pro node-pty/ConPTY, e é exatamente o cenário real que a task
+  // pede pra provar — se o spawn falhar a partir daqui, é achado genuíno,
+  // não bug deste helper.
+  const mkdirTarget = toWindowsExtendedLengthPath(nested)
+  fs.mkdirSync(mkdirTarget, { recursive: true })
+  return fs.mkdtempSync(path.join(mkdirTarget, 'felixo-release-pty-')).replace(/^\\\\\?\\/, '')
+}
+
+function toWindowsExtendedLengthPath(target) {
+  if (process.platform !== 'win32' || target.startsWith('\\\\?\\')) return target
+  return `\\\\?\\${target}`
 }
 
 function removeTemporaryDirectory(directory) {
