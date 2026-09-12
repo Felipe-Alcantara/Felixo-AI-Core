@@ -235,6 +235,11 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-latest
+          # Runner hospedado arm64 gratuito em repositório público — cobre a
+          # validação do node-pty (dependência nativa) nessa arquitetura sem
+          # precisar de dispositivo físico. Ver task "Release — validar
+          # node-pty empacotado no Linux arm64".
+          - ubuntu-24.04-arm
     defaults:
       run:
         working-directory: app
