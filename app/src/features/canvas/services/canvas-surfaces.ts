@@ -15,6 +15,16 @@
 /** Faixa de canvas que continua visível por baixo de tudo. */
 export const MIN_CANVAS_STRIP = 160
 
+/**
+ * Pisos de largura do painel de ferramenta e da gaveta do terminal —
+ * únicos, aqui, pra `CanvasSurfacesProvider.tsx` (que faz a divisão) e
+ * `useResizablePanelWidth.ts`/`TerminalDrawer.tsx` (que liam cada um o seu
+ * próprio piso local, sem garantia de bater com o que o outro lado achava
+ * que o piso era) nunca mais divergirem silenciosamente.
+ */
+export const PANEL_MIN_WIDTH = 260
+export const DRAWER_MIN_WIDTH = 440
+
 export type SurfaceOccupancy = {
   /** Largura da coluna da barra de ferramentas, com a margem dela. */
   toolbar: number
@@ -56,6 +66,92 @@ export function drawerWidthLimit(
   minimum: number,
 ): number {
   return availableWidth(viewportWidth, toolbar + panel, minimum)
+}
+
+/**
+ * Divide a largura disponível entre painel e gaveta NUMA PASSADA SÓ — dado
+ * o que cada um quer (`desiredPanel`/`desiredDrawer`, sem corte nenhum) e o
+ * piso de cada um, devolve os dois valores finais.
+ *
+ * Bug real encontrado em 12/09/2026, reportado como "painéis conflitando com
+ * o terminal, os dois ficam em looping se mexendo": `panelWidthLimit` e
+ * `drawerWidthLimit` cada um calcula o próprio teto lendo a largura JÁ
+ * RELATADA do outro lado — e cada lado relata de volta o valor já cortado
+ * pelo próprio teto. Isso é uma referência circular: painel encolhe porque a
+ * gaveta cresceu, a gaveta recalcula o teto dela vendo o painel menor e
+ * cresce mais, o painel vê a gaveta maior e encolhe mais — provado com
+ * números reais que isso pode alternar entre dois valores PARA SEMPRE (nunca
+ * converge), e medido ao vivo que mesmo quando não oscila de verdade, a
+ * "faixa de canvas garantida" (`MIN_CANVAS_STRIP`) podia ficar espremida
+ * bem abaixo do piso pretendido (32px medidos onde deveriam ser 160px).
+ *
+ * Esta função resolve os dois de uma vez, a partir só do que cada um QUER —
+ * nunca do que o outro já tem relatado — então não existe referência
+ * circular pra oscilar: é uma conta, não uma negociação entre dois efeitos.
+ */
+export function splitHorizontalSpace(
+  viewportWidth: number,
+  toolbarWidth: number,
+  desiredPanel: number,
+  minPanel: number,
+  desiredDrawer: number,
+  minDrawer: number,
+  minCanvas = MIN_CANVAS_STRIP,
+): { panel: number; drawer: number } {
+  const available = Math.max(0, viewportWidth - toolbarWidth - minCanvas)
+
+  if (desiredPanel <= 0) {
+    return { panel: 0, drawer: Math.min(desiredDrawer, Math.max(minDrawer, available)) }
+  }
+  if (desiredDrawer <= 0) {
+    return { panel: Math.min(desiredPanel, Math.max(minPanel, available)), drawer: 0 }
+  }
+
+  // Quem já pediu menos que o próprio piso "normal" (a gaveta recolhida a
+  // um trilho de 44px, por exemplo) não está disputando espaço nenhum — é
+  // uma escolha explícita, não uma superfície espremida. Devolve exatamente
+  // o que foi pedido e deixa o resto pro outro lado, sem forçar o piso dele
+  // numa superfície que nem quer aquele tamanho.
+  if (desiredPanel < minPanel) {
+    const finalPanel = Math.min(desiredPanel, available)
+    return {
+      panel: finalPanel,
+      drawer: Math.min(desiredDrawer, Math.max(minDrawer, available - finalPanel)),
+    }
+  }
+  if (desiredDrawer < minDrawer) {
+    const finalDrawer = Math.min(desiredDrawer, available)
+    return {
+      panel: Math.min(desiredPanel, Math.max(minPanel, available - finalDrawer)),
+      drawer: finalDrawer,
+    }
+  }
+
+  // Nem os dois pisos juntos cabem: sobreposição intencional, cada um no
+  // próprio piso — a mesma filosofia que `availableWidth` já documentava
+  // pra um lado só, aplicada aos dois de uma vez em vez de descoberta aos
+  // poucos por rodadas de relato.
+  if (minPanel + minDrawer > available) {
+    return { panel: minPanel, drawer: minDrawer }
+  }
+
+  const extraAvailable = available - minPanel - minDrawer
+  const extraPanelWanted = Math.max(0, desiredPanel - minPanel)
+  const extraDrawerWanted = Math.max(0, desiredDrawer - minDrawer)
+  const totalExtraWanted = extraPanelWanted + extraDrawerWanted
+
+  if (totalExtraWanted <= extraAvailable) {
+    // Os dois cabem inteiros do jeito que pediram.
+    return { panel: minPanel + extraPanelWanted, drawer: minDrawer + extraDrawerWanted }
+  }
+
+  // Não cabem os dois inteiros: divide o espaço extra proporcionalmente ao
+  // que cada um pediu além do próprio piso — quem pediu mais folga cede
+  // mais, mas nenhum dos dois é espremido abaixo do que já tinha garantido.
+  const panelShare = Math.round(extraAvailable * (extraPanelWanted / totalExtraWanted))
+  const drawerShare = extraAvailable - panelShare
+
+  return { panel: minPanel + panelShare, drawer: minDrawer + drawerShare }
 }
 
 /**

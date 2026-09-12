@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useCanvasSurfaces } from './canvas-surfaces-context'
-import { panelWidthLimit } from '../services/canvas-surfaces'
 import {
   clampPanelWidth,
   clearPanelWidth,
@@ -10,9 +9,6 @@ import {
   writePanelWidth,
   type PanelSize,
 } from '../services/panel-sizing'
-
-/** Abaixo disto o painel não mostra conteúdo útil; é onde o arrasto para. */
-const PANEL_MIN_WIDTH = 260
 
 type ResizablePanelWidth = {
   width: number
@@ -30,12 +26,21 @@ type ResizablePanelWidth = {
  * num monitor grande e depois no notebook não deixa o painel desproporcional.
  * Depois do primeiro arrasto vale a escolha dela, só trazida para dentro da
  * faixa quando a tela não comporta mais aquele tamanho.
+ *
+ * Este hook só PEDE a largura (`reportPanelWidth`, sem corte nenhum) e lê de
+ * volta o que `CanvasSurfacesProvider` decidiu depois de conferir a gaveta
+ * também (`occupancy.panel`) — nunca calcula o próprio teto sozinho. Fazer
+ * isso aqui (lendo a largura já relatada da gaveta pra montar um teto local)
+ * era a causa de um bug real: painel e gaveta entravam num looping de se
+ * espremer mutuamente sem nunca convergir, porque cada um calculava o teto a
+ * partir do valor JÁ CORTADO do outro. Ver `splitHorizontalSpace` em
+ * `canvas-surfaces.ts`.
  */
 export function useResizablePanelWidth(
   panelId: string,
   size: PanelSize,
 ): ResizablePanelWidth {
-  const { occupancy, viewport, reportPanelWidth } = useCanvasSurfaces()
+  const { occupancy, reportPanelWidth } = useCanvasSurfaces()
   const [width, setWidth] = useState(() =>
     readPanelWidth(window.localStorage, panelId, window.innerWidth, size),
   )
@@ -46,18 +51,14 @@ export function useResizablePanelWidth(
   const startX = useRef(0)
   const startWidth = useRef(0)
 
-  // O teto acompanha a gaveta: abrir ou alargar a gaveta encolhe o painel na
-  // hora, em vez de deixar um cobrir o outro.
-  const limit = panelWidthLimit(viewport.width, occupancy, PANEL_MIN_WIDTH)
-  // Derivado, não guardado: a preferência da pessoa continua intacta em
-  // `width`, e o teto só decide o que cabe agora. Guardar o valor já cortado
-  // faria a largura escolhida se perder ao fechar a gaveta.
-  const effectiveWidth = Math.min(width, limit)
-
   useEffect(() => {
-    reportPanelWidth(effectiveWidth)
+    reportPanelWidth(width)
     return () => reportPanelWidth(0)
-  }, [effectiveWidth, reportPanelWidth])
+  }, [width, reportPanelWidth])
+
+  // A largura final: o que o provider decidiu depois de conferir a gaveta —
+  // nunca o que este hook pediu (`width`, acima) direto.
+  const effectiveWidth = occupancy.panel
 
   useEffect(() => {
     function onViewportResize() {
@@ -78,14 +79,14 @@ export function useResizablePanelWidth(
         return
       }
 
+      // Clampada só pelo próprio piso/teto absoluto (`clampPanelWidth`, que
+      // não olha a gaveta) — a negociação com a gaveta acontece depois, no
+      // provider, a partir do que for reportado.
       setWidth(
-        Math.min(
-          limit,
-          clampPanelWidth(
-            startWidth.current + (event.clientX - startX.current),
-            window.innerWidth,
-            size,
-          ),
+        clampPanelWidth(
+          startWidth.current + (event.clientX - startX.current),
+          window.innerWidth,
+          size,
         ),
       )
     }
@@ -112,7 +113,7 @@ export function useResizablePanelWidth(
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
     }
-  }, [limit, panelId, size])
+  }, [panelId, size])
 
   const startResize = useCallback(
     (event: React.MouseEvent) => {
@@ -130,8 +131,8 @@ export function useResizablePanelWidth(
   const reset = useCallback(() => {
     clearPanelWidth(window.localStorage, panelId)
     customized.current = false
-    setWidth(Math.min(limit, getDefaultPanelWidth(window.innerWidth, size)))
-  }, [limit, panelId, size])
+    setWidth(getDefaultPanelWidth(window.innerWidth, size))
+  }, [panelId, size])
 
   return { width: effectiveWidth, resizing, startResize, reset }
 }

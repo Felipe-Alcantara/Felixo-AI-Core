@@ -12,7 +12,9 @@
 // que ainda não tinham um lugar comum — dock e Mini Map inclusos.
 
 import {
+  DRAWER_MIN_WIDTH,
   MIN_CANVAS_STRIP,
+  PANEL_MIN_WIDTH,
   drawerWidthLimit,
   freeCanvasArea,
   miniMapSize,
@@ -20,15 +22,11 @@ import {
   type SurfaceOccupancy,
 } from './canvas-surfaces'
 
+export { DRAWER_MIN_WIDTH, PANEL_MIN_WIDTH }
+
 /** Largura da coluna da barra de ferramentas com a margem dela (ver CanvasView.tsx). */
 export const TOOLBAR_WIDTH = 176
 
-/**
- * Piso de largura do painel de ferramenta e da gaveta do terminal — os
- * mesmos usados hoje por `panel-sizing.ts` (`sm`) e `terminal-drawer-pin.ts`.
- */
-export const PANEL_MIN_WIDTH = 260
-export const DRAWER_MIN_WIDTH = 300
 /** Trilho da gaveta recolhida: só os botões do cabeçalho, sem terminal. */
 export const DRAWER_COLLAPSED_WIDTH = 44
 
@@ -194,14 +192,20 @@ export function detectLiveLayoutClamp({
   occupancy,
   dockTop,
 }: LiveLayoutSnapshot): LayoutInvariantViolation | null {
-  // Painel e gaveta abertos ao mesmo tempo, de verdade, sem caber — a
-  // sobreposição intencional documentada em COMBINED_FLOOR_WIDTH acontecendo
-  // agora, não hipoteticamente.
+  // Painel e gaveta abertos ao mesmo tempo, de verdade, deixando menos que
+  // a faixa de canvas garantida entre os dois — a sobreposição intencional
+  // documentada em COMBINED_FLOOR_WIDTH acontecendo agora, não
+  // hipoteticamente. Checar só "estourou a largura da tela" (em vez de
+  // "sobrou menos que MIN_CANVAS_STRIP") deixava passar batido um caso real:
+  // medido ao vivo em 12/09/2026, barra+painel+gaveta somavam 876px numa
+  // tela de 900px — cabiam, sem "estourar" — mas a faixa de canvas entre os
+  // dois ficou em ~24px, bem abaixo dos 160px pretendidos.
   const horizontalTotal = occupancy.toolbar + occupancy.panel + occupancy.drawer
-  if (occupancy.panel > 0 && occupancy.drawer > 0 && horizontalTotal > viewport.width) {
+  const canvasStrip = viewport.width - horizontalTotal
+  if (occupancy.panel > 0 && occupancy.drawer > 0 && canvasStrip < MIN_CANVAS_STRIP) {
     return {
-      rule: 'painel+gaveta-sobrepostos-de-verdade',
-      detail: `barra ${occupancy.toolbar}px + painel ${occupancy.panel}px + gaveta ${occupancy.drawer}px = ${horizontalTotal}px, viewport ${viewport.width}px`,
+      rule: 'painel+gaveta-espremem-a-faixa-de-canvas',
+      detail: `barra ${occupancy.toolbar}px + painel ${occupancy.panel}px + gaveta ${occupancy.drawer}px = ${horizontalTotal}px, sobrando ${canvasStrip}px de canvas (piso ${MIN_CANVAS_STRIP}px), viewport ${viewport.width}px`,
     }
   }
 

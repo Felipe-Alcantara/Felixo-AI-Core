@@ -4,9 +4,24 @@ import type { SurfaceOccupancy } from '../services/canvas-surfaces'
 export type MinimapSize = { width: number; height: number }
 
 export type CanvasSurfacesValue = {
+  /**
+   * `occupancy.panel`/`occupancy.drawer` são as larguras FINAIS já
+   * decididas por `splitHorizontalSpace` — o que cada superfície de fato
+   * deve renderizar. Não são o que cada lado pediu (isso é `reportPanelWidth`/
+   * `reportDrawerWidth`, abaixo); ler `occupancy` de volta pra decidir a
+   * própria largura é seguro porque é resultado de uma conta feita uma vez,
+   * nunca de um relato do outro lado — ver o comentário em
+   * `CanvasSurfacesProvider.tsx` sobre o loop que essa distinção corrige.
+   */
   occupancy: SurfaceOccupancy
   viewport: { width: number; height: number }
-  /** Cada superfície publica a largura que está ocupando agora. */
+  /**
+   * Cada superfície publica o que QUER ocupar — sem corte nenhum, nem pelo
+   * próprio piso nem pelo que o outro lado está usando. O provider decide a
+   * largura final dos dois de uma vez (`splitHorizontalSpace`) e devolve o
+   * resultado em `occupancy`; quem relata nunca deve calcular o próprio
+   * clamp sozinho, ou a referência circular volta.
+   */
   reportPanelWidth: (width: number) => void
   reportDrawerWidth: (width: number) => void
   /** Topo do dock "Elementos": é onde o painel da esquerda precisa parar. */

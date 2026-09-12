@@ -6,6 +6,7 @@ import {
   freeCanvasArea,
   miniMapSize,
   panelWidthLimit,
+  splitHorizontalSpace,
 } from './canvas-surfaces'
 
 /** Notebook do relato: viewport útil de 1320x738. */
@@ -98,6 +99,78 @@ describe('Mini Map', () => {
   it('some quando nem o tamanho mínimo cabe', () => {
     expect(miniMapSize(100)).toBeNull()
     expect(miniMapSize(0)).toBeNull()
+  })
+})
+
+describe('divisão de uma vez só entre painel e gaveta (splitHorizontalSpace)', () => {
+  // Bug real reportado em 12/09/2026: "painéis conflitando com o terminal,
+  // os dois ficam em looping se mexendo". `panelWidthLimit`/`drawerWidthLimit`
+  // usados em duas mãos (cada lado lendo o valor JÁ CORTADO do outro, via
+  // relato assíncrono num contexto compartilhado) formam uma referência
+  // circular: provado com os mesmos números abaixo que isso pode alternar
+  // entre dois valores PARA SEMPRE, nunca convergir. `splitHorizontalSpace`
+  // calcula os dois de uma vez só, a partir só do que cada um QUER — sem
+  // referência circular possível.
+  it('nunca oscila: a mesma entrada sempre devolve a mesma saída (determinístico)', () => {
+    const resultado1 = splitHorizontalSpace(900, 176, 380, 260, 700, 440)
+    const resultado2 = splitHorizontalSpace(900, 176, 380, 260, 700, 440)
+
+    expect(resultado1).toEqual(resultado2)
+  })
+
+  it('cabendo os dois inteiros, cada um recebe exatamente o que pediu', () => {
+    expect(splitHorizontalSpace(1400, 176, 360, 260, 440, 440)).toEqual({
+      panel: 360,
+      drawer: 440,
+    })
+  })
+
+  it('nem os dois pisos juntos cabem: sobreposição intencional, cada um no próprio piso', () => {
+    // O cenário real medido ao vivo: painel `xl` (quer ~360px) + gaveta numa
+    // janela de 900px. A gaveta nunca relata abaixo do próprio piso (440) —
+    // `clampDrawerWidth` já garante isso antes do relato, mesmo quando a
+    // fração de 45% da tela (405px aqui) ficaria menor. Piso do painel (260)
+    // + piso da gaveta (440) = 700, e só sobram 564px (900-176-160) — nem os
+    // pisos cabem os dois juntos.
+    expect(splitHorizontalSpace(900, 176, 360, 260, 440, 440)).toEqual({
+      panel: 260,
+      drawer: 440,
+    })
+  })
+
+  it('pisos cabem mas os dois inteiros não: divide o extra proporcionalmente ao que cada um pediu', () => {
+    const resultado = splitHorizontalSpace(900, 176, 380, 260, 700, 300)
+
+    expect(resultado.panel + resultado.drawer).toBeLessThanOrEqual(900 - 176 - MIN_CANVAS_STRIP)
+    expect(resultado.panel).toBeGreaterThanOrEqual(260)
+    expect(resultado.drawer).toBeGreaterThanOrEqual(300)
+    // Quem pediu mais folga (gaveta: quer 400 a mais que o piso, painel só
+    // 120) cede proporcionalmente mais do que faltou.
+    expect(resultado.drawer - 300).toBeGreaterThan(resultado.panel - 260)
+  })
+
+  it('gaveta recolhida (pede menos que o próprio piso) não força o piso dela sobre o painel', () => {
+    // A gaveta colapsada (44px, um trilho) é uma escolha explícita, não uma
+    // superfície espremida — não deve reservar os 440px do piso "normal"
+    // dela às custas do painel.
+    const resultado = splitHorizontalSpace(900, 176, 360, 260, 44, 440)
+
+    expect(resultado.drawer).toBe(44)
+    expect(resultado.panel).toBe(360)
+  })
+
+  it('painel fechado: gaveta usa tudo que quiser, até o disponível', () => {
+    expect(splitHorizontalSpace(900, 176, 0, 260, 2000, 440)).toEqual({
+      panel: 0,
+      drawer: 900 - 176 - MIN_CANVAS_STRIP,
+    })
+  })
+
+  it('gaveta fechada: painel usa tudo que quiser, até o disponível', () => {
+    expect(splitHorizontalSpace(900, 176, 2000, 260, 0, 440)).toEqual({
+      panel: 900 - 176 - MIN_CANVAS_STRIP,
+      drawer: 0,
+    })
   })
 })
 

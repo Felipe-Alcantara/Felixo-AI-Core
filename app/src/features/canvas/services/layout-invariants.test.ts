@@ -6,7 +6,11 @@ import {
   isWorstCaseLayoutSafe,
 } from './layout-invariants'
 
-// Bateria de breakpoints a partir de COMBINED_FLOOR_WIDTH (736px): abaixo
+// Bateria de breakpoints a partir de COMBINED_FLOOR_WIDTH (barra 176 + piso
+// do painel 260 + piso da gaveta 440 = 876px — corrigido em 12/09/2026: o
+// piso da gaveta usado aqui era 300, mas o real em TerminalDrawer.tsx sempre
+// foi 440; a divergência escondia uma faixa de canvas espremida bem abaixo
+// do piso pretendido mesmo quando "cabia" segundo a conta errada): abaixo
 // dele, painel de ferramenta e gaveta do terminal abertos juntos já são uma
 // sobreposição intencional por desenho (ver o comentário na constante) — não
 // faz sentido testar "seguro" ali. A partir dele, inclui o notebook modesto
@@ -73,7 +77,7 @@ describe('diagnóstico do estado ao vivo (detectLiveLayoutClamp)', () => {
       dockTop: Number.POSITIVE_INFINITY,
     })
 
-    expect(clamp?.rule).toBe('painel+gaveta-sobrepostos-de-verdade')
+    expect(clamp?.rule).toBe('painel+gaveta-espremem-a-faixa-de-canvas')
   })
 
   it('gaveta sozinha (sem painel), mesmo apertada, não é o clamp de painel+gaveta', () => {

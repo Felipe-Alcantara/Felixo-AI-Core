@@ -22,7 +22,6 @@ import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import type { AgentSessionReference } from '../services/agent-session'
 import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
-import { drawerWidthLimit } from '../services/canvas-surfaces'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
@@ -121,16 +120,7 @@ export function TerminalDrawer({
   // Collapsed keeps the session running and the terminal mounted — the drawer
   // just shrinks to a rail, so reopening is instant and nothing is lost.
   const [collapsed, setCollapsed] = useState(() => readCollapsedPreference(localStorage))
-  const { occupancy, viewport, reportDrawerWidth } = useCanvasSurfaces()
-  // Teto vindo do que o painel da esquerda ocupa: os dois disputam a mesma
-  // largura, e crescer um encolhe o outro em vez de cobrir.
-  const widthLimit = drawerWidthLimit(viewport.width, occupancy, MIN_WIDTH)
-  // O listener de arrasto é montado uma vez só; o teto muda enquanto ele está
-  // vivo, então chega por ref em vez de remontar o listener a cada mudança.
-  const widthLimitRef = useRef(widthLimit)
-  useEffect(() => {
-    widthLimitRef.current = widthLimit
-  }, [widthLimit])
+  const { occupancy, reportDrawerWidth } = useCanvasSurfaces()
   const [maximized, setMaximized] = useState(false)
   const [handoffError, setHandoffError] = useState<string | undefined>()
   const [previewError, setPreviewError] = useState<string | undefined>()
@@ -205,18 +195,26 @@ export function TerminalDrawer({
     store,
   ])
 
-  const effectiveWidth = collapsed
+  // O que a gaveta QUER — inclusive recolhida (44px, uma escolha explícita,
+  // não uma superfície espremida) e maximizada. `CanvasSurfacesProvider`
+  // decide a largura final junto com o painel da esquerda numa passada só
+  // (`splitHorizontalSpace`); ler de volta o valor já decidido em vez de
+  // recalcular o próprio teto aqui é o que evita o looping de espremer
+  // mutuamente (bug real, reproduzido em 12/09/2026).
+  const desiredWidth = collapsed
     ? COLLAPSED_WIDTH
     : maximized
       ? Math.max(COLLAPSED_WIDTH, window.innerWidth - 120)
-      : Math.min(width, widthLimit)
+      : width
 
-  // Publica o que está ocupando de fato — inclusive recolhida e maximizada —
-  // para o painel da esquerda se ajustar a cada um desses estados.
   useEffect(() => {
-    reportDrawerWidth(effectiveWidth)
+    reportDrawerWidth(desiredWidth)
     return () => reportDrawerWidth(0)
-  }, [effectiveWidth, reportDrawerWidth])
+  }, [desiredWidth, reportDrawerWidth])
+
+  // A largura final: o que o provider decidiu depois de conferir o painel
+  // da esquerda — nunca `desiredWidth` direto.
+  const effectiveWidth = occupancy.drawer
 
   // Click outside the drawer closes it, unless pinned.
   useEffect(() => {
@@ -282,13 +280,11 @@ export function TerminalDrawer({
       if (!draggingRef.current) {
         return
       }
+      // Clampada só pelo próprio piso/teto absoluto (`clampDrawerWidth`, que
+      // não olha o painel) — a negociação com o painel acontece depois, no
+      // provider, a partir do que for reportado.
       const next = window.innerWidth - event.clientX
-      setWidth(
-        Math.min(
-          widthLimitRef.current,
-          clampDrawerWidth(next, window.innerWidth, MIN_WIDTH),
-        ),
-      )
+      setWidth(clampDrawerWidth(next, window.innerWidth, MIN_WIDTH))
     }
     const onMouseUp = () => {
       if (draggingRef.current) {

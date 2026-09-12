@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CanvasSurfacesContext } from '../hooks/canvas-surfaces-context'
-import { dockReservedBottom, freeCanvasArea, miniMapSize } from '../services/canvas-surfaces'
+import {
+  DRAWER_MIN_WIDTH,
+  PANEL_MIN_WIDTH,
+  dockReservedBottom,
+  freeCanvasArea,
+  miniMapSize,
+  splitHorizontalSpace,
+} from '../services/canvas-surfaces'
 import { detectLiveLayoutClamp } from '../services/layout-invariants'
 
 /**
@@ -19,8 +26,14 @@ export function CanvasSurfacesProvider({
   toolbarWidth: number
   children: ReactNode
 }) {
-  const [panel, setPanel] = useState(0)
-  const [drawer, setDrawer] = useState(0)
+  // O QUE painel e gaveta QUEREM — sem corte nenhum. A largura final de
+  // cada um (`occupancy.panel`/`occupancy.drawer`, abaixo) é calculada
+  // NUMA PASSADA SÓ a partir destes dois números, nunca um lendo o valor
+  // já cortado do outro — é essa referência circular que causava o painel
+  // e a gaveta entrarem em looping se espremendo mutuamente (bug real,
+  // reportado e reproduzido em 12/09/2026; ver `splitHorizontalSpace`).
+  const [desiredPanel, setDesiredPanel] = useState(0)
+  const [desiredDrawer, setDesiredDrawer] = useState(0)
   const [dockTop, setDockTop] = useState(Number.POSITIVE_INFINITY)
   const [viewport, setViewport] = useState(() => ({
     width: window.innerWidth,
@@ -37,16 +50,29 @@ export function CanvasSurfacesProvider({
   }, [])
 
   const reportPanelWidth = useCallback(
-    (width: number) => setPanel((current) => (current === width ? current : width)),
+    (width: number) => setDesiredPanel((current) => (current === width ? current : width)),
     [],
   )
   const reportDrawerWidth = useCallback(
-    (width: number) => setDrawer((current) => (current === width ? current : width)),
+    (width: number) => setDesiredDrawer((current) => (current === width ? current : width)),
     [],
   )
   const reportDockTop = useCallback(
     (top: number) => setDockTop((current) => (current === top ? current : top)),
     [],
+  )
+
+  const { panel, drawer } = useMemo(
+    () =>
+      splitHorizontalSpace(
+        viewport.width,
+        toolbarWidth,
+        desiredPanel,
+        PANEL_MIN_WIDTH,
+        desiredDrawer,
+        DRAWER_MIN_WIDTH,
+      ),
+    [desiredDrawer, desiredPanel, toolbarWidth, viewport.width],
   )
 
   // Diagnóstico do clamp: só a transição pra um estado clampado vira log —
