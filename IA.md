@@ -4823,3 +4823,40 @@ por squash, branch apagada (local e remota).
 **Estado final.** `3d991f95-497e-81f5-8823-e7717058a874` marcada Concluída (parte 1
 entregue). Parte 2 (investigar suporte real a path longo, não só avisar) virou task
 nova: `3d991f95-497e-8151-bbbf-d27b48fef0ea`, prioridade baixa, linkada.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — path longo no Windows: investigação conclusiva, sem código novo
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+**Contexto.** Parte 2 da decisão sobre node-pty falhando em `cwd` longo no Windows
+(parte 1, o aviso ao usuário, já publicada em `0fd29ce`/PR #27). Task
+"Terminal — investigar suporte real a path longo no Windows para o node-pty".
+
+**Investigação.** Lido o código-fonte C++ do `node-pty` (`conpty.cc:413`): o `cwd`
+vira `lpCurrentDirectory` de `CreateProcessW` sem nenhum tratamento de prefixo de
+path estendido (`\\?\`). Hipótese testada empiricamente: manter esse prefixo até o
+`cwd` que chega no `node-pty` resolveria? Testado via uma branch experimental
+(`terminal/investigate-longpath-prefix`, PR #28) com uma flag temporária
+(`FELIXO_RELEASE_SMOKE_LONG_PATH_PREFIXED=1`) e um release de teste real disparado
+via `workflow_dispatch --ref <branch>` (aprendizado no processo: sem `--ref`, o
+dispatch lê a definição do workflow do `main`, não da branch, então o passo
+experimental simplesmente não aparecia na primeira tentativa).
+
+**Resultado medido (run `34711715030`):** `Cannot create process, error code: 267` —
+**idêntico** ao teste sem o prefixo. Confirma empiricamente que
+`CreateProcessW.lpCurrentDirectory` não honra o prefixo estendido — não é uma
+omissão da nossa camada, é uma limitação real do parâmetro do Windows (e por
+extensão, do `node-pty`, que não adiciona tratamento próprio pra isso).
+
+**Conclusão.** Sem solução viável no nosso lado sem forkar e recompilar o binário
+nativo do `node-pty` — custo de manutenção desproporcional ao problema (só afeta
+quem tem caminho de trabalho muito longo). `LongPathsEnabled`/`longPathAware`
+descartado por documentação: cobre as APIs de arquivo do Win32, não
+`CreateProcess.lpCurrentDirectory`, e mesmo se cobrisse é config de máquina, não de
+app. **Nenhum código novo publicado** — só o achado, a decisão de não seguir, e a
+evidência. Branch e PR #28 descartados (fechada sem merge, branch apagada local e
+remota).
+
+**Tasks no Notion.** `3d991f95-497e-8151-bbbf-d27b48fef0ea` marcada Concluída — a
+conclusão negativa e bem fundamentada é o entregável, exatamente como o critério de
+aceite da própria task previa.
