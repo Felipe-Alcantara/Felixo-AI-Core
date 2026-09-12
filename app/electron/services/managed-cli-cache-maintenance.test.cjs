@@ -2,6 +2,7 @@
 
 const { describe, it } = require('node:test')
 const assert = require('node:assert/strict')
+const path = require('node:path')
 const { EventEmitter } = require('node:events')
 
 const {
@@ -10,7 +11,12 @@ const {
   pruneNpmCacheIfOverBudget,
 } = require('./managed-cli-cache-maintenance.cjs')
 
-/** Sistema de arquivos falso: um mapa caminho → { isFile, size } | { isDir, children }. */
+/**
+ * Sistema de arquivos falso: um mapa caminho → { isFile, size } | { isDir, children }.
+ * As chaves são montadas com `path.join`, não concatenação de string com
+ * `/` — a função real usa `path.join`, que no Windows produz `\`. Um teste
+ * com chave hardcoded em `/` nunca bateria com o caminho real ali.
+ */
 function createFakeFs(tree) {
   return {
     readdirSync(dir, { withFileTypes }) {
@@ -19,8 +25,8 @@ function createFakeFs(tree) {
       if (!withFileTypes) throw new Error('teste espera withFileTypes')
       return node.children.map((name) => ({
         name,
-        isDirectory: () => Boolean(tree[`${dir}/${name}`]?.isDir),
-        isFile: () => Boolean(tree[`${dir}/${name}`]?.isFile),
+        isDirectory: () => Boolean(tree[path.join(dir, name)]?.isDir),
+        isFile: () => Boolean(tree[path.join(dir, name)]?.isFile),
       }))
     },
     statSync(filePath) {
@@ -31,35 +37,37 @@ function createFakeFs(tree) {
   }
 }
 
+const CACHE_DIR = path.join('cache-root', 'cache')
+
 describe('measureDirectorySize', () => {
   it('soma o tamanho de todos os arquivos recursivamente', () => {
     const fileSystem = createFakeFs({
-      '/cache': { isDir: true, children: ['a.txt', 'sub'] },
-      '/cache/a.txt': { isFile: true, size: 100 },
-      '/cache/sub': { isDir: true, children: ['b.txt'] },
-      '/cache/sub/b.txt': { isFile: true, size: 250 },
+      [CACHE_DIR]: { isDir: true, children: ['a.txt', 'sub'] },
+      [path.join(CACHE_DIR, 'a.txt')]: { isFile: true, size: 100 },
+      [path.join(CACHE_DIR, 'sub')]: { isDir: true, children: ['b.txt'] },
+      [path.join(CACHE_DIR, 'sub', 'b.txt')]: { isFile: true, size: 250 },
     })
 
-    assert.equal(measureDirectorySize('/cache', fileSystem), 350)
+    assert.equal(measureDirectorySize(CACHE_DIR, fileSystem), 350)
   })
 
   it('devolve 0 quando a pasta nunca foi criada (cache nunca usado)', () => {
     const fileSystem = createFakeFs({})
 
-    assert.equal(measureDirectorySize('/nao-existe', fileSystem), 0)
+    assert.equal(measureDirectorySize(path.join('cache-root', 'nao-existe'), fileSystem), 0)
   })
 })
 
 describe('pruneNpmCacheIfOverBudget', () => {
   const baseFs = createFakeFs({
-    '/cache': { isDir: true, children: ['big.bin'] },
-    '/cache/big.bin': { isFile: true, size: 300 },
+    [CACHE_DIR]: { isDir: true, children: ['big.bin'] },
+    [path.join(CACHE_DIR, 'big.bin')]: { isFile: true, size: 300 },
   })
 
   it('não mexe no cache quando está dentro do orçamento', async () => {
     let spawnCalled = false
     const result = await pruneNpmCacheIfOverBudget({
-      cacheDir: '/cache',
+      cacheDir: CACHE_DIR,
       npmCliPath: '/npm-cli.js',
       nodeExecutable: '/node',
       env: {},
@@ -78,7 +86,7 @@ describe('pruneNpmCacheIfOverBudget', () => {
   it('limpa o cache com "npm cache clean --force" quando passa do orçamento', async () => {
     const calls = []
     const result = await pruneNpmCacheIfOverBudget({
-      cacheDir: '/cache',
+      cacheDir: CACHE_DIR,
       npmCliPath: '/npm-cli.js',
       nodeExecutable: '/node',
       env: { PATH: '/usr/bin' },
@@ -103,14 +111,14 @@ describe('pruneNpmCacheIfOverBudget', () => {
       'clean',
       '--force',
       '--cache',
-      '/cache',
+      CACHE_DIR,
       '--loglevel=error',
     ])
   })
 
   it('reporta a falha sem lançar quando a limpeza do npm falha', async () => {
     const result = await pruneNpmCacheIfOverBudget({
-      cacheDir: '/cache',
+      cacheDir: CACHE_DIR,
       npmCliPath: '/npm-cli.js',
       nodeExecutable: '/node',
       env: {},
