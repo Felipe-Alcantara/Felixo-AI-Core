@@ -63,11 +63,19 @@ async function runPackagedReleaseSmoke({
     status.readyAt = Date.now()
     writeStatus()
 
-    const ptyCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-pty-'))
+    const ptyCwd = createPtyWorkingDirectory()
     const manager = new PtyManager()
 
     try {
-      status.pty = await runRealPty({ manager, cwd: ptyCwd })
+      status.pty = await runRealPty({
+        manager,
+        cwd: ptyCwd,
+        // Task "validar node-pty empacotado no Windows": cobre cmd.exe e
+        // PowerShell explicitamente, não só o shell padrão do runner —
+        // release.yml roda este smoke duas vezes no Windows, uma com
+        // FELIXO_RELEASE_SMOKE_SHELL=cmd.exe, uma sem (PowerShell/padrão).
+        shellCommand: process.env.FELIXO_RELEASE_SMOKE_SHELL || undefined,
+      })
       writeStatus()
 
       status.contextDelivery = await runContextCatalogSmoke({ app, manager, cwd: ptyCwd })
@@ -97,9 +105,12 @@ async function runPackagedReleaseSmoke({
  * @param {object} options
  * @param {PtyProcessManager} options.manager
  * @param {string} options.cwd
- * @returns {Promise<{ ok: boolean, exitCode: number, marker: string, outputBytes: number }>}
+ * @param {string} [options.shellCommand] - Força um shell específico (ex.:
+ *   "cmd.exe") em vez do shell padrão detectado da plataforma — usado para
+ *   cobrir cmd.exe e PowerShell separadamente no Windows.
+ * @returns {Promise<{ ok: boolean, exitCode: number, marker: string, outputBytes: number, shell: string, cwdLength: number }>}
  */
-function runRealPty({ manager, cwd }) {
+function runRealPty({ manager, cwd, shellCommand }) {
   return new Promise((resolve, reject) => {
     const sessionId = `release-smoke-${process.pid}`
     let output = ''
@@ -128,6 +139,7 @@ function runRealPty({ manager, cwd }) {
     try {
       manager.spawn(sessionId, {
         cwd,
+        ...(shellCommand ? { command: shellCommand } : {}),
         onData: (data) => {
           output = `${output}${String(data)}`.slice(-20_000)
         },
@@ -147,6 +159,8 @@ function runRealPty({ manager, cwd }) {
             exitCode: event.exitCode,
             marker: PTY_MARKER,
             outputBytes: Buffer.byteLength(output),
+            shell: shellCommand || 'default',
+            cwdLength: cwd.length,
           })
         },
       })
@@ -397,6 +411,44 @@ function writeSmokeStatus(statusFile, status) {
   }
 }
 
+/**
+ * Cria o cwd usado pelo PTY do smoke. Com
+ * `FELIXO_RELEASE_SMOKE_LONG_PATH=1` (Windows), aninha diretórios até
+ * passar dos 260 caracteres do `MAX_PATH` clássico — sem isso o runner do
+ * CI nunca reproduz o caminho longo que a task pede pra cobrir (o `os.tmpdir()`
+ * de um runner é sempre curto por padrão).
+ */
+function createPtyWorkingDirectory() {
+  const base = os.tmpdir()
+
+  if (process.env.FELIXO_RELEASE_SMOKE_LONG_PATH !== '1') {
+    return fs.mkdtempSync(path.join(base, 'felixo-release-pty-'))
+  }
+
+  const segment = 'pasta-bem-comprida-para-estourar-o-max-path-classico-do-windows'
+  let nested = base
+  while (nested.length < 240) {
+    nested = path.join(nested, segment)
+  }
+
+  // MAX_PATH clássico (260 caracteres) bloqueia `mkdirSync` sem o prefixo de
+  // path estendido `\\?\` no Windows — independe de "LongPathsEnabled"
+  // estar habilitado no registro do runner (medido ao vivo: sem o prefixo,
+  // ENOENT mesmo criando um diretório por vez com `recursive: true`). Cria
+  // com o prefixo, mas devolve o caminho normal: é o que um cwd de verdade
+  // parece pro node-pty/ConPTY, e é exatamente o cenário real que a task
+  // pede pra provar — se o spawn falhar a partir daqui, é achado genuíno,
+  // não bug deste helper.
+  const mkdirTarget = toWindowsExtendedLengthPath(nested)
+  fs.mkdirSync(mkdirTarget, { recursive: true })
+  return fs.mkdtempSync(path.join(mkdirTarget, 'felixo-release-pty-')).replace(/^\\\\\?\\/, '')
+}
+
+function toWindowsExtendedLengthPath(target) {
+  if (process.platform !== 'win32' || target.startsWith('\\\\?\\')) return target
+  return `\\\\?\\${target}`
+}
+
 function removeTemporaryDirectory(directory) {
   try {
     fs.rmSync(directory, { recursive: true, force: true })
@@ -412,6 +464,7 @@ function getErrorMessage(error) {
 module.exports = {
   CONTEXT_SMOKE_MARKER,
   PTY_MARKER,
+  createPtyWorkingDirectory,
   normalizePtyTextOutput,
   runContextCatalogSmoke,
   runContextReadsInPty,

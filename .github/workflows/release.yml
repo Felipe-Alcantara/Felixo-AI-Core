@@ -267,6 +267,56 @@ jobs:
           path: app/release/release-smoke-quarantine-${{ matrix.os }}.json
           if-no-files-found: ignore
 
+      # O smoke padrão acima já roda no shell detectado pelo runner (Windows
+      # hospedado sempre tem PowerShell, é o que `getDefaultShell` acha
+      # primeiro). Este passo força cmd.exe explicitamente — a task pede os
+      # dois shells cobertos, não só um. Não bloqueia: uma diferença real de
+      # comportamento entre os dois shells é informação, não motivo pra
+      # travar o release quando o padrão (PowerShell) já passou.
+      - name: Validar node-pty em cmd.exe (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        continue-on-error: true
+        env:
+          FELIXO_RELEASE_SMOKE_SHELL: cmd.exe
+        run: |
+          node scripts/release-smoke.cjs \
+            --release-dir release \
+            --report "release/release-smoke-cmd-${{ matrix.os }}.json"
+
+      - name: Upload release smoke report (cmd.exe)
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-cmd-${{ matrix.os }}
+          path: app/release/release-smoke-cmd-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+      # `os.tmpdir()` de um runner é sempre curto por padrão — sem forçar,
+      # o smoke nunca reproduz o caminho longo que barra APIs Win32 sem
+      # suporte a \\?\ (MAX_PATH clássico, 260 caracteres). Não bloqueia:
+      # limitação de path longo é uma característica conhecida do Windows,
+      # não necessariamente um bug do node-pty — a evidência importa mais
+      # que travar o release nela.
+      - name: Validar node-pty em pasta com path longo (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        continue-on-error: true
+        env:
+          FELIXO_RELEASE_SMOKE_LONG_PATH: '1'
+        run: |
+          node scripts/release-smoke.cjs \
+            --release-dir release \
+            --report "release/release-smoke-longpath-${{ matrix.os }}.json"
+
+      - name: Upload release smoke report (path longo)
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-longpath-${{ matrix.os }}
+          path: app/release/release-smoke-longpath-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
       - name: Upload installers
         shell: bash
         run: |
