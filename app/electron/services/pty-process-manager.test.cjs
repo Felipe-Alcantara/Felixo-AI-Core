@@ -1,14 +1,35 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
   DEFAULT_COLS,
   DEFAULT_ROWS,
+  WIN32_MAX_PATH,
   createPtyLaunchSpec,
+  isWindowsLongPathFailure,
   resolveWorkingDirectory,
   resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
+
+/**
+ * Cria um diretório real acima do MAX_PATH clássico. No Windows,
+ * `mkdirSync` sem o prefixo de path estendido `\\?\` falha já na criação
+ * (medido ao vivo em release-smoke.cjs) — mesma técnica usada lá.
+ */
+function criarPastaComPathLongo() {
+  const segmento = 'pasta-bem-comprida-para-estourar-o-max-path-classico-do-windows'
+  let alvo = os.tmpdir()
+  while (alvo.length < WIN32_MAX_PATH + 20) {
+    alvo = path.join(alvo, segmento)
+  }
+  const mkdirAlvo = process.platform === 'win32' ? `\\\\?\\${alvo}` : alvo
+  fs.mkdirSync(mkdirAlvo, { recursive: true })
+  return alvo
+}
 
 /**
  * Build a fake PTY plus a factory that records how it was spawned. The fake
@@ -59,6 +80,61 @@ const fakePosixPlatform = {
   name: 'linux',
   getDefaultShell: () => '/bin/bash',
 }
+
+test('isWindowsLongPathFailure só reconhece o erro real de path longo no Windows', () => {
+  const erro267 = new Error('Cannot create process, error code: 267')
+  const cwdLongo = 'C'.repeat(300)
+  const cwdCurto = 'C:\\projeto'
+
+  assert.equal(isWindowsLongPathFailure(erro267, cwdLongo, 'win32'), true)
+  // Fora do Windows, mesmo erro/cwd não deve disparar — a mensagem é
+  // específica do WindowsPtyAgent.
+  assert.equal(isWindowsLongPathFailure(erro267, cwdLongo, 'linux'), false)
+  // cwd dentro do limite não deve disparar mesmo com a mensagem batendo —
+  // evita falso positivo por coincidência de texto.
+  assert.equal(isWindowsLongPathFailure(erro267, cwdCurto, 'win32'), false)
+  // Outra falha qualquer, mesmo com cwd longo, não deve virar um aviso
+  // enganoso de "path longo".
+  assert.equal(
+    isWindowsLongPathFailure(new Error('node-pty: dlopen failed'), cwdLongo, 'win32'),
+    false,
+  )
+})
+
+test('spawn avisa especificamente sobre path longo quando o node-pty recusa com o erro 267 no Windows', () => {
+  const cwdLongo = criarPastaComPathLongo()
+  try {
+    const manager = new PtyProcessManager({
+      platform: win32Platform,
+      spawnPty: () => {
+        throw new Error('Cannot create process, error code: 267')
+      },
+    })
+    const avisos = []
+
+    assert.throws(
+      () =>
+        manager.spawn('term-long-path', {
+          cwd: cwdLongo,
+          onData: (data) => avisos.push(data),
+        }),
+      (error) => {
+        assert.match(error.message, /excede o limite de caminho do Windows/)
+        return true
+      },
+    )
+
+    assert.ok(
+      avisos.some((aviso) => aviso.includes('caminho longo demais')),
+      'esperava um aviso explicando o path longo, não um "não foi possível criar a sessão" genérico',
+    )
+  } finally {
+    fs.rmSync(process.platform === 'win32' ? `\\\\?\\${cwdLongo}` : cwdLongo, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
 
 test('preserva a causa original quando a fábrica nativa da PTY falha', () => {
   const nativeError = new Error('node-pty: dlopen failed for arm64')
