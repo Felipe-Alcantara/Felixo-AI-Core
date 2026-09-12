@@ -18,12 +18,13 @@ const path = require('node:path')
 const { ipcMain } = require('electron')
 const { detectCli } = require('../core/cli-detector.cjs')
 const { listOfficialAiClis } = require('../core/official-cli-catalog.cjs')
-const { getManagedCliLayout } = require('../core/managed-cli-paths.cjs')
+const { getManagedCliLayout, getNpmRegistryCacheDir } = require('../core/managed-cli-paths.cjs')
 const { getManagedCliManifestEntry } = require('../core/managed-cli-manifest.cjs')
 const { getNodeExecutable, resolveNpmCliPath } = require('../core/node-runtime.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { ensureManagedCliRuntime } = require('./managed-cli-runtime.cjs')
 const { installManagedPackage } = require('./managed-cli-installer.cjs')
+const { pruneNpmCacheIfOverBudget } = require('./managed-cli-cache-maintenance.cjs')
 const { verifyManagedCliInstallation } = require('./managed-cli-health.cjs')
 const {
   allDetected,
@@ -65,6 +66,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   } = options
 
   const layout = getManagedCliLayout({ userData: appPaths.userData })
+  const cacheDir = getNpmRegistryCacheDir(appPaths.userData)
   const stateFilePath = path.join(appPaths.config, STATE_FILE_NAME)
   const enabled = isAutoInstallEnabled(isPackaged)
 
@@ -195,6 +197,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
           npmCliPath,
           nodeExecutable: getNodeExecutable(),
           layout,
+          cacheDir,
         },
       })
 
@@ -218,6 +221,28 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     }
 
     writeState(stateFilePath, attempts)
+
+    // Expurgo oportunista: só depois de instalar algo de verdade, nunca a
+    // cada checagem sem trabalho (a maioria das inicializações não instala
+    // nada). Falha de limpeza nunca derruba o resultado da instalação — é
+    // manutenção, não o objetivo desta rodada.
+    if (pending.length > 0) {
+      try {
+        await pruneNpmCacheIfOverBudget({
+          cacheDir,
+          npmCliPath,
+          nodeExecutable: getNodeExecutable(),
+          env: createCliEnv(),
+        })
+      } catch (error) {
+        logQaEvent({
+          level: 'warn',
+          scope: 'cli:auto-install',
+          message: 'Falha ao verificar o orcamento do cache offline.',
+          details: { error: getErrorMessage(error, 'erro desconhecido') },
+        })
+      }
+    }
 
     return setStatus({ ...summarizeAutoInstall(progress), clis: progress })
   }

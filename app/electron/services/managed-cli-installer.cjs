@@ -25,13 +25,25 @@ const OUTPUT_LIMIT = 12000
  * `--no-audit`/`--no-fund` só cortam ruído de saída. `--loglevel=error`
  * mantém o log legível para quem eventualmente for ler o relatório de falha.
  *
+ * `--cache`/`--prefer-offline` (quando `cacheDir` é passado) apontam o npm
+ * para uma pasta persistente dentro do `userData` do app, em vez do cache
+ * global padrão do sistema (`~/.npm`) — decisão da fatia "cache offline por
+ * perfil": o cache do npm já é endereçado por conteúdo e verificado por SRI
+ * internamente, então reusar o mecanismo do próprio npm (em vez de
+ * reimplementar leitura/escrita/verificação do zero) cobre "primeira
+ * instalação sem rede com cache válido" e "reinstalação/atualização" sem
+ * exigir bater na rede de novo pra um tarball já baixado antes. `
+ * --prefer-offline` usa o cache sem checar frescor no registry quando o
+ * tarball exato já está lá — só volta pra rede quando falta.
+ *
  * @param {object} options
  * @param {string} options.npmCliPath
  * @param {string} options.npmPackage
  * @param {string} options.prefix
+ * @param {string} [options.cacheDir]
  * @returns {string[]}
  */
-function createNpmInstallArgs({ npmCliPath, npmPackage, prefix }) {
+function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir }) {
   return [
     npmCliPath,
     'install',
@@ -41,6 +53,7 @@ function createNpmInstallArgs({ npmCliPath, npmPackage, prefix }) {
     '--no-audit',
     '--no-fund',
     '--loglevel=error',
+    ...(cacheDir ? ['--cache', cacheDir, '--prefer-offline'] : []),
     npmPackage,
   ]
 }
@@ -96,6 +109,19 @@ function createManagedInstallEnv({
   if (platformName === 'win32') {
     env.npm_config_script_shell = env.ComSpec || 'cmd.exe'
   }
+
+  // Fatia 3/5 de "cache offline por perfil": defesa em profundidade — a
+  // instalação gerenciada roda no processo principal, nunca dentro da PTY de
+  // uma conta, então não deveria herdar credencial nenhuma. Mas
+  // `createCliEnv` clona `baseEnv` (`process.env` por padrão) inteiro, sem
+  // filtrar; se alguma dessas chaves algum dia acabar setada no processo
+  // principal por engano, ela vazaria pro ambiente do `npm install` e,
+  // por extensão, pro cache offline que ele escreve. Removidas
+  // explicitamente aqui, não confiando em "isso nunca deveria acontecer".
+  delete env.CODEX_HOME
+  delete env.CLAUDE_CONFIG_DIR
+  delete env.OPENROUTER_API_KEY
+  delete env.FELIXO_REAL_HOME
 
   return env
 }
@@ -190,6 +216,7 @@ async function verifyManagedPackageIntegrity({
  * @param {string} options.nodeExecutable - Binário que roda como Node.
  * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} options.layout
  * @param {string} [options.expectedIntegrity] - Hash esperado, do manifesto.
+ * @param {string} [options.cacheDir] - Cache offline do npm (`getNpmRegistryCacheDir`).
  * @param {(line: string) => void} [options.onLog]
  * @param {Function} [options.spawn] - Injetável nos testes.
  * @param {number} [options.timeoutMs]
@@ -201,6 +228,7 @@ async function installManagedPackage({
   nodeExecutable,
   layout,
   expectedIntegrity,
+  cacheDir,
   onLog,
   spawn = spawnChildProcess,
   timeoutMs = INSTALL_TIMEOUT_MS,
@@ -229,6 +257,7 @@ async function installManagedPackage({
     npmCliPath,
     npmPackage,
     prefix: layout.root,
+    cacheDir,
   })
 
   return runCommand({

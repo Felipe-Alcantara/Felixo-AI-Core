@@ -5,6 +5,7 @@ const path = require('node:path')
 const {
   getManagedCliLayout,
   getManagedCliPathCandidates,
+  getNpmRegistryCacheDir,
   getOfflineCacheLayout,
 } = require('./managed-cli-paths.cjs')
 const { getProfileDir, PROFILES_DIRNAME } = require('../services/cli-account-profiles.cjs')
@@ -121,5 +122,27 @@ describe('getOfflineCacheLayout', () => {
 
     assert.ok(!cache.root.startsWith(path.join(userData, PROFILES_DIRNAME)))
     assert.ok(!credenciais.startsWith(path.join(userData, 'cli-cache')))
+  })
+})
+
+describe('getNpmRegistryCacheDir', () => {
+  it('fica dentro da mesma árvore cli-cache, mas fora de qualquer pasta de versão', () => {
+    const userData = '/home/pessoa/.config/felixo-ai-core'
+    const dir = getNpmRegistryCacheDir(userData, 'linux')
+
+    assert.equal(dir, '/home/pessoa/.config/felixo-ai-core/cli-cache/npm-registry-cache')
+  })
+
+  it('é a mesma pasta pra toda CLI e versão — compartilhado de propósito', () => {
+    const userData = '/home/pessoa/.config/felixo-ai-core'
+
+    assert.equal(
+      getNpmRegistryCacheDir(userData, 'linux'),
+      getNpmRegistryCacheDir(userData, 'linux'),
+    )
+  })
+
+  it('recusa sem userData', () => {
+    assert.throws(() => getNpmRegistryCacheDir(undefined, 'linux'))
   })
 })
