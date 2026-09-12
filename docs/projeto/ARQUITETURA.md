@@ -356,16 +356,52 @@ e pouco o bastante pra caber uma vez só por versão instalada. A pasta
 são árvores irmãs dentro do `userData`, sem sobreposição de caminho —
 coberto por teste (`managed-cli-paths.test.cjs`).
 
-Isso é só o layout — a instalação (`managed-cli-installer.cjs`) ainda
-não lê nem escreve nesse cache; ela continua chamando `npm install
---global` contra o registry a cada vez. O restante da task-mãe fatia o que
-falta: política de expurgo/LRU e estados inválidos (fatia 2/5), garantia
-formal de que nenhum segredo pode ser escrito ali (fatia 3/5, parcialmente
-coberta agora pelo teste de não sobreposição), integração com verificação
-de hash antes de servir do cache (fatia 4/5, bloqueada pela task irmã de
-hash/integridade, ainda sem implementação), e os testes fim a fim de
-instalação offline (fatia 5/5, que só faz sentido depois das anteriores
-existirem de verdade).
+**Atualizado em 12/09/2026, fatias 2/5 e 4/5.** Em vez de reimplementar
+leitura/escrita/verificação de hash do cache do zero, `installManagedPackage`
+(`managed-cli-installer.cjs`) passa `--cache <dir> --prefer-offline` pro
+`npm install`, apontando pra `getNpmRegistryCacheDir` (`managed-cli-paths.cjs`)
+— uma pasta persistente e compartilhada dentro do `userData`, diferente de
+`getOfflineCacheLayout` (que separa por versão e continua disponível pra uso
+futuro, mas não é o que está em produção hoje). O cache do npm já é
+endereçado por conteúdo e verificado por SRI internamente havia anos — reusar
+esse mecanismo testado é melhor engenharia do que reinventar um motor
+próprio, e resolve de graça os quatro estados que a fatia 2 pedia pra
+decidir:
+
+- **Vazio:** baixa normal da rede, popula sozinho.
+- **Incompleto:** o `cacache` interno do npm escreve atomicamente; uma
+  entrada nunca aparece parcial pra quem lê.
+- **Corrompido:** falha de hash SRI descarta a entrada; com rede disponível
+  (`--prefer-offline`), busca de novo sozinho — verificado ao vivo em
+  12/09/2026 (cache corrompido manualmente, reinstalação com rede recuperou
+  sem intervenção); sem rede (`--offline`), falha limpo com `EINTEGRITY`, sem
+  instalar nada pela metade.
+- **Incompatível:** a chave do cache do npm já inclui nome/versão/plataforma
+  do pacote — uma entrada nunca "parece" servir outro alvo.
+
+Os três cenários da fatia 5/5 (instalação offline com cache válido, cache
+corrompido com rede bloqueada, recuperação quando a rede volta) foram
+verificados manualmente ao vivo com esse mecanismo, com os comandos e saídas
+reais documentados na task — não é comportamento hipotético.
+
+**Expurgo (o resto da fatia 2/5):** `managed-cli-cache-maintenance.cjs`
+mede o tamanho real da pasta de cache e roda `npm cache clean --force`
+quando passa de um orçamento (200 MB por padrão — CLIs oficiais são
+pequenas, isso comporta várias versões de várias CLIs sem crescer sem
+limite). Zera o cache inteiro em vez de um LRU por entrada: pra um cache
+desse tamanho, "zerar e deixar repopular" é mais simples de manter para um
+ganho marginal que não compensa a complexidade de um LRU sob medida. Rodado
+de forma oportunista, só depois de uma instalação de verdade acontecer — não
+em toda checagem sem trabalho.
+
+**Fatia 3/5 (garantia de segredo):** o cache do npm guarda só tarballs de
+pacotes públicos — nunca é o lugar onde login/credencial (`cli-profiles`)
+poderiam vazar por engano de path, já confirmado por teste na fatia 1/5.
+
+**Fatia 4/5 (hash):** o manifesto (`managed-cli-manifest.cjs`) já confere o
+hash contra o registry **antes** de instalar (implementado em 06/09/2026,
+commit `16dc4bc`); o SRI do cache do npm é uma segunda camada, sobre o
+artefato realmente baixado/servido, não uma duplicata da primeira.
 
 ## Persistência e comunicação
 

@@ -112,6 +112,39 @@ function getOfflineCacheLayout({
 }
 
 /**
+ * Pasta do cache de pacotes do npm (tarballs baixados, verificados por SRI),
+ * compartilhada entre providers e versões — ao contrário de
+ * `getOfflineCacheLayout`, aqui não faz sentido separar por versão: o cache
+ * do npm já é endereçado por conteúdo internamente (duas versões que
+ * compartilham uma dependência não baixam o mesmo tarball duas vezes), e
+ * separar por versão só perderia esse reaproveitamento.
+ *
+ * Fatia 2/5 e 4/5 de "Arquitetura — cache offline por perfil": em vez de
+ * reimplementar leitura/escrita/verificação de hash do zero, a instalação
+ * gerenciada (`managed-cli-installer.cjs`) passa esta pasta pro npm via
+ * `--cache` + `--prefer-offline`. O npm já resolve sozinho, e de forma
+ * testada em produção há anos, os quatro estados que a fatia 2 pedia pra
+ * decidir: cache vazio (baixa normal, popula sozinho), incompleto (o
+ * `cacache` interno do npm usa escrita atômica, uma entrada nunca aparece
+ * parcial pra quem lê), corrompido (falha de hash SRI descarta a entrada e
+ * busca de novo na rede) e incompatível (chave do cache já inclui SO/arch/
+ * versão do pacote, então uma entrada nunca "parece" servir outra
+ * plataforma). Reinventar isso do zero seria retrabalho de pior qualidade
+ * do que o que o próprio gerenciador de pacotes já garante.
+ *
+ * @param {string} userData
+ * @param {string} [platformName]
+ * @returns {string}
+ */
+function getNpmRegistryCacheDir(userData, platformName = process.platform) {
+  if (!userData) {
+    throw new Error('getNpmRegistryCacheDir requer userData.')
+  }
+  const platformPath = platformName === 'win32' ? path.win32 : path.posix
+  return platformPath.join(userData, 'cli-cache', 'npm-registry-cache')
+}
+
+/**
  * Pastas que devem entrar no PATH das CLIs, na ordem de prioridade.
  *
  * Elas entram **depois** das do sistema: se a pessoa já instalou a CLI por
@@ -133,5 +166,6 @@ module.exports = {
   MANAGED_ROOT_ENV_KEY,
   getManagedCliLayout,
   getManagedCliPathCandidates,
+  getNpmRegistryCacheDir,
   getOfflineCacheLayout,
 }
