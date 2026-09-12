@@ -4797,3 +4797,29 @@ limitação conhecida), não uma escolha técnica única — task nova criada:
 node-pty falhando em cwd com path longo no Windows"), linkada à task de origem.
 
 **Tasks no Notion.** `3d991f95-497e-8106-a0ce-d09608ba7b35` marcada Concluída.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação) — aviso de path longo no terminal do Windows
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+**Contexto.** Trilha B: "Terminal — decidir tratamento para node-pty falhando em cwd
+com path longo no Windows". Pergunta única via `AskUserQuestion` — Felipe respondeu
+"1 depois 2": avisar o usuário primeiro, investigar suporte real a path longo depois.
+
+**`0fd29ce` (PR #27).** `isWindowsLongPathFailure(error, cwd, platformName)` distingue
+a falha real medida no release anterior (`error code: 267`/`ERROR_DIRECTORY`, win32,
+`cwd.length >= 260`) de qualquer outra falha de spawn. Quando reconhecida,
+`PtyProcessManager.spawn()` troca a mensagem genérica "não foi possível criar a sessão
+do terminal" por uma específica: comprimento do caminho + sugestão de mover o projeto,
+sem vazar o caminho em si.
+
+**Validação.** 2 testes novos (`pty-process-manager.test.cjs`): um puro cobrindo os 4
+quadrantes de `isWindowsLongPathFailure`, um de integração real criando de verdade um
+diretório > 260 caracteres via prefixo `\\?\` e confirmando o aviso específico chega
+via `onData`. `npm test` 1150/1150, `tsc -b` limpo. PR #27: 13/13 `success`, incluindo
+`Validate (windows-latest)` rodando os testes de verdade num Windows real. Mergeada
+por squash, branch apagada (local e remota).
+
+**Estado final.** `3d991f95-497e-81f5-8823-e7717058a874` marcada Concluída (parte 1
+entregue). Parte 2 (investigar suporte real a path longo, não só avisar) virou task
+nova: `3d991f95-497e-8151-bbbf-d27b48fef0ea`, prioridade baixa, linkada.
