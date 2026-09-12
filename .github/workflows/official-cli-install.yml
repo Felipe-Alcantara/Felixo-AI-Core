@@ -13,6 +13,12 @@ on:
       - main
     paths:
       - .github/workflows/official-cli-install.yml
+  # Temporário só para validar nesta PR antes do merge — removido no commit
+  # seguinte, porque workflow_dispatch só fica disponível depois que o
+  # arquivo existe no branch padrão (problema do ovo e da galinha).
+  pull_request:
+    paths:
+      - .github/workflows/official-cli-install.yml
   workflow_dispatch:
   schedule:
     # Segunda-feira 09:00 UTC — detecta quebra de instalação por publicação nova
