@@ -7,11 +7,38 @@ const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
-const { runContextCatalogSmoke, normalizePtyTextOutput } = require('./release-smoke.cjs')
+const {
+  createPtyWorkingDirectory,
+  runContextCatalogSmoke,
+  normalizePtyTextOutput,
+} = require('./release-smoke.cjs')
 
 function pastaTemporaria() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-test-'))
 }
+
+test('createPtyWorkingDirectory devolve um cwd curto por padrão', () => {
+  const cwd = createPtyWorkingDirectory()
+  try {
+    assert.ok(fs.existsSync(cwd))
+    assert.ok(cwd.length < 200)
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
+test('createPtyWorkingDirectory estoura o MAX_PATH clássico com FELIXO_RELEASE_SMOKE_LONG_PATH=1', () => {
+  process.env.FELIXO_RELEASE_SMOKE_LONG_PATH = '1'
+  let cwd
+  try {
+    cwd = createPtyWorkingDirectory()
+    assert.ok(fs.existsSync(cwd))
+    assert.ok(cwd.length > 260, `esperava mais de 260 caracteres, teve ${cwd.length}`)
+  } finally {
+    delete process.env.FELIXO_RELEASE_SMOKE_LONG_PATH
+    if (cwd) fs.rmSync(cwd, { recursive: true, force: true })
+  }
+})
 
 /**
  * O `.cmd` do Windows só roda de verdade passado pelo `cmd.exe` (`cmd /c`),

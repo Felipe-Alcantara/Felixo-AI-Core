@@ -7,8 +7,10 @@ const path = require('node:path')
 const { test } = require('node:test')
 
 const {
+  captureWindowsAcl,
   createCliLayout,
   extractNativeErrors,
+  findFileRecursive,
   findPackagedAppRoot,
   getArtifactKind,
   getPackagedResourcesPath,
@@ -51,6 +53,33 @@ test('simulateQuarantine se declara não simulado fora do macOS', () => {
     assert.deepEqual(result, { simulated: false, reason: 'plataforma nao e macOS' })
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
+test('findFileRecursive acha um arquivo aninhado sem precisar do caminho exato', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-find-file-'))
+  try {
+    fs.mkdirSync(path.join(root, 'a', 'b'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'a', 'b', 'pty.node'), '')
+
+    assert.equal(findFileRecursive(root, 'pty.node', 5), path.join(root, 'a', 'b', 'pty.node'))
+    assert.equal(findFileRecursive(root, 'nao-existe.node', 5), null)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('captureWindowsAcl se ausente do resources não quebra fora do Windows', () => {
+  if (process.platform === 'win32') return
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-acl-'))
+  try {
+    const result = captureWindowsAcl(root, path.join(root, 'app.exe'))
+    // icacls não existe fora do Windows: entries fica vazio porque
+    // executablePath não existe e pty.node não foi encontrado — a função
+    // não lança, só reporta o que achou.
+    assert.equal(result.ptyNodeFound, false)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
   }
 })
 

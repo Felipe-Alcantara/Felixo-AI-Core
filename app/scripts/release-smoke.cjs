@@ -52,6 +52,10 @@ async function main(argv = process.argv.slice(2)) {
       report.gatekeeper = simulateQuarantine(prepared.appRoot)
     }
 
+    if (process.platform === 'win32') {
+      report.acl = captureWindowsAcl(prepared.resourcesPath, prepared.executable)
+    }
+
     const appResult = await runPackagedApp({
       appRoot: prepared.appRoot,
       executable: prepared.executable,
@@ -161,6 +165,7 @@ function createEmptyReport() {
     artifact: null,
     installed: null,
     gatekeeper: null,
+    acl: null,
     startupMs: null,
     pty: null,
     contextDelivery: null,
@@ -367,6 +372,61 @@ function simulateQuarantine(appRoot) {
   }
 
   return result
+}
+
+/**
+ * Captura a ACL real (`icacls`) do executável do app e do binário nativo do
+ * node-pty (`pty.node`) dentro do artefato instalado — task "validar
+ * node-pty empacotado no Windows (ACL/path longo/shell)" pede confirmação
+ * de que a ACL do instalador não bloqueia o binário. Não é gate: registra a
+ * ACL real como evidência (o smoke de PTY logo depois já prova
+ * funcionalmente se ela bloqueia ou não).
+ */
+function captureWindowsAcl(resourcesPath, executablePath) {
+  const ptyNode = findFileRecursive(resourcesPath, 'pty.node', 8)
+  const targets = [
+    { label: 'executavel', path: executablePath },
+    { label: 'pty.node', path: ptyNode },
+  ].filter((target) => target.path)
+
+  const entries = targets.map((target) => {
+    const result = spawnSync('icacls', [target.path], { encoding: 'utf8', timeout: 15_000 })
+    return {
+      label: target.label,
+      path: target.path,
+      exitCode: result.status,
+      detail: sanitizeDiagnostic([result.stdout, result.stderr].filter(Boolean).join('\n')),
+    }
+  })
+
+  return {
+    ptyNodeFound: Boolean(ptyNode),
+    entries,
+  }
+}
+
+/** Busca em largura limitada — o binário nativo pode estar a vários níveis dentro de app.asar.unpacked. */
+function findFileRecursive(root, filename, maxDepth) {
+  if (maxDepth < 0) return null
+  let entries
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true })
+  } catch {
+    return null
+  }
+
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name === filename) {
+      return path.join(root, entry.name)
+    }
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const found = findFileRecursive(path.join(root, entry.name), filename, maxDepth - 1)
+      if (found) return found
+    }
+  }
+  return null
 }
 
 function createPreparedArtifact(appRoot, installMode) {
@@ -1012,6 +1072,8 @@ module.exports = {
   findPackagedAppRoot,
   getArtifactKind,
   getPackagedResourcesPath,
+  captureWindowsAcl,
+  findFileRecursive,
   parseArgs,
   resolveReleaseArtifact,
   runBundledNpmSmoke,
