@@ -4553,3 +4553,76 @@ tentaram enviar o diagnóstico interno `builder-debug.yml` com o mesmo nome. O
 asset não é necessário para atualização do usuário e é gerado por cada matriz.
 O workflow de release foi ajustado para não publicar esse diagnóstico compartilhado,
 mantendo instaladores, manifests, inventários, benchmarks e smoke reports sem colisão.
+
+## Fechamento de Trabalho — 2026-09-12 — looping real painel/gaveta corrigido, CI arm64 e título do painel
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+**Contexto.** Três entregas publicadas na mesma sessão, sem branch: um bug real de
+looping/tremor no canvas (relatado pelo Felipe após um primeiro fechamento sem
+reprodução), um item de CI/release fatiado hoje, e um ajuste de UI relatado por print.
+Este registro cobre a lacuna: nenhum dos três commits abaixo havia atualizado o
+`IA.md` no momento em que foi publicado, contrariando o item 8/checklist do
+`Padrão de qualidade - Felixo System Design/core/GUIA_MINIMO_QUALIDADE.md`.
+
+**1. `b9444df` — fix(canvas): elimina looping real de painel e gaveta se espremendo
+mutuamente.** Causa raiz: `panelWidthLimit`/`drawerWidthLimit` liam, cada um, a
+largura JÁ CORTADA que o outro tinha acabado de relatar no `CanvasSurfacesContext`
+compartilhado — referência circular entre ciclos de render. Provado matematicamente
+antes de corrigir: com `P_n = min(localP, W - D_{n-1})` e
+`D_n = min(localD, W - P_{n-1})`, o sistema reduz a `P_n = P_{n-2}` quando ambos
+ficam perpetuamente no teto do outro — oscilação de período 2 que nunca converge.
+Corrigido com `splitHorizontalSpace()` (`canvas-surfaces.ts`): cálculo único e
+determinístico dos dois valores finais a partir só do que cada lado quer, sem
+referência circular possível. `CanvasSurfacesProvider`, `useResizablePanelWidth` e
+`TerminalDrawer` ajustados para reportar a largura desejada crua e ler de volta só
+o valor final. `detectLiveLayoutClamp` (`layout-invariants.ts`) tinha uma constante
+divergente (piso da gaveta documentado como 300px, real sempre foi 440px) que
+escondia o cenário: totais cabiam (876<900) mas a faixa de canvas garantida ficava
+espremida a ~24px — corrigido para importar as constantes canônicas de
+`canvas-surfaces.ts` e checar a faixa de canvas, não só a soma. 7 testes novos em
+`canvas-surfaces.test.ts`, cobrindo o cenário real medido ao vivo. CI: 12/12 jobs
+`success` (run `34688923502`).
+
+**2. `7c821b3` — ci: valida node-pty em runner hospedado ubuntu-24.04-arm (#22).**
+Fatia da task "Release — validar node-pty empacotado no Linux arm64" (dependia de
+"acesso a runner arm64 real"). Descoberto que o repositório público dá acesso
+gratuito ao runner hospedado `ubuntu-24.04-arm` do GitHub Actions, sem hardware.
+Perguntado ao Felipe (`AskUserQuestion`, Trilha B) entre job permanente, execução
+avulsa ou só documentar — escolheu job permanente. Adicionado à matriz existente do
+job `Validate`, que já roda `test:native` (smoke real de node-pty) e a suíte
+completa — cobertura contínua, não pontual. Publicado via PR #22 (não commit direto:
+mudança de infraestrutura de CI, risco de quebrar a matriz para todos os outros
+agentes que dependem dela, justificando branch pela política de versionamento).
+CI da própria PR: 13/13 `success`, incluindo o job novo (3m50s). Mergeado por
+squash, branch apagada.
+
+**3. `3b29c0b` — fix(canvas): título das tarefas do Notion quebra linha em vez de
+cortar.** Felipe reportou por print não conseguir ler títulos de tarefa no painel
+"Tarefas Notion" do canvas. Causa: a célula do título usava `truncate` (Tailwind,
+uma linha, corta com reticências) numa tabela `table-fixed` sem largura garantida
+para a coluna quando o painel encolhe. Trocado para `break-words`
+(`NotionTasksPanel.tsx:962`) — o título agora quebra em várias linhas, a linha da
+tabela cresce, nada é cortado. Commitado direto em `main` (mudança de uma linha,
+baixo risco). CI: 13/13 `success` (run `34691974437`).
+
+**Validação comum aos três.** `npx tsc -b` e `npx eslint` limpos antes de cada
+publicação; nenhum dos três usou suposição sobre estado de app real não medido —
+o looping foi reproduzido e a correção verificada por simulação matemática +
+testes determinísticos + instrumentação ao vivo (`ResizeObserver`/RAF via
+`felixo devtools eval`, zero crescimento no cenário que antes oscilava); o CI
+arm64 foi confirmado rodando de verdade, não assumido disponível; o título foi
+corrigido a partir do print real do Felipe, não de suposição sobre a UI.
+
+**O que não foi validado.** A troca `truncate`→`break-words` não foi conferida
+visualmente com dados reais do Notion (o perfil real do app estava em uso pelo
+Felipe no momento). O fix do looping não repetiu manualmente todos os cenários do
+escopo original da task de instrumentação (zoom, drag, troca de terminal,
+reidratação) — só o cenário relatado (painel+gaveta), que já explicava o sintoma.
+
+**Tasks no Notion.** Bug de looping:
+`3d491f95-497e-819a-aa2a-e4b9ad59b8da` (complementada, Concluída). CI arm64:
+`3d991f95-497e-811f-a69d-e7d7ddb9bfcb` (Concluída). Título do painel:
+`3d991f95-497e-8186-91ec-e0fb313445db` (Concluída). Relatório diário de
+12/09/2026 (`3d991f95-497e-8181-a489-e542a9cd1a5a`) complementado com as três
+entregas.
