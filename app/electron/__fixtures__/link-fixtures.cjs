@@ -49,6 +49,10 @@ function detectarCapacidades() {
   fs.writeFileSync(alvoArquivo, 'alvo', 'utf8')
 
   const consegue = (destino, nome, tipo) => {
+    // Junction is an NTFS reparse-point concept. On POSIX, Node accepts the
+    // type argument but creates a regular symbolic link, which would make the
+    // capability probe report a Windows-only feature incorrectly.
+    if (tipo === 'junction' && process.platform !== 'win32') return false
     try {
       fs.symlinkSync(destino, path.join(base, nome), tipo)
       return true
