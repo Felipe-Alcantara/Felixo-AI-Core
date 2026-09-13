@@ -2,6 +2,7 @@
 
 import type {
   AutomationDefinition,
+  GitFileDiff,
   GitProjectSummary,
   ChatSession,
   Model,
@@ -891,6 +892,32 @@ declare global {
           ok: boolean
           message?: string
           output?: string
+          summary?: GitProjectSummary
+        }>
+        getFileDiff: (params: {
+          projectPath: string
+          filePath: string
+          staged?: boolean
+          untracked?: boolean
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          diff?: GitFileDiff
+        }>
+        stageFile: (params: {
+          projectPath: string
+          filePath: string
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          summary?: GitProjectSummary
+        }>
+        unstageFile: (params: {
+          projectPath: string
+          filePath: string
+        }) => Promise<{
+          ok: boolean
+          message?: string
           summary?: GitProjectSummary
         }>
       }
