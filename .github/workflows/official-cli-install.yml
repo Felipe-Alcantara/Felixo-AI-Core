@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.x
 
@@ -228,7 +228,7 @@ jobs:
 
       - name: Publicar resultado deste job
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cli-install-result-${{ matrix.os }}-${{ matrix.cli.id }}
           path: result.json
@@ -244,7 +244,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Baixar todos os resultados
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: cli-install-result-*
           path: results
@@ -290,7 +290,7 @@ jobs:
           cat cli-install-report.md
 
       - name: Publicar relatório consolidado
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cli-install-report
           path: |

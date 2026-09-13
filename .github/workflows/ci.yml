@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.x
           cache: npm
@@ -101,7 +101,7 @@ jobs:
 
       - name: Upload npm policy reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dependency-policy-npm
           path: app/build/dependency-policy
@@ -129,10 +129,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -156,10 +156,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -202,7 +202,7 @@ jobs:
 
       - name: Upload Python policy reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dependency-policy-python
           path: app/build/dependency-policy/pip-*
@@ -217,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Test retry.sh
         run: bash .github/scripts/retry.test.sh
@@ -246,10 +246,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.x
           cache: npm
@@ -267,7 +267,7 @@ jobs:
 
       - name: Upload npm runtime benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: npm-runtime-${{ matrix.os }}
           path: app/npm-runtime-${{ matrix.os }}.json
@@ -283,7 +283,7 @@ jobs:
 
       - name: Upload package-manager alternatives benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: package-manager-alternatives-${{ matrix.os }}
           path: app/package-manager-alternatives-${{ matrix.os }}.json
@@ -295,7 +295,7 @@ jobs:
 
       - name: Upload package-manager operational benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: package-manager-operational-${{ matrix.os }}
           path: app/package-manager-operational-${{ matrix.os }}.json
@@ -314,7 +314,7 @@ jobs:
 
       - name: Upload terminal responsiveness benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: terminal-responsiveness-${{ matrix.os }}
           path: app/terminal-responsiveness-${{ matrix.os }}.json
@@ -324,7 +324,7 @@ jobs:
       # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
       # mudança de código nunca transforma um resultado antigo em verde.
       - name: Restore TypeScript incremental cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: app/node_modules/.tmp
           key: typecheck-${{ runner.os }}-${{ hashFiles('app/package-lock.json', 'app/tsconfig*.json') }}
@@ -357,7 +357,7 @@ jobs:
 
       - name: Upload Canvas initial context E2E report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: canvas-context-e2e-${{ matrix.os }}
           path: app/build/canvas-context-e2e-${{ matrix.os }}.json
@@ -379,7 +379,7 @@ jobs:
 
       - name: Upload terminal scrollback benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: terminal-scrollback-${{ matrix.os }}
           path: app/terminal-scrollback-${{ matrix.os }}.json
@@ -406,7 +406,7 @@ jobs:
 
       - name: Upload renderer bundle benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bundle-load-${{ matrix.os }}
           path: app/bundle-load-${{ matrix.os }}.json
