@@ -6,8 +6,10 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const {
+  captureHeapSnapshot,
   executarDevtools,
   formatState,
+  metricsListToObject,
   parseArgs,
   profileLooksInUse,
   readState,
@@ -189,4 +191,81 @@ test('status informa sessão encerrada sem fingir que ela está utilizável', as
   const result = await executarDevtools(['status'], { ...env, kill: () => { throw new Error('gone') } })
   assert.equal(result.codigo, 1)
   assert.match(result.saida, /encerrada/)
+})
+
+test('metricsListToObject achata o formato {name,value}[] do CDP num objeto indexável por nome', () => {
+  assert.deepEqual(
+    metricsListToObject([{ name: 'JSHeapUsedSize', value: 123 }, { name: 'Nodes', value: 45 }]),
+    { JSHeapUsedSize: 123, Nodes: 45 },
+  )
+  assert.deepEqual(metricsListToObject(undefined), {})
+  assert.deepEqual(metricsListToObject([{ value: 1 }]), {})
+})
+
+test('captureHeapSnapshot concatena os chunks na ordem de chegada e grava o arquivo', async () => {
+  const env = setup()
+  const output = path.join(env.root, 'snapshots', 'baseline.heapsnapshot')
+  const handlers = {}
+  const fakeSession = {
+    on(event, handler) { handlers[event] = handler },
+    async send(method) {
+      if (method === 'HeapProfiler.takeHeapSnapshot') {
+        handlers['HeapProfiler.addHeapSnapshotChunk']({ chunk: '{"snapshot":' })
+        handlers['HeapProfiler.addHeapSnapshotChunk']({ chunk: '{}}' })
+      }
+    },
+    async detach() {},
+  }
+  const fakePage = {}
+  const result = await captureHeapSnapshot(fakePage, output, { fs, newCDPSession: async () => fakeSession })
+  assert.equal(result.arquivo, output)
+  assert.equal(fs.readFileSync(output, 'utf8'), '{"snapshot":{}}')
+})
+
+function setupWithPage(page) {
+  const env = setup()
+  fs.writeFileSync(env.stateFile, JSON.stringify({ pid: 555, port: 9444, userData: '/tmp/x', realProfile: false, createdAt: 'agora' }))
+  const browser = { contexts: () => [{ pages: () => [page] }], close: async () => {} }
+  return {
+    ...env,
+    kill: () => {},
+    playwright: { chromium: { connectOverCDP: async () => browser } },
+  }
+}
+
+test('comando heap-snapshot grava um .heapsnapshot real via CDP', async () => {
+  const output = path.join(os.tmpdir(), `felixo-devtools-heap-test-${Date.now()}.heapsnapshot`)
+  const handlers = {}
+  const fakeSession = {
+    on(event, handler) { handlers[event] = handler },
+    async send(method) {
+      if (method === 'HeapProfiler.takeHeapSnapshot') handlers['HeapProfiler.addHeapSnapshotChunk']({ chunk: '{"ok":true}' })
+    },
+    async detach() {},
+  }
+  const page = { url: () => 'http://localhost/', context: () => ({ newCDPSession: async () => fakeSession }) }
+  const env = setupWithPage(page)
+  try {
+    const result = await executarDevtools(['heap-snapshot', output], env)
+    assert.equal(result.codigo, 0)
+    assert.equal(fs.readFileSync(output, 'utf8'), '{"ok":true}')
+  } finally {
+    fs.rmSync(output, { force: true })
+  }
+})
+
+test('comando metrics devolve o objeto achatado do Performance.getMetrics', async () => {
+  const fakeSession = {
+    on() {},
+    async send(method) {
+      if (method === 'Performance.getMetrics') return { metrics: [{ name: 'JSHeapUsedSize', value: 42 }] }
+      return {}
+    },
+    async detach() {},
+  }
+  const page = { url: () => 'http://localhost/', context: () => ({ newCDPSession: async () => fakeSession }) }
+  const env = setupWithPage(page)
+  const result = await executarDevtools(['metrics'], env)
+  assert.equal(result.codigo, 0)
+  assert.deepEqual(JSON.parse(result.saida), { JSHeapUsedSize: 42 })
 })
