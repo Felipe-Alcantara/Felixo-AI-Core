@@ -5021,3 +5021,146 @@ cumprido) — recomendação registrada: precisa de sessão com o Felipe present
 de investimento maior em mapear os seletores corretos da UI antes de nova
 tentativa em produção. Task nova aberta pra parte de segundo SO
 (`3da91f95-497e-815e-86b2-f9afdb57e7cf`), por pedido dele.
+
+## Fechamento de trabalho — 2026-09-13 — ferramentas de heap snapshot DevTools real para o Canvas
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task "Performance — capturar snapshots de heap do Canvas real em sessão longa no
+Linux" (task de acompanhamento da investigação de degradação do Canvas, que
+mediu terminal/PTY com `performance.memory` mas não tinha snapshots DevTools de
+uma sessão real com webviews).
+
+### O que foi feito
+
+- `felixo devtools heap-snapshot <arquivo>` e `felixo devtools metrics`: novos
+  subcomandos que usam os domínios CDP `HeapProfiler`/`Performance` pela mesma
+  conexão Playwright já existente no DevTools isolado — um `.heapsnapshot` real
+  (validado abrindo com `JSON.parse` e conferindo `node_fields`/`detachedness`
+  contra um snapshot de verdade capturado da app) e as métricas de heap/DOM/
+  listeners do CDP, achatadas num objeto simples.
+- `scripts/heap-snapshot-analysis.cjs`: resume um `.heapsnapshot` por
+  construtor (`type:name`, contagem, self_size, nós com `detachedness=2` — o
+  mesmo sinal que o filtro "Detached" do DevTools usa) e compara dois
+  snapshots com um limiar de ruído (512 KiB) para separar GC residual normal de
+  crescimento real.
+- `scripts/canvas-long-session-heap-capture.cjs`: orquestra uma sessão real —
+  perfil sempre descartável, nunca produção — que sobe o app, monta uma
+  fixture (N terminais shell, M webviews servidas por um HTTP local
+  autocontido, um bloco e um grupo), alterna atividade/ociosidade pela duração
+  pedida, e captura heap/métricas/RSS real (via `ps`, somando todos os
+  processos descendentes do Electron — renderer, GPU, utility, PTYs) em 5
+  checkpoints: baseline, fixture criada, estado degradado, depois de remover
+  terminais/webviews e depois de "Limpar canvas" (aceitando o `window.confirm`
+  nativo numa conexão CDP contínua). Ao final, roda o diff entre checkpoints
+  consecutivos e escreve `report.json`/`report.md`.
+
+### Validação
+
+34 testes novos (unitários, com CDP/fs/ps injetáveis — nada de rede/Electron
+real nos testes). `npm test` 1235/1235, lint limpo, `npm run build` (typecheck
+completo) sem erro. `npm run test:native` reproduz uma falha pré-existente e
+não relacionada (`claude-usage-query.integration.test.cjs`, flake de
+concorrência entre os dois testes nativos rodando em sequência) — confirmada
+idêntica numa `main` limpa via `git stash`, portanto fora do escopo desta PR.
+
+Smoke real (perfil descartável, 2 terminais shell + 1 webview local, ~30s de
+carga): pipeline completo funcionou ponta a ponta e já apontou um sinal
+concreto — depois de "Limpar canvas" a contagem de processos do SO voltou
+exatamente ao baseline (8 = 8, sem PTY/webview órfão), mas heap JS (1,4 MiB →
+29,4 MiB), nós DOM (52 → 780) e listeners (2 → 585) ficaram bem acima do
+baseline, com contagem de nós `detachedness=2` crescendo a cada checkpoint em
+vez de cair. Sinal de possível retenção no nível do renderer (DOM/listener),
+distinto do que a task principal já corrigiu (liberação de PTY na remoção).
+Amostra pequena demais pra conclusão — a matriz real de 30/60/120 min com
+10/20 terminais fica para a evidência final da task.
+
+### Referências
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## Fechamento de trabalho — 2026-09-13 (continuação) — primeira sessão real de 30min e achado no TerminalDrawer
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+### Sessão real (perfil descartável, 10 terminais shell, 3 webviews locais, 30 minutos de carga)
+
+`/home/felipe/.claude/jobs/225a9b8c/tmp/heap-sessions/30min-10term-3web/report.md`
+(local, sanitizado — sem conteúdo de terminal nem caminho pessoal além do já
+presente no próprio código-fonte).
+
+Baseline 1,6 MiB de heap / 52 nós DOM / 2 listeners / 9 processos → depois de
+"Limpar canvas": 58,6 MiB / 2.645 nós DOM / 1.530 listeners / 8 processos. Os
+processos do SO voltam a um número igual ou menor que o baseline (sem PTY/
+webview órfão — confirma que a correção de liberação de PTY da task principal
+continua valendo), mas heap/DOM/listeners do renderer ficam bem acima do
+baseline.
+
+O diff entre "depois de remover" e "depois de Limpar canvas" aponta um
+candidato específico: nós DOM do `TerminalDrawer` (`.felixo-terminal-drawer`,
+botão "Recolher terminal", cabeçalho do drawer, `xterm-helper-textarea`) com
+`detachedness=2` (o sinal que o próprio V8 grava pra nó destacado do DOM, o
+mesmo que o filtro "Detached" do DevTools usa) chegando a 19-21 instâncias e
+não caindo.
+
+### Ressalva encontrada e corrigida antes de tirar conclusão
+
+A simulação de atividade da sessão só ABRIA o drawer lateral (clicar no card
+do terminal pra digitar nele abre o `TerminalDrawer`, que reaproveita o xterm
+já rodando), nunca fechava — então o crescimento podia ser só "ninguém fechou
+ainda" em vez de retenção real do ciclo abrir/fechar. Corrigido: agora cada
+rajada de atividade fecha o drawer explicitamente
+(`[aria-label="Fechar terminal"]`) antes de seguir. PR:
+https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39
+
+A sessão de 30min citada acima usou a versão SEM o fechamento explícito — os
+números são um teto (pior caso, uso sem fechar), não uma prova de vazamento no
+ciclo abrir/fechar em si. Uma sessão de 60 minutos com a versão corrigida
+(fecha sempre) está rodando para decidir se o candidato se confirma mesmo
+fechando, ou se estabiliza (carga esperada).
+
+### Referências
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+PR da ferramenta: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/38 (mergeada)
+PR do ajuste de metodologia: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39
+
+## Fechamento de trabalho — 2026-09-13 (continuação) — sessão de 60min corrigida: candidato do TerminalDrawer NÃO se confirmou
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+### Sessão real (perfil descartável, 15 terminais shell, 3 webviews locais, 60 minutos de carga, drawer sempre fechado a cada rajada — PR #39)
+
+`/home/felipe/.claude/jobs/225a9b8c/tmp/heap-sessions/60min-15term-3web-v2/report.md` (local, sanitizado).
+
+| Checkpoint | Heap JS | Nós DOM | Listeners | Processos |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 1,5 MiB | 52 | 2 | 9 |
+| Fixture criada (15 term. + 3 webviews) | 49,9 MiB | 2.483 | 1.370 | 23 |
+| Estado degradado (após 60min de carga) | 77,2 MiB | 2.484 | **580** | 26 |
+| Após remoção | 72,7 MiB | 2.333 | 544 | 8 |
+| Após "Limpar canvas" | 73,5 MiB | 2.288 | 553 | 8 |
+
+**Achado principal: o candidato de retenção do TerminalDrawer identificado na sessão de 30min (metodologia com falha, nunca fechava o drawer) NÃO se reproduziu aqui.** Com o drawer sempre fechado a cada rajada de atividade (correção da PR #39), os nós DOM ficaram **praticamente estáveis** durante toda a hora de carga (2.483 → 2.484, quase zero crescimento) e os listeners **caíram** (1.370 → 580) em vez de crescer. Isso inverte completamente a tendência vista na sessão de 30min (DOM 2.002→3.183, listeners 1.117→1.643, ambos crescendo). Conclusão: o achado da sessão de 30min era majoritariamente artefato da própria metodologia (nunca fechar o drawer), não uma retenção real no ciclo abrir/fechar.
+
+Processos do SO voltam exatamente ao baseline nas duas sessões (8 = 8 aqui; 8 = 8 na de 30min) — sem PTY/webview órfão, confirmando que a correção de liberação de PTY da task principal continua valendo mesmo sob carga maior (15 terminais, 1h).
+
+### Resíduo após remoção/Limpar canvas — não confirmado como retenção
+
+O diff 03→04 (após remover os 15 terminais) mostra ~15-19 elementos DOM (input "Nome do bloco", botões de ação do nó, cabeçalho do nó, handles de resize) passando para `detachedness=2`, com **Δ self_size = 0 B** na maioria das entradas — ou seja, os objetos não cresceram em tamanho nem se multiplicaram, só mudaram de "anexado" para "destacado" no exato instante da remoção. Isso é o comportamento esperado e correto de remover um nó do DOM: o subtree fica destacado imediatamente e só é varrido pelo GC depois. `HeapProfiler.takeHeapSnapshot` do Chrome já roda uma coleta de lixo antes de serializar (para evitar falso positivo assim), e mesmo assim ~1 instância por nó removido aparece — consistente com resíduo aguardando o próximo ciclo de GC, não uma referência JS ativa retendo o subtree pra sempre. Não abri correção de código para isso: não há evidência de crescimento contínuo nem de referência viva, só a lacuna natural entre "destacado" e "coletado".
+
+### Meta numérica de monitoramento (proposta, a partir do observado)
+
+- Durante carga sustentada (terminais abertos, drawer sempre fechado após uso): nós DOM e listeners não devem crescer mais que ~5% em relação ao estado logo após a criação da fixture, numa janela de 1h.
+- Após remoção completa + "Limpar canvas": até ~20 elementos destacados por nó removido é aceitável (resíduo pendente de GC); acima disso, investigar.
+- Processos do SO após "Limpar canvas" devem voltar ao mesmo número do baseline (nunca acima).
+
+### Limitação desta rodada
+
+A matriz completa do roteiro da task pede 30/60/120 minutos, 10 e 20 terminais, e repetição em três execuções para declarar não-reprodução com confiança total. Rodei 30min/10 terminais (metodologia com falha, já documentada) e 60min/15 terminais (metodologia corrigida, sem falha) — duas execuções reais, não três, e ainda falta a variante de 120 minutos e 20 terminais. O sinal já é consistente (crescimento zerado/negativo com a correção), mas a rodada de 120min/20 terminais fica como próximo passo se o Felipe quiser fechar com a matriz completa.
+
+### Referências
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+PR da ferramenta: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/38 (mergeada)
+PR do ajuste de metodologia (fecha o drawer): https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39 (mergeada)

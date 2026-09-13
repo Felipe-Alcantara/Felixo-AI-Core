@@ -1,0 +1,75 @@
+SNAPSHOT INICIAL — 2026-09-12 22:45:30
+==================================================
+
+### branch e upstream
+* codex/felixo-visual-polish 2e834a6 [origin/codex/felixo-visual-polish: behind 3] fix(test): respeita junction apenas no Windows
+  main                       3f121f6 [origin/main: ahead 9, behind 2] Merge branch 'main' of https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+### HEAD
+2e834a6 fix(test): respeita junction apenas no Windows
+
+### remotes
+origin	https://github.com/Felipe-Alcantara/Felixo-AI-Core.git (fetch)
+origin	https://github.com/Felipe-Alcantara/Felixo-AI-Core.git (push)
+
+### status --porcelain
+ M app/electron/preload.cjs
+ M app/electron/services/git-ipc-handlers.cjs
+ M app/electron/services/git-service.cjs
+ M app/electron/services/git-service.test.cjs
+ M app/src/features/canvas/components/CanvasToolbar.tsx
+ M app/src/features/canvas/components/CanvasTopbar.tsx
+ M app/src/features/canvas/components/tools/CanvasToolsMenu.tsx
+ M app/src/features/canvas/components/tools/GitPanel.tsx
+ M app/src/features/canvas/components/tools/canvas-tool-labels.ts
+ M app/src/index.css
+ M app/src/vite-env.d.ts
+?? app/src/features/canvas/components/tools/GitDiffView.tsx
+?? app/src/features/canvas/components/tools/git-diff.test.ts
+?? app/src/features/canvas/components/tools/git-diff.ts
+?? app/src/features/canvas/components/tools/git-status.test.ts
+?? app/src/features/canvas/components/tools/git-status.ts
+?? docs/overnight/
+
+### diff --stat
+ app/electron/preload.cjs                           |   3 +
+ app/electron/services/git-ipc-handlers.cjs         |  66 +++
+ app/electron/services/git-service.cjs              | 244 ++++++++++-
+ app/electron/services/git-service.test.cjs         |  94 ++++
+ .../features/canvas/components/CanvasToolbar.tsx   |  19 +-
+ .../features/canvas/components/CanvasTopbar.tsx    |   8 +-
+ .../canvas/components/tools/CanvasToolsMenu.tsx    |   2 +-
+ .../features/canvas/components/tools/GitPanel.tsx  | 479 ++++++++++++++-------
+ .../canvas/components/tools/canvas-tool-labels.ts  |   2 +-
+ app/src/index.css                                  | 385 ++++++++++++++++-
+ app/src/vite-env.d.ts                              |  26 ++
+ 11 files changed, 1141 insertions(+), 187 deletions(-)
+
+### staged --stat
+
+### untracked (exclude-standard)
+app/src/features/canvas/components/tools/GitDiffView.tsx
+app/src/features/canvas/components/tools/git-diff.test.ts
+app/src/features/canvas/components/tools/git-diff.ts
+app/src/features/canvas/components/tools/git-status.test.ts
+app/src/features/canvas/components/tools/git-status.ts
+docs/overnight/_snapshot-inicial.txt
+
+### stashes
+
+### ultimos 15 commits
+2e834a6 fix(test): respeita junction apenas no Windows
+2af46fd fix(cli): evita DEP0190 ao consultar CLIs via shell
+3f121f6 Merge branch 'main' of https://github.com/Felipe-Alcantara/Felixo-AI-Core
+c4672a0 feat(perf): captura metadados de ambiente pra correlação de responsividade/energia (#32)
+70c7d3b docs(qa): registra design, performance e validações visuais
+7805ef1 fix(desktop): estabiliza IPC, launchers e testes de plataforma
+dcaff90 refactor(chat): refina workspace e navegação
+639c357 perf(canvas): reduz custo de renderização e saída de terminal
+aa72ea2 refactor(canvas): refina workbench, nodes e superfícies
+be69f76 fix(canvas): mantém menus e seleções no fluxo de criação
+44f8cec refactor(ui): unifica superfícies e controles visuais
+b9e3555 feat(brand): integra identidade visual e assets transparentes
+43464c4 docs(ia): fecha o dia — cache offline concluído, árvore inteira de tasks fechada
+ade0c55 feat(cli): cache offline real via npm --cache/--prefer-offline + expurgo (#30)
+e427cf8 docs(ia): registra prova de isolamento de credencial entre perfis (PR #31)

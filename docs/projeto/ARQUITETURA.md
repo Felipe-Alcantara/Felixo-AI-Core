@@ -68,6 +68,19 @@ de captura e avaliação do processo principal só existe nessa instância, nunc
 app normal. `--real-profile` é uma exceção explícita e recusa iniciar quando os
 arquivos de singleton indicam que o perfil já está em uso.
 
+`felixo devtools heap-snapshot <arquivo>` e `felixo devtools metrics` expõem os
+domínios CDP `HeapProfiler`/`Performance` pela mesma conexão Playwright — um
+`.heapsnapshot` real (o mesmo formato que o DevTools do Chrome abre) e as
+métricas de heap/DOM/listeners, sem precisar de display para abrir a UI do
+DevTools. `scripts/heap-snapshot-analysis.cjs` resume e compara dois snapshots
+por construtor (self_size agregado, contagem de nós `detachedness=2` — o mesmo
+sinal do filtro "Detached" do DevTools, já pronto no arquivo). Juntos, esses
+dois pontos sustentam `scripts/canvas-long-session-heap-capture.cjs`: uma
+sessão real do Canvas (terminais shell, webviews e blocos numa fixture local,
+sempre em perfil descartável) com checkpoints de heap/RSS em cada fase —
+baseline, fixture criada, carga estabilizada, depois de remover nós e depois de
+"Limpar canvas" — para separar carga esperada de retenção indevida.
+
 ## Typecheck e fronteiras de build
 
 O renderer é validado por dois projetos TypeScript referenciados: o projeto
