@@ -809,4 +809,5 @@ module.exports = {
   runWithRetry,
   summarize,
   validateReport,
+  writeFixture,
 }
