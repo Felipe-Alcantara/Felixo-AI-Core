@@ -4910,3 +4910,48 @@ credencial nunca se sobrepõe entre dois perfis simultâneos; env de um nunca
 referencia o diretório do outro; caminho do binário/cache é idêntico pros dois
 perfis (documentado em código executável). `npm test` 1158/1158. PR #31: 13/13
 `success`. Mergeada, branch apagada (local e remota). Task Concluída.
+
+## Fechamento de Trabalho — 2026-09-12 (continuação, final) — cache offline concluído, árvore inteira de tasks fechada
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Sessão longa (16:00–21:19, ~5h20) autorizada pelo Felipe pra varrer todas as
+tasks-mãe/filhas pendentes do dia sem pausar. `systemd-inhibit` manteve a máquina
+acordada o tempo todo.
+
+**Fatias 2-4 do cache offline (`ade0c55`, PR #30).** `--cache`/`--prefer-offline`
+no `npm install`, apontando pra `getNpmRegistryCacheDir` — reusa o mecanismo nativo
+do npm em vez de reimplementar um cache próprio. Expurgo por orçamento (200MB,
+`managed-cli-cache-maintenance.cjs`). Achado real na auditoria de segredo:
+`createManagedInstallEnv` vazava `CODEX_HOME`/`CLAUDE_CONFIG_DIR`/
+`OPENROUTER_API_KEY` do `process.env` pro ambiente de instalação — corrigido.
+Achado real de teste: fake-fs do teste de expurgo usava `/` hardcoded, quebrava no
+Windows real (`path.join` produz `\`) — corrigido.
+
+**Fatia 5 (testes fim a fim).** 4 cenários verificados ao vivo com um pacote npm
+público de teste, reproduzindo as flags reais do código: instalação populando
+cache, instalação 100% offline com cache válido, cache corrompido+rede bloqueada
+(falha limpa `EINTEGRITY`), cache corrompido+rede disponível (recupera sozinho).
+Não virou teste automatizado no CI — comportamento de terceiro (npm) já testado em
+produção há anos, não código nosso; rodar `npm install` real contra o registry em
+todo CI seria lento e dependente de rede externa. Documentado com comando e saída
+reais em `docs/projeto/ARQUITETURA.md`.
+
+**Isolamento de credencial entre perfis (`e378e1f`, PR #31).** Escopo da task
+original mudou com a decisão de cache compartilhado: só restava provar
+login/credencial nunca vazando entre dois perfis simultâneos (nunca testado
+explicitamente para esse cenário) — 3 testes novos.
+
+**Acidente de sessão, sem perda de trabalho publicado.** Um `git checkout main --
+.` na branch de trabalho sobrescreveu um teste ainda não commitado (isolamento de
+credencial) — recuperado reescrevendo numa branch nova a partir de `main`. Nenhum
+commit já publicado foi afetado.
+
+**Árvore de tasks fechada por completo:** as 5 fatias do cache offline, a
+task-mãe do cache offline, a task-avó "Fixar versão, hash e cache offline", a task
+"Provar isolamento de binário/cache entre perfis" e a task-bisavó "Validar CLIs
+oficiais e dependências nativas com gerenciador alternativo nos três SOs" — todas
+`Etapa=Concluída`, confirmado lendo cada uma de volta.
+
+**PRs do dia:** #22 a #31 (10 PRs), todas mergeadas e com branch apagada local e
+remota. Nenhuma PR aberta ao final da sessão.
