@@ -15,10 +15,17 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
   const inputRef = useSearchInputFocus()
 
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50)
-    }
-  }, [isOpen])
+    if (!isOpen) return undefined
+
+    // O timer não era cancelado: fechar e reabrir a busca em menos de 50ms — ou
+    // desmontar nesse intervalo — deixava um foco pendente disparando sobre um
+    // input que podia não estar mais montado.
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 50)
+    return () => window.clearTimeout(timer)
+    // `inputRef` é identidade estável (`useRef`), então declará-la não muda
+    // quando o efeito roda — a regra só não consegue provar isso através do
+    // custom hook. Declarar é mais honesto que silenciar com disable.
+  }, [isOpen, inputRef])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -29,7 +36,7 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
     }
     if (isOpen) document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, setQuery])
 
   function closePanel() {
     setQuery('')

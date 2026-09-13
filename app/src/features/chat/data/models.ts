@@ -42,15 +42,52 @@ export const initialModels: Model[] = [
 
 export const ideaStarters = [
   'Código',
-  'Aprender',
-  'Estratégias',
-  'Escrever',
-  'Assuntos pessoais',
+  'Planejar',
+  'Analisar',
+  'Explicar',
+  'Revisar',
 ]
 
-export const quickPrompts = [
-  'Criar um plano para conectar as CLIs ao app',
-  'Organizar as próximas tarefas do Felixo AI Core',
-  'Revisar a estrutura contra os padrões Felixo',
-  'Transformar uma ideia solta em MVP',
+/**
+ * Sugestões da tela inicial: título curto + o que a ação entrega.
+ *
+ * Continuam sendo só texto inserido no composer — nenhuma função nova por
+ * trás. O `prompt` é o que vai para a conversa; título e descrição existem
+ * para a pessoa escolher sem precisar ler a frase inteira.
+ */
+export type ChatSuggestion = {
+  id: string
+  title: string
+  description: string
+  prompt: string
+}
+
+export const chatSuggestions: ChatSuggestion[] = [
+  {
+    id: 'plano',
+    title: 'Criar um plano de implementação',
+    description: 'Transforme uma ideia em tarefas claras',
+    prompt: 'Crie um plano de implementação, quebrando a ideia em tarefas claras.',
+  },
+  {
+    id: 'analisar',
+    title: 'Analisar meu código',
+    description: 'Identifique melhorias e possíveis problemas',
+    prompt: 'Analise o código do projeto e aponte melhorias e possíveis problemas.',
+  },
+  {
+    id: 'organizar',
+    title: 'Organizar próximas tarefas',
+    description: 'Estruture o que vem pela frente',
+    prompt: 'Organize as próximas tarefas do projeto, na ordem em que fazem sentido.',
+  },
+  {
+    id: 'explicar',
+    title: 'Explicar um conceito',
+    description: 'Receba uma explicação clara e objetiva',
+    prompt: 'Explique este conceito de forma clara e objetiva.',
+  },
 ]
+
+/** Mantido: outras telas ainda leem a lista simples de prompts. */
+export const quickPrompts = chatSuggestions.map((suggestion) => suggestion.prompt)

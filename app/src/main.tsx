@@ -1,6 +1,7 @@
 import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@xterm/xterm/css/xterm.css'
+import './features/shared/brand/felixo-brand-tokens.css'
 import './index.css'
 import App from './App.tsx'
 import { BootMarker } from './BootMarker'

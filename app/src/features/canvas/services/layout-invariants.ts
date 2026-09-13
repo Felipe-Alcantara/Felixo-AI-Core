@@ -1,20 +1,21 @@
 // Contrato de "nunca sobrepor" do canvas — versão testável.
 //
-// `canvas-surfaces.ts` já resolve a divisão horizontal (barra + painel +
-// gaveta) e `CanvasPanel.tsx` já clampa a altura do painel esquerdo contra o
-// topo medido do dock (`dockTop`). O que faltava era um lugar ÚNICO que
-// junte as duas coisas, mais o dock e o Mini Map, e vire uma bateria de
-// asserções — em vez de cada componente confiar isoladamente que os números
-// dos outros nunca vão colidir com os dele.
+// `canvas-surfaces.ts` já resolve a divisão horizontal (sidebar + painel +
+// gaveta + inspector). O que faltava era um lugar ÚNICO que junte tudo isso
+// e o Mini Map, e vire uma bateria de asserções — em vez de cada componente
+// confiar isoladamente que os números dos outros nunca vão colidir com os
+// dele.
 //
 // Este módulo NÃO reimplementa o layout: importa as mesmas funções puras que
 // os componentes reais usam (`canvas-surfaces.ts`) e só soma as invariantes
-// que ainda não tinham um lugar comum — dock e Mini Map inclusos.
+// que ainda não tinham um lugar comum.
 
 import {
   DRAWER_MIN_WIDTH,
+  INSPECTOR_WIDTH,
   MIN_CANVAS_STRIP,
   PANEL_MIN_WIDTH,
+  SIDEBAR_WIDTH,
   drawerWidthLimit,
   freeCanvasArea,
   miniMapSize,
@@ -24,20 +25,21 @@ import {
 
 export { DRAWER_MIN_WIDTH, PANEL_MIN_WIDTH }
 
-/** Largura da coluna da barra de ferramentas com a margem dela (ver CanvasView.tsx). */
-export const TOOLBAR_WIDTH = 176
+/** Largura da sidebar no pior caso plausível: sempre expandida (ver canvas-surfaces.ts). */
+export const TOOLBAR_WIDTH = SIDEBAR_WIDTH
 
 /** Trilho da gaveta recolhida: só os botões do cabeçalho, sem terminal. */
 export const DRAWER_COLLAPSED_WIDTH = 44
 
-/** Largura fixa do dock "Elementos" (`w-80` em TerminalsPanel.tsx) e sua margem do canto. */
+/** Reserva do inspector "Elementos" no pior caso plausível: sempre expandido. */
+export const INSPECTOR_RESERVED_WIDTH = INSPECTOR_WIDTH
+
+/** Largura fixa e margem do dock "Elementos" no canto inferior direito. */
 export const DOCK_WIDTH = 320
 export const DOCK_CORNER_MARGIN = 16
-/** Altura máxima do dock, em fração do viewport (`max-h-[60vh]`). */
 export const DOCK_MAX_HEIGHT_FRACTION = 0.6
-
-/** Reservado entre o topo do painel esquerdo e o do dock (ver CanvasPanel.tsx). */
 export const PANEL_TO_DOCK_GAP = 16
+const MIN_USABLE_PANEL_HEIGHT = 160
 
 export type LayoutViewport = { width: number; height: number }
 
@@ -47,10 +49,9 @@ export type LayoutInvariantViolation = {
 }
 
 /**
- * Pior caso plausível: barra + painel + gaveta abertos ao mesmo tempo, dock
- * cheio de elementos (altura máxima), painel de ferramenta também esticado
- * até a altura máxima que o dock permite. Se as invariantes seguram aqui,
- * seguram em qualquer combinação mais folgada.
+ * Pior caso plausível: sidebar + painel + gaveta + inspector, todos abertos
+ * ao mesmo tempo. Se as invariantes seguram aqui, seguram em qualquer
+ * combinação mais folgada.
  *
  * @param viewport Viewport útil (sem levar em conta zoom/DPR — ver limitação
  *   no corpo da task de origem).
@@ -58,25 +59,32 @@ export type LayoutInvariantViolation = {
  */
 export function checkWorstCaseLayout(viewport: LayoutViewport): LayoutInvariantViolation[] {
   const violations: LayoutInvariantViolation[] = []
-  const { width: viewportWidth, height: viewportHeight } = viewport
+  const { width: viewportWidth } = viewport
 
-  // 1. Barra + painel + gaveta nunca passam da largura da tela — cada um
-  //    encolhe até o piso, e a soma dos pisos é o limite físico.
+  // 1. Sidebar + painel + gaveta + inspector nunca passam da largura da
+  //    tela — cada um encolhe até o piso (o inspector não encolhe: ou está
+  //    na largura cheia, ou é um puck que não reserva nada — aqui entra
+  //    sempre no seu pior caso, expandido), e a soma dos pisos é o limite
+  //    físico.
   const panelWidth = panelWidthLimit(
     viewportWidth,
-    { toolbar: TOOLBAR_WIDTH, drawer: getWorstCaseDrawerWidth(viewportWidth) },
+    {
+      toolbar: TOOLBAR_WIDTH,
+      drawer: getWorstCaseDrawerWidth(viewportWidth),
+      inspector: INSPECTOR_RESERVED_WIDTH,
+    },
     PANEL_MIN_WIDTH,
   )
   const drawerWidth = drawerWidthLimit(
     viewportWidth,
-    { toolbar: TOOLBAR_WIDTH, panel: panelWidth },
+    { toolbar: TOOLBAR_WIDTH, panel: panelWidth, inspector: INSPECTOR_RESERVED_WIDTH },
     DRAWER_MIN_WIDTH,
   )
-  const horizontalTotal = TOOLBAR_WIDTH + panelWidth + drawerWidth
+  const horizontalTotal = TOOLBAR_WIDTH + panelWidth + drawerWidth + INSPECTOR_RESERVED_WIDTH
 
   if (horizontalTotal > viewportWidth) {
     violations.push({
-      rule: 'barra+painel+gaveta-cabem-na-largura',
+      rule: 'barra+painel+gaveta+inspector-cabem-na-largura',
       detail: `soma ${horizontalTotal}px passa da largura ${viewportWidth}px`,
     })
   }
@@ -87,6 +95,7 @@ export function checkWorstCaseLayout(viewport: LayoutViewport): LayoutInvariantV
     toolbar: TOOLBAR_WIDTH,
     panel: panelWidth,
     drawer: drawerWidth,
+    inspector: INSPECTOR_RESERVED_WIDTH,
   }
   const free = freeCanvasArea(viewport, occupancy)
 
@@ -108,9 +117,6 @@ export function checkWorstCaseLayout(viewport: LayoutViewport): LayoutInvariantV
     })
   }
 
-  // 4. O dock nunca passa da largura da tela, mesmo com a margem do canto —
-  //    é o que `max-w-[calc(100vw-2rem)]` garante em CSS; aqui é o
-  //    equivalente testável em número.
   const dockWidth = Math.min(DOCK_WIDTH, viewportWidth - DOCK_CORNER_MARGIN * 2)
   if (dockWidth + DOCK_CORNER_MARGIN * 2 > viewportWidth) {
     violations.push({
@@ -119,14 +125,9 @@ export function checkWorstCaseLayout(viewport: LayoutViewport): LayoutInvariantV
     })
   }
 
-  // 5. O painel esquerdo, esticado até a altura máxima que o dock permite
-  //    (pior caso: dock ocupando toda a altura reservada a ele), continua
-  //    com uma altura utilizável — nunca negativa nem ilegivelmente pequena.
-  const dockHeight = Math.round(viewportHeight * DOCK_MAX_HEIGHT_FRACTION)
-  const dockTop = viewportHeight - dockHeight
+  const dockHeight = Math.round(viewport.height * DOCK_MAX_HEIGHT_FRACTION)
+  const dockTop = viewport.height - dockHeight
   const panelMaxHeight = dockTop - PANEL_TO_DOCK_GAP
-  const MIN_USABLE_PANEL_HEIGHT = 160
-
   if (panelMaxHeight < MIN_USABLE_PANEL_HEIGHT) {
     violations.push({
       rule: 'painel-esquerdo-tem-altura-usavel-acima-do-dock',
@@ -160,29 +161,27 @@ export function isWorstCaseLayoutSafe(viewport: LayoutViewport): boolean {
  * ferramenta E gaveta do terminal abertos ao mesmo tempo abaixo deste
  * número são uma SOBREPOSIÇÃO INTENCIONAL, não uma violação — é o único
  * caso hoje em que `checkWorstCaseLayout` espera encontrar a regra
- * `barra+painel+gaveta-cabem-na-largura`.
+ * `barra+painel+gaveta+inspector-cabem-na-largura`.
  */
-export const COMBINED_FLOOR_WIDTH = TOOLBAR_WIDTH + PANEL_MIN_WIDTH + DRAWER_MIN_WIDTH
+export const COMBINED_FLOOR_WIDTH =
+  TOOLBAR_WIDTH + PANEL_MIN_WIDTH + DRAWER_MIN_WIDTH + INSPECTOR_RESERVED_WIDTH
 
 /** Nunca é zero: abaixo disto o canvas não teria faixa visível nenhuma. */
 export const MIN_GUARANTEED_CANVAS_STRIP = MIN_CANVAS_STRIP
-
-/** Abaixo disto, um painel esticado até o dock já não mostra conteúdo útil. */
-const MIN_USABLE_PANEL_HEIGHT = 160
 
 export type LiveLayoutSnapshot = {
   viewport: LayoutViewport
   /** Larguras REAIS ocupadas agora — não o pior caso plausível. */
   occupancy: SurfaceOccupancy
-  /** `dockTop` medido de verdade (`Infinity` quando o dock não existe). */
-  dockTop: number
+  /** Topo real do dock; infinito quando ele está colapsado ou não medido. */
+  dockTop?: number
 }
 
 /**
  * Diagnóstico do estado AO VIVO (não o pior caso hipotético de
  * `checkWorstCaseLayout`) — pra saber se o clamp que o código já faz
- * silenciosamente (painel/gaveta no piso, painel esticado até o dock) está
- * acontecendo agora de verdade, e por quê.
+ * silenciosamente (painel/gaveta no piso) está acontecendo agora de
+ * verdade, e por quê.
  *
  * Devolve no máximo UMA violação (a mais relevante) — é pra virar um evento
  * de log na transição, não uma lista de tudo que está no limite.
@@ -190,22 +189,22 @@ export type LiveLayoutSnapshot = {
 export function detectLiveLayoutClamp({
   viewport,
   occupancy,
-  dockTop,
+  dockTop = Number.POSITIVE_INFINITY,
 }: LiveLayoutSnapshot): LayoutInvariantViolation | null {
-  // Painel e gaveta abertos ao mesmo tempo, de verdade, deixando menos que
-  // a faixa de canvas garantida entre os dois — a sobreposição intencional
-  // documentada em COMBINED_FLOOR_WIDTH acontecendo agora, não
-  // hipoteticamente. Checar só "estourou a largura da tela" (em vez de
-  // "sobrou menos que MIN_CANVAS_STRIP") deixava passar batido um caso real:
-  // medido ao vivo em 12/09/2026, barra+painel+gaveta somavam 876px numa
-  // tela de 900px — cabiam, sem "estourar" — mas a faixa de canvas entre os
-  // dois ficou em ~24px, bem abaixo dos 160px pretendidos.
-  const horizontalTotal = occupancy.toolbar + occupancy.panel + occupancy.drawer
+  // Painel e gaveta abertos ao mesmo tempo, de verdade, ultrapassando a
+  // largura disponível — a sobreposição intencional documentada em
+  // COMBINED_FLOOR_WIDTH acontecendo agora, não hipoteticamente. Uma faixa
+  // menor que o piso, por si só, não é clamp: pode ser uma composição válida
+  // quando ainda existe espaço físico suficiente para os elementos.
+  const horizontalTotal = occupancy.toolbar + occupancy.panel + occupancy.drawer + occupancy.inspector
   const canvasStrip = viewport.width - horizontalTotal
-  if (occupancy.panel > 0 && occupancy.drawer > 0 && canvasStrip < MIN_CANVAS_STRIP) {
+  if (occupancy.panel > 0 && occupancy.drawer > 0 && horizontalTotal > viewport.width) {
     return {
-      rule: 'painel+gaveta-espremem-a-faixa-de-canvas',
-      detail: `barra ${occupancy.toolbar}px + painel ${occupancy.panel}px + gaveta ${occupancy.drawer}px = ${horizontalTotal}px, sobrando ${canvasStrip}px de canvas (piso ${MIN_CANVAS_STRIP}px), viewport ${viewport.width}px`,
+      rule:
+        occupancy.inspector > 0 && horizontalTotal > viewport.width
+          ? 'painel+gaveta-sobrepostos-de-verdade'
+          : 'painel+gaveta-espremem-a-faixa-de-canvas',
+      detail: `barra ${occupancy.toolbar}px + painel ${occupancy.panel}px + gaveta ${occupancy.drawer}px + inspector ${occupancy.inspector}px = ${horizontalTotal}px, sobrando ${canvasStrip}px de canvas (piso ${MIN_CANVAS_STRIP}px), viewport ${viewport.width}px`,
     }
   }
 

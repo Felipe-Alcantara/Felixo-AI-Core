@@ -206,11 +206,11 @@ const statusConfig: Record<
   },
   no_login: {
     label: 'Sem login',
-    className: 'border-amber-300/20 bg-amber-300/10 text-amber-300',
+    className: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
   },
   limit_reached: {
     label: 'Limite atingido',
-    className: 'border-amber-300/20 bg-amber-300/10 text-amber-300',
+    className: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
   },
   unknown: {
     label: 'Desconhecido',

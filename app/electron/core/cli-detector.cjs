@@ -166,8 +166,20 @@ async function detectCli(cliInfo, env, options = {}) {
       // o pedaço antes do espaço. Medido ao vivo: `claude`/`codex` instaladas
       // via npm reportavam "não instalada" só numa conta cujo nome de usuário
       // do Windows tem espaço.
-      const commandToRun = useShell ? `"${executable}"` : executable
-      const { stdout, stderr } = await execute(commandToRun, [cliInfo.versionFlag], {
+      //
+      // A flag vai dentro da linha de comando, e nao no array de argumentos,
+      // quando o shell entra: com `shell: true` o Node concatena os
+      // argumentos crus na linha do `cmd.exe` de qualquer jeito, e avisa
+      // disso (DEP0190, que um dia vira erro). Fazendo a juncao aqui o
+      // comando final e identico — o executavel ja vai citado logo acima e a
+      // flag e uma constante de SUPPORTED_CLIS, nunca entrada de usuario —,
+      // mas sem depender de um comportamento que o Node deprecou. Fora do
+      // shell o array continua, que e a forma segura e a unica no POSIX.
+      const commandToRun = useShell
+        ? `"${executable}" ${cliInfo.versionFlag}`
+        : executable
+      const commandArgs = useShell ? [] : [cliInfo.versionFlag]
+      const { stdout, stderr } = await execute(commandToRun, commandArgs, {
         timeout: DETECTION_TIMEOUT_MS,
         env: env || process.env,
         windowsHide: true,

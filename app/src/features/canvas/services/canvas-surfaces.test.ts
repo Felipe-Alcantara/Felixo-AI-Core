@@ -11,8 +11,8 @@ import {
 
 /** Notebook do relato: viewport útil de 1320x738. */
 const LARGURA = 1320
-/** Coluna da barra de ferramentas com as margens. */
-const BARRA = 176
+/** Largura da sidebar expandida (ver SIDEBAR_WIDTH em canvas-surfaces.ts). */
+const BARRA = 288
 const MIN_PAINEL = 260
 const MIN_GAVETA = 440
 
@@ -20,33 +20,32 @@ describe('painel e gaveta dividem a largura', () => {
   it('o painel encolhe quando a gaveta está aberta', () => {
     const semGaveta = panelWidthLimit(
       LARGURA,
-      { toolbar: BARRA, drawer: 0 },
+      { toolbar: BARRA, drawer: 0, inspector: 0 },
       MIN_PAINEL,
     )
     const comGaveta = panelWidthLimit(
       LARGURA,
-      { toolbar: BARRA, drawer: 585 },
+      { toolbar: BARRA, drawer: 585, inspector: 0 },
       MIN_PAINEL,
     )
 
     expect(comGaveta).toBeLessThan(semGaveta)
-    // O que era 528 de largura padrão não cabe mais com a gaveta aberta.
     expect(comGaveta).toBe(LARGURA - BARRA - 585 - MIN_CANVAS_STRIP)
   })
 
   it('a gaveta encolhe quando o painel está aberto', () => {
     const comPainel = drawerWidthLimit(
       LARGURA,
-      { toolbar: BARRA, panel: 528 },
+      { toolbar: BARRA, panel: 300, inspector: 0 },
       MIN_GAVETA,
     )
 
-    expect(comPainel).toBe(LARGURA - BARRA - 528 - MIN_CANVAS_STRIP)
+    expect(comPainel).toBe(LARGURA - BARRA - 300 - MIN_CANVAS_STRIP)
   })
 
   it('somados, os dois nunca passam da tela', () => {
-    const painel = panelWidthLimit(LARGURA, { toolbar: BARRA, drawer: 585 }, MIN_PAINEL)
-    const gaveta = drawerWidthLimit(LARGURA, { toolbar: BARRA, panel: painel }, MIN_GAVETA)
+    const painel = panelWidthLimit(LARGURA, { toolbar: BARRA, drawer: 585, inspector: 0 }, MIN_PAINEL)
+    const gaveta = drawerWidthLimit(LARGURA, { toolbar: BARRA, panel: painel, inspector: 0 }, MIN_GAVETA)
 
     expect(BARRA + painel + gaveta).toBeLessThanOrEqual(LARGURA)
   })
@@ -55,30 +54,53 @@ describe('painel e gaveta dividem a largura', () => {
     // Tela estreita: espremer abaixo do mínimo daria um painel de poucos
     // pixels, que não mostra nada. Aí a sobreposição é declarada, não um
     // painel ilegível.
-    const painel = panelWidthLimit(700, { toolbar: BARRA, drawer: 585 }, MIN_PAINEL)
+    const painel = panelWidthLimit(700, { toolbar: BARRA, drawer: 300, inspector: 0 }, MIN_PAINEL)
 
     expect(painel).toBe(MIN_PAINEL)
+  })
+
+  it('o inspector "Elementos" também encolhe painel e gaveta, como a gaveta encolhe o painel', () => {
+    // O inspector é permanente (não fecha como a gaveta), mas reserva
+    // largura real do mesmo jeito quando expandido.
+    const semInspector = panelWidthLimit(LARGURA, { toolbar: BARRA, drawer: 0, inspector: 0 }, MIN_PAINEL)
+    const comInspector = panelWidthLimit(LARGURA, { toolbar: BARRA, drawer: 0, inspector: 288 }, MIN_PAINEL)
+
+    expect(comInspector).toBeLessThan(semInspector)
+    expect(comInspector).toBe(LARGURA - BARRA - 288 - MIN_CANVAS_STRIP)
   })
 })
 
 describe('área livre do canvas', () => {
-  it('desconta barra, painel e gaveta', () => {
+  it('desconta barra, painel, gaveta e inspector', () => {
     const area = freeCanvasArea(
       { width: LARGURA, height: 738 },
-      { toolbar: BARRA, panel: 528, drawer: 0 },
+      { toolbar: BARRA, panel: 300, drawer: 0, inspector: 288 },
     )
 
-    expect(area.left).toBe(BARRA + 528)
-    expect(area.width).toBe(LARGURA - BARRA - 528)
+    expect(area.left).toBe(BARRA + 300)
+    expect(area.width).toBe(LARGURA - BARRA - 300 - 288)
   })
 
   it('não fica negativa quando tudo somado passa da tela', () => {
     const area = freeCanvasArea(
       { width: 600, height: 738 },
-      { toolbar: BARRA, panel: 400, drawer: 400 },
+      { toolbar: BARRA, panel: 300, drawer: 300, inspector: 288 },
     )
 
     expect(area.width).toBe(0)
+  })
+
+  it('inspector recolhido (0) devolve a largura ao painel de ferramenta e ao Mini Map', () => {
+    const recolhido = freeCanvasArea(
+      { width: LARGURA, height: 738 },
+      { toolbar: BARRA, panel: 300, drawer: 0, inspector: 0 },
+    )
+    const expandido = freeCanvasArea(
+      { width: LARGURA, height: 738 },
+      { toolbar: BARRA, panel: 300, drawer: 0, inspector: 288 },
+    )
+
+    expect(recolhido.width).toBe(expandido.width + 288)
   })
 })
 
@@ -101,7 +123,6 @@ describe('Mini Map', () => {
     expect(miniMapSize(0)).toBeNull()
   })
 })
-
 describe('divisão de uma vez só entre painel e gaveta (splitHorizontalSpace)', () => {
   // Bug real reportado em 12/09/2026: "painéis conflitando com o terminal,
   // os dois ficam em looping se mexendo". `panelWidthLimit`/`drawerWidthLimit`

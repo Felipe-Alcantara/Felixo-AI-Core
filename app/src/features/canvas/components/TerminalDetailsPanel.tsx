@@ -32,7 +32,7 @@ export function TerminalDetailsPanel({
       toolsMenuOpen={toolsMenuOpen}
     >
       <div className="space-y-3 text-xs text-zinc-300">
-        <div className="flex items-center gap-2 text-sm font-medium text-emerald-200">
+        <div className="flex items-center gap-2 text-sm font-medium text-[var(--f-core-white-soft)]">
           <TerminalIcon size={14} />
           <span className="truncate">{value(data.label, 'Terminal')}</span>
         </div>
@@ -52,7 +52,7 @@ export function TerminalDetailsPanel({
         {agentSession && (
           <button
             type="button"
-            className="rounded border border-amber-400/30 px-2 py-1 text-left text-[11px] text-amber-200 hover:bg-amber-400/10"
+            className="rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] px-2 py-1 text-left text-[11px] text-[var(--color-warning)] hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]"
             onClick={() => {
               if (window.confirm('Remover a associação desta conversa? O terminal atual não será encerrado.')) {
                 onClearAgentSession()

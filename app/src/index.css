@@ -3,20 +3,100 @@
 @tailwind utilities;
 
 :root {
-  --color-app-bg: #191918;
-  --color-main-bg: #171716;
-  --color-panel: #242423;
-  --color-sidebar: #272727;
-  --color-input: #1a1a19;
-  --color-composer: #2b2b2a;
-  --color-status-bg: #141413;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-accent: #a7f3d0;
-  --color-error: #fca5a5;
-  --color-success: #86efac;
+  /* Felixo AI Core — aliases semânticos sobre os tokens oficiais do Brand Kit.
+     O arquivo fonte é `features/shared/brand/felixo-brand-tokens.css`; esta
+     camada mantém os nomes históricos do frontend sem criar uma paleta rival. */
+  --f-core-black-deep: var(--felixo-black);
+  --f-core-black-surface: var(--felixo-surface);
+  --f-core-graphite: var(--felixo-surface-2);
+  --f-core-structural: var(--felixo-border);
+  --f-core-secondary: var(--felixo-text-muted);
+  --f-core-muted: var(--felixo-text-subtle);
+  --f-core-white-soft: var(--felixo-white);
+  --f-core-white: var(--felixo-white);
+  --f-core-active: var(--felixo-white);
+  --f-core-font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --f-core-selection-glow: 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 0 18px rgba(255, 255, 255, 0.065), 0 12px 28px rgba(0, 0, 0, 0.28);
+  --f-core-radius-xs: var(--felixo-radius-sm);
+  --f-core-radius-sm: var(--felixo-radius-md);
+  --f-core-radius-md: var(--felixo-radius-lg);
+  --f-core-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Hairline / icon / route: as três espessuras da marca. */
+  --f-core-stroke-hairline: 1px;
+  --f-core-stroke-icon: 1.5px;
+  --f-core-stroke-route: 2px;
+  /* Distributed Route: shared geometry, spacing and motion vocabulary. */
+  --f-space-1: 4px;
+  --f-space-2: 8px;
+  --f-space-3: 12px;
+  --f-space-4: 16px;
+  --f-space-6: 24px;
+  --f-motion-fast: 160ms;
+  --f-motion-reveal: 240ms;
+  --f-node-border: color-mix(in srgb, var(--f-core-white) 12%, transparent);
+  --f-node-selected: color-mix(in srgb, var(--f-core-white) 38%, transparent);
+  --f-surface-hover: color-mix(in srgb, var(--f-core-white) 5%, transparent);
+  --f-edge-idle: color-mix(in srgb, var(--f-core-white) 22%, transparent);
+  --f-edge-focus: color-mix(in srgb, var(--f-core-white) 60%, transparent);
+  --f-port-hit: 14px;
+  --f-port-dot: 4px;
+
+  /* Felixo Controls — one contract for closed fields and portaled menus. */
+  --control-height: 38px;
+  --control-bg: #111214;
+  --control-bg-hover: #151618;
+  --control-bg-focus: #151618;
+  --control-border: rgba(255, 255, 255, 0.07);
+  --control-border-focus: rgba(255, 255, 255, 0.28);
+  --control-radius: 8px;
+  --control-text: #f1f1ee;
+  --control-placeholder: #8d8d89;
+  --control-disabled: #a2a29e;
+  --popover-bg: #101112;
+  --popover-border: rgba(255, 255, 255, 0.08);
+  --popover-shadow: 0 16px 50px rgba(0, 0, 0, 0.4);
+  --popover-radius: 10px;
+  --option-hover: rgba(255, 255, 255, 0.06);
+  --option-selected: rgba(255, 255, 255, 0.095);
+
+  /* Escada de superfícies do workspace.
+     Antes eram três degraus (deep / surface / graphite) e o resultado lia como
+     "tudo preto". Agora são seis, com passos pequenos e desiguais: a diferença
+     é para ser SENTIDA como profundidade, não contada como tons de cinza. O
+     canvas é o mais fundo — é onde o espaço aparece; cada camada de chrome
+     sobe um degrau em direção à luz. */
+  --f-surface-canvas: #060607;
+  --f-surface-sidebar: #08080a;
+  --f-surface-header: #0a0a0c;
+  --f-surface-panel: #0c0c0e;
+  --f-surface-control: #121214;
+  --f-surface-floating: #151517;
+
+  --color-app-bg: var(--f-surface-canvas);
+  --color-main-bg: var(--f-surface-canvas);
+  --color-panel: var(--f-surface-panel);
+  --color-sidebar: var(--f-surface-sidebar);
+  --color-input: var(--f-core-black-deep);
+  --color-composer: var(--f-surface-control);
+  --color-status-bg: var(--f-surface-header);
+  --color-border: rgba(247, 247, 244, 0.09);
+  /* "Em UI, luz indica atividade" (04_Assets/USAGE.md, regra 5): o estado
+     ativo é luz, não cor. O verde-água anterior saiu por isso. */
+  --color-accent: var(--f-core-white);
+  /* Sinal funcional, não decoração: erro e sucesso continuam existindo porque
+     comunicam risco e conclusão, mas dessaturados para não competir com a
+     marca monocromática. */
+  --color-error: #e2b4b4;
+  --color-success: #b6cfbd;
+  /* Atenção: o único âmbar que sobra no produto. Existe porque "aguardando
+     aprovação" é o estado que pede ação humana — na escala de cinza ele se
+     confundiria com "trabalhando" e a pessoa perderia o agente parado. */
+  --color-warning: #d9c39a;
   --spacing-base: 0.5rem;
-  --radius-base: 1rem;
-  --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.32);
+  --radius-base: var(--f-core-radius-sm);
+  --shadow-base: 0 8px 24px rgba(0, 0, 0, 0.45);
   /* Button interaction timings. Press is snappier than release so a click
      feels immediate; both stay short enough not to delay repeated clicks.
      These deliberately stay fast — direct manipulation must never lag the
@@ -25,9 +105,9 @@
   --felixo-release-duration: 180ms;
   --felixo-press-scale: 0.96;
   --felixo-press-scale-icon: 0.9;
-  color: #f4f4f5;
-  background: #09090b;
-  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  color: var(--f-core-white-soft);
+  background: var(--f-core-black-deep);
+  font-family: var(--f-core-font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -74,6 +154,7 @@ body {
   margin: 0;
   overflow: hidden;
   background: var(--color-main-bg);
+  letter-spacing: -0.011em;
 }
 
 button,
@@ -92,13 +173,13 @@ textarea {
 }
 
 select {
-  color: #f4f4f5;
+  color: var(--f-core-white-soft);
   color-scheme: dark;
 }
 
 select option {
-  color: #f4f4f5;
-  background: #1a1a19;
+  color: var(--f-core-white-soft);
+  background: var(--f-core-graphite);
 }
 
 textarea::-webkit-scrollbar,
@@ -116,7 +197,7 @@ div::-webkit-scrollbar-thumb {
 }
 
 ::selection {
-  color: #09090b;
+  color: var(--f-core-black-deep);
   background: var(--color-accent);
 }
 
@@ -147,7 +228,7 @@ div::-webkit-scrollbar-thumb {
     border-radius: 0.375rem;
     background: rgba(0, 0, 0, 0.2);
     padding: 0.125rem 0.375rem;
-    color: #cffafe;
+    color: var(--f-core-white-soft);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: 12px;
   }
@@ -163,37 +244,37 @@ div::-webkit-scrollbar-thumb {
   .markdown-content .hljs-keyword,
   .markdown-content .hljs-selector-tag,
   .markdown-content .hljs-built_in {
-    color: #f0abfc;
+    color: #c2b6c9;
   }
 
   .markdown-content .hljs-title,
   .markdown-content .hljs-title.function_,
   .markdown-content .hljs-function .hljs-title {
-    color: #93c5fd;
+    color: #b9c4d1;
   }
 
   .markdown-content .hljs-string,
   .markdown-content .hljs-attr,
   .markdown-content .hljs-template-variable {
-    color: #86efac;
+    color: var(--color-success);
   }
 
   .markdown-content .hljs-number,
   .markdown-content .hljs-literal,
   .markdown-content .hljs-variable,
   .markdown-content .hljs-property {
-    color: #fdba74;
+    color: var(--color-warning);
   }
 
   .markdown-content .hljs-comment,
   .markdown-content .hljs-quote {
-    color: #94a3b8;
+    color: var(--f-core-secondary);
     font-style: italic;
   }
 
   .markdown-content .hljs-tag,
   .markdown-content .hljs-name {
-    color: #67e8f9;
+    color: #a9c4c4;
   }
 }
 
@@ -201,38 +282,51 @@ div::-webkit-scrollbar-thumb {
    React Flow drives colors through CSS variables, so override those (not just
    the wrapper) or the SVG keeps its light default. */
 .react-flow {
-  --xy-controls-button-background-color: #27272a;
-  --xy-controls-button-background-color-hover: #3f3f46;
-  --xy-controls-button-color: #e4e4e7;
-  --xy-controls-button-color-hover: #ffffff;
-  --xy-controls-button-border-color: rgba(255, 255, 255, 0.08);
-  --xy-minimap-background-color: #18181b;
+  --xy-controls-button-background-color: var(--f-core-graphite);
+  --xy-controls-button-background-color-hover: var(--f-core-structural);
+  --xy-controls-button-color: var(--f-core-white-soft);
+  --xy-controls-button-color-hover: var(--f-core-active);
+  --xy-controls-button-border-color: rgba(247, 247, 244, 0.1);
+  --xy-minimap-background-color: var(--f-core-graphite);
 }
 
 .react-flow__controls-button {
-  background: #27272a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  color: #e4e4e7;
-  fill: #e4e4e7;
+  background: var(--f-core-graphite);
+  border-bottom: 1px solid rgba(247, 247, 244, 0.09);
+  color: var(--f-core-white-soft);
+  fill: var(--f-core-white-soft);
 }
 
 .react-flow__controls-button:hover {
-  background: #3f3f46;
+  background: var(--f-core-structural);
 }
 
 .react-flow__controls-button svg {
-  fill: #e4e4e7;
+  fill: var(--f-core-white);
 }
 
 .react-flow__minimap {
-  background: #18181b;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.5rem;
+  background: var(--f-core-graphite);
+  border: 1px solid rgba(247, 247, 244, 0.1);
+  border-radius: var(--f-core-radius-sm);
   overflow: hidden;
 }
 
 .react-flow__minimap-svg {
-  background: #18181b;
+  background: var(--f-core-graphite);
+}
+
+/* 19rem = INSPECTOR_WIDTH (18rem) + respiro até a borda do inspector; recolhe
+   pra 1rem quando ele vira puck (ver o `:has()` perto de .felixo-workbench-sidebar). */
+.felixo-canvas-minimap {
+  margin-right: 19rem !important;
+  opacity: 0.45;
+  transition: margin-right 180ms var(--f-core-ease), opacity var(--f-motion-fast) var(--f-core-ease);
+}
+
+.felixo-canvas-minimap:hover,
+.felixo-canvas-minimap:focus-within {
+  opacity: 1;
 }
 
 .react-flow__attribution {
@@ -267,8 +361,8 @@ div::-webkit-scrollbar-thumb {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* `--felixo-panel-max-height` is set inline by the flyout that measures the
-   real room available below its anchor button (see toolbarFlyoutStyle) —
+/* `--felixo-panel-max-height` is set by whichever surface hosts the panel —
+   `.felixo-sidebar-inline-panel` caps it to a fraction of the viewport — and
    falls back to the old flat viewport cap for anything that doesn't set it,
    so the "to" state never re-opens the panel past the screen's edge. */
 @keyframes felixo-tools-list-in {
@@ -323,36 +417,36 @@ div::-webkit-scrollbar-thumb {
   100% { transform: translate(44px, -132px); }
 }
 
-/* Surfaces enter slowly enough to be watched and leave faster than they
-   arrive — a slow exit reads as lag, since the user has already moved on. */
+/* Surfaces settle quickly enough to feel immediate. Motion is feedback, never
+   a gate between the pointer and the next usable state. */
 .felixo-anim-drawer-in {
-  animation: felixo-slide-in-right 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: felixo-slide-in-right 180ms var(--f-core-ease);
 }
 
 .felixo-anim-drawer-out {
-  animation: felixo-slide-out-right 300ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: felixo-slide-out-right 160ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .felixo-anim-panel-in {
-  animation: felixo-panel-in 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: felixo-panel-in 190ms var(--f-core-ease);
   transform-origin: top left;
 }
 
 .felixo-anim-panel-out {
-  animation: felixo-panel-out 260ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: felixo-panel-out 160ms cubic-bezier(0.4, 0, 1, 1) forwards;
   transform-origin: top left;
 }
 
 /* Header, then body: the panel's own two parts arrive after its frame does. */
 .felixo-anim-panel-in > * {
-  animation: felixo-tools-list-item-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-tools-list-item-in 140ms var(--f-core-ease) both;
 }
 
-.felixo-anim-panel-in > :nth-child(1) { animation-delay: 90ms; }
-.felixo-anim-panel-in > :nth-child(2) { animation-delay: 170ms; }
+.felixo-anim-panel-in > :nth-child(1) { animation-delay: 25ms; }
+.felixo-anim-panel-in > :nth-child(2) { animation-delay: 45ms; }
 
 .felixo-anim-menu-in {
-  animation: felixo-menu-in 340ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: felixo-menu-in 140ms var(--f-core-ease);
   transform-origin: top;
 }
 
@@ -367,8 +461,8 @@ div::-webkit-scrollbar-thumb {
   /* Opacity trails the transform: the panel is still visible for most of the
      fold, so the eye follows it into the corner instead of losing it early. */
   transition:
-    transform 620ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 480ms cubic-bezier(0.16, 1, 0.3, 1) 90ms;
+    transform 220ms var(--f-core-ease),
+    opacity 160ms var(--f-core-ease) 30ms;
   will-change: transform, opacity;
 }
 
@@ -390,8 +484,8 @@ div::-webkit-scrollbar-thumb {
   /* Delayed so the puck only starts growing once the panel has folded most of
      the way in — the two motions read as one handoff, not a crossfade. */
   transition:
-    transform 560ms cubic-bezier(0.16, 1, 0.3, 1) 140ms,
-    opacity 400ms cubic-bezier(0.16, 1, 0.3, 1) 180ms;
+    transform 190ms var(--f-core-ease) 35ms,
+    opacity 150ms var(--f-core-ease) 45ms;
 }
 
 .felixo-anim-corner-puck-hidden {
@@ -407,35 +501,22 @@ div::-webkit-scrollbar-thumb {
 }
 
 .felixo-anim-sequential-panel {
-  animation: felixo-tools-list-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-tools-list-in var(--f-motion-reveal) var(--f-core-ease) both;
   transform-origin: top left;
 }
 
 /* Each row is slower than the step between rows, so several are in flight at
    once — the list unrolls as one wave instead of ticking item by item. */
 .felixo-anim-sequential-panel > * {
-  animation: felixo-tools-list-item-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-tools-list-item-in var(--f-motion-fast) var(--f-core-ease) both;
 }
 
 /* The stagger. Enumerated rather than computed so it works in every engine;
    past the last row listed the remaining items share the final delay, which
    is what you want anyway — a 40-row list must not take 2s to finish. */
-.felixo-anim-sequential-panel > :nth-child(1) { animation-delay: 50ms; }
-.felixo-anim-sequential-panel > :nth-child(2) { animation-delay: 105ms; }
-.felixo-anim-sequential-panel > :nth-child(3) { animation-delay: 160ms; }
-.felixo-anim-sequential-panel > :nth-child(4) { animation-delay: 215ms; }
-.felixo-anim-sequential-panel > :nth-child(5) { animation-delay: 270ms; }
-.felixo-anim-sequential-panel > :nth-child(6) { animation-delay: 325ms; }
-.felixo-anim-sequential-panel > :nth-child(7) { animation-delay: 380ms; }
-.felixo-anim-sequential-panel > :nth-child(8) { animation-delay: 435ms; }
-.felixo-anim-sequential-panel > :nth-child(9) { animation-delay: 490ms; }
-.felixo-anim-sequential-panel > :nth-child(10) { animation-delay: 545ms; }
-.felixo-anim-sequential-panel > :nth-child(11) { animation-delay: 600ms; }
-.felixo-anim-sequential-panel > :nth-child(12) { animation-delay: 655ms; }
-.felixo-anim-sequential-panel > :nth-child(13) { animation-delay: 710ms; }
-.felixo-anim-sequential-panel > :nth-child(14) { animation-delay: 765ms; }
-.felixo-anim-sequential-panel > :nth-child(15) { animation-delay: 820ms; }
-.felixo-anim-sequential-panel > :nth-child(n + 16) { animation-delay: 875ms; }
+.felixo-anim-sequential-panel > :nth-child(2) { animation-delay: 20ms; }
+.felixo-anim-sequential-panel > :nth-child(3) { animation-delay: 40ms; }
+.felixo-anim-sequential-panel > :nth-child(n + 4) { animation-delay: 60ms; }
 
 /**
  * Same choreography for a scrollable list of rows (the elements dock, the
@@ -443,70 +524,70 @@ div::-webkit-scrollbar-thumb {
  * panels animate their own max-height, which a scroll container must not do.
  */
 .felixo-anim-stagger-list > * {
-  animation: felixo-tools-list-item-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-tools-list-item-in var(--f-motion-fast) var(--f-core-ease) both;
 }
 
-.felixo-anim-stagger-list > :nth-child(1) { animation-delay: 60ms; }
-.felixo-anim-stagger-list > :nth-child(2) { animation-delay: 115ms; }
-.felixo-anim-stagger-list > :nth-child(3) { animation-delay: 170ms; }
-.felixo-anim-stagger-list > :nth-child(4) { animation-delay: 225ms; }
-.felixo-anim-stagger-list > :nth-child(5) { animation-delay: 280ms; }
-.felixo-anim-stagger-list > :nth-child(6) { animation-delay: 335ms; }
-.felixo-anim-stagger-list > :nth-child(7) { animation-delay: 390ms; }
-.felixo-anim-stagger-list > :nth-child(8) { animation-delay: 445ms; }
-.felixo-anim-stagger-list > :nth-child(9) { animation-delay: 500ms; }
-.felixo-anim-stagger-list > :nth-child(10) { animation-delay: 555ms; }
-.felixo-anim-stagger-list > :nth-child(n + 11) { animation-delay: 610ms; }
+.felixo-anim-stagger-list > :nth-child(1) { animation-delay: 10ms; }
+.felixo-anim-stagger-list > :nth-child(2) { animation-delay: 20ms; }
+.felixo-anim-stagger-list > :nth-child(3) { animation-delay: 30ms; }
+.felixo-anim-stagger-list > :nth-child(4) { animation-delay: 40ms; }
+.felixo-anim-stagger-list > :nth-child(5) { animation-delay: 50ms; }
+.felixo-anim-stagger-list > :nth-child(6) { animation-delay: 60ms; }
+.felixo-anim-stagger-list > :nth-child(7) { animation-delay: 70ms; }
+.felixo-anim-stagger-list > :nth-child(8) { animation-delay: 80ms; }
+.felixo-anim-stagger-list > :nth-child(9) { animation-delay: 90ms; }
+.felixo-anim-stagger-list > :nth-child(10) { animation-delay: 100ms; }
+.felixo-anim-stagger-list > :nth-child(n + 11) { animation-delay: 110ms; }
 
 .felixo-toolbar-expanding {
-  animation: felixo-toolbar-expand-root 1180ms linear both;
+  animation: felixo-toolbar-expand-root 220ms linear both;
   transform-origin: top left;
   will-change: transform;
 }
 
 .felixo-toolbar-expanding > :not(:first-child) {
-  animation: felixo-toolbar-item-expand 540ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-toolbar-item-expand 170ms var(--f-core-ease) both;
 }
 
 .felixo-toolbar-expanding > :first-child {
-  animation: felixo-toolbar-trigger-expand 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: felixo-toolbar-trigger-expand 150ms var(--f-core-ease) both;
 }
 
-.felixo-toolbar-expanding > :nth-child(2) { --toolbar-offset: -44px; animation-delay: 50ms; }
-.felixo-toolbar-expanding > :nth-child(3) { --toolbar-offset: -88px; animation-delay: 100ms; }
-.felixo-toolbar-expanding > :nth-child(4) { animation: felixo-notification-to-list 700ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both; }
-.felixo-toolbar-expanding > :nth-child(5) { --toolbar-offset: -176px; animation-delay: 200ms; }
-.felixo-toolbar-expanding > :nth-child(6) { --toolbar-offset: -220px; animation-delay: 250ms; }
-.felixo-toolbar-expanding > :nth-child(7) { --toolbar-offset: -264px; animation-delay: 300ms; }
-.felixo-toolbar-expanding > :nth-child(8) { --toolbar-offset: -308px; animation-delay: 350ms; }
-.felixo-toolbar-expanding > :nth-child(9) { --toolbar-offset: -352px; animation-delay: 400ms; }
-.felixo-toolbar-expanding > :nth-child(10) { --toolbar-offset: -396px; animation-delay: 450ms; }
-.felixo-toolbar-expanding > :nth-child(11) { --toolbar-offset: -440px; animation-delay: 500ms; }
-.felixo-toolbar-expanding > :nth-child(12) { --toolbar-offset: -484px; animation-delay: 550ms; }
-.felixo-toolbar-expanding > :nth-child(13) { --toolbar-offset: -528px; animation-delay: 600ms; }
-.felixo-toolbar-expanding > :nth-child(14) { --toolbar-offset: -572px; animation-delay: 650ms; }
-.felixo-toolbar-expanding > :nth-child(16) { --toolbar-offset: -616px; animation-delay: 700ms; }
+.felixo-toolbar-expanding > :nth-child(2) { --toolbar-offset: -44px; animation-delay: 20ms; }
+.felixo-toolbar-expanding > :nth-child(3) { --toolbar-offset: -88px; animation-delay: 35ms; }
+.felixo-toolbar-expanding > :nth-child(4) { animation: felixo-notification-to-list 220ms var(--f-core-ease) 45ms both; }
+.felixo-toolbar-expanding > :nth-child(5) { --toolbar-offset: -176px; animation-delay: 55ms; }
+.felixo-toolbar-expanding > :nth-child(6) { --toolbar-offset: -220px; animation-delay: 70ms; }
+.felixo-toolbar-expanding > :nth-child(7) { --toolbar-offset: -264px; animation-delay: 85ms; }
+.felixo-toolbar-expanding > :nth-child(8) { --toolbar-offset: -308px; animation-delay: 100ms; }
+.felixo-toolbar-expanding > :nth-child(9) { --toolbar-offset: -352px; animation-delay: 115ms; }
+.felixo-toolbar-expanding > :nth-child(10) { --toolbar-offset: -396px; animation-delay: 130ms; }
+.felixo-toolbar-expanding > :nth-child(11) { --toolbar-offset: -440px; animation-delay: 145ms; }
+.felixo-toolbar-expanding > :nth-child(12) { --toolbar-offset: -484px; animation-delay: 160ms; }
+.felixo-toolbar-expanding > :nth-child(13) { --toolbar-offset: -528px; animation-delay: 175ms; }
+.felixo-toolbar-expanding > :nth-child(14) { --toolbar-offset: -572px; animation-delay: 190ms; }
+.felixo-toolbar-expanding > :nth-child(16) { --toolbar-offset: -616px; animation-delay: 205ms; }
 
 /* Collapsing stays quicker than expanding: the user has already decided to
    dismiss it, so the same slow travel would just read as the UI dragging. */
 .felixo-toolbar-collapsing {
-  animation: felixo-toolbar-collapse-root 660ms linear both;
+  animation: felixo-toolbar-collapse-root 180ms linear both;
   transform-origin: top left;
   pointer-events: none;
   will-change: transform;
 }
 
 .felixo-toolbar-collapsing > :not(:first-child) {
-  animation: felixo-toolbar-item-collapse 480ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: felixo-toolbar-item-collapse 150ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .felixo-toolbar-collapsing > :first-child {
-  animation: felixo-toolbar-trigger-collapse 380ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: felixo-toolbar-trigger-collapse 130ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .felixo-toolbar-collapsing > :nth-child(2) { --toolbar-offset: -44px; }
 .felixo-toolbar-collapsing > :nth-child(3) { --toolbar-offset: -88px; }
-.felixo-toolbar-collapsing > :nth-child(4) { animation: felixo-notification-to-compact 620ms cubic-bezier(0.4, 0, 1, 1) both; }
+.felixo-toolbar-collapsing > :nth-child(4) { animation: felixo-notification-to-compact 190ms cubic-bezier(0.4, 0, 1, 1) both; }
 .felixo-toolbar-collapsing > :nth-child(5) { --toolbar-offset: -176px; }
 .felixo-toolbar-collapsing > :nth-child(6) { --toolbar-offset: -220px; }
 .felixo-toolbar-collapsing > :nth-child(7) { --toolbar-offset: -264px; }
@@ -565,8 +646,921 @@ div::-webkit-scrollbar-thumb {
    inline translate(). Keeping it scoped prevents regular drag operations from
    gaining inertia. Duration matches AGENT_MATRIX_ANIMATION_MS in CanvasView. */
 .react-flow__node.felixo-agent-matrix-moving {
-  transition: transform 820ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 320ms var(--f-core-ease);
   will-change: transform;
+}
+
+/* Pointer drag is direct manipulation: easing the transform here creates
+   visible lag. Keep the visual pickup, but never interpolate the position. */
+.react-flow__node.dragging {
+  transition: none !important;
+  will-change: transform;
+}
+
+/* --------------------------------------------------------------------------
+   Canvas workbench chrome
+
+   The canvas deliberately stays visually quieter than the app shell. The
+   sidebar, inspector and topbar establish the hierarchy; the grid and nodes
+   only surface when they help someone work.
+   -------------------------------------------------------------------------- */
+[data-felixo-canvas-ready] {
+  background: var(--color-main-bg);
+}
+
+[data-felixo-canvas-ready] .react-flow__pane {
+  background:
+    radial-gradient(circle at 42% 18%, rgba(247, 247, 244, 0.025), transparent 38%),
+    var(--f-core-black-surface);
+}
+
+[data-felixo-canvas-ready] .react-flow__background {
+  opacity: 0.62;
+}
+
+.react-flow__node {
+  transition: filter 150ms ease, opacity 150ms ease;
+}
+
+.react-flow__node.selected {
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.2));
+}
+
+.react-flow__edge-path {
+  stroke: var(--f-edge-idle);
+  stroke-width: var(--f-core-stroke-icon);
+  filter: none;
+  transition: stroke 140ms var(--f-core-ease), stroke-width 140ms var(--f-core-ease),
+    filter 140ms var(--f-core-ease), opacity 140ms var(--f-core-ease);
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--f-edge-focus);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--f-edge-focus);
+  stroke-width: var(--f-core-stroke-route);
+}
+
+.react-flow__handle {
+  /* Transparent hit area; keep XYFlow's positioning transform intact. */
+  width: var(--f-port-hit) !important;
+  height: var(--f-port-hit) !important;
+  border: 0 !important;
+  border-radius: 999px;
+  background: transparent !important;
+}
+
+.react-flow__handle.source::after {
+  position: absolute;
+  inset: 5px;
+  width: var(--f-port-dot);
+  height: var(--f-port-dot);
+  border-radius: 50%;
+  background: var(--f-core-secondary);
+  content: '';
+  opacity: 0.2;
+  pointer-events: none;
+  transition: opacity var(--f-motion-fast) var(--f-core-ease), background-color var(--f-motion-fast) var(--f-core-ease);
+}
+
+.react-flow__node:is(:hover, :focus-within, .selected, .connecting) .react-flow__handle.source::after,
+.react-flow__handle.source:hover::after {
+  opacity: 1;
+}
+
+.react-flow__handle.source:hover::after {
+  background: var(--f-core-white);
+}
+
+.react-flow__resize-control.handle {
+  width: var(--f-port-hit) !important;
+  height: var(--f-port-hit) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.react-flow__resize-control.handle::after {
+  position: absolute;
+  inset: 5px;
+  border: 1px solid var(--f-core-secondary);
+  background: var(--f-core-graphite);
+  content: '';
+  opacity: 0.6;
+}
+
+.react-flow__resize-control.handle:hover::after,
+.react-flow__resize-control.handle:active::after {
+  border-color: var(--f-core-white);
+  opacity: 1;
+}
+
+.react-flow__resize-control.line {
+  border-color: transparent !important;
+}
+
+.react-flow__controls {
+  overflow: hidden;
+  border: 1px solid rgba(247, 247, 244, 0.1);
+  border-radius: var(--f-core-radius-sm);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.felixo-canvas-topbar {
+  position: absolute;
+  top: 0;
+  right: 18rem;
+  left: 18rem;
+  z-index: 18;
+  display: grid;
+  /* A 3ª coluna soma `padding-right` (limpa o sino, que flutua por cima,
+     independente da grade) + botão de enquadrar + o pill de zoom — 8rem não
+     cobria essa soma e o conteúdo, alinhado à direita (`flex-end`),
+     vazava para a esquerda por cima da barra de busca em telas <=1366px
+     (confirmado: botão "Enquadrar" renderizando dentro do próprio campo de
+     busca). 11rem é o piso real medido, com folga. */
+  grid-template-columns: minmax(12rem, 1fr) minmax(18rem, 31rem) minmax(11rem, 1fr);
+  align-items: center;
+  height: 3rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--f-surface-header);
+  color: var(--f-core-white);
+  pointer-events: none;
+  transition: left 180ms var(--f-core-ease);
+}
+
+.felixo-canvas-topbar > * {
+  pointer-events: auto;
+}
+
+.felixo-canvas-topbar-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 1rem;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.felixo-canvas-topbar-title > .felixo-lockup {
+  flex-shrink: 0;
+}
+
+/* Lockup horizontal (símbolo + nome), a versão preferida para header de
+   interface. O peso vive no nome; o descritor "AI Core" fica leve e em cinza
+   secundário. O símbolo herda currentColor, então o conjunto acende junto. */
+.felixo-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--f-core-white);
+  white-space: nowrap;
+}
+
+.felixo-lockup-asset {
+  display: block;
+  flex: 0 0 auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.felixo-lockup-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  letter-spacing: -0.012em;
+}
+
+.felixo-lockup-text strong {
+  font-weight: 640;
+}
+
+.felixo-lockup-text > span {
+  color: var(--f-core-secondary);
+  font-size: 0.82em;
+  font-weight: 400;
+}
+
+.felixo-canvas-breadcrumb {
+  display: flex;
+  min-width: 0;
+  gap: 0.65rem;
+  color: var(--f-core-secondary);
+  font-size: 0.75rem;
+  font-weight: 450;
+  white-space: nowrap;
+}
+
+.felixo-command-trigger {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.65rem;
+  height: 2.25rem;
+  padding: 0 0.625rem 0 0.75rem;
+  border: 1px solid rgba(247, 247, 244, 0.12);
+  border-radius: var(--f-core-radius-sm);
+  background: var(--f-core-black-deep);
+  color: var(--f-core-secondary);
+  font-size: 0.78rem;
+  text-align: left;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018);
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.felixo-command-trigger:hover,
+.felixo-command-trigger:focus-visible {
+  border-color: rgba(247, 247, 244, 0.5);
+  background: var(--f-core-structural);
+  color: var(--f-core-white-soft);
+  outline: none;
+}
+
+.felixo-command-trigger > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-canvas-topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-right: 4.5rem;
+}
+
+.felixo-topbar-icon-button,
+.felixo-zoom-readout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  border: 1px solid rgba(247, 247, 244, 0.1);
+  background: var(--f-surface-control);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-topbar-icon-button {
+  width: 2rem;
+  border-radius: var(--f-core-radius-xs);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.felixo-topbar-icon-button:hover {
+  background: var(--f-core-structural);
+  color: var(--f-core-active);
+}
+
+.felixo-zoom-readout {
+  min-width: 3.5rem;
+  border-radius: var(--f-core-radius-xs);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.felixo-canvas-statusbar {
+  position: absolute;
+  right: 18rem;
+  bottom: 0;
+  left: 18rem;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--felixo-statusbar-height);
+  padding: 0 1rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--f-surface-header);
+  color: var(--f-core-secondary);
+  font-size: 0.7rem;
+  pointer-events: none;
+  transition: left 180ms var(--f-core-ease);
+}
+
+.felixo-statusbar-group,
+.felixo-statusbar-item,
+.felixo-statusbar-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.felixo-statusbar-group {
+  gap: 0.8rem;
+}
+
+.felixo-statusbar-workspace {
+  color: var(--f-core-white-soft);
+  font-weight: 600;
+}
+
+.felixo-statusbar-separator {
+  width: 1px;
+  height: 0.75rem;
+  background: rgba(247, 247, 244, 0.12);
+}
+
+.felixo-statusbar-save.is-ready {
+  color: var(--color-accent);
+}
+
+/* Mesmo respiro do Mini Map (19rem, recolhe pra 1rem com o inspector no
+   puck) — o sino fica alinhado com ele no canto direito da tela. */
+.felixo-notifications-trigger {
+  right: 19rem;
+  transition: right 180ms var(--f-core-ease);
+}
+
+.felixo-workbench-sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 26;
+  display: flex;
+  width: 18rem;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+  background: var(--f-surface-sidebar);
+  box-shadow: 8px 0 22px rgba(0, 0, 0, 0.1);
+  transition: width 180ms var(--f-core-ease);
+}
+
+.felixo-workbench-sidebar.is-collapsed {
+  width: 3.25rem;
+}
+
+/* Recolher a navegação devolve espaço real ao workspace. `:has()` é seguro
+   no Chromium do Electron e evita manter uma segunda fonte de estado só para
+   dois offsets de layout. */
+[data-felixo-canvas-ready]:has(.felixo-workbench-sidebar.is-collapsed) .felixo-canvas-topbar,
+[data-felixo-canvas-ready]:has(.felixo-workbench-sidebar.is-collapsed) .felixo-canvas-statusbar {
+  left: 3.25rem;
+}
+
+[data-felixo-canvas-ready]:has(.felixo-workbench-sidebar.is-collapsed) .react-flow__controls {
+  margin-left: 3.8rem !important;
+}
+
+/* Espelho do bloco acima, do outro lado da tela: recolher o inspector
+   "Elementos" (`felixo-anim-corner-dock-collapsed`, ver TerminalsPanel.tsx)
+   também devolve espaço real, sem precisar subir esse estado até aqui em
+   JS — a barra superior, a de status, o Mini Map e o sino de notificações
+   leem o mesmo seletor. */
+[data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-collapsed) .felixo-canvas-topbar,
+[data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-collapsed) .felixo-canvas-statusbar {
+  right: 1rem;
+}
+
+[data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-collapsed) .felixo-canvas-minimap {
+  margin-right: 1rem !important;
+}
+
+[data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-collapsed) .felixo-notifications-trigger {
+  right: 1rem;
+}
+
+.felixo-activity-rail {
+  display: flex;
+  width: 3.25rem;
+  min-width: 3.25rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.35rem;
+  border-right: 1px solid rgba(247, 247, 244, 0.08);
+  background: var(--f-core-black-deep);
+}
+
+.felixo-app-mark {
+  display: flex;
+  width: 2.15rem;
+  height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.35rem;
+  color: var(--f-core-white);
+}
+
+.felixo-activity-rail-button {
+  position: relative;
+  display: flex;
+  width: 2.35rem;
+  height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+}
+
+.felixo-activity-rail-button:hover {
+  background: var(--f-core-structural);
+  color: var(--f-core-white);
+}
+
+.felixo-activity-rail-button.is-active {
+  background: rgba(247, 247, 244, 0.1);
+  color: var(--f-core-active);
+}
+
+.felixo-activity-rail-button.is-active::before {
+  position: absolute;
+  left: -0.35rem;
+  width: 2px;
+  height: 1.3rem;
+  border-radius: 0 2px 2px 0;
+  background: var(--color-accent);
+  content: '';
+}
+
+.felixo-sidebar-content {
+  display: flex;
+  width: 14.75rem;
+  min-width: 14.75rem;
+  flex-direction: column;
+  background: var(--f-surface-sidebar);
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 180ms var(--f-core-ease);
+}
+
+.felixo-workbench-sidebar.is-collapsed .felixo-sidebar-content {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-0.5rem);
+}
+
+.felixo-sidebar-header {
+  display: flex;
+  height: 3rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.65rem 0 0.8rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.felixo-sidebar-header > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.felixo-sidebar-header strong {
+  overflow: hidden;
+  color: var(--f-core-white);
+  font-size: 0.78rem;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-sidebar-header span {
+  color: var(--f-core-secondary);
+  font-size: 0.63rem;
+}
+
+.felixo-sidebar-collapse-button {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+}
+
+.felixo-sidebar-collapse-button:hover {
+  background: var(--f-core-structural);
+  color: var(--f-core-white);
+}
+
+.felixo-sidebar-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.35rem 0.6rem 0.85rem;
+}
+
+.felixo-sidebar-section {
+  padding: 0.48rem 0 0.58rem;
+  border-bottom: 1px solid rgba(247, 247, 244, 0.055);
+}
+
+.felixo-sidebar-section:last-child {
+  border-bottom: 0;
+}
+
+.felixo-sidebar-section-heading {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.18rem 0.28rem 0.38rem;
+  color: var(--f-core-secondary);
+  font-size: 0.62rem;
+  font-weight: 680;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.felixo-sidebar-section-heading:hover {
+  color: var(--f-core-white);
+}
+
+.felixo-sidebar-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+}
+
+.felixo-sidebar-inline-panel {
+  --felixo-panel-max-height: min(58vh, 36rem);
+  border-color: rgba(247, 247, 244, 0.075);
+  background: var(--f-surface-floating);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+.felixo-sidebar-action {
+  min-height: 1.9rem;
+  border: 1px solid transparent;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  box-shadow: none;
+  transition: background-color 130ms ease, border-color 130ms ease, color 130ms ease, transform 90ms ease;
+}
+
+.felixo-sidebar-action:hover {
+  border-color: rgba(247, 247, 244, 0.08);
+  color: var(--f-core-white);
+}
+
+.felixo-sidebar-action.is-active {
+  border-color: transparent;
+  background: rgba(247, 247, 244, 0.095);
+  color: var(--f-core-active);
+  box-shadow: inset 2px 0 var(--color-accent);
+}
+
+.felixo-sidebar-agent-trigger {
+  border: 1px solid rgba(247, 247, 244, 0.065);
+  background: transparent;
+  box-shadow: none;
+}
+
+.felixo-sidebar-agent-trigger > button {
+  min-height: 1.95rem;
+  background: transparent;
+  padding-top: 0.38rem;
+  padding-bottom: 0.38rem;
+  font-size: 0.78rem;
+}
+
+.felixo-sidebar-agent-trigger > button:hover {
+  background: var(--f-core-structural);
+}
+
+.felixo-sidebar-button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.22rem;
+}
+
+.felixo-sidebar-button-grid .felixo-sidebar-action {
+  justify-content: center;
+  gap: 0.35rem;
+  padding-right: 0.35rem;
+  padding-left: 0.35rem;
+  font-size: 0.71rem;
+}
+
+.felixo-sidebar-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.felixo-sidebar-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.felixo-sidebar-tool-group + .felixo-sidebar-tool-group {
+  padding-top: 0.48rem;
+  border-top: 1px solid rgba(247, 247, 244, 0.05);
+}
+
+.felixo-sidebar-tool-group-label {
+  padding: 0 0.45rem 0.2rem;
+  color: var(--f-core-secondary);
+  font-size: 0.57rem;
+  font-weight: 650;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.felixo-sidebar-tool-action {
+  display: flex;
+  width: 100%;
+  min-height: 1.72rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.48rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  font-size: 0.72rem;
+  text-align: left;
+}
+
+.felixo-sidebar-tool-action:hover {
+  background: var(--f-core-structural);
+  color: var(--f-core-white);
+}
+
+.felixo-sidebar-tool-action.is-active {
+  background: rgba(247, 247, 244, 0.09);
+  color: var(--f-core-active);
+  box-shadow: inset 2px 0 var(--color-accent);
+}
+
+.felixo-sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0.6rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--f-core-black-deep);
+}
+
+.felixo-sidebar-footer-row {
+  display: flex;
+  min-height: 1.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.felixo-version-badge {
+  color: var(--f-core-secondary);
+  font-size: 0.64rem;
+  letter-spacing: 0.015em;
+}
+
+.felixo-sidebar-danger {
+  display: flex;
+  width: auto;
+  min-height: 1.65rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--f-core-radius-xs);
+  background: transparent;
+  color: var(--f-core-secondary);
+  font-size: 0.66rem;
+}
+
+.felixo-sidebar-danger:hover {
+  border-color: rgba(248, 113, 113, 0.13);
+  background: rgba(127, 29, 29, 0.22);
+  color: var(--color-error);
+}
+
+.felixo-sidebar-update-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.35rem;
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+}
+
+.felixo-sidebar-update-status > * {
+  max-width: 100%;
+}
+
+/* Right inspector: it belongs to the window frame, never floats over the
+   canvas like a temporary card. The previous dock interactions (selection,
+   keyboard navigation, drag reorder and mass send) remain exactly the same. */
+.felixo-elements-inspector {
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: var(--f-surface-sidebar);
+  box-shadow: -8px 0 22px rgba(0, 0, 0, 0.1);
+  transform-origin: right center;
+}
+
+.felixo-elements-inspector > div:first-child {
+  min-height: 3rem;
+  border-color: var(--color-border);
+  background: var(--f-surface-header);
+}
+
+.felixo-elements-inspector ul {
+  gap: 0.25rem;
+  padding: 0.65rem 0.55rem;
+}
+
+.felixo-elements-inspector [data-element-row] > div > button {
+  min-height: 2.2rem;
+  border: 1px solid transparent;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-elements-inspector [data-element-row] > div > button:hover {
+  border-color: rgba(247, 247, 244, 0.08);
+  background: var(--f-core-structural);
+}
+
+.felixo-elements-inspector .felixo-inspector-row-active {
+  border-color: rgba(247, 247, 244, 0.16);
+  background: rgba(247, 247, 244, 0.1);
+}
+
+.felixo-elements-inspector [data-element-row] > div > button > span:first-child {
+  background: var(--f-core-structural);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-elements-inspector [data-repository-heading] {
+  padding-top: 0.85rem;
+}
+
+.felixo-elements-inspector [data-repository-heading] > div {
+  color: var(--f-core-secondary);
+}
+
+.felixo-inspector-empty {
+  display: flex;
+  min-height: 9rem;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1rem 0.85rem;
+  border: 1px dashed rgba(247, 247, 244, 0.1);
+  border-radius: var(--f-core-radius-sm);
+  background: var(--f-core-black-deep);
+  color: var(--f-core-white-soft);
+  text-align: center;
+}
+
+.felixo-inspector-empty span {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.felixo-inspector-empty p {
+  margin: 0.35rem 0 0;
+  color: var(--f-core-secondary);
+  font-size: 0.71rem;
+  line-height: 1.45;
+}
+
+/* Canvas cards share one technical, solid surface. Their type remains clear
+   through icon, content and semantic status — not a rainbow of permanent
+   chrome. Teal is reserved for direct selection and connection work. */
+.felixo-canvas-card {
+  border-color: rgba(247, 247, 244, 0.12);
+  border-radius: var(--f-core-radius-sm);
+  background: var(--f-surface-panel);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  color: var(--f-core-white-soft);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.felixo-canvas-card:hover {
+  border-color: rgba(247, 247, 244, 0.18);
+}
+
+.felixo-node-header {
+  min-height: 2rem;
+  border-bottom: 1px solid rgba(247, 247, 244, 0.08);
+  background: var(--f-surface-control);
+  color: var(--f-core-white);
+  letter-spacing: -0.005em;
+}
+
+.felixo-node-header:hover {
+  background: var(--f-core-structural);
+}
+
+.felixo-node-header input {
+  color: inherit;
+}
+
+.felixo-canvas-card-terminal {
+  background: var(--f-core-graphite);
+}
+
+.felixo-canvas-card-terminal > button {
+  background: var(--f-core-graphite);
+}
+
+.felixo-canvas-card-file,
+.felixo-canvas-card-web,
+.felixo-canvas-card-notion,
+.felixo-canvas-card-drawing {
+  background: var(--f-core-graphite);
+}
+
+.felixo-canvas-card-file > .nodrag,
+.felixo-canvas-card-web > .nodrag {
+  border-color: rgba(247, 247, 244, 0.08);
+  background-color: var(--f-core-structural);
+}
+
+.felixo-canvas-card-file textarea,
+.felixo-canvas-card-file pre,
+.felixo-canvas-card-file .markdown-content,
+.felixo-canvas-card-web input {
+  background-color: var(--f-core-graphite);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-canvas-card-note .markdown-content {
+  border: 1px solid rgba(247, 247, 244, 0.08);
+  background: var(--f-core-graphite);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-canvas-group {
+  border-color: rgba(247, 247, 244, 0.2);
+  background: rgba(247, 247, 244, 0.025);
+  border-radius: var(--f-core-radius-sm);
+}
+
+.felixo-canvas-group .canvas-node-drag {
+  border-bottom: 1px solid rgba(247, 247, 244, 0.08);
+  border-radius: var(--f-core-radius-sm) var(--f-core-radius-sm) 0 0;
+  background: var(--f-core-structural);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-canvas-group .canvas-node-drag input {
+  color: var(--f-core-white-soft);
+}
+
+.react-flow__node.selected .felixo-canvas-card {
+  border-color: rgba(247, 247, 244, 0.72);
+  box-shadow: 0 0 0 1px rgba(247, 247, 244, 0.15), 0 16px 34px rgba(0, 0, 0, 0.28);
+}
+
+.react-flow__node.selected .felixo-node-header,
+.react-flow__node.selected .felixo-canvas-group .canvas-node-drag {
+  background: rgba(247, 247, 244, 0.13);
+  color: var(--f-core-active);
+}
+
+.react-flow__node.selected .felixo-canvas-group {
+  border-color: rgba(247, 247, 244, 0.58);
+  background: rgba(247, 247, 244, 0.04);
+}
+
+/* Tool panels and the live terminal are part of the same workbench frame.
+   They retain their current sizing, resize and close behaviour, but lose the
+   older floating-card contrast and broad shadows. */
+[data-felixo-canvas-panel] {
+  border-color: rgba(247, 247, 244, 0.12);
+  background: var(--f-surface-panel);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.26);
+}
+
+[data-felixo-canvas-panel] > div:first-child {
+  min-height: 2.9rem;
+  border-color: rgba(247, 247, 244, 0.09);
+  background: var(--f-surface-header);
+  color: var(--f-core-white);
+}
+
+[data-felixo-canvas-panel] > div:last-child {
+  background: var(--f-core-graphite);
+}
+
+.felixo-terminal-drawer {
+  border-color: rgba(247, 247, 244, 0.12);
+  background: var(--f-core-graphite);
+  box-shadow: -12px 0 30px rgba(0, 0, 0, 0.2);
+}
+
+.felixo-terminal-drawer-header {
+  min-height: 3rem;
+  border-color: rgba(247, 247, 244, 0.09);
+  background: var(--f-core-structural);
+}
+
+.felixo-terminal-drawer .xterm {
+  padding: 0.35rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -618,4 +1612,2381 @@ div::-webkit-scrollbar-thumb {
     transition: none;
     will-change: auto;
   }
+}
+
+/* Final art direction: a layered canvas surface creates intentional negative
+   space while keeping the graph above it authoritative. The ambient layer is
+   one DOM element with one SVG, so its cost stays flat as nodes are added. */
+.felixo-canvas-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background-color: #070809;
+  background-image:
+    radial-gradient(circle at 46% 34%, rgba(255, 255, 255, 0.035), transparent 37%),
+    radial-gradient(circle at 82% 76%, rgba(255, 255, 255, 0.018), transparent 29%),
+    linear-gradient(116deg, rgba(255, 255, 255, 0.008), transparent 42%, rgba(0, 0, 0, 0.16));
+  pointer-events: none;
+}
+
+.felixo-canvas-ambient::before {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(237, 237, 234, 0.16) 0.65px, transparent 0.8px);
+  background-position: center;
+  background-size: 32px 32px;
+  content: '';
+  opacity: 0.28;
+}
+
+.felixo-canvas-ambient::after {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, 0.22) 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.felixo-ambient-routes,
+.felixo-ambient-grain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.felixo-ambient-routes {
+  opacity: 0.82;
+}
+
+.felixo-ambient-route,
+.felixo-ambient-arc {
+  fill: none;
+  stroke: var(--f-core-white-soft);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.felixo-ambient-route {
+  stroke-width: 1px;
+  opacity: 0.045;
+}
+
+.felixo-ambient-route.route-b {
+  opacity: 0.028;
+}
+
+.felixo-ambient-route.route-c {
+  opacity: 0.022;
+}
+
+.felixo-ambient-arc {
+  stroke-width: 1.1px;
+  opacity: 0.052;
+}
+
+.felixo-ambient-arc.arc-bottom {
+  opacity: 0.036;
+}
+
+.felixo-ambient-points {
+  fill: var(--f-core-white-soft);
+  opacity: 0.28;
+}
+
+.felixo-ambient-points circle:nth-child(4) {
+  opacity: 0.72;
+}
+
+.felixo-ambient-grain {
+  background-image: radial-gradient(circle, rgba(237, 237, 234, 0.22) 0.45px, transparent 0.75px);
+  background-position: center;
+  background-size: 3px 3px;
+  opacity: 0.018;
+  mix-blend-mode: soft-light;
+}
+
+.felixo-canvas-ambient.is-dense .felixo-ambient-routes {
+  opacity: 0.48;
+}
+
+.felixo-canvas-ambient.is-dense .felixo-ambient-points {
+  opacity: 0.16;
+}
+
+.felixo-canvas-ambient.is-dense::before {
+  opacity: 0.18;
+}
+
+[data-felixo-canvas-ready] > .relative.h-full.min-w-0.flex-1 {
+  background: #070809;
+}
+
+[data-felixo-canvas-ready] > .relative.h-full.min-w-0.flex-1 > .react-flow {
+  z-index: 1;
+  background: transparent;
+}
+
+/* React Flow's pane owns the gesture surface, but it must remain transparent
+   so the authored Felixo atmosphere can read through the canvas. */
+[data-felixo-canvas-ready] .react-flow__pane {
+  background: transparent !important;
+}
+
+.felixo-workbench-sidebar {
+  background: linear-gradient(180deg, #0b0d0f 0%, #08090a 100%);
+}
+
+.felixo-elements-inspector {
+  background: linear-gradient(180deg, #0b0d0f 0%, #08090a 100%);
+}
+
+.felixo-command-trigger {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+/* Ação primária do workspace. A marca é monocromática, então o destaque
+   máximo não vem de matiz e sim de inversão: superfície clara sobre o preto
+   profundo. Usada com parcimônia — uma por painel, no máximo. */
+.felixo-primary-action {
+  border: 1px solid transparent;
+  border-radius: var(--f-core-radius-xs);
+  background: var(--f-core-white-soft);
+  color: var(--f-core-black-deep);
+  font-weight: 560;
+  transition: background-color 150ms var(--f-core-ease), color 150ms var(--f-core-ease);
+}
+
+.felixo-primary-action:hover:not(:disabled) {
+  background: var(--f-core-active);
+}
+
+.felixo-primary-action:disabled {
+  background: var(--f-core-structural);
+  color: var(--f-core-secondary);
+}
+
+/* Campos: recuados em relação ao painel, com foco em luz. */
+.felixo-field {
+  border: 1px solid var(--color-border);
+  border-radius: var(--f-core-radius-xs);
+  background: var(--f-core-black-surface);
+  color: var(--f-core-white-soft);
+  transition: border-color 150ms var(--f-core-ease);
+}
+
+.felixo-field::placeholder {
+  color: var(--f-core-secondary);
+}
+
+.felixo-field:focus {
+  border-color: rgba(247, 247, 244, 0.42);
+  outline: none;
+}
+
+/* Pílula de zoom no formato da prancha da marca: um controle horizontal
+   discreto no canto, em vez da pilha vertical padrão do React Flow. O `:has()`
+   da sidebar recolhida move os dois offsets, igual ao resto do chrome. */
+/* O afastamento inferior sai da altura real da barra de status, e nao de um
+   numero fixo: com 1.75rem (28px) contra uma barra de 1.875rem (30px) o pill
+   entrava 2px por baixo dela em 1366, 1440 e 1920. */
+.felixo-zoom-pill-panel {
+  margin: 0 0 calc(var(--felixo-statusbar-height) + 0.5rem) 19.25rem !important;
+  transition: margin-left 180ms var(--f-core-ease);
+}
+
+[data-felixo-canvas-ready]:has(.felixo-workbench-sidebar.is-collapsed) .felixo-zoom-pill-panel {
+  margin-left: 4.5rem !important;
+}
+
+.felixo-zoom-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--f-surface-floating);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+
+.felixo-zoom-pill-button {
+  display: inline-flex;
+  width: 1.85rem;
+  height: 1.85rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--f-core-secondary);
+  transition: background-color 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+}
+
+.felixo-zoom-pill-button:hover {
+  background: var(--f-core-structural);
+  color: var(--f-core-white);
+}
+
+.felixo-zoom-pill-button.is-active {
+  background: rgba(247, 247, 244, 0.1);
+  color: var(--f-core-active);
+}
+
+.felixo-zoom-pill-value {
+  min-width: 3.1rem;
+  color: var(--f-core-white-soft);
+  font-size: 0.72rem;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.felixo-zoom-pill-divider {
+  width: 1px;
+  height: 1.1rem;
+  margin: 0 0.2rem;
+  background: var(--color-border);
+}
+
+/* Marca no topo da navegação, como na prancha: o produto se apresenta na
+   coluna, não numa faixa separada. */
+.felixo-sidebar-brand {
+  display: flex;
+  height: 3rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.65rem 0 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Brand integration pass 2 — the canvas remains a quiet, continuous surface.
+   The rules below refine existing components; they do not create a second
+   visual system or change their interaction contracts. */
+.felixo-workbench-sidebar {
+  background: var(--f-core-black-surface);
+  box-shadow: none;
+}
+
+.felixo-sidebar-content {
+  background: var(--f-core-black-surface);
+}
+
+.felixo-sidebar-header,
+.felixo-sidebar-brand {
+  border-bottom-color: color-mix(in srgb, var(--f-core-white) 6%, transparent);
+}
+
+.felixo-sidebar-scroll {
+  padding: var(--f-space-1) var(--f-space-2) var(--f-space-4);
+}
+
+.felixo-sidebar-section {
+  padding: var(--f-space-2) 0 var(--f-space-4);
+  border-bottom: 0;
+}
+
+.felixo-sidebar-section-content {
+  gap: var(--f-space-1);
+}
+
+.felixo-sidebar-action,
+.felixo-sidebar-tool-action {
+  min-height: 2rem;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.felixo-sidebar-action:hover,
+.felixo-sidebar-tool-action:hover {
+  border-color: transparent;
+  background: var(--f-surface-hover);
+}
+
+.felixo-sidebar-action.is-active,
+.felixo-sidebar-tool-action.is-active {
+  background: var(--f-surface-hover);
+  box-shadow: inset 2px 0 var(--f-core-white-soft);
+}
+
+.felixo-sidebar-agent-trigger {
+  border-color: transparent;
+}
+
+.felixo-sidebar-tool-group + .felixo-sidebar-tool-group {
+  padding-top: var(--f-space-2);
+  border-top: 0;
+}
+
+.felixo-elements-inspector {
+  background: var(--f-core-black-surface);
+  box-shadow: none;
+}
+
+.felixo-elements-inspector > div:first-child {
+  background: var(--f-core-black-surface);
+  border-color: color-mix(in srgb, var(--f-core-white) 6%, transparent);
+}
+
+.felixo-elements-inspector .felixo-inspector-row-active {
+  border-color: transparent;
+  background: var(--f-surface-hover);
+  box-shadow: inset 2px 0 var(--f-core-secondary);
+}
+
+.felixo-elements-inspector [data-element-row] > div > button > span:first-child {
+  background: transparent;
+  color: var(--f-core-secondary);
+}
+
+.felixo-inspector-empty {
+  min-height: 0;
+  align-items: flex-start;
+  padding: var(--f-space-3) var(--f-space-2);
+  border: 0;
+  background: transparent;
+  opacity: 0.36;
+  text-align: left;
+}
+
+.felixo-inspector-empty p {
+  display: none;
+}
+
+.felixo-canvas-card {
+  border-color: var(--f-node-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.felixo-node-header {
+  min-height: 2rem;
+  flex-shrink: 0;
+  border-bottom-color: var(--f-node-border);
+  background: var(--f-core-graphite);
+}
+
+.felixo-node-header:hover,
+.react-flow__node.selected .felixo-node-header {
+  background: var(--f-surface-hover);
+}
+
+.felixo-node-grip {
+  color: var(--f-core-secondary);
+  opacity: 0.15;
+  transition: opacity var(--f-motion-fast) var(--f-core-ease), color var(--f-motion-fast) var(--f-core-ease);
+}
+
+.felixo-node-header:hover .felixo-node-grip,
+.felixo-node-header:focus-within .felixo-node-grip {
+  color: var(--f-core-white-soft);
+  opacity: 0.8;
+}
+
+.felixo-node-identity {
+  display: inline-flex;
+  width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--f-core-white-soft);
+  opacity: 0.9;
+}
+
+.felixo-provider-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.felixo-provider-mark img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.felixo-provider-openai {
+  filter: none;
+}
+
+.felixo-node-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.52;
+  transition: opacity var(--f-motion-fast) var(--f-core-ease);
+}
+
+.felixo-node-header:hover .felixo-node-actions,
+.felixo-node-header:focus-within .felixo-node-actions,
+.react-flow__node.selected .felixo-node-actions {
+  opacity: 1;
+}
+
+.felixo-node-context {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--f-space-2);
+  min-height: 1.5rem;
+  padding: 0 var(--f-space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--f-core-white) 6%, transparent);
+  color: var(--f-core-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0;
+}
+
+.felixo-node-context-name,
+.felixo-node-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-node-context-name {
+  color: var(--f-core-white-soft);
+}
+
+.felixo-node-model {
+  margin-left: auto;
+  color: var(--f-core-secondary);
+}
+
+.felixo-node-index {
+  color: var(--f-core-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.felixo-node-preview {
+  background: var(--f-core-black-surface) !important;
+  transition: background-color var(--f-motion-fast) var(--f-core-ease);
+}
+
+.felixo-node-preview:hover {
+  background: color-mix(in srgb, var(--f-core-white) 2%, var(--f-core-black-surface)) !important;
+}
+
+.felixo-node-activity {
+  opacity: 0.72;
+}
+
+[data-activity='working'] .felixo-node-activity {
+  color: var(--f-core-white) !important;
+  opacity: 1;
+}
+
+[data-activity='working'] {
+  border-color: color-mix(in srgb, var(--f-core-white) 26%, transparent);
+}
+
+.react-flow__node.selected .felixo-canvas-card {
+  border-color: var(--f-node-selected);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.felixo-zoom-pill {
+  border-radius: var(--f-core-radius-sm);
+}
+
+.felixo-zoom-pill-button {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--f-core-radius-xs);
+}
+
+.felixo-command-trigger {
+  border-radius: var(--f-core-radius-xs);
+}
+
+/* Distributed Route feedback is time-bound to a delivered message. A saved
+   edge has no glow by itself, and a working terminal never lights its neighbors. */
+@keyframes felixo-route-pulse {
+  from { stroke-dashoffset: 20; opacity: 0.82; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+
+.felixo-edge-route-active .react-flow__edge-path {
+  stroke: var(--f-core-white) !important;
+  stroke-width: var(--f-core-stroke-route) !important;
+  stroke-dasharray: 7 13;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--f-core-white) 34%, transparent));
+  animation: felixo-route-pulse 900ms var(--f-core-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .felixo-node-grip,
+  .felixo-node-actions,
+  .felixo-node-preview,
+  .felixo-provider-mark {
+    transition: none;
+  }
+
+  .felixo-edge-route-active .react-flow__edge-path {
+    animation: none;
+    stroke-dasharray: none;
+  }
+}
+
+/* Felixo Controls — the form surface follows the same quiet, solid hierarchy
+   as the canvas. These rules are intentionally appended so shared controls
+   win over legacy utility classes without changing their data contracts. */
+.felixo-control {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background: var(--control-bg);
+  color: var(--control-text);
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018);
+  transition: border-color var(--f-motion-fast) var(--f-core-ease),
+    background-color var(--f-motion-fast) var(--f-core-ease),
+    box-shadow var(--f-motion-fast) var(--f-core-ease);
+}
+
+.felixo-control::placeholder {
+  color: var(--control-placeholder);
+}
+
+.felixo-control:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: var(--control-bg-hover);
+}
+
+.felixo-control:focus,
+.felixo-control:focus-visible {
+  border-color: var(--control-border-focus);
+  background: var(--control-bg-focus);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.025), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.felixo-control:disabled {
+  color: var(--control-disabled);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.felixo-field-label {
+  display: block;
+  margin: 0 0 6px;
+  color: #929292;
+  font-size: 0.7rem;
+  font-weight: 550;
+  line-height: 1.25;
+}
+
+.felixo-select-trigger {
+  display: inline-flex;
+  width: 100%;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--f-space-2);
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background: var(--control-bg);
+  color: var(--control-text);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  text-align: left;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018);
+  transition: border-color var(--f-motion-fast) var(--f-core-ease),
+    background-color var(--f-motion-fast) var(--f-core-ease),
+    box-shadow var(--f-motion-fast) var(--f-core-ease);
+}
+
+.felixo-select-trigger:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: var(--control-bg-hover);
+}
+
+.felixo-select-trigger:focus-visible,
+.felixo-select-trigger.is-open {
+  border-color: var(--control-border-focus);
+  background: var(--control-bg-focus);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.025), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.felixo-select-trigger.is-invalid {
+  border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
+}
+
+.felixo-select-trigger.is-invalid:focus-visible,
+.felixo-select-trigger.is-invalid.is-open {
+  border-color: color-mix(in srgb, var(--color-error) 72%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+.felixo-select-trigger:disabled {
+  color: var(--control-disabled);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.felixo-select-value,
+.felixo-select-leading {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.felixo-select-value {
+  gap: 8px;
+}
+
+.felixo-select-leading {
+  width: 18px;
+  flex: 0 0 18px;
+  justify-content: center;
+  color: var(--f-core-white-soft);
+}
+
+.felixo-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-select-label.is-placeholder {
+  color: var(--control-placeholder);
+}
+
+.felixo-select-chevron {
+  flex: 0 0 auto;
+  color: #8c8c8c;
+  transition: transform 150ms var(--f-core-ease), color 150ms var(--f-core-ease);
+}
+
+.felixo-select-loading {
+  animation: felixo-control-spin 900ms linear infinite;
+}
+
+@keyframes felixo-control-spin {
+  to { transform: rotate(360deg); }
+}
+
+.felixo-select-trigger.is-open .felixo-select-chevron {
+  color: var(--f-core-white-soft);
+  transform: rotate(180deg);
+}
+
+.felixo-popover-surface {
+  position: fixed;
+  z-index: 1000;
+  overflow: hidden;
+  padding: 5px;
+  border: 1px solid var(--popover-border);
+  border-radius: var(--popover-radius);
+  background: var(--popover-bg);
+  color: var(--control-text);
+  box-shadow: var(--popover-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  transform-origin: top center;
+  animation: felixo-popover-in 150ms var(--f-core-ease) both;
+}
+
+.felixo-popover-surface[data-placement='top'] {
+  transform-origin: bottom center;
+}
+
+@keyframes felixo-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.felixo-select-menu-label {
+  padding: 6px 8px 5px;
+  color: #8f8f8f;
+  font-size: 0.66rem;
+  font-weight: 550;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.felixo-select-search {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  margin: 0 1px 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  color: #858585;
+}
+
+.felixo-select-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--control-text);
+  font-size: 0.75rem;
+  outline: none;
+  box-shadow: none;
+}
+
+.felixo-select-search input::placeholder {
+  color: #686868;
+}
+
+.felixo-select-options {
+  max-height: inherit;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.felixo-select-options::-webkit-scrollbar {
+  width: 5px;
+}
+
+.felixo-select-options::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.felixo-select-options::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.felixo-select-options::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.felixo-select-option {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #c9c9c6;
+  cursor: pointer;
+  transition: background-color 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+}
+
+.felixo-select-option:hover,
+.felixo-select-option.is-active {
+  background: var(--option-hover);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-select-option.is-selected {
+  background: var(--option-selected);
+}
+
+.felixo-select-option.is-selected.is-active {
+  background: color-mix(in srgb, var(--option-selected) 78%, var(--option-hover));
+}
+
+.felixo-select-option.is-disabled {
+  color: #777773;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.felixo-select-option-icon {
+  display: inline-flex;
+  width: 18px;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
+  color: #a8a8a3;
+}
+
+.felixo-select-option-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.felixo-select-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.felixo-select-option-description,
+.felixo-select-option-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #777773;
+  font-size: 0.66rem;
+  line-height: 1.2;
+}
+
+.felixo-select-option-meta {
+  color: #686864;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.felixo-select-check {
+  flex: 0 0 auto;
+  color: var(--f-core-white-soft);
+}
+
+.felixo-select-empty {
+  padding: 12px 8px;
+  color: #777773;
+  font-size: 0.72rem;
+}
+
+.felixo-select-emoji {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.felixo-checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--f-core-white-soft);
+  cursor: pointer;
+}
+
+.felixo-checkbox {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 1px 0 0;
+  appearance: none;
+  place-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  background: transparent;
+  outline: none;
+  transition: background-color 140ms var(--f-core-ease), border-color 140ms var(--f-core-ease), box-shadow 140ms var(--f-core-ease);
+}
+
+.felixo-checkbox::before {
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid #050505;
+  border-bottom: 1.5px solid #050505;
+  content: '';
+  opacity: 0;
+  transform: rotate(45deg) translate(-1px, -1px) scale(0.65);
+  transition: opacity 120ms var(--f-core-ease), transform 120ms var(--f-core-ease);
+}
+
+.felixo-checkbox:checked {
+  border-color: var(--f-core-white);
+  background: var(--f-core-white);
+}
+
+.felixo-checkbox:checked::before {
+  opacity: 1;
+  transform: rotate(45deg) translate(-1px, -1px) scale(1);
+}
+
+.felixo-checkbox:focus-visible {
+  border-color: var(--control-border-focus);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.07);
+}
+
+.felixo-checkbox-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.felixo-checkbox-label {
+  color: var(--f-core-white-soft);
+  font-size: 0.78rem;
+  font-weight: 550;
+  line-height: 1.15;
+}
+
+.felixo-checkbox-meta {
+  color: #777773;
+  font-size: 0.67rem;
+  line-height: 1.2;
+}
+
+.felixo-file-picker {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.felixo-file-picker .felixo-file-picker-input {
+  border-radius: var(--control-radius) 0 0 var(--control-radius);
+}
+
+.felixo-file-picker-button {
+  display: inline-flex;
+  width: 38px;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: center;
+  margin-left: -1px;
+  border: 1px solid var(--control-border);
+  border-radius: 0 var(--control-radius) var(--control-radius) 0;
+  background: #151618;
+  color: #b7b7b2;
+  transition: border-color 140ms var(--f-core-ease), background-color 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+}
+
+/* Keep the primary action in the first viewport on common laptop heights;
+   the panel still scrolls naturally on smaller windows. */
+.felixo-sidebar-inline-panel {
+  --felixo-panel-max-height: min(72vh, 40rem);
+}
+
+.felixo-file-picker-button:hover,
+.felixo-file-picker-button:focus-visible {
+  z-index: 1;
+  border-color: var(--control-border-focus);
+  background: #1a1b1d;
+  color: var(--f-core-white-soft);
+}
+
+.felixo-secondary-action {
+  min-height: var(--control-height);
+  border: 1px solid var(--control-border);
+  background: #151618;
+  color: #c4c4bf;
+  transition: border-color 140ms var(--f-core-ease), background-color 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+}
+
+.felixo-secondary-action:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #1a1b1d;
+  color: var(--f-core-white-soft);
+}
+
+/* Keep canvas-specific title inputs compact when the global form polish is
+   loaded after utility classes. */
+.felixo-node-header input,
+.felixo-canvas-group input {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .felixo-control,
+  .felixo-select-trigger,
+  .felixo-select-chevron,
+  .felixo-select-option,
+  .felixo-checkbox,
+  .felixo-checkbox::before,
+  .felixo-file-picker-button,
+  .felixo-secondary-action,
+  .felixo-select-loading {
+    transition: none;
+    animation: none;
+  }
+
+  .felixo-popover-surface {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   HEADER REFINEMENT — faixa contínua de workspace.
+   A marca e o contexto agora pertencem à mesma superfície superior. A
+   navegação e o inspector continuam sendo os mesmos componentes e mantêm
+   suas ações; apenas começam abaixo desta faixa para que o app leia como uma
+   janela única, em vez de três caixas empilhadas.
+   --------------------------------------------------------------------------- */
+:root {
+  --felixo-topbar-height: 3rem;
+  --felixo-statusbar-height: 1.875rem;
+}
+
+.felixo-canvas-topbar {
+  right: 0 !important;
+  left: 0 !important;
+  display: flex;
+  align-items: center;
+  height: var(--felixo-topbar-height);
+  gap: 0;
+  overflow: hidden;
+  border-bottom-color: rgba(247, 247, 244, 0.085);
+  background:
+    linear-gradient(180deg, rgba(11, 13, 15, 0.985) 0%, rgba(9, 10, 12, 0.965) 100%);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+  transition: none;
+}
+
+.felixo-topbar-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 5.5rem;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.felixo-topbar-ambient svg {
+  width: 100%;
+  height: 100%;
+}
+
+.felixo-topbar-ambient path {
+  fill: none;
+  stroke: rgba(237, 237, 234, 0.13);
+  stroke-linecap: round;
+  stroke-width: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+
+.felixo-topbar-ambient path:nth-child(2) {
+  stroke: rgba(237, 237, 234, 0.075);
+}
+
+.felixo-topbar-ambient path:nth-child(3) {
+  stroke: rgba(237, 237, 234, 0.055);
+}
+
+.felixo-topbar-ambient circle {
+  fill: rgba(247, 247, 244, 0.64);
+}
+
+.felixo-topbar-brand,
+.felixo-topbar-divider,
+.felixo-topbar-sidebar-toggle,
+.felixo-topbar-context,
+.felixo-command-trigger {
+  position: relative;
+  z-index: 1;
+}
+
+.felixo-topbar-brand {
+  display: flex;
+  width: 15.75rem;
+  min-width: 15.75rem;
+  align-items: center;
+  padding-left: 1.45rem;
+}
+
+.felixo-topbar-brand .felixo-lockup {
+  color: var(--f-core-white);
+  font-size: 0.98rem;
+}
+
+.felixo-topbar-brand .felixo-lockup-text > span {
+  font-size: 0.84em;
+}
+
+.felixo-topbar-divider {
+  width: 1px;
+  height: 1.3rem;
+  flex: 0 0 1px;
+  background: rgba(247, 247, 244, 0.12);
+}
+
+.felixo-topbar-sidebar-toggle {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.55rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  transition: background-color 150ms var(--f-core-ease), color 150ms var(--f-core-ease);
+}
+
+.felixo-topbar-sidebar-toggle:hover,
+.felixo-topbar-sidebar-toggle:focus-visible {
+  background: var(--f-surface-hover);
+  color: var(--f-core-white);
+  outline: none;
+}
+
+.felixo-topbar-context {
+  display: inline-flex;
+  min-width: 7.5rem;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0 0.7rem;
+  color: var(--f-core-white-soft);
+  font-size: 0.78rem;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+.felixo-topbar-context svg {
+  color: var(--f-core-secondary);
+}
+
+.felixo-topbar-context-tool {
+  max-width: 7rem;
+  overflow: hidden;
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+  font-weight: 450;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-command-trigger {
+  position: absolute;
+  left: 50%;
+  width: min(36vw, 42rem);
+  min-width: 18rem;
+  height: 2.25rem;
+  transform: translateX(-50%);
+  border-color: rgba(247, 247, 244, 0.12);
+  border-radius: 0.85rem;
+  background: rgba(18, 19, 21, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+
+.felixo-command-trigger:hover,
+.felixo-command-trigger:focus-visible {
+  border-color: rgba(247, 247, 244, 0.28);
+  background: rgba(22, 23, 25, 0.94);
+}
+
+.felixo-command-trigger > svg {
+  color: var(--f-core-white-soft);
+}
+
+/* A faixa superior é a única dona do topo. As colunas e seus conteúdos
+   continuam montados pelos mesmos componentes, só começam embaixo dela. */
+.felixo-workbench-sidebar {
+  top: var(--felixo-topbar-height);
+  background:
+    linear-gradient(180deg, rgba(12, 14, 16, 0.985) 0%, var(--f-core-black-surface) 34%, #08090a 100%);
+}
+
+.felixo-sidebar-brand {
+  display: none;
+}
+
+.felixo-sidebar-header {
+  height: 3.35rem;
+  padding-left: 0.9rem;
+  border-bottom-color: rgba(247, 247, 244, 0.075);
+  background: linear-gradient(180deg, rgba(18, 19, 21, 0.42), rgba(10, 11, 13, 0.2));
+}
+
+.felixo-activity-rail {
+  background: rgba(5, 6, 7, 0.78);
+}
+
+.felixo-elements-inspector {
+  background:
+    linear-gradient(180deg, rgba(12, 14, 16, 0.985) 0%, var(--f-core-black-surface) 36%, #08090a 100%);
+}
+
+/* The existing dock anchor already starts at top-12. This keeps the header
+   and the inspector on the same horizontal baseline without adding another
+   layout wrapper. */
+.felixo-elements-inspector > div:first-child {
+  min-height: 3.35rem;
+  background: linear-gradient(180deg, rgba(18, 19, 21, 0.44), rgba(10, 11, 13, 0.2));
+}
+
+@media (max-width: 980px) {
+  .felixo-topbar-brand {
+    width: 11.5rem;
+    min-width: 11.5rem;
+    padding-left: 0.9rem;
+  }
+
+  .felixo-topbar-context {
+    min-width: 5.75rem;
+  }
+
+  .felixo-command-trigger {
+    width: min(35vw, 26rem);
+    min-width: 14rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .felixo-topbar-brand {
+    width: 3.25rem;
+    min-width: 3.25rem;
+    padding-left: 0.9rem;
+  }
+
+  .felixo-topbar-brand .felixo-lockup-text,
+  .felixo-topbar-context-tool {
+    display: none;
+  }
+
+  .felixo-topbar-context {
+    min-width: 4.8rem;
+    padding: 0 0.35rem;
+  }
+
+  .felixo-command-trigger {
+    right: 0.75rem;
+    left: auto;
+    width: min(42vw, 20rem);
+    min-width: 11rem;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Final legibility pass — system-ui proportions, ChatGPT-like clarity
+
+   This is a visual layer only. It does not change the canvas model or any
+   interaction contract. The surface stays monochrome; white is reserved for
+   hierarchy, focus and selection, with a very small amount of ambient light
+   so selected objects feel present without becoming neon.
+   --------------------------------------------------------------------------- */
+body {
+  font-family: var(--f-core-font-sans);
+  font-weight: 400;
+  letter-spacing: -0.012em;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+.felixo-canvas-topbar,
+.felixo-workbench-sidebar,
+.felixo-elements-inspector,
+.felixo-canvas-statusbar {
+  color: var(--f-core-white-soft);
+}
+
+.felixo-sidebar-section-heading,
+.felixo-sidebar-tool-group-label,
+.felixo-sidebar-update-status,
+.felixo-topbar-context-tool,
+.felixo-canvas-breadcrumb,
+.felixo-statusbar-item,
+.felixo-node-model,
+.felixo-node-index {
+  color: var(--f-core-muted);
+}
+
+.felixo-sidebar-section-heading:hover,
+.felixo-sidebar-section-heading:focus-visible {
+  color: var(--f-core-white-soft);
+}
+
+.felixo-sidebar-action:hover,
+.felixo-sidebar-tool-action:hover,
+.felixo-topbar-icon-button:hover,
+.felixo-topbar-icon-button:focus-visible {
+  color: var(--f-core-active);
+}
+
+.felixo-sidebar-action.is-active,
+.felixo-sidebar-tool-action.is-active {
+  background: color-mix(in srgb, var(--f-core-active) 8%, transparent);
+  color: var(--f-core-active);
+  box-shadow: inset 2px 0 var(--f-core-active), 0 0 14px rgba(255, 255, 255, 0.035);
+}
+
+.felixo-activity-rail-button.is-active {
+  color: var(--f-core-active);
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.11));
+}
+
+.felixo-command-trigger:focus-visible,
+.felixo-command-trigger:hover {
+  color: var(--f-core-active);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 0 16px rgba(255, 255, 255, 0.045), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.felixo-command-trigger:focus-visible {
+  outline: none;
+}
+
+.felixo-command-trigger:focus-visible kbd,
+.felixo-command-trigger:hover kbd {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--f-core-active);
+}
+
+.felixo-elements-inspector .text-zinc-500,
+.felixo-elements-inspector .text-zinc-600 {
+  color: var(--f-core-muted) !important;
+}
+
+.felixo-elements-inspector .felixo-inspector-row-active {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--f-core-active) 10%, transparent);
+  color: var(--f-core-active);
+  box-shadow: inset 2px 0 var(--f-core-active), 0 0 14px rgba(255, 255, 255, 0.04);
+}
+
+.felixo-elements-inspector .felixo-inspector-row-active > span:first-child,
+.felixo-elements-inspector .felixo-inspector-row-active svg {
+  color: var(--f-core-white-soft);
+}
+
+.felixo-elements-inspector .felixo-inspector-row-active > span:first-child {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.react-flow__node.selected {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.08))
+    drop-shadow(0 12px 20px rgba(0, 0, 0, 0.22));
+}
+
+.react-flow__node.selected .felixo-canvas-card {
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  background: color-mix(in srgb, var(--f-surface-panel) 96%, var(--f-core-white));
+  box-shadow: var(--f-core-selection-glow) !important;
+}
+
+.react-flow__node.selected .felixo-node-header,
+.react-flow__node.selected .felixo-canvas-group .canvas-node-drag {
+  border-bottom-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.145);
+  color: var(--f-core-active);
+}
+
+.react-flow__node.selected .felixo-node-identity,
+.react-flow__node.selected .felixo-node-actions,
+.react-flow__node.selected .felixo-node-context-name {
+  color: var(--f-core-active);
+}
+
+.react-flow__node.selected .felixo-node-actions button {
+  color: var(--f-core-white-soft);
+}
+
+.react-flow__node:is(:hover, :focus-within, .selected, .connecting) .react-flow__handle.source::after,
+.react-flow__node:is(:hover, :focus-within, .selected, .connecting) .react-flow__handle.target::after {
+  background: var(--f-core-active);
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.24);
+}
+
+.felixo-control:focus-visible,
+.felixo-select-trigger:focus-visible,
+.felixo-select-trigger.is-open {
+  border-color: var(--control-border-focus);
+  color: var(--f-core-active);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.055),
+    0 0 14px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.felixo-field-label {
+  color: var(--f-core-secondary);
+}
+
+.felixo-select-chevron,
+.felixo-select-search {
+  color: var(--f-core-secondary);
+}
+
+.felixo-select-option,
+.felixo-select-option-icon {
+  color: var(--f-core-white-soft);
+}
+
+.felixo-select-option:hover,
+.felixo-select-option.is-active,
+.felixo-select-option.is-selected {
+  color: var(--f-core-active);
+}
+
+.felixo-select-option-description,
+.felixo-select-option-meta,
+.felixo-select-empty {
+  color: var(--f-core-muted);
+}
+
+.felixo-select-option.is-selected {
+  background: var(--option-selected);
+  box-shadow: inset 2px 0 rgba(255, 255, 255, 0.56);
+}
+
+.felixo-select-option.is-selected.is-active {
+  background: color-mix(in srgb, var(--option-selected) 78%, var(--option-hover));
+}
+
+.felixo-statusbar-workspace,
+.felixo-statusbar-save.is-ready {
+  color: var(--f-core-active);
+}
+
+.felixo-statusbar-save:not(.is-ready) {
+  color: var(--f-core-muted);
+}
+
+/* ===========================================================================
+   CHAT — superfícies e composer
+   O chat é a conversa; tudo que é técnico existe como camada secundária.
+   =========================================================================== */
+
+/* Composer: uma peça só, não card dentro de card. A borda é um gradiente
+   (mais clara no topo, sumindo embaixo) desenhado em pseudo-elemento com
+   mask, que é o que dá a sensação de luz batendo numa superfície preta em
+   vez de um contorno sólido de formulário. */
+.felixo-composer {
+  position: relative;
+  border-radius: 18px;
+  background: #101112;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  transition: box-shadow 200ms var(--f-core-ease);
+}
+
+.felixo-composer::before {
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.07) 38%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  content: '';
+  transition: background 200ms var(--f-core-ease);
+}
+
+/* Foco: a luz escapa alguns pixels, como superfície iluminada — nunca aura. */
+.felixo-composer:focus-within {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 18px rgba(255, 255, 255, 0.05),
+    0 18px 44px rgba(0, 0, 0, 0.42);
+}
+
+.felixo-composer:focus-within::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.12) 40%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+}
+
+.felixo-composer textarea::placeholder {
+  color: #5c5c60;
+}
+
+/* Rodapé integrado: divisória quase inexistente, sem virar segunda caixa. */
+.felixo-composer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem 0.55rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.felixo-composer-select {
+  max-width: 11rem;
+}
+
+.felixo-composer-select-model {
+  max-width: 13rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+}
+
+/* Enviar: escuro em repouso; quando há o que enviar, vira luz. */
+.felixo-composer-send {
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--f-surface-control);
+  color: var(--f-core-secondary);
+  transition: background-color 160ms var(--f-core-ease), color 160ms var(--f-core-ease);
+}
+
+.felixo-composer-send:not(:disabled) {
+  background: var(--f-core-white-soft);
+  color: var(--f-core-black-deep);
+}
+
+.felixo-composer-send:not(:disabled):hover {
+  background: var(--f-core-active);
+}
+
+.felixo-composer-send:disabled {
+  cursor: not-allowed;
+}
+
+/* Hero do chat: marca, uma linha do que a tela faz, e o composer logo abaixo.
+   Sem manchete de landing page — isto é ferramenta, não campanha. */
+.felixo-chat-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.felixo-chat-hero-mark {
+  margin-bottom: 1rem;
+  color: var(--f-core-white);
+  opacity: 0.9;
+}
+
+.felixo-chat-hero h1 {
+  margin: 0;
+  color: var(--f-core-white);
+  font-size: 1.65rem;
+  font-weight: 620;
+  letter-spacing: -0.022em;
+}
+
+.felixo-chat-hero p {
+  margin: 0.5rem 0 0;
+  max-width: 30rem;
+  color: var(--f-core-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+@media (max-height: 620px) {
+  .felixo-chat-hero {
+    margin-bottom: 1.25rem;
+  }
+
+  .felixo-chat-hero h1 {
+    font-size: 1.35rem;
+  }
+
+  .felixo-chat-hero p {
+    display: none;
+  }
+}
+
+/* Sugestões: lista leve, sem cards. O texto acende no hover e a seta aparece —
+   é o único movimento, e ele acontece só onde o ponteiro está. */
+.felixo-chat-suggestion {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  font-size: 0.8rem;
+  text-align: left;
+  transition: color 160ms var(--f-core-ease), background-color 160ms var(--f-core-ease);
+}
+
+.felixo-chat-suggestion:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-chat-suggestion svg {
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 160ms var(--f-core-ease), transform 160ms var(--f-core-ease);
+}
+
+.felixo-chat-suggestion:hover:not(:disabled) svg {
+  opacity: 0.55;
+  transform: translateX(0);
+}
+
+.felixo-chat-suggestion:disabled {
+  color: #3a3a3d;
+  cursor: not-allowed;
+}
+
+/* Rodapé em uma linha só: os controles encolhem, as ações nunca saem do lugar.
+   Antes o `flex-wrap` jogava esforço e modo para uma segunda linha e deixava o
+   botão de enviar órfão no canto. */
+.felixo-composer-footer {
+  flex-wrap: nowrap;
+}
+
+.felixo-composer-controls {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: hidden;
+}
+
+.felixo-composer-select {
+  min-width: 0;
+  max-width: 8.5rem;
+  flex: 0 1 auto;
+}
+
+.felixo-composer-select-model {
+  max-width: 10rem;
+}
+
+/* Abaixo de 1100px o modelo do provedor é a informação mais sacrificável:
+   ele continua acessível pelo próprio select, só deixa de ocupar a barra. */
+@media (max-width: 1100px) {
+  .felixo-composer-select-model {
+    display: none;
+  }
+}
+
+/* Faixa técnica do chat.
+   Orquestração e QA Logger ocupavam ~250px permanentes, quase sempre vazios.
+   Recolhidos, agora dividem uma única faixa de 36px; qualquer um expandido
+   volta a ocupar a largura toda. O `:has()` faz a troca sem um terceiro
+   estado em JS para dizer o que os próprios painéis já sabem. */
+.felixo-tech-drawer {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.felixo-tech-drawer:not(:has([data-open='true'])) {
+  flex-direction: row;
+}
+
+.felixo-tech-drawer:not(:has([data-open='true'])) .felixo-tech-strip {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+}
+
+.felixo-tech-drawer:not(:has([data-open='true']))
+  .felixo-tech-strip[data-felixo-tech='qa'] {
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.felixo-tech-strip {
+  background: var(--f-surface-header);
+  border-radius: 0;
+}
+
+.felixo-tech-strip[data-open='false'] > header,
+.felixo-tech-strip-header {
+  display: flex;
+  height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  font-size: 0.7rem;
+}
+
+.felixo-tech-strip[data-open='false'] {
+  color: var(--f-core-secondary);
+}
+
+/* Sidebar do chat: densidade alta, para o centro respirar por contraste.
+   As linhas de modelo tinham duas alturas e repetiam "CLI instalada no
+   sistema" cinco vezes; agora são uma linha, com o logo real do provedor e um
+   ponto de estado. A frase virou title — a informação continua, o ruído não. */
+.felixo-sidebar-model {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  border-radius: var(--f-core-radius-xs);
+  transition: background-color 140ms var(--f-core-ease);
+}
+
+.felixo-sidebar-model:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.felixo-sidebar-model-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.32rem 0.5rem;
+  color: var(--f-core-secondary);
+  font-size: 0.75rem;
+  text-align: left;
+  transition: color 140ms var(--f-core-ease);
+}
+
+.felixo-sidebar-model:hover .felixo-sidebar-model-main {
+  color: var(--f-core-white-soft);
+}
+
+.felixo-sidebar-model-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Disponível é um ponto discreto, não um verde de dashboard. */
+.felixo-status-dot {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(247, 247, 244, 0.38);
+}
+
+.felixo-sidebar-model:hover .felixo-status-dot {
+  background: var(--f-core-white);
+}
+
+.felixo-sidebar-model-remove {
+  display: flex;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.15rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  opacity: 0;
+  transition: opacity 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+}
+
+.felixo-sidebar-model:hover .felixo-sidebar-model-remove,
+.felixo-sidebar-model-remove:focus-visible {
+  opacity: 1;
+}
+
+.felixo-sidebar-model-remove:hover {
+  color: var(--color-error);
+}
+
+/* Sessões: título e horário na mesma linha, sem card. */
+.felixo-sidebar-session {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  font-size: 0.75rem;
+  text-align: left;
+  transition: background-color 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+}
+
+.felixo-sidebar-session:hover {
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-sidebar-session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-sidebar-session-time {
+  flex-shrink: 0;
+  color: #55555a;
+  font-size: 0.65rem;
+}
+
+.felixo-provider-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A interface continua monocromática; a cor fica restrita às marcas dos
+   provedores para que cada integração seja reconhecida em um relance. */
+.felixo-provider-mark img {
+  opacity: 0.96;
+  transition: filter 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.felixo-provider-mark--claude img {
+  filter: drop-shadow(0 0 4px rgb(217 119 87 / 0.22));
+}
+
+.felixo-provider-mark--codex img {
+  filter: drop-shadow(0 0 4px rgb(16 163 127 / 0.2));
+}
+
+.felixo-provider-mark--gemini img {
+  filter: drop-shadow(0 0 4px rgb(49 134 255 / 0.2));
+}
+
+.felixo-provider-mark--openia img {
+  filter: drop-shadow(0 0 4px rgb(255 107 53 / 0.22));
+}
+
+.felixo-provider-mark:hover img,
+.felixo-provider-mark:focus-visible img {
+  opacity: 1;
+  transform: scale(1.04);
+}
+
+/* Estado vazio do inspetor de atividade: uma linha, não um painel. */
+.felixo-activity-empty {
+  padding: 0.35rem 0;
+  color: #4e4e52;
+  font-size: 0.72rem;
+}
+
+/* Hero da prancha: logo, sobrelinha, pergunta e uma linha de apoio. */
+.felixo-chat-hero-logo {
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 1.1rem;
+  object-fit: contain;
+  opacity: 0.95;
+}
+
+.felixo-chat-hero-eyebrow {
+  margin-bottom: 0.85rem;
+  color: var(--f-core-secondary);
+  font-size: 0.66rem;
+  font-weight: 560;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.felixo-chat-hero h1 {
+  font-size: 1.95rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.felixo-chat-hero p {
+  margin-top: 0.7rem;
+  color: #7d7d83;
+  font-size: 0.85rem;
+}
+
+/* Pílulas de atalho: contorno fino, sem peso de botão. */
+.felixo-chat-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.6rem;
+}
+
+.felixo-chat-starter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.1rem;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--f-core-secondary);
+  font-size: 0.76rem;
+  transition: border-color 160ms var(--f-core-ease), color 160ms var(--f-core-ease),
+    background-color 160ms var(--f-core-ease);
+}
+
+.felixo-chat-starter:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--f-core-white);
+}
+
+/* Sugestões em dois por linha, como cartões calmos. */
+.felixo-chat-suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 2rem;
+}
+
+.felixo-suggestion-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.012);
+  text-align: left;
+  transition: border-color 170ms var(--f-core-ease), background-color 170ms var(--f-core-ease);
+}
+
+.felixo-suggestion-card:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.felixo-suggestion-card-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.felixo-suggestion-card-title {
+  color: var(--f-core-white-soft);
+  font-size: 0.8rem;
+  font-weight: 520;
+}
+
+.felixo-suggestion-card-desc {
+  color: #6d6d73;
+  font-size: 0.71rem;
+}
+
+.felixo-suggestion-card svg {
+  flex-shrink: 0;
+  color: #55555a;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 170ms var(--f-core-ease), transform 170ms var(--f-core-ease);
+}
+
+.felixo-suggestion-card:hover:not(:disabled) svg {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (max-width: 1180px) {
+  .felixo-chat-suggestions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Dicas do composer: atalhos reais, ditos onde a pessoa vai digitar. */
+.felixo-composer-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.15rem;
+  margin: 0.7rem 0 0;
+  color: #57575c;
+  font-size: 0.7rem;
+}
+
+.felixo-composer-hints strong {
+  color: #85858b;
+  font-weight: 560;
+}
+
+/* Botão de envio no formato da prancha: círculo com aro, seta para cima. */
+.felixo-composer-send {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.felixo-composer-send:not(:disabled) {
+  border-color: transparent;
+}
+
+/* Provedor: nome e organização, na densidade da prancha. */
+.felixo-sidebar-model-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.felixo-sidebar-model-vendor {
+  color: #5b5b60;
+  font-size: 0.63rem;
+  line-height: 1.1;
+}
+
+.felixo-sidebar-model-main {
+  padding-top: 0.28rem;
+  padding-bottom: 0.28rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Controle de versão (GitPanel)
+
+   Duas colunas: a lista de arquivos à esquerda e o leitor de diferenças à
+   direita. Em tela estreita a lista vira uma faixa no topo e o diff ocupa o
+   resto, porque ler diff em coluna de 300px não serve para nada.
+   --------------------------------------------------------------------------- */
+.felixo-scm {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  gap: var(--f-space-2);
+}
+
+.felixo-scm-head {
+  display: flex;
+  align-items: center;
+  gap: var(--f-space-2);
+}
+
+.felixo-scm-project {
+  min-width: 12rem;
+  max-width: 20rem;
+  flex: 1 1 auto;
+}
+
+.felixo-scm-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--f-core-white-soft);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.felixo-scm-spacer {
+  flex: 1 1 auto;
+}
+
+.felixo-scm-empty,
+.felixo-scm-clean {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--f-core-secondary);
+  font-size: 0.78rem;
+}
+
+.felixo-scm-error {
+  padding: var(--f-space-2);
+  border-radius: var(--f-core-radius-xs);
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  color: var(--color-error);
+  font-size: 0.75rem;
+}
+
+.felixo-scm-body {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  gap: var(--f-space-3);
+}
+
+@media (max-width: 60rem) {
+  .felixo-scm-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+.felixo-scm-side {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--f-space-2);
+  overflow: auto;
+}
+
+.felixo-scm-message {
+  width: 100%;
+  resize: vertical;
+  padding: var(--f-space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--f-core-radius-xs);
+  background: var(--f-surface-floating);
+  color: var(--f-core-white-soft);
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.felixo-scm-message:focus-visible {
+  border-color: color-mix(in srgb, var(--f-core-white) 22%, transparent);
+}
+
+.felixo-scm-commit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--f-core-radius-xs);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.felixo-scm-commit:disabled {
+  opacity: 0.5;
+}
+
+/* Grupos: "Stage" e "Alterações" */
+.felixo-scm-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.felixo-scm-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.15rem;
+}
+
+.felixo-scm-group-title {
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.felixo-scm-count {
+  display: inline-flex;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--f-core-structural);
+  color: var(--f-core-white-soft);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.felixo-scm-group-action {
+  margin-left: auto;
+  padding: 0.2rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+}
+
+.felixo-scm-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.felixo-scm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.3rem;
+  border-radius: var(--f-core-radius-xs);
+}
+
+.felixo-scm-row:hover {
+  background: var(--f-core-structural);
+}
+
+.felixo-scm-row.is-active {
+  background: color-mix(in srgb, var(--f-core-white) 9%, transparent);
+}
+
+.felixo-scm-open {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 0.4rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.felixo-scm-name {
+  color: var(--f-core-white-soft);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.felixo-scm-dir {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+/* A ação por arquivo só aparece no hover ou com foco de teclado — senão a
+   lista vira uma parede de ícones e o nome do arquivo perde o destaque. */
+.felixo-scm-row-action {
+  padding: 0.15rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  opacity: 0;
+}
+
+.felixo-scm-row:hover .felixo-scm-row-action,
+.felixo-scm-row-action:focus-visible {
+  opacity: 1;
+}
+
+.felixo-scm-badge {
+  width: 1rem;
+  flex: none;
+  color: var(--f-core-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.felixo-scm-badge.is-modificado {
+  color: var(--color-warning);
+}
+
+.felixo-scm-badge.is-adicionado,
+.felixo-scm-badge.is-novo {
+  color: var(--color-success);
+}
+
+.felixo-scm-badge.is-removido,
+.felixo-scm-badge.is-conflito {
+  color: var(--color-error);
+}
+
+/* Leitor de diferenças */
+.felixo-scm-diff {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--f-core-radius-sm);
+  background: var(--f-surface-canvas);
+}
+
+.felixo-scm-diff.is-empty {
+  align-items: center;
+  justify-content: center;
+  gap: var(--f-space-2);
+  color: var(--f-core-secondary);
+  font-size: 0.8rem;
+}
+
+.felixo-scm-diff-head {
+  display: flex;
+  align-items: center;
+  gap: var(--f-space-2);
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.felixo-scm-diff-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--f-core-white-soft);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-scm-diff-side {
+  margin-left: auto;
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.felixo-scm-diff-status {
+  padding: var(--f-space-3);
+  color: var(--f-core-secondary);
+  font-size: 0.78rem;
+}
+
+.felixo-scm-diff-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.felixo-scm-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+}
+
+.felixo-diff-num {
+  width: 1px;
+  padding: 0 0.45rem;
+  color: color-mix(in srgb, var(--f-core-secondary) 70%, transparent);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.felixo-diff-text {
+  width: 100%;
+  padding: 0 0.5rem;
+  vertical-align: top;
+}
+
+.felixo-diff-text pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.felixo-diff-added {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+
+.felixo-diff-added .felixo-diff-text {
+  color: var(--color-success);
+}
+
+.felixo-diff-removed {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+.felixo-diff-removed .felixo-diff-text {
+  color: var(--color-error);
+}
+
+.felixo-diff-hunk .felixo-diff-text {
+  color: var(--f-core-secondary);
+  background: color-mix(in srgb, var(--f-core-white) 4%, transparent);
+}
+
+.felixo-diff-meta .felixo-diff-text {
+  color: color-mix(in srgb, var(--f-core-secondary) 75%, transparent);
+}
+
+.felixo-diff-context .felixo-diff-text {
+  color: var(--f-core-white-soft);
 }

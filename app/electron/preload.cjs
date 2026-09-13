@@ -316,6 +316,9 @@ contextBridge.exposeInMainWorld('felixo', {
     stageAll: (params) => ipcRenderer.invoke('git:stage-all', params),
     unstageAll: (params) => ipcRenderer.invoke('git:unstage-all', params),
     commit: (params) => ipcRenderer.invoke('git:commit', params),
+    getFileDiff: (params) => ipcRenderer.invoke('git:get-file-diff', params),
+    stageFile: (params) => ipcRenderer.invoke('git:stage-file', params),
+    unstageFile: (params) => ipcRenderer.invoke('git:unstage-file', params),
   },
   // Fetch All: varre os discos atras de repositorios git, classifica cada um
   // e sincroniza os seguros. O progresso chega por evento porque a varredura

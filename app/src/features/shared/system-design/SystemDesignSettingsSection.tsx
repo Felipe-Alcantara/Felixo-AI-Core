@@ -17,7 +17,7 @@ export function SystemDesignSettingsSection() {
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-100">
           <BookOpen size={14} aria-hidden="true" />
           Felixo System Design
-          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+          <span className="rounded-full border border-white/10 bg-[var(--f-core-white)]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--f-core-white-soft)]">
             Recomendado
           </span>
         </h3>
@@ -75,7 +75,7 @@ export function SystemDesignSettingsSection() {
       </div>
 
       {error || config.lastError ? (
-        <p className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-200">
+        <p className="mt-2 rounded-md border border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] px-2 py-1 text-[11px] text-[var(--color-error)]">
           {error ?? config.lastError}
         </p>
       ) : null}

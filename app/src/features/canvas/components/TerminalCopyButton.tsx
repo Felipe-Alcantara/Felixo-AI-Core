@@ -29,7 +29,7 @@ export function CopyButton({ onCopy }: CopyButtonProps) {
       title="Copiar seleção (ou a tela visível)"
       aria-label="Copiar do terminal"
     >
-      {copied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
+      {copied ? <Check size={15} className="text-[var(--f-core-white-soft)]" /> : <Copy size={15} />}
     </button>
   )
 }

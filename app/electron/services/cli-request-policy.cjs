@@ -12,6 +12,8 @@
  * para garantir isso.
  */
 
+const os = require('node:os')
+
 const { getRequiredString } = require('./cli-event-utils.cjs')
 
 /** CLIs que o orquestrador sabe operar. */
@@ -147,7 +149,7 @@ function validateCliRequest(params) {
  * uma CLI precisar de diretório próprio, isso volta como decisão explícita.
  */
 function resolveCliCwd() {
-  return process.env.HOME || process.cwd()
+  return process.env.HOME || os.homedir() || process.cwd()
 }
 
 /** Só os limites das settings — o que o runner de orquestração consome. */

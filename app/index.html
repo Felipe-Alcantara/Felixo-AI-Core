@@ -1,10 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/brand/favicons/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicons/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/favicons/favicon-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>app</title>
+    <title>Felixo AI Core</title>
   </head>
   <body>
     <!--
@@ -14,6 +16,7 @@
       process and its live PTYs.
     -->
     <div id="boot-fallback" role="status" aria-live="polite">
+      <img id="boot-mark" width="34" height="34" src="/brand/logos/png/felixo-symbol-white-256.png" alt="" />
       <strong>Felixo AI Core</strong>
       <span id="boot-fallback-message">Carregando a interface…</span>
       <button id="boot-retry" type="button">Recarregar interface</button>
@@ -24,7 +27,7 @@
       body {
         min-height: 100%;
         margin: 0;
-        background: #09090b;
+        background: #090909;
       }
 
       #boot-fallback {
@@ -37,8 +40,8 @@
         justify-content: center;
         gap: 0.7rem;
         padding: 1.5rem;
-        color: #f4f4f5;
-        background: #09090b;
+        color: #ffffff;
+        background: #090909;
         font: 14px/1.5 system-ui, sans-serif;
         text-align: center;
       }
@@ -49,7 +52,7 @@
 
       #boot-fallback-message {
         max-width: 28rem;
-        color: #a1a1aa;
+        color: #a1a1a1;
       }
 
       #boot-retry {
@@ -57,8 +60,8 @@
         border: 0;
         border-radius: 999px;
         padding: 0.55rem 1rem;
-        color: #09090b;
-        background: #f4f4f5;
+        color: #090909;
+        background: #ffffff;
         cursor: pointer;
         font: inherit;
         font-weight: 600;

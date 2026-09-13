@@ -12,9 +12,10 @@ import {
   Maximize2,
   RotateCcw,
   Info,
-  Terminal as TerminalIcon,
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
+import { ProviderMark } from '../../shared/brand/ProviderMark'
+import { configuredAgentModel, providerIdentity } from '../../shared/brand/provider-identity'
 import { CopyButton } from './TerminalCopyButton'
 import {
   useSessionSnapshot,
@@ -110,6 +111,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   }, [id, metadata?.startedAt, onSessionStarted, nodeData.sessionStartedAt])
 
   const repository = repositoryLabel(nodeData.cwd)
+  const provider = providerIdentity(nodeData.command)
+  const configuredModel = configuredAgentModel(nodeData.command, nodeData.args)
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
   const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
@@ -144,45 +147,22 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[#0b0f14] text-zinc-200 shadow-xl">
+    <div data-activity={activity} className="felixo-canvas-card felixo-canvas-card-terminal flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-black-surface)] text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={200}
         minHeight={120}
-        lineClassName="!border-emerald-500/40"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-emerald-500"
+        lineClassName="!border-white/30"
+        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
       />
       <TerminalSideHandles />
       <NodeHeader
-        icon={
-          <span className="flex items-center gap-1">
-            <TerminalIcon size={13} />
-            {typeof nodeData.terminalIndex === 'number' && (
-              <span
-                className="rounded bg-black/30 px-1 text-[10px] font-semibold leading-tight tabular-nums text-emerald-300"
-                title="Posição deste terminal na lista de terminais abertos"
-              >
-                #{nodeData.terminalIndex}
-              </span>
-            )}
-            {/* O repositório fica legível sem abrir o terminal. O nome do
-                bloco envelhece — a pessoa o escolhe na criação e continua na
-                mesma sessão depois que aquela tarefa acaba; o diretório, não. */}
-            {repository && (
-              <span
-                className="max-w-[8rem] truncate rounded bg-black/20 px-1 text-[10px] leading-tight text-emerald-200/80"
-                title={nodeData.cwd}
-              >
-                {repository}
-              </span>
-            )}
-          </span>
-        }
+        icon={<ProviderMark command={nodeData.command} />}
         editableValue={nodeData.label ?? ''}
         placeholder="Terminal"
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
         onTitleCommit={(label) => nodeData.onRenameCommit?.(id, label)}
-        className="bg-emerald-950/60 text-emerald-100"
+        className="bg-white/[0.04] text-[var(--f-core-white)]"
         onRemove={() => {
           store.remove(id)
           void deleteElements({ nodes: [{ id }] })
@@ -218,24 +198,31 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         </button>
       </NodeHeader>
 
+      <div className="felixo-node-context" title={nodeData.cwd}>
+        {typeof nodeData.terminalIndex === 'number' && <span className="felixo-node-index">#{nodeData.terminalIndex}</span>}
+        <span className="felixo-node-context-name">{repository || provider.label}</span>
+        {configuredModel && <span className="felixo-node-model" title={`Modelo configurado na criação: ${configuredModel}`}>{configuredModel}</span>}
+      </div>
+
       <button
         type="button"
         onClick={() => nodeData.onExpand?.(id)}
-        className="felixo-btn nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
+        className="felixo-node-preview nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
+        aria-label={`Abrir ${nodeData.label || provider.label}`}
       >
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
         {snapshot?.lastPrompt && (
           <div
-            className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-1 text-[10px] leading-snug text-emerald-200"
+            className="shrink-0 rounded border border-white/10 bg-[var(--f-core-white)]/10 px-1.5 py-1 text-[10px] leading-snug text-[var(--f-core-white-soft)]"
             title={snapshot.lastPrompt}
           >
-            <span className="mr-1 font-semibold text-emerald-400">›</span>
+            <span className="mr-1 font-semibold text-[var(--f-core-white-soft)]">›</span>
             <span className="line-clamp-2">{snapshot.lastPrompt}</span>
           </div>
         )}
         {snapshot?.contextWarning && (
           <div
-            className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] leading-snug text-amber-200"
+            className="shrink-0 rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-[var(--color-warning)]"
             title={snapshot.contextWarning}
           >
             {snapshot.contextWarning}
@@ -244,7 +231,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         {scrollbackNotice && (
           <div
             role="status"
-            className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] leading-snug text-amber-200"
+            className="shrink-0 rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-[var(--color-warning)]"
             title={scrollbackNotice}
           >
             {scrollbackNotice}
@@ -252,7 +239,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         )}
         <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">
           {snapshot?.message ? (
-            <span className="text-red-400">{snapshot.message}</span>
+            <span className="text-[var(--color-error)]">{snapshot.message}</span>
           ) : preview.length > 0 ? (
             preview.map((line, index) => (
               <div key={index} className="overflow-hidden text-ellipsis whitespace-nowrap">
@@ -289,7 +276,7 @@ function TerminalSideHandles() {
             type="source"
             id={`s-${id}`}
             position={position}
-            className="!h-2.5 !w-2.5 !bg-emerald-500"
+            className="!h-2.5 !w-2.5 !bg-[var(--f-core-white)]"
           />
           <Handle
             type="target"
@@ -311,26 +298,26 @@ function ActivityBadge({
   exitCode?: number
 }) {
   const config: Record<SessionActivity, { label: string; className: string }> = {
-    starting: { label: 'iniciando…', className: 'text-amber-400' },
-    working: { label: 'trabalhando', className: 'text-sky-400' },
+    starting: { label: 'iniciando…', className: 'text-[var(--color-warning)]' },
+    working: { label: 'trabalhando', className: 'text-[var(--f-core-white-soft)]' },
     waiting_approval: {
       label: 'aguardando aprovação',
-      className: 'text-amber-400',
+      className: 'text-[var(--color-warning)]',
     },
-    idle: { label: 'aguardando', className: 'text-emerald-400' },
+    idle: { label: 'aguardando', className: 'text-[var(--f-core-white-soft)]' },
     exited: {
       label: `encerrado${exitCode != null ? ` (${exitCode})` : ''}`,
       className: 'text-zinc-500',
     },
-    error: { label: 'erro', className: 'text-red-400' },
+    error: { label: 'erro', className: 'text-[var(--color-error)]' },
   }
   const { label, className } = config[activity]
 
   return (
-    <span className={`flex items-center gap-1 text-[11px] font-medium ${className}`}>
+    <span className={`felixo-node-activity flex items-center gap-1 text-[11px] font-medium ${className}`}>
       {activity === 'working' && <Loader2 size={11} className="animate-spin" />}
       {activity === 'waiting_approval' && <AlertCircle size={11} />}
-      {activity === 'idle' && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+      {activity === 'idle' && <span className="h-1.5 w-1.5 rounded-full bg-[var(--f-core-active)]" />}
       {label}
     </span>
   )

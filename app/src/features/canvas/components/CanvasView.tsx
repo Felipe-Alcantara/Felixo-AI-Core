@@ -3,11 +3,10 @@
 // services/node-geometry.ts, as regras de ligação arquivo↔terminal em
 // services/file-terminal-links.ts, e a UI de toolbar/painéis em
 // CanvasToolbar.tsx e CanvasToolPanels.tsx.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   ReactFlow,
   Background,
-  Controls,
   MiniMap,
   addEdge,
   applyEdgeChanges,
@@ -40,13 +39,18 @@ import {
   type NodeDataCacheEntry,
 } from '../services/node-data-cache'
 import { CanvasToolbar } from './CanvasToolbar'
+import { CanvasTopbar } from './CanvasTopbar'
+import { CanvasStatusBar } from './CanvasStatusBar'
+import { CanvasZoomPill } from './CanvasZoomPill'
+import { CanvasAmbientLayer } from './CanvasAmbientLayer'
 import { CanvasSurfacesProvider } from './CanvasSurfacesProvider'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
-import { dockReservedBottom } from '../services/canvas-surfaces'
+import { toolbarColumnOffset } from './toolbar-flyout'
 import { UpdateToast } from '../../updates/UpdateNotice'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
 import { CanvasToolPanels } from './CanvasToolPanels'
+import { TOOL_LABELS } from './tools/canvas-tool-labels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
 import { moveById } from './tools/terminals-panel-reorder'
 import { NotificationsPanel } from './NotificationsPanel'
@@ -165,7 +169,7 @@ type RestoredAgentTerminals = {
 
 const AGENT_MATRIX_MOVING_CLASS = 'felixo-agent-matrix-moving'
 /** Must match `.felixo-agent-matrix-moving` in index.css. */
-const AGENT_MATRIX_ANIMATION_MS = 820
+const AGENT_MATRIX_ANIMATION_MS = 320
 
 function addCssClass(current: string | undefined, added: string): string {
   return [...new Set([...(current?.split(/\s+/) ?? []), added].filter(Boolean))].join(' ')
@@ -211,28 +215,72 @@ type CanvasViewProps = {
   onOpenChat: () => void
 }
 
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'felixo:canvas-sidebar-collapsed'
+
+/** Lida com storage indisponível (modo privado, testes) como "nunca recolhida". */
+function readSidebarCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeSidebarCollapsed(collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0')
+  } catch {
+    // Sem armazenamento a sidebar só perde a memória do estado entre sessões.
+  }
+}
+
+/**
+ * Espaço que a barra de status inferior (`.felixo-canvas-statusbar`, 1.875rem
+ * de altura) reserva para o painel de notificações — ele abre pra baixo, à
+ * esquerda do sino, e sem isto uma lista longa cresceria por baixo da barra
+ * em vez de parar antes dela.
+ */
+const STATUS_BAR_RESERVE = 40
+
 export function CanvasView({ onOpenChat }: CanvasViewProps) {
+  // Fonte da verdade: o provider de superfícies embrulha `CanvasInner` por
+  // fora, então o estado não pode morar dentro dele — ficaria inacessível
+  // pra quem calcula `toolbarWidth` aqui. Lembrada entre sessões como as
+  // outras preferências de layout (`panel-sizing.ts`, `terminal-drawer-pin.ts`).
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+
+  const changeSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setSidebarCollapsed(collapsed)
+    writeSidebarCollapsed(collapsed)
+  }, [])
+
   return (
     <TerminalSessionProvider>
-      {/* A margem de 1rem de cada lado da coluna entra na conta: é espaço que
-          nenhuma outra superfície pode ocupar. */}
-      <CanvasSurfacesProvider toolbarWidth={TOOLBAR_COLUMN + 32}>
+      <CanvasSurfacesProvider
+        toolbarWidth={toolbarColumnOffset(sidebarCollapsed)}
+      >
         <CanvasProfilerBoundary>
-          <CanvasInner onOpenChat={onOpenChat} />
+          <CanvasInner
+            onOpenChat={onOpenChat}
+            sidebarCollapsed={sidebarCollapsed}
+            onSidebarCollapsedChange={changeSidebarCollapsed}
+          />
         </CanvasProfilerBoundary>
       </CanvasSurfacesProvider>
     </TerminalSessionProvider>
   )
 }
 
-/** Largura da coluna recolhida da barra de ferramentas (`w-36`). */
-const TOOLBAR_COLUMN = 144
+type CanvasInnerProps = CanvasViewProps & {
+  sidebarCollapsed: boolean
+  onSidebarCollapsedChange: (collapsed: boolean) => void
+}
 
-function CanvasInner({ onOpenChat }: CanvasViewProps) {
+function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }: CanvasInnerProps) {
   const store = useTerminalSessions()
-  // dockHeight e minimap já vêm prontos do provider — computados uma vez a
-  // partir de occupancy/viewport internamente, não recalculados aqui.
-  const { dockTop, dockHeight, minimap: miniMap } = useCanvasSurfaces()
+  // minimap já vem pronto do provider — computado uma vez a partir de
+  // occupancy/viewport internamente, não recalculado aqui.
+  const { occupancy, minimap: miniMap } = useCanvasSurfaces()
   const {
     nodes,
     setNodes,
@@ -253,6 +301,48 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   }, [nodes])
   const [edges, setEdges] = useEdgesState<Edge>([])
   const [edgesHydrated, setEdgesHydrated] = useState(false)
+  // A route is lit only after a real PTY delivery succeeds. A connected edge
+  // remains quiet until then; node activity alone never implies data flow.
+  const [activeRouteKeys, setActiveRouteKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const routeTimersRef = useRef<Map<string, number>>(new Map())
+  const routeKey = useCallback(
+    (connection: Pick<Connection, 'source' | 'target'>) =>
+      `${connection.source}->${connection.target}`,
+    [],
+  )
+  const markRouteDelivered = useCallback(
+    (connection: Pick<Connection, 'source' | 'target'>) => {
+      const key = routeKey(connection)
+      setActiveRouteKeys((current) => {
+        const next = new Set(current)
+        next.add(key)
+        return next
+      })
+      const previousTimer = routeTimersRef.current.get(key)
+      if (previousTimer != null) {
+        window.clearTimeout(previousTimer)
+      }
+      const timer = window.setTimeout(() => {
+        setActiveRouteKeys((current) => {
+          const next = new Set(current)
+          next.delete(key)
+          return next
+        })
+        routeTimersRef.current.delete(key)
+      }, 900)
+      routeTimersRef.current.set(key, timer)
+    },
+    [routeKey],
+  )
+  useEffect(() => {
+    const timers = routeTimersRef.current
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      timers.clear()
+    }
+  }, [])
   const connectionIndex = useMemo(
     () => createCanvasConnectionIndex(nodes, edges),
     [nodes, edges],
@@ -272,20 +362,54 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
   )
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
+  // Lido pela topbar e pela status bar — sem isto os dois mostravam "100%"
+  // fixo, independente do zoom real (`onMove` do React Flow é a única fonte
+  // confiável: cobre scroll, pinça, os botões +/- e o "Ver tudo" programático).
+  // A atmosfera do canvas recua conforme o trabalho aparece: com o canvas
+  // vazio ela é o assunto; com muitos blocos ela vira só profundidade de fundo.
+  const atmosfera = useMemo(() => {
+    const total = nodes.length
+    if (total <= 2) return 1
+    if (total <= 6) return 0.75
+    if (total <= 12) return 0.5
+    return 0.3
+  }, [nodes.length])
+
+  const [zoomPercent, setZoomPercent] = useState(100)
+  const zoomPercentRef = useRef(100)
+  const handleCanvasMove = useCallback((
+    _event: unknown,
+    viewport: { zoom: number },
+  ) => {
+    const nextZoomPercent = Math.round(viewport.zoom * 100)
+    if (nextZoomPercent === zoomPercentRef.current) return
+    zoomPercentRef.current = nextZoomPercent
+    setZoomPercent(nextZoomPercent)
+  }, [])
+  // Trava de interação: mesmo comportamento do antigo botão do React Flow,
+  // agora dentro da pílula de zoom.
+  const [canvasLocked, setCanvasLocked] = useState(false)
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
-  // Espelha a largura da coluna da toolbar para os painéis de ferramenta, que
-  // são irmãos dela e abrem ao lado em vez de por cima.
-  const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
+  // Atalho de editor para a busca global do canvas. Captura antes do xterm:
+  // o terminal pode parar eventos no próprio textarea, mas Ctrl/Cmd+K deve
+  // abrir a busca independentemente de onde o foco esteja no workspace.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setActiveTool('search')
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   // Measured live from the bell+panel's actual DOM height (ResizeObserver in
   // NotificationsMenu), not guessed — a fixed offset broke as soon as the
   // notification list grew past whatever number was hardcoded here.
   const [, setNotificationsTriggerHeight] = useState(52)
-  // A altura do dock "Elementos" (pra notificações caberem antes de
-  // encostar nele) vem de `dockHeight`, derivada de `dockTop` no provider —
-  // não é medida de novo aqui. Um segundo `ResizeObserver` em TerminalsPanel
-  // reportando a mesma coisa por um canal `onHeightChange` separado existia
-  // antes; unificado nesta task.
   const sessionSnapshots = useSessionSnapshots()
   const actionableNotificationIds = useMemo(
     () => getActionRequiredNodeIds(nodes, sessionSnapshots),
@@ -862,7 +986,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       flowInstanceRef.current?.setCenter(
         node.position.x + size.width / 2,
         node.position.y + size.height / 2,
-        { zoom: 1.2, duration: 400 },
+        { zoom: 1.2, duration: 240 },
       )
       setNodes((current) =>
         current.map((item) => ({ ...item, selected: item.id === nodeId })),
@@ -1136,9 +1260,15 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         ...edge,
         sourceHandle: `s-${sides.source}`,
         targetHandle: `t-${sides.target}`,
+        className: [
+          edge.className,
+          activeRouteKeys.has(routeKey(edge)) ? 'felixo-edge-route-active' : undefined,
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined,
       }
     })
-  }, [edges, nodes])
+  }, [activeRouteKeys, edges, nodes, routeKey])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -1208,10 +1338,25 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       // A file-to-terminal link grants its agent shared scratchpad context;
       // an agent-to-agent link declares reciprocal collaboration. Other
       // connection shapes remain visual-only for now.
-      void announceFileToTerminal(connection, nodes, store, fileLinkPromptRef.current)
-      announceAgentCollaboration(connection, nodes, store)
+      const routeSink = {
+        sendText: (
+          nodeId: string,
+          text: string,
+          options?: Parameters<typeof store.sendText>[2],
+        ) => {
+          const delivery = store.sendText(nodeId, text, options)
+          void delivery.then((result) => {
+            if (result.delivered) {
+              markRouteDelivered(connection)
+            }
+          })
+          return delivery
+        },
+      }
+      void announceFileToTerminal(connection, nodes, routeSink, fileLinkPromptRef.current)
+      announceAgentCollaboration(connection, nodes, routeSink)
     },
-    [setEdges, nodes, store],
+    [markRouteDelivered, setEdges, nodes, store],
   )
 
   // Flow-space bounds of what's currently visible, used to prefer placing new
@@ -1225,16 +1370,19 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     }
 
     const bounds = container.getBoundingClientRect()
-    // O dock "Elementos" flutua por cima do canvas; sem descontar a altura
-    // real dele aqui, `findFreeNodePosition` só reserva os 40px fixos de
-    // `VIEWPORT_PLACEMENT_PADDING` (pensados pro dock vazio/colapsado) e um
-    // node novo nasce atrás do dock quando ele cresce com vários elementos —
-    // sobreposição confirmada numa captura de tela em 760px de largura.
-    const reservedBottom = dockReservedBottom(bounds.bottom, dockTop)
+    // O inspector "Elementos" cobre a borda direita do canvas com uma coluna
+    // de largura fixa (`occupancy.inspector`, 0 quando recolhido no puck) —
+    // sem descontar isso aqui, `findFreeNodePosition` só reserva os 40px
+    // fixos de `VIEWPORT_PLACEMENT_PADDING` e um node novo nasce atrás do
+    // inspector quando ele está expandido. Antes o dock flutuava embaixo à
+    // direita e crescia em ALTURA com o número de elementos — por isso a
+    // reserva era de rodapé (`dockReservedBottom`); virou coluna permanente à
+    // direita, então a reserva é de largura, não mais de altura.
+    const reservedRight = occupancy.inspector
     const topLeft = flowInstance.screenToFlowPosition({ x: bounds.left, y: bounds.top })
     const bottomRight = flowInstance.screenToFlowPosition({
-      x: bounds.right,
-      y: bounds.bottom - reservedBottom,
+      x: bounds.right - reservedRight,
+      y: bounds.bottom,
     })
     return {
       x: topLeft.x,
@@ -1242,7 +1390,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
       width: bottomRight.x - topLeft.x,
       height: bottomRight.y - topLeft.y,
     }
-  }, [dockTop])
+  }, [occupancy.inspector])
 
   const addNode = useCallback(
     (type: CanvasNodeType, data?: Record<string, unknown>, position?: { x: number; y: number }) => {
@@ -1288,7 +1436,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
     flowInstanceRef.current?.setCenter(
       position.x + size.width / 2,
       position.y + size.height / 2,
-      { zoom: 0.8, duration: 400 },
+      { zoom: 0.8, duration: 240 },
     )
   }, [addNode, focusNode, nodes, setNodes, visibleCanvasBounds])
 
@@ -1304,7 +1452,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         x: position.x + webpageSize.width / 2,
         y: position.y + webpageSize.height / 2,
       }
-      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 350 })
+      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 220 })
     },
     [addNode, nodes, setNodes],
   )
@@ -1321,7 +1469,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         x: position.x + webpageSize.width / 2,
         y: position.y + webpageSize.height / 2,
       }
-      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 350 })
+      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 220 })
     },
     [addNode, nodes, setNodes, visibleCanvasBounds],
   )
@@ -1743,8 +1891,19 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
   return (
     <div className="flex h-full w-full" data-felixo-canvas-ready>
-      <div ref={flowContainerRef} className="relative h-full min-w-0 flex-1">
+      <div
+        ref={flowContainerRef}
+        className="relative h-full min-w-0 flex-1"
+        style={{ '--felixo-atmosphere': atmosfera } as CSSProperties}
+      >
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
+      <CanvasTopbar
+        onOpenSearch={() => setActiveTool('search')}
+        activeToolLabel={activeTool ? TOOL_LABELS[activeTool] : null}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => onSidebarCollapsedChange(!sidebarCollapsed)}
+      />
+      <CanvasAmbientLayer dense={nodes.length > 0} />
       <CanvasToolbar
         activeTool={activeTool}
         onSelectTool={(tool) => {
@@ -1755,7 +1914,8 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           }
           setActiveTool((current) => (current === tool ? null : tool))
         }}
-        onToolsMenuOpenChange={setToolsMenuOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        onSidebarCollapsedChange={onSidebarCollapsedChange}
         updatePresentation={updates.presentation}
         onInstallUpdate={updates.install}
         onCheckUpdate={updates.check}
@@ -1776,7 +1936,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
         }
         onFitView={() =>
-          flowInstanceRef.current?.fitView({ padding: 0.15, duration: 400 })
+          flowInstanceRef.current?.fitView({ padding: 0.15, duration: 240 })
         }
         onExport={() => void exportAll()}
         onImportFile={(event) => void importFile(event)}
@@ -1791,7 +1951,6 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
         notificationCount={notificationCount}
         onToggle={() => setNotificationsOpen((open) => !open)}
         onHeightChange={setNotificationsTriggerHeight}
-        minimapWidth={miniMap?.width ?? null}
       >
         {(ready, panelRef) => (
           <NotificationsPanel
@@ -1800,7 +1959,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             open={notificationsOpen}
             ready={ready}
             panelRef={panelRef}
-            reservedBottomSpace={dockHeight > 0 ? dockHeight + 32 : 0}
+            reservedBottomSpace={STATUS_BAR_RESERVE}
             soundEnabled={notificationSoundEnabled}
             onSoundEnabledChange={setNotificationSoundEnabled}
             volume={notificationVolume}
@@ -1846,7 +2005,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
 
       <CanvasToolPanels
         activeTool={activeTool}
-        toolsMenuOpen={toolsMenuOpen}
+        toolsMenuOpen={sidebarCollapsed}
         onClose={() => setActiveTool(null)}
         nodes={nodes}
         onFocusNode={focusNode}
@@ -1875,7 +2034,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
             nodeId={detailsNode.id}
             data={detailsNode.data}
             onClose={() => setDetailsTerminalId(null)}
-            toolsMenuOpen={toolsMenuOpen}
+            toolsMenuOpen={sidebarCollapsed}
             onClearAgentSession={() => updateNodeData(detailsNode.id, { agentSession: undefined })}
           />
         ) : null
@@ -1901,6 +2060,7 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           onNodeDragStop={onNodeDragStop}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onMove={handleCanvasMove}
           fitView
           // React Flow's default minZoom (0.5) blocks "Ver tudo"/fitView from
           // zooming out enough to frame a spread-out canvas on one screen.
@@ -1916,7 +2076,10 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           // Partial = touching/overlapping a node with the box selects it; the
           // box doesn't need to fully contain the node.
           selectionMode={SelectionMode.Partial}
-          selectionOnDrag={canvasMode === 'select'}
+          nodesDraggable={!canvasLocked}
+          nodesConnectable={!canvasLocked}
+          elementsSelectable={!canvasLocked}
+          selectionOnDrag={canvasMode === 'select' && !canvasLocked}
           panOnDrag={canvasMode === 'select' ? [1, 2] : true}
           selectionKeyCode={null}
           multiSelectionKeyCode={['Shift']}
@@ -1926,40 +2089,46 @@ function CanvasInner({ onOpenChat }: CanvasViewProps) {
           panActivationKeyCode={null}
           className={canvasMode === 'pan' ? 'cursor-grab' : ''}
         >
-          <Background gap={20} color="#1e293b" />
-          <Controls position="bottom-left" className="!mb-4 !ml-4" />
-          {/* Top-right keeps the minimap clear of the bottom Chat/Canvas toggle.
-              The notifications bell lives right above it in the same corner;
-              its real measured height (bell + open panel, via ResizeObserver
-              in NotificationsMenu) sets this gap, so the minimap is pushed
-              down by exactly as much space as the trigger actually occupies —
-              never overlapped, however tall the notification list grows. */}
+          <Background gap={32} size={1} color="rgba(237, 237, 234, 0.07)" />
+          {/* Pílula `− 100% +` no formato da prancha da marca. O offset da
+              esquerda recolhe via `:has()` quando a sidebar vira trilho (ver
+              index.css), sem estado extra aqui. */}
+          <CanvasZoomPill
+            zoomPercent={zoomPercent}
+            locked={canvasLocked}
+            onLockedChange={setCanvasLocked}
+          />
           {/* O mapa é a única superfície que pode encolher até sumir: ele
               ancora na direita da área livre, então é o primeiro a ser
               coberto quando o painel da esquerda cresce, e é também o único
-              cuja ausência não impede nenhuma ação. */}
+              cuja ausência não impede nenhuma ação. A margem direita recolhe
+              perto da borda (via `:has()`, index.css) quando o inspector
+              "Elementos" está no puck — mesmo mecanismo do offset da sidebar,
+              espelhado do outro lado da tela. */}
           {miniMap && (
             <MiniMap
               pannable
               zoomable
-              position="top-right"
-              className="!mr-4"
+              position="bottom-right"
+              className="felixo-canvas-minimap !mb-10"
               style={{
-                // Notifications open horizontally to the left of the map,
-                // so the minimap does not need to be pushed down anymore.
-                marginTop: 16,
-                transition: 'margin-top 300ms ease, width 200ms ease, height 200ms ease',
+                transition: 'width 160ms ease, height 160ms ease',
                 width: miniMap.width,
                 height: miniMap.height,
               }}
-              bgColor="#18181b"
-              maskColor="rgba(0, 0, 0, 0.6)"
-              nodeColor="#3f3f46"
-              nodeStrokeColor="#52525b"
+              bgColor="#0a0a0a"
+              maskColor="rgba(5, 5, 5, 0.66)"
+              nodeColor="#262626"
+              nodeStrokeColor="#858585"
               nodeComponent={miniMapNode}
             />
           )}
         </ReactFlow>
+        <CanvasStatusBar
+          nodeCount={nodes.length}
+          edgeCount={edges.length}
+          hydrated={hydrated && edgesHydrated}
+        />
       </div>
 
       {expandedTerminalId && (

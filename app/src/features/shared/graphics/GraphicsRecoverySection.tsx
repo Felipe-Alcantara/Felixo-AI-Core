@@ -130,12 +130,12 @@ export function GraphicsRecoverySection() {
         continuar deixando a janela preta.
       </p>
       {config?.recommendation && (
-        <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-2.5">
-          <div className="flex items-center gap-2 text-xs font-medium text-amber-200">
+        <div className="mt-3 rounded-xl border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] p-2.5">
+          <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-warning)]">
             <AlertTriangle size={14} aria-hidden="true" />
             Modo compatível recomendado
           </div>
-          <p className="mt-1 text-[11px] leading-relaxed text-amber-100/80">
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-warning)]">
             Numa abertura anterior, o driver de vídeo recusou{' '}
             {config.recommendation.disabledFeatures.join(', ')}. Isso costuma
             causar tela preta ou travamento na janela. Recomendamos trocar
@@ -146,7 +146,7 @@ export function GraphicsRecoverySection() {
               type="button"
               onClick={() => void acceptRecommendation()}
               disabled={recommendationBusy}
-              className="felixo-btn flex h-8 items-center justify-center rounded-lg bg-amber-600/80 px-3 text-[11px] font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="felixo-btn flex h-8 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 text-[11px] font-medium text-white hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Usar modo compatível
             </button>
@@ -166,7 +166,7 @@ export function GraphicsRecoverySection() {
         <select
           value={mode}
           onChange={(event) => setMode(event.target.value as GraphicsMode)}
-          className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-cyan-200/30"
+          className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
         >
           <option value="auto">Automático</option>
           <option value="hardware">GPU normal</option>
@@ -187,7 +187,7 @@ export function GraphicsRecoverySection() {
         Salvar modo gráfico
       </button>
       {message && (
-        <p className="mt-2 text-[11px] leading-relaxed text-amber-300">{message}</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-warning)]">{message}</p>
       )}
       <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
         Se a interface travar, o botão “Recarregar interface” recupera somente

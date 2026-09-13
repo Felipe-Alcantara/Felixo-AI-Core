@@ -9,13 +9,13 @@ describe('highlight', () => {
     )
 
     expect(resultado).toContain('&lt;img src=x onerror=&quot;alert(1)&quot;&gt; ')
-    expect(resultado).toContain('<mark class="bg-amber-400/30 text-inherit rounded-sm">Relatório</mark>')
+    expect(resultado).toContain('<mark class="bg-[color-mix(in_srgb,var(--color-warning)_34%,transparent)] text-inherit rounded-sm">Relatório</mark>')
     expect(resultado).not.toContain('<img')
   })
 
   it('destaca sem diferenciar maiúsculas de minúsculas', () => {
     expect(renderToStaticMarkup(highlight('Mensagem importante', 'MENSAGEM'))).toContain(
-      '<mark class="bg-amber-400/30 text-inherit rounded-sm">Mensagem</mark>',
+      '<mark class="bg-[color-mix(in_srgb,var(--color-warning)_34%,transparent)] text-inherit rounded-sm">Mensagem</mark>',
     )
   })
 })

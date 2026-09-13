@@ -1,7 +1,10 @@
 import { useId, useRef, useState } from 'react'
-import { RotateCw, Trash2 } from 'lucide-react'
+import { FilePlus2, FolderOpen, FolderPlus, RotateCw, TerminalSquare, Trash2, UserRound } from 'lucide-react'
 import { SHELL_AGENT_VALUE, type AgentLaunchPreferences } from '../services/agent-launch-preferences'
 import { ADD_FOLDER_VALUE, type AgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
+import { ProviderMark } from '../../shared/brand/ProviderMark'
+import { providerIdentity } from '../../shared/brand/provider-identity'
+import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 
 type Props = {
   config: AgentConfig
@@ -13,9 +16,24 @@ type Props = {
   autoFocus?: boolean
 }
 
-const CAMPO =
-  'w-full rounded bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-white/10'
-const ROTULO = 'mb-1 block text-xs font-medium text-zinc-400'
+const CAMPO = 'felixo-control w-full'
+const ROTULO = 'felixo-field-label'
+
+const PROVIDER_VENDOR: Record<string, string> = {
+  claude: 'Anthropic',
+  codex: 'OpenAI',
+  gemini: 'Google',
+  openia: 'OpenRouter',
+}
+
+const EFFORT_DESCRIPTION: Record<string, string> = {
+  low: 'Resposta mais rápida',
+  medium: 'Equilíbrio',
+  high: 'Maior esforço',
+  max: 'Máximo disponível',
+  xhigh: 'Esforço estendido',
+  ultra: 'Esforço máximo',
+}
 
 /**
  * Os campos de "como abrir um agente", sem nenhuma opinião sobre onde eles
@@ -47,6 +65,44 @@ export function AgentConfigFields({
   )
   const openiaKeyUsesSelectedAccount = config.accountId.trim() !== ''
 
+  const agentOptions: FelixoSelectOption[] = [
+    {
+      value: SHELL_AGENT_VALUE,
+      label: 'Nenhum (shell)',
+      description: 'Terminal do sistema',
+      icon: <TerminalSquare size={16} strokeWidth={1.5} />,
+    },
+    ...config.agents.map((item) => ({
+      value: item.id,
+      label: item.label,
+      description: PROVIDER_VENDOR[item.id] ?? providerIdentity(item.command).label,
+      icon: <ProviderMark command={item.command} size={17} />,
+      searchText: `${item.label} ${PROVIDER_VENDOR[item.id] ?? ''}`,
+    })),
+  ]
+
+  const projectOptions: FelixoSelectOption[] = [
+    {
+      value: '',
+      label: 'Local (sem projeto)',
+      description: 'Executar no ambiente local',
+      icon: <FolderOpen size={15} strokeWidth={1.5} />,
+    },
+    ...projects.map((project) => ({
+      value: project.id,
+      label: project.name,
+      meta: project.path,
+      icon: <FolderOpen size={15} strokeWidth={1.5} />,
+      searchText: `${project.name} ${project.path}`,
+    })),
+    {
+      value: ADD_FOLDER_VALUE,
+      label: 'Adicionar pasta…',
+      description: 'Escolher uma pasta do computador',
+      icon: <FolderPlus size={15} strokeWidth={1.5} />,
+    },
+  ]
+
   const handleProjectChange = async (value: string) => {
     if (value !== ADD_FOLDER_VALUE) {
       config.setProjectId(value)
@@ -69,7 +125,7 @@ export function AgentConfigFields({
             value={config.name}
             onChange={(event) => config.setName(event.target.value)}
             placeholder="Ex.: Agente de testes"
-            className={`${CAMPO} mb-3 outline-none placeholder:text-zinc-600 focus:ring-emerald-500/50`}
+            className={`${CAMPO} mb-3`}
           />
         </>
       )}
@@ -77,22 +133,18 @@ export function AgentConfigFields({
       <label htmlFor={`${prefixo}-agent`} className={ROTULO}>
         Agente
       </label>
-      <select
+      <FelixoSelect
         id={`${prefixo}-agent`}
         value={config.agentValue}
         autoFocus={autoFocus && !showName}
-        onChange={(event) =>
-          config.changeAgent(event.target.value as AgentLaunchPreferences['agentValue'])
+        onChange={(value) =>
+          config.changeAgent(value as AgentLaunchPreferences['agentValue'])
         }
-        className={`${CAMPO} mb-3`}
-      >
-        <option value={SHELL_AGENT_VALUE}>Nenhum (shell)</option>
-        {config.agents.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.label}
-          </option>
-        ))}
-      </select>
+        options={agentOptions}
+        menuLabel="Agentes disponíveis"
+        aria-label="Agente"
+        className="mb-3"
+      />
 
       {config.agentValue !== SHELL_AGENT_VALUE && (
         <CampoConta prefixo={prefixo} config={config} />
@@ -119,25 +171,25 @@ export function AgentConfigFields({
               <label htmlFor={`${prefixo}-openia-interface`} className={ROTULO}>
                 Interface
               </label>
-              <select
+              <FelixoSelect
                 id={`${prefixo}-openia-interface`}
                 value={config.openiaInterfaceKey}
-                onChange={(event) => config.setOpeniaInterfaceKey(event.target.value)}
+                onChange={config.setOpeniaInterfaceKey}
                 disabled={config.openiaLoading || config.openiaInterfaces.length === 0}
-                className={`${CAMPO} mb-2`}
-              >
-                {config.openiaInterfaces.length === 0 ? (
-                  <option value="">
-                    {config.openiaLoading ? 'Carregando interfaces…' : 'Openia não disponível'}
-                  </option>
-                ) : (
-                  config.openiaInterfaces.map((item) => (
-                    <option key={item.key} value={item.key}>
-                      {item.emoji} {item.name}
-                    </option>
-                  ))
-                )}
-              </select>
+                loading={config.openiaLoading && config.openiaInterfaces.length === 0}
+                options={config.openiaInterfaces.length === 0
+                  ? [{ value: '', label: config.openiaLoading ? 'Carregando interfaces…' : 'Openia não disponível', disabled: true }]
+                  : config.openiaInterfaces.map((item) => ({
+                    value: item.key,
+                    label: item.name,
+                    description: item.description,
+                    icon: <span className="felixo-select-emoji" aria-hidden="true">{item.emoji}</span>,
+                    searchText: `${item.name} ${item.key}`,
+                  }))}
+                menuLabel="Interfaces disponíveis"
+                aria-label="Interface Openia"
+                className="mb-2"
+              />
               {selectedOpeniaInterface?.description && (
                 <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
                   {selectedOpeniaInterface.description}
@@ -147,26 +199,29 @@ export function AgentConfigFields({
               <label htmlFor={`${prefixo}-openia-model`} className={ROTULO}>
                 Modelo
               </label>
-              <select
+              <FelixoSelect
                 id={`${prefixo}-openia-model`}
                 value={config.openiaModel}
-                onChange={(event) => config.changeOpeniaModel(event.target.value)}
+                onChange={config.changeOpeniaModel}
                 disabled={config.openiaLoading || config.openiaModels.length === 0}
-                className={`${CAMPO} mb-2`}
-              >
-                <option value="">Padrão da interface</option>
-                {Object.entries(openiaModelGroups).map(([vendor, models]) => (
-                  <optgroup key={vendor} label={vendor}>
-                    {models.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name} · {item.completionPrice > 0
-                          ? `$${(item.completionPrice * 1_000_000).toFixed(2)}/M`
-                          : 'free'}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                loading={config.openiaLoading && config.openiaModels.length === 0}
+                options={[
+                  { value: '', label: 'Padrão da interface', description: 'Usar a configuração da interface' },
+                  ...Object.entries(openiaModelGroups).flatMap(([vendor, models]) => models.map((item) => ({
+                    value: item.id,
+                    label: item.name,
+                    meta: `${vendor} · ${item.completionPrice > 0
+                      ? `$${(item.completionPrice * 1_000_000).toFixed(2)}/M`
+                      : 'free'}`,
+                    searchText: `${item.name} ${item.id} ${vendor}`,
+                  }))),
+                ]}
+                searchable={config.openiaModels.length > 8}
+                searchPlaceholder="Buscar modelo…"
+                menuLabel="Modelos disponíveis"
+                aria-label="Modelo Openia"
+                className="mb-2"
+              />
               <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
                 {selectedOpeniaInterface?.supportsModelSelection
                   ? 'O modelo escolhido será aplicado automaticamente antes da interface abrir.'
@@ -190,13 +245,13 @@ export function AgentConfigFields({
                         : 'Chave do sistema já configurada'
                       : 'sk-or-…'
                   }
-                  className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+                  className="felixo-control min-w-0 flex-1 text-xs"
                 />
                 <button
                   type="button"
                   onClick={() => void config.saveOpeniaKey()}
                   disabled={config.openiaSaving || !config.openiaKeyDraft.trim()}
-                  className="felixo-btn rounded bg-zinc-700 px-2 text-[11px] text-zinc-200 hover:bg-zinc-600 disabled:opacity-50"
+                  className="felixo-btn felixo-secondary-action rounded px-2 text-[11px] disabled:opacity-50"
                 >
                   {config.openiaSaving ? 'Salvando…' : 'Salvar'}
                 </button>
@@ -211,7 +266,7 @@ export function AgentConfigFields({
                     : 'A chave será enviada ao armazenamento do Openia para o login do sistema e não ficará no canvas.'}
               </p>
               {config.openiaError && (
-                <p className="mt-2 text-[11px] leading-relaxed text-red-300">{config.openiaError}</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-error)]">{config.openiaError}</p>
               )}
             </div>
           ) : (
@@ -231,70 +286,77 @@ export function AgentConfigFields({
                   <RotateCw size={11} className={config.refreshing ? 'animate-spin' : undefined} />
                 </button>
               </div>
-              <select
+              <FelixoSelect
                 id={`${prefixo}-model`}
                 value={config.model}
-                onChange={(event) => config.changeModel(event.target.value)}
-                className={`${CAMPO} mb-3`}
-              >
-                <option value="">Padrão</option>
-                {config.agent.models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+                onChange={config.changeModel}
+                options={[
+                  { value: '', label: 'Padrão', description: 'Configuração recomendada da CLI' },
+                  ...config.agent.models.map((m) => ({ value: m, label: m })),
+                ]}
+                searchable={config.agent.models.length > 8}
+                searchPlaceholder="Buscar modelo…"
+                menuLabel="Modelos disponíveis"
+                aria-label="Modelo"
+                className="mb-3"
+              />
 
               {config.effortLevels && (
                 <>
                   <label htmlFor={`${prefixo}-effort`} className={ROTULO}>
                     Esforço de raciocínio
                   </label>
-                  <select
+                  <FelixoSelect
                     id={`${prefixo}-effort`}
                     value={config.effort}
-                    onChange={(event) => config.setEffort(event.target.value)}
-                    className={`${CAMPO} mb-3`}
-                  >
-                    <option value="">Padrão</option>
-                    {config.effortLevels.map((level) => (
-                      <option key={level} value={level}>
-                        {level}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={config.setEffort}
+                    options={[
+                      { value: '', label: 'Padrão', description: 'Configuração da CLI' },
+                      ...config.effortLevels.map((level) => ({
+                        value: level,
+                        label: level,
+                        description: EFFORT_DESCRIPTION[level],
+                      })),
+                    ]}
+                    menuLabel="Esforço de raciocínio"
+                    aria-label="Esforço de raciocínio"
+                    className="mb-3"
+                  />
                 </>
               )}
 
-              <label className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
+              <label className="felixo-checkbox-field mb-3">
                 <input
                   type="checkbox"
                   checked={config.yolo}
                   onChange={(event) => config.setYolo(event.target.checked)}
-                  className="accent-emerald-600"
+                  className="felixo-checkbox"
                 />
-                Yolo (acesso total, sem confirmações)
+                <span className="felixo-checkbox-copy">
+                  <span className="felixo-checkbox-label">Yolo</span>
+                  <span className="felixo-checkbox-meta">Acesso total, sem confirmações</span>
+                </span>
               </label>
 
               <label htmlFor={`${prefixo}-planning-file`} className={ROTULO}>
                 Arquivo de planejamento
               </label>
-              <div className="mb-3 flex gap-1.5">
+              <div className="felixo-file-picker mb-3">
                 <input
                   id={`${prefixo}-planning-file`}
                   value={config.planningFile}
                   onChange={(event) => config.setPlanningFile(event.target.value)}
                   placeholder="Caminho para um arquivo (opcional)"
-                  className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+                  className="felixo-control felixo-file-picker-input min-w-0 flex-1 text-xs"
                 />
                 <button
                   type="button"
                   onClick={() => planningFileInputRef.current?.click()}
-                  className="felixo-btn-icon rounded bg-zinc-700 px-2 text-xs text-zinc-200 hover:bg-zinc-600"
+                  className="felixo-file-picker-button felixo-btn-icon"
                   title="Selecionar arquivo de planejamento"
                   aria-label="Selecionar arquivo de planejamento"
                 >
-                  …
+                  <FilePlus2 size={14} strokeWidth={1.5} aria-hidden="true" />
                 </button>
                 <input
                   ref={planningFileInputRef}
@@ -316,20 +378,17 @@ export function AgentConfigFields({
       <label htmlFor={`${prefixo}-project`} className={ROTULO}>
         Projeto
       </label>
-      <select
+      <FelixoSelect
         id={`${prefixo}-project`}
         value={config.projectId}
-        onChange={(event) => void handleProjectChange(event.target.value)}
-        className={`${CAMPO} mb-3`}
-      >
-        <option value="">Local (sem projeto)</option>
-        {projects.map((project) => (
-          <option key={project.id} value={project.id}>
-            {project.name}
-          </option>
-        ))}
-        <option value={ADD_FOLDER_VALUE}>+ Adicionar pasta…</option>
-      </select>
+        onChange={(value) => void handleProjectChange(value)}
+        options={projectOptions}
+        searchable={projects.length > 8}
+        searchPlaceholder="Buscar projeto…"
+        menuLabel="Projetos disponíveis"
+        aria-label="Projeto"
+        className="mb-3"
+      />
     </>
   )
 }
@@ -410,28 +469,42 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
         Conta
       </label>
       <div className="mb-3 flex items-center gap-1.5">
-        <select
+        <FelixoSelect
           id={`${prefixo}-account`}
           value={config.accountId}
-          onChange={(event) => {
-            if (event.target.value === NOVA_CONTA) {
+          onChange={(value) => {
+            if (value === NOVA_CONTA) {
               setErroRemocao(null)
               setCriando(true)
               return
             }
             setErroRemocao(null)
-            config.setAccountId(event.target.value)
+            config.setAccountId(value)
           }}
-          className={`${CAMPO} min-w-0 flex-1`}
-        >
-          <option value="">Login do sistema</option>
-          {config.accounts.map((conta) => (
-            <option key={conta.id} value={conta.id}>
-              {conta.label}
-            </option>
-          ))}
-          <option value={NOVA_CONTA}>+ Nova conta…</option>
-        </select>
+          options={[
+            {
+              value: '',
+              label: 'Login do sistema',
+              description: 'Sessão atual do computador',
+              icon: <UserRound size={15} strokeWidth={1.5} />,
+            },
+            ...config.accounts.map((conta) => ({
+              value: conta.id,
+              label: conta.label,
+              description: 'Perfil local',
+              icon: <UserRound size={15} strokeWidth={1.5} />,
+            })),
+            {
+              value: NOVA_CONTA,
+              label: 'Nova conta…',
+              description: 'Cadastrar outro perfil de login',
+              icon: <UserRound size={15} strokeWidth={1.5} />,
+            },
+          ]}
+          menuLabel="Contas disponíveis"
+          aria-label="Conta"
+          className="min-w-0 flex-1"
+        />
 
         {contaAtual && (
           <button

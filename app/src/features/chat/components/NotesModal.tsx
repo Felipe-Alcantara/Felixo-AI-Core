@@ -147,7 +147,7 @@ export function NotesModal({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Buscar"
-                className="h-9 w-full rounded-2xl border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                className="h-9 w-full rounded-2xl border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -165,7 +165,7 @@ export function NotesModal({
                     className={[
                       'felixo-btn w-full rounded-2xl px-3 py-2 text-left text-xs',
                       selectedNoteId === note.id
-                        ? 'bg-cyan-300/10 text-cyan-100'
+                        ? 'bg-[var(--f-core-active)]/10 text-[var(--f-core-white)]'
                         : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200',
                     ].join(' ')}
                   >
@@ -191,7 +191,7 @@ export function NotesModal({
                       updatedAt: new Date().toISOString(),
                     })
                   }
-                  className="mb-3 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                  className="mb-3 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <textarea
                   value={selectedNote.content}
@@ -202,7 +202,7 @@ export function NotesModal({
                       updatedAt: new Date().toISOString(),
                     })
                   }
-                  className="min-h-0 flex-1 resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-3 font-mono text-[13px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                  className="min-h-0 flex-1 resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-3 font-mono text-[13px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
                   <button

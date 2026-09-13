@@ -73,7 +73,7 @@ export function ChatExportModal({
           <button
             type="button"
             onClick={() => onExport('analysis', fileName)}
-            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-sky-300/15 bg-sky-300/5 px-4 py-3 text-left text-sm text-sky-100 hover:bg-sky-300/10"
+            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-[var(--f-core-active)]/5 px-4 py-3 text-left text-sm text-[var(--f-core-white)] hover:bg-[var(--f-core-active)]/10"
           >
             <Bug size={18} aria-hidden="true" />
             Markdown para analise

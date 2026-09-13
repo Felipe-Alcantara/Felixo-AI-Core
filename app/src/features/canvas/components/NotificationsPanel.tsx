@@ -110,10 +110,10 @@ export function NotificationsPanel({
           '--felixo-panel-max-height': `calc(100vh - 5rem - ${reservedBottomSpace}px)`,
         } as CSSProperties
       }
-      className="felixo-anim-sequential-panel absolute right-[calc(100%+0.75rem)] top-0 z-40 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-red-500/40 bg-zinc-900 shadow-2xl"
+      className="felixo-anim-sequential-panel absolute right-[calc(100%+0.75rem)] top-0 z-40 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-zinc-900 shadow-2xl"
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
-        <Bell size={15} className="text-red-400" />
+        <Bell size={15} className="text-[var(--color-error)]" />
         Notificações
         <span className="text-xs font-normal text-zinc-500">{unreadCount}</span>
         <button
@@ -167,7 +167,7 @@ export function NotificationsPanel({
         </span>
       </div>
 
-      <label className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-sky-400/50 focus-within:text-sky-300">
+      <label className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-white/10 focus-within:text-[var(--f-core-white-soft)]">
         <Search size={13} aria-hidden />
         <input
           value={query}
@@ -209,7 +209,7 @@ export function NotificationsPanel({
 
       {visibleItems.length === 0 ? (
         <div className="flex items-center gap-2 px-3 py-5 text-xs text-zinc-500">
-          <CheckCircle2 size={15} className="text-emerald-500" />
+          <CheckCircle2 size={15} className="text-[var(--f-core-white-soft)]" />
           {filter === 'unread'
             ? 'Nenhum agente aguardando ação.'
             : query
@@ -237,7 +237,7 @@ export function NotificationsPanel({
                   className="felixo-btn flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left"
                 >
                   {unread ? (
-                    <AlertCircle size={15} className="mt-0.5 shrink-0 text-red-400" />
+                    <AlertCircle size={15} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
                   ) : (
                     <Check size={15} className="mt-0.5 shrink-0 text-zinc-600" />
                   )}

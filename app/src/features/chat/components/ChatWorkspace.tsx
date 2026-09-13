@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LayoutGrid, PanelLeft } from 'lucide-react'
+import { ArrowRight, LayoutGrid, PanelLeft } from 'lucide-react'
 import {
   initialModels,
   ideaStarters,
-  quickPrompts,
+  chatSuggestions,
 } from '../data/models'
 import {
   createAssistantMessage,
@@ -156,8 +156,8 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   >({})
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
-  const [isOrchestrationDashboardOpen, setIsOrchestrationDashboardOpen] = useState(true)
-  const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(true)
+  const [isOrchestrationDashboardOpen, setIsOrchestrationDashboardOpen] = useState(false)
+  const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(false)
   const activeSessionIdRef = useRef<string | null>(null)
   const activeThreadIdRef = useRef<string | null>(null)
   const activeChatSessionIdRef = useRef<string | null>(null)
@@ -1271,7 +1271,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
               <ChatThread models={models} messages={messages} />
               {orchestrationStatusText && (
                 <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.07] bg-[var(--color-status-bg)] px-5 py-2 text-[12px] text-zinc-400">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-warning)]" />
                   <span className="min-w-0 truncate">{orchestrationStatusText}</span>
                 </div>
               )}
@@ -1294,15 +1294,16 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
           ) : (
             <section className="min-h-0 flex-1 overflow-y-auto px-8 py-12 max-sm:px-4 max-sm:py-8 [@media(max-height:620px)]:py-6">
               <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center">
-                <div className="mb-7 text-center [@media(max-height:620px)]:mb-4">
+                <div className="felixo-chat-hero">
                   <img
-                    src="/brand/felixo-logo.png"
-                    alt="Felixo"
-                    className="mx-auto mb-4 h-9 w-9 object-contain [@media(max-height:620px)]:mb-2 [@media(max-height:620px)]:h-7 [@media(max-height:620px)]:w-7"
+                    src={`${import.meta.env.BASE_URL}brand/logos/png/felixo-symbol-white-256.png`}
+                    alt=""
+                    aria-hidden
+                    className="felixo-chat-hero-logo"
                   />
-                  <h1 className="text-[30px] font-semibold tracking-[-0.02em] text-zinc-200 max-sm:text-2xl [@media(max-height:620px)]:text-2xl">
-                    De volta ao trabalho, Felixo?
-                  </h1>
+                  <span className="felixo-chat-hero-eyebrow">Felixo AI Core</span>
+                  <h1>O que vamos construir hoje?</h1>
+                  <p>Conecte ideias. Orquestre agentes. Transforme em resultados.</p>
                 </div>
 
                 <Composer
@@ -1322,16 +1323,20 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
                   isStreaming={isStreaming}
                 />
 
-                <div className="mx-auto mt-7 max-w-[560px] divide-y divide-white/[0.07] [@media(max-height:620px)]:mt-4">
-                  {quickPrompts.map((prompt) => (
+                <div className="felixo-chat-suggestions">
+                  {chatSuggestions.map((suggestion) => (
                     <button
-                      key={prompt}
+                      key={suggestion.id}
                       type="button"
                       disabled={isStreaming}
-                      onClick={() => setInput(prompt)}
-                      className="felixo-btn block w-full px-3 py-3 text-left text-[12px] text-zinc-500 hover:text-zinc-300 disabled:cursor-not-allowed disabled:text-zinc-700 [@media(max-height:620px)]:py-2"
+                      onClick={() => setInput(suggestion.prompt)}
+                      className="felixo-btn felixo-suggestion-card"
                     >
-                      {prompt}
+                      <span className="felixo-suggestion-card-body">
+                        <span className="felixo-suggestion-card-title">{suggestion.title}</span>
+                        <span className="felixo-suggestion-card-desc">{suggestion.description}</span>
+                      </span>
+                      <ArrowRight size={14} aria-hidden />
                     </button>
                   ))}
                 </div>
@@ -1340,6 +1345,10 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
           )}
         </div>
 
+        {/* Faixa técnica: recolhida, Orquestração e QA Logger dividem ~36px;
+            expandida, cada uma ocupa a largura toda. O vazio devolve espaço
+            ao chat em vez de manter dois painéis grandes parados. */}
+        <div className="felixo-tech-drawer">
         <OrchestrationDashboardPanel
           isOpen={isOrchestrationDashboardOpen}
           onToggleOpen={() =>
@@ -1351,6 +1360,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
           isOpen={isQaLoggerOpen}
           onToggleOpen={() => setIsQaLoggerOpen((value) => !value)}
         />
+        </div>
       </main>
 
       <TerminalPanel

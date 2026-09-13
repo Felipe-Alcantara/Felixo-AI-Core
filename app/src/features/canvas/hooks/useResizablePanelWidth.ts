@@ -50,6 +50,8 @@ export function useResizablePanelWidth(
   const dragging = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
+  const latestClientX = useRef<number | null>(null)
+  const resizeFrame = useRef<number | null>(null)
 
   useEffect(() => {
     reportPanelWidth(width)
@@ -74,21 +76,53 @@ export function useResizablePanelWidth(
   }, [size])
 
   useEffect(() => {
-    function onMouseMove(event: MouseEvent) {
-      if (!dragging.current) {
+    const cancelResizeFrame = () => {
+      if (resizeFrame.current === null) {
         return
       }
+      if (typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(resizeFrame.current)
+      } else {
+        window.clearTimeout(resizeFrame.current)
+      }
+      resizeFrame.current = null
+    }
 
-      // Clampada só pelo próprio piso/teto absoluto (`clampPanelWidth`, que
-      // não olha a gaveta) — a negociação com a gaveta acontece depois, no
-      // provider, a partir do que for reportado.
+    const applyResize = (clientX: number) => {
       setWidth(
         clampPanelWidth(
-          startWidth.current + (event.clientX - startX.current),
+          startWidth.current + (clientX - startX.current),
           window.innerWidth,
           size,
         ),
       )
+    }
+
+    const flushResize = () => {
+      resizeFrame.current = null
+      if (!dragging.current || latestClientX.current === null) {
+        return
+      }
+      applyResize(latestClientX.current)
+    }
+
+    const scheduleResize = () => {
+      if (resizeFrame.current !== null) {
+        return
+      }
+      if (typeof window.requestAnimationFrame === 'function') {
+        resizeFrame.current = window.requestAnimationFrame(flushResize)
+      } else {
+        resizeFrame.current = window.setTimeout(flushResize, 0)
+      }
+    }
+
+    function onMouseMove(event: MouseEvent) {
+      if (!dragging.current) {
+        return
+      }
+      latestClientX.current = event.clientX
+      scheduleResize()
     }
 
     function onMouseUp() {
@@ -96,7 +130,10 @@ export function useResizablePanelWidth(
         return
       }
 
+      cancelResizeFrame()
+      flushResize()
       dragging.current = false
+      latestClientX.current = null
       setResizing(false)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
@@ -110,6 +147,8 @@ export function useResizablePanelWidth(
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
     return () => {
+      cancelResizeFrame()
+      latestClientX.current = null
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
     }

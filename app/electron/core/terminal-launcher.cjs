@@ -1,3 +1,4 @@
+const os = require('node:os')
 const fs = require('node:fs')
 const spawnChildProcess = require('cross-spawn')
 const platform = require('./platform/index.cjs')
@@ -5,7 +6,7 @@ const platform = require('./platform/index.cjs')
 function createTerminalLaunchPlan({
   command,
   args = [],
-  cwd = process.env.HOME || process.cwd(),
+  cwd = process.env.HOME || os.homedir() || process.cwd(),
   env = process.env,
   platform: platformName = process.platform,
   exists = fs.existsSync,
@@ -29,7 +30,7 @@ function launchCommandInTerminal(options = {}) {
   }
 
   const childProcess = spawnChildProcess(plan.command, plan.args, {
-    cwd: options.cwd || process.env.HOME || process.cwd(),
+    cwd: options.cwd || process.env.HOME || os.homedir() || process.cwd(),
     detached: true,
     env: options.env || process.env,
     stdio: 'ignore',

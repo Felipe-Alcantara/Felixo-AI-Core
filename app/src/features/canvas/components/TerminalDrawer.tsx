@@ -114,6 +114,8 @@ export function TerminalDrawer({
     })(),
   )
   const draggingRef = useRef(false)
+  const latestResizeClientXRef = useRef<number | null>(null)
+  const resizeFrameRef = useRef<number | null>(null)
   const [resizing, setResizing] = useState(false)
   const { closing, close } = useExitAnimation(DRAWER_EXIT_MS, onClose)
   const [pinned, setPinned] = useState(() => readPinnedPreference(localStorage))
@@ -276,18 +278,56 @@ export function TerminalDrawer({
   }, [])
 
   useEffect(() => {
+    const cancelResizeFrame = () => {
+      if (resizeFrameRef.current === null) {
+        return
+      }
+      if (typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(resizeFrameRef.current)
+      } else {
+        window.clearTimeout(resizeFrameRef.current)
+      }
+      resizeFrameRef.current = null
+    }
+
+    const applyResize = (clientX: number) => {
+      const next = window.innerWidth - clientX
+      // O provider negocia painel e gaveta numa passada só; aqui aplicamos
+      // apenas o piso/teto absoluto da própria gaveta para manter o arrasto
+      // responsivo e deixar a largura efetiva para o contexto compartilhado.
+      setWidth(clampDrawerWidth(next, window.innerWidth, MIN_WIDTH))
+    }
+
+    const flushResize = () => {
+      resizeFrameRef.current = null
+      if (!draggingRef.current || latestResizeClientXRef.current === null) {
+        return
+      }
+      applyResize(latestResizeClientXRef.current)
+    }
+
+    const scheduleResize = () => {
+      if (resizeFrameRef.current !== null) {
+        return
+      }
+      if (typeof window.requestAnimationFrame === 'function') {
+        resizeFrameRef.current = window.requestAnimationFrame(flushResize)
+      } else {
+        resizeFrameRef.current = window.setTimeout(flushResize, 0)
+      }
+    }
+
     const onMouseMove = (event: MouseEvent) => {
       if (!draggingRef.current) {
         return
       }
-      // Clampada só pelo próprio piso/teto absoluto (`clampDrawerWidth`, que
-      // não olha o painel) — a negociação com o painel acontece depois, no
-      // provider, a partir do que for reportado.
-      const next = window.innerWidth - event.clientX
-      setWidth(clampDrawerWidth(next, window.innerWidth, MIN_WIDTH))
+      latestResizeClientXRef.current = event.clientX
+      scheduleResize()
     }
     const onMouseUp = () => {
       if (draggingRef.current) {
+        cancelResizeFrame()
+        flushResize()
         // Persist on release only: writing on every mousemove would hit
         // localStorage once per frame.
         setWidth((current) => {
@@ -296,6 +336,7 @@ export function TerminalDrawer({
         })
       }
       draggingRef.current = false
+      latestResizeClientXRef.current = null
       setResizing(false)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
@@ -304,6 +345,8 @@ export function TerminalDrawer({
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
     return () => {
+      cancelResizeFrame()
+      latestResizeClientXRef.current = null
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
       if (draggingRef.current) {
@@ -317,7 +360,7 @@ export function TerminalDrawer({
   return (
     <div
       ref={containerRef}
-      className={`relative flex h-full flex-col border-l border-white/10 bg-[#0b0f14] ${
+      className={`felixo-terminal-drawer relative flex h-full flex-col border-l border-white/10 bg-[var(--f-core-black-surface)] ${
         closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
       }`}
       style={{
@@ -329,17 +372,17 @@ export function TerminalDrawer({
           : `${effectiveWidth}px`,
         // Animate the collapse/maximize toggles, but never the resize drag —
         // the edge must track the pointer 1:1.
-        transition: resizing ? undefined : 'width 560ms cubic-bezier(0.16,1,0.3,1)',
+        transition: resizing ? undefined : 'width 180ms cubic-bezier(0.16,1,0.3,1)',
       }}
     >
       {!collapsed && !maximized && (
         <div
           onMouseDown={onMouseDown}
-          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-emerald-500/40"
+          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--f-core-white)]/40"
         />
       )}
       <div
-        className={`flex items-center border-b border-white/10 py-2 text-sm text-zinc-200 ${
+        className={`felixo-terminal-drawer-header flex items-center border-b border-white/10 py-2 text-sm text-zinc-200 ${
           collapsed ? 'flex-col gap-2 px-1' : 'justify-between px-3'
         }`}
       >
@@ -349,7 +392,7 @@ export function TerminalDrawer({
           aria-label={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
           aria-expanded={!collapsed}
           title={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
-          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 transition-transform duration-500 hover:bg-white/10 hover:text-zinc-100"
+          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 transition-transform duration-150 hover:bg-white/10 hover:text-zinc-100"
         >
           {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
@@ -392,12 +435,12 @@ export function TerminalDrawer({
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${
                 snapshot?.activity === 'working'
-                  ? 'bg-sky-400'
+                  ? 'bg-[var(--f-core-active)]'
                   : snapshot?.activity === 'idle'
-                    ? 'bg-emerald-400'
+                    ? 'bg-[var(--f-core-active)]'
                     : snapshot?.activity === 'exited'
                       ? 'bg-zinc-600'
-                      : 'bg-amber-400'
+                      : 'bg-[var(--color-warning)]'
               }`}
               title={snapshot?.activity ?? ''}
             />
@@ -459,7 +502,7 @@ export function TerminalDrawer({
             type="button"
             onClick={togglePinned}
             className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
-              pinned ? 'text-emerald-400 hover:text-emerald-300' : 'text-zinc-400 hover:text-zinc-100'
+              pinned ? 'text-[var(--f-core-white-soft)] hover:text-[var(--f-core-white-soft)]' : 'text-zinc-400 hover:text-zinc-100'
             }`}
             aria-label={pinned ? 'Desafixar terminal' : 'Fixar terminal'}
             title={pinned ? 'Desafixar (fecha ao clicar fora)' : 'Fixar (mantém aberto ao clicar fora)'}
@@ -478,27 +521,27 @@ export function TerminalDrawer({
         </div>
       </div>
       {!collapsed && snapshot?.message && (
-        <div className="border-b border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-[var(--color-error)]">
           {snapshot.message}
         </div>
       )}
       {!collapsed && snapshot?.contextWarning && (
-        <div className="border-b border-amber-500/20 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-[var(--color-warning)]">
           {snapshot.contextWarning}
         </div>
       )}
       {!collapsed && scrollbackNotice && (
-        <div role="status" className="border-b border-amber-500/20 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+        <div role="status" className="border-b border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-[var(--color-warning)]">
           {scrollbackNotice}
         </div>
       )}
       {!collapsed && handoffError && (
-        <div className="border-b border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-[var(--color-error)]">
           {handoffError}
         </div>
       )}
       {!collapsed && previewError && (
-        <div className="border-b border-red-500/20 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-[var(--color-error)]">
           {previewError}
         </div>
       )}

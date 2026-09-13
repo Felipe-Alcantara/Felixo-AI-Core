@@ -26,6 +26,7 @@ import {
 import type { SkillActivationResult } from './tools/SkillsPanel'
 import type { CanvasSkill } from '../types'
 import type { RunFileOptions } from '../services/run-file-command'
+import { TOOL_LABELS } from './tools/canvas-tool-labels'
 
 type CanvasToolPanelsProps = {
   activeTool: CanvasTool | null
@@ -52,22 +53,6 @@ type CanvasToolPanelsProps = {
   onPromptSaved: (prompt: string) => void
   onBootstrapSaved: (prompt: string) => void
   onQualityStandardSaved: (value: { prompt: string; enabled: boolean }) => void
-}
-
-const TOOL_LABELS: Record<CanvasTool, string> = {
-  search: 'Busca',
-  projects: 'Projetos',
-  notes: 'Notas',
-  models: 'Modelos',
-  prompts: 'Prompts',
-  skills: 'Skills',
-  git: 'Git',
-  fetchAll: 'Fetch All',
-  notionTasks: 'Tarefas Notion',
-  agentUsage: 'Limites e uso',
-  orchestrator: 'Orquestrador',
-  qaLogger: 'QA Logger',
-  settings: 'Configurações',
 }
 
 type ToolPanelFallbackProps = {

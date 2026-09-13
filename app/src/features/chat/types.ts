@@ -216,3 +216,11 @@ export type GitProjectSummary = {
   isClean: boolean
   error?: string
 }
+
+/** Result of `git:get-file-diff` — see getFileDiff() in git-service.cjs. */
+export type GitFileDiff = {
+  path: string
+  staged: boolean
+  untracked: boolean
+  diff: string
+}

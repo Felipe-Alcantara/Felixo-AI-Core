@@ -4,9 +4,9 @@ import type { CliSetupPresentation } from './cli-setup-presentation'
 
 const TONE_TEXT: Record<CliSetupPresentation['tone'], string> = {
   neutral: 'text-slate-300',
-  info: 'text-sky-300',
-  success: 'text-emerald-300',
-  error: 'text-rose-300',
+  info: 'text-[var(--f-core-white-soft)]',
+  success: 'text-[var(--f-core-white-soft)]',
+  error: 'text-[var(--color-error)]',
 }
 
 /**
@@ -107,7 +107,7 @@ export function CliSetupToast() {
               aria-valuemax={100}
             >
               <div
-                className="h-full rounded-full bg-sky-400 transition-[width] duration-300"
+                className="h-full rounded-full bg-[var(--f-core-active)] transition-[width] duration-300"
                 style={{ width: `${presentation.progress}%` }}
               />
             </div>
@@ -118,7 +118,7 @@ export function CliSetupToast() {
               <button
                 type="button"
                 onClick={retry}
-                className="rounded-md bg-sky-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-sky-400"
+                className="rounded-md bg-[var(--f-core-white)]/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-[var(--f-core-active)]"
               >
                 Tentar de novo
               </button>

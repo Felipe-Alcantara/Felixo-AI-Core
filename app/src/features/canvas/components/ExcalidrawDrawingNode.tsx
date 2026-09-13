@@ -62,7 +62,7 @@ function ExcalidrawDrawingNodeComponent({ id, data, selected }: NodeProps) {
   )
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-zinc-700 bg-white shadow-xl">
+    <div className="felixo-canvas-card felixo-canvas-card-excalidraw flex h-full w-full flex-col overflow-hidden rounded-lg border border-zinc-700 bg-white shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={360}

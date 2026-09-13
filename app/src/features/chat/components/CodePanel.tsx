@@ -218,7 +218,7 @@ export function CodePanel({
               value={selectedProject?.path ?? ''}
               onChange={(event) => setSelectedProjectPath(event.target.value)}
               disabled={projectOptions.length === 0}
-              className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-violet-200/30 disabled:cursor-not-allowed disabled:text-zinc-600"
+              className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25 disabled:cursor-not-allowed disabled:text-zinc-600"
             >
               {projectOptions.length === 0 ? (
                 <option value="">Nenhum projeto</option>
@@ -272,7 +272,7 @@ export function CodePanel({
               value={commitMessage}
               onChange={(event) => setCommitMessage(event.target.value)}
               placeholder="Mensagem do commit"
-              className="h-10 min-w-0 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+              className="h-10 min-w-0 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
             />
 
             <button

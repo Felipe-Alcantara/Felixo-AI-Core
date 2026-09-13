@@ -1,0 +1,13 @@
+:root {
+  --felixo-black: #090909;
+  --felixo-surface: #0F0F10;
+  --felixo-surface-2: #161617;
+  --felixo-border: #2A2A2E;
+  --felixo-white: #FFFFFF;
+  --felixo-text-muted: #A1A1A1;
+  --felixo-text-subtle: #6F6F74;
+  --felixo-glow: rgba(255,255,255,.18);
+  --felixo-radius-sm: 8px;
+  --felixo-radius-md: 12px;
+  --felixo-radius-lg: 18px;
+}

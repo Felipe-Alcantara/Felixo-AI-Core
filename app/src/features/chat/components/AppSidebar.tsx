@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  Bot,
-  BrainCircuit,
+import {  BrainCircuit,
   ChevronDown,
   Code2,
   Download,
   Gauge,
   Folder,
-  GitBranch,
-  MessageSquare,
-  Network,
+  GitBranch,  Network,
   PanelLeft,
   Plus,
   Search,
@@ -20,6 +16,8 @@ import {
   Trash2,
   User,
 } from 'lucide-react'
+import { CliMark } from '../../shared/brand/CliMark'
+import { cliVendor } from '../../shared/brand/cli-vendor'
 import type { ChatSession, Model, Project } from '../types'
 import { SearchPanel } from './SearchPanel'
 
@@ -227,7 +225,7 @@ export function AppSidebar({
                     type="button"
                     onClick={() => onToggleProject(project)}
                     title={project.path}
-                    className="felixo-btn flex h-6 w-full items-center gap-1.5 rounded-md bg-amber-500/15 px-1.5 text-left text-[11px] text-amber-300"
+                    className="felixo-btn flex h-6 w-full items-center gap-1.5 rounded-md bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 text-left text-[11px] text-[var(--color-warning)]"
                   >
                     <GitBranch size={11} className="shrink-0" aria-hidden="true" />
                     <span className="truncate">{project.name}</span>
@@ -252,7 +250,7 @@ export function AppSidebar({
                       className={[
                         'felixo-btn flex h-6 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px]',
                         activeProjectIds.has(project.id)
-                          ? 'bg-amber-500/15 text-amber-300'
+                          ? 'bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]'
                           : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
                       ].join(' ')}
                     >
@@ -334,29 +332,18 @@ export function AppSidebar({
             )}
           </div>
           <div className="space-y-1">
-            {sessions.length === 0 ? (
-              <div className="px-1.5 py-1 text-[11px] text-zinc-600">
-                Nenhum histórico ainda
-              </div>
-            ) : (
+            {sessions.length === 0 ? null : (
               sessions.slice(0, 5).map((session) => (
                 <button
                   key={session.id}
                   type="button"
                   onClick={() => onSelectSession(session)}
                   title={session.title}
-                  className="felixo-btn flex min-h-8 w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-100"
+                  className="felixo-btn felixo-sidebar-session"
                 >
-                  <MessageSquare
-                    size={13}
-                    aria-hidden="true"
-                    className="mt-0.5 shrink-0"
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate">{session.title}</span>
-                    <span className="block truncate text-[10px] text-zinc-600">
-                      {formatSessionDate(session.updatedAt)}
-                    </span>
+                  <span className="felixo-sidebar-session-title">{session.title}</span>
+                  <span className="felixo-sidebar-session-time">
+                    {formatSessionDate(session.updatedAt)}
                   </span>
                 </button>
               ))
@@ -366,7 +353,7 @@ export function AppSidebar({
 
         <div className="mt-5 px-4 max-xl:px-3">
           <div className="mb-2 flex items-center justify-between text-[11px] text-zinc-500">
-            <span>Modelos</span>
+            <span>Modelos / Providers</span>
             <button
               type="button"
               title="Configurar modelos"
@@ -379,28 +366,27 @@ export function AppSidebar({
           </div>
           <div className="space-y-1">
             {models.map((model) => (
-              <div
-                key={model.id}
-                className="group flex min-h-8 w-full items-center gap-1 rounded-lg text-[12px] text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-100"
-              >
+              <div key={model.id} className="felixo-sidebar-model group">
                 <button
                   type="button"
                   onClick={() => onOpenModelSettingsFor(model.id)}
-                  className="felixo-btn flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                  title={`${model.name} — ${model.source}`}
+                  className="felixo-btn felixo-sidebar-model-main"
                 >
-                  <Bot size={13} aria-hidden="true" className="shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block truncate">{model.name}</span>
-                    <span className="block truncate text-[10px] text-zinc-500">
-                      {model.source}
-                    </span>
+                  <CliMark cliType={model.cliType} size={15} />
+                  <span className="felixo-sidebar-model-text">
+                    <span className="felixo-sidebar-model-name">{model.name}</span>
+                    {cliVendor(model.cliType) && (
+                      <span className="felixo-sidebar-model-vendor">{cliVendor(model.cliType)}</span>
+                    )}
                   </span>
+                  <span className="felixo-status-dot" aria-hidden />
                 </button>
                 <button
                   type="button"
                   title={`Remover ${model.name}`}
                   onClick={() => onRemoveModel(model)}
-                  className="felixo-btn-icon mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-600 opacity-0 hover:bg-theme-error/10 hover:text-theme-error group-hover:opacity-100 focus:opacity-100"
+                  className="felixo-btn-icon felixo-sidebar-model-remove"
                 >
                   <Trash2 size={12} aria-hidden="true" />
                   <span className="sr-only">Remover {model.name}</span>

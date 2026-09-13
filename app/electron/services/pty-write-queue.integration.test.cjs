@@ -30,6 +30,7 @@ const TEMPO_LIMITE_MS = 15_000
 // vem logo depois como fallback para versões do console que consomem Ctrl-Z;
 // POSIX mantém Ctrl-D no modo canônico, que é o EOF nativo esperado pelo shell.
 const MARCADOR_DE_EOF_WINDOWS = '__FELIXO_EOF__'
+const MARCADOR_DE_PRONTO = '__FELIXO_PRONTO__'
 const FIM_DE_ENTRADA =
   process.platform === 'win32'
     ? `\u001a\r${MARCADOR_DE_EOF_WINDOWS}\r`
@@ -60,6 +61,7 @@ const fs = require('node:fs')
 
 const destino = process.argv[2]
 const MARCADOR_DE_EOF_WINDOWS = '__FELIXO_EOF__'
+const MARCADOR_DE_PRONTO = '__FELIXO_PRONTO__'
 let entrada = ''
 let finalizado = false
 
@@ -89,6 +91,14 @@ if (
 ) {
   process.stdin.setRawMode(true)
 }
+// Anuncia prontidao ANTES de escutar. No Windows isto nao e cosmetico: o
+// ConPTY so passa a entregar stdin a um filho depois que esse filho escreve
+// no console. Um coletor silencioso — que so grava em arquivo — nunca
+// recebia nada e a sessao ficava pendurada ate o timeout. Shells e CLIs de
+// verdade nao sofrem disso porque imprimem prompt ou banner na largada, o
+// que e exatamente por que o app funciona e so esta fixture quebrava.
+// Em POSIX a escrita e inofensiva: o teste confere o arquivo, nao a saida.
+process.stdout.write(MARCADOR_DE_PRONTO + String.fromCharCode(13, 10))
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (dados) => {
   const texto = String(dados)
@@ -155,6 +165,29 @@ function esperarSaida(saida, identificador) {
   return Promise.race([saida, limite]).finally(() => clearTimeout(timer))
 }
 
+/**
+ * Espera o coletor anunciar que ja escreveu no console e esta escutando.
+ *
+ * Um timeout aqui e diagnostico, nao ruido: significa que o filho nasceu mas
+ * nunca chegou a escutar, que e um defeito diferente de "recebeu a carga
+ * errada" e merece uma mensagem propria.
+ */
+function esperarProntidao(pronto, identificador) {
+  let timer
+  const limite = new Promise((_, rejeitar) => {
+    timer = setTimeout(() => {
+      rejeitar(
+        new Error(
+          `[PTY nativa] ${identificador} nao sinalizou prontidao em ${TEMPO_LIMITE_MS} ms ` +
+            `no runner ${process.platform}`,
+        ),
+      )
+    }, TEMPO_LIMITE_MS)
+  })
+
+  return Promise.race([pronto, limite]).finally(() => clearTimeout(timer))
+}
+
 async function removerDiretorioTemporario(diretorio) {
   const errosRepetiveis = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY'])
   const tentativas = process.platform === 'win32' ? 20 : 1
@@ -184,6 +217,15 @@ async function executarColeta({ nomeSessao, payload, depois }) {
   const encerrou = new Promise((resolver) => {
     resolverSaida = resolver
   })
+  // O coletor avisa que ja escreveu no console e esta escutando. Esperar por
+  // esse aviso, em vez de escrever logo apos o spawn, elimina a corrida de
+  // inicializacao: no Windows o ConPTY so entrega stdin a um filho depois que
+  // ele produz saida, e escrever antes disso faz a carga se perder.
+  let resolverPronto
+  const pronto = new Promise((resolver) => {
+    resolverPronto = resolver
+  })
+  let saidaAcumulada = ''
 
   try {
     try {
@@ -194,6 +236,10 @@ async function executarColeta({ nomeSessao, payload, depois }) {
         cols: 120,
         rows: 30,
         onExit: resolverSaida,
+        onData: (dados) => {
+          saidaAcumulada += String(dados)
+          if (saidaAcumulada.includes(MARCADOR_DE_PRONTO)) resolverPronto()
+        },
       })
     } catch (error) {
       const detalhe = error instanceof Error ? error.message : String(error)
@@ -203,6 +249,7 @@ async function executarColeta({ nomeSessao, payload, depois }) {
       )
     }
 
+    await esperarProntidao(pronto, nomeSessao)
     assert.equal(manager.write(nomeSessao, payload), true)
     if (depois) {
       assert.equal(manager.write(nomeSessao, depois), true)

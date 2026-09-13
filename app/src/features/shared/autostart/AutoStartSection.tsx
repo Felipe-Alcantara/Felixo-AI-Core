@@ -82,7 +82,7 @@ export function AutoStartSection() {
         </p>
       )}
       {message && (
-        <p className="mt-2 text-[11px] leading-relaxed text-amber-300">{message}</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-warning)]">{message}</p>
       )}
     </section>
   )

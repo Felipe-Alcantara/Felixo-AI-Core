@@ -177,7 +177,10 @@ describe('cli-detector', () => {
     assert.equal(result.detected, true)
     // Citado entre aspas: é isto que evita o `cmd.exe` cortar o comando no
     // primeiro espaço do caminho (ver o teste abaixo com usuário "com espaço").
-    assert.equal(calls[0].command, '"C:\\Users\\me\\npm\\codex.cmd"')
+    assert.equal(calls[0].command, '"C:\\Users\\me\\npm\\codex.cmd" --version')
+    // Com shell a flag vai na linha de comando e o array fica vazio: e o que
+    // evita o DEP0190 sem mudar o comando que o cmd.exe de fato recebe.
+    assert.deepEqual(calls[0].args, [])
     assert.equal(calls[0].options.shell, true)
     assert.equal(result.version, '1.2.3')
   })
@@ -196,7 +199,7 @@ describe('cli-detector', () => {
     // o primeiro espaço — o resto vira argumento solto, e o comando não bate
     // com nada executável.
     const cmdExeFake = async (command) => {
-      if (command !== `"${caminhoComEspaco}"`) {
+      if (command !== `"${caminhoComEspaco}" --version`) {
         throw new Error(`comando não reconhecido: ${command}`)
       }
       return { stdout: '2.1.258 (Claude Code)' }

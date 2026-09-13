@@ -9,7 +9,7 @@ export function highlight(text: string, query: string): ReactNode {
   return (
     <>
       {text.slice(0, index)}
-      <mark className="bg-amber-400/30 text-inherit rounded-sm">
+      <mark className="bg-[color-mix(in_srgb,var(--color-warning)_34%,transparent)] text-inherit rounded-sm">
         {text.slice(index, index + query.length)}
       </mark>
       {text.slice(index + query.length)}

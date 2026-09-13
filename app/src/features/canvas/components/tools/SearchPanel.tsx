@@ -101,7 +101,7 @@ export function SearchPanel({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Buscar blocos por título, arquivo, nota ou comando…"
-        className="mb-3 w-full rounded border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-sky-500/50"
+        className="mb-3 w-full rounded border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-white/10"
       />
 
       {query.trim() && hits.length === 0 && (

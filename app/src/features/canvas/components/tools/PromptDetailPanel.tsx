@@ -91,7 +91,7 @@ export function PromptDetailPanel({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-sky-500/50"
+            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-white/25"
           />
         </label>
 
@@ -101,7 +101,7 @@ export function PromptDetailPanel({
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Descrição curta…"
-            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300 outline-none placeholder:text-zinc-600 focus:ring-1 focus:ring-sky-500/50"
+            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300 outline-none placeholder:text-zinc-600 focus:ring-1 focus:ring-white/25"
           />
         </label>
 
@@ -110,7 +110,7 @@ export function PromptDetailPanel({
           <select
             value={scope}
             onChange={(event) => setScope(event.target.value as AutomationScope)}
-            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-sky-500/50"
+            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-white/25"
           >
             {SCOPES.map((option) => (
               <option key={option} value={option}>
@@ -126,7 +126,7 @@ export function PromptDetailPanel({
             value={text}
             onChange={(event) => setText(event.target.value)}
             rows={18}
-            className="mt-1 min-h-[20rem] flex-1 resize-y rounded bg-zinc-800/60 p-2 font-mono text-xs leading-relaxed text-zinc-200 outline-none focus:ring-1 focus:ring-sky-500/50"
+            className="mt-1 min-h-[20rem] flex-1 resize-y rounded bg-zinc-800/60 p-2 font-mono text-xs leading-relaxed text-zinc-200 outline-none focus:ring-1 focus:ring-white/25"
           />
         </label>
 
@@ -138,7 +138,7 @@ export function PromptDetailPanel({
       </div>
 
       {isDirty && (
-        <div className="-mx-3 flex items-center justify-end gap-2 border-t border-white/10 bg-amber-500/[0.06] px-3 py-2">
+        <div className="-mx-3 flex items-center justify-end gap-2 border-t border-white/10 bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-3 py-2">
           <button
             type="button"
             onClick={cancelDraft}
@@ -149,7 +149,7 @@ export function PromptDetailPanel({
           <button
             type="button"
             onClick={saveDraft}
-            className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
+            className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16]"
           >
             <Check size={13} />
             Salvar
@@ -177,7 +177,7 @@ export function PromptDetailPanel({
               ? 'Salve ou cancele as edições pendentes antes de inserir'
               : 'Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)'
           }
-          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-700"
+          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.16]"
         >
           {justSaved ? (
             <>

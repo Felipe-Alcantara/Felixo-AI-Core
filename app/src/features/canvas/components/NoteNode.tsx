@@ -35,7 +35,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div
-      className={`flex h-full w-full flex-col overflow-hidden rounded-lg border shadow-xl ${theme.container}`}
+      className={`felixo-canvas-card felixo-canvas-card-note flex h-full w-full flex-col overflow-hidden rounded-lg border shadow-xl ${theme.container}`}
     >
       <NodeResizer
         isVisible={selected}

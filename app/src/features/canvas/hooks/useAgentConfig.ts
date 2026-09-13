@@ -32,6 +32,11 @@ import {
 
 export type AgentConfigProject = { id: string; name: string; path: string }
 
+type UseAgentConfigOptions = {
+  /** Persiste alterações enquanto o formulário é preenchido. */
+  persistPreferences?: boolean
+}
+
 /** Sentinel do select de projeto que dispara o seletor de pasta. */
 export const ADD_FOLDER_VALUE = '__add_folder__'
 
@@ -48,7 +53,10 @@ type OpeniaLoadResult = {
  * para outro agente. Enquanto isso morava só no `TerminalMenu`, o segundo caso
  * não tinha como oferecer as mesmas opções sem copiar o formulário inteiro.
  */
-export function useAgentConfig(projects: readonly AgentConfigProject[]) {
+export function useAgentConfig(
+  projects: readonly AgentConfigProject[],
+  { persistPreferences = true }: UseAgentConfigOptions = {},
+) {
   const [inicial] = useState(readAgentLaunchPreferences)
   const [agentValue, setAgentValue] = useState<AgentLaunchPreferences['agentValue']>(
     inicial.agentValue,
@@ -569,7 +577,34 @@ export function useAgentConfig(projects: readonly AgentConfigProject[]) {
       openiaModel: openiaModelRef.current,
       accountId: accountIdRef.current,
     })
-  }, [agentValue, effort, model, planningFile, projectId, yolo])
+  }, [
+    agentValue,
+    effort,
+    model,
+    planningFile,
+    projectId,
+    yolo,
+  ])
+
+  // A configuração do botão principal acompanha a última escolha feita no
+  // formulário, mesmo quando a pessoa apenas fecha o painel sem iniciar um
+  // terminal. O nome fica de fora de propósito: ele é uma identificação
+  // pontual do próximo node, não uma preferência global.
+  useEffect(() => {
+    if (!persistPreferences) return
+    savePreferences()
+  }, [
+    accountId,
+    effort,
+    model,
+    openiaInterfaceKey,
+    openiaModel,
+    persistPreferences,
+    planningFile,
+    projectId,
+    savePreferences,
+    yolo,
+  ])
 
   /** Traduz a configuração atual nas opções de abertura de um terminal. */
   const buildOptions = useCallback((): NewTerminalOptions => {

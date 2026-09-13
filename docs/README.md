@@ -17,6 +17,11 @@ compatibilidade com histórico legado.
 | [projeto/ROADMAP.md](projeto/ROADMAP.md) | Direção e próximos passos. |
 | [projeto/POLITICA-VERSIONAMENTO.md](projeto/POLITICA-VERSIONAMENTO.md) | Política de branches e commits do projeto. |
 | [projeto/RODAR-VIA-CODIGO-FONTE.md](projeto/RODAR-VIA-CODIGO-FONTE.md) | Como rodar o app a partir do código-fonte. |
+| [design/BRAND-SYSTEM.md](design/BRAND-SYSTEM.md) | Tokens e princípios visuais do Felixo AI Core. |
+| [design/NODES.md](design/NODES.md) | Padrão compartilhado dos nodes e handles. |
+| [design/CONNECTIONS.md](design/CONNECTIONS.md) | Estados e regra de evidência das rotas. |
+| [design/MOTION.md](design/MOTION.md) | Motion, hover, foco e reduced motion. |
+| [performance/PERFORMANCE.md](performance/PERFORMANCE.md) | Auditoria, medições e guardrails de performance do Canvas, terminal e bundle. |
 | [guias/GUIA-DESENVOLVEDOR.md](guias/GUIA-DESENVOLVEDOR.md) | Guia para desenvolvedores. |
 | [guias/GUIA-USUARIO.md](guias/GUIA-USUARIO.md) | Guia de instalação e uso para o usuário final. |
 | [AUDITORIA-2026-08-08.md](AUDITORIA-2026-08-08.md) | Auditoria histórica de código e segurança; os achados refletem a fotografia daquela data. |

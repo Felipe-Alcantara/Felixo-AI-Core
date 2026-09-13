@@ -198,6 +198,11 @@ app.on('open-file', (event, filePath) => {
 const cliArg = process.argv.find((arg) => SUPPORTED_EXTENSIONS.has(path.extname(arg).toLowerCase()))
 if (cliArg) pendingFilePath = cliArg
 
+function resolveRuntimeAppVersion() {
+  const developmentVersion = process.env.FELIXO_APP_VERSION?.trim()
+  return !app.isPackaged && developmentVersion ? developmentVersion : app.getVersion()
+}
+
 app.whenReady().then(async () => {
   if (isReleaseSmoke) {
     try {
@@ -446,7 +451,7 @@ app.whenReady().then(async () => {
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
-    appVersion: app.getVersion(),
+    appVersion: resolveRuntimeAppVersion(),
     isPackaged: app.isPackaged,
   })
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
@@ -457,7 +462,7 @@ app.whenReady().then(async () => {
 
   // Expõe a versão empacotada (definida pelo CI no release, não no
   // package.json versionado) para a interface conseguir mostrá-la.
-  ipcMain.handle('app:get-version', () => app.getVersion())
+  ipcMain.handle('app:get-version', () => resolveRuntimeAppVersion())
 
   ipcMain.handle('file:get-pending', () => {
     const filePath = pendingFilePath

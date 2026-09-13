@@ -1,6 +1,5 @@
 import {
   Fragment,
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -8,7 +7,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import type { Node } from '@xyflow/react'
-import { useCanvasSurfaces } from '../../hooks/canvas-surfaces-context'
 import {
   ChevronDown,
   ChevronUp,
@@ -32,6 +30,8 @@ import {
 import { toSubmittedTerminalText } from '../../terminal/terminal-input'
 import type { SessionActivity } from '../../terminal/terminal-session-store'
 import type { CanvasNodeData, CanvasNodeType } from '../../types'
+import { useCanvasSurfaces } from '../../hooks/canvas-surfaces-context'
+import { INSPECTOR_WIDTH } from '../../services/canvas-surfaces'
 import { nextActiveIndex, shouldHandleGlobalShiftArrow } from './terminals-panel-navigation'
 import { pendingDraftNodeIds, type TerminalDrafts } from './terminals-panel-drafts'
 import {
@@ -50,6 +50,7 @@ import {
   readDockCollapsed,
   writeDockCollapsed,
 } from './terminals-panel-collapse'
+import { ProviderMark } from '../../../shared/brand/ProviderMark'
 
 type TerminalsPanelProps = {
   nodes: Node<CanvasNodeData>[]
@@ -69,12 +70,12 @@ type TerminalsPanelProps = {
 }
 
 const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
-  starting: 'bg-amber-400',
-  working: 'bg-sky-400',
-  waiting_approval: 'bg-amber-400',
-  idle: 'bg-emerald-400',
-  exited: 'bg-zinc-600',
-  error: 'bg-red-400',
+  starting: 'bg-[var(--f-core-secondary)]',
+  working: 'bg-[var(--f-core-active)]',
+  waiting_approval: 'bg-[var(--color-warning)]',
+  idle: 'bg-[var(--f-core-structural)]',
+  exited: 'bg-[var(--f-core-structural)]',
+  error: 'bg-[var(--color-error)]',
 }
 
 const TYPE_ICON: Record<CanvasNodeType, typeof TerminalIcon> = {
@@ -103,8 +104,9 @@ function elementTitle(node: Node<CanvasNodeData>) {
  * Fixed, always-on dock (not a toggleable tool panel) listing every block
  * currently on the canvas — terminais, notas, arquivos e grupos —, grouped
  * visually by working folder and numbered in the user's own flat order —
- * matches the "#N" badge shown on each terminal's header. Renders nothing when
- * the canvas is empty.
+ * matches the "#N" badge shown on each terminal's header. When the canvas is
+ * empty it stays visible as a calm inspector state, keeping the workspace
+ * frame stable instead of making the canvas jump sideways.
  *
  * Clicking a row centers it on the canvas and, for terminals, opens the side
  * drawer ready to type (other block types already show their content inline
@@ -378,38 +380,16 @@ export function TerminalsPanel({
     moveActiveRef.current = moveActive
   })
 
-  const [dockElement, setDockElement] = useState<HTMLDivElement | null>(null)
-  const dockRef = useCallback((node: HTMLDivElement | null) => {
-    setDockElement(node)
-  }, [])
-
-  const { reportDockTop } = useCanvasSurfaces()
-
+  // O inspector é permanente e de largura fixa (nunca medido por
+  // ResizeObserver como o dock antigo era): só reporta 0 (puck, não reserva
+  // nada) ou INSPECTOR_WIDTH (expandido) pra quem precisa saber quanto o
+  // canvas livre, o Mini Map e o painel de ferramenta encolhem por causa
+  // dele — mesmo canal que a gaveta do terminal já usa (`reportDrawerWidth`).
+  const { reportInspectorWidth } = useCanvasSurfaces()
   useEffect(() => {
-    if (elements.length === 0 || !dockElement) {
-      // Sem dock não há piso: o painel da esquerda volta a usar a tela toda,
-      // e a altura derivada (`dockHeight` no provider) some junto.
-      reportDockTop(Number.POSITIVE_INFINITY)
-      return
-    }
-
-    // O topo do dock é a única medida publicada — a altura que outras
-    // superfícies precisam reservar (notificações, posicionamento de node)
-    // é derivada dele (`viewport.height - dockTop`) no próprio provider, em
-    // vez de um segundo `ResizeObserver` medindo a mesma coisa por um canal
-    // separado.
-    const publicar = () => reportDockTop(dockElement.getBoundingClientRect().top)
-
-    publicar()
-    const observer = new ResizeObserver(publicar)
-    observer.observe(dockElement)
-    window.addEventListener('resize', publicar)
-
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', publicar)
-    }
-  }, [elements.length, dockElement, reportDockTop])
+    reportInspectorWidth(collapsed ? 0 : INSPECTOR_WIDTH)
+    return () => reportInspectorWidth(0)
+  }, [collapsed, reportInspectorWidth])
 
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
@@ -451,10 +431,6 @@ export function TerminalsPanel({
     return new Map(moved.map((node, index) => [node.id, index]))
   }, [drag, dockRows, elements])
 
-  if (elements.length === 0) {
-    return null
-  }
-
   const commitActive = () => {
     const active = elements[activeIndex]
     if (active) {
@@ -466,9 +442,8 @@ export function TerminalsPanel({
     // The wrapper is only an anchor: it never eats canvas clicks, and each of
     // the two states re-enables pointer events for itself while visible.
     <div
-      ref={dockRef}
       data-terminals-dock
-      className="pointer-events-none absolute bottom-4 right-4 z-20"
+      className="pointer-events-none absolute bottom-7 right-0 top-12 z-20"
     >
       {/* Collapsed, the dock shrinks away into this puck in the corner. Both
           states share the same bottom-right anchor, so the scale animation
@@ -481,7 +456,7 @@ export function TerminalsPanel({
         aria-expanded={false}
         aria-hidden={!collapsed}
         tabIndex={collapsed ? 0 : -1}
-        className={`felixo-btn felixo-anim-corner-puck absolute bottom-0 right-0 flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 shadow-2xl hover:bg-zinc-800 ${
+        className={`felixo-btn felixo-anim-corner-puck absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 shadow-2xl hover:bg-zinc-800 ${
           collapsed ? 'felixo-anim-corner-puck-shown' : 'felixo-anim-corner-puck-hidden'
         }`}
       >
@@ -492,7 +467,7 @@ export function TerminalsPanel({
 
       <div
         inert={collapsed}
-        className={`felixo-anim-corner-dock flex max-h-[60vh] w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 shadow-2xl ${
+        className={`felixo-elements-inspector felixo-anim-corner-dock flex h-full w-72 max-w-[calc(100vw-3.25rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl ${
           collapsed
             ? 'felixo-anim-corner-dock-collapsed'
             : 'felixo-anim-corner-dock-expanded'
@@ -527,7 +502,7 @@ export function TerminalsPanel({
           aria-label="Alternar modo de enviar mensagens em massa"
           aria-pressed={composeMode}
           className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
-            composeMode ? 'text-emerald-400' : 'text-zinc-400'
+            composeMode ? 'text-[var(--f-core-active)]' : 'text-zinc-400'
           }`}
         >
           <MessagesSquare size={14} />
@@ -539,7 +514,7 @@ export function TerminalsPanel({
             type="button"
             onClick={sendAllDrafts}
             disabled={pendingIds.length === 0}
-            className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:opacity-50"
+            className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded felixo-primary-action px-2 py-1.5 text-xs font-medium text-white  disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:opacity-50"
           >
             <Send size={12} />
             Enviar para todos {pendingIds.length > 0 ? `(${pendingIds.length})` : ''}
@@ -567,13 +542,18 @@ export function TerminalsPanel({
             commitActive()
           }
         }}
-        className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-emerald-500/50 ${
+        className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/40 ${
           // The stagger plays as the dock unfolds; while a row is being dragged
           // it must not re-run and fight the drag's own transform.
           collapsed || drag ? '' : 'felixo-anim-stagger-list'
         }`}
       >
-        {dockGroups.map((group) => (
+        {dockGroups.length === 0 ? (
+          <li className="felixo-inspector-empty">
+            <span>Canvas livre</span>
+            <p>Crie um agente, arquivo ou grupo para começar a organizar seu fluxo.</p>
+          </li>
+        ) : dockGroups.map((group) => (
           <Fragment key={`repository-${group.key || 'none'}`}>
             {showRepositoryHeaders && (
               <RepositoryHeading
@@ -704,8 +684,8 @@ function ElementRow({
         dragging
           ? // No transition on the dragged row: it must track the pointer
             // 1:1, while the rows making room animate into place.
-            'relative z-10 bg-zinc-800 shadow-lg ring-1 ring-emerald-500/40'
-          : 'transition-transform duration-[280ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+            'relative z-10 bg-zinc-800 shadow-lg ring-1 ring-white/25'
+          : 'transition-transform duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
       }`}
     >
       <div className="flex items-start">
@@ -727,19 +707,26 @@ function ElementRow({
           onClick={onSelect}
           title={elementTitle(node)}
           className={`felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
-            active ? 'bg-white/10' : ''
+            active ? 'felixo-inspector-row-active bg-white/10' : ''
           }`}
         >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-black/30 text-[10px] font-semibold tabular-nums text-emerald-300">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-black/30 text-[10px] font-semibold tabular-nums text-[var(--f-core-white-soft)]">
             {index}
           </span>
-          <Icon size={13} className="mt-0.5 shrink-0 text-zinc-400" />
+          {isTerminal ? (
+            <ProviderMark
+              command={(node.data as CanvasNodeData & { command?: string }).command}
+              size={14}
+            />
+          ) : (
+            <Icon size={13} className="mt-0.5 shrink-0 text-zinc-400" />
+          )}
           <span className="min-w-0 flex-1 whitespace-normal break-words text-sm text-zinc-100">
             {elementTitle(node)}
           </span>
           {isTerminal &&
             (activity === 'working' ? (
-              <Loader2 size={11} className="mt-0.5 shrink-0 animate-spin text-sky-400" />
+              <Loader2 size={11} className="mt-0.5 shrink-0 animate-spin text-[var(--f-core-white-soft)]" />
             ) : (
               <span
                 className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${ACTIVITY_DOT_CLASS[activity]}`}
@@ -791,7 +778,7 @@ function RowComposer({
         onClick={(event) => event.stopPropagation()}
         placeholder="Mensagem para este terminal…"
         aria-label={`Mensagem para "${terminalTitle}"`}
-        className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-emerald-500/50"
+        className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-white/40"
       />
       <button
         type="button"
@@ -802,7 +789,7 @@ function RowComposer({
         disabled={!draft.trim()}
         title="Enviar"
         aria-label={`Enviar mensagem para "${terminalTitle}"`}
-        className="felixo-btn-icon shrink-0 rounded bg-emerald-700 p-1 text-white hover:bg-emerald-600 disabled:opacity-40"
+        className="felixo-btn-icon shrink-0 rounded felixo-primary-action p-1 text-white  disabled:opacity-40"
       >
         <Send size={12} />
       </button>

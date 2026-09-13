@@ -4,6 +4,9 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 const {
+  criarCaminhoDeArquivoQueEscapa,
+} = require('../__fixtures__/link-fixtures.cjs')
+const {
   createAttachmentFileName,
   registerFileAttachmentIpcHandlers,
   readImageAttachment,
@@ -111,11 +114,7 @@ test('readImageAttachment rejects an image outside the app attachment directory'
 })
 
 test('readImageAttachment rejects a symlink from the attachment directory to outside', async (t) => {
-  if (process.platform === 'win32') {
-    t.skip('Criacao de symlink pode exigir privilegio adicional no Windows.')
-    return
-  }
-
+  // Sem skip por plataforma: ver electron/__fixtures__/link-fixtures.cjs.
   const attachmentDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'felixo-attachment-symlink-'),
   )
@@ -128,9 +127,16 @@ test('readImageAttachment rejects a symlink from the attachment directory to out
   ]))
 
   const outsidePath = path.join(outsideDir, 'private.png')
-  const symlinkPath = path.join(attachmentDir, 'allowed-name.png')
   await fs.writeFile(outsidePath, Buffer.from([1, 2, 3]))
-  await fs.symlink(outsidePath, symlinkPath)
+  // resolveAuthorizedImagePath autoriza por realpath + containment, entao o
+  // caminho so precisa resolver para fora do diretorio de anexos. Onde nao
+  // ha symlink de arquivo, o helper chega la atravessando um diretorio
+  // ligado, que produz o mesmo escape sem exigir privilegio.
+  const { caminho: symlinkPath } = criarCaminhoDeArquivoQueEscapa({
+    dentro: attachmentDir,
+    arquivoExterno: outsidePath,
+    nome: 'allowed-name.png',
+  })
 
   const result = await readImageAttachment(
     {

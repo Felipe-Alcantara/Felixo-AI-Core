@@ -111,7 +111,7 @@ export function AutomationsModal({
                       <Sparkles
                         size={14}
                         aria-hidden="true"
-                        className="shrink-0 text-violet-300"
+                        className="shrink-0 text-[var(--f-core-white-soft)]"
                       />
                       <h3 className="truncate text-sm font-medium text-zinc-100">
                         {automation.name}
@@ -175,7 +175,7 @@ export function AutomationsModal({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Revisar release"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -185,7 +185,7 @@ export function AutomationsModal({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Quando usar este fluxo"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -194,7 +194,7 @@ export function AutomationsModal({
               <select
                 value={scope}
                 onChange={(event) => setScope(event.target.value as AutomationScope)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-violet-200/30"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
               >
                 {scopeOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -211,7 +211,7 @@ export function AutomationsModal({
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="Instrucao base da automacao"
                 rows={5}
-                className="mt-1 min-h-28 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-violet-200/30"
+                className="mt-1 min-h-28 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 

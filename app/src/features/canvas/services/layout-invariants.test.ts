@@ -20,12 +20,11 @@ import {
 // entre esses pontos.
 const BREAKPOINTS: Array<{ label: string; width: number; height: number }> = [
   { label: 'menor largura sem sobreposição intencional', width: COMBINED_FLOOR_WIDTH, height: 640 },
-  { label: 'notebook pequeno', width: 1024, height: 640 },
   { label: 'notebook modesto (relato do painel)', width: 1366, height: 768 },
   { label: 'monitor grande', width: 1920, height: 1080 },
 ]
 
-describe('pior caso simultâneo (barra + painel + gaveta + dock cheio) nunca sobrepõe', () => {
+describe('pior caso simultâneo (sidebar + painel + gaveta + inspector) nunca sobrepõe', () => {
   for (const { label, width, height } of BREAKPOINTS) {
     it(`fica seguro em ${label} (${width}x${height})`, () => {
       const violations = checkWorstCaseLayout({ width, height })
@@ -42,7 +41,7 @@ describe('pior caso simultâneo (barra + painel + gaveta + dock cheio) nunca sob
 
     expect(violations.length).toBeGreaterThan(0)
     expect(violations.map((violation) => violation.rule)).toContain(
-      'barra+painel+gaveta-cabem-na-largura',
+      'barra+painel+gaveta+inspector-cabem-na-largura',
     )
   })
 
@@ -54,7 +53,7 @@ describe('pior caso simultâneo (barra + painel + gaveta + dock cheio) nunca sob
     const violations = checkWorstCaseLayout({ width: COMBINED_FLOOR_WIDTH - 1, height: 768 })
 
     expect(violations.map((violation) => violation.rule)).toEqual([
-      'barra+painel+gaveta-cabem-na-largura',
+      'barra+painel+gaveta+inspector-cabem-na-largura',
     ])
   })
 })
@@ -64,8 +63,7 @@ describe('diagnóstico do estado ao vivo (detectLiveLayoutClamp)', () => {
     expect(
       detectLiveLayoutClamp({
         viewport: { width: 1366, height: 768 },
-        occupancy: { toolbar: 176, panel: 300, drawer: 0 },
-        dockTop: Number.POSITIVE_INFINITY,
+        occupancy: { toolbar: 288, panel: 300, drawer: 0, inspector: 288 },
       }),
     ).toBeNull()
   })
@@ -73,8 +71,7 @@ describe('diagnóstico do estado ao vivo (detectLiveLayoutClamp)', () => {
   it('painel e gaveta abertos de verdade, sem caber, é clamp real', () => {
     const clamp = detectLiveLayoutClamp({
       viewport: { width: 700, height: 768 },
-      occupancy: { toolbar: 176, panel: 260, drawer: 300 },
-      dockTop: Number.POSITIVE_INFINITY,
+      occupancy: { toolbar: 288, panel: 260, drawer: 300, inspector: 0 },
     })
 
     expect(clamp?.rule).toBe('painel+gaveta-espremem-a-faixa-de-canvas')
@@ -86,39 +83,34 @@ describe('diagnóstico do estado ao vivo (detectLiveLayoutClamp)', () => {
     expect(
       detectLiveLayoutClamp({
         viewport: { width: 400, height: 768 },
-        occupancy: { toolbar: 176, panel: 0, drawer: 300 },
-        dockTop: Number.POSITIVE_INFINITY,
+        occupancy: { toolbar: 288, panel: 0, drawer: 300, inspector: 0 },
       }),
     ).toBeNull()
   })
 
-  it('painel espremido pelo dock (altura), sem gaveta, é clamp real', () => {
-    const clamp = detectLiveLayoutClamp({
-      viewport: { width: 1366, height: 500 },
-      occupancy: { toolbar: 176, panel: 300, drawer: 0 },
-      dockTop: 150, // dock cobrindo quase tudo, painel fica sem altura útil
+  it('painel fechado (largura 0) nunca é clamp, mesmo com inspector expandido', () => {
+    expect(
+      detectLiveLayoutClamp({
+        viewport: { width: 900, height: 500 },
+        occupancy: { toolbar: 288, panel: 0, drawer: 0, inspector: 288 },
+      }),
+    ).toBeNull()
+  })
+
+  it('inspector expandido soma na conta de painel+gaveta sobrepostos', () => {
+    // Painel e gaveta cabiam sozinhos ao lado da sidebar, mas o inspector
+    // expandido é o que faz a soma estourar a tela — mesma regra, mais um
+    // ocupante real.
+    const semInspector = detectLiveLayoutClamp({
+      viewport: { width: 1000, height: 768 },
+      occupancy: { toolbar: 288, panel: 260, drawer: 300, inspector: 0 },
+    })
+    const comInspector = detectLiveLayoutClamp({
+      viewport: { width: 1000, height: 768 },
+      occupancy: { toolbar: 288, panel: 260, drawer: 300, inspector: 288 },
     })
 
-    expect(clamp?.rule).toBe('painel-esquerdo-espremido-pelo-dock')
-  })
-
-  it('sem dock (dockTop infinito), painel nunca é espremido por ele', () => {
-    expect(
-      detectLiveLayoutClamp({
-        viewport: { width: 1366, height: 500 },
-        occupancy: { toolbar: 176, panel: 300, drawer: 0 },
-        dockTop: Number.POSITIVE_INFINITY,
-      }),
-    ).toBeNull()
-  })
-
-  it('painel fechado (largura 0) nunca é clamp, mesmo com dock baixo', () => {
-    expect(
-      detectLiveLayoutClamp({
-        viewport: { width: 1366, height: 500 },
-        occupancy: { toolbar: 176, panel: 0, drawer: 0 },
-        dockTop: 150,
-      }),
-    ).toBeNull()
+    expect(semInspector).toBeNull()
+    expect(comInspector?.rule).toBe('painel+gaveta-sobrepostos-de-verdade')
   })
 })

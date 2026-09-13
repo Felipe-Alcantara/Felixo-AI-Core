@@ -43,12 +43,12 @@ export function AgentUsageResetCreditsView({
 
   return (
     <section
-      className="mt-3 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-2.5"
+      className="mt-3 rounded-lg border border-white/10 bg-[color-mix(in_srgb,var(--f-core-active)_4%,transparent)] p-2.5"
       aria-label="Resets bancados desta conta"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
-          <span className="mt-0.5 rounded-md bg-cyan-300/10 p-1.5 text-cyan-200">
+          <span className="mt-0.5 rounded-md bg-[var(--f-core-active)]/10 p-1.5 text-[var(--f-core-white)]">
             <Gift size={13} aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -58,7 +58,7 @@ export function AgentUsageResetCreditsView({
             </p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[10px] font-medium text-cyan-100">
+        <span className="shrink-0 rounded-full border border-white/10 bg-[var(--f-core-active)]/10 px-2 py-1 text-[10px] font-medium text-[var(--f-core-white)]">
           {resetCredits.availableCount} disponível
           {resetCredits.availableCount === 1 ? '' : 'is'}
         </span>
@@ -84,7 +84,7 @@ export function AgentUsageResetCreditsView({
       )}
 
       {!canUse && resetCredits.availableCount > 0 && (
-        <p className="mt-2 text-[10px] leading-snug text-amber-300/80">
+        <p className="mt-2 text-[10px] leading-snug text-[var(--color-warning)]">
           Atualize os limites para habilitar o uso seguro dos créditos desta conta.
         </p>
       )}
@@ -187,7 +187,7 @@ function ResetCreditCard({
             type="button"
             disabled={busy}
             onClick={() => void handleUse()}
-            className="felixo-btn flex shrink-0 items-center gap-1 rounded-md bg-cyan-300/15 px-2 py-1 text-[10px] font-medium text-cyan-100 ring-1 ring-cyan-300/20 hover:bg-cyan-300/25 disabled:cursor-wait disabled:opacity-50"
+            className="felixo-btn flex shrink-0 items-center gap-1 rounded-md bg-[var(--f-core-active)]/15 px-2 py-1 text-[10px] font-medium text-[var(--f-core-white)] ring-1 ring-white/25 hover:bg-[var(--f-core-active)]/25 disabled:cursor-wait disabled:opacity-50"
           >
             <RotateCcw size={11} className={busy ? 'animate-spin' : undefined} aria-hidden="true" />
             {busy ? 'Usando…' : 'Usar reset'}
@@ -215,7 +215,7 @@ function ResetCreditCard({
         </p>
       )}
       {message && (
-        <p className="mt-1.5 text-[10px] text-amber-200" role="status">
+        <p className="mt-1.5 text-[10px] text-[var(--color-warning)]" role="status">
           {message}
         </p>
       )}

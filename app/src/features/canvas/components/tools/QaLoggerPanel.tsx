@@ -129,11 +129,11 @@ function getLevelClassName(level: QaLogEntry['level']) {
   }
 
   if (level === 'warn') {
-    return 'text-yellow-300'
+    return 'text-[var(--color-warning)]'
   }
 
   if (level === 'debug') {
-    return 'text-sky-300'
+    return 'text-[var(--f-core-white-soft)]'
   }
 
   return 'text-theme-success'

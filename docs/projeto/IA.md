@@ -4,6 +4,26 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 
 > Este arquivo segue o template de contexto do padrão de qualidade (`TEMPLATE-CONTEXTO-IA`). O "Histórico de Evolução" mantém a trilha cronológica densa das fases; as seções fixas acima consolidam o estado atual.
 
+## Passada de brand integration — 2026-09-12
+
+- O Brand Kit v1.0 passou a ser a fonte oficial dos assets em
+  `app/public/brand/`: masters SVG, exports PNG, favicons, tokens e marcas de
+  providers.
+- `FelixoMark.tsx` usa os SVGs fornecidos diretamente; a geometria não é mais
+  redesenhada em JSX. O app icon do Electron e o favicon apontam para exports
+  oficiais do kit.
+- O frontend importa `felixo-brand-tokens.css` e mantém apenas aliases
+  semânticos legados em `index.css`, evitando uma segunda paleta concorrente.
+- O sistema visual do canvas continua em `docs/design/`: surfaces, nodes,
+  connections e motion compartilham a linguagem Black Space, White Light e
+  Distributed Routes.
+- Regra permanente: os SVGs oficiais em `/brand` são a fonte da verdade da
+  marca Felixo AI Core. Nenhum agente pode regenerar, reinterpretar,
+  simplificar ou alterar sua geometria sem uma task explícita de redesign.
+- A identificação de Claude, Codex/OpenAI e Gemini nos nodes continua derivada
+  do comando real configurado e usa assets locais pequenos; o provider não
+  domina a identidade Felixo.
+
 ## Snapshot atual — 2026-09-02
 
 - O canvas é a superfície principal do produto: agentes em PTY real, arquivos,
@@ -3146,3 +3166,23 @@ mesma técnica de `agent-command-install.test.cjs` — rodar o shim de verdade
 via `child_process`, sem `node-pty`, para provar o caminho de produção num
 teste unitário) e `scripts/release-smoke.test.cjs` (7/7). `npm run lint` e
 `npm run typecheck` limpos (2 avisos React pré-existentes, alheios).
+
+## [2026-09-12] Auditoria e otimização profunda de performance do Canvas
+
+O mapa de performance e os artefatos brutos estão em
+[`docs/performance/PERFORMANCE.md`](../performance/PERFORMANCE.md). A regra
+operacional é medir antes/depois, identificar o contexto da máquina e escrever
+**NÃO MEDIDO** quando uma bancada não conseguir provar um número.
+
+Nesta passada, o Canvas deixou de manter uma animação ambiental infinita e um
+filtro SVG `feTurbulence` em tela inteira; a textura passou a ser CSS estática,
+sem remover a atmosfera autoral. O callback de movimento deixou de publicar
+percentual de zoom quando o valor arredondado não mudou, e o diagnóstico que
+copiava saída de terminal para o console foi removido. Não houve alteração de
+contrato IPC, PTY, persistência, seleção, conexões ou ferramentas.
+
+Guardrails: não introduzir loops/polling para decoração, blur/filter/glow amplo,
+serialização do grafo em `mousemove` ou state React por byte de terminal;
+preservar culling, batching, scrollback limitado e a separação das sessões PTY
+da árvore React. O mount inicial de 500 nodes continua acima de um frame e
+permanece um gargalo conhecido para uma futura otimização específica.

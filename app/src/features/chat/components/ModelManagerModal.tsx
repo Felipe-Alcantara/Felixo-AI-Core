@@ -820,7 +820,7 @@ export function ModelManagerModal({
                   placeholder="codex, claude ou gemini"
                   value={formCommand}
                   onChange={(event) => setFormCommand(event.target.value)}
-                  className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                  className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <button
                   type="button"
@@ -840,7 +840,7 @@ export function ModelManagerModal({
                 placeholder="Codex CLI"
                 value={formName}
                 onChange={(event) => setFormName(event.target.value)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -850,7 +850,7 @@ export function ModelManagerModal({
                 placeholder="CLI instalada no sistema"
                 value={formSource}
                 onChange={(event) => setFormSource(event.target.value)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 

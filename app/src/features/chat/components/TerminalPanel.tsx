@@ -204,7 +204,7 @@ export function TerminalPanel({
           <span className="sr-only">Abrir logs da CLI</span>
         </button>
         {sessions.some((session) => session.status === 'running') && (
-          <span className="mt-2 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
+          <span className="mt-2 h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-warning)]" />
         )}
       </aside>
     )
@@ -221,7 +221,7 @@ export function TerminalPanel({
       <header className="flex h-12 items-center justify-between border-b border-white/[0.07] px-3">
         <div className="flex min-w-0 items-center gap-2 text-[12px] font-medium text-zinc-300">
           <Terminal size={15} aria-hidden="true" />
-          <span>Logs da CLI</span>
+          <span>Atividade</span>
           <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
             {visibleSessions.length}
           </span>
@@ -230,7 +230,7 @@ export function TerminalPanel({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            title="Limpar logs da CLI"
+            title="Limpar atividade"
             onClick={onClear}
             disabled={visibleSessions.length === 0}
             className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
@@ -240,7 +240,7 @@ export function TerminalPanel({
           </button>
           <button
             type="button"
-            title="Recolher logs da CLI"
+            title="Recolher atividade"
             onClick={onToggleOpen}
             className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
           >
@@ -277,7 +277,7 @@ export function TerminalPanel({
         </button>
       </div>
 
-      {viewMode === 'threads' && (
+      {viewMode === 'threads' && visibleSessions.length > 0 && (
         <div className="max-h-40 shrink-0 overflow-y-auto border-b border-white/[0.07] p-2">
           {visibleSessions.length === 0 ? (
             <p className="px-2 py-3 text-[12px] text-zinc-600">
@@ -340,7 +340,7 @@ export function TerminalPanel({
       )}
 
       <div className="flex min-h-0 flex-1 flex-col">
-        {viewMode === 'threads' && (
+        {viewMode === 'threads' && selectedSession && (
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
             <span className="font-mono text-[10px] text-zinc-500">
               {selectedSession
@@ -374,7 +374,7 @@ export function TerminalPanel({
                 visibleSessions.some((session) => session.droppedChunkCount > 0)) && (
                 <div
                   role="status"
-                  className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2 py-1.5 text-[10px] leading-relaxed text-amber-200"
+                  className="mb-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-2 py-1.5 text-[10px] leading-relaxed text-[var(--color-warning)]"
                 >
                   A orquestração mostra somente a janela visual mais recente de
                   cada execução (até {TERMINAL_OUTPUT_VISUAL_POLICY.maxOrchestratorChunks}{' '}
@@ -459,7 +459,7 @@ const TerminalChunk = memo(function TerminalChunk({
         {chunk.chunk}
       </div>
       {chunk.isTextTruncated && (
-        <div className="mt-1 text-[10px] text-amber-200/80">
+        <div className="mt-1 text-[10px] text-[var(--color-warning)]">
           Parte anterior deste evento está fora da janela visual.
         </div>
       )}
@@ -489,7 +489,7 @@ function HistoryWindowNotice({ session }: { session: TerminalOutputSession }) {
   return (
     <div
       role="status"
-      className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2 py-1.5 text-[10px] leading-relaxed text-amber-200"
+      className="mb-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-2 py-1.5 text-[10px] leading-relaxed text-[var(--color-warning)]"
     >
       Exibindo os últimos {retained} de {total} eventos desta execução.{' '}
       {exportMessage}
@@ -692,14 +692,14 @@ function getSessionRoleClassName(session: TerminalOutputSession) {
     'shrink-0 rounded border px-1 py-px text-[9px] uppercase leading-none'
 
   if (!session.parentThreadId || session.parentThreadId === session.sessionId) {
-    return `${base} border-sky-300/20 text-sky-200`
+    return `${base} border-white/10 text-[var(--f-core-white)]`
   }
 
   if (session.sessionId.includes('orchestrator-turn')) {
-    return `${base} border-sky-300/20 text-sky-200`
+    return `${base} border-white/10 text-[var(--f-core-white)]`
   }
 
-  return `${base} border-amber-300/20 text-amber-200`
+  return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-[var(--color-warning)]`
 }
 
 function isOrchestratorTurnSession(session: TerminalOutputSession) {
@@ -710,7 +710,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   const base = 'border-l-2 py-1 pl-2 pr-1'
 
   if (chunk.kind === 'assistant') {
-    return `${base} border-sky-300/50 text-zinc-200`
+    return `${base} border-white/10 text-zinc-200`
   }
 
   if (chunk.kind === 'metrics') {
@@ -718,7 +718,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'tool') {
-    return `${base} border-amber-300/50 text-zinc-200`
+    return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-zinc-200`
   }
 
   if (chunk.kind === 'error') {
@@ -726,7 +726,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'stderr') {
-    return `${base} border-amber-300/50 text-amber-200`
+    return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-[var(--color-warning)]`
   }
 
   if (chunk.source === 'stdout') {
@@ -738,7 +738,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.severity === 'warn') {
-    return `${base} border-amber-300/50 text-amber-300`
+    return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-[var(--color-warning)]`
   }
 
   return `${base} border-theme-error/60 text-theme-error`
@@ -746,7 +746,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
 
 function getTitleClassName(chunk: TerminalOutputChunk) {
   if (chunk.kind === 'assistant') {
-    return 'min-w-0 truncate text-sky-200'
+    return 'min-w-0 truncate text-[var(--f-core-white)]'
   }
 
   if (chunk.kind === 'metrics') {
@@ -754,7 +754,7 @@ function getTitleClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'tool') {
-    return 'min-w-0 truncate text-amber-200'
+    return 'min-w-0 truncate text-[var(--color-warning)]'
   }
 
   if (chunk.kind === 'error') {
@@ -778,7 +778,7 @@ function formatSource(source: TerminalOutputChunk['source']) {
 
 function getStatusDotClassName(status: TerminalSessionStatus) {
   if (status === 'running') {
-    return 'animate-pulse bg-amber-300'
+    return 'animate-pulse bg-[var(--color-warning)]'
   }
 
   if (status === 'error') {
@@ -794,7 +794,7 @@ function getStatusDotClassName(status: TerminalSessionStatus) {
 
 function getStatusBadgeClassName(status: TerminalSessionStatus) {
   if (status === 'running') {
-    return 'border-amber-200/20 bg-amber-200/10 text-amber-200'
+    return 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]'
   }
 
   if (status === 'error') {

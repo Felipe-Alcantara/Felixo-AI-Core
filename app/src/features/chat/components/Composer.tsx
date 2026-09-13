@@ -5,7 +5,30 @@ import type {
   FormEvent,
   KeyboardEvent,
 } from 'react'
-import { FolderOpen, Mic, Plus, Send, Square, X } from 'lucide-react'
+import {
+  BookOpen,
+  CheckCheck,
+  Code2,
+  FolderOpen,
+  ListChecks,
+  Mic,
+  Plus,
+  ScanSearch,
+  Send,
+  Square,
+  SquareTerminal,
+  X,
+} from 'lucide-react'
+const STARTER_ICONS: Record<string, typeof Code2> = {
+  'Código': Code2,
+  'Planejar': ListChecks,
+  'Analisar': ScanSearch,
+  'Explicar': BookOpen,
+  'Revisar': CheckCheck,
+}
+
+import { FelixoSelect } from '../../shared/components/FelixoSelect'
+import { CliMark } from '../../shared/brand/CliMark'
 import type {
   ContextAttachment,
   Model,
@@ -286,7 +309,7 @@ export function Composer({
             : 'mx-auto w-full max-w-[680px]'
         }
       >
-        <div className="rounded-[1.45rem] border border-white/[0.08] bg-[var(--color-composer)] shadow-soft">
+        <div className="felixo-composer">
           <input
             ref={attachmentInputRef}
             type="file"
@@ -302,12 +325,12 @@ export function Composer({
             onPaste={handlePaste}
             disabled={isStreaming}
             rows={isHome ? 3 : 2}
-            placeholder="Como posso ajudar você hoje?"
+            placeholder="Envie uma mensagem para o Felixo..."
             className="max-h-36 min-h-16 w-full resize-none bg-transparent px-5 py-4 text-[13px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:text-zinc-500 max-sm:px-4 max-sm:py-3 [@media(max-height:620px)]:min-h-12"
           />
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] px-4 py-2.5 max-sm:px-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="felixo-composer-footer">
+            <div className="felixo-composer-controls">
               <button
                 type="button"
                 title="Adicionar arquivos de qualquer tipo"
@@ -330,57 +353,48 @@ export function Composer({
                 <span className="sr-only">Adicionar pasta</span>
               </button>
 
-              <select
+              <FelixoSelect
                 value={selectedModel?.id ?? ''}
-                onChange={(event) => onSelectModel(event.target.value as ModelId)}
+                onChange={(value) => onSelectModel(value as ModelId)}
                 disabled={isStreaming}
-                title="Selecionar CLI"
-                className="h-8 max-w-36 appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent max-sm:max-w-28"
-                aria-label="Selecionar modelo"
-              >
-                {models.length === 0 && (
-                  <option value="">Nenhum modelo</option>
-                )}
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
+                aria-label="Selecionar CLI"
+                menuLabel="CLIs disponíveis"
+                placeholder="Nenhuma CLI"
+                className="felixo-composer-select"
+                options={models.map((model) => ({
+                  value: model.id,
+                  label: model.name,
+                  searchText: model.name,
+                  icon: <CliMark cliType={model.cliType} size={15} />,
+                }))}
+              />
 
-              <select
+              <FelixoSelect
                 value={selectedProviderModel}
-                onChange={(event) => changeProviderModel(event.target.value)}
-                title="Modelo do provedor"
-                aria-label="Modelo do provedor"
+                onChange={changeProviderModel}
                 disabled={!selectedModel || isStreaming}
-                className="h-8 w-44 min-w-0 appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 font-mono text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent max-sm:w-32"
-              >
-                {providerModelOptions.map((option) => (
-                  <option key={option.value || 'default'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                aria-label="Modelo do provedor"
+                menuLabel="Modelo do provedor"
+                searchable={providerModelOptions.length > 8}
+                className="felixo-composer-select felixo-composer-select-model"
+                options={providerModelOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+              />
 
-              <select
+              <FelixoSelect
                 value={selectedReasoningEffort}
-                onChange={(event) =>
-                  changeReasoningEffort(
-                    event.target.value as '' | ReasoningEffort,
-                  )
-                }
-                title="Effort"
-                aria-label="Effort"
+                onChange={(value) => changeReasoningEffort(value as '' | ReasoningEffort)}
                 disabled={isReasoningEffortDisabled}
-                className="h-8 w-[104px] appearance-none truncate rounded-full border border-white/[0.08] bg-transparent px-3 text-[12px] text-zinc-300 outline-none transition hover:bg-white/[0.06] focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
-              >
-                {reasoningEffortOptions.map((option) => (
-                  <option key={option.value || 'default'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                aria-label="Esforço de raciocínio"
+                menuLabel="Esforço de raciocínio"
+                className="felixo-composer-select"
+                options={reasoningEffortOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+              />
             </div>
 
             <div className="flex items-center gap-1">
@@ -398,7 +412,7 @@ export function Composer({
                 title={isStreaming ? 'Parar' : 'Enviar'}
                 onClick={isStreaming ? onStop : undefined}
                 disabled={!isStreaming && !input.trim() && attachments.length === 0}
-                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#2b2b2a] disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-400"
+                className="felixo-btn-icon felixo-composer-send"
               >
                 {isStreaming ? (
                   <Square size={13} aria-hidden="true" />
@@ -424,19 +438,31 @@ export function Composer({
           )}
         </div>
 
-        <div className="mt-3 flex flex-wrap justify-center gap-2 [@media(max-height:620px)]:hidden">
-          {starters.map((starter) => (
-            <button
-              key={starter}
-              type="button"
-              disabled={isStreaming}
-              onClick={() => onInputChange(`${starter}: `)}
-              className="felixo-btn shrink-0 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-[12px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-200/40 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
-            >
-              {starter}
-            </button>
-          ))}
+        <div className="felixo-chat-starters [@media(max-height:620px)]:hidden">
+          {starters.map((starter) => {
+            const Icone = STARTER_ICONS[starter] ?? SquareTerminal
+            return (
+              <button
+                key={starter}
+                type="button"
+                disabled={isStreaming}
+                onClick={() => onInputChange(`${starter}: `)}
+                className="felixo-btn felixo-chat-starter"
+              >
+                <Icone size={13} aria-hidden />
+                {starter}
+              </button>
+            )
+          })}
         </div>
+
+        {/* Dicas do composer: atalhos que já existem, escritos onde a pessoa
+            está prestes a digitar. */}
+        <p className="felixo-composer-hints [@media(max-height:620px)]:hidden">
+          <span><strong>@</strong> para mencionar</span>
+          <span><strong>/</strong> para comandos</span>
+          <span><strong>Shift + Enter</strong> para nova linha</span>
+        </p>
       </div>
     </form>
   )

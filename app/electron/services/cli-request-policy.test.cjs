@@ -2,6 +2,7 @@
 // já tinha antes da extração deste módulo, para que a refatoração possa ser
 // verificada em vez de presumida. Escritos a partir da leitura do código
 // original, ANTES de mover qualquer linha.
+const os = require('node:os')
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
@@ -242,19 +243,28 @@ test('validateCliRequest só aceita cwd string não vazia, senão null', () => {
   assert.equal(validateCliRequest({ sessionId: 's', prompt: 'p' }).projectCwd, null)
 })
 
-test('resolveCliCwd devolve o home do usuário, com o cwd do processo como fallback', () => {
+test('resolveCliCwd devolve o home do usuario em qualquer plataforma', () => {
   const originalHome = process.env.HOME
 
   try {
     process.env.HOME = '/home/exemplo'
-    // O cliType não influencia o resultado: o parâmetro existia num `if` cujos
-    // dois ramos eram idênticos desde o commit inicial do backend.
+    // O cliType nao influencia o resultado: o parametro existia num `if` cujos
+    // dois ramos eram identicos desde o commit inicial do backend.
     assert.equal(resolveCliCwd('codex'), '/home/exemplo')
     assert.equal(resolveCliCwd('claude'), '/home/exemplo')
     assert.equal(resolveCliCwd(undefined), '/home/exemplo')
 
+    // Sem HOME o resultado passa a ser o home que o SO conhece, e nao o cwd
+    // do processo. Isto nao e um detalhe teorico: o Windows nao define HOME
+    // (nem em User, nem em Machine, nem no processo — so USERPROFILE), entao
+    // com o fallback antigo esta funcao NUNCA devolvia o home la. Num app
+    // empacotado, process.cwd() e o diretorio de instalacao, e era ali que a
+    // CLI acabava rodando. os.homedir() le HOME no Unix e USERPROFILE no
+    // Windows, entao a intencao do nome desta funcao passa a valer nos tres
+    // sistemas sem nenhuma condicional de plataforma.
     delete process.env.HOME
-    assert.equal(resolveCliCwd('codex'), process.cwd())
+    assert.equal(resolveCliCwd('codex'), os.homedir())
+    assert.notEqual(os.homedir(), null)
   } finally {
     if (originalHome === undefined) {
       delete process.env.HOME

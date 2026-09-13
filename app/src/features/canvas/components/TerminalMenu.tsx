@@ -1,26 +1,21 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
 import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
-import { useDeferredExpansionPanel } from '../hooks/useDeferredExpansionPanel'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import { AgentConfigFields } from './AgentConfigFields'
-import {
-  toolbarFlyoutClass,
-  toolbarFlyoutStyle,
-  useToolbarFlyoutPosition,
-} from './toolbar-flyout'
+import { isFelixoPopoverTarget } from '../../shared/components/felixo-popover-target'
 
 export type { NewTerminalOptions } from '../services/new-terminal-options'
 
 type TerminalMenuProps = {
   projects: AgentConfigProject[]
+  /** Monotonic request from the canvas empty state; keeps the menu's own state local. */
+  openRequest?: number
   onAdd: (options: NewTerminalOptions) => void
   /** Starts every queued config at once — see the "Fila" section below. */
   onAddMany: (optionsList: NewTerminalOptions[]) => void
   /** Adds a folder as a project (picker + detect repos), returns the new ids. */
   onAddFolder: () => Promise<string[]>
-  /** Keeps this panel in a second column while the tools submenu is open. */
-  toolsMenuOpen?: boolean
 }
 
 /**
@@ -34,39 +29,31 @@ type TerminalMenuProps = {
  */
 export function TerminalMenu({
   projects,
+  openRequest = 0,
   onAdd,
   onAddMany,
   onAddFolder,
-  toolsMenuOpen = false,
 }: TerminalMenuProps) {
   const fieldIdPrefix = useId()
   const [open, setOpen] = useState(false)
-  const {
-    panelReady: settingsReady,
-    preparePanel,
-    resetPanel,
-    markPanelReady,
-  } = useDeferredExpansionPanel(open)
   const config = useAgentConfig(projects)
   // Configs queued up to start together — lets one click launch a whole
   // agent setup instead of repeating "configure, open" once per terminal.
   const [queue, setQueue] = useState<NewTerminalOptions[]>([])
   const [launching, setLaunching] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const flyoutPosition = useToolbarFlyoutPosition({
-    open: open && settingsReady,
-    toolsMenuOpen,
-    containerRef,
-    panelRef,
-    panelWidth: 256,
-    placement: 'below',
-  })
+  const lastOpenRequestRef = useRef(openRequest)
+
+  useEffect(() => {
+    if (openRequest !== lastOpenRequestRef.current) {
+      lastOpenRequestRef.current = openRequest
+      setOpen(true)
+    }
+  }, [openRequest])
 
   const closeSettings = useCallback(() => {
-    resetPanel()
     setOpen(false)
-  }, [resetPanel])
+  }, [])
 
   const toggleSettings = () => {
     if (open) {
@@ -74,7 +61,6 @@ export function TerminalMenu({
       return
     }
 
-    preparePanel()
     setOpen(true)
   }
 
@@ -82,13 +68,14 @@ export function TerminalMenu({
     if (!open) {
       return
     }
-    const onPointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        closeSettings()
+    const onOutsideClick = (event: MouseEvent) => {
+      if (containerRef.current?.contains(event.target as Node) || isFelixoPopoverTarget(event.target)) {
+        return
       }
+      closeSettings()
     }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
+    document.addEventListener('click', onOutsideClick)
+    return () => document.removeEventListener('click', onOutsideClick)
   }, [closeSettings, open])
 
   const openTerminal = async () => {
@@ -99,7 +86,6 @@ export function TerminalMenu({
         // O clique no botão compacto acontece com o painel fechado; reabri-lo
         // torna o erro de configuração visível e deixa a pessoa corrigir ali.
         if (!open) {
-          preparePanel()
           setOpen(true)
         }
         return
@@ -152,14 +138,7 @@ export function TerminalMenu({
   return (
     <div
       ref={containerRef}
-      className={`relative transition-[width] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        open ? 'w-[25.5rem]' : 'w-36'
-      }`}
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === 'width' && open) {
-          markPanelReady()
-        }
-      }}
+      className="relative w-full"
     >
       {/*
         O `felixo-btn` fica na moldura, não nas metades: aplicado em cada metade,
@@ -169,12 +148,12 @@ export function TerminalMenu({
         `felixo-btn-flat`, que mantém transição e anel de foco sem o `scale`.
         Mesmo conserto do controle dividido do Organizar (commit 83178b9).
       */}
-      <div className="felixo-btn flex w-full overflow-hidden rounded-lg shadow-lg ring-1 ring-white/10">
+      <div className="felixo-btn felixo-sidebar-agent-trigger flex w-full overflow-hidden rounded-md">
         <button
           type="button"
           onClick={() => void openTerminal()}
           disabled={launching}
-          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700 disabled:opacity-50"
+          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-transparent px-3 py-2 text-sm text-[var(--f-core-white-soft)] hover:bg-white/[0.06] disabled:opacity-50"
         >
           <TerminalSquare size={16} />
           Agente
@@ -191,14 +170,12 @@ export function TerminalMenu({
         </button>
       </div>
 
-      {open && settingsReady && (
+      {open && (
         <div
-          ref={panelRef}
           id={`${fieldIdPrefix}-settings`}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          style={toolbarFlyoutStyle(flyoutPosition)}
-          className={`felixo-anim-sequential-panel ${toolbarFlyoutClass('below')} ${flyoutPosition ? '' : 'invisible'} w-64 overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10`}
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10"
         >
           <AgentConfigFields
             config={config}
@@ -212,7 +189,7 @@ export function TerminalMenu({
               type="button"
               onClick={() => void openTerminal()}
               disabled={launching}
-              className="felixo-btn flex-1 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+              className="felixo-btn flex-1 rounded felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50"
             >
               Abrir agente
             </button>
@@ -253,7 +230,7 @@ export function TerminalMenu({
                       onChange={(event) => renameQueued(index, event.target.value)}
                       title="Renomear antes de iniciar"
                       aria-label={`Renomear "${item.label}" antes de iniciar`}
-                      className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs text-zinc-200 outline-none ring-1 ring-transparent hover:ring-white/10 focus:bg-zinc-950 focus:ring-emerald-500/50"
+                      className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs text-zinc-200 outline-none ring-1 ring-transparent hover:ring-white/10 focus:bg-zinc-950 focus:ring-white/40"
                     />
                     <button
                       type="button"
@@ -269,7 +246,7 @@ export function TerminalMenu({
               <button
                 type="button"
                 onClick={startQueue}
-                className="felixo-btn w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+                className="felixo-btn w-full rounded felixo-primary-action px-3 py-1.5 text-sm "
               >
                 Iniciar {queue.length} terminais
               </button>
@@ -279,4 +256,4 @@ export function TerminalMenu({
       )}
     </div>
   )
-}
+        }
