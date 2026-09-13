@@ -301,6 +301,25 @@ jobs:
           path: app/package-manager-operational-${{ matrix.os }}.json
           if-no-files-found: ignore
 
+      # Fatia 4/4 de "Performance — correlacionar instalação do gerenciador
+      # com responsividade e energia no artefato": junta as fatias 1-3
+      # (metadados de ambiente, primeiro output do terminal, proxy de
+      # energia) numa matriz real nos três SOs do CI. Não é gate — é medição
+      # exploratória; uma regressão aqui não bloqueia PR, mas fica arquivada
+      # pra comparação entre execuções.
+      - name: Benchmark terminal responsiveness during install
+        shell: bash
+        continue-on-error: true
+        run: npm run benchmark:terminal-responsiveness -- --iterations=2 --out=terminal-responsiveness-${{ matrix.os }}.json
+
+      - name: Upload terminal responsiveness benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-responsiveness-${{ matrix.os }}
+          path: app/terminal-responsiveness-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
       # O cache contém somente os tsbuildinfo do renderer. O tsc valida os
       # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
       # mudança de código nunca transforma um resultado antigo em verde.
