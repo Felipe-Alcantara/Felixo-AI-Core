@@ -4955,3 +4955,40 @@ oficiais e dependências nativas com gerenciador alternativo nos três SOs" — 
 
 **PRs do dia:** #22 a #31 (10 PRs), todas mergeadas e com branch apagada local e
 remota. Nenhuma PR aberta ao final da sessão.
+
+## Fechamento de Trabalho — 2026-09-12/13 (continuação) — correlação instalação × responsividade × energia, achado real
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task "Performance — correlacionar instalação do gerenciador com responsividade e
+energia no artefato" (esforço "Dias"): perguntado ao Felipe, escolheu fatiar e
+implementar tudo direto. 4 fatias, 4 PRs (#32, #33, #35, #36 — #34 é de outro agente
+trabalhando em paralelo no mesmo repositório, branch `codex/felixo-visual-polish`,
+não tocada).
+
+**Fatia 1 (`c4672a0`).** `scripts/environment-metadata.cjs` centraliza CPU/RAM/
+Electron-Node (já duplicado em 3 bancadas) e acrescenta GPU/resolução/energia/rede,
+sempre `disponivel: false` + motivo quando a leitura real não existe.
+
+**Fatia 2 (`5f6311f`).** `scripts/terminal-responsiveness-during-install.cjs` usa
+`PtyProcessManager` direto (node-pty funciona standalone) pra medir p50/p95 do
+primeiro output de um terminal real, baseline vs. com 1/2/5/10 instalações
+concorrentes do gerenciador.
+
+**Fatia 3 (`706ea7b`).** `scripts/energy-measurement.cjs` tenta RAPL no Linux
+(`/sys/class/powercap/intel-rapl:0/energy_uj`), cai pro proxy de tempo de parede
+quando a fonte real não existe/não pode ser lida — medido ao vivo: RAPL existe
+nesta máquina mas nega permissão, confirmando o cenário real da task.
+
+**Fatia 4 (`129a9e2`).** Integra as três, roda a matriz real no CI (job `Validate`,
+4 ambientes: ubuntu/windows/macos/ubuntu-24.04-arm), `continue-on-error` (medição
+exploratória). **Resultado real, baixado e lido dos 4 ambientes:** Yarn Classic
+preserva e supera a responsividade do npm-runtime em todos eles (p50 menor com 10
+agentes concorrentes em macOS/Linux x64/Linux arm64/Windows) — resposta direta à
+pergunta que a task-mãe deixou em aberto, sem indício de regressão que
+desaconselhasse a avaliação recomendada anteriormente.
+
+**Estado final.** As 4 fatias e a task-mãe marcadas Concluída. Energia ficou como
+proxy de CPU/tempo de parede em todo ambiente testado (nenhum runner hospedado
+expõe leitura real com permissão suficiente) — declarado, não inventado. Não vira
+recomendação de migração automática — decisão humana, fora do escopo desta task.
