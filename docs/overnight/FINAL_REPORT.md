@@ -1,27 +1,26 @@
 # FINAL REPORT — sessão autônoma noturna
 
-Fim: 2026-09-13 ~23:09 (horário local, Windows). HEAD final: `14112be`
+Fim: 2026-09-13 ~23:09 (horário local, Windows). Atualização final: HEAD
+`92b5708`
 (`main`, == `origin/main`).
 
 ## STATUS
 
 **READY FOR USE** — app funcional, pipeline verde, validado no Electron real.
-**READY FOR MAIN** — sim, já integrado: o trabalho desta sessão chegou a
-`main` através do processo de PR estabelecido do projeto (PR #34), mesclado
-por outra sessão/pessoa ativa durante esta mesma execução, não por mim
-diretamente.
+**READY FOR MAIN** — sim, já integrado: o trabalho visual/estabilidade chegou a
+`main` pelo PR #34, e a manutenção do CI desta continuação chegou pelo PR #37.
 **PROD**: não avaliado — fora do escopo desta sessão (ver seção PRODUCTION).
 
 ## BRANCHES
 
-- **Current**: `main` (HEAD `14112be`, idêntica a `origin/main`). O checkout
+- **Current**: `main` (HEAD `92b5708`, idêntica a `origin/main`). O checkout
   mudou de `codex/felixo-visual-polish` para `main` durante a sessão por ação
   de outra sessão ativa que compartilha este mesmo diretório de trabalho
   físico — não fui eu quem trocou.
-- **Created**: nenhuma branch nova. Continuei em `codex/felixo-visual-polish`
-  (já existente, de sessões anteriores) até ela ser mesclada.
-- **Merged**: `codex/felixo-visual-polish` → `main` via PR #34 (mesclado por
-  outra sessão, com meu trabalho incluído).
+- **Created**: `codex/ci-node24-actions`, com atualização isolada dos
+  runtimes das actions oficiais.
+- **Merged**: `codex/felixo-visual-polish` → `main` via PR #34 e
+  `codex/ci-node24-actions` → `main` via PR #37.
 - **Remaining**: nenhuma branch de trabalho pendente. `codex/felixo-visual-polish`
   segue existindo no remoto, já mesclada.
 
@@ -33,8 +32,9 @@ diretamente.
 | `fbc8953` | feat(git): add per-file diff, stage and unstage to the git service | Backend: diff/stage/unstage por arquivo, allowlist estendida com validação de path |
 | `9e796ac` | feat(canvas): rebuild GitPanel as a full source-control view | UI completa de controle de versão (lista por arquivo + leitor de diff) |
 | `d28ec50` | fix(types): declare GitFileDiff instead of leaving it unresolved | Fecha um `any` implícito silencioso causado por `skipLibCheck` |
+| `082a74c` | fix(ci): atualiza actions para runtime Node 24 | Remove warnings de runtime Node 20 nas actions oficiais |
 
-Todos os quatro estão em `main` via o merge do PR #34.
+Todos estão em `main` via os merges dos PRs #34 e #37.
 
 ## TESTS
 
@@ -48,11 +48,14 @@ Todos os quatro estão em `main` via o merge do PR #34.
 | Build | **PASS** |
 | Electron real | **PASS** — reload, navegação Chat↔Canvas↔Ferramentas↔Controle de versão via clique real, 0 erro de console |
 
-Todos rodados na árvore final mesclada (`14112be`), não só nos commits
+Todos rodados na árvore final mesclada (`92b5708`), não só nos commits
 isolados.
 
 O CI pós-merge do commit `14112be` também terminou verde: execução #491,
 **13/13 jobs aprovados**, incluindo a validação do Windows.
+
+O CI pós-merge do commit `92b5708` terminou verde na execução #494:
+**13/13 jobs aprovados**, com **0 annotations** nos check runs.
 
 ## BACKEND
 
@@ -112,6 +115,8 @@ Não inventei métrica onde não medi.
    mesmo arquivo — reconstruído.
 4. `GitFileDiff` referenciado em `vite-env.d.ts` sem nunca ser declarado,
    virando `any` implícito por causa de `skipLibCheck` — tipo declarado.
+5. Actions oficiais do GitHub ainda executavam em Node 20 e geravam 12 avisos
+   de depreciação — atualizadas para os majors compatíveis com Node 24.
 
 ## VISUAL REGRESSIONS FIXED
 
@@ -128,12 +133,9 @@ Achado documentado (não corrigido, decisão de produto): 21 arquivos
 
 ## MAIN
 
-**Integrated? SIM** (o código). Via PR #34, mesclado por outra sessão ativa
-durante esta execução — não por mim diretamente (sem `gh` CLI disponível, eu
-não teria como abrir/mesclar um PR; documentei "READY FOR MERGE" e a
-integração aconteceu por conta própria antes mesmo de eu terminar de
-escrever essa seção). `main` local == `origin/main`, pipeline revalidado
-nesse estado exato após o merge.
+**Integrated? SIM** (código e manutenção de CI). O PR #34 integrou o trabalho
+principal e o PR #37 integrou a atualização das actions. `main` local ==
+`origin/main` em `92b5708`; o CI #494 revalidou esse estado exato.
 
 **Nota sobre esta própria documentação**: tentei inicialmente commitar estes
 5 arquivos de `docs/overnight/` diretamente em `main` (parecia seguro — é só
@@ -162,9 +164,10 @@ pipeline; tratando como bloqueio por padrão, não por evidência de problema).
 
 ## RISKS REMAINING
 
-- **P2**: `main` local estava 4 commits atrás de `origin/main` no início da
-  sessão (trabalho de performance/energia de outra sessão) — já resolvido
-  pelo próprio merge do PR #34, que trouxe `origin/main` completo.
+- **P2**: `main` local estava desatualizada em pontos anteriores — resolvido;
+  agora está alinhada com `origin/main` em `92b5708`.
+- **P8**: release #332 estava em publicação na última observação; não houve
+  intervenção manual nem falha observada.
 - **P5**: 21 `preview-*.png` commitados na raiz sem clareza de propósito —
   decisão de produto, não risco técnico.
 - Nenhum P0/P1 conhecido no momento do fechamento desta sessão.

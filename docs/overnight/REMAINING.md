@@ -13,10 +13,11 @@ específico (`/preview-*.png`, nunca `*.png` genérico) no `.gitignore` para nã
 repetir. Isso é decisão de produto, não técnica.
 
 ### 2. Merge para `main` — concluído
-O código da branch `codex/felixo-visual-polish` foi integrado pelo PR #34.
-O merge commit é `14112be`; `main` local e `origin/main` apontam para o mesmo
-commit. A execução pós-merge CI #491 terminou com **13/13 jobs aprovados**.
-Não há decisão de merge pendente para o código desta sessão.
+O código da branch `codex/felixo-visual-polish` foi integrado pelo PR #34 e a
+manutenção das actions Node 24 foi integrada pelo PR #37. O merge commit atual
+é `92b5708`; `main` local e `origin/main` apontam para o mesmo commit. A
+execução pós-merge CI #494 terminou com **13/13 jobs aprovados** e 0
+annotations. Não há decisão de merge pendente para o código desta sessão.
 
 ### 3. Branches de trabalho — limpeza opcional
 As branches `codex/felixo-visual-polish` e
