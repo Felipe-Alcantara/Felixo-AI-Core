@@ -888,19 +888,6 @@ div::-webkit-scrollbar-thumb {
   white-space: nowrap;
 }
 
-.felixo-command-trigger kbd {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-  padding: 0.16rem 0.35rem;
-  border: 1px solid rgba(247, 247, 244, 0.08);
-  border-radius: var(--f-core-radius-xs);
-  background: var(--f-core-structural);
-  color: var(--f-core-secondary);
-  font-family: inherit;
-  font-size: 0.65rem;
-}
-
 .felixo-canvas-topbar-actions {
   display: flex;
   align-items: center;
@@ -2779,15 +2766,6 @@ div::-webkit-scrollbar-thumb {
   color: var(--f-core-white-soft);
 }
 
-.felixo-command-trigger kbd {
-  min-width: 2.7rem;
-  justify-content: center;
-  border-color: rgba(247, 247, 244, 0.1);
-  background: rgba(247, 247, 244, 0.06);
-  color: var(--f-core-white-soft);
-  font-size: 0.63rem;
-}
-
 /* A faixa superior é a única dona do topo. As colunas e seus conteúdos
    continuam montados pelos mesmos componentes, só começam embaixo dela. */
 .felixo-workbench-sidebar {
@@ -3648,4 +3626,367 @@ select {
 .felixo-sidebar-model-main {
   padding-top: 0.28rem;
   padding-bottom: 0.28rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Controle de versão (GitPanel)
+
+   Duas colunas: a lista de arquivos à esquerda e o leitor de diferenças à
+   direita. Em tela estreita a lista vira uma faixa no topo e o diff ocupa o
+   resto, porque ler diff em coluna de 300px não serve para nada.
+   --------------------------------------------------------------------------- */
+.felixo-scm {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  gap: var(--f-space-2);
+}
+
+.felixo-scm-head {
+  display: flex;
+  align-items: center;
+  gap: var(--f-space-2);
+}
+
+.felixo-scm-project {
+  min-width: 12rem;
+  max-width: 20rem;
+  flex: 1 1 auto;
+}
+
+.felixo-scm-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--f-core-white-soft);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.felixo-scm-spacer {
+  flex: 1 1 auto;
+}
+
+.felixo-scm-empty,
+.felixo-scm-clean {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--f-core-secondary);
+  font-size: 0.78rem;
+}
+
+.felixo-scm-error {
+  padding: var(--f-space-2);
+  border-radius: var(--f-core-radius-xs);
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  color: var(--color-error);
+  font-size: 0.75rem;
+}
+
+.felixo-scm-body {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  gap: var(--f-space-3);
+}
+
+@media (max-width: 60rem) {
+  .felixo-scm-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+.felixo-scm-side {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--f-space-2);
+  overflow: auto;
+}
+
+.felixo-scm-message {
+  width: 100%;
+  resize: vertical;
+  padding: var(--f-space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--f-core-radius-xs);
+  background: var(--f-surface-floating);
+  color: var(--f-core-white-soft);
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.felixo-scm-message:focus-visible {
+  border-color: color-mix(in srgb, var(--f-core-white) 22%, transparent);
+}
+
+.felixo-scm-commit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--f-core-radius-xs);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.felixo-scm-commit:disabled {
+  opacity: 0.5;
+}
+
+/* Grupos: "Stage" e "Alterações" */
+.felixo-scm-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.felixo-scm-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.15rem;
+}
+
+.felixo-scm-group-title {
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.felixo-scm-count {
+  display: inline-flex;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--f-core-structural);
+  color: var(--f-core-white-soft);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.felixo-scm-group-action {
+  margin-left: auto;
+  padding: 0.2rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+}
+
+.felixo-scm-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.felixo-scm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.3rem;
+  border-radius: var(--f-core-radius-xs);
+}
+
+.felixo-scm-row:hover {
+  background: var(--f-core-structural);
+}
+
+.felixo-scm-row.is-active {
+  background: color-mix(in srgb, var(--f-core-white) 9%, transparent);
+}
+
+.felixo-scm-open {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 0.4rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.felixo-scm-name {
+  color: var(--f-core-white-soft);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.felixo-scm-dir {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+/* A ação por arquivo só aparece no hover ou com foco de teclado — senão a
+   lista vira uma parede de ícones e o nome do arquivo perde o destaque. */
+.felixo-scm-row-action {
+  padding: 0.15rem;
+  border-radius: var(--f-core-radius-xs);
+  color: var(--f-core-secondary);
+  opacity: 0;
+}
+
+.felixo-scm-row:hover .felixo-scm-row-action,
+.felixo-scm-row-action:focus-visible {
+  opacity: 1;
+}
+
+.felixo-scm-badge {
+  width: 1rem;
+  flex: none;
+  color: var(--f-core-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.felixo-scm-badge.is-modificado {
+  color: var(--color-warning);
+}
+
+.felixo-scm-badge.is-adicionado,
+.felixo-scm-badge.is-novo {
+  color: var(--color-success);
+}
+
+.felixo-scm-badge.is-removido,
+.felixo-scm-badge.is-conflito {
+  color: var(--color-error);
+}
+
+/* Leitor de diferenças */
+.felixo-scm-diff {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--f-core-radius-sm);
+  background: var(--f-surface-canvas);
+}
+
+.felixo-scm-diff.is-empty {
+  align-items: center;
+  justify-content: center;
+  gap: var(--f-space-2);
+  color: var(--f-core-secondary);
+  font-size: 0.8rem;
+}
+
+.felixo-scm-diff-head {
+  display: flex;
+  align-items: center;
+  gap: var(--f-space-2);
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.felixo-scm-diff-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--f-core-white-soft);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.felixo-scm-diff-side {
+  margin-left: auto;
+  color: var(--f-core-secondary);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.felixo-scm-diff-status {
+  padding: var(--f-space-3);
+  color: var(--f-core-secondary);
+  font-size: 0.78rem;
+}
+
+.felixo-scm-diff-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.felixo-scm-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+}
+
+.felixo-diff-num {
+  width: 1px;
+  padding: 0 0.45rem;
+  color: color-mix(in srgb, var(--f-core-secondary) 70%, transparent);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.felixo-diff-text {
+  width: 100%;
+  padding: 0 0.5rem;
+  vertical-align: top;
+}
+
+.felixo-diff-text pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.felixo-diff-added {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+
+.felixo-diff-added .felixo-diff-text {
+  color: var(--color-success);
+}
+
+.felixo-diff-removed {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+.felixo-diff-removed .felixo-diff-text {
+  color: var(--color-error);
+}
+
+.felixo-diff-hunk .felixo-diff-text {
+  color: var(--f-core-secondary);
+  background: color-mix(in srgb, var(--f-core-white) 4%, transparent);
+}
+
+.felixo-diff-meta .felixo-diff-text {
+  color: color-mix(in srgb, var(--f-core-secondary) 75%, transparent);
+}
+
+.felixo-diff-context .felixo-diff-text {
+  color: var(--f-core-white-soft);
 }
