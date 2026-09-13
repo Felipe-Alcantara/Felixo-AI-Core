@@ -145,7 +145,7 @@ export function ProjectsModal({
               className={[
                 'felixo-btn mb-[-1px] border-b-2 px-3 pb-2.5 text-[12px]',
                 tab === t
-                  ? 'border-amber-400 text-zinc-200'
+                  ? 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-zinc-200'
                   : 'border-transparent text-zinc-500 hover:text-zinc-300',
               ].join(' ')}
             >
@@ -213,7 +213,7 @@ export function ProjectsModal({
                     type="button"
                     disabled={selected.size === 0}
                     onClick={confirmWorkspace}
-                    className="felixo-btn flex h-9 items-center gap-2 self-end rounded-lg bg-amber-500/20 px-4 text-[12px] text-amber-300 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="felixo-btn flex h-9 items-center gap-2 self-end rounded-lg bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-4 text-[12px] text-[var(--color-warning)] hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Plus size={13} />
                     Adicionar {selected.size} {selected.size === 1 ? 'repositório' : 'repositórios'}
@@ -253,7 +253,7 @@ export function ProjectsModal({
                       className={[
                         'felixo-btn-icon shrink-0 rounded p-1',
                         editingProjectId === project.id
-                          ? 'text-amber-400'
+                          ? 'text-[var(--color-warning)]'
                           : 'text-zinc-600 hover:text-zinc-300',
                       ].join(' ')}
                       title="Configurar instruções"
@@ -310,7 +310,7 @@ function ProjectInstructionsEditor({
           maxLength={4000}
           rows={4}
           placeholder="Instruções persistentes para quando este projeto estiver ativo. Ex: 'Use TypeScript strict, siga o padrão de pastas src/features/, testes com Vitest...'"
-          className="resize-y rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-2 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-amber-400/40 focus:outline-none"
+          className="resize-y rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-2 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] focus:outline-none"
         />
         <span className="text-right text-[10px] text-zinc-700">
           {instructions.length}/4000
@@ -326,7 +326,7 @@ function ProjectInstructionsEditor({
           value={docsDirectory}
           onChange={(e) => setDocsDirectory(e.target.value)}
           placeholder="docs"
-          className="h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-amber-400/40 focus:outline-none"
+          className="h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] focus:outline-none"
         />
         <p className="text-[10px] text-zinc-700">
           Caminho relativo ao projeto. Os arquivos .md deste diretório serão indexados e o agente poderá consultá-los por tópico.
@@ -342,7 +342,7 @@ function ProjectInstructionsEditor({
             docsDirectory: docsDirectory.trim() || undefined,
           })
         }
-        className="felixo-btn flex h-8 items-center gap-1.5 self-end rounded-lg bg-amber-500/20 px-3 text-[11px] text-amber-300 hover:bg-amber-500/30"
+        className="felixo-btn flex h-8 items-center gap-1.5 self-end rounded-lg bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 text-[11px] text-[var(--color-warning)] hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]"
       >
         <Check size={12} />
         Salvar

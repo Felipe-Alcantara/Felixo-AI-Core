@@ -92,7 +92,7 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                 className={`flex min-w-0 items-end gap-2 ${isUser ? 'justify-end' : ''}`}
               >
                 {!isUser && (
-                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-orange-200/20 bg-orange-200/10 text-orange-100">
+                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]">
                     <Bot size={16} aria-hidden="true" />
                   </span>
                 )}
@@ -100,7 +100,7 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                 <div
                   className={`min-w-0 max-w-[78%] rounded-[1.45rem] border px-4 py-3 shadow-soft max-sm:max-w-[86%] ${
                     isUser
-                      ? 'rounded-br-md border-sky-200/[0.15] bg-sky-200/[0.08]'
+                      ? 'rounded-br-md border-white/[0.15] bg-white/[0.06]'
                       : 'rounded-bl-md border-white/[0.08] bg-[#252524]'
                   }`}
                 >
@@ -135,13 +135,13 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                   )}
                   <span>
                     {message.isStreaming && (
-                      <span className="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-full bg-orange-200 align-middle" />
+                      <span className="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--color-warning)] align-middle" />
                     )}
                   </span>
                 </div>
 
                 {isUser && (
-                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-200/20 bg-sky-200/10 text-sky-100">
+                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.10] text-[var(--f-core-white)]">
                     <User size={15} aria-hidden="true" />
                   </span>
                 )}
@@ -180,7 +180,7 @@ function CopyButton({ text, title }: { text: string; title: string }) {
       className="felixo-btn-icon flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:text-zinc-300"
     >
       {copied ? (
-        <Check size={12} className="text-emerald-400" aria-hidden="true" />
+        <Check size={12} className="text-[var(--f-core-white-soft)]" aria-hidden="true" />
       ) : (
         <Copy size={12} aria-hidden="true" />
       )}
@@ -206,13 +206,13 @@ function MessageAttachments({
         (Boolean(attachment.previewUrl) || Boolean(attachment.path)) ? (
           <figure
             key={attachment.id}
-            className="overflow-hidden rounded-lg border border-sky-200/[0.12] bg-black/20"
+            className="overflow-hidden rounded-lg border border-white/[0.12] bg-black/20"
           >
             <button
               type="button"
               title={`Expandir ${attachment.name}`}
               onClick={() => onOpenImage(attachment)}
-              className="felixo-btn-icon group relative flex max-h-72 min-h-32 w-full items-center justify-center bg-black/20 outline-none focus:ring-2 focus:ring-sky-200/40"
+              className="felixo-btn-icon group relative flex max-h-72 min-h-32 w-full items-center justify-center bg-black/20 outline-none focus:ring-2 focus:ring-white/25"
             >
               {attachment.previewUrl ? (
                 <img
@@ -240,7 +240,7 @@ function MessageAttachments({
           <div
             key={attachment.id}
             title={attachment.path || attachment.name}
-            className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-sky-200/[0.12] bg-black/15 px-2.5 py-1.5 text-[11px] text-zinc-300"
+            className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-white/[0.12] bg-black/15 px-2.5 py-1.5 text-[11px] text-zinc-300"
           >
             <span className="min-w-0 truncate">{attachment.name}</span>
             <span className="shrink-0 font-mono text-[10px] text-zinc-600">
@@ -298,7 +298,7 @@ function ImageLightbox({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {image.isLoadingOriginal && (
-              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--f-core-white-soft)]" />
             )}
             <button
               type="button"

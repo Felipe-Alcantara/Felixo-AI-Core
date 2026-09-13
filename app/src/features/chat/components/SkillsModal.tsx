@@ -151,7 +151,7 @@ export function SkillsModal({
                         <BrainCircuit
                           size={14}
                           aria-hidden="true"
-                          className="shrink-0 text-cyan-200"
+                          className="shrink-0 text-[var(--f-core-white)]"
                         />
                         <h3 className="truncate text-sm font-medium text-zinc-100">
                           {skill.name}
@@ -236,7 +236,7 @@ export function SkillsModal({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Django REST"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -246,7 +246,7 @@ export function SkillsModal({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Quando aplicar"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -257,7 +257,7 @@ export function SkillsModal({
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="Instrucao persistente da skill"
                 rows={8}
-                className="mt-1 min-h-44 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-cyan-200/30"
+                className="mt-1 min-h-44 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 

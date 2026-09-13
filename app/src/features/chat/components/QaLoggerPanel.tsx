@@ -98,7 +98,11 @@ export function QaLoggerPanel({
 
   if (!isOpen) {
     return (
-      <section className="h-10 shrink-0 border-t border-white/[0.08] bg-[#10100f] text-zinc-400">
+      <section
+        data-felixo-tech="qa"
+        data-open="false"
+        className="felixo-tech-strip shrink-0 border-t border-white/[0.08] text-zinc-400"
+      >
         <header className="flex h-full items-center justify-between px-3">
           <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium">
             <Terminal size={13} aria-hidden="true" />
@@ -223,11 +227,11 @@ function getLevelClassName(level: QaLogEntry['level']) {
   }
 
   if (level === 'warn') {
-    return 'text-yellow-300'
+    return 'text-[var(--color-warning)]'
   }
 
   if (level === 'debug') {
-    return 'text-sky-300'
+    return 'text-[var(--f-core-white-soft)]'
   }
 
   return 'text-theme-success'

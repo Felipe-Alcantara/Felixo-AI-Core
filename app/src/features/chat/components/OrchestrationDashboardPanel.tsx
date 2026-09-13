@@ -13,10 +13,10 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  running: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-  completed: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  error: 'bg-red-500/15 text-red-300 border-red-500/30',
-  fallback: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  running: 'bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)] border-white/10',
+  completed: 'bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)] border-white/10',
+  error: 'bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] text-[var(--color-error)] border-[color-mix(in_srgb,var(--color-error)_38%,transparent)]',
+  fallback: 'bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)] border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)]',
 }
 
 export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
@@ -31,8 +31,12 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
   )
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-zinc-900/60 backdrop-blur">
-      <header className="flex items-center justify-between gap-3 px-4 py-2.5">
+    <section
+      data-felixo-tech="orchestration"
+      data-open={isOpen ? 'true' : 'false'}
+      className="felixo-tech-strip border-t border-white/[0.08]"
+    >
+      <header className="felixo-tech-strip-header">
         <div className="flex items-center gap-2 text-xs text-zinc-300">
           <span className="font-medium text-zinc-100">Orquestração</span>
           <span className="text-zinc-500">·</span>
@@ -43,7 +47,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
           {limitedModels.length > 0 ? (
             <>
               <span className="text-zinc-500">·</span>
-              <span className="text-amber-300">
+              <span className="text-[var(--color-warning)]">
                 {limitedModels.length} modelo(s) com limite
               </span>
             </>
@@ -69,21 +73,21 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
 
           {limitedModels.length > 0 ? (
             <div>
-              <h4 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+              <h4 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-warning)]">
                 Modelos com limite
               </h4>
               <ul className="space-y-1">
                 {limitedModels.map((entry) => (
                   <li
                     key={`${entry.cliType}:${entry.modelId ?? 'cli-wide'}`}
-                    className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 text-xs text-amber-100"
+                    className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-xs text-[var(--color-warning)]"
                   >
                     <div className="font-medium">
                       {entry.modelName ?? entry.modelId ?? entry.cliType}
-                      <span className="ml-1 text-amber-300/70">({entry.cliType})</span>
+                      <span className="ml-1 text-[var(--color-warning)]">({entry.cliType})</span>
                     </div>
                     {entry.resetLabel ? (
-                      <div className="text-[11px] text-amber-300/80">
+                      <div className="text-[11px] text-[var(--color-warning)]">
                         Reset previsto: {entry.resetLabel}
                       </div>
                     ) : null}
@@ -128,7 +132,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
                         {agent.modelName ? ` · ${agent.modelName}` : ''}
                       </div>
                       {agent.fallbackHistory.length > 0 ? (
-                        <div className="text-[11px] text-amber-300/90">
+                        <div className="text-[11px] text-[var(--color-warning)]">
                           {agent.fallbackHistory.map((entry, index) => (
                             <span key={index} className="block">
                               ↻ {entry.fromCliType} → {entry.toCliType}
