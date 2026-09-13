@@ -125,12 +125,25 @@ Achado documentado (não corrigido, decisão de produto): 21 arquivos
 
 ## MAIN
 
-**Integrated? SIM.** Via PR #34, mesclado por outra sessão ativa durante esta
-execução — não por mim diretamente (sem `gh` CLI disponível, eu não teria
-como abrir/mesclar um PR; documentei "READY FOR MERGE" e a integração
-aconteceu por conta própria antes mesmo de eu terminar de escrever essa
-seção). `main` local == `origin/main`, pipeline revalidado nesse estado
-exato após o merge.
+**Integrated? SIM** (o código). Via PR #34, mesclado por outra sessão ativa
+durante esta execução — não por mim diretamente (sem `gh` CLI disponível, eu
+não teria como abrir/mesclar um PR; documentei "READY FOR MERGE" e a
+integração aconteceu por conta própria antes mesmo de eu terminar de
+escrever essa seção). `main` local == `origin/main`, pipeline revalidado
+nesse estado exato após o merge.
+
+**Nota sobre esta própria documentação**: tentei inicialmente commitar estes
+5 arquivos de `docs/overnight/` diretamente em `main` (parecia seguro — é só
+texto, sem código). O push foi **rejeitado pela proteção de branch**
+("12 of 12 required status checks are expected"), o que eu não sabia de
+antemão. Segui a regra do mandato ("se branch protection impedir: não tente
+burlar") e não desabilitei nem contornei nada: criei a branch
+`docs/overnight-report-20260912` a partir do commit já feito (preservando-o
+por completo, sem perda), devolvi `main` ao exato estado de `origin/main`
+via `git branch -f` (não `git reset --hard`, que o mandato proíbe
+explicitamente) enquanto tinha outra branch em checkout, e empurrei a nova
+branch — que está pronta para virar PR:
+https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/new/docs/overnight-report-20260912
 
 ## PRODUCTION
 
