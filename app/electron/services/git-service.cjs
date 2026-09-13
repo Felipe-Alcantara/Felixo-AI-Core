@@ -6,6 +6,10 @@ const { promisify } = require('util')
 const execFileAsync = promisify(execFile)
 const GIT_COMMAND_TIMEOUT_MS = 10000
 const GIT_COMMAND_MAX_BUFFER = 1024 * 1024
+// A arvore do repositorio sai numa tacada so e passa facil do buffer padrao:
+// 20 mil caminhos de 40 bytes ja encostam em 800 KB.
+const GIT_TREE_MAX_BUFFER = 8 * 1024 * 1024
+const REPO_FILE_LIMIT = 20000
 
 async function getGitProjectSummary(projectPath) {
   const cwd = normalizeGitProjectPath(projectPath)
@@ -21,6 +25,7 @@ async function getGitProjectSummary(projectPath) {
     ])
   const statusLines = parseGitStatusLines(statusOutput)
   const branch = parseGitBranch(statusLines, branchOutput)
+  const tracking = parseBranchTracking(statusLines)
   const recentCommits = commitsOutput
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -29,11 +34,26 @@ async function getGitProjectSummary(projectPath) {
   return {
     projectPath: cwd,
     branch,
+    ...tracking,
     statusLines: statusLines.filter((line) => !line.startsWith('## ')),
     diffStat: diffStatOutput.trim(),
     recentCommits,
     isClean: statusLines.filter((line) => !line.startsWith('## ')).length === 0,
   }
+}
+
+/**
+ * Upstream e distancia ate ele, lidos do cabecalho do porcelain:
+ * "## main...origin/main [ahead 1, behind 2]". Sem upstream nao ha o "...",
+ * e ahead/behind ficam em zero — e o que deixa Push/Pull saberem se tem o que
+ * fazer sem uma ida a mais ao git.
+ */
+function parseBranchTracking(statusLines) {
+  const branchLine = statusLines.find((line) => line.startsWith('## ')) ?? ''
+  const upstream = branchLine.match(/\.\.\.(\S+)/)?.[1] ?? null
+  const ahead = Number(branchLine.match(/ahead (\d+)/)?.[1] ?? 0)
+  const behind = Number(branchLine.match(/behind (\d+)/)?.[1] ?? 0)
+  return { upstream, ahead, behind }
 }
 
 async function stageAllChanges(projectPath) {
@@ -66,8 +86,11 @@ async function runGit(cwd, args, options = {}) {
   try {
     const { stdout } = await execFileAsync('git', args, {
       cwd,
-      timeout: GIT_COMMAND_TIMEOUT_MS,
-      maxBuffer: GIT_COMMAND_MAX_BUFFER,
+      timeout: options.timeout ?? GIT_COMMAND_TIMEOUT_MS,
+      maxBuffer: options.maxBuffer ?? GIT_COMMAND_MAX_BUFFER,
+      // Nunca deixar o git parar num prompt de senha: sem terminal, ele
+      // ficaria pendurado ate o timeout e a interface veria so "demorou".
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', ...(options.env ?? {}) },
     })
 
     return stdout
@@ -123,7 +146,15 @@ function assertAllowedGitArgs(args) {
     ['log', '-5', '--oneline', '--decorate=short'].join('\0'),
     ['branch', '--show-current'].join('\0'),
     ['add', '--all'].join('\0'),
+    ['ls-files', '--cached', '--others', '--exclude-standard', '-z'].join('\0'),
     ['restore', '--staged', '--', '.'].join('\0'),
+    ['branch', '--list', '--format=%(refname:short)'].join('\0'),
+    LOG_ARGS.join('\0'),
+    // Rede: so as formas que nao reescrevem historico. `--ff-only` recusa o
+    // pull que precisaria de merge — isso e trabalho para o terminal, com a
+    // pessoa olhando, nao para um botao.
+    ['push'].join('\0'),
+    ['pull', '--ff-only'].join('\0'),
   ])
 
   if (allowed.has(key)) {
@@ -138,7 +169,59 @@ function assertAllowedGitArgs(args) {
     return
   }
 
+  if (isAllowedBranchArgs(args)) {
+    return
+  }
+
   throw new Error('Comando Git nao permitido.')
+}
+
+/** Historico em registros separados por 0x1e, campos por 0x1f — nenhum dos dois aparece em mensagem de commit. */
+const LOG_ARGS = [
+  'log',
+  '--max-count=60',
+  '--date=iso-strict',
+  '--pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%s%x1e',
+]
+
+/**
+ * Formas cujo argumento variavel e um nome de branch. O nome passa por
+ * `assertSafeBranchName`: nada que comece com "-" (viraria opcao), nem os
+ * caracteres que o proprio git recusa em ref.
+ */
+function isAllowedBranchArgs(args) {
+  if (args.length === 2 && args[0] === 'switch') {
+    assertSafeBranchName(args[1])
+    return true
+  }
+  if (
+    args.length === 4 &&
+    args[0] === 'push' &&
+    args[1] === '--set-upstream' &&
+    args[2] === 'origin'
+  ) {
+    assertSafeBranchName(args[3])
+    return true
+  }
+  return false
+}
+
+function assertSafeBranchName(valor) {
+  if (typeof valor !== 'string' || !valor.trim()) {
+    throw new Error('Nome de branch invalido.')
+  }
+  if (
+    valor.startsWith('-') ||
+    valor.endsWith('/') ||
+    valor.endsWith('.') ||
+    valor.endsWith('.lock') ||
+    valor.includes('..') ||
+    valor.includes('@{') ||
+    /[\s~^:?*[\\\0]/.test(valor)
+  ) {
+    throw new Error('Nome de branch invalido.')
+  }
+  return valor
 }
 
 /**
@@ -158,6 +241,11 @@ function isAllowedPathArgs(args) {
     ['restore', '--staged', '--'],
     ['diff', '--unified=3', '--'],
     ['diff', '--staged', '--unified=3', '--'],
+    // Descartar: volta o arquivo ao HEAD nos dois lados, ou apaga o que ainda
+    // nao e rastreado. As duas sao destrutivas de proposito e a interface
+    // confirma antes; aqui so se garante que agem num caminho, nunca em ".".
+    ['restore', '--staged', '--worktree', '--'],
+    ['clean', '-f', '--'],
   ]
 
   for (const prefixo of prefixos) {
@@ -340,6 +428,11 @@ function assertSafeRepoRelativePath(valor) {
   if (normalizado === '..' || normalizado.startsWith('../')) {
     throw new Error('Caminho fora do repositorio.')
   }
+  // "." e a raiz inteira: com `clean -f` apagaria tudo que nao e rastreado.
+  // As formas que agem na arvore toda sao literais na allowlist, nunca aqui.
+  if (normalizado === '.' || normalizado === '') {
+    throw new Error('Caminho de arquivo invalido.')
+  }
 
   return normalizado
 }
@@ -390,12 +483,206 @@ async function unstageFile(projectPath, filePath) {
   return getGitProjectSummary(cwd)
 }
 
+/**
+ * A arvore do repositorio como o proprio git a enxerga.
+ *
+ * `--cached --others --exclude-standard` junta o que esta no indice com o que
+ * ainda e novo, ja descontando o que o .gitignore manda ignorar: o explorador
+ * nasce sem `node_modules` e sem pasta de build, que e justamente o que torna
+ * a arvore legivel. Listar o disco cru daria a arvore errada — a do sistema de
+ * arquivos, nao a do repositorio.
+ *
+ * `-z` desliga o escape octal de caminho: os nomes vem crus, separados por
+ * byte nulo, e nao precisam passar por `descitarCaminho`.
+ */
+async function listRepoFiles(projectPath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const output = await runGit(
+    cwd,
+    ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+    { maxBuffer: GIT_TREE_MAX_BUFFER },
+  )
+
+  // Durante um conflito o mesmo caminho sai uma vez por estagio do indice;
+  // a arvore quer o arquivo, nao os estagios.
+  const todos = [...new Set(output.split('\0').filter((item) => item.length > 0))]
+  // Repositorio gigante nao cabe numa arvore sem virar outra ferramenta: a
+  // lista e cortada e a interface avisa, em vez de travar a renderizacao.
+  const files = todos.slice(0, REPO_FILE_LIMIT)
+
+  return {
+    projectPath: cwd,
+    files,
+    total: todos.length,
+    truncated: todos.length > files.length,
+  }
+}
+
+const NETWORK_TIMEOUT_MS = 60000
+const REPO_FILE_MAX_BYTES = 1024 * 1024
+
+async function listBranches(projectPath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const [listOutput, currentOutput] = await Promise.all([
+    runGit(cwd, ['branch', '--list', '--format=%(refname:short)']),
+    runGit(cwd, ['branch', '--show-current']),
+  ])
+  const branches = listOutput
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  return { projectPath: cwd, branches, current: currentOutput.trim() || null }
+}
+
+/**
+ * Troca de branch com `switch`, que — ao contrario de `checkout` — nao
+ * aceita caminho e nao cria branch: ou a branch existe e a arvore esta limpa
+ * o bastante para trocar, ou o git recusa e a mensagem sobe para a tela.
+ */
+async function switchBranch(projectPath, branchName) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const nome = assertSafeBranchName(branchName)
+  const output = await runGit(cwd, ['switch', nome])
+  return { output: output.trim(), summary: await getGitProjectSummary(cwd) }
+}
+
+/**
+ * Push da branch atual. Sem upstream, o primeiro push ja o define em
+ * `origin` — e o que a pessoa faria a mao, e evita a mensagem criptica do
+ * git sobre "no upstream branch".
+ */
+async function pushCurrentBranch(projectPath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const summary = await getGitProjectSummary(cwd)
+  const args = summary.upstream
+    ? ['push']
+    : ['push', '--set-upstream', 'origin', assertSafeBranchName(summary.branch ?? '')]
+  const output = await runGitWithStderr(cwd, args, { timeout: NETWORK_TIMEOUT_MS })
+  return { output, summary: await getGitProjectSummary(cwd) }
+}
+
+async function pullCurrentBranch(projectPath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const output = await runGitWithStderr(cwd, ['pull', '--ff-only'], {
+    timeout: NETWORK_TIMEOUT_MS,
+  })
+  return { output, summary: await getGitProjectSummary(cwd) }
+}
+
+/**
+ * Push e pull falam pelo stderr mesmo quando dao certo ("Everything
+ * up-to-date", contagem de objetos). A tela quer esse texto como resultado,
+ * nao como erro.
+ */
+async function runGitWithStderr(cwd, args, options = {}) {
+  assertAllowedGitArgs(args)
+  try {
+    const { stdout, stderr } = await execFileAsync('git', args, {
+      cwd,
+      timeout: options.timeout ?? GIT_COMMAND_TIMEOUT_MS,
+      maxBuffer: GIT_COMMAND_MAX_BUFFER,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    })
+    return `${stdout}${stderr}`.trim()
+  } catch (error) {
+    const detalhe = typeof error?.stderr === 'string' ? error.stderr.trim() : ''
+    throw new Error(detalhe || (error instanceof Error ? error.message : 'Falha no git.'))
+  }
+}
+
+/**
+ * Descarta a alteracao de um arquivo. Tracked volta ao HEAD nos dois lados
+ * (stage e arvore); untracked e apagado. Arquivo novo ja no stage nao existe
+ * no HEAD, entao o `restore` falha — ai ele sai do stage e e apagado como
+ * untracked, que e o que "descartar" significa para ele.
+ */
+async function discardFileChanges(projectPath, filePath, options = {}) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const relativo = assertSafeRepoRelativePath(filePath)
+
+  if (options.untracked) {
+    await runGit(cwd, ['clean', '-f', '--', relativo])
+    return getGitProjectSummary(cwd)
+  }
+
+  try {
+    await runGit(cwd, ['restore', '--staged', '--worktree', '--', relativo])
+  } catch (error) {
+    const detalhe = typeof error?.stderr === 'string' ? error.stderr : ''
+    if (!/did not match any file|pathspec/.test(detalhe)) throw error
+    await runGit(cwd, ['restore', '--staged', '--', relativo])
+    await runGit(cwd, ['clean', '-f', '--', relativo])
+  }
+  return getGitProjectSummary(cwd)
+}
+
+async function getCommitLog(projectPath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const output = await runGit(cwd, LOG_ARGS)
+  const commits = output
+    .split('\x1e')
+    .map((registro) => registro.replace(/^\r?\n/, ''))
+    .filter((registro) => registro.trim())
+    .map((registro) => {
+      const [hash, shortHash, author, date, subject] = registro.split('\x1f')
+      return { hash, shortHash, author, date, subject: (subject ?? '').trim() }
+    })
+  return { projectPath: cwd, commits }
+}
+
+/**
+ * Le um arquivo da arvore de trabalho para o explorador mostrar.
+ *
+ * O caminho passa pela mesma barreira dos comandos git e, alem dela, pelo
+ * realpath: um symlink dentro do repositorio apontando para fora nao pode
+ * virar leitura de arquivo arbitrario. Binario e arquivo grande nao viram
+ * texto na tela — a resposta diz o que sao e a interface explica.
+ */
+function readRepoFile(projectPath, filePath) {
+  const cwd = normalizeGitProjectPath(projectPath)
+  const relativo = assertSafeRepoRelativePath(filePath)
+  const raizReal = fs.realpathSync(cwd)
+  const absoluto = path.resolve(raizReal, relativo)
+  const alvoReal = fs.realpathSync(absoluto)
+
+  if (alvoReal !== raizReal && !alvoReal.startsWith(raizReal + path.sep)) {
+    throw new Error('Caminho fora do repositorio.')
+  }
+
+  const stat = fs.statSync(alvoReal)
+  if (!stat.isFile()) {
+    throw new Error('O caminho nao e um arquivo.')
+  }
+
+  const base = { path: relativo, size: stat.size, binary: false, truncated: false, content: '' }
+  if (stat.size > REPO_FILE_MAX_BYTES) {
+    return { ...base, truncated: true }
+  }
+
+  const bytes = fs.readFileSync(alvoReal)
+  if (bytes.subarray(0, 8000).includes(0)) {
+    return { ...base, binary: true }
+  }
+
+  return { ...base, content: bytes.toString('utf8') }
+}
+
 module.exports = {
   assertAllowedGitArgs,
+  assertSafeBranchName,
   assertSafeRepoRelativePath,
   commitStagedChanges,
+  discardFileChanges,
+  getCommitLog,
   getFileDiff,
   getGitProjectSummary,
+  listBranches,
+  listRepoFiles,
+  parseBranchTracking,
+  pullCurrentBranch,
+  pushCurrentBranch,
+  readRepoFile,
+  switchBranch,
   normalizeGitProjectPath,
   normalizeCommitMessage,
   parseGitBranch,

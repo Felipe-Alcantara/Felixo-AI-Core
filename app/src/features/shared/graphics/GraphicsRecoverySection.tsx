@@ -1,7 +1,14 @@
 import { AlertTriangle, Cpu, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { FelixoSelect, type FelixoSelectOption } from '../components/FelixoSelect'
 
 type GraphicsMode = 'auto' | 'hardware' | 'software'
+
+const GRAPHICS_MODE_OPTIONS: FelixoSelectOption[] = [
+  { value: 'auto', label: 'Automático' },
+  { value: 'hardware', label: 'GPU normal' },
+  { value: 'software', label: 'Modo compatível (sem GPU)' },
+]
 
 type GraphicsRecommendation = {
   reason: 'gpu-feature-disabled'
@@ -161,18 +168,16 @@ export function GraphicsRecoverySection() {
           </div>
         </div>
       )}
-      <label className="mt-3 block text-xs text-zinc-400">
+      <div className="mt-3 block text-xs text-zinc-400">
         Modo gráfico
-        <select
+        <FelixoSelect
           value={mode}
-          onChange={(event) => setMode(event.target.value as GraphicsMode)}
-          className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
-        >
-          <option value="auto">Automático</option>
-          <option value="hardware">GPU normal</option>
-          <option value="software">Modo compatível (sem GPU)</option>
-        </select>
-      </label>
+          options={GRAPHICS_MODE_OPTIONS}
+          onChange={(value) => setMode(value as GraphicsMode)}
+          aria-label="Modo gráfico"
+          className="mt-1"
+        />
+      </div>
       <div className="mt-2 text-[11px] text-zinc-500">
         {config?.softwareRenderingActive
           ? 'Esta abertura está usando rasterização por software.'

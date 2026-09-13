@@ -2,8 +2,10 @@
 
 import type {
   AutomationDefinition,
+  GitCommit,
   GitFileDiff,
   GitProjectSummary,
+  GitRepoFile,
   ChatSession,
   Model,
   OrchestratorSettings,
@@ -870,6 +872,61 @@ declare global {
           ok: boolean
           message?: string
           summary?: GitProjectSummary
+        }>
+        listFiles: (params: {
+          projectPath: string
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          tree?: {
+            projectPath: string
+            files: string[]
+            total: number
+            truncated: boolean
+          }
+        }>
+        listBranches: (params: { projectPath: string }) => Promise<{
+          ok: boolean
+          message?: string
+          branches?: string[]
+          current?: string | null
+        }>
+        switchBranch: (params: { projectPath: string; branch: string }) => Promise<{
+          ok: boolean
+          message?: string
+          output?: string
+          summary?: GitProjectSummary
+        }>
+        getLog: (params: { projectPath: string }) => Promise<{
+          ok: boolean
+          message?: string
+          commits?: GitCommit[]
+        }>
+        push: (params: { projectPath: string }) => Promise<{
+          ok: boolean
+          message?: string
+          output?: string
+          summary?: GitProjectSummary
+        }>
+        pull: (params: { projectPath: string }) => Promise<{
+          ok: boolean
+          message?: string
+          output?: string
+          summary?: GitProjectSummary
+        }>
+        discardFile: (params: {
+          projectPath: string
+          filePath: string
+          untracked?: boolean
+        }) => Promise<{
+          ok: boolean
+          message?: string
+          summary?: GitProjectSummary
+        }>
+        readFile: (params: { projectPath: string; filePath: string }) => Promise<{
+          ok: boolean
+          message?: string
+          file?: GitRepoFile
         }>
         stageAll: (params: {
           projectPath: string

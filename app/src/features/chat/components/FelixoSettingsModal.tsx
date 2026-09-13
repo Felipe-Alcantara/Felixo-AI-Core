@@ -2,8 +2,14 @@ import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
+import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import { GraphicsRecoverySection } from '../../shared/graphics/GraphicsRecoverySection'
 import { SystemDesignSettingsSection } from '../../shared/system-design/SystemDesignSettingsSection'
+
+const THEME_OPTIONS: FelixoSelectOption[] = [
+  { value: 'dark', label: 'Escuro' },
+  { value: 'high_contrast', label: 'Alto contraste' },
+]
 
 type FelixoSettingsModalProps = {
   isOpen: boolean
@@ -170,25 +176,21 @@ function FelixoSettingsDialog({
                 />
               </label>
 
-              <label className="block text-xs text-zinc-400">
+              <div className="block text-xs text-zinc-400">
                 Modo
-                <select
+                <FelixoSelect
                   value={settingsDraft.mode}
-                  onChange={(event) =>
+                  options={modeOptions}
+                  onChange={(value) =>
                     setSettingsDraft((current) => ({
                       ...current,
-                      mode: event.target.value as OrchestratorMode,
+                      mode: value as OrchestratorMode,
                     }))
                   }
-                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
-                >
-                  {modeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  aria-label="Modo do orquestrador"
+                  className="mt-1"
+                />
+              </div>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3">
@@ -275,17 +277,16 @@ function FelixoSettingsDialog({
               <Palette size={14} aria-hidden="true" />
               Aparência
             </div>
-            <label className="block text-xs text-zinc-400">
+            <div className="block text-xs text-zinc-400">
               Tema
-              <select
+              <FelixoSelect
                 value={theme}
-                onChange={(event) => onThemeChange(event.target.value as AppTheme)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
-              >
-                <option value="dark">Escuro</option>
-                <option value="high_contrast">Alto contraste</option>
-              </select>
-            </label>
+                options={THEME_OPTIONS}
+                onChange={(value) => onThemeChange(value as AppTheme)}
+                aria-label="Tema"
+                className="mt-1"
+              />
+            </div>
           </section>
         </div>
       </section>

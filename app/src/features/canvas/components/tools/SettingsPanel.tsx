@@ -10,8 +10,14 @@ import { DEFAULT_QUALITY_STANDARD_PROMPT } from '../../services/quality-standard
 import { AutoStartSection } from '../../../shared/autostart/AutoStartSection'
 import { GraphicsRecoverySection } from '../../../shared/graphics/GraphicsRecoverySection'
 import { SystemDesignSettingsSection } from '../../../shared/system-design/SystemDesignSettingsSection'
+import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { useAppTheme } from '../../../shared/theme/theme-context'
 import type { AppTheme } from '../../../shared/theme/theme-storage'
+
+const THEME_OPTIONS: FelixoSelectOption[] = [
+  { value: 'dark', label: 'Escuro' },
+  { value: 'high_contrast', label: 'Alto contraste' },
+]
 
 type SettingsPanelProps = {
   onClose: () => void
@@ -113,20 +119,18 @@ function ThemeField() {
   const { theme, setTheme } = useAppTheme()
 
   return (
-    <label className="block text-xs text-zinc-400">
+    <div className="block text-xs text-zinc-400">
       <span className="mb-1 flex items-center gap-1.5 text-zinc-300">
         <Palette size={13} aria-hidden="true" />
         Tema
       </span>
-      <select
+      <FelixoSelect
         value={theme}
-        onChange={(event) => setTheme(event.target.value as AppTheme)}
-        className="w-full rounded-md border border-white/10 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-white/20"
-      >
-        <option value="dark">Escuro</option>
-        <option value="high_contrast">Alto contraste</option>
-      </select>
-    </label>
+        options={THEME_OPTIONS}
+        onChange={(value) => setTheme(value as AppTheme)}
+        aria-label="Tema"
+      />
+    </div>
   )
 }
 

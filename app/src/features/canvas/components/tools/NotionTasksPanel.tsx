@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { DeferredMarkdownContent } from '../../../shared/components/DeferredMarkdownContent'
+import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import type {
   NotionConnection,
   NotionDatabase,
@@ -78,6 +79,11 @@ type TaskContentState = {
 
 const inputClass =
   'w-full rounded border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-white/10'
+const STATUS_SCOPE_OPTIONS: FelixoSelectOption[] = [
+  { value: 'all', label: 'Todos os estados' },
+  { value: 'open', label: 'Só abertas' },
+  { value: 'done', label: 'Só concluídas' },
+]
 const buttonClass =
   'felixo-btn flex items-center justify-center gap-1.5 rounded bg-zinc-700 px-2 py-1.5 text-xs text-zinc-100 hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50'
 
@@ -704,15 +710,15 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
             <div className="flex min-w-0 items-center gap-2">
               <Database size={16} className="shrink-0 text-[var(--f-core-white-soft)]" />
               {databases.length > 0 ? (
-                <select
-                  className="min-w-0 max-w-[34rem] flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-none"
+                <FelixoSelect
+                  className="min-w-0 max-w-[34rem] flex-1"
                   value={dataSourceId}
-                  onChange={(event) => setDataSourceId(event.target.value)}
+                  options={databases.map((database) => ({ value: database.id, label: database.name }))}
+                  onChange={setDataSourceId}
+                  placeholder="Selecione uma database"
+                  searchable={databases.length > 8}
                   aria-label="Database Notion"
-                >
-                  <option value="">Selecione uma database</option>
-                  {databases.map((database) => <option key={database.id} value={database.id}>{database.name}</option>)}
-                </select>
+                />
               ) : (
                 <span className="truncate text-sm font-medium text-zinc-100">{selectedDatabase?.name || 'Selecione uma database'}</span>
               )}
@@ -761,9 +767,17 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
               </div>
               {connections.length > 0 ? (
                 <div className="flex items-center gap-1.5">
-                  <select className={`${inputClass} h-8 min-w-0 flex-1`} value={connectionId} onChange={(event) => setConnectionId(event.target.value)} aria-label="Conexão Notion">
-                    {connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.label}{connection.hasToken ? '' : ' · sem token'}</option>)}
-                  </select>
+                  <FelixoSelect
+                    className="min-w-0 flex-1"
+                    value={connectionId}
+                    options={connections.map((connection) => ({
+                      value: connection.id,
+                      label: connection.label,
+                      meta: connection.hasToken ? undefined : 'sem token',
+                    }))}
+                    onChange={setConnectionId}
+                    aria-label="Conexão Notion"
+                  />
                   <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] disabled:opacity-50" onClick={() => void testConnection()} disabled={busy || !selectedConnection?.hasToken} aria-label="Testar conexão" title="Testar conexão"><Check size={14} /></button>
                   <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)] disabled:opacity-50" onClick={() => void removeConnection()} disabled={busy} aria-label="Remover conexão" title="Remover conexão"><Trash2 size={14} /></button>
                 </div>
@@ -913,23 +927,24 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input className={`${inputClass} h-9`} value={viewDraft.name} onChange={(event) => setViewDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Nome da visualização" aria-label="Nome da visualização" required />
-                  <select className={`${inputClass} h-9`} value={viewDraft.statusFilter} onChange={(event) => setViewDraft((current) => ({ ...current, statusFilter: event.target.value as NotionStatusScope }))} aria-label="Estado incluído na visualização">
-                    <option value="all">Todos os estados</option>
-                    <option value="open">Só abertas</option>
-                    <option value="done">Só concluídas</option>
-                  </select>
+                  <FelixoSelect
+                    value={viewDraft.statusFilter}
+                    options={STATUS_SCOPE_OPTIONS}
+                    onChange={(value) => setViewDraft((current) => ({ ...current, statusFilter: value as NotionStatusScope }))}
+                    aria-label="Estado incluído na visualização"
+                  />
                 </div>
                 {filterableProperties.length > 0 ? (
                   <div className="space-y-2">
-                    <select
-                      className={`${inputClass} h-9`}
+                    <FelixoSelect
                       value={viewDraft.property}
-                      onChange={(event) => setViewDraft((current) => ({ ...current, property: event.target.value, values: [] }))}
+                      options={[
+                        { value: '', label: 'Sem filtro por propriedade' },
+                        ...filterableProperties.map((property) => ({ value: property.name, label: property.name })),
+                      ]}
+                      onChange={(value) => setViewDraft((current) => ({ ...current, property: value, values: [] }))}
                       aria-label="Propriedade para filtrar"
-                    >
-                      <option value="">Sem filtro por propriedade</option>
-                      {filterableProperties.map((property) => <option key={property.name} value={property.name}>{property.name}</option>)}
-                    </select>
+                    />
                     {viewDraft.property && (
                       <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Valores de ${viewDraft.property}`}>
                         {filterableProperties.find((property) => property.name === viewDraft.property)?.options.map((option) => {
@@ -956,7 +971,15 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                 </div>
                 <div className="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_minmax(9rem,1fr)_auto]">
                   <input className={`${inputClass} h-9`} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Título" aria-label="Título da tarefa" required />
-                  <select className={`${inputClass} h-9`} value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))} aria-label="Estado da tarefa"><option value="">Estado (automático)</option>{statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+                  <FelixoSelect
+                    value={draft.status}
+                    options={[
+                      { value: '', label: 'Estado (automático)' },
+                      ...statusOptions.map((option) => ({ value: option, label: option })),
+                    ]}
+                    onChange={(value) => setDraft((current) => ({ ...current, status: value }))}
+                    aria-label="Estado da tarefa"
+                  />
                   <input className={`${inputClass} h-9`} type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} aria-label="Prazo da tarefa" />
                   <label className="flex h-9 items-center gap-2 rounded border border-white/10 px-2 text-xs text-zinc-300"><input type="checkbox" checked={draft.completed} onChange={(event) => setDraft((current) => ({ ...current, completed: event.target.checked }))} /> Concluída</label>
                 </div>

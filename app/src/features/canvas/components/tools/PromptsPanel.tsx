@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, CircleAlert, Eye, ListFilter, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { PromptDetailPanel } from './PromptDetailPanel'
 import { defaultAutomations } from '../../../shared/data/automations'
 import {
@@ -33,6 +34,11 @@ type PromptsPanelProps = {
 const SAVE_DEBOUNCE_MS = 500
 
 const SCOPES = AUTOMATION_SCOPES
+
+const SCOPE_OPTIONS: FelixoSelectOption[] = SCOPES.map((scope) => ({
+  value: scope,
+  label: AUTOMATION_SCOPE_LABELS[scope],
+}))
 
 function createAutomationId() {
   return `automation-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
@@ -385,17 +391,13 @@ export function PromptsPanel({
             className="mb-1 w-full resize-y rounded bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-none placeholder:text-zinc-600"
           />
           <div className="flex items-center justify-between gap-2">
-            <select
+            <FelixoSelect
               value={draft.scope}
-              onChange={(event) => updateDraft({ scope: event.target.value as AutomationScope })}
-              className="rounded bg-zinc-900/60 px-1.5 py-1 text-xs text-zinc-300 outline-none"
-            >
-              {SCOPES.map((scope) => (
-                <option key={scope} value={scope}>
-                  {scope}
-                </option>
-              ))}
-            </select>
+              options={SCOPE_OPTIONS}
+              onChange={(value) => updateDraft({ scope: value as AutomationScope })}
+              aria-label="Escopo do prompt"
+              className="min-w-[11rem]"
+            />
             <button
               type="button"
               onClick={() => void createDraftAutomation()}
@@ -577,21 +579,17 @@ export function PromptsPanel({
                     rows={2}
                     className="mb-1 w-full resize-y rounded bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-none placeholder:text-zinc-600"
                   />
-                  <select
+                  <FelixoSelect
                     value={prompt.scope}
-                    onChange={(event) =>
+                    options={SCOPE_OPTIONS}
+                    onChange={(value) =>
                       editCustomAutomation(prompt.id, {
-                        scope: event.target.value as AutomationScope,
+                        scope: value as AutomationScope,
                       })
                     }
-                    className="rounded bg-zinc-900/60 px-1.5 py-1 text-xs text-zinc-300 outline-none"
-                  >
-                    {SCOPES.map((scope) => (
-                      <option key={scope} value={scope}>
-                        {scope}
-                      </option>
-                    ))}
-                  </select>
+                    aria-label="Escopo do prompt"
+                    className="min-w-[11rem]"
+                  />
                 </>
               ) : (
                 prompt.description && (

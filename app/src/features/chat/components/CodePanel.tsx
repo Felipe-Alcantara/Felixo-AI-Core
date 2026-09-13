@@ -8,6 +8,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react'
+import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { GitProjectSummary, Project } from '../types'
 
 type CodePanelProps = {
@@ -214,22 +215,15 @@ export function CodePanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <select
+            <FelixoSelect
               value={selectedProject?.path ?? ''}
-              onChange={(event) => setSelectedProjectPath(event.target.value)}
+              options={projectOptions.map((project) => ({ value: project.path, label: project.name }))}
+              onChange={setSelectedProjectPath}
               disabled={projectOptions.length === 0}
-              className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25 disabled:cursor-not-allowed disabled:text-zinc-600"
-            >
-              {projectOptions.length === 0 ? (
-                <option value="">Nenhum projeto</option>
-              ) : (
-                projectOptions.map((project) => (
-                  <option key={project.id} value={project.path}>
-                    {project.name}
-                  </option>
-                ))
-              )}
-            </select>
+              placeholder={projectOptions.length === 0 ? 'Nenhum projeto' : 'Escolha um projeto…'}
+              aria-label="Projeto"
+              className="min-w-0 flex-1"
+            />
 
             <button
               type="button"

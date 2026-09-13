@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { BrainCircuit, Save, X } from 'lucide-react'
 import type { CliType, Model, ReasoningEffort } from '../types'
+import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import {
   getAgent,
   getEffortLevels,
@@ -201,20 +202,16 @@ export function ModelConfigModal({
             </div>
 
             {providerOptions.length > 1 && (
-              <label className="block text-xs text-zinc-400">
+              <div className="block text-xs text-zinc-400">
                 Modelo do provedor
-                <select
+                <FelixoSelect
                   value={providerModel}
-                  onChange={(event) => handleProviderModelChange(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
-                >
-                  {providerOptions.map((option) => (
-                    <option key={option.value || 'default'} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  options={providerOptions.map((option) => ({ value: option.value, label: option.label }))}
+                  onChange={handleProviderModelChange}
+                  aria-label="Modelo do provedor"
+                  className="mt-1"
+                />
+              </div>
             )}
 
             {selectedSpec && (
@@ -227,22 +224,16 @@ export function ModelConfigModal({
             )}
 
             {effortOptions.length > 1 && (
-              <label className="block text-xs text-zinc-400">
+              <div className="block text-xs text-zinc-400">
                 Effort
-                <select
+                <FelixoSelect
                   value={reasoningEffort}
-                  onChange={(event) =>
-                    setReasoningEffort(event.target.value as '' | ReasoningEffort)
-                  }
-                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
-                >
-                  {effortOptions.map((option) => (
-                    <option key={option.value || 'default'} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  options={effortOptions.map((option) => ({ value: option.value, label: option.label }))}
+                  onChange={(value) => setReasoningEffort(value as '' | ReasoningEffort)}
+                  aria-label="Effort"
+                  className="mt-1"
+                />
+              </div>
             )}
           </section>
 

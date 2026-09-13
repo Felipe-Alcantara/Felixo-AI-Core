@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, Gauge, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { AgentUsageResetCreditsView } from '../../../shared/agent-usage/AgentUsageResetCredits'
 import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
 import {
@@ -44,6 +45,11 @@ const AUTO_REFRESH_OPTIONS = [
   { value: 15, label: '+ 15 min' },
   { value: 30, label: '+ 30 min' },
 ]
+
+const AUTO_REFRESH_SELECT_OPTIONS: FelixoSelectOption[] = AUTO_REFRESH_OPTIONS.map((option) => ({
+  value: String(option.value),
+  label: option.label,
+}))
 
 /**
  * Limites e uso das CLIs, no canvas.
@@ -288,20 +294,16 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
           </span>
         )}
 
-        <label className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500">
+        <div className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500">
           Reconsultar
-          <select
-            value={autoRefreshMinutes}
-            onChange={(event) => setAutoRefreshMinutes(Number(event.target.value))}
-            className="rounded border border-white/10 bg-zinc-800 px-1.5 py-1 text-[11px] text-zinc-200"
-          >
-            {AUTO_REFRESH_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <FelixoSelect
+            value={String(autoRefreshMinutes)}
+            options={AUTO_REFRESH_SELECT_OPTIONS}
+            onChange={(value) => setAutoRefreshMinutes(Number(value))}
+            aria-label="Intervalo de reconsulta"
+            className="min-w-[10rem]"
+          />
+        </div>
       </div>
 
       {statusMessage && (
@@ -703,17 +705,12 @@ function AddAccountForm({
             e-mail; nunca chave, token ou senha.
           </p>
 
-          <select
+          <FelixoSelect
             value={providerId}
-            onChange={(event) => setProviderId(event.target.value)}
-            className="w-full rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200"
-          >
-            {providers.map((provider) => (
-              <option key={provider.id} value={provider.id}>
-                {provider.name}
-              </option>
-            ))}
-          </select>
+            options={providers.map((provider) => ({ value: provider.id, label: provider.name }))}
+            onChange={setProviderId}
+            aria-label="Provider da conta"
+          />
 
           <input
             value={label}

@@ -12,7 +12,7 @@ export const TOOL_LABELS: Record<CanvasTool, string> = {
   models: 'Modelos',
   prompts: 'Prompts',
   skills: 'Skills',
-  git: 'Controle de versão',
+  git: 'Source Control',
   fetchAll: 'Fetch All',
   notionTasks: 'Tarefas Notion',
   agentUsage: 'Limites e uso',
