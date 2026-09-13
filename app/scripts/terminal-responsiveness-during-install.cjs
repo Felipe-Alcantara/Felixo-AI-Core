@@ -34,6 +34,7 @@ const {
   writeFixture,
 } = require('./package-manager-operational-performance.cjs')
 const { collectEnvironmentMetadata } = require('./environment-metadata.cjs')
+const { measureEnergyDuringOperation } = require('./energy-measurement.cjs')
 
 const DEFAULT_ITERATIONS = 5
 const DEFAULT_AGENT_COUNTS = [1, 2, 5, 10]
@@ -208,8 +209,10 @@ async function runBenchmark(options) {
   let baseline = null
 
   try {
-    const baselineSamples = await measureFirstOutputSeries(options.iterations)
-    baseline = { firstOutputMs: summarize(baselineSamples) }
+    const { result: baselineSamples, energy: baselineEnergy } = await measureEnergyDuringOperation(
+      () => measureFirstOutputSeries(options.iterations),
+    )
+    baseline = { firstOutputMs: summarize(baselineSamples), energy: baselineEnergy }
 
     for (const manager of managers) {
       if (!manager.available) {
@@ -226,11 +229,17 @@ async function runBenchmark(options) {
         const { done, root } = startConcurrentInstalls(manager, agentCount, temporaryRoot)
         let installOutcome = null
         try {
-          const duringSamples = await measureFirstOutputSeries(options.iterations)
+          // A energia é medida em volta da MESMA janela em que a
+          // responsividade é medida (fatia 4/4: correlacionar as duas, não
+          // medi-las em momentos diferentes que não se comparam).
+          const { result: duringSamples, energy } = await measureEnergyDuringOperation(
+            () => measureFirstOutputSeries(options.iterations),
+          )
           installOutcome = await done
           perAgentCount.push({
             agentCount,
             firstOutputMs: summarize(duringSamples),
+            energy,
             installsSucceeded: installOutcome.every((result) => !result.error && !result.timedOut && result.code === 0),
           })
         } finally {
