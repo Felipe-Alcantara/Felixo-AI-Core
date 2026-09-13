@@ -1,0 +1,13 @@
+{
+  "brand": {
+    "black": "#090909",
+    "surface": "#0F0F10",
+    "surface2": "#161617",
+    "border": "#2A2A2E",
+    "white": "#FFFFFF",
+    "textMuted": "#A1A1A1",
+    "textSubtle": "#6F6F74"
+  },
+  "motion": {"fast": 150, "normal": 220},
+  "logo": {"clearSpace": "0.5x symbol width", "minDigital": "24px", "favicon": "16px"}
+}

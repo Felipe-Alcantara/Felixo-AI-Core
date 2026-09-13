@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Felixo AI Core symbol">
+<line x1="256" y1="70" x2="246" y2="160" stroke="#FFFFFF" stroke-width="2.5" opacity="0.72" stroke-linecap="round"/>
+<line x1="256" y1="70" x2="150" y2="142" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="256" y1="70" x2="385" y2="128" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="150" y1="142" x2="246" y2="160" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="150" y1="142" x2="90" y2="238" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="150" y1="142" x2="176" y2="218" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="90" y1="238" x2="176" y2="218" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="90" y1="238" x2="160" y2="322" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="176" y1="218" x2="246" y2="160" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="176" y1="218" x2="255" y2="268" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="176" y1="218" x2="160" y2="322" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="246" y1="160" x2="255" y2="268" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="246" y1="160" x2="342" y2="240" stroke="#FFFFFF" stroke-width="2.5" opacity="0.72" stroke-linecap="round"/>
+<line x1="246" y1="160" x2="385" y2="128" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="342" y1="240" x2="420" y2="202" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="342" y1="240" x2="255" y2="268" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="342" y1="240" x2="358" y2="330" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="255" y1="268" x2="236" y2="344" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="255" y1="268" x2="358" y2="330" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="255" y1="268" x2="160" y2="322" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="160" y1="322" x2="236" y2="344" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="236" y1="344" x2="358" y2="330" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="236" y1="344" x2="240" y2="435" stroke="#FFFFFF" stroke-width="2.5" opacity="0.72" stroke-linecap="round"/>
+<line x1="358" y1="330" x2="240" y2="435" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="72" y1="315" x2="160" y2="322" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<line x1="397" y1="305" x2="358" y2="330" stroke="#FFFFFF" stroke-width="1.35" opacity="0.34" stroke-linecap="round"/>
+<circle cx="256" cy="70" r="20" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="150" cy="142" r="11" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="246" cy="160" r="17" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="385" cy="128" r="7" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="90" cy="238" r="18" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="176" cy="218" r="9" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="342" cy="240" r="17" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="420" cy="202" r="10" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="255" cy="268" r="8" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="160" cy="322" r="9" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="236" cy="344" r="17" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="358" cy="330" r="10" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="240" cy="435" r="19" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="72" cy="315" r="6" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+<circle cx="397" cy="305" r="5" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+</svg>

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { FelixoSymbol } from './features/shared/brand/FelixoMark'
 
 type RendererRecoveryBoundaryProps = {
   children: ReactNode
@@ -35,7 +36,8 @@ export class RendererRecoveryBoundary extends Component<
     return (
       <main className="flex h-screen w-screen items-center justify-center bg-zinc-950 px-6 text-zinc-100">
         <section className="w-full max-w-md rounded-3xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-300">
+          <FelixoSymbol size={32} className="mb-4" />
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--f-core-white-soft)]">
             Felixo AI Core
           </p>
           <h1 className="mt-3 text-lg font-semibold">A interface não conseguiu carregar</h1>
