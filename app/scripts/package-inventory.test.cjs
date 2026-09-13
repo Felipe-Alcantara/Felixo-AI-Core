@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
+const { criarLinkDeDiretorio } = require('../electron/__fixtures__/link-fixtures.cjs')
 const asar = require('@electron/asar')
 
 const {
@@ -103,7 +104,11 @@ test('measureTree não segue symlink para fora do artefato', () => {
   try {
     fs.writeFileSync(path.join(root, 'inside.txt'), 'inside', 'utf8')
     fs.writeFileSync(path.join(outside, 'outside.txt'), 'outside', 'utf8')
-    fs.symlinkSync(outside, path.join(root, 'linked-outside'), 'dir')
+    // O link e fixture, nao o comportamento sob teste: measureTree so
+    // pergunta `lstat().isSymbolicLink()`. O helper usa symlink real onde a
+    // plataforma permite e junction no Windows sem privilegio, verificando
+    // nos dois casos que a propriedade consultada continua valendo.
+    criarLinkDeDiretorio(outside, path.join(root, 'linked-outside'))
     assert.deepEqual(measureTree(root), { files: 1, bytes: 6 })
   } finally {
     fs.rmSync(root, { recursive: true, force: true })

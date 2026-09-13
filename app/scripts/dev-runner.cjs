@@ -22,6 +22,7 @@ const POLL_INTERVAL_MS = 300
 const SHUTDOWN_TIMEOUT_MS = 5_000
 
 const APP_DIR = path.join(__dirname, '..')
+const REPO_DIR = path.join(APP_DIR, '..')
 const VITE_ENTRY = path.join(APP_DIR, 'node_modules', 'vite', 'bin', 'vite.js')
 const ELECTRON_ENTRY = path.join(__dirname, 'start-electron.cjs')
 
@@ -233,10 +234,36 @@ function spawnVite({ spawnImpl = spawn, env = process.env } = {}) {
   })
 }
 
-function spawnElectron({ spawnImpl = spawn, env = process.env } = {}) {
+function normalizeDevVersion(description) {
+  const value = String(description ?? '').trim().replace(/^v/, '')
+  if (!value) return null
+  return value.endsWith('-dirty') ? `${value.slice(0, -'-dirty'.length)}-dev` : value
+}
+
+function resolveDevVersion({ execFileSyncImpl = execFileSync } = {}) {
+  try {
+    return normalizeDevVersion(
+      execFileSyncImpl('git', ['describe', '--tags', '--always', '--dirty'], {
+        cwd: REPO_DIR,
+        encoding: 'utf8',
+      }),
+    )
+  } catch {
+    return null
+  }
+}
+
+function spawnElectron({
+  spawnImpl = spawn,
+  env = process.env,
+  devVersion = resolveDevVersion(),
+} = {}) {
+  const electronEnv = devVersion
+    ? { ...env, FELIXO_APP_VERSION: devVersion }
+    : env
   return spawnImpl(process.execPath, [ELECTRON_ENTRY, '--dev'], {
     cwd: APP_DIR,
-    env,
+    env: electronEnv,
     stdio: 'inherit',
     windowsHide: false,
   })
@@ -393,6 +420,8 @@ module.exports = {
   findListeningPids,
   parseListeningPids,
   probeFelixoVite,
+  normalizeDevVersion,
+  resolveDevVersion,
   runDev,
   spawnElectron,
   spawnVite,

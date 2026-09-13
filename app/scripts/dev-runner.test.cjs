@@ -6,6 +6,17 @@ const assert = require('node:assert/strict')
 
 const runner = require('./dev-runner.cjs')
 
+test('usa a tag real do git como versão do app em desenvolvimento', () => {
+  assert.equal(runner.normalizeDevVersion('v0.1.298\n'), '0.1.298')
+  assert.equal(runner.normalizeDevVersion('v0.1.298-dirty\n'), '0.1.298-dev')
+  assert.equal(runner.normalizeDevVersion(''), null)
+
+  assert.equal(
+    runner.resolveDevVersion({ execFileSyncImpl: () => 'v0.1.298-dirty\n' }),
+    '0.1.298-dev',
+  )
+})
+
 test('o marcador distingue o Vite do Felixo de uma porta de outro processo', async () => {
   const response = new EventEmitter()
   response.statusCode = 200

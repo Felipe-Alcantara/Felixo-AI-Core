@@ -5,6 +5,10 @@ const path = require('node:path')
 const test = require('node:test')
 const { registerProjectsIpcHandlers } = require('./projects-ipc-handlers.cjs')
 const { registerTextFileIpcHandlers } = require('./text-file-ipc-handlers.cjs')
+const {
+  criarCaminhoDeArquivoQueEscapa,
+  criarLinkDeDiretorio,
+} = require('../__fixtures__/link-fixtures.cjs')
 
 function createHarness({ projects = [], selection = [] } = {}) {
   const storedProjects = projects.map((project) => ({ ...project }))
@@ -217,11 +221,10 @@ test('listagem, indexacao e texto usam somente a raiz registrada', async (t) => 
 })
 
 test('listagem, indexacao e texto rejeitam link simbolico para fora', async (t) => {
-  if (process.platform === 'win32') {
-    t.skip('Criacao de symlink pode exigir privilegio adicional no Windows.')
-    return
-  }
-
+  // Sem skip por plataforma: o helper de fixture cria o link com o recurso
+  // disponivel (symlink real, ou junction no Windows sem privilegio) e
+  // verifica que ele de fato escapa da raiz, entao a regra e exercida em
+  // todo sistema suportado. Ver electron/__fixtures__/link-fixtures.cjs.
   const projectRoot = createTempDirectory('felixo-project-ipc-symlink-')
   const outsideRoot = createTempDirectory('felixo-project-ipc-symlink-outside-')
   t.after(() => {
@@ -234,9 +237,12 @@ test('listagem, indexacao e texto rejeitam link simbolico para fora', async (t) 
   fs.mkdirSync(outsideDocs)
   fs.writeFileSync(outsideFile, '# Secreto', 'utf8')
   const linkedDirectory = path.join(projectRoot, 'linked-docs')
-  const linkedFile = path.join(projectRoot, 'linked-secret.md')
-  fs.symlinkSync(outsideDocs, linkedDirectory)
-  fs.symlinkSync(outsideFile, linkedFile)
+  criarLinkDeDiretorio(outsideDocs, linkedDirectory)
+  const { caminho: linkedFile } = criarCaminhoDeArquivoQueEscapa({
+    dentro: projectRoot,
+    arquivoExterno: outsideFile,
+    nome: 'linked-secret.md',
+  })
 
   const harness = createHarness({ selection: [projectRoot] })
   const picked = await harness.handlers.get('projects:pick-folder')(null)

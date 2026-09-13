@@ -6,6 +6,10 @@ const os = require('node:os')
 const path = require('node:path')
 const { test } = require('node:test')
 const {
+  capacidadesDeLink,
+  criarLinkDeDiretorio,
+} = require('../electron/__fixtures__/link-fixtures.cjs')
+const {
   aggregateSamples,
   createEnvironment,
   findPackagedRuntime,
@@ -144,16 +148,26 @@ test('runWithRetry recupera uma falha transitória e registra a tentativa', asyn
 
 test('measureTree contabiliza arquivos sem seguir symlinks', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-package-manager-test-'))
+  const externo = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-package-manager-externo-'))
   try {
     fs.writeFileSync(path.join(root, 'one.txt'), '123', 'utf8')
     fs.mkdirSync(path.join(root, 'nested'))
     fs.writeFileSync(path.join(root, 'nested', 'two.txt'), '4567', 'utf8')
-    if (process.platform !== 'win32') fs.symlinkSync(path.join(root, 'one.txt'), path.join(root, 'link.txt'))
+    fs.writeFileSync(path.join(externo, 'ignorado.txt'), '89', 'utf8')
+    // Symlink de arquivo so existe onde a plataforma permite. O link de
+    // diretorio cobre a mesma regra ("nao siga o reparse point") em todo
+    // sistema suportado: antes disto o Windows nao criava link nenhum e a
+    // assercao passava sem exercer a regra.
+    if (capacidadesDeLink().symlinkDeArquivo) {
+      fs.symlinkSync(path.join(root, 'one.txt'), path.join(root, 'link.txt'), 'file')
+    }
+    criarLinkDeDiretorio(externo, path.join(root, 'linked-dir'))
     const measured = measureTree(root)
     assert.equal(measured.files, 2)
     assert.equal(measured.bytes, 7)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(externo, { recursive: true, force: true })
   }
 })
 

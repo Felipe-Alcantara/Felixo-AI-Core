@@ -20,6 +20,8 @@
  * Server-to-client requests (session/request_permission) are auto-approved.
  */
 
+const os = require('node:os')
+
 const {
   createGeminiFullAccessArgs,
   createModelOptionArgs,
@@ -56,7 +58,7 @@ function createPersistentInput(prompt, context = {}) {
     case 'session':
       return {
         input: formatJsonRpc('session/new', {
-          cwd: cwd || process.env.HOME || process.cwd(),
+          cwd: cwd || process.env.HOME || os.homedir() || process.cwd(),
           mcpServers: [],
         }),
         didStartSession: true,
