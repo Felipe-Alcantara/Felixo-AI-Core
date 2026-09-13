@@ -21,7 +21,13 @@ type CanvasPanelProps = {
   size?: PanelSize
   /** Superfície ampla para ferramentas que trabalham como uma página, como a tabela do Notion. */
   variant?: 'panel' | 'workspace'
-  /** Widens the toolbar column, so the panel slides further right to clear it. */
+  /**
+   * Recolhida, a sidebar libera espaço à esquerda — o painel desliza pra
+   * mais perto da borda pra ocupá-lo, em vez de deixar um vão parado onde a
+   * navegação estava. Nome mantido por compatibilidade com o resto da
+   * cadeia de painéis de ferramenta (`CanvasToolPanels.tsx` e os ~13
+   * painéis individuais), que só repassam o valor sem interpretá-lo.
+   */
   toolsMenuOpen?: boolean
 }
 
@@ -30,10 +36,9 @@ type CanvasPanelProps = {
  * Sits over the canvas without dimming it, so the board stays visible.
  * Slides in on mount and plays a brief exit animation before unmounting.
  *
- * Opens beside the toolbar rather than on top of it: the panel and the toolbar
- * are absolute siblings sharing an origin, so it offsets right by the button
- * column's width and tracks the tools menu widening with the same transition
- * the toolbar flyouts use.
+ * Opens beside the integrated navigation and stops before the elements
+ * inspector. The canvas remains visible around a tool instead of becoming a
+ * temporary modal surface.
  *
  * A largura acompanha a tela e pode ser ajustada arrastando a borda direita —
  * antes era um valor fixo em rem por painel, o que num notebook de 1366px
@@ -52,35 +57,32 @@ export function CanvasPanel({
 }: CanvasPanelProps) {
   const { closing, close } = useExitAnimation(PANEL_EXIT_MS, onClose)
   const { width, resizing, startResize, reset } = useResizablePanelWidth(panelId, size)
-  const { dockTop, reportPanelWidth, viewport } = useCanvasSurfaces()
+  const { occupancy, reportPanelWidth, viewport } = useCanvasSurfaces()
   const isWorkspace = variant === 'workspace'
-  const viewportHeight = useViewportPanelHeight()
-  // A altura para onde o dock "Elementos" começa: antes o painel passava por
-  // baixo dele e as duas superfícies disputavam os mesmos pixels.
-  const maxHeight = Math.max(
-    240,
-    Math.min(
-      viewportHeight,
-      dockTop - (isWorkspace ? WORKSPACE_TOP : PANEL_TOP) - DOCK_GAP,
-    ),
-  )
+  // Topo e rodapé já reservados por `getPanelMaxHeight` (ver panel-sizing.ts):
+  // o painel nunca precisou de um segundo teto vindo do inspector — ele fica
+  // à direita, não embaixo, então não disputa altura com o painel esquerdo.
+  const maxHeight = useViewportPanelHeight()
 
   useEffect(() => {
     if (!isWorkspace) return undefined
     const workspaceWidth = Math.max(
       0,
-      viewport.width - toolbarColumnOffset(toolsMenuOpen) - WORKSPACE_SIDE_GAP * 2,
+      viewport.width - toolbarColumnOffset(toolsMenuOpen) - occupancy.inspector - WORKSPACE_SIDE_GAP * 2,
     )
     reportPanelWidth(workspaceWidth)
     return () => reportPanelWidth(0)
-  }, [isWorkspace, reportPanelWidth, toolsMenuOpen, viewport.width])
+  }, [isWorkspace, occupancy.inspector, reportPanelWidth, toolsMenuOpen, viewport.width])
 
   return (
     <div
       style={{
         left: `calc(1rem + ${toolbarColumnOffset(toolsMenuOpen)}px)`,
         width: isWorkspace ? undefined : width,
-        right: isWorkspace ? `${WORKSPACE_SIDE_GAP}px` : undefined,
+        right: isWorkspace ? `${occupancy.inspector + WORKSPACE_SIDE_GAP}px` : undefined,
+        maxWidth: isWorkspace
+          ? undefined
+          : `${Math.max(260, viewport.width - toolbarColumnOffset(toolsMenuOpen) - occupancy.inspector - WORKSPACE_SIDE_GAP * 2)}px`,
         maxHeight,
       }}
       data-felixo-canvas-panel={panelId}
@@ -89,7 +91,7 @@ export function CanvasPanel({
       } ${
         resizing
           ? ''
-          : 'transition-[left] duration-[620ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+          : 'transition-[left] duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
       } ${closing ? 'felixo-anim-panel-out' : 'felixo-anim-panel-in'}`}
     >
       <div className={`flex items-center justify-between border-b border-white/10 ${isWorkspace ? 'px-4 py-3' : 'px-3 py-2'}`}>
@@ -124,10 +126,6 @@ export function CanvasPanel({
   )
 }
 
-/** Deslocamento do topo (`top-16`) e folga até o dock, em pixels. */
-const PANEL_TOP = 64
-const DOCK_GAP = 12
-const WORKSPACE_TOP = 16
 const WORKSPACE_SIDE_GAP = 16
 
 /** Acompanha a altura da janela para o painel nunca passar do rodapé. */
