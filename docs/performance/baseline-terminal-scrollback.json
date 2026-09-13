@@ -1,0 +1,744 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-09-12T20:06:39.453Z",
+  "finishedAt": "2026-09-12T20:06:44.597Z",
+  "durationMs": 5143.5899,
+  "host": {
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.19045",
+    "cpuCount": 12,
+    "totalMemoryMiB": 16310,
+    "node": "v24.18.0",
+    "electron": "41.10.7",
+    "xterm": "6.0.0"
+  },
+  "scenario": {
+    "counts": [
+      1,
+      5
+    ],
+    "scrollbacks": [
+      5000
+    ],
+    "policies": [
+      "current",
+      "adaptive"
+    ],
+    "adaptiveScrollback": 5000,
+    "adaptiveThreshold": 10,
+    "linesPerTerminal": 1000,
+    "nativeLinesPerTerminal": 300,
+    "activeIntervalMs": 4,
+    "chunkLines": 32,
+    "lineWidth": 120,
+    "longPromptChars": 4096,
+    "longEvery": 2000,
+    "nativeHoldMs": 250,
+    "nativeDrainMs": 250,
+    "sampleIntervalMs": 250,
+    "timeoutMs": 30000
+  },
+  "results": [
+    {
+      "phase": "native-pty",
+      "count": 1,
+      "activeCount": 1,
+      "idleCount": 0,
+      "linesPerTerminal": 300,
+      "outputBytes": 40719,
+      "outputBytesBySession": [
+        40719
+      ],
+      "linesBySession": [
+        334
+      ],
+      "firstOutputMs": {
+        "count": 1,
+        "p50": 103.768,
+        "p95": 103.768,
+        "max": 103.7679
+      },
+      "ptyRssMiB": {
+        "count": 1,
+        "p50": 48.066,
+        "p95": 48.066,
+        "max": 48.06640625
+      },
+      "benchmarkProcessRssMiB": {
+        "count": 1,
+        "p50": 139.313,
+        "p95": 139.313,
+        "max": 139.3125
+      },
+      "memorySamples": 1,
+      "timedOut": false
+    },
+    {
+      "phase": "native-pty",
+      "count": 5,
+      "activeCount": 3,
+      "idleCount": 2,
+      "linesPerTerminal": 300,
+      "outputBytes": 203595,
+      "outputBytesBySession": [
+        40719,
+        40719,
+        40719,
+        40719,
+        40719
+      ],
+      "linesBySession": [
+        334,
+        334,
+        334,
+        334,
+        334
+      ],
+      "firstOutputMs": {
+        "count": 5,
+        "p50": 353.042,
+        "p95": 353.311,
+        "max": 353.3472999999999
+      },
+      "ptyRssMiB": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "benchmarkProcessRssMiB": {
+        "count": 1,
+        "p50": 174.855,
+        "p95": 174.855,
+        "max": 174.85546875
+      },
+      "memorySamples": 1,
+      "timedOut": false
+    },
+    {
+      "phase": "renderer-xterm",
+      "policy": "current",
+      "count": 1,
+      "scrollback": 5000,
+      "activeCount": 1,
+      "idleCount": 0,
+      "linesPerTerminal": 1000,
+      "outputBytes": 125995,
+      "replayBytes": 125995,
+      "replayLines": 1000,
+      "linesWritten": [
+        1000
+      ],
+      "retainedRows": [
+        1035
+      ],
+      "lineIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "detachAttachPreserved": true,
+      "resumedRows": [
+        1035
+      ],
+      "resumeIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "firstOutputMs": {
+        "count": 1,
+        "p50": 10,
+        "p95": 10,
+        "max": 10
+      },
+      "writeMs": {
+        "count": 33,
+        "p50": 5.3,
+        "p95": 7.96,
+        "max": 16.59999990463257
+      },
+      "frameMs": {
+        "count": 61,
+        "p50": 6.9,
+        "p95": 7,
+        "max": 41.59999999999991
+      },
+      "longTaskMs": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "createMs": 42.200000047683716,
+      "streamMs": 338,
+      "detachAttachMs": 0.5999999046325684,
+      "closeMs": 0.9000000953674316,
+      "resumeMs": 47,
+      "resumedCloseMs": 0.2999999523162842,
+      "gcAvailable": true,
+      "heapBefore": {
+        "usedJsHeapBytes": 5858947,
+        "totalJsHeapBytes": 9254995,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterStream": {
+        "usedJsHeapBytes": 9180805,
+        "totalJsHeapBytes": 14286001,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterCleanup": {
+        "usedJsHeapBytes": 9225067,
+        "totalJsHeapBytes": 16822331,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heap": {
+        "usedJsHeapBytes": 9225067,
+        "totalJsHeapBytes": 16822331,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "rendererWorkingSetMiB": {
+        "count": 4,
+        "p50": 129.232,
+        "p95": 133.006,
+        "max": 133.16796875
+      },
+      "appWorkingSetMiB": {
+        "count": 4,
+        "p50": 508.492,
+        "p95": 512.331,
+        "max": 512.4921875
+      },
+      "memorySamples": 4
+    },
+    {
+      "phase": "renderer-xterm",
+      "policy": "current",
+      "count": 5,
+      "scrollback": 5000,
+      "activeCount": 3,
+      "idleCount": 2,
+      "linesPerTerminal": 1000,
+      "outputBytes": 629975,
+      "replayBytes": 629975,
+      "replayLines": 1000,
+      "linesWritten": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "retainedRows": [
+        1035,
+        1035,
+        1035,
+        1035,
+        1035
+      ],
+      "lineIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 1,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 2,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 3,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 4,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "detachAttachPreserved": true,
+      "resumedRows": [
+        1035,
+        1035,
+        1035,
+        1035,
+        1035
+      ],
+      "resumeIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 1,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 2,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 3,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 4,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "firstOutputMs": {
+        "count": 5,
+        "p50": 75.5,
+        "p95": 76.86,
+        "max": 77
+      },
+      "writeMs": {
+        "count": 103,
+        "p50": 5.8,
+        "p95": 17.57,
+        "max": 34.5
+      },
+      "frameMs": {
+        "count": 84,
+        "p50": 7,
+        "p95": 27.7,
+        "max": 48.59999999999991
+      },
+      "longTaskMs": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "createMs": 26.09999990463257,
+      "streamMs": 521,
+      "detachAttachMs": 0.7000000476837158,
+      "closeMs": 1,
+      "resumeMs": 146.39999985694885,
+      "resumedCloseMs": 1.3999998569488525,
+      "gcAvailable": true,
+      "heapBefore": {
+        "usedJsHeapBytes": 6649298,
+        "totalJsHeapBytes": 13777906,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterStream": {
+        "usedJsHeapBytes": 17683274,
+        "totalJsHeapBytes": 27063398,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterCleanup": {
+        "usedJsHeapBytes": 9754478,
+        "totalJsHeapBytes": 27832606,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heap": {
+        "usedJsHeapBytes": 9754478,
+        "totalJsHeapBytes": 27832606,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "rendererWorkingSetMiB": {
+        "count": 5,
+        "p50": 160.691,
+        "p95": 186.103,
+        "max": 192.08203125
+      },
+      "appWorkingSetMiB": {
+        "count": 5,
+        "p50": 534.254,
+        "p95": 560.005,
+        "max": 565.75390625
+      },
+      "memorySamples": 5
+    },
+    {
+      "phase": "renderer-xterm",
+      "policy": "adaptive",
+      "count": 1,
+      "scrollback": 20000,
+      "activeCount": 1,
+      "idleCount": 0,
+      "linesPerTerminal": 1000,
+      "outputBytes": 125995,
+      "replayBytes": 125995,
+      "replayLines": 1000,
+      "linesWritten": [
+        1000
+      ],
+      "retainedRows": [
+        1035
+      ],
+      "lineIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "detachAttachPreserved": true,
+      "resumedRows": [
+        1035
+      ],
+      "resumeIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "firstOutputMs": {
+        "count": 1,
+        "p50": 5.3,
+        "p95": 5.3,
+        "max": 5.299999952316284
+      },
+      "writeMs": {
+        "count": 33,
+        "p50": 5.6,
+        "p95": 6.24,
+        "max": 18.90000009536743
+      },
+      "frameMs": {
+        "count": 61,
+        "p50": 6.9,
+        "p95": 7,
+        "max": 20.699999999999818
+      },
+      "longTaskMs": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "createMs": 6.1000001430511475,
+      "streamMs": 330.5,
+      "detachAttachMs": 0.2999999523162842,
+      "closeMs": 0.2999999523162842,
+      "resumeMs": 48.200000047683716,
+      "resumedCloseMs": 0.2999999523162842,
+      "gcAvailable": true,
+      "heapBefore": {
+        "usedJsHeapBytes": 7030752,
+        "totalJsHeapBytes": 25050352,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterStream": {
+        "usedJsHeapBytes": 13028211,
+        "totalJsHeapBytes": 26963207,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterCleanup": {
+        "usedJsHeapBytes": 9591700,
+        "totalJsHeapBytes": 27570716,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heap": {
+        "usedJsHeapBytes": 9591700,
+        "totalJsHeapBytes": 27570716,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "rendererWorkingSetMiB": {
+        "count": 4,
+        "p50": 160.748,
+        "p95": 164.796,
+        "max": 165.33984375
+      },
+      "appWorkingSetMiB": {
+        "count": 4,
+        "p50": 535.598,
+        "p95": 539.651,
+        "max": 540.1953125
+      },
+      "memorySamples": 4
+    },
+    {
+      "phase": "renderer-xterm",
+      "policy": "adaptive",
+      "count": 5,
+      "scrollback": 20000,
+      "activeCount": 3,
+      "idleCount": 2,
+      "linesPerTerminal": 1000,
+      "outputBytes": 629975,
+      "replayBytes": 629975,
+      "replayLines": 1000,
+      "linesWritten": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "retainedRows": [
+        1035,
+        1035,
+        1035,
+        1035,
+        1035
+      ],
+      "lineIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 1,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 2,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 3,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 4,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "detachAttachPreserved": true,
+      "resumedRows": [
+        1035,
+        1035,
+        1035,
+        1035,
+        1035
+      ],
+      "resumeIntegrity": [
+        {
+          "sessionIndex": 0,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 1,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 2,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 3,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        },
+        {
+          "sessionIndex": 4,
+          "expectedLastLine": 999,
+          "firstRetainedLine": 0,
+          "lastRetainedLine": 999,
+          "retainedMarkerCount": 1000,
+          "contiguousTailLines": 1000,
+          "outputComplete": true,
+          "unexpectedGap": false
+        }
+      ],
+      "firstOutputMs": {
+        "count": 5,
+        "p50": 66.5,
+        "p95": 67.86,
+        "max": 68
+      },
+      "writeMs": {
+        "count": 103,
+        "p50": 5.5,
+        "p95": 14.45,
+        "max": 30.299999952316284
+      },
+      "frameMs": {
+        "count": 83,
+        "p50": 7,
+        "p95": 20.89,
+        "max": 34.600000000000364
+      },
+      "longTaskMs": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "createMs": 19.5,
+      "streamMs": 505.89999985694885,
+      "detachAttachMs": 0.7000000476837158,
+      "closeMs": 0.6999998092651367,
+      "resumeMs": 122.70000004768372,
+      "resumedCloseMs": 1.2000000476837158,
+      "gcAvailable": true,
+      "heapBefore": {
+        "usedJsHeapBytes": 7041902,
+        "totalJsHeapBytes": 24526318,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterStream": {
+        "usedJsHeapBytes": 25525526,
+        "totalJsHeapBytes": 49940602,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heapAfterCleanup": {
+        "usedJsHeapBytes": 9862442,
+        "totalJsHeapBytes": 43561754,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "heap": {
+        "usedJsHeapBytes": 9862442,
+        "totalJsHeapBytes": 43561754,
+        "jsHeapLimitBytes": 4294967296
+      },
+      "rendererWorkingSetMiB": {
+        "count": 5,
+        "p50": 178.367,
+        "p95": 216.285,
+        "max": 222.0234375
+      },
+      "appWorkingSetMiB": {
+        "count": 5,
+        "p50": 553.414,
+        "p95": 591.322,
+        "max": 597.06640625
+      },
+      "memorySamples": 5
+    }
+  ]
+}

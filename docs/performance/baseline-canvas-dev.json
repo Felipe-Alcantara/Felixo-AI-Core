@@ -1,0 +1,553 @@
+{
+  "schemaVersion": 1,
+  "kind": "canvas-connection-react-profiler",
+  "startedAt": "2026-09-12T20:01:48.850Z",
+  "finishedAt": "2026-09-12T20:01:56.574Z",
+  "durationMs": 7723.6,
+  "renderer": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7680.216 Electron/41.10.7 Safari/537.36",
+    "viewport": {
+      "width": 1592,
+      "height": 948
+    },
+    "devicePixelRatio": 1
+  },
+  "method": {
+    "profilerMetric": "actualDuration",
+    "heapMetric": "performance.memory.usedJSHeapSize",
+    "gc": "window.gc quando exposto pelo Electron",
+    "iterations": 2,
+    "warmupPasses": 1,
+    "modeOrder": "alternado por cenário",
+    "sizes": [
+      100,
+      500
+    ],
+    "scenarios": [
+      "render-inicial",
+      "drag"
+    ],
+    "modes": [
+      "baseline",
+      "indexado"
+    ]
+  },
+  "results": [
+    {
+      "size": 100,
+      "scenario": "render-inicial",
+      "mode": "baseline",
+      "nodes": 100,
+      "edges": 253,
+      "namedConnections": 20,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 43.85,
+        "p95": 45.515,
+        "max": 45.7
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 17661599,
+          "p95": 18138834.8,
+          "max": 18191861
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 23516752,
+          "p95": 23742159.7,
+          "max": 23767205
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 5855153,
+          "p95": 6106981.1,
+          "max": 6134962
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 45.7,
+          "baseDurationMs": 33.2,
+          "heapBeforeBytes": 17131337,
+          "heapAfterBytes": 23266299,
+          "heapDeltaBytes": 6134962,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        },
+        {
+          "actualDurationMs": 42,
+          "baseDurationMs": 28.9,
+          "heapBeforeBytes": 18191861,
+          "heapAfterBytes": 23767205,
+          "heapDeltaBytes": 5575344,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        }
+      ]
+    },
+    {
+      "size": 100,
+      "scenario": "render-inicial",
+      "mode": "indexado",
+      "nodes": 100,
+      "edges": 253,
+      "namedConnections": 20,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 23.85,
+        "p95": 27.135,
+        "max": 27.5
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 18868920.5,
+          "p95": 19009046.45,
+          "max": 19024616
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 22922863.5,
+          "p95": 22954420.65,
+          "max": 22957927
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 4053943,
+          "p95": 4225626.1,
+          "max": 4244702
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 27.5,
+          "baseDurationMs": 17.5,
+          "heapBeforeBytes": 18713225,
+          "heapAfterBytes": 22957927,
+          "heapDeltaBytes": 4244702,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        },
+        {
+          "actualDurationMs": 20.2,
+          "baseDurationMs": 10.9,
+          "heapBeforeBytes": 19024616,
+          "heapAfterBytes": 22887800,
+          "heapDeltaBytes": 3863184,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        }
+      ]
+    },
+    {
+      "size": 100,
+      "scenario": "drag",
+      "mode": "indexado",
+      "nodes": 100,
+      "edges": 253,
+      "namedConnections": 20,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 0.6,
+        "p95": 0.69,
+        "max": 0.7
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 19070538,
+          "p95": 19233583.8,
+          "max": 19251700
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 25022644,
+          "p95": 25533419.2,
+          "max": 25590172
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 5952106,
+          "p95": 6299835.4,
+          "max": 6338472
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 0.5,
+          "baseDurationMs": 16.7,
+          "heapBeforeBytes": 18889376,
+          "heapAfterBytes": 24455116,
+          "heapDeltaBytes": 5565740,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        },
+        {
+          "actualDurationMs": 0.7,
+          "baseDurationMs": 55.1,
+          "heapBeforeBytes": 19251700,
+          "heapAfterBytes": 25590172,
+          "heapDeltaBytes": 6338472,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        }
+      ]
+    },
+    {
+      "size": 100,
+      "scenario": "drag",
+      "mode": "baseline",
+      "nodes": 100,
+      "edges": 253,
+      "namedConnections": 20,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 0.5,
+        "p95": 0.5,
+        "max": 0.5
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 19369218,
+          "p95": 19424393.4,
+          "max": 19430524
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 24034800,
+          "p95": 24050848.8,
+          "max": 24052632
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 4665582,
+          "p95": 4704708.6,
+          "max": 4709056
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 0.5,
+          "baseDurationMs": 16.3,
+          "heapBeforeBytes": 19307912,
+          "heapAfterBytes": 24016968,
+          "heapDeltaBytes": 4709056,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        },
+        {
+          "actualDurationMs": 0.5,
+          "baseDurationMs": 16.7,
+          "heapBeforeBytes": 19430524,
+          "heapAfterBytes": 24052632,
+          "heapDeltaBytes": 4622108,
+          "gcAvailable": true,
+          "domNodeCount": 65
+        }
+      ]
+    },
+    {
+      "size": 500,
+      "scenario": "render-inicial",
+      "mode": "baseline",
+      "nodes": 500,
+      "edges": 1253,
+      "namedConnections": 100,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 108.3,
+        "p95": 133.68,
+        "max": 136.5
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 19848494,
+          "p95": 20182403,
+          "max": 20219504
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 27103462,
+          "p95": 27339595,
+          "max": 27365832
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 7254968,
+          "p95": 7825010,
+          "max": 7888348
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 136.5,
+          "baseDurationMs": 90.1,
+          "heapBeforeBytes": 19477484,
+          "heapAfterBytes": 27365832,
+          "heapDeltaBytes": 7888348,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        },
+        {
+          "actualDurationMs": 80.1,
+          "baseDurationMs": 41.7,
+          "heapBeforeBytes": 20219504,
+          "heapAfterBytes": 26841092,
+          "heapDeltaBytes": 6621588,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        }
+      ]
+    },
+    {
+      "size": 500,
+      "scenario": "render-inicial",
+      "mode": "indexado",
+      "nodes": 500,
+      "edges": 1253,
+      "namedConnections": 100,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 104.4,
+        "p95": 132.48,
+        "max": 135.6
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 20117460,
+          "p95": 20614544.4,
+          "max": 20669776
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 27544294,
+          "p95": 27606853,
+          "max": 27613804
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 7426834,
+          "p95": 7861359.4,
+          "max": 7909640
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 135.6,
+          "baseDurationMs": 90.8,
+          "heapBeforeBytes": 19565144,
+          "heapAfterBytes": 27474784,
+          "heapDeltaBytes": 7909640,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        },
+        {
+          "actualDurationMs": 73.2,
+          "baseDurationMs": 37.1,
+          "heapBeforeBytes": 20669776,
+          "heapAfterBytes": 27613804,
+          "heapDeltaBytes": 6944028,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        }
+      ]
+    },
+    {
+      "size": 500,
+      "scenario": "drag",
+      "mode": "indexado",
+      "nodes": 500,
+      "edges": 1253,
+      "namedConnections": 100,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 1.05,
+        "p95": 1.275,
+        "max": 1.3
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 20762120,
+          "p95": 21116730.8,
+          "max": 21156132
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 28858838,
+          "p95": 29141022.2,
+          "max": 29172376
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 8096718,
+          "p95": 8169144.6,
+          "max": 8177192
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 0.8,
+          "baseDurationMs": 20.7,
+          "heapBeforeBytes": 20368108,
+          "heapAfterBytes": 28545300,
+          "heapDeltaBytes": 8177192,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        },
+        {
+          "actualDurationMs": 1.3,
+          "baseDurationMs": 35.5,
+          "heapBeforeBytes": 21156132,
+          "heapAfterBytes": 29172376,
+          "heapDeltaBytes": 8016244,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        }
+      ]
+    },
+    {
+      "size": 500,
+      "scenario": "drag",
+      "mode": "baseline",
+      "nodes": 500,
+      "edges": 1253,
+      "namedConnections": 100,
+      "repetitions": 2,
+      "profiler": {
+        "count": 2,
+        "p50": 2.9,
+        "p95": 2.9,
+        "max": 2.9
+      },
+      "heap": {
+        "supported": true,
+        "gcAvailable": true,
+        "beforeBytes": {
+          "count": 2,
+          "p50": 20563170,
+          "p95": 20730993,
+          "max": 20749640
+        },
+        "afterBytes": {
+          "count": 2,
+          "p50": 28746586,
+          "p95": 29102811.4,
+          "max": 29142392
+        },
+        "deltaBytes": {
+          "count": 2,
+          "p50": 8183416,
+          "p95": 8707464.4,
+          "max": 8765692
+        }
+      },
+      "samples": [
+        {
+          "actualDurationMs": 2.9,
+          "baseDurationMs": 24.1,
+          "heapBeforeBytes": 20376700,
+          "heapAfterBytes": 29142392,
+          "heapDeltaBytes": 8765692,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        },
+        {
+          "actualDurationMs": 2.9,
+          "baseDurationMs": 22.8,
+          "heapBeforeBytes": 20749640,
+          "heapAfterBytes": 28350780,
+          "heapDeltaBytes": 7601140,
+          "gcAvailable": true,
+          "domNodeCount": 145
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "size": 100,
+      "scenario": "render-inicial",
+      "baselineProfilerP95Ms": 45.515,
+      "indexedProfilerP95Ms": 27.135,
+      "profilerP95ImprovementPercent": 40.38,
+      "baselineHeapDeltaP95Bytes": 6106981.1,
+      "indexedHeapDeltaP95Bytes": 4225626.1,
+      "indexedHeapDeltaOverBaselineBytes": -1881355
+    },
+    {
+      "size": 100,
+      "scenario": "drag",
+      "baselineProfilerP95Ms": 0.5,
+      "indexedProfilerP95Ms": 0.69,
+      "profilerP95ImprovementPercent": -38,
+      "baselineHeapDeltaP95Bytes": 4704708.6,
+      "indexedHeapDeltaP95Bytes": 6299835.4,
+      "indexedHeapDeltaOverBaselineBytes": 1595126.8000000007
+    },
+    {
+      "size": 500,
+      "scenario": "render-inicial",
+      "baselineProfilerP95Ms": 133.68,
+      "indexedProfilerP95Ms": 132.48,
+      "profilerP95ImprovementPercent": 0.9,
+      "baselineHeapDeltaP95Bytes": 7825010,
+      "indexedHeapDeltaP95Bytes": 7861359.4,
+      "indexedHeapDeltaOverBaselineBytes": 36349.40000000037
+    },
+    {
+      "size": 500,
+      "scenario": "drag",
+      "baselineProfilerP95Ms": 2.9,
+      "indexedProfilerP95Ms": 1.275,
+      "profilerP95ImprovementPercent": 56.03,
+      "baselineHeapDeltaP95Bytes": 8707464.4,
+      "indexedHeapDeltaP95Bytes": 8169144.6,
+      "indexedHeapDeltaOverBaselineBytes": -538319.8000000007
+    }
+  ],
+  "host": {
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.19045",
+    "cpuCount": 12,
+    "totalMemoryMiB": 16310,
+    "node": "v24.18.0",
+    "electron": "41.10.7",
+    "rendererProcess": {
+      "pid": 26224,
+      "rendererWorkingSetKiB": 293468
+    }
+  },
+  "runner": {
+    "startedAt": "2026-09-12T20:01:48.269Z",
+    "finishedAt": "2026-09-12T20:01:56.575Z",
+    "durationMs": 8306.179
+  }
+}
