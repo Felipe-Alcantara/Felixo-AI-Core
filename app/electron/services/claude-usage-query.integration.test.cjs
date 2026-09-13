@@ -134,6 +134,9 @@ function criarFixtureClaude(diretorio) {
     "  if (!statusPublicado && entrada.includes('/status')) {",
     '    statusPublicado = true',
     '    process.stdout.write(STATUS_OUTPUT)',
+    // A consulta e descartável: encerrar a fixture depois de publicar a tela
+    // evita que o teardown precise matar um ConPTY já desacoplado do runner.
+    '    setTimeout(() => process.exit(0), 100)',
     '  }',
     '})',
     'process.stdin.resume()',
