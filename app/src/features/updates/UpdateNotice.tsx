@@ -3,9 +3,9 @@ import type { UpdatePresentation } from './update-presentation'
 
 const TONE_TEXT: Record<UpdatePresentation['tone'], string> = {
   neutral: 'text-slate-300',
-  info: 'text-sky-300',
-  success: 'text-emerald-300',
-  error: 'text-rose-300',
+  info: 'text-[var(--f-core-white-soft)]',
+  success: 'text-[var(--f-core-white-soft)]',
+  error: 'text-[var(--color-error)]',
 }
 
 type UpdateIndicatorProps = {
@@ -88,7 +88,7 @@ export function AppVersionBadge({ version }: { version: string | null }) {
 
   return (
     <span
-      className="select-text px-1.5 text-xs text-slate-500"
+      className="felixo-version-badge select-text"
       title="Versão instalada do Felixo AI Core"
     >
       v{version}
@@ -172,7 +172,7 @@ export function UpdateToast({
               aria-valuemax={100}
             >
               <div
-                className="h-full rounded-full bg-sky-400 transition-[width] duration-300"
+                className="h-full rounded-full bg-[var(--f-core-active)] transition-[width] duration-300"
                 style={{ width: `${presentation.progress}%` }}
               />
             </div>
@@ -183,7 +183,7 @@ export function UpdateToast({
               <button
                 type="button"
                 onClick={onInstall}
-                className="rounded-md bg-emerald-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-emerald-400"
+                className="rounded-md bg-[var(--f-core-white)]/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-[var(--f-core-active)]"
               >
                 Reiniciar agora
               </button>

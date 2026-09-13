@@ -189,7 +189,7 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
     a({ children, href }) {
       return (
         <a
-          className="font-medium text-cyan-200 underline decoration-cyan-200/35 underline-offset-4 hover:text-cyan-100"
+          className="font-medium text-[var(--f-core-white)] underline decoration-white/30 underline-offset-4 hover:text-[var(--f-core-white)]"
           href={href}
           rel="noreferrer"
           target="_blank"
@@ -200,7 +200,7 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
     },
     blockquote({ children }) {
       return (
-        <blockquote className="border-l-2 border-orange-200/35 pl-3 text-zinc-300">
+        <blockquote className="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
           {children}
         </blockquote>
       )
@@ -376,8 +376,8 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
         >
           {copied ? (
             <>
-              <Check size={11} className="text-emerald-400" />
-              <span className="normal-case text-emerald-400">copiado</span>
+              <Check size={11} className="text-[var(--f-core-white-soft)]" />
+              <span className="normal-case text-[var(--f-core-white-soft)]">copiado</span>
             </>
           ) : (
             <>

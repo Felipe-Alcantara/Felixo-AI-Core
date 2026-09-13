@@ -114,7 +114,7 @@ export const AGENT_USAGE_STATUS_LABELS: Record<AgentUsageStatus, string> = {
 
 export const AGENT_USAGE_STATUS_CLASSES: Record<AgentUsageStatus, string> = {
   current: 'border-theme-success/20 bg-theme-success/10 text-theme-success',
-  stale: 'border-amber-300/20 bg-amber-300/10 text-amber-300',
+  stale: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
   unavailable: 'border-zinc-400/20 bg-zinc-400/10 text-zinc-400',
   error: 'border-theme-error/20 bg-theme-error/10 text-theme-error',
 }
