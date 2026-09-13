@@ -6,6 +6,7 @@ const assert = require('node:assert/strict')
 const {
   measureFirstOutput,
   parseArgs,
+  runBenchmark,
 } = require('./terminal-responsiveness-during-install.cjs')
 
 /** PtyProcessManager falso: emite o marcador em onData logo depois do spawn. */
@@ -83,5 +84,29 @@ describe('parseArgs', () => {
 
   it('rejeita argumento desconhecido', () => {
     assert.throws(() => parseArgs(['--desconhecido']), /desconhecido/)
+  })
+})
+
+describe('runBenchmark (integração real, sem mock — 1 agente, 1 iteração pra ficar rápido)', () => {
+  it('fatia 4/4: o relatório traz responsividade e energia juntas, na mesma janela', async () => {
+    const report = await runBenchmark({
+      iterations: 1,
+      agentCounts: [1],
+      managers: ['npm-runtime'],
+      out: null,
+    })
+
+    assert.equal(typeof report.environment.host.platform, 'string')
+    assert.ok(report.baseline.firstOutputMs)
+    assert.ok(report.baseline.energy)
+    assert.equal(typeof report.baseline.energy.method, 'string')
+
+    const npmResult = report.results.find((entry) => entry.manager === 'npm-runtime')
+    assert.ok(npmResult, 'npm-runtime deveria estar sempre disponível (empacotado no repo)')
+    assert.equal(npmResult.available, true)
+    assert.equal(npmResult.perAgentCount.length, 1)
+    assert.ok(npmResult.perAgentCount[0].firstOutputMs)
+    assert.ok(npmResult.perAgentCount[0].energy)
+    assert.equal(typeof npmResult.perAgentCount[0].installsSucceeded, 'boolean')
   })
 })
