@@ -27,6 +27,7 @@ const AJUDA_DEVTOOLS = `felixo devtools — dirige uma instância isolada e invi
   felixo devtools status | screenshot [--out arquivo] | buttons | windows | quit
   felixo devtools click <seletor> | click-text <texto> | type <texto> | press <tecla>
   felixo devtools text [seletor] | eval <expressão JavaScript> | main <expressão JavaScript>
+  felixo devtools heap-snapshot <arquivo.heapsnapshot> | metrics
 
 Por padrão a sessão usa um userData temporário e uma janela invisível, e sobe da fonte
 (o mesmo \`electron .\` do \`npm run dev\`, contra o Vite dev server). --real-profile é
@@ -194,6 +195,40 @@ async function connect(state, deps = {}) {
   return { browser, page }
 }
 async function withPage(deps, action) { const state = readState(deps); const { browser, page } = await connect(state, deps); try { return await action(page, state) } finally { await browser.close() } }
+
+/**
+ * Achata a lista `{name, value}[]` do CDP `Performance.getMetrics` num objeto
+ * simples — mais fácil de comparar entre snapshots (JSON.stringify de listas
+ * ordena por posição, não por nome, e dificulta o diff manual).
+ */
+function metricsListToObject(list) {
+  const result = {}
+  for (const entry of list ?? []) {
+    if (entry && typeof entry.name === 'string') result[entry.name] = entry.value
+  }
+  return result
+}
+
+/**
+ * Captura um heap snapshot real via CDP (`HeapProfiler.takeHeapSnapshot`) e
+ * grava no formato `.heapsnapshot` que o DevTools do Chrome abre nativamente
+ * — os chunks chegam via evento e precisam ser concatenados na ordem em que
+ * chegam, o protocolo não os numera.
+ */
+async function captureHeapSnapshot(page, outputPath, deps = {}) {
+  const session = await (deps.newCDPSession ?? ((p) => p.context().newCDPSession(p)))(page)
+  const chunks = []
+  session.on('HeapProfiler.addHeapSnapshotChunk', (event) => chunks.push(event.chunk))
+  try {
+    await session.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false, captureNumericValue: true })
+  } finally {
+    await session.detach().catch(() => {})
+  }
+  const fileSystem = deps.fs ?? fs
+  fileSystem.mkdirSync(path.dirname(outputPath), { recursive: true })
+  fileSystem.writeFileSync(outputPath, chunks.join(''), 'utf8')
+  return { arquivo: outputPath, bytes: Buffer.byteLength(chunks.join('')) }
+}
 function killTree(pid, deps = {}) {
   if (!isProcessAlive(pid, deps)) return false
   try {
@@ -228,8 +263,10 @@ async function executarDevtools(args, deps = {}) {
     if (command === 'text') { const selector = positional.join(' ') || 'body'; const value = await withPage(deps, (page) => page.locator(selector).first().innerText()); return { saida: value, codigo: 0 } }
     if (command === 'eval') { if (!positional.length) throw new Error('eval exige uma expressão JavaScript.'); const value = await withPage(deps, (page) => page.evaluate(positional.join(' '))); return { saida: typeof value === 'string' ? value : JSON.stringify(value, null, 2), codigo: 0 } }
     if (command === 'main') { if (!positional.length) throw new Error('main exige uma expressão JavaScript.'); const expression = positional.join(' '); const value = await withPage(deps, (page) => page.evaluate((source) => window.felixo?.devtools?.mainEval(source), expression)); return { saida: typeof value === 'string' ? value : JSON.stringify(value, null, 2), codigo: 0 } }
+    if (command === 'heap-snapshot') { if (!positional.length) throw new Error('heap-snapshot exige um arquivo de saída.'); const output = path.resolve(positional.join(' ')); const result = await withPage(deps, (page) => captureHeapSnapshot(page, output, deps)); return { saida: `${result.arquivo} (${result.bytes} bytes)`, codigo: 0 } }
+    if (command === 'metrics') { const value = await withPage(deps, async (page) => { const session = await (deps.newCDPSession ?? ((p) => p.context().newCDPSession(p)))(page); try { await session.send('Performance.enable'); const { metrics } = await session.send('Performance.getMetrics'); return metricsListToObject(metrics) } finally { await session.detach().catch(() => {}) } }); return { saida: JSON.stringify(value, null, 2), codigo: 0 } }
     return { saida: AJUDA_DEVTOOLS, erro: `Comando DevTools desconhecido: ${command}`, codigo: 2 }
   } catch (error) { return { saida: '', erro: error?.message ?? 'Falha no DevTools.', codigo: 1 } }
 }
 
-module.exports = { AJUDA_DEVTOOLS, STATE_FILE, executarDevtools, findFreePort, formatState, isProcessAlive, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }
+module.exports = { AJUDA_DEVTOOLS, STATE_FILE, captureHeapSnapshot, connect, executarDevtools, findFreePort, formatState, isProcessAlive, metricsListToObject, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }

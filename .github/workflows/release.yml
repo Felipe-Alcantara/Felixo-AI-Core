@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout validated commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 
@@ -124,7 +124,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # workflow_run roda no contexto do branch padrão, não no commit que
           # disparou o CI. Sem fixar o SHA, o release publicaria o topo de
@@ -132,7 +132,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.x
           cache: npm
@@ -144,7 +144,7 @@ jobs:
       # Reaproveita o diagnóstico incremental salvo pelo CI do mesmo SO. O
       # tsc ainda confere as entradas; cache antigo apenas força reconstrução.
       - name: Restore TypeScript incremental cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: app/node_modules/.tmp
           key: typecheck-${{ runner.os }}-${{ hashFiles('app/package-lock.json', 'app/tsconfig*.json') }}
@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload packaged inventory report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: package-inventory-${{ matrix.os }}
           path: app/release/package-inventory-${{ matrix.os }}.json
@@ -195,7 +195,7 @@ jobs:
 
       - name: Upload package manager benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: package-manager-alternatives-${{ matrix.os }}
           path: app/release/package-manager-alternatives-${{ matrix.os }}.json
@@ -212,7 +212,7 @@ jobs:
 
       - name: Upload package-manager operational benchmark
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: package-manager-operational-${{ matrix.os }}
           path: app/release/package-manager-operational-${{ matrix.os }}.json
@@ -235,7 +235,7 @@ jobs:
 
       - name: Upload release smoke report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-smoke-${{ matrix.os }}
           path: app/release/release-smoke-${{ matrix.os }}.json
@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload release smoke report (quarentena simulada)
         if: always() && runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-smoke-quarantine-${{ matrix.os }}
           path: app/release/release-smoke-quarantine-${{ matrix.os }}.json
@@ -286,7 +286,7 @@ jobs:
 
       - name: Upload release smoke report (cmd.exe)
         if: always() && runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-smoke-cmd-${{ matrix.os }}
           path: app/release/release-smoke-cmd-${{ matrix.os }}.json
@@ -311,7 +311,7 @@ jobs:
 
       - name: Upload release smoke report (path longo)
         if: always() && runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-smoke-longpath-${{ matrix.os }}
           path: app/release/release-smoke-longpath-${{ matrix.os }}.json
@@ -360,7 +360,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 

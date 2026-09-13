@@ -4992,3 +4992,89 @@ desaconselhasse a avaliação recomendada anteriormente.
 proxy de CPU/tempo de parede em todo ambiente testado (nenhum runner hospedado
 expõe leitura real com permissão suficiente) — declarado, não inventado. Não vira
 recomendação de migração automática — decisão humana, fora do escopo desta task.
+
+## Fechamento de Trabalho — 2026-09-12/13 (continuação) — tentativa de validar troca multi-conta Codex, interrompida por segurança
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task "Release — validar troca multi-conta Codex com duas contas reais no pacote em
+Linux e outro SO" pedia duas contas Codex reais + segundo SO. Perguntado, o Felipe
+autorizou usar as contas já autenticadas no perfil real dele (login padrão do
+sistema + um perfil já criado no app) e pediu pra fatiar a parte de segundo SO.
+
+Abri o app real empacotado (`.deb` v0.1.299 instalado, acima do pré-requisito
+v0.1.179) via `felixo devtools launch --packaged ... --real-profile`, com
+autorização explícita do Felipe pra mexer no perfil de produção sem ele
+acompanhando ao vivo. Tentei seguir o roteiro (criar nós Codex A/B), mas a
+automação de clique às cegas criou um nó "Claude · local" indesejado — as
+coordenadas do screenshot não bateram com os bounding rects do DOM via `eval`
+(provável transform de zoom/pan do canvas), tornando a automação não confiável.
+
+**Decisão de segurança:** parei antes de continuar tentando seletores às cegas
+contra dados de produção reais, já passando da meia-noite e sem supervisão — o
+risco não compensava. Removi o nó indesejado (via tecla Delete, confirmado por
+screenshot que o canvas voltou ao estado original) antes de encerrar a sessão.
+Nenhum dado real foi perdido/alterado, nenhum segredo foi lido/exposto.
+
+**Estado final.** Task permanece não concluída (nenhum critério de aceite
+cumprido) — recomendação registrada: precisa de sessão com o Felipe presente, ou
+de investimento maior em mapear os seletores corretos da UI antes de nova
+tentativa em produção. Task nova aberta pra parte de segundo SO
+(`3da91f95-497e-815e-86b2-f9afdb57e7cf`), por pedido dele.
+
+## Fechamento de trabalho — 2026-09-13 — ferramentas de heap snapshot DevTools real para o Canvas
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task "Performance — capturar snapshots de heap do Canvas real em sessão longa no
+Linux" (task de acompanhamento da investigação de degradação do Canvas, que
+mediu terminal/PTY com `performance.memory` mas não tinha snapshots DevTools de
+uma sessão real com webviews).
+
+### O que foi feito
+
+- `felixo devtools heap-snapshot <arquivo>` e `felixo devtools metrics`: novos
+  subcomandos que usam os domínios CDP `HeapProfiler`/`Performance` pela mesma
+  conexão Playwright já existente no DevTools isolado — um `.heapsnapshot` real
+  (validado abrindo com `JSON.parse` e conferindo `node_fields`/`detachedness`
+  contra um snapshot de verdade capturado da app) e as métricas de heap/DOM/
+  listeners do CDP, achatadas num objeto simples.
+- `scripts/heap-snapshot-analysis.cjs`: resume um `.heapsnapshot` por
+  construtor (`type:name`, contagem, self_size, nós com `detachedness=2` — o
+  mesmo sinal que o filtro "Detached" do DevTools usa) e compara dois
+  snapshots com um limiar de ruído (512 KiB) para separar GC residual normal de
+  crescimento real.
+- `scripts/canvas-long-session-heap-capture.cjs`: orquestra uma sessão real —
+  perfil sempre descartável, nunca produção — que sobe o app, monta uma
+  fixture (N terminais shell, M webviews servidas por um HTTP local
+  autocontido, um bloco e um grupo), alterna atividade/ociosidade pela duração
+  pedida, e captura heap/métricas/RSS real (via `ps`, somando todos os
+  processos descendentes do Electron — renderer, GPU, utility, PTYs) em 5
+  checkpoints: baseline, fixture criada, estado degradado, depois de remover
+  terminais/webviews e depois de "Limpar canvas" (aceitando o `window.confirm`
+  nativo numa conexão CDP contínua). Ao final, roda o diff entre checkpoints
+  consecutivos e escreve `report.json`/`report.md`.
+
+### Validação
+
+34 testes novos (unitários, com CDP/fs/ps injetáveis — nada de rede/Electron
+real nos testes). `npm test` 1235/1235, lint limpo, `npm run build` (typecheck
+completo) sem erro. `npm run test:native` reproduz uma falha pré-existente e
+não relacionada (`claude-usage-query.integration.test.cjs`, flake de
+concorrência entre os dois testes nativos rodando em sequência) — confirmada
+idêntica numa `main` limpa via `git stash`, portanto fora do escopo desta PR.
+
+Smoke real (perfil descartável, 2 terminais shell + 1 webview local, ~30s de
+carga): pipeline completo funcionou ponta a ponta e já apontou um sinal
+concreto — depois de "Limpar canvas" a contagem de processos do SO voltou
+exatamente ao baseline (8 = 8, sem PTY/webview órfão), mas heap JS (1,4 MiB →
+29,4 MiB), nós DOM (52 → 780) e listeners (2 → 585) ficaram bem acima do
+baseline, com contagem de nós `detachedness=2` crescendo a cada checkpoint em
+vez de cair. Sinal de possível retenção no nível do renderer (DOM/listener),
+distinto do que a task principal já corrigiu (liberação de PTY na remoção).
+Amostra pequena demais pra conclusão — a matriz real de 30/60/120 min com
+10/20 terminais fica para a evidência final da task.
+
+### Referências
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
