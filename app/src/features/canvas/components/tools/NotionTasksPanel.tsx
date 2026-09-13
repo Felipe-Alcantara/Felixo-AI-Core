@@ -930,13 +930,13 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                 <table className="min-w-[760px] w-full table-fixed border-collapse text-xs" aria-label="Tarefas do Notion">
                   <thead className="bg-white/[0.03] text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                     <tr className="border-b border-white/10">
-                      <th className="w-12 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>
-                      <th className="min-w-[22rem] px-3 py-2 font-medium" scope="col">Tarefa</th>
+                      <th className="sticky left-0 z-10 w-12 bg-zinc-950 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>
+                      <th className="sticky left-12 z-10 w-[22rem] bg-zinc-950 px-3 py-2 font-medium" scope="col">Tarefa</th>
                       <th className="w-36 px-3 py-2 font-medium" scope="col">Estado</th>
                       <th className="w-32 px-3 py-2 font-medium" scope="col">Prioridade</th>
                       <th className="w-36 px-3 py-2 font-medium" scope="col">Prazo</th>
                       {visibleColumns.map((name) => (
-                        <th key={name} className="min-w-[9rem] px-3 py-2 font-medium" scope="col" title={name}>{name}</th>
+                        <th key={name} className="w-[9rem] px-3 py-2 font-medium" scope="col" title={name}>{name}</th>
                       ))}
                       <th className="w-24 px-3 py-2 text-right font-medium" scope="col"><span className="sr-only">Ações</span></th>
                     </tr>
@@ -953,13 +953,20 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       return (
                         <Fragment key={task.id}>
                           <tr className={`group border-b border-white/[0.07] align-middle last:border-0 hover:bg-white/[0.035] ${task.completed ? 'text-zinc-500' : 'text-zinc-300'}`}>
-                            <td className="px-3 py-2.5">
-                              <button type="button" className={`felixo-btn-icon flex h-5 w-5 items-center justify-center rounded-full border ${task.completed ? 'border-white/10 felixo-primary-action text-white' : 'border-zinc-600 text-transparent hover:border-zinc-400'} disabled:opacity-50`} onClick={() => void toggleTask(task)} disabled={busyTaskId === task.id} aria-label={task.completed ? `Reabrir ${task.title}` : `Concluir ${task.title}`} title={task.completed ? 'Reabrir' : 'Concluir'}><Check size={12} /></button>
+                            <td className="sticky left-0 z-10 bg-zinc-950 px-3 py-2.5 group-hover:bg-zinc-900">
+                              <button
+                                type="button"
+                                className={`felixo-btn-icon flex h-5 w-5 items-center justify-center rounded-full border ${task.completed ? 'border-white/10 felixo-primary-action text-white' : 'border-zinc-500 text-zinc-600 hover:border-zinc-300 hover:text-zinc-300'} disabled:opacity-50`}
+                                onClick={() => void toggleTask(task)}
+                                disabled={busyTaskId === task.id}
+                                aria-label={task.completed ? `Reabrir ${task.title}` : `Concluir ${task.title}`}
+                                title={task.completed ? 'Concluída — clique para reabrir' : 'Marcar como concluída'}
+                              ><Check size={12} /></button>
                             </td>
-                            <td className="px-3 py-2.5">
+                            <td className="sticky left-12 z-10 bg-zinc-950 px-3 py-2.5 group-hover:bg-zinc-900">
                               <div className="flex min-w-0 items-center gap-1">
                                 {hasDetails ? <button type="button" className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200" onClick={() => toggleTaskDetails(task)} aria-label={isExpanded ? `Recolher ${task.title}` : `Ver detalhes de ${task.title}`} title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button> : <span className="w-[19px] shrink-0" />}
-                                <span className={`min-w-0 flex-1 break-words font-medium ${task.completed ? 'line-through' : 'text-zinc-100'}`} title={task.title}>{task.title}</span>
+                                <span className={`min-w-0 flex-1 whitespace-normal break-words font-medium ${task.completed ? 'line-through' : 'text-zinc-100'}`} title={task.title}>{task.title}</span>
                                 {task.url && <a className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] group-hover:opacity-100" href={task.url} target="_blank" rel="noreferrer" aria-label={`Abrir ${task.title}`} title="Abrir no Notion"><ExternalLink size={13} /></a>}
                               </div>
                             </td>
