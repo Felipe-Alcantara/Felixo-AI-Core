@@ -12,20 +12,17 @@ preview screenshots` removendo os arquivos, e opcionalmente um padrão
 específico (`/preview-*.png`, nunca `*.png` genérico) no `.gitignore` para não
 repetir. Isso é decisão de produto, não técnica.
 
-### 2. Merge para `main`
-Esta branch (`codex/felixo-visual-polish`) está com pipeline 100% verde e
-sincronizada com o remoto. O projeto usa fluxo de PR (CI dispara em
-`pull_request`, commits referenciam `#32`, `#36` etc.) e `gh` CLI não está
-instalado nesta máquina — não tentei abrir PR via API manual nem push direto
-em `main`, que seria contornar o processo estabelecido. **READY FOR MERGE**:
-falta apenas abrir o PR (`git push` já feito, é só criar o PR no GitHub) ou
-alguém com `gh` configurado rodar `gh pr create`.
+### 2. Merge para `main` — concluído
+O código da branch `codex/felixo-visual-polish` foi integrado pelo PR #34.
+O merge commit é `14112be`; `main` local e `origin/main` apontam para o mesmo
+commit. A execução pós-merge CI #491 terminou com **13/13 jobs aprovados**.
+Não há decisão de merge pendente para o código desta sessão.
 
-### 3. `main` local está desatualizada
-`main` local (`3f121f6`) está 4 commits atrás de `origin/main` (trabalho de
-performance/energia mesclado por outra sessão) e não foi tocada nesta sessão
-— nenhuma necessidade de mexer nela já que o trabalho acontece na feature
-branch.
+### 3. Branches de trabalho — limpeza opcional
+As branches `codex/felixo-visual-polish` e
+`docs/overnight-report-20260912` continuam no remoto para preservar o
+histórico e a auditoria. Removê-las é opcional e deve ser feito somente após
+confirmar que os PRs e os documentos não serão mais necessários.
 
 ## Sem bloqueio, mas fora do escopo desta sessão
 

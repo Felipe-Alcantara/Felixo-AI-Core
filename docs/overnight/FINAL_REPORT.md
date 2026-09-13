@@ -51,6 +51,9 @@ Todos os quatro estão em `main` via o merge do PR #34.
 Todos rodados na árvore final mesclada (`14112be`), não só nos commits
 isolados.
 
+O CI pós-merge do commit `14112be` também terminou verde: execução #491,
+**13/13 jobs aprovados**, incluindo a validação do Windows.
+
 ## BACKEND
 
 **Status: estável, sem regressão.** Único código de produção tocado nesta
