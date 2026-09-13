@@ -136,11 +136,20 @@ async function createMiscNodes() {
   }
 }
 
-/** Digita um texto benigno num terminal aleatório — carga de "atividade" sem depender de CLI real. */
+/**
+ * Digita um texto benigno num terminal — carga de "atividade" sem depender de
+ * CLI real. Clicar no card do terminal abre o drawer lateral
+ * (`TerminalDrawer`, ver `.felixo-terminal-drawer`); fechar explicitamente no
+ * fim do burst é o que separa "ninguém fechou ainda" (carga esperada) de uma
+ * retenção real — se o DOM do drawer continuar crescendo mesmo fechando
+ * sempre, o vazamento é do próprio ciclo abrir/fechar, não da falta de uso.
+ */
 async function simulateActivityBurst() {
   await devtools.executarDevtools(['click-text', 'aguardando'])
   await devtools.executarDevtools(['type', `echo sessao-longa-heap-${Date.now()}`])
   await devtools.executarDevtools(['press', 'Enter'])
+  await sleep(200)
+  await devtools.executarDevtools(['click', '[aria-label="Fechar terminal"]']).catch(() => {})
 }
 
 async function removeAllTerminalAndWebviewNodes() {

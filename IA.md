@@ -5078,3 +5078,49 @@ Amostra pequena demais pra conclusão — a matriz real de 30/60/120 min com
 ### Referências
 
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## Fechamento de trabalho — 2026-09-13 (continuação) — primeira sessão real de 30min e achado no TerminalDrawer
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+### Sessão real (perfil descartável, 10 terminais shell, 3 webviews locais, 30 minutos de carga)
+
+`/home/felipe/.claude/jobs/225a9b8c/tmp/heap-sessions/30min-10term-3web/report.md`
+(local, sanitizado — sem conteúdo de terminal nem caminho pessoal além do já
+presente no próprio código-fonte).
+
+Baseline 1,6 MiB de heap / 52 nós DOM / 2 listeners / 9 processos → depois de
+"Limpar canvas": 58,6 MiB / 2.645 nós DOM / 1.530 listeners / 8 processos. Os
+processos do SO voltam a um número igual ou menor que o baseline (sem PTY/
+webview órfão — confirma que a correção de liberação de PTY da task principal
+continua valendo), mas heap/DOM/listeners do renderer ficam bem acima do
+baseline.
+
+O diff entre "depois de remover" e "depois de Limpar canvas" aponta um
+candidato específico: nós DOM do `TerminalDrawer` (`.felixo-terminal-drawer`,
+botão "Recolher terminal", cabeçalho do drawer, `xterm-helper-textarea`) com
+`detachedness=2` (o sinal que o próprio V8 grava pra nó destacado do DOM, o
+mesmo que o filtro "Detached" do DevTools usa) chegando a 19-21 instâncias e
+não caindo.
+
+### Ressalva encontrada e corrigida antes de tirar conclusão
+
+A simulação de atividade da sessão só ABRIA o drawer lateral (clicar no card
+do terminal pra digitar nele abre o `TerminalDrawer`, que reaproveita o xterm
+já rodando), nunca fechava — então o crescimento podia ser só "ninguém fechou
+ainda" em vez de retenção real do ciclo abrir/fechar. Corrigido: agora cada
+rajada de atividade fecha o drawer explicitamente
+(`[aria-label="Fechar terminal"]`) antes de seguir. PR:
+https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39
+
+A sessão de 30min citada acima usou a versão SEM o fechamento explícito — os
+números são um teto (pior caso, uso sem fechar), não uma prova de vazamento no
+ciclo abrir/fechar em si. Uma sessão de 60 minutos com a versão corrigida
+(fecha sempre) está rodando para decidir se o candidato se confirma mesmo
+fechando, ou se estabiliza (carga esperada).
+
+### Referências
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+PR da ferramenta: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/38 (mergeada)
+PR do ajuste de metodologia: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39
