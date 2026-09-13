@@ -14,6 +14,7 @@ import {
 } from '../../shared/agent-usage/agent-usage'
 import { AgentUsageStatusDetailsView } from '../../shared/agent-usage/AgentUsageStatusDetails'
 import { AgentUsageResetCreditsView } from '../../shared/agent-usage/AgentUsageResetCredits'
+import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
@@ -26,11 +27,11 @@ type AgentUsageLimitsModalProps = {
   onClose: () => void
 }
 
-const AUTO_REFRESH_OPTIONS = [
-  { value: 0, label: 'Desligado' },
-  { value: 5, label: 'A cada 5 min' },
-  { value: 15, label: 'A cada 15 min' },
-  { value: 30, label: 'A cada 30 min' },
+const AUTO_REFRESH_OPTIONS: FelixoSelectOption[] = [
+  { value: '0', label: 'Desligado' },
+  { value: '5', label: 'A cada 5 min' },
+  { value: '15', label: 'A cada 15 min' },
+  { value: '30', label: 'A cada 30 min' },
 ]
 
 export function AgentUsageLimitsModal({
@@ -245,20 +246,16 @@ export function AgentUsageLimitsModal({
               <SummaryBadge label="Erros" value={summary.error} tone="error" />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 text-[11px] text-zinc-500">
+              <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                 Atualização automática
-                <select
-                  value={autoRefreshMinutes}
-                  onChange={(event) => setAutoRefreshMinutes(Number(event.target.value))}
-                  className="h-8 rounded-xl border border-white/[0.08] bg-[#1a1a19] px-2 text-[11px] text-zinc-300 outline-none focus:ring-2 focus:ring-white/25"
-                >
-                  {AUTO_REFRESH_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <FelixoSelect
+                  value={String(autoRefreshMinutes)}
+                  options={AUTO_REFRESH_OPTIONS}
+                  onChange={(value) => setAutoRefreshMinutes(Number(value))}
+                  aria-label="Atualização automática"
+                  className="min-w-[9.5rem]"
+                />
+              </div>
               <button
                 type="button"
                 disabled={loading}
@@ -313,20 +310,16 @@ export function AgentUsageLimitsModal({
                 mascarada de exibição.
               </p>
 
-              <label className="block text-xs text-zinc-400">
+              <div className="block text-xs text-zinc-400">
                 Provider
-                <select
+                <FelixoSelect
                   value={providerId}
-                  onChange={(event) => setProviderId(event.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-white/[0.08] bg-[#1a1a19] px-2 text-xs text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
-                >
-                  {providers.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  options={providers.map((provider) => ({ value: provider.id, label: provider.name }))}
+                  onChange={setProviderId}
+                  aria-label="Provider"
+                  className="mt-1"
+                />
+              </div>
 
               <label className="block text-xs text-zinc-400">
                 Nome local

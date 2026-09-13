@@ -60,7 +60,7 @@
     "appId": "com.felixoverse.felixo-ai-core",
     "productName": "Felixo AI Core",
     "copyright": "Copyright © 2026 Felipe Alcantara",
-    "icon": "public/brand/logos/png/felixo-app-icon-dark-512.png",
+    "icon": "public/brand/logos/png/felixo-cyber-cat-4096.png",
     "directories": {
       "output": "release"
     },

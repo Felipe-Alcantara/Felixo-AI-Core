@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Play, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { AUTOMATION_SCOPE_LABELS } from '../../shared/types/automations'
+import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { AutomationDefinition, AutomationScope } from '../types'
 
 type AutomationDraft = Pick<
@@ -189,20 +190,16 @@ export function AutomationsModal({
               />
             </label>
 
-            <label className="block text-xs text-zinc-400">
+            <div className="block text-xs text-zinc-400">
               Escopo
-              <select
+              <FelixoSelect
                 value={scope}
-                onChange={(event) => setScope(event.target.value as AutomationScope)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
-              >
-                {scopeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={scopeOptions}
+                onChange={(value) => setScope(value as AutomationScope)}
+                aria-label="Escopo"
+                className="mt-1"
+              />
+            </div>
 
             <label className="block text-xs text-zinc-400">
               Prompt

@@ -1,13 +1,57 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const os = require('node:os')
+const fsp = require('node:fs')
+const path = require('node:path')
+const { execFileSync } = require('node:child_process')
 const {
   assertAllowedGitArgs,
+  assertSafeBranchName,
+  getCommitLog,
+  listRepoFiles,
   normalizeCommitMessage,
+  parseBranchTracking,
   parseGitBranch,
   assertSafeRepoRelativePath,
   parseGitStatusEntries,
   parseGitStatusLines,
+  readRepoFile,
 } = require('./git-service.cjs')
+
+test('parseBranchTracking le upstream e distancia do cabecalho do porcelain', () => {
+  assert.deepEqual(parseBranchTracking(['## main...origin/main [ahead 2, behind 1]']), {
+    upstream: 'origin/main',
+    ahead: 2,
+    behind: 1,
+  })
+  assert.deepEqual(parseBranchTracking(['## feature']), { upstream: null, ahead: 0, behind: 0 })
+})
+
+test('assertSafeBranchName recusa o que viraria opcao ou ref invalida', () => {
+  assert.equal(assertSafeBranchName('feature/login-2'), 'feature/login-2')
+  for (const ruim of ['-x', '--force', 'a..b', 'a b', 'x/', 'x.lock', 'feat@{1}', 'a~1', 'a^', 'a:b']) {
+    assert.throws(() => assertSafeBranchName(ruim), /invalido/, ruim)
+  }
+})
+
+test('a allowlist de rede e branch aceita so as formas fixas', () => {
+  assert.doesNotThrow(() => assertAllowedGitArgs(['push']))
+  assert.doesNotThrow(() => assertAllowedGitArgs(['pull', '--ff-only']))
+  assert.doesNotThrow(() => assertAllowedGitArgs(['switch', 'main']))
+  assert.doesNotThrow(() => assertAllowedGitArgs(['push', '--set-upstream', 'origin', 'main']))
+  assert.throws(() => assertAllowedGitArgs(['push', '--force']), /nao permitido/)
+  assert.throws(() => assertAllowedGitArgs(['pull']), /nao permitido/)
+  assert.throws(() => assertAllowedGitArgs(['switch', '-c', 'nova']), /nao permitido|invalido/)
+  assert.throws(() => assertAllowedGitArgs(['switch', '--detach']), /invalido/)
+})
+
+test('descartar nunca aceita a raiz inteira como caminho', () => {
+  assert.doesNotThrow(() => assertAllowedGitArgs(['clean', '-f', '--', 'novo.txt']))
+  assert.doesNotThrow(() => assertAllowedGitArgs(['restore', '--staged', '--worktree', '--', 'a.ts']))
+  assert.throws(() => assertAllowedGitArgs(['clean', '-f', '--', '.']), /invalido/)
+  assert.throws(() => assertAllowedGitArgs(['clean', '-fd', '--', 'x']), /nao permitido/)
+  assert.throws(() => assertSafeRepoRelativePath('.'), /invalido/)
+})
 
 test('parses git status lines without empty output', () => {
   assert.deepEqual(
@@ -33,6 +77,15 @@ test('allows only safe git command shapes used by Code panel', () => {
   )
   assert.doesNotThrow(() => assertAllowedGitArgs(['diff', '--stat']))
   assert.doesNotThrow(() => assertAllowedGitArgs(['add', '--all']))
+  assert.doesNotThrow(() =>
+    assertAllowedGitArgs(['ls-files', '--cached', '--others', '--exclude-standard', '-z']),
+  )
+  // Sem --exclude-standard a mesma listagem despejaria node_modules inteiro:
+  // a forma aceita e uma so, nao o comando com qualquer combinacao de flags.
+  assert.throws(
+    () => assertAllowedGitArgs(['ls-files', '--cached', '--others', '-z']),
+    /nao permitido/,
+  )
   assert.doesNotThrow(() =>
     assertAllowedGitArgs(['restore', '--staged', '--', '.']),
   )
@@ -142,4 +195,77 @@ test('a allowlist aceita as formas por arquivo e continua recusando o resto', ()
   assert.throws(() => assertAllowedGitArgs(['push', '--force']), /nao permitido/)
   assert.throws(() => assertAllowedGitArgs(['checkout', '--', 'src/app.ts']), /nao permitido/)
   assert.throws(() => assertAllowedGitArgs(['clean', '-fd']), /nao permitido/)
+})
+
+test('listRepoFiles lista o repositorio sem o que o .gitignore exclui', async () => {
+  const repo = fsp.mkdtempSync(path.join(os.tmpdir(), 'felixo-git-'))
+  execFileSync('git', ['init', '--quiet'], { cwd: repo })
+  fsp.writeFileSync(path.join(repo, '.gitignore'), 'ignorado/')
+  fsp.mkdirSync(path.join(repo, 'src'))
+  fsp.mkdirSync(path.join(repo, 'ignorado'))
+  fsp.writeFileSync(path.join(repo, 'src', 'app.ts'), 'export const x = 1')
+  fsp.writeFileSync(path.join(repo, 'ignorado', 'lixo.txt'), 'nao deve aparecer')
+
+  try {
+    const tree = await listRepoFiles(repo)
+    assert.ok(tree.files.includes('src/app.ts'))
+    assert.ok(tree.files.includes('.gitignore'))
+    assert.equal(
+      tree.files.some((file) => file.startsWith('ignorado/')),
+      false,
+    )
+    // Sem duplicata: o mesmo caminho sai uma vez por estagio durante conflito.
+    assert.equal(new Set(tree.files).size, tree.files.length)
+    assert.equal(tree.truncated, false)
+    assert.equal(tree.total, tree.files.length)
+  } finally {
+    fsp.rmSync(repo, { recursive: true, force: true })
+  }
+})
+
+test('getCommitLog e readRepoFile trabalham sobre um repositorio real', async () => {
+  const repo = fsp.mkdtempSync(path.join(os.tmpdir(), 'felixo-git-log-'))
+  const git = (...args) =>
+    execFileSync('git', args, {
+      cwd: repo,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'Teste',
+        GIT_AUTHOR_EMAIL: 't@t.dev',
+        GIT_COMMITTER_NAME: 'Teste',
+        GIT_COMMITTER_EMAIL: 't@t.dev',
+      },
+    })
+  git('init', '--quiet')
+  fsp.writeFileSync(path.join(repo, 'a.txt'), 'linha 1')
+  fsp.writeFileSync(path.join(repo, 'bin.dat'), Buffer.from([0, 1, 2, 3]))
+  git('add', '--all')
+  git('commit', '--quiet', '-m', 'feat: primeiro')
+
+  try {
+    const { commits } = await getCommitLog(repo)
+    assert.equal(commits.length, 1)
+    assert.equal(commits[0].subject, 'feat: primeiro')
+    assert.equal(commits[0].author, 'Teste')
+    assert.match(commits[0].shortHash, /^[0-9a-f]{7,}$/)
+
+    const texto = readRepoFile(repo, 'a.txt')
+    assert.equal(texto.content, 'linha 1')
+    assert.equal(texto.binary, false)
+
+    assert.equal(readRepoFile(repo, 'bin.dat').binary, true)
+    assert.throws(() => readRepoFile(repo, '../fora.txt'), /fora do repositorio/)
+    assert.throws(() => readRepoFile(repo, 'nao-existe.txt'), /ENOENT/)
+  } finally {
+    fsp.rmSync(repo, { recursive: true, force: true })
+  }
+})
+
+test('listRepoFiles recusa pasta que nao e repositorio', async () => {
+  const vazio = fsp.mkdtempSync(path.join(os.tmpdir(), 'felixo-sem-git-'))
+  try {
+    await assert.rejects(() => listRepoFiles(vazio), /repositorio Git/)
+  } finally {
+    fsp.rmSync(vazio, { recursive: true, force: true })
+  }
 })

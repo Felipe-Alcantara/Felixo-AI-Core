@@ -4,9 +4,10 @@
 
 /**
  * Accepts URLs without a protocol (like a browser's address bar) and
- * prefixes `https://` automatically. Returns `undefined` when the resulting
- * text isn't a parseable http(s) URL — this only rejects obviously invalid
- * input, it's not a domain allowlist/blocklist.
+ * prefixes `https://` automatically, except for loopback hosts commonly used
+ * by local development servers, which default to `http://`. Returns
+ * `undefined` when the resulting text isn't a parseable http(s) URL — this
+ * only rejects obviously invalid input, it's not a domain allowlist/blocklist.
  */
 export function normalizeUrlInput(raw: string): string | undefined {
   const trimmed = raw.trim()
@@ -14,7 +15,7 @@ export function normalizeUrlInput(raw: string): string | undefined {
     return undefined
   }
 
-  // Só o texto SEM esquema ganha o https:// implícito. Sem esta checagem,
+  // Só o texto SEM esquema ganha um protocolo implícito. Sem esta checagem,
   // `file:///etc/passwd` não casaria com o teste de http(s), seria prefixado
   // e viraria `https://file///etc/passwd` — um endereço absurdo em vez de uma
   // rejeição. O mesmo valia para ftp://, chrome:// e afins.
@@ -23,9 +24,10 @@ export function normalizeUrlInput(raw: string): string | undefined {
   // seria lido como esquema "localhost" e o endereço de um servidor local
   // deixaria de funcionar. Os esquemas sem `//` que importam bloquear —
   // javascript:, data:, about: — já são barrados pela checagem de protocolo
-  // no fim, porque o https:// implícito não os torna http(s).
+  // no fim, porque o protocolo implícito não os torna http(s).
   const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
-  const candidate = hasScheme ? trimmed : `https://${trimmed}`
+  const implicitProtocol = hasScheme ? '' : isLoopbackAddress(trimmed) ? 'http://' : 'https://'
+  const candidate = hasScheme ? trimmed : `${implicitProtocol}${trimmed}`
 
   try {
     const parsed = new URL(candidate)
@@ -34,5 +36,24 @@ export function normalizeUrlInput(raw: string): string | undefined {
       : undefined
   } catch {
     return undefined
+  }
+}
+
+/**
+ * Local development servers almost always speak plain HTTP. Detect the host
+ * from a temporary HTTPS parse so paths, ports, and IPv6 brackets are handled
+ * by the platform URL parser instead of by a second hand-written grammar.
+ */
+function isLoopbackAddress(raw: string): boolean {
+  try {
+    const hostname = new URL(`https://${raw}`).hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    return (
+      hostname === 'localhost' ||
+      hostname === 'localhost.localdomain' ||
+      hostname === '::1' ||
+      /^127(?:\.\d{1,3}){3}$/.test(hostname)
+    )
+  } catch {
+    return false
   }
 }

@@ -210,11 +210,36 @@ export type {
 export type GitProjectSummary = {
   projectPath: string
   branch: string | null
+  /** Branch remota rastreada ("origin/main"), ou null sem upstream. */
+  upstream: string | null
+  ahead: number
+  behind: number
   statusLines: string[]
   diffStat: string
   recentCommits: string[]
   isClean: boolean
   error?: string
+}
+
+/** Um commit do `git:get-log` — see getCommitLog() in git-service.cjs. */
+export type GitCommit = {
+  hash: string
+  shortHash: string
+  author: string
+  /** ISO 8601 estrito, como o git emite com `--date=iso-strict`. */
+  date: string
+  subject: string
+}
+
+/** Result of `git:read-file` — see readRepoFile() in git-service.cjs. */
+export type GitRepoFile = {
+  path: string
+  size: number
+  /** Conteúdo vazio quando `binary` ou `truncated`. */
+  content: string
+  binary: boolean
+  /** Acima do limite de leitura; o conteúdo não veio. */
+  truncated: boolean
 }
 
 /** Result of `git:get-file-diff` — see getFileDiff() in git-service.cjs. */

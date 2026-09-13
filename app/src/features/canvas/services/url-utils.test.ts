@@ -41,15 +41,20 @@ describe('normalizeUrlInput', () => {
     expect(normalizeUrlInput('file:///etc/passwd')).toBeUndefined()
   })
 
-  it('trata host:porta como endereço, não como esquema', () => {
-    // Regressão: uma checagem de esquema genérica (`^[a-z]+:`) leria
-    // "localhost" como esquema e rejeitaria o endereço de um servidor local,
-    // que é justamente o que se abre num bloco de Página Web durante o dev.
-    expect(normalizeUrlInput('localhost:3000')).toBe('https://localhost:3000/')
+  it('trata host:porta como endereço e usa http no loopback local', () => {
+    // Servidores de desenvolvimento locais normalmente não oferecem TLS.
+    // Sem o protocolo explícito, o bloco deve abrir a porta HTTP em vez de
+    // tentar um handshake HTTPS contra ela.
+    expect(normalizeUrlInput('localhost:3000')).toBe('http://localhost:3000/')
     expect(normalizeUrlInput('exemplo.com:8080/painel')).toBe(
       'https://exemplo.com:8080/painel',
     )
-    expect(normalizeUrlInput('127.0.0.1:5173')).toBe('https://127.0.0.1:5173/')
+    expect(normalizeUrlInput('127.0.0.1:5173')).toBe('http://127.0.0.1:5173/')
+    expect(normalizeUrlInput('[::1]:5173')).toBe('http://[::1]:5173/')
+  })
+
+  it('preserva https explícito mesmo em host local', () => {
+    expect(normalizeUrlInput('https://localhost:3000/')).toBe('https://localhost:3000/')
   })
 
   it('rejeita texto que não forma uma URL válida', () => {

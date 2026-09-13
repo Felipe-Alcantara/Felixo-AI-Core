@@ -10,7 +10,6 @@ import {
 } from 'react'
 import {
   ChevronDown,
-  ChevronUp,
   FileText,
   FolderOpen,
   Globe,
@@ -27,7 +26,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
-import { FelixoLockup, FelixoSymbol } from '../../shared/brand/FelixoMark'
+import { FelixoLockup } from '../../shared/brand/FelixoMark'
+import { SidebarSection } from '../../shared/components/SidebarSection'
 import { TerminalMenu } from './TerminalMenu'
 import { AppVersionBadge, CheckUpdateButton, UpdateIndicator } from '../../updates/UpdateNotice'
 import { CliSetupIndicator } from '../../setup/CliSetupNotice'
@@ -145,9 +145,6 @@ export function CanvasToolbar({
       aria-label="Navegação do canvas"
     >
       <nav className="felixo-activity-rail" aria-label="Ações principais">
-        <div className="felixo-app-mark" aria-hidden>
-          <FelixoSymbol size={24} />
-        </div>
         {/* O icone da secao abre e fecha a propria coluna, como a barra de
             atividades de um editor: clicar de novo recolhe. O enquadramento
             continua no botao "Enquadrar", em ORGANIZAR. */}
@@ -344,33 +341,6 @@ function ActivityRailButton({
     >
       {children}
     </button>
-  )
-}
-
-function SidebarSection({
-  title,
-  children,
-  defaultOpen = true,
-}: {
-  title: string
-  children: ReactNode
-  defaultOpen?: boolean
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-
-  return (
-    <section className="felixo-sidebar-section">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="felixo-sidebar-section-heading"
-        aria-expanded={open}
-      >
-        <span>{title}</span>
-        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-      </button>
-      {open && <div className="felixo-sidebar-section-content">{children}</div>}
-    </section>
   )
 }
 

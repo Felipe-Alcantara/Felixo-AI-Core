@@ -5,6 +5,7 @@ import {
   AUTOMATION_SCOPES,
 } from '../../../shared/types/automations'
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
+import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 
 type PromptDetailPanelProps = {
   prompt: AutomationDefinition
@@ -19,8 +20,10 @@ type PromptDetailPanelProps = {
   onInsert: () => void
 }
 
-const SCOPES = AUTOMATION_SCOPES
-const SCOPE_LABELS = AUTOMATION_SCOPE_LABELS
+const SCOPE_OPTIONS: FelixoSelectOption[] = AUTOMATION_SCOPES.map((scope) => ({
+  value: scope,
+  label: AUTOMATION_SCOPE_LABELS[scope],
+}))
 
 /**
  * Full-text viewer/editor for a preset prompt, rendered inline inside
@@ -105,20 +108,16 @@ export function PromptDetailPanel({
           />
         </label>
 
-        <label className="block text-xs text-zinc-500">
+        <div className="block text-xs text-zinc-500">
           Escopo
-          <select
+          <FelixoSelect
             value={scope}
-            onChange={(event) => setScope(event.target.value as AutomationScope)}
-            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-white/25"
-          >
-            {SCOPES.map((option) => (
-              <option key={option} value={option}>
-                {SCOPE_LABELS[option]}
-              </option>
-            ))}
-          </select>
-        </label>
+            options={SCOPE_OPTIONS}
+            onChange={(value) => setScope(value as AutomationScope)}
+            aria-label="Escopo"
+            className="mt-1"
+          />
+        </div>
 
         <label className="flex min-h-0 flex-1 flex-col text-xs text-zinc-500">
           Prompt completo

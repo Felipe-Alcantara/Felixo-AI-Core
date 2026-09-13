@@ -1,33 +1,28 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Check,
   FileDiff,
   GitBranch,
-  GitCommit,
+  GitCommit as GitCommitIcon,
   Minus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCw,
 } from 'lucide-react'
+import type { GitCommit, GitProjectSummary, GitRepoFile } from '../../../chat/types'
 import { FelixoSelect } from '../../../shared/components/FelixoSelect'
 import { CanvasPanel } from './CanvasPanel'
+import { GitChangesList, type SelectedFile } from './GitChangesList'
 import { GitDiffView } from './GitDiffView'
-import {
-  parseStatusEntries,
-  splitPath,
-  statusDescriptor,
-  type GitStatusEntry,
-} from './git-status'
+import { GitExplorer } from './GitExplorer'
+import { GitHistory } from './GitHistory'
+import { parseStatusEntries, type GitStatusEntry } from './git-status'
+import { ancestorPaths, buildRepoTree, dirsWithChanges } from './repo-tree'
 
 type CanvasProject = { id: string; name: string; path: string }
-
-type GitSummary = {
-  branch: string | null
-  statusLines: string[]
-  diffStat: string
-  recentCommits: string[]
-  isClean: boolean
-  error?: string
-}
 
 type GitPanelProps = {
   onClose: () => void
@@ -35,28 +30,52 @@ type GitPanelProps = {
   toolsMenuOpen?: boolean
 }
 
-/** Arquivo aberto no leitor de diferenças, e de qual lado ele está sendo visto. */
-type SelectedFile = { path: string; staged: boolean; untracked: boolean }
+type ActionResult = { ok?: boolean; message?: string; output?: string } | undefined
 
 /**
- * Controle de versão do canvas.
+ * Source Control do canvas.
  *
- * A lista é por arquivo, não as linhas cruas do `git status --short`: quem vai
- * revisar um commit precisa ver o que mudou em cada arquivo e escolher, um a
- * um, o que entra — e não decorar o formato porcelain. Um mesmo arquivo pode
- * aparecer nos dois grupos (editado depois de adicionado é o caso comum), que
- * é exatamente o que a lista antiga escondia ao mostrar só uma linha de texto.
+ * Três colunas lado a lado: o repositório inteiro, as alterações pendentes e o
+ * leitor. O editor que serviu de referência obriga a trocar de visão entre a
+ * árvore e as mudanças — aqui as duas ficam abertas, porque são a mesma
+ * pergunta vista de dois lados ("o que existe" e "o que mudou"), e ir de uma à
+ * outra é o trabalho inteiro de preparar um commit.
+ *
+ * O cabeçalho carrega o que se faz antes e depois do commit: trocar de branch,
+ * puxar e enviar. Só as formas seguras — `pull --ff-only`, `push` sem force —
+ * porque tudo que reescreve histórico é trabalho para o terminal, com a
+ * pessoa olhando.
  */
 export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
   const [projects, setProjects] = useState<CanvasProject[]>([])
   const [projectPath, setProjectPath] = useState('')
-  const [summary, setSummary] = useState<GitSummary | null>(null)
+  const [summary, setSummary] = useState<GitProjectSummary | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Resultado de push/pull/troca de branch — informação, não erro. */
+  const [notice, setNotice] = useState<string | null>(null)
+
   const [selected, setSelected] = useState<SelectedFile | null>(null)
   const [diff, setDiff] = useState<string | null>(null)
-  const [diffLoading, setDiffLoading] = useState(false)
+  const [fileContent, setFileContent] = useState<GitRepoFile | null>(null)
+  const [readerLoading, setReaderLoading] = useState(false)
+
+  const [files, setFiles] = useState<string[]>([])
+  const [treeTotal, setTreeTotal] = useState(0)
+  const [treeTruncated, setTreeTruncated] = useState(false)
+  const [treeLoading, setTreeLoading] = useState(false)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [query, setQuery] = useState('')
+  const [changedOnly, setChangedOnly] = useState(false)
+  const [explorerOpen, setExplorerOpen] = useState(true)
+
+  const [branches, setBranches] = useState<string[]>([])
+  const [commits, setCommits] = useState<GitCommit[]>([])
+  const [historyReadAt, setHistoryReadAt] = useState(0)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  /** A coluna do meio mostra o que está por vir (alterações) ou o que já foi (histórico). */
+  const [view, setView] = useState<'changes' | 'history'>('changes')
 
   useEffect(() => {
     let cancelled = false
@@ -74,58 +93,142 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
     if (!path) {
       setSummary(null)
       setError(null)
-      return
+      return null
     }
     const result = await window.felixo?.git?.getSummary({ projectPath: path })
     if (result?.ok && result.summary) {
-      const next = result.summary as GitSummary
-      setSummary(next)
-      setError(next.error ?? null)
-    } else {
-      setSummary(null)
-      setError(result?.message ?? 'Falha ao consultar o repositório Git.')
+      setSummary(result.summary)
+      setError(result.summary.error ?? null)
+      return result.summary
+    }
+    setSummary(null)
+    setError(result?.message ?? 'Falha ao consultar o repositório Git.')
+    return null
+  }, [])
+
+  const loadTree = useCallback(async (path: string) => {
+    if (!path) {
+      setFiles([])
+      setTreeTotal(0)
+      setTreeTruncated(false)
+      return [] as string[]
+    }
+    setTreeLoading(true)
+    try {
+      const result = await window.felixo?.git?.listFiles({ projectPath: path })
+      const next = result?.ok && result.tree ? result.tree.files : []
+      setFiles(next)
+      setTreeTotal(result?.tree?.total ?? next.length)
+      setTreeTruncated(Boolean(result?.tree?.truncated))
+      return next
+    } finally {
+      setTreeLoading(false)
     }
   }, [])
 
-  const loadDiff = useCallback(async (file: SelectedFile | null, path: string) => {
-    if (!file || !path) {
-      setDiff(null)
+  const loadBranches = useCallback(async (path: string) => {
+    if (!path) {
+      setBranches([])
       return
     }
-    setDiffLoading(true)
+    const result = await window.felixo?.git?.listBranches({
+      projectPath: path,
+    })
+    setBranches(result?.ok && result.branches ? result.branches : [])
+  }, [])
+
+  const loadLog = useCallback(async (path: string) => {
+    if (!path) {
+      setCommits([])
+      return
+    }
+    setHistoryLoading(true)
     try {
+      const result = await window.felixo?.git?.getLog({ projectPath: path })
+      setCommits(result?.ok && result.commits ? result.commits : [])
+      setHistoryReadAt(Date.now())
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  /**
+   * Alimenta o leitor: diff para quem tem alteração, conteúdo para quem não.
+   * Um arquivo limpo não tem diff a pedir — mandar o git comparar o arquivo
+   * com ele mesmo devolveria vazio, que a tela leria como "binário".
+   */
+  const loadReader = useCallback(async (file: SelectedFile | null, path: string) => {
+    if (!file || !path) {
+      setDiff(null)
+      setFileContent(null)
+      return
+    }
+    setReaderLoading(true)
+    try {
+      if (file.clean) {
+        const result = await window.felixo?.git?.readFile({
+          projectPath: path,
+          filePath: file.path,
+        })
+        setDiff(null)
+        setFileContent(result?.ok ? (result.file ?? null) : null)
+        if (result && !result.ok && result.message) setError(result.message)
+        return
+      }
       const result = await window.felixo?.git?.getFileDiff({
         projectPath: path,
         filePath: file.path,
         staged: file.staged,
         untracked: file.untracked,
       })
+      setFileContent(null)
       setDiff(result?.ok ? (result.diff?.diff ?? '') : null)
       if (result && !result.ok && result.message) setError(result.message)
     } finally {
-      setDiffLoading(false)
+      setReaderLoading(false)
     }
   }, [])
 
   const selectProject = useCallback(
-    (path: string) => {
+    async (path: string) => {
       setProjectPath(path)
       setSelected(null)
       setDiff(null)
-      void refresh(path)
+      setFileContent(null)
+      setNotice(null)
+      setQuery('')
+      const [next, repoFiles] = await Promise.all([
+        refresh(path),
+        loadTree(path),
+        loadBranches(path),
+        loadLog(path),
+      ])
+      // O repositório abre já aberto onde há mudança: fechado na raiz, uma
+      // árvore grande esconde exatamente o que trouxe a pessoa até aqui.
+      const tree = buildRepoTree(repoFiles, parseStatusEntries(next?.statusLines ?? []))
+      setExpanded(new Set(dirsWithChanges(tree)))
     },
-    [refresh],
+    [loadBranches, loadLog, loadTree, refresh],
   )
 
-  const entries = useMemo(
-    () => parseStatusEntries(summary?.statusLines ?? []),
-    [summary],
-  )
+  const entries = useMemo(() => parseStatusEntries(summary?.statusLines ?? []), [summary])
   const staged = useMemo(() => entries.filter((item) => item.staged), [entries])
   const unstaged = useMemo(
     () => entries.filter((item) => item.unstaged || item.untracked),
     [entries],
   )
+  const tree = useMemo(() => buildRepoTree(files, entries), [entries, files])
+
+  /** Abre as pastas até o arquivo, para ele aparecer selecionado na árvore. */
+  const reveal = useCallback((path: string) => {
+    const ancestors = ancestorPaths(path)
+    if (ancestors.length === 0) return
+    setExpanded((current) => {
+      const next = new Set(current)
+      for (const ancestor of ancestors) next.add(ancestor)
+      return next
+    })
+  }, [])
 
   const openFile = useCallback(
     (entry: GitStatusEntry, stagedSide: boolean) => {
@@ -135,23 +238,62 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
         untracked: entry.untracked,
       }
       setSelected(file)
-      void loadDiff(file, projectPath)
+      reveal(entry.path)
+      void loadReader(file, projectPath)
     },
-    [loadDiff, projectPath],
+    [loadReader, projectPath, reveal],
   )
 
   /**
+   * Abre um arquivo pela árvore. Com alteração pendente, mostra o lado que a
+   * pessoa ainda pode mexer — o não preparado, quando existe, senão o do
+   * stage. Sem alteração, mostra o arquivo como está no disco.
+   */
+  const openPath = useCallback(
+    (path: string) => {
+      const entry = entries.find((item) => item.path === path)
+      if (!entry) {
+        const file: SelectedFile = {
+          path,
+          staged: false,
+          untracked: false,
+          clean: true,
+        }
+        setSelected(file)
+        void loadReader(file, projectPath)
+        return
+      }
+      openFile(entry, !(entry.unstaged || entry.untracked))
+    },
+    [entries, loadReader, openFile, projectPath],
+  )
+
+  const toggleDir = useCallback((path: string) => {
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (!next.delete(path)) next.add(path)
+      return next
+    })
+  }, [])
+
+  /**
    * Envolve uma ação de git: trava a interface, recarrega o status e, se havia
-   * um arquivo aberto, relê o diff — senão o leitor continuaria mostrando o
+   * um arquivo aberto, relê o leitor — senão ele continuaria mostrando o
    * estado anterior ao que a pessoa acabou de fazer.
    */
   const runAction = useCallback(
     async (
-      action: () => Promise<{ ok?: boolean; message?: string } | undefined> | undefined,
+      action: () => Promise<ActionResult> | undefined,
       fallback: string,
+      options: {
+        reloadTree?: boolean
+        reloadLog?: boolean
+        keepSelection?: boolean
+      } = {},
     ) => {
       if (!projectPath) return
       setBusy(true)
+      setNotice(null)
       try {
         const result = await action()
         if (!result?.ok) {
@@ -159,45 +301,96 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
           return
         }
         setError(null)
-        await refresh(projectPath)
-        await loadDiff(selected, projectPath)
+        if (result.output) setNotice(result.output)
+        const tasks: Promise<unknown>[] = [refresh(projectPath)]
+        if (options.reloadTree) tasks.push(loadTree(projectPath))
+        if (options.reloadLog) tasks.push(loadLog(projectPath), loadBranches(projectPath))
+        await Promise.all(tasks)
+        if (options.keepSelection === false) {
+          setSelected(null)
+          setDiff(null)
+          setFileContent(null)
+        } else {
+          await loadReader(selected, projectPath)
+        }
       } finally {
         setBusy(false)
       }
     },
-    [loadDiff, projectPath, refresh, selected],
+    [loadBranches, loadLog, loadReader, loadTree, projectPath, refresh, selected],
   )
 
   const commit = useCallback(async () => {
-    if (!projectPath || !message.trim()) return
-    setBusy(true)
-    try {
-      const result = await window.felixo?.git?.commit({
-        projectPath,
-        message: message.trim(),
-      })
-      if (result && !result.ok) {
-        setError(result.message ?? 'Falha ao criar o commit.')
-        return
-      }
-      setError(null)
-      setMessage('')
-      setSelected(null)
-      setDiff(null)
-      await refresh(projectPath)
-    } finally {
-      setBusy(false)
-    }
-  }, [message, projectPath, refresh])
+    if (!message.trim()) return
+    const text = message.trim()
+    await runAction(
+      () => window.felixo?.git?.commit({ projectPath, message: text }),
+      'Falha ao criar o commit.',
+      // Um commit muda o que existe no repositório, não só o que está sujo:
+      // arquivo novo deixa de ser novo e arquivo apagado some da árvore.
+      { reloadTree: true, reloadLog: true, keepSelection: false },
+    )
+    setMessage('')
+  }, [message, projectPath, runAction])
+
+  const discard = useCallback(
+    (entry: GitStatusEntry) => {
+      const question = entry.untracked
+        ? `Apagar o arquivo novo "${entry.path}"? Ele ainda não está no git e não tem como voltar.`
+        : `Descartar as alterações de "${entry.path}" e voltar ao último commit? Isso não tem como desfazer.`
+      if (!window.confirm(question)) return
+      void runAction(
+        () =>
+          window.felixo?.git?.discardFile({
+            projectPath,
+            filePath: entry.path,
+            untracked: entry.untracked,
+          }),
+        'Falha ao descartar as alterações.',
+        { reloadTree: true, keepSelection: selected?.path !== entry.path },
+      )
+    },
+    [projectPath, runAction, selected],
+  )
+
+  const switchBranch = useCallback(
+    (branch: string) => {
+      if (!branch || branch === summary?.branch) return
+      void runAction(
+        () => window.felixo?.git?.switchBranch({ projectPath, branch }),
+        'Falha ao trocar de branch.',
+        { reloadTree: true, reloadLog: true, keepSelection: false },
+      )
+    },
+    [projectPath, runAction, summary],
+  )
+
+  const refreshAll = useCallback(async () => {
+    if (!projectPath) return
+    await Promise.all([
+      refresh(projectPath),
+      loadTree(projectPath),
+      loadBranches(projectPath),
+      loadLog(projectPath),
+    ])
+  }, [loadBranches, loadLog, loadTree, projectPath, refresh])
 
   const projectOptions = useMemo(
     () => projects.map((project) => ({ value: project.path, label: project.name })),
     [projects],
   )
+  const branchOptions = useMemo(() => {
+    const known = new Set(branches)
+    if (summary?.branch && !known.has(summary.branch)) known.add(summary.branch)
+    return [...known].sort().map((name) => ({ value: name, label: name }))
+  }, [branches, summary])
+
+  const ahead = summary?.ahead ?? 0
+  const behind = summary?.behind ?? 0
 
   return (
     <CanvasPanel
-      title="Controle de versão"
+      title="Source Control"
       panelId="git"
       variant="workspace"
       icon={<GitBranch size={15} />}
@@ -206,32 +399,119 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
     >
       <div className="felixo-scm">
         <header className="felixo-scm-head">
+          {summary && (
+            <button
+              type="button"
+              onClick={() => setExplorerOpen((current) => !current)}
+              className="felixo-btn-icon felixo-scm-head-icon"
+              title={explorerOpen ? 'Esconder o explorador' : 'Mostrar o explorador'}
+              aria-pressed={explorerOpen}
+            >
+              {explorerOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+            </button>
+          )}
           <FelixoSelect
             value={projectPath}
             options={projectOptions}
-            onChange={selectProject}
+            onChange={(path) => void selectProject(path)}
             placeholder="Escolha um repositório…"
             aria-label="Repositório"
             className="felixo-scm-project"
           />
           {summary && (
-            <span className="felixo-scm-branch" title="Branch atual">
+            <div
+              className="felixo-scm-branch-field"
+              title="Branch atual — escolha outra para trocar"
+            >
               <GitBranch size={13} aria-hidden />
-              {summary.branch ?? '—'}
-            </span>
+              <FelixoSelect
+                value={summary.branch ?? ''}
+                options={branchOptions}
+                onChange={switchBranch}
+                disabled={busy}
+                searchable={branchOptions.length > 8}
+                placeholder="sem branch"
+                aria-label="Branch"
+                className="felixo-scm-branch"
+              />
+              {summary.upstream ? (
+                <span
+                  className="felixo-scm-sync"
+                  title={`${summary.upstream}: ${ahead} para enviar, ${behind} para puxar`}
+                >
+                  <ArrowUpFromLine size={11} aria-hidden />
+                  {ahead}
+                  <ArrowDownToLine size={11} aria-hidden />
+                  {behind}
+                </span>
+              ) : (
+                <span
+                  className="felixo-scm-sync is-muted"
+                  title="Esta branch ainda não tem upstream"
+                >
+                  sem remoto
+                </span>
+              )}
+            </div>
           )}
           <span className="felixo-scm-spacer" />
-          {projectPath && (
-            <button
-              type="button"
-              onClick={() => void refresh(projectPath)}
-              disabled={busy}
-              className="felixo-btn-icon felixo-scm-refresh"
-              title="Atualizar status"
-              aria-label="Atualizar status"
-            >
-              <RefreshCw size={14} />
-            </button>
+          {summary && (
+            <div className="felixo-scm-head-actions">
+              <button
+                type="button"
+                onClick={() =>
+                  void runAction(
+                    () => window.felixo?.git?.pull({ projectPath }),
+                    'Falha ao atualizar (pull).',
+                    { reloadTree: true, reloadLog: true },
+                  )
+                }
+                disabled={busy || !summary.upstream}
+                className="felixo-btn felixo-scm-head-action"
+                title={
+                  summary.upstream
+                    ? 'Puxar do remoto (só avanço rápido)'
+                    : 'Sem upstream: não há de onde puxar'
+                }
+                aria-label={`Pull${behind > 0 ? ` (${behind})` : ''}`}
+              >
+                <ArrowDownToLine size={13} aria-hidden />
+                <span className="felixo-scm-head-label">Pull</span>
+                {behind > 0 && <span className="felixo-scm-head-count">{behind}</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void runAction(
+                    () => window.felixo?.git?.push({ projectPath }),
+                    'Falha ao enviar (push).',
+                    { reloadLog: true },
+                  )
+                }
+                disabled={busy || !summary.branch}
+                className="felixo-btn felixo-scm-head-action"
+                title={
+                  summary.upstream
+                    ? 'Enviar commits para o remoto'
+                    : 'Enviar e definir o upstream em origin'
+                }
+                aria-label={`Push${ahead > 0 ? ` (${ahead})` : ''}`}
+              >
+                <ArrowUpFromLine size={13} aria-hidden />
+                <span className="felixo-scm-head-label">Push</span>
+                {ahead > 0 && <span className="felixo-scm-head-count">{ahead}</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => void refreshAll()}
+                disabled={busy}
+                className="felixo-btn-icon felixo-scm-head-icon"
+                title="Atualizar"
+                aria-label="Atualizar"
+              >
+                <RefreshCw size={14} className={busy ? 'felixo-spin' : undefined} />
+              </button>
+            </div>
           )}
         </header>
 
@@ -242,195 +522,169 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
         )}
 
         {error && <p className="felixo-scm-error">{error}</p>}
+        {!error && notice && <p className="felixo-scm-notice">{notice}</p>}
 
         {summary && (
-          <div className="felixo-scm-body">
+          <div className={`felixo-scm-body ${explorerOpen ? 'has-explorer' : ''}`}>
+            {explorerOpen && (
+              <GitExplorer
+                root={tree}
+                expanded={expanded}
+                selectedPath={selected?.path ?? null}
+                query={query}
+                changedOnly={changedOnly}
+                loading={treeLoading}
+                truncated={treeTruncated}
+                total={treeTotal}
+                onQueryChange={setQuery}
+                onChangedOnlyChange={setChangedOnly}
+                onToggleDir={toggleDir}
+                onOpenFile={openPath}
+              />
+            )}
+
             <div className="felixo-scm-side">
-              <textarea
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder="Mensagem do commit…"
-                rows={2}
-                className="felixo-scm-message"
-                aria-label="Mensagem do commit"
-              />
-              <button
-                type="button"
-                onClick={() => void commit()}
-                disabled={busy || !message.trim() || staged.length === 0}
-                className="felixo-btn felixo-scm-commit"
-                title={
-                  staged.length === 0
-                    ? 'Nada no stage: adicione ao menos um arquivo'
-                    : 'Criar commit com o que está no stage'
-                }
-              >
-                <GitCommit size={14} aria-hidden />
-                Commit{staged.length > 0 ? ` (${staged.length})` : ''}
-              </button>
+              <div className="felixo-scm-tabs" role="tablist" aria-label="Coluna do meio">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'changes'}
+                  onClick={() => setView('changes')}
+                  className={`felixo-btn felixo-scm-tab ${view === 'changes' ? 'is-active' : ''}`}
+                >
+                  Alterações
+                  {entries.length > 0 && <span className="felixo-scm-count">{entries.length}</span>}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === 'history'}
+                  onClick={() => setView('history')}
+                  className={`felixo-btn felixo-scm-tab ${view === 'history' ? 'is-active' : ''}`}
+                >
+                  Histórico
+                  {ahead > 0 && (
+                    <span
+                      className="felixo-scm-count is-warning"
+                      title={`${ahead} commit(s) ainda não enviados`}
+                    >
+                      {ahead}
+                    </span>
+                  )}
+                </button>
+              </div>
 
-              <FileGroup
-                title="Stage"
-                entries={staged}
-                selected={selected}
-                stagedSide
-                actionLabel="Tirar do stage"
-                actionIcon={<Minus size={13} aria-hidden />}
-                bulkLabel="Tirar tudo do stage"
-                disabled={busy}
-                onOpen={(entry) => openFile(entry, true)}
-                onFileAction={(entry) =>
-                  void runAction(
-                    () =>
-                      window.felixo?.git?.unstageFile({
-                        projectPath,
-                        filePath: entry.path,
-                      }),
-                    'Falha ao tirar do stage.',
-                  )
-                }
-                onBulk={() =>
-                  void runAction(
-                    () => window.felixo?.git?.unstageAll({ projectPath }),
-                    'Falha ao tirar do stage.',
-                  )
-                }
-              />
+              {view === 'history' && (
+                <GitHistory
+                  commits={commits}
+                  loading={historyLoading}
+                  ahead={ahead}
+                  now={historyReadAt}
+                />
+              )}
 
-              <FileGroup
-                title="Alterações"
-                entries={unstaged}
-                selected={selected}
-                stagedSide={false}
-                actionLabel="Adicionar ao stage"
-                actionIcon={<Plus size={13} aria-hidden />}
-                bulkLabel="Adicionar tudo ao stage"
-                disabled={busy}
-                onOpen={(entry) => openFile(entry, false)}
-                onFileAction={(entry) =>
-                  void runAction(
-                    () =>
-                      window.felixo?.git?.stageFile({
-                        projectPath,
-                        filePath: entry.path,
-                      }),
-                    'Falha ao adicionar ao stage.',
-                  )
-                }
-                onBulk={() =>
-                  void runAction(
-                    () => window.felixo?.git?.stageAll({ projectPath }),
-                    'Falha ao adicionar ao stage.',
-                  )
-                }
-              />
+              {view === 'changes' && (
+                <>
+                  <textarea
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder="Mensagem do commit…"
+                    rows={2}
+                    className="felixo-scm-message"
+                    aria-label="Mensagem do commit"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void commit()}
+                    disabled={busy || !message.trim() || staged.length === 0}
+                    className="felixo-btn felixo-scm-commit"
+                    title={
+                      staged.length === 0
+                        ? 'Nada no stage: adicione ao menos um arquivo'
+                        : 'Criar commit com o que está no stage'
+                    }
+                  >
+                    <GitCommitIcon size={14} aria-hidden />
+                    Commit{staged.length > 0 ? ` (${staged.length})` : ''}
+                  </button>
 
-              {entries.length === 0 && (
-                <p className="felixo-scm-clean">
-                  <Check size={13} aria-hidden />
-                  Sem alterações pendentes.
-                </p>
+                  <GitChangesList
+                    title="Stage"
+                    entries={staged}
+                    selected={selected}
+                    stagedSide
+                    actionLabel="Tirar do stage"
+                    actionIcon={<Minus size={13} aria-hidden />}
+                    bulkLabel="Tirar tudo do stage"
+                    disabled={busy}
+                    onOpen={(entry) => openFile(entry, true)}
+                    onFileAction={(entry) =>
+                      void runAction(
+                        () =>
+                          window.felixo?.git?.unstageFile({
+                            projectPath,
+                            filePath: entry.path,
+                          }),
+                        'Falha ao tirar do stage.',
+                      )
+                    }
+                    onBulk={() =>
+                      void runAction(
+                        () => window.felixo?.git?.unstageAll({ projectPath }),
+                        'Falha ao tirar do stage.',
+                      )
+                    }
+                  />
+
+                  <GitChangesList
+                    title="Alterações"
+                    entries={unstaged}
+                    selected={selected}
+                    stagedSide={false}
+                    actionLabel="Adicionar ao stage"
+                    actionIcon={<Plus size={13} aria-hidden />}
+                    bulkLabel="Adicionar tudo ao stage"
+                    disabled={busy}
+                    onOpen={(entry) => openFile(entry, false)}
+                    onFileAction={(entry) =>
+                      void runAction(
+                        () =>
+                          window.felixo?.git?.stageFile({
+                            projectPath,
+                            filePath: entry.path,
+                          }),
+                        'Falha ao adicionar ao stage.',
+                      )
+                    }
+                    onBulk={() =>
+                      void runAction(
+                        () => window.felixo?.git?.stageAll({ projectPath }),
+                        'Falha ao adicionar ao stage.',
+                      )
+                    }
+                    onDiscard={discard}
+                  />
+
+                  {entries.length === 0 && (
+                    <p className="felixo-scm-clean">
+                      <Check size={13} aria-hidden />
+                      Sem alterações pendentes.
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
             <GitDiffView
               file={selected}
               diff={diff}
-              loading={diffLoading}
+              content={fileContent}
+              loading={readerLoading}
               icone={<FileDiff size={22} aria-hidden />}
             />
           </div>
         )}
       </div>
     </CanvasPanel>
-  )
-}
-
-type FileGroupProps = {
-  title: string
-  entries: GitStatusEntry[]
-  selected: SelectedFile | null
-  /** `true` no grupo que mostra o lado do stage. */
-  stagedSide: boolean
-  actionLabel: string
-  actionIcon: ReactNode
-  bulkLabel: string
-  disabled: boolean
-  onOpen: (entry: GitStatusEntry) => void
-  onFileAction: (entry: GitStatusEntry) => void
-  onBulk: () => void
-}
-
-function FileGroup({
-  title,
-  entries,
-  selected,
-  stagedSide,
-  actionLabel,
-  actionIcon,
-  bulkLabel,
-  disabled,
-  onOpen,
-  onFileAction,
-  onBulk,
-}: FileGroupProps) {
-  if (entries.length === 0) return null
-
-  return (
-    <section className="felixo-scm-group">
-      <header className="felixo-scm-group-head">
-        <span className="felixo-scm-group-title">{title}</span>
-        <span className="felixo-scm-count">{entries.length}</span>
-        <button
-          type="button"
-          onClick={onBulk}
-          disabled={disabled}
-          className="felixo-btn-icon felixo-scm-group-action"
-          title={bulkLabel}
-          aria-label={bulkLabel}
-        >
-          {actionIcon}
-        </button>
-      </header>
-      <ul className="felixo-scm-list">
-        {entries.map((entry) => {
-          const { dir, name } = splitPath(entry.path)
-          const badge = statusDescriptor(entry, stagedSide)
-          const active = selected?.path === entry.path && selected.staged === stagedSide
-          return (
-            <li key={entry.path}>
-              <div className={`felixo-scm-row ${active ? 'is-active' : ''}`}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(entry)}
-                  className="felixo-scm-open"
-                  title={entry.path}
-                >
-                  <span className="felixo-scm-name">{name}</span>
-                  {dir && <span className="felixo-scm-dir">{dir}</span>}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onFileAction(entry)}
-                  disabled={disabled}
-                  className="felixo-btn-icon felixo-scm-row-action"
-                  title={`${actionLabel}: ${entry.path}`}
-                  aria-label={`${actionLabel}: ${entry.path}`}
-                >
-                  {actionIcon}
-                </button>
-                <span
-                  className={`felixo-scm-badge is-${badge.tone}`}
-                  title={badge.label}
-                  aria-label={badge.label}
-                >
-                  {badge.letter}
-                </span>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
   )
 }

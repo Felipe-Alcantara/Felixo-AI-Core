@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, LayoutGrid, PanelLeft } from 'lucide-react'
-import {
-  initialModels,
-  ideaStarters,
-  chatSuggestions,
-} from '../data/models'
+import { LayoutGrid, PanelLeft } from 'lucide-react'
+import { initialModels, ideaStarters } from '../data/models'
 import {
   createAssistantMessage,
   createUserMessage,
@@ -155,7 +151,10 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
     Record<string, ModelAvailabilityStatus>
   >({})
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(true)
+  // A atividade da CLI nasce recolhida: aberta, ela ocupa um terço da tela
+  // para dizer "aguardando execução". O trilho recolhido pulsa quando há
+  // algo rodando, então fechada ela não esconde o que importa.
+  const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(false)
   const [isOrchestrationDashboardOpen, setIsOrchestrationDashboardOpen] = useState(false)
   const [isQaLoggerOpen, setIsQaLoggerOpen] = useState(false)
   const activeSessionIdRef = useRef<string | null>(null)
@@ -1296,14 +1295,13 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
               <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center">
                 <div className="felixo-chat-hero">
                   <img
-                    src={`${import.meta.env.BASE_URL}brand/logos/png/felixo-symbol-white-256.png`}
+                    src={`${import.meta.env.BASE_URL}brand/logos/png/felixo-cyber-cat-4096.png`}
                     alt=""
                     aria-hidden
                     className="felixo-chat-hero-logo"
                   />
                   <span className="felixo-chat-hero-eyebrow">Felixo AI Core</span>
                   <h1>O que vamos construir hoje?</h1>
-                  <p>Conecte ideias. Orquestre agentes. Transforme em resultados.</p>
                 </div>
 
                 <Composer
@@ -1322,24 +1320,6 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
                   onStop={stopStreaming}
                   isStreaming={isStreaming}
                 />
-
-                <div className="felixo-chat-suggestions">
-                  {chatSuggestions.map((suggestion) => (
-                    <button
-                      key={suggestion.id}
-                      type="button"
-                      disabled={isStreaming}
-                      onClick={() => setInput(suggestion.prompt)}
-                      className="felixo-btn felixo-suggestion-card"
-                    >
-                      <span className="felixo-suggestion-card-body">
-                        <span className="felixo-suggestion-card-title">{suggestion.title}</span>
-                        <span className="felixo-suggestion-card-desc">{suggestion.description}</span>
-                      </span>
-                      <ArrowRight size={14} aria-hidden />
-                    </button>
-                  ))}
-                </div>
               </div>
             </section>
           )}

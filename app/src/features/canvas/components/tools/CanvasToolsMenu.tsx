@@ -48,7 +48,7 @@ const TOOL_GROUPS: Array<{ label: string; tools: ToolEntry[] }> = [
       { tool: 'models', label: 'Modelos', icon: LayoutList },
       { tool: 'prompts', label: 'Prompts', icon: Sparkles },
       { tool: 'skills', label: 'Skills', icon: BrainCircuit },
-      { tool: 'git', label: 'Controle de versão', icon: GitBranch },
+      { tool: 'git', label: 'Source Control', icon: GitBranch },
     ],
   },
   {

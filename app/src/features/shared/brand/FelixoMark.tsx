@@ -1,9 +1,10 @@
+import type { CSSProperties } from 'react'
+
 /**
  * Marca oficial do Felixo AI Core.
  *
- * Os PNGs transparentes em `public/brand/logos/png` são as versões de UI do
- * Brand Kit. Este componente só controla escala e contexto de uso; ele não
- * redesenha, simplifica ou reinterpreta a geometria do símbolo.
+ * A arte cyber-cat é o único asset visual da marca. Este componente só
+ * controla escala e contexto de uso; nunca redesenha o símbolo.
  */
 
 type FelixoMarkTone = 'light' | 'dark'
@@ -26,7 +27,9 @@ export function FelixoSymbol({
   tone = 'light',
   alt = 'Felixo AI Core',
 }: FelixoSymbolProps) {
-  const filename = tone === 'dark' ? 'felixo-symbol-black-256.png' : 'felixo-symbol-white-256.png'
+  // A mesma arte monocromática é usada nos dois contextos de tema.
+  void tone
+  const filename = 'felixo-cyber-cat-4096.png'
 
   return (
     <img
@@ -47,17 +50,28 @@ type FelixoLockupProps = {
   className?: string
 }
 
-/** Usa o lockup horizontal master do Brand Kit, sem reconstruir a tipografia. */
+/** Usa o ícone cyber-cat com o nome da marca em texto para manter a leitura do lockup. */
 export function FelixoLockup({ size = 18, className }: FelixoLockupProps) {
   return (
-    <img
-      src={brandPngAsset('felixo-ai-core-lockup-white-4096.png')}
-      alt="Felixo AI Core"
-      className={`felixo-lockup felixo-lockup-asset ${className ?? ''}`.trim()}
-      width={Math.round(size * 7.8)}
-      height={Math.round(size * 2.34)}
-      draggable={false}
-      decoding="async"
-    />
+    <span
+      className={`felixo-lockup ${className ?? ''}`.trim()}
+      style={{ '--felixo-lockup-size': `${size}px` } as CSSProperties}
+      role="img"
+      aria-label="Felixo AI Core"
+    >
+      <img
+        src={brandPngAsset('felixo-cyber-cat-4096.png')}
+        alt=""
+        className="felixo-lockup-mark"
+        width={Math.round(size * 2.1)}
+        height={Math.round(size * 2.1)}
+        draggable={false}
+        decoding="async"
+      />
+      <span className="felixo-lockup-text">
+        <strong>Felixo</strong>
+        <span>AI Core</span>
+      </span>
+    </span>
   )
 }

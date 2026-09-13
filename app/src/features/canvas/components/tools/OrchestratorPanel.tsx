@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Network, Save } from 'lucide-react'
 import { useOrchestrationDashboard } from '../../../shared/orchestrator/useOrchestrationDashboard'
 import { CanvasPanel } from './CanvasPanel'
+import { FelixoSelect } from '../../../shared/components/FelixoSelect'
 import {
   defaultOrchestratorSettings,
   loadOrchestratorSettings,
@@ -140,25 +141,20 @@ export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelP
         <p className="text-xs text-zinc-500">Carregando configurações…</p>
       ) : (
         <div className="space-y-3">
-          <label className="block text-xs text-zinc-400">
+          <div className="block text-xs text-zinc-400">
             <span className="mb-1 block text-zinc-300">Modo</span>
-            <select
+            <FelixoSelect
               value={draft.mode}
-              onChange={(event) =>
+              options={MODE_OPTIONS}
+              onChange={(value) =>
                 setDraft((current) => ({
                   ...current,
-                  mode: event.target.value as OrchestratorMode,
+                  mode: value as OrchestratorMode,
                 }))
               }
-              className="w-full rounded-md border border-white/10 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-100"
-            >
-              {MODE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              aria-label="Modo do orquestrador"
+            />
+          </div>
 
           <fieldset>
             <legend className="mb-1.5 text-xs text-zinc-300">Limites por execução</legend>

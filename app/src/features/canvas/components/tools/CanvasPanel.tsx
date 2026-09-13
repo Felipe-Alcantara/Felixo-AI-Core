@@ -84,6 +84,11 @@ export function CanvasPanel({
           ? undefined
           : `${Math.max(260, viewport.width - toolbarColumnOffset(toolsMenuOpen) - occupancy.inspector - WORKSPACE_SIDE_GAP * 2)}px`,
         maxHeight,
+        // Workspace é página: ocupa a altura toda, e com ela definida os
+        // filhos conseguem `height: 100%` e rolar cada coluna por dentro.
+        // Só com max-height a altura fica "auto" e a rolagem interna nunca
+        // acontece — a tela inteira do painel rola, com cabeçalho e tudo.
+        height: isWorkspace ? maxHeight : undefined,
       }}
       data-felixo-canvas-panel={panelId}
       className={`absolute z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl ${

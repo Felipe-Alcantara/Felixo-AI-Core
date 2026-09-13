@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp, Network } from 'lucide-react'
 import { useOrchestrationDashboard } from '../../shared/orchestrator/useOrchestrationDashboard'
 
 type Props = {
@@ -36,29 +37,40 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
       data-open={isOpen ? 'true' : 'false'}
       className="felixo-tech-strip border-t border-white/[0.08]"
     >
+      {/* Mesma anatomia da faixa do QA Logger ao lado: ícone, nome, pílula com
+          a contagem e uma seta. Parada, a faixa não narra "0 runs · 0/0
+          agentes" — só diz quantas execuções existem; o detalhe aparece
+          quando há algo rodando. */}
       <header className="felixo-tech-strip-header">
-        <div className="flex items-center gap-2 text-xs text-zinc-300">
-          <span className="font-medium text-zinc-100">Orquestração</span>
-          <span className="text-zinc-500">·</span>
-          <span>
-            {runs.length} run{runs.length === 1 ? '' : 's'} · {runningAgents}/{totalAgents}{' '}
-            agente(s) ativos
+        <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-zinc-400">
+          <Network size={13} aria-hidden="true" />
+          <span>Orquestração</span>
+          <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+            {runs.length}
           </span>
+          {totalAgents > 0 ? (
+            <span className="truncate font-normal text-zinc-500">
+              {runningAgents}/{totalAgents} agente(s) ativos
+            </span>
+          ) : null}
           {limitedModels.length > 0 ? (
-            <>
-              <span className="text-zinc-500">·</span>
-              <span className="text-[var(--color-warning)]">
-                {limitedModels.length} modelo(s) com limite
-              </span>
-            </>
+            <span className="truncate font-normal text-[var(--color-warning)]">
+              {limitedModels.length} modelo(s) com limite
+            </span>
           ) : null}
         </div>
         <button
           type="button"
+          title={isOpen ? 'Recolher orquestração' : 'Abrir orquestração'}
           onClick={onToggleOpen}
-          className="felixo-btn rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5"
+          className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
         >
-          {isOpen ? 'Recolher' : 'Expandir'}
+          {isOpen ? (
+            <ChevronDown size={14} aria-hidden="true" />
+          ) : (
+            <ChevronUp size={14} aria-hidden="true" />
+          )}
+          <span className="sr-only">{isOpen ? 'Recolher orquestração' : 'Abrir orquestração'}</span>
         </button>
       </header>
 
