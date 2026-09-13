@@ -148,7 +148,15 @@ export function CanvasToolbar({
         <div className="felixo-app-mark" aria-hidden>
           <FelixoSymbol size={24} />
         </div>
-        <ActivityRailButton label="Canvas" active onClick={onFitView}>
+        {/* O icone da secao abre e fecha a propria coluna, como a barra de
+            atividades de um editor: clicar de novo recolhe. O enquadramento
+            continua no botao "Enquadrar", em ORGANIZAR. */}
+        <ActivityRailButton
+          label={sidebarCollapsed ? 'Abrir menu do canvas' : 'Fechar menu do canvas'}
+          active={!sidebarCollapsed}
+          expanded={!sidebarCollapsed}
+          onClick={toggleSidebar}
+        >
           <LayoutGrid size={18} />
         </ActivityRailButton>
         <ActivityRailButton label="Chat" onClick={onOpenChat}>
@@ -309,11 +317,19 @@ export function CanvasToolbar({
 function ActivityRailButton({
   label,
   active = false,
+  expanded,
   onClick,
   children,
 }: {
   label: string
   active?: boolean
+  /**
+   * Só para os botões que abrem e fecham algo. Sem isto o leitor de tela
+   * anuncia um botão comum e a pessoa não sabe que ele alterna — nem em que
+   * estado está. Fica opcional porque os outros botões do rail navegam, não
+   * alternam, e um `aria-expanded` neles seria mentira.
+   */
+  expanded?: boolean
   onClick: () => void
   children: ReactNode
 }) {
@@ -324,6 +340,7 @@ function ActivityRailButton({
       onClick={onClick}
       title={label}
       aria-label={label}
+      {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
     >
       {children}
     </button>

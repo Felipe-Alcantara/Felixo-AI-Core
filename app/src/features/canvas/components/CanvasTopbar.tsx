@@ -1,4 +1,4 @@
-import { ChevronDown, Command, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { FelixoLockup } from '../../shared/brand/FelixoMark'
 
 type CanvasTopbarProps = {
@@ -19,9 +19,6 @@ export function CanvasTopbar({
   sidebarCollapsed,
   onToggleSidebar,
 }: CanvasTopbarProps) {
-  const usesCommandKey =
-    typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
-
   return (
     <header className="felixo-canvas-topbar" aria-label="Barra do workspace">
       <div className="felixo-topbar-ambient" aria-hidden="true">
@@ -68,9 +65,6 @@ export function CanvasTopbar({
       >
         <Search size={16} aria-hidden />
         <span>Pesquisar no canvas ou executar comando…</span>
-        <kbd>
-          {usesCommandKey ? <Command size={11} aria-hidden /> : 'Ctrl'} K
-        </kbd>
       </button>
 
     </header>
