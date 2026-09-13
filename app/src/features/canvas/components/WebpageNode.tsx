@@ -201,32 +201,32 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-emerald-300/20 bg-[#0d1712] text-zinc-200 shadow-xl">
+    <div className="felixo-canvas-card felixo-canvas-card-web flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-graphite)] text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={360}
         minHeight={280}
-        lineClassName="!border-emerald-500/40"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-emerald-500"
+        lineClassName="!border-white/30"
+        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
         onResizeStart={() => setIsResizing(true)}
         onResizeEnd={() => setIsResizing(false)}
       />
-      <Handle type="target" position={Position.Left} className="!bg-emerald-500" />
+      <Handle type="target" position={Position.Left} className="!bg-[var(--f-core-white)]" />
       <NodeHeader
         icon={<Globe size={13} />}
         editableValue={nodeData.label ?? ''}
         placeholder="Página Web"
         onTitleChange={handleLabelChange}
-        className="bg-emerald-950/60 text-emerald-100"
+        className="bg-white/[0.04] text-[var(--f-core-white)]"
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
       />
 
-      <div className="nodrag nowheel nopan flex items-center gap-1 border-b border-emerald-300/10 bg-emerald-950/30 px-2 py-1">
+      <div className="nodrag nowheel nopan flex items-center gap-1 border-b border-white/10 bg-white/[0.04] px-2 py-1">
         <button
           type="button"
           onClick={() => webviewRef.current?.goBack()}
           disabled={!canGoBack}
-          className="felixo-btn-icon rounded p-1 text-emerald-200/70 hover:bg-white/10 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-30"
+          className="felixo-btn-icon rounded p-1 text-[var(--f-core-white-soft)] hover:bg-white/10 hover:text-[var(--f-core-white)] disabled:cursor-not-allowed disabled:opacity-30"
           title="Voltar"
           aria-label="Voltar"
         >
@@ -236,7 +236,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           onClick={() => webviewRef.current?.goForward()}
           disabled={!canGoForward}
-          className="felixo-btn-icon rounded p-1 text-emerald-200/70 hover:bg-white/10 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-30"
+          className="felixo-btn-icon rounded p-1 text-[var(--f-core-white-soft)] hover:bg-white/10 hover:text-[var(--f-core-white)] disabled:cursor-not-allowed disabled:opacity-30"
           title="Avançar"
           aria-label="Avançar"
         >
@@ -245,7 +245,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         <button
           type="button"
           onClick={() => webviewRef.current?.reload()}
-          className="felixo-btn-icon rounded p-1 text-emerald-200/70 hover:bg-white/10 hover:text-emerald-100"
+          className="felixo-btn-icon rounded p-1 text-[var(--f-core-white-soft)] hover:bg-white/10 hover:text-[var(--f-core-white)]"
           title="Recarregar"
           aria-label="Recarregar"
         >
@@ -261,12 +261,12 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
             }
           }}
           placeholder="URL (ex: google.com)"
-          className="min-w-0 flex-1 rounded bg-emerald-900/40 px-2 py-1 text-xs text-emerald-50 outline-none ring-1 ring-white/10 placeholder:text-emerald-300/40 focus:ring-emerald-500/50"
+          className="min-w-0 flex-1 rounded bg-white/[0.04] px-2 py-1 text-xs text-[var(--f-core-white)] outline-none ring-1 ring-white/10 placeholder:text-[var(--f-core-secondary)] focus:ring-white/25"
         />
       </div>
 
       {loadError && (
-        <div className="nodrag border-b border-emerald-300/10 bg-red-950/40 px-2 py-1 text-[11px] text-red-300">
+        <div className="nodrag border-b border-white/10 bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-[var(--color-error)]">
           {loadError}
         </div>
       )}
@@ -285,7 +285,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         />
       </div>
 
-      <Handle type="source" position={Position.Right} className="!bg-emerald-500" />
+      <Handle type="source" position={Position.Right} className="!bg-[var(--f-core-white)]" />
     </div>
   )
 }

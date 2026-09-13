@@ -346,7 +346,7 @@ export function PromptsPanel({
           type="button"
           onClick={startCustomAutomation}
           disabled={Boolean(draft)}
-          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16]"
         >
           <Plus size={13} />
           Novo prompt
@@ -354,7 +354,7 @@ export function PromptsPanel({
       </div>
 
       {draft && (
-        <section className="mb-3 rounded border border-emerald-500/30 bg-emerald-500/[0.06] p-2.5">
+        <section className="mb-3 rounded border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_6%,transparent)] p-2.5">
           <div className="mb-1 flex items-center gap-2">
             <input
               value={draft.name}
@@ -400,13 +400,13 @@ export function PromptsPanel({
               type="button"
               onClick={() => void createDraftAutomation()}
               disabled={isCreatingDraft}
-              className="felixo-btn rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+              className="felixo-btn rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
             >
               {isCreatingDraft ? 'Criando…' : 'Criar prompt'}
             </button>
           </div>
           {feedbackId === 'draft' ? (
-            <p className="mt-1 flex items-center gap-1 text-[11px] text-red-300">
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--color-error)]">
               <CircleAlert size={11} />
               {feedbackText}
             </p>
@@ -418,11 +418,11 @@ export function PromptsPanel({
         </section>
       )}
 
-      <div className="mb-3 rounded border border-sky-500/20 bg-sky-500/[0.06] p-2.5 text-xs leading-relaxed text-sky-100/80">
+      <div className="mb-3 rounded border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_6%,transparent)] p-2.5 text-xs leading-relaxed text-[var(--f-core-white)]/80">
         Marque um ou vários prompts para montar uma única tarefa. Os textos são
         enviados na ordem do catálogo, com o nome de cada prompt preservado.
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-sky-200/60">
+          <span className="text-[var(--f-core-white)]/60">
             {selectedPrompts.length === 0
               ? 'Nenhum prompt selecionado.'
               : `${selectedPrompts.length} selecionado${selectedPrompts.length === 1 ? '' : 's'}.`}
@@ -431,7 +431,7 @@ export function PromptsPanel({
             type="button"
             onClick={() => void insertSelected()}
             disabled={selectedPrompts.length === 0 || pendingId === 'combined'}
-            className="felixo-btn flex items-center gap-1 rounded bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {pendingId === 'combined' ? (
               <SendHorizontal size={13} className="animate-pulse" />
@@ -450,7 +450,7 @@ export function PromptsPanel({
           </button>
         </div>
         {feedbackId === 'combined' && (
-          <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-red-300' : 'text-emerald-300'}`}>
+          <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-[var(--color-error)]' : 'text-[var(--f-core-white-soft)]'}`}>
             {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
             {feedbackText}
           </p>
@@ -531,12 +531,12 @@ export function PromptsPanel({
                     </>
                   ) : inserted ? (
                     <>
-                      <Check size={13} className="text-emerald-400" />
+                      <Check size={13} className="text-[var(--f-core-white-soft)]" />
                       Feito
                     </>
                   ) : failed ? (
                     <>
-                      <CircleAlert size={13} className="text-red-400" />
+                      <CircleAlert size={13} className="text-[var(--color-error)]" />
                       Tentar de novo
                     </>
                   ) : (
@@ -550,7 +550,7 @@ export function PromptsPanel({
                   <button
                     type="button"
                     onClick={() => void removeCustomAutomation(prompt.id)}
-                    className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                    className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)]"
                     aria-label="Remover prompt"
                   >
                     <Trash2 size={14} />
@@ -600,7 +600,7 @@ export function PromptsPanel({
               )}
 
               {feedbackId === prompt.id && (
-                <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-red-300' : 'text-emerald-300'}`}>
+                <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-[var(--color-error)]' : 'text-[var(--f-core-white-soft)]'}`}>
                   {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
                   {feedbackText}
                 </p>

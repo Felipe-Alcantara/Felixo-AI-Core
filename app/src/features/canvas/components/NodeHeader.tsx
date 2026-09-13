@@ -42,10 +42,10 @@ export function NodeHeader({
 
   return (
     <div
-      className={`${NODE_DRAG_HANDLE_CLASS} flex cursor-grab items-center gap-1.5 px-2 py-1 text-xs active:cursor-grabbing ${className ?? ''}`}
+      className={`felixo-node-header ${NODE_DRAG_HANDLE_CLASS} flex cursor-grab items-center gap-1.5 px-2 py-1 text-xs active:cursor-grabbing ${className ?? ''}`}
     >
-      <GripVertical size={13} className="shrink-0 opacity-50" />
-      {icon && <span className="shrink-0 opacity-70">{icon}</span>}
+      <GripVertical size={12} className="felixo-node-grip shrink-0" aria-hidden />
+      {icon && <span className="felixo-node-identity shrink-0">{icon}</span>}
       {editable ? (
         <TitleInput
           value={editableValue}
@@ -56,6 +56,7 @@ export function NodeHeader({
       ) : (
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
       )}
+      <div className="felixo-node-actions nodrag">
       {children}
       {onRemove && (
         <button
@@ -64,10 +65,12 @@ export function NodeHeader({
           className="felixo-btn-icon nodrag rounded p-0.5 opacity-60 hover:bg-black/20 hover:opacity-100"
           onClick={onRemove}
           aria-label="Remover no"
+          title="Remover bloco"
         >
           <X size={13} />
         </button>
       )}
+      </div>
     </div>
   )
 }
@@ -92,6 +95,7 @@ function TitleInput({
   return (
     <input
       value={value}
+      aria-label="Nome do bloco"
       placeholder={placeholder}
       onFocus={(event) => {
         valueAtFocusRef.current = event.target.value

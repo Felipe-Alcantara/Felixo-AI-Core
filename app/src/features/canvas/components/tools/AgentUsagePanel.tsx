@@ -305,7 +305,7 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
       </div>
 
       {statusMessage && (
-        <p className="mb-3 rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1.5 text-[11px] text-amber-200">
+        <p className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-warning)]">
           {statusMessage}
         </p>
       )}
@@ -453,7 +453,7 @@ function ClaudeStatuslineControl({
 
   if (state.conflictingStatusLine) {
     return (
-      <p className="mt-2 text-[10px] leading-snug text-amber-300/80">
+      <p className="mt-2 text-[10px] leading-snug text-[var(--color-warning)]">
         Você já tem uma status line configurada no Claude Code. O app não
         sobrescreve a sua — remova-a para poder ligar a coleta aqui.
       </p>
@@ -514,7 +514,7 @@ function AccountRow({
           {account.identityDisplay ?? account.label}
         </span>
         {plan && (
-          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
+          <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-warning)]">
             {plan}
           </span>
         )}
@@ -640,7 +640,7 @@ function barToneClass(percent: number): string {
   }
 
   if (percent >= 60) {
-    return 'bg-amber-400'
+    return 'bg-[var(--color-warning)]'
   }
 
   return 'bg-theme-success'

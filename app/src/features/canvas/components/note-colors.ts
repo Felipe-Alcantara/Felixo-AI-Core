@@ -15,36 +15,52 @@ export const NOTE_COLORS: NoteColor[] = ['amber', 'emerald', 'sky', 'rose', 'zin
 
 export const DEFAULT_NOTE_COLOR: NoteColor = 'amber'
 
+/**
+ * Cinco papéis, não cinco matizes.
+ *
+ * Os temas eram âmbar, verde, azul e rosa saturados — uma ilha colorida num
+ * produto monocromático. Agora ficam todos na mesma banda de luminosidade do
+ * branco da marca, separados por um sussurro de matiz: passam no teste do
+ * manual (em preto e branco viram praticamente o mesmo cinza) e ainda assim
+ * dá para distinguir uma nota da outra lado a lado.
+ *
+ * A nota continua sendo a única superfície clara do canvas, de propósito: é
+ * papel sobre a mesa escura, e é isso que a faz ler como anotação humana no
+ * meio dos blocos de máquina.
+ *
+ * As chaves não mudam: `NoteColor` é persistido no canvas de quem já usa, e
+ * renomeá-las apagaria a escolha feita em notas antigas.
+ */
 export const NOTE_THEMES: Record<NoteColor, NoteTheme> = {
   amber: {
-    container: 'border-amber-300/30 bg-amber-100/95 text-amber-950',
-    header: 'bg-amber-200/80 text-amber-900',
-    text: 'text-amber-950 placeholder:text-amber-800/40',
-    swatch: 'bg-amber-300',
+    container: 'border-black/10 bg-[#ede9e0] text-[#151515]',
+    header: 'bg-black/[0.06] text-[#262626]',
+    text: 'text-[#151515] placeholder:text-black/35',
+    swatch: 'bg-[#ede9e0]',
   },
   emerald: {
-    container: 'border-emerald-300/30 bg-emerald-100/95 text-emerald-950',
-    header: 'bg-emerald-200/80 text-emerald-900',
-    text: 'text-emerald-950 placeholder:text-emerald-800/40',
-    swatch: 'bg-emerald-300',
+    container: 'border-black/10 bg-[#e6ebe7] text-[#151515]',
+    header: 'bg-black/[0.06] text-[#262626]',
+    text: 'text-[#151515] placeholder:text-black/35',
+    swatch: 'bg-[#e6ebe7]',
   },
   sky: {
-    container: 'border-sky-300/30 bg-sky-100/95 text-sky-950',
-    header: 'bg-sky-200/80 text-sky-900',
-    text: 'text-sky-950 placeholder:text-sky-800/40',
-    swatch: 'bg-sky-300',
+    container: 'border-black/10 bg-[#e4e9ee] text-[#151515]',
+    header: 'bg-black/[0.06] text-[#262626]',
+    text: 'text-[#151515] placeholder:text-black/35',
+    swatch: 'bg-[#e4e9ee]',
   },
   rose: {
-    container: 'border-rose-300/30 bg-rose-100/95 text-rose-950',
-    header: 'bg-rose-200/80 text-rose-900',
-    text: 'text-rose-950 placeholder:text-rose-800/40',
-    swatch: 'bg-rose-300',
+    container: 'border-black/10 bg-[#efe6e7] text-[#151515]',
+    header: 'bg-black/[0.06] text-[#262626]',
+    text: 'text-[#151515] placeholder:text-black/35',
+    swatch: 'bg-[#efe6e7]',
   },
   zinc: {
-    container: 'border-zinc-300/30 bg-zinc-200/95 text-zinc-900',
-    header: 'bg-zinc-300/80 text-zinc-800',
-    text: 'text-zinc-900 placeholder:text-zinc-600/40',
-    swatch: 'bg-zinc-300',
+    container: 'border-black/10 bg-[#ededea] text-[#151515]',
+    header: 'bg-black/[0.06] text-[#262626]',
+    text: 'text-[#151515] placeholder:text-black/35',
+    swatch: 'bg-[#ededea]',
   },
 }
 

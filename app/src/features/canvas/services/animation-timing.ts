@@ -7,7 +7,7 @@
  */
 
 /** Mirrors `.felixo-anim-drawer-out` in index.css. */
-export const DRAWER_EXIT_MS = 300
+export const DRAWER_EXIT_MS = 160
 
 /** Mirrors `.felixo-anim-panel-out` in index.css. */
-export const PANEL_EXIT_MS = 260
+export const PANEL_EXIT_MS = 160

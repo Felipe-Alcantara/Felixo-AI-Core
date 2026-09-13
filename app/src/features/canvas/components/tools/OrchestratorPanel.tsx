@@ -289,10 +289,10 @@ const AGENT_STATUS_LABEL: Record<string, string> = {
 }
 
 const AGENT_STATUS_CLASS: Record<string, string> = {
-  running: 'border-blue-500/30 bg-blue-500/15 text-blue-300',
-  completed: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300',
-  error: 'border-red-500/30 bg-red-500/15 text-red-300',
-  fallback: 'border-amber-500/30 bg-amber-500/15 text-amber-300',
+  running: 'border-white/10 bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)]',
+  completed: 'border-white/10 bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)]',
+  error: 'border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] text-[var(--color-error)]',
+  fallback: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
 }
 
 /**
@@ -336,14 +336,14 @@ function LiveRuns() {
           {limitedModels.map((entry) => (
             <li
               key={`${entry.cliType}:${entry.modelId ?? 'cli-wide'}`}
-              className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-100"
+              className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-warning)]"
             >
               <span className="font-medium">
                 {entry.modelName ?? entry.modelId ?? entry.cliType}
               </span>
-              <span className="ml-1 text-amber-300/70">({entry.cliType})</span>
+              <span className="ml-1 text-[var(--color-warning)]">({entry.cliType})</span>
               {entry.resetLabel && (
-                <span className="block text-amber-300/80">
+                <span className="block text-[var(--color-warning)]">
                   Reset previsto: {entry.resetLabel}
                 </span>
               )}
@@ -376,7 +376,7 @@ function LiveRuns() {
                   {agent.modelName ? ` · ${agent.modelName}` : ''}
                 </div>
                 {agent.fallbackHistory.map((entry, index) => (
-                  <div key={index} className="text-[10px] text-amber-300/90">
+                  <div key={index} className="text-[10px] text-[var(--color-warning)]">
                     ↻ {entry.fromCliType} → {entry.toCliType}
                     {entry.spreadFromCliType
                       ? ` (espalhado de ${entry.spreadFromCliType})`

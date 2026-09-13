@@ -134,17 +134,17 @@ function ReducedMotionNotice() {
   return (
     <div
       role="status"
-      className="mb-3 rounded border border-sky-500/30 bg-sky-500/[0.08] p-2.5 text-xs leading-relaxed text-sky-100/90"
+      className="mb-3 rounded border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_8%,transparent)] p-2.5 text-xs leading-relaxed text-[var(--f-core-white)]/90"
     >
       <div className="flex gap-2">
-        <CircleAlert className="mt-0.5 shrink-0 text-sky-300" size={15} />
+        <CircleAlert className="mt-0.5 shrink-0 text-[var(--f-core-white-soft)]" size={15} />
         <div>
-          <p className="font-medium text-sky-100">As animações estão desligadas pelo sistema.</p>
-          <p className="mt-1 text-sky-100/75">
+          <p className="font-medium text-[var(--f-core-white)]">As animações estão desligadas pelo sistema.</p>
+          <p className="mt-1 text-[var(--f-core-white)]/75">
             Isso não é um defeito: o Felixo respeita a preferência de movimento
             reduzido do seu sistema.
           </p>
-          <p className="mt-1 text-sky-100/75">
+          <p className="mt-1 text-[var(--f-core-white)]/75">
             No Windows, ajuste em Configurações → Acessibilidade → Efeitos visuais
             → Efeitos de animação.
           </p>
@@ -217,7 +217,7 @@ function PromptField({
         <button
           type="button"
           onClick={() => void save()}
-          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16]"
         >
           <Save size={14} />
           {saved ? 'Salvo' : 'Salvar'}
@@ -293,7 +293,7 @@ function QualityStandardField({
         <button
           type="button"
           onClick={() => void save()}
-          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16]"
         >
           <Save size={14} />
           {saved ? 'Salvo' : 'Salvar'}

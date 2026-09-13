@@ -24,18 +24,18 @@ export type CanvasSurfacesValue = {
    */
   reportPanelWidth: (width: number) => void
   reportDrawerWidth: (width: number) => void
-  /** Topo do dock "Elementos": é onde o painel da esquerda precisa parar. */
+  /**
+   * Largura do inspector "Elementos", publicada por `TerminalsPanel`: 0
+   * quando está recolhido no puck, `INSPECTOR_WIDTH` quando expandido. Ele é
+   * permanente (não é medido via `ResizeObserver` — a largura é fixa por
+   * desenho), então é só um número reportado a cada troca de estado, igual
+   * `reportDrawerWidth`.
+   */
+  reportInspectorWidth: (width: number) => void
+  /** Topo medido do dock Elementos; infinito quando não está disponível. */
   dockTop: number
   reportDockTop: (top: number) => void
-  /**
-   * Altura do dock, DERIVADA de `dockTop` (nunca medida de novo): a
-   * distância dele até o fim do viewport já é a altura ocupada + a margem
-   * do canto. Existia um segundo caminho de medição (`onHeightChange` em
-   * `TerminalsPanel`, com seu próprio `ResizeObserver`) que reportava
-   * exatamente a mesma coisa por um canal separado — unificado aqui: quem
-   * precisa reservar espaço pro dock (notificações, posicionamento de node)
-   * lê isto, não reimplementa a conta.
-   */
+  /** Altura do dock que precisa ser reservada no rodapé do canvas. */
   dockHeight: number
   /**
    * Tamanho do Mini Map pra área livre atual, já calculado uma vez aqui —
@@ -65,13 +65,14 @@ export const CanvasSurfacesContext = createContext<CanvasSurfacesValue | null>(
 export function useCanvasSurfaces(): CanvasSurfacesValue {
   return (
     useContext(CanvasSurfacesContext) ?? {
-      occupancy: { toolbar: 0, panel: 0, drawer: 0 },
+      occupancy: { toolbar: 0, panel: 0, drawer: 0, inspector: 0 },
       viewport: {
         width: typeof window === 'undefined' ? 1280 : window.innerWidth,
         height: typeof window === 'undefined' ? 800 : window.innerHeight,
       },
       reportPanelWidth: () => {},
       reportDrawerWidth: () => {},
+      reportInspectorWidth: () => {},
       dockTop: Number.POSITIVE_INFINITY,
       reportDockTop: () => {},
       dockHeight: 0,

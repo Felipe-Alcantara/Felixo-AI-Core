@@ -159,7 +159,7 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
       )}
 
       {error && (
-        <p className="mb-2 rounded bg-red-950/50 p-2 text-xs text-red-300">{error}</p>
+        <p className="mb-2 rounded bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] p-2 text-xs text-[var(--color-error)]">{error}</p>
       )}
 
       {summary && (
@@ -167,7 +167,7 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
           <div className="flex items-center gap-2 text-xs text-zinc-400">
             <GitBranch size={13} />
             <span className="text-zinc-200">{summary.branch ?? '—'}</span>
-            {summary.isClean && <span className="text-emerald-400">· limpo</span>}
+            {summary.isClean && <span className="text-[var(--f-core-white-soft)]">· limpo</span>}
           </div>
 
           {summary.statusLines.length > 0 ? (
@@ -237,7 +237,7 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
             type="button"
             onClick={() => void commit()}
             disabled={busy || !message.trim()}
-            className="felixo-btn flex items-center justify-center gap-2 rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+            className="felixo-btn flex items-center justify-center gap-2 rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16] disabled:opacity-50"
           >
             <GitCommit size={14} />
             Commit

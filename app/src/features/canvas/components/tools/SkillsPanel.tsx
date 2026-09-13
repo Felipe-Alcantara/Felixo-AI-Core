@@ -135,7 +135,7 @@ export function SkillsPanel({
       <button
         type="button"
         onClick={startNew}
-        className="felixo-btn mb-3 flex items-center gap-1 rounded bg-sky-700/50 px-2 py-1 text-sm text-sky-50 hover:bg-sky-600/60"
+        className="felixo-btn mb-3 flex items-center gap-1 rounded bg-white/[0.10] px-2 py-1 text-sm text-[var(--f-core-white)] hover:bg-white/[0.16]"
       >
         <Plus size={14} />
         Nova skill
@@ -148,13 +148,13 @@ export function SkillsPanel({
             value={draft.name}
             onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))}
             placeholder="Nome"
-            className="rounded border border-white/10 bg-black/30 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-sky-500/50"
+            className="rounded border border-white/10 bg-black/30 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-white/10"
           />
           <input
             value={draft.path}
             onChange={(event) => setDraft((d) => ({ ...d, path: event.target.value }))}
             placeholder="Caminho do arquivo da skill"
-            className="rounded border border-white/10 bg-black/30 px-2 py-1 font-mono text-xs text-zinc-100 outline-none focus:border-sky-500/50"
+            className="rounded border border-white/10 bg-black/30 px-2 py-1 font-mono text-xs text-zinc-100 outline-none focus:border-white/10"
           />
           <textarea
             value={draft.description}
@@ -163,14 +163,14 @@ export function SkillsPanel({
             }
             placeholder="Descrição (opcional)"
             rows={2}
-            className="resize-none rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-sky-500/50"
+            className="resize-none rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-white/10"
           />
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => void saveDraft()}
               disabled={!draft.name.trim() || !draft.path.trim()}
-              className="felixo-btn rounded bg-sky-700/60 px-2 py-1 text-xs text-sky-50 hover:bg-sky-600/70 disabled:opacity-50"
+              className="felixo-btn rounded bg-white/[0.10] px-2 py-1 text-xs text-[var(--f-core-white)] hover:bg-white/[0.16] disabled:opacity-50"
             >
               Salvar
             </button>
@@ -217,14 +217,14 @@ export function SkillsPanel({
                   {item.name}
                 </span>
                 {item.source === 'community' && (
-                  <span className="shrink-0 rounded bg-amber-900/40 px-1 text-[10px] text-amber-200">
+                  <span className="shrink-0 rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1 text-[10px] text-[var(--color-warning)]">
                     {item.origin ?? 'terceiros'}
                   </span>
                 )}
                 <button
                   type="button"
                   onClick={() => void activate(item)}
-                  className="felixo-btn ml-auto shrink-0 rounded px-1 text-[10px] text-emerald-300 hover:bg-white/10"
+                  className="felixo-btn ml-auto shrink-0 rounded px-1 text-[10px] text-[var(--f-core-white-soft)] hover:bg-white/10"
                   title="Ativar agora no terminal aberto"
                 >
                   Ativar
@@ -251,7 +251,7 @@ export function SkillsPanel({
               <button
                 type="button"
                 onClick={() => void activate(skill)}
-                className="felixo-btn flex items-center gap-1 rounded bg-emerald-700/40 px-1.5 py-0.5 text-xs text-emerald-100 hover:bg-emerald-600/50"
+                className="felixo-btn flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-0.5 text-xs text-[var(--f-core-white)] hover:bg-white/[0.16]"
                 title="Ativar: enviar ao terminal aberto (ou copiar)"
               >
                 <Zap size={12} />
@@ -268,7 +268,7 @@ export function SkillsPanel({
               <button
                 type="button"
                 onClick={() => void removeSkill(skill.id)}
-                className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300"
+                className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)]"
                 title="Remover"
               >
                 <Trash2 size={13} />
@@ -281,7 +281,7 @@ export function SkillsPanel({
               <p className="mt-0.5 text-xs text-zinc-500">{skill.description}</p>
             )}
             {feedbackId === skill.id && (
-              <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-300">
+              <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--f-core-white-soft)]">
                 <Check size={11} />
                 {feedbackText}
               </p>

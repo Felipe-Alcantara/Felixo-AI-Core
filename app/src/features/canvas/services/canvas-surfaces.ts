@@ -1,16 +1,18 @@
-// Repartição do espaço entre as superfícies flutuantes do canvas.
+// Repartição do espaço entre as superfícies fixas do canvas.
 //
-// A barra de ferramentas e o painel de ferramenta ancoram na esquerda; a
-// gaveta do terminal, o Mini Map e o dock "Elementos" ancoram na direita.
-// Cada um era dimensionado sem saber da existência dos outros, então eles se
-// cobriam: medido em 1320x738, com o painel de prompts aberto, o painel
-// invadia o Mini Map (188x104 px) e o dock (306x53 px), e escapava da gaveta
-// por 35 px — que sumiam ao primeiro arrasto.
+// A sidebar (trilho de atividades + navegação) ancora na esquerda; o painel
+// de ferramenta abre ao lado dela, também na esquerda. A gaveta do terminal e
+// o inspector "Elementos" ancoram na direita — o inspector é permanente
+// (largura fixa, `TerminalsPanel.tsx`), a gaveta só existe com um terminal
+// expandido. Cada um era dimensionado sem saber da existência dos outros,
+// então eles se cobriam: medido em 1320x738, com o painel de prompts aberto,
+// o painel invadia o Mini Map (188x104 px) e o dock antigo (306x53 px), e
+// escapava da gaveta por 35 px — que sumiam ao primeiro arrasto.
 //
 // Aqui mora a conta, em funções puras: quem está na esquerda e quem está na
 // direita disputam a mesma largura, e o que sobra é o canvas. Nenhuma
 // superfície some para caber; todas encolhem até um piso, e é o piso que
-// impede o arrasto de continuar.
+// impede o arrasto de continuar — exceto o Mini Map, que pode sumir.
 
 /** Faixa de canvas que continua visível por baixo de tudo. */
 export const MIN_CANVAS_STRIP = 160
@@ -25,13 +27,31 @@ export const MIN_CANVAS_STRIP = 160
 export const PANEL_MIN_WIDTH = 260
 export const DRAWER_MIN_WIDTH = 440
 
+/**
+ * Largura da sidebar (trilho de atividades + navegação), expandida e
+ * recolhida — mesmos números de `.felixo-workbench-sidebar` em index.css
+ * (18rem / 3.25rem). Único lugar que os declara; `CanvasView.tsx` e
+ * `toolbar-flyout.ts` importam daqui em vez de repetir o par.
+ */
+export const SIDEBAR_WIDTH = 288
+export const SIDEBAR_RAIL_WIDTH = 52
+
+/**
+ * Largura do inspector "Elementos", sempre visível à direita — mesmo número
+ * de `w-72` em `TerminalsPanel.tsx`. Recolhido ele vira um puck flutuante que
+ * não reserva espaço nenhum (0).
+ */
+export const INSPECTOR_WIDTH = 288
+
 export type SurfaceOccupancy = {
-  /** Largura da coluna da barra de ferramentas, com a margem dela. */
+  /** Largura da sidebar, com a margem dela. */
   toolbar: number
   /** Largura do painel de ferramenta aberto; zero quando não há nenhum. */
   panel: number
   /** Largura da gaveta do terminal; zero quando ela está fechada. */
   drawer: number
+  /** Largura do inspector "Elementos"; zero quando está recolhido no puck. */
+  inspector: number
 }
 
 /**
@@ -53,19 +73,19 @@ export function availableWidth(
 /** Quanto o painel da esquerda pode ocupar, dado o que está na direita. */
 export function panelWidthLimit(
   viewportWidth: number,
-  { toolbar, drawer }: Pick<SurfaceOccupancy, 'toolbar' | 'drawer'>,
+  { toolbar, drawer, inspector }: Pick<SurfaceOccupancy, 'toolbar' | 'drawer' | 'inspector'>,
   minimum: number,
 ): number {
-  return availableWidth(viewportWidth, toolbar + drawer, minimum)
+  return availableWidth(viewportWidth, toolbar + drawer + inspector, minimum)
 }
 
 /** Quanto a gaveta da direita pode ocupar, dado o que está na esquerda. */
 export function drawerWidthLimit(
   viewportWidth: number,
-  { toolbar, panel }: Pick<SurfaceOccupancy, 'toolbar' | 'panel'>,
+  { toolbar, panel, inspector }: Pick<SurfaceOccupancy, 'toolbar' | 'panel' | 'inspector'>,
   minimum: number,
 ): number {
-  return availableWidth(viewportWidth, toolbar + panel, minimum)
+  return availableWidth(viewportWidth, toolbar + panel + inspector, minimum)
 }
 
 /**
@@ -97,8 +117,9 @@ export function splitHorizontalSpace(
   desiredDrawer: number,
   minDrawer: number,
   minCanvas = MIN_CANVAS_STRIP,
+  inspectorWidth = 0,
 ): { panel: number; drawer: number } {
-  const available = Math.max(0, viewportWidth - toolbarWidth - minCanvas)
+  const available = Math.max(0, viewportWidth - toolbarWidth - inspectorWidth - minCanvas)
 
   if (desiredPanel <= 0) {
     return { panel: 0, drawer: Math.min(desiredDrawer, Math.max(minDrawer, available)) }
@@ -156,9 +177,8 @@ export function splitHorizontalSpace(
 
 /**
  * A área livre do canvas: o retângulo que não está debaixo de superfície
- * nenhuma. É dela que saem o tamanho do Mini Map e a largura do dock, que
- * ancoram à direita e por isso são os primeiros a serem cobertos quando o
- * painel da esquerda cresce.
+ * nenhuma. É dela que sai o tamanho do Mini Map, que ancora à direita e por
+ * isso é o primeiro a ser coberto quando o painel da esquerda cresce.
  */
 export function freeCanvasArea(
   viewport: { width: number; height: number },
@@ -168,7 +188,7 @@ export function freeCanvasArea(
 
   return {
     left,
-    width: Math.max(0, viewport.width - left - occupancy.drawer),
+    width: Math.max(0, viewport.width - left - occupancy.drawer - occupancy.inspector),
     height: viewport.height,
   }
 }
@@ -186,18 +206,7 @@ const MINIMAP_DEFAULT = { width: 200, height: 150 }
 const MINIMAP_MIN = { width: 96, height: 72 }
 const MINIMAP_MARGIN = 32
 
-/**
- * Altura, em pixels de tela, que o dock "Elementos" ocupa por cima do
- * canvas agora — a partir do topo real dele (`dockTop`, medido via
- * `getBoundingClientRect`, nunca estimado) até o fim do container do canvas.
- *
- * Existe porque um node novo era posicionado com uma margem fixa de 40px de
- * rodapé (pensada pra quando o dock está vazio/colapsado): com vários
- * elementos, o dock cresce até 60vh de altura e o node nascia atrás dele —
- * sobreposição real, medida numa captura de tela em 760px de largura.
- * `dockTop = Infinity` (dock nunca mediu, ou está colapsado) devolve 0: sem
- * medida real, é mais seguro não reservar nada do que reservar demais.
- */
+/** Altura real ocupada pelo dock "Elementos" sobre a base do canvas. */
 export function dockReservedBottom(
   containerBottom: number,
   dockTop: number,

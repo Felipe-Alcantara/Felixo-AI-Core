@@ -139,7 +139,7 @@ export function NotesPanel({
         <button
           type="button"
           onClick={onAddNote}
-          className="felixo-btn flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
         >
           <Plus size={13} />
           Nova nota
@@ -161,7 +161,7 @@ export function NotesPanel({
                   className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
                   title="Centralizar esta nota no canvas"
                 >
-                  <StickyNote size={14} className="mt-0.5 shrink-0 text-amber-300/80" />
+                  <StickyNote size={14} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-zinc-100">{title}</span>
                     {data.text && (
@@ -186,7 +186,7 @@ export function NotesPanel({
         <button
           type="button"
           onClick={onAddDrawing}
-          className="felixo-btn flex items-center gap-1 rounded bg-sky-700 px-2 py-1 text-xs font-medium text-white hover:bg-sky-600"
+          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
         >
           <Plus size={13} />
           Novo desenho
@@ -208,7 +208,7 @@ export function NotesPanel({
                   className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
                   title="Centralizar este desenho no canvas"
                 >
-                  <Pencil size={14} className="mt-0.5 shrink-0 text-sky-300/80" />
+                  <Pencil size={14} className="mt-0.5 shrink-0 text-[var(--f-core-white-soft)]" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-zinc-100">{title}</span>
                   </span>
@@ -228,7 +228,7 @@ export function NotesPanel({
         <button
           type="button"
           onClick={onAddExcalidrawDrawing}
-          className="felixo-btn flex items-center gap-1 rounded bg-violet-700 px-2 py-1 text-xs font-medium text-white hover:bg-violet-600"
+          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
           title="Modo avançado: formas, texto, setas — carrega o Excalidraw sob demanda"
         >
           <Plus size={13} />
@@ -251,7 +251,7 @@ export function NotesPanel({
                   className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
                   title="Centralizar este desenho no canvas"
                 >
-                  <PenTool size={14} className="mt-0.5 shrink-0 text-violet-300/80" />
+                  <PenTool size={14} className="mt-0.5 shrink-0 text-[var(--f-core-white-soft)]" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-zinc-100">{title}</span>
                   </span>
@@ -293,7 +293,7 @@ export function NotesPanel({
                 <button
                   type="button"
                   onClick={() => void removeSavedNote(note.id)}
-                  className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                  className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)]"
                   aria-label="Remover nota"
                 >
                   <Trash2 size={14} />

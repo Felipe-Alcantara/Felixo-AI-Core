@@ -126,13 +126,13 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-sky-300/20 bg-[#0d1420] text-zinc-200 shadow-xl">
+    <div className="felixo-canvas-card felixo-canvas-card-file flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-graphite)] text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={220}
         minHeight={140}
-        lineClassName="!border-sky-500/40"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-sky-500"
+        lineClassName="!border-white/30"
+        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
       />
       <FourSideHandles />
       <NodeHeader
@@ -140,7 +140,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         editableValue={nodeData.label ?? displayName}
         placeholder={displayName || 'arquivo.md'}
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
-        className="bg-sky-950/60 text-sky-100"
+        className="bg-white/[0.04] text-[var(--f-core-white)]"
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
       >
         <button
@@ -150,7 +150,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           title="Copiar caminho do arquivo (para dar ao agente)"
           aria-label="Copiar caminho"
         >
-          {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+          {copied ? <Check size={13} className="text-[var(--f-core-white-soft)]" /> : <Copy size={13} />}
         </button>
         <button
           type="button"
@@ -186,18 +186,18 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       */}
       {isExternal ? (
         <div
-          className="nodrag truncate border-b border-sky-300/10 bg-sky-950/30 px-2 py-1 text-[11px] text-sky-300/60"
+          className="nodrag truncate border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-[var(--f-core-secondary)]"
           title={absolutePath || filePath}
         >
           {absolutePath || filePath}
         </div>
       ) : (
-        <div className="nodrag flex items-center gap-1 border-b border-sky-300/10 bg-sky-950/30 px-2 py-1 text-[11px]">
+        <div className="nodrag flex items-center gap-1 border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[11px]">
           <span className="inline-flex overflow-hidden rounded ring-1 ring-white/10">
             <button
               type="button"
               onClick={() => setMode('scratchpad')}
-              className={`felixo-btn px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+              className={`felixo-btn px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-white/[0.10] text-[var(--f-core-white)]' : 'text-[var(--f-core-white-soft)] hover:bg-white/5'}`}
               title="Modo scratchpad: log vivo e leve"
             >
               Scratchpad
@@ -205,7 +205,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               onClick={() => setMode('plan')}
-              className={`felixo-btn px-1.5 py-0.5 ${mode === 'plan' ? 'bg-sky-700/60 text-sky-50' : 'text-sky-300/70 hover:bg-white/5'}`}
+              className={`felixo-btn px-1.5 py-0.5 ${mode === 'plan' ? 'bg-white/[0.10] text-[var(--f-core-white)]' : 'text-[var(--f-core-white-soft)] hover:bg-white/5'}`}
               title="Modo plano: gerar diagnóstico do repositório"
             >
               Plano
@@ -216,7 +216,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               onClick={() => void generateDiagnosis()}
               disabled={diagnosing}
-              className="felixo-btn nodrag ml-auto inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60 disabled:opacity-50"
+              className="felixo-btn nodrag ml-auto inline-flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-0.5 text-[var(--f-core-white)] hover:bg-white/[0.16] disabled:opacity-50"
               title="Pedir ao terminal conectado um diagnóstico do repositório"
             >
               <Stethoscope size={12} />
@@ -227,13 +227,13 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       )}
 
       {error && (
-        <div className="nodrag border-b border-rose-400/20 bg-rose-950/30 px-2 py-1 text-[11px] text-rose-200">
+        <div className="nodrag border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-[var(--color-error)]">
           {error}
         </div>
       )}
 
       {!isExternal && mode === 'plan' && diagnosisFeedback && (
-        <div className="nodrag border-b border-sky-300/10 bg-sky-950/20 px-2 py-1 text-[11px] text-sky-200/80">
+        <div className="nodrag border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-[var(--f-core-white-soft)]">
           {diagnosisFeedback}
         </div>
       )}
@@ -302,7 +302,7 @@ function FourSideHandles() {
             type="source"
             id={`s-${id}`}
             position={position}
-            className="!h-2.5 !w-2.5 !bg-sky-500"
+            className="!h-2.5 !w-2.5 !bg-[var(--f-core-white)]"
           />
           {/* Target sits on top of the source so either drag direction works. */}
           <Handle
@@ -346,11 +346,11 @@ function LinkedAgentsPanel({
   onUnlink,
 }: LinkedAgentsPanelProps) {
   return (
-    <div className="nodrag relative mt-auto border-t border-sky-300/10 bg-sky-950/30 px-2 py-1.5 text-[11px]">
-      <div className="mb-1 flex items-center gap-1 text-sky-300/70">
+    <div className="nodrag relative mt-auto border-t border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11px]">
+      <div className="mb-1 flex items-center gap-1 text-[var(--f-core-white-soft)]">
         <Link2 size={11} />
         <span>Agentes ligados</span>
-        <span className="rounded bg-sky-800/50 px-1 text-[10px] text-sky-100">
+        <span className="rounded bg-white/[0.08] px-1 text-[10px] text-[var(--f-core-white)]">
           {connectedAgents.length}
         </span>
       </div>
@@ -362,13 +362,13 @@ function LinkedAgentsPanel({
               key={agent.id}
               className="group flex items-center gap-1 rounded px-1 py-0.5 hover:bg-white/5"
             >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-              <span className="min-w-0 flex-1 truncate text-sky-100">{agent.label}</span>
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--f-core-active)]" />
+              <span className="min-w-0 flex-1 truncate text-[var(--f-core-white)]">{agent.label}</span>
               {canUnlink && (
                 <button
                   type="button"
                   onClick={() => onUnlink(agent.id)}
-                  className="felixo-btn-icon rounded p-0.5 text-sky-300/60 opacity-0 hover:bg-black/20 hover:text-rose-300 group-hover:opacity-100"
+                  className="felixo-btn-icon rounded p-0.5 text-[var(--f-core-secondary)] opacity-0 hover:bg-black/20 hover:text-[var(--color-error)] group-hover:opacity-100"
                   title="Desligar este agente"
                   aria-label={`Desligar ${agent.label}`}
                 >
@@ -379,7 +379,7 @@ function LinkedAgentsPanel({
           ))}
         </ul>
       ) : (
-        <p className="text-sky-300/40">Nenhum agente ligado ainda.</p>
+        <p className="text-[var(--f-core-secondary)]">Nenhum agente ligado ainda.</p>
       )}
 
       {canLink && (
@@ -387,7 +387,7 @@ function LinkedAgentsPanel({
           <button
             type="button"
             onClick={onToggleMenu}
-            className="felixo-btn inline-flex items-center gap-1 rounded bg-sky-700/50 px-1.5 py-0.5 text-sky-50 hover:bg-sky-600/60"
+            className="felixo-btn inline-flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-0.5 text-[var(--f-core-white)] hover:bg-white/[0.16]"
             title="Ligar este arquivo a um agente do canvas"
           >
             <Plus size={11} />
@@ -395,21 +395,21 @@ function LinkedAgentsPanel({
           </button>
 
           {menuOpen && (
-            <div className="nowheel absolute bottom-full left-0 z-10 mb-1 max-h-44 w-44 overflow-auto rounded-md border border-sky-300/20 bg-[#0d1420] py-1 shadow-xl">
+            <div className="nowheel absolute bottom-full left-0 z-10 mb-1 max-h-44 w-44 overflow-auto rounded-md border border-white/10 bg-[var(--f-core-graphite)] py-1 shadow-xl">
               {availableAgents.length > 0 ? (
                 availableAgents.map((agent) => (
                   <button
                     key={agent.id}
                     type="button"
                     onClick={() => onLink(agent.id)}
-                    className="felixo-btn flex w-full items-center gap-1 px-2 py-1 text-left text-sky-100 hover:bg-sky-800/40"
+                    className="felixo-btn flex w-full items-center gap-1 px-2 py-1 text-left text-[var(--f-core-white)] hover:bg-white/[0.16]"
                   >
                     <Link2 size={11} className="shrink-0 opacity-60" />
                     <span className="min-w-0 flex-1 truncate">{agent.label}</span>
                   </button>
                 ))
               ) : (
-                <p className="px-2 py-1 text-sky-300/40">
+                <p className="px-2 py-1 text-[var(--f-core-secondary)]">
                   Nenhum agente disponível. Crie um terminal primeiro.
                 </p>
               )}

@@ -13,7 +13,7 @@ import { detectLiveLayoutClamp } from '../services/layout-invariants'
 /**
  * Mantém quem está ocupando qual pedaço da tela do canvas.
  *
- * As superfícies flutuantes eram dimensionadas isoladamente, cada uma com o
+ * As superfícies fixas eram dimensionadas isoladamente, cada uma com o
  * viewport inteiro como referência — por isso se cobriam. Aqui elas publicam
  * a largura que estão usando e leem a dos outros, de modo que crescer uma
  * encolhe a outra em vez de passar por cima.
@@ -22,7 +22,7 @@ export function CanvasSurfacesProvider({
   toolbarWidth,
   children,
 }: {
-  /** Coluna da barra de ferramentas, que nunca é coberta. */
+  /** Coluna da sidebar, que nunca é coberta — expandida ou recolhida. */
   toolbarWidth: number
   children: ReactNode
 }) {
@@ -35,6 +35,7 @@ export function CanvasSurfacesProvider({
   const [desiredPanel, setDesiredPanel] = useState(0)
   const [desiredDrawer, setDesiredDrawer] = useState(0)
   const [dockTop, setDockTop] = useState(Number.POSITIVE_INFINITY)
+  const [inspector, setInspector] = useState(0)
   const [viewport, setViewport] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -57,6 +58,10 @@ export function CanvasSurfacesProvider({
     (width: number) => setDesiredDrawer((current) => (current === width ? current : width)),
     [],
   )
+  const reportInspectorWidth = useCallback(
+    (width: number) => setInspector((current) => (current === width ? current : width)),
+    [],
+  )
   const reportDockTop = useCallback(
     (top: number) => setDockTop((current) => (current === top ? current : top)),
     [],
@@ -71,8 +76,10 @@ export function CanvasSurfacesProvider({
         PANEL_MIN_WIDTH,
         desiredDrawer,
         DRAWER_MIN_WIDTH,
+        undefined,
+        inspector,
       ),
-    [desiredDrawer, desiredPanel, toolbarWidth, viewport.width],
+    [desiredDrawer, desiredPanel, inspector, toolbarWidth, viewport.width],
   )
 
   // Diagnóstico do clamp: só a transição pra um estado clampado vira log —
@@ -83,7 +90,7 @@ export function CanvasSurfacesProvider({
   const lastLoggedRuleRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const occupancy = { toolbar: toolbarWidth, panel, drawer }
+    const occupancy = { toolbar: toolbarWidth, panel, drawer, inspector }
     const clamp = detectLiveLayoutClamp({ viewport, occupancy, dockTop })
 
     if (!clamp) {
@@ -107,15 +114,10 @@ export function CanvasSurfacesProvider({
         // Falha ao gravar o log não pode derrubar o layout em si — na pior
         // das hipóteses, esta ocorrência específica fica sem registro.
       })
-  }, [dockTop, drawer, panel, toolbarWidth, viewport])
+  }, [dockTop, drawer, inspector, panel, toolbarWidth, viewport])
 
   const value = useMemo(() => {
-    const occupancy = { toolbar: toolbarWidth, panel, drawer }
-    // Distância do topo do dock até o fim do viewport: a mesma medida que
-    // `dockReservedBottom` usa pra não deixar um node novo nascer atrás do
-    // dock, aqui vira a altura que outras superfícies (notificações) também
-    // precisam reservar — uma leitura só de `dockTop`, não uma segunda
-    // medição via ResizeObserver como existia antes.
+    const occupancy = { toolbar: toolbarWidth, panel, drawer, inspector }
     const dockHeight = dockReservedBottom(viewport.height, dockTop)
 
     return {
@@ -123,6 +125,7 @@ export function CanvasSurfacesProvider({
       viewport,
       reportPanelWidth,
       reportDrawerWidth,
+      reportInspectorWidth,
       dockTop,
       reportDockTop,
       dockHeight,
@@ -131,9 +134,11 @@ export function CanvasSurfacesProvider({
   }, [
     dockTop,
     drawer,
+    inspector,
     panel,
-    reportDockTop,
     reportDrawerWidth,
+    reportDockTop,
+    reportInspectorWidth,
     reportPanelWidth,
     toolbarWidth,
     viewport,
