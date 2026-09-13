@@ -162,12 +162,19 @@ curso normal sem nenhuma ação minha.
 **PROD READY — DEPLOY REQUIRES HUMAN APPROVAL** (não confirmado se há
 pipeline; tratando como bloqueio por padrão, não por evidência de problema).
 
+## RELEASE
+
+O workflow de release #332 concluiu com sucesso para o commit `92b5708`.
+A tag `v0.1.332` está publicada, não é draft nem prerelease e contém 28
+assets para os três sistemas. Nenhuma ação manual de produção foi executada.
+
 ## RISKS REMAINING
 
 - **P2**: `main` local estava desatualizada em pontos anteriores — resolvido;
   agora está alinhada com `origin/main` em `92b5708`.
-- **P8**: release #332 estava em publicação na última observação; não houve
-  intervenção manual nem falha observada.
+- **P8**: release #332 concluído com sucesso; tag `v0.1.332` publicada, sem
+  draft/prerelease e com 28 assets. Nenhuma intervenção manual em produção
+  foi feita.
 - **P5**: 21 `preview-*.png` commitados na raiz sem clareza de propósito —
   decisão de produto, não risco técnico.
 - Nenhum P0/P1 conhecido no momento do fechamento desta sessão.

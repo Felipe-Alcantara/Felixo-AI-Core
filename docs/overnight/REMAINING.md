@@ -27,6 +27,8 @@ confirmar que os PRs e os documentos não serão mais necessários.
 
 ## Sem bloqueio, mas fora do escopo desta sessão
 
+- **Release `v0.1.332`**: workflow #332 concluído com sucesso e publicação
+  oficial confirmada com 28 assets. Não há ação restante neste item.
 - **Chunk de 1.821 kB do Excalidraw**: investigado com evidência, confirmado
   como fontes internas da biblioteca, já lazy, fora do startup. Reduzir mais
   exigiria vendoring ou patch da própria dependência — não é "ganho seguro"
