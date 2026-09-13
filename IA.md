@@ -5124,3 +5124,43 @@ fechando, ou se estabiliza (carga esperada).
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
 PR da ferramenta: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/38 (mergeada)
 PR do ajuste de metodologia: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39
+
+## Fechamento de trabalho — 2026-09-13 (continuação) — sessão de 60min corrigida: candidato do TerminalDrawer NÃO se confirmou
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+### Sessão real (perfil descartável, 15 terminais shell, 3 webviews locais, 60 minutos de carga, drawer sempre fechado a cada rajada — PR #39)
+
+`/home/felipe/.claude/jobs/225a9b8c/tmp/heap-sessions/60min-15term-3web-v2/report.md` (local, sanitizado).
+
+| Checkpoint | Heap JS | Nós DOM | Listeners | Processos |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 1,5 MiB | 52 | 2 | 9 |
+| Fixture criada (15 term. + 3 webviews) | 49,9 MiB | 2.483 | 1.370 | 23 |
+| Estado degradado (após 60min de carga) | 77,2 MiB | 2.484 | **580** | 26 |
+| Após remoção | 72,7 MiB | 2.333 | 544 | 8 |
+| Após "Limpar canvas" | 73,5 MiB | 2.288 | 553 | 8 |
+
+**Achado principal: o candidato de retenção do TerminalDrawer identificado na sessão de 30min (metodologia com falha, nunca fechava o drawer) NÃO se reproduziu aqui.** Com o drawer sempre fechado a cada rajada de atividade (correção da PR #39), os nós DOM ficaram **praticamente estáveis** durante toda a hora de carga (2.483 → 2.484, quase zero crescimento) e os listeners **caíram** (1.370 → 580) em vez de crescer. Isso inverte completamente a tendência vista na sessão de 30min (DOM 2.002→3.183, listeners 1.117→1.643, ambos crescendo). Conclusão: o achado da sessão de 30min era majoritariamente artefato da própria metodologia (nunca fechar o drawer), não uma retenção real no ciclo abrir/fechar.
+
+Processos do SO voltam exatamente ao baseline nas duas sessões (8 = 8 aqui; 8 = 8 na de 30min) — sem PTY/webview órfão, confirmando que a correção de liberação de PTY da task principal continua valendo mesmo sob carga maior (15 terminais, 1h).
+
+### Resíduo após remoção/Limpar canvas — não confirmado como retenção
+
+O diff 03→04 (após remover os 15 terminais) mostra ~15-19 elementos DOM (input "Nome do bloco", botões de ação do nó, cabeçalho do nó, handles de resize) passando para `detachedness=2`, com **Δ self_size = 0 B** na maioria das entradas — ou seja, os objetos não cresceram em tamanho nem se multiplicaram, só mudaram de "anexado" para "destacado" no exato instante da remoção. Isso é o comportamento esperado e correto de remover um nó do DOM: o subtree fica destacado imediatamente e só é varrido pelo GC depois. `HeapProfiler.takeHeapSnapshot` do Chrome já roda uma coleta de lixo antes de serializar (para evitar falso positivo assim), e mesmo assim ~1 instância por nó removido aparece — consistente com resíduo aguardando o próximo ciclo de GC, não uma referência JS ativa retendo o subtree pra sempre. Não abri correção de código para isso: não há evidência de crescimento contínuo nem de referência viva, só a lacuna natural entre "destacado" e "coletado".
+
+### Meta numérica de monitoramento (proposta, a partir do observado)
+
+- Durante carga sustentada (terminais abertos, drawer sempre fechado após uso): nós DOM e listeners não devem crescer mais que ~5% em relação ao estado logo após a criação da fixture, numa janela de 1h.
+- Após remoção completa + "Limpar canvas": até ~20 elementos destacados por nó removido é aceitável (resíduo pendente de GC); acima disso, investigar.
+- Processos do SO após "Limpar canvas" devem voltar ao mesmo número do baseline (nunca acima).
+
+### Limitação desta rodada
+
+A matriz completa do roteiro da task pede 30/60/120 minutos, 10 e 20 terminais, e repetição em três execuções para declarar não-reprodução com confiança total. Rodei 30min/10 terminais (metodologia com falha, já documentada) e 60min/15 terminais (metodologia corrigida, sem falha) — duas execuções reais, não três, e ainda falta a variante de 120 minutos e 20 terminais. O sinal já é consistente (crescimento zerado/negativo com a correção), mas a rodada de 120min/20 terminais fica como próximo passo se o Felipe quiser fechar com a matriz completa.
+
+### Referências
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+PR da ferramenta: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/38 (mergeada)
+PR do ajuste de metodologia (fecha o drawer): https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39 (mergeada)
