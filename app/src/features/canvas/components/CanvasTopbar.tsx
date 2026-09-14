@@ -20,7 +20,7 @@ export function CanvasTopbar({
   onToggleSidebar,
 }: CanvasTopbarProps) {
   return (
-    <header className="felixo-canvas-topbar" aria-label="Barra do workspace">
+    <header className="felixo-canvas-topbar" aria-label="Barra do workspace" data-felixo-region="topbar">
       <div className="felixo-topbar-ambient" aria-hidden="true">
         <svg viewBox="0 0 1600 96" preserveAspectRatio="none" focusable="false">
           <path d="M80 -22 C310 4 360 82 620 72 S1000 4 1290 36 S1490 92 1680 58" />

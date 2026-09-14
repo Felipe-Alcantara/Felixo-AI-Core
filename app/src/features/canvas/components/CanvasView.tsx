@@ -1895,6 +1895,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         ref={flowContainerRef}
         className="relative h-full min-w-0 flex-1"
         style={{ '--felixo-atmosphere': atmosfera } as CSSProperties}
+        data-felixo-region="canvas"
       >
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <CanvasTopbar

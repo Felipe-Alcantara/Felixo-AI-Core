@@ -7,12 +7,16 @@
  * devtools` (sessão isolada, invisível, porta CDP local) em vez de duplicar
  * lógica de spawn/CDP — é a mesma automação que um agente usa manualmente.
  *
- * Escopo desta primeira fatia: mount (o canvas hidrata de verdade) e viewport
- * mínimo (a interface não estoura a largura da janela num tamanho pequeno).
- * "No-overlap", foco e tool/terminal/notificação ficam para as próximas
- * fatias — precisam de `data-testid` nos componentes de layout, que ainda
- * não existem, e adicioná-los sem revisão fica fora do escopo desta task
- * inicial. Ver a página da task para o plano completo.
+ * Fatia 1: mount (o canvas hidrata de verdade) e viewport mínimo (a interface
+ * não estoura a largura da janela num tamanho pequeno).
+ * Fatia 2: os três landmarks de layout (topbar/sidebar/canvas, marcados com
+ * `data-felixo-region`) existem e têm tamanho visível — um "no-overlap"
+ * literal foi tentado e abandonado (o layout é full-bleed com chrome
+ * flutuante por design; ver o comentário de `checarLandmarksVisiveis`) — e
+ * foco inicial ao abrir uma ferramenta (o input de busca precisa herdar o
+ * foco, não só aparecer), usando `data-felixo-canvas-panel`, que já existia
+ * antes desta task. Terminal/notificação continuam pendentes — ver a página
+ * da task para o plano completo.
  */
 
 const path = require('node:path')
@@ -61,6 +65,68 @@ async function checarMontagem(page) {
   )
 }
 
+const LAYOUT_REGIONS = ['topbar', 'sidebar', 'canvas']
+
+/**
+ * Medido nesta task: o layout do canvas é full-bleed com chrome flutuante
+ * (a topbar sobrepõe o canvas de propósito, e a sidebar hoje também é
+ * posicionada por cima dele, não como coluna flex reservando espaço) — não
+ * um layout empilhado onde regiões nunca se tocam. Um "no-overlap" literal
+ * (nenhum par de regiões pode compartilhar área) marcaria como falha o
+ * próprio design pretendido, então foi abandonado nesta fatia; ver a página
+ * da task para o registro completo da tentativa.
+ *
+ * O que fica, então, é a checagem que não depende do modelo de posicionamento
+ * mudar no futuro: cada landmark existe no DOM e tem tamanho visível de
+ * verdade (não colapsou pra 0x0 por um CSS quebrado) — um regressão real de
+ * layout (ex.: sidebar sumindo, topbar com altura zerada) ainda derruba isto.
+ */
+async function checarLandmarksVisiveis(page) {
+  const retangulos = await page.evaluate((seletores) => {
+    return seletores.map((regiao) => {
+      const elemento = document.querySelector(`[data-felixo-region="${regiao}"]`)
+      if (!elemento) return { regiao, ausente: true }
+      const rect = elemento.getBoundingClientRect()
+      return { regiao, width: rect.width, height: rect.height }
+    })
+  }, LAYOUT_REGIONS)
+
+  const ausentes = retangulos.filter((r) => r.ausente).map((r) => r.regiao)
+  if (ausentes.length > 0) {
+    throw new Error(`[canvas-smoke] região(ões) de layout não encontrada(s) no DOM: ${ausentes.join(', ')}`)
+  }
+
+  const colapsadas = retangulos.filter((r) => r.width <= 0 || r.height <= 0)
+  if (colapsadas.length > 0) {
+    throw new Error(
+      `[canvas-smoke] região(ões) de layout com tamanho zerado: ${JSON.stringify(colapsadas)}`,
+    )
+  }
+}
+
+async function checarFocoAoAbrirFerramenta(page) {
+  // "Buscar" é o rótulo acessível do botão na sidebar (ActivityRailButton).
+  await page.getByRole('button', { name: 'Buscar' }).click()
+
+  const painel = page.locator('[data-felixo-canvas-panel="search"]')
+  await painel.waitFor({ state: 'visible', timeout: 5_000 })
+
+  const campoFocado = await page.evaluate(() => {
+    const painelEl = document.querySelector('[data-felixo-canvas-panel="search"]')
+    const input = painelEl?.querySelector('input')
+    return Boolean(input) && document.activeElement === input
+  })
+  if (!campoFocado) {
+    throw new Error(
+      '[canvas-smoke] abrir "Buscar" não moveu o foco para o campo de busca do painel',
+    )
+  }
+
+  // Fecha a ferramenta pra não vazar estado pro próximo check (viewport
+  // mínimo já espera a sidebar/topbar no estado padrão).
+  await page.getByRole('button', { name: 'Buscar' }).click()
+}
+
 async function checarViewportMinimo(page) {
   await page.setViewportSize(MIN_VIEWPORT)
   // Um reflow após o resize precisa de um tick; sem ele o scrollWidth ainda
@@ -84,6 +150,8 @@ async function main() {
     const { browser, page } = await connect(state)
     try {
       await checarMontagem(page)
+      await checarLandmarksVisiveis(page)
+      await checarFocoAoAbrirFerramenta(page)
       await checarViewportMinimo(page)
     } catch (error) {
       const output = path.join(APP_DIR, 'build', `canvas-smoke-failure-${process.platform}.png`)
@@ -99,7 +167,7 @@ async function main() {
       await browser.close()
     }
   })
-  console.log('[canvas-smoke] mount + viewport mínimo: ok')
+  console.log('[canvas-smoke] mount + landmarks visíveis + foco + viewport mínimo: ok')
 }
 
 main().catch((error) => {
