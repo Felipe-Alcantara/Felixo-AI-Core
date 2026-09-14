@@ -166,6 +166,31 @@ seleção, conexão, expansão de sidebar, ferramentas, arquivos ou agents.
   em toda a superfície.
 - Toda nova camada ambiental deve ser validada em canvas vazio e canvas cheio.
 
+## Modo Performance (2026-09-13)
+
+Motivo: feedback direto de um usuário com notebook mais fraco relatando o app
+pesado. Em vez de só ajustar internamente, a saída ficou visível e sob
+controle da pessoa: um interruptor em Configurações (logo abaixo do tema,
+tanto no canvas quanto no chat), persistido em `localStorage` e aplicado via
+`data-performance-mode` no elemento raiz — sem reload, sem reiniciar
+terminal.
+
+Quando ligado, corta apenas decoração e coreografia, nunca dado ou contrato:
+
+- O céu animado do canvas (`CanvasAmbientLayer`) não monta: ~1.280 sombras de
+  estrela e a camada de compositor que as anima somem, não só a animação.
+- O minimapa do React Flow não monta.
+- Painéis, menus, docas, toolbar, controles de formulário e o pulso da aresta
+  ativa perdem transição/animação — o mesmo corte que `prefers-reduced-motion`
+  já aplicava, agora também disponível por escolha manual (`index.css`, blocos
+  logo após cada `@media (prefers-reduced-motion: reduce)`).
+- `useDeferredExpansionPanel` para de esperar uma animação que não vai rodar.
+
+Fora do escopo desta passada, de propósito: scrollback do xterm, política de
+batching de saída do terminal e modo gráfico (GPU/software, que já tem seu
+próprio controle em "Renderização e recuperação"). Nenhum dado, replay,
+attach/detach ou contrato de IPC muda.
+
 ## Reexecução
 
 Na pasta `app/`:
