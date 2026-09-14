@@ -1059,6 +1059,8 @@ declare global {
         log: (entry: QaLogEntryInput) => Promise<QaLogEntry>
         onEntry: (callback: (entry: QaLogEntry) => void) => () => void
         onCleared: (callback: () => void) => () => void
+        /** Botão "Reportar problema": versão, SO, últimas entradas e estado das CLIs, já redigido — pronto pra anexar numa task. */
+        buildReport: () => Promise<{ ok: boolean; filePath: string; report: unknown }>
       }
     }
   }

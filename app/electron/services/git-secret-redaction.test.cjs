@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 const {
   formatGitError,
+  isSensitiveKeyName,
   redactSensitiveText,
   sanitizeGitErrorText,
   sanitizeGitRemoteUrl,
@@ -65,4 +66,18 @@ test('formatGitError preserva etapa, código e destino sem linha de comando', ()
   assert.match(message, /Repositório: https:\/\/github\.com\/acme\/private\.git/)
   assert.doesNotMatch(message, new RegExp(GITHUB_TOKEN))
   assert.doesNotMatch(message, /Command failed: git clone/)
+})
+
+test('isSensitiveKeyName reconhece nomes de chave que indicam segredo', () => {
+  assert.equal(isSensitiveKeyName('password'), true)
+  assert.equal(isSensitiveKeyName('api_key'), true)
+  assert.equal(isSensitiveKeyName('Authorization'), true)
+  assert.equal(isSensitiveKeyName('  token  '), true)
+})
+
+test('isSensitiveKeyName não marca nome comum como segredo', () => {
+  assert.equal(isSensitiveKeyName('message'), false)
+  assert.equal(isSensitiveKeyName('sessionId'), false)
+  assert.equal(isSensitiveKeyName(''), false)
+  assert.equal(isSensitiveKeyName(42), false)
 })

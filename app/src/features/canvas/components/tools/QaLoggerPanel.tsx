@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Terminal, Trash2 } from 'lucide-react'
+import { FileWarning, Terminal, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import type { QaLogEntry } from '../../../shared/types/qa-log'
 
@@ -21,7 +21,24 @@ const MAX_ENTRIES = 400
  */
 export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
   const [entries, setEntries] = useState<QaLogEntry[]>([])
+  const [reportState, setReportState] = useState<
+    { status: 'idle' } | { status: 'building' } | { status: 'done'; filePath: string } | { status: 'error'; message: string }
+  >({ status: 'idle' })
   const endRef = useRef<HTMLDivElement>(null)
+
+  const buildReport = async () => {
+    setReportState({ status: 'building' })
+    try {
+      const result = await window.felixo?.qaLogger?.buildReport()
+      if (result?.ok) {
+        setReportState({ status: 'done', filePath: result.filePath })
+      } else {
+        setReportState({ status: 'error', message: 'Não foi possível gerar o relatório.' })
+      }
+    } catch (error) {
+      setReportState({ status: 'error', message: error instanceof Error ? error.message : 'Falha desconhecida.' })
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -65,13 +82,34 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
         </span>
         <button
           type="button"
+          onClick={() => void buildReport()}
+          disabled={reportState.status === 'building'}
+          title="Gera um pacote com versão, SO, as últimas entradas do log e o estado das CLIs — pronto pra anexar numa task, sem segredo nenhum dentro."
+          className="felixo-btn ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 disabled:opacity-50"
+        >
+          <FileWarning size={12} />
+          {reportState.status === 'building' ? 'Gerando…' : 'Reportar problema'}
+        </button>
+        <button
+          type="button"
           onClick={() => window.felixo?.qaLogger?.clear()}
-          className="felixo-btn ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
+          className="felixo-btn flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
         >
           <Trash2 size={12} />
           Limpar
         </button>
       </div>
+
+      {reportState.status === 'done' && (
+        <p className="mb-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 text-[11px] text-zinc-400">
+          Relatório salvo em <span className="break-all text-zinc-300">{reportState.filePath}</span>. Anexe este arquivo na task.
+        </p>
+      )}
+      {reportState.status === 'error' && (
+        <p className="mb-2 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-2 py-1.5 text-[11px] text-[var(--color-warning)]">
+          Não foi possível gerar o relatório: {reportState.message}
+        </p>
+      )}
 
       {entries.length === 0 ? (
         <p className="text-[11px] text-zinc-600">Aguardando eventos do backend.</p>

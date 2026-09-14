@@ -59,6 +59,23 @@ demanda, junto com as outras ferramentas do canvas. O painel mostra a origem
 da sincronização, filtros por texto/estado, seleção de tabelas compartilhadas,
 formulário guiado pelo schema reconhecido e confirmação antes de arquivar.
 
+**Ordenação e filtros seguem a ordem visual do schema, não a alfabética.**
+`notion-task-sort.ts` usa `schemaOptionOrder` pra ler a ordem real de
+`select`/`status`: `select` é a ordem do array `options`; `status` tem grupo
+("A fazer"/"Em andamento"/"Concluído") e a ordem certa vem de percorrer
+`groups[].option_ids` nessa ordem — o array `options` do topo é só a lista
+completa, sem garantia de bater com a ordem visual. `notion-task-views.ts`
+reaproveita a mesma função pra montar a lista de opções de um filtro. A chave
+de ordenação de cada tarefa é calculada **uma vez por tarefa** antes do
+`.sort()` (nunca dentro do comparador, que roda O(n log n) vezes) — em 792
+linhas isso é a diferença entre ~792 e ~15.000 chamadas de formatação.
+
+**Database maior que a carga.** `queryTasks` para em `MAX_QUERY_PAGES × MAX_PAGE_SIZE`
+(2.000 linhas) mesmo com mais dado disponível; `listTasks` já calculava
+`hasMore` a partir disso, mas o painel não mostrava — agora um aviso aparece
+quando a tabela carregada está truncada, deixando claro que ordenação/filtro
+valem só pro que já chegou.
+
 ## DevTools isolado
 
 `felixo devtools` é a superfície de automação de UI para qualquer agente. O
@@ -440,6 +457,36 @@ falhas explícitas; o agente não deve escolher outro artefato silenciosamente.
 Os caminhos são resolvidos pelo `app.getPath('userData')`, não ficam dentro do
 repositório do usuário e não devem ser documentados com caminhos privados ou
 credenciais reais.
+
+### Observabilidade: erros com causa, persistidos e reportáveis
+
+O QA Logger guardava só até 400 entradas em memória — reiniciar o app (o
+contorno mais comum quando algo trava) apagava o histórico. Agora:
+
+- `qa-log-disk-store.cjs` persiste cada entrada em `logs/qa/qa-AAAA-MM-DD.jsonl`
+  (um arquivo por dia), com rotação por idade (`maxDays`, padrão 14) e por
+  orçamento de tamanho (`maxTotalBytes`, padrão 5 MiB — os arquivos mais
+  antigos saem primeiro). No boot, `qa-logger.initQaDiskStore` hidrata o
+  buffer em memória com o que sobreviveu ao restart anterior.
+- Toda entrada passa por `redactValue` antes de gravar — reaproveita
+  `redactSensitiveText` de `git-secret-redaction.cjs` (rótulo dentro do
+  texto, ex. `token=...`) e soma `isSensitiveKeyName` (nome da propriedade
+  já indica segredo, ex. `{"password": "..."}`, onde o rótulo não está no
+  valor). As duas fontes são necessárias: nenhuma cobre sozinha o outro caso.
+- `global-error-handlers.cjs` cobre `uncaughtException`, `unhandledRejection`,
+  `render-process-gone` e `child-process-gone` no processo principal, e
+  envolve `ipcMain.handle` uma única vez (`wrapIpcHandleWithLogging`) pra
+  logar canal + `error.cause` de qualquer handler que lançar, sem precisar
+  tocar cada `ipcMain.handle` do projeto individualmente. Nenhum handler
+  decide encerrar o processo — só registra.
+- No renderer, `renderer-error-reporting.ts` cobre `window.onerror` e
+  `unhandledrejection`; `RendererRecoveryBoundary` (o último resort quando o
+  React para de renderizar) também manda a entrada pro QA Logger antes de
+  oferecer o botão de recarregar.
+- Botão "Reportar problema" (painel QA Logger) monta um pacote —
+  `qa-report-builder.cjs` — com versão do app, SO/arquitetura, as últimas N
+  entradas do log e o estado de detecção de cada CLI, tudo redigido de novo
+  (defesa em profundidade) antes de gravar em `reports/problema-<hora>.json`.
 
 ## Fluxo legado de chat
 

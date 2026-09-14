@@ -5230,3 +5230,123 @@ registrado como Windows concluído e macOS aguardando validação externa.
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
 Código: `app/electron/cli/felixo-devtools.cjs`
 Testes: `app/electron/cli/felixo-devtools.test.cjs`
+
+## Fechamento de trabalho — 2026-09-14 — Observabilidade: erros com causa, persistidos em disco e reportáveis
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task Notion: "Observabilidade — capturar erros com causa, persistir em disco e
+exportar relatório de problema". Anotação de origem (14/09/2026): erros do
+app eram difíceis de explicar e reproduzir porque o QA Logger só guardava em
+memória, e reiniciar o app — o contorno mais comum quando algo trava — apagava
+o histórico.
+
+### O que foi feito (4 fatias)
+
+1. **Persistência em disco com rotação** — `qa-log-disk-store.cjs`: um
+   arquivo `.jsonl` por dia em `logs/qa/`, rotação por idade (14 dias) e por
+   orçamento de tamanho (5 MiB). `qa-logger.cjs` ganhou `initQaDiskStore`
+   (hidrata o buffer em memória a partir do disco no boot) e `hydrate` no
+   store interno.
+2. **Handlers globais + causa** — `global-error-handlers.cjs`: cobre
+   `uncaughtException`, `unhandledRejection`, `render-process-gone` e
+   `child-process-gone` no main; `wrapIpcHandleWithLogging` envolve
+   `ipcMain.handle` uma única vez pra logar canal + `error.cause` de
+   qualquer handler que lançar, cobrindo todo o projeto sem tocar cada
+   `ipcMain.handle` individualmente.
+3. **Handlers globais no renderer** — `renderer-error-reporting.ts`
+   (`window.onerror`/`unhandledrejection`) e `RendererRecoveryBoundary`
+   passou a mandar a entrada pro QA Logger antes de oferecer o reload.
+4. **Botão "Reportar problema"** — `qa-report-builder.cjs` monta um pacote
+   (versão, SO/arquitetura, últimas N entradas, estado de cada CLI) e grava
+   em `reports/`. Botão no painel QA Logger, com mensagem mostrando o
+   caminho do arquivo pra anexar numa task.
+
+### Achado de segurança durante a fatia 1
+
+`redactSensitiveText` só examina o CONTEÚDO de uma string — não pega
+`{"password": "segredo123"}`, porque o rótulo mora no NOME da propriedade,
+não dentro do valor. Adicionado `isSensitiveKeyName` (exportado de
+`git-secret-redaction.cjs`) e usado em `redactValue` pra mascarar o valor
+inteiro quando a própria chave já é sensível — as duas fontes de sinal são
+necessárias, nenhuma cobre o caso da outra sozinha. Coberto por teste.
+
+### Validação
+
+`npm test`: 1279/1279. `npx vitest run`: 907 passed, 1 skipped
+(pré-existente). `eslint`: limpo. `npm run build` (typecheck completo): ok.
+41 testes novos entre os 4 módulos novos + os que ganharam cobertura extra
+(`git-secret-redaction`, `qa-logger`). Critério de aceite "pacote sem
+segredo" tem teste dedicado com tokens/senhas falsos reais (GitHub PAT,
+Bearer, senha) confirmando ausência no JSON serializado.
+
+### Limitação declarada
+
+Não foi possível validar ao vivo no app real (forçar erro → reiniciar →
+confirmar persistência) porque `felixo devtools` está com uma regressão
+separada: qualquer `connect` trava depois do handshake WebSocket, mesmo num
+`launch` padrão sem nenhuma mudança desta task — reproduzido e confirmado
+como pré-existente. Pista: `playwright-core` instalado (1.62.1) está acima do
+que o `package.json` fixa (`^1.58.2`). Task de acompanhamento aberta.
+A evidência desta task fica nos testes unitários (fs real via `mkdtemp`,
+sem mock de disco) mais a leitura de código — não numa sessão real do app.
+
+### Evidência de origem
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## Fechamento de trabalho — 2026-09-14 (continuação) — ordenação e filtros seguem a ordem visual do Notion
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task Notion: "Notion — ordenação e filtros do canvas seguirem a hierarquia do
+Notion e aguentarem databases grandes". Duas anotações de 14/09 juntadas:
+ordenação bugada e filtros/ordenação não seguindo o padrão do app do Notion.
+Segue a PR #43 (ordenação por coluna), deste mesmo agente, um dia antes.
+
+### O que a investigação já tinha encontrado (registrado na própria task)
+
+`notion-task-sort.ts` ordenava tudo como texto (`localeCompare`), ignorando a
+ordem configurada das opções de `select`/`status` — exemplo real citado:
+Prioridade devia sair Baixa→Média→Alta→Urgente→Hiperfoco, saía alfabético
+(Alta, Baixa, Hiperfoco, Média, Urgente). Tarefa concluída era forçada pro
+texto literal "Concluída", fora de ordem. `formatValue` era chamado duas
+vezes por comparação, sem pré-cálculo — custoso nas 792 linhas do database
+real. `hasMore` já existia no backend (`listTasks`) mas nunca chegava no
+painel — um database truncado (>2.000 linhas) ordenava/filtrava só uma parte,
+sem aviso.
+
+### O que foi feito
+
+- `schemaOptionOrder(property)`: ordem visual real de `select`/`status` — para
+  `status`, monta a ordem a partir de `groups[].option_ids` (a ordem
+  verdadeira), não do array `options` solto, que não tem essa garantia.
+  Reaproveitada em `notion-task-views.ts` pra ordenar as opções do filtro
+  também (mesmo mapeamento de tipos, como a task pedia).
+- `buildSortKey`: uma chave tipada por coluna (`{kind:'number'|'string'|'empty'}`)
+  usando o schema — índice da opção pra `select`/`status`/`multi_select`
+  (mínimo entre as selecionadas), número real pra `number`, `0`/`1` pra
+  `checkbox`, ISO como texto pra `date` (já ordena certo). Removida a
+  substituição forçada por "Concluída" — `task.status` já vem certo do
+  backend.
+- `sortTasks` agora pré-calcula a chave de cada tarefa **uma vez** antes do
+  `.sort()` (Schwartzian transform), não a cada comparação — O(n) chamadas de
+  formatação em vez de O(n log n). Medido: 792 linhas × 20 ordenações reais
+  (schema de verdade, coluna por índice) em 160ms total (~8ms por ordenação)
+  — não trava a interface.
+- `NotionTasksPanel.tsx`: novo estado `hasMoreTasks`, populado de
+  `result.hasMore` (o backend já calculava, só não chegava na tela); aviso
+  visível quando a tabela carregada está truncada.
+
+### Validação
+
+31 testes no `notion-task-sort.test.ts` (schema real da task: Prioridade
+select 5 opções, Etapa status com 3 grupos, multi_select, number, checkbox,
+contagem de chamadas de formatação). 2 testes novos em
+`notion-service.test.cjs` cobrindo `hasMore:true/false`. `npm test`:
+1281/1281. `npx vitest run`: 922 passed, 1 skipped (pré-existente). `eslint`
+limpo. `npm run build` (typecheck completo) ok.
+
+### Evidência de origem
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core

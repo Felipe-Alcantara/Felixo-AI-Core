@@ -144,6 +144,10 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   const stale = syncStatus === 'stale'
   const syncing = syncStatus === 'syncing'
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
+  // O backend já para de paginar acima de MAX_QUERY_PAGES × MAX_PAGE_SIZE
+  // (2.000 linhas) e diz isso em `hasMore` — sem exibir, ordenar/filtrar
+  // parecia "certo" enquanto só mostrava parte da tabela, sem aviso nenhum.
+  const [hasMoreTasks, setHasMoreTasks] = useState(false)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true)
   const [busy, setBusy] = useState(false)
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
@@ -368,6 +372,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
       setTasks(result.tasks || [])
       setSchema(result.schema || {})
       setFetchedAt(result.fetchedAt || null)
+      setHasMoreTasks(Boolean(result.hasMore))
       if (result.stale && !silent) {
         setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
       }
@@ -376,7 +381,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   }, [api, connectionId, dataSourceId, search, activeView.statusFilter])
 
   const filteredTasks = useMemo(() => filterTasksByView(tasks, activeView), [tasks, activeView])
-  const visibleTasks = useMemo(() => sortTasks(filteredTasks, sortState, formatPropertyValue), [filteredTasks, sortState])
+  const visibleTasks = useMemo(() => sortTasks(filteredTasks, sortState, formatPropertyValue, schema), [filteredTasks, sortState, schema])
 
   useEffect(() => {
     if (!connectionId || !dataSourceId) return undefined
@@ -816,10 +821,15 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
         {secureStorage && !secureStorage.ok && !showWorkspaceSettings && (
           <p className="mt-3 rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] text-[var(--color-warning)]">{secureStorage.reason}</p>
         )}
-        {(message || error) && (
+        {(message || error || hasMoreTasks) && (
           <div className="mt-3 space-y-1.5">
             {message && <p className="rounded bg-white/[0.04] px-2.5 py-2 text-[11px] text-[var(--f-core-white)]" role="status">{message}</p>}
             {error && <p className="rounded bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2.5 py-2 text-[11px] text-[var(--color-error)]" role="alert">{error}</p>}
+            {hasMoreTasks && (
+              <p className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] text-[var(--color-warning)]" role="status">
+                Esta tabela tem mais linhas do que o Felixo carrega de uma vez — ordenação, filtro e busca valem só para as que já chegaram. Refine a busca pra reduzir o total.
+              </p>
+            )}
           </div>
         )}
 

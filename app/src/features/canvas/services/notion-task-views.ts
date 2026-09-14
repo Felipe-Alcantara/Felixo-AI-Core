@@ -1,4 +1,5 @@
 import type { NotionSchemaProperty, NotionTask } from '../../shared/types/notion'
+import { schemaOptionOrder } from './notion-task-sort'
 
 /** Tipos de propriedade Notion que aceitam um conjunto fechado de valores e por isso servem de filtro. */
 const FILTERABLE_PROPERTY_TYPES = ['select', 'multi_select', 'status'] as const
@@ -111,19 +112,12 @@ export function listFilterableProperties(schema: Record<string, NotionSchemaProp
     .map((property) => ({
       name: property.name,
       type: property.type,
-      options: readPropertyOptions(property),
+      // A ordem visual do Notion (ver schemaOptionOrder), não a ordem
+      // arbitrária do array `options` da API — importa pra `status`, que
+      // tem grupo, e é exatamente a mesma ordem que a ordenação usa.
+      options: schemaOptionOrder(property),
     }))
     .filter((property) => property.options.length > 0)
-}
-
-function readPropertyOptions(property: NotionSchemaProperty): string[] {
-  const config = property[property.type]
-  if (!config || typeof config !== 'object') return []
-  const items = (config as { options?: unknown[] }).options
-  if (!Array.isArray(items)) return []
-  return items
-    .map((item) => (item && typeof item === 'object' ? (item as { name?: unknown }).name : undefined))
-    .filter((name): name is string => typeof name === 'string' && name.length > 0)
 }
 
 /** Valores efetivos de uma propriedade numa tarefa (select vira 1 item, multi_select vira N). */
