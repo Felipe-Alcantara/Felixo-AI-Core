@@ -3,18 +3,28 @@ import {
   getMenuPanelPreparationDelay,
   prefersReducedMotion,
 } from '../services/menu-panel-timing'
+import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 
 /**
  * Coordinates a side panel with the button that reveals it. The panel mounts
  * shortly before the button finishes growing, so its own first delayed item
  * becomes visible exactly when the button reaches its final width.
+ *
+ * Modo Performance skips the wait the same way the OS reduced-motion
+ * preference already does: the button itself doesn't grow (index.css), so
+ * the panel must not sit there waiting for a growth that never plays.
  */
 export function useDeferredExpansionPanel(open: boolean) {
   const [panelReady, setPanelReady] = useState(false)
+  const { performanceMode } = usePerformanceMode()
+  const skipDelay = useCallback(
+    () => performanceMode || prefersReducedMotion(),
+    [performanceMode],
+  )
 
   const preparePanel = useCallback(() => {
-    setPanelReady(prefersReducedMotion())
-  }, [])
+    setPanelReady(skipDelay())
+  }, [skipDelay])
 
   const resetPanel = useCallback(() => {
     setPanelReady(false)
@@ -25,7 +35,7 @@ export function useDeferredExpansionPanel(open: boolean) {
   }, [])
 
   useEffect(() => {
-    if (!open || panelReady || prefersReducedMotion()) {
+    if (!open || panelReady || skipDelay()) {
       return
     }
 
@@ -34,7 +44,7 @@ export function useDeferredExpansionPanel(open: boolean) {
       getMenuPanelPreparationDelay(),
     )
     return () => window.clearTimeout(timer)
-  }, [open, panelReady])
+  }, [open, panelReady, skipDelay])
 
   return {
     panelReady,

@@ -1677,6 +1677,56 @@ div::-webkit-scrollbar-thumb {
   }
 }
 
+/* Modo Performance corta a mesma coreografia do bloco de
+   prefers-reduced-motion acima, mesmo com o sistema operacional sem essa
+   preferência — ver PerformanceModeProvider. Mantenha os dois em sincronia. */
+:root[data-performance-mode='on'] .felixo-anim-drawer-in,
+:root[data-performance-mode='on'] .felixo-anim-drawer-out,
+:root[data-performance-mode='on'] .felixo-anim-panel-in,
+:root[data-performance-mode='on'] .felixo-anim-panel-out,
+:root[data-performance-mode='on'] .felixo-anim-menu-in {
+  animation: none;
+}
+
+:root[data-performance-mode='on'] .felixo-anim-sequential-panel,
+:root[data-performance-mode='on'] .felixo-anim-sequential-panel > *,
+:root[data-performance-mode='on'] .felixo-anim-stagger-list > *,
+:root[data-performance-mode='on'] .felixo-anim-panel-in > * {
+  animation: none;
+}
+
+:root[data-performance-mode='on'] .felixo-anim-corner-dock,
+:root[data-performance-mode='on'] .felixo-anim-corner-puck {
+  transition: none;
+}
+
+:root[data-performance-mode='on'] .felixo-anim-corner-dock-collapsed,
+:root[data-performance-mode='on'] .felixo-anim-corner-puck-hidden {
+  transform: none;
+}
+
+:root[data-performance-mode='on'] .felixo-toolbar-expanding,
+:root[data-performance-mode='on'] .felixo-toolbar-collapsing,
+:root[data-performance-mode='on'] .felixo-toolbar-expanding > *,
+:root[data-performance-mode='on'] .felixo-toolbar-collapsing > * {
+  animation: none;
+}
+
+:root[data-performance-mode='on'] .felixo-btn,
+:root[data-performance-mode='on'] .felixo-btn-icon {
+  transition-property: background-color, color, opacity, border-color;
+}
+
+:root[data-performance-mode='on'] .felixo-btn:active:not(:disabled),
+:root[data-performance-mode='on'] .felixo-btn-icon:active:not(:disabled) {
+  transform: none;
+}
+
+:root[data-performance-mode='on'] .react-flow__node.felixo-agent-matrix-moving {
+  transition: none;
+  will-change: auto;
+}
+
 /* Final art direction: black, and a sky over it. The gradients, dot grid,
    route lines and grain that used to stack here were all competing for the
    same quiet the star field needs, so the surface now carries one idea
@@ -2155,6 +2205,19 @@ div::-webkit-scrollbar-thumb {
   }
 }
 
+/* Modo Performance — mesmo corte do bloco de prefers-reduced-motion acima. */
+:root[data-performance-mode='on'] .felixo-node-grip,
+:root[data-performance-mode='on'] .felixo-node-actions,
+:root[data-performance-mode='on'] .felixo-node-preview,
+:root[data-performance-mode='on'] .felixo-provider-mark {
+  transition: none;
+}
+
+:root[data-performance-mode='on'] .felixo-edge-route-active .react-flow__edge-path {
+  animation: none;
+  stroke-dasharray: none;
+}
+
 /* Felixo Controls — the form surface follows the same quiet, solid hierarchy
    as the canvas. These rules are intentionally appended so shared controls
    win over legacy utility classes without changing their data contracts. */
@@ -2626,6 +2689,24 @@ div::-webkit-scrollbar-thumb {
   .felixo-popover-surface {
     animation: none;
   }
+}
+
+/* Modo Performance — mesmo corte do bloco de prefers-reduced-motion acima. */
+:root[data-performance-mode='on'] .felixo-control,
+:root[data-performance-mode='on'] .felixo-select-trigger,
+:root[data-performance-mode='on'] .felixo-select-chevron,
+:root[data-performance-mode='on'] .felixo-select-option,
+:root[data-performance-mode='on'] .felixo-checkbox,
+:root[data-performance-mode='on'] .felixo-checkbox::before,
+:root[data-performance-mode='on'] .felixo-file-picker-button,
+:root[data-performance-mode='on'] .felixo-secondary-action,
+:root[data-performance-mode='on'] .felixo-select-loading {
+  transition: none;
+  animation: none;
+}
+
+:root[data-performance-mode='on'] .felixo-popover-surface {
+  animation: none;
 }
 
 /* ---------------------------------------------------------------------------
