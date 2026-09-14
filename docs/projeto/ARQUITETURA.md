@@ -135,8 +135,7 @@ deliberada: as acoes `canvas-listar` e `canvas-ler` (registradas em
 `agent-requests.cjs`) sao **auto-resolvidas sem confirmacao humana**, porque a
 task que motivou esta fatia marca a escrita — nao a leitura — como o maior
 risco de seguranca (prompt injection vindo de um terminal ou pagina lido por
-outro agente mandando escrever em outro lugar). Escrita fica para uma fatia
-futura; nesta, o agente so le.
+outro agente mandando escrever em outro lugar).
 
 `canvas-agent-read.cjs` e a logica pura: `listarElementos` devolve id, tipo e
 um rotulo por bloco (lido de `canvas-repository.cjs`, o snapshot SQLite do
@@ -151,6 +150,34 @@ conteudo passa por `redactSensitiveText` antes de sair.
 A CLI expoe `felixo canvas listar` e `felixo canvas ler <id>`, com o mesmo
 padrao de espera curta (poll ate ~4s) e "ver-pedido" para conferir depois que
 o Fetch All e o navegador ja usam.
+
+### Fatia 2: escrita numa nota, sempre com confirmacao humana
+
+`agent-canvas-write-ipc-handlers.cjs` cuida da acao `canvas-escrever` na
+mesma fila. Ao contrario da leitura, ela **nunca** e auto-resolvida: fica
+pendente ate `canvas:resolve-write-request` ser chamado por um clique real
+no painel "Pedidos de escrita" (`AgentCanvasWriteRequestsPanel.tsx`) — o
+mesmo padrao que o Fetch All ja usa para `executar-plano`. Nesta fatia so o
+tipo `note` aceita escrita (`canvas-agent-write.cjs`); qualquer outro tipo
+devolve `ok:false` sem tentar escrever.
+
+Persistir no SQLite nao move nada na tela sozinho — o renderer e dono do
+estado vivo (`useCanvasPersistence.ts`) e so le do banco no boot. Por isso,
+depois de `canvasRepository.save`, o processo principal empurra o novo
+`data` pro renderer pelo evento `canvas:agent-node-updated`; o hook aplica o
+patch no no vivo e cancela qualquer save pendente daquele no (uma posicao
+arrastada, por exemplo), pra uma escrita antiga em memoria nao sobrescrever
+a escrita do agente na proxima autosave.
+
+Nao existe um log de auditoria separado: cada pedido ja fica persistido como
+arquivo em `userData/agent-requests`, com pedidoEm/resolvidoEm/estado/
+resultado — o mesmo arquivo que serve de fila e o registro do que foi
+pedido, quando, e o que a pessoa decidiu.
+
+A CLI expoe `felixo canvas escrever <id> <conteudo>`. Ao contrario de
+listar/ler, este comando NAO espera resposta — o pedido pode ficar minutos
+esperando um clique — so registra e devolve na hora, apontando pra
+`felixo canvas ver-pedido <id>`.
 
 ## Fetch All e inventario multiplataforma
 

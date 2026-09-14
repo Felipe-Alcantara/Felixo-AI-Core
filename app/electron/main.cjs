@@ -61,6 +61,9 @@ const {
   registerAgentCanvasReadIpcHandlers,
 } = require('./services/agent-canvas-read-ipc-handlers.cjs')
 const {
+  registerAgentCanvasWriteIpcHandlers,
+} = require('./services/agent-canvas-write-ipc-handlers.cjs')
+const {
   instalarComandoDoAgente: installAgentCommand,
 } = require('./services/agent-command-install.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
@@ -124,6 +127,7 @@ let agentUsageWatching = null
 let notionHandlers = null
 let agentBrowserWatching = null
 let agentCanvasReadWatching = null
+let agentCanvasWriteWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -494,6 +498,11 @@ app.whenReady().then(async () => {
     appPaths,
     getTerminalLogStore: () => terminalLogStore,
   })
+  agentCanvasWriteWatching = registerAgentCanvasWriteIpcHandlers({
+    getMainWindow,
+    database: storageDatabase,
+    appPaths,
+  })
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
@@ -569,6 +578,15 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     agentCanvasReadWatching = null
+  }
+
+  if (agentCanvasWriteWatching) {
+    try {
+      agentCanvasWriteWatching.pararDeObservarPedidos()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentCanvasWriteWatching = null
   }
 
   if (agentUsageWatching) {

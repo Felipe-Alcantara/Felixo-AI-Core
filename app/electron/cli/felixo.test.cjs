@@ -43,8 +43,21 @@ test('interpretarArgumentos separa verbo de opção', () => {
     ferramenta: 'fetch-all',
     verbo: 'varrer',
     argumento: '',
+    argumento2: '',
+    argumento2Fornecido: false,
     opcoes: { cache: true, json: true },
   })
+})
+
+test('interpretarArgumentos distingue "argumento2 não veio" de "argumento2 veio vazio"', () => {
+  assert.equal(
+    interpretarArgumentos(['canvas', 'escrever', 'n1']).argumento2Fornecido,
+    false,
+  )
+  assert.equal(
+    interpretarArgumentos(['canvas', 'escrever', 'n1', '']).argumento2Fornecido,
+    true,
+  )
 })
 
 test('browser open registra intenções externas e embutidas na fila compartilhada', async () => {
@@ -444,4 +457,41 @@ test('canvas ver-pedido mostra o desfecho de um pedido de leitura já resolvido'
   const resultado = await executar(['canvas', 'ver-pedido', pedido.id], deps)
 
   assert.match(resultado.saida, /aceito/)
+})
+
+test('canvas escrever exige id e conteúdo', async () => {
+  const { deps } = dependencias()
+
+  const semId = await executar(['canvas', 'escrever'], deps)
+  assert.equal(semId.codigo, 2)
+  assert.match(semId.erro, /Informe o id/)
+
+  const semConteudo = await executar(['canvas', 'escrever', 'n1'], deps)
+  assert.equal(semConteudo.codigo, 2)
+  assert.match(semConteudo.erro, /conteúdo/)
+})
+
+test('canvas escrever: registra o pedido e devolve na hora, sem esperar confirmação humana', async () => {
+  const { pasta, deps } = dependencias()
+  const resultado = await executar(['canvas', 'escrever', 'n1', 'texto novo da nota'], deps)
+
+  assert.equal(resultado.codigo, 0)
+  assert.match(resultado.saida, /Pedido registrado/)
+  assert.match(resultado.saida, /canvas ver-pedido/)
+
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const [pedido] = repositorio.listarPendentes({ acao: 'canvas-escrever' })
+  assert.equal(pedido.idDoElemento, 'n1')
+  assert.equal(pedido.conteudo, 'texto novo da nota')
+  assert.equal(pedido.estado, 'pendente')
+})
+
+test('canvas escrever aceita conteúdo vazio (limpar a nota) desde que a opção venha explícita', async () => {
+  const { pasta, deps } = dependencias()
+  const resultado = await executar(['canvas', 'escrever', 'n1', ''], deps)
+
+  assert.equal(resultado.codigo, 0)
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const [pedido] = repositorio.listarPendentes({ acao: 'canvas-escrever' })
+  assert.equal(pedido.conteudo, '')
 })

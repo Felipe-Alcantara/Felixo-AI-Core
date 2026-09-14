@@ -79,6 +79,12 @@ function interpretarArgumentos(argumentos) {
     ferramenta: positivos[0] ?? '',
     verbo: positivos[1] ?? '',
     argumento: positivos[2] ?? '',
+    // Só `canvas escrever <id> <conteúdo>` usa um segundo argumento; os
+    // demais verbos ignoram este campo. Contar em vez de checar verdade:
+    // "" é um conteúdo válido (limpar a nota), e precisa se distinguir de
+    // "o argumento nem foi passado".
+    argumento2: positivos[3] ?? '',
+    argumento2Fornecido: positivos.length > 3,
     opcoes,
   }
 }
@@ -92,6 +98,7 @@ const VERBOS_BROWSER_ABRIR = ['open', 'abrir']
 const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 const VERBOS_CANVAS_LISTAR = ['listar']
 const VERBOS_CANVAS_LER = ['ler']
+const VERBOS_CANVAS_ESCREVER = ['escrever']
 const VERBOS_CANVAS_STATUS = ['ver-pedido']
 // Leitura é auto-resolvida pelo app (sem confirmação humana — ver
 // agent-canvas-read-ipc-handlers.cjs), então uma espera curta aqui poupa o
@@ -134,7 +141,8 @@ async function executar(argumentos, dependencias = {}) {
     lerEstado = lerEstadoPadrao,
   } = dependencias
 
-  const { ferramenta, verbo, argumento, opcoes } = interpretarArgumentos(argumentos)
+  const { ferramenta, verbo, argumento, argumento2, argumento2Fornecido, opcoes } =
+    interpretarArgumentos(argumentos)
 
   if (FERRAMENTAS_BROWSER.includes(ferramenta)) {
     if (VERBOS_BROWSER_ABRIR.includes(verbo)) {
@@ -191,6 +199,48 @@ async function executar(argumentos, dependencias = {}) {
 
   if (FERRAMENTAS_CANVAS.includes(ferramenta)) {
     const { esperar = esperarPadrao } = dependencias
+
+    // Escrita NUNCA é auto-resolvida (ver agent-canvas-write-ipc-handlers.cjs):
+    // fica esperando um clique real da pessoa no painel, que pode demorar
+    // minutos. Por isso este comando não espera nada — registra e devolve na
+    // hora, com o id para acompanhar depois, igual a "browser abrir".
+    if (VERBOS_CANVAS_ESCREVER.includes(verbo)) {
+      if (!argumento) {
+        return { saida: '', erro: 'Informe o id do elemento a escrever (veja "felixo canvas listar").', codigo: 2 }
+      }
+      if (!argumento2Fornecido) {
+        return { saida: '', erro: 'Informe o conteúdo a escrever (pode ser vazio: "").', codigo: 2 }
+      }
+
+      try {
+        const pedido = criarPedidos().registrar('canvas-escrever', {
+          idDoElemento: argumento,
+          conteudo: argumento2,
+          origem: diretorioAtual(),
+        })
+
+        if (opcoes.json === true) {
+          return { saida: JSON.stringify({ ok: true, pedido }, null, 2), codigo: 0 }
+        }
+
+        return {
+          saida: [
+            `Pedido registrado: ${pedido.id}`,
+            `Elemento: ${pedido.idDoElemento}`,
+            '',
+            'Escrita depende de confirmação humana no painel "Pedidos de escrita" do canvas.',
+            `Para acompanhar: felixo canvas ver-pedido ${pedido.id}`,
+          ].join('\n'),
+          codigo: 0,
+        }
+      } catch (error) {
+        return {
+          saida: '',
+          erro: error instanceof Error ? error.message : 'Não foi possível registrar o pedido.',
+          codigo: 2,
+        }
+      }
+    }
 
     if (VERBOS_CANVAS_LISTAR.includes(verbo)) {
       const pedido = criarPedidos().registrar('canvas-listar', { origem: diretorioAtual() })

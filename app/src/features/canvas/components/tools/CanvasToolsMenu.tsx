@@ -9,6 +9,7 @@ import {
   ListTodo,
   type LucideIcon,
   Notebook,
+  PenLine,
   RefreshCw,
   Sparkles,
   Terminal,
@@ -35,6 +36,7 @@ export type CanvasTool =
   | 'agentUsage'
   | 'orchestrator'
   | 'qaLogger'
+  | 'agentCanvasWrite'
   | 'settings'
 
 type ToolEntry = { tool: CanvasTool; label: string; icon: LucideIcon }
@@ -59,6 +61,7 @@ const TOOL_GROUPS: Array<{ label: string; tools: ToolEntry[] }> = [
       { tool: 'agentUsage', label: 'Limites e uso', icon: Gauge },
       { tool: 'orchestrator', label: 'Orquestrador', icon: Network },
       { tool: 'qaLogger', label: 'QA Logger', icon: Terminal },
+      { tool: 'agentCanvasWrite', label: 'Pedidos de escrita', icon: PenLine },
     ],
   },
 ]

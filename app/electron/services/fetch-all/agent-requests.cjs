@@ -21,7 +21,16 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 /** Intenções aceitas. Lista fechada de propósito. */
-const ACOES_ACEITAS = ['executar-plano', 'abrir-pagina', 'canvas-listar', 'canvas-ler']
+const ACOES_ACEITAS = [
+  'executar-plano',
+  'abrir-pagina',
+  'canvas-listar',
+  'canvas-ler',
+  'canvas-escrever',
+]
+
+/** Tamanho máximo do conteúdo que um pedido de escrita pode carregar. */
+const CONTEUDO_ESCRITA_MAX = 20000
 
 const MODOS_ABERTURA_PAGINA = ['externo', 'embutido']
 
@@ -84,6 +93,26 @@ function normalizarPedido(acao, opcoes = {}) {
 
   if (nome === 'canvas-listar') {
     return { acao: nome, comCommit: false }
+  }
+
+  // Escrita: fica pendente até confirmação humana (ver agent-canvas-write-
+  // ipc-handlers.cjs). Este pedido não decide SE o elemento aceita escrita —
+  // isso é responsabilidade de quem atende, com o canvas de verdade na mão.
+  if (nome === 'canvas-escrever') {
+    const idDoElemento = typeof opcoes?.idDoElemento === 'string' ? opcoes.idDoElemento.trim() : ''
+    const conteudo = typeof opcoes?.conteudo === 'string' ? opcoes.conteudo : ''
+
+    if (!idDoElemento) {
+      throw new Error('Informe o id do elemento do canvas a escrever.')
+    }
+    if (!opcoes || typeof opcoes.conteudo !== 'string') {
+      throw new Error('Informe o conteúdo a escrever.')
+    }
+    if (conteudo.length > CONTEUDO_ESCRITA_MAX) {
+      throw new Error(`Conteúdo muito grande (máximo ${CONTEUDO_ESCRITA_MAX} caracteres).`)
+    }
+
+    return { acao: nome, comCommit: false, idDoElemento, conteudo }
   }
 
   return { acao: nome, comCommit: opcoes?.comCommit === true }
@@ -255,6 +284,7 @@ function criarRepositorioDePedidos(opcoes) {
 
 module.exports = {
   ACOES_ACEITAS,
+  CONTEUDO_ESCRITA_MAX,
   ESTADOS,
   MODOS_ABERTURA_PAGINA,
   VALIDADE_MS,
