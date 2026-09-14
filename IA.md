@@ -5230,3 +5230,67 @@ registrado como Windows concluído e macOS aguardando validação externa.
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
 Código: `app/electron/cli/felixo-devtools.cjs`
 Testes: `app/electron/cli/felixo-devtools.test.cjs`
+
+## Fechamento de trabalho — 2026-09-14 — Observabilidade: erros com causa, persistidos em disco e reportáveis
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task Notion: "Observabilidade — capturar erros com causa, persistir em disco e
+exportar relatório de problema". Anotação de origem (14/09/2026): erros do
+app eram difíceis de explicar e reproduzir porque o QA Logger só guardava em
+memória, e reiniciar o app — o contorno mais comum quando algo trava — apagava
+o histórico.
+
+### O que foi feito (4 fatias)
+
+1. **Persistência em disco com rotação** — `qa-log-disk-store.cjs`: um
+   arquivo `.jsonl` por dia em `logs/qa/`, rotação por idade (14 dias) e por
+   orçamento de tamanho (5 MiB). `qa-logger.cjs` ganhou `initQaDiskStore`
+   (hidrata o buffer em memória a partir do disco no boot) e `hydrate` no
+   store interno.
+2. **Handlers globais + causa** — `global-error-handlers.cjs`: cobre
+   `uncaughtException`, `unhandledRejection`, `render-process-gone` e
+   `child-process-gone` no main; `wrapIpcHandleWithLogging` envolve
+   `ipcMain.handle` uma única vez pra logar canal + `error.cause` de
+   qualquer handler que lançar, cobrindo todo o projeto sem tocar cada
+   `ipcMain.handle` individualmente.
+3. **Handlers globais no renderer** — `renderer-error-reporting.ts`
+   (`window.onerror`/`unhandledrejection`) e `RendererRecoveryBoundary`
+   passou a mandar a entrada pro QA Logger antes de oferecer o reload.
+4. **Botão "Reportar problema"** — `qa-report-builder.cjs` monta um pacote
+   (versão, SO/arquitetura, últimas N entradas, estado de cada CLI) e grava
+   em `reports/`. Botão no painel QA Logger, com mensagem mostrando o
+   caminho do arquivo pra anexar numa task.
+
+### Achado de segurança durante a fatia 1
+
+`redactSensitiveText` só examina o CONTEÚDO de uma string — não pega
+`{"password": "segredo123"}`, porque o rótulo mora no NOME da propriedade,
+não dentro do valor. Adicionado `isSensitiveKeyName` (exportado de
+`git-secret-redaction.cjs`) e usado em `redactValue` pra mascarar o valor
+inteiro quando a própria chave já é sensível — as duas fontes de sinal são
+necessárias, nenhuma cobre o caso da outra sozinha. Coberto por teste.
+
+### Validação
+
+`npm test`: 1279/1279. `npx vitest run`: 907 passed, 1 skipped
+(pré-existente). `eslint`: limpo. `npm run build` (typecheck completo): ok.
+41 testes novos entre os 4 módulos novos + os que ganharam cobertura extra
+(`git-secret-redaction`, `qa-logger`). Critério de aceite "pacote sem
+segredo" tem teste dedicado com tokens/senhas falsos reais (GitHub PAT,
+Bearer, senha) confirmando ausência no JSON serializado.
+
+### Limitação declarada
+
+Não foi possível validar ao vivo no app real (forçar erro → reiniciar →
+confirmar persistência) porque `felixo devtools` está com uma regressão
+separada: qualquer `connect` trava depois do handshake WebSocket, mesmo num
+`launch` padrão sem nenhuma mudança desta task — reproduzido e confirmado
+como pré-existente. Pista: `playwright-core` instalado (1.62.1) está acima do
+que o `package.json` fixa (`^1.58.2`). Task de acompanhamento aberta.
+A evidência desta task fica nos testes unitários (fs real via `mkdtemp`,
+sem mock de disco) mais a leitura de código — não numa sessão real do app.
+
+### Evidência de origem
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core

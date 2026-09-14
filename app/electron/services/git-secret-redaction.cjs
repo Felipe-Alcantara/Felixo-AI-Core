@@ -180,9 +180,22 @@ function sanitizeMetadata(value, fallback) {
   return normalized || fallback
 }
 
+/**
+ * Diz se um NOME de chave (não o conteúdo) indica um valor sensível — para
+ * quem redige objeto estruturado (`{"password": "segredo123"}`), onde o
+ * rótulo mora no nome da propriedade, não dentro da string a redigir.
+ *
+ * @param {unknown} key
+ * @returns {boolean}
+ */
+function isSensitiveKeyName(key) {
+  return typeof key === 'string' && SENSITIVE_PARAMETER_NAME_PATTERN.test(key.trim())
+}
+
 module.exports = {
   createRedactedGitError,
   formatGitError,
+  isSensitiveKeyName,
   redactSensitiveText,
   sanitizeGitErrorText,
   sanitizeGitRemoteUrl,

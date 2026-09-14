@@ -379,5 +379,6 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('qa-logger:cleared', handler)
       return () => ipcRenderer.removeListener('qa-logger:cleared', handler)
     },
+    buildReport: () => ipcRenderer.invoke('qa-logger:build-report'),
   },
 })
