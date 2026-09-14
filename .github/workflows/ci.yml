@@ -363,6 +363,28 @@ jobs:
           path: app/build/canvas-context-e2e-${{ matrix.os }}.json
           if-no-files-found: warn
 
+      # Primeira fatia do gate de evidência visual: sobe a mesma sessão
+      # isolada do `felixo devtools` (Electron real, contra o Vite dev
+      # server) e confere que o canvas hidrata e que a interface não estoura
+      # a largura num viewport mínimo. Linux precisa do display virtual; os
+      # outros dois runners abrem a janela Electron nativamente.
+      - name: Test Canvas PR smoke (mount + viewport mínimo)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:canvas-smoke
+          else
+            npm run test:canvas-smoke
+          fi
+
+      - name: Upload Canvas PR smoke failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-smoke-failure-${{ matrix.os }}
+          path: app/build/canvas-smoke-failure-*.png
+          if-no-files-found: ignore
+
       # O scrollback adaptativo só pode ser habilitado depois de medir a
       # combinação real Electron + xterm + PTY nos três runners. O check usa
       # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
