@@ -14,6 +14,7 @@ const {
   profileLooksInUse,
   readState,
   requirePackagedExecutable,
+  waitForCdp,
 } = require('./felixo-devtools.cjs')
 
 function setup() {
@@ -96,24 +97,62 @@ test('launch --packaged sobe o binário real, sem Vite e sem VITE_DEV_SERVER_URL
 
 test('launch sem --packaged continua subindo da fonte, com origem "fonte (dev)"', async () => {
   const env = setup()
+  let spawnOptions
   const result = await executarDevtools(['launch', '--port', '9333'], {
     ...env,
     getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
     probeVite: async () => ({ status: 'felixo' }),
     electronPath: 'electron-falso',
     appDir: env.root,
-    spawn: () => ({ pid: 4321, unref() {} }),
+    spawn: (_command, _args, options) => {
+      spawnOptions = options
+      return { pid: 4321, unref() {} }
+    },
     waitForCdp: async () => {},
   })
   assert.equal(result.codigo, 0)
   assert.match(result.saida, /Origem: fonte \(dev\)/)
   assert.equal(readState(env).packaged, null)
+  assert.equal(spawnOptions.windowsHide, true)
+})
+
+test('launch --visible permite que a janela Electron seja mostrada no Windows', async () => {
+  const env = setup()
+  let spawnOptions
+  const result = await executarDevtools(['launch', '--visible', '--port', '9333'], {
+    ...env,
+    getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
+    probeVite: async () => ({ status: 'felixo' }),
+    electronPath: 'electron-falso',
+    appDir: env.root,
+    spawn: (_command, _args, options) => {
+      spawnOptions = options
+      return { pid: 4321, unref() {} }
+    },
+    waitForCdp: async () => {},
+  })
+  assert.equal(result.codigo, 0)
+  assert.equal(spawnOptions.windowsHide, false)
+  assert.equal(spawnOptions.env.FELIXO_DEVTOOLS_HEADLESS, '0')
 })
 
 test('aceita --help diretamente depois de devtools', async () => {
   const result = await executarDevtools(['--help'])
   assert.equal(result.codigo, 0)
   assert.match(result.saida, /felixo devtools/)
+})
+
+test('waitForCdp aborta uma porta ocupada que aceita a conexao mas nao responde', async () => {
+  await assert.rejects(
+    waitForCdp(9333, {
+      timeoutMs: 50,
+      fetchImpl: (_url, { signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('request aborted')), { once: true })
+      }),
+      sleep: async () => {},
+    }),
+    /Electron.*CDP/,
+  )
 })
 
 test('recusa perfil real quando os arquivos de singleton indicam app em uso', async () => {
@@ -151,6 +190,31 @@ test('launch cria perfil isolado, espera CDP e persiste apenas metadados da sess
   assert.equal(state.port, 9333)
   assert.equal(state.realProfile, false)
   assert.match(state.userData, /profile-/)
+})
+
+test('relaunch remove perfil isolado encerrado e retoma Vite criado pela sessao anterior', async () => {
+  const env = setup()
+  const oldProfile = path.join(env.root, 'old-profile')
+  fs.mkdirSync(oldProfile)
+  fs.writeFileSync(path.join(oldProfile, 'lock'), 'old')
+  fs.writeFileSync(env.stateFile, JSON.stringify({ pid: 0, port: 9333, userData: oldProfile, realProfile: false, vitePid: 6666, createdAt: 'agora' }))
+  const result = await executarDevtools(['launch', '--port', '9333'], {
+    ...env,
+    platform: 'linux',
+    sleep: async () => {},
+    kill: () => {},
+    getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
+    probeVite: async () => ({ status: 'felixo' }),
+    electronPath: 'electron-falso',
+    appDir: env.root,
+    spawn: () => ({ pid: 8888, unref() {} }),
+    waitForCdp: async () => {},
+  })
+  assert.equal(result.codigo, 0)
+  assert.equal(fs.existsSync(oldProfile), false)
+  assert.equal(readState(env).vitePid, 6666)
+  await executarDevtools(['quit'], { ...env, platform: 'linux', sleep: async () => {} })
+  assert.equal(fs.existsSync(env.stateFile), false)
 })
 
 test('falha de CDP encerra a tentativa e descarta o perfil isolado', async () => {
