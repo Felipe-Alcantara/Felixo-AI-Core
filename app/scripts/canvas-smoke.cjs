@@ -31,8 +31,15 @@ function runCli(args) {
   })
 }
 
+// Boot frio do Electron sob Xvfb em runner de CI Linux mediu mais que os 15s
+// padrão do `waitForCdp` (o Vite já tinha respondido antes disso — não é
+// timeout de compilação, é o próprio processo Electron demorando pra abrir a
+// porta CDP). 60s dá folga sem mudar o padrão do CLI para quem chama sem
+// `--timeout`.
+const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
+
 async function withDevtoolsSession(action) {
-  runCli(['launch'])
+  runCli(['launch', '--timeout', String(DEVTOOLS_LAUNCH_TIMEOUT_MS)])
   try {
     return await action()
   } finally {

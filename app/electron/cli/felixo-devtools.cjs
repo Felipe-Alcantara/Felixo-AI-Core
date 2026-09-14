@@ -23,7 +23,7 @@ const DEFAULT_TIMEOUT = 15_000
 
 const AJUDA_DEVTOOLS = `felixo devtools — dirige uma instância isolada e invisível do Felixo AI Core.
 
-  felixo devtools launch [--visible] [--real-profile] [--port N] [--packaged <executável>]
+  felixo devtools launch [--visible] [--real-profile] [--port N] [--timeout MS] [--packaged <executável>]
   felixo devtools status | screenshot [--out arquivo] | buttons | windows | quit
   felixo devtools click <seletor> | click-text <texto> | type <texto> | press <tecla>
   felixo devtools text [seletor] | eval <expressão JavaScript> | main <expressão JavaScript>
@@ -33,23 +33,28 @@ Por padrão a sessão usa um userData temporário e uma janela invisível, e sob
 (o mesmo \`electron .\` do \`npm run dev\`, contra o Vite dev server). --real-profile é
 deliberadamente excepcional e é recusado se o perfil aparentar estar em uso.
 
+--timeout MS troca só o prazo de espera pela porta CDP abrir (padrão 15000ms), depois que
+o Vite já respondeu — não mexe no prazo do Vite em si (esse é fixo, 60s). Útil quando o
+boot do Electron sob Xvfb é mais lento que o padrão, como em runners de CI Linux.
+
 --packaged <executável> dirige o BINÁRIO EMPACOTADO no lugar da fonte — sem servidor
 Vite, carregando o \`dist\` real do instalador/CI. É o que prova UI clicada dentro do
 artefato que a pessoa de fato instala, não de uma aproximação de desenvolvimento.`
 
 function parseArgs(args) {
-  const options = { visible: false, realProfile: false, port: null, out: '', packaged: '' }
+  const options = { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null }
   if (args[0] === '--help') return { command: 'help', positional: [], options }
   const positional = []
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index]
     if (value === '--visible') options.visible = true
     else if (value === '--real-profile') options.realProfile = true
-    else if (value === '--port' || value === '--out' || value === '--packaged') {
+    else if (value === '--port' || value === '--out' || value === '--packaged' || value === '--timeout') {
       const next = args[++index]
       if (!next) throw new Error(`${value} exige um valor.`)
       if (value === '--port') options.port = Number(next)
       else if (value === '--out') options.out = next
+      else if (value === '--timeout') options.timeout = Number(next)
       else options.packaged = next
     } else if (value.startsWith('--')) {
       throw new Error(`Opção desconhecida: ${value}`)
@@ -213,7 +218,7 @@ async function launch(options, deps = {}) {
   const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid, createdAt: new Date().toISOString() }
   writeState(state, deps)
   try {
-    await (deps.waitForCdp ?? waitForCdp)(port)
+    await (deps.waitForCdp ?? waitForCdp)(port, { timeoutMs: options.timeout ?? DEFAULT_TIMEOUT })
   } catch (error) {
     killTree(child.pid, deps)
     if (vitePid) killTree(vitePid, deps)
