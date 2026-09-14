@@ -441,6 +441,36 @@ Os caminhos são resolvidos pelo `app.getPath('userData')`, não ficam dentro do
 repositório do usuário e não devem ser documentados com caminhos privados ou
 credenciais reais.
 
+### Observabilidade: erros com causa, persistidos e reportáveis
+
+O QA Logger guardava só até 400 entradas em memória — reiniciar o app (o
+contorno mais comum quando algo trava) apagava o histórico. Agora:
+
+- `qa-log-disk-store.cjs` persiste cada entrada em `logs/qa/qa-AAAA-MM-DD.jsonl`
+  (um arquivo por dia), com rotação por idade (`maxDays`, padrão 14) e por
+  orçamento de tamanho (`maxTotalBytes`, padrão 5 MiB — os arquivos mais
+  antigos saem primeiro). No boot, `qa-logger.initQaDiskStore` hidrata o
+  buffer em memória com o que sobreviveu ao restart anterior.
+- Toda entrada passa por `redactValue` antes de gravar — reaproveita
+  `redactSensitiveText` de `git-secret-redaction.cjs` (rótulo dentro do
+  texto, ex. `token=...`) e soma `isSensitiveKeyName` (nome da propriedade
+  já indica segredo, ex. `{"password": "..."}`, onde o rótulo não está no
+  valor). As duas fontes são necessárias: nenhuma cobre sozinha o outro caso.
+- `global-error-handlers.cjs` cobre `uncaughtException`, `unhandledRejection`,
+  `render-process-gone` e `child-process-gone` no processo principal, e
+  envolve `ipcMain.handle` uma única vez (`wrapIpcHandleWithLogging`) pra
+  logar canal + `error.cause` de qualquer handler que lançar, sem precisar
+  tocar cada `ipcMain.handle` do projeto individualmente. Nenhum handler
+  decide encerrar o processo — só registra.
+- No renderer, `renderer-error-reporting.ts` cobre `window.onerror` e
+  `unhandledrejection`; `RendererRecoveryBoundary` (o último resort quando o
+  React para de renderizar) também manda a entrada pro QA Logger antes de
+  oferecer o botão de recarregar.
+- Botão "Reportar problema" (painel QA Logger) monta um pacote —
+  `qa-report-builder.cjs` — com versão do app, SO/arquitetura, as últimas N
+  entradas do log e o estado de detecção de cada CLI, tudo redigido de novo
+  (defesa em profundidade) antes de gravar em `reports/problema-<hora>.json`.
+
 ## Fluxo legado de chat
 
 O código em `features/chat/` e o armazenamento de histórico continuam sendo

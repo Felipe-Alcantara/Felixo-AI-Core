@@ -18,7 +18,8 @@ const {
   registerFileAttachmentIpcHandlers,
 } = require('./services/file-attachments-ipc-handlers.cjs')
 const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-handlers.cjs')
-const { registerQaLoggerIpcHandlers, logQaEvent } = require('./services/qa-logger.cjs')
+const { registerQaLoggerIpcHandlers, logQaEvent, initQaDiskStore } = require('./services/qa-logger.cjs')
+const { createQaLogDiskStore } = require('./services/qa-log-disk-store.cjs')
 const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handlers.cjs')
 const { registerNotesIpcHandlers } = require('./services/notes-ipc-handlers.cjs')
 const { registerCanvasIpcHandlers } = require('./services/canvas-ipc-handlers.cjs')
@@ -96,6 +97,16 @@ const { getAutoStartStatus, setAutoStartEnabled } = require('./core/autostart.cj
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
+const { registerGlobalErrorHandlers, wrapIpcHandleWithLogging } = require('./services/global-error-handlers.cjs')
+
+// O mais cedo possível — antes de qualquer `ipcMain.handle` de outro módulo
+// registrar, e antes de `app.whenReady()`. Task "Observabilidade": nenhum
+// destes quatro era tratado, então a maioria dos travamentos relatados não
+// deixava rastro. `logQaEvent` já funciona neste ponto (o buffer em memória
+// do módulo existe desde o `require`); só a persistência em disco depende de
+// `appPaths`, ligada depois dentro de `whenReady` (ver `initQaDiskStore`).
+registerGlobalErrorHandlers({ log: logQaEvent, processObj: process, electronApp: app })
+wrapIpcHandleWithLogging(ipcMain, logQaEvent)
 
 let mainWindow = null
 let ptyHandlers = null
@@ -237,6 +248,13 @@ app.whenReady().then(async () => {
   }).catch(() => {})
 
   const appPaths = initAppPaths()
+  // Antes de qualquer outra coisa: sem isso, um crash no boot (ex.: banco
+  // corrompido, path inválido) ficava só em memória e sumia no restart que a
+  // própria falha ia forçar. Não bloqueia o boot no erro — log em disco é
+  // melhor esforço (ver initQaDiskStore).
+  initQaDiskStore(createQaLogDiskStore({ directory: path.join(appPaths.logs, 'qa') })).catch((error) => {
+    console.error('[felixo] falha ao inicializar o QA log em disco:', error)
+  })
   storageDatabase = createStorageDatabase({
     databaseDir: appPaths.database,
   })
@@ -384,7 +402,15 @@ app.whenReady().then(async () => {
     })
   }
 
-  registerQaLoggerIpcHandlers(getMainWindow)
+  registerQaLoggerIpcHandlers(getMainWindow, {
+    getReportContext: async () => ({
+      appVersion: resolveRuntimeAppVersion(),
+      platformName: process.platform,
+      arch: process.arch,
+      cliDetectionResults: await detectAllClis(),
+      reportsDirectory: appPaths.reports,
+    }),
+  })
   registerCliIpcHandlers(getMainWindow, { terminalLogStore })
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,

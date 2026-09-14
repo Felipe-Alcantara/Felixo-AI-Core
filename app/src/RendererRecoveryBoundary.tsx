@@ -26,6 +26,16 @@ export class RendererRecoveryBoundary extends Component<
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[felixo] falha ao renderizar a interface:', error, info.componentStack)
+    // Antes só ia pro console — some com o reload que o próprio boundary
+    // oferece logo abaixo. É exatamente o cenário que motivou a task
+    // "Observabilidade": a queda mais grave do renderer (a UI inteira parou
+    // de renderizar) era a que menos deixava rastro.
+    void window.felixo?.qaLogger?.log({
+      level: 'error',
+      scope: 'renderer:recovery-boundary',
+      message: error.message || error.name || 'Erro sem mensagem.',
+      details: { stack: error.stack ?? null, componentStack: info.componentStack ?? null },
+    })
   }
 
   render() {

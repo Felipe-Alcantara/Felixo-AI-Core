@@ -8,6 +8,12 @@ import { BootMarker } from './BootMarker'
 import { RendererRecoveryBoundary } from './RendererRecoveryBoundary'
 import { LazyCanvasConnectionPerformanceHarness } from './features/canvas/benchmarks/CanvasConnectionPerformanceHarnessLoader'
 import { LazyTerminalOutputPerformanceHarness } from './features/chat/benchmarks/TerminalOutputPerformanceHarnessLoader'
+import { installRendererErrorReporting } from './renderer-error-reporting'
+
+// Espelho renderer dos handlers globais do main (`global-error-handlers.cjs`):
+// sem isto, um erro fora de um componente React (listener de DOM, timer,
+// promise solta) não chegava nem ao console, nem ao QA Logger.
+installRendererErrorReporting()
 
 const benchmark = new URLSearchParams(window.location.search).get('benchmark')
 
