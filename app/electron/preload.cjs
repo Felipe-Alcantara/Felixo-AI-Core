@@ -181,6 +181,22 @@ contextBridge.exposeInMainWorld('felixo', {
       }
       return () => agentBrowserListeners.delete(callback)
     },
+    listWriteRequests: () => ipcRenderer.invoke('canvas:list-write-requests'),
+    resolveWriteRequest: (params) => ipcRenderer.invoke('canvas:resolve-write-request', params),
+    onWriteRequests: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('canvas:agent-write-requests', handler)
+      return () => ipcRenderer.removeListener('canvas:agent-write-requests', handler)
+    },
+    // Escrita confirmada já foi persistida pelo processo principal; este
+    // evento só avisa o renderer pra aplicar o mesmo `data` no nó vivo, sem
+    // esperar um reload nem deixar a próxima autosave sobrescrever com a
+    // cópia velha que o React ainda tem em memória.
+    onNodeUpdated: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('canvas:agent-node-updated', handler)
+      return () => ipcRenderer.removeListener('canvas:agent-node-updated', handler)
+    },
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),

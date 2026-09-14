@@ -22,6 +22,8 @@ import type {
   TerminalOutputEvent,
 } from './features/chat/types'
 import type {
+  CanvasNodeData,
+  CanvasWriteAgentRequest,
   FetchAllActionResult,
   FetchAllAgentRequest,
   FetchAllPlan,
@@ -636,6 +638,24 @@ declare global {
         }) => Promise<CliInvokeResult>
         onAgentBrowserOpen: (
           callback: (data: { requestId: string; url: string }) => void,
+        ) => () => void
+        listWriteRequests: () => Promise<
+          CliInvokeResult & { requests?: CanvasWriteAgentRequest[] }
+        >
+        resolveWriteRequest: (params: {
+          id: string
+          aceito: boolean
+        }) => Promise<
+          CliInvokeResult & {
+            resolved?: CanvasWriteAgentRequest | null
+            resultado?: { ok: boolean; id?: string; type?: string; message?: string }
+          }
+        >
+        onWriteRequests: (
+          callback: (data: { requests: CanvasWriteAgentRequest[] }) => void,
+        ) => () => void
+        onNodeUpdated: (
+          callback: (data: { id: string; data: CanvasNodeData }) => void,
         ) => () => void
       }
       canvasFiles?: {

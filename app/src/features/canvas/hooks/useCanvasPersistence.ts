@@ -56,6 +56,24 @@ export function useCanvasPersistence() {
     }
   }, [])
 
+  // Um pedido de escrita confirmado já foi persistido pelo processo principal
+  // quando este evento chega — só falta o nó vivo (React) saber. Qualquer
+  // save pendente daquele mesmo nó (posição arrastada, por exemplo) carrega
+  // o `data` de ANTES da escrita do agente; sem cancelar, ele dispararia
+  // depois e sobrescreveria a escrita com o texto velho.
+  useEffect(() => {
+    return window.felixo?.canvas?.onNodeUpdated(({ id, data }) => {
+      const timer = saveTimers.current.get(id)
+      if (timer) {
+        clearTimeout(timer)
+        saveTimers.current.delete(id)
+      }
+      setNodes((current) =>
+        current.map((node) => (node.id === id ? { ...node, data: { ...node.data, ...data } } : node)),
+      )
+    })
+  }, [])
+
   const persistNode = useCallback((node: CanvasFlowNode) => {
     const timers = saveTimers.current
     const existing = timers.get(node.id)

@@ -174,9 +174,14 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       nota (Markdown) ou arquivo. Outros tipos ainda não têm leitura nesta
       fatia da task, e o comando diz isso em vez de falhar sem explicação.
 
+  felixo canvas escrever <id> <conteúdo> [--json]
+      Pede para substituir o conteúdo de uma nota. NUNCA escreve sozinho:
+      fica pendente até a pessoa confirmar no painel "Pedidos de escrita" do
+      canvas — este comando só registra o pedido e devolve na hora, sem
+      esperar a confirmação. Só "note" aceita escrita nesta fatia.
+
   felixo canvas ver-pedido <id> [--json]
-      Confere o desfecho de um pedido de canvas, caso a espera tenha
-      estourado o prazo do próprio comando.
+      Confere o desfecho de um pedido de canvas (leitura ou escrita).
 
   Também são aceitos os equivalentes em português: navegador abrir,
   navegador ver-pedido e --embutido.

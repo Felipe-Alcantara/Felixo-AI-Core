@@ -85,6 +85,26 @@ test('canvas-ler exige o id do elemento, aparado de espaço', () => {
   assert.throws(() => normalizarPedido('canvas-ler', { idDoElemento: '   ' }), /id do elemento/)
 })
 
+test('canvas-escrever exige id e conteúdo (mesmo vazio, mas string)', () => {
+  assert.deepEqual(
+    normalizarPedido('canvas-escrever', { idDoElemento: '  nota-1  ', conteudo: 'texto novo' }),
+    { acao: 'canvas-escrever', comCommit: false, idDoElemento: 'nota-1', conteudo: 'texto novo' },
+  )
+  // Conteúdo vazio é um pedido válido (limpar a nota), desde que seja string.
+  assert.deepEqual(normalizarPedido('canvas-escrever', { idDoElemento: 'nota-1', conteudo: '' }), {
+    acao: 'canvas-escrever',
+    comCommit: false,
+    idDoElemento: 'nota-1',
+    conteudo: '',
+  })
+  assert.throws(() => normalizarPedido('canvas-escrever', { conteudo: 'x' }), /id do elemento/)
+  assert.throws(() => normalizarPedido('canvas-escrever', { idDoElemento: 'nota-1' }), /conteúdo/)
+  assert.throws(
+    () => normalizarPedido('canvas-escrever', { idDoElemento: 'nota-1', conteudo: 'x'.repeat(20001) }),
+    /muito grande/,
+  )
+})
+
 test('registrar grava o pedido pendente e listarPendentes o devolve', () => {
   const pasta = pastaTemporaria()
   const repositorio = criarRepositorioDePedidos({ pasta })

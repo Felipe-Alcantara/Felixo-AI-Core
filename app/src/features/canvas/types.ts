@@ -293,6 +293,25 @@ export type FetchAllAgentRequest = {
   resolvidoEm?: string
 }
 
+/**
+ * Pedido que um agente deixou pelo comando `felixo canvas escrever`.
+ *
+ * Ao contrário da leitura (`canvas-listar`/`canvas-ler`), este pedido nunca
+ * se resolve sozinho: fica pendente até a pessoa aceitar ou recusar no
+ * painel — é o risco de segurança que a própria task nomeia (prompt
+ * injection tentando mandar escrever em outro lugar).
+ */
+export type CanvasWriteAgentRequest = {
+  id: string
+  acao: 'canvas-escrever'
+  idDoElemento: string
+  conteudo: string
+  estado: 'pendente' | 'aceito' | 'recusado'
+  pedidoEm: string
+  origem: string
+  resolvidoEm?: string
+}
+
 export type FetchAllActionResult = {
   status: FetchAllRepoStatus
   action: 'pull' | 'push' | 'commit'

@@ -9,6 +9,7 @@ import type { Node } from '@xyflow/react'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import { CanvasPanel } from './tools/CanvasPanel'
 import {
+  LazyAgentCanvasWriteRequestsPanel,
   LazyAgentUsagePanel,
   LazyFetchAllPanel,
   LazyGitPanel,
@@ -236,6 +237,14 @@ export function CanvasToolPanels({
         return <LazyOrchestratorPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
       case 'qaLogger':
         return <LazyQaLoggerPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+      case 'agentCanvasWrite':
+        return (
+          <LazyAgentCanvasWriteRequestsPanel
+            nodes={nodes}
+            onClose={onClose}
+            toolsMenuOpen={toolsMenuOpen}
+          />
+        )
       case 'settings':
         return (
           <LazySettingsPanel

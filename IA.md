@@ -5419,3 +5419,79 @@ nesta fatia" em vez de ler).
 ### Evidência de origem
 
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## Fechamento de trabalho — 2026-09-14: canvas, escrita numa nota (Fatia 2)
+
+### Contexto
+
+Fatia 2 da task "Canvas — agentes leem e editam qualquer elemento do canvas",
+continuação direta da Fatia 1 (leitura, PR #48). É a parte que a task
+original nomeia como o maior risco de segurança do app: prompt injection
+vindo de um terminal ou página lido por outro agente pode tentar mandar
+escrever em outro lugar. Por isso a regra é dura e sem exceção: toda escrita
+fica pendente até um clique humano real.
+
+### O que foi feito
+
+- `agent-requests.cjs`: ação nova `canvas-escrever` (id do elemento +
+  conteúdo, limite de 20.000 caracteres); conteúdo vazio é um pedido válido
+  (limpar a nota), distinguido de "conteúdo não informado" por contagem de
+  argumentos posicionais na CLI, não por truthiness.
+- `canvas-agent-write.cjs` (lógica pura): valida o pedido contra o canvas de
+  verdade e calcula o novo `data`, sem persistir nada. Só `note` aceita
+  escrita nesta fatia — outro tipo devolve `ok:false` explicando, sem tentar
+  escrever.
+- `agent-canvas-write-ipc-handlers.cjs`: ao contrário da leitura, `canvas-
+  escrever` **nunca** é auto-resolvido. Fica esperando `canvas:resolve-
+  write-request`, chamado só por um clique real no painel. Na aceitação,
+  relê o canvas de verdade no momento do clique (não o que veio no pedido,
+  que pode ter envelhecido), persiste via `canvas-repository.cjs` e empurra
+  o novo `data` pro renderer.
+- Problema de arquitetura resolvido: persistir no SQLite não move nada na
+  tela — o renderer é dono do estado vivo e só lê do banco no boot. Sem
+  avisar o renderer, a escrita ficaria invisível até reload e uma autosave
+  pendente do bloco (com o `data` antigo em memória) poderia sobrescrevê-la.
+  Solução: evento `canvas:agent-node-updated`, que `useCanvasPersistence.ts`
+  aplica no nó vivo E usa para cancelar qualquer save pendente daquele nó.
+- Painel novo `AgentCanvasWriteRequestsPanel.tsx` ("Pedidos de escrita" no
+  menu de ferramentas): mostra o rótulo do bloco alvo, o conteúdo a escrever
+  (truncado) e dois botões — Aceitar e escrever / Recusar. A pessoa nunca
+  autoriza no escuro: o conteúdo fica visível antes do clique.
+- CLI: `felixo canvas escrever <id> "<texto>"`. Ao contrário de listar/ler,
+  não espera resposta (um clique humano pode demorar minutos) — só registra
+  e devolve na hora, apontando pra `felixo canvas ver-pedido <id>`.
+- Sem log de auditoria separado: cada pedido já persiste como arquivo em
+  `userData/agent-requests` com pedidoEm/resolvidoEm/estado/resultado — é o
+  próprio registro do que foi pedido, quando, e o que a pessoa decidiu.
+  Decisão deliberada: não duplicar persistência que já existe.
+- Skill nova `escrever-em-elementos-do-canvas`, e a skill de leitura
+  (`ler-elementos-do-canvas`) atualizada pra apontar pra ela.
+- `ARQUITETURA.md` documenta a Fatia 2 na mesma seção da Fatia 1.
+
+### O que foi decidido não fazer
+
+A heurística de "detectar se o conteúdo parece ter vindo de uma leitura
+anterior" (cogitada no planejamento da task) foi descartada: é segurança de
+fachada — fácil de contornar, difícil de acertar sem falso positivo — e a
+mitigação real já existe e é incondicional (confirmação humana sempre, sem
+exceção). Documentado aqui pra não parecer um esquecimento.
+
+### Validação
+
+Testes novos: `canvas-agent-write.test.cjs` (5), `agent-canvas-write-ipc-
+handlers.test.cjs` (5), `agent-requests.test.cjs` (+1), `felixo.test.cjs`
+(+4), `canvas-write-agent-requests.test.ts` (16 no vitest). `npm test` e
+`npx vitest run` cobrindo tudo antes do push (números finais no PR).
+
+### Limitações
+
+Mesma limitação da Fatia 1: sem `felixo devtools connect` funcionando, não
+foi possível um smoke test do app de verdade rodando — o push pro renderer
+(`canvas:agent-node-updated`) e o painel ficam sem verificação visual ao
+vivo, só cobertura de lógica pura e dos handlers de IPC. Terminal e arquivo
+continuam sem escrita (fora do escopo desta fatia); se fizerem sentido, cada
+um vira task nova quando alguém precisar.
+
+### Evidência de origem
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core

@@ -37,6 +37,12 @@ const BUILTIN_SKILLS = [
       'Listar e ler outros blocos da mesma instância — terminal, nota, arquivo — com `felixo canvas listar`/`ler`, sem digitar em outro terminal nem editar nada; leitura é auto-resolvida, sem confirmação humana.',
   },
   {
+    slug: 'escrever-em-elementos-do-canvas',
+    name: 'Escrever numa nota do canvas',
+    description:
+      'Pedir com `felixo canvas escrever <id> <conteúdo>` para substituir o Markdown de uma nota de outro bloco — nunca escreve sozinho, sempre depende de confirmação humana no painel "Pedidos de escrita".',
+  },
+  {
     slug: 'notion-operacoes',
     name: 'Operar o Notion sem estragar nada',
     description:
