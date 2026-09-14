@@ -35,10 +35,10 @@ function setup() {
 
 test('interpreta as opções do DevTools sem transformar texto em flag', () => {
   assert.deepEqual(parseArgs(['launch', '--visible', '--port', '9223']), {
-    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '', packaged: '' },
+    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '', packaged: '', timeout: null },
   })
   assert.deepEqual(parseArgs(['click-text', 'Abrir', 'agente']), {
-    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '', packaged: '' },
+    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null },
   })
 })
 
@@ -46,7 +46,15 @@ test('parseArgs reconhece --packaged com o mesmo formato de --port/--out', () =>
   assert.deepEqual(parseArgs(['launch', '--packaged', '/opt/Felixo AI Core/felixo-ai-core']), {
     command: 'launch',
     positional: [],
-    options: { visible: false, realProfile: false, port: null, out: '', packaged: '/opt/Felixo AI Core/felixo-ai-core' },
+    options: { visible: false, realProfile: false, port: null, out: '', packaged: '/opt/Felixo AI Core/felixo-ai-core', timeout: null },
+  })
+})
+
+test('parseArgs reconhece --timeout com o mesmo formato de --port', () => {
+  assert.deepEqual(parseArgs(['launch', '--timeout', '60000']), {
+    command: 'launch',
+    positional: [],
+    options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: 60000 },
   })
 })
 
