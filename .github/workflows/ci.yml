@@ -363,6 +363,34 @@ jobs:
           path: app/build/canvas-context-e2e-${{ matrix.os }}.json
           if-no-files-found: warn
 
+      # Primeira fatia do gate de evidência visual: sobe a mesma sessão
+      # isolada do `felixo devtools` (Electron real, contra o Vite dev
+      # server) e confere que o canvas hidrata e que a interface não estoura
+      # a largura num viewport mínimo.
+      #
+      # Só macOS e Windows por enquanto: no Linux (ubuntu-latest e
+      # ubuntu-24.04-arm), sob xvfb-run, o Electron nunca chega a abrir a
+      # porta CDP — medido em três tentativas (runs 34827616284, 34828636528,
+      # 34829476404), inclusive depois de ampliar o timeout pra 60s e de
+      # desativar o sandbox do Chromium (`--no-sandbox`, só na instância de
+      # automação). Nenhuma resolveu; `createDetached` roda com
+      # `stdio: 'ignore'`, então o stderr do Chromium nunca chega ao log — a
+      # próxima tentativa precisa capturar esse stderr antes de adivinhar de
+      # novo. Ver a task "Canvas — criar gate CI de evidência visual" no
+      # Notion para o registro completo e a task de investigação aberta.
+      - name: Test Canvas PR smoke (mount + viewport mínimo)
+        if: runner.os != 'Linux'
+        shell: bash
+        run: npm run test:canvas-smoke
+
+      - name: Upload Canvas PR smoke failure screenshot
+        if: failure() && runner.os != 'Linux'
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-smoke-failure-${{ matrix.os }}
+          path: app/build/canvas-smoke-failure-*.png
+          if-no-files-found: ignore
+
       # O scrollback adaptativo só pode ser habilitado depois de medir a
       # combinação real Electron + xterm + PTY nos três runners. O check usa
       # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20

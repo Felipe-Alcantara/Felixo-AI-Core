@@ -55,6 +55,7 @@
     "test:native": "node --test --test-concurrency=1 electron/services/pty-write-queue.integration.test.cjs electron/services/claude-usage-query.integration.test.cjs",
     "test:frontend": "vitest run",
     "test:canvas-context": "vitest run src/features/canvas/terminal/canvas-context-e2e.test.ts --reporter=verbose",
+    "test:canvas-smoke": "node scripts/canvas-smoke.cjs",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node scripts/start-electron.cjs"
   },

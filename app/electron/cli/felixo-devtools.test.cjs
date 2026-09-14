@@ -14,6 +14,7 @@ const {
   profileLooksInUse,
   readState,
   requirePackagedExecutable,
+  waitForCdp,
 } = require('./felixo-devtools.cjs')
 
 function setup() {
@@ -34,10 +35,10 @@ function setup() {
 
 test('interpreta as opções do DevTools sem transformar texto em flag', () => {
   assert.deepEqual(parseArgs(['launch', '--visible', '--port', '9223']), {
-    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '', packaged: '' },
+    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '', packaged: '', timeout: null },
   })
   assert.deepEqual(parseArgs(['click-text', 'Abrir', 'agente']), {
-    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '', packaged: '' },
+    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null },
   })
 })
 
@@ -45,7 +46,15 @@ test('parseArgs reconhece --packaged com o mesmo formato de --port/--out', () =>
   assert.deepEqual(parseArgs(['launch', '--packaged', '/opt/Felixo AI Core/felixo-ai-core']), {
     command: 'launch',
     positional: [],
-    options: { visible: false, realProfile: false, port: null, out: '', packaged: '/opt/Felixo AI Core/felixo-ai-core' },
+    options: { visible: false, realProfile: false, port: null, out: '', packaged: '/opt/Felixo AI Core/felixo-ai-core', timeout: null },
+  })
+})
+
+test('parseArgs reconhece --timeout com o mesmo formato de --port', () => {
+  assert.deepEqual(parseArgs(['launch', '--timeout', '60000']), {
+    command: 'launch',
+    positional: [],
+    options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: 60000 },
   })
 })
 
@@ -96,24 +105,62 @@ test('launch --packaged sobe o binário real, sem Vite e sem VITE_DEV_SERVER_URL
 
 test('launch sem --packaged continua subindo da fonte, com origem "fonte (dev)"', async () => {
   const env = setup()
+  let spawnOptions
   const result = await executarDevtools(['launch', '--port', '9333'], {
     ...env,
     getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
     probeVite: async () => ({ status: 'felixo' }),
     electronPath: 'electron-falso',
     appDir: env.root,
-    spawn: () => ({ pid: 4321, unref() {} }),
+    spawn: (_command, _args, options) => {
+      spawnOptions = options
+      return { pid: 4321, unref() {} }
+    },
     waitForCdp: async () => {},
   })
   assert.equal(result.codigo, 0)
   assert.match(result.saida, /Origem: fonte \(dev\)/)
   assert.equal(readState(env).packaged, null)
+  assert.equal(spawnOptions.windowsHide, true)
+})
+
+test('launch --visible permite que a janela Electron seja mostrada no Windows', async () => {
+  const env = setup()
+  let spawnOptions
+  const result = await executarDevtools(['launch', '--visible', '--port', '9333'], {
+    ...env,
+    getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
+    probeVite: async () => ({ status: 'felixo' }),
+    electronPath: 'electron-falso',
+    appDir: env.root,
+    spawn: (_command, _args, options) => {
+      spawnOptions = options
+      return { pid: 4321, unref() {} }
+    },
+    waitForCdp: async () => {},
+  })
+  assert.equal(result.codigo, 0)
+  assert.equal(spawnOptions.windowsHide, false)
+  assert.equal(spawnOptions.env.FELIXO_DEVTOOLS_HEADLESS, '0')
 })
 
 test('aceita --help diretamente depois de devtools', async () => {
   const result = await executarDevtools(['--help'])
   assert.equal(result.codigo, 0)
   assert.match(result.saida, /felixo devtools/)
+})
+
+test('waitForCdp aborta uma porta ocupada que aceita a conexao mas nao responde', async () => {
+  await assert.rejects(
+    waitForCdp(9333, {
+      timeoutMs: 50,
+      fetchImpl: (_url, { signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('request aborted')), { once: true })
+      }),
+      sleep: async () => {},
+    }),
+    /Electron.*CDP/,
+  )
 })
 
 test('recusa perfil real quando os arquivos de singleton indicam app em uso', async () => {
@@ -151,6 +198,31 @@ test('launch cria perfil isolado, espera CDP e persiste apenas metadados da sess
   assert.equal(state.port, 9333)
   assert.equal(state.realProfile, false)
   assert.match(state.userData, /profile-/)
+})
+
+test('relaunch remove perfil isolado encerrado e retoma Vite criado pela sessao anterior', async () => {
+  const env = setup()
+  const oldProfile = path.join(env.root, 'old-profile')
+  fs.mkdirSync(oldProfile)
+  fs.writeFileSync(path.join(oldProfile, 'lock'), 'old')
+  fs.writeFileSync(env.stateFile, JSON.stringify({ pid: 0, port: 9333, userData: oldProfile, realProfile: false, vitePid: 6666, createdAt: 'agora' }))
+  const result = await executarDevtools(['launch', '--port', '9333'], {
+    ...env,
+    platform: 'linux',
+    sleep: async () => {},
+    kill: () => {},
+    getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
+    probeVite: async () => ({ status: 'felixo' }),
+    electronPath: 'electron-falso',
+    appDir: env.root,
+    spawn: () => ({ pid: 8888, unref() {} }),
+    waitForCdp: async () => {},
+  })
+  assert.equal(result.codigo, 0)
+  assert.equal(fs.existsSync(oldProfile), false)
+  assert.equal(readState(env).vitePid, 6666)
+  await executarDevtools(['quit'], { ...env, platform: 'linux', sleep: async () => {} })
+  assert.equal(fs.existsSync(env.stateFile), false)
 })
 
 test('falha de CDP encerra a tentativa e descarta o perfil isolado', async () => {

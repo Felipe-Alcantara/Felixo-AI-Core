@@ -23,7 +23,7 @@ const DEFAULT_TIMEOUT = 15_000
 
 const AJUDA_DEVTOOLS = `felixo devtools — dirige uma instância isolada e invisível do Felixo AI Core.
 
-  felixo devtools launch [--visible] [--real-profile] [--port N] [--packaged <executável>]
+  felixo devtools launch [--visible] [--real-profile] [--port N] [--timeout MS] [--packaged <executável>]
   felixo devtools status | screenshot [--out arquivo] | buttons | windows | quit
   felixo devtools click <seletor> | click-text <texto> | type <texto> | press <tecla>
   felixo devtools text [seletor] | eval <expressão JavaScript> | main <expressão JavaScript>
@@ -33,23 +33,28 @@ Por padrão a sessão usa um userData temporário e uma janela invisível, e sob
 (o mesmo \`electron .\` do \`npm run dev\`, contra o Vite dev server). --real-profile é
 deliberadamente excepcional e é recusado se o perfil aparentar estar em uso.
 
+--timeout MS troca só o prazo de espera pela porta CDP abrir (padrão 15000ms), depois que
+o Vite já respondeu — não mexe no prazo do Vite em si (esse é fixo, 60s). Útil quando o
+boot do Electron sob Xvfb é mais lento que o padrão, como em runners de CI Linux.
+
 --packaged <executável> dirige o BINÁRIO EMPACOTADO no lugar da fonte — sem servidor
 Vite, carregando o \`dist\` real do instalador/CI. É o que prova UI clicada dentro do
 artefato que a pessoa de fato instala, não de uma aproximação de desenvolvimento.`
 
 function parseArgs(args) {
-  const options = { visible: false, realProfile: false, port: null, out: '', packaged: '' }
+  const options = { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null }
   if (args[0] === '--help') return { command: 'help', positional: [], options }
   const positional = []
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index]
     if (value === '--visible') options.visible = true
     else if (value === '--real-profile') options.realProfile = true
-    else if (value === '--port' || value === '--out' || value === '--packaged') {
+    else if (value === '--port' || value === '--out' || value === '--packaged' || value === '--timeout') {
       const next = args[++index]
       if (!next) throw new Error(`${value} exige um valor.`)
       if (value === '--port') options.port = Number(next)
       else if (value === '--out') options.out = next
+      else if (value === '--timeout') options.timeout = Number(next)
       else options.packaged = next
     } else if (value.startsWith('--')) {
       throw new Error(`Opção desconhecida: ${value}`)
@@ -71,6 +76,17 @@ function writeState(state, deps = {}) {
 function removeState(deps = {}) {
   try { (deps.fs ?? fs).rmSync(statePath(deps), { force: true }) } catch {}
 }
+async function removeIsolatedProfile(userData, deps = {}) {
+  const fileSystem = deps.fs ?? fs
+  const exists = deps.existsSync ?? ((value) => fileSystem.existsSync(value))
+  const sleep = deps.sleep ?? ((delay) => new Promise((resolve) => setTimeout(resolve, delay)))
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try { fileSystem.rmSync(userData, { recursive: true, force: true }) } catch {}
+    if (!exists(userData)) return true
+    await sleep(100)
+  }
+  return false
+}
 function isProcessAlive(pid, deps = {}) {
   if (!Number.isInteger(pid) || pid <= 0) return false
   try { (deps.kill ?? process.kill)(pid, 0); return true } catch { return false }
@@ -89,6 +105,25 @@ function findFreePort({ listen = net.createServer, host = '127.0.0.1' } = {}) {
     })
   })
 }
+function assertPortAvailable(port, { listen = net.createServer, host = '127.0.0.1' } = {}) {
+  return new Promise((resolve, reject) => {
+    const server = listen()
+    let settled = false
+    const finish = (error) => {
+      if (settled) return
+      settled = true
+      if (server.listening) {
+        server.close(() => error ? reject(error) : resolve())
+      } else if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    }
+    server.once('error', () => finish(new Error(`A porta ${port} do DevTools j\u00e1 est\u00e1 em uso.`)))
+    server.listen(port, host, () => finish())
+  })
+}
 function requirePort(port) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('A porta deve estar entre 1 e 65535.')
   return port
@@ -97,16 +132,24 @@ async function waitForCdp(port, { fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT
   const deadline = Date.now() + timeoutMs
   let lastError = null
   while (Date.now() < deadline) {
+    const controller = new AbortController()
+    const requestTimeout = setTimeout(() => controller.abort(), Math.min(1_000, deadline - Date.now()))
     try {
-      const response = await fetchImpl(`http://127.0.0.1:${port}/json/version`)
+      const response = await fetchImpl(`http://127.0.0.1:${port}/json/version`, { signal: controller.signal })
       if (response.ok) return
     } catch (error) { lastError = error }
-    await sleep(150)
+    finally { clearTimeout(requestTimeout) }
+    await sleep(Math.min(150, Math.max(0, deadline - Date.now())))
   }
   throw new Error(`O Electron não abriu CDP na porta ${port}. ${lastError?.message ?? ''}`.trim())
 }
 function createDetached(command, args, options, deps = {}) {
-  const child = (deps.spawn ?? spawn)(command, args, { ...options, detached: true, stdio: 'ignore', windowsHide: true })
+  const child = (deps.spawn ?? spawn)(command, args, {
+    ...options,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: options.windowsHide ?? true,
+  })
   child.unref?.()
   return child
 }
@@ -144,7 +187,9 @@ async function launch(options, deps = {}) {
   const old = readState(deps)
   if (old?.pid && isProcessAlive(old.pid, deps)) throw new Error('Já existe uma sessão DevTools ativa. Use `felixo devtools status` ou `quit`.')
   if (old) removeState(deps)
+  if (old && !old.realProfile && old.userData) await removeIsolatedProfile(old.userData, deps)
   const port = options.port === null ? await (deps.findFreePort ?? findFreePort)() : requirePort(options.port)
+  if (options.port !== null) await (deps.assertPortAvailable ?? assertPortAvailable)(port)
   const realUserData = (deps.getAppPaths ?? getAppPaths)().userData
   if (options.realProfile && (deps.profileLooksInUse ?? profileLooksInUse)(realUserData, deps)) {
     throw new Error('O perfil real parece estar em uso por outra instância. Feche o app antes de usar --real-profile.')
@@ -157,6 +202,7 @@ async function launch(options, deps = {}) {
   // saber se está em modo desenvolvimento — presente, ele tentaria abrir o
   // dev server que não existe ali).
   const vite = packaged ? { pid: null, reused: true } : await ensureVite(deps)
+  const vitePid = packaged ? null : (vite.pid ?? (old?.vitePid && isProcessAlive(old.vitePid, deps) ? old.vitePid : null))
   const env = {
     ...process.env,
     ...(deps.env ?? {}),
@@ -167,17 +213,17 @@ async function launch(options, deps = {}) {
   }
   delete env.ELECTRON_RUN_AS_NODE
   const child = packaged
-    ? createDetached(packaged, [], { cwd: deps.appDir ?? APP_DIR, env }, deps)
-    : createDetached(deps.electronPath ?? electronPath(), ['.'], { cwd: deps.appDir ?? APP_DIR, env }, deps)
-  const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid: vite.pid, createdAt: new Date().toISOString() }
+    ? createDetached(packaged, [], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible }, deps)
+    : createDetached(deps.electronPath ?? electronPath(), ['.'], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible }, deps)
+  const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid, createdAt: new Date().toISOString() }
   writeState(state, deps)
   try {
-    await (deps.waitForCdp ?? waitForCdp)(port)
+    await (deps.waitForCdp ?? waitForCdp)(port, { timeoutMs: options.timeout ?? DEFAULT_TIMEOUT })
   } catch (error) {
     killTree(child.pid, deps)
-    if (vite.pid) killTree(vite.pid, deps)
+    if (vitePid) killTree(vitePid, deps)
     if (!options.realProfile) {
-      try { (deps.fs ?? fs).rmSync(userData, { recursive: true, force: true }) } catch {}
+      await removeIsolatedProfile(userData, deps)
     }
     removeState(deps)
     throw error
@@ -250,7 +296,7 @@ async function executarDevtools(args, deps = {}) {
     if (command === 'quit') {
       if (!state) return { saida: 'Nenhuma sessão DevTools registrada.', codigo: 0 }
       killTree(state.pid, deps); if (state.vitePid) killTree(state.vitePid, deps)
-      if (!state.realProfile) { try { (deps.fs ?? fs).rmSync(state.userData, { recursive: true, force: true }) } catch {} }
+      if (!state.realProfile) await removeIsolatedProfile(state.userData, deps)
       removeState(deps); return { saida: 'Sessão DevTools encerrada.', codigo: 0 }
     }
     if (command === 'screenshot') { const output = options.out ? path.resolve(options.out) : path.resolve('felixo-devtools.png'); await withPage(deps, async (page) => { const dataUrl = await page.evaluate(() => window.felixo?.devtools?.capturePage()); if (!dataUrl?.startsWith('data:image/png;base64,')) throw new Error('A captura nativa DevTools não está disponível. Reinicie a sessão.'); (deps.fs ?? fs).mkdirSync(path.dirname(output), { recursive: true }); (deps.fs ?? fs).writeFileSync(output, Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64')) }); return { saida: output, codigo: 0 } }
@@ -269,4 +315,4 @@ async function executarDevtools(args, deps = {}) {
   } catch (error) { return { saida: '', erro: error?.message ?? 'Falha no DevTools.', codigo: 1 } }
 }
 
-module.exports = { AJUDA_DEVTOOLS, STATE_FILE, captureHeapSnapshot, connect, executarDevtools, findFreePort, formatState, isProcessAlive, metricsListToObject, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }
+module.exports = { AJUDA_DEVTOOLS, STATE_FILE, assertPortAvailable, captureHeapSnapshot, connect, executarDevtools, findFreePort, formatState, isProcessAlive, metricsListToObject, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }

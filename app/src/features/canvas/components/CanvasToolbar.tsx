@@ -143,6 +143,7 @@ export function CanvasToolbar({
     <aside
       className={`felixo-workbench-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}
       aria-label="Navegação do canvas"
+      data-felixo-region="sidebar"
     >
       <nav className="felixo-activity-rail" aria-label="Ações principais">
         {/* O icone da secao abre e fecha a propria coluna, como a barra de

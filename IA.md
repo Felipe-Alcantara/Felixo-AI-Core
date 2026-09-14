@@ -5164,3 +5164,69 @@ A matriz completa do roteiro da task pede 30/60/120 minutos, 10 e 20 terminais, 
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
 PR da ferramenta: https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/38 (mergeada)
 PR do ajuste de metodologia (fecha o drawer): https://github.com/Felipe-Alcantara/Felixo-AI-Core/pull/39 (mergeada)
+
+## Fechamento de trabalho — 2026-09-14 — DevTools interativo no Windows
+
+AGENTE/REPOSITÓRIO: Codex / Felixo-AI-Core.
+
+### Escopo e ambiente
+
+Validação manual do CLI `felixo devtools` no checkout Windows da branch `main`:
+Windows NT 10.0.26200.0, x64/AMD64, Node v25.3.0, npm 11.6.2. O checkout
+estava em `48278e3` (descendente do ajuste `b634334`). O `felixo` encontrado no
+PATH apontava para um shim temporário de outra instalação; por isso a evidência
+foi produzida pelo entrypoint equivalente do checkout, `node
+electron/cli/felixo.cjs devtools ...`.
+
+### Fluxo manual concluído
+
+- `devtools --help` respondeu com código 0.
+- `launch` sem `--visible` abriu a sessão na porta CDP 59190, com PID 29200,
+  perfil isolado e `mainWindow.isVisible() = false`.
+- `status`, `windows`, `buttons`, `screenshot --out`, `click`, `click-text`,
+  `type`, `press`, `text`, `eval` e `main` responderam com código 0. A busca
+  inofensiva por `devtools smoke windows` apareceu no canvas sem dados privados;
+  a captura PNG tinha 48.204 bytes e assinatura PNG válida.
+- `quit` removeu a sessão, o perfil isolado e os listeners CDP/Vite; não ficaram
+  processos Electron/Vite do checkout.
+- `launch --visible` abriu a janela real no Windows: porta 59330, PID 30844,
+  `mainWindow.isVisible() = true`, handle nativo 2167098 e título `Felixo AI
+  Core`; `quit` também limpou essa sessão.
+
+### Achados, correções e guardas
+
+O primeiro `launch --visible` passava a flag, mas o Windows recebia
+`windowsHide: true`, então a janela permanecia invisível. O CLI agora passa
+`windowsHide: !options.visible` somente ao Electron; o Vite continua oculto.
+Também foram adicionados: pré-checagem de colisão de porta explícita, timeout
+abortável para uma porta que aceita conexão sem responder, limpeza com retry do
+perfil temporário e recuperação do PID do Vite criado pela sessão anterior após
+crash/relaunch.
+
+Os cenários de segurança foram exercitados: perfil real com `SingletonLock` foi
+recusado; CDP ocupado falhou em aproximadamente 90 ms sem iniciar Vite/Electron;
+Vite HTTP estrangeiro foi recusado e permaneceu vivo; crash seguido de relaunch
+removeu o perfil antigo e o `quit` final encerrou Vite, Electron, estado e perfil.
+Os testes unitários do CLI cobrem esses contratos.
+
+### Gates
+
+`npm test` (com `CODEX_HOME` herdado do agente removido): 1245 pass, 0 fail,
+1 skipped. `npm run test:frontend`: 898 pass, 1 skipped. `npm run lint` e
+`npm run build` passaram; o build transformou 4669 módulos. A primeira execução
+do teste completo com `CODEX_HOME` herdado produziu duas falhas ambientais nos
+testes de descoberta/PTY; a repetição com o ambiente sanitizado passou sem
+alteração nesses módulos.
+
+### Limitação e próximo passo
+
+O host desta rodada é Windows; não há uma máquina macOS disponível nesta sessão,
+portanto a evidência manual macOS permanece pendente. A task não deve ser
+considerada plenamente aceita até essa rodada ser executada. O trabalho fica
+registrado como Windows concluído e macOS aguardando validação externa.
+
+### Referências
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+Código: `app/electron/cli/felixo-devtools.cjs`
+Testes: `app/electron/cli/felixo-devtools.test.cjs`
