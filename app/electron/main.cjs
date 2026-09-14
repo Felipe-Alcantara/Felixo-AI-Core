@@ -124,6 +124,17 @@ const devtoolsPort = Number.parseInt(process.env.FELIXO_DEVTOOLS_PORT ?? '', 10)
 // nenhuma porta adicional.
 if (Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535) {
   app.commandLine.appendSwitch('remote-debugging-port', String(devtoolsPort))
+  // Medido no CI (runs 34827616284/34828636528): sob Xvfb em runner Linux do
+  // GitHub Actions (contêiner sem CAP_SYS_ADMIN), o Chromium nunca chega a
+  // abrir a porta CDP — o sandbox de SO do próprio Chromium exige o helper
+  // SUID, que o contêiner não concede. Os outros scripts de benchmark que já
+  // abrem Electron no mesmo CI (terminal-scrollback-benchmark.cjs,
+  // bundle-load-benchmark.cjs) evitam o problema abrindo BrowserWindows
+  // próprias com `sandbox: false` em vez de subir o app inteiro; a instância
+  // de automação do DevTools sobe o `main.cjs` real, então o switch precisa
+  // vir daqui. Exclusivo desta instância — o app normal do usuário nunca
+  // recebe FELIXO_DEVTOOLS_PORT e mantém o sandbox do Chromium ativo.
+  app.commandLine.appendSwitch('no-sandbox')
 }
 
 if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {
