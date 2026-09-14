@@ -68,6 +68,23 @@ test('abrir-pagina aceita apenas URL web e os dois destinos fechados', () => {
   )
 })
 
+test('canvas-listar não exige nenhum campo extra', () => {
+  assert.deepEqual(normalizarPedido('canvas-listar'), {
+    acao: 'canvas-listar',
+    comCommit: false,
+  })
+})
+
+test('canvas-ler exige o id do elemento, aparado de espaço', () => {
+  assert.deepEqual(normalizarPedido('canvas-ler', { idDoElemento: '  terminal-abc  ' }), {
+    acao: 'canvas-ler',
+    comCommit: false,
+    idDoElemento: 'terminal-abc',
+  })
+  assert.throws(() => normalizarPedido('canvas-ler', {}), /id do elemento/)
+  assert.throws(() => normalizarPedido('canvas-ler', { idDoElemento: '   ' }), /id do elemento/)
+})
+
 test('registrar grava o pedido pendente e listarPendentes o devolve', () => {
   const pasta = pastaTemporaria()
   const repositorio = criarRepositorioDePedidos({ pasta })

@@ -97,6 +97,41 @@ function contar(lista) {
   return Array.isArray(lista) ? lista.length : 0
 }
 
+/**
+ * Uma linha por elemento do canvas: id (pra usar em `canvas ler`), tipo e
+ * rótulo. `leituraSuportada:false` fica marcado — evita que o agente tente
+ * ler um tipo ainda sem suporte só pra descobrir isso na segunda chamada.
+ *
+ * @param {Array<{ id: string, type: string, label: string, leituraSuportada: boolean }>} elementos
+ * @returns {string}
+ */
+function formatarElementos(elementos) {
+  if (!Array.isArray(elementos) || elementos.length === 0) {
+    return 'Nenhum elemento neste canvas.'
+  }
+
+  const linhas = elementos.map((item) => {
+    const aviso = item.leituraSuportada ? '' : '  (leitura ainda não suportada nesta fatia)'
+    return `  ${item.id}  [${item.type}]  ${item.label}${aviso}`
+  })
+  return [`${elementos.length} elemento(s) no canvas:`, '', ...linhas].join('\n')
+}
+
+/**
+ * @param {{ ok: boolean, id: string, type?: string, label?: string, content?: string, message?: string }} resultado
+ * @returns {string}
+ */
+function formatarLeitura(resultado) {
+  if (!resultado?.ok) {
+    return `Não foi possível ler "${resultado?.id}": ${resultado?.message ?? 'motivo desconhecido'}.`
+  }
+
+  const cabecalho = `${resultado.label ?? resultado.id} [${resultado.type}]`
+  const partes = [cabecalho, ''.padStart(cabecalho.length, '─'), resultado.content || '(vazio)']
+  if (resultado.message) partes.push('', resultado.message)
+  return partes.join('\n')
+}
+
 /** Texto de ajuda. É a primeira coisa que um agente lê ao descobrir o comando. */
 const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e reporta o que está fora de sincronia.
 
@@ -129,6 +164,20 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       Lê um artefato temporário pelo nome portátil. Também aceito:
       felixo contexto ler <nome-do-artefato>.
 
+  felixo canvas listar [--json]
+      Lista os elementos do canvas desta instância (terminais, notas,
+      arquivos, páginas...), com o id que "canvas ler" usa. Só leitura; não
+      precisa de confirmação — o app responde na hora.
+
+  felixo canvas ler <id> [--json]
+      Lê o conteúdo de um elemento: terminal (últimas linhas, redigidas),
+      nota (Markdown) ou arquivo. Outros tipos ainda não têm leitura nesta
+      fatia da task, e o comando diz isso em vez de falhar sem explicação.
+
+  felixo canvas ver-pedido <id> [--json]
+      Confere o desfecho de um pedido de canvas, caso a espera tenha
+      estourado o prazo do próprio comando.
+
   Também são aceitos os equivalentes em português: navegador abrir,
   navegador ver-pedido e --embutido.
 
@@ -147,5 +196,7 @@ module.exports = {
   AJUDA_CONTEXT,
   AVISO_ESCRITA,
   descreverRepositorio,
+  formatarElementos,
+  formatarLeitura,
   formatarPlano,
 }

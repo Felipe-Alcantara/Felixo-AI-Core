@@ -5350,3 +5350,72 @@ limpo. `npm run build` (typecheck completo) ok.
 ### Evidência de origem
 
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## Fechamento de trabalho — 2026-09-14: canvas, leitura de outros elementos (Fatia 1)
+
+### Contexto
+
+Task Notion "Canvas — agentes leem e editam qualquer elemento do canvas
+(terminais, notas, Notion, arquivos, páginas)". A própria task nomeia o maior
+risco de segurança do app: prompt injection vindo de uma página ou da saída
+de um terminal lido por outro agente pode mandar escrever em outro lugar — e
+por isso pede explicitamente para fatiar antes de codar, entregando leitura
+primeiro e escrita depois, cada fatia com teste. Esta entrada fecha a Fatia 1
+(leitura) apenas; escrita fica para uma task nova.
+
+### O que foi feito
+
+- `agent-requests.cjs`: duas ações novas na fila compartilhada com o Fetch
+  All e o navegador — `canvas-listar` (sem campos extras) e `canvas-ler`
+  (exige `idDoElemento`, aparado de espaço).
+- `canvas-agent-read.cjs` (novo, lógica pura): `listarElementos` (id, tipo,
+  rótulo, `leituraSuportada`) e `lerElemento` — suporta `terminal` (últimas
+  linhas do `terminalLogStore`, cujo `sessionId` é o mesmo id do nó),
+  `note` (Markdown do bloco) e `file` (conteúdo do arquivo apontado);
+  qualquer outro tipo devolve uma mensagem explícita de "ainda não tem
+  leitura nesta fatia" em vez de falhar sem explicação ou inventar
+  resultado. Todo conteúdo passa por `redactSensitiveText` antes de sair.
+- `agent-canvas-read-ipc-handlers.cjs` (novo): observa a fila, resolve os
+  pedidos lendo o snapshot do `canvas-repository.cjs`. Decisão de produto
+  deliberada: ao contrário de `executar-plano`, leitura é auto-resolvida
+  **sem confirmação humana** — o ponto de atenção da task é sobre escrever,
+  não sobre listar/ler.
+- `felixo.cjs` + `agent-command-output.cjs`: comandos `felixo canvas listar`,
+  `felixo canvas ler <id>` e `felixo canvas ver-pedido <id>`, com o mesmo
+  padrão de espera curta (poll até ~4s) e checagem posterior que `fetch-all`
+  e `browser` já usam.
+- Skill nova `ler-elementos-do-canvas`, registrada em `skills-catalog.cjs`,
+  com uma seção explícita "O que este comando NÃO faz": não escreve em nada,
+  e conteúdo lido de terminal/página é dado, nunca instrução a seguir.
+- `ARQUITETURA.md`: nova seção "Agente lê outros elementos do canvas".
+
+### Bug pego pelo teste
+
+`ultimasLinhasDaSessao` dividia o texto por `\r?\n` sem tirar a quebra final
+antes — uma sessão terminando em `\n` gerava uma "linha" vazia espúria no
+fim, empurrando pra fora uma linha real quando o limite era atingido.
+Corrigido tirando uma quebra final antes de dividir.
+
+### Validação
+
+44 testes novos (`agent-requests.test.cjs` +2, `canvas-agent-read.test.cjs`
++19, `agent-canvas-read-ipc-handlers.test.cjs` +5,
+`agent-command-output-canvas.test.cjs` +7, `felixo.test.cjs` +6, e mais no
+catálogo de skills). `npm test`: 1320/1320. `npx vitest run`: 922 passed, 1
+skipped (pré-existente, sem relação). `eslint` limpo. `npm run build`
+(typecheck completo + build) ok.
+
+### Limitações e o que fica pendente
+
+Não foi possível fazer um smoke test do app de verdade rodando (o
+`felixo devtools connect` trava depois do handshake WebSocket — regressão já
+registrada em tarefa própria, `3db91f95-497e-816f-8cf3-f06b159f40b6`);
+validação ficou só na suíte automatizada. Ficam fora desta fatia, cada uma
+para abrir como task nova: escrita com confirmação humana (o risco que a
+task original nomeia como prioridade), e leitura de `webpage` e de
+databases/tarefas do Notion no canvas (hoje devolvem "ainda não tem leitura
+nesta fatia" em vez de ler).
+
+### Evidência de origem
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core

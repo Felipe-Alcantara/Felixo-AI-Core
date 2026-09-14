@@ -31,6 +31,12 @@ const BUILTIN_SKILLS = [
       'Pedir ao Felixo AI Core para abrir uma URL http(s) no navegador externo ou como um bloco Webpage persistido no canvas, usando `felixo browser` e a fila compartilhada com o Fetch All.',
   },
   {
+    slug: 'ler-elementos-do-canvas',
+    name: 'Ler outros elementos do canvas',
+    description:
+      'Listar e ler outros blocos da mesma instância — terminal, nota, arquivo — com `felixo canvas listar`/`ler`, sem digitar em outro terminal nem editar nada; leitura é auto-resolvida, sem confirmação humana.',
+  },
+  {
     slug: 'notion-operacoes',
     name: 'Operar o Notion sem estragar nada',
     description:

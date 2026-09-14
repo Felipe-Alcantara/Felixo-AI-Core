@@ -347,3 +347,101 @@ test('ver-pedido sem id conhecido falha em vez de inventar', async () => {
   assert.equal(resultado.codigo, 1)
   assert.match(resultado.erro, /não encontrado/)
 })
+
+test('canvas listar registra o pedido e, quando o app resolve durante a espera, imprime os elementos', async () => {
+  const { pasta, deps } = dependencias()
+  let resolveuUmaVez = false
+  // Simula o app processando a fila em segundo plano: na primeira "espera",
+  // resolve o pedido de listagem que "canvas listar" acabou de registrar.
+  const esperar = async () => {
+    if (resolveuUmaVez) return
+    resolveuUmaVez = true
+    const repositorio = criarRepositorioDePedidos({ pasta })
+    const [pedido] = repositorio.listarPendentes({ acao: 'canvas-listar' })
+    if (pedido) {
+      repositorio.resolver(pedido.id, {
+        aceito: true,
+        resultado: { ok: true, elementos: [{ id: 't1', type: 'terminal', label: 'Shell', leituraSuportada: true }] },
+      })
+    }
+  }
+
+  const resultado = await executar(['canvas', 'listar'], { ...deps, esperar })
+
+  assert.equal(resultado.codigo, 0)
+  assert.match(resultado.saida, /t1/)
+  assert.match(resultado.saida, /terminal/)
+})
+
+test('canvas ler exige o id do elemento', async () => {
+  const { deps } = dependencias()
+  const resultado = await executar(['canvas', 'ler'], deps)
+  assert.equal(resultado.codigo, 2)
+  assert.match(resultado.erro, /Informe o id/)
+})
+
+test('canvas ler: quando o app resolve com sucesso, imprime o conteúdo com código 0', async () => {
+  const { pasta, deps } = dependencias()
+  const esperar = (() => {
+    let chamado = false
+    return async () => {
+      if (chamado) return
+      chamado = true
+      const repositorio = criarRepositorioDePedidos({ pasta })
+      const [pedido] = repositorio.listarPendentes({ acao: 'canvas-ler' })
+      if (pedido) {
+        repositorio.resolver(pedido.id, {
+          aceito: true,
+          resultado: { ok: true, id: 't1', type: 'terminal', label: 'Shell', content: 'saída do terminal' },
+        })
+      }
+    }
+  })()
+
+  const resultado = await executar(['canvas', 'ler', 't1'], { ...deps, esperar })
+
+  assert.equal(resultado.codigo, 0)
+  assert.match(resultado.saida, /saída do terminal/)
+})
+
+test('canvas ler: quando o app resolve com falha (ex.: id inexistente), código 1 mas não é um erro de uso', async () => {
+  const { pasta, deps } = dependencias()
+  const esperar = (() => {
+    let chamado = false
+    return async () => {
+      if (chamado) return
+      chamado = true
+      const repositorio = criarRepositorioDePedidos({ pasta })
+      const [pedido] = repositorio.listarPendentes({ acao: 'canvas-ler' })
+      if (pedido) {
+        repositorio.resolver(pedido.id, { aceito: true, resultado: { ok: false, id: 'x', message: 'Nenhum elemento com id "x" neste canvas.' } })
+      }
+    }
+  })()
+
+  const resultado = await executar(['canvas', 'ler', 'x'], { ...deps, esperar })
+
+  assert.equal(resultado.codigo, 1)
+  assert.match(resultado.saida, /Nenhum elemento com id/)
+})
+
+test('canvas listar: sem o app responder, avisa o timeout e diz como conferir depois', async () => {
+  const { deps } = dependencias()
+  const resultado = await executar(['canvas', 'listar'], { ...deps, esperar: async () => {} })
+
+  assert.equal(resultado.codigo, 1)
+  assert.match(resultado.saida, /não respondeu a tempo/)
+  assert.match(resultado.saida, /canvas ver-pedido/)
+})
+
+test('canvas ver-pedido mostra o desfecho de um pedido de leitura já resolvido', async () => {
+  const { pasta, deps } = dependencias()
+  await executar(['canvas', 'listar'], { ...deps, esperar: async () => {} })
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const [pedido] = repositorio.listarPendentes({ acao: 'canvas-listar' })
+  repositorio.resolver(pedido.id, { aceito: true, resultado: { ok: true, elementos: [] } })
+
+  const resultado = await executar(['canvas', 'ver-pedido', pedido.id], deps)
+
+  assert.match(resultado.saida, /aceito/)
+})

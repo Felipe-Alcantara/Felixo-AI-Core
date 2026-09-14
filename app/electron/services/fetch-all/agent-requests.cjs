@@ -21,7 +21,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 /** Intenções aceitas. Lista fechada de propósito. */
-const ACOES_ACEITAS = ['executar-plano', 'abrir-pagina']
+const ACOES_ACEITAS = ['executar-plano', 'abrir-pagina', 'canvas-listar', 'canvas-ler']
 
 const MODOS_ABERTURA_PAGINA = ['externo', 'embutido']
 
@@ -69,6 +69,21 @@ function normalizarPedido(acao, opcoes = {}) {
     }
 
     return { acao: nome, comCommit: false, url, modo }
+  }
+
+  // Leitura: nada aqui decide SE o elemento existe (isso é responsabilidade
+  // de quem atende o pedido, que tem acesso ao canvas de verdade) — só que o
+  // pedido chegou com o que ele precisa pra ser atendido.
+  if (nome === 'canvas-ler') {
+    const idDoElemento = typeof opcoes?.idDoElemento === 'string' ? opcoes.idDoElemento.trim() : ''
+    if (!idDoElemento) {
+      throw new Error('Informe o id do elemento do canvas a ler.')
+    }
+    return { acao: nome, comCommit: false, idDoElemento }
+  }
+
+  if (nome === 'canvas-listar') {
+    return { acao: nome, comCommit: false }
   }
 
   return { acao: nome, comCommit: opcoes?.comCommit === true }

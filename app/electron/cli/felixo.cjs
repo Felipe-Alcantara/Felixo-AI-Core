@@ -24,7 +24,7 @@ const { getAppPaths } = require('../core/app-paths.cjs')
 const { createFetchAllService } = require('../services/fetch-all-service.cjs')
 const { criarRepositorioDePedidos } = require('../services/fetch-all/agent-requests.cjs')
 const { loadAgentScanState, saveAgentScanState } = require('./agent-scan-state.cjs')
-const { AJUDA, formatarPlano } = require('./agent-command-output.cjs')
+const { AJUDA, formatarElementos, formatarLeitura, formatarPlano } = require('./agent-command-output.cjs')
 const { executarContexto } = require('./context-command.cjs')
 
 /**
@@ -87,8 +87,17 @@ function interpretarArgumentos(argumentos) {
 const VERBOS = ['varrer', 'estado', 'pedir-execucao', 'ver-pedido']
 const FERRAMENTAS_BROWSER = ['browser', 'navegador']
 const FERRAMENTAS_CONTEXT = ['context', 'contexto']
+const FERRAMENTAS_CANVAS = ['canvas']
 const VERBOS_BROWSER_ABRIR = ['open', 'abrir']
 const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
+const VERBOS_CANVAS_LISTAR = ['listar']
+const VERBOS_CANVAS_LER = ['ler']
+const VERBOS_CANVAS_STATUS = ['ver-pedido']
+// Leitura é auto-resolvida pelo app (sem confirmação humana — ver
+// agent-canvas-read-ipc-handlers.cjs), então uma espera curta aqui poupa o
+// agente de ter que rodar "ver-pedido" ele mesmo no caso comum (app aberto).
+const CANVAS_ESPERA_MAXIMA_MS = 4000
+const CANVAS_ESPERA_INTERVALO_MS = 150
 
 /**
  * Executa o comando e devolve o que imprimir e com qual código de saída.
@@ -165,6 +174,53 @@ async function executar(argumentos, dependencias = {}) {
     }
 
     if (VERBOS_BROWSER_STATUS.includes(verbo)) {
+      const pedido = argumento ? criarPedidos().ler(argumento) : null
+
+      if (!pedido) {
+        return { saida: '', erro: `Pedido nao encontrado: ${argumento || '(sem id)'}`, codigo: 1 }
+      }
+
+      return {
+        saida: opcoes.json ? JSON.stringify(pedido, null, 2) : descreverPedido(pedido),
+        codigo: 0,
+      }
+    }
+
+    return { saida: `${AJUDA}\n\n${obterAjudaDevtools()}`, codigo: 2 }
+  }
+
+  if (FERRAMENTAS_CANVAS.includes(ferramenta)) {
+    const { esperar = esperarPadrao } = dependencias
+
+    if (VERBOS_CANVAS_LISTAR.includes(verbo)) {
+      const pedido = criarPedidos().registrar('canvas-listar', { origem: diretorioAtual() })
+      const resolvido = await aguardarResolucao(criarPedidos(), pedido.id, esperar)
+
+      if (!resolvido) return respostaPedidoNaoAtendido(pedido, 'canvas ver-pedido')
+
+      return {
+        saida: opcoes.json ? JSON.stringify(resolvido.resultado, null, 2) : formatarElementos(resolvido.resultado?.elementos),
+        codigo: 0,
+      }
+    }
+
+    if (VERBOS_CANVAS_LER.includes(verbo)) {
+      if (!argumento) {
+        return { saida: '', erro: 'Informe o id do elemento a ler (veja "felixo canvas listar").', codigo: 2 }
+      }
+
+      const pedido = criarPedidos().registrar('canvas-ler', { idDoElemento: argumento, origem: diretorioAtual() })
+      const resolvido = await aguardarResolucao(criarPedidos(), pedido.id, esperar)
+
+      if (!resolvido) return respostaPedidoNaoAtendido(pedido, 'canvas ver-pedido')
+
+      return {
+        saida: opcoes.json ? JSON.stringify(resolvido.resultado, null, 2) : formatarLeitura(resolvido.resultado),
+        codigo: resolvido.resultado?.ok ? 0 : 1,
+      }
+    }
+
+    if (VERBOS_CANVAS_STATUS.includes(verbo)) {
       const pedido = argumento ? criarPedidos().ler(argumento) : null
 
       if (!pedido) {
@@ -316,6 +372,49 @@ async function gravarEstadoPadrao(resultado) {
     })
   } catch {
     return ''
+  }
+}
+
+/** @returns {Promise<void>} */
+function esperarPadrao(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Espera curta e limitada até o app resolver um pedido de leitura — leitura
+ * não precisa de clique humano (ver agent-canvas-read-ipc-handlers.cjs), só
+ * do app estar aberto e de um instante pra processar a fila. Sem essa
+ * espera, o agente teria que rodar "canvas ver-pedido" manualmente pro caso
+ * comum (app já aberto), o que é pior experiência sem ganhar nada.
+ *
+ * @param {ReturnType<typeof criarRepositorioDePedidos>} pedidos
+ * @param {string} id
+ * @param {(ms: number) => Promise<void>} esperar
+ * @returns {Promise<object|null>} o pedido resolvido, ou `null` se o prazo estourou.
+ */
+async function aguardarResolucao(pedidos, id, esperar) {
+  const tentativas = Math.ceil(CANVAS_ESPERA_MAXIMA_MS / CANVAS_ESPERA_INTERVALO_MS)
+  for (let tentativa = 0; tentativa < tentativas; tentativa += 1) {
+    const pedido = pedidos.ler(id)
+    if (pedido && pedido.estado !== 'pendente') return pedido
+    await esperar(CANVAS_ESPERA_INTERVALO_MS)
+  }
+  return null
+}
+
+/**
+ * @param {{ id: string }} pedido
+ * @param {string} comandoStatus
+ * @returns {{ saida: string, codigo: number }}
+ */
+function respostaPedidoNaoAtendido(pedido, comandoStatus) {
+  return {
+    saida: [
+      `Pedido registrado (${pedido.id}), mas o app não respondeu a tempo.`,
+      'Verifique se o Felixo está aberto e tente de novo, ou confira depois:',
+      `  felixo ${comandoStatus} ${pedido.id}`,
+    ].join('\n'),
+    codigo: 1,
   }
 }
 
