@@ -2,6 +2,7 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const path = require('node:path')
 const {
   descreverElemento,
   lerElemento,
@@ -69,7 +70,7 @@ test('ultimasLinhasDaSessao devolve string vazia quando não há saída nenhuma'
 
 test('resolverCaminhoDoArquivo prioriza filePath (absoluto) sobre fileName (relativo à pasta do app)', () => {
   assert.equal(resolverCaminhoDoArquivo({ filePath: '/tmp/x.md', fileName: 'y.md' }, '/canvas-files'), '/tmp/x.md')
-  assert.equal(resolverCaminhoDoArquivo({ fileName: 'y.md' }, '/canvas-files'), '/canvas-files/y.md')
+  assert.equal(resolverCaminhoDoArquivo({ fileName: 'y.md' }, '/canvas-files'), path.join('/canvas-files', 'y.md'))
   assert.equal(resolverCaminhoDoArquivo({}, '/canvas-files'), '')
 })
 
