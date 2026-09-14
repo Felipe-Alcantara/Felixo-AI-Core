@@ -127,6 +127,31 @@ fora nao atravessam a fronteira. Os IPCs de texto usam a mesma lista de raizes;
 um arquivo externo so entra por uma escolha explicita no seletor nativo, com
 concessao mantida em memoria durante a sessao.
 
+## Agente le outros elementos do canvas
+
+`agent-canvas-read-ipc-handlers.cjs` reaproveita a mesma fila de
+`userData/agent-requests` do Fetch All e do navegador, mas com uma diferenca
+deliberada: as acoes `canvas-listar` e `canvas-ler` (registradas em
+`agent-requests.cjs`) sao **auto-resolvidas sem confirmacao humana**, porque a
+task que motivou esta fatia marca a escrita — nao a leitura — como o maior
+risco de seguranca (prompt injection vindo de um terminal ou pagina lido por
+outro agente mandando escrever em outro lugar). Escrita fica para uma fatia
+futura; nesta, o agente so le.
+
+`canvas-agent-read.cjs` e a logica pura: `listarElementos` devolve id, tipo e
+um rotulo por bloco (lido de `canvas-repository.cjs`, o snapshot SQLite do
+canvas — pode ficar levemente atrasado em relacao ao estado vivo do
+renderer). `lerElemento` suporta `terminal` (ultimas linhas do
+`terminalLogStore`, cujo `sessionId` e o mesmo id do no no canvas), `note`
+(o Markdown do bloco) e `file` (conteudo lido do caminho resolvido a partir
+de `fileName`/`filePath`); outros tipos devolvem uma mensagem explicita de
+"ainda nao tem leitura nesta fatia" em vez de falhar sem explicacao. Todo
+conteudo passa por `redactSensitiveText` antes de sair.
+
+A CLI expoe `felixo canvas listar` e `felixo canvas ler <id>`, com o mesmo
+padrao de espera curta (poll ate ~4s) e "ver-pedido" para conferir depois que
+o Fetch All e o navegador ja usam.
+
 ## Fetch All e inventario multiplataforma
 
 O scanner em `services/fetch-all/repo-scanner.cjs` separa a descoberta de
