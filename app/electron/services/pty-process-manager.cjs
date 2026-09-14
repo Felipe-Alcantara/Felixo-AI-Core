@@ -113,12 +113,6 @@ class PtyProcessManager {
    *   should never pass this themselves.
    * @param {boolean} [useConpty] - Internal Windows backend override. `false`
    *   retries through WinPTY after a ConPTY startup-path error.
-   * @param {boolean} [options.useConptyDll] - Force node-pty's DLL-based
-   *   ConPTY path. Nesse modo `kill()` fecha o pseudo-console direto, sem
-   *   bifurcar `conpty_console_list_agent` (que chama `AttachConsole` e falha
-   *   em runners Windows sem sessão de console, como o CI). Sem esta opção o
-   *   comportamento de produção não muda; só quem passar explicitamente entra
-   *   nesse caminho — hoje, a fixture nativa de PTY do CI.
    * @returns {PtyHandle}
    */
   spawn(
@@ -231,7 +225,6 @@ class PtyProcessManager {
         cwd,
         env,
         ...(useConpty === false ? { useConpty: false } : {}),
-        ...(options.useConptyDll ? { useConptyDll: true } : {}),
       })
     } catch (error) {
       if (isWindowsLongPathFailure(error, cwd, this.platform.name)) {
