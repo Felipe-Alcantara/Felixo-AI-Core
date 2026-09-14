@@ -45,6 +45,7 @@ import { CanvasZoomPill } from './CanvasZoomPill'
 import { CanvasAmbientLayer } from './CanvasAmbientLayer'
 import { CanvasSurfacesProvider } from './CanvasSurfacesProvider'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
+import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { toolbarColumnOffset } from './toolbar-flyout'
 import { UpdateToast } from '../../updates/UpdateNotice'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
@@ -281,6 +282,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   // minimap já vem pronto do provider — computado uma vez a partir de
   // occupancy/viewport internamente, não recalculado aqui.
   const { occupancy, minimap: miniMap } = useCanvasSurfaces()
+  const { performanceMode } = usePerformanceMode()
   const {
     nodes,
     setNodes,
@@ -2106,7 +2108,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
               perto da borda (via `:has()`, index.css) quando o inspector
               "Elementos" está no puck — mesmo mecanismo do offset da sidebar,
               espelhado do outro lado da tela. */}
-          {miniMap && (
+          {miniMap && !performanceMode && (
             <MiniMap
               pannable
               zoomable

@@ -4,6 +4,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import { GraphicsRecoverySection } from '../../shared/graphics/GraphicsRecoverySection'
+import { PerformanceModeSection } from '../../shared/performance/PerformanceModeSection'
 import { SystemDesignSettingsSection } from '../../shared/system-design/SystemDesignSettingsSection'
 
 const THEME_OPTIONS: FelixoSelectOption[] = [
@@ -267,6 +268,8 @@ function FelixoSettingsDialog({
               <Metric label="Automações" value={`${automationsCount}`} />
             </div>
           </section>
+
+          <PerformanceModeSection />
 
           <GraphicsRecoverySection />
 

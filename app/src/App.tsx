@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { useFocusRestore } from './features/shared/focus/useFocusRestore'
 import { ThemeProvider } from './features/shared/theme/ThemeProvider'
+import { PerformanceModeProvider } from './features/shared/performance/PerformanceModeProvider'
 
 type Screen = 'canvas' | 'chat'
 
@@ -41,21 +42,24 @@ function App() {
   useFocusRestore()
 
   return (
-    // O tema envolve as duas telas: quem escolhe é o painel de configurações do
-    // canvas, e a escolha não pode depender de qual tela está montada.
+    // O tema e o Modo Performance envolvem as duas telas: quem escolhe é o
+    // painel de configurações do canvas (ou do chat), e a escolha não pode
+    // depender de qual tela está montada.
     <ThemeProvider>
-      <div
-        className="relative h-screen overflow-hidden bg-[var(--color-main-bg)] text-zinc-50"
-        data-felixo-app-shell
-      >
-        <Suspense fallback={<ScreenLoading />}>
-          {screen === 'canvas' ? (
-            <CanvasView onOpenChat={() => setScreen('chat')} />
-          ) : (
-            <ChatWorkspace onBack={() => setScreen('canvas')} />
-          )}
-        </Suspense>
-      </div>
+      <PerformanceModeProvider>
+        <div
+          className="relative h-screen overflow-hidden bg-[var(--color-main-bg)] text-zinc-50"
+          data-felixo-app-shell
+        >
+          <Suspense fallback={<ScreenLoading />}>
+            {screen === 'canvas' ? (
+              <CanvasView onOpenChat={() => setScreen('chat')} />
+            ) : (
+              <ChatWorkspace onBack={() => setScreen('canvas')} />
+            )}
+          </Suspense>
+        </div>
+      </PerformanceModeProvider>
     </ThemeProvider>
   )
 }
