@@ -240,6 +240,15 @@ async function executarColeta({ nomeSessao, payload, depois }) {
           saidaAcumulada += String(dados)
           if (saidaAcumulada.includes(MARCADOR_DE_PRONTO)) resolverPronto()
         },
+        // No Windows o node-pty legado (sem useConptyDll) fecha a sessão
+        // bifurcando conpty_console_list_agent, que chama AttachConsole no
+        // PID do shell. Runners do CI (GitHub Actions windows-latest) rodam
+        // sem sessão de console herdável e essa chamada falha com
+        // "AttachConsole failed" — não é uma regressão de leitura/escrita da
+        // PTY, é uma limitação do agente legado nesse tipo de sessão. O modo
+        // DLL fecha o pseudo-console diretamente, sem esse fork, e evita o
+        // limite sem mascarar as asserções de conteúdo desta fixture.
+        ...(process.platform === 'win32' ? { useConptyDll: true } : {}),
       })
     } catch (error) {
       const detalhe = error instanceof Error ? error.message : String(error)
