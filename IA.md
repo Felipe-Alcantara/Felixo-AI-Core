@@ -5294,3 +5294,59 @@ sem mock de disco) mais a leitura de código — não numa sessão real do app.
 ### Evidência de origem
 
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## Fechamento de trabalho — 2026-09-14 (continuação) — ordenação e filtros seguem a ordem visual do Notion
+
+AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
+
+Task Notion: "Notion — ordenação e filtros do canvas seguirem a hierarquia do
+Notion e aguentarem databases grandes". Duas anotações de 14/09 juntadas:
+ordenação bugada e filtros/ordenação não seguindo o padrão do app do Notion.
+Segue a PR #43 (ordenação por coluna), deste mesmo agente, um dia antes.
+
+### O que a investigação já tinha encontrado (registrado na própria task)
+
+`notion-task-sort.ts` ordenava tudo como texto (`localeCompare`), ignorando a
+ordem configurada das opções de `select`/`status` — exemplo real citado:
+Prioridade devia sair Baixa→Média→Alta→Urgente→Hiperfoco, saía alfabético
+(Alta, Baixa, Hiperfoco, Média, Urgente). Tarefa concluída era forçada pro
+texto literal "Concluída", fora de ordem. `formatValue` era chamado duas
+vezes por comparação, sem pré-cálculo — custoso nas 792 linhas do database
+real. `hasMore` já existia no backend (`listTasks`) mas nunca chegava no
+painel — um database truncado (>2.000 linhas) ordenava/filtrava só uma parte,
+sem aviso.
+
+### O que foi feito
+
+- `schemaOptionOrder(property)`: ordem visual real de `select`/`status` — para
+  `status`, monta a ordem a partir de `groups[].option_ids` (a ordem
+  verdadeira), não do array `options` solto, que não tem essa garantia.
+  Reaproveitada em `notion-task-views.ts` pra ordenar as opções do filtro
+  também (mesmo mapeamento de tipos, como a task pedia).
+- `buildSortKey`: uma chave tipada por coluna (`{kind:'number'|'string'|'empty'}`)
+  usando o schema — índice da opção pra `select`/`status`/`multi_select`
+  (mínimo entre as selecionadas), número real pra `number`, `0`/`1` pra
+  `checkbox`, ISO como texto pra `date` (já ordena certo). Removida a
+  substituição forçada por "Concluída" — `task.status` já vem certo do
+  backend.
+- `sortTasks` agora pré-calcula a chave de cada tarefa **uma vez** antes do
+  `.sort()` (Schwartzian transform), não a cada comparação — O(n) chamadas de
+  formatação em vez de O(n log n). Medido: 792 linhas × 20 ordenações reais
+  (schema de verdade, coluna por índice) em 160ms total (~8ms por ordenação)
+  — não trava a interface.
+- `NotionTasksPanel.tsx`: novo estado `hasMoreTasks`, populado de
+  `result.hasMore` (o backend já calculava, só não chegava na tela); aviso
+  visível quando a tabela carregada está truncada.
+
+### Validação
+
+31 testes no `notion-task-sort.test.ts` (schema real da task: Prioridade
+select 5 opções, Etapa status com 3 grupos, multi_select, number, checkbox,
+contagem de chamadas de formatação). 2 testes novos em
+`notion-service.test.cjs` cobrindo `hasMore:true/false`. `npm test`:
+1281/1281. `npx vitest run`: 922 passed, 1 skipped (pré-existente). `eslint`
+limpo. `npm run build` (typecheck completo) ok.
+
+### Evidência de origem
+
+Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core

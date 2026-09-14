@@ -62,6 +62,41 @@ test('listTasks sinaliza syncStatus:success quando a rede responde', async () =>
   assert.equal(result.stale, false)
 })
 
+test('listTasks sinaliza hasMore:true quando queryTasks para no teto de páginas com mais dado esperando', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({
+      resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+      // nextCursor não-nulo é o sinal de que queryTasks parou pelo teto de
+      // páginas, não porque a tabela acabou — database maior que o que o
+      // Felixo carrega de uma vez.
+      queryTasks: async () => ({ tasks: [{ id: 'page-1', title: 'Uma de 2.000+', completed: false, fields: {} }], nextCursor: 'cursor-pagina-21' }),
+    }),
+    now: () => '2026-09-14T10:00:00.000Z',
+  })
+
+  const result = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+  assert.equal(result.hasMore, true)
+})
+
+test('listTasks sinaliza hasMore:false quando a tabela inteira coube na carga', async () => {
+  const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
+  const service = createNotionService({
+    connectionStore: fakeStore(),
+    cacheRepository: cache,
+    clientFactory: () => ({
+      resolveDataSource: async () => ({ id: 'source-1', properties: {} }),
+      queryTasks: async () => ({ tasks: [{ id: 'page-1', title: 'Só uma', completed: false, fields: {} }], nextCursor: null }),
+    }),
+    now: () => '2026-09-14T10:00:00.000Z',
+  })
+
+  const result = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+  assert.equal(result.hasMore, false)
+})
+
 test('getCachedTasks lê o snapshot local sem tocar a rede, e sinaliza stale quando há dado', async () => {
   const task = { id: 'page-1', title: 'Offline', completed: false, fields: {} }
   const cache = fakeCache({ tasks: [task], schema: { Name: { type: 'title' } }, fetchedAt: '2026-09-08T12:00:00.000Z' })
