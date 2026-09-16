@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld('felixo', {
         devtools: {
           capturePage: () => ipcRenderer.invoke('devtools:capture-page'),
           mainEval: (expression) => ipcRenderer.invoke('devtools:main-eval', expression),
+          // O smoke de interações injeta este sinal numa sessão isolada para
+          // que o renderer use o store de PTY fake e nunca abra um CLI real.
+          mockPty: process.env.FELIXO_DEVTOOLS_MOCK_PTY === '1',
         },
       }
     : {}),

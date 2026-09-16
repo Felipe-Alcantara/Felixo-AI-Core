@@ -298,6 +298,8 @@ declare global {
       devtools?: {
         capturePage: () => Promise<string>
         mainEval: (expression: string) => Promise<unknown>
+        /** True only in the isolated interaction smoke; no real CLI is spawned. */
+        mockPty?: boolean
       }
       windowFocus?: {
         onChange: (callback: (focused: boolean) => void) => () => void

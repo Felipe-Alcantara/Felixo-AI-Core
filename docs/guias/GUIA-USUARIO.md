@@ -328,6 +328,19 @@ macOS e no Windows, para que o pedido chegue ao painel correto.
 - **Ver tudo:** enquadra todos os blocos na tela de uma vez.
 - Blocos fora da área visível não são renderizados, o que mantém o canvas leve mesmo com muitos terminais abertos.
 
+O canvas considera como área útil o espaço que sobra depois da barra superior,
+sidebar, painel aberto, inspector **Elementos** e barra de status. Por isso
+**Ver tudo**, a busca e a criação de blocos posicionam o conteúdo longe dessas
+superfícies, inclusive quando a gaveta de um terminal está aberta. A gaveta é
+uma coluna do layout e não cobre o quadro.
+
+O teclado segue o mesmo fluxo dos cliques: abrir um terminal foca seu conteúdo,
+fechar a gaveta devolve o foco ao botão de expansão, e `Escape` fecha
+notificações ou diálogos com retorno ao controle que os abriu. Botões, campos e
+separadores do canvas têm rótulos para leitores de tela. Ao recarregar o app,
+os nós e as conexões persistidos voltam uma única vez; a validação automatizada
+usa um PTY fake para não executar comandos externos.
+
 ### Canvas portátil
 
 Use **Exportar** na barra do canvas para gerar um arquivo `.fxcanvas`. Esse arquivo é

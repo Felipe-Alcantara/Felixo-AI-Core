@@ -242,6 +242,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         <textarea
           value={content}
           onChange={(event) => save(event.target.value)}
+          aria-label="Conteúdo do arquivo"
           placeholder={isExternal ? 'Arquivo vazio.' : '# Conteúdo do arquivo .md'}
           className="nodrag nowheel nopan min-h-0 w-full flex-1 resize-none overflow-auto bg-transparent p-3 font-mono text-xs text-zinc-200 outline-none"
         />

@@ -91,6 +91,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
             setText(next)
             nodeData.onDataChange?.(id, { text: next })
           }}
+          aria-label="Conteúdo da nota"
           placeholder="Markdown: # titulo, - [ ] tarefa, **negrito**…"
           className={`nodrag nowheel nopan min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm outline-none ${theme.text}`}
         />

@@ -5570,3 +5570,39 @@ usuário. Nenhuma conta, chave ou credencial foi acessada.
 
 **Evidência de origem.** Repositório:
 https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Canvas — interações, oclusão e acessibilidade
+
+**Task.** Cobrir as interações dos nodes, superfícies fixas e terminais e
+corrigir o caso em que o grupo da fixture nascia sob a barra superior/sidebar.
+
+**Implementação.** `canvas-interaction-geometry.ts` centraliza o retângulo útil
+do canvas, descontando topbar, sidebar, painel, inspector e statusbar sem
+descontar duas vezes a gaveta, que já é uma coluna flex. Criação, foco, abertura
+de página/tarefas, **Ver tudo** e **Organizar** usam a mesma geometria. O smoke
+do Canvas agora persiste os oito tipos de node, verifica hit testing, arrasto
+curto, handles de conexão, abertura/fechamento da gaveta, notificações,
+`Escape`, URL inválida, reidratação e ausência de duplicação. A gaveta retorna o
+foco ao gatilho mesmo com culling; depois da primeira abertura os gatilhos ficam
+montados para completar esse contrato.
+
+O DevTools isolado ativa `MockTerminalSessionStore` por
+`FELIXO_DEVTOOLS_MOCK_PTY=1`, mantendo a prova de foco e teclado sem iniciar
+shell ou CLI externa. A migration 013 amplia o `CHECK` do SQLite para
+`drawing` e `excalidrawDrawing`, com teste de persistência após restart. Inputs
+de nodes receberam rótulos acessíveis.
+
+**Validação local.** Início: 16/09/2026 10:06 (America/Sao_Paulo). `npm test`:
+1.336/1.336 em 52 suítes; `npm run test:frontend`: 958 aprovados e 1 ignorado;
+`npm run test:native`: 5/5; typecheck, lint, build, testes focados de geometria
+(36) e storage (33) passaram; `npm run test:canvas-smoke` passou no Electron
+real. O `AttachConsole failed` recorrente do node-pty no Windows continua
+apenas ruído conhecido. Não há axe-core instalado: o smoke faz auditoria
+determinística de landmarks, nomes acessíveis, foco e teclado; a limitação
+permanece registrada para uma futura bancada dedicada.
+
+**Estado.** Código e documentação prontos para commit, push, CI/release e
+registro no Notion.
+
+**Evidência de origem.** Repositório:
+https://github.com/Felipe-Alcantara/Felixo-AI-Core

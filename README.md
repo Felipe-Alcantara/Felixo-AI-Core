@@ -236,6 +236,22 @@ um bloco pode reordená-lo dentro da própria pasta, mas nunca muda o seu `cwd`.
 
 Para saber a que repositório um terminal pertence **sem abri-lo**, o cabeçalho do bloco mostra o nome da última pasta do `cwd` ao lado do `#N` (o caminho completo fica no *tooltip*). É a informação que não envelhece: o nome do bloco é escolhido na criação e costuma ficar desatualizado quando a mesma sessão segue para outra tarefa.
 
+### Área útil e foco do canvas
+
+O enquadramento do canvas reserva a área ocupada pela barra superior, sidebar,
+painel de ferramenta, inspector **Elementos** e barra de status. Nós novos,
+**Ver tudo**, busca e abertura de uma página ou tarefa usam esse mesmo retângulo;
+assim o alvo aparece no espaço livre, e não atrás do chrome fixo. A gaveta do
+terminal já reduz a largura do canvas pelo layout e não é descontada duas vezes.
+
+Os controles de terminal, painéis e notificações têm nomes acessíveis. Abrir a
+gaveta leva o foco para o terminal; fechá-la devolve o foco ao botão que a abriu.
+`Escape` fecha notificações e diálogos e restaura o foco ao gatilho. O canvas
+mantém os gatilhos montados depois da primeira abertura da gaveta para que esse
+retorno continue funcionando mesmo quando o culling tira um nó da área visível.
+Esses fluxos são exercitados pelo smoke do Canvas com um PTY fake, sem iniciar
+uma CLI ou shell real.
+
 ### Conta da CLI oficial: ver e trocar
 
 No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações de conta — hoje o Codex — ganha dois botões:

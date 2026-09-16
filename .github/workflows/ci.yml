@@ -363,10 +363,10 @@ jobs:
           path: app/build/canvas-context-e2e-${{ matrix.os }}.json
           if-no-files-found: warn
 
-      # Primeira fatia do gate de evidência visual: sobe a mesma sessão
-      # isolada do `felixo devtools` (Electron real, contra o Vite dev
-      # server) e confere que o canvas hidrata e que a interface não estoura
-      # a largura num viewport mínimo.
+      # Gate de interação e evidência visual: sobe a mesma sessão isolada do
+      # `felixo devtools` (Electron real, contra o Vite dev server) e confere
+      # hidratação, oclusão, foco/teclado, handles, persistência e viewport
+      # mínimo. O PTY fake não inicia uma CLI ou shell real.
       #
       # Só macOS e Windows por enquanto: no Linux (ubuntu-latest e
       # ubuntu-24.04-arm), sob xvfb-run, o Electron nunca chega a abrir a
@@ -378,7 +378,7 @@ jobs:
       # próxima tentativa precisa capturar esse stderr antes de adivinhar de
       # novo. Ver a task "Canvas — criar gate CI de evidência visual" no
       # Notion para o registro completo e a task de investigação aberta.
-      - name: Test Canvas PR smoke (mount + viewport mínimo)
+      - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
         if: runner.os != 'Linux'
         shell: bash
         run: npm run test:canvas-smoke

@@ -144,6 +144,11 @@ import {
   countArrangeableNodes,
   type ArrangeMode,
 } from '../services/canvas-matrix-layout'
+import {
+  flowCenterForSafeArea,
+  getCanvasSafeArea,
+  safeViewportOffset,
+} from '../services/canvas-interaction-geometry'
 import type { CanvasNodeType, CanvasSkill, DiagnosisRequestStatus } from '../types'
 
 type FlowPositionMapper = {
@@ -161,6 +166,11 @@ type FlowPositionMapper = {
   fitBounds: (
     bounds: { x: number; y: number; width: number; height: number },
     options?: { padding?: number; duration?: number },
+  ) => void
+  getViewport?: () => { x: number; y: number; zoom: number }
+  setViewport?: (
+    viewport: { x: number; y: number; zoom: number },
+    options?: { duration?: number },
   ) => void
 }
 
@@ -358,7 +368,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   >({})
   const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
+  const expandedTerminalIdRef = useRef<string | null>(null)
   const terminalFocusReturnRef = useRef<HTMLElement | null>(null)
+  // Once a drawer has been opened, keep node triggers mounted so closing it
+  // can return focus even if safe-area recentering pans a card outside the
+  // virtualization window.
+  const [keepCanvasNodesMounted, setKeepCanvasNodesMounted] = useState(false)
   const [detailsTerminalId, setDetailsTerminalId] = useState<string | null>(null)
   // Passagem de responsabilidade em andamento: o histórico é capturado no
   // momento do clique, e não quando o usuário confirma — do contrário o agente
@@ -569,13 +584,24 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   const openTerminal = useCallback(
     (nodeId: string) => {
       const active = document.activeElement
-      if (
+      const trigger = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
+      ).find((element) => element.dataset.terminalExpandTrigger === nodeId)
+      if (trigger) {
+        // A programmatic activation (dock row, keyboard command, or an E2E
+        // click) may not leave the button as document.activeElement. Capture
+        // the actual trigger up front so closing the drawer has a stable
+        // focus target even when React Flow rerenders the node.
+        terminalFocusReturnRef.current = trigger
+      } else if (
         active instanceof HTMLElement &&
         !active.closest('[data-canvas-terminal-drawer]') &&
         active !== document.body
       ) {
         terminalFocusReturnRef.current = active
       }
+      expandedTerminalIdRef.current = nodeId
+      setKeepCanvasNodesMounted(true)
       setExpandedTerminalId(nodeId)
       acknowledgeNodeNotifications(nodeId)
       setNotificationHistory((current) =>
@@ -586,25 +612,38 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   )
 
   const closeExpandedTerminal = useCallback(() => {
-    const closingId = expandedTerminalId
+    const closingId = expandedTerminalIdRef.current ?? expandedTerminalId
     const active = document.activeElement
     const focusWasInside =
       active instanceof HTMLElement &&
       Boolean(active.closest('[data-canvas-terminal-drawer]'))
     setExpandedTerminalId(null)
+    expandedTerminalIdRef.current = null
     if (!focusWasInside) return
 
-    window.requestAnimationFrame(() => {
+    const restoreFocus = (attempt: number) => {
       const remembered = terminalFocusReturnRef.current
-      if (remembered?.isConnected) {
-        remembered.focus({ preventScroll: true })
+      const trigger = closingId
+        ? Array.from(
+            document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
+          ).find((element) => element.dataset.terminalExpandTrigger === closingId)
+        : null
+      const target = remembered?.isConnected ? remembered : trigger
+      if (target) {
+        target.focus({ preventScroll: true })
+        terminalFocusReturnRef.current = target
         return
       }
-      const trigger = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
-      ).find((element) => element.dataset.terminalExpandTrigger === closingId)
-      ;(trigger ?? flowContainerRef.current)?.focus({ preventScroll: true })
-    })
+      // onlyRenderVisibleElements can temporarily unmount the terminal while
+      // the drawer's occupancy is being removed. Retry after React Flow has
+      // restored the node before falling back to the canvas region.
+      if (attempt < 12) {
+        window.requestAnimationFrame(() => restoreFocus(attempt + 1))
+        return
+      }
+      flowContainerRef.current?.focus({ preventScroll: true })
+    }
+    window.requestAnimationFrame(() => restoreFocus(0))
   }, [expandedTerminalId])
 
   const closeHandoff = useCallback(() => {
@@ -780,6 +819,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   }, [hydrated, nodes])
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
+  const [flowReady, setFlowReady] = useState(false)
   const agentMatrixAnimationFrameRef = useRef<number | undefined>(undefined)
   const agentMatrixAnimationCleanupRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const agentMatrixAnimationRunRef = useRef(0)
@@ -796,6 +836,128 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   const [nodeDataCache] = useState(
     () => new Map<string, NodeDataCacheEntry>(),
   )
+
+  /**
+   * O React Flow ocupa o retângulo inteiro do container, mas o chrome do
+   * workspace fica por cima dele. Centralizar esta medida evita que cada ação
+   * invente seu próprio desconto para topbar, sidebar, painéis e inspector.
+   * A gaveta é irmã do container no flex root, portanto não é descontada aqui
+   * uma segunda vez.
+   */
+  const getSafeCanvasScreenRect = useCallback(() => {
+    const container = flowContainerRef.current
+    if (!container) {
+      return undefined
+    }
+
+    return getCanvasSafeArea(
+      container.getBoundingClientRect(),
+      occupancy,
+      { drawerOutsideContainer: true },
+    )
+  }, [occupancy])
+
+  const centerNodeInSafeArea = useCallback(
+    (
+      position: { x: number; y: number },
+      size: { width: number; height: number },
+      zoom: number,
+      duration: number,
+    ) => {
+      const flowInstance = flowInstanceRef.current
+      if (!flowInstance) {
+        return
+      }
+
+      const nodeCenter = {
+        x: position.x + size.width / 2,
+        y: position.y + size.height / 2,
+      }
+      const container = flowContainerRef.current
+      const safeArea = getSafeCanvasScreenRect()
+      if (!container || !safeArea) {
+        flowInstance.setCenter(nodeCenter.x, nodeCenter.y, { zoom, duration })
+        return
+      }
+
+      const target = flowCenterForSafeArea(
+        nodeCenter,
+        container.getBoundingClientRect(),
+        safeArea,
+        zoom,
+      )
+      flowInstance.setCenter(target.x, target.y, { zoom, duration })
+    },
+    [getSafeCanvasScreenRect],
+  )
+
+  /** Move um viewport já calculado pelo React Flow para o centro da área útil. */
+  const shiftViewportToSafeArea = useCallback(() => {
+    const flowInstance = flowInstanceRef.current
+    const container = flowContainerRef.current
+    const safeArea = getSafeCanvasScreenRect()
+    if (
+      !flowInstance?.getViewport ||
+      !flowInstance.setViewport ||
+      !container ||
+      !safeArea
+    ) {
+      return
+    }
+
+    const offset = safeViewportOffset(container.getBoundingClientRect(), safeArea)
+    if (Math.abs(offset.x) < 0.5 && Math.abs(offset.y) < 0.5) {
+      return
+    }
+
+    const current = flowInstance.getViewport()
+    flowInstance.setViewport(
+      { ...current, x: current.x + offset.x, y: current.y + offset.y },
+      { duration: 0 },
+    )
+  }, [getSafeCanvasScreenRect])
+
+  const fitCanvasViewSafely = useCallback(
+    (duration = 240) => {
+      const flowInstance = flowInstanceRef.current
+      if (!flowInstance) {
+        return
+      }
+
+      // React Flow resolve a promise quando a animação termina. O fallback
+      // para `void` mantém o mapper pequeno e permite os doubles dos testes.
+      Promise.resolve(flowInstance.fitView({ padding: 0.15, duration })).then(
+        shiftViewportToSafeArea,
+      )
+    },
+    [shiftViewportToSafeArea],
+  )
+
+  const fitBoundsSafely = useCallback(
+    (
+      bounds: { x: number; y: number; width: number; height: number },
+      duration: number,
+    ) => {
+      const flowInstance = flowInstanceRef.current
+      if (!flowInstance) {
+        return
+      }
+
+      Promise.resolve(
+        flowInstance.fitBounds(bounds, { padding: 0.1, duration }),
+      ).then(shiftViewportToSafeArea)
+    },
+    [shiftViewportToSafeArea],
+  )
+
+  useEffect(() => {
+    if (!hydrated || !flowReady) {
+      return undefined
+    }
+
+    const frame = window.requestAnimationFrame(() => fitCanvasViewSafely(0))
+    return () => window.cancelAnimationFrame(frame)
+  }, [canvasRevision, fitCanvasViewSafely, flowReady, hydrated])
 
   useEffect(() => {
     edgesRef.current = edges
@@ -1027,16 +1189,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         return
       }
       const size = getNodeSize(node)
-      flowInstanceRef.current?.setCenter(
-        node.position.x + size.width / 2,
-        node.position.y + size.height / 2,
-        { zoom: 1.2, duration: 240 },
-      )
+      centerNodeInSafeArea(node.position, size, 1.2, 240)
       setNodes((current) =>
         current.map((item) => ({ ...item, selected: item.id === nodeId })),
       )
     },
-    [nodes, setNodes],
+    [centerNodeInSafeArea, nodes, setNodes],
   )
 
   // Dock reorder: the node array's order IS the dock's list order and the
@@ -1413,28 +1571,25 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       return undefined
     }
 
-    const bounds = container.getBoundingClientRect()
-    // O inspector "Elementos" cobre a borda direita do canvas com uma coluna
-    // de largura fixa (`occupancy.inspector`, 0 quando recolhido no puck) —
-    // sem descontar isso aqui, `findFreeNodePosition` só reserva os 40px
-    // fixos de `VIEWPORT_PLACEMENT_PADDING` e um node novo nasce atrás do
-    // inspector quando ele está expandido. Antes o dock flutuava embaixo à
-    // direita e crescia em ALTURA com o número de elementos — por isso a
-    // reserva era de rodapé (`dockReservedBottom`); virou coluna permanente à
-    // direita, então a reserva é de largura, não mais de altura.
-    const reservedRight = occupancy.inspector
-    const topLeft = flowInstance.screenToFlowPosition({ x: bounds.left, y: bounds.top })
+    const safeArea = getSafeCanvasScreenRect()
+    if (!safeArea) {
+      return undefined
+    }
+
+    // A área útil já desconta topbar/statusbar/sidebar/painel e a coluna do
+    // inspector. A gaveta não entra novamente: ela é irmã flex do container.
+    const topLeft = flowInstance.screenToFlowPosition({ x: safeArea.left, y: safeArea.top })
     const bottomRight = flowInstance.screenToFlowPosition({
-      x: bounds.right - reservedRight,
-      y: bounds.bottom,
+      x: safeArea.right,
+      y: safeArea.bottom,
     })
     return {
       x: topLeft.x,
       y: topLeft.y,
-      width: bottomRight.x - topLeft.x,
-      height: bottomRight.y - topLeft.y,
+      width: Math.max(0, bottomRight.x - topLeft.x),
+      height: Math.max(0, bottomRight.y - topLeft.y),
     }
-  }, [occupancy.inspector])
+  }, [getSafeCanvasScreenRect])
 
   const addNode = useCallback(
     (type: CanvasNodeType, data?: Record<string, unknown>, position?: { x: number; y: number }) => {
@@ -1477,12 +1632,8 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     setNodes((current) =>
       current.map((node) => ({ ...node, selected: node.id === id })),
     )
-    flowInstanceRef.current?.setCenter(
-      position.x + size.width / 2,
-      position.y + size.height / 2,
-      { zoom: 0.8, duration: 240 },
-    )
-  }, [addNode, focusNode, nodes, setNodes, visibleCanvasBounds])
+    centerNodeInSafeArea(position, size, 0.8, 240)
+  }, [addNode, centerNodeInSafeArea, focusNode, nodes, setNodes, visibleCanvasBounds])
 
   const openWebpageFromTerminal = useCallback(
     (sourceId: string, url: string) => {
@@ -1492,13 +1643,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
-      const center = {
-        x: position.x + webpageSize.width / 2,
-        y: position.y + webpageSize.height / 2,
-      }
-      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 220 })
+      centerNodeInSafeArea(position, webpageSize, 0.9, 220)
     },
-    [addNode, nodes, setNodes],
+    [addNode, centerNodeInSafeArea, nodes, setNodes],
   )
 
   const openWebpageFromAgent = useCallback(
@@ -1509,13 +1656,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
-      const center = {
-        x: position.x + webpageSize.width / 2,
-        y: position.y + webpageSize.height / 2,
-      }
-      flowInstanceRef.current?.setCenter(center.x, center.y, { zoom: 0.9, duration: 220 })
+      centerNodeInSafeArea(position, webpageSize, 0.9, 220)
     },
-    [addNode, nodes, setNodes, visibleCanvasBounds],
+    [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
   )
 
   useEffect(() => {
@@ -1757,10 +1900,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     // do campo de visão.
     const frameMatrix = () => {
       if (!bounds) return
-      flowInstanceRef.current?.fitBounds(bounds, {
-        padding: 0.1,
-        duration: AGENT_MATRIX_ANIMATION_MS,
-      })
+      fitBoundsSafely(bounds, AGENT_MATRIX_ANIMATION_MS)
     }
 
     const applyTargetPositions = () => {
@@ -1829,7 +1969,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         }, AGENT_MATRIX_ANIMATION_MS)
       })
     })
-  }, [nodes, edges, setNodes, persistNode])
+  }, [nodes, edges, setNodes, persistNode, fitBoundsSafely])
 
   // "Run this file" from the Projects panel: the terminal's process IS the
   // file running (command = interpreter, args = [file]) — unlike agent
@@ -1998,9 +2138,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onToggleMode={() =>
           setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
         }
-        onFitView={() =>
-          flowInstanceRef.current?.fitView({ padding: 0.15, duration: 240 })
-        }
+        onFitView={() => fitCanvasViewSafely(240)}
         onExport={() => void exportAll()}
         onImportFile={(event) => void importFile(event)}
         onClear={() => void clearAll()}
@@ -2119,19 +2257,23 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
           nodeTypes={nodeTypes}
           onInit={(instance) => {
             flowInstanceRef.current = instance
+            setFlowReady(true)
           }}
           onNodesChange={onNodesChange}
           onNodeDragStop={onNodeDragStop}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onMove={handleCanvasMove}
-          fitView
+          // O primeiro enquadramento acontece no efeito abaixo, depois que o
+          // flow container e as superfícies publicaram suas medidas. Assim a
+          // restauração não começa com um grupo escondido sob a topbar.
+          fitView={false}
           // React Flow's default minZoom (0.5) blocks "Ver tudo"/fitView from
           // zooming out enough to frame a spread-out canvas on one screen.
           minZoom={0.05}
           // Skip rendering blocks outside the viewport — with several terminal
           // blocks (xterm) mounted, this is the biggest win on modest hardware.
-          onlyRenderVisibleElements
+          onlyRenderVisibleElements={!keepCanvasNodesMounted}
           proOptions={{ hideAttribution: true }}
           deleteKeyCode={['Delete', 'Backspace']}
           // Select mode: drag on empty canvas draws a selection box (middle/right

@@ -243,6 +243,31 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos
   referenciados, mas não leva comandos ou caminhos dependentes da máquina.
 
+### Geometria segura e acessibilidade das superfícies
+
+`CanvasView` mantém o React Flow em uma área full-bleed para preservar pan e
+zoom, mas todas as ações que escolhem uma posição usam
+`canvas-interaction-geometry.ts`. O módulo traduz a ocupação publicada por
+`CanvasSurfacesProvider` em um retângulo de tela que desconta topbar, sidebar,
+painel, inspector e statusbar. A gaveta do terminal é irmã flex do container,
+portanto seu espaço já saiu do `getBoundingClientRect` e não é descontado de
+novo. Criação, foco, abertura de página/tarefa e `fitView`/organização aplicam
+essa mesma geometria; o deslocamento do viewport mantém o resultado visível
+quando o chrome muda de tamanho.
+
+Os gatilhos de terminal permanecem montados depois que a gaveta foi aberta uma
+vez. Isso evita que o culling de nós remova o elemento antes da animação de
+fechamento devolver o foco. A auditoria E2E verifica landmarks, nomes
+acessíveis, hit testing, arrasto curto, handles de conexão, `Tab`/`Escape`,
+foco do terminal e reidratação sem duplicar nós, edges ou sessões. O cenário
+usa `MockTerminalSessionStore`, ativado só no DevTools isolado por
+`FELIXO_DEVTOOLS_MOCK_PTY=1`; nenhum shell ou CLI de fornecedor é iniciado.
+
+Os tipos `drawing` e `excalidrawDrawing`, já expostos pelo renderer, também
+fazem parte do contrato persistido. A migration 013 amplia o `CHECK` de
+`canvas_nodes` e o teste de reabertura do banco prova que esses nós sobrevivem
+ao restart.
+
 A remoção de um nó é também uma fronteira de ciclo de vida. `CanvasView` passa
 as mudanças do React Flow por `releaseRemovedCanvasNodes`: ids de terminal são
 liberados no `TerminalSessionStore` e todos os ids removidos seguem para a

@@ -37,6 +37,7 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
             setLabel(next)
             nodeData.onDataChange?.(id, { label: next })
           }}
+          aria-label="Nome do grupo"
           // nodrag so editing the title doesn't drag the whole group.
           className="nodrag min-w-0 flex-1 bg-transparent text-xs font-semibold text-[var(--f-core-white)] outline-none"
           placeholder="Grupo"

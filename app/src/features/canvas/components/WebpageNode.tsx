@@ -261,6 +261,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
             }
           }}
           placeholder="URL (ex: google.com)"
+          aria-label="Endereço da página"
           className="min-w-0 flex-1 rounded bg-white/[0.04] px-2 py-1 text-xs text-[var(--f-core-white)] outline-none ring-1 ring-white/10 placeholder:text-[var(--f-core-secondary)] focus:ring-white/25"
         />
       </div>
