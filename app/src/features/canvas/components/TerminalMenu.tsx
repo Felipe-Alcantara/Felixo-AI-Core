@@ -42,6 +42,7 @@ export function TerminalMenu({
   const [queue, setQueue] = useState<NewTerminalOptions[]>([])
   const [launching, setLaunching] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const lastOpenRequestRef = useRef(openRequest)
 
   useEffect(() => {
@@ -68,14 +69,31 @@ export function TerminalMenu({
     if (!open) {
       return
     }
+    const restoreFocus = () => {
+      window.requestAnimationFrame(() => triggerRef.current?.focus())
+    }
     const onOutsideClick = (event: MouseEvent) => {
       if (containerRef.current?.contains(event.target as Node) || isFelixoPopoverTarget(event.target)) {
         return
       }
       closeSettings()
+      restoreFocus()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !containerRef.current?.contains(event.target as Node)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      closeSettings()
+      restoreFocus()
     }
     document.addEventListener('click', onOutsideClick)
-    return () => document.removeEventListener('click', onOutsideClick)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('click', onOutsideClick)
+      document.removeEventListener('keydown', onKeyDown)
+    }
   }, [closeSettings, open])
 
   const openTerminal = async () => {
@@ -95,6 +113,7 @@ export function TerminalMenu({
       onAdd(options)
       config.setName('')
       closeSettings()
+      window.requestAnimationFrame(() => triggerRef.current?.focus())
     } finally {
       setLaunching(false)
     }
@@ -123,6 +142,7 @@ export function TerminalMenu({
     onAddMany(queue)
     setQueue([])
     closeSettings()
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
   const removeQueued = (index: number) => {
@@ -150,6 +170,7 @@ export function TerminalMenu({
       */}
       <div className="felixo-btn felixo-sidebar-agent-trigger flex w-full overflow-hidden rounded-md">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => void openTerminal()}
           disabled={launching}
@@ -173,9 +194,11 @@ export function TerminalMenu({
       {open && (
         <div
           id={`${fieldIdPrefix}-settings`}
+          role="group"
+          aria-label="Configurar novo agente"
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full overflow-y-auto rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10"
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10"
         >
           <AgentConfigFields
             config={config}

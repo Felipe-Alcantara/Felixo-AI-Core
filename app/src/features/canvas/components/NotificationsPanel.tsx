@@ -1,5 +1,5 @@
 import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Search, Trash2, Volume2, VolumeX, X } from 'lucide-react'
-import { useState, type CSSProperties } from 'react'
+import { useId, useState, type CSSProperties } from 'react'
 import type { Node } from '@xyflow/react'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
@@ -26,6 +26,7 @@ type NotificationsPanelProps = {
    *  corner. */
   reservedBottomSpace?: number
   onClose: () => void
+  onDismiss?: () => void
   onFocusNode: (nodeId: string) => void
   /** Abre o agente. Abrir já vale como ler: quem trata isso marca as
    * pendências dele como lidas, aqui e em qualquer outro caminho de abertura. */
@@ -50,6 +51,7 @@ export function NotificationsPanel({
   panelRef,
   reservedBottomSpace = 0,
   onClose,
+  onDismiss,
   onFocusNode,
   onExpandNode,
   onMarkRead,
@@ -61,6 +63,8 @@ export function NotificationsPanel({
 }: NotificationsPanelProps) {
   const [filter, setFilter] = useState<HistoryFilter>('unread')
   const [query, setQuery] = useState('')
+  const titleId = useId()
+  const dismiss = onDismiss ?? onClose
   // Reopening the panel always starts on what still needs attention. Adjusted
   // during render (React's documented pattern for deriving state from a prop
   // change) rather than in an effect, which would render the stale tab first.
@@ -99,6 +103,10 @@ export function NotificationsPanel({
   return (
     <section
       ref={panelRef}
+      id="canvas-notifications-panel"
+      role="region"
+      aria-labelledby={titleId}
+      tabIndex={-1}
       aria-label="Notificações dos agentes"
       // `felixo-anim-sequential-panel`'s open animation drives `max-height`
       // itself (see `--felixo-panel-max-height` in index.css) and, being a
@@ -113,8 +121,10 @@ export function NotificationsPanel({
       className="felixo-anim-sequential-panel absolute right-[calc(100%+0.75rem)] top-0 z-40 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-zinc-900 shadow-2xl"
     >
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
-        <Bell size={15} className="text-[var(--color-error)]" />
-        Notificações
+        <h2 id={titleId} className="flex min-w-0 items-center gap-2 font-medium">
+          <Bell size={15} className="text-[var(--color-error)]" aria-hidden="true" />
+          Notificações
+        </h2>
         <span className="text-xs font-normal text-zinc-500">{unreadCount}</span>
         <button
           type="button"
@@ -128,7 +138,7 @@ export function NotificationsPanel({
         </button>
         <button
           type="button"
-          onClick={onClose}
+          onClick={dismiss}
           className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
           aria-label="Fechar notificações"
         >
@@ -232,7 +242,7 @@ export function NotificationsPanel({
                   onClick={() => {
                     onFocusNode(node.id)
                     onExpandNode(node.id)
-                    onClose()
+                    dismiss()
                   }}
                   className="felixo-btn flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left"
                 >

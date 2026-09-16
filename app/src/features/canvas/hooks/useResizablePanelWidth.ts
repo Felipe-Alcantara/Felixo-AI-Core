@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useCanvasSurfaces } from './canvas-surfaces-context'
 import {
+  COLLAPSED_SURFACE_WIDTH,
+  PANEL_MIN_WIDTH,
+  panelWidthLimit,
+} from '../services/canvas-surfaces'
+import {
   clampPanelWidth,
   clearPanelWidth,
   getDefaultPanelWidth,
@@ -10,11 +15,16 @@ import {
   type PanelSize,
 } from '../services/panel-sizing'
 
+const PANEL_MIN = PANEL_MIN_WIDTH
+
 type ResizablePanelWidth = {
   width: number
+  minWidth: number
+  maxWidth: number
   resizing: boolean
   /** Começa o arrasto na borda direita do painel. */
   startResize: (event: React.MouseEvent) => void
+  resizeBy: (delta: number) => void
   /** Volta à largura sugerida para a tela atual. */
   reset: () => void
 }
@@ -39,8 +49,9 @@ type ResizablePanelWidth = {
 export function useResizablePanelWidth(
   panelId: string,
   size: PanelSize,
+  collapsed = false,
 ): ResizablePanelWidth {
-  const { occupancy, reportPanelWidth } = useCanvasSurfaces()
+  const { occupancy, reportPanelWidth, viewport } = useCanvasSurfaces()
   const [width, setWidth] = useState(() =>
     readPanelWidth(window.localStorage, panelId, window.innerWidth, size),
   )
@@ -53,14 +64,16 @@ export function useResizablePanelWidth(
   const latestClientX = useRef<number | null>(null)
   const resizeFrame = useRef<number | null>(null)
 
+  const limit = panelWidthLimit(viewport.width, occupancy, PANEL_MIN)
+
   useEffect(() => {
-    reportPanelWidth(width)
+    reportPanelWidth(collapsed ? COLLAPSED_SURFACE_WIDTH : width)
     return () => reportPanelWidth(0)
-  }, [width, reportPanelWidth])
+  }, [collapsed, reportPanelWidth, width])
 
   // A largura final: o que o provider decidiu depois de conferir a gaveta —
   // nunca o que este hook pediu (`width`, acima) direto.
-  const effectiveWidth = occupancy.panel
+  const effectiveWidth = collapsed ? COLLAPSED_SURFACE_WIDTH : occupancy.panel
 
   useEffect(() => {
     function onViewportResize() {
@@ -90,10 +103,13 @@ export function useResizablePanelWidth(
 
     const applyResize = (clientX: number) => {
       setWidth(
-        clampPanelWidth(
-          startWidth.current + (clientX - startX.current),
-          window.innerWidth,
-          size,
+        Math.min(
+          limit,
+          clampPanelWidth(
+            startWidth.current + (clientX - startX.current),
+            window.innerWidth,
+            size,
+          ),
         ),
       )
     }
@@ -151,8 +167,14 @@ export function useResizablePanelWidth(
       latestClientX.current = null
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
+      if (dragging.current) {
+        dragging.current = false
+        setResizing(false)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
     }
-  }, [panelId, size])
+  }, [limit, panelId, size])
 
   const startResize = useCallback(
     (event: React.MouseEvent) => {
@@ -160,11 +182,25 @@ export function useResizablePanelWidth(
       dragging.current = true
       setResizing(true)
       startX.current = event.clientX
-      startWidth.current = effectiveWidth
+      startWidth.current = Math.min(width, limit)
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
     },
-    [effectiveWidth],
+    [limit, width],
+  )
+
+  const resizeBy = useCallback(
+    (delta: number) => {
+      if (collapsed) return
+      const next = Math.min(
+        limit,
+        clampPanelWidth(width + delta, window.innerWidth, size),
+      )
+      customized.current = true
+      setWidth(next)
+      writePanelWidth(window.localStorage, panelId, next)
+    },
+    [collapsed, limit, panelId, size, width],
   )
 
   const reset = useCallback(() => {
@@ -173,5 +209,13 @@ export function useResizablePanelWidth(
     setWidth(getDefaultPanelWidth(window.innerWidth, size))
   }, [panelId, size])
 
-  return { width: effectiveWidth, resizing, startResize, reset }
+  return {
+    width: effectiveWidth,
+    minWidth: Math.min(PANEL_MIN, limit),
+    maxWidth: limit,
+    resizing,
+    startResize,
+    resizeBy,
+    reset,
+  }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MIN_CANVAS_STRIP,
+  canvasSurfaceLayoutWarning,
   dockReservedBottom,
   drawerWidthLimit,
   freeCanvasArea,
@@ -211,5 +212,26 @@ describe('reserva de rodapé do dock "Elementos"', () => {
     // Melhor não reservar nada do que reservar um número inventado — o dock
     // colapsado praticamente não ocupa espaço mesmo.
     expect(dockReservedBottom(700, Number.POSITIVE_INFINITY)).toBe(0)
+  })
+})
+
+
+describe('aviso de espaço reduzido', () => {
+  it('anuncia quando painel, gaveta, inspector e faixa mínima não cabem', () => {
+    expect(
+      canvasSurfaceLayoutWarning(
+        { width: 900, height: 738 },
+        { toolbar: 176, panel: 260, drawer: 440, inspector: 288 },
+      ),
+    ).toMatch(/Pouco espa/)
+  })
+
+  it('anuncia quando a altura impede o acesso ao conteúdo', () => {
+    expect(
+      canvasSurfaceLayoutWarning(
+        { width: 1600, height: 180 },
+        { toolbar: 176, panel: 260, drawer: 0, inspector: 0 },
+      ),
+    ).toMatch(/Pouco espa/)
   })
 })

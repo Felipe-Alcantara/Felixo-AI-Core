@@ -5495,3 +5495,15 @@ um vira task nova quando alguém precisar.
 ### Evidência de origem
 
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Canvas: teclado, foco, colapso e espaço reduzido
+
+**Task.** Tornar as superfícies do canvas acessíveis por teclado quando o foco muda, a sidebar/painel/gaveta colapsa ou a janela fica sem espaço.
+
+**Implementação.** O fluxo agora tem retorno de foco para busca, ferramentas, notificações, terminal e handoff; diálogos mantêm Tab dentro do ciclo e Escape fecha; painéis e gaveta expõem regiões nomeadas, controles de colapso e separadores redimensionáveis por teclado; a sidebar colapsada fica inerte para não deixar controles invisíveis no Tab. Painéis, menus e filas têm rolagem interna, limites responsivos e anúncios de estado. A ocupação compartilhada inclui inspector e publica um aviso acessível quando os pisos de largura/altura não cabem.
+
+**Validação local.** Typecheck, lint (somente dois avisos preexistentes em SearchPanel), testes frontend, testes nativos, build e diff-check foram executados antes da integração no main atualizado. A suíte geral manteve apenas a falha ambiental conhecida do inventário de pacote ao criar symlink no Windows (EPERM).
+
+**Estado.** Código integrado sobre o main remoto mais recente; commit, push, CI/release e atualização do Notion serão registrados no fechamento desta execução.
+
+**Evidência de origem.** Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core

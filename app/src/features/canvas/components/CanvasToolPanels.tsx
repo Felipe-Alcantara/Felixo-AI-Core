@@ -173,12 +173,35 @@ export function CanvasToolPanels({
 }: CanvasToolPanelsProps) {
   if (!activeTool) return null
 
+  const closeActiveTool = () => {
+    const tool = activeTool
+    onClose()
+    window.requestAnimationFrame(() => {
+      const selectors =
+        tool === 'search'
+          ? ['[data-canvas-tool-trigger="search"]']
+          : [
+              '[data-canvas-tool-menu-trigger]',
+              '[data-felixo-region="sidebar"] .felixo-activity-rail-button',
+            ]
+      const target = selectors
+        .map((selector) => document.querySelector<HTMLElement>(selector))
+        .find(
+          (element) =>
+            element &&
+            element.isConnected &&
+            !element.closest('[aria-hidden="true"], [inert]'),
+        )
+      target?.focus()
+    })
+  }
+
   const panel = (() => {
     switch (activeTool) {
       case 'projects':
         return (
           <LazyProjectsPanel
-            onClose={onClose}
+            onClose={closeActiveTool}
             onProjectsChanged={onProjectsChanged}
             onRemoveFolder={onRemoveFolder}
             onRunFile={onRunFile}
@@ -191,7 +214,7 @@ export function CanvasToolPanels({
           <LazySearchPanel
             nodes={nodes}
             onFocusNode={onFocusNode}
-            onClose={onClose}
+            onClose={closeActiveTool}
             toolsMenuOpen={toolsMenuOpen}
           />
         )
@@ -203,16 +226,16 @@ export function CanvasToolPanels({
             onAddNote={onAddNote}
             onAddDrawing={onAddDrawing}
             onAddExcalidrawDrawing={onAddExcalidrawDrawing}
-            onClose={onClose}
+            onClose={closeActiveTool}
             toolsMenuOpen={toolsMenuOpen}
           />
         )
       case 'models':
-        return <LazyModelsPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyModelsPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'prompts':
         return (
           <LazyPromptsPanel
-            onClose={onClose}
+            onClose={closeActiveTool}
             onInsertPrompt={onInsertPrompt}
             toolsMenuOpen={toolsMenuOpen}
           />
@@ -221,34 +244,34 @@ export function CanvasToolPanels({
         return (
           <LazySkillsPanel
             onActivateSkill={onActivateSkill}
-            onClose={onClose}
+            onClose={closeActiveTool}
             toolsMenuOpen={toolsMenuOpen}
           />
         )
       case 'git':
-        return <LazyGitPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyGitPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'fetchAll':
-        return <LazyFetchAllPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyFetchAllPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'notionTasks':
-        return <LazyNotionTasksPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyNotionTasksPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentUsage':
-        return <LazyAgentUsagePanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyAgentUsagePanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'orchestrator':
-        return <LazyOrchestratorPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyOrchestratorPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'qaLogger':
-        return <LazyQaLoggerPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyQaLoggerPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentCanvasWrite':
         return (
           <LazyAgentCanvasWriteRequestsPanel
             nodes={nodes}
-            onClose={onClose}
+            onClose={closeActiveTool}
             toolsMenuOpen={toolsMenuOpen}
           />
         )
       case 'settings':
         return (
           <LazySettingsPanel
-            onClose={onClose}
+            onClose={closeActiveTool}
             onPromptSaved={onPromptSaved}
             onBootstrapSaved={onBootstrapSaved}
             onQualityStandardSaved={onQualityStandardSaved}
@@ -262,14 +285,14 @@ export function CanvasToolPanels({
     <ToolPanelErrorBoundary
       activeTool={activeTool}
       toolsMenuOpen={toolsMenuOpen}
-      onClose={onClose}
+      onClose={closeActiveTool}
     >
       <Suspense
         fallback={
           <ToolPanelLoading
             activeTool={activeTool}
             toolsMenuOpen={toolsMenuOpen}
-            onClose={onClose}
+            onClose={closeActiveTool}
           />
         }
       >

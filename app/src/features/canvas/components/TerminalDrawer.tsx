@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import {
   ArrowRightLeft,
   ChevronLeft,
@@ -22,6 +22,7 @@ import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import type { AgentSessionReference } from '../services/agent-session'
 import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
+import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
@@ -70,7 +71,7 @@ type TerminalDrawerProps = {
   onClose: () => void
 }
 
-const MIN_WIDTH = 440
+const MIN_WIDTH = DRAWER_MIN_WIDTH
 const DEFAULT_WIDTH = 720
 
 /**
@@ -98,6 +99,8 @@ export function TerminalDrawer({
   }
   const mountRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const collapsedTriggerRef = useRef<HTMLButtonElement>(null)
+  const titleId = useId()
   const [width, setWidth] = useState(() =>
     (() => {
       const maxWidth = getDrawerMaxWidth(window.innerWidth)
@@ -126,6 +129,7 @@ export function TerminalDrawer({
   const [maximized, setMaximized] = useState(false)
   const [handoffError, setHandoffError] = useState<string | undefined>()
   const [previewError, setPreviewError] = useState<string | undefined>()
+  const focusTerminalOnExpandRef = useRef(true)
 
   const togglePinned = useCallback(() => {
     setPinned((prev) => {
@@ -229,7 +233,9 @@ export function TerminalDrawer({
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [pinned, close])
 
-  // Attach the live terminal element into the drawer and focus it.
+  // Attach the live terminal element into the drawer. Focus is handled below
+  // only while the drawer is expanded, so a collapsed rail never leaves focus
+  // inside an invisible xterm.
   //
   // `restart()` swaps in a brand-new xterm.Terminal under the same sessionId,
   // so `snapshot.generation` is in the deps too — without it this effect
@@ -244,7 +250,6 @@ export function TerminalDrawer({
 
     store.attach(sessionId, container)
     store.fit(sessionId)
-    store.focus(sessionId)
 
     const rafId = window.requestAnimationFrame(() => {
       store.fit(sessionId)
@@ -265,10 +270,27 @@ export function TerminalDrawer({
   // Keep the terminal fitted as the drawer width changes. Expanding also
   // returns focus to the terminal so the user can type right away.
   useEffect(() => {
-    if (collapsed) return
+    if (collapsed) {
+      focusTerminalOnExpandRef.current = true
+      return
+    }
     store.fit(sessionId)
-    store.focus(sessionId)
+    const activeElement = document.activeElement
+    if (
+      focusTerminalOnExpandRef.current ||
+      !containerRef.current?.contains(activeElement) ||
+      mountRef.current?.contains(activeElement)
+    ) {
+      store.focus(sessionId)
+      focusTerminalOnExpandRef.current = false
+    }
   }, [store, sessionId, effectiveWidth, collapsed])
+
+  useEffect(() => {
+    if (collapsed && mountRef.current?.contains(document.activeElement)) {
+      collapsedTriggerRef.current?.focus()
+    }
+  }, [collapsed])
 
   const onMouseDown = useCallback(() => {
     draggingRef.current = true
@@ -351,25 +373,64 @@ export function TerminalDrawer({
       window.removeEventListener('mouseup', onMouseUp)
       if (draggingRef.current) {
         draggingRef.current = false
+        setResizing(false)
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
       }
     }
   }, [])
 
+  const updateDrawerWidth = useCallback((requestedWidth: number) => {
+    const maxWidth = getDrawerMaxWidth(window.innerWidth)
+    const next = clampDrawerWidth(requestedWidth, window.innerWidth, MIN_WIDTH)
+    setWidth(Math.min(maxWidth, next))
+    writeWidthPreference(localStorage, Math.min(maxWidth, next))
+  }, [])
+
+  const resetDrawerWidth = useCallback(() => {
+    const suggested = clampDrawerWidth(
+      Math.min(DEFAULT_WIDTH, Math.floor(window.innerWidth * 0.45)),
+      window.innerWidth,
+      MIN_WIDTH,
+    )
+    updateDrawerWidth(suggested)
+  }, [updateDrawerWidth])
+
+  const onResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Home') {
+      event.preventDefault()
+      resetDrawerWidth()
+      return
+    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const direction = event.key === 'ArrowLeft' ? 1 : -1
+    updateDrawerWidth(effectiveWidth + direction * (event.shiftKey ? 80 : 24))
+  }
+
   return (
     <div
       ref={containerRef}
-      className={`felixo-terminal-drawer relative flex h-full flex-col border-l border-white/10 bg-[var(--f-core-black-surface)] ${
+      role="region"
+      aria-labelledby={titleId}
+      data-canvas-terminal-drawer
+      onKeyDown={(event) => {
+        if (
+          event.key === 'Escape' &&
+          !mountRef.current?.contains(event.target as Node)
+        ) {
+          event.preventDefault()
+          close()
+        }
+      }}
+      className={`felixo-terminal-drawer relative z-20 flex h-full flex-col border-l border-white/10 bg-[var(--f-core-black-surface)] focus-within:z-30 ${
         closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
       }`}
       style={{
         // `effectiveWidth` já vem limitado pelo que o painel da esquerda
         // ocupa; usar a largura crua aqui era o que deixava a gaveta passar
         // por cima dele mesmo depois de o limite ter sido calculado.
-        width: maximized
-          ? 'max(44px, calc(100vw - 120px))'
-          : `${effectiveWidth}px`,
+        width: `${effectiveWidth}px`,
         // Animate the collapse/maximize toggles, but never the resize drag —
         // the edge must track the pointer 1:1.
         transition: resizing ? undefined : 'width 180ms cubic-bezier(0.16,1,0.3,1)',
@@ -378,7 +439,16 @@ export function TerminalDrawer({
       {!collapsed && !maximized && (
         <div
           onMouseDown={onMouseDown}
-          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--f-core-white)]/40"
+          onKeyDown={onResizeKeyDown}
+          role="separator"
+          aria-label={`Redimensionar terminal ${title}`}
+          aria-orientation="vertical"
+          aria-valuenow={effectiveWidth}
+          aria-valuemin={Math.min(MIN_WIDTH, getDrawerMaxWidth(window.innerWidth))}
+          aria-valuemax={getDrawerMaxWidth(window.innerWidth)}
+          aria-description="Seta para esquerda amplia, seta para direita reduz e Home restaura o tamanho padrão."
+          tabIndex={0}
+          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--f-core-white)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
         />
       )}
       <div
@@ -387,10 +457,12 @@ export function TerminalDrawer({
         }`}
       >
         <button
+          ref={collapsedTriggerRef}
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
           aria-expanded={!collapsed}
+          aria-controls="canvas-terminal-output"
           title={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
           className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 transition-transform duration-150 hover:bg-white/10 hover:text-zinc-100"
         >
@@ -398,21 +470,22 @@ export function TerminalDrawer({
         </button>
         {collapsed ? (
           // Vertical title strip, so the rail still says which agent it is.
-          <span
+          <h2
+            id={titleId}
             className="felixo-anim-sequential-panel min-h-0 flex-1 select-none truncate text-xs text-zinc-500"
             style={{ writingMode: 'vertical-rl' }}
             title={title}
           >
             {title}
-          </span>
+          </h2>
         ) : (
-          <span className="felixo-anim-sequential-panel mr-auto ml-2 truncate font-medium">
+          <h2 id={titleId} className="felixo-anim-sequential-panel mr-auto ml-2 truncate font-medium">
             {title}
-          </span>
+          </h2>
         )}
         <div className={`flex items-center gap-2 ${collapsed ? 'flex-col' : ''}`}>
           {!collapsed && (
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-zinc-500" aria-live="polite">
               {snapshot?.activity === 'working'
                 ? 'trabalhando'
                 : snapshot?.activity === 'idle'
@@ -491,6 +564,7 @@ export function TerminalDrawer({
             <button
               type="button"
               onClick={startResponsibilityHandoff}
+              data-canvas-handoff-trigger
               className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Passar responsabilidade para outro agente"
               title="Passar responsabilidade para outro agente"
@@ -549,6 +623,8 @@ export function TerminalDrawer({
           scrollback must survive); only its box is hidden. */}
       <div
         ref={mountRef}
+        id="canvas-terminal-output"
+        aria-hidden={collapsed}
         className={`min-h-0 flex-1 overflow-hidden px-1 pb-2 pt-1 ${collapsed ? 'invisible w-0' : ''}`}
       />
     </div>

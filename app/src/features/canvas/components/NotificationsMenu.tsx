@@ -8,7 +8,11 @@ type NotificationsMenuProps = {
   open: boolean
   notificationCount: number
   onToggle: () => void
-  children?: (ready: boolean, panelRef: (node: HTMLDivElement | null) => void) => ReactNode
+  children?: (
+    ready: boolean,
+    panelRef: (node: HTMLDivElement | null) => void,
+    dismiss: () => void,
+  ) => ReactNode
   /** Reports the trigger's total on-screen height (button + open panel, if
    *  any) every time it changes, so callers can reserve exactly that much
    *  space instead of guessing a fixed offset that breaks once the panel's
@@ -72,6 +76,42 @@ export function NotificationsMenu({
     onToggle()
   }
 
+  const dismiss = useCallback(() => {
+    if (!open) return
+    resetPanel()
+    onToggle()
+    window.requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>('[data-notifications-trigger]')?.focus(),
+    )
+  }, [onToggle, open, resetPanel])
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        !event.target ||
+        (!document.querySelector('[data-notifications-trigger]')?.contains(event.target as Node) &&
+          !panelElement?.contains(event.target as Node))
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      dismiss()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [dismiss, open, panelElement])
+
+  useEffect(() => {
+    if (!open || !panelElement) return
+    const frame = window.requestAnimationFrame(() => {
+      panelElement.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, panelElement])
+
   return (
     <div className="felixo-notifications-trigger absolute top-4 z-40 inline-block">
       <button
@@ -85,6 +125,8 @@ export function NotificationsMenu({
         title="Notificações dos agentes"
         aria-label="Notificações dos agentes"
         aria-expanded={open}
+        aria-controls="canvas-notifications-panel"
+        data-notifications-trigger
       >
         <Bell size={16} />
         {notificationCount > 0 && (
@@ -96,7 +138,7 @@ export function NotificationsMenu({
           </span>
         )}
       </button>
-      {children?.(panelReady, panelRef)}
+      {children?.(panelReady, panelRef, dismiss)}
     </div>
   )
 }

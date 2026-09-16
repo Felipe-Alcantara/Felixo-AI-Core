@@ -45,6 +45,7 @@ import { CanvasZoomPill } from './CanvasZoomPill'
 import { CanvasAmbientLayer } from './CanvasAmbientLayer'
 import { CanvasSurfacesProvider } from './CanvasSurfacesProvider'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
+import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-surfaces'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { toolbarColumnOffset } from './toolbar-flyout'
 import { UpdateToast } from '../../updates/UpdateNotice'
@@ -194,6 +195,7 @@ function isCanvasFocused(target: HTMLElement | null): boolean {
   // inside an input/terminal/panel does not.
   return (
     target === document.body ||
+    target.dataset.felixoRegion === 'canvas' ||
     target.classList.contains('react-flow__pane') ||
     target.closest('.react-flow__pane') !== null
   )
@@ -281,7 +283,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   const store = useTerminalSessions()
   // minimap já vem pronto do provider — computado uma vez a partir de
   // occupancy/viewport internamente, não recalculado aqui.
-  const { occupancy, minimap: miniMap } = useCanvasSurfaces()
+  const { occupancy, minimap: miniMap, viewport } = useCanvasSurfaces()
+  const layoutWarning = canvasSurfaceLayoutWarning(viewport, occupancy)
+  const freeArea = freeCanvasArea(viewport, occupancy)
   const { performanceMode } = usePerformanceMode()
   const {
     nodes,
@@ -354,6 +358,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   >({})
   const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
+  const terminalFocusReturnRef = useRef<HTMLElement | null>(null)
   const [detailsTerminalId, setDetailsTerminalId] = useState<string | null>(null)
   // Passagem de responsabilidade em andamento: o histórico é capturado no
   // momento do clique, e não quando o usuário confirma — do contrário o agente
@@ -563,6 +568,14 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   // notificação fantasma que só o painel sabia apagar.
   const openTerminal = useCallback(
     (nodeId: string) => {
+      const active = document.activeElement
+      if (
+        active instanceof HTMLElement &&
+        !active.closest('[data-canvas-terminal-drawer]') &&
+        active !== document.body
+      ) {
+        terminalFocusReturnRef.current = active
+      }
       setExpandedTerminalId(nodeId)
       acknowledgeNodeNotifications(nodeId)
       setNotificationHistory((current) =>
@@ -571,6 +584,35 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     },
     [acknowledgeNodeNotifications],
   )
+
+  const closeExpandedTerminal = useCallback(() => {
+    const closingId = expandedTerminalId
+    const active = document.activeElement
+    const focusWasInside =
+      active instanceof HTMLElement &&
+      Boolean(active.closest('[data-canvas-terminal-drawer]'))
+    setExpandedTerminalId(null)
+    if (!focusWasInside) return
+
+    window.requestAnimationFrame(() => {
+      const remembered = terminalFocusReturnRef.current
+      if (remembered?.isConnected) {
+        remembered.focus({ preventScroll: true })
+        return
+      }
+      const trigger = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
+      ).find((element) => element.dataset.terminalExpandTrigger === closingId)
+      ;(trigger ?? flowContainerRef.current)?.focus({ preventScroll: true })
+    })
+  }, [expandedTerminalId])
+
+  const closeHandoff = useCallback(() => {
+    setHandoff(null)
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-canvas-handoff-trigger]')?.focus()
+    })
+  }, [])
 
   // Read items older than the retention window drop out of the history, and so
   // do notifications whose terminal no longer exists — an unread one never
@@ -1898,6 +1940,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         className="relative h-full min-w-0 flex-1"
         style={{ '--felixo-atmosphere': atmosfera } as CSSProperties}
         data-felixo-region="canvas"
+        role="region"
+        aria-label="Área de trabalho do canvas"
+        tabIndex={0}
       >
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <CanvasTopbar
@@ -1906,6 +1951,21 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => onSidebarCollapsedChange(!sidebarCollapsed)}
       />
+      {layoutWarning && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          data-canvas-layout-warning
+          className="pointer-events-none absolute top-16 z-10 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-[var(--color-warning)] shadow-lg"
+          style={{
+            left: toolbarColumnOffset(sidebarCollapsed) + 16,
+            maxWidth: Math.max(180, freeArea.width - 32),
+          }}
+        >
+          {layoutWarning}
+        </div>
+      )}
       <CanvasAmbientLayer dense={nodes.length > 0} />
       <CanvasToolbar
         activeTool={activeTool}
@@ -1955,7 +2015,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onToggle={() => setNotificationsOpen((open) => !open)}
         onHeightChange={setNotificationsTriggerHeight}
       >
-        {(ready, panelRef) => (
+        {(ready, panelRef, dismiss) => (
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
@@ -1967,7 +2027,8 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
             onSoundEnabledChange={setNotificationSoundEnabled}
             volume={notificationVolume}
             onVolumeChange={setNotificationVolume}
-            onClose={() => setNotificationsOpen(false)}
+            onClose={dismiss}
+            onDismiss={dismiss}
             onFocusNode={focusNode}
             onExpandNode={openTerminal}
             onMarkRead={(notificationId) => {
@@ -2156,7 +2217,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
             setHandoff({ sourceId: expandedTerminalId, transcript })
           }
           onOpenFilePreview={openTextFileNode}
-          onClose={() => setExpandedTerminalId(null)}
+          onClose={closeExpandedTerminal}
         />
       )}
 
@@ -2170,7 +2231,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
           onConfirm={(options) =>
             passResponsibility(handoff.sourceId, handoff.transcript, options)
           }
-          onClose={() => setHandoff(null)}
+          onClose={closeHandoff}
         />
       )}
       <UpdateToast

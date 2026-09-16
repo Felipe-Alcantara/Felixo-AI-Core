@@ -3,6 +3,7 @@
 // as ações chegam por props do CanvasView.
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type ChangeEvent,
@@ -160,7 +161,11 @@ export function CanvasToolbar({
         <ActivityRailButton label="Chat" onClick={onOpenChat}>
           <MessageSquare size={18} />
         </ActivityRailButton>
-        <ActivityRailButton label="Buscar" onClick={() => onSelectTool('search')}>
+        <ActivityRailButton
+          label="Buscar"
+          onClick={() => onSelectTool('search')}
+          dataCanvasToolTrigger="search"
+        >
           <Search size={18} />
         </ActivityRailButton>
         <ActivityRailButton label="Projetos" onClick={() => onSelectTool('projects')}>
@@ -179,7 +184,11 @@ export function CanvasToolbar({
         </div>
       </nav>
 
-      <div className="felixo-sidebar-content" aria-hidden={sidebarCollapsed}>
+      <div
+        className="felixo-sidebar-content"
+        aria-hidden={sidebarCollapsed}
+        inert={sidebarCollapsed}
+      >
         {/* A marca abre a coluna, como na prancha: o produto se apresenta aqui,
             e a barra superior fica só com contexto e ações do canvas. */}
         <div className="felixo-sidebar-brand">
@@ -317,6 +326,7 @@ function ActivityRailButton({
   active = false,
   expanded,
   onClick,
+  dataCanvasToolTrigger,
   children,
 }: {
   label: string
@@ -326,9 +336,10 @@ function ActivityRailButton({
    * anuncia um botão comum e a pessoa não sabe que ele alterna — nem em que
    * estado está. Fica opcional porque os outros botões do rail navegam, não
    * alternam, e um `aria-expanded` neles seria mentira.
-   */
+  */
   expanded?: boolean
   onClick: () => void
+  dataCanvasToolTrigger?: string
   children: ReactNode
 }) {
   return (
@@ -338,6 +349,9 @@ function ActivityRailButton({
       onClick={onClick}
       title={label}
       aria-label={label}
+      {...(dataCanvasToolTrigger
+        ? { 'data-canvas-tool-trigger': dataCanvasToolTrigger }
+        : {})}
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
     >
       {children}
@@ -365,24 +379,44 @@ function OrganizeButton({
 }: OrganizeButtonProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
   const disabled = arrangeableCount < 2
 
   useEffect(() => {
-    if (!open) {
-      return
+    if (!open) return
+    panelRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus()
+    const closeAndReturn = () => {
+      setOpen(false)
+      window.requestAnimationFrame(() => toggleRef.current?.focus())
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        !event.target ||
+        !containerRef.current?.contains(event.target as Node)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      closeAndReturn()
     }
     const onOutsideClick = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false)
-      }
+      if (!containerRef.current?.contains(event.target as Node)) closeAndReturn()
     }
-    document.addEventListener('click', onOutsideClick)
-    return () => document.removeEventListener('click', onOutsideClick)
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('mousedown', onOutsideClick)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('mousedown', onOutsideClick)
+    }
   }, [open])
 
   const organize = (mode: ArrangeMode) => {
     setOpen(false)
     onOrganize(mode)
+    window.requestAnimationFrame(() => toggleRef.current?.focus())
   }
 
   return (
@@ -401,6 +435,7 @@ function OrganizeButton({
         }`}
       >
         <button
+          ref={toggleRef}
           type="button"
           onClick={() => organize('single')}
           disabled={disabled}
@@ -420,6 +455,7 @@ function OrganizeButton({
           disabled={disabled}
           aria-label="Modos de organização"
           aria-expanded={open}
+          aria-controls="canvas-organize-modes"
           className="felixo-btn-flat flex items-center border-l border-white/10 bg-[var(--f-core-structural)] px-1.5 text-[var(--f-core-secondary)] enabled:hover:bg-[#303030] disabled:cursor-not-allowed"
           title="Modos de organização"
         >
@@ -429,7 +465,11 @@ function OrganizeButton({
 
       {open && (
         <div
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
+          ref={panelRef}
+          id="canvas-organize-modes"
+          role="group"
+          aria-label="Modos de organização do canvas"
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
         >
           <button
             type="button"
@@ -503,35 +543,57 @@ function NamedCreateButton({
 }: NamedCreateButtonProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
+  const popoverId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    if (!open) {
-      return
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        !event.target ||
+        !containerRef.current?.contains(event.target as Node)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setOpen(false)
+      window.requestAnimationFrame(() => triggerRef.current?.focus())
     }
     const onOutsideClick = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false)
+        window.requestAnimationFrame(() => triggerRef.current?.focus())
       }
     }
-    document.addEventListener('click', onOutsideClick)
-    return () => document.removeEventListener('click', onOutsideClick)
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('mousedown', onOutsideClick)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('mousedown', onOutsideClick)
+    }
   }, [open])
 
   const create = () => {
     onCreate(name.trim() || undefined)
     setName('')
     setOpen(false)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
   return (
     <div ref={containerRef} className="relative w-full">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         className={`${TOOLBAR_BUTTON_CLASS} w-full`}
         title={title}
         aria-expanded={open}
+        aria-controls={popoverId}
       >
         {icon}
         {buttonLabel}
@@ -543,7 +605,11 @@ function NamedCreateButton({
 
       {open && (
         <div
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
+          ref={panelRef}
+          id={popoverId}
+          role="group"
+          aria-label={`Criar bloco ${buttonLabel}`}
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
         >
           <input
             autoFocus
@@ -551,12 +617,17 @@ function NamedCreateButton({
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
+                event.preventDefault()
                 create()
               } else if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
                 setOpen(false)
+                window.requestAnimationFrame(() => triggerRef.current?.focus())
               }
             }}
             placeholder={placeholder}
+            aria-label={placeholder}
             className="mb-2 felixo-field w-full px-2 py-1.5 text-sm outline-none"
           />
           <button
@@ -573,6 +644,7 @@ function NamedCreateButton({
               onClick={() => {
                 setOpen(false)
                 onSecondary()
+                window.requestAnimationFrame(() => triggerRef.current?.focus())
               }}
               title={secondaryTitle}
               className="felixo-btn mt-2 w-full rounded border-t border-white/10 px-3 py-1.5 pt-2.5 text-sm text-[var(--f-core-secondary)] hover:bg-white/[0.06] hover:text-[var(--f-core-white)]"
@@ -602,37 +674,66 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
+  const [urlError, setUrlError] = useState<string | undefined>()
+  const popoverId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const urlInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!open) {
-      return
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        !event.target ||
+        !containerRef.current?.contains(event.target as Node)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setOpen(false)
+      window.requestAnimationFrame(() => triggerRef.current?.focus())
     }
     const onOutsideClick = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false)
+        window.requestAnimationFrame(() => triggerRef.current?.focus())
       }
     }
-    document.addEventListener('click', onOutsideClick)
-    return () => document.removeEventListener('click', onOutsideClick)
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('mousedown', onOutsideClick)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('mousedown', onOutsideClick)
+    }
   }, [open])
 
   const create = () => {
     const normalized = normalizeUrlInput(url)
-    if (!normalized) return
+    if (!normalized) {
+      setUrlError('Informe um endereço de site válido.')
+      window.requestAnimationFrame(() => urlInputRef.current?.focus())
+      return
+    }
     onCreate(normalized, name.trim() || undefined)
     setUrl('')
     setName('')
+    setUrlError(undefined)
     setOpen(false)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
   return (
     <div ref={containerRef} className="relative w-full">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         className={`${TOOLBAR_BUTTON_CLASS} w-full`}
         aria-expanded={open}
+        aria-controls={popoverId}
       >
         {icon}
         {buttonLabel}
@@ -644,33 +745,58 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
 
       {open && (
         <div
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
+          ref={panelRef}
+          id={popoverId}
+          role="group"
+          aria-label={`Criar bloco ${buttonLabel}`}
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
         >
           <input
+            ref={urlInputRef}
             autoFocus
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => {
+              setUrl(event.target.value)
+              setUrlError(undefined)
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
+                event.preventDefault()
                 create()
               } else if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
                 setOpen(false)
+                window.requestAnimationFrame(() => triggerRef.current?.focus())
               }
             }}
             placeholder="URL (ex: google.com)"
+            aria-label="Endereço do site"
+            aria-invalid={urlError ? true : undefined}
+            aria-describedby={urlError ? `${popoverId}-error` : undefined}
             className="mb-1.5 felixo-field w-full px-2 py-1.5 text-sm outline-none"
           />
+          {urlError && (
+            <p id={`${popoverId}-error`} role="alert" className="mb-2 text-xs text-red-300">
+              {urlError}
+            </p>
+          )}
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
+                event.preventDefault()
                 create()
               } else if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
                 setOpen(false)
+                window.requestAnimationFrame(() => triggerRef.current?.focus())
               }
             }}
             placeholder="Nome (opcional)"
+            aria-label="Nome do bloco (opcional)"
             className="mb-2 felixo-field w-full px-2 py-1.5 text-sm outline-none"
           />
           <button
