@@ -53,6 +53,7 @@ Base funcional entregue:
 - Canvas visual para organizar agentes, arquivos compartilhados, notas, grupos e páginas web (mini-navegador embutido)
 - Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
 - **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
+- Entrega de contexto inicial por artefatos somente leitura, com trilha persistida `written → path-typed → read` em `logs/qa` para diagnosticar reinícios e trocas de terminal/agente
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI; no Codex, também mostra a quantidade, validade e detalhes dos resets bancados por conta, com uso protegido por confirmação
 - Painel **Tarefas Notion** no canvas, com conexão própria cifrada, seleção de database compartilhada, cache offline e CRUD de tarefas
 - Preview de Markdown com sanitização de HTML/URLs externos, remoção de ANSI, limite de 200.000 caracteres e imagens remotas bloqueadas por padrão; GFM e imagens locais seguem a autorização do arquivo
@@ -442,6 +443,17 @@ npm run test:canvas-context
 npm run lint
 npm run build
 ```
+
+`npm run test:canvas-context` inclui a matriz ponta a ponta do contexto. Ela
+repete por padrão 50 vezes os fluxos de reidratação após restart, troca de
+agente no mesmo node, reabertura de terminal, dois terminais simultâneos,
+confiança de pasta do Claude e relançamento do Codex após auto-update. Para uma
+execução curta de diagnóstico, defina `FELIXO_CONTEXT_MATRIX_RUNS=1`; para
+guardar a evidência em um caminho específico, use
+`FELIXO_CONTEXT_MATRIX_REPORT=build/context-matrix.json`. Cada artefato deixa
+os estados `written`, `path-typed` e `read` no JSONL diário do QA em
+`logs/qa/qa-AAAA-MM-DD.jsonl`; uma leitura ausente ou erro registra `failed` e
+faz a matriz falhar.
 
 `npm run typecheck` usa o cache incremental do `tsc -b` sem relaxar a
 verificação. Para uma auditoria limpa dos dois projetos TypeScript, use

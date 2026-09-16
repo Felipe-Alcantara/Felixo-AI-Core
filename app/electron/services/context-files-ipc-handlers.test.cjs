@@ -131,6 +131,64 @@ test('IPC release removes all files registered for one session only', async () =
   }
 })
 
+test('persiste a trilha escrita → caminho digitado com terminal e agente', async () => {
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-delivery-ipc-'))
+  const events = []
+  const controller = registerContextFilesIpcHandlers(
+    { contextFiles: baseDir },
+    { logDelivery: (entry) => events.push(entry) },
+  )
+
+  try {
+    const write = handlers.get('context-file:write')
+    const markPathTyped = handlers.get('context-file:path-typed')
+    const result = await write(null, {
+      sessionId: 'canvas:terminal-log',
+      terminal: 'terminal-log',
+      agent: 'claude',
+      kind: 'initial-context',
+      content: 'contexto de teste',
+    })
+    const marked = await markPathTyped(null, {
+      sessionId: 'canvas:terminal-log',
+      names: [result.name],
+      terminal: 'terminal-log',
+      agent: 'claude',
+    })
+
+    assert.equal(marked.marked, 1)
+    assert.deepEqual(
+      events.map((entry) => ({
+        scope: entry.scope,
+        artifactId: entry.details.artifactId,
+        terminal: entry.details.terminal,
+        agent: entry.details.agent,
+        state: entry.details.state,
+      })),
+      [
+        {
+          scope: 'context-delivery',
+          artifactId: result.name,
+          terminal: 'terminal-log',
+          agent: 'claude',
+          state: 'written',
+        },
+        {
+          scope: 'context-delivery',
+          artifactId: result.name,
+          terminal: 'terminal-log',
+          agent: 'claude',
+          state: 'path-typed',
+        },
+      ],
+    )
+  } finally {
+    await controller.dispose()
+    await fsp.rm(baseDir, { recursive: true, force: true })
+  }
+})
+
 test('write devolve o caminho absoluto do comando desta instância, quando conhecido', async () => {
   // Regressão: pedir pro agente rodar só o nome nu "felixo" deixa a
   // resolução a cargo do shell — e uma função de shell com esse mesmo nome

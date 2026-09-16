@@ -559,6 +559,14 @@ contorno mais comum quando algo trava) apagava o histórico. Agora:
   logar canal + `error.cause` de qualquer handler que lançar, sem precisar
   tocar cada `ipcMain.handle` do projeto individualmente. Nenhum handler
   decide encerrar o processo — só registra.
+Eventos de entrega de contexto usam o mesmo arquivo QA e o escopo
+`context-delivery`. O IPC registra `written` quando o artefato é fechado no
+disco; o renderer registra `path-typed` somente depois que a referência foi
+aceita pela PTY; e o comando standalone `felixo context read` registra `read`
+ou `failed`. Cada transição leva o id do artefato e a associação segura de
+terminal/agente, sem copiar o corpo do prompt. Isso permite conferir a cadeia
+depois de restart e localizar uma falha sem depender do buffer em memória.
+
 - No renderer, `renderer-error-reporting.ts` cobre `window.onerror` e
   `unhandledrejection`; `RendererRecoveryBoundary` (o último resort quando o
   React para de renderizar) também manda a entrada pro QA Logger antes de

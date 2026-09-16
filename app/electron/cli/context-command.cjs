@@ -13,6 +13,7 @@ const fsp = require('node:fs/promises')
 const path = require('node:path')
 const { getAppPaths } = require('../core/app-paths.cjs')
 const { CONTEXT_FILE_PREFIX, CONTEXT_FILE_SUFFIX } = require('../core/context-file-contract.cjs')
+const { appendContextDeliveryEvent, recordContextDeliveryRead } = require('../services/context-delivery-log.cjs')
 const { AJUDA_CONTEXT } = require('./agent-command-output.cjs')
 
 const CONTEXT_READ_VERBS = new Set(['read', 'ler'])
@@ -93,9 +94,43 @@ async function executarContexto(argumentos, dependencies = {}) {
     }
   }
 
+  const contextDir = dependencies.getContextDir?.() || getAppPaths().contextFiles
+  const deliveryLogDirectory =
+    dependencies.deliveryLogDirectory || path.join(path.dirname(contextDir), 'logs', 'qa')
+
   try {
-    return { saida: await lerArtefatoDeContexto(name, dependencies), codigo: 0 }
+    const saida = await lerArtefatoDeContexto(name, { ...dependencies, getContextDir: () => contextDir })
+    try {
+      if (typeof dependencies.recordDeliveryRead === 'function') {
+        await dependencies.recordDeliveryRead(name, { contextDir, deliveryLogDirectory })
+      } else {
+        await recordContextDeliveryRead(deliveryLogDirectory, name)
+      }
+    } catch {
+      // Reading context must remain reliable when a disk diagnostic cannot be
+      // appended. The successful stdout is still the source of truth.
+    }
+    return { saida, codigo: 0 }
   } catch (error) {
+    try {
+      const metadata = typeof dependencies.deliveryMetadata === 'object'
+        ? dependencies.deliveryMetadata
+        : {}
+      let safeArtifactId
+      try {
+        safeArtifactId = validarNomeDoArtefato(name)
+      } catch {
+        safeArtifactId = undefined
+      }
+      await appendContextDeliveryEvent(deliveryLogDirectory, {
+        ...metadata,
+        artifactId: safeArtifactId,
+        state: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      })
+    } catch {
+      // Best effort: preserve the original read error and exit code.
+    }
     if (error?.code === 'ENOENT') {
       return {
         saida: '',

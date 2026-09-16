@@ -15,6 +15,7 @@ const crypto = require('node:crypto')
 const { toErrorResult } = require('./ipc-result.cjs')
 const { CONTEXT_FILE_PREFIX } = require('../core/context-file-contract.cjs')
 const { caminhoDoComando } = require('./agent-command-install.cjs')
+const { buildContextDeliveryEntry } = require('./context-delivery-log.cjs')
 
 const STALE_CONTEXT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const MAX_CONTEXT_BYTES = 32 * 1024 * 1024
@@ -131,9 +132,25 @@ async function writeContextFile(baseDir, params = {}, now = new Date()) {
   }
 }
 
-function registerContextFilesIpcHandlers(appPaths) {
+function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
   const baseDir = appPaths.contextFiles
   const filesBySession = new Map()
+  const metadataByArtifact = new Map()
+  const logDelivery =
+    typeof dependencies.logDelivery === 'function' ? dependencies.logDelivery : null
+
+  // Main-process callers normally pass `logQaEvent`; tests can inject a
+  // collector. Diagnostics must never turn a successful handoff into an IPC
+  // failure, so the callback is deliberately best effort.
+  const recordDelivery = (event) => {
+    if (!logDelivery) return
+    try {
+      const pending = logDelivery(buildContextDeliveryEntry(event))
+      if (pending && typeof pending.catch === 'function') pending.catch(() => {})
+    } catch {
+      // QA logging is best effort.
+    }
+  }
   // Caminho absoluto do shim `felixo` desta instância. Devolvido ao lado do
   // arquivo para que o prompt possa mandar o agente rodar o executável exato
   // em vez de digitar o nome nu do comando: uma função de shell com o mesmo
@@ -155,9 +172,61 @@ function registerContextFilesIpcHandlers(appPaths) {
         filesBySession.set(result.sessionId, files)
       }
       files.add(result.path)
+      const metadata = {
+        sessionId: result.sessionId,
+        terminal: params.terminal ?? params.terminalId ?? result.sessionId,
+        agent: params.agent ?? params.source,
+        kind: params.kind,
+      }
+      metadataByArtifact.set(result.filename, metadata)
+      recordDelivery({ ...metadata, artifactId: result.filename, state: 'written' })
       return { ok: true, path: result.path, name: result.filename, bytes: result.bytes, commandPath }
     } catch (error) {
+      recordDelivery({
+        artifactId: params.artifactId ?? params.name,
+        sessionId: params.sessionId,
+        terminal: params.terminal ?? params.terminalId ?? params.sessionId,
+        agent: params.agent ?? params.source,
+        kind: params.kind,
+        state: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      })
       return toErrorResult(error, 'Não foi possível criar o arquivo temporário de contexto.')
+    }
+  })
+
+  ipcMain.handle('context-file:path-typed', async (_event, params = {}) => {
+    try {
+      const sessionId = requireText(params.sessionId, 'sessionId')
+      const names = Array.isArray(params.names)
+        ? params.names
+        : Array.isArray(params.artifactIds)
+          ? params.artifactIds
+          : []
+      let marked = 0
+      for (const value of names) {
+        const name = typeof value === 'string' ? value.trim() : ''
+        const metadata = metadataByArtifact.get(name)
+        if (!metadata || metadata.sessionId !== sessionId) continue
+        recordDelivery({
+          ...metadata,
+          artifactId: name,
+          terminal: params.terminal ?? params.terminalId ?? metadata.terminal,
+          agent: params.agent ?? metadata.agent,
+          state: 'path-typed',
+        })
+        marked += 1
+      }
+      return { ok: true, marked }
+    } catch (error) {
+      recordDelivery({
+        sessionId: params.sessionId,
+        terminal: params.terminal ?? params.terminalId ?? params.sessionId,
+        agent: params.agent,
+        state: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return toErrorResult(error, 'Nao foi possivel registrar a digitacao do contexto.')
     }
   })
 
@@ -168,6 +237,7 @@ function registerContextFilesIpcHandlers(appPaths) {
       let removed = 0
       for (const filePath of files) {
         if (await removeFileIfOwned(filePath, baseDir)) removed += 1
+        metadataByArtifact.delete(path.basename(filePath))
       }
       filesBySession.delete(sessionId)
       return { ok: true, removed }
@@ -180,15 +250,22 @@ function registerContextFilesIpcHandlers(appPaths) {
     baseDir,
     releaseSession: async (sessionId) => {
       const files = filesBySession.get(sessionId) ?? new Set()
-      for (const filePath of files) await removeFileIfOwned(filePath, baseDir)
+      for (const filePath of files) {
+        await removeFileIfOwned(filePath, baseDir)
+        metadataByArtifact.delete(path.basename(filePath))
+      }
       filesBySession.delete(sessionId)
     },
     dispose: async () => {
       for (const sessionId of filesBySession.keys()) {
         const files = filesBySession.get(sessionId) ?? new Set()
-        for (const filePath of files) await removeFileIfOwned(filePath, baseDir)
+        for (const filePath of files) {
+          await removeFileIfOwned(filePath, baseDir)
+          metadataByArtifact.delete(path.basename(filePath))
+        }
       }
       filesBySession.clear()
+      metadataByArtifact.clear()
     },
   }
 }

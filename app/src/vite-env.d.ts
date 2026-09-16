@@ -684,6 +684,9 @@ declare global {
           sessionId: string
           kind?: string
           source?: string
+          terminal?: string
+          terminalId?: string
+          agent?: string
           content: string
         }) => Promise<
           CliInvokeResult & {
@@ -699,6 +702,14 @@ declare global {
             commandPath?: string
           }
         >
+        markPathTyped: (params: {
+          sessionId: string
+          names?: string[]
+          artifactIds?: string[]
+          terminal?: string
+          terminalId?: string
+          agent?: string
+        }) => Promise<CliInvokeResult & { marked?: number }>
         release: (params: { sessionId: string }) => Promise<CliInvokeResult & { removed?: number }>
       }
       /**

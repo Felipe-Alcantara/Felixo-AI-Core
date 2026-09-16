@@ -376,6 +376,10 @@ type Session = {
   args: string[]
   initialText?: string
   rawInitialText?: string
+  /** Artifact names belonging to the most recent generated context reference. */
+  contextArtifactNames: string[]
+  /** Avoid persisting duplicate path-typed transitions during retries. */
+  contextArtifactsPathTyped: Set<string>
   sourceLabel?: string
   optionsOnOpenWebpage?: (url: string) => void
   agentSession?: AgentSessionReference
@@ -576,6 +580,8 @@ export class TerminalSessionStore {
       args: [...launchArgs],
       initialText: undefined,
       rawInitialText: options.initialText,
+      contextArtifactNames: [],
+      contextArtifactsPathTyped: new Set(),
       sourceLabel: options.sourceLabel,
       optionsOnOpenWebpage: options.onOpenWebpage,
       agentSession: isAgentSessionReference(options.agentSession)
@@ -1148,6 +1154,13 @@ export class TerminalSessionStore {
     return true
   }
 
+  /** Fire-and-forget PTY writes must not become unhandled rejections on teardown. */
+  private writePtySafely(session: Session, data: string): void {
+    void Promise.resolve()
+      .then(() => window.felixo?.pty?.write({ sessionId: session.ptySessionId, data }))
+      .catch(() => {})
+  }
+
   /** Writes text into the PTY exactly as if the person had typed it. */
   private typeIntoSession(session: Session, text: string): void {
     if (!text || session.disposed) {
@@ -1156,7 +1169,7 @@ export class TerminalSessionStore {
 
     const delivery = session.sendChain.then(() => {
       if (session.disposed) return
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+      this.writePtySafely(session, text)
       session.inputTouched = true
       this.trackTypedInput(session, text)
     })
@@ -1242,6 +1255,7 @@ export class TerminalSessionStore {
       }
 
       session.inputTouched = true
+      this.markContextPathTyped(session)
       const prompt = cleanPrompt(delivered)
       if (prompt) {
         this.update(session, { lastPrompt: prompt })
@@ -1689,10 +1703,17 @@ export class TerminalSessionStore {
 
       session.initialTextSent = true
       const submission = splitTerminalSubmission(session.initialText ?? '')
-      void window.felixo?.pty?.write({
-        sessionId: session.ptySessionId,
-        data: submission.text,
-      })
+      void Promise.resolve()
+        .then(() => window.felixo?.pty?.write({
+          sessionId: session.ptySessionId,
+          data: submission.text,
+        }))
+        .then((result) => {
+          if (!result || (result.ok !== false && result.delivered !== false)) {
+            this.markContextPathTyped(session)
+          }
+        })
+        .catch(() => {})
 
       // Sem Enter, o prompt é contexto: fica escrito na entrada da CLI e quem
       // decide executar é o usuário, que ainda vai digitar a tarefa depois
@@ -1709,10 +1730,7 @@ export class TerminalSessionStore {
       // user submission after the TUI has consumed the text.
       setTimeout(() => {
         if (!session.disposed) {
-          void window.felixo?.pty?.write({
-            sessionId: session.ptySessionId,
-            data: submit,
-          })
+          this.writePtySafely(session, submit)
           this.confirmSubmission(session, submission.text, submit)
         }
       }, INITIAL_TEXT_SUBMIT_DELAY_MS)
@@ -1764,6 +1782,8 @@ export class TerminalSessionStore {
           sessionId: session.ptySessionId,
           kind: part.kind,
           source: session.sourceLabel || session.command || session.id,
+          terminal: session.id,
+          agent: session.command || session.sourceLabel || 'shell',
           content: part.content,
         })
       } catch {
@@ -1778,12 +1798,14 @@ export class TerminalSessionStore {
       // are the multi-OS bug this channel is fixing. The prompt must carry only
       // the stable artifact name, which the active `felixo` shim resolves.
       if (!result?.ok || !result.name) {
+        session.contextArtifactNames = []
         return this.contextDeliveryFallback(session, text, kind)
       }
       deliveredFiles.push({ name: result.name, kind: part.kind })
       commandPath ??= result.commandPath
     }
 
+    session.contextArtifactNames = deliveredFiles.map((file) => file.name)
     this.update(session, { contextWarning: undefined })
     return buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath)
   }
@@ -1796,6 +1818,21 @@ export class TerminalSessionStore {
     const warning =
       'Arquivo temporário de contexto indisponível; o terminal usou o fallback inline. Para handoffs muito grandes, o limite antigo preserva o começo e o fim e marca o trecho omitido.'
     this.update(session, { contextWarning: warning })
+    void Promise.resolve(
+      window.felixo?.qaLogger?.log({
+        level: 'error',
+        scope: 'context-delivery',
+        sessionId: session.ptySessionId,
+        message: 'context-delivery:failed',
+        details: {
+          artifactId: null,
+          terminal: session.id,
+          agent: session.command || session.sourceLabel || 'shell',
+          state: 'failed',
+          reason: 'context-file-write-failed',
+        },
+      }),
+    ).catch(() => {})
     const split = splitTerminalSubmission(text)
     if (!split.submit || kind !== 'handoff') {
       return buildInlineFallback(text)
@@ -1803,6 +1840,34 @@ export class TerminalSessionStore {
 
     const prepared = prepareHandoffTranscript(split.text)
     return buildInlineFallback(toSubmittedTerminalText(prepared.text))
+  }
+
+  /**
+   * Persists the point at which the generated artifact reference was accepted
+   * by the PTY. The standalone `felixo context read` command appends the final
+   * `read` transition, so a restart still has a joinable written → typed → read
+   * trail. Older preloads may not expose this optional method.
+   */
+  private markContextPathTyped(session: Session): void {
+    const names = session.contextArtifactNames.filter(
+      (name) => !session.contextArtifactsPathTyped.has(name),
+    )
+    if (names.length === 0) return
+
+    for (const name of names) session.contextArtifactsPathTyped.add(name)
+    const markPathTyped = window.felixo?.contextFiles?.markPathTyped
+    if (typeof markPathTyped !== 'function') return
+
+    void Promise.resolve(
+      markPathTyped({
+        sessionId: session.ptySessionId,
+        names,
+        terminal: session.id,
+        agent: session.command || session.sourceLabel || 'shell',
+      }),
+    ).catch(() => {
+      // Delivery evidence is best effort and must not affect terminal input.
+    })
   }
 
   /**
@@ -1834,7 +1899,7 @@ export class TerminalSessionStore {
         return
       }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: submit })
+      this.writePtySafely(session, submit)
       this.confirmSubmission(session, text, submit, attempt + 1)
     }, SUBMIT_RETRY_DELAY_MS)
   }
@@ -1895,7 +1960,7 @@ export class TerminalSessionStore {
         return
       }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+      this.writePtySafely(session, text)
       this.confirmContextDelivery(session, text, rewrites + 1, deadline)
     }, CONTEXT_CONFIRM_DELAY_MS)
   }
@@ -1946,10 +2011,7 @@ export class TerminalSessionStore {
 
     setTimeout(() => {
       if (!session.disposed) {
-        void window.felixo?.pty?.write({
-          sessionId: session.ptySessionId,
-          data: '\r',
-        })
+        this.writePtySafely(session, '\r')
       }
     }, SCREEN_ACCEPT_DELAY_MS)
 
@@ -2076,12 +2138,12 @@ export class TerminalSessionStore {
         return
       }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: '\x1b[B' })
+      this.writePtySafely(session, '\x1b[B')
       setTimeout(() => {
         if (session.disposed) {
           return
         }
-        void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: '\r' })
+        this.writePtySafely(session, '\r')
         this.acceptClaudeDecisionScreen(session, isStillShowing, attempt + 1)
       }, KEY_SEQUENCE_DELAY_MS)
     }, SCREEN_ACCEPT_DELAY_MS)

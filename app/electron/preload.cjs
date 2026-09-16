@@ -216,6 +216,7 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   contextFiles: {
     write: (params) => ipcRenderer.invoke('context-file:write', params),
+    markPathTyped: (params) => ipcRenderer.invoke('context-file:path-typed', params),
     release: (params) => ipcRenderer.invoke('context-file:release', params),
   },
   // Arquivos de texto que ja existem no disco, abertos num bloco do canvas.

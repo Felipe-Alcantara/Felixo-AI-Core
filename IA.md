@@ -5606,3 +5606,47 @@ registro no Notion.
 
 **Evidência de origem.** Repositório:
 https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Contexto — prova ponta a ponta e matriz de recuperação
+
+**Task.** Provar que o contexto inicial chega ao agente em todos os fluxos de
+restart/reidratação, troca de agente, reabertura de terminal, concorrência,
+confiança de pasta do Claude e auto-update do Codex, deixando diagnóstico
+persistente quando algo falhar.
+
+**Implementação.**
+
+- `context-delivery-log.cjs` compartilha a trilha QA `written`, `path-typed`,
+  `read` e `failed` entre o processo Electron e o comando standalone. Cada
+  entrada guarda o id do artefato, terminal, agente e tipo, sem copiar o corpo
+  do contexto.
+- O IPC e o preload registram a escrita e a referência aceita pela PTY; o
+  `TerminalSessionStore` associa os artefatos à sessão e evita transições
+  duplicadas. O leitor `felixo context read` registra a leitura ou a falha no
+  JSONL diário de `logs/qa`.
+- `canvas-context-e2e.test.ts` usa o escritor e leitor reais, arquivos isolados
+  e uma PTY determinística para executar seis cenários. A matriz repete 50
+  vezes por padrão, grava relatório JSON atômico e conserva as últimas entradas
+  do QA em qualquer falha. O CI executa as 50 repetições nos três sistemas.
+- README, `ARQUITETURA.md` e este registro documentam o contrato e o caminho
+  da evidência.
+
+**Validação local.** Início: 16/09/2026 12:44 (America/Sao_Paulo). Fechamento
+dos gates: 16/09/2026 13:49. `npm test`: 1.341/1.341 testes em 52 suítes;
+`npm run test:frontend` com 50 repetições: 961 aprovados e 1 ignorado;
+`npm run test:native`: 5/5; testes focados de contexto: 18/18; matriz E2E:
+50/50 repetições, 1.000/1.000 artefatos com a cadeia completa e zero falhas;
+typecheck, lint, build e diff-check passaram. O stderr `AttachConsole failed`
+do node-pty continua sendo ruído conhecido do runner Windows e não alterou os
+resultados.
+
+**Limitação.** A matriz usa uma PTY determinística, mas atravessa o escritor de
+arquivo, o shim e o leitor standalone reais. Ela prova restart como
+reidratação do renderer sobre a sessão viva; CLIs autenticadas e um processo
+Electron empacotado permanecem cobertos pelos gates de release existentes.
+
+**Estado.** Implementação e documentação validadas para commit, push, CI e
+atualização da task no Notion.
+
+**Evidência de origem.** Task Notion:
+https://app.notion.com/p/Felixo-AI-Core-Contexto-provar-ponta-a-ponta-que-o-contexto-inicial-chega-em-100-dos-casos-resta-3db91f95497e81fca040c22f5f95e420
