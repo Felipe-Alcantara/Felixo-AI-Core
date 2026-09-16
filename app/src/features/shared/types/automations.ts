@@ -2,6 +2,13 @@
 
 import automationScopes from '../../../../electron/services/storage/automation-scopes.json'
 
+export type {
+  PromptInsertion,
+  PromptInsertionInput,
+  PromptInsertionMetadata,
+  PromptInsertionSource,
+} from './prompt-insertion'
+
 export type AutomationScope =
   | 'chat'
   | 'code'

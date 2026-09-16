@@ -65,6 +65,25 @@ function normalizeState(value) {
   return CONTEXT_DELIVERY_STATES.has(state) ? state : 'failed'
 }
 
+function normalizeInsertion(value) {
+  if (!value || typeof value !== 'object') return undefined
+  const id = normalizeText(value.id)
+  const name = normalizeText(value.name)
+  const source = normalizeText(value.source)
+  const combinedNames = Array.isArray(value.combinedNames)
+    ? value.combinedNames.map((entry) => normalizeText(entry)).filter(Boolean).slice(0, 50)
+    : []
+  if (!id && !name && !source && combinedNames.length === 0) return undefined
+  return {
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    ...(source ? { source } : {}),
+    combinedNames,
+    autoSubmit: value.autoSubmit === true,
+    ...(normalizeText(value.timestamp) ? { timestamp: normalizeText(value.timestamp) } : {}),
+  }
+}
+
 /**
  * Build the QA entry shared by the main process and the standalone reader.
  * No context body or absolute path is copied into the log.
@@ -72,6 +91,7 @@ function normalizeState(value) {
 function buildContextDeliveryEntry(event = {}) {
   const state = normalizeState(event.state)
   const artifactId = normalizeArtifactId(event.artifactId ?? event.name)
+  const insertion = normalizeInsertion(event.insertion)
   return {
     level: state === 'failed' ? 'error' : 'info',
     scope: CONTEXT_DELIVERY_SCOPE,
@@ -83,6 +103,7 @@ function buildContextDeliveryEntry(event = {}) {
       agent: normalizeText(event.agent),
       kind: normalizeText(event.kind),
       state,
+      ...(insertion ? { insertion } : {}),
       ...(normalizeText(event.error) ? { error: normalizeText(event.error) } : {}),
     },
   }
@@ -124,6 +145,7 @@ async function findContextDeliveryMetadata(directory, artifactId) {
       terminal: entry.details.terminal,
       agent: entry.details.agent,
       kind: entry.details.kind,
+      ...(entry.details.insertion ? { insertion: entry.details.insertion } : {}),
     }
   }
   return {}
@@ -148,5 +170,6 @@ module.exports = {
   findContextDeliveryMetadata,
   flushContextDeliveryLog,
   normalizeArtifactId,
+  normalizeInsertion,
   recordContextDeliveryRead,
 }

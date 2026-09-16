@@ -392,6 +392,25 @@ com a quota lida da pasta dela — é assim que duas contas do mesmo provedor
 aparecem com números separados. Enquanto a conta não tiver sido usada, a linha
 diz isso em vez de mostrar zero.
 
+### Identidade das inserções de prompt
+
+Toda entrada programática ou digitada pode carregar um `PromptInsertion` com
+`id`, `name` opcional, `source`, `content`, `combinedNames`, `autoSubmit` e
+`timestamp`. O rótulo serve para explicar a origem no canvas; o agente continua
+recebendo o corpo de prompt no formato antigo, sem prefixo de metadata.
+
+Prompts do catálogo usam o ID estável da definição atual, inclusive depois de
+uma edição; skills usam o ID e o nome da skill. Uma seleção combinada conserva
+os nomes na ordem enviada, inclusive nomes repetidos, e mantém os headings que
+já faziam parte do payload. Texto digitado manualmente tem origem `manual`,
+`combinedNames` vazio e nenhum nome presumido.
+
+O snapshot da sessão guarda o registro completo para a interface. Ao salvar o
+node do canvas, `content` é removido; a persistência, os cabeçalhos dos artefatos
+e o log QA carregam somente a identidade, origem, composição, intenção de
+envio e timestamp. A mesma metadata acompanha a entrega por arquivo e o
+fallback inline, sem virar opção ou campo adicional de `pty.write`.
+
 ## Como distribuir
 
 Build local:

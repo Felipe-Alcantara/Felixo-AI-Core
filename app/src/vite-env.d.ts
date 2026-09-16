@@ -32,6 +32,7 @@ import type {
   FetchAllSettings,
 } from './features/canvas/types'
 import type { CliAccount } from './features/shared/types/cli-accounts'
+import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   AgentUsageDashboard,
   ClaudeStatuslineState,
@@ -687,6 +688,8 @@ declare global {
           terminal?: string
           terminalId?: string
           agent?: string
+          /** Body-free prompt provenance; content is never sent as metadata. */
+          insertion?: PromptInsertionMetadata
           content: string
         }) => Promise<
           CliInvokeResult & {

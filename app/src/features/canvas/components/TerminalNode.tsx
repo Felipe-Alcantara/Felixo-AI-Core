@@ -30,6 +30,7 @@ import {
   canResumeAgentSession,
   type AgentSessionReference,
 } from '../services/agent-session'
+import { toPromptInsertionMetadata } from '../../shared/types/prompt-insertion'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
@@ -58,6 +59,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const onSessionStarted = nodeData.onSessionStarted
   const onAgentSession = nodeData.onAgentSession
   const onOpenWebpage = nodeData.onOpenWebpage
+  const onDataChange = nodeData.onDataChange
+  const persistedInsertion = nodeData.lastPromptInsertion
 
   // Start (or adopt) the background session as soon as the card mounts.
   // ensure() is idempotent, so initialText only fires on the first creation.
@@ -109,6 +112,17 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       onSessionStarted?.(id, metadata.startedAt)
     }
   }, [id, metadata?.startedAt, onSessionStarted, nodeData.sessionStartedAt])
+
+  // Keep a body-free provenance record on the canvas node. The live snapshot
+  // retains `content` for the terminal/details runtime, while persistence gets
+  // only identity, origin, ordering, submission intent and timestamp.
+  useEffect(() => {
+    const insertion = snapshot?.lastPromptInsertion
+    if (!insertion || !onDataChange) return
+    const safe = toPromptInsertionMetadata(insertion)
+    if (JSON.stringify(persistedInsertion) === JSON.stringify(safe)) return
+    onDataChange(id, { lastPromptInsertion: safe })
+  }, [id, onDataChange, persistedInsertion, snapshot?.lastPromptInsertion])
 
   const repository = repositoryLabel(nodeData.cwd)
   const provider = providerIdentity(nodeData.command)

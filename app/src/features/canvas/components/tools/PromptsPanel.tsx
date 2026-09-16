@@ -13,7 +13,13 @@ import {
 import { AUTOMATION_SCOPE_LABELS, AUTOMATION_SCOPES } from '../../../shared/types/automations'
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
 import type { SkillActivationResult } from './SkillsPanel'
-import { composeSelectedPrompts } from '../../services/prompt-composition'
+import {
+  composeSelectedPromptInsertion,
+} from '../../services/prompt-composition'
+import {
+  createCatalogPromptInsertion,
+  type PromptInsertion,
+} from '../../../shared/types/prompt-insertion'
 import {
   describeCombinedInsertFeedback,
   describeSingleInsertFeedback,
@@ -26,7 +32,7 @@ import {
 type PromptsPanelProps = {
   onClose: () => void
   /** Sends the prompt to the expanded terminal, or copies it as a fallback. */
-  onInsertPrompt: (prompt: string) => Promise<SkillActivationResult>
+  onInsertPrompt: (prompt: PromptInsertion | string) => Promise<SkillActivationResult>
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
 }
@@ -132,7 +138,7 @@ export function PromptsPanel({
     setPendingId(prompt.id)
     let result: SkillActivationResult
     try {
-      result = await onInsertPrompt(prompt.prompt)
+      result = await onInsertPrompt(createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: true }))
     } finally {
       setPendingId((id) => (id === prompt.id ? null : id))
     }
@@ -157,8 +163,8 @@ export function PromptsPanel({
   }
 
   const insertSelected = async () => {
-    const combined = composeSelectedPrompts(selectedPrompts)
-    if (!combined) return
+    const combined = composeSelectedPromptInsertion(selectedPrompts, { autoSubmit: true })
+    if (!combined.content) return
     setPendingId('combined')
     let result: SkillActivationResult
     try {

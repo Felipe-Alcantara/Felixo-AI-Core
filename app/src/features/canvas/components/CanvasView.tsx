@@ -98,6 +98,12 @@ import {
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
+  createManualPromptInsertion,
+  createSkillPromptInsertion,
+  createPromptInsertion,
+  type PromptInsertion,
+} from '../../shared/types/prompt-insertion'
+import {
   isDirectOpeniaLaunch,
   isKnownAgentCommand,
 } from '../services/agent-launch-options'
@@ -1278,11 +1284,15 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   const activateSkill = useCallback(
     async (skill: CanvasSkill): Promise<SkillActivationResult> => {
       const prompt = buildSkillActivationPrompt(skill)
+      const insertion = createSkillPromptInsertion(skill, prompt, { autoSubmit: true })
       if (expandedTerminalId) {
-        const result = await store.sendText(expandedTerminalId, prompt, { kind: 'skill-prompt' })
+        const result = await store.sendText(expandedTerminalId, prompt, {
+          kind: 'skill-prompt',
+          insertion,
+        })
         return result.delivered ? 'sent' : 'failed'
       }
-      await navigator.clipboard?.writeText(prompt)
+      await navigator.clipboard?.writeText(insertion.content)
       return 'copied'
     },
     [expandedTerminalId, store],
@@ -1291,14 +1301,22 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   // Insert a pre-built automation prompt into the expanded terminal if one is
   // open; otherwise copy it for manual pasting, same fallback as skills.
   const insertPrompt = useCallback(
-    async (prompt: string): Promise<SkillActivationResult> => {
+    async (promptInput: PromptInsertion | string): Promise<SkillActivationResult> => {
+      const insertion = typeof promptInput === 'string'
+        ? createManualPromptInsertion(promptInput, { autoSubmit: true })
+        : createPromptInsertion({
+            ...promptInput,
+            content: promptInput.content,
+            autoSubmit: promptInput.autoSubmit,
+          })
       if (expandedTerminalId) {
-        const result = await store.sendText(expandedTerminalId, toSubmittedTerminalText(prompt), {
+        const result = await store.sendText(expandedTerminalId, toSubmittedTerminalText(insertion.content), {
           kind: 'catalog-prompt',
+          insertion,
         })
         return result.delivered ? 'sent' : 'failed'
       }
-      await navigator.clipboard?.writeText(prompt)
+      await navigator.clipboard?.writeText(insertion.content)
       return 'copied'
     },
     [expandedTerminalId, store],

@@ -538,6 +538,25 @@ Os caminhos são resolvidos pelo `app.getPath('userData')`, não ficam dentro do
 repositório do usuário e não devem ser documentados com caminhos privados ou
 credenciais reais.
 
+### Identidade das inserções de prompt
+
+O renderer usa `PromptInsertion` como envelope de rastreabilidade ao inserir
+texto no terminal. O envelope tem `id`, `name` opcional, `source`, `content`,
+`combinedNames`, `autoSubmit` e `timestamp`; ele não altera o contrato textual
+de `sendText(id, text)` nem o objeto `{ sessionId, data }` enviado a `pty.write`.
+
+O catálogo usa o ID estável da definição resolvida (inclusive overrides
+editados), skills usam seu próprio ID, e o texto digitado pelo usuário fica em
+`source: manual`, sem nome presumido. A composição mantém os headings legados,
+a ordem da seleção e nomes repetidos em `combinedNames`.
+
+`TerminalSessionStore` expõe a última inserção no snapshot e em
+`SessionMetadata`. O node persistido recebe apenas `PromptInsertionMetadata`,
+sem `content`; o mesmo registro seguro acompanha a escrita de um artefato
+temporário e o fallback inline. O cabeçalho do artefato e o QA Logger podem
+mostrar ID, nome, origem, composição, intenção de envio e timestamp, nunca o
+corpo da instrução como metadata.
+
 ### Observabilidade: erros com causa, persistidos e reportáveis
 
 O QA Logger guardava só até 400 entradas em memória — reiniciar o app (o

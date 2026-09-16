@@ -1,11 +1,21 @@
 import type { AgentSessionReference } from '../services/agent-session'
-import type { ContextFileKind } from '../services/context-file-delivery'
+import {
+  promptInsertionSourceForContextKind,
+} from '../services/context-file-delivery'
+import {
+  createPromptInsertion,
+  isPromptInsertion,
+  promptRequestsSubmission,
+  toPromptInsertionMetadata,
+  type PromptInsertion,
+} from '../../shared/types/prompt-insertion'
 import type { SessionMetadata } from './session-metadata'
 import type {
   SendTextResult,
   SessionListener,
   SessionOptions,
   SessionSnapshot,
+  SendTextInput,
   TerminalSessionStoreApi,
   TerminalTranscript,
 } from './terminal-session-api'
@@ -108,23 +118,36 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
   async sendText(
     id: string,
     text: string,
-    options: { kind?: ContextFileKind } = {},
+    options: SendTextInput = {},
   ): Promise<SendTextResult> {
-    void options
     const session = this.sessions.get(id)
     if (!session) {
       return { delivered: false, reason: 'no-session' }
     }
 
     const value = String(text)
+    const explicit = isPromptInsertion(options)
+      ? options
+      : options.insertion ?? options.promptInsertion ?? options.metadata
+    const kind = isPromptInsertion(options) ? undefined : options.kind
+    const insertion: PromptInsertion = createPromptInsertion({
+      ...(explicit ?? {}),
+      source: explicit?.source ?? promptInsertionSourceForContextKind(kind ?? 'manual-prompt'),
+      content: value,
+      autoSubmit: promptRequestsSubmission(value),
+      ...(explicit?.combinedNames ? { combinedNames: explicit.combinedNames } : {}),
+    })
     session.transcript += value
     session.shellHistory += value
     session.snapshot = {
       ...session.snapshot,
       activity: 'idle',
       lastPrompt: value.trim(),
+      lastPromptInsertion: insertion,
       previewLines: [`[mock] ${value.trim()}`],
     }
+    session.metadata.lastPromptInsertion = insertion
+    session.metadata.lastPromptInsertionMetadata = toPromptInsertionMetadata(insertion)
     if (session.terminalElement) {
       session.terminalElement.value = session.transcript
     }

@@ -26,6 +26,7 @@ import {
 } from './canvas-tool-loaders'
 import type { SkillActivationResult } from './tools/SkillsPanel'
 import type { CanvasSkill } from '../types'
+import type { PromptInsertion } from '../../shared/types/prompt-insertion'
 import type { RunFileOptions } from '../services/run-file-command'
 import { TOOL_LABELS } from './tools/canvas-tool-labels'
 
@@ -50,7 +51,7 @@ type CanvasToolPanelsProps = {
   /** Abre um arquivo do projeto num bloco do canvas, em vez de rodá-lo. */
   onOpenFileInCanvas: (filePath: string, fileName: string) => void
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
-  onInsertPrompt: (prompt: string) => Promise<SkillActivationResult>
+  onInsertPrompt: (prompt: PromptInsertion | string) => Promise<SkillActivationResult>
   onPromptSaved: (prompt: string) => void
   onBootstrapSaved: (prompt: string) => void
   onQualityStandardSaved: (value: { prompt: string; enabled: boolean }) => void

@@ -201,9 +201,22 @@ function stripFunctions(data: Record<string, unknown>): CanvasNodeData {
   const clean: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(data ?? {})) {
-    if (typeof value !== 'function' && !TRANSIENT_DATA_KEYS.has(key)) {
-      clean[key] = value
+    if (typeof value === 'function' || TRANSIENT_DATA_KEYS.has(key)) continue
+    if (key === 'lastPromptInsertion' && value && typeof value === 'object') {
+      // A live snapshot contains the body for the terminal/details runtime;
+      // persisted canvas data keeps only safe provenance fields.
+      const metadata = Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).filter(([name]) => name !== 'content'),
+      ) as Record<string, unknown>
+      clean[key] = {
+        ...metadata,
+        ...(Array.isArray(metadata.combinedNames)
+          ? { combinedNames: [...metadata.combinedNames] }
+          : {}),
+      }
+      continue
     }
+    clean[key] = value
   }
 
   return clean as CanvasNodeData

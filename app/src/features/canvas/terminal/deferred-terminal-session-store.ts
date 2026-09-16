@@ -1,12 +1,12 @@
 import type {
   SendTextResult,
+  SendTextInput,
   SessionListener,
   SessionOptions,
   SessionSnapshot,
   TerminalSessionStoreApi,
   TerminalTranscript,
 } from './terminal-session-api'
-import type { ContextFileKind } from '../services/context-file-delivery'
 import type { SessionMetadata } from './session-metadata'
 
 const EMPTY_TRANSCRIPT: TerminalTranscript = { text: '' }
@@ -116,7 +116,7 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   sendText(
     id: string,
     text: string,
-    options: { kind?: ContextFileKind } = {},
+    options: SendTextInput = {},
   ): Promise<SendTextResult> {
     return this.load().then((store) => store.sendText(id, text, options))
   }

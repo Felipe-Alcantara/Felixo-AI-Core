@@ -1,4 +1,5 @@
 import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
+import type { PromptInsertionSource } from '../../shared/types/prompt-insertion'
 
 export type ContextFileKind =
   | 'initial-context'
@@ -8,9 +9,39 @@ export type ContextFileKind =
   | 'handoff'
   | 'catalog-prompt'
   | 'skill-prompt'
+  | 'manual-prompt'
   | 'collaboration'
   | 'scratchpad-link'
   | 'rename'
+
+/** Maps delivery plumbing to the stable provenance vocabulary. */
+export function promptInsertionSourceForContextKind(
+  kind?: ContextFileKind,
+): PromptInsertionSource {
+  switch (kind) {
+    case 'catalog-prompt':
+      return 'catalog'
+    case 'skill-prompt':
+      return 'skill'
+    case 'manual-prompt':
+      return 'manual'
+    case 'scratchpad-link':
+      return 'file'
+    case 'handoff':
+      return 'handoff'
+    case 'collaboration':
+      return 'collaboration'
+    case 'rename':
+      return 'rename'
+    case 'initial-context':
+    case 'canvas-context':
+    case 'agent-identity':
+    case 'skills-manifest':
+      return 'system'
+    default:
+      return 'unknown'
+  }
+}
 
 export type ContextFilePart = {
   kind: ContextFileKind

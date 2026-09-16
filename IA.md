@@ -5650,3 +5650,19 @@ atualização da task no Notion.
 
 **Evidência de origem.** Task Notion:
 https://app.notion.com/p/Felixo-AI-Core-Contexto-provar-ponta-a-ponta-que-o-contexto-inicial-chega-em-100-dos-casos-resta-3db91f95497e81fca040c22f5f95e420
+
+## [2026-09-16] Prompts — metadados de inserção e rastreabilidade
+
+**Task.** Definir ID, nome, origem e composição da injeção de prompts sem alterar o payload interpretado pelo agente.
+
+**Implementação.** `PromptInsertion` centraliza `id`, `name` opcional, `source`, `content`, `combinedNames`, `autoSubmit` e `timestamp`. O catálogo usa o ID estável da definição (inclusive após edição), skills mantêm ID/nome, combinações preservam ordem e nomes repetidos, e entrada manual usa `source: manual` sem nome inventado. `PromptsPanel`, skills, links de arquivo, handoff e o `TerminalSessionStore` passam a registrar essa identidade; chamadas legadas de `sendText(id, text)` e o objeto `{ sessionId, data }` da PTY continuam compatíveis.
+
+A sessão expõe a última inserção no snapshot e em `SessionMetadata`. O canvas persiste somente `PromptInsertionMetadata`, sem `content`; artefatos de contexto e QA carregam apenas identidade segura. Arquivo e fallback inline usam a mesma metadata, e nenhum campo de metadata é enviado ao `pty.write`.
+
+**Validação local.** `npm test`: 1.341/1.341; `npm run test:frontend`: 972 aprovados e 1 ignorado; `npm run test:native`: 5/5; `npm run test:canvas-context`: 5/5 com matriz de 50 repetições; `npm run test:canvas-smoke`: sucesso; testes focados de inserção/sessão/persistência: 54/54; `npm run typecheck`, `npm run lint`, `npm run build` e `git diff --check`: sucesso. O stderr recorrente `AttachConsole failed` do node-pty no Windows apareceu apenas como ruído dos testes nativos e não alterou os resultados.
+
+**Decisões.** O texto existente de `composeSelectedPrompts` e os headings legados permanecem intactos; o rótulo humano fica fora do payload. O corpo não entra em node persistido nem em metadata de arquivo/log. O tipo técnico antigo do catálogo permanece para chamadas sem opções; o painel manual declara `manual-prompt` explicitamente.
+
+**Estado.** Implementação e documentação prontas para commit, push, CI e encerramento da task.
+
+**Evidência de origem.** Task Notion: https://app.notion.com/p/Felixo-AI-Core-Prompts-definir-metadados-de-nome-ID-origem-e-composi-o-da-inje-o-3ce91f95497e810d998ad77cfe057677

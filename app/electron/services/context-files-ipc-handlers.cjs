@@ -26,6 +26,12 @@ function requireText(value, fieldName) {
   return value.trim()
 }
 
+function normalizeMetadataText(value) {
+  if (value === undefined || value === null) return undefined
+  const text = String(value).replace(/[\r\n]+/g, ' ').trim()
+  return text ? text.slice(0, 240) : undefined
+}
+
 function normalizeKind(value) {
   const normalized = String(value || 'contexto')
     .trim()
@@ -35,10 +41,42 @@ function normalizeKind(value) {
   return normalized || 'contexto'
 }
 
-function buildContextFileContent({ kind, source, generatedAt, body }) {
+function normalizeInsertionMetadata(value) {
+  if (!value || typeof value !== 'object') return undefined
+  const id = normalizeMetadataText(value.id)
+  const source = normalizeMetadataText(value.source)
+  const name = normalizeMetadataText(value.name)
+  const combinedNames = Array.isArray(value.combinedNames)
+    ? value.combinedNames.map((entry) => normalizeMetadataText(entry)).filter(Boolean).slice(0, 50)
+    : []
+  if (!id && !source && !name && combinedNames.length === 0) return undefined
+  return {
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    ...(source ? { source } : {}),
+    combinedNames,
+    autoSubmit: value.autoSubmit === true,
+    timestamp: normalizeMetadataText(value.timestamp),
+  }
+}
+
+function buildContextFileContent({ kind, source, generatedAt, body, insertion }) {
   const origin = String(source || '').replace(/[\r\n]+/g, ' ').trim() || 'Felixo AI Core'
   const type = normalizeKind(kind)
   const timestamp = generatedAt || new Date().toISOString()
+  const normalizedInsertion = normalizeInsertionMetadata(insertion)
+  const insertionLines = normalizedInsertion
+    ? [
+        '',
+        '## Metadados da inserção',
+        `- ID: ${normalizedInsertion.id || '(não informado)'}`,
+        `- Nome: ${normalizedInsertion.name || '(sem nome humano)'}`,
+        `- Origem: ${normalizedInsertion.source || '(não informada)'}`,
+        `- Composição: ${normalizedInsertion.combinedNames.length > 0 ? normalizedInsertion.combinedNames.join(' + ') : '(manual)'}`,
+        `- Autoenvio: ${normalizedInsertion.autoSubmit ? 'sim' : 'não'}`,
+        ...(normalizedInsertion.timestamp ? [`- Timestamp: ${normalizedInsertion.timestamp}`] : []),
+      ]
+    : []
 
   return [
     '# CONTEXTO ENTREGUE PELO FELIXO AI CORE',
@@ -49,6 +87,7 @@ function buildContextFileContent({ kind, source, generatedAt, body }) {
     '- Regime: somente leitura; não edite este arquivo.',
     '- Este caminho é um artefato temporário do app, não é o repositório trabalhado e não deve entrar em commit.',
     '- Este é um canvas multiagente: outros agentes podem estar trabalhando em paralelo. Registre decisões no scratchpad compartilhado do canvas, quando houver um.',
+    ...insertionLines,
     '',
     '## Como usar',
     'Leia este arquivo antes de agir. O corpo abaixo é o contexto entregue pelo app; preserve o conteúdo e valide comandos, caminhos, segredos e decisões contra o estado real do projeto.',
@@ -114,6 +153,7 @@ async function writeContextFile(baseDir, params = {}, now = new Date()) {
     source: params.source,
     generatedAt: now.toISOString(),
     body,
+    insertion: params.insertion,
   })
   const tempPath = `${filePath}.tmp-${process.pid}`
   try {
@@ -177,6 +217,7 @@ function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
         terminal: params.terminal ?? params.terminalId ?? result.sessionId,
         agent: params.agent ?? params.source,
         kind: params.kind,
+        insertion: normalizeInsertionMetadata(params.insertion),
       }
       metadataByArtifact.set(result.filename, metadata)
       recordDelivery({ ...metadata, artifactId: result.filename, state: 'written' })
@@ -188,6 +229,7 @@ function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
         terminal: params.terminal ?? params.terminalId ?? params.sessionId,
         agent: params.agent ?? params.source,
         kind: params.kind,
+        insertion: normalizeInsertionMetadata(params.insertion),
         state: 'failed',
         error: error instanceof Error ? error.message : String(error),
       })

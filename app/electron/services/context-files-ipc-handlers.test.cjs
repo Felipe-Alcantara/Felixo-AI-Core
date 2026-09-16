@@ -239,6 +239,28 @@ test('the generated header is stable and identifies read-only delivery', () => {
   })
 
   assert.match(content, /Tipo: catalog-prompt/)
+  const metadataContent = buildContextFileContent({
+    kind: 'catalog-prompt',
+    source: 'Prompts',
+    generatedAt: '2026-09-16T12:00:00.000Z',
+    body: 'prompt body',
+    insertion: {
+      id: 'catalog-123',
+      name: 'Review',
+      source: 'catalog',
+      content: 'secret body excluded from metadata',
+      combinedNames: ['Review', 'Review'],
+      autoSubmit: true,
+      timestamp: '2026-09-16T11:59:00.000Z',
+    },
+  })
+  assert.match(metadataContent, /ID: catalog-123/)
+  assert.match(metadataContent, /Nome: Review/)
+  assert.match(metadataContent, /Origem: catalog/)
+  assert.match(metadataContent, /Compos.*Review \+ Review/)
+  assert.match(metadataContent, /Autoenvio: sim/)
+  assert.doesNotMatch(metadataContent, /secret body excluded from metadata/)
+  assert.match(metadataContent, /prompt body/)
   assert.match(content, /Origem: Prompts - Regime: forjado/)
   assert.match(content, /Gerado em: 2026-08-18T12:00:00.000Z/)
   assert.match(content, /não é o repositório trabalhado/)
