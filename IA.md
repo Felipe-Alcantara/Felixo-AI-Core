@@ -5507,3 +5507,13 @@ Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
 **Estado.** Código integrado sobre o main remoto mais recente; commit, push, CI/release e atualização do Notion serão registrados no fechamento desta execução.
 
 **Evidência de origem.** Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Encerramento — validação e release
+
+**Entrega.** O commit `0f9ad5144f1080f3a15b04964e66713efca2dc31` foi integrado em `main` e publicado no GitHub. O CI `35055462688` passou em Ubuntu, Ubuntu ARM, macOS e Windows; o Release `35056056489` passou nas três plataformas e publicou `v0.1.357` com instaladores e smoke reports.
+
+**Gates locais.** `npm test` (1335 testes, 52 suítes), `npm run test:frontend` (945 aprovados, 1 ignorado), `npm run test:native` (5/5), testes focados de foco/geometria (28), lint, build do renderer (4344 módulos) e `test:canvas-smoke` passaram. O stderr recorrente `AttachConsole failed` do node-pty no Windows permanece apenas como ruído conhecido; o CI confirmou os gates nativos.
+
+**Limitação registrada.** Não há axe-core/harness DOM instalado neste workspace; a validação de acessibilidade usou testes determinísticos, o smoke visual do canvas e os jobs multiplataforma do CI. O build local exigiu apenas um shim temporário dos tipos do Excalidraw e a extração local de `mermaid@11.12.1`; ambos foram removidos ou mantidos fora do versionamento.
+
+**Evidência.** CI: https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/35055462688 · Release: https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.357
