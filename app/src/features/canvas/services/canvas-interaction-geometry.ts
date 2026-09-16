@@ -13,6 +13,26 @@ export type CanvasScreenRect = {
   height: number
 }
 
+export type CanvasFlowBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export type CanvasSafeViewport = {
+  x: number
+  y: number
+  zoom: number
+}
+
+export type CanvasSafeViewportOptions = {
+  /** Mantém a mesma escala de respiro do `fitView` do React Flow. */
+  padding?: number
+  minZoom?: number
+  maxZoom?: number
+}
+
 type CanvasRectLike = {
   left: number
   top: number
@@ -108,6 +128,60 @@ export function safeViewportOffset(
   return {
     x: safeCenter.x - containerCenter.x,
     y: safeCenter.y - containerCenter.y,
+  }
+}
+
+/**
+ * Calcula o viewport que enquadra os bounds dentro da área útil, e não no
+ * retângulo inteiro do flow. O `fitView` nativo centraliza no container todo;
+ * em uma tela com sidebar e inspector isso pode colocar a extremidade do
+ * grafo por baixo dessas superfícies. O resultado usa coordenadas relativas
+ * ao container do React Flow, como `setViewport` espera.
+ */
+export function viewportForSafeArea(
+  bounds: CanvasFlowBounds,
+  container: Pick<CanvasScreenRect, 'left' | 'top' | 'right' | 'bottom'>,
+  safeArea: Pick<CanvasScreenRect, 'left' | 'top' | 'right' | 'bottom'>,
+  options: CanvasSafeViewportOptions = {},
+): CanvasSafeViewport | undefined {
+  if (
+    !Number.isFinite(bounds.x) ||
+    !Number.isFinite(bounds.y) ||
+    !Number.isFinite(bounds.width) ||
+    !Number.isFinite(bounds.height) ||
+    bounds.width <= 0 ||
+    bounds.height <= 0
+  ) {
+    return undefined
+  }
+
+  const safeWidth = Math.max(0, safeArea.right - safeArea.left)
+  const safeHeight = Math.max(0, safeArea.bottom - safeArea.top)
+  if (safeWidth <= 0 || safeHeight <= 0) {
+    return undefined
+  }
+
+  const padding = Number.isFinite(options.padding) ? Math.max(0, options.padding as number) : 0
+  // React Flow resolves a numeric padding to:
+  // `viewport - viewport / (1 + padding)`, split over both sides.
+  const availableWidth = safeWidth / (1 + padding)
+  const availableHeight = safeHeight / (1 + padding)
+  const rawZoom = Math.min(availableWidth / bounds.width, availableHeight / bounds.height)
+  const minZoom = Number.isFinite(options.minZoom) ? Math.max(0, options.minZoom as number) : 0.05
+  const maxZoom = Number.isFinite(options.maxZoom)
+    ? Math.max(minZoom, options.maxZoom as number)
+    : 2
+  const zoom = Math.min(maxZoom, Math.max(minZoom, rawZoom))
+  const safeCenter = canvasScreenCenter(safeArea)
+  const boundsCenter = {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  }
+
+  return {
+    x: safeCenter.x - container.left - boundsCenter.x * zoom,
+    y: safeCenter.y - container.top - boundsCenter.y * zoom,
+    zoom,
   }
 }
 

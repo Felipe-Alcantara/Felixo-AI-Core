@@ -6,6 +6,7 @@ import {
   getCanvasSafeArea,
   safeViewportOffset,
   screenRectsOverlap,
+  viewportForSafeArea,
 } from './canvas-interaction-geometry'
 
 const viewport = { left: 0, top: 0, right: 1280, bottom: 738, width: 1280, height: 738 }
@@ -69,6 +70,50 @@ describe('área útil de interação do Canvas', () => {
     })
 
     expect(safeViewportOffset(viewport, safe)).toEqual({ x: 0, y: 9 })
+  })
+
+  it('enquadra bounds largos dentro da faixa livre, inclusive nas laterais', () => {
+    const safe = getCanvasSafeArea(viewport, {
+      toolbar: 288,
+      panel: 0,
+      drawer: 0,
+      inspector: 288,
+    })
+    const fitted = viewportForSafeArea(
+      { x: 0, y: 0, width: 1800, height: 1720 },
+      viewport,
+      safe,
+      { padding: 0.15, minZoom: 0.05, maxZoom: 2 },
+    )
+
+    expect(fitted).toBeDefined()
+    const result = fitted as NonNullable<typeof fitted>
+    const left = viewport.left + result.x
+    const top = viewport.top + result.y
+    const right = left + 1800 * result.zoom
+    const bottom = top + 1720 * result.zoom
+
+    expect(left).toBeGreaterThanOrEqual(safe.left)
+    expect(top).toBeGreaterThanOrEqual(safe.top)
+    expect(right).toBeLessThanOrEqual(safe.right)
+    expect(bottom).toBeLessThanOrEqual(safe.bottom)
+  })
+
+  it('recusa bounds vazios ou faixa sem largura', () => {
+    expect(
+      viewportForSafeArea(
+        { x: 0, y: 0, width: 0, height: 100 },
+        viewport,
+        getCanvasSafeArea(viewport, { toolbar: 0, panel: 0, drawer: 0, inspector: 0 }),
+      ),
+    ).toBeUndefined()
+    expect(
+      viewportForSafeArea(
+        { x: 0, y: 0, width: 100, height: 100 },
+        viewport,
+        { left: 320, top: 48, right: 320, bottom: 708 },
+      ),
+    ).toBeUndefined()
   })
 
   it('considera oclusão somente quando há área compartilhada', () => {

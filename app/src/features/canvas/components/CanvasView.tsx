@@ -148,6 +148,7 @@ import {
   flowCenterForSafeArea,
   getCanvasSafeArea,
   safeViewportOffset,
+  viewportForSafeArea,
 } from '../services/canvas-interaction-geometry'
 import type { CanvasNodeType, CanvasSkill, DiagnosisRequestStatus } from '../types'
 
@@ -172,6 +173,15 @@ type FlowPositionMapper = {
     viewport: { x: number; y: number; zoom: number },
     options?: { duration?: number },
   ) => void
+  getNodes?: () => Node[]
+  // `getNodesBounds` is generic over the node union supplied to React Flow;
+  // `never[]` keeps this local mapper assignable to any concrete instance.
+  getNodesBounds?: (nodes: never[]) => {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
 }
 
 type RestoredAgentTerminals = {
@@ -917,6 +927,34 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     )
   }, [getSafeCanvasScreenRect])
 
+  const setSafeViewportForBounds = useCallback(
+    (
+      bounds: { x: number; y: number; width: number; height: number },
+      duration: number,
+    ) => {
+      const flowInstance = flowInstanceRef.current
+      const container = flowContainerRef.current
+      const safeArea = getSafeCanvasScreenRect()
+      if (!flowInstance || !container || !safeArea || !flowInstance.setViewport) {
+        return false
+      }
+
+      const viewport = viewportForSafeArea(
+        bounds,
+        container.getBoundingClientRect(),
+        safeArea,
+        { padding: 0.15, minZoom: 0.05, maxZoom: 2 },
+      )
+      if (!viewport) {
+        return false
+      }
+
+      flowInstance.setViewport(viewport, { duration })
+      return true
+    },
+    [getSafeCanvasScreenRect],
+  )
+
   const fitCanvasViewSafely = useCallback(
     (duration = 240) => {
       const flowInstance = flowInstanceRef.current
@@ -926,11 +964,19 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
       // React Flow resolve a promise quando a animação termina. O fallback
       // para `void` mantém o mapper pequeno e permite os doubles dos testes.
+      const bounds =
+        flowInstance.getNodes && flowInstance.getNodesBounds
+          ? flowInstance.getNodesBounds(flowInstance.getNodes() as never[])
+          : undefined
+      if (bounds && setSafeViewportForBounds(bounds, duration)) {
+        return
+      }
+
       Promise.resolve(flowInstance.fitView({ padding: 0.15, duration })).then(
         shiftViewportToSafeArea,
       )
     },
-    [shiftViewportToSafeArea],
+    [setSafeViewportForBounds, shiftViewportToSafeArea],
   )
 
   const fitBoundsSafely = useCallback(
@@ -943,11 +989,15 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         return
       }
 
+      if (setSafeViewportForBounds(bounds, duration)) {
+        return
+      }
+
       Promise.resolve(
         flowInstance.fitBounds(bounds, { padding: 0.1, duration }),
       ).then(shiftViewportToSafeArea)
     },
-    [shiftViewportToSafeArea],
+    [setSafeViewportForBounds, shiftViewportToSafeArea],
   )
 
   useEffect(() => {
