@@ -5517,3 +5517,56 @@ Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
 **Limitação registrada.** Não há axe-core/harness DOM instalado neste workspace; a validação de acessibilidade usou testes determinísticos, o smoke visual do canvas e os jobs multiplataforma do CI. O build local exigiu apenas um shim temporário dos tipos do Excalidraw e a extração local de `mermaid@11.12.1`; ambos foram removidos ou mantidos fora do versionamento.
 
 **Evidência.** CI: https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/35055462688 · Release: https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.357
+
+## [2026-09-16] Segurança: sanitização de Markdown com saída de terminal
+
+**Task.** Executar “Felixo AI Core/Segurança — sanitizar Markdown de terminal,
+HTML, URLs e imagens”, derivada da auditoria do commit 109a679 e das
+superfícies MarkdownContent, WebpageNode e terminal-external-link.
+
+**Causa medida.** O schema já removia HTML ativo e esquemas perigosos, mas a
+prévia ainda podia materializar imagens HTTP/HTTPS sem concessão, não limitava
+o texto antes do parser e não normalizava controles ANSI de uma saída de
+terminal. O link do terminal também deixava o parser de URL normalizar
+controles antes da validação.
+
+**Implementação.**
+
+- markdown-content-safety.ts remove CSI/OSC/C0/C1 de saída de terminal,
+  normaliza quebras e limita o Markdown a 200.000 caracteres antes de
+  react-markdown; a interface anuncia o corte com role=status.
+- rehypeRaw continua seguido pelo schema explícito de rehype-sanitize, com
+  protocolos remotos de src bloqueados e a segunda barreira mantendo somente
+  imagens raster data: base64 de até 2 MiB. Imagem HTTP/HTTPS vira texto
+  alternativo, sem elemento de imagem nem request automático.
+- O corpus de testes mistura ANSI + Markdown e cobre script, handler, SVG,
+  CSS remoto, OSC 8 com javascript:, URLs não aprovadas, truncamento,
+  surrogate, data image e arquivo local autorizado. A validação de URL do
+  terminal recusa controles, host ausente e protocolos fora de HTTP/HTTPS.
+- README, guia do usuário e docs/projeto/ARQUITETURA.md documentam a
+  fronteira e a decisão de bloquear imagem remota. A revisão de dependências
+  não encontrou pacote novo necessário; rehype-raw/rehype-sanitize e
+  remark-gfm existentes permanecem suficientes.
+
+**Validação local.** Início: 16/09/2026 08:59 (America/Sao_Paulo). Fechamento
+da implementação e dos testes locais: 16/09/2026 09:23. npm test: 1.335/1.335
+testes em 52 suítes; npm run test:frontend -- --reporter=dot: 953 aprovados,
+1 ignorado; npm run test:native: 5/5; testes focados de Markdown/ANSI/links:
+34 aprovados; npm run lint: sucesso; npm run build e npx vite build: sucesso
+com 4.345 módulos; npm run test:canvas-smoke: sucesso. A primeira execução do
+typecheck encontrou dist/types ausente na instalação local de
+@excalidraw/excalidraw; após restaurar os tipos declarados no pacote, o mesmo
+build completo passou, sem alteração no lockfile. O stderr recorrente
+AttachConsole failed do node-pty no Windows é ruído conhecido e não alterou o
+resultado.
+
+**Limitação.** Não há uma concessão visual para reativar imagens remotas nesta
+fatia; se o produto precisar carregá-las, abrir uma task específica para
+consentimento explícito, política de referrer e proxy controlado. WebpageNode
+continua com sua política separada por ser um navegador embutido criado pelo
+usuário. Nenhuma conta, chave ou credencial foi acessada.
+
+**Estado.** Código e documentação prontos para commit, push e gates remotos.
+
+**Evidência de origem.** Repositório:
+https://github.com/Felipe-Alcantara/Felixo-AI-Core

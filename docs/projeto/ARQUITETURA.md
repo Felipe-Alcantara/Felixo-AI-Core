@@ -344,13 +344,16 @@ um JSON da comparação por runner.
 
 ### Renderização segura de Markdown
 
-`MarkdownContent` recebe texto de agentes, arquivos e histórico como conteúdo
-não confiável. O pipeline mantém `remark-gfm` e os elementos visuais
-necessários, mas executa `rehypeRaw` seguido de um schema explícito do
-`rehype-sanitize`: HTML ativo, embeds, SVG, mídia e atributos de evento não
-chegam ao DOM. A transformação final de URLs repete a decisão no boundary do
-React: links ficam em `http:`, `https:`, `mailto:` ou âncoras; imagens remotas
-ficam em `http:`/`https:`; `data:` só aceita imagens raster base64 de até 2 MiB.
+`MarkdownContent` recebe texto de agentes, arquivos, histórico e saídas com
+formato de terminal como conteúdo não confiável. Antes do parser, o módulo
+remove sequências ANSI, normaliza quebras e limita o texto a 200.000
+caracteres. O pipeline mantém `remark-gfm` e os elementos visuais necessários,
+mas executa `rehypeRaw` seguido de um schema explícito do `rehype-sanitize`:
+HTML ativo, embeds, SVG, mídia, CSS remoto e atributos de evento não chegam ao
+DOM. A transformação final de URLs repete a decisão no boundary do React:
+links ficam em `http:`, `https:`, `mailto:` ou âncoras; imagens remotas são
+bloqueadas e viram texto alternativo; `data:` só aceita imagens raster base64
+de até 2 MiB.
 
 Uma referência relativa de imagem só é convertida em `file://` quando o
 componente recebeu o `baseDir` derivado de um arquivo já autorizado pelo

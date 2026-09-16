@@ -2,8 +2,9 @@
  * Resolve o `src` de uma imagem de Markdown para algo que o navegador
  * consiga carregar de fato.
  *
- * URLs remotas (`http:`/`https:`) e imagens `data:` pequenas e rasterizadas
- * passam por uma política explícita. Caminho relativo (`./foto.png`, a
+ * Imagens `data:` pequenas e rasterizadas passam por uma política explícita;
+ * URLs remotas (`http:`/`https:`) são bloqueadas no renderer para não criar
+ * requests automáticos. Caminho relativo (`./foto.png`, a
  * convenção do blog para imagem de post — ver `src/content/posts/<slug>/` no
  * felixo-blog) só carrega se soubermos de que pasta ele é relativo: por isso
  * ele é resolvido contra `baseDir` (a pasta do arquivo aberto) e vira uma URL
@@ -28,7 +29,7 @@ export function resolveMarkdownImageSrc(
 
   if (!isSafeMarkdownImageReference(normalizedSrc)) return undefined
 
-  if (isRemoteImageUrl(normalizedSrc) || isSafeDataImage(normalizedSrc)) {
+  if (isSafeDataImage(normalizedSrc)) {
     return normalizedSrc
   }
 
@@ -46,7 +47,7 @@ export function resolveMarkdownImageSrc(
 export function sanitizeMarkdownUrl(value: string, key: string): string {
   const normalizedValue = value.trim()
 
-  if (!normalizedValue) return ''
+  if (!normalizedValue || hasUrlControl(normalizedValue)) return ''
 
   if (key === 'href') {
     return isSafeMarkdownLink(normalizedValue) ? normalizedValue : ''
@@ -61,7 +62,10 @@ export function sanitizeMarkdownUrl(value: string, key: string): string {
 
 function isSafeMarkdownLink(value: string): boolean {
   if (value.startsWith('#')) return true
-  return isSafeRemoteUrl(value, ['http:', 'https:', 'mailto:'])
+  return (
+    isSafeRemoteUrl(value, ['http:', 'https:']) ||
+    isSafeMailto(value)
+  )
 }
 
 function isSafeMarkdownImageReference(value: string): boolean {
@@ -71,7 +75,10 @@ function isSafeMarkdownImageReference(value: string): boolean {
     return false
   }
 
-  if (isRemoteImageUrl(value) || isSafeDataImage(value)) return true
+  // Uma URL remota tem protocolo permitido, mas não pode disparar tracking ou
+  // transferir contexto a um servidor externo sem uma concessão explícita.
+  if (isSafeDataImage(value)) return true
+  if (isRemoteImageUrl(value)) return false
   if (hasUrlScheme(value)) return false
 
   // Fragmentos e query strings não são caminhos de imagem locais.
@@ -84,7 +91,23 @@ function isRemoteImageUrl(value: string): boolean {
 
 function isSafeRemoteUrl(value: string, protocols = ['http:', 'https:']): boolean {
   const scheme = getUrlScheme(value)
-  return scheme ? protocols.includes(scheme) : false
+  if (!scheme || !protocols.includes(scheme)) return false
+
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === scheme && Boolean(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
+function isSafeMailto(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'mailto:' && Boolean(parsed.pathname)
+  } catch {
+    return false
+  }
 }
 
 function getUrlScheme(value: string): string | undefined {
@@ -134,6 +157,18 @@ export function dirnameOf(absolutePath: string | undefined): string | undefined 
 /** `http:`, `https:`, `data:`, `file:`, `mailto:`, … — qualquer esquema já resolvido. */
 function hasUrlScheme(value: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(value)
+}
+
+function hasUrlControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+
+    if ((code >= 0 && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 function isPosixAbsolute(value: string): boolean {

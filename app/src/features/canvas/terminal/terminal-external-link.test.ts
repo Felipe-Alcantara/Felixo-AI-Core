@@ -21,6 +21,13 @@ describe('terminal external links', () => {
     },
   )
 
+  it.each(['\u001b[31mhttps://example.com\u001b[0m', 'https://example.com\njavascript:alert(1)', 'https://'])(
+    'rejects controls or incomplete URL %s',
+    (uri) => {
+      expect(isAllowedTerminalExternalLink(uri)).toBe(false)
+    },
+  )
+
   it('requires exactly Ctrl or Cmd before opening', () => {
     expect(hasTerminalLinkModifier(mouseEvent({ ctrlKey: true }))).toBe(true)
     expect(hasTerminalLinkModifier(mouseEvent({ metaKey: true }))).toBe(true)

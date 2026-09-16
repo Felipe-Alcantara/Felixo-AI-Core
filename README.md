@@ -55,7 +55,7 @@ Base funcional entregue:
 - **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI; no Codex, também mostra a quantidade, validade e detalhes dos resets bancados por conta, com uso protegido por confirmação
 - Painel **Tarefas Notion** no canvas, com conexão própria cifrada, seleção de database compartilhada, cache offline e CRUD de tarefas
-- Preview de Markdown com sanitização de HTML/URLs externos, preservando GFM e imagens locais somente pela autorização do arquivo
+- Preview de Markdown com sanitização de HTML/URLs externos, remoção de ANSI, limite de 200.000 caracteres e imagens remotas bloqueadas por padrão; GFM e imagens locais seguem a autorização do arquivo
 - Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
 - Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`

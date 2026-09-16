@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { MarkdownContent } from './MarkdownContent'
+import { MAX_MARKDOWN_CONTENT_CHARS } from './markdown-content-safety'
 
 function renderMarkdown(content: string, baseDir?: string) {
   return renderToStaticMarkup(
@@ -13,6 +14,28 @@ function renderMarkdown(content: string, baseDir?: string) {
 }
 
 describe('MarkdownContent', () => {
+  it('sanitiza corpus malicioso misturado com ANSI antes do renderer', () => {
+    const html = renderMarkdown(`
+\u001b[31m# Saída do terminal\u001b[0m
+
+\u001b]8;;javascript:alert(1)\u0007[link perigoso]\u001b]8;;\u0007
+
+<svg><script>alert(1)</script></svg>
+<img src="https://tracker.example/pixel.gif" onerror="alert(2)">
+<style>@import url(https://tracker.example/style.css)</style>
+<link rel="stylesheet" href="https://tracker.example/style.css">
+<div onclick="alert(3)"><strong>seguro</strong></div>
+`)
+
+    expect(html).toMatch(/<h1[^>]*>Saída do terminal<\/h1>/)
+    expect(html).toMatch(/<strong[^>]*>seguro<\/strong>/)
+    expect(html.includes(String.fromCharCode(0x1b))).toBe(false)
+    expect(html.includes(String.fromCharCode(0x7f))).toBe(false)
+    expect(html).not.toMatch(/<svg|<script|<style|<link|onerror=|onclick=/i)
+    expect(html).not.toContain('tracker.example')
+    expect(html).not.toMatch(/href="(?:javascript|data):/i)
+  })
+
   it('remove HTML ativo e atributos de evento, preservando elementos visuais seguros', () => {
     const html = renderMarkdown(`
 <div onmouseover="alert(1)" style="color: red">
@@ -48,7 +71,7 @@ describe('MarkdownContent', () => {
     expect(html).not.toMatch(/href="(?:javascript|file|gopher|data):/i)
   })
 
-  it('resolve imagens remotas, data raster e arquivos relativos autorizados', () => {
+  it('converte imagem remota em texto e mantém data raster e arquivos autorizados', () => {
     const html = renderMarkdown(
       `
 ![remota](https://example.com/foto.png)
@@ -58,9 +81,17 @@ describe('MarkdownContent', () => {
       '/home/user/posts/ola-mundo',
     )
 
-    expect(html).toContain('src="https://example.com/foto.png"')
+    expect(html).toContain('remota')
+    expect(html).not.toContain('src="https://example.com/foto.png"')
     expect(html).toContain('src="data:image/png;base64,AAAA"')
     expect(html).toContain('src="file:///home/user/posts/ola-mundo/foto%20com%20espa%C3%A7o.png"')
+  })
+
+  it('avisa quando o conteúdo excede o limite de segurança', () => {
+    const html = renderMarkdown(`início\n\n${'x'.repeat(MAX_MARKDOWN_CONTENT_CHARS + 1)}`)
+
+    expect(html).toContain('Conteúdo truncado após 200.000 caracteres')
+    expect(html).toContain('início')
   })
 
   it('recusa imagens locais implícitas e esquemas de imagem perigosos', () => {
