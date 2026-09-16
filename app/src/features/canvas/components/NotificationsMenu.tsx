@@ -106,6 +106,10 @@ export function NotificationsMenu({
 
   useEffect(() => {
     if (!open || !panelElement) return
+    // Move focus as soon as the panel is mounted. The frame below keeps the
+    // behavior stable when an opening animation or Electron's pointer event
+    // dispatch puts focus back on the trigger in the same tick.
+    panelElement.focus()
     const frame = window.requestAnimationFrame(() => {
       panelElement.focus()
     })

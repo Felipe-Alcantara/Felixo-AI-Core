@@ -339,8 +339,11 @@ async function checarInteracoes(page) {
   await bell.click()
   const notifications = page.locator('#canvas-notifications-panel')
   await notifications.waitFor({ state: 'visible', timeout: 5_000 })
-  const notificationFocused = await page.evaluate(() => document.activeElement?.id === 'canvas-notifications-panel')
-  if (!notificationFocused) throw new Error('[canvas-smoke] abrir notificacoes nao focou o painel')
+  await page.waitForFunction(
+    () => document.activeElement?.id === 'canvas-notifications-panel',
+    null,
+    { timeout: 5_000 },
+  )
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => !document.querySelector('#canvas-notifications-panel'), null, { timeout: 5_000 })
   await page.waitForFunction(
