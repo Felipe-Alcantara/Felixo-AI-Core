@@ -14,6 +14,7 @@ import {
   Info,
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
+import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { ProviderMark } from '../../shared/brand/ProviderMark'
 import { configuredAgentModel, providerIdentity } from '../../shared/brand/provider-identity'
 import { CopyButton } from './TerminalCopyButton'
@@ -52,6 +53,7 @@ type TerminalNodeDataWithHandlers = TerminalNodeData & {
 function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = (data ?? {}) as TerminalNodeDataWithHandlers
   const store = useTerminalSessions()
+  const { performanceMode } = usePerformanceMode()
   const snapshot = useSessionSnapshot(id)
   const metadata = useSessionMetadata(id)
   const { deleteElements } = useReactFlow()
@@ -80,6 +82,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       agentSession: nodeData.agentSession,
       resumeAgentSession: nodeData.resumeAgentSession,
       terminalCount: nodeData.terminalCount,
+      performanceMode,
       onAgentSession: (reference) => onAgentSession?.(id, reference),
       onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
@@ -99,6 +102,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.agentSession,
     nodeData.resumeAgentSession,
     nodeData.terminalCount,
+    performanceMode,
     onAgentSession,
     onOpenWebpage,
     nodeData.sessionStartedAt,
@@ -140,6 +144,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       agentSession: nodeData.agentSession,
       resumeAgentSession: canResume,
       terminalCount: nodeData.terminalCount,
+      performanceMode,
       onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),
       onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  Bell,
   ChevronDown,
   FileText,
   FolderOpen,
@@ -65,6 +66,9 @@ const TOOLBAR_BUTTON_CLASS = `felixo-btn ${TOOLBAR_BUTTON_SHAPE}`
 type CanvasToolbarProps = {
   activeTool: CanvasTool | null
   onSelectTool: (tool: CanvasTool) => void
+  /** Agentes aguardando ação + atualização pendente, se houver — mostrado no
+   *  sino do rail lateral. */
+  notificationCount: number
   updatePresentation: UpdatePresentation
   onInstallUpdate: () => void
   /** Verifica atualização agora, oferecido quando a última verificação falhou. */
@@ -108,6 +112,7 @@ type CanvasToolbarProps = {
 export function CanvasToolbar({
   activeTool,
   onSelectTool,
+  notificationCount,
   updatePresentation,
   onInstallUpdate,
   onCheckUpdate,
@@ -165,6 +170,22 @@ export function CanvasToolbar({
         </ActivityRailButton>
         <ActivityRailButton label="Projetos" onClick={() => onSelectTool('projects')}>
           <FolderOpen size={18} />
+        </ActivityRailButton>
+        <ActivityRailButton
+          label={notificationCount > 0 ? `Notificações (${notificationCount})` : 'Notificações'}
+          active={activeTool === 'notifications'}
+          onClick={() => onSelectTool('notifications')}
+          highlight={notificationCount > 0}
+        >
+          <Bell size={18} />
+          {notificationCount > 0 && (
+            <span
+              className="felixo-notifications-badge pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-error)] px-1 text-[9px] font-bold text-[var(--f-core-black-deep)] ring-2 ring-[var(--f-core-black-deep)]"
+              aria-hidden
+            >
+              {notificationCount}
+            </span>
+          )}
         </ActivityRailButton>
         <div className="mt-auto">
           <ActivityRailButton label="Configurações" onClick={() => onSelectTool('settings')}>
@@ -318,6 +339,7 @@ function ActivityRailButton({
   expanded,
   onClick,
   children,
+  highlight = false,
 }: {
   label: string
   active?: boolean
@@ -330,11 +352,18 @@ function ActivityRailButton({
   expanded?: boolean
   onClick: () => void
   children: ReactNode
+  /** Pendência importante aguardando: acende um contorno pulsante em volta
+   *  do botão, além do badge numérico — reservado para coisas que realmente
+   *  precisam de atenção (agente parado, atualização pronta), não qualquer
+   *  novidade. Respeita Modo Performance e "reduzir movimento" (ver index.css). */
+  highlight?: boolean
 }) {
   return (
     <button
       type="button"
-      className={`felixo-btn-icon felixo-activity-rail-button ${active ? 'is-active' : ''}`}
+      className={`felixo-btn-icon felixo-activity-rail-button relative ${active ? 'is-active' : ''} ${
+        highlight ? 'felixo-activity-rail-button-highlight' : ''
+      }`}
       onClick={onClick}
       title={label}
       aria-label={label}

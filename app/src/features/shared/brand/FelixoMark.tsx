@@ -28,8 +28,10 @@ export function FelixoSymbol({
   alt = 'Felixo AI Core',
 }: FelixoSymbolProps) {
   // A mesma arte monocromática é usada nos dois contextos de tema.
+  // Renderizado sempre em ícones pequenos: a variante 256px evita decodificar
+  // o bitmap 4096px inteiro (a arte-fonte, usada só no ícone do instalador).
   void tone
-  const filename = 'felixo-cyber-cat-4096.png'
+  const filename = 'felixo-cyber-cat-256.png'
 
   return (
     <img
@@ -60,7 +62,7 @@ export function FelixoLockup({ size = 18, className }: FelixoLockupProps) {
       aria-label="Felixo AI Core"
     >
       <img
-        src={brandPngAsset('felixo-cyber-cat-4096.png')}
+        src={brandPngAsset('felixo-cyber-cat-256.png')}
         alt=""
         className="felixo-lockup-mark"
         width={Math.round(size * 2.1)}

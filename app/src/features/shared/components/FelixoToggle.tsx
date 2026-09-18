@@ -21,7 +21,7 @@ export function FelixoToggle({ checked, onChange, label, disabled }: FelixoToggl
     >
       <span
         className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-[23px]' : 'translate-x-[3px]'
+          checked ? 'translate-x-[21px]' : 'translate-x-[3px]'
         }`}
       />
     </button>

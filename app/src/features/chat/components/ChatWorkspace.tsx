@@ -1295,7 +1295,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
               <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center">
                 <div className="felixo-chat-hero">
                   <img
-                    src={`${import.meta.env.BASE_URL}brand/logos/png/felixo-cyber-cat-4096.png`}
+                    src={`${import.meta.env.BASE_URL}brand/logos/png/felixo-cyber-cat-256.png`}
                     alt=""
                     aria-hidden
                     className="felixo-chat-hero-logo"

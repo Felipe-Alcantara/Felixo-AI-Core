@@ -235,6 +235,8 @@ type SessionOptions = {
   onAgentSession?: (reference: AgentSessionReference) => void
   /** Render-time total; never persisted in the canvas node. */
   terminalCount?: number
+  /** Render-time Modo Performance flag; never persisted in the canvas node. */
+  performanceMode?: boolean
 }
 
 type LinkMenuActions = {
@@ -494,6 +496,8 @@ export class TerminalSessionStore {
       // made once per xterm: changing this option later would discard old rows.
       scrollback: terminalScrollbackForSessionCount(
         options.terminalCount ?? this.sessions.size + 1,
+        'adaptive',
+        options.performanceMode,
       ),
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',

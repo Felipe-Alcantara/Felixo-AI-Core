@@ -23,8 +23,12 @@ import { preloadCanvasTool } from '../canvas-tool-preloaders'
 //
 // 'search' is not here either: Buscar sits at the top of the toolbar, where the
 // most-used action of the canvas shouldn't cost two clicks.
+//
+// 'notifications' also stays out of this menu: como Buscar, tem seu próprio
+// botão fixo no rail (ver CanvasToolbar.tsx), com o sino e o badge de pendências.
 export type CanvasTool =
   | 'search'
+  | 'notifications'
   | 'projects'
   | 'notes'
   | 'models'
