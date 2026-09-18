@@ -20,6 +20,10 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import {
+  MAX_MARKDOWN_CONTENT_CHARS,
+  prepareMarkdownContent,
+} from './markdown-content-safety'
 import { resolveMarkdownImageSrc, sanitizeMarkdownUrl } from './markdown-image-src'
 
 type MarkdownContentProps = {
@@ -113,9 +117,10 @@ const MARKDOWN_SANITIZE_SCHEMA = {
     cite: ['http', 'https'],
     href: ['http', 'https', 'mailto'],
     longDesc: ['http', 'https'],
-    // `data:` só passa pelo AST para a segunda barreira aplicar o MIME e o
-    // limite de 2 MiB em `isSafeDataImage`.
-    src: ['http', 'https', 'data'],
+    // Imagens remotas não entram no AST com `src`: a prévia mostra alt text e
+    // evita request automático. `data:` ainda passa pela segunda barreira,
+    // que aplica MIME raster e limite de 2 MiB em `isSafeDataImage`.
+    src: ['data'],
   },
   strip: [
     'script',
@@ -419,14 +424,28 @@ export function MarkdownContent({ content, baseDir }: MarkdownContentProps) {
         remarkPlugins={[remarkGfm]}
         urlTransform={sanitizeMarkdownUrl}
       >
-        {normalizedContent}
+        {normalizedContent.text}
       </ReactMarkdown>
+      {normalizedContent.truncated && (
+        <p
+          className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-2 py-1 text-[11px] text-[var(--color-warning)]"
+          role="status"
+        >
+          Conteúdo truncado após {MAX_MARKDOWN_CONTENT_CHARS.toLocaleString('pt-BR')}{' '}
+          caracteres para proteger a prévia.
+        </p>
+      )}
     </div>
   )
 }
 
 function normalizeMarkdownContent(content: string) {
-  return unwrapMarkdownDocumentFences(content.replace(/\r\n?/g, '\n'))
+  const prepared = prepareMarkdownContent(content)
+
+  return {
+    text: unwrapMarkdownDocumentFences(prepared.text),
+    truncated: prepared.truncated,
+  }
 }
 
 function unwrapMarkdownDocumentFences(content: string) {

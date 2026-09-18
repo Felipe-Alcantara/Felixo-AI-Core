@@ -2,6 +2,7 @@ import type { AgentSessionReference } from '../services/agent-session'
 import type { ContextFileKind } from '../services/context-file-delivery'
 import type { TerminalScrollbackStatus } from './terminal-scrollback'
 import type { SessionMetadata } from './session-metadata'
+import type { PromptInsertion } from '../../shared/types/prompt-insertion'
 
 /** The small lifecycle vocabulary needed by cards, the dock, and notices. */
 export type SessionActivity =
@@ -20,6 +21,8 @@ export type SessionSnapshot = {
   message?: string
   contextWarning?: string
   lastPrompt?: string
+  /** Provenance of the most recent programmatic or submitted prompt. */
+  lastPromptInsertion?: PromptInsertion
   generation?: number
 }
 
@@ -57,6 +60,19 @@ export type SendTextResult =
   | { delivered: true }
   | { delivered: false; reason: 'no-session' | 'rejected' | 'error'; message?: string }
 
+/** Optional context kind plus the identity kept beside the terminal payload. */
+export type SendTextOptions = {
+  kind?: ContextFileKind
+  insertion?: PromptInsertion
+  /** Alias kept for integrations that call the record a prompt insertion. */
+  promptInsertion?: PromptInsertion
+  /** Alias accepted by older adapters that expose metadata terminology. */
+  metadata?: PromptInsertion
+}
+
+/** Third argument accepted by the store; a record can be passed directly. */
+export type SendTextInput = SendTextOptions | PromptInsertion
+
 /**
  * Runtime surface shared by the canvas and the real xterm-backed store.
  * Keeping this contract free of the concrete store lets the canvas render
@@ -72,7 +88,7 @@ export type TerminalSessionStoreApi = {
   sendText: (
     id: string,
     text: string,
-    options?: { kind?: ContextFileKind },
+    options?: SendTextInput,
   ) => Promise<SendTextResult>
   copy: (id: string) => Promise<string>
   getTranscript: (id: string) => TerminalTranscript

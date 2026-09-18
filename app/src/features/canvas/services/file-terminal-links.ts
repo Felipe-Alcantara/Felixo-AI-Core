@@ -7,10 +7,11 @@ import {
   buildFileLinkPrompt,
 } from './file-link-prompt'
 import type { DiagnosisRequestStatus } from '../types'
-import type { ContextFileKind } from './context-file-delivery'
+import { createFilePromptInsertion } from '../../shared/types/prompt-insertion'
+import type { SendTextInput } from '../terminal/terminal-session-api'
 
 type TerminalTextSink = {
-  sendText: (id: string, text: string, options?: { kind?: ContextFileKind }) => void
+  sendText: (id: string, text: string, options?: SendTextInput) => void
 }
 
 /** The file + terminal a connection links, in either direction (or null). */
@@ -81,11 +82,11 @@ export async function announceFileNodeToTerminalNode(
     return
   }
 
-  store.sendText(
-    terminalNode.id,
-    buildFileLinkPrompt(template, resolved.path, agentNameOf(terminalNode)),
-    { kind: 'scratchpad-link' },
-  )
+  const prompt = buildFileLinkPrompt(template, resolved.path, agentNameOf(terminalNode))
+  store.sendText(terminalNode.id, prompt, {
+    kind: 'scratchpad-link',
+    insertion: createFilePromptInsertion(fileName, prompt, { autoSubmit: true }),
+  })
 }
 
 /**
@@ -126,11 +127,11 @@ export async function requestRepoDiagnosis(
     return 'resolve-failed'
   }
 
-  store.sendText(
-    terminalNode.id,
-    buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentNameOf(terminalNode)),
-    { kind: 'scratchpad-link' },
-  )
+  const prompt = buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentNameOf(terminalNode))
+  store.sendText(terminalNode.id, prompt, {
+    kind: 'scratchpad-link',
+    insertion: createFilePromptInsertion(fileName, prompt, { autoSubmit: true }),
+  })
   return 'ok'
 }
 

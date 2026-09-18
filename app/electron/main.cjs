@@ -442,7 +442,9 @@ app.whenReady().then(async () => {
   })
   registerNotesIpcHandlers({ database: storageDatabase })
   canvasFilesHandlers = registerCanvasFilesIpcHandlers(getMainWindow, appPaths)
-  contextFilesHandlers = registerContextFilesIpcHandlers(appPaths)
+  contextFilesHandlers = registerContextFilesIpcHandlers(appPaths, {
+    logDelivery: (entry) => logQaEvent(entry),
+  })
   textFileHandlers = registerTextFileIpcHandlers(getMainWindow, {
     listProjectRoots: projectsHandlers.listProjectRoots,
   })

@@ -3,12 +3,21 @@ import {
   buildContextFileReferences,
   buildInlineFallback,
   contextFileKindForPrompt,
+  promptInsertionSourceForContextKind,
   isAgentCliCommand,
   quoteContextFileName,
   splitInitialContext,
 } from './context-file-delivery'
 
 describe('context-file-delivery', () => {
+  it('maps technical artifact kinds to prompt insertion origins', () => {
+    expect(promptInsertionSourceForContextKind('catalog-prompt')).toBe('catalog')
+    expect(promptInsertionSourceForContextKind('skill-prompt')).toBe('skill')
+    expect(promptInsertionSourceForContextKind('manual-prompt')).toBe('manual')
+    expect(promptInsertionSourceForContextKind('scratchpad-link')).toBe('file')
+    expect(promptInsertionSourceForContextKind('initial-context')).toBe('system')
+  })
+
   it('keeps agent slash commands out of the file channel', () => {
     expect(isAgentCliCommand('/resume\r')).toBe(true)
     expect(isAgentCliCommand('/clear')).toBe(true)

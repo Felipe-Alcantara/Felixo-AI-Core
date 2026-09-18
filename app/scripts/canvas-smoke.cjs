@@ -1,22 +1,10 @@
 'use strict'
 
 /**
- * Smoke de PR do Canvas — primeira fatia do gate de CI de evidência visual
- * (task "Felixo AI Core/Canvas — criar gate CI de evidência visual,
- * estabilidade e regressão"). Reusa a mesma infraestrutura do `felixo
- * devtools` (sessão isolada, invisível, porta CDP local) em vez de duplicar
- * lógica de spawn/CDP — é a mesma automação que um agente usa manualmente.
- *
- * Fatia 1: mount (o canvas hidrata de verdade) e viewport mínimo (a interface
- * não estoura a largura da janela num tamanho pequeno).
- * Fatia 2: os três landmarks de layout (topbar/sidebar/canvas, marcados com
- * `data-felixo-region`) existem e têm tamanho visível — um "no-overlap"
- * literal foi tentado e abandonado (o layout é full-bleed com chrome
- * flutuante por design; ver o comentário de `checarLandmarksVisiveis`) — e
- * foco inicial ao abrir uma ferramenta (o input de busca precisa herdar o
- * foco, não só aparecer), usando `data-felixo-canvas-panel`, que já existia
- * antes desta task. Terminal/notificação continuam pendentes — ver a página
- * da task para o plano completo.
+ * Smoke de interacoes do Canvas. A sessao DevTools e isolada e o PTY fake e
+ * ativado antes do Electron iniciar, por isso nenhum CLI real e executado.
+ * O fluxo cobre mount/hidratacao, todos os tipos persistidos, hit testing,
+ * foco/Tab/Escape, arrasto pequeno, conexao, gaveta, URL invalida e reload.
  */
 
 const path = require('node:path')
@@ -27,6 +15,74 @@ const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
 const MIN_VIEWPORT = { width: 375, height: 667 }
 const HYDRATION_TIMEOUT_MS = 20_000
+const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
+
+const FIXTURE_NODES = [
+  {
+    id: 'fixture-group',
+    type: 'group',
+    position: { x: 0, y: 0 },
+    width: 480,
+    height: 320,
+    data: { label: 'Grupo fixture' },
+  },
+  {
+    id: 'fixture-file',
+    type: 'file',
+    position: { x: 560, y: 0 },
+    width: 320,
+    height: 260,
+    data: { fileName: 'fixture.md', label: 'Arquivo fixture', mode: 'scratchpad' },
+  },
+  {
+    id: 'fixture-note',
+    type: 'note',
+    position: { x: 920, y: 0 },
+    width: 220,
+    height: 160,
+    data: { label: 'Nota fixture', text: 'Interacao do canvas' },
+  },
+  {
+    id: 'fixture-drawing',
+    type: 'drawing',
+    position: { x: 0, y: 400 },
+    width: 360,
+    height: 280,
+    data: { label: 'Desenho fixture', strokes: '' },
+  },
+  {
+    id: 'fixture-excalidraw',
+    type: 'excalidrawDrawing',
+    position: { x: 420, y: 400 },
+    width: 760,
+    height: 560,
+    data: { label: 'Excalidraw fixture', scene: '' },
+  },
+  {
+    id: 'fixture-webpage',
+    type: 'webpage',
+    position: { x: 1240, y: 0 },
+    width: 560,
+    height: 420,
+    data: { label: 'Web fixture', url: 'http://127.0.0.1:9/' },
+  },
+  {
+    id: 'fixture-notion',
+    type: 'notionTasks',
+    position: { x: 0, y: 1040 },
+    width: 1040,
+    height: 680,
+    data: { label: 'Notion fixture' },
+  },
+  {
+    id: 'fixture-terminal',
+    type: 'terminal',
+    position: { x: 1240, y: 520 },
+    width: 520,
+    height: 360,
+    data: { label: 'Terminal fixture', command: 'mock', args: [], cwd: '' },
+  },
+]
 
 function runCli(args) {
   return execFileSync(process.execPath, [FELIXO_CLI, 'devtools', ...args], {
@@ -35,25 +91,20 @@ function runCli(args) {
   })
 }
 
-// Boot frio do Electron sob Xvfb em runner de CI Linux mediu mais que os 15s
-// padrão do `waitForCdp` (o Vite já tinha respondido antes disso — não é
-// timeout de compilação, é o próprio processo Electron demorando pra abrir a
-// porta CDP). 60s dá folga sem mudar o padrão do CLI para quem chama sem
-// `--timeout`.
-const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
-
 async function withDevtoolsSession(action) {
+  const previousMockPty = process.env.FELIXO_DEVTOOLS_MOCK_PTY
+  process.env.FELIXO_DEVTOOLS_MOCK_PTY = '1'
   runCli(['launch', '--timeout', String(DEVTOOLS_LAUNCH_TIMEOUT_MS)])
   try {
     return await action()
   } finally {
-    // O quit precisa rodar mesmo se a asserção falhar, ou a sessão isolada
-    // (processo Electron + perfil temporário) vaza para a próxima execução.
     try {
       runCli(['quit'])
     } catch (error) {
-      console.warn(`[canvas-smoke] falha ao encerrar a sessão DevTools: ${error.message}`)
+      console.warn(`[canvas-smoke] falha ao encerrar a sessao DevTools: ${error.message}`)
     }
+    if (previousMockPty === undefined) delete process.env.FELIXO_DEVTOOLS_MOCK_PTY
+    else process.env.FELIXO_DEVTOOLS_MOCK_PTY = previousMockPty
   }
 }
 
@@ -67,80 +118,287 @@ async function checarMontagem(page) {
 
 const LAYOUT_REGIONS = ['topbar', 'sidebar', 'canvas']
 
-/**
- * Medido nesta task: o layout do canvas é full-bleed com chrome flutuante
- * (a topbar sobrepõe o canvas de propósito, e a sidebar hoje também é
- * posicionada por cima dele, não como coluna flex reservando espaço) — não
- * um layout empilhado onde regiões nunca se tocam. Um "no-overlap" literal
- * (nenhum par de regiões pode compartilhar área) marcaria como falha o
- * próprio design pretendido, então foi abandonado nesta fatia; ver a página
- * da task para o registro completo da tentativa.
- *
- * O que fica, então, é a checagem que não depende do modelo de posicionamento
- * mudar no futuro: cada landmark existe no DOM e tem tamanho visível de
- * verdade (não colapsou pra 0x0 por um CSS quebrado) — um regressão real de
- * layout (ex.: sidebar sumindo, topbar com altura zerada) ainda derruba isto.
- */
 async function checarLandmarksVisiveis(page) {
-  const retangulos = await page.evaluate((seletores) => {
-    return seletores.map((regiao) => {
-      const elemento = document.querySelector(`[data-felixo-region="${regiao}"]`)
-      if (!elemento) return { regiao, ausente: true }
-      const rect = elemento.getBoundingClientRect()
-      return { regiao, width: rect.width, height: rect.height }
-    })
-  }, LAYOUT_REGIONS)
+  const rectangles = await page.evaluate((regions) =>
+    regions.map((region) => {
+      const element = document.querySelector(`[data-felixo-region="${region}"]`)
+      if (!element) return { region, missing: true }
+      const rect = element.getBoundingClientRect()
+      return { region, width: rect.width, height: rect.height }
+    }), LAYOUT_REGIONS)
 
-  const ausentes = retangulos.filter((r) => r.ausente).map((r) => r.regiao)
-  if (ausentes.length > 0) {
-    throw new Error(`[canvas-smoke] região(ões) de layout não encontrada(s) no DOM: ${ausentes.join(', ')}`)
+  const missing = rectangles.filter((item) => item.missing).map((item) => item.region)
+  if (missing.length > 0) {
+    throw new Error(`[canvas-smoke] landmark(s) ausente(s): ${missing.join(', ')}`)
   }
 
-  const colapsadas = retangulos.filter((r) => r.width <= 0 || r.height <= 0)
-  if (colapsadas.length > 0) {
-    throw new Error(
-      `[canvas-smoke] região(ões) de layout com tamanho zerado: ${JSON.stringify(colapsadas)}`,
-    )
+  const collapsed = rectangles.filter((item) => item.width <= 0 || item.height <= 0)
+  if (collapsed.length > 0) {
+    throw new Error(`[canvas-smoke] landmark(s) colapsado(s): ${JSON.stringify(collapsed)}`)
+  }
+}
+
+async function checarNavegacaoPorTab(page) {
+  const canvas = page.locator('[data-felixo-region="canvas"]')
+  await canvas.focus()
+  await page.keyboard.press('Tab')
+  const focus = await page.evaluate(() => {
+    const active = document.activeElement
+    return {
+      tag: active?.tagName,
+      insideCanvas: Boolean(active?.closest('[data-felixo-region="canvas"]')),
+      interactive: active instanceof HTMLElement &&
+        ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A'].includes(active.tagName),
+    }
+  })
+  if (!focus.insideCanvas || !focus.interactive) {
+    throw new Error(`[canvas-smoke] Tab nao alcancou um controle do canvas: ${JSON.stringify(focus)}`)
   }
 }
 
 async function checarFocoAoAbrirFerramenta(page) {
-  // "Buscar" é o rótulo acessível do botão na sidebar (ActivityRailButton).
   await page.getByRole('button', { name: 'Buscar' }).click()
-
-  const painel = page.locator('[data-felixo-canvas-panel="search"]')
-  await painel.waitFor({ state: 'visible', timeout: 5_000 })
-
-  const campoFocado = await page.evaluate(() => {
-    const painelEl = document.querySelector('[data-felixo-canvas-panel="search"]')
-    const input = painelEl?.querySelector('input')
+  const panel = page.locator('[data-felixo-canvas-panel="search"]')
+  await panel.waitFor({ state: 'visible', timeout: 5_000 })
+  const focused = await page.evaluate(() => {
+    const panelElement = document.querySelector('[data-felixo-canvas-panel="search"]')
+    const input = panelElement?.querySelector('input')
     return Boolean(input) && document.activeElement === input
   })
-  if (!campoFocado) {
-    throw new Error(
-      '[canvas-smoke] abrir "Buscar" não moveu o foco para o campo de busca do painel',
-    )
+  if (!focused) {
+    throw new Error('[canvas-smoke] abrir Buscar nao moveu o foco para o campo')
+  }
+  await page.getByRole('button', { name: 'Buscar' }).click()
+}
+
+async function prepararFixture(page) {
+  const result = await page.evaluate(async (nodes) => {
+    const bridge = window.felixo?.canvas
+    if (!bridge) throw new Error('ponte canvas indisponivel')
+    const cleared = await bridge.clear()
+    if (!cleared?.ok) throw new Error(cleared?.message || 'limpeza do canvas falhou')
+    for (const node of nodes) {
+      const saved = await bridge.save(node)
+      if (!saved?.ok) throw new Error(saved?.message || `persistencia falhou: ${node.id}`)
+    }
+    const savedEdge = await bridge.saveEdge({
+      id: 'fixture-edge',
+      source: 'fixture-note',
+      target: 'fixture-file',
+    })
+    if (!savedEdge?.ok) throw new Error(savedEdge?.message || 'persistencia da conexao falhou')
+    const listedNodes = await bridge.list()
+    const listedEdges = await bridge.listEdges()
+    return {
+      nodeCount: listedNodes.nodes?.length ?? 0,
+      edgeCount: listedEdges.edges?.length ?? 0,
+    }
+  }, FIXTURE_NODES)
+
+  if (result.nodeCount !== FIXTURE_NODES.length || result.edgeCount !== 1) {
+    throw new Error(`[canvas-smoke] fixture incompleto: ${JSON.stringify(result)}`)
   }
 
-  // Fecha a ferramenta pra não vazar estado pro próximo check (viewport
-  // mínimo já espera a sidebar/topbar no estado padrão).
-  await page.getByRole('button', { name: 'Buscar' }).click()
+  await page.reload()
+  await checarMontagem(page)
+  await page.waitForFunction(
+    (ids) => ids.every((id) => document.querySelector(`[data-id="${id}"]`)),
+    FIXTURE_NODES.map((node) => node.id),
+    { timeout: HYDRATION_TIMEOUT_MS },
+  )
+}
+
+function rectangleOverlaps(first, second) {
+  return first && second && first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top
+}
+
+async function checarOclusaoDoFixture(page) {
+  const rectangles = await page.evaluate(() => {
+    const read = (selector) => {
+      const element = document.querySelector(selector)
+      if (!element) return null
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      if (style.display === 'none' || style.visibility === 'hidden' || rect.width <= 0 || rect.height <= 0) return null
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+    }
+    return {
+      group: read('[data-id="fixture-group"]'),
+      topbar: read('[data-felixo-region="topbar"]'),
+      sidebar: read('[data-felixo-region="sidebar"]'),
+      statusbar: read('.felixo-canvas-statusbar'),
+      inspector: read('.felixo-elements-inspector:not([aria-hidden="true"])'),
+    }
+  })
+
+  if (!rectangles.group) throw new Error('[canvas-smoke] grupo fixture nao foi renderizado')
+  for (const [name, rectangle] of Object.entries(rectangles)) {
+    if (name === 'group' || !rectangle) continue
+    if (rectangleOverlaps(rectangles.group, rectangle)) {
+      throw new Error(`[canvas-smoke] grupo fixture ocluido por ${name}: ${JSON.stringify(rectangles)}`)
+    }
+  }
+}
+
+async function checarAuditoriaDeAcessibilidade(page) {
+  const audit = await page.evaluate(() => {
+    const visible = (element) => {
+      if (element.closest('[aria-hidden="true"], [inert]')) return false
+      const style = getComputedStyle(element)
+      if (style.display === 'none' || style.visibility === 'hidden') return false
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    }
+    const controls = [...document.querySelectorAll('button, input, textarea, [role="separator"]')]
+      .filter(visible)
+      .filter((element) => !element.closest('.excalidraw'))
+    const unlabeled = controls
+      .filter((element) => {
+        if (element.hasAttribute('aria-label') || element.hasAttribute('aria-labelledby')) return false
+        if (element.getAttribute('title')?.trim()) return false
+        if (element.closest('label')) return false
+        return !element.textContent?.trim()
+      })
+      .map((element) => ({ tag: element.tagName.toLowerCase(), type: element.getAttribute('type'), outer: element.outerHTML.slice(0, 180) }))
+    const landmarks = ['topbar', 'sidebar', 'canvas'].map((region) => Boolean(document.querySelector(`[data-felixo-region="${region}"]`)))
+    return { unlabeled, landmarks }
+  })
+
+  if (audit.unlabeled.length > 0) {
+    throw new Error(`[canvas-smoke] controle sem nome acessivel: ${JSON.stringify(audit.unlabeled)}`)
+  }
+  if (audit.landmarks.some((present) => !present)) {
+    throw new Error(`[canvas-smoke] landmarks incompletos: ${JSON.stringify(audit.landmarks)}`)
+  }
+}
+
+async function checarInteracoes(page) {
+  const group = page.locator('[data-id="fixture-group"]')
+  // Use a real pointer hit test here. This catches a fixed surface or the
+  // React Flow pane stealing the click from a node that looks visible.
+  await group.click()
+  const selected = await group.evaluate((element) => element.classList.contains('selected'))
+  if (!selected) throw new Error('[canvas-smoke] selecionar o grupo nao marcou o node')
+
+  const dragNode = page.locator('[data-id="fixture-note"]')
+  const before = await page.evaluate(async () => (await window.felixo.canvas.list()).nodes.find((node) => node.id === 'fixture-note')?.position)
+  const grip = dragNode.locator('.felixo-node-grip')
+  const gripBox = await grip.boundingBox()
+  if (!gripBox) throw new Error('[canvas-smoke] grip do grupo sem hit box')
+  // The group title is an editable input (`nodrag`); start in the parent's
+  // left padding so React Flow receives the drag handle event itself.
+  const dragX = gripBox.x + Math.min(3, gripBox.width / 4)
+  const dragY = gripBox.y + gripBox.height / 2
+  await page.mouse.move(dragX, dragY)
+  await page.mouse.down()
+  await page.mouse.move(dragX + 14, dragY + 9, { steps: 5 })
+  await page.mouse.up()
+  await page.waitForTimeout(800)
+  const after = await page.evaluate(async () => (await window.felixo.canvas.list()).nodes.find((node) => node.id === 'fixture-note')?.position)
+  if (!before || !after || (before.x === after.x && before.y === after.y)) {
+    throw new Error(`[canvas-smoke] arrasto pequeno da nota nao persistiu: antes=${JSON.stringify(before)} depois=${JSON.stringify(after)}`)
+  }
+
+  const source = page.locator('[data-id="fixture-drawing"] .react-flow__handle.source').first()
+  const target = page.locator('[data-id="fixture-excalidraw"] .react-flow__handle.target').first()
+  const sourceBox = await source.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!sourceBox || !targetBox) throw new Error('[canvas-smoke] handles da conexao sem hit box')
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 })
+  await page.mouse.up()
+  await page.waitForTimeout(500)
+  const edgesAfterConnect = await page.evaluate(async () => (await window.felixo.canvas.listEdges()).edges || [])
+  if (edgesAfterConnect.length < 2) {
+    throw new Error(`[canvas-smoke] conexao por handle nao persistiu: ${JSON.stringify(edgesAfterConnect)}`)
+  }
+
+  const terminalTrigger = page.locator('[data-terminal-expand-trigger="fixture-terminal"]').first()
+  // Native click in Electron can dispatch React's handler before focus lands
+  // on a transformed node button; focus it first so the return contract is
+  // deterministic while still exercising the real open/close handlers.
+  await terminalTrigger.focus()
+  await terminalTrigger.click()
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator('[data-felixo-mock-terminal="fixture-terminal"]').waitFor({ state: 'visible', timeout: 5_000 })
+  const terminalFocused = await page.evaluate(() => document.activeElement?.getAttribute('data-felixo-mock-terminal') === 'fixture-terminal')
+  if (!terminalFocused) throw new Error('[canvas-smoke] abrir a gaveta nao focou o terminal fake')
+  await page.getByRole('button', { name: 'Fechar terminal' }).click()
+  await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: 5_000 })
+  const focusAfterDrawer = await page.evaluate(() => ({
+    returned: document.activeElement?.getAttribute('data-terminal-expand-trigger') === 'fixture-terminal',
+    tag: document.activeElement?.tagName,
+    html: document.activeElement?.outerHTML?.slice(0, 240),
+  }))
+  if (!focusAfterDrawer.returned) {
+    throw new Error(`[canvas-smoke] fechar a gaveta nao devolveu o foco ao gatilho: ${JSON.stringify(focusAfterDrawer)}`)
+  }
+
+  const bell = page.locator('[data-notifications-trigger]')
+  await bell.click()
+  const notifications = page.locator('#canvas-notifications-panel')
+  await notifications.waitFor({ state: 'visible', timeout: 5_000 })
+  await page.waitForFunction(
+    () => document.activeElement?.id === 'canvas-notifications-panel',
+    null,
+    { timeout: 5_000 },
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => !document.querySelector('#canvas-notifications-panel'), null, { timeout: 5_000 })
+  await page.waitForFunction(
+    () => document.activeElement?.hasAttribute('data-notifications-trigger'),
+    null,
+    { timeout: 5_000 },
+  )
+
+  const webpageButton = page.getByRole('button', { name: 'Página Web' })
+  await webpageButton.click()
+  const urlInput = page.locator('input[aria-label="Endereço do site"]')
+  await urlInput.fill('javascript:alert(1)')
+  await page.getByRole('button', { name: 'Criar' }).last().click()
+  await page.waitForFunction(() => document.body.innerText.includes('Informe um endereço de site válido'), null, { timeout: 5_000 })
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => !document.querySelector('input[aria-label="Endereço do site"]'), null, { timeout: 5_000 })
+}
+
+async function checarReloadSemDuplicacao(page) {
+  const before = await page.evaluate(async () => {
+    const nodes = await window.felixo.canvas.list()
+    const edges = await window.felixo.canvas.listEdges()
+    return { nodeCount: nodes.nodes?.length ?? 0, edgeCount: edges.edges?.length ?? 0, fixtureEdges: (edges.edges || []).filter((edge) => edge.id === 'fixture-edge').length, terminalNodes: (nodes.nodes || []).filter((node) => node.type === 'terminal').length }
+  })
+  await page.reload()
+  await checarMontagem(page)
+  await page.waitForFunction(() => document.querySelector('[data-felixo-canvas-ready]'))
+  const after = await page.evaluate(async () => {
+    const nodes = await window.felixo.canvas.list()
+    const edges = await window.felixo.canvas.listEdges()
+    return { nodeCount: nodes.nodes?.length ?? 0, edgeCount: edges.edges?.length ?? 0, fixtureEdges: (edges.edges || []).filter((edge) => edge.id === 'fixture-edge').length, terminalNodes: (nodes.nodes || []).filter((node) => node.type === 'terminal').length, mountedMockTerminals: document.querySelectorAll('[data-felixo-mock-terminal]').length }
+  })
+  const comparableAfter = {
+    nodeCount: after.nodeCount,
+    edgeCount: after.edgeCount,
+    fixtureEdges: after.fixtureEdges,
+    terminalNodes: after.terminalNodes,
+  }
+  if (JSON.stringify(before) !== JSON.stringify(comparableAfter)) {
+    throw new Error(`[canvas-smoke] reload alterou persistencia: antes=${JSON.stringify(before)} depois=${JSON.stringify(after)}`)
+  }
+  if (after.fixtureEdges !== 1 || after.mountedMockTerminals !== 0 || after.terminalNodes !== 1) {
+    throw new Error(`[canvas-smoke] reload duplicou edge/sessao ou deixou terminal montado: ${JSON.stringify(after)}`)
+  }
 }
 
 async function checarViewportMinimo(page) {
   await page.setViewportSize(MIN_VIEWPORT)
-  // Um reflow após o resize precisa de um tick; sem ele o scrollWidth ainda
-  // reflete o layout anterior e o teste passaria por sorte, não por medição.
-  await page.waitForTimeout(200)
+  await page.waitForTimeout(250)
   const overflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
   }))
   if (overflow.scrollWidth > overflow.clientWidth) {
-    throw new Error(
-      `[canvas-smoke] overflow horizontal no viewport mínimo (${MIN_VIEWPORT.width}x${MIN_VIEWPORT.height}): ` +
-        `scrollWidth=${overflow.scrollWidth} > clientWidth=${overflow.clientWidth}`,
-    )
+    throw new Error(`[canvas-smoke] overflow horizontal no viewport minimo: ${JSON.stringify(overflow)}`)
   }
 }
 
@@ -151,7 +409,13 @@ async function main() {
     try {
       await checarMontagem(page)
       await checarLandmarksVisiveis(page)
+      await checarNavegacaoPorTab(page)
       await checarFocoAoAbrirFerramenta(page)
+      await prepararFixture(page)
+      await checarOclusaoDoFixture(page)
+      await checarAuditoriaDeAcessibilidade(page)
+      await checarInteracoes(page)
+      await checarReloadSemDuplicacao(page)
       await checarViewportMinimo(page)
     } catch (error) {
       const output = path.join(APP_DIR, 'build', `canvas-smoke-failure-${process.platform}.png`)
@@ -160,14 +424,14 @@ async function main() {
         await page.screenshot({ path: output })
         console.error(`[canvas-smoke] captura de falha salva em ${output}`)
       } catch (screenshotError) {
-        console.error(`[canvas-smoke] não foi possível capturar a falha: ${screenshotError.message}`)
+        console.error(`[canvas-smoke] nao foi possivel capturar a falha: ${screenshotError.message}`)
       }
       throw error
     } finally {
       await browser.close()
     }
   })
-  console.log('[canvas-smoke] mount + landmarks visíveis + foco + viewport mínimo: ok')
+  console.log('[canvas-smoke] mount + fixture + oclusao + interacoes + reload + viewport minimo: ok')
 }
 
 main().catch((error) => {

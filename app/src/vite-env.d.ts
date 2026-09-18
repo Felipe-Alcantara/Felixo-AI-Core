@@ -32,6 +32,7 @@ import type {
   FetchAllSettings,
 } from './features/canvas/types'
 import type { CliAccount } from './features/shared/types/cli-accounts'
+import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   AgentUsageDashboard,
   ClaudeStatuslineState,
@@ -298,6 +299,8 @@ declare global {
       devtools?: {
         capturePage: () => Promise<string>
         mainEval: (expression: string) => Promise<unknown>
+        /** True only in the isolated interaction smoke; no real CLI is spawned. */
+        mockPty?: boolean
       }
       windowFocus?: {
         onChange: (callback: (focused: boolean) => void) => () => void
@@ -682,6 +685,11 @@ declare global {
           sessionId: string
           kind?: string
           source?: string
+          terminal?: string
+          terminalId?: string
+          agent?: string
+          /** Body-free prompt provenance; content is never sent as metadata. */
+          insertion?: PromptInsertionMetadata
           content: string
         }) => Promise<
           CliInvokeResult & {
@@ -697,6 +705,14 @@ declare global {
             commandPath?: string
           }
         >
+        markPathTyped: (params: {
+          sessionId: string
+          names?: string[]
+          artifactIds?: string[]
+          terminal?: string
+          terminalId?: string
+          agent?: string
+        }) => Promise<CliInvokeResult & { marked?: number }>
         release: (params: { sessionId: string }) => Promise<CliInvokeResult & { removed?: number }>
       }
       /**

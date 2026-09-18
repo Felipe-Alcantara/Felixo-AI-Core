@@ -53,9 +53,10 @@ Base funcional entregue:
 - Canvas visual para organizar agentes, arquivos compartilhados, notas, grupos e páginas web (mini-navegador embutido)
 - Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
 - **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
+- Entrega de contexto inicial por artefatos somente leitura, com trilha persistida `written → path-typed → read` em `logs/qa` para diagnosticar reinícios e trocas de terminal/agente
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI; no Codex, também mostra a quantidade, validade e detalhes dos resets bancados por conta, com uso protegido por confirmação
 - Painel **Tarefas Notion** no canvas, com conexão própria cifrada, seleção de database compartilhada, cache offline e CRUD de tarefas
-- Preview de Markdown com sanitização de HTML/URLs externos, preservando GFM e imagens locais somente pela autorização do arquivo
+- Preview de Markdown com sanitização de HTML/URLs externos, remoção de ANSI, limite de 200.000 caracteres e imagens remotas bloqueadas por padrão; GFM e imagens locais seguem a autorização do arquivo
 - Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
 - Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`
@@ -236,6 +237,22 @@ um bloco pode reordená-lo dentro da própria pasta, mas nunca muda o seu `cwd`.
 
 Para saber a que repositório um terminal pertence **sem abri-lo**, o cabeçalho do bloco mostra o nome da última pasta do `cwd` ao lado do `#N` (o caminho completo fica no *tooltip*). É a informação que não envelhece: o nome do bloco é escolhido na criação e costuma ficar desatualizado quando a mesma sessão segue para outra tarefa.
 
+### Área útil e foco do canvas
+
+O enquadramento do canvas reserva a área ocupada pela barra superior, sidebar,
+painel de ferramenta, inspector **Elementos** e barra de status. Nós novos,
+**Ver tudo**, busca e abertura de uma página ou tarefa usam esse mesmo retângulo;
+assim o alvo aparece no espaço livre, e não atrás do chrome fixo. A gaveta do
+terminal já reduz a largura do canvas pelo layout e não é descontada duas vezes.
+
+Os controles de terminal, painéis e notificações têm nomes acessíveis. Abrir a
+gaveta leva o foco para o terminal; fechá-la devolve o foco ao botão que a abriu.
+`Escape` fecha notificações e diálogos e restaura o foco ao gatilho. O canvas
+mantém os gatilhos montados depois da primeira abertura da gaveta para que esse
+retorno continue funcionando mesmo quando o culling tira um nó da área visível.
+Esses fluxos são exercitados pelo smoke do Canvas com um PTY fake, sem iniciar
+uma CLI ou shell real.
+
 ### Conta da CLI oficial: ver e trocar
 
 No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações de conta — hoje o Codex — ganha dois botões:
@@ -375,6 +392,25 @@ com a quota lida da pasta dela — é assim que duas contas do mesmo provedor
 aparecem com números separados. Enquanto a conta não tiver sido usada, a linha
 diz isso em vez de mostrar zero.
 
+### Identidade das inserções de prompt
+
+Toda entrada programática ou digitada pode carregar um `PromptInsertion` com
+`id`, `name` opcional, `source`, `content`, `combinedNames`, `autoSubmit` e
+`timestamp`. O rótulo serve para explicar a origem no canvas; o agente continua
+recebendo o corpo de prompt no formato antigo, sem prefixo de metadata.
+
+Prompts do catálogo usam o ID estável da definição atual, inclusive depois de
+uma edição; skills usam o ID e o nome da skill. Uma seleção combinada conserva
+os nomes na ordem enviada, inclusive nomes repetidos, e mantém os headings que
+já faziam parte do payload. Texto digitado manualmente tem origem `manual`,
+`combinedNames` vazio e nenhum nome presumido.
+
+O snapshot da sessão guarda o registro completo para a interface. Ao salvar o
+node do canvas, `content` é removido; a persistência, os cabeçalhos dos artefatos
+e o log QA carregam somente a identidade, origem, composição, intenção de
+envio e timestamp. A mesma metadata acompanha a entrega por arquivo e o
+fallback inline, sem virar opção ou campo adicional de `pty.write`.
+
 ## Como distribuir
 
 Build local:
@@ -426,6 +462,17 @@ npm run test:canvas-context
 npm run lint
 npm run build
 ```
+
+`npm run test:canvas-context` inclui a matriz ponta a ponta do contexto. Ela
+repete por padrão 50 vezes os fluxos de reidratação após restart, troca de
+agente no mesmo node, reabertura de terminal, dois terminais simultâneos,
+confiança de pasta do Claude e relançamento do Codex após auto-update. Para uma
+execução curta de diagnóstico, defina `FELIXO_CONTEXT_MATRIX_RUNS=1`; para
+guardar a evidência em um caminho específico, use
+`FELIXO_CONTEXT_MATRIX_REPORT=build/context-matrix.json`. Cada artefato deixa
+os estados `written`, `path-typed` e `read` no JSONL diário do QA em
+`logs/qa/qa-AAAA-MM-DD.jsonl`; uma leitura ausente ou erro registra `failed` e
+faz a matriz falhar.
 
 `npm run typecheck` usa o cache incremental do `tsc -b` sem relaxar a
 verificação. Para uma auditoria limpa dos dois projetos TypeScript, use

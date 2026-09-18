@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TerminalSessionStore } from './terminal-session-store'
+import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
 
 /**
  * Entrega do texto inicial, exercitada contra a saída real de uma CLI.
@@ -455,6 +456,90 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
 
     expect(result).toEqual({ delivered: true })
+  }, 10000)
+
+  it('guarda a identidade do catálogo ao lado do payload enviado', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const insertion = createCatalogPromptInsertion(
+      { id: 'catalog-123', name: 'Revisão', prompt: 'revisar o diff' },
+      'revisar o diff',
+      { autoSubmit: true, timestamp: '2026-09-16T12:00:00.000Z' },
+    )
+    const result = await harness.store.sendText(SESSION_ID, 'revisar o diff\r', {
+      kind: 'catalog-prompt',
+      insertion,
+    })
+
+    expect(result).toEqual({ delivered: true })
+    expect(harness.store.getSnapshot(SESSION_ID)?.lastPromptInsertion).toMatchObject({
+      id: 'catalog-123',
+      name: 'Revisão',
+      source: 'catalog',
+      content: 'revisar o diff',
+      combinedNames: ['Revisão'],
+      autoSubmit: true,
+      timestamp: '2026-09-16T12:00:00.000Z',
+    })
+    expect(harness.store.getSessionMetadata(SESSION_ID)?.lastPromptInsertion?.id).toBe('catalog-123')
+  }, 10000)
+
+  it('mantém a mesma metadata quando o arquivo cai no fallback inline', async () => {
+    const insertion = createCatalogPromptInsertion(
+      { id: 'catalog-fallback', name: 'Fallback', prompt: 'instrução protegida' },
+      'instrução protegida',
+      { autoSubmit: true, timestamp: '2026-09-16T12:00:00.000Z' },
+    )
+    const delivered = createHarness('', 'codex', true)
+    delivered.feed(BOOT_ESCAPES)
+    delivered.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    await delivered.store.sendText(SESSION_ID, 'instrução protegida\r', {
+      kind: 'catalog-prompt',
+      insertion,
+    })
+    const deliveredMetadata = delivered.store.getSnapshot(SESSION_ID)?.lastPromptInsertion
+    delivered.store.clear()
+
+    const fallback = createHarness('', 'codex', false)
+    fallback.feed(BOOT_ESCAPES)
+    fallback.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    await fallback.store.sendText(SESSION_ID, 'instrução protegida\r', {
+      kind: 'catalog-prompt',
+      insertion,
+    })
+
+    expect(fallback.store.getSnapshot(SESSION_ID)?.lastPromptInsertion).toEqual(
+      deliveredMetadata,
+    )
+    expect(fallback.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('fallback inline')
+  }, 10000)
+
+  it('marca envio digitado pelo painel como manual e sem nome', async () => {
+    harness = createHarness('', 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+
+    const result = await harness.store.sendText(SESSION_ID, 'texto escrito\r', {
+      kind: 'manual-prompt',
+      insertion: createManualPromptInsertion('texto escrito\r', {
+        timestamp: '2026-09-16T12:00:00.000Z',
+      }),
+    })
+
+    expect(result).toEqual({ delivered: true })
+    expect(harness.store.getSnapshot(SESSION_ID)?.lastPromptInsertion).toMatchObject({
+      source: 'manual',
+      combinedNames: [],
+      content: 'texto escrito',
+      autoSubmit: true,
+    })
+    expect(harness.store.getSnapshot(SESSION_ID)?.lastPromptInsertion?.name).toBeUndefined()
   }, 10000)
 
   it('sendText devolve delivered:false quando a PTY rejeita a escrita', async () => {

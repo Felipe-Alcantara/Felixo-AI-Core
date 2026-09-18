@@ -31,6 +31,33 @@ test('lê um artefato pelo nome no diretório do perfil ativo', async () => {
   }
 })
 
+test('registra a leitura do agente no QA JSONL persistido', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-log-'))
+  const contextDir = path.join(root, 'context-deliveries')
+  const deliveryLogDirectory = path.join(root, 'logs', 'qa')
+  const name = 'felixo-context-123-log.txt'
+
+  try {
+    await fsp.mkdir(contextDir, { recursive: true })
+    await fsp.writeFile(path.join(contextDir, name), 'corpo lido pelo agente', 'utf8')
+    const result = await executarContexto(['read', name], {
+      getContextDir: () => contextDir,
+      deliveryLogDirectory,
+    })
+
+    assert.equal(result.codigo, 0)
+    const logFile = path.join(deliveryLogDirectory, `qa-${new Date().toISOString().slice(0, 10)}.jsonl`)
+    const entries = (await fsp.readFile(logFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    assert.equal(entries.at(-1).scope, 'context-delivery')
+    assert.equal(entries.at(-1).details.artifactId, name)
+    assert.equal(entries.at(-1).details.state, 'read')
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
 test('aceita o alias em português sem transportar caminho do sistema', async () => {
   const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
   const name = 'felixo-context-123-abc-catalog-prompt.txt'
@@ -73,6 +100,32 @@ test('artefato ausente falha sem sugerir um caminho de outro perfil', async () =
     assert.doesNotMatch(result.erro, new RegExp(contextDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   } finally {
     await fsp.rm(contextDir, { recursive: true, force: true })
+  }
+})
+
+test('persiste um diagnóstico quando a leitura do agente falha', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-failure-'))
+  const contextDir = path.join(root, 'context-deliveries')
+  const deliveryLogDirectory = path.join(root, 'logs', 'qa')
+  const name = 'felixo-context-inexistente-diagnostico.txt'
+
+  try {
+    const result = await executarContexto(['read', name], {
+      getContextDir: () => contextDir,
+      deliveryLogDirectory,
+    })
+
+    assert.equal(result.codigo, 1)
+    const logFile = path.join(deliveryLogDirectory, `qa-${new Date().toISOString().slice(0, 10)}.jsonl`)
+    const entries = (await fsp.readFile(logFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    assert.equal(entries.at(-1).scope, 'context-delivery')
+    assert.equal(entries.at(-1).details.artifactId, name)
+    assert.equal(entries.at(-1).details.state, 'failed')
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true })
   }
 })
 

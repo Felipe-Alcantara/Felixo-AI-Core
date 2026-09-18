@@ -4,12 +4,32 @@
  * confirma a intenção com Ctrl/Cmd+clique.
  */
 export function isAllowedTerminalExternalLink(uri: string): boolean {
+  const normalizedUri = uri.trim()
+
+  // URL normaliza tab/newline antes de fazer o parse; uma saída de terminal
+  // com ANSI ou controles não pode ganhar uma rota diferente nesse passo.
+  if (!normalizedUri || hasTerminalControl(normalizedUri)) {
+    return false
+  }
+
   try {
-    const { protocol } = new URL(uri)
-    return protocol === 'http:' || protocol === 'https:'
+    const { protocol, hostname } = new URL(normalizedUri)
+    return Boolean(hostname) && (protocol === 'http:' || protocol === 'https:')
   } catch {
     return false
   }
+}
+
+function hasTerminalControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+
+    if ((code >= 0 && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 export function hasTerminalLinkModifier(event: Pick<MouseEvent, 'ctrlKey' | 'metaKey'>): boolean {
@@ -27,7 +47,7 @@ export function openAllowedTerminalExternalLink(
     return false
   }
 
-  openExternalLink(uri)
+  openExternalLink(uri.trim())
   return true
 }
 

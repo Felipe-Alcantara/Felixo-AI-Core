@@ -15,6 +15,7 @@ const crypto = require('node:crypto')
 const { toErrorResult } = require('./ipc-result.cjs')
 const { CONTEXT_FILE_PREFIX } = require('../core/context-file-contract.cjs')
 const { caminhoDoComando } = require('./agent-command-install.cjs')
+const { buildContextDeliveryEntry } = require('./context-delivery-log.cjs')
 
 const STALE_CONTEXT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const MAX_CONTEXT_BYTES = 32 * 1024 * 1024
@@ -23,6 +24,12 @@ function requireText(value, fieldName) {
     throw new Error(`${fieldName} precisa ser um texto não vazio.`)
   }
   return value.trim()
+}
+
+function normalizeMetadataText(value) {
+  if (value === undefined || value === null) return undefined
+  const text = String(value).replace(/[\r\n]+/g, ' ').trim()
+  return text ? text.slice(0, 240) : undefined
 }
 
 function normalizeKind(value) {
@@ -34,10 +41,42 @@ function normalizeKind(value) {
   return normalized || 'contexto'
 }
 
-function buildContextFileContent({ kind, source, generatedAt, body }) {
+function normalizeInsertionMetadata(value) {
+  if (!value || typeof value !== 'object') return undefined
+  const id = normalizeMetadataText(value.id)
+  const source = normalizeMetadataText(value.source)
+  const name = normalizeMetadataText(value.name)
+  const combinedNames = Array.isArray(value.combinedNames)
+    ? value.combinedNames.map((entry) => normalizeMetadataText(entry)).filter(Boolean).slice(0, 50)
+    : []
+  if (!id && !source && !name && combinedNames.length === 0) return undefined
+  return {
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    ...(source ? { source } : {}),
+    combinedNames,
+    autoSubmit: value.autoSubmit === true,
+    timestamp: normalizeMetadataText(value.timestamp),
+  }
+}
+
+function buildContextFileContent({ kind, source, generatedAt, body, insertion }) {
   const origin = String(source || '').replace(/[\r\n]+/g, ' ').trim() || 'Felixo AI Core'
   const type = normalizeKind(kind)
   const timestamp = generatedAt || new Date().toISOString()
+  const normalizedInsertion = normalizeInsertionMetadata(insertion)
+  const insertionLines = normalizedInsertion
+    ? [
+        '',
+        '## Metadados da inserção',
+        `- ID: ${normalizedInsertion.id || '(não informado)'}`,
+        `- Nome: ${normalizedInsertion.name || '(sem nome humano)'}`,
+        `- Origem: ${normalizedInsertion.source || '(não informada)'}`,
+        `- Composição: ${normalizedInsertion.combinedNames.length > 0 ? normalizedInsertion.combinedNames.join(' + ') : '(manual)'}`,
+        `- Autoenvio: ${normalizedInsertion.autoSubmit ? 'sim' : 'não'}`,
+        ...(normalizedInsertion.timestamp ? [`- Timestamp: ${normalizedInsertion.timestamp}`] : []),
+      ]
+    : []
 
   return [
     '# CONTEXTO ENTREGUE PELO FELIXO AI CORE',
@@ -48,6 +87,7 @@ function buildContextFileContent({ kind, source, generatedAt, body }) {
     '- Regime: somente leitura; não edite este arquivo.',
     '- Este caminho é um artefato temporário do app, não é o repositório trabalhado e não deve entrar em commit.',
     '- Este é um canvas multiagente: outros agentes podem estar trabalhando em paralelo. Registre decisões no scratchpad compartilhado do canvas, quando houver um.',
+    ...insertionLines,
     '',
     '## Como usar',
     'Leia este arquivo antes de agir. O corpo abaixo é o contexto entregue pelo app; preserve o conteúdo e valide comandos, caminhos, segredos e decisões contra o estado real do projeto.',
@@ -113,6 +153,7 @@ async function writeContextFile(baseDir, params = {}, now = new Date()) {
     source: params.source,
     generatedAt: now.toISOString(),
     body,
+    insertion: params.insertion,
   })
   const tempPath = `${filePath}.tmp-${process.pid}`
   try {
@@ -131,9 +172,25 @@ async function writeContextFile(baseDir, params = {}, now = new Date()) {
   }
 }
 
-function registerContextFilesIpcHandlers(appPaths) {
+function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
   const baseDir = appPaths.contextFiles
   const filesBySession = new Map()
+  const metadataByArtifact = new Map()
+  const logDelivery =
+    typeof dependencies.logDelivery === 'function' ? dependencies.logDelivery : null
+
+  // Main-process callers normally pass `logQaEvent`; tests can inject a
+  // collector. Diagnostics must never turn a successful handoff into an IPC
+  // failure, so the callback is deliberately best effort.
+  const recordDelivery = (event) => {
+    if (!logDelivery) return
+    try {
+      const pending = logDelivery(buildContextDeliveryEntry(event))
+      if (pending && typeof pending.catch === 'function') pending.catch(() => {})
+    } catch {
+      // QA logging is best effort.
+    }
+  }
   // Caminho absoluto do shim `felixo` desta instância. Devolvido ao lado do
   // arquivo para que o prompt possa mandar o agente rodar o executável exato
   // em vez de digitar o nome nu do comando: uma função de shell com o mesmo
@@ -155,9 +212,63 @@ function registerContextFilesIpcHandlers(appPaths) {
         filesBySession.set(result.sessionId, files)
       }
       files.add(result.path)
+      const metadata = {
+        sessionId: result.sessionId,
+        terminal: params.terminal ?? params.terminalId ?? result.sessionId,
+        agent: params.agent ?? params.source,
+        kind: params.kind,
+        insertion: normalizeInsertionMetadata(params.insertion),
+      }
+      metadataByArtifact.set(result.filename, metadata)
+      recordDelivery({ ...metadata, artifactId: result.filename, state: 'written' })
       return { ok: true, path: result.path, name: result.filename, bytes: result.bytes, commandPath }
     } catch (error) {
+      recordDelivery({
+        artifactId: params.artifactId ?? params.name,
+        sessionId: params.sessionId,
+        terminal: params.terminal ?? params.terminalId ?? params.sessionId,
+        agent: params.agent ?? params.source,
+        kind: params.kind,
+        insertion: normalizeInsertionMetadata(params.insertion),
+        state: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      })
       return toErrorResult(error, 'Não foi possível criar o arquivo temporário de contexto.')
+    }
+  })
+
+  ipcMain.handle('context-file:path-typed', async (_event, params = {}) => {
+    try {
+      const sessionId = requireText(params.sessionId, 'sessionId')
+      const names = Array.isArray(params.names)
+        ? params.names
+        : Array.isArray(params.artifactIds)
+          ? params.artifactIds
+          : []
+      let marked = 0
+      for (const value of names) {
+        const name = typeof value === 'string' ? value.trim() : ''
+        const metadata = metadataByArtifact.get(name)
+        if (!metadata || metadata.sessionId !== sessionId) continue
+        recordDelivery({
+          ...metadata,
+          artifactId: name,
+          terminal: params.terminal ?? params.terminalId ?? metadata.terminal,
+          agent: params.agent ?? metadata.agent,
+          state: 'path-typed',
+        })
+        marked += 1
+      }
+      return { ok: true, marked }
+    } catch (error) {
+      recordDelivery({
+        sessionId: params.sessionId,
+        terminal: params.terminal ?? params.terminalId ?? params.sessionId,
+        agent: params.agent,
+        state: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return toErrorResult(error, 'Nao foi possivel registrar a digitacao do contexto.')
     }
   })
 
@@ -168,6 +279,7 @@ function registerContextFilesIpcHandlers(appPaths) {
       let removed = 0
       for (const filePath of files) {
         if (await removeFileIfOwned(filePath, baseDir)) removed += 1
+        metadataByArtifact.delete(path.basename(filePath))
       }
       filesBySession.delete(sessionId)
       return { ok: true, removed }
@@ -180,15 +292,22 @@ function registerContextFilesIpcHandlers(appPaths) {
     baseDir,
     releaseSession: async (sessionId) => {
       const files = filesBySession.get(sessionId) ?? new Set()
-      for (const filePath of files) await removeFileIfOwned(filePath, baseDir)
+      for (const filePath of files) {
+        await removeFileIfOwned(filePath, baseDir)
+        metadataByArtifact.delete(path.basename(filePath))
+      }
       filesBySession.delete(sessionId)
     },
     dispose: async () => {
       for (const sessionId of filesBySession.keys()) {
         const files = filesBySession.get(sessionId) ?? new Set()
-        for (const filePath of files) await removeFileIfOwned(filePath, baseDir)
+        for (const filePath of files) {
+          await removeFileIfOwned(filePath, baseDir)
+          metadataByArtifact.delete(path.basename(filePath))
+        }
       }
       filesBySession.clear()
+      metadataByArtifact.clear()
     },
   }
 }

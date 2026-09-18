@@ -1,5 +1,6 @@
 import type { SessionActivity } from './terminal-session-store'
 import type { AgentSessionReference } from '../services/agent-session'
+import type { PromptInsertion, PromptInsertionMetadata } from '../../shared/types/prompt-insertion'
 
 export type SessionMetadata = {
   elementId: string
@@ -13,6 +14,10 @@ export type SessionMetadata = {
   /** Agent-owned resume/session id, when a CLI exposes one explicitly. */
   agentSessionId?: string
   agentSession?: AgentSessionReference
+  /** Full runtime record; never forwarded as PTY options. */
+  lastPromptInsertion?: PromptInsertion
+  /** Body-free form suitable for persistence/telemetry consumers. */
+  lastPromptInsertionMetadata?: PromptInsertionMetadata
 }
 
 export const SESSION_ACTIVITY_LABEL: Record<SessionActivity, string> = {

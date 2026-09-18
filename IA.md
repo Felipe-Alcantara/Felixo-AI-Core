@@ -5495,3 +5495,174 @@ um vira task nova quando alguém precisar.
 ### Evidência de origem
 
 Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Canvas: teclado, foco, colapso e espaço reduzido
+
+**Task.** Tornar as superfícies do canvas acessíveis por teclado quando o foco muda, a sidebar/painel/gaveta colapsa ou a janela fica sem espaço.
+
+**Implementação.** O fluxo agora tem retorno de foco para busca, ferramentas, notificações, terminal e handoff; diálogos mantêm Tab dentro do ciclo e Escape fecha; painéis e gaveta expõem regiões nomeadas, controles de colapso e separadores redimensionáveis por teclado; a sidebar colapsada fica inerte para não deixar controles invisíveis no Tab. Painéis, menus e filas têm rolagem interna, limites responsivos e anúncios de estado. A ocupação compartilhada inclui inspector e publica um aviso acessível quando os pisos de largura/altura não cabem.
+
+**Validação local.** Typecheck, lint (somente dois avisos preexistentes em SearchPanel), testes frontend, testes nativos, build e diff-check foram executados antes da integração no main atualizado. A suíte geral manteve apenas a falha ambiental conhecida do inventário de pacote ao criar symlink no Windows (EPERM).
+
+**Estado.** Código integrado sobre o main remoto mais recente; commit, push, CI/release e atualização do Notion serão registrados no fechamento desta execução.
+
+**Evidência de origem.** Repositório: https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Encerramento — validação e release
+
+**Entrega.** O commit `0f9ad5144f1080f3a15b04964e66713efca2dc31` foi integrado em `main` e publicado no GitHub. O CI `35055462688` passou em Ubuntu, Ubuntu ARM, macOS e Windows; o Release `35056056489` passou nas três plataformas e publicou `v0.1.357` com instaladores e smoke reports.
+
+**Gates locais.** `npm test` (1335 testes, 52 suítes), `npm run test:frontend` (945 aprovados, 1 ignorado), `npm run test:native` (5/5), testes focados de foco/geometria (28), lint, build do renderer (4344 módulos) e `test:canvas-smoke` passaram. O stderr recorrente `AttachConsole failed` do node-pty no Windows permanece apenas como ruído conhecido; o CI confirmou os gates nativos.
+
+**Limitação registrada.** Não há axe-core/harness DOM instalado neste workspace; a validação de acessibilidade usou testes determinísticos, o smoke visual do canvas e os jobs multiplataforma do CI. O build local exigiu apenas um shim temporário dos tipos do Excalidraw e a extração local de `mermaid@11.12.1`; ambos foram removidos ou mantidos fora do versionamento.
+
+**Evidência.** CI: https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/35055462688 · Release: https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.357
+
+## [2026-09-16] Segurança: sanitização de Markdown com saída de terminal
+
+**Task.** Executar “Felixo AI Core/Segurança — sanitizar Markdown de terminal,
+HTML, URLs e imagens”, derivada da auditoria do commit 109a679 e das
+superfícies MarkdownContent, WebpageNode e terminal-external-link.
+
+**Causa medida.** O schema já removia HTML ativo e esquemas perigosos, mas a
+prévia ainda podia materializar imagens HTTP/HTTPS sem concessão, não limitava
+o texto antes do parser e não normalizava controles ANSI de uma saída de
+terminal. O link do terminal também deixava o parser de URL normalizar
+controles antes da validação.
+
+**Implementação.**
+
+- markdown-content-safety.ts remove CSI/OSC/C0/C1 de saída de terminal,
+  normaliza quebras e limita o Markdown a 200.000 caracteres antes de
+  react-markdown; a interface anuncia o corte com role=status.
+- rehypeRaw continua seguido pelo schema explícito de rehype-sanitize, com
+  protocolos remotos de src bloqueados e a segunda barreira mantendo somente
+  imagens raster data: base64 de até 2 MiB. Imagem HTTP/HTTPS vira texto
+  alternativo, sem elemento de imagem nem request automático.
+- O corpus de testes mistura ANSI + Markdown e cobre script, handler, SVG,
+  CSS remoto, OSC 8 com javascript:, URLs não aprovadas, truncamento,
+  surrogate, data image e arquivo local autorizado. A validação de URL do
+  terminal recusa controles, host ausente e protocolos fora de HTTP/HTTPS.
+- README, guia do usuário e docs/projeto/ARQUITETURA.md documentam a
+  fronteira e a decisão de bloquear imagem remota. A revisão de dependências
+  não encontrou pacote novo necessário; rehype-raw/rehype-sanitize e
+  remark-gfm existentes permanecem suficientes.
+
+**Validação local.** Início: 16/09/2026 08:59 (America/Sao_Paulo). Fechamento
+da implementação e dos testes locais: 16/09/2026 09:23. npm test: 1.335/1.335
+testes em 52 suítes; npm run test:frontend -- --reporter=dot: 953 aprovados,
+1 ignorado; npm run test:native: 5/5; testes focados de Markdown/ANSI/links:
+34 aprovados; npm run lint: sucesso; npm run build e npx vite build: sucesso
+com 4.345 módulos; npm run test:canvas-smoke: sucesso. A primeira execução do
+typecheck encontrou dist/types ausente na instalação local de
+@excalidraw/excalidraw; após restaurar os tipos declarados no pacote, o mesmo
+build completo passou, sem alteração no lockfile. O stderr recorrente
+AttachConsole failed do node-pty no Windows é ruído conhecido e não alterou o
+resultado.
+
+**Limitação.** Não há uma concessão visual para reativar imagens remotas nesta
+fatia; se o produto precisar carregá-las, abrir uma task específica para
+consentimento explícito, política de referrer e proxy controlado. WebpageNode
+continua com sua política separada por ser um navegador embutido criado pelo
+usuário. Nenhuma conta, chave ou credencial foi acessada.
+
+**Estado.** Código e documentação prontos para commit, push e gates remotos.
+
+**Evidência de origem.** Repositório:
+https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Canvas — interações, oclusão e acessibilidade
+
+**Task.** Cobrir as interações dos nodes, superfícies fixas e terminais e
+corrigir o caso em que o grupo da fixture nascia sob a barra superior/sidebar.
+
+**Implementação.** `canvas-interaction-geometry.ts` centraliza o retângulo útil
+do canvas, descontando topbar, sidebar, painel, inspector e statusbar sem
+descontar duas vezes a gaveta, que já é uma coluna flex. Criação, foco, abertura
+de página/tarefas, **Ver tudo** e **Organizar** usam a mesma geometria. O smoke
+do Canvas agora persiste os oito tipos de node, verifica hit testing, arrasto
+curto, handles de conexão, abertura/fechamento da gaveta, notificações,
+`Escape`, URL inválida, reidratação e ausência de duplicação. A gaveta retorna o
+foco ao gatilho mesmo com culling; depois da primeira abertura os gatilhos ficam
+montados para completar esse contrato.
+
+O DevTools isolado ativa `MockTerminalSessionStore` por
+`FELIXO_DEVTOOLS_MOCK_PTY=1`, mantendo a prova de foco e teclado sem iniciar
+shell ou CLI externa. A migration 013 amplia o `CHECK` do SQLite para
+`drawing` e `excalidrawDrawing`, com teste de persistência após restart. Inputs
+de nodes receberam rótulos acessíveis.
+
+**Validação local.** Início: 16/09/2026 10:06 (America/Sao_Paulo). `npm test`:
+1.336/1.336 em 52 suítes; `npm run test:frontend`: 958 aprovados e 1 ignorado;
+`npm run test:native`: 5/5; typecheck, lint, build, testes focados de geometria
+(36) e storage (33) passaram; `npm run test:canvas-smoke` passou no Electron
+real. O `AttachConsole failed` recorrente do node-pty no Windows continua
+apenas ruído conhecido. Não há axe-core instalado: o smoke faz auditoria
+determinística de landmarks, nomes acessíveis, foco e teclado; a limitação
+permanece registrada para uma futura bancada dedicada.
+
+**Estado.** Código e documentação prontos para commit, push, CI/release e
+registro no Notion.
+
+**Evidência de origem.** Repositório:
+https://github.com/Felipe-Alcantara/Felixo-AI-Core
+
+## [2026-09-16] Contexto — prova ponta a ponta e matriz de recuperação
+
+**Task.** Provar que o contexto inicial chega ao agente em todos os fluxos de
+restart/reidratação, troca de agente, reabertura de terminal, concorrência,
+confiança de pasta do Claude e auto-update do Codex, deixando diagnóstico
+persistente quando algo falhar.
+
+**Implementação.**
+
+- `context-delivery-log.cjs` compartilha a trilha QA `written`, `path-typed`,
+  `read` e `failed` entre o processo Electron e o comando standalone. Cada
+  entrada guarda o id do artefato, terminal, agente e tipo, sem copiar o corpo
+  do contexto.
+- O IPC e o preload registram a escrita e a referência aceita pela PTY; o
+  `TerminalSessionStore` associa os artefatos à sessão e evita transições
+  duplicadas. O leitor `felixo context read` registra a leitura ou a falha no
+  JSONL diário de `logs/qa`.
+- `canvas-context-e2e.test.ts` usa o escritor e leitor reais, arquivos isolados
+  e uma PTY determinística para executar seis cenários. A matriz repete 50
+  vezes por padrão, grava relatório JSON atômico e conserva as últimas entradas
+  do QA em qualquer falha. O CI executa as 50 repetições nos três sistemas.
+- README, `ARQUITETURA.md` e este registro documentam o contrato e o caminho
+  da evidência.
+
+**Validação local.** Início: 16/09/2026 12:44 (America/Sao_Paulo). Fechamento
+dos gates: 16/09/2026 13:49. `npm test`: 1.341/1.341 testes em 52 suítes;
+`npm run test:frontend` com 50 repetições: 961 aprovados e 1 ignorado;
+`npm run test:native`: 5/5; testes focados de contexto: 18/18; matriz E2E:
+50/50 repetições, 1.000/1.000 artefatos com a cadeia completa e zero falhas;
+typecheck, lint, build e diff-check passaram. O stderr `AttachConsole failed`
+do node-pty continua sendo ruído conhecido do runner Windows e não alterou os
+resultados.
+
+**Limitação.** A matriz usa uma PTY determinística, mas atravessa o escritor de
+arquivo, o shim e o leitor standalone reais. Ela prova restart como
+reidratação do renderer sobre a sessão viva; CLIs autenticadas e um processo
+Electron empacotado permanecem cobertos pelos gates de release existentes.
+
+**Estado.** Implementação e documentação validadas para commit, push, CI e
+atualização da task no Notion.
+
+**Evidência de origem.** Task Notion:
+https://app.notion.com/p/Felixo-AI-Core-Contexto-provar-ponta-a-ponta-que-o-contexto-inicial-chega-em-100-dos-casos-resta-3db91f95497e81fca040c22f5f95e420
+
+## [2026-09-16] Prompts — metadados de inserção e rastreabilidade
+
+**Task.** Definir ID, nome, origem e composição da injeção de prompts sem alterar o payload interpretado pelo agente.
+
+**Implementação.** `PromptInsertion` centraliza `id`, `name` opcional, `source`, `content`, `combinedNames`, `autoSubmit` e `timestamp`. O catálogo usa o ID estável da definição (inclusive após edição), skills mantêm ID/nome, combinações preservam ordem e nomes repetidos, e entrada manual usa `source: manual` sem nome inventado. `PromptsPanel`, skills, links de arquivo, handoff e o `TerminalSessionStore` passam a registrar essa identidade; chamadas legadas de `sendText(id, text)` e o objeto `{ sessionId, data }` da PTY continuam compatíveis.
+
+A sessão expõe a última inserção no snapshot e em `SessionMetadata`. O canvas persiste somente `PromptInsertionMetadata`, sem `content`; artefatos de contexto e QA carregam apenas identidade segura. Arquivo e fallback inline usam a mesma metadata, e nenhum campo de metadata é enviado ao `pty.write`.
+
+**Validação local.** `npm test`: 1.341/1.341; `npm run test:frontend`: 972 aprovados e 1 ignorado; `npm run test:native`: 5/5; `npm run test:canvas-context`: 5/5 com matriz de 50 repetições; `npm run test:canvas-smoke`: sucesso; testes focados de inserção/sessão/persistência: 54/54; `npm run typecheck`, `npm run lint`, `npm run build` e `git diff --check`: sucesso. O stderr recorrente `AttachConsole failed` do node-pty no Windows apareceu apenas como ruído dos testes nativos e não alterou os resultados.
+
+**Decisões.** O texto existente de `composeSelectedPrompts` e os headings legados permanecem intactos; o rótulo humano fica fora do payload. O corpo não entra em node persistido nem em metadata de arquivo/log. O tipo técnico antigo do catálogo permanece para chamadas sem opções; o painel manual declara `manual-prompt` explicitamente.
+
+**Estado.** Implementação e documentação prontas para commit, push, CI e encerramento da task.
+
+**Evidência de origem.** Task Notion: https://app.notion.com/p/Felixo-AI-Core-Prompts-definir-metadados-de-nome-ID-origem-e-composi-o-da-inje-o-3ce91f95497e810d998ad77cfe057677

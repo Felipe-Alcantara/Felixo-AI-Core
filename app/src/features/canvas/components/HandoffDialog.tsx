@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import { AgentConfigFields } from './AgentConfigFields'
+import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
 
 type Props = {
   /** Nome do agente que está passando o trabalho, só para o texto do diálogo. */
@@ -35,10 +36,44 @@ export function HandoffDialog({
   const [busy, setBusy] = useState(false)
   const [erro, setErro] = useState<string | undefined>()
   const painelRef = useRef<HTMLDivElement>(null)
+  const tituloId = useId()
 
   useEffect(() => {
+    const dialog = painelRef.current
+    if (!dialog) return
+
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement) || !dialog.contains(active)) {
+      const first = getFocusableElements(dialog)[0]
+      ;(first ?? dialog).focus()
+    }
+
     const aoTeclar = (evento: KeyboardEvent) => {
-      if (evento.key === 'Escape') onClose()
+      if (evento.key === 'Escape') {
+        evento.preventDefault()
+        evento.stopPropagation()
+        onClose()
+        return
+      }
+      if (evento.key !== 'Tab') return
+
+      const elementos = getFocusableElements(dialog)
+      if (elementos.length === 0) {
+        evento.preventDefault()
+        dialog.focus()
+        return
+      }
+      const atual = document.activeElement
+      const destino = tabTrapTarget(
+        elementos,
+        atual instanceof HTMLElement ? atual : null,
+        evento.shiftKey,
+        atual instanceof Node && dialog.contains(atual),
+      )
+      if (destino) {
+        evento.preventDefault()
+        destino.focus()
+      }
     }
     document.addEventListener('keydown', aoTeclar)
     return () => document.removeEventListener('keydown', aoTeclar)
@@ -88,12 +123,13 @@ export function HandoffDialog({
         ref={painelRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Passar responsabilidade para outro agente"
-        className="felixo-anim-sequential-panel max-h-[85vh] w-80 overflow-y-auto rounded-lg bg-zinc-800 p-4 shadow-2xl ring-1 ring-white/10"
+        aria-labelledby={tituloId}
+        tabIndex={-1}
+        className="felixo-anim-sequential-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-4 shadow-2xl ring-1 ring-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
       >
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <h2 id={tituloId} className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
               <ArrowRightLeft size={15} />
               Passar responsabilidade
             </h2>

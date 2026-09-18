@@ -158,6 +158,41 @@ test('canvas repository persists webpage and notionTasks nodes across a restart'
   }
 })
 
+test('canvas repository persists drawing nodes across a restart', () => {
+  const databaseDir = createTempDir('felixo-canvas-drawing-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    repository.save({
+      id: 'drawing-1',
+      type: 'drawing',
+      position: { x: 40, y: 80 },
+      data: { strokes: '[]' },
+    })
+    repository.save({
+      id: 'excalidraw-1',
+      type: 'excalidrawDrawing',
+      position: { x: 420, y: 80 },
+      data: { scene: '' },
+    })
+    database.close()
+
+    const reopened = createStorageDatabase({ databaseDir })
+    const nodes = createCanvasRepository(reopened).list()
+
+    assert.deepEqual(
+      nodes.map((node) => node.type).sort(),
+      ['drawing', 'excalidrawDrawing'].sort(),
+    )
+
+    reopened.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
 test('canvas repository stores, lists and soft-deletes edges', () => {
   const databaseDir = createTempDir('felixo-canvas-edges-')
 

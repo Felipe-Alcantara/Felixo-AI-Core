@@ -16,16 +16,16 @@
 
 /** Faixa de canvas que continua visível por baixo de tudo. */
 export const MIN_CANVAS_STRIP = 160
-
-/**
- * Pisos de largura do painel de ferramenta e da gaveta do terminal —
- * únicos, aqui, pra `CanvasSurfacesProvider.tsx` (que faz a divisão) e
- * `useResizablePanelWidth.ts`/`TerminalDrawer.tsx` (que liam cada um o seu
- * próprio piso local, sem garantia de bater com o que o outro lado achava
- * que o piso era) nunca mais divergirem silenciosamente.
- */
+export const COLLAPSED_SURFACE_WIDTH = 44
+/** Pisos compartilhados por painel, gaveta e os cálculos de ocupação. */
 export const PANEL_MIN_WIDTH = 260
 export const DRAWER_MIN_WIDTH = 440
+// Nomes antigos continuam exportados para consumidores/testes que ainda usam
+// a nomenclatura anterior; há uma única fonte numérica acima.
+export const MIN_PANEL_WIDTH = PANEL_MIN_WIDTH
+export const MIN_DRAWER_WIDTH = DRAWER_MIN_WIDTH
+const MIN_PANEL_HEIGHT = 304
+const MIN_DRAWER_HEIGHT = 200
 
 /**
  * Largura da sidebar (trilho de atividades + navegação), expandida e
@@ -236,4 +236,40 @@ export function miniMapSize(
       Math.round(MINIMAP_DEFAULT.height * scale),
     ),
   }
+}
+
+/**
+ * Texto para anunciar quando as superfícies abertas já não cabem nos pisos
+ * acessíveis. O mapa pode desaparecer; painel, terminal e faixa de canvas
+ * precisam continuar com uma saída clara para a pessoa.
+ */
+export function canvasSurfaceLayoutWarning(
+  viewport: { width: number; height: number },
+  occupancy: SurfaceOccupancy,
+): string | null {
+  const panelExpanded = occupancy.panel > COLLAPSED_SURFACE_WIDTH
+  const drawerExpanded = occupancy.drawer > COLLAPSED_SURFACE_WIDTH
+
+  if (!panelExpanded && !drawerExpanded) return null
+
+  const requiredWidth =
+    occupancy.toolbar +
+    (panelExpanded ? MIN_PANEL_WIDTH : occupancy.panel) +
+    (drawerExpanded ? MIN_DRAWER_WIDTH : occupancy.drawer) +
+    occupancy.inspector +
+    MIN_CANVAS_STRIP
+
+  if (viewport.width < requiredWidth) {
+    return 'Pouco espaço horizontal: recolha o painel ou o terminal, ou aumente a janela para manter as superfícies acessíveis.'
+  }
+
+  const requiredHeight = Math.max(
+    panelExpanded ? MIN_PANEL_HEIGHT : 0,
+    drawerExpanded ? MIN_DRAWER_HEIGHT : 0,
+  )
+  if (viewport.height < requiredHeight) {
+    return 'Pouco espaço vertical: role o conteúdo do painel ou aumente a altura da janela para acessar todas as ações.'
+  }
+
+  return null
 }

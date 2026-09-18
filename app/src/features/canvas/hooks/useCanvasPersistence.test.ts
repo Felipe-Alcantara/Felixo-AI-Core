@@ -106,6 +106,35 @@ describe('canvas persistence boundaries', () => {
     expect(persisted.data.handoffText).toBeUndefined()
   })
 
+  it('persiste identidade da inserção sem guardar o corpo do prompt', () => {
+    const persisted = toPersistedNode({
+      id: 'prompt-safe',
+      type: 'terminal',
+      position: { x: 0, y: 0 },
+      data: {
+        lastPromptInsertion: {
+          id: 'catalog-1',
+          name: 'Revisão',
+          source: 'catalog',
+          content: 'segredo que não deve ser serializado',
+          combinedNames: ['Revisão'],
+          autoSubmit: true,
+          timestamp: '2026-09-16T12:00:00.000Z',
+        },
+      } as CanvasNodeData,
+    })
+
+    expect(persisted.data.lastPromptInsertion).toEqual({
+      id: 'catalog-1',
+      name: 'Revisão',
+      source: 'catalog',
+      combinedNames: ['Revisão'],
+      autoSubmit: true,
+      timestamp: '2026-09-16T12:00:00.000Z',
+    })
+    expect((persisted.data.lastPromptInsertion as Record<string, unknown>).content).toBeUndefined()
+  })
+
   // Fatia 3 da task Canvas Excalidraw: os dois nodes de desenho usam formatos
   // deliberadamente separados — o leve guarda um JSON de traços simples, o
   // Excalidraw guarda a cena nativa dele — mas o caminho de ida e volta pelo

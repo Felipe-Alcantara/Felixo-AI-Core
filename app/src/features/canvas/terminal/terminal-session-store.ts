@@ -38,8 +38,17 @@ import {
   contextFileKindForPrompt,
   isAgentCliCommand,
   splitInitialContext,
+  promptInsertionSourceForContextKind,
 } from '../services/context-file-delivery'
 import type { ContextFileKind } from '../services/context-file-delivery'
+import {
+  createManualPromptInsertion,
+  createPromptInsertion,
+  isPromptInsertion,
+  promptRequestsSubmission,
+  toPromptInsertionMetadata,
+  type PromptInsertion,
+} from '../../shared/types/prompt-insertion'
 import { prepareHandoffTranscript } from '../services/terminal-handoff'
 import {
   buildAgentResumeArgs,
@@ -64,6 +73,7 @@ import {
   looksLikeApprovalPrompt,
   readInputLineState,
 } from './terminal-screen-state'
+import type { SendTextInput } from './terminal-session-api'
 import {
   TERMINAL_REPLAY_BUFFER_CHARS,
   terminalScrollbackForSessionCount,
@@ -99,6 +109,8 @@ export type SessionSnapshot = {
   contextWarning?: string
   /** The most recent prompt submitted to the session (typed or programmatic). */
   lastPrompt?: string
+  /** Provenance of the most recent prompt; content never enters PTY options. */
+  lastPromptInsertion?: PromptInsertion
   /**
    * Bumped every time `ensure()` creates a brand-new `xterm.Terminal` for this
    * id (first mount, or after `restart()`). The id itself doesn't change on
@@ -349,6 +361,12 @@ type Session = {
   command?: string
   /** Printable keystrokes typed since the last submit, to capture the prompt. */
   inputBuffer: string
+  /** Programmatic submissions waiting for the echoed Enter from xterm. */
+  pendingPromptInsertions: PromptInsertion[]
+  /** Metadata for the startup context before it reaches the PTY. */
+  initialTextInsertion?: PromptInsertion
+  /** Last insertion acknowledged by the PTY. */
+  lastPromptInsertion?: PromptInsertion
   /**
    * O texto que o Ctrl+A destacou na linha de entrada.
    *
@@ -378,6 +396,10 @@ type Session = {
   args: string[]
   initialText?: string
   rawInitialText?: string
+  /** Artifact names belonging to the most recent generated context reference. */
+  contextArtifactNames: string[]
+  /** Avoid persisting duplicate path-typed transitions during retries. */
+  contextArtifactsPathTyped: Set<string>
   sourceLabel?: string
   optionsOnOpenWebpage?: (url: string) => void
   agentSession?: AgentSessionReference
@@ -451,6 +473,37 @@ function readScrollbackStatus(
     historyTruncated: outputLines > limit,
     replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
   }
+}
+
+function insertionFromSendInput(input: SendTextInput | undefined): PromptInsertion | undefined {
+  if (!input) return undefined
+  if (isPromptInsertion(input)) return input
+  return input.insertion ?? input.promptInsertion ?? input.metadata
+}
+
+function kindFromSendInput(input: SendTextInput | undefined): ContextFileKind | undefined {
+  return input && !isPromptInsertion(input) ? input.kind : undefined
+}
+
+/**
+ * Aligns an explicit record with the bytes that are actually about to be
+ * delivered. This prevents a stale edited body from being reported when an
+ * adapter reuses an insertion record with a newer catalog definition.
+ */
+function normalizeInsertionForDelivery(
+  text: string,
+  input: SendTextInput | undefined,
+  kind?: ContextFileKind,
+): PromptInsertion {
+  const explicit = insertionFromSendInput(input)
+  const source = explicit?.source ?? promptInsertionSourceForContextKind(kind ?? 'manual-prompt')
+  return createPromptInsertion({
+    ...(explicit ?? {}),
+    source,
+    content: text,
+    autoSubmit: promptRequestsSubmission(text),
+    ...(explicit?.combinedNames ? { combinedNames: explicit.combinedNames } : {}),
+  })
 }
 
 /**
@@ -575,11 +628,16 @@ export class TerminalSessionStore {
       pendingWrites: 0,
       command: options.command,
       inputBuffer: '',
+      pendingPromptInsertions: [],
+      initialTextInsertion: undefined,
+      lastPromptInsertion: undefined,
       lastSignature: '',
       lastMeaningfulAt: Date.now(),
       args: [...launchArgs],
       initialText: undefined,
       rawInitialText: options.initialText,
+      contextArtifactNames: [],
+      contextArtifactsPathTyped: new Set(),
       sourceLabel: options.sourceLabel,
       optionsOnOpenWebpage: options.onOpenWebpage,
       agentSession: isAgentSessionReference(options.agentSession)
@@ -1152,6 +1210,13 @@ export class TerminalSessionStore {
     return true
   }
 
+  /** Fire-and-forget PTY writes must not become unhandled rejections on teardown. */
+  private writePtySafely(session: Session, data: string): void {
+    void Promise.resolve()
+      .then(() => window.felixo?.pty?.write({ sessionId: session.ptySessionId, data }))
+      .catch(() => {})
+  }
+
   /** Writes text into the PTY exactly as if the person had typed it. */
   private typeIntoSession(session: Session, text: string): void {
     if (!text || session.disposed) {
@@ -1160,7 +1225,7 @@ export class TerminalSessionStore {
 
     const delivery = session.sendChain.then(() => {
       if (session.disposed) return
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+      this.writePtySafely(session, text)
       session.inputTouched = true
       this.trackTypedInput(session, text)
     })
@@ -1196,13 +1261,19 @@ export class TerminalSessionStore {
   async sendText(
     id: string,
     text: string,
-    options: { kind?: ContextFileKind } = {},
+    options: SendTextInput = {},
   ): Promise<SendTextResult> {
     const session = this.sessions.get(id)
     if (!session || session.disposed || !text) {
       return { delivered: false, reason: 'no-session' }
     }
 
+    // Keep the old no-options delivery kind for string callers. The manual
+    // panel opts into `manual-prompt` explicitly, while integrations that only
+    // know the historical `sendText(id, text)` shape keep their catalog file
+    // naming and payload behavior.
+    const kind = kindFromSendInput(options) ?? 'catalog-prompt'
+    const insertion = normalizeInsertionForDelivery(text, options, kind)
     let outcome: SendTextResult = { delivered: false, reason: 'error' }
 
     const delivery = session.sendChain.then(async () => {
@@ -1214,7 +1285,8 @@ export class TerminalSessionStore {
       const delivered = await this.deliverContextText(
         session,
         text,
-        options.kind ?? 'catalog-prompt',
+        kind,
+        insertion,
       )
       if (session.disposed) {
         outcome = { delivered: false, reason: 'no-session' }
@@ -1246,10 +1318,11 @@ export class TerminalSessionStore {
       }
 
       session.inputTouched = true
+      this.markContextPathTyped(session)
       const prompt = cleanPrompt(delivered)
-      if (prompt) {
-        this.update(session, { lastPrompt: prompt })
-      }
+      if (prompt) this.update(session, { lastPrompt: prompt })
+      this.recordPromptInsertion(session, insertion)
+      session.pendingPromptInsertions = insertion.autoSubmit ? [insertion] : []
       outcome = { delivered: true }
     })
 
@@ -1266,6 +1339,11 @@ export class TerminalSessionStore {
     return outcome
   }
 
+  private recordPromptInsertion(session: Session, insertion: PromptInsertion): void {
+    session.lastPromptInsertion = insertion
+    this.update(session, { lastPromptInsertion: insertion })
+  }
+
   /**
    * Reconstruct the line being typed so we can capture it on submit. xterm emits
    * one `onData` per keystroke (or a chunk for paste): printable text appends,
@@ -1276,18 +1354,41 @@ export class TerminalSessionStore {
   private trackTypedInput(session: Session, data: string): void {
     for (const char of data) {
       if (char === '\r') {
-        const prompt = cleanPrompt(session.inputBuffer)
+        const rawPrompt = session.inputBuffer
+        const prompt = cleanPrompt(rawPrompt)
         session.inputBuffer = ''
         if (prompt) {
-          this.update(session, { lastPrompt: prompt })
+          const pending = session.pendingPromptInsertions[0]
+          if (pending && cleanPrompt(pending.content) === prompt) {
+            session.pendingPromptInsertions.shift()
+            this.update(session, { lastPrompt: prompt, lastPromptInsertion: pending })
+          } else {
+            // A keystroke-originated prompt has no catalog label. It still gets
+            // an id and timestamp so the session history can distinguish it
+            // from a preceding programmatic insertion.
+            this.recordPromptInsertion(
+              session,
+              createManualPromptInsertion(rawPrompt, { autoSubmit: true }),
+            )
+            this.update(session, { lastPrompt: prompt })
+          }
+        } else if (session.pendingPromptInsertions.length > 0) {
+          // Some TUIs echo a programmatic Enter without echoing the body.
+          const pending = session.pendingPromptInsertions.shift()
+          if (pending) this.update(session, { lastPromptInsertion: pending })
         }
       } else if (char === '\x7f' || char === '\b') {
+        session.pendingPromptInsertions = []
         session.inputBuffer = session.inputBuffer.slice(0, -1)
       } else if (char === '\n') {
         // Shift+Enter newline inside the prompt — keep it as a line break.
+        session.pendingPromptInsertions = []
         session.inputBuffer += '\n'
       } else if (char >= ' ') {
         // Printable character (skips other control/escape bytes).
+        // The person started typing before a synthetic Enter echo; the new
+        // line belongs to the person and must not consume an older record.
+        session.pendingPromptInsertions = []
         session.inputBuffer += char
       }
     }
@@ -1425,6 +1526,10 @@ export class TerminalSessionStore {
       args: [...session.args],
       agentSessionId: session.agentSession?.sessionId,
       agentSession: session.agentSession,
+      lastPromptInsertion: session.lastPromptInsertion,
+      lastPromptInsertionMetadata: session.lastPromptInsertion
+        ? toPromptInsertionMetadata(session.lastPromptInsertion)
+        : undefined,
     }
   }
 
@@ -1693,10 +1798,23 @@ export class TerminalSessionStore {
 
       session.initialTextSent = true
       const submission = splitTerminalSubmission(session.initialText ?? '')
-      void window.felixo?.pty?.write({
-        sessionId: session.ptySessionId,
-        data: submission.text,
-      })
+      void Promise.resolve()
+        .then(() => window.felixo?.pty?.write({
+          sessionId: session.ptySessionId,
+          data: submission.text,
+        }))
+        .then((result) => {
+          if (!result || (result.ok !== false && result.delivered !== false)) {
+            this.markContextPathTyped(session)
+            if (session.initialTextInsertion) {
+              this.recordPromptInsertion(session, session.initialTextInsertion)
+              session.pendingPromptInsertions = session.initialTextInsertion.autoSubmit
+                ? [session.initialTextInsertion]
+                : []
+            }
+          }
+        })
+        .catch(() => {})
 
       // Sem Enter, o prompt é contexto: fica escrito na entrada da CLI e quem
       // decide executar é o usuário, que ainda vai digitar a tarefa depois
@@ -1713,10 +1831,7 @@ export class TerminalSessionStore {
       // user submission after the TUI has consumed the text.
       setTimeout(() => {
         if (!session.disposed) {
-          void window.felixo?.pty?.write({
-            sessionId: session.ptySessionId,
-            data: submit,
-          })
+          this.writePtySafely(session, submit)
           this.confirmSubmission(session, submission.text, submit)
         }
       }, INITIAL_TEXT_SUBMIT_DELAY_MS)
@@ -1732,13 +1847,25 @@ export class TerminalSessionStore {
     const text = session.rawInitialText
     if (!text) {
       session.initialText = undefined
+      session.initialTextInsertion = undefined
       return
     }
+
+    const kind = isAgentCliCommand(text) ? undefined : contextFileKindForPrompt(text)
+    session.initialTextInsertion = createPromptInsertion({
+      id: kind === 'handoff' ? 'handoff' : 'initial-context',
+      name: kind === 'handoff' ? 'Passagem de responsabilidade' : 'Contexto inicial',
+      source: kind ? promptInsertionSourceForContextKind(kind) : 'system',
+      content: text,
+      combinedNames: [],
+      autoSubmit: promptRequestsSubmission(text),
+    })
 
     session.initialText = await this.deliverContextText(
       session,
       text,
-      isAgentCliCommand(text) ? undefined : contextFileKindForPrompt(text),
+      kind,
+      session.initialTextInsertion,
     )
   }
 
@@ -1747,6 +1874,7 @@ export class TerminalSessionStore {
     session: Session,
     text: string,
     kind?: ContextFileKind,
+    insertion?: PromptInsertion,
   ): Promise<string> {
     if (isAgentCliCommand(text) || !kind) {
       return text
@@ -1768,6 +1896,9 @@ export class TerminalSessionStore {
           sessionId: session.ptySessionId,
           kind: part.kind,
           source: session.sourceLabel || session.command || session.id,
+          terminal: session.id,
+          agent: session.command || session.sourceLabel || 'shell',
+          ...(insertion ? { insertion: toPromptInsertionMetadata(insertion) } : {}),
           content: part.content,
         })
       } catch {
@@ -1782,12 +1913,14 @@ export class TerminalSessionStore {
       // are the multi-OS bug this channel is fixing. The prompt must carry only
       // the stable artifact name, which the active `felixo` shim resolves.
       if (!result?.ok || !result.name) {
-        return this.contextDeliveryFallback(session, text, kind)
+        session.contextArtifactNames = []
+        return this.contextDeliveryFallback(session, text, kind, insertion)
       }
       deliveredFiles.push({ name: result.name, kind: part.kind })
       commandPath ??= result.commandPath
     }
 
+    session.contextArtifactNames = deliveredFiles.map((file) => file.name)
     this.update(session, { contextWarning: undefined })
     return buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath)
   }
@@ -1796,10 +1929,27 @@ export class TerminalSessionStore {
     session: Session,
     text: string,
     kind?: ContextFileKind,
+    insertion?: PromptInsertion,
   ): string {
     const warning =
       'Arquivo temporário de contexto indisponível; o terminal usou o fallback inline. Para handoffs muito grandes, o limite antigo preserva o começo e o fim e marca o trecho omitido.'
     this.update(session, { contextWarning: warning })
+    void Promise.resolve(
+      window.felixo?.qaLogger?.log({
+        level: 'error',
+        scope: 'context-delivery',
+        sessionId: session.ptySessionId,
+        message: 'context-delivery:failed',
+        details: {
+          artifactId: null,
+          terminal: session.id,
+          agent: session.command || session.sourceLabel || 'shell',
+          state: 'failed',
+          reason: 'context-file-write-failed',
+          ...(insertion ? { insertion: toPromptInsertionMetadata(insertion) } : {}),
+        },
+      }),
+    ).catch(() => {})
     const split = splitTerminalSubmission(text)
     if (!split.submit || kind !== 'handoff') {
       return buildInlineFallback(text)
@@ -1807,6 +1957,34 @@ export class TerminalSessionStore {
 
     const prepared = prepareHandoffTranscript(split.text)
     return buildInlineFallback(toSubmittedTerminalText(prepared.text))
+  }
+
+  /**
+   * Persists the point at which the generated artifact reference was accepted
+   * by the PTY. The standalone `felixo context read` command appends the final
+   * `read` transition, so a restart still has a joinable written → typed → read
+   * trail. Older preloads may not expose this optional method.
+   */
+  private markContextPathTyped(session: Session): void {
+    const names = session.contextArtifactNames.filter(
+      (name) => !session.contextArtifactsPathTyped.has(name),
+    )
+    if (names.length === 0) return
+
+    for (const name of names) session.contextArtifactsPathTyped.add(name)
+    const markPathTyped = window.felixo?.contextFiles?.markPathTyped
+    if (typeof markPathTyped !== 'function') return
+
+    void Promise.resolve(
+      markPathTyped({
+        sessionId: session.ptySessionId,
+        names,
+        terminal: session.id,
+        agent: session.command || session.sourceLabel || 'shell',
+      }),
+    ).catch(() => {
+      // Delivery evidence is best effort and must not affect terminal input.
+    })
   }
 
   /**
@@ -1838,7 +2016,7 @@ export class TerminalSessionStore {
         return
       }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: submit })
+      this.writePtySafely(session, submit)
       this.confirmSubmission(session, text, submit, attempt + 1)
     }, SUBMIT_RETRY_DELAY_MS)
   }
@@ -1899,7 +2077,7 @@ export class TerminalSessionStore {
         return
       }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+      this.writePtySafely(session, text)
       this.confirmContextDelivery(session, text, rewrites + 1, deadline)
     }, CONTEXT_CONFIRM_DELAY_MS)
   }
@@ -1950,10 +2128,7 @@ export class TerminalSessionStore {
 
     setTimeout(() => {
       if (!session.disposed) {
-        void window.felixo?.pty?.write({
-          sessionId: session.ptySessionId,
-          data: '\r',
-        })
+        this.writePtySafely(session, '\r')
       }
     }, SCREEN_ACCEPT_DELAY_MS)
 
@@ -2080,12 +2255,12 @@ export class TerminalSessionStore {
         return
       }
 
-      void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: '\x1b[B' })
+      this.writePtySafely(session, '\x1b[B')
       setTimeout(() => {
         if (session.disposed) {
           return
         }
-        void window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: '\r' })
+        this.writePtySafely(session, '\r')
         this.acceptClaudeDecisionScreen(session, isStillShowing, attempt + 1)
       }, KEY_SEQUENCE_DELAY_MS)
     }, SCREEN_ACCEPT_DELAY_MS)

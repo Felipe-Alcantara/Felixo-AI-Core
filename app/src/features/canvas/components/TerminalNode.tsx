@@ -31,6 +31,7 @@ import {
   canResumeAgentSession,
   type AgentSessionReference,
 } from '../services/agent-session'
+import { toPromptInsertionMetadata } from '../../shared/types/prompt-insertion'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
@@ -60,6 +61,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const onSessionStarted = nodeData.onSessionStarted
   const onAgentSession = nodeData.onAgentSession
   const onOpenWebpage = nodeData.onOpenWebpage
+  const onDataChange = nodeData.onDataChange
+  const persistedInsertion = nodeData.lastPromptInsertion
 
   // Start (or adopt) the background session as soon as the card mounts.
   // ensure() is idempotent, so initialText only fires on the first creation.
@@ -113,6 +116,17 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       onSessionStarted?.(id, metadata.startedAt)
     }
   }, [id, metadata?.startedAt, onSessionStarted, nodeData.sessionStartedAt])
+
+  // Keep a body-free provenance record on the canvas node. The live snapshot
+  // retains `content` for the terminal/details runtime, while persistence gets
+  // only identity, origin, ordering, submission intent and timestamp.
+  useEffect(() => {
+    const insertion = snapshot?.lastPromptInsertion
+    if (!insertion || !onDataChange) return
+    const safe = toPromptInsertionMetadata(insertion)
+    if (JSON.stringify(persistedInsertion) === JSON.stringify(safe)) return
+    onDataChange(id, { lastPromptInsertion: safe })
+  }, [id, onDataChange, persistedInsertion, snapshot?.lastPromptInsertion])
 
   const repository = repositoryLabel(nodeData.cwd)
   const provider = providerIdentity(nodeData.command)
@@ -196,6 +210,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => nodeData.onExpand?.(id)}
+          data-terminal-expand-trigger={id}
           aria-label="Expandir terminal"
           title="Expandir"
         >
@@ -212,6 +227,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       <button
         type="button"
         onClick={() => nodeData.onExpand?.(id)}
+        data-terminal-expand-trigger={id}
         className="felixo-node-preview nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
         aria-label={`Abrir ${nodeData.label || provider.label}`}
       >

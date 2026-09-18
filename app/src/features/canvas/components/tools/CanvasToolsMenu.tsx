@@ -93,7 +93,14 @@ export function CanvasToolsMenu({
   isBusy,
 }: CanvasToolsMenuProps) {
   return (
-    <div id="canvas-tools-options" className="felixo-sidebar-tool-list">
+    <div
+      id="canvas-tools-options"
+      role="group"
+      aria-label="Ferramentas auxiliares"
+      data-canvas-tool-menu-trigger
+      tabIndex={-1}
+      className="felixo-sidebar-tool-list focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+    >
       {TOOL_GROUPS.map((group) => (
         <div key={group.label} className="felixo-sidebar-tool-group">
           <span className="felixo-sidebar-tool-group-label">{group.label}</span>

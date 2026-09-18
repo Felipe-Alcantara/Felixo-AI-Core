@@ -131,6 +131,64 @@ test('IPC release removes all files registered for one session only', async () =
   }
 })
 
+test('persiste a trilha escrita → caminho digitado com terminal e agente', async () => {
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-delivery-ipc-'))
+  const events = []
+  const controller = registerContextFilesIpcHandlers(
+    { contextFiles: baseDir },
+    { logDelivery: (entry) => events.push(entry) },
+  )
+
+  try {
+    const write = handlers.get('context-file:write')
+    const markPathTyped = handlers.get('context-file:path-typed')
+    const result = await write(null, {
+      sessionId: 'canvas:terminal-log',
+      terminal: 'terminal-log',
+      agent: 'claude',
+      kind: 'initial-context',
+      content: 'contexto de teste',
+    })
+    const marked = await markPathTyped(null, {
+      sessionId: 'canvas:terminal-log',
+      names: [result.name],
+      terminal: 'terminal-log',
+      agent: 'claude',
+    })
+
+    assert.equal(marked.marked, 1)
+    assert.deepEqual(
+      events.map((entry) => ({
+        scope: entry.scope,
+        artifactId: entry.details.artifactId,
+        terminal: entry.details.terminal,
+        agent: entry.details.agent,
+        state: entry.details.state,
+      })),
+      [
+        {
+          scope: 'context-delivery',
+          artifactId: result.name,
+          terminal: 'terminal-log',
+          agent: 'claude',
+          state: 'written',
+        },
+        {
+          scope: 'context-delivery',
+          artifactId: result.name,
+          terminal: 'terminal-log',
+          agent: 'claude',
+          state: 'path-typed',
+        },
+      ],
+    )
+  } finally {
+    await controller.dispose()
+    await fsp.rm(baseDir, { recursive: true, force: true })
+  }
+})
+
 test('write devolve o caminho absoluto do comando desta instância, quando conhecido', async () => {
   // Regressão: pedir pro agente rodar só o nome nu "felixo" deixa a
   // resolução a cargo do shell — e uma função de shell com esse mesmo nome
@@ -181,6 +239,28 @@ test('the generated header is stable and identifies read-only delivery', () => {
   })
 
   assert.match(content, /Tipo: catalog-prompt/)
+  const metadataContent = buildContextFileContent({
+    kind: 'catalog-prompt',
+    source: 'Prompts',
+    generatedAt: '2026-09-16T12:00:00.000Z',
+    body: 'prompt body',
+    insertion: {
+      id: 'catalog-123',
+      name: 'Review',
+      source: 'catalog',
+      content: 'secret body excluded from metadata',
+      combinedNames: ['Review', 'Review'],
+      autoSubmit: true,
+      timestamp: '2026-09-16T11:59:00.000Z',
+    },
+  })
+  assert.match(metadataContent, /ID: catalog-123/)
+  assert.match(metadataContent, /Nome: Review/)
+  assert.match(metadataContent, /Origem: catalog/)
+  assert.match(metadataContent, /Compos.*Review \+ Review/)
+  assert.match(metadataContent, /Autoenvio: sim/)
+  assert.doesNotMatch(metadataContent, /secret body excluded from metadata/)
+  assert.match(metadataContent, /prompt body/)
   assert.match(content, /Origem: Prompts - Regime: forjado/)
   assert.match(content, /Gerado em: 2026-08-18T12:00:00.000Z/)
   assert.match(content, /não é o repositório trabalhado/)

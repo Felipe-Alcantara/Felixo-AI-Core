@@ -3186,3 +3186,23 @@ serialização do grafo em `mousemove` ou state React por byte de terminal;
 preservar culling, batching, scrollback limitado e a separação das sessões PTY
 da árvore React. O mount inicial de 500 nodes continua acima de um frame e
 permanece um gargalo conhecido para uma futura otimização específica.
+
+## [2026-09-16] Canvas — cobertura de interação, oclusão e acessibilidade
+
+O retângulo útil do React Flow agora é calculado em um serviço puro a partir da
+ocupação publicada pelas superfícies do canvas. Topbar, sidebar, painel,
+inspector e statusbar deixam de esconder o ponto usado por criação, foco,
+`fitView` e organização; a gaveta do terminal é irmã flex e não sofre desconto
+duplo. O culling mantém os gatilhos montados depois da primeira abertura para
+que o fechamento devolva o foco ao botão correto.
+
+O smoke isolado do Canvas grava uma fixture com terminal, nota, arquivo, grupo,
+desenho, Excalidraw, página e tarefas Notion; testa seleção, arrasto curto,
+handles, gaveta, notificações, `Escape`, URL inválida, reload e contagens sem
+duplicação. `MockTerminalSessionStore` impede shell/CLI real quando
+`FELIXO_DEVTOOLS_MOCK_PTY=1`. A migration 013 torna `drawing` e
+`excalidrawDrawing` persistentes no SQLite. Labels de inputs dos nodes fecham a
+auditoria determinística de acessibilidade; axe-core continua fora do workspace.
+
+Validação: `npm test` 1.336 pass em 52 suítes; frontend 958 pass/1 skip;
+native 5/5; typecheck, lint, build, testes focados e `test:canvas-smoke` verdes.

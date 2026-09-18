@@ -243,6 +243,31 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos
   referenciados, mas não leva comandos ou caminhos dependentes da máquina.
 
+### Geometria segura e acessibilidade das superfícies
+
+`CanvasView` mantém o React Flow em uma área full-bleed para preservar pan e
+zoom, mas todas as ações que escolhem uma posição usam
+`canvas-interaction-geometry.ts`. O módulo traduz a ocupação publicada por
+`CanvasSurfacesProvider` em um retângulo de tela que desconta topbar, sidebar,
+painel, inspector e statusbar. A gaveta do terminal é irmã flex do container,
+portanto seu espaço já saiu do `getBoundingClientRect` e não é descontado de
+novo. Criação, foco, abertura de página/tarefa e `fitView`/organização aplicam
+essa mesma geometria; o deslocamento do viewport mantém o resultado visível
+quando o chrome muda de tamanho.
+
+Os gatilhos de terminal permanecem montados depois que a gaveta foi aberta uma
+vez. Isso evita que o culling de nós remova o elemento antes da animação de
+fechamento devolver o foco. A auditoria E2E verifica landmarks, nomes
+acessíveis, hit testing, arrasto curto, handles de conexão, `Tab`/`Escape`,
+foco do terminal e reidratação sem duplicar nós, edges ou sessões. O cenário
+usa `MockTerminalSessionStore`, ativado só no DevTools isolado por
+`FELIXO_DEVTOOLS_MOCK_PTY=1`; nenhum shell ou CLI de fornecedor é iniciado.
+
+Os tipos `drawing` e `excalidrawDrawing`, já expostos pelo renderer, também
+fazem parte do contrato persistido. A migration 013 amplia o `CHECK` de
+`canvas_nodes` e o teste de reabertura do banco prova que esses nós sobrevivem
+ao restart.
+
 A remoção de um nó é também uma fronteira de ciclo de vida. `CanvasView` passa
 as mudanças do React Flow por `releaseRemovedCanvasNodes`: ids de terminal são
 liberados no `TerminalSessionStore` e todos os ids removidos seguem para a
@@ -344,13 +369,16 @@ um JSON da comparação por runner.
 
 ### Renderização segura de Markdown
 
-`MarkdownContent` recebe texto de agentes, arquivos e histórico como conteúdo
-não confiável. O pipeline mantém `remark-gfm` e os elementos visuais
-necessários, mas executa `rehypeRaw` seguido de um schema explícito do
-`rehype-sanitize`: HTML ativo, embeds, SVG, mídia e atributos de evento não
-chegam ao DOM. A transformação final de URLs repete a decisão no boundary do
-React: links ficam em `http:`, `https:`, `mailto:` ou âncoras; imagens remotas
-ficam em `http:`/`https:`; `data:` só aceita imagens raster base64 de até 2 MiB.
+`MarkdownContent` recebe texto de agentes, arquivos, histórico e saídas com
+formato de terminal como conteúdo não confiável. Antes do parser, o módulo
+remove sequências ANSI, normaliza quebras e limita o texto a 200.000
+caracteres. O pipeline mantém `remark-gfm` e os elementos visuais necessários,
+mas executa `rehypeRaw` seguido de um schema explícito do `rehype-sanitize`:
+HTML ativo, embeds, SVG, mídia, CSS remoto e atributos de evento não chegam ao
+DOM. A transformação final de URLs repete a decisão no boundary do React:
+links ficam em `http:`, `https:`, `mailto:` ou âncoras; imagens remotas são
+bloqueadas e viram texto alternativo; `data:` só aceita imagens raster base64
+de até 2 MiB.
 
 Uma referência relativa de imagem só é convertida em `file://` quando o
 componente recebeu o `baseDir` derivado de um arquivo já autorizado pelo
@@ -510,6 +538,25 @@ Os caminhos são resolvidos pelo `app.getPath('userData')`, não ficam dentro do
 repositório do usuário e não devem ser documentados com caminhos privados ou
 credenciais reais.
 
+### Identidade das inserções de prompt
+
+O renderer usa `PromptInsertion` como envelope de rastreabilidade ao inserir
+texto no terminal. O envelope tem `id`, `name` opcional, `source`, `content`,
+`combinedNames`, `autoSubmit` e `timestamp`; ele não altera o contrato textual
+de `sendText(id, text)` nem o objeto `{ sessionId, data }` enviado a `pty.write`.
+
+O catálogo usa o ID estável da definição resolvida (inclusive overrides
+editados), skills usam seu próprio ID, e o texto digitado pelo usuário fica em
+`source: manual`, sem nome presumido. A composição mantém os headings legados,
+a ordem da seleção e nomes repetidos em `combinedNames`.
+
+`TerminalSessionStore` expõe a última inserção no snapshot e em
+`SessionMetadata`. O node persistido recebe apenas `PromptInsertionMetadata`,
+sem `content`; o mesmo registro seguro acompanha a escrita de um artefato
+temporário e o fallback inline. O cabeçalho do artefato e o QA Logger podem
+mostrar ID, nome, origem, composição, intenção de envio e timestamp, nunca o
+corpo da instrução como metadata.
+
 ### Observabilidade: erros com causa, persistidos e reportáveis
 
 O QA Logger guardava só até 400 entradas em memória — reiniciar o app (o
@@ -531,6 +578,14 @@ contorno mais comum quando algo trava) apagava o histórico. Agora:
   logar canal + `error.cause` de qualquer handler que lançar, sem precisar
   tocar cada `ipcMain.handle` do projeto individualmente. Nenhum handler
   decide encerrar o processo — só registra.
+Eventos de entrega de contexto usam o mesmo arquivo QA e o escopo
+`context-delivery`. O IPC registra `written` quando o artefato é fechado no
+disco; o renderer registra `path-typed` somente depois que a referência foi
+aceita pela PTY; e o comando standalone `felixo context read` registra `read`
+ou `failed`. Cada transição leva o id do artefato e a associação segura de
+terminal/agente, sem copiar o corpo do prompt. Isso permite conferir a cadeia
+depois de restart e localizar uma falha sem depender do buffer em memória.
+
 - No renderer, `renderer-error-reporting.ts` cobre `window.onerror` e
   `unhandledrejection`; `RendererRecoveryBoundary` (o último resort quando o
   React para de renderizar) também manda a entrada pro QA Logger antes de

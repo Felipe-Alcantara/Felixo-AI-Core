@@ -1,4 +1,5 @@
 import type { AgentSessionReference } from './services/agent-session'
+import type { PromptInsertionMetadata } from '../shared/types/prompt-insertion'
 
 export type CanvasNodeType =
   | 'terminal'
@@ -110,6 +111,8 @@ export type TerminalNodeData = {
   sessionStartedAt?: number
   /** Provider-owned conversation identity used only after exact compatibility checks. */
   agentSession?: AgentSessionReference
+  /** Latest prompt provenance without its potentially sensitive body. */
+  lastPromptInsertion?: PromptInsertionMetadata
   /** Render-time flag: launch the persisted provider session instead of generic /resume. */
   resumeAgentSession?: boolean
   /**

@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld('felixo', {
         devtools: {
           capturePage: () => ipcRenderer.invoke('devtools:capture-page'),
           mainEval: (expression) => ipcRenderer.invoke('devtools:main-eval', expression),
+          // O smoke de interações injeta este sinal numa sessão isolada para
+          // que o renderer use o store de PTY fake e nunca abra um CLI real.
+          mockPty: process.env.FELIXO_DEVTOOLS_MOCK_PTY === '1',
         },
       }
     : {}),
@@ -213,6 +216,7 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   contextFiles: {
     write: (params) => ipcRenderer.invoke('context-file:write', params),
+    markPathTyped: (params) => ipcRenderer.invoke('context-file:path-typed', params),
     release: (params) => ipcRenderer.invoke('context-file:release', params),
   },
   // Arquivos de texto que ja existem no disco, abertos num bloco do canvas.

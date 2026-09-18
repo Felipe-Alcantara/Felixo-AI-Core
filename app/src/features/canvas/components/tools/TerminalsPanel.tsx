@@ -190,7 +190,7 @@ export function TerminalsPanel({
     if (!trimmed) {
       return
     }
-    store.sendText(nodeId, toSubmittedTerminalText(trimmed), { kind: 'catalog-prompt' })
+    store.sendText(nodeId, toSubmittedTerminalText(trimmed), { kind: 'manual-prompt' })
     setDrafts((current) => ({ ...current, [nodeId]: '' }))
   }
 

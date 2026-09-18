@@ -21,6 +21,19 @@ export function TerminalDetailsPanel({
   const value = (text: string | undefined, fallback = 'não informado') => text?.trim() || fallback
   const hasPersistedAssociation = Object.prototype.hasOwnProperty.call(data, 'agentSession')
   const agentSession = hasPersistedAssociation ? data.agentSession : metadata?.agentSession
+  const insertion = metadata?.lastPromptInsertion ?? data.lastPromptInsertion
+  const insertionLabel = insertion
+    ? [
+        insertion.name ?? (insertion.source === 'manual' ? 'Prompt manual' : undefined),
+        insertion.combinedNames.length > 1
+          ? insertion.combinedNames.join(' + ')
+          : undefined,
+        `origem: ${insertion.source}`,
+        insertion.autoSubmit ? 'autoenvio' : 'rascunho',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined
 
   return (
     <CanvasPanel
@@ -49,6 +62,7 @@ export function TerminalDetailsPanel({
           copy={agentSession?.sessionId}
           mono
         />
+        {insertionLabel && <Detail label="Última inserção" value={insertionLabel} mono />}
         {agentSession && (
           <button
             type="button"

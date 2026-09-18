@@ -344,12 +344,19 @@ jobs:
       # O reporter padrão do Vitest registra "Test Files" e "Tests" no log.
       # Sem --passWithNoTests, uma coleta vazia falha o job em vez de ficar verde.
       - name: Test frontend
+        env:
+          # A matriz de 50 repetições roda no gate E2E logo abaixo; o conjunto
+          # geral mantém uma passada para não duplicar o custo.
+          FELIXO_CONTEXT_MATRIX_RUNS: 1
         run: npm run test:frontend
 
-      # Protege a fronteira contexto versus submissão em todos os três
-      # runners, sem iniciar CLIs autenticadas: o teste usa o store e o
-      # manager reais com um PTY fake determinístico.
+      # Protege a fronteira contexto versus submissão nos três runners, sem
+      # iniciar CLIs autenticadas: o teste usa o store/manager reais, o
+      # escritor/leitor de artefatos e um PTY fake determinístico.
       - name: Test Canvas initial context E2E
+        env:
+          FELIXO_CONTEXT_MATRIX_RUNS: 50
+          FELIXO_CONTEXT_MATRIX_REPORT: build/canvas-context-matrix-${{ matrix.os }}.json
         run: >-
           npm run test:canvas-context --
           --reporter=json
@@ -360,13 +367,15 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: canvas-context-e2e-${{ matrix.os }}
-          path: app/build/canvas-context-e2e-${{ matrix.os }}.json
+          path: |
+            app/build/canvas-context-e2e-${{ matrix.os }}.json
+            app/build/canvas-context-matrix-${{ matrix.os }}.json
           if-no-files-found: warn
 
-      # Primeira fatia do gate de evidência visual: sobe a mesma sessão
-      # isolada do `felixo devtools` (Electron real, contra o Vite dev
-      # server) e confere que o canvas hidrata e que a interface não estoura
-      # a largura num viewport mínimo.
+      # Gate de interação e evidência visual: sobe a mesma sessão isolada do
+      # `felixo devtools` (Electron real, contra o Vite dev server) e confere
+      # hidratação, oclusão, foco/teclado, handles, persistência e viewport
+      # mínimo. O PTY fake não inicia uma CLI ou shell real.
       #
       # Só macOS e Windows por enquanto: no Linux (ubuntu-latest e
       # ubuntu-24.04-arm), sob xvfb-run, o Electron nunca chega a abrir a
@@ -378,7 +387,7 @@ jobs:
       # próxima tentativa precisa capturar esse stderr antes de adivinhar de
       # novo. Ver a task "Canvas — criar gate CI de evidência visual" no
       # Notion para o registro completo e a task de investigação aberta.
-      - name: Test Canvas PR smoke (mount + viewport mínimo)
+      - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
         if: runner.os != 'Linux'
         shell: bash
         run: npm run test:canvas-smoke

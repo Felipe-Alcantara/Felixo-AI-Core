@@ -7,10 +7,8 @@ import {
 } from './markdown-image-src'
 
 describe('resolveMarkdownImageSrc', () => {
-  it('deixa URL com esquema passar intocada', () => {
-    expect(resolveMarkdownImageSrc('https://exemplo.com/foto.png', '/x')).toBe(
-      'https://exemplo.com/foto.png',
-    )
+  it('bloqueia URL remota para impedir request automático', () => {
+    expect(resolveMarkdownImageSrc('https://exemplo.com/foto.png', '/x')).toBeUndefined()
     expect(resolveMarkdownImageSrc('data:image/png;base64,AAAA', '/x')).toBe(
       'data:image/png;base64,AAAA',
     )
@@ -90,12 +88,12 @@ describe('sanitizeMarkdownUrl', () => {
     expect(sanitizeMarkdownUrl('gopher://exemplo.com', 'href')).toBe('')
     expect(sanitizeMarkdownUrl('data:text/html;base64,PGh0bWw+', 'href')).toBe('')
     expect(sanitizeMarkdownUrl('//exemplo.com/sem-esquema', 'href')).toBe('')
+    expect(sanitizeMarkdownUrl('https://', 'href')).toBe('')
+    expect(sanitizeMarkdownUrl('https://exemplo.com\njavascript:alert(1)', 'href')).toBe('')
   })
 
   it('preserva somente referências de imagem aprovadas', () => {
-    expect(sanitizeMarkdownUrl('https://exemplo.com/foto.png', 'src')).toBe(
-      'https://exemplo.com/foto.png',
-    )
+    expect(sanitizeMarkdownUrl('https://exemplo.com/foto.png', 'src')).toBe('')
     expect(sanitizeMarkdownUrl('./foto.png', 'src')).toBe('./foto.png')
     expect(sanitizeMarkdownUrl('data:image/png;base64,AAAA', 'src')).toBe(
       'data:image/png;base64,AAAA',
