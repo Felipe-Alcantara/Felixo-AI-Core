@@ -18,6 +18,10 @@ import {
 
 const PRELOADERS: Record<CanvasTool, () => Promise<unknown>> = {
   search: loadSearchPanel,
+  // Notificações não é lazy-loaded (mora direto em NotificationsPanel.tsx,
+  // já no bundle do canvas) — nada a pré-carregar, mas a entrada precisa
+  // existir para o Record cobrir todo o union de CanvasTool.
+  notifications: () => Promise.resolve(),
   projects: loadProjectsPanel,
   notes: loadNotesPanel,
   models: loadModelsPanel,

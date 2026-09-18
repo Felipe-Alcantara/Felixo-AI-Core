@@ -44,6 +44,8 @@ export type SessionOptions = {
   resumeAgentSession?: boolean
   onAgentSession?: (reference: AgentSessionReference) => void
   terminalCount?: number
+  /** Render-time Modo Performance flag; never persisted in the canvas node. */
+  performanceMode?: boolean
 }
 
 export type SessionListener = (snapshot: SessionSnapshot) => void
