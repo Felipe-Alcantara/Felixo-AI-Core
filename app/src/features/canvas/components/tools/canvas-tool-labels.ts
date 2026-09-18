@@ -7,6 +7,7 @@ import type { CanvasTool } from './CanvasToolsMenu'
  */
 export const TOOL_LABELS: Record<CanvasTool, string> = {
   search: 'Busca',
+  notifications: 'Notificações',
   projects: 'Projetos',
   notes: 'Notas',
   models: 'Modelos',

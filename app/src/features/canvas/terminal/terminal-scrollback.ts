@@ -26,7 +26,11 @@ export type TerminalScrollbackPolicy = 'adaptive' | 'full'
 export function terminalScrollbackForSessionCount(
   sessionCount: number,
   policy: TerminalScrollbackPolicy = 'adaptive',
+  performanceMode = false,
 ): number {
+  if (performanceMode) {
+    return TERMINAL_ADAPTIVE_SCROLLBACK
+  }
   const count = Number.isFinite(sessionCount) ? Math.max(0, Math.floor(sessionCount)) : 0
   return policy === 'adaptive' && count >= TERMINAL_ADAPTIVE_THRESHOLD
     ? TERMINAL_ADAPTIVE_SCROLLBACK

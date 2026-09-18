@@ -1,32 +1,38 @@
-import { AlertCircle, Bell, Check, CheckCheck, CheckCircle2, Search, Trash2, Volume2, VolumeX, X } from 'lucide-react'
-import { useId, useState, type CSSProperties } from 'react'
+import {
+  AlertCircle,
+  ArrowUpCircle,
+  Check,
+  CheckCheck,
+  CheckCircle2,
+  Search,
+  Trash2,
+  Volume2,
+  VolumeX,
+  X,
+} from 'lucide-react'
+import { useState } from 'react'
 import type { Node } from '@xyflow/react'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
 import type { CanvasNotification } from '../terminal/canvas-notifications'
 import type { CanvasNodeData } from '../types'
+import type { UpdatePresentation } from '../../updates/update-presentation'
+
+/** Atualização pendente a mostrar como um item fixo no topo da lista, no
+ *  lugar do antigo aviso flutuante no canto da tela. */
+export type UpdateNotificationItem = {
+  presentation: UpdatePresentation
+  onInstall: () => void
+  onDismiss: () => void
+}
 
 type NotificationsPanelProps = {
   nodes: Node<CanvasNodeData>[]
   notifications: CanvasNotification[]
-  open: boolean
-  ready: boolean
+  updateItem: UpdateNotificationItem | null
   soundEnabled: boolean
   volume: number
-  /** Root element callback ref, so NotificationsMenu can measure this panel's
-   *  real rendered height (it's `position: absolute`, so it never
-   *  contributes to a parent's flow height on its own) and reserve exactly
-   *  that much space for it elsewhere on screen — e.g. pushing the minimap
-   *  down. */
-  panelRef?: (node: HTMLDivElement | null) => void
-  /** Extra space (px) to leave clear at the bottom of the viewport, on top of
-   *  the panel's own margin — e.g. the "Elementos" dock's current height, so
-   *  a long notification list stops growing before it reaches that dock
-   *  instead of sliding underneath it. 0 when nothing else occupies that
-   *  corner. */
-  reservedBottomSpace?: number
   onClose: () => void
-  onDismiss?: () => void
   onFocusNode: (nodeId: string) => void
   /** Abre o agente. Abrir já vale como ler: quem trata isso marca as
    * pendências dele como lidas, aqui e em qualquer outro caminho de abertura. */
@@ -41,19 +47,21 @@ type NotificationsPanelProps = {
 
 type HistoryFilter = 'unread' | 'all'
 
+/**
+ * Conteúdo do painel de notificações — hoje aberto a partir do sino no menu
+ * lateral do canvas, dentro do `CanvasPanel` (título e fechar já vêm de lá).
+ * Reúne dois tipos de aviso: agentes que precisam de atenção e, no topo,
+ * atualizações do app disponíveis (substituindo o antigo aviso flutuante).
+ */
 export function NotificationsPanel({
   nodes,
   notifications,
-  open,
-  ready,
+  updateItem,
   soundEnabled,
   volume,
-  panelRef,
-  reservedBottomSpace = 0,
-  onClose,
-  onDismiss,
   onFocusNode,
   onExpandNode,
+  onClose,
   onMarkRead,
   onMarkAllRead,
   onRemove,
@@ -63,18 +71,6 @@ export function NotificationsPanel({
 }: NotificationsPanelProps) {
   const [filter, setFilter] = useState<HistoryFilter>('unread')
   const [query, setQuery] = useState('')
-  const titleId = useId()
-  const dismiss = onDismiss ?? onClose
-  // Reopening the panel always starts on what still needs attention. Adjusted
-  // during render (React's documented pattern for deriving state from a prop
-  // change) rather than in an effect, which would render the stale tab first.
-  const [previousOpen, setPreviousOpen] = useState(open)
-  if (open !== previousOpen) {
-    setPreviousOpen(open)
-    if (open) setFilter('unread')
-  }
-
-  if (!open || !ready) return null
 
   const allItems = notifications
     .map((notification) => ({
@@ -92,40 +88,19 @@ export function NotificationsPanel({
   const readCount = allItems.length - unreadCount
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const visibleItems = allItems.filter(({ notification, node }) => {
-      if (filter === 'unread' && notification.readAt !== null) return false
-      if (!normalizedQuery) return true
-      const label = String(node.data.label || node.data.command || node.id)
-      return `${label} ${lastNotificationMessage(notification.snapshot)}`
-        .toLocaleLowerCase()
-        .includes(normalizedQuery)
+    if (filter === 'unread' && notification.readAt !== null) return false
+    if (!normalizedQuery) return true
+    const label = String(node.data.label || node.data.command || node.id)
+    return `${label} ${lastNotificationMessage(notification.snapshot)}`
+      .toLocaleLowerCase()
+      .includes(normalizedQuery)
   })
 
+  const showUpdateItem = updateItem !== null && (filter === 'all' || !normalizedQuery)
+
   return (
-    <section
-      ref={panelRef}
-      id="canvas-notifications-panel"
-      role="region"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      aria-label="Notificações dos agentes"
-      // `felixo-anim-sequential-panel`'s open animation drives `max-height`
-      // itself (see `--felixo-panel-max-height` in index.css) and, being a
-      // CSS animation with `animation-fill-mode: both`, would otherwise win
-      // over a plain inline `maxHeight` for the panel's entire open lifetime
-      // — not just override it once at mount.
-      style={
-        {
-          '--felixo-panel-max-height': `calc(100vh - 5rem - ${reservedBottomSpace}px)`,
-        } as CSSProperties
-      }
-      className="felixo-anim-sequential-panel absolute right-[calc(100%+0.75rem)] top-0 z-40 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-zinc-900 shadow-2xl"
-    >
-      <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
-        <h2 id={titleId} className="flex min-w-0 items-center gap-2 font-medium">
-          <Bell size={15} className="text-[var(--color-error)]" aria-hidden="true" />
-          Notificações
-        </h2>
-        <span className="text-xs font-normal text-zinc-500">{unreadCount}</span>
+    <div className="flex flex-col gap-2 text-sm">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onMarkAllRead}
@@ -136,17 +111,9 @@ export function NotificationsPanel({
         >
           <CheckCheck size={14} />
         </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
-          aria-label="Fechar notificações"
-        >
-          <X size={14} />
-        </button>
-      </header>
+      </div>
 
-      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+      <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5">
         <button
           type="button"
           onClick={() => onSoundEnabledChange(!soundEnabled)}
@@ -177,7 +144,7 @@ export function NotificationsPanel({
         </span>
       </div>
 
-      <label className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-white/10 focus-within:text-[var(--f-core-white-soft)]">
+      <label className="flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-white/10 focus-within:text-[var(--f-core-white-soft)]">
         <Search size={13} aria-hidden />
         <input
           value={query}
@@ -193,7 +160,7 @@ export function NotificationsPanel({
         )}
       </label>
 
-      <div className="flex items-center gap-1 border-b border-white/10 px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-white/10 pb-1.5">
         <FilterTab
           label={`Não lidas${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
           active={filter === 'unread'}
@@ -217,8 +184,12 @@ export function NotificationsPanel({
         )}
       </div>
 
-      {visibleItems.length === 0 ? (
-        <div className="flex items-center gap-2 px-3 py-5 text-xs text-zinc-500">
+      {showUpdateItem && updateItem && (
+        <UpdateNotificationRow item={updateItem} />
+      )}
+
+      {visibleItems.length === 0 && !showUpdateItem ? (
+        <div className="flex items-center gap-2 px-1 py-5 text-xs text-zinc-500">
           <CheckCircle2 size={15} className="text-[var(--f-core-white-soft)]" />
           {filter === 'unread'
             ? 'Nenhum agente aguardando ação.'
@@ -227,7 +198,7 @@ export function NotificationsPanel({
               : 'Nenhuma notificação nos últimos 7 dias.'}
         </div>
       ) : (
-        <div className="felixo-anim-stagger-list max-h-[38vh] overflow-auto p-1.5">
+        <div className="felixo-anim-stagger-list max-h-[38vh] overflow-auto -mx-1">
           {visibleItems.map(({ notification, node }) => {
             const unread = notification.readAt === null
             return (
@@ -242,7 +213,7 @@ export function NotificationsPanel({
                   onClick={() => {
                     onFocusNode(node.id)
                     onExpandNode(node.id)
-                    dismiss()
+                    onClose()
                   }}
                   className="felixo-btn flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left"
                 >
@@ -292,7 +263,71 @@ export function NotificationsPanel({
           })}
         </div>
       )}
-    </section>
+    </div>
+  )
+}
+
+const UPDATE_TONE_TEXT: Record<UpdatePresentation['tone'], string> = {
+  neutral: 'text-slate-300',
+  info: 'text-[var(--f-core-white-soft)]',
+  success: 'text-[var(--f-core-white-soft)]',
+  error: 'text-[var(--color-error)]',
+}
+
+/** Item fixo no topo do painel quando há uma atualização em andamento ou
+ *  pronta — no lugar do antigo card flutuante no canto da tela. */
+function UpdateNotificationRow({ item }: { item: UpdateNotificationItem }) {
+  const { presentation, onInstall, onDismiss } = item
+  return (
+    <div className="rounded-md border border-[color-mix(in_srgb,var(--f-core-active)_38%,transparent)] bg-white/5 px-2.5 py-2">
+      <div className="flex items-start gap-2">
+        <ArrowUpCircle size={15} className={`mt-0.5 shrink-0 ${UPDATE_TONE_TEXT[presentation.tone]}`} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-zinc-100">{presentation.toastTitle}</p>
+          <p className="mt-0.5 text-xs text-zinc-400">{presentation.toastDescription}</p>
+          {presentation.progress !== null && !presentation.canInstall && (
+            <div
+              className="mt-2 h-1 overflow-hidden rounded-full bg-white/10"
+              role="progressbar"
+              aria-valuenow={presentation.progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full rounded-full bg-[var(--f-core-active)] transition-[width] duration-300"
+                style={{ width: `${presentation.progress}%` }}
+              />
+            </div>
+          )}
+          {presentation.canInstall && (
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={onInstall}
+                className="felixo-btn rounded-md bg-[var(--f-core-white)]/90 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-[var(--f-core-active)]"
+              >
+                Reiniciar agora
+              </button>
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="felixo-btn rounded-md px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10"
+              >
+                Depois
+              </button>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="felixo-btn-icon -mr-1 -mt-1 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+          aria-label="Dispensar aviso de atualização"
+        >
+          <X size={13} />
+        </button>
+      </div>
+    </div>
   )
 }
 

@@ -1081,6 +1081,34 @@ div::-webkit-scrollbar-thumb {
   content: '';
 }
 
+/* Pendência importante (agente aguardando ação, atualização pronta): o sino
+   de notificações fica destacado — cor de erro sempre, mais um pulso de anel
+   contínuo para chamar o olho sem depender de o usuário notar o número.
+   `prefers-reduced-motion`/Modo Performance abaixo cortam só o movimento,
+   mantendo o destaque de cor estático. */
+.felixo-activity-rail-button-highlight {
+  color: var(--color-error);
+  animation: felixo-notifications-alert 1.8s ease-in-out infinite;
+}
+
+.felixo-notifications-badge {
+  animation: felixo-notifications-badge-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes felixo-notifications-alert {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-error) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-error) 0%, transparent);
+  }
+}
+
+@keyframes felixo-notifications-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
 .felixo-sidebar-content {
   display: flex;
   width: 14.75rem;
@@ -1675,6 +1703,11 @@ div::-webkit-scrollbar-thumb {
     transition: none;
     will-change: auto;
   }
+
+  .felixo-activity-rail-button-highlight,
+  .felixo-notifications-badge {
+    animation: none;
+  }
 }
 
 /* Modo Performance corta a mesma coreografia do bloco de
@@ -1725,6 +1758,28 @@ div::-webkit-scrollbar-thumb {
 :root[data-performance-mode='on'] .react-flow__node.felixo-agent-matrix-moving {
   transition: none;
   will-change: auto;
+}
+
+:root[data-performance-mode='on'] .felixo-activity-rail-button-highlight,
+:root[data-performance-mode='on'] .felixo-notifications-badge {
+  animation: none;
+}
+
+/* drop-shadow força um layer de composição por elemento — em multi-seleção
+   no canvas isso empilha um custo por node. Modo Performance corta esses
+   filtros e mantém só a indicação de estado por cor/borda. */
+:root[data-performance-mode='on'] .react-flow__node.selected,
+:root[data-performance-mode='on'] .felixo-activity-rail-button.is-active,
+:root[data-performance-mode='on'] .felixo-provider-mark--claude img,
+:root[data-performance-mode='on'] .felixo-provider-mark--codex img,
+:root[data-performance-mode='on'] .felixo-provider-mark--gemini img,
+:root[data-performance-mode='on'] .felixo-provider-mark--openia img {
+  filter: none;
+}
+
+:root[data-performance-mode='on'] .felixo-edge-route-active .react-flow__edge-path {
+  filter: none !important;
+  animation: none;
 }
 
 /* Final art direction: black, and a sky over it. The gradients, dot grid,

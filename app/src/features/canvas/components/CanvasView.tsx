@@ -22,6 +22,7 @@ import {
   type MiniMapNodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { DrawingNode } from './DrawingNode'
@@ -48,15 +49,14 @@ import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-surfaces'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { toolbarColumnOffset } from './toolbar-flyout'
-import { UpdateToast } from '../../updates/UpdateNotice'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
 import { CanvasToolPanels } from './CanvasToolPanels'
 import { TOOL_LABELS } from './tools/canvas-tool-labels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
 import { moveById } from './tools/terminals-panel-reorder'
+import { CanvasPanel } from './tools/CanvasPanel'
 import { NotificationsPanel } from './NotificationsPanel'
-import { NotificationsMenu } from './NotificationsMenu'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useSessionSnapshots, useTerminalSessions } from '../terminal/terminal-session-context'
 import {
@@ -263,14 +263,6 @@ function writeSidebarCollapsed(collapsed: boolean): void {
   }
 }
 
-/**
- * Espaço que a barra de status inferior (`.felixo-canvas-statusbar`, 1.875rem
- * de altura) reserva para o painel de notificações — ele abre pra baixo, à
- * esquerda do sino, e sem isto uma lista longa cresceria por baixo da barra
- * em vez de parar antes dela.
- */
-const STATUS_BAR_RESERVE = 40
-
 export function CanvasView({ onOpenChat }: CanvasViewProps) {
   // Fonte da verdade: o provider de superfícies embrulha `CanvasInner` por
   // fora, então o estado não pode morar dentro dele — ficaria inacessível
@@ -443,11 +435,6 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [])
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
-  // Measured live from the bell+panel's actual DOM height (ResizeObserver in
-  // NotificationsMenu), not guessed — a fixed offset broke as soon as the
-  // notification list grew past whatever number was hardcoded here.
-  const [, setNotificationsTriggerHeight] = useState(52)
   const sessionSnapshots = useSessionSnapshots()
   const actionableNotificationIds = useMemo(
     () => getActionRequiredNodeIds(nodes, sessionSnapshots),
@@ -700,13 +687,25 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   // Só os terminais existentes contam — a mesma regra que o painel usa para
   // montar a lista. Sem isso o badge somava notificações de blocos já
   // fechados e ficava marcando um número que o painel não reconhecia.
+  // Atualização pendente mostrada como item fixo no painel de notificações,
+  // no lugar do antigo aviso flutuante no canto da tela — `showToast` só é
+  // true para 'available'/'downloading'/'downloaded' (nunca 'error'), então
+  // isso nunca vira ruído sobre uma falha passageira de rede.
+  const updateNotificationItem = useMemo(() => {
+    if (!updates.presentation.showToast || updates.dismissed) return null
+    return {
+      presentation: updates.presentation,
+      onInstall: updates.install,
+      onDismiss: updates.dismiss,
+    }
+  }, [updates.presentation, updates.dismissed, updates.install, updates.dismiss])
   const notificationCount = useMemo(
     () =>
       countUnreadCanvasNotifications(
         notificationHistory,
         nodes.filter((node) => node.type === 'terminal').map((node) => node.id),
-      ),
-    [notificationHistory, nodes],
+      ) + (updateNotificationItem ? 1 : 0),
+    [notificationHistory, nodes, updateNotificationItem],
   )
   const miniMapNode = useCallback(
     (props: MiniMapNodeProps) => {
@@ -1986,7 +1985,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       })
     }
 
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    if (performanceMode || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       applyTargetPositions()
       frameMatrix()
       return
@@ -2037,7 +2036,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         }, AGENT_MATRIX_ANIMATION_MS)
       })
     })
-  }, [nodes, edges, setNodes, persistNode, fitBoundsSafely])
+  }, [nodes, edges, setNodes, persistNode, performanceMode, fitBoundsSafely])
 
   // "Run this file" from the Projects panel: the terminal's process IS the
   // file running (command = interpreter, args = [file]) — unlike agent
@@ -2187,6 +2186,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         }}
         sidebarCollapsed={sidebarCollapsed}
         onSidebarCollapsedChange={onSidebarCollapsedChange}
+        notificationCount={notificationCount}
         updatePresentation={updates.presentation}
         onInstallUpdate={updates.install}
         onCheckUpdate={updates.check}
@@ -2215,26 +2215,29 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onOpenChat={onOpenChat}
       />
 
-      <NotificationsMenu
-        open={notificationsOpen}
-        notificationCount={notificationCount}
-        onToggle={() => setNotificationsOpen((open) => !open)}
-        onHeightChange={setNotificationsTriggerHeight}
-      >
-        {(ready, panelRef, dismiss) => (
+      {activeTool === 'notifications' && (
+        <CanvasPanel
+          title="Notificações"
+          icon={<Bell size={15} className="text-[var(--color-error)]" />}
+          panelId="notifications"
+          id="canvas-notifications-panel"
+          onClose={() => {
+            setActiveTool(null)
+            window.requestAnimationFrame(() =>
+              document.querySelector<HTMLElement>('[data-notifications-trigger]')?.focus(),
+            )
+          }}
+          toolsMenuOpen={sidebarCollapsed}
+        >
           <NotificationsPanel
             nodes={nodes}
             notifications={notificationHistory}
-            open={notificationsOpen}
-            ready={ready}
-            panelRef={panelRef}
-            reservedBottomSpace={STATUS_BAR_RESERVE}
+            updateItem={updateNotificationItem}
             soundEnabled={notificationSoundEnabled}
             onSoundEnabledChange={setNotificationSoundEnabled}
             volume={notificationVolume}
             onVolumeChange={setNotificationVolume}
-            onClose={dismiss}
-            onDismiss={dismiss}
+            onClose={() => setActiveTool(null)}
             onFocusNode={focusNode}
             onExpandNode={openTerminal}
             onMarkRead={(notificationId) => {
@@ -2270,11 +2273,11 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
               setNotificationHistory((current) => clearReadCanvasNotifications(current))
             }
           />
-        )}
-      </NotificationsMenu>
+        </CanvasPanel>
+      )}
 
       <CanvasToolPanels
-        activeTool={activeTool}
+        activeTool={activeTool === 'notifications' ? null : activeTool}
         toolsMenuOpen={sidebarCollapsed}
         onClose={() => setActiveTool(null)}
         nodes={nodes}
@@ -2422,6 +2425,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
             agentSession: expandedNodeData?.agentSession,
             resumeAgentSession: expandedCanResumeAgentSession,
             terminalCount: expandedNodeData?.terminalCount,
+            performanceMode,
           }}
           onPassResponsibility={(transcript) =>
             setHandoff({ sourceId: expandedTerminalId, transcript })
@@ -2444,12 +2448,6 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
           onClose={closeHandoff}
         />
       )}
-      <UpdateToast
-        presentation={updates.presentation}
-        dismissed={updates.dismissed}
-        onDismiss={updates.dismiss}
-        onInstall={updates.install}
-      />
       {/* Cuida do proprio estado: o avanco da instalacao nao precisa passar
           pelo canvas para chegar na tela. */}
       <CliSetupToast />

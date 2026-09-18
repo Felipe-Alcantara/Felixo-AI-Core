@@ -1,4 +1,4 @@
-import { ArrowUpCircle, Loader2, RefreshCw, X } from 'lucide-react'
+import { ArrowUpCircle, Loader2, RefreshCw } from 'lucide-react'
 import type { UpdatePresentation } from './update-presentation'
 
 const TONE_TEXT: Record<UpdatePresentation['tone'], string> = {
@@ -123,90 +123,5 @@ export function CheckUpdateButton({
       <RefreshCw size={13} aria-hidden />
       Verificar atualizações
     </button>
-  )
-}
-
-type UpdateToastProps = {
-  presentation: UpdatePresentation
-  dismissed: boolean
-  onDismiss: () => void
-  onInstall: () => void
-}
-
-/**
- * Aviso flutuante, no canto inferior direito. Some quando dispensado e volta
- * quando a atualização fica pronta, porque aí há uma ação nova a oferecer.
- */
-export function UpdateToast({
-  presentation,
-  dismissed,
-  onDismiss,
-  onInstall,
-}: UpdateToastProps) {
-  if (!presentation.showToast || dismissed) {
-    return null
-  }
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-auto fixed bottom-4 right-4 z-50 w-80 rounded-xl border border-white/10 bg-slate-900/95 p-4 shadow-xl backdrop-blur"
-    >
-      <div className="flex items-start gap-3">
-        <ArrowUpCircle
-          size={18}
-          className={`mt-0.5 shrink-0 ${TONE_TEXT[presentation.tone]}`}
-          aria-hidden
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-slate-100">{presentation.toastTitle}</p>
-          <p className="mt-1 text-xs text-slate-400">{presentation.toastDescription}</p>
-
-          {presentation.progress !== null && !presentation.canInstall && (
-            <div
-              className="mt-3 h-1 overflow-hidden rounded-full bg-white/10"
-              role="progressbar"
-              aria-valuenow={presentation.progress}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div
-                className="h-full rounded-full bg-[var(--f-core-active)] transition-[width] duration-300"
-                style={{ width: `${presentation.progress}%` }}
-              />
-            </div>
-          )}
-
-          {presentation.canInstall && (
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={onInstall}
-                className="rounded-md bg-[var(--f-core-white)]/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-[var(--f-core-active)]"
-              >
-                Reiniciar agora
-              </button>
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="rounded-md px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
-              >
-                Depois
-              </button>
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="-mr-1 -mt-1 rounded-md p-1 text-slate-500 transition hover:bg-white/10 hover:text-slate-300"
-          aria-label="Dispensar aviso de atualização"
-        >
-          <X size={14} />
-        </button>
-      </div>
-    </div>
   )
 }

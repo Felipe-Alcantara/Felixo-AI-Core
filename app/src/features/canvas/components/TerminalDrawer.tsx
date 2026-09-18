@@ -54,6 +54,8 @@ type TerminalDrawerProps = {
     resumeAgentSession?: boolean
     /** Render-time total used only when this drawer creates a fresh xterm. */
     terminalCount?: number
+    /** Render-time Modo Performance flag used only when this drawer creates a fresh xterm. */
+    performanceMode?: boolean
   }
   /**
    * Abre a escolha do agente que vai assumir o trabalho, levando o histórico
