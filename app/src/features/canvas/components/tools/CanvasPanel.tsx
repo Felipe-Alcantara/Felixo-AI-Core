@@ -17,6 +17,9 @@ type CanvasPanelProps = {
   icon?: ReactNode
   onClose: () => void
   children: ReactNode
+  /** Id fixo do elemento raiz, para quem precisa apontar pra ele de fora
+   *  (ex.: `canvas-smoke.cjs` verificando onde o foco aterrissa ao abrir). */
+  id?: string
   /**
    * Identidade do painel para lembrar a largura arrastada. Sem isto todos os
    * painéis dividiriam a mesma memória e ajustar um mudaria os outros.
@@ -56,6 +59,7 @@ export function CanvasPanel({
   onClose,
   children,
   panelId,
+  id,
   size = 'sm',
   variant = 'panel',
   toolsMenuOpen = false,
@@ -110,6 +114,7 @@ export function CanvasPanel({
   return (
     <div
       ref={panelRef}
+      id={id}
       role="region"
       aria-labelledby={headingId}
       tabIndex={-1}

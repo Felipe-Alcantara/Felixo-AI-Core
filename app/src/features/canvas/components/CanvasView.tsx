@@ -2220,7 +2220,13 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
           title="Notificações"
           icon={<Bell size={15} className="text-[var(--color-error)]" />}
           panelId="notifications"
-          onClose={() => setActiveTool(null)}
+          id="canvas-notifications-panel"
+          onClose={() => {
+            setActiveTool(null)
+            window.requestAnimationFrame(() =>
+              document.querySelector<HTMLElement>('[data-notifications-trigger]')?.focus(),
+            )
+          }}
           toolsMenuOpen={sidebarCollapsed}
         >
           <NotificationsPanel

@@ -181,6 +181,7 @@ export function CanvasToolbar({
           active={activeTool === 'notifications'}
           onClick={() => onSelectTool('notifications')}
           highlight={notificationCount > 0}
+          notificationsTrigger
         >
           <Bell size={18} />
           {notificationCount > 0 && (
@@ -350,6 +351,7 @@ function ActivityRailButton({
   dataCanvasToolTrigger,
   children,
   highlight = false,
+  notificationsTrigger = false,
 }: {
   label: string
   active?: boolean
@@ -368,6 +370,9 @@ function ActivityRailButton({
    *  precisam de atenção (agente parado, atualização pronta), não qualquer
    *  novidade. Respeita Modo Performance e "reduzir movimento" (ver index.css). */
   highlight?: boolean
+  /** Marca este botão como o gatilho do sino de notificações, para o painel
+   *  devolver o foco a ele ao fechar (ver `canvas-smoke.cjs`). */
+  notificationsTrigger?: boolean
 }) {
   return (
     <button
@@ -381,6 +386,7 @@ function ActivityRailButton({
       {...(dataCanvasToolTrigger
         ? { 'data-canvas-tool-trigger': dataCanvasToolTrigger }
         : {})}
+      {...(notificationsTrigger ? { 'data-notifications-trigger': true } : {})}
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
     >
       {children}
