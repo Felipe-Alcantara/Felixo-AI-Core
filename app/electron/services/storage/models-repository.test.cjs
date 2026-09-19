@@ -19,9 +19,12 @@ const BASE = {
 
 function comBanco(run) {
   const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-models-'))
+  const database = createStorageDatabase({ databaseDir })
   try {
-    return run(createModelsRepository(createStorageDatabase({ databaseDir })))
+    return run(createModelsRepository(database))
   } finally {
+    // No Windows o arquivo SQLite não pode ser apagado com a conexão aberta.
+    database.close()
     fs.rmSync(databaseDir, { recursive: true, force: true })
   }
 }
