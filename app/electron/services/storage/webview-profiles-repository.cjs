@@ -18,7 +18,7 @@ function createWebviewProfilesRepository(database) {
 
   function list() {
     return connection
-      .prepare('SELECT * FROM webview_profiles WHERE archived_at IS NULL ORDER BY created_at ASC, id ASC')
+      .prepare('SELECT * FROM webview_profiles WHERE archived_at IS NULL ORDER BY created_at ASC, rowid ASC')
       .all()
       .map(mapRow)
   }

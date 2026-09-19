@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PANEL_MIN_HEIGHT,
+  clampPanelHeight,
+  clearPanelHeight,
   clampPanelWidth,
   getDefaultPanelWidth,
   getNodeSizeScale,
   getPanelMaxHeight,
   getPanelMaxWidth,
+  readPanelHeight,
   readPanelWidth,
   scaleNodeSize,
+  writePanelHeight,
   writePanelWidth,
 } from './panel-sizing'
 
@@ -110,6 +115,73 @@ describe('altura do painel', () => {
 
   it('mantém altura utilizável mesmo numa janela muito baixa', () => {
     expect(getPanelMaxHeight(200)).toBe(240)
+  })
+})
+
+describe('altura arrastada do painel', () => {
+  // Janelas de 320 a 2400 de altura: do menor smoke (667) ao monitor grande.
+  const ALTURAS = [200, 320, 480, 600, 667, 738, 768, 900, 1080, 1440, 2400]
+
+  it('a altura clampada SEMPRE cabe na janela e respeita o piso, em qualquer altura/pedido', () => {
+    for (const viewport of ALTURAS) {
+      const max = getPanelMaxHeight(viewport)
+      for (const pedido of [-500, 0, 1, 100, 239, 240, 500, 10_000, Number.MAX_SAFE_INTEGER]) {
+        const altura = clampPanelHeight(pedido, viewport)
+        expect(altura, `viewport ${viewport} pedido ${pedido}`).toBeGreaterThanOrEqual(PANEL_MIN_HEIGHT)
+        expect(altura, `viewport ${viewport} pedido ${pedido}`).toBeLessThanOrEqual(max)
+        // Nunca passa do rodapé: topo (64) + altura cabe na janela, exceto quando
+        // a janela é menor que o piso (aí vale o piso — sobreposição declarada).
+        if (viewport >= PANEL_MIN_HEIGHT + 64 + 48) expect(64 + altura).toBeLessThanOrEqual(viewport)
+      }
+    }
+  })
+
+  it('o intervalo [piso, teto] nunca se inverte, nem numa janela mais baixa que o piso', () => {
+    for (const viewport of [0, 50, 200, 300]) {
+      expect(getPanelMaxHeight(viewport)).toBeGreaterThanOrEqual(PANEL_MIN_HEIGHT)
+      expect(clampPanelHeight(10_000, viewport)).toBe(clampPanelHeight(0, viewport))
+    }
+  })
+
+  it('o teto é o MESMO que o painel já respeitava: não cria posição nova que disputasse espaço', () => {
+    expect(clampPanelHeight(10_000, 738)).toBe(getPanelMaxHeight(738))
+    expect(clampPanelHeight(10_000, 768)).toBe(getPanelMaxHeight(768))
+  })
+
+  it('lembra a altura, por painel, sem um mexer no outro; nunca ajustado devolve null', () => {
+    const storage = fakeStorage()
+    expect(readPanelHeight(storage, 'notas', 768)).toBeNull()
+    writePanelHeight(storage, 'notas', 400)
+    writePanelHeight(storage, 'git', 500)
+    expect(readPanelHeight(storage, 'notas', 768)).toBe(400)
+    expect(readPanelHeight(storage, 'git', 768)).toBe(500)
+    clearPanelHeight(storage, 'notas')
+    expect(readPanelHeight(storage, 'notas', 768)).toBeNull()
+    expect(readPanelHeight(storage, 'git', 768)).toBe(500)
+  })
+
+  it('traz para a faixa uma altura salva numa janela maior (monitor → notebook)', () => {
+    const storage = fakeStorage()
+    writePanelHeight(storage, 'notas', 1200)
+    expect(readPanelHeight(storage, 'notas', 738)).toBe(getPanelMaxHeight(738))
+  })
+
+  it('ignora lixo salvo (volta a null = altura do conteúdo)', () => {
+    for (const lixo of ['', 'abc', '-5', '0', 'NaN', 'Infinity']) {
+      const storage = fakeStorage({ 'felixo:canvas-panel-height:notas': lixo })
+      expect(readPanelHeight(storage, 'notas', 768), lixo).toBeNull()
+    }
+  })
+
+  it('sobrevive a um armazenamento que lança', () => {
+    const throwing = {
+      getItem: () => { throw new Error('bloqueado') },
+      setItem: () => { throw new Error('bloqueado') },
+      removeItem: () => { throw new Error('bloqueado') },
+    }
+    expect(readPanelHeight(throwing, 'notas', 768)).toBeNull()
+    expect(() => writePanelHeight(throwing, 'notas', 400)).not.toThrow()
+    expect(() => clearPanelHeight(throwing, 'notas')).not.toThrow()
   })
 })
 

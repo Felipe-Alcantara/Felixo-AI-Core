@@ -364,6 +364,19 @@ microfone). O contrato acima e o do CLIENTE; que um servidor especifico o aceite
 — inclusive o formato webm/opus, que alguns exigem converter — e justamente o
 experimento pendente. Nenhum servidor e recomendado antes de medido.
 
+## Layout: altura dos paineis
+
+Os paineis de ferramenta redimensionam a LARGURA (arrasto, `useResizablePanelWidth`,
+que passa por `reportPanelWidth` no coordenador de superficies) e, desde a fatia
+1 da task de layout, tambem a ALTURA (`useResizablePanelHeight`, alca na borda
+de baixo, setas e `Home`). A altura nao fala com o coordenador: o painel ancora
+no topo, so concorre com as outras superficies pela largura, e a altura tem o
+mesmo teto que ele ja respeitava (`getPanelMaxHeight`, topo 64 + rodape 48) —
+esticar na vertical nao cria uma posicao nova e, por isso, nao reabre o loop de
+painel x gaveta de 12/09 (leitura circular entre superficies, ver
+`splitHorizontalSpace`). Inventario completo, com o que ainda nao redimensiona:
+`docs/projeto/LAYOUT-SUPERFICIES.md`.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um
