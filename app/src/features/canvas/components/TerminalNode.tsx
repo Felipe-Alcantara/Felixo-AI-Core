@@ -1,4 +1,5 @@
 import { memo, useEffect } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   Position,
@@ -169,8 +170,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     <div data-activity={activity} className="felixo-canvas-card felixo-canvas-card-terminal flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-black-surface)] text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
-        minWidth={200}
-        minHeight={120}
+        minWidth={NODE_MIN_SIZE.terminal.width}
+        minHeight={NODE_MIN_SIZE.terminal.height}
         lineClassName="!border-white/30"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
       />

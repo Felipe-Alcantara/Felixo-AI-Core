@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from '@xyflow/react'
+import type { CanvasNodeType } from '../types'
 import {
+  DEFAULT_SIZE,
+  NODE_MIN_SIZE,
   findFreeNodePosition,
   findFreeNodePositionNearNode,
   findFreeNodePositions,
+  getDefaultNodeSize,
 } from './node-geometry'
 
 const SIZE = { width: 100, height: 100 }
@@ -103,5 +107,41 @@ describe('findFreeNodePositionNearNode', () => {
       x: -12,
       y: 120,
     })
+  })
+})
+
+describe('tamanho padrão × mínimo de cada bloco', () => {
+  // Larguras de janela: de um celular deitado ao monitor grande.
+  const LARGURAS = [320, 480, 800, 1024, 1280, 1366, 1600, 1920, 2560, 3840]
+  const TIPOS = Object.keys(DEFAULT_SIZE) as CanvasNodeType[]
+
+  it('nenhum bloco nasce menor que o próprio mínimo, em nenhuma largura de janela', () => {
+    for (const tipo of TIPOS) {
+      for (const largura of LARGURAS) {
+        const nasce = getDefaultNodeSize(tipo, largura)
+        const minimo = NODE_MIN_SIZE[tipo]
+        expect(nasce.width, `${tipo} @${largura}`).toBeGreaterThanOrEqual(minimo.width)
+        expect(nasce.height, `${tipo} @${largura}`).toBeGreaterThanOrEqual(minimo.height)
+      }
+    }
+  })
+
+  it('todo tipo de bloco tem um mínimo declarado, e o mínimo cabe no tamanho padrão de tela grande', () => {
+    for (const tipo of TIPOS) {
+      const minimo = NODE_MIN_SIZE[tipo]
+      expect(minimo, tipo).toBeDefined()
+      expect(minimo.width).toBeLessThanOrEqual(DEFAULT_SIZE[tipo].width)
+      expect(minimo.height).toBeLessThanOrEqual(DEFAULT_SIZE[tipo].height)
+    }
+  })
+
+  it('o Tarefas Notion cabe numa janela de 800 px (o mínimo antigo, 760×460, cobria quase tudo)', () => {
+    expect(NODE_MIN_SIZE.notionTasks.width).toBeLessThanOrEqual(520)
+    expect(NODE_MIN_SIZE.notionTasks.height).toBeLessThanOrEqual(360)
+  })
+
+  it('em tela grande o tamanho padrão continua o de sempre (o piso só age onde o bloco encolheria demais)', () => {
+    expect(getDefaultNodeSize('terminal', 1920)).toEqual(DEFAULT_SIZE.terminal)
+    expect(getDefaultNodeSize('notionTasks', 1920)).toEqual(DEFAULT_SIZE.notionTasks)
   })
 })

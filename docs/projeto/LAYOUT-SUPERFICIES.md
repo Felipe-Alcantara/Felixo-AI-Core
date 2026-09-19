@@ -24,8 +24,8 @@ outras superfícies (a altura do painel) não precisa falar com o coordenador.
 |---|---|---|---|---|
 | Painéis de ferramenta (`CanvasPanel`, ~15) | **sim** (arrasto na borda direita, setas, `Home`/duplo clique = padrão) | **sim, a partir desta fatia** (borda de baixo, setas ↑↓, `Home`/duplo clique = altura do conteúdo) | largura 260–380 por porte (`sm`…`xl`); altura 240 | Largura: `PANEL_SPECS`, teto `min(spec.max, viewport − 340)`. Altura: piso 240, teto `viewport − 112` (`getPanelMaxHeight`). Persistem por painel no `localStorage`. |
 | Painel "workspace" (Tarefas Notion) | não (ocupa a largura livre) | não (altura toda) | — | Página, não janela: por desenho. |
-| Gaveta do terminal (`TerminalDrawer`) | **sim** (`col-resize`) | não (preenche) | 440 (`DRAWER_MIN_WIDTH`) | Só existe com um terminal expandido. |
-| Inspector "Elementos" | não (288 fixo, `INSPECTOR_WIDTH`) | preenche | 288 | Recolhe para um puck (não reserva espaço). |
+| Gaveta do terminal (`TerminalDrawer`) | **sim** (`col-resize`) | não — **por decisão** (ver abaixo) | 440 (`DRAWER_MIN_WIDTH`) | Coluna de altura total (`h-full`); só existe com um terminal expandido. Tem recolher e maximizar. |
+| Inspector "Elementos" | não — **por decisão** (288 fixo, `INSPECTOR_WIDTH`) | preenche | 288 | Recolhe para um puck (não reserva espaço). |
 | Sidebar | não (288 expandida / 52 trilho) | preenche | 52 | Recolher/expandir. |
 | Mini Map | encolhe sozinho (200×150 → 96×72) | idem | 96×72 | É a única superfície que **pode sumir** (nenhuma ação depende dele). |
 
@@ -40,10 +40,12 @@ outras superfícies (a altura do painel) não precisa falar com o coordenador.
 | Desenho leve | 220 × 180 |
 | Página Web | 360 × 280 |
 | Desenho Excalidraw | 360 × 280 |
-| Tarefas Notion | 760 × 460 |
+| Tarefas Notion | **480 × 320** (era 760 × 460) |
 
-Todos redimensionam nos dois eixos. O Tarefas Notion tem o maior mínimo (760 × 460):
-em uma janela de 800 px ele já cobre quase tudo — candidato a revisão.
+Todos redimensionam nos dois eixos. Os mínimos vêm de uma fonte única,
+`NODE_MIN_SIZE` (`node-geometry.ts`), que os `NodeResizer` e `getDefaultNodeSize` leem;
+um teste garante que nenhum bloco nasce menor que o próprio mínimo em nenhuma largura
+de janela (a nota nascia com 158 px contra um mínimo de 180).
 
 ## Modais (tamanho fixo por `max-w`/`max-h`; **nenhum redimensiona**)
 
@@ -72,12 +74,30 @@ componente, não pela pessoa.
 flyouts da barra (`toolbar-flyout.ts`), `TerminalMenu`. Não redimensionam; o risco aqui
 não é tamanho, é ficar fora da tela em janela estreita.
 
-## Estado desta fatia
+## Decisões (podem ser revistas)
 
-Feito: altura dos painéis de ferramenta (hook próprio, sem tocar no coordenador),
-invariantes testadas (a altura cabe na janela em qualquer altura de 200 a 2400),
-smoke de viewport em 1366×768, 1024×640 e 800×600.
+**Gaveta do terminal: sem eixo vertical.** Ela é uma coluna encostada na direita, de
+altura total (`h-full` dentro da linha flex do canvas), não uma janela. Não há altura a
+redimensionar sem transformá-la numa janela flutuante — outra feature, com outro
+custo (posição, sobreposição, foco). Continua com largura arrastável, recolher e
+maximizar.
 
-Pendente (tasks próprias): modais (13 componentes), gaveta e inspector na vertical/
-horizontal, revisão do mínimo do bloco Tarefas Notion, e conferir tudo numa janela
-real — nada disto foi visto rodando por quem escreveu este documento.
+**Inspector "Elementos": continua com 288 fixo.** `INSPECTOR_WIDTH` é uma constante
+lida pelo coordenador de superfícies, por `layout-invariants.ts` e pelo próprio painel.
+Torná-lo variável faria dele um terceiro disputante em `splitHorizontalSpace`
+(painel × gaveta × inspector) — exatamente o acoplamento que gerou o loop de
+12/09 — para uma superfície que já devolve espaço quando recolhida (vira um puck e
+reserva 0). O ganho não paga o risco. Se a pessoa precisar de mais espaço, recolhe.
+
+**Tarefas Notion: mínimo 480 × 320** (era 760 × 460). O conteúdo do bloco rola por dentro
+e o painel usa colunas flexíveis. O tamanho padrão continua o de sempre (1040 × 680,
+escalado pela janela).
+
+## Estado
+
+Feito: altura dos painéis (PR #60); fonte única dos mínimos dos blocos, piso em
+`getDefaultNodeSize` e mínimo do Tarefas Notion reduzido (esta fatia), com teste de
+invariante em 10 larguras de janela (320–3840) × 8 tipos de bloco.
+
+Pendente (task própria): modais (13 componentes). E, para tudo isto: conferir numa
+janela real — nada foi visto rodando por quem escreveu este documento.

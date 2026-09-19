@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type RefObject } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   Position,
@@ -129,8 +130,8 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
     <div className="felixo-canvas-card felixo-canvas-card-file flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-graphite)] text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
-        minWidth={220}
-        minHeight={140}
+        minWidth={NODE_MIN_SIZE.file.width}
+        minHeight={NODE_MIN_SIZE.file.height}
         lineClassName="!border-white/30"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
       />
