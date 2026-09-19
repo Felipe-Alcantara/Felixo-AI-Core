@@ -8,6 +8,7 @@ import {
   getEffortLevels,
   isEffortValidForModel,
 } from '../../canvas/services/agent-launch-options'
+import { modelSupportsFastMode, resolveFastMode } from '../services/model-fast-mode'
 
 type ModelConfigModalProps = {
   isOpen: boolean
@@ -114,6 +115,7 @@ export function ModelConfigModal({
   const [reasoningEffort, setReasoningEffort] = useState<'' | ReasoningEffort>(
     model.reasoningEffort ?? '',
   )
+  const [fastMode, setFastMode] = useState(model.fastMode === true)
 
   if (!isOpen) {
     return null
@@ -122,6 +124,7 @@ export function ModelConfigModal({
   const capabilities = getModelCapabilities(model)
   const providerOptions = getProviderModelOptions(model)
   const effortOptions = getReasoningEffortOptions(model, providerModel)
+  const fastSupported = modelSupportsFastMode({ cliType: model.cliType, providerModel })
   const selectedSpec = providerModel ? providerModelSpecs[providerModel] ?? null : null
 
   function handleProviderModelChange(value: string) {
@@ -140,6 +143,7 @@ export function ModelConfigModal({
       ...model,
       providerModel: providerModel || undefined,
       reasoningEffort: (reasoningEffort as ReasoningEffort) || undefined,
+      fastMode: resolveFastMode({ cliType: model.cliType, providerModel }, fastMode),
     })
     onClose()
   }
@@ -234,6 +238,21 @@ export function ModelConfigModal({
                   className="mt-1"
                 />
               </div>
+            )}
+
+            {fastSupported && (
+              <label className="felixo-checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={fastMode}
+                  onChange={(event) => setFastMode(event.target.checked)}
+                  className="felixo-checkbox"
+                />
+                <span className="felixo-checkbox-copy">
+                  <span className="felixo-checkbox-label">Modo fast</span>
+                  <span className="felixo-checkbox-meta">Mais rápido, gasta mais do limite</span>
+                </span>
+              </label>
             )}
           </section>
 

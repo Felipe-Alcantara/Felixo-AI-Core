@@ -207,6 +207,9 @@ function createModelSessionKey(model) {
     model?.id ?? '',
     model?.providerModel ?? '',
     model?.reasoningEffort ?? '',
+    // Fast muda os argumentos de spawn do Codex: alternar o campo não pode
+    // reaproveitar o processo persistente aberto com o tier anterior.
+    model?.fastMode === true ? 'fast' : '',
   ].join(':')
 }
 

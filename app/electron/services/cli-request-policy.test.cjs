@@ -273,3 +273,10 @@ test('resolveCliCwd devolve o home do usuario em qualquer plataforma', () => {
     }
   }
 })
+
+test('normalizeAvailableModel preserva fastMode só quando é o booleano true', () => {
+  assert.equal(normalizeAvailableModel({ ...VALID_MODEL, cliType: 'codex', fastMode: true }).fastMode, true)
+  for (const fastMode of [false, 'true', 1, undefined]) {
+    assert.equal('fastMode' in normalizeAvailableModel({ ...VALID_MODEL, cliType: 'codex', fastMode }), false)
+  }
+})

@@ -21,6 +21,8 @@ export type Model = {
   cliType: CliType
   providerModel?: string
   reasoningEffort?: ReasoningEffort
+  /** Modo fast do Codex (`service_tier="priority"`): mais rápido, gasta mais limite. */
+  fastMode?: boolean
 }
 
 export type ModelFileSelection = Omit<Model, 'id'>
