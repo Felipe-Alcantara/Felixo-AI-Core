@@ -14,6 +14,7 @@ import {
   Sparkles,
   Terminal,
   Upload,
+  UserCog,
 } from 'lucide-react'
 import { preloadCanvasTool } from '../canvas-tool-preloaders'
 
@@ -41,6 +42,7 @@ export type CanvasTool =
   | 'orchestrator'
   | 'qaLogger'
   | 'agentCanvasWrite'
+  | 'agentPresets'
   | 'settings'
 
 type ToolEntry = { tool: CanvasTool; label: string; icon: LucideIcon }
@@ -66,6 +68,7 @@ const TOOL_GROUPS: Array<{ label: string; tools: ToolEntry[] }> = [
       { tool: 'orchestrator', label: 'Orquestrador', icon: Network },
       { tool: 'qaLogger', label: 'QA Logger', icon: Terminal },
       { tool: 'agentCanvasWrite', label: 'Pedidos de escrita', icon: PenLine },
+      { tool: 'agentPresets', label: 'Presets de agente', icon: UserCog },
     ],
   },
 ]

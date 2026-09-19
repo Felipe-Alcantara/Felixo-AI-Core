@@ -259,6 +259,21 @@ e as skills do preset entram no `initialText` do terminal
 contexto grande de preset nunca e digitado inteiro no PTY. A cor do preset vira
 a moldura (`frameColor`) do terminal.
 
+### Gerenciar presets (fatia 2)
+
+`AgentPresetsPanel` (ferramenta "Presets de agente") edita todos os campos de
+um preset da pessoa, escolhe as skills no catalogo (`listAvailableSkills`),
+duplica, exclui e troca arquivos `.fxpreset`. As regras de edicao ficam em
+`agent-preset-editor.ts` (puro): trocar de CLI zera modelo/esforco/fast; trocar
+de modelo so mantem esforco e fast que o novo modelo aceita. Exportar usa o
+mesmo `files.saveTextFile` do `.fxcanvas`; importar le o arquivo no renderer,
+valida formato e versao (`parsePresetFile`), da outro id e, se o nome ja
+existe, numera como copia — nunca sobrescreve um preset. A pasta padrao e do
+preset mas nao vai no arquivo. Skill citada que o catalogo nao tem mais e
+avisada na edicao e ignorada ao abrir o agente. Como o formulario de spawn e a
+tela usam instancias separadas de `useAgentPresets`, a lista muda por um
+evento de janela (`felixo:agent-presets-changed`).
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um
