@@ -779,12 +779,24 @@ declare global {
       speech?: {
         getConfig: () => Promise<
           CliInvokeResult & {
-            config?: { baseUrl: string; model: string; language: string; keyConfigured: boolean }
+            config?: {
+              baseUrl: string
+              model: string
+              language: string
+              keyConfigured: boolean
+              keyRequired: boolean
+            }
           }
         >
         saveConfig: (config: { baseUrl: string; model: string; language: string }) => Promise<
           CliInvokeResult & {
-            config?: { baseUrl: string; model: string; language: string; keyConfigured: boolean }
+            config?: {
+              baseUrl: string
+              model: string
+              language: string
+              keyConfigured: boolean
+              keyRequired: boolean
+            }
           }
         >
         setKey: (key: string) => Promise<CliInvokeResult>

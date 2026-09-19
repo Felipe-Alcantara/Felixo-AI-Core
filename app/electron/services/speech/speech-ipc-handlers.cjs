@@ -44,7 +44,8 @@ function registerSpeechIpcHandlers({ userData, dependencies = {} }) {
 
   ipcMain.handle('speech:save-config', (_event, config) => {
     try {
-      return { ok: true, config: { ...store.saveConfig(config), keyConfigured: store.getConfig().keyConfigured } }
+      store.saveConfig(config)
+      return { ok: true, config: store.getConfig() }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel salvar a configuracao do ditado.')
     }

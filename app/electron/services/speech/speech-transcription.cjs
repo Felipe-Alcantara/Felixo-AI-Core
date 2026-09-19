@@ -1,6 +1,7 @@
 'use strict'
 
 const { redactSensitiveText } = require('../git-secret-redaction.cjs')
+const { isLoopbackBaseUrl } = require('./speech-settings-store.cjs')
 
 const MIN_AUDIO_BYTES = 1024
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024
@@ -46,7 +47,10 @@ function apiErrorMessage(status, bodyText) {
  * @returns {Promise<{ ok: true, text: string } | { ok: false, message: string }>}
  */
 async function transcribeAudio({ audio, mimeType, config, apiKey, fetchImpl = globalThis.fetch }) {
-  if (!apiKey) {
+  // Servidor local (loopback) não pede chave: o áudio não sai da máquina. Já a
+  // nuvem exige, e nunca se manda uma requisição sem credencial para fora.
+  const local = isLoopbackBaseUrl(config.baseUrl)
+  if (!apiKey && !local) {
     return { ok: false, message: 'Cadastre a chave da API de transcrição nas configurações do ditado.' }
   }
   const type = baseMimeType(mimeType)
@@ -68,7 +72,8 @@ async function transcribeAudio({ audio, mimeType, config, apiKey, fetchImpl = gl
   try {
     const response = await fetchImpl(`${config.baseUrl}/audio/transcriptions`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
+      // Sem chave (servidor local) não há cabeçalho de autorização.
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
       body: form,
       signal: controller.signal,
     })
@@ -86,7 +91,12 @@ async function transcribeAudio({ audio, mimeType, config, apiKey, fetchImpl = gl
       : { ok: false, message: 'Não entendi nada nessa gravação. Tente falar mais perto do microfone.' }
   } catch (error) {
     if (error?.name === 'AbortError') return { ok: false, message: 'A transcrição demorou demais e foi cancelada.' }
-    return { ok: false, message: 'Não foi possível falar com a API de transcrição. Confira a conexão e o endereço.' }
+    return {
+      ok: false,
+      message: local
+        ? 'Não consegui falar com o servidor local de transcrição. Confira se ele está rodando no endereço configurado.'
+        : 'Não foi possível falar com a API de transcrição. Confira a conexão e o endereço.',
+    }
   } finally {
     clearTimeout(timer)
   }

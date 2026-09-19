@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_DICTATION_SHORTCUT,
@@ -7,6 +8,7 @@ import {
   dictationReducer,
   formatElapsed,
   formatShortcut,
+  isLoopbackEndpoint,
   matchesShortcut,
   readShortcut,
   sanitizeDictatedText,
@@ -149,5 +151,31 @@ describe('formatElapsed', () => {
     expect(formatElapsed(7400)).toBe('0:07')
     expect(formatElapsed(83_000)).toBe('1:23')
     expect(formatElapsed(-5)).toBe('0:00')
+  })
+})
+
+describe('isLoopbackEndpoint — servidor local × nuvem', () => {
+  it('só endereços desta máquina contam como servidor local', () => {
+    for (const local of ['http://localhost:8080/v1', 'http://127.0.0.1:9000', 'https://localhost/v1']) {
+      expect(isLoopbackEndpoint(local), local).toBe(true)
+    }
+    for (const remoto of ['https://api.openai.com/v1', 'http://192.168.0.5:8080', 'https://localhost.evil.com/v1', 'http://x', '', null, 3]) {
+      expect(isLoopbackEndpoint(remoto), String(remoto)).toBe(false)
+    }
+  })
+
+  it('renderer e processo principal concordam (paridade): é a regra que decide se a chave é exigida', () => {
+    const require = createRequire(import.meta.url)
+    const main = require('../../../../electron/services/speech/speech-settings-store.cjs') as {
+      isLoopbackBaseUrl: (value: unknown) => boolean
+    }
+    const amostras = [
+      'http://localhost:8080/v1', 'http://127.0.0.1:9000', 'http://[::1]:8080/v1', 'https://localhost/v1',
+      'https://api.openai.com/v1', 'http://192.168.0.5:8080', 'https://localhost.evil.com/v1',
+      'http://user:pass@localhost/v1', 'ftp://localhost', 'localhost:8080', '', '   ',
+    ]
+    for (const amostra of amostras) {
+      expect(isLoopbackEndpoint(amostra), amostra).toBe(main.isLoopbackBaseUrl(amostra))
+    }
   })
 })
