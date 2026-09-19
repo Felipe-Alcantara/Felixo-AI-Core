@@ -195,6 +195,13 @@ contextBridge.exposeInMainWorld('felixo', {
     // evento só avisa o renderer pra aplicar o mesmo `data` no nó vivo, sem
     // esperar um reload nem deixar a próxima autosave sobrescrever com a
     // cópia velha que o React ainda tem em memória.
+    listQuestions: () => ipcRenderer.invoke('canvas:list-questions'),
+    answerQuestion: (params) => ipcRenderer.invoke('canvas:answer-question', params),
+    onQuestions: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('canvas:agent-questions', handler)
+      return () => ipcRenderer.removeListener('canvas:agent-questions', handler)
+    },
     onNodeUpdated: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('canvas:agent-node-updated', handler)

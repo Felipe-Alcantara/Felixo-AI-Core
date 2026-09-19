@@ -328,6 +328,22 @@ export type CanvasWriteAgentRequest = {
   resolvidoEm?: string
 }
 
+/**
+ * Pergunta com opções que um agente deixou pelo comando `felixo perguntar`.
+ * A pessoa responde clicando; a resposta devolvida ao agente é sempre uma das
+ * opções que o próprio pedido carrega.
+ */
+export type CanvasAgentQuestion = {
+  id: string
+  acao: 'perguntar'
+  pergunta: string
+  opcoes: Array<{ label: string; descricao?: string }>
+  estado: 'pendente' | 'aceito' | 'recusado'
+  pedidoEm: string
+  origem: string
+  resolvidoEm?: string
+}
+
 export type FetchAllActionResult = {
   status: FetchAllRepoStatus
   action: 'pull' | 'push' | 'commit'

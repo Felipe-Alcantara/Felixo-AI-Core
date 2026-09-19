@@ -180,6 +180,13 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       canvas — este comando só registra o pedido e devolve na hora, sem
       esperar a confirmação. Só "note" aceita escrita nesta fatia.
 
+  felixo perguntar "<pergunta>" "<opção 1>" "<opção 2>" [... até 4] [--json]
+      Faz uma pergunta com 2 a 4 opções e BLOQUEIA até a pessoa clicar numa
+      delas no diálogo do app; imprime o texto da opção escolhida (código 0).
+      Código 3 = a pessoa dispensou a pergunta; código 1 = ninguém respondeu em
+      5 minutos (o id do pedido fica no texto, para conferir depois com
+      "felixo canvas ver-pedido <id>"). Quem responde é sempre uma pessoa.
+
   felixo canvas ver-pedido <id> [--json]
       Confere o desfecho de um pedido de canvas (leitura ou escrita).
 

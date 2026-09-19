@@ -5692,3 +5692,56 @@ Testes: `frame-colors.test.ts` (3) e round-trip de persistência em todos os
 8 tipos + nota antiga (2). eslint, tsc e testes rodados antes do push.
 Sem verificação visual ao vivo (`felixo devtools connect` ainda travado — task
 própria) — o aspecto do halo/contorno não foi visto na tela.
+
+## Fechamento de trabalho — 2026-09-19: perguntas com opções para o Codex (`felixo perguntar`)
+
+### Contexto
+
+Task "Agentes — perguntas interativas com opções para o Codex no canvas".
+Critério: um agente Codex faz uma pergunta com 2 a 4 opções, o Felipe escolhe
+clicando e a resposta volta sem digitar; o caminho escolhido fica no IA.md.
+
+### O que foi medido (Codex 0.154.0, protocolo real)
+
+`codex app-server generate-json-schema --experimental` mostra
+`item/tool/requestUserInput` (`ToolRequestUserInputParams`: perguntas com id,
+header, opções label/descrição, `isOther`, `isSecret`; resposta:
+`answers[id].answers[]`). `codex features list`:
+`default_mode_request_user_input` = *under development*, **false** — a
+ferramenta nativa só existe fora do plan mode atrás dessa flag. Confirmou a
+divergência com a anotação: o Codex tem a ferramenta, mas instável.
+
+### Decisão (perguntada ao Felipe; escolha: `felixo perguntar`)
+
+1. Flag nativa no PTY: instável e a pergunta fica dentro do TUI, por
+   teclado — não cumpre "clicando". Descartada como caminho principal.
+2. Diálogo do app-server: o app-server só serve chat/orquestrador; os
+   terminais do canvas rodam o TUI por PTY, então não alcançaria o agente do
+   canvas. Descartada.
+3. **`felixo perguntar`** na fila `agent-requests`: agnóstico de agente
+   (Codex/Claude/Gemini), reaproveita o canal já construído. Escolhida. O
+   Felipe também notou que o Codex às vezes já pergunta sozinho, mas pior que
+   o Claude — coerente com não depender da flag.
+
+### O que foi feito
+
+- `agent-requests.cjs`: ação `perguntar` (pergunta ≤500, 2–4 opções ≤120,
+  descrição ≤300).
+- `agent-question-ipc-handlers.cjs`: nunca auto-resolve; o renderer envia só o
+  ÍNDICE e o texto devolvido ao agente vem do pedido gravado (o que chega do
+  renderer nunca vira a resposta). Índice inválido não resolve nem fecha a
+  pergunta.
+- `AgentQuestionDialog` global no CanvasView (quem perguntou está bloqueado;
+  não pode depender de painel aberto): clique, teclas 1–4, Esc dispensa.
+- CLI `felixo perguntar "<pergunta>" "<op1>" "<op2>"…`: ao contrário de
+  `canvas escrever`, BLOQUEIA até a resposta (5 min). Saída: texto da opção
+  (0), dispensada (3), sem resposta no prazo (1), uso inválido (2).
+- Skill `perguntar-com-opcoes`; `ARQUITETURA.md` com a decisão.
+
+### Validação
+
+Testes novos: 1 em `agent-requests`, 5 no handler, 6 na CLI, 4 de lógica pura
+do diálogo (vitest). Resultado completo de `npm test`/vitest/eslint/tsc no PR.
+Sem verificação visual/ao vivo: `felixo devtools connect` segue travado (task
+própria) e o diálogo não foi visto na tela; um Codex real também não foi
+posto a usar o comando — a skill ensina, mas não medi se ele a segue.

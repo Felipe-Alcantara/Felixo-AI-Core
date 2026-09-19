@@ -179,6 +179,28 @@ listar/ler, este comando NAO espera resposta — o pedido pode ficar minutos
 esperando um clique — so registra e devolve na hora, apontando pra
 `felixo canvas ver-pedido <id>`.
 
+## Perguntas com opcoes de um agente (felixo perguntar)
+
+Decisao registrada (task "perguntas interativas com opcoes para o Codex").
+Verificado no protocolo real do Codex 0.154.0 (`codex app-server
+generate-json-schema --experimental`): o app-server tem
+`item/tool/requestUserInput` (perguntas + opcoes, resposta por id), mas o
+app-server so serve o chat/orquestrador — os terminais do canvas rodam o TUI
+do Codex por PTY, entao esse caminho nao alcancaria o agente do canvas. A flag
+nativa `default_mode_request_user_input` esta "under development" (desligada)
+e a pergunta so aparece dentro do TUI, por teclado. Escolhido: comando
+`felixo perguntar "<pergunta>" "<opcao>" ...` na mesma fila `agent-requests`,
+que serve Codex, Claude e Gemini.
+
+`agent-question-ipc-handlers.cjs` guarda a pergunta como pedido pendente e so
+a resolve quando a pessoa clica no `AgentQuestionDialog` (global no
+CanvasView: quem perguntou esta bloqueado, entao o dialogo nao pode depender
+de um painel aberto). O renderer manda apenas o INDICE da opcao; o texto
+devolvido ao agente vem do pedido gravado, nunca do que chega do renderer.
+De 2 a 4 opcoes, limites de tamanho em `agent-requests.cjs`. A CLI ao
+contrario de `canvas escrever`, BLOQUEIA ate responderem (5 min): codigo 0 =
+escolha no stdout, 3 = dispensada, 1 = sem resposta no prazo.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um

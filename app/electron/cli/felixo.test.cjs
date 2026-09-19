@@ -45,6 +45,7 @@ test('interpretarArgumentos separa verbo de opção', () => {
     argumento: '',
     argumento2: '',
     argumento2Fornecido: false,
+    restantes: [],
     opcoes: { cache: true, json: true },
   })
 })
@@ -494,4 +495,64 @@ test('canvas escrever aceita conteúdo vazio (limpar a nota) desde que a opção
   const repositorio = criarRepositorioDePedidos({ pasta })
   const [pedido] = repositorio.listarPendentes({ acao: 'canvas-escrever' })
   assert.equal(pedido.conteudo, '')
+})
+
+function responderPergunta(pasta, resposta) {
+  let feito = false
+  return async () => {
+    if (feito) return
+    feito = true
+    const repositorio = criarRepositorioDePedidos({ pasta })
+    const [pedido] = repositorio.listarPendentes({ acao: 'perguntar' })
+    if (pedido) repositorio.resolver(pedido.id, resposta(pedido))
+  }
+}
+
+test('perguntar: exige a pergunta', async () => {
+  const { deps } = dependencias()
+  const resultado = await executar(['perguntar'], deps)
+  assert.equal(resultado.codigo, 2)
+  assert.match(resultado.erro, /Informe a pergunta/)
+})
+
+test('perguntar: valida de 2 a 4 opções antes de registrar qualquer pedido', async () => {
+  const { pasta, deps } = dependencias()
+  const resultado = await executar(['perguntar', 'Qual?', 'só uma'], deps)
+  assert.equal(resultado.codigo, 2)
+  assert.match(resultado.erro, /2 a 4 opções/)
+  assert.deepEqual(criarRepositorioDePedidos({ pasta }).listarPendentes(), [])
+})
+
+test('perguntar: bloqueia até a resposta e imprime só o texto da opção escolhida', async () => {
+  const { pasta, deps } = dependencias()
+  const esperar = responderPergunta(pasta, (pedido) => ({
+    aceito: true,
+    resultado: { ok: true, indice: 1, label: pedido.opcoes[1].label },
+  }))
+  const resultado = await executar(['perguntar', 'Qual banco?', 'SQLite', 'Postgres'], { ...deps, esperar })
+  assert.equal(resultado.codigo, 0)
+  assert.equal(resultado.saida, 'Postgres')
+})
+
+test('perguntar --json devolve o resultado estruturado', async () => {
+  const { pasta, deps } = dependencias()
+  const esperar = responderPergunta(pasta, () => ({ aceito: true, resultado: { ok: true, indice: 0, label: 'SQLite' } }))
+  const resultado = await executar(['perguntar', 'Qual?', 'SQLite', 'Postgres', '--json'], { ...deps, esperar })
+  assert.deepEqual(JSON.parse(resultado.saida), { ok: true, indice: 0, label: 'SQLite' })
+})
+
+test('perguntar: pergunta dispensada sai com código 3 e sem inventar uma escolha', async () => {
+  const { pasta, deps } = dependencias()
+  const esperar = responderPergunta(pasta, () => ({ aceito: false }))
+  const resultado = await executar(['perguntar', 'Qual?', 'a', 'b'], { ...deps, esperar })
+  assert.equal(resultado.codigo, 3)
+  assert.match(resultado.saida, /dispensou/)
+})
+
+test('perguntar: sem resposta no prazo, avisa e diz como conferir depois', async () => {
+  const { deps } = dependencias()
+  const resultado = await executar(['perguntar', 'Qual?', 'a', 'b'], { ...deps, esperar: async () => {}, esperaMaximaMs: 1000 })
+  assert.equal(resultado.codigo, 1)
+  assert.match(resultado.saida, /ninguém respondeu a tempo/)
+  assert.match(resultado.saida, /canvas ver-pedido/)
 })
