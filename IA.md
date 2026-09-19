@@ -5745,3 +5745,56 @@ do diálogo (vitest). Resultado completo de `npm test`/vitest/eslint/tsc no PR.
 Sem verificação visual/ao vivo: `felixo devtools connect` segue travado (task
 própria) e o diálogo não foi visto na tela; um Codex real também não foi
 posto a usar o comando — a skill ensina, mas não medi se ele a segue.
+
+## Fechamento de trabalho — 2026-09-19: modo fast ao criar agente Codex
+
+### Contexto
+
+Task "Agentes — opção de modo fast ao criar agente Codex". A investigação
+anterior só tinha strings do binário (`service_tier`, `fast_mode`) e mandava
+confirmar o contrato. Feito antes de codar.
+
+### O que foi medido
+
+- `~/.codex/models_cache.json`: todo modelo (gpt-5.6-sol/terra/luna, gpt-5.5…)
+  traz `service_tiers: [{id:"priority", name:"Fast", description:"1.5x/2x
+  speed, increased usage"}]` e `additional_speed_tiers: ["fast"]`.
+- `codex features list`: `fast_mode` = stable, true. O `~/.codex/config.toml`
+  da máquina tem `service_tier = "default"`.
+- Prova ponta a ponta sem gastar uso: `codex app-server` + `config/read` →
+  `service_tier` efetivo `"default"` sem override e `"priority"` com
+  `--config service_tier="priority"`. Contrato: chave `service_tier`, valor
+  `priority` (o `id`, não o nome "Fast").
+
+### Decisões
+
+- Sem fast, **nada é enviado** (não forço `service_tier="default"`): isso
+  sobrescreveria uma escolha da própria pessoa no `config.toml`. Consequência
+  conhecida: quem já tem `priority` no config.toml roda fast mesmo sem marcar.
+- Compatibilidade por modelo vem do catálogo do Codex (`fastModels`); modelo
+  padrão (vazio) conta como compatível.
+- Cabeçalho: o rótulo do terminal (`describeLaunch`) ganha "⚡ fast".
+- `fast` salvo em preferências só vale para agente/modelo que suporta.
+
+### O que foi feito
+
+`agent-launch-options.ts` (`fastModels`, `supportsFastMode`, arg, rótulo),
+`agent-launch-preferences.ts`, `useAgentConfig.ts`, checkbox "Modo fast" em
+`AgentConfigFields.tsx` (só onde suporta; a HandoffDialog herda) e
+`model-options.cjs` (exec + app-server via `model.fastMode === true`).
+
+### Não feito / pendente
+
+O campo `fastMode` do `Model` de chat (ModelConfigModal + coluna SQLite em
+`models-repository`) não foi criado: hoje só o fluxo de criar agente no
+canvas expõe o modo; os dois caminhos de `model-options.cjs` já sabem
+aplicá-lo (testado), faltando persistir/mostrar no modelo de chat. Também
+falta o preset de agente nativo (task irmã) guardar a opção. **Não conferi
+`/status` numa sessão Codex real** (critério de aceite original): a prova foi
+a config efetiva do app-server, não uma sessão de verdade.
+
+### Validação
+
+Testes: 4 em `model-options.test.cjs`, 6 em `agent-launch-options.test.ts`, 1
+em `agent-launch-preferences.test.ts` (+ expectativas com `fast`). Resultado
+completo dos gates no PR.

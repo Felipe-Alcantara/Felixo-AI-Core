@@ -338,6 +338,21 @@ export function AgentConfigFields({
                 </span>
               </label>
 
+              {config.fastSupported && (
+                <label className="felixo-checkbox-field mb-3">
+                  <input
+                    type="checkbox"
+                    checked={config.fast}
+                    onChange={(event) => config.setFast(event.target.checked)}
+                    className="felixo-checkbox"
+                  />
+                  <span className="felixo-checkbox-copy">
+                    <span className="felixo-checkbox-label">Modo fast</span>
+                    <span className="felixo-checkbox-meta">Mais rápido, gasta mais do limite</span>
+                  </span>
+                </label>
+              )}
+
               <label htmlFor={`${prefixo}-planning-file`} className={ROTULO}>
                 Arquivo de planejamento
               </label>
