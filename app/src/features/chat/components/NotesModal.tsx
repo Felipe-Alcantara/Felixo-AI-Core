@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { FilePlus, Save, Search, StickyNote, Trash2, X } from 'lucide-react'
 import type { ProjectNote } from '../types'
 import { createEmptyNote } from '../services/note-storage'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type NotesModalProps = {
   isOpen: boolean
@@ -24,6 +26,7 @@ export function NotesModal({
   onUseAsContext,
   onCreateFromChat,
 }: NotesModalProps) {
+  const dialog = useResizableDialog('notes')
   const [query, setQuery] = useState('')
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const filteredNotes = useMemo(() => {
@@ -93,7 +96,8 @@ export function NotesModal({
       onClick={onClose}
     >
       <section
-        className="flex h-[82vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex h-[82vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -244,6 +248,7 @@ export function NotesModal({
             )}
           </main>
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

@@ -47,10 +47,18 @@ Todos redimensionam nos dois eixos. Os mínimos vêm de uma fonte única,
 um teste garante que nenhum bloco nasce menor que o próprio mínimo em nenhuma largura
 de janela (a nota nascia com 158 px contra um mínimo de 180).
 
-## Modais (tamanho fixo por `max-w`/`max-h`; **nenhum redimensiona**)
+## Modais (redimensionáveis nos dois eixos, exceto `AgentQuestionDialog`)
 
-Nenhum estoura a janela (todos têm `max-h` em `vh`/`dvh`), mas o tamanho é dado pelo
-componente, não pela pessoa.
+Os 12 modais usam `useResizableDialog(id)` + `<DialogResizeHandles>` (`features/shared/dialog/`):
+alças na borda direita, na inferior e no canto; setas ajustam, `Home`/`Enter`/duplo clique
+voltam ao original. Sem ajuste não há estilo inline — o modal segue exatamente como era.
+Depois de ajustado o tamanho é fixo, sempre dentro de [mínimo 320×240, janela − 16 px] e
+lembrado por modal (`felixo:dialog-size:<id>`). Como o modal é centralizado, arrastar uma
+borda por `dx` cresce `2·dx` (a borda acompanha o ponteiro). Soltar o mouse fora da moldura
+dispararia `click` no fundo e fecharia o modal: `swallowNextClick` engole esse clique.
+O hook é chamado antes do `return null` antecipado de cada componente. A tabela abaixo
+mostra o tamanho ORIGINAL (o que vale até a pessoa ajustar); o `AgentQuestionDialog` fica
+fora porque é bloqueante.
 
 | Modal | Máximo declarado |
 |---|---|
@@ -99,5 +107,5 @@ Feito: altura dos painéis (PR #60); fonte única dos mínimos dos blocos, piso 
 `getDefaultNodeSize` e mínimo do Tarefas Notion reduzido (esta fatia), com teste de
 invariante em 10 larguras de janela (320–3840) × 8 tipos de bloco.
 
-Pendente (task própria): modais (13 componentes). E, para tudo isto: conferir numa
+Feito também: modais (12 componentes; teste de invariante de janela e do clique de soltar). Pendente: para tudo isto: conferir numa
 janela real — nada foi visto rodando por quem escreveu este documento.

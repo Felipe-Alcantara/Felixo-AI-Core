@@ -4,6 +4,8 @@ import { Play, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { AUTOMATION_SCOPE_LABELS } from '../../shared/types/automations'
 import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { AutomationDefinition, AutomationScope } from '../types'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type AutomationDraft = Pick<
   AutomationDefinition,
@@ -38,6 +40,7 @@ export function AutomationsModal({
   onAddAutomation,
   onRemoveAutomation,
 }: AutomationsModalProps) {
+  const dialog = useResizableDialog('automations')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -75,7 +78,8 @@ export function AutomationsModal({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[86vh] w-full max-w-[860px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[86vh] w-full max-w-[860px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -226,6 +230,7 @@ export function AutomationsModal({
             </p>
           </form>
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

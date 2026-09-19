@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, FolderOpen, GitBranch, Loader2, Plus, Settings, Trash2, X } from 'lucide-react'
 import type { Project } from '../types'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type Tab = 'repo' | 'workspace'
 
@@ -21,6 +23,7 @@ export function ProjectsModal({
   onRemoveProject,
   onUpdateProject,
 }: ProjectsModalProps) {
+  const dialog = useResizableDialog<HTMLDivElement>('projects')
   const [tab, setTab] = useState<Tab>('repo')
   const [loading, setLoading] = useState(false)
   const [detected, setDetected] = useState<{ name: string; path: string }[]>([])
@@ -120,6 +123,7 @@ export function ProjectsModal({
       onClick={closeModal}
     >
       <div
+        {...dialog.frameProps}
         className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/[0.08] bg-[#1e1e1d] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -283,6 +287,7 @@ export function ProjectsModal({
             </div>
           </div>
         )}
+        <DialogResizeHandles dialog={dialog} />
       </div>
     </div>
   )

@@ -4,6 +4,8 @@ import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import { AgentConfigFields } from './AgentConfigFields'
 import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type Props = {
   /** Nome do agente que está passando o trabalho, só para o texto do diálogo. */
@@ -30,6 +32,7 @@ export function HandoffDialog({
   onConfirm,
   onClose,
 }: Props) {
+  const dialogSize = useResizableDialog<HTMLDivElement>('handoff')
   // A passagem de responsabilidade tem uma configuração própria e temporária;
   // só vira a última configuração do botão Agente quando for confirmada.
   const config = useAgentConfig(projects, { persistPreferences: false })
@@ -120,12 +123,16 @@ export function HandoffDialog({
       }}
     >
       <div
+        {...dialogSize.frameProps}
+        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-md"
+      >
+      <div
         ref={painelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={tituloId}
         tabIndex={-1}
-        className="felixo-anim-sequential-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-4 shadow-2xl ring-1 ring-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+        className="felixo-anim-sequential-panel min-h-0 w-full flex-1 overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-4 shadow-2xl ring-1 ring-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
       >
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
@@ -181,6 +188,8 @@ export function HandoffDialog({
             {busy ? 'Passando…' : 'Passar responsabilidade'}
           </button>
         </div>
+      </div>
+        <DialogResizeHandles dialog={dialogSize} />
       </div>
     </div>
   )

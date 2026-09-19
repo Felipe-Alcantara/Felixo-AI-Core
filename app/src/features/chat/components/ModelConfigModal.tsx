@@ -9,6 +9,8 @@ import {
   isEffortValidForModel,
 } from '../../canvas/services/agent-launch-options'
 import { modelSupportsFastMode, resolveFastMode } from '../services/model-fast-mode'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type ModelConfigModalProps = {
   isOpen: boolean
@@ -111,6 +113,7 @@ export function ModelConfigModal({
   onClose,
   onUpdateModel,
 }: ModelConfigModalProps) {
+  const dialog = useResizableDialog('model-config')
   const [providerModel, setProviderModel] = useState(model.providerModel ?? '')
   const [reasoningEffort, setReasoningEffort] = useState<'' | ReasoningEffort>(
     model.reasoningEffort ?? '',
@@ -154,7 +157,8 @@ export function ModelConfigModal({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[80vh] w-full max-w-[400px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[80vh] w-full max-w-[400px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -264,6 +268,7 @@ export function ModelConfigModal({
             Salvar
           </button>
         </form>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )
