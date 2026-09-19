@@ -404,13 +404,31 @@ function alturaMaximaEsperada(viewportHeight) {
   return Math.max(240, viewportHeight - 64 - 48)
 }
 
+// O painel entra com uma animacao que inclui `scale`: medido no meio dela,
+// `getBoundingClientRect` devolve uma altura menor que a real (visto no CI do
+// macOS: 108,9 contra 118,4, razao ~0,92). Por isso a altura comparada e a de
+// LAYOUT (`offsetHeight`, que ignora transform) e a medicao espera as animacoes
+// acabarem; o retangulo so serve para conferir que o painel esta dentro da janela.
+async function aguardarPainelAssentado(page, panelId) {
+  await page.waitForFunction(
+    (id) => {
+      const element = document.querySelector(`[data-felixo-canvas-panel="${id}"]`)
+      return Boolean(element) && element.getAnimations().length === 0
+    },
+    panelId,
+    { timeout: 5_000 },
+  )
+}
+
 async function medirPainel(page, panelId) {
+  await aguardarPainelAssentado(page, panelId)
   return page.evaluate((id) => {
     const element = document.querySelector(`[data-felixo-canvas-panel="${id}"]`)
     if (!element) return null
     const rect = element.getBoundingClientRect()
     return {
-      left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, height: rect.height,
+      left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+      height: element.offsetHeight,
       viewportWidth: window.innerWidth, viewportHeight: window.innerHeight,
     }
   }, panelId)
