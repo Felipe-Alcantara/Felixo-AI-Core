@@ -21,7 +21,7 @@ function createAgentPresetsRepository(database) {
     list() {
       return connection
         .prepare(
-          'SELECT * FROM agent_presets WHERE archived_at IS NULL ORDER BY created_at ASC, id ASC',
+          'SELECT * FROM agent_presets WHERE archived_at IS NULL ORDER BY created_at ASC, rowid ASC',
         )
         .all()
         .map(mapRow)

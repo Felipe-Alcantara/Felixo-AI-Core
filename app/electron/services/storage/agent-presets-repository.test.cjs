@@ -98,3 +98,12 @@ test('uma linha corrompida não esconde os outros presets', () => {
     assert.deepEqual(repo.list().map((item) => item.id), ['p1'])
   })
 })
+
+test('dois presets criados no MESMO instante mantêm a ordem de criação (desempate pela inserção, não pelo id)', () => {
+  comBanco((repo, database) => {
+    const inserir = database.connection.prepare("INSERT INTO agent_presets (id, name, data_json, created_at, updated_at) VALUES (?, ?, ?, 'T', 'T')")
+    inserir.run('zzz', 'Primeiro', JSON.stringify({ id: 'zzz', name: 'Primeiro' }))
+    inserir.run('aaa', 'Segundo', JSON.stringify({ id: 'aaa', name: 'Segundo' }))
+    assert.deepEqual(repo.list().map((item) => item.id), ['zzz', 'aaa'])
+  })
+})

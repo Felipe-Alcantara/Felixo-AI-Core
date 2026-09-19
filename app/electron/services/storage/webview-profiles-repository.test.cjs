@@ -87,3 +87,19 @@ test('sobrevive a reabrir o banco (o critério "depois de reiniciar o app")', ()
     fs.rmSync(databaseDir, { recursive: true, force: true })
   }
 })
+
+test('dois perfis criados no MESMO instante mantêm a ordem de criação (desempate pela inserção, não pelo id)', () => {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-webview-profiles-empate-'))
+  const database = createStorageDatabase({ databaseDir })
+  try {
+    // Mesmo created_at, ids em ordem alfabética INVERSA à da inserção: com o
+    // desempate por id a lista sairia ['aaa-1111', 'zzz-9999'].
+    const inserir = database.connection.prepare("INSERT INTO webview_profiles (id, name, created_at, updated_at) VALUES (?, ?, 'T', 'T')")
+    inserir.run('zzz-9999', 'Primeiro')
+    inserir.run('aaa-1111', 'Segundo')
+    assert.deepEqual(createWebviewProfilesRepository(database).list().map((item) => item.id), ['zzz-9999', 'aaa-1111'])
+  } finally {
+    database.close()
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  }
+})
