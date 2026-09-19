@@ -339,6 +339,31 @@ builds do macOS passarem a ser assinadas (hoje nao sao, ver release.yml), o
 entitlement `com.apple.security.device.audio-input` com hardened runtime — nao
 foi adicionado porque hoje seria letra morta e a pipeline nao e testavel aqui.
 
+### Servidor local de transcricao (motor offline)
+
+Nao ha motor local embutido. O caminho local e um servidor de transcricao
+rodando na propria maquina, apontado pelo campo "Endereco da API" (ou pelo
+motor "Servidor local" nas configuracoes). Quando o endereco e de loopback
+(`localhost`, `127.0.0.1`, `[::1]`; `isLoopbackBaseUrl`, com paridade testada
+contra `isLoopbackEndpoint` do renderer), a chave NAO e exigida e nenhum
+cabecalho `Authorization` e enviado — o audio nao sai da maquina. Fora do
+loopback a chave continua obrigatoria e a requisicao nunca sai sem credencial.
+Com chave configurada, ela e usada mesmo no local.
+
+Contrato que o servidor precisa cumprir (o que o cliente faz de fato, coberto
+por teste contra um servidor HTTP real em loopback): `POST {baseUrl}/audio/
+transcriptions`, corpo `multipart/form-data` com `file` (audio; nome
+`ditado.<ext>`; tipo `audio/webm` — o que o Chromium grava, sem parametros),
+`model`, `language` (2 letras) e `response_format=json`; resposta JSON
+`{ "text": "..." }`. Erros HTTP viram mensagem (401/403 chave, 404 modelo ou
+endereco, 413 tamanho, 429 limite, demais com a mensagem da API redigida).
+Servidor desligado diz para conferir se ele esta rodando.
+
+NAO verificado: nenhum servidor real foi rodado (nada instalado aqui e sem
+microfone). O contrato acima e o do CLIENTE; que um servidor especifico o aceite
+— inclusive o formato webm/opus, que alguns exigem converter — e justamente o
+experimento pendente. Nenhum servidor e recomendado antes de medido.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um

@@ -70,3 +70,118 @@ test('baseMimeType tira os parâmetros do tipo', () => {
   assert.equal(baseMimeType('AUDIO/OGG'), 'audio/ogg')
   assert.equal(baseMimeType(undefined), '')
 })
+
+// ── Servidor HTTP de verdade (loopback), sem `fetch` falso ─────────────────
+
+const http = require('node:http')
+const { Readable } = require('node:stream')
+
+/** Sobe um servidor que se comporta como uma API compatível: lê o multipart de verdade. */
+function servidorLocal(responder) {
+  const recebidos = []
+  const server = http.createServer(async (req, res) => {
+    const request = new Request(`http://127.0.0.1${req.url}`, {
+      method: req.method,
+      headers: req.headers,
+      body: Readable.toWeb(req),
+      duplex: 'half',
+    })
+    let form
+    try {
+      form = await request.formData()
+    } catch {
+      res.writeHead(400).end('multipart inválido')
+      return
+    }
+    const arquivo = form.get('file')
+    recebidos.push({
+      method: req.method,
+      url: req.url,
+      authorization: req.headers.authorization,
+      model: form.get('model'),
+      language: form.get('language'),
+      responseFormat: form.get('response_format'),
+      filename: arquivo?.name,
+      type: arquivo?.type,
+      size: arquivo?.size,
+    })
+    const { status = 200, body = { text: 'texto do servidor local' } } = responder?.(recebidos.length) ?? {}
+    res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body))
+  })
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address()
+      resolve({ port, recebidos, fechar: () => new Promise((done) => server.close(done)) })
+    })
+  })
+}
+
+const LOCAL = (port) => ({ baseUrl: `http://127.0.0.1:${port}/v1`, model: 'base', language: 'pt' })
+
+test('servidor local (loopback): funciona SEM chave e não manda cabeçalho de autorização', async () => {
+  const servidor = await servidorLocal()
+  try {
+    const result = await transcribeAudio({ audio: AUDIO, mimeType: 'audio/webm;codecs=opus', config: LOCAL(servidor.port), apiKey: '' })
+    assert.deepEqual(result, { ok: true, text: 'texto do servidor local' })
+    assert.equal(servidor.recebidos[0].authorization, undefined)
+  } finally {
+    await servidor.fechar()
+  }
+})
+
+test('o pedido chega a um servidor HTTP real como multipart válido, no caminho e com os campos que a API espera', async () => {
+  const servidor = await servidorLocal()
+  try {
+    await transcribeAudio({ audio: AUDIO, mimeType: 'audio/webm;codecs=opus', config: LOCAL(servidor.port), apiKey: '' })
+    assert.deepEqual(servidor.recebidos[0], {
+      method: 'POST',
+      url: '/v1/audio/transcriptions',
+      authorization: undefined,
+      model: 'base',
+      language: 'pt',
+      responseFormat: 'json',
+      filename: 'ditado.webm',
+      type: 'audio/webm',
+      size: AUDIO.byteLength,
+    })
+  } finally {
+    await servidor.fechar()
+  }
+})
+
+test('servidor local COM chave configurada ainda manda o Bearer (a chave, se existe, é usada)', async () => {
+  const servidor = await servidorLocal()
+  try {
+    await transcribeAudio({ audio: AUDIO, mimeType: 'audio/webm', config: LOCAL(servidor.port), apiKey: 'sk-local' })
+    assert.equal(servidor.recebidos[0].authorization, 'Bearer sk-local')
+  } finally {
+    await servidor.fechar()
+  }
+})
+
+test('nuvem (não-loopback) SEM chave continua recusada antes de qualquer rede', async () => {
+  const { fetchImpl, chamadas } = respostaFalsa()
+  const result = await transcribeAudio({ audio: AUDIO, mimeType: 'audio/webm', config: CONFIG, apiKey: '', fetchImpl })
+  assert.equal(result.ok, false)
+  assert.match(result.message, /Cadastre a chave/)
+  assert.equal(chamadas.length, 0)
+})
+
+test('erro do servidor local vira mensagem, e servidor local DESLIGADO diz para conferir se está rodando (rede real)', async () => {
+  const quebrado = await servidorLocal(() => ({ status: 500, body: { error: { message: 'modelo não carregado' } } }))
+  try {
+    const result = await transcribeAudio({ audio: AUDIO, mimeType: 'audio/webm', config: LOCAL(quebrado.port), apiKey: '' })
+    assert.equal(result.ok, false)
+    assert.match(result.message, /500.*modelo não carregado/)
+  } finally {
+    await quebrado.fechar()
+  }
+
+  // Porta que acabou de ser fechada: a conexão é recusada de verdade.
+  const desligado = await servidorLocal()
+  const port = desligado.port
+  await desligado.fechar()
+  const result = await transcribeAudio({ audio: AUDIO, mimeType: 'audio/webm', config: LOCAL(port), apiKey: '' })
+  assert.equal(result.ok, false)
+  assert.match(result.message, /servidor local de transcrição.*rodando/)
+})

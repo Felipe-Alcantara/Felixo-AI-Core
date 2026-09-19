@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { Mic } from 'lucide-react'
 import { useDictationShortcut } from '../../hooks/useDictationShortcut'
 import {
+  CLOUD_ENDPOINT_SUGGESTION,
   DEFAULT_DICTATION_SHORTCUT,
+  LOCAL_SERVER_SUGGESTION,
   describeMicrophoneStatus,
   formatShortcut,
+  isLoopbackEndpoint,
   shortcutFromEvent,
 } from '../../services/dictation'
 
-type Config = { baseUrl: string; model: string; language: string; keyConfigured: boolean }
+type Config = { baseUrl: string; model: string; language: string; keyConfigured: boolean; keyRequired: boolean }
 
 const CAMPO = 'felixo-control w-full text-sm'
 const ROTULO = 'felixo-field-label'
@@ -93,6 +96,17 @@ export function DictationSettingsSection() {
   }
 
   const blocked = describeMicrophoneStatus(micStatus, platform)
+  // O modo sai do endereço (mesma regra do processo principal): servidor local
+  // é o que dispensa a chave e mantém o áudio nesta máquina.
+  const local = isLoopbackEndpoint(config?.baseUrl)
+
+  function chooseEngine(nextLocal: boolean) {
+    if (nextLocal === local) return
+    setConfig((current) =>
+      current ? { ...current, baseUrl: nextLocal ? LOCAL_SERVER_SUGGESTION : CLOUD_ENDPOINT_SUGGESTION } : current,
+    )
+    setMessage({ tone: 'ok', text: 'Ajuste o endereço se precisar e clique em "Salvar endereço, modelo e idioma".' })
+  }
 
   return (
     <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
@@ -104,9 +118,28 @@ export function DictationSettingsSection() {
       </header>
       <p className="mb-3 text-[11px] leading-relaxed text-zinc-400">
         Aperte o atalho, fale, aperte de novo: o texto entra na linha de entrada do terminal aberto e
-        <strong> não é enviado sozinho</strong>. O áudio é transcrito por uma API compatível com a da OpenAI —{' '}
-        <strong>ele sai do seu computador e vai para o endereço abaixo</strong>.
+        <strong> não é enviado sozinho</strong>. A transcrição usa uma API compatível com a da OpenAI:
+        na <strong>nuvem</strong> o áudio sai do seu computador e vai para o endereço abaixo; num{' '}
+        <strong>servidor local</strong> ele fica nesta máquina.
       </p>
+
+      <fieldset className="mb-3">
+        <legend className={ROTULO}>Motor de transcrição</legend>
+        <label className="flex items-start gap-2 text-xs">
+          <input type="radio" name="dictation-engine" checked={!local} onChange={() => chooseEngine(false)} className="mt-0.5" />
+          <span>Nuvem (API com chave) — precisa de internet</span>
+        </label>
+        <label className="mt-1 flex items-start gap-2 text-xs">
+          <input type="radio" name="dictation-engine" checked={local} onChange={() => chooseEngine(true)} className="mt-0.5" />
+          <span>
+            Servidor local (sem chave) — o áudio não sai desta máquina
+            <span className="block text-[11px] text-zinc-500">
+              Você precisa rodar um servidor de transcrição compatível neste computador. Este recurso ainda não foi
+              testado com um servidor real.
+            </span>
+          </span>
+        </label>
+      </fieldset>
 
       {message && (
         <p role="status" className={`mb-2 rounded p-2 text-[11px] ${message.tone === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -114,7 +147,8 @@ export function DictationSettingsSection() {
         </p>
       )}
 
-      <label htmlFor="dictation-key" className={ROTULO}>Chave da API de transcrição</label>
+      {!local && <label htmlFor="dictation-key" className={ROTULO}>Chave da API de transcrição</label>}
+      {!local && (
       <div className="mb-3 flex items-center gap-2">
         <input
           id="dictation-key"
@@ -134,6 +168,7 @@ export function DictationSettingsSection() {
           </button>
         )}
       </div>
+      )}
 
       <label htmlFor="dictation-url" className={ROTULO}>Endereço da API</label>
       <input
@@ -143,7 +178,11 @@ export function DictationSettingsSection() {
         placeholder="https://api.openai.com/v1"
         className={`${CAMPO} mb-1`}
       />
-      <p className="mb-3 text-[11px] text-zinc-500">Só https (ou http em localhost) recebe a chave e o áudio.</p>
+      <p className="mb-3 text-[11px] text-zinc-500">
+        {local
+          ? 'Endereço desta máquina: nenhuma chave é enviada.'
+          : 'Só https (ou http em localhost) recebe a chave e o áudio.'}
+      </p>
 
       <div className="mb-3 flex gap-2">
         <div className="min-w-0 flex-1">

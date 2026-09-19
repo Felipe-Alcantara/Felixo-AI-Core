@@ -80,7 +80,8 @@ export function useDictation({ deliver }: Options) {
     }
     // Sem chave não vale a pena gravar: a pessoa falaria para o nada.
     const config = await speech.getConfig()
-    if (!config.ok || !config.config?.keyConfigured) {
+    // Servidor local não exige chave (`keyRequired: false`); a nuvem exige.
+    if (!config.ok || (config.config?.keyRequired !== false && !config.config?.keyConfigured)) {
       dispatch({ type: 'fail', message: 'Cadastre a chave da API de transcrição em Configurações → Ditado por voz.' })
       return
     }

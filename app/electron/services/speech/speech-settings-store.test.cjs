@@ -6,6 +6,7 @@ const path = require('node:path')
 const {
   DEFAULT_CONFIG,
   createSpeechSettingsStore,
+  isLoopbackBaseUrl,
   normalizeBaseUrl,
   normalizeConfig,
 } = require('./speech-settings-store.cjs')
@@ -86,5 +87,25 @@ test('a config persiste e um arquivo corrompido volta ao padrão sem quebrar', (
     assert.deepEqual(store.readConfig(), { baseUrl: 'https://api.groq.com/openai/v1', model: 'whisper-large-v3-turbo', language: 'pt' })
     fs.writeFileSync(path.join(userData, 'config', 'speech-config.json'), '{ nao json')
     assert.deepEqual(store.readConfig(), { ...DEFAULT_CONFIG })
+  })
+})
+
+test('isLoopbackBaseUrl: só endereços desta máquina contam como servidor local', () => {
+  for (const local of ['http://localhost:8080/v1', 'http://127.0.0.1:9000', 'https://localhost/v1']) {
+    assert.equal(isLoopbackBaseUrl(local), true, local)
+  }
+  for (const remoto of ['https://api.openai.com/v1', 'http://192.168.0.5:8080', 'https://localhost.evil.com/v1', 'http://x', '', null]) {
+    assert.equal(isLoopbackBaseUrl(remoto), false, String(remoto))
+  }
+})
+
+test('a config diz se a chave é exigida: nuvem sim, servidor local não', () => {
+  comPasta((userData) => {
+    const store = createSpeechSettingsStore({ userData, safeStorage })
+    assert.equal(store.getConfig().keyRequired, true)
+    store.saveConfig({ baseUrl: 'http://127.0.0.1:8080/v1', model: 'base', language: 'pt' })
+    assert.equal(store.getConfig().keyRequired, false)
+    store.saveConfig({ baseUrl: 'https://api.groq.com/openai/v1', model: 'm', language: 'pt' })
+    assert.equal(store.getConfig().keyRequired, true)
   })
 })

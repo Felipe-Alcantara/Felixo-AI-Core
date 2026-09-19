@@ -6026,3 +6026,50 @@ passar a ser assinado; timeout/limite reais de gravação em uso.
 Testes: 18 do processo principal (config, transcrição, IPC), 1 de empacotamento,
 19 do ditado (sanitização, erros, estados, atalho), 7 do gravador, 3 do
 `typeText`. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: motor de transcrição local (parcial, sem teste real)
+
+### Contexto
+
+Task "Entrada de voz — motor de transcrição local (offline)". O Felipe pediu
+para seguir **sem teste real por enquanto** (microfone com defeito). A task é de
+pesquisa/decisão: o passo 2 (medir latência/qualidade no notebook modesto) e a
+decisão de embutir whisper dependem de medição e ficam pendentes.
+
+### O que foi feito (só o que é verificável sem microfone)
+
+- **Achado que bloqueava o caminho local:** o cliente exigia chave sempre, então
+  apontar para `localhost` não funcionava sem uma chave inútil. Agora, com
+  endereço de loopback, a chave é opcional e nenhum `Authorization` é enviado;
+  fora do loopback a chave continua obrigatória e nada sai sem credencial.
+- Config expõe `keyRequired`; o pré-teste do ditado e a tela usam isso (servidor
+  local não pede chave).
+- Configurações: motor "Nuvem × Servidor local" (o modo sai do endereço, mesma
+  regra do processo principal, com teste de paridade), com aviso explícito de
+  que o servidor local não foi testado com um servidor real.
+- Servidor desligado diz para conferir se ele está rodando (mensagem própria).
+- **Teste com servidor HTTP de verdade (loopback, sem `fetch` falso):** o pedido
+  chega como multipart válido, no caminho `/v1/audio/transcriptions`, com
+  `model`, `language`, `response_format=json`, arquivo `ditado.webm`/`audio/webm`
+  e tamanho correto; sem chave não há `Authorization`; com chave há o Bearer;
+  500 vira mensagem; porta fechada (recusa de conexão real) vira a mensagem do
+  servidor local. Contrato documentado em `ARQUITETURA.md`.
+
+### Não feito / NÃO verificado
+
+- **Nenhum servidor de transcrição real foi rodado** (nenhum instalado aqui, e
+  sem microfone/áudio real). Não sei se um servidor específico aceita o webm/opus
+  que o app grava (alguns exigem conversão) — é exatamente o experimento
+  pendente. Não recomendo servidor nenhum antes de medido.
+- **Sem medição:** latência e qualidade em português no notebook do Felipe, nos
+  tamanhos de modelo do whisper. Sem número, a decisão (documentar o servidor
+  local × embutir whisper.cpp × outra) **não foi tomada** e continua sendo do
+  Felipe (custo de empacotamento/tamanho).
+- O critério de aceite ("ditar sem internet e ver o texto no terminal, com
+  latência medida") **não foi cumprido**.
+
+### Validação
+
+Testes: 8 novos no processo principal (5 contra servidor HTTP real em loopback,
+2 do store, 1 de recusa sem chave), 2 do renderer (incl. paridade). Resultado
+completo dos gates no PR.

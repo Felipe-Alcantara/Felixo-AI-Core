@@ -43,6 +43,31 @@ export function sanitizeDictatedText(raw: string): string {
     .slice(0, MAX_DICTATED_CHARS)
 }
 
+// ── Motor: nuvem × servidor local ──────────────────────────────────────────
+
+/** Endereço sugerido para um servidor local de transcrição (a porta é só uma sugestão). */
+export const LOCAL_SERVER_SUGGESTION = 'http://127.0.0.1:8080/v1'
+export const CLOUD_ENDPOINT_SUGGESTION = 'https://api.openai.com/v1'
+
+/**
+ * O endereço é desta própria máquina? Mesma regra do processo principal
+ * (`isLoopbackBaseUrl`): é ela que decide se a chave é exigida e para onde o
+ * áudio vai. Um teste de paridade compara as duas implementações.
+ */
+export function isLoopbackEndpoint(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  let url: URL
+  try {
+    url = new URL(value.trim())
+  } catch {
+    return false
+  }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) return false
+  if (url.username || url.password) return false
+  return loopback
+}
+
 // ── Erros do microfone ─────────────────────────────────────────────────────
 
 export type MicrophonePlatform = 'darwin' | 'win32' | 'linux' | string

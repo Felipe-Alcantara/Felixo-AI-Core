@@ -36,6 +36,13 @@ function normalizeBaseUrl(value) {
   return url.toString().replace(/\/+$/, '')
 }
 
+/** O endereço aponta para esta própria máquina (servidor local de transcrição)? */
+function isLoopbackBaseUrl(value) {
+  const normalized = normalizeBaseUrl(value)
+  if (!normalized) return false
+  return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(normalized).hostname)
+}
+
 function normalizeConfig(value) {
   const raw = value && typeof value === 'object' ? value : {}
   const baseUrl = normalizeBaseUrl(raw.baseUrl) ?? DEFAULT_CONFIG.baseUrl
@@ -87,7 +94,10 @@ function createSpeechSettingsStore({ userData, safeStorage, fileSystem = fs } = 
 
   return {
     getConfig() {
-      return { ...readConfig(), keyConfigured: Boolean(readKey()) }
+      const config = readConfig()
+      // Servidor local não exige chave; nuvem exige. É o que a tela e o
+      // pré-teste do ditado usam para decidir se pedem a chave.
+      return { ...config, keyConfigured: Boolean(readKey()), keyRequired: !isLoopbackBaseUrl(config.baseUrl) }
     },
     saveConfig(next) {
       const config = normalizeConfig(next)
@@ -121,4 +131,10 @@ function createSpeechSettingsStore({ userData, safeStorage, fileSystem = fs } = 
   }
 }
 
-module.exports = { DEFAULT_CONFIG, createSpeechSettingsStore, normalizeBaseUrl, normalizeConfig }
+module.exports = {
+  DEFAULT_CONFIG,
+  createSpeechSettingsStore,
+  isLoopbackBaseUrl,
+  normalizeBaseUrl,
+  normalizeConfig,
+}
