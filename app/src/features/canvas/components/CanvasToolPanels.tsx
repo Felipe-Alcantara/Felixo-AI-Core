@@ -10,6 +10,7 @@ import type { CanvasTool } from './tools/CanvasToolsMenu'
 import { CanvasPanel } from './tools/CanvasPanel'
 import {
   LazyAgentCanvasWriteRequestsPanel,
+  LazyAgentPresetsPanel,
   LazyAgentUsagePanel,
   LazyFetchAllPanel,
   LazyGitPanel,
@@ -261,6 +262,8 @@ export function CanvasToolPanels({
         return <LazyOrchestratorPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'qaLogger':
         return <LazyQaLoggerPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
+      case 'agentPresets':
+        return <LazyAgentPresetsPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
       case 'agentCanvasWrite':
         return (
           <LazyAgentCanvasWriteRequestsPanel

@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import {
   loadAgentCanvasWriteRequestsPanel,
+  loadAgentPresetsPanel,
   loadAgentUsagePanel,
   loadFetchAllPanel,
   loadGitPanel,
@@ -29,4 +30,5 @@ export const LazyAgentUsagePanel = lazy(loadAgentUsagePanel)
 export const LazyOrchestratorPanel = lazy(loadOrchestratorPanel)
 export const LazyQaLoggerPanel = lazy(loadQaLoggerPanel)
 export const LazySettingsPanel = lazy(loadSettingsPanel)
+export const LazyAgentPresetsPanel = lazy(loadAgentPresetsPanel)
 export const LazyAgentCanvasWriteRequestsPanel = lazy(loadAgentCanvasWriteRequestsPanel)

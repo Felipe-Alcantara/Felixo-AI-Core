@@ -5874,3 +5874,40 @@ prompt.
 
 Testes: 12 do formato, 5 do prompt, 6 do repositório. Resultado completo dos
 gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: presets de agente (fatia 2, tela)
+
+### Contexto
+
+Fatia 2 da task de presets (fatia 1: PR #55): tela para editar, escolher
+skills, exportar e importar.
+
+### O que foi feito
+
+- Ferramenta "Presets de agente" (`AgentPresetsPanel`): lista com nativos e da
+  pessoa; novo, editar (todos os campos), duplicar, excluir, exportar,
+  importar. Nativo não se edita.
+- Regras de edição puras em `agent-preset-editor.ts`: trocar de CLI zera
+  modelo/esforço/fast; trocar de modelo só mantém esforço e fast válidos;
+  `checkPresetDraft` valida e normaliza antes de salvar; `presetFileName`
+  gera nome de arquivo seguro.
+- Skills escolhidas numa lista do catálogo; skill citada que o catálogo não
+  tem mais é avisada na tela (e ignorada ao abrir o agente, como já era).
+- Exportar reaproveita `files.saveTextFile` (extensão `.fxpreset`); importar
+  lê o arquivo no renderer, valida formato/versão, dá outro id e numera o nome
+  se colidir — nunca sobrescreve. Limite de 256 KB no arquivo.
+- `useAgentPresets` avisa outras instâncias por evento de janela: a tela e o
+  formulário de spawn são instâncias separadas, e sem isso o formulário
+  mostraria a lista velha depois de uma edição.
+
+### Não verificado
+
+Nenhuma tela foi vista rodando (`felixo devtools connect` segue travado):
+painel, exportar (diálogo nativo) e importar (seletor de arquivo) só têm
+cobertura pela lógica pura e pelo formato (ida e volta testada na fatia 1). O
+critério "importar em outra instância e ver o mesmo agente nascer" foi coberto
+até o formato, não numa segunda instância de verdade.
+
+### Validação
+
+10 testes novos do editor. Resultado completo dos gates no PR.
