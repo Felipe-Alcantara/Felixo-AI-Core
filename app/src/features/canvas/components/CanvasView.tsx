@@ -25,6 +25,7 @@ import '@xyflow/react/dist/style.css'
 import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
+import { AgentQuestionDialog } from './AgentQuestionDialog'
 import { NodeColorMenu } from './NodeColorMenu'
 import { frameClassName } from './frame-colors'
 import { DrawingNode } from './DrawingNode'
@@ -2416,6 +2417,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
             />
           )}
         </ReactFlow>
+        <AgentQuestionDialog />
         {colorMenu && (
           <NodeColorMenu
             x={colorMenu.x}

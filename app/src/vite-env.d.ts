@@ -22,6 +22,7 @@ import type {
   TerminalOutputEvent,
 } from './features/chat/types'
 import type {
+  CanvasAgentQuestion,
   CanvasNodeData,
   CanvasWriteAgentRequest,
   FetchAllActionResult,
@@ -656,6 +657,19 @@ declare global {
         >
         onWriteRequests: (
           callback: (data: { requests: CanvasWriteAgentRequest[] }) => void,
+        ) => () => void
+        listQuestions: () => Promise<CliInvokeResult & { requests?: CanvasAgentQuestion[] }>
+        answerQuestion: (params: {
+          id: string
+          indice: number | null
+        }) => Promise<
+          CliInvokeResult & {
+            resolved?: CanvasAgentQuestion | null
+            resultado?: { ok: boolean; indice?: number; label?: string }
+          }
+        >
+        onQuestions: (
+          callback: (data: { requests: CanvasAgentQuestion[] }) => void,
         ) => () => void
         onNodeUpdated: (
           callback: (data: { id: string; data: CanvasNodeData }) => void,

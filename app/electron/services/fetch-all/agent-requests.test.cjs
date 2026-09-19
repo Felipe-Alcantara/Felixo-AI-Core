@@ -202,3 +202,19 @@ test('pasta inexistente equivale a nenhum pedido', () => {
   assert.deepEqual(repositorio.listarPendentes(), [])
   assert.equal(repositorio.ler('seja-o-que-for'), null)
 })
+
+test('perguntar exige pergunta e de 2 a 4 opções, com texto', () => {
+  const ok = normalizarPedido('perguntar', { pergunta: '  Qual banco? ', opcoes: ['SQLite', { label: 'Postgres', descricao: 'servidor' }] })
+  assert.deepEqual(ok, {
+    acao: 'perguntar',
+    comCommit: false,
+    pergunta: 'Qual banco?',
+    opcoes: [{ label: 'SQLite' }, { label: 'Postgres', descricao: 'servidor' }],
+  })
+  assert.throws(() => normalizarPedido('perguntar', { opcoes: ['a', 'b'] }), /Informe a pergunta/)
+  assert.throws(() => normalizarPedido('perguntar', { pergunta: 'x', opcoes: ['a'] }), /2 a 4 opções/)
+  assert.throws(() => normalizarPedido('perguntar', { pergunta: 'x', opcoes: ['a', 'b', 'c', 'd', 'e'] }), /2 a 4 opções/)
+  assert.throws(() => normalizarPedido('perguntar', { pergunta: 'x', opcoes: ['a', '  '] }), /texto/)
+  assert.throws(() => normalizarPedido('perguntar', { pergunta: 'x'.repeat(501), opcoes: ['a', 'b'] }), /muito grande/)
+  assert.throws(() => normalizarPedido('perguntar', { pergunta: 'x', opcoes: ['a', 'b'.repeat(121)] }), /muito grande/)
+})

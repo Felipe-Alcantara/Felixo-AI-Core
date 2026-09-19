@@ -43,6 +43,12 @@ const BUILTIN_SKILLS = [
       'Pedir com `felixo canvas escrever <id> <conteúdo>` para substituir o Markdown de uma nota de outro bloco — nunca escreve sozinho, sempre depende de confirmação humana no painel "Pedidos de escrita".',
   },
   {
+    slug: 'perguntar-com-opcoes',
+    name: 'Perguntar com opções clicáveis',
+    description:
+      'Fazer uma pergunta com 2 a 4 opções à pessoa com `felixo perguntar` e receber a escolha no stdout — para agentes sem ferramenta nativa de perguntas (Codex); só uma pessoa responde, clicando.',
+  },
+  {
     slug: 'notion-operacoes',
     name: 'Operar o Notion sem estragar nada',
     description:
