@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef, useState } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   Position,
@@ -106,8 +107,8 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
     <div className="felixo-canvas-card felixo-canvas-card-drawing flex h-full w-full flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
       <NodeResizer
         isVisible={selected}
-        minWidth={220}
-        minHeight={180}
+        minWidth={NODE_MIN_SIZE.drawing.width}
+        minHeight={NODE_MIN_SIZE.drawing.height}
         lineClassName="!border-white/20"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-white/40"
       />
