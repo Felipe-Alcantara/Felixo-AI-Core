@@ -253,6 +253,11 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (model) => ipcRenderer.invoke('models:save', model),
     delete: (modelId) => ipcRenderer.invoke('models:delete', modelId),
   },
+  agentPresets: {
+    list: () => ipcRenderer.invoke('agent-presets:list'),
+    save: (preset) => ipcRenderer.invoke('agent-presets:save', preset),
+    delete: (presetId) => ipcRenderer.invoke('agent-presets:delete', presetId),
+  },
   // Modelos que cada CLI de agente oferece hoje: `get` lê o cache (imediato,
   // é o que abre o menu), `refresh` consulta as CLIs em background.
   agentModels: {

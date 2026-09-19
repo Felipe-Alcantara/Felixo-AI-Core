@@ -776,6 +776,13 @@ declare global {
         save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>
         delete: (modelId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      agentPresets?: {
+        list: () => Promise<CliInvokeResult & { presets?: Record<string, unknown>[] }>
+        save: (
+          preset: Record<string, unknown>,
+        ) => Promise<CliInvokeResult & { preset?: Record<string, unknown> }>
+        delete: (presetId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
       agentModels?: {
         get: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
         refresh: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
