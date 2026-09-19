@@ -6,6 +6,7 @@ import {
   getAgent,
   getEffortLevels,
   isEffortValidForModel,
+  supportsFastMode,
   type AgentDefinition,
   type EffortLevel,
 } from '../services/agent-launch-options'
@@ -72,6 +73,7 @@ export function useAgentConfig(
   const [model, setModel] = useState(inicial.model)
   const [effort, setEffort] = useState(inicial.effort)
   const [yolo, setYolo] = useState(inicial.yolo)
+  const [fast, setFast] = useState(inicial.fast)
   const [projectId, setProjectId] = useState(inicial.projectId)
   const [planningFile, setPlanningFile] = useState(inicial.planningFile)
   const [name, setName] = useState('')
@@ -99,6 +101,7 @@ export function useAgentConfig(
       ? undefined
       : (agents.find((item) => item.id === agentValue) ?? getAgent(agentValue))
   const effortLevels = agent ? getEffortLevels(agent, model) : null
+  const fastSupported = supportsFastMode(agent, model)
 
   const setOpeniaInterfaceKey = useCallback((value: string) => {
     openiaInterfaceRef.current = value
@@ -409,6 +412,7 @@ export function useAgentConfig(
     setAgentValue(valor)
     setModel('')
     setEffort('')
+    setFast(false)
   }, [])
 
   const refreshOpenia = useCallback(() => {
@@ -561,6 +565,9 @@ export function useAgentConfig(
       if (agent && !isEffortValidForModel(agent, valor, effort)) {
         setEffort('')
       }
+      if (!supportsFastMode(agent, valor)) {
+        setFast(false)
+      }
     },
     [agent, effort],
   )
@@ -571,6 +578,7 @@ export function useAgentConfig(
       model,
       effort,
       yolo,
+      fast: fast && fastSupported,
       projectId,
       planningFile,
       openiaInterface: openiaInterfaceRef.current,
@@ -580,6 +588,8 @@ export function useAgentConfig(
   }, [
     agentValue,
     effort,
+    fast,
+    fastSupported,
     model,
     planningFile,
     projectId,
@@ -596,6 +606,7 @@ export function useAgentConfig(
   }, [
     accountId,
     effort,
+    fast,
     model,
     openiaInterfaceKey,
     openiaModel,
@@ -625,6 +636,7 @@ export function useAgentConfig(
       model: model || undefined,
       effort: (effort || undefined) as EffortLevel | undefined,
       yolo,
+      fast: fast && fastSupported,
     }
     if (agent.isLauncher) {
       const launcherArgs = buildOpeniaRunArgs(
@@ -660,6 +672,8 @@ export function useAgentConfig(
   }, [
     agent,
     effort,
+    fast,
+    fastSupported,
     model,
     name,
     openiaInterfaces,
@@ -681,6 +695,9 @@ export function useAgentConfig(
     effortLevels,
     yolo,
     setYolo,
+    fast,
+    setFast,
+    fastSupported,
     projectId,
     setProjectId,
     planningFile,

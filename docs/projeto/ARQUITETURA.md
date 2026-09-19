@@ -201,6 +201,27 @@ De 2 a 4 opcoes, limites de tamanho em `agent-requests.cjs`. A CLI ao
 contrario de `canvas escrever`, BLOQUEIA ate responderem (5 min): codigo 0 =
 escolha no stdout, 3 = dispensada, 1 = sem resposta no prazo.
 
+## Modo fast do Codex ao criar agente
+
+Contrato confirmado no proprio Codex 0.154.0, nao por documentacao: cada
+modelo do `~/.codex/models_cache.json` (e `Model.serviceTiers` do protocolo
+do app-server) declara `serviceTiers: [{ id: "priority", name: "Fast" }]`
+com "1.5x/2x speed, increased usage"; `codex features list` mostra
+`fast_mode` estavel e ligado. A chave e `service_tier = "priority"`; um
+`codex app-server --config service_tier="priority"` mais `config/read`
+devolve `priority` como valor efetivo (sem o override, `default`).
+
+No canvas, `AgentDefinition.fastModels` (agent-launch-options.ts) lista os
+modelos compativeis e `supportsFastMode` decide se o campo "Modo fast"
+aparece; o modelo vazio (padrao) conta como compativel. `buildAgentArgs` so
+envia `-c service_tier=priority` para Codex e modelo compativel, e
+`describeLaunch` poe "⚡ fast" no rotulo — que e o cabecalho do terminal.
+O estado vive em `useAgentConfig` (mesmo padrao do yolo), e a preferencia
+salva so vale para agente/modelo que suporta, para um `fast` antigo nao
+ligar o tier escondido. `model-options.cjs` faz o mesmo nos dois caminhos
+(exec e app-server) quando `model.fastMode === true`. Sem o pedido, nada e
+enviado: vale o `service_tier` do `~/.codex/config.toml` da pessoa.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um

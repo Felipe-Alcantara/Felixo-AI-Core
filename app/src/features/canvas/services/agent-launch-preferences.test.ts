@@ -35,6 +35,7 @@ describe('agent launch preferences', () => {
         model: 'gpt-5.6-terra',
         effort: 'ultra',
         yolo: true,
+        fast: true,
         projectId: 'project-a',
         planningFile: '/work/plans/release-plan.pdf',
         // A conta escolhida também é preferência reutilizável: sem ela o campo
@@ -51,6 +52,7 @@ describe('agent launch preferences', () => {
       model: 'gpt-5.6-terra',
       effort: 'ultra',
       yolo: true,
+      fast: true,
       projectId: 'project-a',
       planningFile: '/work/plans/release-plan.pdf',
       accountId: 'conta-trabalho',
@@ -76,6 +78,7 @@ describe('agent launch preferences', () => {
       model: '',
       effort: '',
       yolo: false,
+      fast: false,
       projectId: '',
       planningFile: '',
       openiaInterface: 'orchat',
@@ -91,6 +94,7 @@ describe('agent launch preferences', () => {
       model: '',
       effort: '',
       yolo: false,
+      fast: false,
       accountId: '',
       projectId: '',
       planningFile: '',
@@ -106,5 +110,22 @@ describe('agent launch preferences', () => {
       openiaInterface: 'openclaw',
       openiaModel: 'openai/gpt-5',
     })
+  })
+
+  it('fast só é lembrado para agente/modelo que o suporta', () => {
+    const salvar = (extra: Record<string, unknown>) =>
+      readAgentLaunchPreferences(
+        createStorage({
+          'felixo:last-agent-launch-preferences': JSON.stringify({ fast: true, ...extra }),
+        }),
+      )
+
+    expect(salvar({ agentValue: 'codex', model: 'gpt-5.6-sol' }).fast).toBe(true)
+    expect(salvar({ agentValue: 'codex' }).fast).toBe(true)
+    // Um fast salvo não pode ligar o tier escondido em quem não tem o campo.
+    expect(salvar({ agentValue: 'claude', model: 'opus' }).fast).toBe(false)
+    expect(salvar({ agentValue: 'gemini' }).fast).toBe(false)
+    // Valor de tipo errado é descartado.
+    expect(salvar({ agentValue: 'codex', fast: 'yes' }).fast).toBe(false)
   })
 })
