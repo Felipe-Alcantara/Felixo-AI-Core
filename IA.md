@@ -6073,3 +6073,56 @@ decisão de embutir whisper dependem de medição e ficam pendentes.
 Testes: 8 novos no processo principal (5 contra servidor HTTP real em loopback,
 2 do store, 1 de recusa sem chave), 2 do renderer (incl. paridade). Resultado
 completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: layout, altura dos painéis (fatia 1) — sem verificação visual
+
+### Contexto
+
+Task "Layout — redimensionar painéis e janelas nos dois eixos sem quebrar em telas
+pequenas" (Esforço: Dias, risco alto: o loop painel × gaveta de 12/09 saiu de
+uma leitura circular entre superfícies). Fatiada.
+
+### O que foi feito
+
+- **Inventário** (`docs/projeto/LAYOUT-SUPERFICIES.md`): cada superfície, se
+  redimensiona, em qual eixo e o mínimo útil — levantado **lendo o código**, não
+  medido numa janela. Achados: painéis só redimensionavam a largura; a altura só
+  tinha teto; nenhum dos 13 modais redimensiona (todos têm `max-h` em `vh`, então
+  não estouram a janela); o Tarefas Notion tem mínimo de 760×460 (em 800 px cobre
+  quase tudo).
+- **Altura dos painéis de ferramenta**: `clampPanelHeight`/`read`/`write`/`clear`
+  em `panel-sizing.ts` + `useResizablePanelHeight` + alça na borda de baixo do
+  `CanvasPanel` (arrasto, setas ↑↓, `Home`/duplo clique = altura do conteúdo).
+- **Por que não reabre o loop de 12/09:** a altura NÃO fala com o coordenador de
+  superfícies. O painel ancora no topo e só concorre com as outras superfícies
+  pela LARGURA; a altura usa o mesmo teto que o painel já respeitava
+  (`getPanelMaxHeight`), então esticar não cria uma posição nova. A largura
+  continua passando por `reportPanelWidth`, intocada.
+- **Invariante testada:** em 11 alturas de janela (200 a 2400) × 9 pedidos (de
+  negativo a `MAX_SAFE_INTEGER`) a altura fica entre o piso e o teto e cabe na
+  janela; o intervalo nunca se inverte, nem em janela mais baixa que o piso.
+- **Smoke de viewport** (`canvas-smoke.cjs`): em 1366×768, 1024×640 e 800×600
+  abre o painel, confere que ele fica dentro da janela nos 4 lados, cresce pela
+  alça de altura respeitando o teto e volta com `Home`. **Só roda no CI**
+  (macOS/Windows); não rodei localmente.
+
+### NÃO verificado
+
+- Nada foi visto numa janela real: o `felixo devtools connect` segue travado e o
+  ambiente não sobe o Electron. A alça de baixo (posição, cursor, sobreposição
+  com a alça da direita no canto) e a rolagem interna com altura fixa estão
+  cobertas só pela lógica pura e pelo smoke do CI.
+- O smoke novo foi escrito sem poder executá-lo antes do push: pode precisar de
+  ajuste depois do primeiro resultado do CI.
+- O critério de aceite ("toda superfície do inventário redimensiona nos dois
+  eixos") **não foi cumprido**: modais, gaveta (vertical) e inspector ficam
+  pendentes.
+
+### Pendente (tasks novas)
+
+Modais redimensionáveis (13); gaveta e inspector; revisar o mínimo do Tarefas
+Notion; conferir tudo numa janela real.
+
+### Validação
+
+12 testes novos em `panel-sizing.test.ts`. Resultado completo dos gates no PR.

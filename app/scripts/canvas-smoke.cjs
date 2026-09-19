@@ -390,6 +390,73 @@ async function checarReloadSemDuplicacao(page) {
   }
 }
 
+// Janelas em que o painel precisa continuar dentro da tela e redimensionável.
+// 1366x768 é o notebook do relato; 800x600 é o piso em que o painel ainda abre
+// pelo botão da barra lateral (abaixo disso só o overflow é conferido).
+const VIEWPORTS_DO_PAINEL = [
+  { width: 1366, height: 768 },
+  { width: 1024, height: 640 },
+  { width: 800, height: 600 },
+]
+
+// Espelha `getPanelMaxHeight` (panel-sizing.ts): topo 64 + rodapé 48, piso 240.
+function alturaMaximaEsperada(viewportHeight) {
+  return Math.max(240, viewportHeight - 64 - 48)
+}
+
+async function medirPainel(page, panelId) {
+  return page.evaluate((id) => {
+    const element = document.querySelector(`[data-felixo-canvas-panel="${id}"]`)
+    if (!element) return null
+    const rect = element.getBoundingClientRect()
+    return {
+      left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, height: rect.height,
+      viewportWidth: window.innerWidth, viewportHeight: window.innerHeight,
+    }
+  }, panelId)
+}
+
+async function checarPainelNosDoisEixos(page) {
+  for (const viewport of VIEWPORTS_DO_PAINEL) {
+    const rotulo = `${viewport.width}x${viewport.height}`
+    await page.setViewportSize(viewport)
+    await page.waitForTimeout(250)
+    await page.getByRole('button', { name: 'Buscar' }).click()
+    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'visible', timeout: 5_000 })
+
+    const antes = await medirPainel(page, 'search')
+    if (!antes) throw new Error(`[canvas-smoke] painel Buscar nao encontrado em ${rotulo}`)
+    // O painel nunca escapa da janela, em nenhum dos quatro lados.
+    if (antes.left < 0 || antes.top < 0 || antes.right > antes.viewportWidth + 1 || antes.bottom > antes.viewportHeight + 1) {
+      throw new Error(`[canvas-smoke] painel fora da janela em ${rotulo}: ${JSON.stringify(antes)}`)
+    }
+
+    // Altura pelo teclado: a alça de baixo cresce o painel e respeita o teto.
+    const alca = page.locator('[data-felixo-panel-height-handle="search"]')
+    await alca.focus()
+    for (let i = 0; i < 12; i += 1) await page.keyboard.press('ArrowDown')
+    const depois = await medirPainel(page, 'search')
+    const teto = alturaMaximaEsperada(depois.viewportHeight)
+    if (antes.height + 24 <= teto && !(depois.height > antes.height)) {
+      throw new Error(`[canvas-smoke] a alca de altura nao cresceu o painel em ${rotulo}: ${antes.height} -> ${depois.height}`)
+    }
+    if (depois.height > teto + 1 || depois.bottom > depois.viewportHeight + 1) {
+      throw new Error(`[canvas-smoke] painel passou do teto de altura em ${rotulo}: ${JSON.stringify({ depois, teto })}`)
+    }
+
+    // Home devolve a altura do conteudo.
+    await alca.focus()
+    await page.keyboard.press('Home')
+    const restaurado = await medirPainel(page, 'search')
+    if (Math.abs(restaurado.height - antes.height) > 2) {
+      throw new Error(`[canvas-smoke] Home nao restaurou a altura em ${rotulo}: ${antes.height} vs ${restaurado.height}`)
+    }
+
+    await page.getByRole('button', { name: 'Buscar' }).click()
+    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'detached', timeout: 5_000 })
+  }
+}
+
 async function checarViewportMinimo(page) {
   await page.setViewportSize(MIN_VIEWPORT)
   await page.waitForTimeout(250)
@@ -416,6 +483,7 @@ async function main() {
       await checarAuditoriaDeAcessibilidade(page)
       await checarInteracoes(page)
       await checarReloadSemDuplicacao(page)
+      await checarPainelNosDoisEixos(page)
       await checarViewportMinimo(page)
     } catch (error) {
       const output = path.join(APP_DIR, 'build', `canvas-smoke-failure-${process.platform}.png`)
@@ -431,7 +499,7 @@ async function main() {
       await browser.close()
     }
   })
-  console.log('[canvas-smoke] mount + fixture + oclusao + interacoes + reload + viewport minimo: ok')
+  console.log('[canvas-smoke] mount + fixture + oclusao + interacoes + reload + painel nos dois eixos + viewport minimo: ok')
 }
 
 main().catch((error) => {
