@@ -5798,3 +5798,39 @@ a config efetiva do app-server, não uma sessão de verdade.
 Testes: 4 em `model-options.test.cjs`, 6 em `agent-launch-options.test.ts`, 1
 em `agent-launch-preferences.test.ts` (+ expectativas com `fast`). Resultado
 completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: modo fast no modelo de chat do Codex
+
+### Contexto
+
+Pendência da task do modo fast (PR #53): o modo já existia ao criar agente no
+canvas e nos args de `model-options.cjs`, mas o `Model` de chat não tinha o
+campo.
+
+### O que foi feito
+
+- Migration `014_models_fast_mode.sql` (`fast_mode INTEGER NOT NULL DEFAULT 0`);
+  `models-repository.cjs` grava/lê e só devolve `fastMode: true` quando ligado.
+- `Model.fastMode`; `modelSupportsFastMode`/`resolveFastMode` (uma fonte só,
+  `supportsFastMode`); checkbox no `ModelConfigModal`, botão "⚡ Fast" no
+  `Composer`; `model-storage` preserva/mescla o campo.
+- **Duas armadilhas do caminho renderer → spawn** (não estavam na task):
+  1. `normalizeAvailableModel` (`cli-request-policy.cjs`) reconstrói o modelo
+     campo a campo — sem tocar nela, o `fastMode` morreria ali e o adapter
+     nunca o veria (cobrido por teste).
+  2. `createModelSessionKey` identifica o processo persistente do Codex; sem o
+     fast na chave, alternar o campo reaproveitaria o processo aberto com o
+     tier antigo (cobrido por teste).
+
+### Não feito
+
+Item 4 da task (preset de agente nativo guardar o fast): o recurso de presets
+ainda não existe (task "criar agentes nativos pré-configurados", em Entrada);
+quando existir, basta o preset carregar `fastMode` no `Model`/escolhas já
+prontos. `/status` numa sessão Codex real segue sem conferência.
+
+### Validação
+
+Testes: 3 no repositório (round-trip real em SQLite + upgrade pela
+backward-compatibility), 1 na política, 2 na chave de sessão, 2 do helper.
+Resultado completo dos gates no PR.

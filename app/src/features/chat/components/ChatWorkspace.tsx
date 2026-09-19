@@ -796,7 +796,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   }
 
   function updateSelectedModelConfig(
-    patch: Partial<Pick<Model, 'providerModel' | 'reasoningEffort'>>,
+    patch: Partial<Pick<Model, 'providerModel' | 'reasoningEffort' | 'fastMode'>>,
   ) {
     if (!selectedModel) {
       return
@@ -811,6 +811,10 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
 
     if ('reasoningEffort' in patch) {
       updatedModel.reasoningEffort = patch.reasoningEffort
+    }
+
+    if ('fastMode' in patch) {
+      updatedModel.fastMode = patch.fastMode
     }
 
     updateModel(updatedModel)

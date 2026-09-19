@@ -222,6 +222,19 @@ ligar o tier escondido. `model-options.cjs` faz o mesmo nos dois caminhos
 (exec e app-server) quando `model.fastMode === true`. Sem o pedido, nada e
 enviado: vale o `service_tier` do `~/.codex/config.toml` da pessoa.
 
+No modelo de chat, `Model.fastMode` (so o booleano `true`; ausente = sem fast)
+e uma coluna propria (`fast_mode`, migration 014, default 0) em
+`models-repository.cjs`. `modelSupportsFastMode`/`resolveFastMode`
+(`chat/services/model-fast-mode.ts`) reusam `supportsFastMode` do canvas e
+so guardam `true` onde o modelo suporta — trocar para um modelo sem o tier
+limpa o campo em vez de deixa-lo ligado escondido. Tres pontos do caminho
+renderer -> spawn precisaram conhecer o campo: `normalizeAvailableModel`
+(`cli-request-policy.cjs`, que descarta campos desconhecidos) e
+`createModelSessionKey` (o processo persistente do Codex e reaproveitado por
+essa chave; sem o fast nela, alternar o campo reusaria o processo aberto com
+o tier antigo). UI: checkbox no `ModelConfigModal` e botao "⚡ Fast" no
+`Composer`.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um

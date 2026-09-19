@@ -190,6 +190,7 @@ function normalizeModel(value: unknown): Model | null {
         : detectModelCliType(restoredModel),
       providerModel: getOptionalString(model.providerModel),
       reasoningEffort: normalizeReasoningEffort(model.reasoningEffort),
+      ...(model.fastMode === true ? { fastMode: true } : {}),
     }
   }
 
@@ -277,6 +278,7 @@ function pickPreferredDuplicate(currentModel: Model, candidateModel: Model) {
     ...candidateModel,
     providerModel: currentModel.providerModel ?? candidateModel.providerModel,
     reasoningEffort: currentModel.reasoningEffort ?? candidateModel.reasoningEffort,
+    ...((currentModel.fastMode ?? candidateModel.fastMode) === true ? { fastMode: true } : {}),
   }
 }
 

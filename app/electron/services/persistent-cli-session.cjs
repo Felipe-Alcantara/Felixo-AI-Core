@@ -132,6 +132,7 @@ function createPersistentCliSessionManager({
           modelName: model?.name,
           providerModel: model?.providerModel,
           reasoningEffort: model?.reasoningEffort,
+          fastMode: model?.fastMode === true,
           command,
           args: persistentSession.args,
           cwd,
