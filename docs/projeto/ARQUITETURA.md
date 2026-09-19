@@ -179,6 +179,21 @@ listar/ler, este comando NAO espera resposta — o pedido pode ficar minutos
 esperando um clique — so registra e devolve na hora, apontando pra
 `felixo canvas ver-pedido <id>`.
 
+## Cor de moldura dos blocos do canvas
+
+Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um
+token de paleta curta (`frame-colors.ts`), nunca hex livre. E separado de
+`NoteNodeData.color`, que segue sendo o papel da nota: notas antigas mantem a
+cor que tinham sem migracao, porque nenhum campo existente muda de nome ou
+significado. O CanvasView transforma o token em classe (`felixo-frame-*`) no
+wrapper do no do React Flow; o CSS pinta so o contorno e um halo no primeiro
+filho (o card), entao o conteudo — inclusive o terminal — nao e colorido. Um
+valor desconhecido vindo de disco (`readFrameColor`) vira "sem cor". A escolha
+e feita por um menu de clique direito unico (`NodeColorMenu.tsx`) e persiste
+pelo mesmo `updateNodeData` das outras edicoes. Prioridade com notificacao:
+o realce de notificacao, quando existir, deve ser declarado depois do bloco
+`.felixo-frame` no CSS — a cor dela vence.
+
 ## Fetch All e inventario multiplataforma
 
 O scanner em `services/fetch-all/repo-scanner.cjs` separa a descoberta de

@@ -5666,3 +5666,29 @@ A sessão expõe a última inserção no snapshot e em `SessionMetadata`. O canv
 **Estado.** Implementação e documentação prontas para commit, push, CI e encerramento da task.
 
 **Evidência de origem.** Task Notion: https://app.notion.com/p/Felixo-AI-Core-Prompts-definir-metadados-de-nome-ID-origem-e-composi-o-da-inje-o-3ce91f95497e810d998ad77cfe057677
+## Fechamento de trabalho — 2026-09-19: canvas, cor de moldura em qualquer bloco
+
+### Contexto
+
+Task "Canvas — escolher a cor de qualquer elemento do canvas": só notas tinham
+cor (`NoteColor`, papel da nota). Critério: todo tipo aceita cor, ela
+sobrevive a reiniciar e notas antigas mantêm a que tinham.
+
+### Decisões
+
+- Campo novo `frameColor` (token de 6 cores), em vez de reaproveitar
+  `color`: em nota, `color` é o *papel* (fundo claro); a task pede moldura
+  sem pintar conteúdo. Campos separados = notas antigas intactas sem
+  migração, o que cumpre o critério pelo caminho mais seguro.
+- Um único ponto de aplicação: classe no wrapper do nó (CanvasView) + CSS no
+  primeiro filho, em vez de mexer nos 8 componentes de bloco. Um único menu de
+  clique direito (`NodeColorMenu`) cobre também grupo, que não tem NodeHeader.
+- Prioridade com a notificação: ainda não existe realce de notificação por
+  nó (task irmã aberta); a regra ficou documentada no CSS (declarar depois).
+
+### Validação
+
+Testes: `frame-colors.test.ts` (3) e round-trip de persistência em todos os
+8 tipos + nota antiga (2). eslint, tsc e testes rodados antes do push.
+Sem verificação visual ao vivo (`felixo devtools connect` ainda travado — task
+própria) — o aspecto do halo/contorno não foi visto na tela.
