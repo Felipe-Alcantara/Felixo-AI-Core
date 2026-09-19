@@ -153,9 +153,12 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
   felixo fetch-all ver-pedido <id> [--json]
       Diz se um pedido já foi confirmado, recusado ou continua esperando.
 
-  felixo browser open <url> [--embedded] [--json]
+  felixo browser open <url> [--embedded] [--profile=<nome>] [--json]
       Pede ao app para abrir uma página no navegador do sistema. Com
-      --embedded, a página vira um bloco Webpage persistido no canvas.
+      --embedded, a página vira um bloco Webpage persistido no canvas; com
+      --profile=<nome> (só junto de --embedded) o bloco abre nesse perfil do
+      navegador interno — logins separados por perfil. "Padrão" é o perfil
+      que já existia. Perfil inexistente falha em vez de cair no Padrão.
 
   felixo browser status <id> [--json]
       Mostra o desfecho de um pedido de abertura.

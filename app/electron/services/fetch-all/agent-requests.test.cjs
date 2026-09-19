@@ -218,3 +218,14 @@ test('perguntar exige pergunta e de 2 a 4 opções, com texto', () => {
   assert.throws(() => normalizarPedido('perguntar', { pergunta: 'x'.repeat(501), opcoes: ['a', 'b'] }), /muito grande/)
   assert.throws(() => normalizarPedido('perguntar', { pergunta: 'x', opcoes: ['a', 'b'.repeat(121)] }), /muito grande/)
 })
+
+test('abrir-pagina aceita perfil só junto do bloco embutido', () => {
+  assert.deepEqual(
+    normalizarPedido('abrir-pagina', { url: 'https://example.com', modo: 'embutido', perfil: '  Trabalho ' }),
+    { acao: 'abrir-pagina', comCommit: false, url: 'https://example.com', modo: 'embutido', perfil: 'Trabalho' },
+  )
+  // Sem perfil, o pedido é o de sempre (nada de campo vazio).
+  assert.equal('perfil' in normalizarPedido('abrir-pagina', { url: 'https://example.com', modo: 'embutido', perfil: '  ' }), false)
+  assert.throws(() => normalizarPedido('abrir-pagina', { url: 'https://example.com', perfil: 'X' }), /--embedded/)
+  assert.throws(() => normalizarPedido('abrir-pagina', { url: 'https://example.com', modo: 'embutido', perfil: 'x'.repeat(41) }), /muito grande/)
+})

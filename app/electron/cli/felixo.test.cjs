@@ -556,3 +556,40 @@ test('perguntar: sem resposta no prazo, avisa e diz como conferir depois', async
   assert.match(resultado.saida, /ninguém respondeu a tempo/)
   assert.match(resultado.saida, /canvas ver-pedido/)
 })
+
+test('browser open --embedded --profile=Nome registra o perfil no pedido', async () => {
+  const { pasta, deps } = dependencias()
+  const resultado = await executar(['browser', 'open', 'https://example.com', '--embedded', '--profile=Trabalho'], deps)
+
+  assert.equal(resultado.codigo, 0)
+  assert.match(resultado.saida, /Perfil: Trabalho/)
+  const [pedido] = criarRepositorioDePedidos({ pasta }).listarPendentes({ acao: 'abrir-pagina' })
+  assert.equal(pedido.perfil, 'Trabalho')
+  assert.equal(pedido.modo, 'embutido')
+})
+
+test('--perfil= é aceito como sinônimo e nomes com espaço funcionam entre aspas', async () => {
+  const { pasta, deps } = dependencias()
+  await executar(['navegador', 'abrir', 'https://example.com', '--embutido', '--perfil=Conta Pessoal'], deps)
+  const [pedido] = criarRepositorioDePedidos({ pasta }).listarPendentes({ acao: 'abrir-pagina' })
+  assert.equal(pedido.perfil, 'Conta Pessoal')
+})
+
+test('--profile sem valor, ou perfil sem --embedded, é erro de uso e não registra pedido', async () => {
+  const { pasta, deps } = dependencias()
+  const semValor = await executar(['browser', 'open', 'https://example.com', '--embedded', '--profile'], deps)
+  assert.equal(semValor.codigo, 2)
+  assert.match(semValor.erro, /--profile=<nome>/)
+
+  const externo = await executar(['browser', 'open', 'https://example.com', '--profile=Trabalho'], deps)
+  assert.equal(externo.codigo, 2)
+  assert.match(externo.erro, /--embedded/)
+  assert.deepEqual(criarRepositorioDePedidos({ pasta }).listarPendentes(), [])
+})
+
+test('flags booleanas de sempre continuam booleanas (--json, --cache)', () => {
+  const { opcoes } = interpretarArgumentos(['fetch-all', 'varrer', '--cache', '--json', '--profile=X'])
+  assert.equal(opcoes.cache, true)
+  assert.equal(opcoes.json, true)
+  assert.equal(opcoes.profile, 'X')
+})

@@ -1728,10 +1728,16 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   )
 
   const openWebpageFromAgent = useCallback(
-    (url: string) => {
+    (url: string, profileId?: string) => {
       const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
       const position = findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
-      const id = addNode('webpage', { url }, position)
+      // `felixo browser open --embedded --profile=Nome`: o processo principal
+      // já resolveu o nome; o Padrão é o bloco sem `profileId`.
+      const id = addNode(
+        'webpage',
+        { url, ...(profileId && profileId !== 'default' ? { profileId } : {}) },
+        position,
+      )
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
@@ -1741,9 +1747,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   )
 
   useEffect(() => {
-    const unsubscribe = window.felixo?.canvas?.onAgentBrowserOpen?.(({ url }) => {
+    const unsubscribe = window.felixo?.canvas?.onAgentBrowserOpen?.(({ url, profileId }) => {
       if (typeof url === 'string' && url.trim()) {
-        openWebpageFromAgent(url)
+        openWebpageFromAgent(url, typeof profileId === 'string' ? profileId : undefined)
       }
     })
 
@@ -2219,8 +2225,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onAddFile={addFileNode}
         onOpenFile={() => void pickAndOpenTextFile()}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
-        onAddWebpage={(url, name) =>
-          addNode('webpage', { url, ...(name ? { label: name } : {}) })
+        onAddWebpage={(url, name, profileId) =>
+          addNode('webpage', {
+            url,
+            ...(name ? { label: name } : {}),
+            ...(profileId ? { profileId } : {}),
+          })
         }
         canvasMode={canvasMode}
         onToggleMode={() =>

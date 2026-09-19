@@ -274,6 +274,33 @@ avisada na edicao e ignorada ao abrir o agente. Como o formulario de spawn e a
 tela usam instancias separadas de `useAgentPresets`, a lista muda por um
 evento de janela (`felixo:agent-presets-changed`).
 
+## Perfis do navegador interno
+
+Cada bloco Pagina Web tem um perfil, e cada perfil e uma particao propria do
+Electron (`persist:felixo-webview-<id>`): logins de perfis diferentes nao se
+misturam. O perfil "Padrao" e a particao que JA existia (`persist:felixo-webview`)
+e e virtual (nao mora no banco); bloco sem `profileId` continua nela, entao
+ninguem e deslogado na atualizacao. Os perfis da pessoa ficam no SQLite
+(migration 016, `webview-profiles-repository.cjs`; nome unico sem diferenciar
+maiuscula) e uma store externa (`webview-profiles-store.ts`) os compartilha entre
+todos os blocos e o seletor de criacao.
+
+Decisoes com motivo: (1) a particao do webview sai DIRETO do `profileId` do
+bloco, nunca da lista de perfis — a lista carrega de forma assincrona e um
+bloco de "Trabalho" abriria primeiro na sessao Padrao, carregando a pagina
+logado como outra pessoa; (2) bloco de perfil excluido mantem a particao (agora
+vazia) e aparece como "Perfil removido", nunca e empurrado em silencio para a
+sessao Padrao; (3) excluir um perfil limpa a sessao (`clearStorageData` +
+`clearCache`) ANTES de tira-lo da lista, e o handler recusa o id `default` — o
+Padrao e a sessao de todos os blocos antigos; (4) o id do perfil entra num nome
+de particao, entao renderer e processo principal validam com a mesma regra
+(teste de paridade). Trocar de perfil recria o webview na mesma pagina.
+
+`felixo browser open --embedded --profile=Nome` leva o NOME no pedido; o
+processo principal o resolve (Padrao/default sem consultar o banco) e um nome
+inexistente FALHA em vez de cair no Padrao. `interpretarArgumentos` passou a
+aceitar `--chave=valor`; as flags booleanas continuam como eram.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um

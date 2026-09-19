@@ -54,6 +54,9 @@ const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
 const {
+  registerWebviewProfilesIpcHandlers,
+} = require('./services/webview-profiles-ipc-handlers.cjs')
+const {
   registerAgentPresetsIpcHandlers,
 } = require('./services/agent-presets-ipc-handlers.cjs')
 const { registerNotionIpcHandlers } = require('./services/notion-ipc-handlers.cjs')
@@ -502,7 +505,10 @@ app.whenReady().then(async () => {
     appPaths,
     database: storageDatabase,
   })
-  agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths)
+  const webviewProfiles = registerWebviewProfilesIpcHandlers({ database: storageDatabase })
+  agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths, {
+    findProfileByName: (name) => webviewProfiles.repository.findByName(name),
+  })
   agentCanvasReadWatching = registerAgentCanvasReadIpcHandlers({
     database: storageDatabase,
     appPaths,

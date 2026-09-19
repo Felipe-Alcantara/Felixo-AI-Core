@@ -5911,3 +5911,58 @@ até o formato, não numa segunda instância de verdade.
 ### Validação
 
 10 testes novos do editor. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: perfis separados no navegador interno
+
+### Contexto
+
+Task "Navegador — perfis separados no navegador interno (uma partição por
+perfil)". Todos os blocos Página Web usavam `persist:felixo-webview`, então não
+dava para ter duas contas do mesmo site nem separar trabalho de pessoal.
+
+### Decisões (com o motivo)
+
+- **A partição sai do `profileId` do bloco, nunca da lista de perfis.** A lista
+  carrega de forma assíncrona; se a partição dependesse dela, um bloco do perfil
+  "Trabalho" abriria primeiro na sessão Padrão e só depois remontaria — a página
+  carregaria por um instante logada como outra pessoa. Cobri o risco no desenho
+  (e a lógica de exibição separada: `describeWebviewProfile`).
+- **Padrão = a partição antiga, virtual.** Bloco sem `profileId` continua nela:
+  ninguém é deslogado. O id `default` é recusado no banco e no handler de
+  exclusão — excluir o Padrão apagaria o login de todos os blocos antigos.
+- **Excluir limpa a sessão antes de tirar o perfil da lista**; se a limpeza
+  falha, o perfil continua (não sobra sessão logada sem dono). Bloco de perfil
+  excluído mantém a partição vazia e aparece como "Perfil removido" — não é
+  empurrado em silêncio para o Padrão.
+- **Agente:** `felixo browser open --embedded --profile=Nome` leva o NOME; o
+  processo principal resolve. Perfil inexistente **falha** em vez de cair no
+  Padrão (abriria numa sessão logada que o agente não escolheu). O CLI passou a
+  aceitar `--chave=valor` (booleanas seguem iguais); `--profile` sem valor e
+  perfil sem `--embedded` são erro de uso.
+- Renderer e processo principal validam o id do perfil com a mesma regra (vai em
+  nome de partição) — teste de paridade lê o `.cjs`.
+- Erro meu pego a tempo: um `sub` de script aplicou o seletor no componente
+  errado (`NamedCreateButton`, markup idêntico ao `UrlCreateButton`); `tsc`
+  acusou e refiz no lugar certo.
+
+### O que foi feito
+
+Migration 016 + repositório + IPC (`webview-profiles:*`); store externa e hook;
+menu no cabeçalho do bloco (ver, trocar, criar, excluir; em portal porque o card
+corta overflow); seletor de perfil ao criar o bloco (só aparece se existir perfil
+da pessoa); caminho do agente; skill `abrir-paginas-no-navegador` atualizada.
+
+### Não verificado
+
+**Critério de aceite não conferido de verdade:** "dois blocos do mesmo site em
+perfis diferentes mantêm logins independentes depois de reiniciar o app". Não
+foi testado em app real (`felixo devtools connect` segue travado; e exigiria
+login numa conta real). O que está coberto: a partição por perfil (unidade), a
+persistência da lista (reabrir o banco), a limpeza ao excluir (com doubles) e
+o caminho do agente. O comportamento do Electron com `persist:` por partição é
+o esperado pela documentação, mas não o medi aqui. Também não vi o menu na tela.
+
+### Validação
+
+Testes: 4 partição, 6 repositório, 4 IPC, 4 handler do agente, 1+4 pedido/CLI,
+11 formato, 7 store. Resultado completo dos gates no PR.
