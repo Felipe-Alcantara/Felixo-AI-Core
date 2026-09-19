@@ -865,3 +865,10 @@ crescimento `2*dx` por o modal ser centralizado, persistencia por modal e
 `swallowNextClick`, que impede o clique gerado ao soltar o mouse fora da moldura
 de fechar o modal pelo fundo. O hook devolve `frameProps` (ref por funcao + estilo)
 para espalhar na moldura; um objeto com `ref` nomeado disparava `react-hooks/refs`.
+
+## Terminal: rolagem do Claude Code
+
+`terminal-scroll-preference.ts` guarda a opção (padrão desligada). No spawn, o store envia
+`classicScreen` (booleano) e `PtyProcessManager` o traduz em
+`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` só para o executável `claude` (`isClaudeCommandName`).
+O renderer não escolhe nome nem valor de variável de ambiente.
