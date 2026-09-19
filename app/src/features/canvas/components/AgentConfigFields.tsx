@@ -5,6 +5,7 @@ import { ADD_FOLDER_VALUE, type AgentConfig, type AgentConfigProject } from '../
 import { ProviderMark } from '../../shared/brand/ProviderMark'
 import { providerIdentity } from '../../shared/brand/provider-identity'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
+import { AgentPresetFields } from './AgentPresetFields'
 
 type Props = {
   config: AgentConfig
@@ -129,6 +130,8 @@ export function AgentConfigFields({
           />
         </>
       )}
+
+      <AgentPresetFields config={config} />
 
       <label htmlFor={`${prefixo}-agent`} className={ROTULO}>
         Agente

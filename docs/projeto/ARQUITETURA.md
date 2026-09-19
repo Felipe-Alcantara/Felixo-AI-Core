@@ -235,6 +235,30 @@ essa chave; sem o fast nela, alternar o campo reusaria o processo aberto com
 o tier antigo). UI: checkbox no `ModelConfigModal` e botao "⚡ Fast" no
 `Composer`.
 
+## Presets de agente (fatia 1)
+
+"Pre-treinado" nao e treinar modelo: e uma receita salva (`AgentPreset` em
+`agent-preset.ts`): CLI, modelo, esforco, fast, yolo, contexto inicial,
+skills, cor e pasta. O modulo e so o formato — validar, normalizar e
+(de)serializar — para o formato salvo e o de troca terem teste. Valor que a
+versao atual nao conhece (modelo removido, esforco que o modelo recusa, fast em
+modelo sem o tier) vira o padrao em vez de um argumento que a CLI recusaria.
+O arquivo de troca (`felixo-agent-preset`, `version: 1`) omite id, pasta e a
+marca de nativo, e a importacao recusa versao maior que a que conhece.
+
+Nativos (Tasks do Notion, Revisor de PR, Depurador) moram no codigo: atualizam
+com o app e nao se editam — duplica-se. Os da pessoa ficam no SQLite (migration
+015, `agent-presets-repository.cjs`, soft-delete; nativo e recusado no banco).
+O repositorio guarda o objeto como veio; quem repara valores antigos e o
+renderer, ao ler.
+
+Escolher um preset no formulario de novo agente so PREENCHE a configuracao
+(`useAgentConfig.applyPreset`); o agente nasce pelo botao de sempre. O contexto
+e as skills do preset entram no `initialText` do terminal
+(`buildPresetInstruction`), que o session-store ja entrega por ARQUIVO — um
+contexto grande de preset nunca e digitado inteiro no PTY. A cor do preset vira
+a moldura (`frameColor`) do terminal.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um

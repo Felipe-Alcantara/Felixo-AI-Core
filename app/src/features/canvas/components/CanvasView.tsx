@@ -26,6 +26,7 @@ import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
+import { buildPresetInstruction } from '../services/agent-preset-prompt'
 import { NodeColorMenu } from './NodeColorMenu'
 import { frameClassName } from './frame-colors'
 import { DrawingNode } from './DrawingNode'
@@ -1804,6 +1805,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       const planningInstruction = isContextAwareCommand
         ? buildPlanningFileInstruction(options.planningFile)
         : undefined
+      // Preset de agente: contexto e skills dele entram no mesmo initialText,
+      // que o session-store entrega por arquivo. Passagem de responsabilidade
+      // (handoff) carrega o próprio pedido e não recebe preset.
+      const presetInstruction = isContextAwareCommand && !options.handoffText
+        ? buildPresetInstruction(options.preset, availableSkillsRef.current)
+        : undefined
       const handoffSections = isContextAwareCommand && options.handoffText
         ? composeTerminalInitialText(
             quality.enabled ? buildQualityStandardMessage(quality.prompt) : undefined,
@@ -1825,6 +1832,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
                   availableSkillsRef.current,
                 )
               : undefined,
+            presetInstruction,
             planningInstruction,
           )
         : undefined
@@ -1837,6 +1845,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         ...(options.accountId ? { accountId: options.accountId } : {}),
         ...(options.providerId ? { providerId: options.providerId } : {}),
         ...(options.launchMode ? { launchMode: options.launchMode } : {}),
+        ...(options.preset?.color ? { frameColor: options.preset.color } : {}),
         ...(initialText && !options.handoffText ? { initialText } : {}),
         ...(options.handoffText ? { handoffText: initialText } : {}),
       }

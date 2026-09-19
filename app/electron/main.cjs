@@ -53,6 +53,9 @@ const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
 const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
+const {
+  registerAgentPresetsIpcHandlers,
+} = require('./services/agent-presets-ipc-handlers.cjs')
 const { registerNotionIpcHandlers } = require('./services/notion-ipc-handlers.cjs')
 const {
   registerAgentBrowserIpcHandlers,
@@ -489,6 +492,7 @@ app.whenReady().then(async () => {
   })
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
+  registerAgentPresetsIpcHandlers({ database: storageDatabase })
   registerAgentModelsIpcHandlers(appPaths)
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
   registerChatHistoryIpcHandlers({ database: storageDatabase })

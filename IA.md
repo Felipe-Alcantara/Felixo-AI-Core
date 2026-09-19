@@ -5834,3 +5834,43 @@ prontos. `/status` numa sessão Codex real segue sem conferência.
 Testes: 3 no repositório (round-trip real em SQLite + upgrade pela
 backward-compatibility), 1 na política, 2 na chave de sessão, 2 do helper.
 Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: presets de agente (fatia 1)
+
+### Contexto
+
+Task "criar agentes nativos pré-configurados" (Esforço: Dias). "Pré-treinado"
+= receita salva, não treino de modelo. Fatiada: esta entrega cobre o núcleo
+(formato, nativos, persistência, salvar/aplicar no formulário, contexto por
+arquivo); a tela de gerenciar fica para a fatia 2.
+
+### Decisões
+
+- **Formato versionado e puro** (`agent-preset.ts`, `felixo-agent-preset` v1):
+  normalizar repara valores antigos para o padrão; o arquivo de troca omite id,
+  pasta (caminho da máquina de origem) e marca de nativo; importar recusa
+  versão maior com mensagem clara.
+- **Nativos no código, da pessoa no SQLite** (migration 015): nativo atualiza
+  com o app e não se edita (duplica-se); o banco recusa gravar nativo.
+- **Escolher preset só preenche o formulário**; o agente nasce pelo botão de
+  sempre. Contexto e skills seguem no `initialText` → entregues por arquivo
+  pelo session-store, atendendo "nunca digitar prompt gigante no PTY" sem
+  criar mecanismo novo. Cor do preset vira `frameColor` (reuso da task de cor).
+- Modo fast e yolo entram no preset (fast só vale onde o modelo suporta).
+
+### Não feito (fatia 2, task própria)
+
+Tela de gerenciar (editar campos do preset, escolher skills, exportar/
+importar arquivo). Hoje: criar via "Salvar como preset" (mantém as skills do
+preset ativo), duplicar e excluir; skills de preset da pessoa só vêm de
+duplicar um nativo. O formato de exportar/importar já existe e tem teste;
+falta a UI que o usa.
+Não verificado ao vivo: `felixo devtools connect` segue travado, então nem o
+formulário nem um agente nascendo de preset foram vistos rodando; a validação
+foi por testes do formato, do repositório (inclui reabrir o banco) e do
+prompt.
+
+### Validação
+
+Testes: 12 do formato, 5 do prompt, 6 do repositório. Resultado completo dos
+gates no PR.
