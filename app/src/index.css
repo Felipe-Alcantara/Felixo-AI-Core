@@ -4436,3 +4436,23 @@ select {
 .felixo-diff-context .felixo-diff-text {
   color: var(--f-core-white-soft);
 }
+
+/* Cor de moldura escolhida pela pessoa (`data.frameColor`), aplicada no
+   wrapper do nó pelo CanvasView. Só contorno e um halo suave no primeiro
+   filho (o card) — o conteúdo do bloco não é pintado, então o terminal
+   continua legível. Uma notificação não lida, quando existir o realce
+   próprio dela, deve ser declarada DEPOIS deste bloco: a cor da notificação
+   vence a da moldura. */
+.felixo-frame > :first-child {
+  --felixo-frame-color: transparent;
+  box-shadow:
+    0 0 0 2px var(--felixo-frame-color),
+    0 0 14px color-mix(in srgb, var(--felixo-frame-color) 35%, transparent),
+    0 12px 28px rgba(0, 0, 0, 0.22);
+}
+.felixo-frame-sky > :first-child { --felixo-frame-color: #5aa9e6; }
+.felixo-frame-emerald > :first-child { --felixo-frame-color: #4cbf8b; }
+.felixo-frame-amber > :first-child { --felixo-frame-color: #e0a93b; }
+.felixo-frame-rose > :first-child { --felixo-frame-color: #e26d8a; }
+.felixo-frame-violet > :first-child { --felixo-frame-color: #9b7be0; }
+.felixo-frame-zinc > :first-child { --felixo-frame-color: #8a8a86; }

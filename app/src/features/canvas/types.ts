@@ -203,6 +203,18 @@ export type OrderedNodeData = {
   orderIndex?: number
 }
 
+/**
+ * Cor de moldura comum a todos os tipos de bloco (terminal, nota, arquivo,
+ * página, Notion, desenho, grupo). É só o contorno/realce — nunca pinta o
+ * conteúdo. Token, não hex livre, para manter contraste nos temas. Separada
+ * de `NoteNodeData.color`, que é o papel da nota e segue como estava.
+ */
+export type FrameColor = 'sky' | 'emerald' | 'amber' | 'rose' | 'violet' | 'zinc'
+
+export type FramedNodeData = {
+  frameColor?: FrameColor
+}
+
 export type CanvasNodeData = TerminalNodeData &
   NoteNodeData &
   GroupNodeData &
@@ -210,7 +222,8 @@ export type CanvasNodeData = TerminalNodeData &
   WebpageNodeData &
   DrawingNodeData &
   ExcalidrawDrawingNodeData &
-  OrderedNodeData
+  OrderedNodeData &
+  FramedNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */
 export type PersistedCanvasNode = {

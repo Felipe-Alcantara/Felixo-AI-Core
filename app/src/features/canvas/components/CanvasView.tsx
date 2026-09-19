@@ -25,6 +25,8 @@ import '@xyflow/react/dist/style.css'
 import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
+import { NodeColorMenu } from './NodeColorMenu'
+import { frameClassName } from './frame-colors'
 import { DrawingNode } from './DrawingNode'
 import { ExcalidrawDrawingNode } from './ExcalidrawDrawingNode'
 import { GroupNode } from './GroupNode'
@@ -1507,10 +1509,18 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
   // Groups must render before their children so they sit behind them.
   const orderedNodes = useMemo(() => {
-    const groups = renderedNodes.filter((node) => node.type === 'group')
-    const rest = renderedNodes.filter((node) => node.type !== 'group')
+    // A moldura escolhida vira classe no wrapper do nó; o realce mora no CSS.
+    const framed = renderedNodes.map((node) => {
+      const frame = frameClassName(node.data?.frameColor)
+      return frame ? { ...node, className: [node.className, frame].filter(Boolean).join(' ') } : node
+    })
+    const groups = framed.filter((node) => node.type === 'group')
+    const rest = framed.filter((node) => node.type !== 'group')
     return [...groups, ...rest]
   }, [renderedNodes])
+
+  const [colorMenu, setColorMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
+  const closeColorMenu = useCallback(() => setColorMenu(null), [])
 
   // Route each edge through the handles on the facing sides of its two nodes,
   // computed from their current positions. Handles aren't persisted, so without
@@ -2332,6 +2342,11 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
           }}
           onNodesChange={onNodesChange}
           onNodeDragStop={onNodeDragStop}
+          onNodeContextMenu={(event, node) => {
+            event.preventDefault()
+            setColorMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
+          }}
+          onPaneClick={closeColorMenu}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onMove={handleCanvasMove}
@@ -2401,6 +2416,18 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
             />
           )}
         </ReactFlow>
+        {colorMenu && (
+          <NodeColorMenu
+            x={colorMenu.x}
+            y={colorMenu.y}
+            current={nodes.find((node) => node.id === colorMenu.nodeId)?.data?.frameColor}
+            onSelect={(color) => {
+              updateNodeData(colorMenu.nodeId, { frameColor: color })
+              closeColorMenu()
+            }}
+            onClose={closeColorMenu}
+          />
+        )}
         <CanvasStatusBar
           nodeCount={nodes.length}
           edgeCount={edges.length}
