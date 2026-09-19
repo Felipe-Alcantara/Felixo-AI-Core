@@ -5966,3 +5966,63 @@ o esperado pela documentação, mas não o medi aqui. Também não vi o menu na 
 
 Testes: 4 partição, 6 repositório, 4 IPC, 4 handler do agente, 1+4 pedido/CLI,
 11 formato, 7 store. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: entrada de voz (ditado), sem verificação com microfone real
+
+### Contexto
+
+Task "Entrada de voz — ditar prompts pelo microfone em qualquer SO". O passo 1
+da task é escolher o motor **medindo** latência, qualidade em português e
+custo. Não deu para medir: o microfone do notebook do Felipe está com defeito
+e este ambiente não sobe o Electron (`/dev/shm` bloqueado → FATAL), então nem a
+Web Speech API (a "armadilha provável" da task) foi testada.
+
+### Decisão (do Felipe, via pergunta: nuvem / só a base / adiar)
+
+Nuvem + motor plugável: API de transcrição compatível com a da OpenAI. Igual
+nos 3 SOs, sem binários. **Escolha sem medição** — registrada como tal. Não
+cito latência/custo/qualidade porque não medi; whisper local, Web Speech e APIs
+nativas ficam como alternativas não avaliadas.
+
+### O que foi feito
+
+- Processo principal: `speech-settings-store` (config + chave **cifrada** pelo
+  `safeStorage`; sem cifra a chave não é gravada), `speech-transcription`
+  (multipart, limites, erros mapeados, redação de eco de chave), IPC
+  `speech:*`, status/pedido de permissão do microfone.
+- Renderer: gravador (`getUserMedia` + `MediaRecorder`, libera o microfone
+  sempre), máquina de estados, hook, botão com indicador de gravação/cronômetro
+  na barra superior, atalho configurável (padrão Ctrl/Cmd+Shift+M), seção em
+  Configurações (chave, endereço, modelo, idioma, atalho, status do microfone).
+- macOS: `NSMicrophoneUsageDescription` em `package.json` + teste-guarda.
+- **Segurança do texto ditado** (vem de API externa e vai para um shell): duas
+  camadas — `sanitizeDictatedText` (quebra vira espaço; remove controle e
+  caracteres invisíveis/direcionais) e `typeText`, que recusa controle por conta
+  própria. O texto **nunca** é enviado: só digitado na linha de entrada.
+- O endereço da API só aceita https (ou http em loopback) e vem da config no
+  processo principal: o renderer não decide para onde a chave e o áudio vão.
+- Erro meu pego pelo ambiente: o primeiro comando com caracteres de controle/
+  bidi literais foi barrado pela ferramenta; refiz montando-os por código
+  (`String.fromCharCode`) — o fonte e os testes não carregam invisíveis.
+
+### NÃO verificado (o essencial)
+
+**Nada foi ouvido com microfone real, em nenhum SO.** Critério de aceite
+("apertar o atalho, falar uma frase em português e ver o texto no terminal",
+nos três SOs) **não conferido**. Cobertura: lógica pura, gravador com dublês,
+cliente de transcrição com `fetch` falso, IPC com dublês, `typeText` contra o
+harness real do store. Não foi vista a UI (botão, popover de erro, seção de
+configurações), nem o comportamento real de `MediaRecorder`/permissão no
+Electron, nem o diálogo de permissão do macOS/Windows.
+
+### Pendências (task nova)
+
+Validar com microfone real nos 3 SOs; medir latência e qualidade em português
+com a API escolhida; comparar com whisper local; entitlement de áudio se o macOS
+passar a ser assinado; timeout/limite reais de gravação em uso.
+
+### Validação
+
+Testes: 18 do processo principal (config, transcrição, IPC), 1 de empacotamento,
+19 do ditado (sanitização, erros, estados, atalho), 7 do gravador, 3 do
+`typeText`. Resultado completo dos gates no PR.

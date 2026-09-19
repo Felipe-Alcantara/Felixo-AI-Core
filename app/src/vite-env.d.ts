@@ -776,6 +776,28 @@ declare global {
         save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>
         delete: (modelId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      speech?: {
+        getConfig: () => Promise<
+          CliInvokeResult & {
+            config?: { baseUrl: string; model: string; language: string; keyConfigured: boolean }
+          }
+        >
+        saveConfig: (config: { baseUrl: string; model: string; language: string }) => Promise<
+          CliInvokeResult & {
+            config?: { baseUrl: string; model: string; language: string; keyConfigured: boolean }
+          }
+        >
+        setKey: (key: string) => Promise<CliInvokeResult>
+        clearKey: () => Promise<CliInvokeResult>
+        transcribe: (params: {
+          audio: Uint8Array
+          mimeType: string
+        }) => Promise<CliInvokeResult & { text?: string }>
+        getMicrophoneStatus: () => Promise<
+          CliInvokeResult & { status?: string; platform?: string }
+        >
+        requestMicrophone: () => Promise<CliInvokeResult & { status?: string; platform?: string }>
+      }
       webviewProfiles?: {
         list: () => Promise<CliInvokeResult & { profiles?: Record<string, unknown>[] }>
         save: (

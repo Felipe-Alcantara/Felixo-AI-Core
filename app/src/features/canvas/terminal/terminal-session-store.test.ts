@@ -458,6 +458,43 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(result).toEqual({ delivered: true })
   }, 10000)
 
+  it('typeText digita o texto ditado SEM Enter e SEM arquivo de contexto', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    const antes = harness.writes.length
+
+    const result = await harness.store.typeText(SESSION_ID, 'listar os arquivos do projeto')
+
+    expect(result).toEqual({ delivered: true })
+    const novos = harness.writes.slice(antes)
+    expect(novos).toEqual(['listar os arquivos do projeto'])
+    // Nada de Enter, e o texto curto não vira "arquivo de contexto".
+    expect(novos.join('')).not.toMatch(/[\r\n]/)
+    expect(contextWrites(novos)).toEqual([])
+  }, 10000)
+
+  it('typeText RECUSA controle (Enter/ESC) mesmo se o chamador esquecer de limpar', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await wait(400)
+    const antes = harness.writes.length
+
+    for (const perigoso of ['rm -rf /\r', 'ls\n', 'x\x1b[2Jy', 'a\x00b']) {
+      const result = await harness.store.typeText(SESSION_ID, perigoso)
+      expect(result.delivered).toBe(false)
+    }
+    expect(harness.writes.length).toBe(antes)
+  }, 10000)
+
+  it('typeText sem sessão ou com texto vazio não entrega nada', async () => {
+    harness = createHarness(CONTEXT, 'codex', false)
+    expect(await harness.store.typeText('nao-existe', 'oi')).toEqual({ delivered: false, reason: 'no-session' })
+    expect(await harness.store.typeText(SESSION_ID, '')).toEqual({ delivered: false, reason: 'no-session' })
+  })
+
   it('guarda a identidade do catálogo ao lado do payload enviado', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)

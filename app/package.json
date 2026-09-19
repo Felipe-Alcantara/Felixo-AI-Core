@@ -150,6 +150,9 @@
         "zip"
       ],
       "category": "public.app-category.developer-tools",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "O Felixo AI Core usa o microfone para o ditado por voz: você fala e o texto aparece no terminal, sem ser enviado sozinho."
+      },
       "artifactName": "Felixo-AI-Core-${version}-${os}-${arch}.${ext}"
     },
     "win": {

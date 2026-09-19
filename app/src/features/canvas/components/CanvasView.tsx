@@ -26,6 +26,10 @@ import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
+import { DictationButton } from './DictationButton'
+import { useDictation } from '../hooks/useDictation'
+import { useDictationShortcut } from '../hooks/useDictationShortcut'
+import { formatShortcut, matchesShortcut } from '../services/dictation'
 import { buildPresetInstruction } from '../services/agent-preset-prompt'
 import { NodeColorMenu } from './NodeColorMenu'
 import { frameClassName } from './frame-colors'
@@ -1325,6 +1329,34 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     [expandedTerminalId, store],
   )
 
+  // Ditado por voz: o texto vai para a linha de entrada do terminal aberto
+  // (expandido), SEM Enter. Sem terminal aberto, copia — mesmo recurso que os
+  // prompts do catálogo já usam.
+  const dictation = useDictation({
+    deliver: async (text) => {
+      if (expandedTerminalId) {
+        const result = await store.typeText(expandedTerminalId, text)
+        return result.delivered ? null : 'Não consegui digitar no terminal. O texto foi copiado.'
+      }
+      await navigator.clipboard?.writeText(text)
+      return 'Nenhum terminal aberto: copiei o texto ditado. Cole onde quiser.'
+    },
+  })
+  const { shortcut: dictationShortcut } = useDictationShortcut()
+  const dictationToggle = dictation.toggle
+  useEffect(() => {
+    const platform = window.felixo?.platform ?? 'linux'
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!matchesShortcut(event, dictationShortcut, platform)) return
+      event.preventDefault()
+      event.stopPropagation()
+      dictationToggle()
+    }
+    // Captura: vale mesmo com o foco dentro do terminal (o xterm consome teclas).
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [dictationShortcut, dictationToggle])
+
   const addNodeRef = useRef<(sourceId: string, url: string) => void>(() => {})
 
   // Inject render-time concerns: the header drag handle (so only the header
@@ -2183,6 +2215,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         activeToolLabel={activeTool ? TOOL_LABELS[activeTool] : null}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => onSidebarCollapsedChange(!sidebarCollapsed)}
+        trailing={
+          <DictationButton
+            dictation={dictation}
+            shortcutLabel={formatShortcut(dictationShortcut, window.felixo?.platform ?? 'linux')}
+          />
+        }
       />
       {layoutWarning && (
         <div

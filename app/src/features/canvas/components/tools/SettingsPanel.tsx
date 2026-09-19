@@ -10,6 +10,7 @@ import { DEFAULT_QUALITY_STANDARD_PROMPT } from '../../services/quality-standard
 import { AutoStartSection } from '../../../shared/autostart/AutoStartSection'
 import { GraphicsRecoverySection } from '../../../shared/graphics/GraphicsRecoverySection'
 import { PerformanceModeSection } from '../../../shared/performance/PerformanceModeSection'
+import { DictationSettingsSection } from './DictationSettingsSection'
 import { SystemDesignSettingsSection } from '../../../shared/system-design/SystemDesignSettingsSection'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { useAppTheme } from '../../../shared/theme/theme-context'
@@ -70,6 +71,10 @@ export function SettingsPanel({
       <div className="my-3 border-t border-white/10" />
 
       <AutoStartSection />
+
+      <div className="my-3 border-t border-white/10" />
+
+      <DictationSettingsSection />
 
       <div className="my-3 border-t border-white/10" />
 
