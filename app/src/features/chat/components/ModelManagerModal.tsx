@@ -28,6 +28,8 @@ import {
   type OfficialCliAccountSession,
   type OfficialCliAccountStatus,
 } from '../services/official-cli-account'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type ModelManagerModalProps = {
   isOpen: boolean
@@ -82,6 +84,7 @@ export function ModelManagerModal({
   onClearModels,
   onRemoveModel,
 }: ModelManagerModalProps) {
+  const dialog = useResizableDialog('model-manager')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -492,7 +495,8 @@ export function ModelManagerModal({
       onClick={closeManager}
     >
       <section
-        className="flex max-h-[85vh] w-full max-w-[480px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[85vh] w-full max-w-[480px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -869,6 +873,7 @@ export function ModelManagerModal({
             )}
           </form>
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

@@ -21,6 +21,8 @@ import type {
   AgentUsageMutationResult,
   AgentUsageProviderGroup,
 } from '../../shared/agent-usage/agent-usage'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type AgentUsageLimitsModalProps = {
   isOpen: boolean
@@ -38,6 +40,7 @@ export function AgentUsageLimitsModal({
   isOpen,
   onClose,
 }: AgentUsageLimitsModalProps) {
+  const dialog = useResizableDialog('agent-usage-limits')
   const [dashboard, setDashboard] = useState<AgentUsageDashboard>({ ok: true })
   const [loading, setLoading] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -206,7 +209,8 @@ export function AgentUsageLimitsModal({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[92vh] w-full max-w-[1040px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[92vh] w-full max-w-[1040px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-start justify-between border-b border-white/[0.08] px-5 py-4">
@@ -358,6 +362,7 @@ export function AgentUsageLimitsModal({
             </form>
           </div>
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

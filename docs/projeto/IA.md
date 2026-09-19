@@ -3206,3 +3206,14 @@ auditoria determinística de acessibilidade; axe-core continua fora do workspace
 
 Validação: `npm test` 1.336 pass em 52 suítes; frontend 958 pass/1 skip;
 native 5/5; typecheck, lint, build, testes focados e `test:canvas-smoke` verdes.
+
+
+## 2026-09-19 — Modais redimensionáveis nos dois eixos
+
+12 modais ganham alças (direita, inferior, canto) via `useResizableDialog` +
+`DialogResizeHandles`; regra pura em `features/shared/dialog/dialog-sizing.ts`
+(10 testes: invariante de janela em várias resoluções, `2*dx`, persistência,
+lixo salvo, armazenamento que lança, engolir o clique de soltar). Risco tratado: o
+fundo fecha o modal no `click`, e soltar o mouse fora da moldura após arrastar o
+dispara. Não verificado numa janela real (nada foi visto rodando).
+Validação: tsc, eslint e vitest (1089 pass) verdes.

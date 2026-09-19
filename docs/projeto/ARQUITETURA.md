@@ -854,3 +854,14 @@ produção e tem cobertura própria de unidade.
   atualização do checkout.
 - [`GUIA-USUARIO.md`](../guias/GUIA-USUARIO.md): instalação e operação do
   canvas.
+
+
+## Layout: modais redimensionáveis
+
+Os 12 modais (exceto o `AgentQuestionDialog`, bloqueante) redimensionam nos dois
+eixos com `useResizableDialog` e `DialogResizeHandles` (`features/shared/dialog/`).
+A regra vive em `dialog-sizing.ts` (puro): clamp em [320x240, janela - 16 px],
+crescimento `2*dx` por o modal ser centralizado, persistencia por modal e
+`swallowNextClick`, que impede o clique gerado ao soltar o mouse fora da moldura
+de fechar o modal pelo fundo. O hook devolve `frameProps` (ref por funcao + estilo)
+para espalhar na moldura; um objeto com `ref` nomeado disparava `react-hooks/refs`.

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Save, X } from 'lucide-react'
 import type { Model, ModelAvailabilityStatus, OrchestratorSettings } from '../types'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type OrchestratorSettingsModalProps = {
   isOpen: boolean
@@ -18,6 +20,7 @@ export function OrchestratorSettingsModal({
   onClose,
   onSave,
 }: OrchestratorSettingsModalProps) {
+  const dialog = useResizableDialog('orchestrator-settings')
   const [draft, setDraft] = useState(settings)
   const spawnableModels = useMemo(
     () => models.filter((model) => model.cliType !== 'unknown'),
@@ -70,7 +73,8 @@ export function OrchestratorSettingsModal({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[82vh] w-full max-w-[640px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[82vh] w-full max-w-[640px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -162,6 +166,7 @@ export function OrchestratorSettingsModal({
             </button>
           </div>
         </form>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )
