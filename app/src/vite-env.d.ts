@@ -422,6 +422,8 @@ declare global {
           fallbackCommand?: string
           /** Keeps the terminal interactive after the command exits (run-a-file). */
           keepShellOpen?: boolean
+          /** Claude Code: mantém a saída no buffer normal (rolagem), sem o alternate screen. */
+          classicScreen?: boolean
           accountId?: string
           /** Provider of the CLI; validated against the account in the main process. */
           providerId?: string

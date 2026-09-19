@@ -3217,3 +3217,24 @@ lixo salvo, armazenamento que lança, engolir o clique de soltar). Risco tratado
 fundo fecha o modal no `click`, e soltar o mouse fora da moldura após arrastar o
 dispara. Não verificado numa janela real (nada foi visto rodando).
 Validação: tsc, eslint e vitest (1089 pass) verdes.
+
+## 2026-09-19 — Rolagem no terminal do Claude Code (alternate screen)
+
+Causa (já conhecida): o Claude Code entra no alternate screen (`ESC[?1049h`) e liga rastreio
+de mouse no boot; o xterm.js não tem scrollback nesse buffer. **Confirmado no binário da CLI
+2.1.278** (leitura das strings): `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` "forces the classic
+renderer any time"; existe também `/tui fullscreen` / `CLAUDE_CODE_NO_FLICKER=1` para o caminho
+inverso (a própria CLI desliga o fullscreen sozinha após falhas de boot).
+
+Medição do boot num PTY (30×100, 10 s, sem enviar prompt): sem a variável, `?1049h` = sim e
+rastreio de mouse (`?1000h/1002h/1003h`) = sim; com a variável, ambos = não.
+
+Implementação: opção global "Rolagem no terminal do Claude Code" (Configurações, **desligada por
+padrão**, `felixo-ai-core.claude-terminal-scroll`). O store manda só `classicScreen: boolean` no
+`pty:spawn`; o processo principal converte em `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` **apenas**
+para o executável `claude` (nunca ambiente arbitrário vindo do renderer). Vale para terminais novos.
+
+NÃO verificado: `scrollHeight` vs `clientHeight` do xterm com a variável (falta janela real),
+efeito em menus, seleção com o mouse (`terminal-mouse-selection.ts`), cópia e flicker — por isso
+o padrão continua desligado. O teste que detecta a volta do `?1049h` no boot não entrou: exige o
+`claude` instalado e autenticado, que o CI não tem.

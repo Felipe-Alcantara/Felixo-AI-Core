@@ -57,6 +57,9 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         reuseExisting: Boolean(params.reuseExisting),
         fallbackCommand: params.fallbackCommand,
         keepShellOpen: Boolean(params.keepShellOpen),
+        // Só um booleano atravessa: o processo principal decide qual variável
+        // isso vira, e só para o Claude Code (nunca ambiente arbitrário).
+        classicScreen: params.classicScreen === true,
         // Conta escolhida no configurador do agente; ausente = login do
         // sistema, que é o comportamento de antes desta feature.
         accountId: typeof params.accountId === 'string' ? params.accountId : undefined,

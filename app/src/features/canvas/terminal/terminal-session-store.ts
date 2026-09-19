@@ -75,6 +75,7 @@ import {
   readInputLineState,
 } from './terminal-screen-state'
 import type { SendTextInput } from './terminal-session-api'
+import { loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
 import {
   TERMINAL_REPLAY_BUFFER_CHARS,
   terminalScrollbackForSessionCount,
@@ -842,6 +843,7 @@ export class TerminalSessionStore {
         reuseExisting: true,
         fallbackCommand: options.fallbackCommand,
         keepShellOpen: options.keepShellOpen,
+        classicScreen: shouldUseClassicScreen(options.command, loadClaudeTerminalScroll()),
         accountId: options.accountId,
         providerId: options.providerId,
       })
