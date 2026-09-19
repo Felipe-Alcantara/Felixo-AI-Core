@@ -139,6 +139,11 @@ export type WebpageNodeData = {
   url?: string
   /** Human label shown on the node header (searchable). */
   label?: string
+  /**
+   * Perfil do navegador interno (uma partição por perfil). Ausente = o perfil
+   * Padrão, que é a partição que já existia — blocos antigos não mudam.
+   */
+  profileId?: string
 }
 
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'

@@ -37,6 +37,8 @@ import { useAppVersion } from '../../updates/useAppVersion'
 import type { UpdatePresentation } from '../../updates/update-presentation'
 import { deveMostrarRodapeDeStatus } from './toolbar-status'
 import { normalizeUrlInput } from '../services/url-utils'
+import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
+import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
@@ -87,7 +89,7 @@ type CanvasToolbarProps = {
   /** Abre o seletor nativo e cria um bloco apontando para o arquivo escolhido. */
   onOpenFile: () => void
   onAddGroup: (name?: string) => void
-  onAddWebpage: (url: string, name?: string) => void
+  onAddWebpage: (url: string, name?: string, profileId?: string) => void
   canvasMode: 'select' | 'pan'
   onToggleMode: () => void
   onFitView: () => void
@@ -696,8 +698,11 @@ function NamedCreateButton({
 type UrlCreateButtonProps = {
   icon: ReactNode
   buttonLabel: string
-  /** Creates the block; `name` is undefined when the field is left empty. */
-  onCreate: (url: string, name?: string) => void
+  /**
+   * Creates the block; `name` is undefined when the field is left empty and
+   * `profileId` when the Padrão profile is chosen.
+   */
+  onCreate: (url: string, name?: string, profileId?: string) => void
 }
 
 /**
@@ -710,6 +715,9 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
   const [urlError, setUrlError] = useState<string | undefined>()
+  // Perfil do navegador interno do bloco novo ('' = Padrão).
+  const [profileId, setProfileId] = useState('')
+  const { profiles } = useWebviewProfiles()
   const popoverId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -752,7 +760,7 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
       window.requestAnimationFrame(() => urlInputRef.current?.focus())
       return
     }
-    onCreate(normalized, name.trim() || undefined)
+    onCreate(normalized, name.trim() || undefined, profileId || undefined)
     setUrl('')
     setName('')
     setUrlError(undefined)
@@ -834,6 +842,20 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
             aria-label="Nome do bloco (opcional)"
             className="mb-2 felixo-field w-full px-2 py-1.5 text-sm outline-none"
           />
+          {profiles.length > 0 && (
+            <div className="mb-2">
+              <FelixoSelect
+                value={profileId}
+                onChange={setProfileId}
+                options={[
+                  { value: '', label: 'Perfil: Padrão' },
+                  ...profiles.map((profile) => ({ value: profile.id, label: `Perfil: ${profile.name}` })),
+                ]}
+                menuLabel="Perfil do navegador"
+                aria-label="Perfil do navegador"
+              />
+            </div>
+          )}
           <button
             type="button"
             onClick={create}

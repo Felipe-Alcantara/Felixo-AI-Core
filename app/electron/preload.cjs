@@ -253,6 +253,11 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (model) => ipcRenderer.invoke('models:save', model),
     delete: (modelId) => ipcRenderer.invoke('models:delete', modelId),
   },
+  webviewProfiles: {
+    list: () => ipcRenderer.invoke('webview-profiles:list'),
+    save: (profile) => ipcRenderer.invoke('webview-profiles:save', profile),
+    delete: (profileId) => ipcRenderer.invoke('webview-profiles:delete', profileId),
+  },
   agentPresets: {
     list: () => ipcRenderer.invoke('agent-presets:list'),
     save: (preset) => ipcRenderer.invoke('agent-presets:save', preset),

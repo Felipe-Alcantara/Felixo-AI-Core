@@ -74,10 +74,30 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
           continue
         }
 
-        webContents.send(BROWSER_OPEN_CHANNEL, { requestId: pedido.id, url })
+        // Perfil pedido por NOME. Perfil que não existe falha explicitamente:
+        // cair no Padrão abriria a página numa sessão logada que o agente não
+        // escolheu — o oposto de isolar.
+        let profileId
+        if (pedido.perfil) {
+          profileId = resolveProfileId(pedido.perfil, dependencies.findProfileByName)
+          if (!profileId) {
+            pedidos.resolver(pedido.id, {
+              aceito: false,
+              resultado: {
+                ok: false,
+                modo: 'embutido',
+                url,
+                message: `O perfil "${pedido.perfil}" nao existe no navegador interno.`,
+              },
+            })
+            continue
+          }
+        }
+
+        webContents.send(BROWSER_OPEN_CHANNEL, { requestId: pedido.id, url, ...(profileId ? { profileId } : {}) })
         pedidos.resolver(pedido.id, {
           aceito: true,
-          resultado: { ok: true, modo: 'embutido', url },
+          resultado: { ok: true, modo: 'embutido', url, ...(profileId ? { perfil: pedido.perfil, profileId } : {}) },
         })
         continue
       }
@@ -110,6 +130,14 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     processPending,
     pararDeObservarPedidos: () => watcher?.close(),
   }
+}
+
+const DEFAULT_PROFILE_NAMES = new Set(['padrao', 'padrão', 'default'])
+
+/** Nome de perfil → id. "Padrão" é o perfil que já existia; os outros vêm do banco. */
+function resolveProfileId(name, findProfileByName) {
+  if (DEFAULT_PROFILE_NAMES.has(String(name).trim().toLowerCase())) return 'default'
+  return findProfileByName?.(name)?.id ?? null
 }
 
 /** Returns webContents only after the main document has listeners installed. */

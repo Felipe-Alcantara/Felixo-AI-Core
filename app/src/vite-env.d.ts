@@ -641,7 +641,7 @@ declare global {
           hiddenBuiltinIds?: string[]
         }) => Promise<CliInvokeResult>
         onAgentBrowserOpen: (
-          callback: (data: { requestId: string; url: string }) => void,
+          callback: (data: { requestId: string; url: string; profileId?: string }) => void,
         ) => () => void
         listWriteRequests: () => Promise<
           CliInvokeResult & { requests?: CanvasWriteAgentRequest[] }
@@ -775,6 +775,13 @@ declare global {
         list: () => Promise<CliInvokeResult & { models?: Model[] }>
         save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>
         delete: (modelId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      webviewProfiles?: {
+        list: () => Promise<CliInvokeResult & { profiles?: Record<string, unknown>[] }>
+        save: (
+          profile: Record<string, unknown>,
+        ) => Promise<CliInvokeResult & { profile?: Record<string, unknown> }>
+        delete: (profileId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
       agentPresets?: {
         list: () => Promise<CliInvokeResult & { presets?: Record<string, unknown>[] }>

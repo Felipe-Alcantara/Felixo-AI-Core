@@ -71,7 +71,14 @@ function interpretarArgumentos(argumentos) {
 
   for (const item of argumentos) {
     if (item.startsWith('--')) {
-      opcoes[item.slice(2)] = true
+      // `--chave=valor` guarda o valor (texto); `--chave` sozinha é uma opção
+      // ligada. Só `--profile=Nome` usa o valor; o resto continua booleano.
+      const igual = item.indexOf('=')
+      if (igual > 2) {
+        opcoes[item.slice(2, igual)] = item.slice(igual + 1)
+      } else {
+        opcoes[item.slice(2)] = true
+      }
     }
   }
 
@@ -158,9 +165,14 @@ async function executar(argumentos, dependencias = {}) {
       }
 
       try {
+        const perfil = opcoes.profile ?? opcoes.perfil
+        if (perfil === true) {
+          return { saida: '', erro: 'Informe o perfil com --profile=<nome> (sem espaço antes do nome).', codigo: 2 }
+        }
         const pedido = criarPedidos().registrar('abrir-pagina', {
           url: argumento,
           modo: opcoes.embedded === true || opcoes.embutido === true ? 'embutido' : 'externo',
+          ...(typeof perfil === 'string' ? { perfil } : {}),
           origem: diretorioAtual(),
         })
 
@@ -173,6 +185,7 @@ async function executar(argumentos, dependencias = {}) {
             `Pedido registrado: ${pedido.id}`,
             `URL: ${pedido.url}`,
             `Destino: ${pedido.modo}`,
+            ...(pedido.perfil ? [`Perfil: ${pedido.perfil}`] : []),
             '',
             'O app vai atender o pedido pela fila compartilhada com o Fetch All.',
             `Para acompanhar: felixo browser status ${pedido.id}`,
@@ -547,6 +560,7 @@ function descreverPedido(pedido) {
     pedido.acao ? `  ação: ${pedido.acao}` : null,
     pedido.acao === 'abrir-pagina' ? `  url: ${pedido.url}` : null,
     pedido.acao === 'abrir-pagina' ? `  destino: ${pedido.modo}` : null,
+    pedido.acao === 'abrir-pagina' && pedido.perfil ? `  perfil: ${pedido.perfil}` : null,
     `  estado: ${pedido.estado} (${estados[pedido.estado] ?? 'desconhecido'})`,
     `  pedido em: ${pedido.pedidoEm}`,
     pedido.resolvidoEm ? `  resolvido em: ${pedido.resolvidoEm}` : null,

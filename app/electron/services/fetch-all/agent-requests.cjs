@@ -37,6 +37,9 @@ const OPCOES_MAX = 4
 const OPCAO_LABEL_MAX = 120
 const OPCAO_DESCRICAO_MAX = 300
 
+/** Nome de perfil do navegador interno citado num pedido (igual ao limite do repositório). */
+const PERFIL_NOME_MAX = 40
+
 /** Tamanho máximo do conteúdo que um pedido de escrita pode carregar. */
 const CONTEUDO_ESCRITA_MAX = 20000
 
@@ -85,7 +88,17 @@ function normalizarPedido(acao, opcoes = {}) {
       )
     }
 
-    return { acao: nome, comCommit: false, url, modo }
+    // Perfil do navegador interno (por NOME; o app resolve). Só faz sentido no
+    // bloco embutido — o navegador do sistema tem os perfis dele.
+    const perfil = typeof opcoes?.perfil === 'string' ? opcoes.perfil.trim() : ''
+    if (perfil && modo !== 'embutido') {
+      throw new Error('O perfil so vale com --embedded (bloco Pagina Web).')
+    }
+    if (perfil.length > PERFIL_NOME_MAX) {
+      throw new Error(`Nome de perfil muito grande (maximo ${PERFIL_NOME_MAX} caracteres).`)
+    }
+
+    return { acao: nome, comCommit: false, url, modo, ...(perfil ? { perfil } : {}) }
   }
 
   // Leitura: nada aqui decide SE o elemento existe (isso é responsabilidade
