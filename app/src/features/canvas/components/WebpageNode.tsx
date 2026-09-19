@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   Position,
@@ -208,8 +209,8 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     <div className="felixo-canvas-card felixo-canvas-card-web flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-graphite)] text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
-        minWidth={360}
-        minHeight={280}
+        minWidth={NODE_MIN_SIZE.webpage.width}
+        minHeight={NODE_MIN_SIZE.webpage.height}
         lineClassName="!border-white/30"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
         onResizeStart={() => setIsResizing(true)}

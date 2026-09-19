@@ -6126,3 +6126,52 @@ Notion; conferir tudo numa janela real.
 ### Validação
 
 12 testes novos em `panel-sizing.test.ts`. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: layout, gaveta/inspector/Tarefas Notion (fatia 2) — duas decisões de não mudar
+
+### Contexto
+
+Task "Layout — gaveta do terminal e inspector: redimensionar e revisar o mínimo do
+Tarefas Notion". Três itens, com riscos bem diferentes; a largura é a parte que já
+gerou o loop de 12/09.
+
+### Decisões (com o motivo; a pessoa pode revertê-las)
+
+- **Gaveta: sem eixo vertical.** É uma coluna de altura total (`h-full` numa linha
+  flex), não uma janela — não há altura a redimensionar sem transformá-la numa
+  janela flutuante (outra feature). Mantém largura arrastável, recolher e maximizar.
+- **Inspector: continua com 288 fixo.** `INSPECTOR_WIDTH` é constante lida pelo
+  coordenador, pelas invariantes e pelo painel; torná-lo variável o faria um terceiro
+  disputante em `splitHorizontalSpace` — o acoplamento do loop de 12/09 — para uma
+  superfície que já devolve espaço ao recolher (puck, reserva 0). Ganho não paga o
+  risco. **Nenhuma linha do caminho da largura foi tocada.**
+- **Tarefas Notion: mínimo 760×460 → 480×320.** O bloco rola por dentro
+  (`overflow-auto`) e o painel usa colunas flexíveis (`min-w-0`).
+
+### O que foi feito (código)
+
+- `NODE_MIN_SIZE` (`node-geometry.ts`) como fonte ÚNICA dos mínimos dos 8 blocos;
+  os `NodeResizer` de cada componente e `getDefaultNodeSize` leem dela (antes o
+  número estava copiado em cada componente).
+- **Bug real achado pelo teste de invariante:** a NOTA nascia com 158×115 em janela
+  estreita, abaixo do próprio mínimo (180×120) — e o Tarefas Notion com 749 contra
+  760 numa janela de 800. `getDefaultNodeSize` agora aplica o piso. O teste
+  falhou antes do piso (`note @320: 158 < 180`) e passa depois.
+- Teste: em 10 larguras de janela (320–3840) × 8 tipos, nenhum bloco nasce menor
+  que o mínimo; o mínimo cabe no padrão de tela grande; em tela grande o tamanho
+  padrão é o de sempre.
+
+### NÃO verificado
+
+- Nada foi visto numa janela real (`felixo devtools connect` travado; sem Electron
+  aqui). Não vi o Tarefas Notion em 480×320 — se a tabela fica legível ali é
+  inferência do código (`min-w-0`, `overflow-auto`), não observação.
+- O smoke de viewport não exercita o Tarefas Notion; a cobertura é o teste de
+  invariante, não uma janela.
+- "Tarefas Notion utilizável em 800 px" não foi conferido visualmente.
+- As invariantes de largura do coordenador (`layout-invariants.ts`) já existiam e
+  não foram alteradas — como nenhuma largura mudou, não escrevi teste novo delas.
+
+### Validação
+
+4 testes novos em `node-geometry.test.ts`. Resultado completo dos gates no PR.

@@ -19,6 +19,27 @@ export const DEFAULT_SIZE: Record<
 }
 
 /**
+ * Menor tamanho a que cada bloco pode ser redimensionado — a fonte ÚNICA: os
+ * `NodeResizer` de cada componente leem daqui, e `getDefaultNodeSize` também,
+ * para um bloco nunca nascer menor que o próprio mínimo (havia um: a nota, e o
+ * Tarefas Notion com 749 contra um mínimo de 760, numa janela de 800 px).
+ *
+ * O Tarefas Notion tinha 760×460 — em uma janela de 800 px cobria quase tudo. O
+ * conteúdo do bloco rola por dentro (`overflow-auto`) e o painel usa colunas
+ * flexíveis (`min-w-0`), então 480×320 continua utilizável.
+ */
+export const NODE_MIN_SIZE: Record<CanvasNodeType, { width: number; height: number }> = {
+  group: { width: 240, height: 180 },
+  file: { width: 220, height: 140 },
+  terminal: { width: 200, height: 120 },
+  note: { width: 180, height: 120 },
+  webpage: { width: 360, height: 280 },
+  notionTasks: { width: 480, height: 320 },
+  drawing: { width: 220, height: 180 },
+  excalidrawDrawing: { width: 360, height: 280 },
+}
+
+/**
  * Tamanho com que um bloco nasce, ajustado à tela.
  *
  * Os valores de `DEFAULT_SIZE` foram escritos para monitor grande: um terminal
@@ -29,7 +50,13 @@ export function getDefaultNodeSize(
   type: CanvasNodeType,
   viewportWidth: number,
 ): { width: number; height: number } {
-  return scaleNodeSize(DEFAULT_SIZE[type], viewportWidth)
+  const scaled = scaleNodeSize(DEFAULT_SIZE[type], viewportWidth)
+  const minimum = NODE_MIN_SIZE[type]
+  // O piso só age onde a escala encolheria o bloco abaixo do que ele aceita ser.
+  return {
+    width: Math.max(scaled.width, minimum.width),
+    height: Math.max(scaled.height, minimum.height),
+  }
 }
 
 const NODE_PLACEMENT_GAP = 32
