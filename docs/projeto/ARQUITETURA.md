@@ -301,6 +301,44 @@ processo principal o resolve (Padrao/default sem consultar o banco) e um nome
 inexistente FALHA em vez de cair no Padrao. `interpretarArgumentos` passou a
 aceitar `--chave=valor`; as flags booleanas continuam como eram.
 
+## Ditado por voz
+
+Decisao tomada sem medicao: a task pedia escolher o motor medindo latencia,
+qualidade em portugues e custo, mas nao havia microfone funcional e o ambiente
+nao sobe o Electron (`/dev/shm` bloqueado) — entao nem a Web Speech API foi
+testada. Escolhido (pelo Felipe, entre nuvem, so-base e adiar): transcricao na
+nuvem por uma API compativel com a da OpenAI (`POST {baseUrl}/audio/transcriptions`),
+igual nos 3 SOs e sem binarios, com o motor atras de uma fronteira estreita
+(`speech-transcription.cjs`) para trocar por whisper local depois.
+
+Fluxo: o renderer grava (`voice-recorder.ts`, getUserMedia + MediaRecorder) e
+manda o audio ao processo principal (`speech:transcribe`), que le a chave
+cifrada e chama a API; so o texto volta. A chave fica em arquivo proprio,
+cifrada pelo `safeStorage` (`speech-settings-store.cjs`), e o renderer so sabe
+SE ela existe. Sem cifra disponivel (Linux sem keyring) a chave NAO e gravada
+em texto puro. O endereco so aceita https (ou http em loopback), e vem da
+config guardada no processo principal — o renderer nao escolhe para onde a
+chave vai. Mensagens de erro da API passam pela redacao (elas costumam ecoar
+parte da chave).
+
+O texto transcrito vem de uma API externa e vai para um shell/agente, entao:
+`sanitizeDictatedText` troca quebras por espaco e remove todo controle
+(inclusive ESC/CSI) e o que disfarca texto (marcas de direcao, largura zero),
+e `TerminalSessionStore.typeText` RECUSA qualquer controle por conta propria —
+duas camadas para que um chamador futuro nao consiga enviar/executar sem
+querer. `typeText` digita como o teclado (sem arquivo de contexto e sem Enter);
+o alvo e o terminal aberto (`expandedTerminalId`) e, sem terminal, o texto e
+copiado — mesmo recurso dos prompts do catalogo.
+
+Permissao: `speech:microphone-status` (macOS/Windows respondem; Linux devolve
+`unknown`) e `speech:request-microphone` (so o macOS pede pelo processo
+principal). Negado vira mensagem com o caminho das configuracoes de cada SO.
+No macOS empacotado o `NSMicrophoneUsageDescription` e obrigatorio e agora
+esta em `package.json` (`mac.extendInfo`, com teste-guarda). Ainda falta, SE as
+builds do macOS passarem a ser assinadas (hoje nao sao, ver release.yml), o
+entitlement `com.apple.security.device.audio-input` com hardened runtime — nao
+foi adicionado porque hoje seria letra morta e a pipeline nao e testavel aqui.
+
 ## Cor de moldura dos blocos do canvas
 
 Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um

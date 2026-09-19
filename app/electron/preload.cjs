@@ -253,6 +253,15 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (model) => ipcRenderer.invoke('models:save', model),
     delete: (modelId) => ipcRenderer.invoke('models:delete', modelId),
   },
+  speech: {
+    getConfig: () => ipcRenderer.invoke('speech:get-config'),
+    saveConfig: (config) => ipcRenderer.invoke('speech:save-config', config),
+    setKey: (key) => ipcRenderer.invoke('speech:set-key', key),
+    clearKey: () => ipcRenderer.invoke('speech:clear-key'),
+    transcribe: (params) => ipcRenderer.invoke('speech:transcribe', params),
+    getMicrophoneStatus: () => ipcRenderer.invoke('speech:microphone-status'),
+    requestMicrophone: () => ipcRenderer.invoke('speech:request-microphone'),
+  },
   webviewProfiles: {
     list: () => ipcRenderer.invoke('webview-profiles:list'),
     save: (profile) => ipcRenderer.invoke('webview-profiles:save', profile),

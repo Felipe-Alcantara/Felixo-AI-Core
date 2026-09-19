@@ -92,6 +92,8 @@ export type TerminalSessionStoreApi = {
     text: string,
     options?: SendTextInput,
   ) => Promise<SendTextResult>
+  /** Digita texto puro no PTY, sem Enter e sem arquivo de contexto (ditado por voz). */
+  typeText: (id: string, text: string) => Promise<SendTextResult>
   copy: (id: string) => Promise<string>
   getTranscript: (id: string) => TerminalTranscript
   getShellHistory: (id: string) => TerminalTranscript

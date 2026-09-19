@@ -54,6 +54,9 @@ const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
 const {
+  registerSpeechIpcHandlers,
+} = require('./services/speech/speech-ipc-handlers.cjs')
+const {
   registerWebviewProfilesIpcHandlers,
 } = require('./services/webview-profiles-ipc-handlers.cjs')
 const {
@@ -496,6 +499,7 @@ app.whenReady().then(async () => {
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
   registerAgentPresetsIpcHandlers({ database: storageDatabase })
+  registerSpeechIpcHandlers({ userData: appPaths.userData })
   registerAgentModelsIpcHandlers(appPaths)
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
   registerChatHistoryIpcHandlers({ database: storageDatabase })

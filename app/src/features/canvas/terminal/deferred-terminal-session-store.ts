@@ -121,6 +121,10 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
     return this.load().then((store) => store.sendText(id, text, options))
   }
 
+  typeText(id: string, text: string): Promise<SendTextResult> {
+    return this.load().then((store) => store.typeText(id, text))
+  }
+
   copy(id: string): Promise<string> {
     return this.load().then((store) => store.copy(id))
   }
