@@ -33,8 +33,9 @@ import type {
   NotionSchemaProperty,
   NotionTask,
 } from '../../../shared/types/notion'
-import { readVisibleColumns, saveVisibleColumns } from '../../services/notion-table-columns'
+import { hasVisibleColumnsPreference, readVisibleColumns, saveVisibleColumns } from '../../services/notion-table-columns'
 import { nextSortState, readSortState, saveSortState, sortTasks, type SortState } from '../../services/notion-task-sort'
+import { ROW_PAGE_SIZE, defaultVisibleColumns, formatPropertyValue, hasTaskRoles, nextRowLimit } from '../../services/notion-table-view'
 import {
   BUILT_IN_VIEWS,
   createViewId,
@@ -166,6 +167,10 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
   const selectedDatabase = databases.find((database) => database.id === dataSourceId) || null
 
+  // Linhas montadas no DOM: uma página por vez (2.000 linhas × N colunas pesam); reinicia ao trocar de database.
+  const [rowLimitState, setRowLimitState] = useState<{ key: string; limit: number }>({ key: '', limit: ROW_PAGE_SIZE })
+  const rowLimit = rowLimitState.key === dataSourceId ? rowLimitState.limit : ROW_PAGE_SIZE
+
   const statusOptions = useMemo(() => {
     const values = new Set<string>()
     for (const property of Object.values(schema)) {
@@ -193,7 +198,10 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
   )
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- columnsVersion força reler o localStorage após persistVisibleColumns
-  const visibleColumns = useMemo(() => readVisibleColumns(connectionId, dataSourceId).filter((name) => columnableProperties.includes(name)), [connectionId, dataSourceId, columnableProperties, columnsVersion])
+  const visibleColumns = useMemo(() => (hasVisibleColumnsPreference(connectionId, dataSourceId) ? readVisibleColumns(connectionId, dataSourceId) : defaultVisibleColumns(schema)).filter((name) => columnableProperties.includes(name)), [connectionId, dataSourceId, columnableProperties, columnsVersion, schema])
+  // Sem estado/prazo/caixa de marcar a tabela é genérica: só título + todas as colunas (sem Estado/Prioridade/Prazo vazios).
+  const taskMode = useMemo(() => hasTaskRoles(schema), [schema])
+  const fixedColumnCount = taskMode ? 6 : 2
 
   function persistVisibleColumns(next: string[]) {
     saveVisibleColumns(connectionId, dataSourceId, next)
@@ -1006,11 +1014,11 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                 <table className="min-w-[760px] w-full table-fixed border-collapse text-xs" aria-label="Tarefas do Notion">
                   <thead className="bg-white/[0.03] text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                     <tr className="border-b border-white/10">
-                      <th className="sticky left-0 z-10 w-12 bg-zinc-950 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>
-                      <th className="sticky left-12 z-10 w-[22rem] bg-zinc-950 px-3 py-2 font-medium" scope="col"><SortableHeader column="title" label="Tarefa" sort={sortState} onSort={toggleSort} /></th>
-                      <th className="w-36 px-3 py-2 font-medium" scope="col"><SortableHeader column="status" label="Estado" sort={sortState} onSort={toggleSort} /></th>
-                      <th className="w-32 px-3 py-2 font-medium" scope="col"><SortableHeader column="priority" label="Prioridade" sort={sortState} onSort={toggleSort} /></th>
-                      <th className="w-36 px-3 py-2 font-medium" scope="col"><SortableHeader column="dueDate" label="Prazo" sort={sortState} onSort={toggleSort} /></th>
+                      {taskMode && <th className="sticky left-0 z-10 w-12 bg-zinc-950 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>}
+                      <th className={`sticky ${taskMode ? 'left-12' : 'left-0'} z-10 w-[22rem] bg-zinc-950 px-3 py-2 font-medium`} scope="col"><SortableHeader column="title" label={taskMode ? 'Tarefa' : 'Nome'} sort={sortState} onSort={toggleSort} /></th>
+                      {taskMode && <th className="w-36 px-3 py-2 font-medium" scope="col"><SortableHeader column="status" label="Estado" sort={sortState} onSort={toggleSort} /></th>}
+                      {taskMode && <th className="w-32 px-3 py-2 font-medium" scope="col"><SortableHeader column="priority" label="Prioridade" sort={sortState} onSort={toggleSort} /></th>}
+                      {taskMode && <th className="w-36 px-3 py-2 font-medium" scope="col"><SortableHeader column="dueDate" label="Prazo" sort={sortState} onSort={toggleSort} /></th>}
                       {visibleColumns.map((name) => (
                         <th key={name} className="w-[9rem] px-3 py-2 font-medium" scope="col"><SortableHeader column={name} label={name} sort={sortState} onSort={toggleSort} /></th>
                       ))}
@@ -1019,8 +1027,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   </thead>
                   <tbody aria-live="polite">
                     {visibleTasks.length === 0 ? (
-                      <tr><td colSpan={6 + visibleColumns.length} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
-                    ) : visibleTasks.map((task) => {
+                      <tr><td colSpan={fixedColumnCount + visibleColumns.length} className="px-3 py-12 text-center text-xs text-zinc-500">Nenhuma tarefa encontrada.</td></tr>
+                    ) : visibleTasks.slice(0, rowLimit).map((task) => {
                       const hasDetails = true
                       const isExpanded = expandedTaskId === task.id
                       const taskContent = taskContentById[task.id]
@@ -1029,7 +1037,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       return (
                         <Fragment key={task.id}>
                           <tr className={`group border-b border-white/[0.07] align-middle last:border-0 hover:bg-white/[0.035] ${task.completed ? 'text-zinc-500' : 'text-zinc-300'}`}>
-                            <td className="sticky left-0 z-10 bg-zinc-950 px-3 py-2.5 group-hover:bg-zinc-900">
+                            {taskMode && <td className="sticky left-0 z-10 bg-zinc-950 px-3 py-2.5 group-hover:bg-zinc-900">
                               <button
                                 type="button"
                                 className={`felixo-btn-icon flex h-5 w-5 items-center justify-center rounded-full border ${task.completed ? 'border-white/10 felixo-primary-action text-white' : 'border-zinc-500 text-zinc-600 hover:border-zinc-300 hover:text-zinc-300'} disabled:opacity-50`}
@@ -1038,26 +1046,35 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                                 aria-label={task.completed ? `Reabrir ${task.title}` : `Concluir ${task.title}`}
                                 title={task.completed ? 'Concluída — clique para reabrir' : 'Marcar como concluída'}
                               ><Check size={12} /></button>
-                            </td>
-                            <td className="sticky left-12 z-10 bg-zinc-950 px-3 py-2.5 group-hover:bg-zinc-900">
+                            </td>}
+                            <td className={`sticky ${taskMode ? 'left-12' : 'left-0'} z-10 bg-zinc-950 px-3 py-2.5 group-hover:bg-zinc-900`}>
                               <div className="flex min-w-0 items-center gap-1">
                                 {hasDetails ? <button type="button" className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200" onClick={() => toggleTaskDetails(task)} aria-label={isExpanded ? `Recolher ${task.title}` : `Ver detalhes de ${task.title}`} title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button> : <span className="w-[19px] shrink-0" />}
                                 <span className={`min-w-0 flex-1 whitespace-normal break-words font-medium ${task.completed ? 'line-through' : 'text-zinc-100'}`} title={task.title}>{task.title}</span>
                                 {task.url && <a className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] group-hover:opacity-100" href={task.url} target="_blank" rel="noreferrer" aria-label={`Abrir ${task.title}`} title="Abrir no Notion"><ExternalLink size={13} /></a>}
                               </div>
                             </td>
-                            <td className="px-3 py-2.5"><span className={`inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(task)}`}>{task.completed ? 'Concluída' : task.status || 'Sem estado'}</span></td>
-                            <td className="px-3 py-2.5"><span className="truncate text-[11px] text-zinc-400">{task.priority || '—'}</span></td>
-                            <td className="px-3 py-2.5"><span className="flex items-center gap-1 text-[11px] text-zinc-400">{task.dueDate ? <><CalendarDays size={12} className="text-zinc-600" /> {formatShortDate(task.dueDate)}</> : '—'}</span></td>
-                            {visibleColumns.map((name) => (
-                              <td key={name} className="px-3 py-2.5"><span className="block truncate text-[11px] text-zinc-400" title={formatPropertyValue(task.fields?.[name])}>{formatPropertyValue(task.fields?.[name]) || '—'}</span></td>
-                            ))}
+                            {taskMode && <td className="px-3 py-2.5"><span className={`inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(task)}`}>{task.completed ? 'Concluída' : task.status || 'Sem estado'}</span></td>}
+                            {taskMode && <td className="px-3 py-2.5"><span className="truncate text-[11px] text-zinc-400">{task.priority || '—'}</span></td>}
+                            {taskMode && <td className="px-3 py-2.5"><span className="flex items-center gap-1 text-[11px] text-zinc-400">{task.dueDate ? <><CalendarDays size={12} className="text-zinc-600" /> {formatShortDate(task.dueDate)}</> : '—'}</span></td>}
+                            {visibleColumns.map((name) => {
+                              const cell = formatPropertyValue(task.fields?.[name], schema[name]?.type)
+                              return <td key={name} className="px-3 py-2.5"><span className="block truncate text-[11px] text-zinc-400" title={cell}>{cell || '—'}</span></td>
+                            })}
                             <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)] disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
                           </tr>
-                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={6 + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/[0.08] bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-[var(--color-warning)]"><span>{taskContent.message}</span><button type="button" className="text-[var(--f-core-white-soft)] underline hover:text-[var(--f-core-white)]" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-[var(--f-core-white-soft)] hover:text-[var(--f-core-white)]" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-[var(--f-core-white-soft)]" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={fixedColumnCount + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/[0.08] bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-[var(--color-warning)]"><span>{taskContent.message}</span><button type="button" className="text-[var(--f-core-white-soft)] underline hover:text-[var(--f-core-white)]" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-[var(--f-core-white-soft)] hover:text-[var(--f-core-white)]" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-[var(--f-core-white-soft)]" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
                         </Fragment>
                       )
                     })}
+                    {visibleTasks.length > rowLimit && (
+                      <tr>
+                        <td colSpan={fixedColumnCount + visibleColumns.length} className="px-3 py-3 text-center text-[11px] text-zinc-500">
+                          Mostrando {rowLimit} de {visibleTasks.length} linhas.{' '}
+                          <button type="button" className="text-[var(--f-core-white-soft)] underline hover:text-[var(--f-core-white)]" onClick={() => setRowLimitState({ key: dataSourceId, limit: nextRowLimit(rowLimit, visibleTasks.length) })}>Mostrar mais {ROW_PAGE_SIZE}</button>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1122,29 +1139,10 @@ function getTaskProperties(
       return {
         name,
         type: definition?.type || 'unknown',
-        value: formatPropertyValue(value),
+        value: formatPropertyValue(value, definition?.type),
       }
     })
     .filter((property) => property.type !== 'title' && property.value && !hiddenNames.includes(property.name))
-}
-
-function formatPropertyValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return ''
-  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'string') return value
-  if (Array.isArray(value)) {
-    return value.map((item) => formatPropertyValue(item)).filter(Boolean).join(', ')
-  }
-  if (typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    for (const key of ['name', 'plain_text', 'title', 'content', 'start', 'url', 'id']) {
-      const candidate = record[key]
-      if (typeof candidate === 'string' && candidate) return candidate
-    }
-    return Object.values(record).map((item) => formatPropertyValue(item)).filter(Boolean).join(', ')
-  }
-  return String(value)
 }
 
 function statusBadgeClass(task: NotionTask): string {

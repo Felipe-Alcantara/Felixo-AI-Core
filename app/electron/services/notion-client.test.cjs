@@ -370,3 +370,102 @@ function fakeResponse(status, payload, headerValues = {}) {
     text: async () => JSON.stringify(payload),
   }
 }
+
+test('normalizePage lê people, files, relation, unique_id, created_by e rollup como valores legíveis', () => {
+  const page = normalizePage({
+    id: 'p1',
+    properties: {
+      Nome: { type: 'title', title: [{ plain_text: 'Item' }] },
+      Responsáveis: { type: 'people', people: [{ id: 'u1', name: 'Ana' }, { id: 'u2' }] },
+      Anexos: { type: 'files', files: [{ name: 'a.pdf' }, { name: 'b.png' }] },
+      Projeto: { type: 'relation', relation: [{ id: 'r1' }, { id: 'r2' }] },
+      Código: { type: 'unique_id', unique_id: { prefix: 'TSK', number: 42 } },
+      Sequência: { type: 'unique_id', unique_id: { prefix: null, number: 7 } },
+      Autor: { type: 'created_by', created_by: { id: 'u9', name: 'Bia' } },
+      Total: { type: 'rollup', rollup: { type: 'number', number: 12 } },
+      Datas: { type: 'rollup', rollup: { type: 'array', array: [{ type: 'date', date: { start: '2026-01-02' } }, { type: 'number', number: 3 }] } },
+      Ação: { type: 'button', button: {} },
+    },
+  })
+  assert.deepEqual(page.fields['Responsáveis'], ['Ana', 'u2'])
+  assert.deepEqual(page.fields['Anexos'], ['a.pdf', 'b.png'])
+  assert.deepEqual(page.fields['Projeto'], ['r1', 'r2'])
+  assert.equal(page.fields['Código'], 'TSK-42')
+  assert.equal(page.fields['Sequência'], '7')
+  assert.equal(page.fields['Autor'], 'Bia')
+  assert.equal(page.fields['Total'], 12)
+  assert.deepEqual(page.fields['Datas'], ['2026-01-02', 3])
+  assert.equal(page.fields['Ação'], null)
+})
+
+// Estrutura da database de tarefas real (20/09): dois `status` (Esforço, Etapa), um `select`
+// "Repositório" ANTES da Etapa nas propriedades da página e um checkbox "Em andamento" que NÃO
+// significa concluída. A tela mostrava Estado = "Felixo-AI-Core" e tarefa em andamento como concluída.
+const schemaReal = {
+  Tarefa: { id: 't', name: 'Tarefa', type: 'title' },
+  'Em andamento': { id: 'a', name: 'Em andamento', type: 'checkbox' },
+  Esforço: { id: 'e', name: 'Esforço', type: 'status' },
+  Etapa: { id: 'g', name: 'Etapa', type: 'status' },
+  Prioridade: { id: 'p', name: 'Prioridade', type: 'select' },
+  Repositório: { id: 'r', name: 'Repositório', type: 'select' },
+}
+const paginaReal = (etapa, andamento) => ({
+  id: 'x',
+  properties: {
+    Repositório: { type: 'select', select: { name: 'Felixo-AI-Core' } },
+    'Em andamento': { type: 'checkbox', checkbox: andamento },
+    Esforço: { type: 'status', status: { name: 'Dias' } },
+    Etapa: { type: 'status', status: { name: etapa } },
+    Prioridade: { type: 'select', select: { name: 'Média' } },
+    Tarefa: { type: 'title', title: [{ plain_text: 'Item' }] },
+  },
+})
+
+test('o estado da tarefa vem da propriedade de estado (Etapa), não do primeiro select/status da página', () => {
+  const task = normalizePage(paginaReal('Entrada', false), schemaReal)
+  assert.equal(task.status, 'Entrada')
+  assert.equal(task.priority, 'Média')
+})
+
+test('checkbox "Em andamento" não marca a tarefa como concluída; a Etapa "Concluída" marca', () => {
+  assert.equal(normalizePage(paginaReal('Entrada', true), schemaReal).completed, false)
+  assert.equal(normalizePage(paginaReal('Concluída', false), schemaReal).completed, true)
+})
+
+test('lista de tarefas clássica (um checkbox sem nome de conclusão e nenhuma coluna de estado) continua usando o checkbox', () => {
+  const schema = { Nome: { name: 'Nome', type: 'title' }, Check: { name: 'Check', type: 'checkbox' } }
+  const feito = normalizePage({ id: 'y', properties: { Nome: { type: 'title', title: [{ plain_text: 'A' }] }, Check: { type: 'checkbox', checkbox: true } } }, schema)
+  assert.equal(feito.completed, true)
+})
+
+test('checkbox com nome de conclusão ("Feita") vale mesmo havendo coluna de estado', () => {
+  const schema = { ...schemaReal, Feita: { id: 'f', name: 'Feita', type: 'checkbox' } }
+  const page = paginaReal('Entrada', false)
+  page.properties.Feita = { type: 'checkbox', checkbox: true }
+  assert.equal(normalizePage(page, schema).completed, true)
+})
+
+const schemaRealComOpcoes = {
+  ...schemaReal,
+  Etapa: {
+    id: 'g', name: 'Etapa', type: 'status',
+    status: { options: [{ name: 'Entrada' }, { name: 'Em breve' }, { name: 'Concluída' }] },
+  },
+}
+
+test('concluir uma tarefa grava a Etapa "Concluída" e NÃO marca o checkbox "Em andamento" (estrutura real)', () => {
+  const props = buildPageProperties(schemaRealComOpcoes, { completed: true })
+  assert.deepEqual(props.Etapa, { status: { name: 'Concluída' } })
+  assert.equal('Em andamento' in props, false)
+})
+
+test('reabrir grava a primeira etapa aberta; sem coluna de estado, o único checkbox continua sendo a conclusão', () => {
+  assert.deepEqual(buildPageProperties(schemaRealComOpcoes, { completed: false }).Etapa, { status: { name: 'Entrada' } })
+  const lista = { Nome: { name: 'Nome', type: 'title' }, Feito: { name: 'Feito', type: 'checkbox' } }
+  assert.deepEqual(buildPageProperties(lista, { completed: true }), { Feito: { checkbox: true } })
+})
+
+test('um select "Repositório" sem nome de estado nunca recebe o valor de conclusão', () => {
+  const soRepo = { Nome: { name: 'Nome', type: 'title' }, Repositório: { name: 'Repositório', type: 'select', select: { options: [{ name: 'Felixo' }, { name: 'Concluído' }] } } }
+  assert.equal('Repositório' in buildPageProperties(soRepo, { completed: true }), false)
+})

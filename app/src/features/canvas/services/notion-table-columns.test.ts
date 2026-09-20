@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readVisibleColumns, saveVisibleColumns } from './notion-table-columns'
+import { hasVisibleColumnsPreference, readVisibleColumns, saveVisibleColumns } from './notion-table-columns'
 
 function storage(initial?: Record<string, string>) {
   const values = new Map(Object.entries(initial ?? {}))
@@ -26,5 +26,20 @@ describe('notion-table-columns', () => {
   it('ignora dado guardado corrompido ou em formato inesperado', () => {
     expect(readVisibleColumns('conn-1', 'db-1', storage({ 'felixo:notion-table-columns:conn-1:db-1': '{not-json' }))).toEqual([])
     expect(readVisibleColumns('conn-1', 'db-1', storage({ 'felixo:notion-table-columns:conn-1:db-1': '[1,2]' }))).toEqual([])
+  })
+})
+
+describe('hasVisibleColumnsPreference', () => {
+  it('distingue "nunca escolheu" de "escolheu nenhuma coluna"', () => {
+    const store = new Map<string, string>()
+    const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) }
+    expect(hasVisibleColumnsPreference('c', 'd', storage)).toBe(false)
+    saveVisibleColumns('c', 'd', [], storage)
+    expect(hasVisibleColumnsPreference('c', 'd', storage)).toBe(true)
+    expect(readVisibleColumns('c', 'd', storage)).toEqual([])
+  })
+  it('sem armazenamento ou sem ids, nunca há preferência', () => {
+    expect(hasVisibleColumnsPreference('c', 'd', undefined)).toBe(false)
+    expect(hasVisibleColumnsPreference('', 'd', { getItem: () => '[]', setItem: () => {} })).toBe(false)
   })
 })

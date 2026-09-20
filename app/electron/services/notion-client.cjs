@@ -353,9 +353,40 @@ function normalizeDataSourceSummary(item) {
   }
 }
 
+const STATUS_NAME_PATTERN = /estado|status|etapa|situa[cç][aã]o|fase/i
+const DONE_CHECKBOX_PATTERN = /conclu|done|complet|feit|finaliz|finish/i
+
+/**
+ * Qual propriedade é "o estado" da tarefa. Antes valia a PRIMEIRA `status` ou
+ * `select` que aparecesse na página: numa database com `Repositório` (select)
+ * antes de `Etapa` (status), o Estado mostrava o nome do repositório. Agora: 1)
+ * `status` com nome de estado (Etapa, Estado, Status…); 2) `select` com esse
+ * nome; 3) o primeiro `status`; 4) o primeiro `select`. O renderer repete a
+ * regra em `notion-task-sort.ts`, com teste de paridade.
+ */
+function pickStatusPropertyName(schema = {}) {
+  const defs = Object.values(schema || {}).filter((d) => d && (d.type === 'status' || d.type === 'select'))
+  const named = (type) => defs.find((d) => d.type === type && STATUS_NAME_PATTERN.test(d.name || ''))
+  return (named('status') || named('select') || defs.find((d) => d.type === 'status') || defs[0])?.name ?? null
+}
+
+/**
+ * O checkbox que significa "concluída": um com nome de conclusão; senão, o
+ * único checkbox de uma database SEM coluna de estado (lista de tarefas
+ * clássica). "Em andamento", por exemplo, não é conclusão.
+ */
+function pickDoneCheckboxName(schema = {}, statusName = null) {
+  const boxes = Object.values(schema || {}).filter((d) => d && d.type === 'checkbox')
+  const named = boxes.find((d) => DONE_CHECKBOX_PATTERN.test(d.name || ''))
+  if (named) return named.name
+  return !statusName && boxes.length === 1 ? boxes[0].name : null
+}
+
 function normalizePage(page, schema = {}) {
   if (!page || typeof page !== 'object' || typeof page.id !== 'string') return null
   const properties = page.properties && typeof page.properties === 'object' ? page.properties : {}
+  const statusName = pickStatusPropertyName(schema)
+  const doneCheckboxName = pickDoneCheckboxName(schema, statusName)
   const fields = {}
   let title = ''
   let completed = false
@@ -372,16 +403,18 @@ function normalizePage(page, schema = {}) {
 
     if (!title && type === 'title') title = stringifyValue(value)
     if (!text && type === 'rich_text') text = stringifyValue(value)
-    if (!status && (type === 'status' || type === 'select')) status = stringifyValue(value)
+    if (statusName === null ? !status && (type === 'status' || type === 'select') : name === statusName) {
+      status = stringifyValue(value)
+      if (isCompletedLabel(value)) completed = true
+    }
     if (!dueDate && type === 'date') dueDate = stringifyValue(value)
-    if (!priority && (type === 'select' || type === 'status')) {
+    if (!priority && (type === 'select' || type === 'status') && name !== statusName) {
       const lowerName = name.toLocaleLowerCase()
       if (lowerName.includes('prior') || lowerName.includes('urg')) {
         priority = stringifyValue(value)
       }
     }
-    if (type === 'checkbox') completed = value === true
-    if ((type === 'status' || type === 'select') && isCompletedLabel(value)) completed = true
+    if (type === 'checkbox' && name === doneCheckboxName && value === true) completed = true
   }
 
   return {
@@ -424,9 +457,42 @@ function readPropertyValue(property, type = property?.type) {
       return typeof raw === 'string' ? raw : ''
     case 'formula':
       return readPropertyValue(raw, raw?.type)
+    case 'people':
+      return Array.isArray(raw) ? raw.map((user) => user?.name || user?.id).filter(Boolean) : []
+    case 'files':
+      return Array.isArray(raw) ? raw.map((file) => file?.name).filter(Boolean) : []
+    case 'relation':
+      // Só os ids: ler o título de cada página relacionada custaria uma consulta por linha.
+      return Array.isArray(raw) ? raw.map((item) => item?.id).filter(Boolean) : []
+    case 'unique_id':
+      return typeof raw?.number === 'number' ? `${raw.prefix ? `${raw.prefix}-` : ''}${raw.number}` : ''
+    case 'created_by':
+    case 'last_edited_by':
+      return raw?.name || raw?.id || ''
+    case 'rollup':
+      return readRollupValue(raw)
+    case 'button':
+    case 'verification':
+      // Sem valor legível pela API de consulta: a tela mostra "não suportado".
+      return null
     default:
       return raw ?? null
   }
+}
+
+function readRollupValue(rollup) {
+  if (!rollup || typeof rollup !== 'object') return null
+  if (rollup.type === 'number') return typeof rollup.number === 'number' ? rollup.number : null
+  if (rollup.type === 'date') return rollup.date?.start || ''
+  if (rollup.type === 'array') {
+    return (Array.isArray(rollup.array) ? rollup.array : [])
+      .flatMap((item) => {
+        const value = readPropertyValue(item, item?.type)
+        return Array.isArray(value) ? value : [value]
+      })
+      .filter((value) => value !== null && value !== undefined && value !== '')
+  }
+  return null
 }
 
 function readRichText(value) {
@@ -457,11 +523,16 @@ function buildPageProperties(schema = {}, input = {}, { create = false } = {}) {
     properties[titleEntry[0]] = { title: [{ type: 'text', text: { content: 'Nova tarefa' } }] }
   }
 
-  const checkboxEntry = findProperty(entries, ['checkbox'])
-  const statusEntry = findSemanticProperty(entries, ['status', 'estado', 'conclu', 'done', 'complete'])
+  // Mesma regra da LEITURA (`normalizePage`): escrever numa coluna diferente da que a tela
+  // mostra corrompia dados — concluir gravava no primeiro `status` (Esforço) e marcava o
+  // checkbox "Em andamento". Sem coluna de estado reconhecível, o estado não é tocado.
+  const statusName = pickWritableStatusName(schema)
+  const doneCheckboxName = pickDoneCheckboxName(schema, pickStatusPropertyName(schema))
+  const checkboxEntry = entries.find(([name, definition]) => definition?.type === 'checkbox' && name === doneCheckboxName) || null
+  const statusEntry = entries.find(([name]) => name === statusName) || null
   const textEntry = findProperty(entries, ['rich_text'])
   const dateEntry = findProperty(entries, ['date'])
-  const priorityEntry = findSemanticProperty(entries, ['prior', 'urg'])
+  const priorityEntry = findSemanticProperty(entries, ['prior', 'urg'], { fallback: false })
 
   if (input.completed !== undefined) {
     if (checkboxEntry) {
@@ -512,14 +583,25 @@ function findProperty(entries, types) {
   return entries.find(([, definition]) => types.includes(definition?.type)) || null
 }
 
-function findSemanticProperty(entries, words) {
+function findSemanticProperty(entries, words, { fallback = true } = {}) {
   return (
     entries.find(([, definition]) => {
       if (!['status', 'select'].includes(definition?.type)) return false
       const name = String(definition?.name || '').toLocaleLowerCase()
       return words.some((word) => name.includes(word))
-    }) || entries.find(([, definition]) => ['status', 'select'].includes(definition?.type)) || null
+    }) || (fallback ? entries.find(([, definition]) => ['status', 'select'].includes(definition?.type)) : null) || null
   )
+}
+
+/**
+ * A propriedade de estado onde é seguro ESCREVER: a escolhida pela leitura, mas só se
+ * for `status` ou tiver nome de estado. Um `select` qualquer (Repositório, Origem) não
+ * pode receber "Concluído".
+ */
+function pickWritableStatusName(schema = {}) {
+  const name = pickStatusPropertyName(schema)
+  const definition = name ? schema[name] : null
+  return definition && (definition.type === 'status' || STATUS_NAME_PATTERN.test(definition.name || '')) ? name : null
 }
 
 function limitText(value) {
@@ -564,6 +646,7 @@ function messageForStatus(status, payload) {
 }
 
 module.exports = {
+  pickStatusPropertyName,
   DEFAULT_BASE_URL,
   MAX_PAGE_SIZE,
   NOTION_API_VERSION,

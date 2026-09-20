@@ -128,10 +128,17 @@ function optionIndex(schema: Record<string, NotionSchemaProperty>, propertyName:
  * Pra ordenar essas colunas pela ordem do schema (não alfabética) é preciso
  * achar a MESMA propriedade de novo aqui, pelo mesmo critério.
  */
-function findStatusPropertyName(schema: Record<string, NotionSchemaProperty>): string | undefined {
-  const statusProperty = Object.values(schema).find((property) => property.type === 'status')
-  if (statusProperty) return statusProperty.name
-  return Object.values(schema).find((property) => property.type === 'select')?.name
+const STATUS_NAME_PATTERN = /estado|status|etapa|situa[cç][aã]o|fase/i
+
+/**
+ * Mesma regra de `pickStatusPropertyName` (`notion-client.cjs`), que decide o
+ * `task.status` no backend: `status` com nome de estado; `select` com esse nome;
+ * o primeiro `status`; o primeiro `select`. Há um teste de paridade entre os dois.
+ */
+export function findStatusPropertyName(schema: Record<string, NotionSchemaProperty>): string | undefined {
+  const defs = Object.values(schema).filter((property) => property.type === 'status' || property.type === 'select')
+  const named = (type: string) => defs.find((property) => property.type === type && STATUS_NAME_PATTERN.test(property.name || ''))
+  return (named('status') || named('select') || defs.find((property) => property.type === 'status') || defs[0])?.name
 }
 
 function findPriorityPropertyName(schema: Record<string, NotionSchemaProperty>): string | undefined {
