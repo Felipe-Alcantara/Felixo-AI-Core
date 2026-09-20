@@ -3397,3 +3397,30 @@ para este ambiente restrito; não foi verificado no Windows nem no macOS.
 registro e o servidor foram testados; um turno usaria a conta/limite da pessoa); o Firefox
 real da pessoa (nenhuma via oficial o controla: a extensão só cobre Chromium); a PoC 3 fora do
 CDP (o canal `felixo browser` com ações de controle ainda não existe).
+
+## 2026-09-20 — Electron sob Xvfb no Linux: instrumentação antes de qualquer flag nova
+
+A task pedia capturar o stderr real ANTES de mais uma tentativa (três às cegas já falharam). Feito, sem
+mudar o padrão do CLI: (1) `FELIXO_DEVTOOLS_DEBUG_LOG=<arquivo>` liga stdout+stderr do Electron
+detached num arquivo (`createDetached`; sem a variável continua `stdio: 'ignore'`); (2) o erro do
+`felixo devtools launch` agora diz se o Electron **encerrou** antes de abrir o CDP (código e sinal) ou
+**seguia vivo e mudo**, e anexa o fim do log quando ele existe — antes os dois casos eram o mesmo
+"fetch failed"; (3) o CI ganhou um passo **informativo** no Linux (`continue-on-error`) que roda o
+smoke sob `xvfb-run` com o log ligado e sobe `electron-devtools-*.log` como artefato. 3 testes novos
+no `felixo-devtools.test.cjs`. O gate do Linux (`if: runner.os != 'Linux'`) continua como estava até
+haver causa documentada e 2-3 execuções verdes.
+
+Pista independente (NÃO é a causa provada dos runners): num ambiente Linux restrito local o app só
+respondeu ao CDP com `--no-sandbox` na LINHA DE COMANDO; o `appendSwitch('no-sandbox')` do `main.cjs`
+chega tarde para o zygote e para a checagem do sandbox SUID, que roda antes do `main.cjs`. Se o log do
+CI mostrar `FATAL ... sandbox`, a correção provável é passar `--no-sandbox` no `launch` (só Linux, só
+instância de automação) — a decidir com o log real na mão, não antes.
+
+**Causa raiz (evidência real do CI, run 35540428944, x64 e ARM idênticos):**
+`FATAL:sandbox/linux/suid/client/setuid_sandbox_host.cc:166 The SUID sandbox helper binary was found, but
+is not configured correctly. Rather than run without sandboxing I'm aborting now. ... chrome-sandbox is
+owned by root and has mode 4755.` O Chromium checa o sandbox SUID ao iniciar o processo do navegador,
+ANTES do `main.cjs`; por isso o `appendSwitch('no-sandbox')` da 3ª tentativa nunca teve como funcionar.
+Correção: `felixo devtools launch` passa `--no-sandbox` na linha de comando no Linux (só na instância de
+automação; 1 teste novo). O passo do Linux segue informativo até 2-3 execuções verdes seguidas; só então
+o `if: runner.os != 'Linux'` sai.

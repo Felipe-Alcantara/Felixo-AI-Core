@@ -423,6 +423,33 @@ jobs:
         shell: bash
         run: npm run test:canvas-smoke
 
+      # DIAGNÓSTICO (task "CI — investigar por que o Electron não abre CDP sob
+      # Xvfb no Linux"): roda o mesmo smoke no Linux, mas SEM bloquear o PR
+      # (`continue-on-error`) e com a saída do Electron gravada em arquivo
+      # (FELIXO_DEVTOOLS_DEBUG_LOG). O erro real do Chromium — que as três
+      # tentativas anteriores nunca viram — sai no log do passo e no artefato.
+      # Só vira gate depois de causa documentada e 2-3 execuções verdes.
+      - name: Diagnose Canvas PR smoke on Linux (informativo, captura o stderr do Electron)
+        timeout-minutes: 10
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        env:
+          FELIXO_DEVTOOLS_DEBUG_LOG: ${{ github.workspace }}/app/build/electron-devtools-${{ matrix.os }}.log
+        run: |
+          mkdir -p build
+          xvfb-run -a npm run test:canvas-smoke
+
+      - name: Upload Canvas PR smoke Linux diagnostics
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-smoke-linux-diagnostics-${{ matrix.os }}
+          path: |
+            app/build/electron-devtools-*.log
+            app/build/canvas-smoke-failure-*.png
+          if-no-files-found: ignore
+
       - name: Upload Canvas PR smoke failure screenshot
         if: failure() && runner.os != 'Linux'
         uses: actions/upload-artifact@v6
