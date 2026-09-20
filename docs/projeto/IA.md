@@ -3303,5 +3303,6 @@ E na reexecução da mesma main (20/09): "arrasto pequeno da nota nao persistiu"
 era timeout: o smoke esperava 800 ms FIXOS depois de soltar o mouse e lia a posição salva; a gravação
 tem atraso e no runner Windows passou disso. O arrasto e a criação de conexão agora esperam a mudança
 aparecer no armazenamento (polling de 200 ms até `INTERACTION_TIMEOUT_MS`); se nunca aparecer, o erro
-continua sendo o mesmo de antes (falha real). Não verificado: não li o screenshot desta falha, e só o
-CI do Windows mostra se o polling resolve.
+continua sendo o mesmo de antes (falha real). Não verificado: o screenshot da falha mostra a nota SELECIONADA
+(o mouse chegou nela) mas não permite ver se ela se moveu — inconclusivo; só o CI do Windows mostra se o
+polling resolve. Se ainda falhar mesmo esperando até 20 s, o arrasto pode ser um problema real.
