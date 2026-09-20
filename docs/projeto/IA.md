@@ -3258,3 +3258,21 @@ registro não é vulnerabilidade — continua falhando fechado.
 Não feito: decidir quais benchmarks bloqueiam o PR (só o de responsividade já é informativo) e o
 destino do pre-release parcial v0.1.368 (decisão do Felipe). O efeito real dos tetos e do timeout
 maior só se comprova nas próximas execuções do CI.
+
+## 2026-09-20 — Borda colorida no nó com notificação não lida
+
+A anotação de 14/09 pedia cores "sincronizadas com as das notificações", mas o painel usava uma
+cor só (`--color-error`): não existiam categorias. Criadas em `terminal/notification-category.ts`,
+a partir do `SessionSnapshot` da notificação: **Precisa de resposta** (`waiting_approval`, âmbar,
+pulsa), **Terminou** (`idle` ou saída 0, verde) e **Falhou** (saída ≠ 0 ou `error`, rosa).
+
+A cor mora em UM lugar, no CSS (`--felixo-notify-<categoria>`, com valor próprio no tema de alto
+contraste); o item do painel e a borda do nó usam o mesmo token. Só notificação NÃO lida pinta o
+nó (ler remove a borda); no mesmo nó vence a mais urgente (falhou > precisa de resposta >
+terminou). A borda é declarada depois da moldura escolhida pela pessoa (`frameColor`), então a
+notificação vence a moldura enquanto existir. A pulsação respeita `prefers-reduced-motion` e o
+Modo Performance. Testes: mapeamento snapshot→categoria, borda só enquanto não lida, prioridade,
+e o teste que confere que os tokens existem nos dois temas e que a borda usa o mesmo token.
+
+NÃO verificado: nada visto numa janela real (contraste real das três cores sobre o canvas, a
+pulsação, e os nós que não são terminal); sem cobertura no smoke.

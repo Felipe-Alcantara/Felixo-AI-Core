@@ -15,6 +15,11 @@ import type { Node } from '@xyflow/react'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
 import type { CanvasNotification } from '../terminal/canvas-notifications'
+import {
+  NOTIFICATION_CATEGORY_LABELS,
+  notificationCategory,
+  notificationColorVar,
+} from '../terminal/notification-category'
 import type { CanvasNodeData } from '../types'
 import type { UpdatePresentation } from '../../updates/update-presentation'
 
@@ -218,7 +223,12 @@ export function NotificationsPanel({
                   className="felixo-btn flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left"
                 >
                   {unread ? (
-                    <AlertCircle size={15} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
+                    <AlertCircle
+                      size={15}
+                      className="mt-0.5 shrink-0"
+                      style={{ color: notificationColorVar(notificationCategory(notification.snapshot)) }}
+                      aria-label={NOTIFICATION_CATEGORY_LABELS[notificationCategory(notification.snapshot)]}
+                    />
                   ) : (
                     <Check size={15} className="mt-0.5 shrink-0 text-zinc-600" />
                   )}

@@ -112,6 +112,10 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Categorias de notificação: usadas pela borda do nó e pelo item do painel. */
+  --felixo-notify-needs-response: #e0a93b;
+  --felixo-notify-finished: #4cbf8b;
+  --felixo-notify-failed: #e26d8a;
 }
 
 /* Feedback local: o arquivo ainda não foi lido nem enviado; apenas o alvo
@@ -137,6 +141,9 @@
   --spacing-base: 0.5rem;
   --radius-base: 0.75rem;
   --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.48);
+  --felixo-notify-needs-response: #fbbf24;
+  --felixo-notify-finished: #4ade80;
+  --felixo-notify-failed: #f87171;
 }
 
 * {
@@ -4456,3 +4463,25 @@ select {
 .felixo-frame-rose > :first-child { --felixo-frame-color: #e26d8a; }
 .felixo-frame-violet > :first-child { --felixo-frame-color: #9b7be0; }
 .felixo-frame-zinc > :first-child { --felixo-frame-color: #8a8a86; }
+
+/* Notificação NÃO lida no nó: contorno mais grosso na cor da categoria, o mesmo
+   token do item do painel. Declarado depois da moldura escolhida de propósito —
+   a cor da notificação vence a da moldura enquanto ela existir. */
+.felixo-notify > :first-child {
+  --felixo-notify-color: transparent;
+  box-shadow:
+    0 0 0 3px var(--felixo-notify-color),
+    0 0 18px color-mix(in srgb, var(--felixo-notify-color) 55%, transparent),
+    0 12px 28px rgba(0, 0, 0, 0.22);
+}
+.felixo-notify-needs-response > :first-child { --felixo-notify-color: var(--felixo-notify-needs-response); }
+.felixo-notify-finished > :first-child { --felixo-notify-color: var(--felixo-notify-finished); }
+.felixo-notify-failed > :first-child { --felixo-notify-color: var(--felixo-notify-failed); }
+@keyframes felixo-notify-pulse {
+  50% { box-shadow: 0 0 0 3px var(--felixo-notify-color), 0 0 26px color-mix(in srgb, var(--felixo-notify-color) 75%, transparent), 0 12px 28px rgba(0, 0, 0, 0.22); }
+}
+.felixo-notify-needs-response > :first-child { animation: felixo-notify-pulse 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .felixo-notify > :first-child { animation: none; }
+}
+:root[data-performance-mode='on'] .felixo-notify > :first-child { animation: none; }
