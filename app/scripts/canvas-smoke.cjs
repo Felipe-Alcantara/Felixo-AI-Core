@@ -11,6 +11,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
 const { diagnosticarMontagem } = require('./canvas-smoke-diagnostics.cjs')
+const { esperarAte } = require('./canvas-smoke-wait.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -322,16 +323,13 @@ async function checarInteracoes(page) {
   // falhou no runner Windows (main do #66, 20/09). Espera a mudança aparecer até o
   // teto: se ela nunca vier, o erro abaixo continua sendo o de arrasto que não persistiu.
   if (before) {
-    await page
-      .waitForFunction(
-        async (origem) => {
-          const node = (await window.felixo.canvas.list()).nodes.find((item) => item.id === 'fixture-note')
-          return Boolean(node?.position) && (node.position.x !== origem.x || node.position.y !== origem.y)
-        },
-        before,
-        { timeout: INTERACTION_TIMEOUT_MS, polling: 200 },
-      )
-      .catch(() => {})
+    await esperarAte(
+      async () => {
+        const atual = await page.evaluate(async () => (await window.felixo.canvas.list()).nodes.find((node) => node.id === 'fixture-note')?.position)
+        return Boolean(atual) && (atual.x !== before.x || atual.y !== before.y)
+      },
+      { timeoutMs: INTERACTION_TIMEOUT_MS },
+    )
   }
   const after = await page.evaluate(async () => (await window.felixo.canvas.list()).nodes.find((node) => node.id === 'fixture-note')?.position)
   if (!before || !after || (before.x === after.x && before.y === after.y)) {
@@ -348,12 +346,10 @@ async function checarInteracoes(page) {
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 })
   await page.mouse.up()
   // Mesma razão do arrasto acima: espera a conexão aparecer no armazenamento (até o teto).
-  await page
-    .waitForFunction(async () => ((await window.felixo.canvas.listEdges()).edges || []).length >= 2, null, {
-      timeout: INTERACTION_TIMEOUT_MS,
-      polling: 200,
-    })
-    .catch(() => {})
+  await esperarAte(
+    async () => (await page.evaluate(async () => (await window.felixo.canvas.listEdges()).edges || [])).length >= 2,
+    { timeoutMs: INTERACTION_TIMEOUT_MS },
+  )
   const edgesAfterConnect = await page.evaluate(async () => (await window.felixo.canvas.listEdges()).edges || [])
   if (edgesAfterConnect.length < 2) {
     throw new Error(`[canvas-smoke] conexao por handle nao persistiu: ${JSON.stringify(edgesAfterConnect)}`)

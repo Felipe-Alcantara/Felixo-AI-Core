@@ -3306,3 +3306,11 @@ aparecer no armazenamento (polling de 200 ms até `INTERACTION_TIMEOUT_MS`); se 
 continua sendo o mesmo de antes (falha real). Não verificado: o screenshot da falha mostra a nota SELECIONADA
 (o mouse chegou nela) mas não permite ver se ela se moveu — inconclusivo; só o CI do Windows mostra se o
 polling resolve. Se ainda falhar mesmo esperando até 20 s, o arrasto pode ser um problema real.
+
+Erro meu no mesmo PR (#67): a 1ª versão do polling usava `page.waitForFunction(async () => ...)`, que
+NÃO espera — a Promise devolvida já é "verdadeira" e a espera termina na hora. Resultado: como eu
+tinha REMOVIDO os 800 ms fixos, o smoke passou a ler a posição sem esperar nada e falhou em ~1,5 s no
+macOS (o CI do PR pegou). Corrigido com `esperarAte` (`scripts/canvas-smoke-wait.cjs`, polling no lado
+do Node com `page.evaluate`, 4 testes com relógio falso, inclusive o caso "Promise que resolve falsa
+não conta"). Não reproduzi o `waitForFunction` num navegador (não há um aqui): a conclusão vem do tempo
+da falha (1,5 s < 5 s de teto) e do comportamento documentado; o teste do helper protege o novo código.
