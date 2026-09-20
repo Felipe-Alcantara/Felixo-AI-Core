@@ -19,6 +19,11 @@ const MIN_VIEWPORT = { width: 375, height: 667 }
 // 19/09 por 20 s, com o app montando logo depois): teto maior só lá. O tempo
 // medido de cada subida vai para o log, para decidir o número com dados.
 const HYDRATION_TIMEOUT_MS = process.platform === 'win32' ? 45_000 : 20_000
+// Espera por uma reação da interface (abrir painel, fechar gaveta...). 5 s falhou
+// 6 vezes no runner Windows (PRs #48, #55 e a main do #66 em 20/09); o screenshot
+// da última mostrou o painel de busca ABERTO, só que depois do teto — lentidão do
+// runner (o painel é um chunk carregado sob demanda), não painel quebrado.
+const INTERACTION_TIMEOUT_MS = process.platform === 'win32' ? 20_000 : 5_000
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 
 const FIXTURE_NODES = [
@@ -179,7 +184,7 @@ async function checarNavegacaoPorTab(page) {
 async function checarFocoAoAbrirFerramenta(page) {
   await page.getByRole('button', { name: 'Buscar' }).click()
   const panel = page.locator('[data-felixo-canvas-panel="search"]')
-  await panel.waitFor({ state: 'visible', timeout: 5_000 })
+  await panel.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   const focused = await page.evaluate(() => {
     const panelElement = document.querySelector('[data-felixo-canvas-panel="search"]')
     const input = panelElement?.querySelector('input')
@@ -340,12 +345,12 @@ async function checarInteracoes(page) {
   // deterministic while still exercising the real open/close handlers.
   await terminalTrigger.focus()
   await terminalTrigger.click()
-  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: 5_000 })
-  await page.locator('[data-felixo-mock-terminal="fixture-terminal"]').waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  await page.locator('[data-felixo-mock-terminal="fixture-terminal"]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   const terminalFocused = await page.evaluate(() => document.activeElement?.getAttribute('data-felixo-mock-terminal') === 'fixture-terminal')
   if (!terminalFocused) throw new Error('[canvas-smoke] abrir a gaveta nao focou o terminal fake')
   await page.getByRole('button', { name: 'Fechar terminal' }).click()
-  await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: INTERACTION_TIMEOUT_MS })
   const focusAfterDrawer = await page.evaluate(() => ({
     returned: document.activeElement?.getAttribute('data-terminal-expand-trigger') === 'fixture-terminal',
     tag: document.activeElement?.tagName,
@@ -358,18 +363,18 @@ async function checarInteracoes(page) {
   const bell = page.locator('[data-notifications-trigger]')
   await bell.click()
   const notifications = page.locator('#canvas-notifications-panel')
-  await notifications.waitFor({ state: 'visible', timeout: 5_000 })
+  await notifications.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   await page.waitForFunction(
     () => document.activeElement?.id === 'canvas-notifications-panel',
     null,
-    { timeout: 5_000 },
+    { timeout: INTERACTION_TIMEOUT_MS },
   )
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => !document.querySelector('#canvas-notifications-panel'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => !document.querySelector('#canvas-notifications-panel'), null, { timeout: INTERACTION_TIMEOUT_MS })
   await page.waitForFunction(
     () => document.activeElement?.hasAttribute('data-notifications-trigger'),
     null,
-    { timeout: 5_000 },
+    { timeout: INTERACTION_TIMEOUT_MS },
   )
 
   const webpageButton = page.getByRole('button', { name: 'Página Web' })
@@ -377,9 +382,9 @@ async function checarInteracoes(page) {
   const urlInput = page.locator('input[aria-label="Endereço do site"]')
   await urlInput.fill('javascript:alert(1)')
   await page.getByRole('button', { name: 'Criar' }).last().click()
-  await page.waitForFunction(() => document.body.innerText.includes('Informe um endereço de site válido'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => document.body.innerText.includes('Informe um endereço de site válido'), null, { timeout: INTERACTION_TIMEOUT_MS })
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => !document.querySelector('input[aria-label="Endereço do site"]'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => !document.querySelector('input[aria-label="Endereço do site"]'), null, { timeout: INTERACTION_TIMEOUT_MS })
 }
 
 async function checarReloadSemDuplicacao(page) {
@@ -436,7 +441,7 @@ async function aguardarPainelAssentado(page, panelId) {
       return Boolean(element) && element.getAnimations().length === 0
     },
     panelId,
-    { timeout: 5_000 },
+    { timeout: INTERACTION_TIMEOUT_MS },
   )
 }
 
@@ -460,7 +465,7 @@ async function checarPainelNosDoisEixos(page) {
     await page.setViewportSize(viewport)
     await page.waitForTimeout(250)
     await page.getByRole('button', { name: 'Buscar' }).click()
-    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'visible', timeout: 5_000 })
+    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
 
     const antes = await medirPainel(page, 'search')
     if (!antes) throw new Error(`[canvas-smoke] painel Buscar nao encontrado em ${rotulo}`)
@@ -491,7 +496,7 @@ async function checarPainelNosDoisEixos(page) {
     }
 
     await page.getByRole('button', { name: 'Buscar' }).click()
-    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'detached', timeout: 5_000 })
+    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'detached', timeout: INTERACTION_TIMEOUT_MS })
   }
 }
 

@@ -3292,3 +3292,9 @@ segfault do node-pty (exit 139, `AttachConsole failed`), igual ao do PR #51. O p
 até 3 vezes SOMENTE quando o código de saída é 139; qualquer outro código falha na hora (laço
 testado com funções falsas: recupera no 3º segfault e não repete falha real). Não verificado no
 runner: se o segfault for determinístico numa máquina, as 3 tentativas também falham.
+
+Ainda em 20/09 (CI da main do #66): o smoke do Windows falhou no `waitFor` de 5 s do painel de busca
+(`checarPainelNosDoisEixos`, o mesmo que já tinha caído nos PRs #48 e #55). O screenshot de falha
+mostra o painel "Pesquisar" ABERTO — apareceu depois do teto, ou seja, runner lento. Os 14
+`timeout: 5_000` de interação do smoke viraram `INTERACTION_TIMEOUT_MS` (20 s no Windows, 5 s nos
+demais). Não verificado: só as próximas execuções do Windows mostram se 20 s bastam.
