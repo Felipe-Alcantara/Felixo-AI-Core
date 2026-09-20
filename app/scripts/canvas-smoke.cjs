@@ -318,7 +318,21 @@ async function checarInteracoes(page) {
   await page.mouse.down()
   await page.mouse.move(dragX + 14, dragY + 9, { steps: 5 })
   await page.mouse.up()
-  await page.waitForTimeout(800)
+  // A posição é gravada depois do arrasto (com atraso); uma espera fixa de 800 ms
+  // falhou no runner Windows (main do #66, 20/09). Espera a mudança aparecer até o
+  // teto: se ela nunca vier, o erro abaixo continua sendo o de arrasto que não persistiu.
+  if (before) {
+    await page
+      .waitForFunction(
+        async (origem) => {
+          const node = (await window.felixo.canvas.list()).nodes.find((item) => item.id === 'fixture-note')
+          return Boolean(node?.position) && (node.position.x !== origem.x || node.position.y !== origem.y)
+        },
+        before,
+        { timeout: INTERACTION_TIMEOUT_MS, polling: 200 },
+      )
+      .catch(() => {})
+  }
   const after = await page.evaluate(async () => (await window.felixo.canvas.list()).nodes.find((node) => node.id === 'fixture-note')?.position)
   if (!before || !after || (before.x === after.x && before.y === after.y)) {
     throw new Error(`[canvas-smoke] arrasto pequeno da nota nao persistiu: antes=${JSON.stringify(before)} depois=${JSON.stringify(after)}`)
@@ -333,7 +347,13 @@ async function checarInteracoes(page) {
   await page.mouse.down()
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 })
   await page.mouse.up()
-  await page.waitForTimeout(500)
+  // Mesma razão do arrasto acima: espera a conexão aparecer no armazenamento (até o teto).
+  await page
+    .waitForFunction(async () => ((await window.felixo.canvas.listEdges()).edges || []).length >= 2, null, {
+      timeout: INTERACTION_TIMEOUT_MS,
+      polling: 200,
+    })
+    .catch(() => {})
   const edgesAfterConnect = await page.evaluate(async () => (await window.felixo.canvas.listEdges()).edges || [])
   if (edgesAfterConnect.length < 2) {
     throw new Error(`[canvas-smoke] conexao por handle nao persistiu: ${JSON.stringify(edgesAfterConnect)}`)

@@ -3298,3 +3298,10 @@ Ainda em 20/09 (CI da main do #66): o smoke do Windows falhou no `waitFor` de 5 
 mostra o painel "Pesquisar" ABERTO — apareceu depois do teto, ou seja, runner lento. Os 13
 `timeout: 5_000` de interação do smoke viraram `INTERACTION_TIMEOUT_MS` (20 s no Windows, 5 s nos
 demais). Não verificado: só as próximas execuções do Windows mostram se 20 s bastam.
+
+E na reexecução da mesma main (20/09): "arrasto pequeno da nota nao persistiu" (`checarInteracoes`). Não
+era timeout: o smoke esperava 800 ms FIXOS depois de soltar o mouse e lia a posição salva; a gravação
+tem atraso e no runner Windows passou disso. O arrasto e a criação de conexão agora esperam a mudança
+aparecer no armazenamento (polling de 200 ms até `INTERACTION_TIMEOUT_MS`); se nunca aparecer, o erro
+continua sendo o mesmo de antes (falha real). Não verificado: não li o screenshot desta falha, e só o
+CI do Windows mostra se o polling resolve.
