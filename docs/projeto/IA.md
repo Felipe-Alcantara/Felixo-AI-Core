@@ -3295,6 +3295,6 @@ runner: se o segfault for determinístico numa máquina, as 3 tentativas também
 
 Ainda em 20/09 (CI da main do #66): o smoke do Windows falhou no `waitFor` de 5 s do painel de busca
 (`checarPainelNosDoisEixos`, o mesmo que já tinha caído nos PRs #48 e #55). O screenshot de falha
-mostra o painel "Pesquisar" ABERTO — apareceu depois do teto, ou seja, runner lento. Os 14
+mostra o painel "Pesquisar" ABERTO — apareceu depois do teto, ou seja, runner lento. Os 13
 `timeout: 5_000` de interação do smoke viraram `INTERACTION_TIMEOUT_MS` (20 s no Windows, 5 s nos
 demais). Não verificado: só as próximas execuções do Windows mostram se 20 s bastam.
