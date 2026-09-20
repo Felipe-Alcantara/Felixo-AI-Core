@@ -440,11 +440,26 @@ jobs:
         timeout-minutes: 10
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
-          else
-            npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
-          fi
+          run_benchmark() {
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              xvfb-run -a npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            else
+              npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            fi
+          }
+          # O node-pty derruba o processo com segfault (exit 139, "AttachConsole
+          # failed") de vez em quando no runner Windows (PR #51 e PR #66, em
+          # 20/09). Só ESSE código é repetido (até 3 vezes): uma falha real do
+          # benchmark, com outro código de saída, falha na hora.
+          for attempt in 1 2 3; do
+            set +e
+            run_benchmark
+            status=$?
+            set -e
+            if [ "$status" -ne 139 ]; then exit "$status"; fi
+            echo "benchmark terminou com segfault (139), tentativa $attempt/3"
+          done
+          exit 139
 
       - name: Upload terminal scrollback benchmark
         if: always()

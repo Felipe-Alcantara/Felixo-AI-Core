@@ -10,6 +10,7 @@ const {
   criarLinkDeDiretorio,
 } = require('../electron/__fixtures__/link-fixtures.cjs')
 const {
+  settleOrphans,
   aggregateSamples,
   createEnvironment,
   findPackagedRuntime,
@@ -208,4 +209,29 @@ test('validateReport exige npm-runtime, cenários frios/quentes e métricas de p
     },
   }, 2, [1]), [])
   assert.match(validateReport({ managers: { 'npm-runtime': { available: false, scenarios: [] } } }, 1, [1]).join('; '), /npm-runtime/)
+})
+
+test('settleOrphans: filho que sai da tabela de processos durante a espera não é órfão', async () => {
+  const respostas = [[101, 102], [101], []]
+  let chamadas = 0
+  const esperas = []
+  const resultado = await settleOrphans(async () => respostas[Math.min(chamadas++, respostas.length - 1)], {
+    sleep: async (ms) => { esperas.push(ms) },
+  })
+  assert.deepEqual(resultado, [])
+  assert.equal(chamadas, 3)
+  assert.deepEqual(esperas, [500, 500])
+})
+
+test('settleOrphans: filho que PERMANECE depois do prazo continua reportado (gate não afrouxa)', async () => {
+  let esperado = 0
+  const resultado = await settleOrphans(async () => [7], { settleMs: 2000, intervalMs: 500, sleep: async (ms) => { esperado += ms } })
+  assert.deepEqual(resultado, [7])
+  assert.equal(esperado, 2000)
+})
+
+test('settleOrphans: sem órfãos não espera nada', async () => {
+  let dormiu = false
+  assert.deepEqual(await settleOrphans(async () => [], { sleep: async () => { dormiu = true } }), [])
+  assert.equal(dormiu, false)
 })
