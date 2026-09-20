@@ -3286,3 +3286,9 @@ de órfãos falhando, sem relação com o diff. `findOrphans` reverificava UMA v
 Um filho que permanece depois do prazo continua reportado — o gate não foi afrouxado. Testes: filho
 que some durante a espera, filho que permanece e caso sem órfãos. NÃO verificado no runner: só o CI
 mostra se 6 s bastam; se ainda falhar, o log do processo remanescente é o próximo dado.
+
+Também em 20/09 (PR #66): o passo "Benchmark terminal scrollback policy" do Windows morreu com
+segfault do node-pty (exit 139, `AttachConsole failed`), igual ao do PR #51. O passo agora repete
+até 3 vezes SOMENTE quando o código de saída é 139; qualquer outro código falha na hora (laço
+testado com funções falsas: recupera no 3º segfault e não repete falha real). Não verificado no
+runner: se o segfault for determinístico numa máquina, as 3 tentativas também falham.
