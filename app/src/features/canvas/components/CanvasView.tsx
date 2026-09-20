@@ -33,6 +33,7 @@ import { formatShortcut, matchesShortcut } from '../services/dictation'
 import { buildPresetInstruction } from '../services/agent-preset-prompt'
 import { NodeColorMenu } from './NodeColorMenu'
 import { frameClassName } from './frame-colors'
+import { notificationClassName, unreadCategoryByNode } from '../terminal/notification-category'
 import { DrawingNode } from './DrawingNode'
 import { ExcalidrawDrawingNode } from './ExcalidrawDrawingNode'
 import { GroupNode } from './GroupNode'
@@ -1544,14 +1545,19 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   // Groups must render before their children so they sit behind them.
   const orderedNodes = useMemo(() => {
     // A moldura escolhida vira classe no wrapper do nó; o realce mora no CSS.
+    // Notificação não lida vira um segundo realce, na cor da categoria (a mesma
+    // do painel); o CSS a declara depois da moldura, então ela vence enquanto existir.
+    const notifyByNode = unreadCategoryByNode(notificationHistory)
     const framed = renderedNodes.map((node) => {
       const frame = frameClassName(node.data?.frameColor)
-      return frame ? { ...node, className: [node.className, frame].filter(Boolean).join(' ') } : node
+      const category = notifyByNode.get(node.id)
+      const extra = [frame, category ? notificationClassName(category) : undefined].filter(Boolean)
+      return extra.length ? { ...node, className: [node.className, ...extra].filter(Boolean).join(' ') } : node
     })
     const groups = framed.filter((node) => node.type === 'group')
     const rest = framed.filter((node) => node.type !== 'group')
     return [...groups, ...rest]
-  }, [renderedNodes])
+  }, [notificationHistory, renderedNodes])
 
   const [colorMenu, setColorMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
   const closeColorMenu = useCallback(() => setColorMenu(null), [])
