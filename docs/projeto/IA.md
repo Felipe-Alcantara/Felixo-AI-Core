@@ -3276,3 +3276,13 @@ e o teste que confere que os tokens existem nos dois temas e que a borda usa o m
 
 NÃO verificado: nada visto numa janela real (contraste real das três cores sobre o canvas, a
 pulsação, e os nós que não são terminal); sem cobertura no smoke.
+
+## 2026-09-20 — Benchmark operacional (Windows): espera dos órfãos passou de 750 ms para até 6 s
+
+"processos órfãos detectados em yarn-classic" derrubou o Validate/Windows três vezes (PR #52, PR #55
+e o CI da main do #65, run 35519847921); o log mostra o benchmark inteiro passando e só o recheck
+de órfãos falhando, sem relação com o diff. `findOrphans` reverificava UMA vez após 750 ms; agora
+`settleOrphans` reverifica a cada 500 ms por até 6 s (mantendo a checagem de identidade do processo).
+Um filho que permanece depois do prazo continua reportado — o gate não foi afrouxado. Testes: filho
+que some durante a espera, filho que permanece e caso sem órfãos. NÃO verificado no runner: só o CI
+mostra se 6 s bastam; se ainda falhar, o log do processo remanescente é o próximo dado.
