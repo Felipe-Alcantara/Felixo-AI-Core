@@ -3424,3 +3424,12 @@ ANTES do `main.cjs`; por isso o `appendSwitch('no-sandbox')` da 3ª tentativa nu
 Correção: `felixo devtools launch` passa `--no-sandbox` na linha de comando no Linux (só na instância de
 automação; 1 teste novo). O passo do Linux segue informativo até 2-3 execuções verdes seguidas; só então
 o `if: runner.os != 'Linux'` sai.
+
+**Gate reativado no Linux (20/09/2026).** Com a causa corrigida, o smoke rodou verde no Linux
+(ubuntu-latest e ubuntu-24.04-arm) em: (1) o CI do PR #70 depois do push da correção (run 35540981631),
+(2) o CI da main do #70 (run 35541689317) e (3) o CI do PR que reativou o gate. O passo "Test Canvas PR
+smoke" agora roda nos três SOs (Linux sob `xvfb-run`, log do Electron em `FELIXO_DEVTOOLS_DEBUG_LOG` e
+sobe como artefato se falhar) e o passo informativo do diagnóstico foi removido. Limitações honestas:
+3 execuções verdes não provam determinismo absoluto (a flake do Windows mostrou isso); a 3ª foi um PR,
+não uma reexecução da main, porque reexecutar o CI da main dispara outro Release e o `release.yml` tem
+`cancel-in-progress: true` — uma reexecução com Release em andamento poderia cancelar a publicação.

@@ -407,55 +407,35 @@ jobs:
       # hidratação, oclusão, foco/teclado, handles, persistência e viewport
       # mínimo. O PTY fake não inicia uma CLI ou shell real.
       #
-      # Só macOS e Windows por enquanto: no Linux (ubuntu-latest e
-      # ubuntu-24.04-arm), sob xvfb-run, o Electron nunca chega a abrir a
-      # porta CDP — medido em três tentativas (runs 34827616284, 34828636528,
-      # 34829476404), inclusive depois de ampliar o timeout pra 60s e de
-      # desativar o sandbox do Chromium (`--no-sandbox`, só na instância de
-      # automação). Nenhuma resolveu; `createDetached` roda com
-      # `stdio: 'ignore'`, então o stderr do Chromium nunca chega ao log — a
-      # próxima tentativa precisa capturar esse stderr antes de adivinhar de
-      # novo. Ver a task "Canvas — criar gate CI de evidência visual" no
-      # Notion para o registro completo e a task de investigação aberta.
+      # Roda nos três SOs. No Linux o Electron sobe sob `xvfb-run`; a causa do
+      # antigo "nunca abre CDP" era o Chromium abortar na checagem do sandbox
+      # SUID (`chrome-sandbox` sem root/4755), ANTES do main.cjs — o
+      # `appendSwitch('no-sandbox')` chegava tarde. `felixo devtools launch` agora
+      # passa `--no-sandbox` na linha de comando no Linux (diagnóstico real: log
+      # do Electron do run 35540428944). O log fica em FELIXO_DEVTOOLS_DEBUG_LOG e
+      # sobe como artefato se o passo falhar. Execuções verdes no Linux antes de
+      # virar gate: PR #70 (push da correção), main do #70 e o CI do PR que o
+      # reativou (que só entrou na main por ter passado).
       - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
         timeout-minutes: 10
-        if: runner.os != 'Linux'
         shell: bash
-        run: npm run test:canvas-smoke
-
-      # DIAGNÓSTICO (task "CI — investigar por que o Electron não abre CDP sob
-      # Xvfb no Linux"): roda o mesmo smoke no Linux, mas SEM bloquear o PR
-      # (`continue-on-error`) e com a saída do Electron gravada em arquivo
-      # (FELIXO_DEVTOOLS_DEBUG_LOG). O erro real do Chromium — que as três
-      # tentativas anteriores nunca viram — sai no log do passo e no artefato.
-      # Só vira gate depois de causa documentada e 2-3 execuções verdes.
-      - name: Diagnose Canvas PR smoke on Linux (informativo, captura o stderr do Electron)
-        timeout-minutes: 10
-        if: runner.os == 'Linux'
-        continue-on-error: true
-        shell: bash
-        env:
-          FELIXO_DEVTOOLS_DEBUG_LOG: ${{ github.workspace }}/app/build/electron-devtools-${{ matrix.os }}.log
         run: |
-          mkdir -p build
-          xvfb-run -a npm run test:canvas-smoke
-
-      - name: Upload Canvas PR smoke Linux diagnostics
-        if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v6
-        with:
-          name: canvas-smoke-linux-diagnostics-${{ matrix.os }}
-          path: |
-            app/build/electron-devtools-*.log
-            app/build/canvas-smoke-failure-*.png
-          if-no-files-found: ignore
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            mkdir -p build
+            export FELIXO_DEVTOOLS_DEBUG_LOG="$GITHUB_WORKSPACE/app/build/electron-devtools-${{ matrix.os }}.log"
+            xvfb-run -a npm run test:canvas-smoke
+          else
+            npm run test:canvas-smoke
+          fi
 
       - name: Upload Canvas PR smoke failure screenshot
-        if: failure() && runner.os != 'Linux'
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: canvas-smoke-failure-${{ matrix.os }}
-          path: app/build/canvas-smoke-failure-*.png
+          path: |
+            app/build/canvas-smoke-failure-*.png
+            app/build/electron-devtools-*.log
           if-no-files-found: ignore
 
       # O scrollback adaptativo só pode ser habilitado depois de medir a
