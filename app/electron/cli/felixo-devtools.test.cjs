@@ -341,3 +341,62 @@ test('comando metrics devolve o objeto achatado do Performance.getMetrics', asyn
   assert.equal(result.codigo, 0)
   assert.deepEqual(JSON.parse(result.saida), { JSHeapUsedSize: 42 })
 })
+
+function launchDeps(env, extra = {}) {
+  return {
+    ...env,
+    getAppPaths: () => ({ userData: path.join(env.root, 'real') }),
+    probeVite: async () => ({ status: 'felixo' }),
+    electronPath: 'electron-falso',
+    appDir: env.root,
+    ...extra,
+  }
+}
+
+test('sem FELIXO_DEVTOOLS_DEBUG_LOG o Electron continua silencioso (stdio ignore)', async () => {
+  const env = setup()
+  let stdio
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+    spawn: (_c, _a, options) => { stdio = options.stdio; return { pid: 4321, unref() {} } },
+    waitForCdp: async () => {},
+  }))
+  assert.equal(result.codigo, 0)
+  assert.equal(stdio, 'ignore')
+})
+
+test('com FELIXO_DEVTOOLS_DEBUG_LOG a saída do Electron vai para o arquivo e aparece no erro do launch', async () => {
+  const env = setup()
+  const log = path.join(env.root, 'electron.log')
+  let stdio
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+    env: { FELIXO_DEVTOOLS_DEBUG_LOG: log },
+    spawn: (_c, _a, options) => {
+      stdio = options.stdio
+      fs.writeSync(options.stdio[2], 'FATAL: The SUID sandbox helper binary was found, but is not configured correctly.\n')
+      return { pid: 4321, unref() {}, once() {} }
+    },
+    waitForCdp: async () => { throw new Error('O Electron não abriu CDP na porta 9333. fetch failed') },
+  }))
+  assert.equal(Array.isArray(stdio), true)
+  assert.equal(stdio[0], 'ignore')
+  assert.equal(stdio[1], stdio[2])
+  assert.notEqual(result.codigo, 0)
+  assert.match(result.erro, /fetch failed/)
+  assert.match(result.erro, /SUID sandbox helper/)
+  assert.match(result.erro, /seguia vivo, mas não abriu o CDP/)
+})
+
+test('o erro do launch diz quando o Electron MORREU ao subir (código e sinal), sem log ligado', async () => {
+  const env = setup()
+  let onExit
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+    spawn: () => ({ pid: 4321, unref() {}, once: (_evento, fn) => { onExit = fn } }),
+    waitForCdp: async () => {
+      onExit(133, null)
+      throw new Error('O Electron não abriu CDP na porta 9333. fetch failed')
+    },
+  }))
+  assert.notEqual(result.codigo, 0)
+  assert.match(result.erro, /ENCERROU antes de abrir o CDP \(código 133, sinal nenhum\)/)
+  assert.doesNotMatch(result.erro, /Saída do Electron/)
+})

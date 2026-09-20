@@ -3397,3 +3397,21 @@ para este ambiente restrito; não foi verificado no Windows nem no macOS.
 registro e o servidor foram testados; um turno usaria a conta/limite da pessoa); o Firefox
 real da pessoa (nenhuma via oficial o controla: a extensão só cobre Chromium); a PoC 3 fora do
 CDP (o canal `felixo browser` com ações de controle ainda não existe).
+
+## 2026-09-20 — Electron sob Xvfb no Linux: instrumentação antes de qualquer flag nova
+
+A task pedia capturar o stderr real ANTES de mais uma tentativa (três às cegas já falharam). Feito, sem
+mudar o padrão do CLI: (1) `FELIXO_DEVTOOLS_DEBUG_LOG=<arquivo>` liga stdout+stderr do Electron
+detached num arquivo (`createDetached`; sem a variável continua `stdio: 'ignore'`); (2) o erro do
+`felixo devtools launch` agora diz se o Electron **encerrou** antes de abrir o CDP (código e sinal) ou
+**seguia vivo e mudo**, e anexa o fim do log quando ele existe — antes os dois casos eram o mesmo
+"fetch failed"; (3) o CI ganhou um passo **informativo** no Linux (`continue-on-error`) que roda o
+smoke sob `xvfb-run` com o log ligado e sobe `electron-devtools-*.log` como artefato. 3 testes novos
+no `felixo-devtools.test.cjs`. O gate do Linux (`if: runner.os != 'Linux'`) continua como estava até
+haver causa documentada e 2-3 execuções verdes.
+
+Pista independente (NÃO é a causa provada dos runners): num ambiente Linux restrito local o app só
+respondeu ao CDP com `--no-sandbox` na LINHA DE COMANDO; o `appendSwitch('no-sandbox')` do `main.cjs`
+chega tarde para o zygote e para a checagem do sandbox SUID, que roda antes do `main.cjs`. Se o log do
+CI mostrar `FATAL ... sandbox`, a correção provável é passar `--no-sandbox` no `launch` (só Linux, só
+instância de automação) — a decidir com o log real na mão, não antes.
