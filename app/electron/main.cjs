@@ -167,6 +167,11 @@ if (Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535)
   // vir daqui. Exclusivo desta instância — o app normal do usuário nunca
   // recebe FELIXO_DEVTOOLS_PORT e mantém o sandbox do Chromium ativo.
   app.commandLine.appendSwitch('no-sandbox')
+  // ATENÇÃO: este switch chega TARDE para a checagem do sandbox SUID, que roda ao
+  // iniciar o processo do navegador, antes deste arquivo (log real do CI em 20/09:
+  // "SUID sandbox helper binary was found, but is not configured correctly").
+  // Por isso `felixo devtools launch` também passa `--no-sandbox` na linha de
+  // comando no Linux; sem isso o Electron aborta e o CDP nunca abre.
 }
 
 if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {

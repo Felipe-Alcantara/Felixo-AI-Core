@@ -3415,3 +3415,12 @@ respondeu ao CDP com `--no-sandbox` na LINHA DE COMANDO; o `appendSwitch('no-san
 chega tarde para o zygote e para a checagem do sandbox SUID, que roda antes do `main.cjs`. Se o log do
 CI mostrar `FATAL ... sandbox`, a correção provável é passar `--no-sandbox` no `launch` (só Linux, só
 instância de automação) — a decidir com o log real na mão, não antes.
+
+**Causa raiz (evidência real do CI, run 35540428944, x64 e ARM idênticos):**
+`FATAL:sandbox/linux/suid/client/setuid_sandbox_host.cc:166 The SUID sandbox helper binary was found, but
+is not configured correctly. Rather than run without sandboxing I'm aborting now. ... chrome-sandbox is
+owned by root and has mode 4755.` O Chromium checa o sandbox SUID ao iniciar o processo do navegador,
+ANTES do `main.cjs`; por isso o `appendSwitch('no-sandbox')` da 3ª tentativa nunca teve como funcionar.
+Correção: `felixo devtools launch` passa `--no-sandbox` na linha de comando no Linux (só na instância de
+automação; 1 teste novo). O passo do Linux segue informativo até 2-3 execuções verdes seguidas; só então
+o `if: runner.os != 'Linux'` sai.

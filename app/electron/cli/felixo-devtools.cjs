@@ -232,9 +232,17 @@ async function launch(options, deps = {}) {
   }
   delete env.ELECTRON_RUN_AS_NODE
   const debugLog = env.FELIXO_DEVTOOLS_DEBUG_LOG || ''
+  // Linux: o Chromium checa o sandbox SUID ao iniciar o processo do navegador, ANTES
+  // do main.cjs — sem `chrome-sandbox` root/4755 (contêiner, CI, AppImage) ele aborta com
+  // "SUID sandbox helper binary was found, but is not configured correctly" e o CDP nunca
+  // abre (log real do CI, 20/09, ubuntu-latest e ubuntu-24.04-arm). O appendSwitch do
+  // main.cjs chega tarde; a flag tem de ir na linha de comando. Só nesta instância de
+  // automação: o app normal da pessoa nunca recebe isto.
+  const platform = deps.platform ?? process.platform
+  const sandboxArgs = platform === 'linux' ? ['--no-sandbox'] : []
   const child = packaged
-    ? createDetached(packaged, [], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
-    : createDetached(deps.electronPath ?? electronPath(), ['.'], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
+    ? createDetached(packaged, sandboxArgs, { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
+    : createDetached(deps.electronPath ?? electronPath(), ['.', ...sandboxArgs], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
   const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid, createdAt: new Date().toISOString() }
   writeState(state, deps)
   // Distingue "o Electron morreu ao subir" de "ficou vivo e mudo": sem isso os dois

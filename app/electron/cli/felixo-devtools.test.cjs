@@ -88,7 +88,7 @@ test('launch --packaged sobe o binário real, sem Vite e sem VITE_DEV_SERVER_URL
     appDir: env.root,
     spawn(command, args, options) {
       assert.equal(command, exe)
-      assert.deepEqual(args, [])
+      assert.deepEqual(args, process.platform === 'linux' ? ['--no-sandbox'] : [])
       assert.equal('VITE_DEV_SERVER_URL' in options.env, false)
       assert.equal(options.env.FELIXO_DEVTOOLS_PORT, '9333')
       return { pid: 5555, unref() {} }
@@ -399,4 +399,20 @@ test('o erro do launch diz quando o Electron MORREU ao subir (código e sinal), 
   assert.notEqual(result.codigo, 0)
   assert.match(result.erro, /ENCERROU antes de abrir o CDP \(código 133, sinal nenhum\)/)
   assert.doesNotMatch(result.erro, /Saída do Electron/)
+})
+
+test('Linux: --no-sandbox vai na LINHA DE COMANDO do Electron (o appendSwitch do main chega tarde); outros SOs não recebem', async () => {
+  const argumentosPara = async (platform, extra = []) => {
+    const env = setup()
+    let recebido
+    await executarDevtools(['launch', '--port', '9333', ...extra], launchDeps(env, {
+      platform,
+      spawn: (_c, args) => { recebido = args; return { pid: 4321, unref() {} } },
+      waitForCdp: async () => {},
+    }))
+    return recebido
+  }
+  assert.deepEqual(await argumentosPara('linux'), ['.', '--no-sandbox'])
+  assert.deepEqual(await argumentosPara('win32'), ['.'])
+  assert.deepEqual(await argumentosPara('darwin'), ['.'])
 })
