@@ -3292,3 +3292,25 @@ segfault do node-pty (exit 139, `AttachConsole failed`), igual ao do PR #51. O p
 até 3 vezes SOMENTE quando o código de saída é 139; qualquer outro código falha na hora (laço
 testado com funções falsas: recupera no 3º segfault e não repete falha real). Não verificado no
 runner: se o segfault for determinístico numa máquina, as 3 tentativas também falham.
+
+Ainda em 20/09 (CI da main do #66): o smoke do Windows falhou no `waitFor` de 5 s do painel de busca
+(`checarPainelNosDoisEixos`, o mesmo que já tinha caído nos PRs #48 e #55). O screenshot de falha
+mostra o painel "Pesquisar" ABERTO — apareceu depois do teto, ou seja, runner lento. Os 13
+`timeout: 5_000` de interação do smoke viraram `INTERACTION_TIMEOUT_MS` (20 s no Windows, 5 s nos
+demais). Não verificado: só as próximas execuções do Windows mostram se 20 s bastam.
+
+E na reexecução da mesma main (20/09): "arrasto pequeno da nota nao persistiu" (`checarInteracoes`). Não
+era timeout: o smoke esperava 800 ms FIXOS depois de soltar o mouse e lia a posição salva; a gravação
+tem atraso e no runner Windows passou disso. O arrasto e a criação de conexão agora esperam a mudança
+aparecer no armazenamento (polling de 200 ms até `INTERACTION_TIMEOUT_MS`); se nunca aparecer, o erro
+continua sendo o mesmo de antes (falha real). Não verificado: o screenshot da falha mostra a nota SELECIONADA
+(o mouse chegou nela) mas não permite ver se ela se moveu — inconclusivo; só o CI do Windows mostra se o
+polling resolve. Se ainda falhar mesmo esperando até 20 s, o arrasto pode ser um problema real.
+
+Erro meu no mesmo PR (#67): a 1ª versão do polling usava `page.waitForFunction(async () => ...)`, que
+NÃO espera — a Promise devolvida já é "verdadeira" e a espera termina na hora. Resultado: como eu
+tinha REMOVIDO os 800 ms fixos, o smoke passou a ler a posição sem esperar nada e falhou em ~1,5 s no
+macOS (o CI do PR pegou). Corrigido com `esperarAte` (`scripts/canvas-smoke-wait.cjs`, polling no lado
+do Node com `page.evaluate`, 4 testes com relógio falso, inclusive o caso "Promise que resolve falsa
+não conta"). Não reproduzi o `waitForFunction` num navegador (não há um aqui): a conclusão vem do tempo
+da falha (1,5 s < 5 s de teto) e do comportamento documentado; o teste do helper protege o novo código.
