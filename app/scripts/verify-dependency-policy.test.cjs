@@ -5,6 +5,7 @@ const test = require('node:test')
 
 const {
   parseArgs,
+  validateAuditReport,
   validateDependencyPolicy,
 } = require('./verify-dependency-policy.cjs')
 
@@ -120,4 +121,21 @@ test('rejeita SBOM que não é CycloneDX', () => {
     }),
     /CycloneDX/,
   )
+})
+
+test('erro do registro do npm (400/503) falha fechado, mas diz que não é vulnerabilidade', () => {
+  const erro = { error: { code: 'EAUDIT', summary: '503 Service Unavailable - maintenance' } }
+  assert.throws(
+    () => validateAuditReport(erro, 'npm audit completo'),
+    (e) => /não obteve resposta do registro/.test(e.message) && /503 Service Unavailable/.test(e.message) && /NÃO indica vulnerabilidade/.test(e.message),
+  )
+})
+
+test('lixo sem erro do npm continua com a mensagem antiga (e falhando)', () => {
+  assert.throws(() => validateAuditReport({ foo: 1 }, 'x'), /não parece ser uma saída de npm audit/)
+  assert.throws(() => validateAuditReport(null, 'x'), /não contém um objeto/)
+})
+
+test('relatório válido continua passando', () => {
+  assert.equal(validateAuditReport(auditReport({ low: 2 }), 'x').low, 2)
 })

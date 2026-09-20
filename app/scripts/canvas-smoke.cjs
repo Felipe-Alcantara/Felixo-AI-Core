@@ -10,11 +10,15 @@
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
+const { diagnosticarMontagem } = require('./canvas-smoke-diagnostics.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
 const MIN_VIEWPORT = { width: 375, height: 667 }
-const HYDRATION_TIMEOUT_MS = 20_000
+// O runner Windows do GitHub sobe o app bem mais devagar (falhou 5 vezes em
+// 19/09 por 20 s, com o app montando logo depois): teto maior só lá. O tempo
+// medido de cada subida vai para o log, para decidir o número com dados.
+const HYDRATION_TIMEOUT_MS = process.platform === 'win32' ? 45_000 : 20_000
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 
 const FIXTURE_NODES = [
@@ -109,11 +113,27 @@ async function withDevtoolsSession(action) {
 }
 
 async function checarMontagem(page) {
-  await page.waitForFunction(
-    () => document.body.innerText.includes('Canvas pronto'),
-    null,
-    { timeout: HYDRATION_TIMEOUT_MS },
-  )
+  const started = Date.now()
+  try {
+    await page.waitForFunction(
+      () => document.querySelector('[data-felixo-hydrated="true"]') !== null,
+      null,
+      { timeout: HYDRATION_TIMEOUT_MS },
+    )
+  } catch (error) {
+    const info = await page
+      .evaluate(() => {
+        const root = document.querySelector('[data-felixo-canvas-ready]')
+        return {
+          rootPresent: root !== null,
+          hydrated: root?.getAttribute('data-felixo-hydrated') ?? null,
+          status: (document.querySelector('footer, [data-felixo-region="statusbar"]')?.textContent ?? '').trim().slice(0, 80),
+        }
+      })
+      .catch(() => ({ rootPresent: false, hydrated: null, status: '(página indisponível)' }))
+    throw new Error(`${diagnosticarMontagem(info, HYDRATION_TIMEOUT_MS)} Causa original: ${error.message.split('\n')[0]}`)
+  }
+  console.log(`[canvas-smoke] canvas pronto em ${Date.now() - started} ms (teto ${HYDRATION_TIMEOUT_MS} ms)`)
 }
 
 const LAYOUT_REGIONS = ['topbar', 'sidebar', 'canvas']
