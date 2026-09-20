@@ -2199,7 +2199,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   const arrangeableCount = countArrangeableNodes(nodes)
 
   return (
-    <div className="flex h-full w-full" data-felixo-canvas-ready>
+    <div
+      className="flex h-full w-full"
+      data-felixo-canvas-ready
+      // Sinal explícito de prontidão para o smoke (em vez de ler o texto da barra de status).
+      data-felixo-hydrated={hydrated ? 'true' : 'false'}
+    >
       <div
         ref={flowContainerRef}
         className="relative h-full min-w-0 flex-1"

@@ -130,6 +130,15 @@ function validateAuditReport(report, label) {
     throw new Error(`Relatório ${label} não contém um objeto.`)
   }
   if (!Number.isInteger(report.auditReportVersion)) {
+    // O npm devolve {"error":{...}} quando o registro não responde (400/503).
+    // Continua falhando fechado, mas diz que NÃO é uma vulnerabilidade.
+    if (report.error && typeof report.error === 'object') {
+      const { code, summary } = report.error
+      throw new Error(
+        `Relatório ${label}: o npm audit não obteve resposta do registro (${[code, summary].filter(Boolean).join(': ') || 'erro sem detalhe'}). ` +
+          'Isto NÃO indica vulnerabilidade — o registro do npm pode estar indisponível (status.npmjs.org); rode de novo. O gate continua bloqueando por segurança.',
+      )
+    }
     throw new Error(`Relatório ${label} não parece ser uma saída de npm audit.`)
   }
   return vulnerabilityCounts(report)

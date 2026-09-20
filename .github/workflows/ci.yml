@@ -40,11 +40,19 @@ jobs:
       - name: Audit npm dependency graph (complete)
         shell: bash
         run: |
-          set +e
-          npm audit --json > build/dependency-policy/npm-audit-full.json
-          status=$?
+          # Até 3 tentativas SÓ quando o npm não devolveu relatório (registro fora
+          # do ar: 400/503 em 19/09). Com relatório, vale a primeira resposta — o
+          # gate não é afrouxado, só deixa de cair por um soluço do registro.
+          for attempt in 1 2 3; do
+            set +e
+            npm audit --json > build/dependency-policy/npm-audit-full.json
+            status=$?
+            set -e
+            if grep -q '"auditReportVersion"' build/dependency-policy/npm-audit-full.json; then break; fi
+            echo "npm audit sem relatório (tentativa $attempt/3); o registro do npm pode estar indisponível."
+            if [ "$attempt" -lt 3 ]; then sleep 20; fi
+          done
           printf '%s\n' "$status" > build/dependency-policy/npm-audit-full.exit
-          set -e
 
       # Este comparativo representa somente o que o npm considera produção.
       # Ele é um gate separado porque o resultado não pode substituir o audit
@@ -52,11 +60,19 @@ jobs:
       - name: Audit npm dependency graph (omit dev, required gate)
         shell: bash
         run: |
-          set +e
-          npm audit --omit=dev --json > build/dependency-policy/npm-audit-production.json
-          status=$?
+          # Até 3 tentativas SÓ quando o npm não devolveu relatório (registro fora
+          # do ar: 400/503 em 19/09). Com relatório, vale a primeira resposta — o
+          # gate não é afrouxado, só deixa de cair por um soluço do registro.
+          for attempt in 1 2 3; do
+            set +e
+            npm audit --omit=dev --json > build/dependency-policy/npm-audit-production.json
+            status=$?
+            set -e
+            if grep -q '"auditReportVersion"' build/dependency-policy/npm-audit-production.json; then break; fi
+            echo "npm audit sem relatório (tentativa $attempt/3); o registro do npm pode estar indisponível."
+            if [ "$attempt" -lt 3 ]; then sleep 20; fi
+          done
           printf '%s\n' "$status" > build/dependency-policy/npm-audit-production.exit
-          set -e
 
       - name: Generate npm SBOM
         run: npm sbom --package-lock-only --sbom-format=cyclonedx --sbom-type=application > build/dependency-policy/npm-sbom.cdx.json
@@ -65,6 +81,7 @@ jobs:
       # npm-runtime observável no artefato, em vez de inventariar somente o
       # package-lock.
       - name: Build unpacked application
+        timeout-minutes: 10
         run: npm run pack
 
       - name: Inventory packaged application
@@ -75,6 +92,7 @@ jobs:
       # falha funcional ou violação de budget em gate; alternativas ausentes
       # ficam registradas no JSON sem tornar o job dependente delas.
       - name: Benchmark package managers in packaged application
+        timeout-minutes: 10
         shell: bash
         run: >-
           npm run benchmark:package-managers:check --
@@ -82,6 +100,7 @@ jobs:
           --out=build/dependency-policy/package-managers.json
 
       - name: Benchmark package-manager operational cost in packaged application
+        timeout-minutes: 15
         shell: bash
         run: >-
           npm run benchmark:package-managers:performance:check --
@@ -228,6 +247,9 @@ jobs:
   validate:
     name: Validate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # Teto do job: o mais lento medido é ~13 min no Windows; um passo pendurado
+    # (26 min em 19/09) passa a falhar claro em vez de ocupar o runner por horas.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -262,6 +284,7 @@ jobs:
       # runner. A bancada compara a política anterior com a atual e executa
       # instalação/atualização offline usando o Electron em cada SO.
       - name: Benchmark npm runtime
+        timeout-minutes: 10
         shell: bash
         run: npm run benchmark:npm-runtime:check -- --iterations=2 --out=npm-runtime-${{ matrix.os }}.json
 
@@ -278,6 +301,7 @@ jobs:
       # a matriz, mas qualquer alternativa encontrada que falhe no smoke deixa
       # o job vermelho. O JSON registra a disponibilidade por sistema.
       - name: Benchmark package-manager alternatives
+        timeout-minutes: 10
         shell: bash
         run: npm run benchmark:package-managers -- --iterations=2 --check --out=package-manager-alternatives-${{ matrix.os }}.json
 
@@ -290,6 +314,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Benchmark package-manager operational cost
+        timeout-minutes: 15
         shell: bash
         run: npm run benchmark:package-managers:performance:check -- --iterations=2 --agents=1,2,5,10 --out=package-manager-operational-${{ matrix.os }}.json
 
@@ -308,6 +333,7 @@ jobs:
       # exploratória; uma regressão aqui não bloqueia PR, mas fica arquivada
       # pra comparação entre execuções.
       - name: Benchmark terminal responsiveness during install
+        timeout-minutes: 10
         shell: bash
         continue-on-error: true
         run: npm run benchmark:terminal-responsiveness -- --iterations=2 --out=terminal-responsiveness-${{ matrix.os }}.json
@@ -332,6 +358,7 @@ jobs:
             typecheck-${{ runner.os }}-
 
       - name: Test
+        timeout-minutes: 15
         run: npm test
 
       # Mantém a cobertura que depende de node-pty visível no log da matriz.
@@ -339,11 +366,13 @@ jobs:
       # próprio launch spec (Linux direto, macOS shell de login, Windows
       # cmd.exe/ConPTY).
       - name: Test native PTY integration
+        timeout-minutes: 10
         run: npm run test:native
 
       # O reporter padrão do Vitest registra "Test Files" e "Tests" no log.
       # Sem --passWithNoTests, uma coleta vazia falha o job em vez de ficar verde.
       - name: Test frontend
+        timeout-minutes: 10
         env:
           # A matriz de 50 repetições roda no gate E2E logo abaixo; o conjunto
           # geral mantém uma passada para não duplicar o custo.
@@ -354,6 +383,7 @@ jobs:
       # iniciar CLIs autenticadas: o teste usa o store/manager reais, o
       # escritor/leitor de artefatos e um PTY fake determinístico.
       - name: Test Canvas initial context E2E
+        timeout-minutes: 10
         env:
           FELIXO_CONTEXT_MATRIX_RUNS: 50
           FELIXO_CONTEXT_MATRIX_REPORT: build/canvas-context-matrix-${{ matrix.os }}.json
@@ -388,6 +418,7 @@ jobs:
       # novo. Ver a task "Canvas — criar gate CI de evidência visual" no
       # Notion para o registro completo e a task de investigação aberta.
       - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
+        timeout-minutes: 10
         if: runner.os != 'Linux'
         shell: bash
         run: npm run test:canvas-smoke
@@ -406,6 +437,7 @@ jobs:
       # contra o baseline fixo de 20k. Linux precisa do display virtual; os
       # outros dois runners abrem a mesma janela Electron nativamente.
       - name: Benchmark terminal scrollback policy
+        timeout-minutes: 10
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
@@ -423,9 +455,11 @@ jobs:
           if-no-files-found: ignore
 
       - name: Lint
+        timeout-minutes: 5
         run: npm run lint
 
       - name: Build renderer
+        timeout-minutes: 10
         run: npm run build
 
       # A divisão do bundle só é válida se os chunks relativos continuarem
@@ -433,6 +467,7 @@ jobs:
       # abre o menu de ferramentas e carrega Fetch All; Linux usa o mesmo
       # display virtual da bancada de scrollback.
       - name: Benchmark renderer bundle
+        timeout-minutes: 10
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then

@@ -3238,3 +3238,23 @@ NÃO verificado: `scrollHeight` vs `clientHeight` do xterm com a variável (falt
 efeito em menus, seleção com o mouse (`terminal-mouse-selection.ts`), cópia e flicker — por isso
 o padrão continua desligado. O teste que detecta a volta do `?1049h` no boot não entrou: exige o
 `claude` instalado e autenticado, que o CI não tem.
+
+## 2026-09-20 — CI: flakes do Validate do Windows (tetos, smoke, audit do npm)
+
+Evidência: nesta semana o smoke de montagem (`checarMontagem`, 20 s) falhou 5 vezes no runner
+Windows e passou no rerun (a última em 19/09 no CI da main do #62, run 35461628950, com o app
+montando logo depois); um benchmark ficou ~26 min pendurado; o `npm audit` recebeu 400/503.
+
+Feito: (1) `timeout-minutes` em todos os passos de teste/benchmark/build dos jobs Validate e
+Dependency policy e teto de 45 min no job Validate (o mais lento medido é ~13 min no Windows;
+tetos = várias vezes a duração medida do passo); (2) o app expõe `data-felixo-hydrated` e o smoke
+espera esse sinal em vez do texto da barra de status; teto de 45 s no Windows (20 s nos outros) e
+o tempo real de cada subida passa a sair no log (`canvas pronto em N ms`) — **p50/p95 ainda NÃO
+medidos: falta acumular execuções**; (3) a falha do smoke diferencia "APP LENTO" (canvas montou e
+segue carregando) de "APP NÃO MONTOU" (`canvas-smoke-diagnostics.cjs`, com teste); (4) `npm audit`
+tenta até 3 vezes só quando NÃO veio relatório e `verify-dependency-policy.cjs` diz que o erro do
+registro não é vulnerabilidade — continua falhando fechado.
+
+Não feito: decidir quais benchmarks bloqueiam o PR (só o de responsividade já é informativo) e o
+destino do pre-release parcial v0.1.368 (decisão do Felipe). O efeito real dos tetos e do timeout
+maior só se comprova nas próximas execuções do CI.
