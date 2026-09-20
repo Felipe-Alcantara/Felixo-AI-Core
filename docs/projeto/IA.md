@@ -3338,3 +3338,62 @@ para `remove`, e cada nova tentativa criava outra. Agora a criação desfaz a pa
 antes do conserto). Item 4 da task (pastas de tentativas antigas): na máquina do Felipe, pastas
 em `cli-profiles/<cli>/` cujo id NÃO consta em `config/cli-accounts.json` são órfãs e podem ser
 apagadas à mão; o app não faz essa varredura.
+
+## 2026-09-20 — Decisão: como um agente controla um navegador de verdade
+
+**Decisão:** o caminho principal é o **3 — o navegador do próprio AI Core como ferramenta**, exposto
+a qualquer agente (Codex, Claude, Gemini) pelo comando `felixo` (fila `agent-requests`, lista de
+ações fechada), operando o `webContents` dos blocos Página Web. O **2 — MCP de navegador no Codex CLI**
+fica como complemento imediato para sites externos fora do canvas. O **1 — embutir o app do Codex —
+está descartado**.
+
+**Fontes oficiais lidas em 20/09/2026** (`learn.chatgpt.com`, para onde as URLs antigas de
+`developers.openai.com` redirecionam; lidas por resumo, não por cópia integral):
+- *Browser* do Codex: disponível no app desktop do ChatGPT e na web; "não está disponível no Codex
+  CLI nem na extensão de IDE".
+- Extensão para Chrome: "Chrome, Edge, Brave, Opera ou Vivaldi" — **não Firefox**.
+- Codex CLI **suporta MCP**: `codex mcp add <nome> -- <comando stdio>` ou `[mcp_servers.<nome>]` no
+  `config.toml` (stdio: `command`/`args`/`env`/`cwd`; HTTP: `url`); "Playwright: Control and inspect a
+  browser using Playwright" está entre os exemplos.
+- O `codex` local (0.154.0) tem `codex mcp add|list|get|remove|login|logout`.
+
+**Prova de conceito 2 (MCP), sem credenciais e com perfil em memória.** `@playwright/mcp` 0.0.82
+(`--headless --isolated`, Chromium do Playwright), falando JSON-RPC por stdio com uma página local:
+`initialize` → 25 ferramentas (`browser_navigate`, `browser_snapshot`, `browser_click`,
+`browser_fill_form`, `browser_evaluate`, …) → abriu a página, achou o botão por referência (`e2`),
+clicou e leu o texto novo (`segredo-do-clique-42`). O Codex registrou o servidor num `CODEX_HOME`
+temporário (`[mcp_servers.playwright]`, status *enabled*). O servidor também aceita
+`--cdp-endpoint` e `--browser firefox` (build do Playwright, NÃO o Firefox instalado da pessoa).
+
+**Prova de conceito 3 (navegador do AI Core), no app real** (Electron 41 sob Xvfb, build `dist`,
+`FELIXO_DEVTOOLS_PORT`, perfil isolado, `FELIXO_DEVTOOLS_MOCK_PTY=1`): um cliente CDP puro
+salvou um bloco `webpage` apontando para uma página local; o `webview` apareceu como alvo CDP
+(`type: webview`); um clique real (`Input.dispatchMouseEvent`, com `mouseMoved` antes) no botão da
+página mudou o texto, lido depois (`segredo-do-webview-77`). Nada de cookies ou sessão reais.
+
+**Por que 3 e não os outros**
+- **1 (embutir o app do Codex):** o Browser dele mora no app do ChatGPT, outro processo Electron; não
+  existe webview de outro app, e reparent de janela é frágil e diferente em cada SO. Não resolve
+  Codex CLI, Claude nem Gemini.
+- **2 (MCP Playwright):** funciona hoje, mas só para o Codex (cada CLI configura MCP do seu jeito),
+  abre um navegador à parte (não é o bloco do canvas que a pessoa está vendo), baixa um navegador
+  (~115 MB) e não usa o perfil isolado do navegador interno. Serve para sites fora do canvas.
+- **3:** um único canal para os três agentes, no bloco que a pessoa vê, com o perfil escolhido
+  (`--profile`). O canal já existe (`felixo browser open`), falta ampliar as ações.
+
+**Como fazer o 3 sem abrir a porta de depuração:** a PoC usou a porta CDP da instância de
+automação, que expõe o app inteiro (inclusive `window.felixo`) a qualquer processo local; não
+serve como recurso. A versão de produto deve ser uma lista FECHADA de ações no `felixo browser`
+(`snapshot`, `ler`, `clicar`, `preencher`), resolvidas no processo principal pelo `webContents` do
+bloco, e pedir confirmação (`felixo perguntar`) para ações sensíveis em perfis com login.
+
+**Achado de ambiente (útil para o `felixo devtools`):** aqui o app só respondeu ao CDP depois de
+passar `--no-sandbox` na LINHA DE COMANDO do Electron; o `appendSwitch('no-sandbox')` do
+`main.cjs` chega tarde para o zygote e o renderer morre ("Unable to access /dev/shm"), deixando o
+alvo aberto mas mudo — a mesma aparência do travamento de `felixo devtools connect`. Isso vale
+para este ambiente restrito; não foi verificado no Windows nem no macOS.
+
+**NÃO verificado:** um turno real do Codex chamando as ferramentas do Playwright MCP (só o
+registro e o servidor foram testados; um turno usaria a conta/limite da pessoa); o Firefox
+real da pessoa (nenhuma via oficial o controla: a extensão só cobre Chromium); a PoC 3 fora do
+CDP (o canal `felixo browser` com ações de controle ainda não existe).
