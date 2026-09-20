@@ -3314,3 +3314,27 @@ macOS (o CI do PR pegou). Corrigido com `esperarAte` (`scripts/canvas-smoke-wait
 do Node com `page.evaluate`, 4 testes com relógio falso, inclusive o caso "Promise que resolve falsa
 não conta"). Não reproduzi o `waitForFunction` num navegador (não há um aqui): a conclusão vem do tempo
 da falha (1,5 s < 5 s de teto) e do comportamento documentado; o teste do helper protege o novo código.
+
+## 2026-09-20 — Criar perfil de conta (Codex/Claude/Gemini): reprodução e pasta órfã
+
+Task: reproduzir a falha ao criar perfil depois da correção de 07/09 (dependência opcional
+`@openai/codex-win32-x64`, que continua no manifesto e com testes: `managed-cli-manifest`,
+`cli-auto-install`, `managed-cli-health`).
+
+Reprodução feita aqui (Linux, CLIs reais instaladas, `userData` temporário, o próprio
+`createCliAccountStore` + `buildProfileEnv` do app): `create` OK nas três CLIs, pasta criada
+(vazia em Codex/Claude; `.gitconfig` espelhado no Gemini) e a CLI respondeu com o isolamento
+certo (`codex login status` → "Not logged in"; `claude auth status --json` → `loggedIn:false`
+com `configDirectory` na pasta do perfil; `gemini --version` OK). O "exit 1" de codex/claude é
+o estado normal "não logado". NÃO reproduzido: Windows (a máquina do Felipe) e o fluxo
+interativo de login — a anotação de 14/09 não diz qual CLI nem qual mensagem, e não há log
+persistido; sem isso a falha original segue sem causa conhecida.
+
+Defeito real achado na investigação e corrigido: `create` fazia `mkdir` + espelhamento (no Gemini
+copia `.ssh`) + gravação do registro; se qualquer passo depois do `mkdir` falhasse (disco cheio,
+permissão), sobrava uma pasta órfã — com chaves ssh copiadas — sem conta registrada, invisível
+para `remove`, e cada nova tentativa criava outra. Agora a criação desfaz a pasta em caso de erro
+(o erro que sobe é o da criação, mesmo se a limpeza falhar). 2 testes novos (o primeiro falhava
+antes do conserto). Item 4 da task (pastas de tentativas antigas): na máquina do Felipe, pastas
+em `cli-profiles/<cli>/` cujo id NÃO consta em `config/cli-accounts.json` são órfãs e podem ser
+apagadas à mão; o app não faz essa varredura.

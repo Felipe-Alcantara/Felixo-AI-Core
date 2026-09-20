@@ -135,9 +135,21 @@ function createCliAccountStore({
 
     const profileDir = getProfileDir(userData, providerId, account.id)
     fileSystem.mkdirSync(profileDir, { recursive: true })
-    mirrorHomeEntries(providerId, profileDir)
 
-    writeStore([...readStore(), account])
+    try {
+      mirrorHomeEntries(providerId, profileDir)
+      writeStore([...readStore(), account])
+    } catch (error) {
+      // Sem registro a pasta nunca seria achada nem apagada por `remove` — e no
+      // Gemini ela já guarda cópia de .ssh. Desfaz o que foi criado; se nem a
+      // limpeza for possível, o erro que sobe continua sendo o da criação.
+      try {
+        fileSystem.rmSync(profileDir, { recursive: true, force: true })
+      } catch {
+        // Melhor esforço.
+      }
+      throw error
+    }
 
     return account
   }
