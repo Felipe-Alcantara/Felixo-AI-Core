@@ -173,6 +173,7 @@ function sanitizeModel(value) {
   if (!id) return null
 
   const completionPrice = Number(value.completionPrice)
+  const outputModalities = sanitizeOutputModalities(value.outputModalities)
   return {
     id,
     vendor: sanitizeString(value.vendor, 120) || id.split('/', 1)[0],
@@ -180,7 +181,18 @@ function sanitizeModel(value) {
     completionPrice: Number.isFinite(completionPrice) && completionPrice >= 0
       ? completionPrice
       : 0,
+    // Só aparece quando o Openia informa (contrato em docs/projeto/OPENIA-IMAGEM-CONTRATO.md).
+    // Ausente = capacidade DESCONHECIDA; o Felixo não presume que um modelo gera imagem.
+    ...(outputModalities ? { outputModalities } : {}),
   }
+}
+
+const OUTPUT_MODALITIES = new Set(['text', 'image', 'audio', 'video', 'embeddings', 'file'])
+
+/** Lista fechada de modalidades de saída; `undefined` quando o campo não veio ou não é uma lista. */
+function sanitizeOutputModalities(value) {
+  if (!Array.isArray(value)) return undefined
+  return [...new Set(value.map((item) => sanitizeString(item, 20).toLowerCase()).filter((item) => OUTPUT_MODALITIES.has(item)))]
 }
 
 function sanitizeString(value, maxLength) {
@@ -188,9 +200,16 @@ function sanitizeString(value, maxLength) {
   return value.trim().slice(0, maxLength)
 }
 
-function runOpeniaCommand(args, { input, timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
+/** Executável, ambiente e necessidade de shell (só `.cmd`/`.bat` no Windows) para chamar o Openia. */
+function resolveOpeniaSpawn() {
   const env = createCliEnv()
   const executable = resolveCommandPath('openia', env, { platform: process.platform }) || 'openia'
+  const needsShell = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
+  return { executable, env, needsShell }
+}
+
+function runOpeniaCommand(args, { input, timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
+  const { executable, env, needsShell } = resolveOpeniaSpawn()
   const stdio = input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe']
 
   return new Promise((resolve) => {
@@ -201,9 +220,7 @@ function runOpeniaCommand(args, { input, timeoutMs = COMMAND_TIMEOUT_MS } = {}) 
         env,
         stdio,
         windowsHide: true,
-        ...(process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
-          ? { shell: true }
-          : {}),
+        ...(needsShell ? { shell: true } : {}),
       })
     } catch {
       resolve({ ok: false })
@@ -257,8 +274,10 @@ module.exports = {
   listOpeniaInterfaces,
   listOpeniaModels,
   registerOpeniaIpcHandlers,
+  resolveOpeniaSpawn,
   runOpeniaCommand,
   sanitizeInterface,
   sanitizeModel,
+  sanitizeOutputModalities,
   setOpeniaKey,
 }

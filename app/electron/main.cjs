@@ -13,9 +13,14 @@ const { createCliAccountStore } = require('./services/cli-account-store.cjs')
 const {
   registerCliAccountIpcHandlers,
 } = require('./services/cli-account-ipc-handlers.cjs')
-const { registerOpeniaIpcHandlers } = require('./services/openia-service.cjs')
+const { createOpeniaService, registerOpeniaIpcHandlers } = require('./services/openia-service.cjs')
+const {
+  createOpeniaImageService,
+  registerOpeniaImageIpcHandlers,
+} = require('./services/openia-image-service.cjs')
 const {
   registerFileAttachmentIpcHandlers,
+  saveGeneratedImage,
 } = require('./services/file-attachments-ipc-handlers.cjs')
 const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-handlers.cjs')
 const { registerQaLoggerIpcHandlers, logQaEvent, initQaDiskStore } = require('./services/qa-logger.cjs')
@@ -128,6 +133,7 @@ wrapIpcHandleWithLogging(ipcMain, logQaEvent)
 
 let mainWindow = null
 let ptyHandlers = null
+let openiaImageService = null
 let canvasFilesHandlers = null
 let contextFilesHandlers = null
 let textFileHandlers = null
@@ -441,7 +447,8 @@ app.whenReady().then(async () => {
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
-  registerOpeniaIpcHandlers()
+  const openiaService = createOpeniaService()
+  registerOpeniaIpcHandlers({ service: openiaService })
   registerCliAccountIpcHandlers({ store: cliAccounts })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
     validateAccount: (accountId, providerId) =>
@@ -454,6 +461,17 @@ app.whenReady().then(async () => {
     }),
   })
   registerFileAttachmentIpcHandlers(appPaths, { getMainWindow })
+  // Geração de imagem: filho do Openia + arquivo de saída. Grava no MESMO diretório e pelo mesmo
+  // caminho seguro das outras imagens geradas, e só depois avisa o canvas.
+  openiaImageService = createOpeniaImageService({
+    userData: appPaths.userData,
+    listModels: () => openiaService.listModels(),
+    saveImage: (params) =>
+      saveGeneratedImage(params, path.join(appPaths.userData, 'generated-images')),
+    notify: (artifact) => getMainWindow()?.webContents?.send('canvas:image-generated', artifact),
+  })
+  registerOpeniaImageIpcHandlers({ service: openiaImageService })
+  void openiaImageService.sweepOrphans()
   registerFileExportIpcHandlers(getMainWindow)
   const projectsHandlers = registerProjectsIpcHandlers(getMainWindow, {
     database: storageDatabase,
@@ -588,6 +606,8 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  // Interrompe gerações de imagem em andamento (mata o filho do Openia e a pasta temporária).
+  openiaImageService?.shutdown()
   if (agentBrowserWatching) {
     try {
       agentBrowserWatching.pararDeObservarPedidos()
