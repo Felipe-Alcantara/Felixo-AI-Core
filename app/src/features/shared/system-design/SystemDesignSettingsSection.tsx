@@ -1,6 +1,17 @@
-import { BookOpen, ExternalLink, RefreshCw, Trash2 } from 'lucide-react'
+import { BookOpen, ExternalLink, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
 
+import {
+  describeConfiguredSource,
+  describeSystemDesignStatus,
+  type SystemDesignStatusTone,
+} from './system-design-presentation'
 import { useSystemDesignSettings } from './useSystemDesignSettings'
+
+const TONE_CLASS: Record<SystemDesignStatusTone, string> = {
+  ok: 'text-[var(--color-success)]',
+  warn: 'text-[var(--color-warning)]',
+  muted: 'text-zinc-400',
+}
 
 export function SystemDesignSettingsSection() {
   const { state, sync, updateConfig, resetCache } = useSystemDesignSettings()
@@ -10,6 +21,14 @@ export function SystemDesignSettingsSection() {
     ? new Date(config.lastSyncedAt).toLocaleString('pt-BR')
     : 'nunca'
   const shaLabel = config.lastSha ? config.lastSha.slice(0, 7) : '—'
+  const status = describeSystemDesignStatus(config)
+
+  // Voltar ao padrão troca a fonte configurada; sem sincronizar em seguida o
+  // conteúdo entregue continuaria sendo o da fonte anterior.
+  const restoreDefaultSource = async () => {
+    await updateConfig({ sourceMode: 'default' })
+    await sync()
+  }
 
   return (
     <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
@@ -21,16 +40,18 @@ export function SystemDesignSettingsSection() {
             Recomendado
           </span>
         </h3>
-        <a
-          href={config.repoUrl.replace(/\.git$/, '')}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/5"
-          title="Abrir o repositório no GitHub"
-        >
-          <ExternalLink size={11} aria-hidden="true" />
-          Ver repositório
-        </a>
+        {config.repoUrl ? (
+          <a
+            href={config.repoUrl.replace(/\.git$/, '')}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/5"
+            title="Abrir o repositório no GitHub"
+          >
+            <ExternalLink size={11} aria-hidden="true" />
+            Ver repositório
+          </a>
+        ) : null}
       </header>
 
       <p className="mb-3 text-[11px] leading-relaxed text-zinc-400">
@@ -54,6 +75,23 @@ export function SystemDesignSettingsSection() {
         />
         Usar Felixo System Design como guia obrigatório dos agentes
       </label>
+
+      <div
+        className="mb-2 rounded-md bg-white/5 px-2 py-1.5 text-[11px]"
+        data-felixo-system-design-status
+      >
+        <div className="text-zinc-300">
+          <span className="text-zinc-500">Fonte: </span>
+          <span>{describeConfiguredSource(config)}</span>
+          {config.sourceMode === 'custom' ? (
+            <span className="ml-1.5 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+              escolhida por você
+            </span>
+          ) : null}
+        </div>
+        <div className={`mt-0.5 font-medium ${TONE_CLASS[status.tone]}`}>{status.headline}</div>
+        {status.detail ? <div className="mt-0.5 text-zinc-400">{status.detail}</div> : null}
+      </div>
 
       <div className="grid grid-cols-2 gap-2 rounded-md bg-white/5 px-2 py-1.5 text-[11px] text-zinc-300">
         <div>
@@ -103,6 +141,18 @@ export function SystemDesignSettingsSection() {
           <Trash2 size={12} aria-hidden="true" />
           Limpar cache
         </button>
+        {config.sourceMode === 'custom' ? (
+          <button
+            type="button"
+            onClick={() => void restoreDefaultSource()}
+            disabled={syncing}
+            className="felixo-btn inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+            title="Descarta a fonte escolhida e volta a seguir o padrão do Felixo"
+          >
+            <RotateCcw size={12} aria-hidden="true" />
+            Voltar ao padrão do app
+          </button>
+        ) : null}
       </div>
 
       {documents.length > 0 ? (

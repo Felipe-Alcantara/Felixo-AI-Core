@@ -213,6 +213,21 @@ equivalente). Não coloque usuário, senha, token ou parâmetro secreto na URL d
 repositório; quando uma configuração legada contém esse formato, o app remove
 essas partes antes de salvar e de chamar o Git.
 
+O bloco mostra três coisas que costumam ser confundidas: a **fonte** (repositório e
+branch), o **estado da sincronização** e **de onde vem o conteúdo que os agentes
+estão recebendo agora**. Depois de trocar a fonte, ou quando a sincronização falha,
+o conteúdo em cache ainda é o da fonte anterior — e a tela diz isso, em vez de
+afirmar que a nova já vale. O texto do lembrete de padrão de qualidade e o bloco
+enviado ao orquestrador citam a mesma fonte, com o mesmo estado.
+
+- **Padrão do app:** sem escolha sua, o Felixo segue o padrão dele. Se o padrão do
+  app mudar numa atualização, você passa a recebê-lo.
+- **Fonte escolhida por você:** nunca é trocada por um novo padrão do app. O botão
+  **Voltar ao padrão do app** descarta a escolha e sincroniza de novo.
+- **Instalação anterior a esta versão:** configuração igual ao padrão vira "segue o
+  padrão"; qualquer outra vira "escolhida por você" e é preservada como estava.
+- Uma URL inválida é recusada com o motivo, sem alterar nada.
+
 Se o clone, fetch ou reset falhar, a mensagem preserva a etapa, o código, o
 branch e o repositório sem a credencial. O stderr, cabeçalhos de autorização e
 a linha de comando completa não são persistidos no SQLite, enviados ao QA

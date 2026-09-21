@@ -6231,3 +6231,89 @@ limpos, `git diff --check` limpo. Testes novos: 9 do detector (`.cmd` com espaç
 integração em `cli-auto-install.test.cjs`. Mutação feita em duas regras (ready
 recomendando instalar; mensagem persistida sem redação) — os testes correspondentes
 falharam e foram restaurados.
+
+## Fechamento de trabalho — 2026-09-21: System Design, fonte padrão configurável sem quebrar instalações existentes
+
+### Contexto
+
+Task "Felixo AI Core/System Design — tornar a fonte padrão configurável sem quebrar
+instalações existentes" (Esforço: Dias, task híbrida: decisões perguntadas antes de
+codar). O default (Felixo/main) vivia copiado em serviço, handlers, hook do renderer
+e texto do prompt, e a configuração gravada SEMPRE carregava `repoUrl`/`branch` —
+o default era copiado para o disco na primeira sincronização. Não dava para separar
+"a pessoa escolheu esta fonte" de "o app copiou o padrão", então trocar o default
+ou nunca alcançaria quem já o tinha gravado, ou o reinterpretaria em silêncio.
+
+### Decisões (perguntadas ao dono do produto; todas na opção recomendada)
+
+1. Migração: gravado igual ao default = "segue o padrão"; diferente = escolha explícita.
+2. Precedência: usuário > default, com o fallback offline sendo o último conteúdo
+   entregue. "Projeto" NÃO entrou (hoje não existe config por projeto).
+3. Prompt gerado da fonte efetiva, não texto fixo do Felixo.
+4. "Não atualizar automaticamente" = nunca trocar a fonte escolhida; o conteúdo dela
+   continua sincronizando por sessão.
+
+### O que foi feito (código)
+
+- `electron/core/system-design-source.cjs` (novo): contrato único — default,
+  migração v1→v2, precedência, `syncState`, fonte entregue (`delivered`) separada da
+  configurada, `applyConfigChange` com lista branca e validação de URL.
+  `LEGACY_DEFAULT_SOURCES` cobre quem pula de uma versão v1 direto para uma com
+  novo default.
+- `system-design-ipc-handlers.cjs`: sobre o contrato; migração gravada na primeira
+  leitura (idempotente); `save-config` só aceita `enabled`, `sourceMode:'default'`,
+  `repoUrl`, `branch` (antes `{...current, ...partial}` deixava o renderer escrever
+  `lastSha`); a entrega é registrada com a fonte REALMENTE sincronizada (há teste de
+  troca de fonte durante o clone).
+- `system-design-service.cjs`: o default deixou de ser copiado aqui; e **um clone em
+  cache cujo `origin` não é a fonte pedida é descartado** (ver "Bug achado").
+- Renderer: sem cópia do default (`UNLOADED_CONFIG`); `syncState`/`delivered` nos
+  tipos; presenter puro; seção mostra fonte, selo "escolhida por você", estado e
+  "Voltar ao padrão do app"; hook relê a config após falha e escuta um evento para
+  duas instâncias não divergirem.
+- Prompts: bloco do orquestrador cita a fonte ENTREGUE e avisa quando é diferente da
+  configurada; lembrete de padrão de qualidade gerado da fonte (para o default é
+  **idêntico byte a byte** ao texto histórico — teste com o literal original tirado
+  do git). O painel passou a gravar vazio quando o texto é o padrão (antes gravava o
+  padrão intocado como se fosse da pessoa, congelando a fonte do dia).
+
+### Bug achado só no app real
+
+Trocar a URL configurada nunca trocava de repositório: com um clone já em cache, o
+serviço fazia `fetch`/`reset` no `origin` ANTIGO e gravava o conteúdo como da fonte
+nova. Só apareceu ao exercitar o app: a tela dizia "System Design (Openia) @ cc4aae7"
+e `cc4aae7` era o SHA do Felixo (confirmado com `git remote get-url origin` no cache).
+Os testes do serviço usam git falso e não pegariam isso. Corrigido, com teste que
+falhou antes e passa depois; reverificado no app: entregue = Openia `@ 9bb9099`, 34
+documentos dela.
+
+### Validação
+
+`npm test` 1514/1514, `npm run test:frontend` 1146 passed / 1 skipped, `eslint .` e
+`tsc -b` limpos. Testes novos: 30 do contrato, 7 de integração dos handlers (SQLite
+real), 4 do serviço (origin), 7 do bloco do orquestrador, 8 do presenter, 15 do texto
+do lembrete. Mutação feita em duas regras (lista de defaults históricos; registrar a
+entrega com a fonte errada) — os testes falharam e foram restaurados. No app real
+(instância isolada, Windows): sincronização do default, escolha de fonte própria,
+sincronização pelo botão, URL inválida recusada, fonte inalcançável (falha real: os
+agentes seguem recebendo a fonte anterior e a tela diz isso), "Voltar ao padrão do
+app"; captura de tela conferida.
+
+### NÃO verificado / limitações
+
+- **Nenhuma instalação v1 real foi migrada**: a migração está coberta por testes com
+  SQLite real e configs v1 sintéticas, mas o app foi exercitado em perfil isolado novo.
+- **Não há campo na UI para digitar URL/branch** (sempre foi assim; só o IPC permite
+  fonte própria). A escolha de fonte própria foi exercitada pelo IPC; a UI oferece
+  mostrar e voltar ao padrão, não editar.
+- **Camada "projeto" fora do escopo** por decisão; o contrato foi escrito para
+  aceitá-la depois.
+- O texto do toggle e o parágrafo explicativo da seção continuam dizendo "Felixo
+  System Design", mesmo com fonte própria (é o nome da função; o estado e a fonte
+  mostrados logo abaixo são os reais).
+- Terminais já abertos não têm o lembrete reescrito ao trocar de fonte; só os novos.
+- Se a troca de fonte falhar no clone, o clone antigo já foi descartado (os documentos
+  indexados no SQLite continuam, então a fonte anterior segue entregue); o próximo
+  sync da fonte antiga re-clona em vez de dar `fetch`.
+- Um "aviso de mudança de default" para quem segue o padrão não existe: ao mudar o
+  default do app, quem o segue passa a recebê-lo sem aviso (decisão 1).

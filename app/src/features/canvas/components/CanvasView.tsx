@@ -103,8 +103,12 @@ import {
   buildQualityStandardMessage,
   composeTerminalInitialText,
   isTerminalInitialTextReady,
+  qualityStandardSourceFrom,
+  resolveQualityStandardPrompt,
   resolveTerminalInitialText,
+  type QualityStandardSource,
 } from '../services/quality-standard-prompt'
+import { subscribeSystemDesignConfig } from '../../shared/system-design/system-design-events'
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
@@ -823,6 +827,31 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     },
     [],
   )
+  // O texto que vai para o agente é resolvido em UM lugar, a partir de três
+  // entradas: o que a pessoa gravou (`stored`, vazio = "sem personalização"),
+  // se o lembrete está ligado e a fonte do System Design que vale agora.
+  // Criação, retomada e reabertura de terminal leem o mesmo resultado (é o
+  // `qualityStandard` acima), então a fonte citada não pode divergir entre elas.
+  const qualityStoredPromptRef = useRef<string | null>(null)
+  const qualityEnabledRef = useRef(true)
+  const qualitySourceRef = useRef<QualityStandardSource | null>(null)
+  const refreshQualityStandard = useCallback(() => {
+    applyQualityStandard({
+      prompt: resolveQualityStandardPrompt({
+        stored: qualityStoredPromptRef.current,
+        source: qualitySourceRef.current,
+      }),
+      enabled: qualityEnabledRef.current,
+    })
+  }, [applyQualityStandard])
+  const applySavedQualityStandard = useCallback(
+    (value: { prompt: string; enabled: boolean }) => {
+      qualityStoredPromptRef.current = value.prompt
+      qualityEnabledRef.current = value.enabled
+      refreshQualityStandard()
+    },
+    [refreshQualityStandard],
+  )
   // Agent terminals that already existed on disk the moment the app booted —
   // i.e. left open from a previous run, so whatever they were doing may not
   // have finished. Captured once, right when hydration lands, from the raw
@@ -1072,18 +1101,32 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         bootstrapPromptRef.current = result.prompt
       }
     })
-    void window.felixo?.canvas?.getQualityStandard?.().then((result) => {
-      if (result?.ok) {
-        applyQualityStandard({
-          prompt:
-            typeof result.prompt === 'string' && result.prompt.trim()
-              ? result.prompt
-              : DEFAULT_QUALITY_STANDARD_PROMPT,
-          enabled: result.enabled !== false,
-        })
+    void Promise.all([
+      window.felixo?.canvas?.getQualityStandard?.(),
+      window.felixo?.systemDesign?.getConfig?.(),
+    ]).then(([quality, systemDesign]) => {
+      if (systemDesign?.ok) {
+        qualitySourceRef.current = qualityStandardSourceFrom(systemDesign.config)
+      }
+      if (quality?.ok) {
+        qualityStoredPromptRef.current = typeof quality.prompt === 'string' ? quality.prompt : null
+        qualityEnabledRef.current = quality.enabled !== false
+        refreshQualityStandard()
       }
     })
-  }, [applyQualityStandard])
+  }, [refreshQualityStandard])
+
+  // A fonte do System Design pode mudar com o canvas aberto (o painel de
+  // configurações troca a fonte, a sincronização falha ou termina). Terminais
+  // já abertos não são reescritos; os próximos citam a fonte de agora.
+  useEffect(
+    () =>
+      subscribeSystemDesignConfig((config) => {
+        qualitySourceRef.current = qualityStandardSourceFrom(config)
+        refreshQualityStandard()
+      }),
+    [refreshQualityStandard],
+  )
 
   // 'Q' toggles select/pan, but only when the canvas itself is focused — never
   // while typing in a field, terminal or tool panel.
@@ -2398,7 +2441,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onBootstrapSaved={(prompt) => {
           bootstrapPromptRef.current = prompt
         }}
-        onQualityStandardSaved={applyQualityStandard}
+        onQualityStandardSaved={applySavedQualityStandard}
       />
 
       {detailsTerminalId && (() => {

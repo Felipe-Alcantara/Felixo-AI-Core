@@ -109,3 +109,128 @@ test('sync usa URL sanitizada e propaga apenas erro Git redigido', async (t) => 
     'repo',
   ])
 })
+
+// ---------------------------------------------------------------------------
+// Clone já existente: só vale se o `origin` dele for a fonte pedida.
+// Medido no app real (21/09/2026): trocar a URL configurada não trocava de
+// repositório — o `fetch`/`reset` rodava no clone da fonte ANTIGA e o resultado
+// era gravado como se fosse da nova.
+// ---------------------------------------------------------------------------
+
+function createFakeGit({ originUrl, originFails = false }) {
+  const calls = []
+  const executeGit = async (command, args, options) => {
+    calls.push({ args, cwd: options.cwd })
+    const verb = args[0]
+
+    if (verb === 'remote') {
+      if (originFails) throw new Error('fatal: No such remote origin')
+      return { stdout: `${originUrl}\n` }
+    }
+    if (verb === 'clone') {
+      const target = path.join(options.cwd, args[args.length - 1])
+      fs.mkdirSync(path.join(target, '.git'), { recursive: true })
+      fs.writeFileSync(path.join(target, 'guia.md'), '# Guia\n\nTexto.\n')
+      return { stdout: '' }
+    }
+    if (verb === 'rev-parse') return { stdout: `${'f'.repeat(40)}\n` }
+    return { stdout: '' }
+  }
+  return { executeGit, calls }
+}
+
+function seedExistingClone(cacheDir) {
+  const repoPath = path.join(cacheDir, 'repo')
+  fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true })
+  fs.writeFileSync(path.join(repoPath, 'antigo.md'), '# Da fonte antiga\n')
+  return repoPath
+}
+
+const noopRepository = { save() {}, deleteMissing() { return 0 } }
+
+test('clone existente de OUTRA fonte é descartado e a fonte pedida é clonada', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-origin-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const repoPath = seedExistingClone(cacheDir)
+  const { executeGit, calls } = createFakeGit({
+    originUrl: 'https://github.com/Felipe-Alcantara/Felixo-System-Design.git',
+  })
+
+  await syncSystemDesignRepository({
+    repoUrl: 'https://github.com/acme/padroes.git',
+    branch: 'main',
+    cacheDir,
+    repository: noopRepository,
+    executeGit,
+  })
+
+  const verbs = calls.map((call) => call.args[0])
+  assert.ok(verbs.includes('clone'), 'deveria clonar a fonte pedida')
+  assert.ok(!verbs.includes('fetch'), 'não pode dar fetch no origin antigo')
+  assert.ok(!verbs.includes('reset'), 'não pode dar reset a partir do origin antigo')
+  assert.ok(
+    calls.find((call) => call.args[0] === 'clone').args.includes('https://github.com/acme/padroes.git'),
+  )
+  assert.equal(fs.existsSync(path.join(repoPath, 'antigo.md')), false, 'o conteúdo da fonte antiga sumiu')
+  assert.equal(fs.existsSync(path.join(repoPath, 'guia.md')), true)
+})
+
+test('clone existente da MESMA fonte só atualiza (fetch + reset), sem re-clonar', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-origin-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  seedExistingClone(cacheDir)
+  // Mesma fonte escrita de outro jeito: sem .git, host em maiúsculas, barra final.
+  const { executeGit, calls } = createFakeGit({ originUrl: 'https://GitHub.com/acme/padroes/' })
+
+  await syncSystemDesignRepository({
+    repoUrl: 'https://github.com/acme/padroes.git',
+    branch: 'main',
+    cacheDir,
+    repository: noopRepository,
+    executeGit,
+  })
+
+  const verbs = calls.map((call) => call.args[0])
+  assert.ok(verbs.includes('fetch'))
+  assert.ok(verbs.includes('reset'))
+  assert.ok(!verbs.includes('clone'), 'a mesma fonte não deve ser re-clonada')
+})
+
+test('não conseguir ler o origin do clone existente é tratado como fonte desconhecida (re-clona)', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-origin-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  seedExistingClone(cacheDir)
+  const { executeGit, calls } = createFakeGit({ originUrl: '', originFails: true })
+
+  await syncSystemDesignRepository({
+    repoUrl: 'https://github.com/acme/padroes.git',
+    branch: 'main',
+    cacheDir,
+    repository: noopRepository,
+    executeGit,
+  })
+
+  const verbs = calls.map((call) => call.args[0])
+  assert.ok(verbs.includes('clone'))
+  assert.ok(!verbs.includes('fetch'))
+})
+
+test('a credencial do origin gravado não vaza para o resultado da comparação', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-origin-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  seedExistingClone(cacheDir)
+  // Clone antigo feito com credencial na URL: ainda é a mesma fonte.
+  const { executeGit, calls } = createFakeGit({
+    originUrl: 'https://usuario:SEGREDO123@github.com/acme/padroes.git',
+  })
+
+  await syncSystemDesignRepository({
+    repoUrl: 'https://github.com/acme/padroes.git',
+    branch: 'main',
+    cacheDir,
+    repository: noopRepository,
+    executeGit,
+  })
+
+  assert.ok(calls.some((call) => call.args[0] === 'fetch'), 'mesma fonte apesar da credencial')
+})

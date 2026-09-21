@@ -17,6 +17,7 @@ import type {
   QaLogEntryInput,
   StreamEvent,
   SystemDesignConfig,
+  SystemDesignConfigChange,
   SystemDesignDocument,
   SystemDesignDocumentSummary,
   TerminalOutputEvent,
@@ -877,7 +878,7 @@ declare global {
           CliInvokeResult & { config?: SystemDesignConfig }
         >
         saveConfig: (
-          partial: Partial<SystemDesignConfig>,
+          change: SystemDesignConfigChange,
         ) => Promise<CliInvokeResult & { config?: SystemDesignConfig }>
         listDocuments: () => Promise<
           CliInvokeResult & { documents?: SystemDesignDocumentSummary[] }

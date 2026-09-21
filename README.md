@@ -77,6 +77,12 @@ destino sem userinfo. Tokens, parâmetros sensíveis, cabeçalhos de autorizaç�
 stderr cru e a linha de comando completa são redigidos antes de `lastError`, do
 QA Logger e da resposta ao renderer.
 
+A fonte (URL e branch) tem um contrato único em `electron/core/system-design-source.cjs`:
+só a escolha explícita é gravada, o padrão do app é resolvido na leitura, e a UI e os
+prompts dizem a fonte **entregue** (a do conteúdo em cache), que pode diferir da
+configurada até a próxima sincronização. Uma fonte escolhida nunca é trocada por um
+novo padrão do app; configurações antigas são migradas sem reset.
+
 ---
 
 ## Stack

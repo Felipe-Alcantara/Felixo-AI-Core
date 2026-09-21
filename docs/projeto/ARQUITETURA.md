@@ -615,6 +615,30 @@ branch e destino seguro, usa stderr apenas depois da redação e elimina a linha
 de comando completa. A migração de configuração também regrava URLs e erros
 legados já sanitizados no SQLite.
 
+### Fonte do System Design: contrato e precedência
+
+`electron/core/system-design-source.cjs` é a única definição do padrão da fonte e
+da migração da configuração (`schemaVersion` 2). Só a escolha explícita é gravada
+(`sourceMode: custom` + `customSource`); no modo `default` a fonte é resolvida na
+leitura, então um novo padrão do app alcança quem o segue e nunca uma fonte
+escolhida. A precedência é **escolha do usuário > padrão do app**; o fallback
+offline não é uma terceira fonte, é o último conteúdo entregue (`delivered`), que
+segue valendo enquanto a sincronização falha.
+
+A migração do v1 (que gravava `repoUrl`/`branch` sempre) trata como "segue o
+padrão" o que for igual ao padrão atual ou a um padrão histórico
+(`LEGACY_DEFAULT_SOURCES` — ao trocar o padrão do app, acrescente o que está
+saindo), e como escolha explícita o restante, preservando `enabled`, sha, data e
+erro.
+
+`system-design:save-config` aceita só `enabled`, `sourceMode: 'default'`, `repoUrl`
+e `branch` (lista branca); sha, data, erro e fonte entregue só o processo principal
+escreve, e URL inválida é recusada sem gravar. O serviço descarta um clone em cache
+cujo `origin` não é a fonte pedida (antes o `fetch` rodava no `origin` antigo e o
+conteúdo da fonte anterior era gravado como da nova). O renderer não tem cópia do
+padrão; recebe a configuração já resolvida com `syncState` (`disabled`,
+`never-synced`, `synced`, `offline-fallback`, `pending-source-change`) e `delivered`.
+
 ## Providers e contas
 
 Os providers entram por adapters e pelo registry de Terminal Adapters. A

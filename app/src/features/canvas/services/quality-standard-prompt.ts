@@ -1,3 +1,4 @@
+import type { SystemDesignSyncState } from '../../shared/system-design/types'
 import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillsManifestPrompt } from './skills-manifest'
 import type { CanvasSkill } from '../types'
@@ -13,9 +14,167 @@ import {
  * regardless of the task. Independent of file-block linking.
  */
 
-export const DEFAULT_QUALITY_STANDARD_PROMPT = `Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE do Felixo System Design (padrões de design, backend/frontend, política de git e o template de contexto IA.md). Procure os guias na pasta "Padrão de qualidade - Felixo System Design/" dentro do repositório; se ela não existir, use a fonte: https://github.com/Felipe-Alcantara/Felixo-System-Design. Leia o que for relevante para a tarefa e mantenha esse padrão em tudo que produzir (código, commits e documentação). Se estiver atualizando um arquivo de contexto ou plano, nunca encerre a resposta com o trabalho ainda marcado como "em andamento": faça a última edição do arquivo e deixe o estado final claro (concluído, bloqueado, aguardando decisão ou interrompido com motivo).
+/**
+ * A fonte do padrão de qualidade que o texto padrão aponta. Vem da configuração
+ * do System Design (`useSystemDesignSettings`); o texto não guarda mais a URL
+ * do Felixo fixa.
+ */
+export type QualityStandardSource = {
+  label: string
+  repoUrl: string
+  branch: string
+  sourceMode: 'default' | 'custom'
+  syncState: SystemDesignSyncState
+}
+
+/** Nome e URL que o texto padrão sempre usou; ainda é o resultado para o default do app. */
+const FELIXO_LABEL = 'Felixo System Design'
+const FELIXO_URL = 'https://github.com/Felipe-Alcantara/Felixo-System-Design'
+
+/** URL como o agente deve ver: sem credencial embutida e sem o `.git` final. */
+function toReadableRepoUrl(repoUrl: string): string {
+  return repoUrl
+    .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@\s]*@/i, '$1')
+    .replace(/\.git$/i, '')
+}
+
+function buildQualityStandardTemplate(params: {
+  label: string
+  url: string
+  branchNote: string
+  stateNote: string
+}): string {
+  const { label, url, branchNote, stateNote } = params
+  return `Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE do ${label} (padrões de design, backend/frontend, política de git e o template de contexto IA.md). Procure os guias na pasta "Padrão de qualidade - Felixo System Design/" dentro do repositório; se ela não existir, use a fonte: ${url}${branchNote}.${stateNote} Leia o que for relevante para a tarefa e mantenha esse padrão em tudo que produzir (código, commits e documentação). Se estiver atualizando um arquivo de contexto ou plano, nunca encerre a resposta com o trabalho ainda marcado como "em andamento": faça a última edição do arquivo e deixe o estado final claro (concluído, bloqueado, aguardando decisão ou interrompido com motivo).
 
 Quando precisar perguntar algo ao usuário (escolher entre opções, confirmar uma decisão que só ele pode tomar), use a ferramenta interativa de pergunta da sua própria CLI (ex.: AskUserQuestion), se ela existir — não escreva a pergunta como texto corrido no chat. Pergunta em texto vira só um parágrafo na conversa, sem botão nem campo pra responder; a ferramenta interativa é o que dá ao usuário uma UI de verdade para escolher.`
+}
+
+/**
+ * Texto padrão para o padrão de qualidade do Felixo. Para o default do app é
+ * idêntico, byte a byte, ao texto fixo que existia antes de a fonte ser
+ * configurável (há teste com o literal original).
+ */
+export const DEFAULT_QUALITY_STANDARD_PROMPT = buildQualityStandardTemplate({
+  label: FELIXO_LABEL,
+  url: FELIXO_URL,
+  branchNote: '',
+  stateNote: '',
+})
+
+/**
+ * Texto padrão para a fonte que está valendo agora.
+ *
+ * - Default do app: idêntico ao texto histórico.
+ * - Fonte escolhida: nome, URL e BRANCH dela — quem escolheu não pode receber
+ *   uma instrução que manda o agente para o repositório do Felixo.
+ * - Sincronização que falhou ou fonte trocada e ainda não sincronizada: uma
+ *   frase avisando que o índice local pode não ser o da fonte citada.
+ */
+export function buildDefaultQualityStandardPrompt(source: QualityStandardSource | null): string {
+  if (!source || !source.repoUrl) return DEFAULT_QUALITY_STANDARD_PROMPT
+
+  const isCustom = source.sourceMode === 'custom'
+  let stateNote = ''
+  if (source.syncState === 'offline-fallback') {
+    stateNote = ' Atenção: a última sincronização dessa fonte falhou; o índice local pode estar desatualizado.'
+  } else if (source.syncState === 'pending-source-change') {
+    stateNote = ' Atenção: essa fonte foi alterada e ainda não foi sincronizada; o índice local vem da fonte anterior.'
+  }
+
+  return buildQualityStandardTemplate({
+    label: isCustom ? source.label : FELIXO_LABEL,
+    url: toReadableRepoUrl(source.repoUrl),
+    branchNote: isCustom && source.branch ? ` (branch: ${source.branch})` : '',
+    stateNote,
+  })
+}
+
+/**
+ * O texto guardado é a personalização de alguém, ou só o padrão que o painel
+ * salvou como estava?
+ *
+ * O painel grava o que está na caixa de texto, inclusive o padrão intocado, então
+ * muita instalação tem o texto legado gravado sem nunca tê-lo editado. Esse
+ * texto (e qualquer padrão gerado) NÃO é personalização: tratá-lo como tal
+ * congelaria a fonte citada no dia em que foi salvo.
+ */
+export function isCustomizedQualityStandardPrompt(
+  stored: string | null | undefined,
+  source: QualityStandardSource | null,
+): boolean {
+  if (typeof stored !== 'string' || !stored.trim()) return false
+  const text = stored.trim()
+  if (text === DEFAULT_QUALITY_STANDARD_PROMPT.trim()) return false
+  if (text === buildDefaultQualityStandardPrompt(source).trim()) return false
+  // Padrão gerado para OUTRA fonte (ou em outro estado): também não é
+  // personalização — reconhecido pela estrutura do modelo, não pelo texto exato.
+  return !getGeneratedDefaultPattern().test(text)
+}
+
+let generatedDefaultPattern: RegExp | null = null
+
+/**
+ * Casa qualquer texto que o construtor do padrão poderia ter gerado, com
+ * qualquer nome, URL, branch e aviso de estado. Montado a partir do próprio
+ * modelo (com marcadores no lugar das partes variáveis), para nunca divergir
+ * dele.
+ */
+function getGeneratedDefaultPattern(): RegExp {
+  if (generatedDefaultPattern) return generatedDefaultPattern
+
+  const skeleton = buildQualityStandardTemplate({
+    label: '\u0001',
+    url: '\u0002',
+    branchNote: '\u0003',
+    stateNote: '\u0004',
+  })
+  const escaped = skeleton.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const source = escaped
+    .replace('\u0001', '[^\\n]+?')
+    .replace('\u0002', '\\S+')
+    .replace('\u0003', '(?: \\(branch: [^)\\n]+\\))?')
+    .replace('\u0004', '(?: Atenção: [^\\n]*?\\.)?')
+
+  generatedDefaultPattern = new RegExp(`^${source}$`)
+  return generatedDefaultPattern
+}
+
+/**
+ * A fonte que o texto padrão deve citar, a partir da configuração do System
+ * Design. Devolve `null` enquanto a configuração ainda não foi lida — melhor
+ * o texto histórico do que citar uma fonte que ninguém confirmou.
+ *
+ * Cita a fonte CONFIGURADA (é o ponteiro para o padrão que a pessoa quer que o
+ * agente siga); quando o conteúdo local ainda é de outra fonte, o estado
+ * (`syncState`) acrescenta o aviso.
+ */
+export function qualityStandardSourceFrom(config: {
+  label: string
+  repoUrl: string
+  branch: string
+  sourceMode: 'default' | 'custom'
+  syncState: SystemDesignSyncState
+} | null | undefined): QualityStandardSource | null {
+  if (!config || !config.repoUrl) return null
+  return {
+    label: config.label,
+    repoUrl: config.repoUrl,
+    branch: config.branch,
+    sourceMode: config.sourceMode,
+    syncState: config.syncState,
+  }
+}
+
+/** O texto que de fato vai para o agente: a personalização, ou o padrão da fonte atual. */
+export function resolveQualityStandardPrompt(params: {
+  stored: string | null | undefined
+  source: QualityStandardSource | null
+}): string {
+  return isCustomizedQualityStandardPrompt(params.stored, params.source)
+    ? (params.stored as string)
+    : buildDefaultQualityStandardPrompt(params.source)
+}
 
 const CANVAS_CONTEXT_PROMPT = `Contexto do canvas: você está em um nó do canvas do Felixo AI Core. Esse terminal faz parte do canvas, então trate o canvas como o ambiente real de trabalho. Se este terminal estiver ligado a um arquivo .md do canvas, esse arquivo é um scratchpad vivo compartilhado entre agentes e é a fonte da verdade do trabalho. Leia-o, siga-o e mantenha-o atualizado conforme o trabalho avançar.`
 

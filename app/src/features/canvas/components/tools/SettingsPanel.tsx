@@ -6,7 +6,13 @@ import {
   DEFAULT_FILE_LINK_PROMPT,
   DEFAULT_FILE_BOOTSTRAP_PROMPT,
 } from '../../services/file-link-prompt'
-import { DEFAULT_QUALITY_STANDARD_PROMPT } from '../../services/quality-standard-prompt'
+import {
+  buildDefaultQualityStandardPrompt,
+  isCustomizedQualityStandardPrompt,
+  qualityStandardSourceFrom,
+  type QualityStandardSource,
+} from '../../services/quality-standard-prompt'
+import { subscribeSystemDesignConfig } from '../../../shared/system-design/system-design-events'
 import { AutoStartSection } from '../../../shared/autostart/AutoStartSection'
 import { GraphicsRecoverySection } from '../../../shared/graphics/GraphicsRecoverySection'
 import { PerformanceModeSection } from '../../../shared/performance/PerformanceModeSection'
@@ -260,28 +266,50 @@ function QualityStandardField({
 }: {
   onSaved?: (value: { prompt: string; enabled: boolean }) => void
 }) {
-  const [prompt, setPrompt] = useState(DEFAULT_QUALITY_STANDARD_PROMPT)
+  // `customText === null` significa "sem personalização": o texto mostrado é o
+  // padrão da fonte de System Design que vale agora, e o que se grava é vazio.
+  // Antes o painel gravava o padrão intocado como se fosse texto da pessoa, e
+  // ele ficava congelado com a fonte do dia em que foi salvo.
+  const [customText, setCustomText] = useState<string | null>(null)
+  const [source, setSource] = useState<QualityStandardSource | null>(null)
   const [enabled, setEnabled] = useState(true)
   const [saved, setSaved] = useState(false)
+  const defaultPrompt = buildDefaultQualityStandardPrompt(source)
+  const prompt = customText ?? defaultPrompt
 
   useEffect(() => {
     let cancelled = false
-    void window.felixo?.canvas?.getQualityStandard?.().then((result) => {
-      if (!cancelled && result?.ok) {
-        if (typeof result.prompt === 'string' && result.prompt.trim()) {
-          setPrompt(result.prompt)
-        }
-        setEnabled(result.enabled !== false)
+    void Promise.all([
+      window.felixo?.canvas?.getQualityStandard?.(),
+      window.felixo?.systemDesign?.getConfig?.(),
+    ]).then(([quality, systemDesign]) => {
+      if (cancelled) return
+      const currentSource = systemDesign?.ok
+        ? qualityStandardSourceFrom(systemDesign.config)
+        : null
+      setSource(currentSource)
+      if (quality?.ok) {
+        setCustomText(
+          isCustomizedQualityStandardPrompt(quality.prompt, currentSource)
+            ? (quality.prompt as string)
+            : null,
+        )
+        setEnabled(quality.enabled !== false)
       }
+    })
+    const unsubscribe = subscribeSystemDesignConfig((config) => {
+      setSource(qualityStandardSourceFrom(config))
     })
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [])
 
   const save = async () => {
-    await window.felixo?.canvas?.setQualityStandard?.({ prompt, enabled })
-    onSaved?.({ prompt, enabled })
+    const toStore = customText ?? ''
+    await window.felixo?.canvas?.setQualityStandard?.({ prompt: toStore, enabled })
+    onSaved?.({ prompt: toStore, enabled })
     setSaved(true)
     window.setTimeout(() => setSaved(false), 1500)
   }
@@ -303,7 +331,11 @@ function QualityStandardField({
       </p>
       <textarea
         value={prompt}
-        onChange={(event) => setPrompt(event.target.value)}
+        onChange={(event) =>
+          setCustomText(
+            event.target.value.trim() === defaultPrompt.trim() ? null : event.target.value,
+          )
+        }
         rows={6}
         disabled={!enabled}
         className="mb-2 w-full resize-y rounded bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-none disabled:opacity-50"
@@ -319,7 +351,7 @@ function QualityStandardField({
         </button>
         <button
           type="button"
-          onClick={() => setPrompt(DEFAULT_QUALITY_STANDARD_PROMPT)}
+          onClick={() => setCustomText(null)}
           className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
           title="Restaurar o texto padrão"
         >
