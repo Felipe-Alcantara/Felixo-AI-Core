@@ -35,6 +35,13 @@ const MIN_DRAWER_HEIGHT = 200
  */
 export const SIDEBAR_WIDTH = 288
 export const SIDEBAR_RAIL_WIDTH = 52
+/**
+ * Faixa em que a pessoa pode arrastar a sidebar expandida. O piso mantém os
+ * rótulos das seções legíveis; o teto é só um freio de sanidade — o limite
+ * real, por tela, sai de `sidebarWidthLimit`.
+ */
+export const SIDEBAR_MIN_WIDTH = 240
+export const SIDEBAR_MAX_WIDTH = 560
 
 /**
  * Largura do inspector "Elementos", sempre visível à direita — mesmo número
@@ -77,6 +84,18 @@ export function panelWidthLimit(
   minimum: number,
 ): number {
   return availableWidth(viewportWidth, toolbar + drawer + inspector, minimum)
+}
+
+/**
+ * Até onde a sidebar expandida pode ser arrastada nesta tela.
+ *
+ * Reserva o inspector inteiro, um painel de ferramenta no piso e a faixa
+ * mínima de canvas — a gaveta fica de fora de propósito: ela só existe com
+ * um terminal expandido e já encolhe sozinha (`splitHorizontalSpace`).
+ */
+export function sidebarWidthLimit(viewportWidth: number): number {
+  const reserved = INSPECTOR_WIDTH + PANEL_MIN_WIDTH + MIN_CANVAS_STRIP
+  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, viewportWidth - reserved))
 }
 
 /** Quanto a gaveta da direita pode ocupar, dado o que está na esquerda. */

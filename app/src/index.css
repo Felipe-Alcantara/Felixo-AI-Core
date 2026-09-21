@@ -1003,7 +1003,7 @@ div::-webkit-scrollbar-thumb {
   position: absolute;
   right: 18rem;
   bottom: 0;
-  left: 18rem;
+  left: var(--felixo-sidebar-width);
   z-index: 18;
   display: flex;
   align-items: center;
@@ -1059,7 +1059,7 @@ div::-webkit-scrollbar-thumb {
   left: 0;
   z-index: 26;
   display: flex;
-  width: 18rem;
+  width: var(--felixo-sidebar-width);
   overflow: hidden;
   border-right: 1px solid var(--color-border);
   background: var(--f-surface-sidebar);
@@ -1069,6 +1069,81 @@ div::-webkit-scrollbar-thumb {
 
 .felixo-workbench-sidebar.is-collapsed {
   width: 3.25rem;
+}
+
+/* Durante o arrasto a largura muda a cada frame; qualquer transição aqui
+   viraria atraso visível entre a sidebar e o resto do chrome que a segue. */
+.is-sidebar-resizing .felixo-workbench-sidebar,
+.is-sidebar-resizing .felixo-canvas-statusbar,
+.is-sidebar-resizing .felixo-zoom-pill-panel,
+.is-sidebar-resizing [data-felixo-canvas-panel] {
+  transition: none !important;
+}
+
+/* Alça de redimensionar, compartilhada por sidebar e painéis de ferramenta.
+   O "grip" no meio fica sempre visível (fraco) pra denunciar que a borda é
+   arrastável — a versão só-no-hover ninguém achava. */
+.felixo-resize-handle {
+  --felixo-grip-length: 2.25rem;
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  transition: background-color 150ms var(--f-core-ease);
+}
+
+.felixo-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: var(--felixo-grip-length);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--f-core-white) 18%, transparent);
+  transform: translate(-50%, -50%);
+  transition: background-color 150ms var(--f-core-ease), width 150ms var(--f-core-ease), height 150ms var(--f-core-ease);
+}
+
+.felixo-resize-handle:hover,
+.felixo-resize-handle.is-resizing {
+  background: color-mix(in srgb, var(--f-core-white) 6%, transparent);
+}
+
+.felixo-resize-handle:hover,
+.felixo-resize-handle:focus-visible,
+.felixo-resize-handle.is-resizing {
+  --felixo-grip-length: 3.5rem;
+}
+
+.felixo-resize-handle:hover::before,
+.felixo-resize-handle:focus-visible::before,
+.felixo-resize-handle.is-resizing::before {
+  background: color-mix(in srgb, var(--f-core-white) 55%, transparent);
+}
+
+.felixo-resize-handle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.felixo-resize-handle--horizontal {
+  top: auto;
+  right: auto;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  cursor: row-resize;
+}
+
+.felixo-resize-handle--horizontal::before {
+  width: var(--felixo-grip-length);
+  height: 3px;
 }
 
 /* Recolher a navegação devolve espaço real ao workspace. `:has()` é seguro
@@ -1174,8 +1249,12 @@ div::-webkit-scrollbar-thumb {
 
 .felixo-sidebar-content {
   display: flex;
-  width: 14.75rem;
-  min-width: 14.75rem;
+  /* Largura da sidebar menos o trilho de atividades (3.25rem). Deriva da
+     variável, e não de `flex: 1`, de propósito: ao recolher, a variável não
+     muda, então a coluna mantém a forma e é só recortada pelo overflow —
+     sem o texto refluir no meio da animação. */
+  width: calc(var(--felixo-sidebar-width) - 3.25rem);
+  min-width: calc(var(--felixo-sidebar-width) - 3.25rem);
   flex-direction: column;
   background: var(--f-surface-sidebar);
   opacity: 1;
@@ -1762,6 +1841,10 @@ div::-webkit-scrollbar-thumb {
     transform: none;
   }
 
+  .felixo-resize-handle::before {
+    transition-property: background-color;
+  }
+
   .react-flow__node.felixo-agent-matrix-moving {
     transition: none;
     will-change: auto;
@@ -1816,6 +1899,10 @@ div::-webkit-scrollbar-thumb {
 :root[data-performance-mode='on'] .felixo-btn:active:not(:disabled),
 :root[data-performance-mode='on'] .felixo-btn-icon:active:not(:disabled) {
   transform: none;
+}
+
+:root[data-performance-mode='on'] .felixo-resize-handle::before {
+  transition-property: background-color;
 }
 
 :root[data-performance-mode='on'] .react-flow__node.felixo-agent-matrix-moving {
@@ -1986,7 +2073,7 @@ div::-webkit-scrollbar-thumb {
    numero fixo: com 1.75rem (28px) contra uma barra de 1.875rem (30px) o pill
    entrava 2px por baixo dela em 1366, 1440 e 1920. */
 .felixo-zoom-pill-panel {
-  margin: 0 0 calc(var(--felixo-statusbar-height) + 0.5rem) 19.25rem !important;
+  margin: 0 0 calc(var(--felixo-statusbar-height) + 0.5rem) calc(var(--felixo-sidebar-width) + 1.25rem) !important;
   transition: margin-left 180ms var(--f-core-ease);
 }
 
@@ -2837,6 +2924,9 @@ div::-webkit-scrollbar-thumb {
 :root {
   --felixo-topbar-height: 3rem;
   --felixo-statusbar-height: 1.875rem;
+  /* Padrão = SIDEBAR_WIDTH (canvas-surfaces.ts). O CanvasView sobrescreve na
+     raiz do canvas com a largura arrastada, em px. */
+  --felixo-sidebar-width: 18rem;
 }
 
 .felixo-canvas-topbar {

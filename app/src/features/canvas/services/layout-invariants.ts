@@ -25,7 +25,11 @@ import {
 
 export { DRAWER_MIN_WIDTH, PANEL_MIN_WIDTH }
 
-/** Largura da sidebar no pior caso plausível: sempre expandida (ver canvas-surfaces.ts). */
+/**
+ * Largura da sidebar expandida na configuração padrão (ver canvas-surfaces.ts).
+ * Uma largura arrastada além disso é escolha da pessoa, presa por
+ * `sidebarWidthLimit` e conferida ao vivo por `detectLiveLayoutClamp`.
+ */
 export const TOOLBAR_WIDTH = SIDEBAR_WIDTH
 
 /** Trilho da gaveta recolhida: só os botões do cabeçalho, sem terminal. */
