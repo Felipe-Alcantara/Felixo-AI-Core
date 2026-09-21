@@ -12,6 +12,7 @@ import { GraphicsRecoverySection } from '../../../shared/graphics/GraphicsRecove
 import { PerformanceModeSection } from '../../../shared/performance/PerformanceModeSection'
 import { SystemDesignSettingsSection } from '../../../shared/system-design/SystemDesignSettingsSection'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
+import { FelixoToggle } from '../../../shared/components/FelixoToggle'
 import { useAppTheme } from '../../../shared/theme/theme-context'
 import type { AppTheme } from '../../../shared/theme/theme-storage'
 
@@ -278,15 +279,14 @@ function QualityStandardField({
 
   return (
     <div>
-      <label className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-400">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(event) => setEnabled(event.target.checked)}
-          className="accent-emerald-600"
-        />
+      <div className="mb-1 flex items-center justify-between gap-3 text-xs font-medium text-zinc-400">
         Sempre lembrar o agente do padrão de qualidade
-      </label>
+        <FelixoToggle
+          checked={enabled}
+          onChange={setEnabled}
+          label="Sempre lembrar o agente do padrão de qualidade"
+        />
+      </div>
       <p className="mb-2 text-xs text-zinc-500">
         Enviada ao abrir um terminal com um agente (Claude/Gemini/Codex),
         independente do prompt. Não é enviada para um shell puro.

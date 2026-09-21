@@ -9,6 +9,10 @@ Padrão de qualidade - Felixo System Design/
 .felixo-start-config.json
 logs/startup/
 
+# Screenshots soltos de preview gerados durante depuração manual — nunca
+# fizeram parte do produto, só poluíam a raiz do repo.
+/preview-*.png
+
 # Variáveis de ambiente locais. O app não carrega .env (a configuração real é
 # o menu do start_app.py, que grava .felixo-start-config.json), mas quem criar
 # um .env à mão pode acabar guardando credencial nele — ex.: o GH_TOKEN do

@@ -642,6 +642,62 @@ div::-webkit-scrollbar-thumb {
   transform: none;
 }
 
+/* Shared on/off switch (FelixoToggle) — same visual everywhere a boolean
+   setting toggles. Thumb keeps a 2px margin on every edge in both states so
+   it never pokes outside the pill. */
+.felixo-switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 51px;
+  height: 29px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background-color: #ffffff2b;
+  cursor: pointer;
+  box-shadow:
+    rgba(0, 0, 0, 0.62) 0 0 5px inset,
+    rgba(0, 0, 0, 0.21) 0 0 0 24px inset,
+    #22cc3f 0 0 0 0 inset,
+    rgba(224, 224, 224, 0.45) 0 1px 0 0;
+  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.felixo-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.felixo-switch[aria-checked='true'] {
+  box-shadow:
+    rgba(0, 0, 0, 0.62) 0 0 5px inset,
+    #22cc3f 0 0 0 2px inset,
+    #22cc3f 0 0 0 24px inset,
+    rgba(224, 224, 224, 0.45) 0 1px 0 0;
+}
+
+.felixo-switch:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.felixo-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 25px;
+  height: 25px;
+  border-radius: 999px;
+  background-color: #e3e3e3;
+  box-shadow: rgba(0, 0, 0, 0.3) 0 6px 6px;
+  transition: left 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.felixo-switch[aria-checked='true'] .felixo-switch-thumb {
+  left: 24px;
+}
+
 /* Applied only while the explicit agent-matrix action updates React Flow's
    inline translate(). Keeping it scoped prevents regular drag operations from
    gaining inertia. Duration matches AGENT_MATRIX_ANIMATION_MS in CanvasView. */
@@ -3035,8 +3091,6 @@ select {
   color: var(--f-core-white-soft);
 }
 
-.felixo-sidebar-section-heading,
-.felixo-sidebar-tool-group-label,
 .felixo-sidebar-update-status,
 .felixo-topbar-context-tool,
 .felixo-canvas-breadcrumb,

@@ -1,6 +1,7 @@
 import { BookOpen, ExternalLink, RefreshCw, Trash2 } from 'lucide-react'
 
 import { useSystemDesignSettings } from './useSystemDesignSettings'
+import { FelixoToggle } from '../components/FelixoToggle'
 
 export function SystemDesignSettingsSection() {
   const { state, sync, updateConfig, resetCache } = useSystemDesignSettings()
@@ -42,18 +43,17 @@ export function SystemDesignSettingsSection() {
         mais consistentes; pode desligar se preferir respostas livres.
       </p>
 
-      <label className="mb-3 flex items-center gap-2 text-xs text-zinc-200">
-        <input
-          type="checkbox"
-          className="h-3.5 w-3.5 accent-blue-500"
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-xs text-zinc-200">
+          Usar Felixo System Design como guia obrigatório dos agentes
+        </span>
+        <FelixoToggle
           disabled={!loaded}
           checked={config.enabled}
-          onChange={(event) =>
-            void updateConfig({ enabled: event.target.checked })
-          }
+          onChange={(checked) => void updateConfig({ enabled: checked })}
+          label="Usar Felixo System Design como guia obrigatório dos agentes"
         />
-        Usar Felixo System Design como guia obrigatório dos agentes
-      </label>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 rounded-md bg-white/5 px-2 py-1.5 text-[11px] text-zinc-300">
         <div>
