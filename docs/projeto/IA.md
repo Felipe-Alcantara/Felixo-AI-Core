@@ -3517,3 +3517,11 @@ ruído do teste. O `assert.equal` do Node trunca o texto, então os bytes não a
 `describeDivergence` (`__fixtures__/text-divergence.cjs`, 3 testes) mostra o índice da primeira divergência, os
 tamanhos e o trecho com controles escapados; usada nos três testes de payload. NÃO investigado: a causa — só a
 próxima falha, agora com os bytes na mensagem, permite decidir entre bug real e ruído do teste.
+
+E2E de contexto (`canvas-context-e2e.test.ts`, cenário "claude-confianca-de-pasta"), Windows, 3 falhas em runs do #75:
+`expect(contextIndex).toBeGreaterThan(decisionIndex)` recebeu -1 com a decisão de confiança presente. Mecanismo (lido
+no código do fake): `write()` junta ao buffer de referência QUALQUER escrita que chegue até 40 ms depois de um trecho de
+contexto; se um Enter cai nessa janela, o evento vira `context-submitted` e o teste, que procura `context`, não acha. Há
+invariantes em outros cenários exigindo ZERO `context-submitted` (o produto não pode enviar contexto sozinho), então
+aceitar os dois tipos no teste poderia esconder um bug real. Ainda não se sabe QUEM mandou o Enter. A mensagem da falha
+agora traz a sequência completa de eventos; só a próxima falha decide entre artefato de tempo do fake e bug do produto.

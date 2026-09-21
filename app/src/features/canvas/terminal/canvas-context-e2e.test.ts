@@ -1109,8 +1109,12 @@ describe('E2E do contexto inicial do Canvas', () => {
           const trustFake = await waitForInitialRead(localHarness, trustId, expectedReads(trustProfile))
           const decisionIndex = trustFake.events.findIndex((event) => event.kind === 'decision')
           const contextIndex = trustFake.events.findIndex((event) => event.kind === 'context')
-          expect(decisionIndex).toBeGreaterThanOrEqual(0)
-          expect(contextIndex).toBeGreaterThan(decisionIndex)
+          // A sequência completa vai na mensagem: em 20-21/09 o Windows falhou aqui (contextIndex -1) e o
+          // log só mostrava os índices. Sem ver se o evento virou 'context-submitted' (um Enter dentro da
+          // janela de 40 ms do fake) não dá para separar artefato de tempo de envio automático do produto.
+          const sequencia = JSON.stringify(trustFake.events.map((event) => [event.kind, event.data.slice(0, 40)]))
+          expect(decisionIndex, `eventos: ${sequencia}`).toBeGreaterThanOrEqual(0)
+          expect(contextIndex, `context ausente ou submetido — eventos: ${sequencia}`).toBeGreaterThan(decisionIndex)
           report.scenarios.push({ iteration, name: 'claude-confianca-de-pasta', ok: true, deliveries: 1 })
 
           const updateId = `matrix-codex-update-${iteration}`
