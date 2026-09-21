@@ -278,7 +278,7 @@ test('saveGeneratedImage persists a sanitized artifact that survives the preview
   assert.equal(result.artifact.cost, 0.04)
   assert.equal(result.artifact.key, undefined)
   assert.equal(result.artifact.url, undefined)
-  assert.equal(path.dirname(result.artifact.path), generatedImageDir)
+  assert.equal(path.dirname(result.artifact.path), await fs.realpath(generatedImageDir))
   assert.deepEqual(Array.from(await fs.readFile(result.artifact.path)), [1, 2, 3])
 
   const preview = await readImageAttachment(
@@ -348,7 +348,7 @@ test('generated image actions enforce ownership and keep copies inside generated
     },
   )
   assert.equal(duplicated.ok, true)
-  assert.equal(path.dirname(duplicated.artifact.path), generatedImageDir)
+  assert.equal(path.dirname(duplicated.artifact.path), await fs.realpath(generatedImageDir))
   assert.equal(duplicated.artifact.prompt, 'copied prompt')
   assert.deepEqual(Array.from(await fs.readFile(duplicated.artifact.path)), [4, 5, 6])
 
