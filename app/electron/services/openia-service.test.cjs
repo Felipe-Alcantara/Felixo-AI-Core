@@ -15,6 +15,8 @@ Module._load = function patchedLoad(request, parent, isMain) {
 const {
   createOpeniaService,
   registerOpeniaIpcHandlers,
+  sanitizeModel,
+  sanitizeOutputModalities,
 } = require('./openia-service.cjs')
 Module._load = originalLoad
 
@@ -146,4 +148,30 @@ test('registra somente os quatro canais da ponte Openia', async () => {
     ['models', { refresh: true }],
     ['key', { name: 'felixo', key: 'segredo' }],
   ])
+})
+
+test('capacidade de saída: só modalidades conhecidas; ausente continua ausente (desconhecido)', () => {
+  const com = sanitizeModel({ id: 'acme/pixel', name: 'Pixel', vendor: 'acme', completionPrice: 0, outputModalities: ['text', 'IMAGE', 'image', 'telepatia', 42, '<script>'] })
+  assert.deepEqual(com.outputModalities, ['text', 'image'])
+
+  const sem = sanitizeModel({ id: 'acme/texto', name: 'Texto', vendor: 'acme', completionPrice: 0 })
+  assert.equal('outputModalities' in sem, false, 'sem o campo o Felixo não presume capacidade')
+
+  assert.equal(sanitizeOutputModalities('image'), undefined)
+  assert.equal(sanitizeOutputModalities(null), undefined)
+  assert.deepEqual(sanitizeOutputModalities([]), [])
+})
+
+test('listModels repassa a capacidade que o Openia informou, sem inventar', async () => {
+  const service = createOpeniaService({
+    runCommand: async () => ({
+      ok: true,
+      stdout: JSON.stringify({ models: [
+        { id: 'acme/pixel', name: 'Pixel', vendor: 'acme', completionPrice: 0.1, outputModalities: ['image'] },
+        { id: 'acme/texto', name: 'Texto', vendor: 'acme', completionPrice: 0.1 },
+      ] }),
+    }),
+  })
+  const result = await service.listModels()
+  assert.deepEqual(result.models.map((model) => model.outputModalities), [['image'], undefined])
 })

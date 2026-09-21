@@ -116,16 +116,22 @@ test('runChild sempre coleta uma amostra inicial e não mantém o timer do timeo
 })
 
 test('runChild consegue ler RSS de um processo real', async () => {
-  // No Windows cada amostra (PowerShell/CIM) pode levar mais de 1,5 s num runner carregado:
-  // com o filho vivo só 1,5 s, nenhuma amostra chegava antes de ele sair (CI do #75, 21/09).
-  // O filho vive o bastante para sobrar tempo a pelo menos uma amostra.
-  const result = await runChild(process.execPath, ['-e', 'setTimeout(() => {}, 6000)'], {
-    cwd: process.cwd(),
-    env: process.env,
-    timeoutMs: 20_000,
-  })
-  assert.equal(result.code, 0)
-  assert.ok(result.samples.some((sample) => sample.rssBytes > 0), JSON.stringify(result.samples))
+  // No Windows a amostra é UMA consulta PowerShell/CIM por vez; num runner carregado ela levou
+  // mais que a vida do filho e voltou vazia (CI do #75 e do #81, 21/09: uma única amostra com
+  // pids [] mesmo com o filho vivo 6 s). O teste só precisa provar que o amostrador CONSEGUE ler
+  // RSS de um processo real: tenta até 3 vezes e exige sucesso em pelo menos uma. Um amostrador
+  // que nunca lê nada continua reprovando.
+  let samples = []
+  for (let tentativa = 1; tentativa <= 3 && !samples.some((sample) => sample.rssBytes > 0); tentativa += 1) {
+    const result = await runChild(process.execPath, ['-e', 'setTimeout(() => {}, 4000)'], {
+      cwd: process.cwd(),
+      env: process.env,
+      timeoutMs: 20_000,
+    })
+    assert.equal(result.code, 0)
+    samples = result.samples
+  }
+  assert.ok(samples.some((sample) => sample.rssBytes > 0), JSON.stringify(samples))
 })
 
 test('runWithRetry recupera uma falha transitória e registra a tentativa', async () => {

@@ -3575,3 +3575,29 @@ o contrato de armazenamento, autorização, persistência e apresentação para 
 Verificação: `npm test` (1.524 testes, 61 suítes), `npm run test:frontend` (1.148 testes, 120 arquivos,
 1 arquivo pulado), `npm run lint`, `npm run typecheck`, `npm run build` e testes direcionados de IPC/
 transferência/preview passaram. O build mantém apenas o aviso já conhecido de chunks acima de 500 kB.
+
+## 2026-09-21 — Openia: geração de imagem via IPC, processo filho e arquivo de saída (lado do Felixo)
+
+Decisões (perguntadas à pessoa, com as opções): **(1) quem gera** — o Openia ganha um subcomando `image` e o
+Felixo o chama como processo filho (a chave continua só no Openia; o AI Core nunca a lê, hoje proibido de
+propósito); **(2) escopo** — só o lado do AI Core com testes (serviço, IPC, validação, cancelamento, limpeza),
+sem tela nova; **(3) capacidade** — o Openia informa `outputModalities` em `models --json`; ausente = desconhecido
+e nada é oferecido; **(4) repositório do Openia** — já estava clonado (com outro nome de pasta,
+`Testes-com-ia`, remote `Felipe-Alcantara/Openia`); usado só para LER, sem alterações lá.
+
+Implementado (`openia-image-service.cjs`, 23 testes novos com filho simulado e com um `openia` falso rodando
+como processo de verdade): schema fechado do pedido (`prompt`, `model`, `requestId`; qualquer pasta/caminho é
+recusado); exige capacidade informada; pasta privada por pedido; filho sem shell (exceto `.cmd` no Windows),
+prompt por stdin, stderr descartado; leitura só do que o filho LISTOU (nome simples, arquivo regular, dentro da
+pasta, ≤ 25 MB, bytes raster — SVG/HTML recusados); gravação por `saveGeneratedImage` (a infraestrutura do outro
+agente, mesmo dia) e aviso ao canvas só depois de gravar tudo; `pending/success/error/cancelled`; cancelamento
+e tempo (180 s) matam o grupo de processos (Windows: `taskkill /T /F`) e esperam o filho sair; varredura de
+pastas órfãs ao iniciar e `shutdown()` no `before-quit`; mensagens fixas por código (nunca stderr/chave/traceback).
+Contrato para o lado do Openia: `docs/projeto/OPENIA-IMAGEM-CONTRATO.md`.
+
+Verificação de que os testes pegam o defeito: mutação — trocar o kill do grupo de processos por kill só do filho
+faz o teste "cancelar mata o filho E o neto" falhar ("o processo neto ficou órfão"); revertido.
+
+NÃO verificado: nada disto rodou contra um Openia real (a 0.1.0 não tem `image`; o teste usa um `openia` falso);
+nenhuma imagem foi gerada de verdade; o cancelamento do grupo no Windows (`taskkill /T /F`) só é exercitado pelo
+CI, não visto rodando; não há tela para pedir imagem (fica em task própria).

@@ -107,6 +107,12 @@ contextBridge.exposeInMainWorld('felixo', {
     listModels: (params) => ipcRenderer.invoke('openia:list-models', params),
     keyStatus: () => ipcRenderer.invoke('openia:key-status'),
     setKey: (params) => ipcRenderer.invoke('openia:set-key', params),
+    // Geração de imagem: o renderer só pede { prompt, model, requestId } e recebe estados/artefatos
+    // já saneados; nunca chave, cabeçalho, stderr nem caminho de saída.
+    listImageModels: () => ipcRenderer.invoke('openia:image-models'),
+    generateImage: (params) => ipcRenderer.invoke('openia:generate-image', params),
+    cancelImage: (params) => ipcRenderer.invoke('openia:cancel-image', params),
+    imageStatus: (params) => ipcRenderer.invoke('openia:image-status', params),
   },
   pty: {
     spawn: (params) => ipcRenderer.invoke('pty:spawn', params),
