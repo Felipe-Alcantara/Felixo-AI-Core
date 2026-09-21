@@ -15,13 +15,20 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain)
 }
 const {
+  IMAGE_MODELS_URL,
   MAX_CONCURRENT,
   MESSAGES,
+  buildOpeniaArgs,
   collectFiles,
   createOpeniaImageService,
+  fetchImageCatalog,
+  mapFailure,
+  parseEnvelope,
   parseRequest,
   registerOpeniaImageIpcHandlers,
+  resolveOutputNames,
   runOpeniaImageProcess,
+  sanitizeArgsForShell,
   sniffRasterMimeType,
 } = require('./openia-image-service.cjs')
 const { saveGeneratedImage } = require('./file-attachments-ipc-handlers.cjs')
@@ -37,25 +44,22 @@ function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-openia-image-'))
 }
 
-function models(extra = {}) {
-  return async () => ({
-    ok: true,
-    models: [
-      { id: MODEL, vendor: 'acme', name: 'Pixel', completionPrice: 0, outputModalities: ['text', 'image'] },
-      { id: 'acme/texto', vendor: 'acme', name: 'Texto', completionPrice: 0, outputModalities: ['text'] },
-    ],
+/** Catálogo público simulado: um modelo de imagem (o que o serviço deve oferecer). */
+function catalog(extra = []) {
+  return async () => [
+    { id: MODEL, vendor: 'acme', name: 'Pixel', inputModalities: ['text'], outputModalities: ['image'] },
     ...extra,
-  })
+  ]
 }
 
 /** Serviço com gravação REAL no disco (mesma função usada em produção) e filho simulado. */
-function harness({ runImage, listModels = models(), timeoutMs, saveImage } = {}) {
+function harness({ runImage, fetchCatalog = catalog(), timeoutMs, saveImage } = {}) {
   const userData = tmp()
   const generatedDir = path.join(userData, 'generated-images')
   const notified = []
   const service = createOpeniaImageService({
     userData,
-    listModels,
+    fetchCatalog,
     saveImage: saveImage ?? ((params) => saveGeneratedImage(params, generatedDir)),
     notify: (artifact) => notified.push({ artifact, existsAtNotify: fs.existsSync(artifact.path) }),
     runImage,
@@ -64,29 +68,48 @@ function harness({ runImage, listModels = models(), timeoutMs, saveImage } = {})
   return { userData, generatedDir, notified, service, runsDir: path.join(userData, 'openia-image-runs') }
 }
 
-/** Filho simulado: descobre a pasta de saída pelos argumentos e escreve os arquivos pedidos. */
-function child({ files = [['img-1.png', PNG]], listed, cost = 0.04, stdout, ok = true } = {}) {
+const outDirOf = (request) => request.args[request.args.indexOf('--output-dir') + 1]
+
+/** Envelope de sucesso do Openia (formato real: outputs[].path absoluto, sem custo). */
+function successEnvelope(outputs) {
+  return JSON.stringify({
+    version: 1,
+    ok: true,
+    requestId: 'req',
+    model: MODEL,
+    outputs: outputs.map((file) => ({ path: file, mime: 'image/png', bytes: 1 })),
+    createdAt: '2026-09-21T00:00:00.000Z',
+    completedAt: '2026-09-21T00:00:01.000Z',
+  })
+}
+
+function failureEnvelope(code, message = SECRET) {
+  return JSON.stringify({ version: 1, ok: false, error: { code, message }, requestId: 'req' })
+}
+
+/** Filho simulado: escreve os arquivos na pasta de saída pedida e responde com o envelope real. */
+function child({ files = [['img-1.png', PNG]], listed, stdout, exitCode = 0 } = {}) {
   const calls = []
   const run = async (request) => {
     calls.push(request)
-    const outDir = request.args[request.args.indexOf('--out-dir') + 1]
+    const outDir = outDirOf(request)
     for (const [name, data] of files) fs.writeFileSync(path.join(outDir, name), data)
-    return {
-      started: true,
-      ok,
-      stdout: stdout ?? JSON.stringify({ ok: true, files: (listed ?? files.map(([name]) => name)).map((name) => ({ name })), cost }),
-    }
+    // `{ raw }` entrega o caminho exatamente como veio (ex.: relativo), sem o `path.join`, que o normalizaria.
+    const paths = (listed ?? files.map(([name]) => name)).map((name) =>
+      typeof name === 'object' ? name.raw : path.isAbsolute(name) ? name : path.join(outDir, name),
+    )
+    return { started: true, ok: exitCode === 0, exitCode, stdout: stdout ?? successEnvelope(paths) }
   }
   run.calls = calls
   return run
 }
 
 test('gera, grava pelo caminho seguro e só DEPOIS de gravar avisa o canvas', async () => {
-  const runImage = child({ cost: 0.04 })
+  const runImage = child()
   const h = harness({ runImage })
   const result = await h.service.generate({ prompt: '  um gato astronauta  ', model: MODEL, requestId: 'req-000001' })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, JSON.stringify(result))
   assert.equal(result.state, 'success')
   assert.equal(result.artifacts.length, 1)
   const artifact = result.artifacts[0]
@@ -94,7 +117,7 @@ test('gera, grava pelo caminho seguro e só DEPOIS de gravar avisa o canvas', as
   assert.equal(artifact.prompt, 'um gato astronauta')
   assert.equal(artifact.model, MODEL)
   assert.equal(artifact.requestId, 'req-000001')
-  assert.equal(artifact.cost, 0.04)
+  assert.equal('cost' in artifact, false, 'o Openia não informa custo e o Felixo não inventa')
   assert.equal(artifact.temporary, true)
   // `realpath.native` (libuv), o mesmo do código de produção: no Windows o temp usa nomes curtos 8.3
   // (RUNNER~1) que o `realpathSync` do JS não expande, e a comparação de prefixo falhava só lá.
@@ -104,30 +127,40 @@ test('gera, grava pelo caminho seguro e só DEPOIS de gravar avisa o canvas', as
   // O aviso ao canvas só ocorre com o arquivo já escrito.
   assert.equal(h.notified.length, 1)
   assert.equal(h.notified[0].existsAtNotify, true)
-  // A pasta temporária do pedido some, com sucesso.
+  // A pasta e o arquivo de cancelamento do pedido somem, com sucesso.
   assert.equal(fs.existsSync(path.join(h.runsDir, 'req-000001')), false)
+  assert.equal(fs.existsSync(path.join(h.runsDir, 'req-000001.cancel')), false)
   assert.equal(h.service.status({ requestId: 'req-000001' }).state, 'success')
 })
 
-test('o prompt vai por stdin (input), nunca por argumento; a pasta de saída é a do Felixo', async () => {
+test('argumentos do filho seguem o contrato REAL do Openia (prompt em --prompt=, pasta em --output-dir, cancelamento por arquivo)', async () => {
   const runImage = child()
   const h = harness({ runImage })
-  await h.service.generate({ prompt: 'segredo do prompt', model: MODEL, requestId: 'req-000002' })
+  await h.service.generate({ prompt: '--isto-nao-e-uma-opcao', model: MODEL, requestId: 'req-000002' })
   const [request] = runImage.calls
-  assert.equal(request.input, 'segredo do prompt')
-  assert.equal(request.args.some((arg) => arg.includes('segredo do prompt')), false)
-  assert.deepEqual(request.args.slice(0, 4), ['image', '--json', '--model', MODEL])
-  assert.equal(request.args[request.args.indexOf('--out-dir') + 1], path.join(h.runsDir, 'req-000002'))
-  assert.equal(request.args[request.args.indexOf('--request-id') + 1], 'req-000002')
+  const args = request.args
+
+  assert.deepEqual(args.slice(0, 4), ['image', '--json', '--model', MODEL])
+  assert.ok(args.includes('--prompt=--isto-nao-e-uma-opcao'), 'o prompt vai colado a --prompt= e nunca é lido como opção')
+  assert.equal(args.includes('--out-dir'), false)
+  assert.equal(outDirOf(request), path.join(h.runsDir, 'req-000002'))
+  assert.equal(args[args.indexOf('--request-id') + 1], 'req-000002')
+  assert.equal(args[args.indexOf('--cancel-file') + 1], path.join(h.runsDir, 'req-000002.cancel'))
+  assert.equal(args[args.indexOf('--timeout') + 1], '100')
+  assert.equal(args[args.indexOf('--retries') + 1], '1')
   assert.ok(request.signal instanceof AbortSignal)
+  assert.equal(request.cancelFile, path.join(h.runsDir, 'req-000002.cancel'))
+  assert.equal('input' in request, false, 'o Openia não lê o prompt por stdin')
+  assert.deepEqual(args, buildOpeniaArgs({ prompt: '--isto-nao-e-uma-opcao', model: MODEL, runDir: outDirOf(request), requestId: 'req-000002', cancelFile: request.cancelFile }))
 })
 
-test('parseRequest: schema fechado — recusa pasta/caminho, modelo com cara de opção, prompt vazio ou enorme', () => {
+test('parseRequest: schema fechado — recusa pasta/caminho, modelo com cara de opção, prompt vazio/enorme e id que começa com - ou _', () => {
   assert.equal(parseRequest({ prompt: 'ok', model: MODEL }).ok, true)
   assert.equal(parseRequest({ prompt: 'ok', model: MODEL, requestId: 'abcdefgh' }).ok, true)
   const invalidos = [
     null, 'x', [], {},
     { prompt: 'ok', model: MODEL, outDir: '/tmp' },
+    { prompt: 'ok', model: MODEL, outputDir: '/tmp' },
     { prompt: 'ok', model: MODEL, path: '/etc/passwd' },
     { prompt: '', model: MODEL },
     { prompt: '   ', model: MODEL },
@@ -141,6 +174,8 @@ test('parseRequest: schema fechado — recusa pasta/caminho, modelo com cara de 
     { prompt: 'ok', model: 'a/b;rm -rf /' },
     { prompt: 'ok', model: MODEL, requestId: '../../x' },
     { prompt: 'ok', model: MODEL, requestId: 'curto' },
+    { prompt: 'ok', model: MODEL, requestId: '-abcdefgh' },
+    { prompt: 'ok', model: MODEL, requestId: '_abcdefgh' },
     { prompt: 'ok', model: MODEL, requestId: 42 },
     { prompt: 42, model: MODEL },
   ]
@@ -156,45 +191,116 @@ test('o IPC recusa payload com diretório de saída e não chama o filho', async
   assert.equal(runImage.calls.length, 0)
 })
 
-test('sem capacidade informada pelo Openia nada é oferecido nem executado (não presume)', async () => {
-  const runImage = child()
-  const h = harness({
-    runImage,
-    listModels: async () => ({ ok: true, models: [{ id: MODEL, vendor: 'acme', name: 'Pixel', completionPrice: 0 }] }),
+// ---- Catálogo público ---------------------------------------------------------------------------------------
+
+function fakeResponse(body, { ok = true, headers = {} } = {}) {
+  const text = typeof body === 'string' ? body : JSON.stringify(body)
+  return { ok, headers: { get: (name) => headers[name.toLowerCase()] ?? null }, text: async () => text }
+}
+
+test('catálogo público: só modelos com saída de imagem, sem chave, sem redirecionamento, campos saneados', async () => {
+  let chamada
+  const fetchImpl = async (url, init) => {
+    chamada = { url, init }
+    return fakeResponse({
+      data: [
+        { id: 'openai/gpt-image', name: 'GPT Image', architecture: { input_modalities: ['text', 'IMAGE', 'telepatia'], output_modalities: ['image'] } },
+        { id: 'acme/texto', name: 'Texto', architecture: { output_modalities: ['text'] } },
+        { id: 'acme/sem-arquitetura', name: 'Sem' },
+        { id: '-x/opcao', name: 'Cara de opção', architecture: { output_modalities: ['image'] } },
+        { id: 'sem-barra', architecture: { output_modalities: ['image'] } },
+        { id: 'a b/c', architecture: { output_modalities: ['image'] } },
+        null,
+        'lixo',
+        { id: 'acme/sem-nome', architecture: { output_modalities: ['text', 'image'] } },
+      ],
+    })
+  }
+  const models = await fetchImageCatalog({ fetchImpl })
+
+  assert.equal(chamada.url, IMAGE_MODELS_URL)
+  assert.equal(chamada.init.method, 'GET')
+  assert.equal(chamada.init.redirect, 'error')
+  assert.deepEqual(Object.keys(chamada.init.headers), ['accept'], 'nenhum cabeçalho de autorização')
+  assert.deepEqual(models.map((model) => model.id), ['openai/gpt-image', 'acme/sem-nome'])
+  assert.deepEqual(models[0], {
+    id: 'openai/gpt-image', vendor: 'openai', name: 'GPT Image', inputModalities: ['text', 'image'], outputModalities: ['image'],
   })
-  const listed = await h.service.imageModels()
-  assert.deepEqual(listed, { ok: true, capabilityKnown: false, models: [] })
-  const result = await h.service.generate({ prompt: 'x', model: MODEL })
-  assert.equal(result.code, 'capability_unknown')
-  assert.equal(runImage.calls.length, 0)
+  assert.equal(models[1].name, 'acme/sem-nome')
 })
 
-test('modelo que não gera imagem e catálogo indisponível são recusados sem executar o filho', async () => {
+test('catálogo público: falha, formato inválido, grande demais e lento demais são recusados', async () => {
+  await assert.rejects(fetchImageCatalog({ fetchImpl: async () => fakeResponse({}, { ok: false }) }))
+  await assert.rejects(fetchImageCatalog({ fetchImpl: async () => fakeResponse('isto não é json') }))
+  await assert.rejects(fetchImageCatalog({ fetchImpl: async () => fakeResponse({ data: 'nao-e-lista' }) }))
+  await assert.rejects(fetchImageCatalog({ fetchImpl: async () => fakeResponse({ data: [] }, { headers: { 'content-length': String(3 * 1024 * 1024) } }) }))
+  await assert.rejects(fetchImageCatalog({ fetchImpl: async () => fakeResponse({ data: [{ id: 'a/b', pad: 'x'.repeat(2000) }] }), maxBytes: 500 }))
+  const lento = (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('abortado'))))
+  await assert.rejects(fetchImageCatalog({ fetchImpl: lento, timeoutMs: 30 }))
+})
+
+test('o catálogo é consultado uma vez e reaproveitado; falha do catálogo e modelo fora da lista são recusados sem executar o filho', async () => {
   const runImage = child()
-  const h = harness({ runImage })
+  let consultas = 0
+  const h = harness({ runImage, fetchCatalog: async () => { consultas += 1; return catalog()() } })
+  assert.equal((await h.service.generate({ prompt: 'x', model: MODEL })).ok, true)
+  assert.equal((await h.service.generate({ prompt: 'x', model: MODEL })).ok, true)
+  assert.equal(consultas, 1)
   assert.equal((await h.service.generate({ prompt: 'x', model: 'acme/texto' })).code, 'model_not_image_capable')
   assert.equal((await h.service.generate({ prompt: 'x', model: 'outro/inexistente' })).code, 'model_not_image_capable')
+  assert.deepEqual((await h.service.imageModels()).models.map((model) => model.id), [MODEL])
 
-  const semCatalogo = harness({ runImage, listModels: async () => ({ ok: false }) })
-  assert.equal((await semCatalogo.service.generate({ prompt: 'x', model: MODEL })).code, 'openia_unavailable')
-  assert.equal(runImage.calls.length, 0)
+  const chamadasAntes = runImage.calls.length
+  const fora = harness({ runImage, fetchCatalog: async () => { throw new Error('sem rede') } })
+  const result = await fora.service.generate({ prompt: 'x', model: MODEL })
+  assert.equal(result.code, 'catalog_unavailable')
+  assert.equal(result.message, MESSAGES.catalog_unavailable)
+  assert.equal((await fora.service.imageModels()).ok, false)
+  assert.equal(runImage.calls.length, chamadasAntes)
 })
 
-test('erros do filho viram códigos e mensagens FIXAS: nunca stderr, chave nem traceback', async () => {
+// ---- Envelope, códigos de saída e vazamento ----------------------------------------------------------------
+
+test('mapFailure: o código de SAÍDA do Openia manda; o error.code é reserva; o resto é falha genérica', () => {
+  const porSaida = { 2: 'invalid_request', 3: 'authentication_error', 4: 'model_unavailable', 5: 'limit_error', 6: 'network_error', 124: 'timeout', 130: 'cancelled', 7: 'generation_failed', 8: 'generation_failed', 1: 'generation_failed' }
+  for (const [saida, esperado] of Object.entries(porSaida)) assert.equal(mapFailure(Number(saida), 'qualquer'), esperado, `saída ${saida}`)
+  assert.equal(mapFailure(undefined, 'missing_key'), 'authentication_error')
+  assert.equal(mapFailure(undefined, 'rate_limit'), 'limit_error')
+  assert.equal(mapFailure(undefined, 'model_not_found'), 'model_unavailable')
+  assert.equal(mapFailure(undefined, 'output_too_large'), 'invalid_output')
+  assert.equal(mapFailure(undefined, 'algo-inventado'), 'generation_failed')
+  assert.equal(mapFailure(undefined, undefined), 'generation_failed')
+})
+
+test('parseEnvelope: só versão 1 com "ok" booleano; lixo e versão desconhecida valem como inválidos', () => {
+  assert.equal(parseEnvelope(successEnvelope(['/x/a.png'])).ok, true)
+  assert.equal(parseEnvelope(failureEnvelope('missing_key')).ok, false)
+  for (const ruim of ['', 'Traceback', '[]', 'null', '"x"', JSON.stringify({ ok: true }), JSON.stringify({ version: 2, ok: true, outputs: [] }), JSON.stringify({ version: 1, ok: 'sim' })]) {
+    assert.equal(parseEnvelope(ruim), null, ruim)
+  }
+})
+
+test('erros do filho viram códigos e mensagens FIXAS: nunca stderr, chave, mensagem do filho nem traceback', async () => {
   const casos = [
-    [{ started: true, ok: false, stdout: JSON.stringify({ ok: false, code: 'key_missing', message: SECRET }) }, 'key_missing'],
-    [{ started: true, ok: false, stdout: JSON.stringify({ ok: false, code: 'insufficient_credits' }) }, 'insufficient_credits'],
-    [{ started: true, ok: false, stdout: JSON.stringify({ ok: false, code: 'algo-inventado', message: SECRET }) }, 'generation_failed'],
-    [{ started: true, ok: false, stdout: `Traceback (most recent call last): ${SECRET}` }, 'generation_failed'],
-    [{ started: true, ok: true, stdout: `Traceback ${SECRET}` }, 'invalid_output'],
-    [{ started: true, ok: true, stdout: JSON.stringify({ ok: true, files: 'nao-e-lista' }) }, 'invalid_output'],
+    [{ started: true, ok: false, exitCode: 3, stdout: failureEnvelope('missing_key') }, 'authentication_error'],
+    [{ started: true, ok: false, exitCode: 3, stdout: failureEnvelope('invalid_key') }, 'authentication_error'],
+    [{ started: true, ok: false, exitCode: 5, stdout: failureEnvelope('account_limit') }, 'limit_error'],
+    [{ started: true, ok: false, exitCode: 4, stdout: failureEnvelope('model_unsupported') }, 'model_unavailable'],
+    [{ started: true, ok: false, exitCode: 6, stdout: failureEnvelope('network_error') }, 'network_error'],
+    [{ started: true, ok: false, exitCode: 7, stdout: failureEnvelope('provider_error') }, 'generation_failed'],
+    [{ started: true, ok: false, exitCode: 99, stdout: failureEnvelope('algo-inventado') }, 'generation_failed'],
+    [{ started: true, ok: false, exitCode: 1, stdout: `Traceback (most recent call last): ${SECRET}` }, 'generation_failed'],
+    [{ started: true, ok: true, exitCode: 0, stdout: `Traceback ${SECRET}` }, 'invalid_output'],
+    [{ started: true, ok: true, exitCode: 0, stdout: JSON.stringify({ version: 1, ok: true, outputs: 'nao-e-lista' }) }, 'invalid_output'],
+    [{ started: true, ok: true, exitCode: 0, stdout: JSON.stringify({ version: 1, ok: true, outputs: [] }) }, 'invalid_output'],
+    [{ started: true, ok: true, exitCode: 0, stdout: JSON.stringify({ version: 2, ok: true, outputs: [{ path: '/x/a.png' }] }) }, 'invalid_output'],
     [{ started: false }, 'openia_unavailable'],
   ]
   for (const [resposta, codigo] of casos) {
     const h = harness({ runImage: async () => resposta })
     const result = await h.service.generate({ prompt: 'x', model: MODEL })
     assert.equal(result.ok, false)
-    assert.equal(result.code, codigo)
+    assert.equal(result.code, codigo, JSON.stringify(resposta))
     assert.equal(result.message, MESSAGES[codigo])
     const serializado = JSON.stringify(result)
     assert.equal(serializado.includes(SECRET), false)
@@ -204,12 +310,14 @@ test('erros do filho viram códigos e mensagens FIXAS: nunca stderr, chave nem t
 })
 
 test('saída inválida do filho invalida tudo: nada gravado, nada anunciado, pasta do pedido limpa', async () => {
+  const fora = path.join(tmp(), 'fugiu.png')
+  fs.writeFileSync(fora, PNG)
   const outros = [
     child({ files: [['img.png', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')]] }),
     child({ files: [['img.png', Buffer.from('isto nao e uma imagem de verdade')]] }),
-    child({ files: [['img.png', PNG]], listed: ['../fugiu.png'] }),
+    child({ files: [['img.png', PNG]], listed: [fora] }), // caminho absoluto fora da pasta do pedido
     child({ files: [['img.png', PNG]], listed: ['nao-existe.png'] }),
-    child({ files: [['img.png', PNG]], listed: [] }),
+    child({ files: [['img.png', PNG]], listed: [{ raw: 'img.png' }] }), // caminho relativo: o envelope só traz absolutos
   ]
   for (const runImage of outros) {
     const h = harness({ runImage })
@@ -219,6 +327,28 @@ test('saída inválida do filho invalida tudo: nada gravado, nada anunciado, pas
     assert.equal(fs.existsSync(h.generatedDir) ? fs.readdirSync(h.generatedDir).length : 0, 0)
     assert.equal(fs.existsSync(path.join(h.runsDir, 'req-invalid1')), false)
   }
+  assert.equal(fs.existsSync(fora), true, 'o serviço não pode tocar em arquivo fora da pasta do pedido')
+})
+
+test('resolveOutputNames: caminho relativo, de pasta vizinha ou de subpasta é recusado; só arquivo DIRETO na pasta vale', async () => {
+  const dir = tmp()
+  const run = path.join(dir, 'run')
+  const vizinha = path.join(dir, 'vizinha')
+  fs.mkdirSync(path.join(run, 'sub'), { recursive: true })
+  fs.mkdirSync(vizinha)
+  assert.deepEqual(await resolveOutputNames(run, [{ path: path.join(run, 'a.png') }]), { ok: true, names: ['a.png'] })
+  for (const ruim of [
+    [{ path: 'a.png' }],
+    [{ path: path.join(vizinha, 'a.png') }],
+    [{ path: path.join(run, 'sub', 'a.png') }],
+    [{ path: path.join(run, '..', 'vizinha', 'a.png') }],
+    [{ path: 42 }],
+    [{}],
+    [],
+  ]) {
+    assert.equal((await resolveOutputNames(run, ruim)).ok, false, JSON.stringify(ruim))
+  }
+  assert.equal((await resolveOutputNames(path.join(dir, 'nao-existe'), [{ path: path.join(run, 'a.png') }])).ok, false)
 })
 
 test('arquivos que o filho NÃO listou são ignorados (não é qualquer arquivo da pasta)', async () => {
@@ -230,7 +360,7 @@ test('arquivos que o filho NÃO listou são ignorados (não é qualquer arquivo 
   assert.equal(result.artifacts[0].mimeType, 'image/png')
 })
 
-test('o MIME vem dos BYTES, não da extensão que o filho escolheu', async () => {
+test('o MIME vem dos BYTES, não da extensão nem do "mime" que o filho declarou', async () => {
   const runImage = child({ files: [['foto.png', JPEG]] })
   const h = harness({ runImage })
   const result = await h.service.generate({ prompt: 'x', model: MODEL })
@@ -260,7 +390,7 @@ test('duas imagens: se a segunda não grava, a primeira é desfeita e nada é an
 
 test('limite de execuções simultâneas e identificador repetido', async () => {
   const liberar = []
-  const runImage = () => new Promise((resolve) => liberar.push(() => resolve({ started: true, ok: false, stdout: '' })))
+  const runImage = () => new Promise((resolve) => liberar.push(() => resolve({ started: true, ok: false, exitCode: 1, stdout: '' })))
   const h = harness({ runImage })
   const ids = Array.from({ length: MAX_CONCURRENT }, (_, i) => `req-conc-0${i}`)
   const emAndamento = ids.map((requestId) => h.service.generate({ prompt: 'x', model: MODEL, requestId }))
@@ -275,15 +405,14 @@ test('limite de execuções simultâneas e identificador repetido', async () => 
   assert.equal(h.service.status({ requestId: ids[0] }).state, 'error')
 })
 
-test('cancelar: para o filho, devolve "cancelled", não grava, não anuncia e limpa a pasta', async () => {
+test('cancelar: avisa o filho, devolve "cancelled", não grava, não anuncia e limpa pasta e arquivo de cancelamento', async () => {
   let recebeuSinal = false
   const runImage = ({ args, signal }) =>
     new Promise((resolve) => {
-      const outDir = args[args.indexOf('--out-dir') + 1]
-      fs.writeFileSync(path.join(outDir, 'parcial.png'), PNG)
+      fs.writeFileSync(path.join(args[args.indexOf('--output-dir') + 1], 'parcial.png'), PNG)
       signal.addEventListener('abort', () => {
         recebeuSinal = true
-        resolve({ started: true, ok: false, stdout: '' })
+        resolve({ started: true, ok: false, exitCode: 130, stdout: failureEnvelope('cancelled') })
       })
     })
   const h = harness({ runImage })
@@ -306,7 +435,7 @@ test('cancelar: para o filho, devolve "cancelled", não grava, não anuncia e li
 
 test('estourar o tempo interrompe o filho e devolve "timeout"', async () => {
   const runImage = ({ signal }) =>
-    new Promise((resolve) => signal.addEventListener('abort', () => resolve({ started: true, ok: false, stdout: '' })))
+    new Promise((resolve) => signal.addEventListener('abort', () => resolve({ started: true, ok: false, exitCode: 130, stdout: '' })))
   const h = harness({ runImage, timeoutMs: 40 })
   const result = await h.service.generate({ prompt: 'x', model: MODEL, requestId: 'req-timeout' })
   assert.equal(result.code, 'timeout')
@@ -314,26 +443,26 @@ test('estourar o tempo interrompe o filho e devolve "timeout"', async () => {
   assert.equal(fs.existsSync(path.join(h.runsDir, 'req-timeout')), false)
 })
 
-test('reiniciar preserva a referência gravada e a varredura só apaga pastas de pedido velhas', async () => {
+test('reiniciar preserva a referência gravada e a varredura só apaga pastas e cancelamentos de pedido velhos', async () => {
   const h = harness({ runImage: child() })
   const result = await h.service.generate({ prompt: 'x', model: MODEL })
   const artifactPath = result.artifacts[0].path
 
   fs.mkdirSync(h.runsDir, { recursive: true })
   const velha = path.join(h.runsDir, 'sobra-de-uma-queda')
+  const velhoCancel = path.join(h.runsDir, 'sobra-de-uma-queda.cancel')
   const recente = path.join(h.runsDir, 'pedido-em-curso')
   fs.mkdirSync(velha)
+  fs.writeFileSync(velhoCancel, '')
   fs.mkdirSync(recente)
   const ha2Horas = new Date(Date.now() - 2 * 60 * 60_000)
   fs.utimesSync(velha, ha2Horas, ha2Horas)
+  fs.utimesSync(velhoCancel, ha2Horas, ha2Horas)
 
-  const reiniciado = createOpeniaImageService({
-    userData: h.userData,
-    listModels: models(),
-    saveImage: () => ({ ok: false }),
-  })
-  assert.deepEqual(await reiniciado.sweepOrphans(), { removed: 1 })
+  const reiniciado = createOpeniaImageService({ userData: h.userData, fetchCatalog: catalog(), saveImage: () => ({ ok: false }) })
+  assert.deepEqual(await reiniciado.sweepOrphans(), { removed: 2 })
   assert.equal(fs.existsSync(velha), false)
+  assert.equal(fs.existsSync(velhoCancel), false)
   assert.equal(fs.existsSync(recente), true)
   assert.equal(fs.existsSync(artifactPath), true)
 })
@@ -350,6 +479,8 @@ test('registra só os quatro canais de imagem do Openia', async () => {
   ])
   const recusa = await handlers.get('openia:generate-image')({}, { prompt: 'x', model: MODEL, outDir: '/tmp' })
   assert.equal(recusa.code, 'invalid_request')
+  const lista = await handlers.get('openia:image-models')({})
+  assert.deepEqual(lista.models.map((model) => model.id), [MODEL])
 })
 
 test('sniffRasterMimeType reconhece só raster e recusa SVG, HTML e lixo', () => {
@@ -393,42 +524,63 @@ test('collectFiles recusa link simbólico, diretório, arquivo vazio, gigante e 
   assert.equal((await collectFiles(path.join(dir, 'nao-existe'), ['x.png'])).ok, false)
 })
 
+test('sanitizeArgsForShell troca quebra de linha por espaço (atalho .cmd do Windows passa por cmd.exe)', () => {
+  assert.deepEqual(sanitizeArgsForShell(['image', '--prompt=linha 1\r\nlinha 2\nlinha 3', '--json']), ['image', '--prompt=linha 1 linha 2 linha 3', '--json'])
+})
+
 // ---- Contrato com um `openia` falso rodando como PROCESSO de verdade -----------------------------------------
+// O falso fala os argumentos, o envelope e os códigos de saída REAIS do Openia (image.py, commit 9bb9099).
 
 const FAKE_OPENIA = `
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 const argv = process.argv.slice(2)
-const outDir = argv[argv.indexOf('--out-dir') + 1]
+const value = (flag) => argv[argv.indexOf(flag) + 1]
+const promptArg = argv.find((arg) => arg.startsWith('--prompt='))
+const prompt = promptArg ? promptArg.slice('--prompt='.length) : ''
+const outDir = value('--output-dir')
+const cancelFile = value('--cancel-file')
+const requestId = value('--request-id')
 const runsDir = path.dirname(outDir)
 fs.writeFileSync(path.join(runsDir, 'last-argv.json'), JSON.stringify(argv))
-let prompt = ''
-process.stdin.setEncoding('utf8')
-process.stdin.on('data', (chunk) => { prompt += chunk })
-process.stdin.on('end', () => {
-  fs.writeFileSync(path.join(runsDir, 'last-prompt.txt'), prompt)
-  if (prompt.includes('FALHAR')) {
-    process.stderr.write('Traceback (most recent call last): Authorization: Bearer ${SECRET}\\n')
-    process.exit(1)
-  }
-  if (prompt.includes('TRAVAR')) {
-    const neto = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
-    fs.writeFileSync(path.join(runsDir, 'neto.pid'), String(neto.pid))
-    fs.writeFileSync(path.join(outDir, 'parcial.png'), 'incompleto')
-    setInterval(() => {}, 1000)
-    return
-  }
-  fs.writeFileSync(path.join(outDir, 'img-1.png'), Buffer.from('${PNG.toString('base64')}', 'base64'))
-  process.stdout.write(JSON.stringify({ ok: true, files: [{ name: 'img-1.png', mimeType: 'image/png' }], cost: 0.02 }))
-})
+const envelope = (extra) => process.stdout.write(JSON.stringify({ version: 1, requestId, ...extra }))
+
+if (prompt.includes('FALHAR')) {
+  process.stderr.write('Traceback (most recent call last): Authorization: Bearer ${SECRET}\\n')
+  process.exit(1)
+}
+if (prompt.includes('AUTENTICAR')) {
+  envelope({ ok: false, error: { code: 'missing_key', message: '${SECRET}' } })
+  process.exit(3)
+}
+if (prompt.includes('COOPERAR') || prompt.includes('TRAVAR')) {
+  const neto = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+  fs.writeFileSync(path.join(runsDir, 'neto.pid'), String(neto.pid))
+  fs.writeFileSync(path.join(outDir, 'parcial.png'), 'incompleto')
+  const cooperar = prompt.includes('COOPERAR')
+  setInterval(() => {
+    // COOPERAR observa o arquivo de cancelamento como o Openia real; TRAVAR o ignora.
+    if (cooperar && fs.existsSync(cancelFile)) {
+      try { process.kill(neto.pid) } catch {}
+      envelope({ ok: false, error: { code: 'cancelled', message: 'a operação foi cancelada.' } })
+      process.exit(130)
+    }
+  }, 30)
+  return
+}
+const file = path.join(outDir, 'img-1.png')
+fs.writeFileSync(file, Buffer.from('${PNG.toString('base64')}', 'base64'))
+envelope({ ok: true, model: value('--model'), outputs: [{ path: file, mime: 'image/png', bytes: fs.statSync(file).size }], createdAt: '2026-09-21T00:00:00.000Z', completedAt: '2026-09-21T00:00:01.000Z' })
 `
 
-function realProcessHarness() {
+function realProcessHarness({ cooperativeGraceMs = 250, killGraceMs = 250 } = {}) {
   const script = path.join(tmp(), 'fake-openia.cjs')
   fs.writeFileSync(script, FAKE_OPENIA)
   const resolveSpawn = () => ({ executable: process.execPath, env: process.env, needsShell: false, prefixArgs: [script] })
-  return harness({ runImage: (request) => runOpeniaImageProcess({ ...request, resolveSpawn, killGraceMs: 300 }) })
+  return harness({
+    runImage: (request) => runOpeniaImageProcess({ ...request, resolveSpawn, cooperativeGraceMs, killGraceMs }),
+  })
 }
 
 function esta_vivo(pid) {
@@ -449,15 +601,20 @@ async function esperarMorrer(pid, ms = 6000) {
   return false
 }
 
-test('contrato real: prompt por stdin, saída em arquivo na pasta do Felixo, artefato gravado', async () => {
+async function esperarArquivo(arquivo, ms = 8000) {
+  const limite = Date.now() + ms
+  while (!fs.existsSync(arquivo) && Date.now() < limite) await new Promise((resolve) => setTimeout(resolve, 30))
+  return fs.existsSync(arquivo)
+}
+
+test('contrato real: --prompt= com prompt que parece opção, pasta de saída do Felixo, artefato gravado', async () => {
   const h = realProcessHarness()
-  const result = await h.service.generate({ prompt: 'um gato astronauta', model: MODEL, requestId: 'req-real-01' })
+  const result = await h.service.generate({ prompt: '--um gato astronauta', model: MODEL, requestId: 'req-real-01' })
 
   assert.equal(result.ok, true, JSON.stringify(result))
-  assert.equal(result.artifacts[0].cost, 0.02)
-  assert.equal(fs.readFileSync(path.join(h.runsDir, 'last-prompt.txt'), 'utf8'), 'um gato astronauta')
+  assert.equal(result.artifacts.length, 1)
   const argv = JSON.parse(fs.readFileSync(path.join(h.runsDir, 'last-argv.json'), 'utf8'))
-  assert.equal(argv.some((arg) => arg.includes('gato')), false, 'o prompt não pode ir em argumento')
+  assert.ok(argv.includes('--prompt=--um gato astronauta'))
   assert.deepEqual(argv.slice(0, 4), ['image', '--json', '--model', MODEL])
   assert.equal(h.notified.length, 1)
 })
@@ -475,22 +632,48 @@ test('contrato real: falha do filho com traceback e "chave" no stderr não vaza 
   assert.equal(h.notified.length, 0)
 })
 
-test('contrato real: cancelar mata o filho E o neto e não deixa arquivo órfão', async () => {
+test('contrato real: exit 3 com missing_key vira "authentication_error" sem repetir a mensagem do filho', async () => {
   const h = realProcessHarness()
-  const pendente = h.service.generate({ prompt: 'TRAVAR para sempre', model: MODEL, requestId: 'req-real-03' })
+  const result = await h.service.generate({ prompt: 'AUTENTICAR', model: MODEL, requestId: 'req-real-03' })
+  assert.equal(result.code, 'authentication_error')
+  assert.equal(result.message, MESSAGES.authentication_error)
+  assert.equal(JSON.stringify(result).includes(SECRET), false)
+})
+
+test('contrato real: cancelar cria o arquivo de cancelamento e um Openia cooperativo sai sozinho (exit 130) sem esperar o kill', async () => {
+  const h = realProcessHarness({ cooperativeGraceMs: 30_000 }) // se o kill fosse necessário, o teste estouraria o tempo
+  const pendente = h.service.generate({ prompt: 'COOPERAR até cancelar', model: MODEL, requestId: 'req-real-04' })
 
   const pidFile = path.join(h.runsDir, 'neto.pid')
-  const limite = Date.now() + 8000
-  while (!fs.existsSync(pidFile) && Date.now() < limite) await new Promise((resolve) => setTimeout(resolve, 30))
-  assert.equal(fs.existsSync(pidFile), true, 'o filho falso não chegou a subir o neto')
+  assert.equal(await esperarArquivo(pidFile), true, 'o filho falso não chegou a subir o neto')
   const neto = Number(fs.readFileSync(pidFile, 'utf8'))
   assert.equal(esta_vivo(neto), true)
 
-  assert.equal(h.service.cancel({ requestId: 'req-real-03' }).cancelled, true)
+  const inicio = Date.now()
+  assert.equal(h.service.cancel({ requestId: 'req-real-04' }).cancelled, true)
+  const result = await pendente
+  assert.equal(result.code, 'cancelled')
+  assert.ok(Date.now() - inicio < 10_000, 'o cancelamento cooperativo não pode depender do kill')
+  assert.equal(await esperarMorrer(neto), true)
+  assert.equal(fs.existsSync(path.join(h.runsDir, 'req-real-04')), false)
+  assert.equal(fs.existsSync(path.join(h.runsDir, 'req-real-04.cancel')), false)
+  assert.equal(h.notified.length, 0)
+})
+
+test('contrato real: um Openia que IGNORA o cancelamento é morto, com o neto, e não deixa arquivo órfão', async () => {
+  const h = realProcessHarness()
+  const pendente = h.service.generate({ prompt: 'TRAVAR para sempre', model: MODEL, requestId: 'req-real-05' })
+
+  const pidFile = path.join(h.runsDir, 'neto.pid')
+  assert.equal(await esperarArquivo(pidFile), true, 'o filho falso não chegou a subir o neto')
+  const neto = Number(fs.readFileSync(pidFile, 'utf8'))
+  assert.equal(esta_vivo(neto), true)
+
+  assert.equal(h.service.cancel({ requestId: 'req-real-05' }).cancelled, true)
   const result = await pendente
   assert.equal(result.code, 'cancelled')
   assert.equal(await esperarMorrer(neto), true, 'o processo neto ficou órfão depois do cancelamento')
-  assert.equal(fs.existsSync(path.join(h.runsDir, 'req-real-03')), false)
+  assert.equal(fs.existsSync(path.join(h.runsDir, 'req-real-05')), false)
   assert.equal(h.notified.length, 0)
   assert.equal(fs.existsSync(h.generatedDir) ? fs.readdirSync(h.generatedDir).length : 0, 0)
 })

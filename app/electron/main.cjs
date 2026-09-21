@@ -13,7 +13,7 @@ const { createCliAccountStore } = require('./services/cli-account-store.cjs')
 const {
   registerCliAccountIpcHandlers,
 } = require('./services/cli-account-ipc-handlers.cjs')
-const { createOpeniaService, registerOpeniaIpcHandlers } = require('./services/openia-service.cjs')
+const { registerOpeniaIpcHandlers } = require('./services/openia-service.cjs')
 const {
   createOpeniaImageService,
   registerOpeniaImageIpcHandlers,
@@ -447,8 +447,7 @@ app.whenReady().then(async () => {
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
-  const openiaService = createOpeniaService()
-  registerOpeniaIpcHandlers({ service: openiaService })
+  registerOpeniaIpcHandlers()
   registerCliAccountIpcHandlers({ store: cliAccounts })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
     validateAccount: (accountId, providerId) =>
@@ -465,7 +464,6 @@ app.whenReady().then(async () => {
   // caminho seguro das outras imagens geradas, e só depois avisa o canvas.
   openiaImageService = createOpeniaImageService({
     userData: appPaths.userData,
-    listModels: () => openiaService.listModels(),
     saveImage: (params) =>
       saveGeneratedImage(params, path.join(appPaths.userData, 'generated-images')),
     notify: (artifact) => getMainWindow()?.webContents?.send('canvas:image-generated', artifact),
