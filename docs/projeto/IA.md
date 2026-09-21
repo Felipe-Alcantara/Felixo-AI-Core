@@ -3469,3 +3469,29 @@ formatada uma vez só. O aviso de truncamento (>2.000 linhas) já existia, com t
 
 NÃO verificado: nada disto foi visto rodando (a instância da pessoa é a versão instalada, sem esta
 mudança) e a edição por tipo, os quadros/listas e o título das páginas relacionadas ficam para depois.
+
+## 2026-09-20 — Canvas resetava a visualização sozinho
+
+Relato da pessoa: "o canvas toda hora fica resetando a visualização". Causa (por leitura do código, sem
+reprodução em janela real): o efeito que enquadra o canvas (`CanvasView`, `fitCanvasViewSafely(0)`)
+tinha a própria função nas dependências, e ela é recriada a cada mudança de `occupancy` (gaveta do
+terminal, painéis, inspector) via `getSafeCanvasScreenRect`. Qualquer abrir/fechar/redimensionar de
+superfície refazia o "ver tudo" e jogava fora o pan e o zoom da pessoa.
+
+Correção: `viewport-auto-fit.ts` decide quando reenquadrar. Enquadra na primeira vez de cada revisão do
+canvas e em mudanças de layout ENQUANTO a pessoa ainda não mexeu na visão (medida tardia das
+superfícies no boot); depois que ela move o viewport — pan, zoom, botões de zoom, foco em bloco, "Ver
+tudo" — a visão é dela e mudança de layout não reenquadra mais. O movimento causado pelo próprio
+enquadramento (janela de 400 ms) não conta como da pessoa. Um canvas novo (importar arquivo) volta ao
+automático. 6 testes cobrem os casos, inclusive o do bug.
+
+NÃO verificado: não vi o reset acontecendo nem a correção funcionando numa janela real; a instância da
+pessoa é a versão instalada. Se o reset persistir depois desta correção, há outra fonte de reenquadramento
+ainda não achada (por exemplo, remontar o React Flow por `canvasRevision` inesperadamente).
+
+Também em 20/09 (CI do PR #72): o benchmark de scrollback do Windows terminou com **exit 3** depois de
+imprimir o JSON completo e sem nenhuma linha de erro do benchmark (`PostQueuedCompletionStatus: (6) The
+handle is invalid`) — `abort()` do Electron no encerramento, mesma família do crash do node-pty do #51. O
+retry do passo (antes só o 139) agora repete também o 3, até 3 vezes; outros códigos (o 1 de falha real do
+benchmark, por exemplo) falham na hora, e um crash persistente sai com o código real. Laço testado com
+funções falsas. Não verificado no runner: só as próximas execuções mostram se 3 tentativas bastam.

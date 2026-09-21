@@ -34,6 +34,7 @@ import { buildPresetInstruction } from '../services/agent-preset-prompt'
 import { NodeColorMenu } from './NodeColorMenu'
 import { frameClassName } from './frame-colors'
 import { notificationClassName, unreadCategoryByNode } from '../terminal/notification-category'
+import { initialAutoFitState, planAutoFit, registerViewportMove } from '../services/viewport-auto-fit'
 import { DrawingNode } from './DrawingNode'
 import { ExcalidrawDrawingNode } from './ExcalidrawDrawingNode'
 import { GroupNode } from './GroupNode'
@@ -416,10 +417,14 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
   const [zoomPercent, setZoomPercent] = useState(100)
   const zoomPercentRef = useRef(100)
+  // Estado do enquadramento automático (ver `viewport-auto-fit.ts`): depois que a
+  // pessoa mexe na visão, mudança de layout não pode mais reenquadrar.
+  const autoFitStateRef = useRef(initialAutoFitState())
   const handleCanvasMove = useCallback((
     _event: unknown,
     viewport: { zoom: number },
   ) => {
+    autoFitStateRef.current = registerViewportMove(autoFitStateRef.current, performance.now())
     const nextZoomPercent = Math.round(viewport.zoom * 100)
     if (nextZoomPercent === zoomPercentRef.current) return
     zoomPercentRef.current = nextZoomPercent
@@ -1016,6 +1021,14 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
   useEffect(() => {
     if (!hydrated || !flowReady) {
+      return undefined
+    }
+
+    // `fitCanvasViewSafely` muda a cada mudança de layout; sem este plano cada
+    // abrir/fechar de gaveta ou painel jogava fora o pan e o zoom da pessoa.
+    const plan = planAutoFit(autoFitStateRef.current, canvasRevision, performance.now())
+    autoFitStateRef.current = plan.state
+    if (!plan.fit) {
       return undefined
     }
 
