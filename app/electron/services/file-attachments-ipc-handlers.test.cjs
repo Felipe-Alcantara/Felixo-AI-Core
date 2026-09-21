@@ -8,9 +8,15 @@ const {
 } = require('../__fixtures__/link-fixtures.cjs')
 const {
   createAttachmentFileName,
+  duplicateImage,
+  openImageArtifact,
+  pickImageArtifact,
   registerFileAttachmentIpcHandlers,
   readImageAttachment,
+  removeGeneratedImage,
   saveAttachment,
+  saveGeneratedImage,
+  saveImageCopy,
 } = require('./file-attachments-ipc-handlers.cjs')
 
 test('saveAttachment persists image data in attachment directory', async (t) => {
@@ -239,6 +245,199 @@ test('native context selection returns absolute paths and grants selected images
   assert.equal(directoryResult.attachments[0].path, resolvedSelectedDir)
   assert.equal(directoryResult.attachments[0].isDirectory, true)
   assert.equal(directoryResult.attachments[0].type, 'inode/directory')
+})
+
+test('saveGeneratedImage persists a sanitized artifact that survives the preview boundary', async (t) => {
+  const rootDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'felixo-generated-image-'),
+  )
+  const generatedImageDir = path.join(rootDir, 'generated-images')
+  t.after(() => fs.rm(rootDir, { recursive: true, force: true }))
+
+  const result = await saveGeneratedImage(
+    {
+      name: 'resultado da imagem.png',
+      type: 'image/png',
+      data: new Uint8Array([1, 2, 3]).buffer,
+      prompt: '  um gato no espaço  ',
+      model: 'image-model',
+      requestId: 'request-123',
+      createdAt: '2026-09-21T12:00:00.000Z',
+      cost: 0.04,
+      temporary: true,
+      key: 'nao-deve-vazar',
+      url: 'https://private.example/image',
+    },
+    generatedImageDir,
+  )
+
+  assert.equal(result.ok, true)
+  assert.equal(result.artifact.kind, 'generated-image')
+  assert.equal(result.artifact.mimeType, 'image/png')
+  assert.equal(result.artifact.prompt, 'um gato no espaço')
+  assert.equal(result.artifact.cost, 0.04)
+  assert.equal(result.artifact.key, undefined)
+  assert.equal(result.artifact.url, undefined)
+  assert.equal(path.dirname(result.artifact.path), generatedImageDir)
+  assert.deepEqual(Array.from(await fs.readFile(result.artifact.path)), [1, 2, 3])
+
+  const preview = await readImageAttachment(
+    { path: result.artifact.path, type: 'image/jpeg' },
+    { authorizedImageDirs: [generatedImageDir] },
+  )
+  assert.equal(preview.ok, true)
+  assert.equal(preview.type, 'image/png')
+})
+
+test('generated image actions enforce ownership and keep copies inside generated storage', async (t) => {
+  const rootDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'felixo-generated-actions-'),
+  )
+  const generatedImageDir = path.join(rootDir, 'generated-images')
+  const outsideDir = path.join(rootDir, 'outside')
+  await fs.mkdir(outsideDir)
+  t.after(() => fs.rm(rootDir, { recursive: true, force: true }))
+
+  const saved = await saveGeneratedImage(
+    {
+      name: 'original.png',
+      type: 'image/png',
+      data: new Uint8Array([4, 5, 6]).buffer,
+      prompt: 'prompt',
+      model: 'model',
+    },
+    generatedImageDir,
+  )
+  assert.equal(saved.ok, true)
+
+  let openedPath = ''
+  const opened = await openImageArtifact(
+    { path: saved.artifact.path },
+    {
+      authorizedImageDirs: [generatedImageDir],
+      openPath: async (filePath) => {
+        openedPath = filePath
+        return ''
+      },
+    },
+  )
+  assert.deepEqual(opened, { ok: true })
+  assert.equal(openedPath, saved.artifact.path)
+
+  const copyPath = path.join(outsideDir, 'copy.png')
+  const copied = await saveImageCopy(
+    { path: saved.artifact.path },
+    {
+      authorizedImageDirs: [generatedImageDir],
+      showSaveDialog: async () => ({ canceled: false, filePath: copyPath }),
+    },
+  )
+  assert.deepEqual(copied, { ok: true, filePath: copyPath })
+  assert.deepEqual(Array.from(await fs.readFile(copyPath)), [4, 5, 6])
+
+  const duplicated = await duplicateImage(
+    {
+      path: saved.artifact.path,
+      name: 'duplicated.png',
+      prompt: 'copied prompt',
+      model: 'copied model',
+    },
+    {
+      generatedImageDir,
+      authorizedImageDirs: [generatedImageDir],
+    },
+  )
+  assert.equal(duplicated.ok, true)
+  assert.equal(path.dirname(duplicated.artifact.path), generatedImageDir)
+  assert.equal(duplicated.artifact.prompt, 'copied prompt')
+  assert.deepEqual(Array.from(await fs.readFile(duplicated.artifact.path)), [4, 5, 6])
+
+  const outsideResult = await openImageArtifact(
+    { path: copyPath },
+    { authorizedImageDirs: [generatedImageDir] },
+  )
+  assert.equal(outsideResult.ok, false)
+
+  const removed = await removeGeneratedImage(
+    { path: duplicated.artifact.path },
+    generatedImageDir,
+  )
+  assert.deepEqual(removed, { ok: true, deleted: true })
+  await assert.rejects(fs.access(duplicated.artifact.path))
+})
+
+test('native image picker grants a supported image and returns canonical MIME metadata', async (t) => {
+  const rootDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'felixo-image-picker-'),
+  )
+  const imagePath = path.join(rootDir, 'reference.jpeg')
+  await fs.writeFile(imagePath, Buffer.from([1, 2]))
+  t.after(() => fs.rm(rootDir, { recursive: true, force: true }))
+
+  let dialogOptions
+  const authorizedImagePaths = new Set()
+  const result = await pickImageArtifact({
+    authorizedImagePaths,
+    showOpenDialog: async (options) => {
+      dialogOptions = options
+      return { canceled: false, filePaths: [imagePath] }
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.type, 'image/jpeg')
+  assert.equal(result.mimeType, 'image/jpeg')
+  assert.equal(result.path, await fs.realpath(imagePath))
+  assert.equal(authorizedImagePaths.has(result.path), true)
+  assert.deepEqual(dialogOptions.filters, [
+    {
+      name: 'Imagens',
+      extensions: ['avif', 'bmp', 'gif', 'jpg', 'png', 'svg', 'webp', 'jpeg'],
+    },
+  ])
+})
+
+test('registered generated-image IPC emits only the sanitized artifact', async (t) => {
+  const rootDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'felixo-generated-ipc-'),
+  )
+  const handlers = new Map()
+  const events = []
+  const ipcMain = {
+    handle(channel, handler) {
+      handlers.set(channel, handler)
+    },
+  }
+  t.after(() => fs.rm(rootDir, { recursive: true, force: true }))
+
+  registerFileAttachmentIpcHandlers(
+    { userData: rootDir },
+    {
+      ipcMain,
+      getMainWindow: () => ({
+        isDestroyed: () => false,
+        webContents: { send: (...event) => events.push(event) },
+      }),
+    },
+  )
+
+  const result = await handlers.get('files:save-generated-image')(null, {
+    name: 'from-ipc.png',
+    type: 'image/png',
+    data: new Uint8Array([7, 8]).buffer,
+    prompt: 'safe prompt',
+    key: 'private-key',
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(events.map(([channel]) => channel), ['canvas:image-generated'])
+  assert.equal(events[0][1].path, result.artifact.path)
+  assert.equal(events[0][1].key, undefined)
+  assert.equal(typeof handlers.get('files:pick-image'), 'function')
+  assert.equal(typeof handlers.get('files:open-image'), 'function')
+  assert.equal(typeof handlers.get('files:save-image-copy'), 'function')
+  assert.equal(typeof handlers.get('files:duplicate-image'), 'function')
+  assert.equal(typeof handlers.get('files:remove-generated-image'), 'function')
 })
 
 test('createAttachmentFileName sanitizes untrusted names', () => {

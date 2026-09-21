@@ -116,6 +116,16 @@ async function lerElemento({ id, nodes, terminalSessions, readFile, redact, canv
   }
 
   if (node.type === 'file') {
+    if (data.fileKind === 'image' || data.image?.kind === 'generated-image' || data.image?.kind === 'local-image') {
+      return {
+        ok: true,
+        id,
+        type: node.type,
+        label,
+        content: '',
+        message: 'Este bloco aponta para uma imagem; use o preview e as ações do canvas em vez de ler bytes como texto.',
+      }
+    }
     const caminho = resolverCaminhoDoArquivo(data, canvasFilesDir)
     if (!caminho) {
       return { ok: false, id, type: node.type, label, message: 'Este bloco de arquivo ainda não aponta pra nenhum caminho.' }

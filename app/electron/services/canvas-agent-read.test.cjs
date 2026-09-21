@@ -140,6 +140,35 @@ test('lerElemento: arquivo lê via readFile injetado e redige', async () => {
   assert.deepEqual(lidos, ['/tmp/notas.md'])
 })
 
+test('lerElemento: imagem não tenta interpretar bytes binários como texto', async () => {
+  const nodes = [{
+    id: 'image-1',
+    type: 'file',
+    data: {
+      filePath: '/tmp/generated.png',
+      fileKind: 'image',
+      image: { kind: 'generated-image', mimeType: 'image/png' },
+    },
+  }]
+  let chamou = false
+  const resultado = await lerElemento({
+    id: 'image-1',
+    nodes,
+    terminalSessions: [],
+    readFile: async () => {
+      chamou = true
+      return 'bytes'
+    },
+    redact: semRedacao,
+    canvasFilesDir: '/x',
+  })
+
+  assert.equal(resultado.ok, true)
+  assert.equal(resultado.content, '')
+  assert.equal(chamou, false)
+  assert.match(resultado.message, /preview/)
+})
+
 test('lerElemento: arquivo sem caminho configurado devolve ok:false sem tentar ler', async () => {
   const nodes = [{ id: 'file-1', type: 'file', data: {} }]
   let chamou = false

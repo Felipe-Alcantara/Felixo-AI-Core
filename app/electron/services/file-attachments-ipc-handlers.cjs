@@ -10,12 +10,21 @@ const {
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 const CONTEXT_PICK_MODES = new Set(['files', 'directory'])
+const IMAGE_PICK_FILTERS = [
+  {
+    name: 'Imagens',
+    extensions: [...new Set([...IMAGE_MIME_EXTENSIONS.values(), 'jpeg'])],
+  },
+]
 
 function registerFileAttachmentIpcHandlers(appPaths, options = {}) {
   const { ipcMain = require('electron').ipcMain } = options
   const attachmentDir =
     options.attachmentDir ||
     path.join(appPaths.userData, 'clipboard-attachments')
+  const generatedImageDir =
+    options.generatedImageDir ||
+    path.join(appPaths.userData, 'generated-images')
   const authorizedImagePaths = options.authorizedImagePaths || new Set()
 
   ipcMain.handle('files:pick-context', async (_event, params) =>
@@ -30,7 +39,53 @@ function registerFileAttachmentIpcHandlers(appPaths, options = {}) {
     saveAttachment(params, attachmentDir),
   )
   ipcMain.handle('files:read-image-attachment', async (_event, params) =>
-    readImageAttachment(params, { attachmentDir, authorizedImagePaths }),
+    readImageAttachment(params, {
+      attachmentDir,
+      authorizedImagePaths,
+      authorizedImageDirs: [generatedImageDir],
+    }),
+  )
+  ipcMain.handle('files:pick-image', async () =>
+    pickImageArtifact({
+      authorizedImagePaths,
+      getMainWindow: options.getMainWindow,
+      showOpenDialog: options.showOpenDialog,
+    }),
+  )
+  ipcMain.handle('files:save-generated-image', async (_event, params) => {
+    const result = await saveGeneratedImage(params, generatedImageDir)
+    if (result.ok) {
+      sendGeneratedImage(options.getMainWindow, result.artifact)
+    }
+    return result
+  })
+  ipcMain.handle('files:open-image', async (_event, params) =>
+    openImageArtifact(params, {
+      attachmentDir,
+      authorizedImagePaths,
+      authorizedImageDirs: [generatedImageDir],
+      openPath: options.openPath,
+    }),
+  )
+  ipcMain.handle('files:save-image-copy', async (_event, params) =>
+    saveImageCopy(params, {
+      attachmentDir,
+      authorizedImagePaths,
+      authorizedImageDirs: [generatedImageDir],
+      getMainWindow: options.getMainWindow,
+      showSaveDialog: options.showSaveDialog,
+    }),
+  )
+  ipcMain.handle('files:duplicate-image', async (_event, params) =>
+    duplicateImage(params, {
+      generatedImageDir,
+      attachmentDir,
+      authorizedImagePaths,
+      authorizedImageDirs: [generatedImageDir],
+    }),
+  )
+  ipcMain.handle('files:remove-generated-image', async (_event, params) =>
+    removeGeneratedImage(params, generatedImageDir),
   )
   ipcMain.handle('files:save-clipboard-image', async () =>
     saveClipboardImage(attachmentDir, options),
@@ -125,6 +180,85 @@ async function showContextOpenDialog(dialogOptions, options = {}) {
   }
 
   return dialog.showOpenDialog(dialogOptions)
+}
+
+/**
+ * Let the person explicitly grant one external image to a canvas image node.
+ * This is intentionally separate from generated-image storage: a picked path
+ * is an in-memory grant and must be picked again after a restart.
+ */
+async function pickImageArtifact(options = {}) {
+  try {
+    const result = await showContextOpenDialog(
+      {
+        title: 'Abrir imagem no canvas',
+        properties: ['openFile'],
+        filters: IMAGE_PICK_FILTERS,
+      },
+      options,
+    )
+
+    if (
+      result?.canceled ||
+      !Array.isArray(result?.filePaths) ||
+      result.filePaths.length === 0
+    ) {
+      return { ok: true, canceled: true }
+    }
+
+    const artifact = await describePickedImagePath(
+      result.filePaths[0],
+      options.authorizedImagePaths,
+    )
+
+    if (!artifact) {
+      return {
+        ok: false,
+        message: 'Selecione um arquivo de imagem suportado e menor que 25 MB.',
+      }
+    }
+
+    return { ok: true, canceled: false, ...artifact }
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao abrir o seletor de imagens.',
+    }
+  }
+}
+
+async function describePickedImagePath(filePath, authorizedImagePaths) {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return null
+  }
+
+  try {
+    const resolvedPath = await fs.realpath(filePath)
+    const stats = await fs.stat(resolvedPath)
+    const type = imageMimeTypeFromFileName(resolvedPath)
+
+    if (!stats.isFile() || !type || !IMAGE_MIME_EXTENSIONS.has(type)) {
+      return null
+    }
+    if (stats.size > MAX_ATTACHMENT_BYTES) {
+      return null
+    }
+
+    authorizedImagePaths?.add(resolvedPath)
+    return {
+      name: path.basename(resolvedPath) || resolvedPath,
+      path: resolvedPath,
+      type,
+      mimeType: type,
+      size: stats.size,
+      temporary: false,
+    }
+  } catch {
+    return null
+  }
 }
 
 async function describePickedContextPath(filePath, authorizedImagePaths) {
@@ -286,18 +420,224 @@ async function resolveAuthorizedImagePath(filePath, options = {}) {
     return resolvedPath
   }
 
-  const attachmentDir =
-    typeof options.attachmentDir === 'string' ? options.attachmentDir : ''
+  const allowedDirectories = [
+    ...(typeof options.attachmentDir === 'string' ? [options.attachmentDir] : []),
+    ...(Array.isArray(options.authorizedImageDirs) ? options.authorizedImageDirs : []),
+  ]
 
-  if (attachmentDir) {
-    const resolvedAttachmentDir = await fs.realpath(attachmentDir).catch(() => null)
-
-    if (resolvedAttachmentDir && isPathInside(resolvedAttachmentDir, resolvedPath)) {
+  for (const directory of allowedDirectories) {
+    const resolvedDirectory = await fs.realpath(directory).catch(() => null)
+    if (resolvedDirectory && isPathInside(resolvedDirectory, resolvedPath)) {
       return resolvedPath
     }
   }
 
   throw new Error('Caminho da imagem nao autorizado.')
+}
+
+/**
+ * Stores bytes produced by a trusted generation flow. The renderer receives
+ * only a sanitized artifact reference; no provider response, header, URL or
+ * key crosses this boundary.
+ */
+async function saveGeneratedImage(params, generatedImageDir) {
+  const mimeType = normalizeImageMimeType(params?.type)
+  const buffer = toBuffer(params?.data)
+
+  if (!mimeType || !IMAGE_MIME_EXTENSIONS.has(mimeType)) {
+    return { ok: false, message: 'Formato de imagem gerada nao suportado.' }
+  }
+  if (!buffer || buffer.length === 0) {
+    return { ok: false, message: 'Imagem gerada vazia ou invalida.' }
+  }
+  if (buffer.length > MAX_ATTACHMENT_BYTES) {
+    return { ok: false, message: 'Imagem maior que o limite de 25 MB.' }
+  }
+
+  const fileName = createAttachmentFileName(params?.name || 'generated-image', mimeType)
+  const filePath = path.join(generatedImageDir, fileName)
+  const metadata = sanitizeGeneratedImageMetadata(params)
+
+  try {
+    await fs.mkdir(generatedImageDir, { recursive: true })
+    await writeFileAtomically(filePath, buffer)
+    const stats = await fs.stat(filePath)
+    const artifact = {
+      path: await fs.realpath(filePath),
+      name: fileName,
+      type: mimeType,
+      mimeType,
+      size: stats.size,
+      kind: 'generated-image',
+      ...metadata,
+    }
+    return { ok: true, artifact, ...artifact }
+  } catch {
+    await fs.rm(filePath, { force: true }).catch(() => {})
+    return { ok: false, message: 'Nao foi possivel salvar a imagem gerada.' }
+  }
+}
+
+async function writeFileAtomically(filePath, buffer) {
+  const temporaryPath = `${filePath}.${randomUUID()}.tmp`
+  try {
+    await fs.writeFile(temporaryPath, buffer, { flag: 'wx' })
+    await fs.rename(temporaryPath, filePath)
+  } finally {
+    await fs.rm(temporaryPath, { force: true }).catch(() => {})
+  }
+}
+
+function sanitizeGeneratedImageMetadata(params = {}) {
+  const metadata = {}
+  const prompt = sanitizeMetadataString(params.prompt, 2_000)
+  const model = sanitizeMetadataString(params.model, 200)
+  const requestId = sanitizeMetadataString(params.requestId, 160)
+  const createdAt =
+    typeof params.createdAt === 'string' && !Number.isNaN(Date.parse(params.createdAt))
+      ? new Date(params.createdAt).toISOString()
+      : new Date().toISOString()
+  const cost = Number(params.cost)
+
+  if (prompt) metadata.prompt = prompt
+  if (model) metadata.model = model
+  if (requestId) metadata.requestId = requestId
+  metadata.createdAt = createdAt
+  if (Number.isFinite(cost) && cost >= 0 && cost <= 1_000_000) {
+    metadata.cost = cost
+  }
+  metadata.temporary = params.temporary !== false
+  return metadata
+}
+
+function sanitizeMetadataString(value, maxLength) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+}
+
+async function openImageArtifact(params, options = {}) {
+  try {
+    const filePath = await resolveAuthorizedImagePath(params?.path, options)
+    const type = imageMimeTypeFromFileName(filePath)
+    if (!type || !IMAGE_MIME_EXTENSIONS.has(type)) {
+      return { ok: false, message: 'Formato de imagem nao suportado.' }
+    }
+    const openPath = options.openPath || (async (target) => {
+      const { shell } = require('electron')
+      return shell.openPath(target)
+    })
+    const errorMessage = await openPath(filePath)
+    if (errorMessage) {
+      return { ok: false, message: 'Nao foi possivel abrir a imagem no sistema.' }
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, message: 'Imagem nao autorizada ou indisponivel.' }
+  }
+}
+
+async function saveImageCopy(params, options = {}) {
+  try {
+    const sourcePath = await resolveAuthorizedImagePath(params?.path, options)
+    const result = await showImageSaveDialog(
+      {
+        defaultPath: path.basename(sourcePath),
+        filters: IMAGE_PICK_FILTERS,
+      },
+      options,
+    )
+    if (result?.canceled || !result?.filePath) {
+      return { ok: true, canceled: true }
+    }
+
+    await fs.copyFile(sourcePath, result.filePath)
+    return { ok: true, filePath: result.filePath }
+  } catch {
+    return { ok: false, message: 'Nao foi possivel salvar uma copia da imagem.' }
+  }
+}
+
+async function showImageSaveDialog(dialogOptions, options = {}) {
+  if (typeof options.showSaveDialog === 'function') {
+    return options.showSaveDialog(dialogOptions)
+  }
+
+  const { BrowserWindow, dialog } = require('electron')
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  const configuredWindow =
+    typeof options.getMainWindow === 'function' ? options.getMainWindow() : undefined
+  const window = focusedWindow || configuredWindow
+
+  if (window && !window.isDestroyed()) {
+    return dialog.showSaveDialog(window, dialogOptions)
+  }
+  return dialog.showSaveDialog(dialogOptions)
+}
+
+async function duplicateImage(params, options = {}) {
+  try {
+    const sourcePath = await resolveAuthorizedImagePath(params?.path, options)
+    const generatedImageDir = options.generatedImageDir
+    if (typeof generatedImageDir !== 'string' || !generatedImageDir) {
+      return { ok: false, message: 'Diretorio de imagens geradas indisponivel.' }
+    }
+
+    const root = await fs.realpath(generatedImageDir)
+    if (!isPathInside(root, sourcePath)) {
+      return { ok: false, message: 'Somente imagens geradas podem ser duplicadas.' }
+    }
+
+    const type = imageMimeTypeFromFileName(sourcePath)
+    if (!type || !IMAGE_MIME_EXTENSIONS.has(type)) {
+      return { ok: false, message: 'Formato de imagem nao suportado.' }
+    }
+
+    await fs.mkdir(generatedImageDir, { recursive: true })
+    const fileName = createAttachmentFileName(
+      params?.name || path.basename(sourcePath),
+      type,
+    )
+    const filePath = path.join(generatedImageDir, fileName)
+    await fs.copyFile(sourcePath, filePath)
+    const stats = await fs.stat(filePath)
+    const metadata = sanitizeGeneratedImageMetadata(params)
+    const artifact = {
+      path: await fs.realpath(filePath),
+      name: fileName,
+      type,
+      mimeType: type,
+      size: stats.size,
+      kind: 'generated-image',
+      ...metadata,
+    }
+    return { ok: true, artifact, ...artifact }
+  } catch {
+    return { ok: false, message: 'Nao foi possivel duplicar a imagem.' }
+  }
+}
+
+async function removeGeneratedImage(params, generatedImageDir) {
+  try {
+    const root = await fs.realpath(generatedImageDir)
+    const filePath = await fs.realpath(params?.path)
+    if (!isPathInside(root, filePath) || filePath === root) {
+      return { ok: false, message: 'Imagem temporaria nao autorizada.' }
+    }
+    await fs.rm(filePath, { force: true })
+    return { ok: true, deleted: true }
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return { ok: true, deleted: false }
+    }
+    return { ok: false, message: 'Nao foi possivel remover a imagem temporaria.' }
+  }
+}
+
+function sendGeneratedImage(getMainWindow, artifact) {
+  if (typeof getMainWindow !== 'function' || !artifact) return
+  const window = getMainWindow()
+  if (window && !window.isDestroyed()) {
+    window.webContents.send('canvas:image-generated', artifact)
+  }
 }
 
 function isPathInside(rootPath, targetPath) {
@@ -354,13 +694,20 @@ function sanitizeBaseName(value) {
 }
 
 module.exports = {
+  MAX_ATTACHMENT_BYTES,
   createAttachmentFileName,
   describePickedContextPath,
+  duplicateImage,
   isPathInside,
+  openImageArtifact,
+  pickImageArtifact,
   pickContextAttachments,
   readImageAttachment,
+  removeGeneratedImage,
   registerFileAttachmentIpcHandlers,
   resolveAuthorizedImagePath,
   saveAttachment,
   saveClipboardImage,
+  saveGeneratedImage,
+  saveImageCopy,
 }

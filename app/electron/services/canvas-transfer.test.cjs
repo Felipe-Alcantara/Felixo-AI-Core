@@ -96,6 +96,41 @@ test('canvas transfer includes only registered Markdown files and recreates miss
   ])
 })
 
+test('canvas transfer strips absolute image paths and preserves repair metadata', () => {
+  const source = validSource({
+    nodes: [
+      {
+        id: 'image-1',
+        type: 'file',
+        position: { x: 80, y: 90 },
+        data: {
+          label: 'Imagem gerada',
+          fileLabel: 'resultado.png',
+          filePath: '/private/old-machine/generated-images/resultado.png',
+          fileKind: 'image',
+          image: {
+            kind: 'generated-image',
+            mimeType: 'image/png',
+            prompt: 'um pôster',
+            model: 'image-model',
+            temporary: true,
+          },
+        },
+      },
+    ],
+    edges: [],
+    files: [],
+  })
+
+  const bundle = createCanvasBundle(source)
+  const imageData = bundle.nodes[0].data
+
+  assert.equal(imageData.filePath, undefined)
+  assert.equal(imageData.fileLabel, 'resultado.png')
+  assert.equal(imageData.image.prompt, 'um pôster')
+  assert.equal(parseCanvasBundle(JSON.stringify(bundle)).nodes[0].data.filePath, undefined)
+})
+
 test('canvas transfer rejects malformed and unsupported packages', () => {
   assert.throws(() => parseCanvasBundle('{bad'), /JSON malformado/)
   assert.throws(

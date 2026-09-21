@@ -83,6 +83,16 @@ function normalizeCanvasBundle(value) {
         },
       }
     }
+    if (node.type === 'file') {
+      // External paths are machine-specific and may point at private files.
+      // Keep the image/text label and safe metadata, but force repair after an
+      // import instead of exporting an absolute path or granting a new read.
+      const data = node.data && typeof node.data === 'object' ? node.data : {}
+      if (node.data.fileKind === 'image' || typeof data.filePath === 'string') {
+        const { filePath: _filePath, ...portableData } = data
+        return { ...node, data: portableData }
+      }
+    }
     return node
   })
 
@@ -99,6 +109,9 @@ function normalizeCanvasBundle(value) {
   }
   for (const node of nodes) {
     if (node.type !== 'file') {
+      continue
+    }
+    if (node.data?.fileKind === 'image') {
       continue
     }
     const name = typeof node.data.fileName === 'string' ? node.data.fileName.trim() : ''

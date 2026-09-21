@@ -170,7 +170,12 @@ import {
   safeViewportOffset,
   viewportForSafeArea,
 } from '../services/canvas-interaction-geometry'
-import type { CanvasNodeType, CanvasSkill, DiagnosisRequestStatus } from '../types'
+import type {
+  CanvasImageArtifact,
+  CanvasNodeType,
+  CanvasSkill,
+  DiagnosisRequestStatus,
+} from '../types'
 
 type FlowPositionMapper = {
   screenToFlowPosition: (position: { x: number; y: number }) => {
@@ -337,6 +342,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   useEffect(() => {
     nodesRef.current = nodes
   }, [nodes])
+  const addImageNodeRef = useRef<
+    (artifact: CanvasImageArtifact, position?: { x: number; y: number }) => string
+  >(() => '')
   const [edges, setEdges] = useEdgesState<Edge>([])
   const [edgesHydrated, setEdgesHydrated] = useState(false)
   // A route is lit only after a real PTY delivery succeeds. A connected edge
@@ -1258,6 +1266,94 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     [store],
   )
 
+  const duplicateImageNode = useCallback(
+    async (nodeId: string): Promise<boolean> => {
+      const node = nodesRef.current.find((item) => item.id === nodeId)
+      const data = node?.data as {
+        filePath?: string
+        fileLabel?: string
+        image?: CanvasImageArtifact
+      } | undefined
+      const duplicate = window.felixo?.files?.duplicateImage
+      if (!node || node.type !== 'file' || !data?.filePath || !duplicate) {
+        return false
+      }
+
+      const result = await duplicate({
+        path: data.filePath,
+        name: data.fileLabel,
+        prompt: data.image?.prompt,
+        model: data.image?.model,
+        createdAt: data.image?.createdAt,
+        cost: data.image?.cost,
+        requestId: data.image?.requestId,
+        temporary: data.image?.temporary,
+      }).catch(() => null)
+      const artifact = result?.artifact ?? result
+      if (!result?.ok || !artifact?.path || !artifact?.name || !artifact?.mimeType) {
+        return false
+      }
+
+      addImageNodeRef.current(artifact as CanvasImageArtifact, {
+        x: node.position.x + (node.width ?? 320) + 32,
+        y: node.position.y,
+      })
+      return true
+    },
+    [],
+  )
+
+  const repairImageNode = useCallback(
+    async (nodeId: string): Promise<boolean> => {
+      const pickImage = window.felixo?.files?.pickImage
+      if (!pickImage) return false
+      const result = await pickImage().catch(() => null)
+      const mimeType = result?.type ?? result?.mimeType
+      if (!result?.ok || result.canceled || !result.path || !result.name || !mimeType) {
+        return false
+      }
+
+      updateNodeData(nodeId, {
+        filePath: result.path,
+        fileLabel: result.name,
+        fileKind: 'image',
+        image: {
+          kind: 'local-image',
+          mimeType,
+          temporary: false,
+        },
+      })
+      return true
+    },
+    [updateNodeData],
+  )
+
+  const removeTemporaryImageNode = useCallback(
+    async (nodeId: string): Promise<boolean> => {
+      const node = nodesRef.current.find((item) => item.id === nodeId)
+      const data = node?.data as { filePath?: string; image?: { temporary?: boolean } } | undefined
+      const removeImage = window.felixo?.files?.removeGeneratedImage
+      if (!node || node.type !== 'file' || !data?.filePath || data.image?.temporary !== true || !removeImage) {
+        return false
+      }
+
+      const result = await removeImage({ path: data.filePath }).catch(() => null)
+      if (!result?.ok) return false
+
+      setNodes((current) => current.filter((item) => item.id !== nodeId))
+      const relatedEdges = edgesRef.current.filter(
+        (edge) => edge.source === nodeId || edge.target === nodeId,
+      )
+      if (relatedEdges.length > 0) {
+        relatedEdges.forEach((edge) => void deleteCanvasEdge(edge.id))
+        setEdges((current) => current.filter((edge) => !relatedEdges.some((item) => item.id === edge.id)))
+      }
+      removeNode(nodeId)
+      return true
+    },
+    [removeNode, setEdges, setNodes],
+  )
+
   // "+ Ligar agente" on a file block: create the edge (if missing) and tell the
   // agent about the file — the same outcome as dragging a wire between them.
   const linkAgentToFile = useCallback(
@@ -1465,6 +1561,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
               ...node.data,
               onDataChange: updateNodeData,
               onGenerateDiagnosis: generateDiagnosis,
+              onDuplicateImage: duplicateImageNode,
+              onRepairImage: repairImageNode,
+              onRemoveTemporaryImage: removeTemporaryImageNode,
               connectedAgents,
               availableAgents,
               onLinkAgent: linkAgentToFile,
@@ -1594,6 +1693,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   }, [
     nodeDataCache,
     connectionIndex,
+    duplicateImageNode,
     edgesHydrated,
     generateDiagnosis,
     linkAgentToFile,
@@ -1601,6 +1701,8 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     nodes,
     openTerminal,
     qualityStandard,
+    removeTemporaryImageNode,
+    repairImageNode,
     restoredAgentTerminals,
     terminalCanvasFilePaths,
     unlinkAgentFromFile,
@@ -1683,6 +1785,20 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         (nodeId) => store.remove(nodeId),
         removeNode,
       )
+      const removeGeneratedImage = window.felixo?.files?.removeGeneratedImage
+      if (removeGeneratedImage) {
+        for (const change of changes) {
+          if (change.type !== 'remove') continue
+          const removed = nodesRef.current.find((node) => node.id === change.id)
+          const data = removed?.data as {
+            filePath?: string
+            image?: { temporary?: boolean }
+          } | undefined
+          if (data?.filePath && data.image?.temporary === true) {
+            void removeGeneratedImage({ path: data.filePath })
+          }
+        }
+      }
       if (removedNodeIds.length > 0) {
         const removedIds = new Set(removedNodeIds)
         setNotificationHistory((current) =>
@@ -1875,6 +1991,72 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     },
     [addNode],
   )
+
+  const addImageNodeFromArtifact = useCallback(
+    (artifact: CanvasImageArtifact, position?: { x: number; y: number }) => {
+      if (!artifact.path || !artifact.name || !artifact.mimeType) {
+        return ''
+      }
+
+      const imageSize = getDefaultNodeSize('file', window.innerWidth)
+      const id = addNode(
+        'file',
+        {
+          filePath: artifact.path,
+          fileLabel: artifact.name,
+          label: artifact.name,
+          fileKind: 'image',
+          image: {
+            kind: artifact.kind,
+            mimeType: artifact.mimeType,
+            ...(artifact.prompt ? { prompt: artifact.prompt } : {}),
+            ...(artifact.model ? { model: artifact.model } : {}),
+            ...(artifact.createdAt ? { createdAt: artifact.createdAt } : {}),
+            ...(typeof artifact.cost === 'number' ? { cost: artifact.cost } : {}),
+            ...(artifact.requestId ? { requestId: artifact.requestId } : {}),
+            ...(typeof artifact.temporary === 'boolean'
+              ? { temporary: artifact.temporary }
+              : {}),
+          },
+        },
+        position,
+      )
+      setNodes((current) =>
+        current.map((node) => ({ ...node, selected: node.id === id })),
+      )
+      centerNodeInSafeArea(position ?? findFreeNodePosition(nodes, imageSize, visibleCanvasBounds()), imageSize, 0.9, 220)
+      return id
+    },
+    [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
+  )
+
+  useEffect(() => {
+    addImageNodeRef.current = addImageNodeFromArtifact
+  }, [addImageNodeFromArtifact])
+
+  useEffect(() => {
+    const unsubscribe = window.felixo?.canvas?.onImageGenerated?.((artifact) => {
+      if (artifact?.path) {
+        addImageNodeFromArtifact(artifact)
+      }
+    })
+    return () => unsubscribe?.()
+  }, [addImageNodeFromArtifact])
+
+  const pickAndOpenImageFile = useCallback(async () => {
+    const result = await window.felixo?.files?.pickImage?.()
+    const mimeType = result?.type ?? result?.mimeType
+    if (result?.ok && !result.canceled && result.path && result.name && mimeType) {
+      addImageNodeFromArtifact({
+        kind: 'local-image',
+        path: result.path,
+        name: result.name,
+        size: result.size ?? 0,
+        mimeType,
+        temporary: false,
+      })
+    }
+  }, [addImageNodeFromArtifact])
 
   /**
    * Cria um bloco apontando para um arquivo que já existe no disco.
@@ -2338,6 +2520,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onAddFolder={addProjectFolder}
         onAddFile={addFileNode}
         onOpenFile={() => void pickAndOpenTextFile()}
+        onOpenImage={() => void pickAndOpenImageFile()}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
         onAddWebpage={(url, name, profileId) =>
           addNode('webpage', {
