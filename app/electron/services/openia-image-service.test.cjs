@@ -96,7 +96,10 @@ test('gera, grava pelo caminho seguro e só DEPOIS de gravar avisa o canvas', as
   assert.equal(artifact.requestId, 'req-000001')
   assert.equal(artifact.cost, 0.04)
   assert.equal(artifact.temporary, true)
-  assert.ok(artifact.path.startsWith(fs.realpathSync(h.generatedDir)))
+  // `realpath.native` (libuv), o mesmo do código de produção: no Windows o temp usa nomes curtos 8.3
+  // (RUNNER~1) que o `realpathSync` do JS não expande, e a comparação de prefixo falhava só lá.
+  const relativo = path.relative(fs.realpathSync.native(h.generatedDir), artifact.path)
+  assert.ok(relativo && !relativo.startsWith('..') && !path.isAbsolute(relativo), `fora da pasta de imagens geradas: ${relativo}`)
   assert.equal(fs.existsSync(artifact.path), true)
   // O aviso ao canvas só ocorre com o arquivo já escrito.
   assert.equal(h.notified.length, 1)
