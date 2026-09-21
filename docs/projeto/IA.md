@@ -3433,3 +3433,10 @@ sobe como artefato se falhar) e o passo informativo do diagnóstico foi removido
 3 execuções verdes não provam determinismo absoluto (a flake do Windows mostrou isso); a 3ª foi um PR,
 não uma reexecução da main, porque reexecutar o CI da main dispara outro Release e o `release.yml` tem
 `cancel-in-progress: true` — uma reexecução com Release em andamento poderia cancelar a publicação.
+
+Também em 20/09 (CI do PR #72): o benchmark de scrollback do Windows terminou com **exit 3** depois de
+imprimir o JSON completo e sem nenhuma linha de erro do benchmark (`PostQueuedCompletionStatus: (6) The
+handle is invalid`) — `abort()` do Electron no encerramento, mesma família do crash do node-pty do #51. O
+retry do passo (antes só o 139) agora repete também o 3, até 3 vezes; outros códigos (o 1 de falha real do
+benchmark, por exemplo) falham na hora, e um crash persistente sai com o código real. Laço testado com
+funções falsas. Não verificado no runner: só as próximas execuções mostram se 3 tentativas bastam.

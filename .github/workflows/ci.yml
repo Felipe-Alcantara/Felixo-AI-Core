@@ -454,19 +454,21 @@ jobs:
               npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
             fi
           }
-          # O node-pty derruba o processo com segfault (exit 139, "AttachConsole
-          # failed") de vez em quando no runner Windows (PR #51 e PR #66, em
-          # 20/09). Só ESSE código é repetido (até 3 vezes): uma falha real do
-          # benchmark, com outro código de saída, falha na hora.
+          # O node-pty derruba o processo de vez em quando no runner Windows: segfault
+          # (exit 139, "AttachConsole failed" — PR #51 e #66) e abort() no encerramento
+          # depois do benchmark já ter impresso o resultado (exit 3, "PostQueuedCompletionStatus:
+          # (6) The handle is invalid" — PR #72, 20/09). Só ESSES códigos de crash são
+          # repetidos (até 3 vezes): uma falha real do benchmark (exit 1, ou qualquer
+          # outro código) falha na hora.
           for attempt in 1 2 3; do
             set +e
             run_benchmark
             status=$?
             set -e
-            if [ "$status" -ne 139 ]; then exit "$status"; fi
-            echo "benchmark terminou com segfault (139), tentativa $attempt/3"
+            if [ "$status" -ne 139 ] && [ "$status" -ne 3 ]; then exit "$status"; fi
+            echo "benchmark terminou com crash do node-pty (código $status), tentativa $attempt/3"
           done
-          exit 139
+          exit "$status"
 
       - name: Upload terminal scrollback benchmark
         if: always()
