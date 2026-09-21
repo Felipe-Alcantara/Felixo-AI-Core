@@ -3507,3 +3507,13 @@ antiga das superfícies, ficava errado. Corrigido: a janela conta da EXECUÇÃO 
 movimento programático com ajuste pendente é "nosso", e evento DOM real (mouse/roda/toque, `onMove` com evento)
 é sempre da pessoa. 9 testes, incluindo o cenário lento (plano em t=1000, execução em t=16000). NÃO verificado:
 o smoke do Windows passar de forma estável com esta correção (só o CI mostra) e nada foi visto numa janela real.
+
+Ainda em 20/09 (CI da main do #73): o teste de integração nativo "payload grande chega inteiro e o marcador
+posterior preserva a ordem" (`pty-write-queue.integration.test.cjs`) falhou UMA vez no Windows: o recebido tinha
+**9 caracteres a mais** que o esperado no meio da linha 131 de um payload de ~43 mil (nada faltou). Passou na
+reexecução. Não é do diff (viewport e CI) e é intermitente, mas o teste é de CORREÇÃO do produto: pode ser o
+ConPTY injetando sequência de escape numa escrita grande (o que afetaria colar prompt grande no Windows) ou
+ruído do teste. O `assert.equal` do Node trunca o texto, então os bytes não apareceram. Instrumentação:
+`describeDivergence` (`__fixtures__/text-divergence.cjs`, 3 testes) mostra o índice da primeira divergência, os
+tamanhos e o trecho com controles escapados; usada nos três testes de payload. NÃO investigado: a causa — só a
+próxima falha, agora com os bytes na mensagem, permite decidir entre bug real e ruído do teste.
