@@ -150,8 +150,15 @@ type OpeniaModel = {
   vendor: string
   name: string
   completionPrice: number
-  /** Só quando o Openia informa; ausente = capacidade desconhecida (nada é presumido). */
-  outputModalities?: string[]
+}
+
+/** Modelo do catálogo PÚBLICO do OpenRouter com saída de imagem (o Openia não informa capacidade). */
+type OpeniaImageModel = {
+  id: string
+  vendor: string
+  name: string
+  inputModalities: string[]
+  outputModalities: string[]
 }
 
 type OpeniaImageState = 'pending' | 'success' | 'error' | 'cancelled' | 'unknown'
@@ -429,9 +436,7 @@ declare global {
         listModels: (params?: { refresh?: boolean }) => Promise<CliInvokeResult & { models?: OpeniaModel[] }>
         keyStatus: () => Promise<CliInvokeResult & { configured?: boolean; active?: string | null }>
         setKey: (params: { name?: string; key: string }) => Promise<CliInvokeResult & { configured?: boolean }>
-        listImageModels: () => Promise<
-          CliInvokeResult & { capabilityKnown?: boolean; models?: OpeniaModel[] }
-        >
+        listImageModels: () => Promise<CliInvokeResult & { code?: string; models?: OpeniaImageModel[] }>
         generateImage: (params: { prompt: string; model: string; requestId?: string }) => Promise<OpeniaImageResult>
         cancelImage: (params: { requestId: string }) => Promise<CliInvokeResult & { cancelled?: boolean }>
         imageStatus: (params: { requestId: string }) => Promise<

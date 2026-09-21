@@ -173,7 +173,6 @@ function sanitizeModel(value) {
   if (!id) return null
 
   const completionPrice = Number(value.completionPrice)
-  const outputModalities = sanitizeOutputModalities(value.outputModalities)
   return {
     id,
     vendor: sanitizeString(value.vendor, 120) || id.split('/', 1)[0],
@@ -181,18 +180,7 @@ function sanitizeModel(value) {
     completionPrice: Number.isFinite(completionPrice) && completionPrice >= 0
       ? completionPrice
       : 0,
-    // Só aparece quando o Openia informa (contrato em docs/projeto/OPENIA-IMAGEM-CONTRATO.md).
-    // Ausente = capacidade DESCONHECIDA; o Felixo não presume que um modelo gera imagem.
-    ...(outputModalities ? { outputModalities } : {}),
   }
-}
-
-const OUTPUT_MODALITIES = new Set(['text', 'image', 'audio', 'video', 'embeddings', 'file'])
-
-/** Lista fechada de modalidades de saída; `undefined` quando o campo não veio ou não é uma lista. */
-function sanitizeOutputModalities(value) {
-  if (!Array.isArray(value)) return undefined
-  return [...new Set(value.map((item) => sanitizeString(item, 20).toLowerCase()).filter((item) => OUTPUT_MODALITIES.has(item)))]
 }
 
 function sanitizeString(value, maxLength) {
@@ -278,6 +266,5 @@ module.exports = {
   runOpeniaCommand,
   sanitizeInterface,
   sanitizeModel,
-  sanitizeOutputModalities,
   setOpeniaKey,
 }

@@ -3601,3 +3601,33 @@ faz o teste "cancelar mata o filho E o neto" falhar ("o processo neto ficou órf
 NÃO verificado: nada disto rodou contra um Openia real (a 0.1.0 não tem `image`; o teste usa um `openia` falso);
 nenhuma imagem foi gerada de verdade; o cancelamento do grupo no Windows (`taskkill /T /F`) só é exercitado pelo
 CI, não visto rodando; não há tela para pedir imagem (fica em task própria).
+
+## 2026-09-21 (correção) — Openia imagem: conformar ao contrato REAL do Openia
+
+**Erro meu de investigação, registrado:** o PR #81 (v0.1.402) foi escrito contra um clone do Openia que estava
+5 commits atrás do remoto. Nele eu tinha definido um contrato que o Openia real NÃO tem: prompt por stdin,
+`--out-dir`, envelope `files[].name`, custo, códigos `key_missing`/`content_policy`, e `outputModalities` em
+`models --json`. O Openia upstream já tinha o comando `openia image` (commits `d1b542e`..`9bb9099`) com outro
+contrato; contra ele, o serviço publicado não funcionaria. Percebi ao checar as tasks do Openia no Notion
+(marcadas Concluídas) e fazer `git fetch` no clone.
+
+Corrigido nesta entrada: prompt em `--prompt=<texto>`; `--output-dir`, `--request-id`, `--cancel-file`,
+`--timeout`/`--retries`; envelope versionado (`outputs[].path` absoluto, sem custo) e mapeamento por CÓDIGO DE
+SAÍDA (2/3/4/5/6/124/130); só arquivos diretamente na pasta do pedido; cancelamento cooperativo por arquivo
+antes do kill; `requestId` que nunca começa com `-`/`_`. Removidos: o gate por `outputModalities` e o campo de
+custo. Contrato reescrito em `docs/projeto/OPENIA-IMAGEM-CONTRATO.md`.
+
+**Decisão da pessoa (perguntada):** como o Openia não lista capacidade, o **AI Core consulta o catálogo
+público** `GET https://openrouter.ai/api/v1/images/models` (verifiquei que responde HTTP 200 sem credencial;
+o Openia o chama com a chave, mas ela não é exigida) — sem chave, sem redirecionamento, 10 s / 2 MiB, cache de
+10 min. Modelos fora da lista são recusados antes de executar o filho.
+
+Verificação: 28 testes do serviço (incluindo um `openia` falso que fala os argumentos, o envelope e os códigos
+reais, com cancelamento cooperativo e com kill do neto), 2 mutações pegas (sem arquivo de cancelamento; sem exigir
+a pasta do pedido) e uma execução de ponta a ponta contra o Openia REAL (upstream extraído, `HOME` falso, sem
+chave, sem custo): o serviço passou os argumentos reais, incluindo um prompt que parece opção, e devolveu
+`authentication_error` com mensagem fixa e nenhuma pasta sobrando.
+
+NÃO verificado: nenhuma imagem foi gerada de verdade (exige chave e gasta crédito); o cancelamento cooperativo
+contra o Openia real (sem chave ele falha antes); o `taskkill /T /F` e o atalho `.cmd` do Windows só o CI
+exercita; a consulta do catálogo dentro do Electron empacotado (testada com `fetch` simulado e por `curl`).
