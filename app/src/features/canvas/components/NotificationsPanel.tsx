@@ -314,7 +314,7 @@ function UpdateNotificationRow({ item }: { item: UpdateNotificationItem }) {
               <button
                 type="button"
                 onClick={onInstall}
-                className="felixo-btn rounded-md bg-[var(--f-core-white)]/90 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-[var(--f-core-active)]"
+                className="felixo-btn rounded-md bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-[var(--f-core-active)]"
               >
                 Reiniciar agora
               </button>

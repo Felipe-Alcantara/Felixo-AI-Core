@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
+import { FelixoToggle } from '../../shared/components/FelixoToggle'
 import { GraphicsRecoverySection } from '../../shared/graphics/GraphicsRecoverySection'
 import { PerformanceModeSection } from '../../shared/performance/PerformanceModeSection'
 import { SystemDesignSettingsSection } from '../../shared/system-design/SystemDesignSettingsSection'
@@ -235,20 +236,19 @@ function FelixoSettingsDialog({
               />
             </div>
 
-            <label className="mt-3 flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-zinc-300">
-              <input
-                type="checkbox"
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-zinc-300">
+              Confirmar ações sensíveis
+              <FelixoToggle
                 checked={settingsDraft.requireConfirmationForSensitiveActions}
-                onChange={(event) =>
+                onChange={(checked) =>
                   setSettingsDraft((current) => ({
                     ...current,
-                    requireConfirmationForSensitiveActions: event.target.checked,
+                    requireConfirmationForSensitiveActions: checked,
                   }))
                 }
-                className="h-4 w-4 accent-cyan-300"
+                label="Confirmar ações sensíveis"
               />
-              Confirmar ações sensíveis
-            </label>
+            </div>
 
             <div className="mt-3 flex justify-end">
               <button

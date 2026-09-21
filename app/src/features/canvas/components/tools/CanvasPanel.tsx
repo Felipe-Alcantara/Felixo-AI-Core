@@ -186,12 +186,12 @@ export function CanvasPanel({
         </button>
         <h2
           id={headingId}
-          className={`flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-100 ${collapsed ? 'max-h-[70vh] flex-col truncate' : ''}`}
-          style={collapsed ? { writingMode: 'vertical-rl' } : undefined}
+          className="flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-100"
+          aria-label={title}
           title={title}
         >
-          {icon}
-          {title}
+          {icon ?? (collapsed && title.slice(0, 1))}
+          {!collapsed && title}
         </h2>
         <button
           type="button"

@@ -1,5 +1,6 @@
 import { Power } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { FelixoToggle } from '../components/FelixoToggle'
 
 type AutoStartConfig = {
   supported: boolean
@@ -61,21 +62,17 @@ export function AutoStartSection() {
         Iniciar com o sistema
       </div>
       {config.supported ? (
-        <>
+        <div className="flex items-start justify-between gap-3">
           <p className="text-xs leading-relaxed text-zinc-500">
             Abre o Felixo automaticamente quando você liga o computador.
           </p>
-          <label className="mt-3 flex items-center gap-2 text-xs text-zinc-300">
-            <input
-              type="checkbox"
-              checked={config.enabled}
-              onChange={() => void toggle()}
-              disabled={busy}
-              className="h-4 w-4 accent-cyan-400 disabled:cursor-not-allowed"
-            />
-            Sempre iniciar com o sistema
-          </label>
-        </>
+          <FelixoToggle
+            checked={config.enabled}
+            onChange={() => void toggle()}
+            disabled={busy}
+            label="Sempre iniciar com o sistema"
+          />
+        </div>
       ) : (
         <p className="text-xs leading-relaxed text-zinc-500">
           Esta opção não está disponível nesta plataforma.
