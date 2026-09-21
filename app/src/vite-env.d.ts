@@ -24,6 +24,7 @@ import type {
 } from './features/chat/types'
 import type {
   CanvasAgentQuestion,
+  CanvasImageArtifact,
   CanvasNodeData,
   CanvasWriteAgentRequest,
   FetchAllActionResult,
@@ -163,6 +164,16 @@ type ReadImageAttachmentResult = CliInvokeResult & {
   type?: string
   size?: number
 }
+
+type PickImageResult = CliInvokeResult &
+  Partial<CanvasImageArtifact> & {
+    canceled?: boolean
+    type?: string
+  }
+
+type SaveGeneratedImageResult = CliInvokeResult & {
+  artifact?: CanvasImageArtifact
+} & Partial<CanvasImageArtifact>
 
 type PickedContextAttachment = {
   id: string
@@ -677,6 +688,9 @@ declare global {
         onNodeUpdated: (
           callback: (data: { id: string; data: CanvasNodeData }) => void,
         ) => () => void
+        onImageGenerated: (
+          callback: (artifact: CanvasImageArtifact) => void,
+        ) => () => void
       }
       canvasFiles?: {
         list: () => Promise<CliInvokeResult & { files?: string[] }>
@@ -920,6 +934,35 @@ declare global {
           name?: string
           type?: string
         }) => Promise<ReadImageAttachmentResult>
+        pickImage: () => Promise<PickImageResult>
+        saveGeneratedImage: (params: {
+          name?: string
+          type: string
+          data: ArrayBuffer
+          prompt?: string
+          model?: string
+          createdAt?: string
+          cost?: number
+          requestId?: string
+          temporary?: boolean
+        }) => Promise<SaveGeneratedImageResult>
+        openImage: (params: { path: string }) => Promise<CliInvokeResult>
+        saveImageCopy: (params: {
+          path: string
+        }) => Promise<CliInvokeResult & { canceled?: boolean; filePath?: string }>
+        duplicateImage: (params: {
+          path: string
+          name?: string
+          prompt?: string
+          model?: string
+          createdAt?: string
+          cost?: number
+          requestId?: string
+          temporary?: boolean
+        }) => Promise<SaveGeneratedImageResult>
+        removeGeneratedImage: (params: {
+          path: string
+        }) => Promise<CliInvokeResult & { deleted?: boolean }>
         saveAttachment: (params: {
           name: string
           type: string

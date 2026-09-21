@@ -3549,3 +3549,29 @@ Feito (autorizado pela pessoa, que escolheu as três opções propostas):
 NÃO feito de propósito: paralelizar passos DENTRO do mesmo job (os testes sensíveis a tempo já falham de forma
 intermitente no Windows e a contenção pioraria isso). NÃO verificado: o `Release gate` só roda de verdade na `main`
 depois do merge; se ele falhar, nenhum instalador sai e é preciso disparar `Release` à mão (`workflow_dispatch`).
+
+## 2026-09-21 — Canvas: artefatos de imagem gerados sem expor chave
+
+Implementada a infraestrutura de imagem do Canvas. O processo principal grava bytes gerados em
+`userData/generated-images` com nome sanitizado e escrita atômica, normaliza o MIME e devolve somente
+uma referência persistível (`path`, `name`, `mimeType`, tamanho e metadados permitidos: prompt, modelo,
+data, custo e requestId). Respostas de provedor, cabeçalhos, URLs privadas e chaves não atravessam a
+ponte IPC. O evento `canvas:image-generated` cria o `FileNode` automaticamente; o preload guarda eventos
+que chegam antes da montagem do Canvas.
+
+O `FileNode` agora renderiza apenas rasterizações allowlisted via `data:` local lido pelo processo
+principal, com limite de 25 MB e autorização por caminho. SVG, MIME desconhecido, arquivo ausente,
+grande ou corrompido cai para fallback com reparo, abertura no aplicativo do sistema e salvamento de
+cópia. Há zoom acessível por teclado e botões, ações para copiar o caminho, duplicar um artefato
+gerado, remover temporário e mostrar prompt/modelo/data/custo permitido. Imagens externas só ganham
+acesso depois do picker nativo e a concessão em memória é perdida no reinício; artefatos internos são
+autorizados apenas dentro da pasta gerada. Exportação/importação remove caminhos absolutos e preserva
+metadados seguros para reparo.
+
+Também foi evitada a leitura binária de imagens como texto por agentes do Canvas. A geração efetiva
+via Openia continua sendo a task de integração IPC separada já registrada no Notion; esta fatia fornece
+o contrato de armazenamento, autorização, persistência e apresentação para ela.
+
+Verificação: `npm test` (1.524 testes, 61 suítes), `npm run test:frontend` (1.148 testes, 120 arquivos,
+1 arquivo pulado), `npm run lint`, `npm run typecheck`, `npm run build` e testes direcionados de IPC/
+transferência/preview passaram. O build mantém apenas o aviso já conhecido de chunks acima de 500 kB.

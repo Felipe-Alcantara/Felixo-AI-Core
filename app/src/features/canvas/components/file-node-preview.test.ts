@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isMarkdownFileName, resolvePreviewKind } from './file-node-preview'
+import {
+  isMarkdownFileName,
+  isSafeImagePreviewMimeType,
+  resolvePreviewKind,
+} from './file-node-preview'
 
 describe('resolvePreviewKind', () => {
   it('formata markdown nos arquivos em que isso significa alguma coisa', () => {
@@ -47,5 +51,19 @@ describe('isMarkdownFileName', () => {
     expect(isMarkdownFileName('notas.mdo')).toBe(false)
     expect(isMarkdownFileName('arquivo.amd')).toBe(false)
     expect(isMarkdownFileName('mdfile')).toBe(false)
+  })
+})
+
+describe('isSafeImagePreviewMimeType', () => {
+  it('permite somente formatos raster para o elemento img', () => {
+    expect(isSafeImagePreviewMimeType('image/png')).toBe(true)
+    expect(isSafeImagePreviewMimeType('IMAGE/JPEG')).toBe(true)
+    expect(isSafeImagePreviewMimeType('image/webp')).toBe(true)
+  })
+
+  it('mantém SVG e tipos desconhecidos fora do preview executável', () => {
+    expect(isSafeImagePreviewMimeType('image/svg+xml')).toBe(false)
+    expect(isSafeImagePreviewMimeType('text/html')).toBe(false)
+    expect(isSafeImagePreviewMimeType(undefined)).toBe(false)
   })
 })

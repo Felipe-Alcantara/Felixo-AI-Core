@@ -24,6 +24,27 @@ export type GroupNodeData = {
  */
 export type FileNodeMode = 'scratchpad' | 'plan'
 
+/** Metadata safe to persist beside an image produced by an AI operation. */
+export type CanvasImageMetadata = {
+  /** The image is rendered as a file artifact, never as HTML or a remote URL. */
+  kind: 'generated-image' | 'local-image'
+  mimeType: string
+  prompt?: string
+  model?: string
+  createdAt?: string
+  cost?: number
+  requestId?: string
+  /** Temporary artifacts can be removed with the explicit cleanup action. */
+  temporary?: boolean
+}
+
+/** Main-process result used to create a persistent image file node. */
+export type CanvasImageArtifact = CanvasImageMetadata & {
+  path: string
+  name: string
+  size: number
+}
+
 export type FileNodeData = {
   /** Filename of the .md inside the app's canvas-files directory. */
   fileName?: string
@@ -40,6 +61,10 @@ export type FileNodeData = {
   label?: string
   /** Per-block mode; defaults to `scratchpad` when absent. */
   mode?: FileNodeMode
+  /** Image nodes reuse the file block but never pass image bytes through state. */
+  fileKind?: 'image'
+  /** MIME/path metadata returned by the main process for image artifacts. */
+  image?: CanvasImageMetadata
 }
 
 /**
