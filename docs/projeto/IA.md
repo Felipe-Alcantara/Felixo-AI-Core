@@ -3507,3 +3507,45 @@ antiga das superfícies, ficava errado. Corrigido: a janela conta da EXECUÇÃO 
 movimento programático com ajuste pendente é "nosso", e evento DOM real (mouse/roda/toque, `onMove` com evento)
 é sempre da pessoa. 9 testes, incluindo o cenário lento (plano em t=1000, execução em t=16000). NÃO verificado:
 o smoke do Windows passar de forma estável com esta correção (só o CI mostra) e nada foi visto numa janela real.
+
+Ainda em 20/09 (CI da main do #73): o teste de integração nativo "payload grande chega inteiro e o marcador
+posterior preserva a ordem" (`pty-write-queue.integration.test.cjs`) falhou UMA vez no Windows: o recebido tinha
+**9 caracteres a mais** que o esperado no meio da linha 131 de um payload de ~43 mil (nada faltou). Passou na
+reexecução. Não é do diff (viewport e CI) e é intermitente, mas o teste é de CORREÇÃO do produto: pode ser o
+ConPTY injetando sequência de escape numa escrita grande (o que afetaria colar prompt grande no Windows) ou
+ruído do teste. O `assert.equal` do Node trunca o texto, então os bytes não apareceram. Instrumentação:
+`describeDivergence` (`__fixtures__/text-divergence.cjs`, 3 testes) mostra o índice da primeira divergência, os
+tamanhos e o trecho com controles escapados; usada nos três testes de payload. NÃO investigado: a causa — só a
+próxima falha, agora com os bytes na mensagem, permite decidir entre bug real e ruído do teste.
+
+E2E de contexto (`canvas-context-e2e.test.ts`, cenário "claude-confianca-de-pasta"), Windows, 3 falhas em runs do #75:
+`expect(contextIndex).toBeGreaterThan(decisionIndex)` recebeu -1 com a decisão de confiança presente. Mecanismo (lido
+no código do fake): `write()` junta ao buffer de referência QUALQUER escrita que chegue até 40 ms depois de um trecho de
+contexto; se um Enter cai nessa janela, o evento vira `context-submitted` e o teste, que procura `context`, não acha. Há
+invariantes em outros cenários exigindo ZERO `context-submitted` (o produto não pode enviar contexto sozinho), então
+aceitar os dois tipos no teste poderia esconder um bug real. Ainda não se sabe QUEM mandou o Enter. A mensagem da falha
+agora traz a sequência completa de eventos; só a próxima falha decide entre artefato de tempo do fake e bug do produto.
+
+## 2026-09-21 — Ciclo de PR mais rápido
+
+Medição (Windows, run da main do #76): ~12 min de passos, dos quais os benchmarks somam ~4,8 min (custo
+operacional 145 s, scrollback 74 s, responsividade 50 s), o smoke 134 s e o E2E de contexto 81 s, tudo em série.
+Ciclo por PR ≈ CI do PR (~13 min) + CI da main (~13 min) + Release (~11 min).
+
+Feito (autorizado pela pessoa, que escolheu as três opções propostas):
+1. `concurrency` no `ci.yml`: em PR um push novo cancela a run anterior da branch; na `main` nunca cancela (o
+   Release depende do CI de cada commit).
+2. **Auto-merge ligado** no repositório (`allow_auto_merge`): `gh pr merge --auto --squash` faz o PR entrar sozinho
+   quando os checks obrigatórios passam.
+3. **Release só quando o app muda.** Novo workflow `Release gate` (`release-gate.yml`) roda depois do CI da `main`,
+   decide com `release-relevant.sh` (14 casos de teste; na dúvida publica) e só então dispara o `Release` por
+   `workflow_dispatch`. Commits só de docs/teste/`ci.yml` não publicam. O filtro NÃO fica dentro do `release.yml`
+   porque o `concurrency` dele cancelaria uma publicação em andamento por causa de um commit irrelevante. O
+   `release.yml` perdeu o gatilho `workflow_run` (fica só `workflow_dispatch`).
+4. **Benchmarks em job paralelo.** O job `Benchmarks (<os>)` roda em paralelo ao `Validate` os passos que não
+   dependem de build (npm runtime, alternativas, custo operacional, responsividade, scrollback); o do bundle
+   continua no `Validate`. Mesmos passos, mesmos gates, outra máquina ao mesmo tempo: o Windows deve cair de ~13
+   para ~8 min. As verificações obrigatórias da `main` ganharam `Benchmarks (ubuntu|windows|macos-latest)`.
+NÃO feito de propósito: paralelizar passos DENTRO do mesmo job (os testes sensíveis a tempo já falham de forma
+intermitente no Windows e a contenção pioraria isso). NÃO verificado: o `Release gate` só roda de verdade na `main`
+depois do merge; se ele falhar, nenhum instalador sai e é preciso disparar `Release` à mão (`workflow_dispatch`).

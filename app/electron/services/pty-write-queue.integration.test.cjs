@@ -321,6 +321,8 @@ async function executarColeta({ nomeSessao, payload, depois }) {
   }
 }
 
+const { describeDivergence } = require('../__fixtures__/text-divergence.cjs')
+
 function normalizarQuebras(texto) {
   return String(texto).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
@@ -338,10 +340,11 @@ test('payload grande chega inteiro e o marcador posterior preserva a ordem', asy
     depois: marcador,
   })
 
+  const normalizado = normalizarQuebras(recebido)
   assert.equal(
-    normalizarQuebras(recebido),
+    normalizado,
     payload + marcador,
-    'a PTY não pode perder a carga nem deixar a escrita posterior passar na frente',
+    `a PTY não pode perder a carga nem deixar a escrita posterior passar na frente — ${describeDivergence(payload + marcador, normalizado)}`,
   )
 })
 
@@ -356,7 +359,7 @@ test('emoji não é partido ao atravessar a PTY nativa', async () => {
   })
 
   const normalizado = normalizarQuebras(recebido)
-  assert.equal(normalizado, payload)
+  assert.equal(normalizado, payload, `emoji partido/alterado — ${describeDivergence(payload, normalizado)}`)
   assert.ok(!normalizado.includes('�'), 'apareceu caractere de substituição')
 })
 
@@ -370,5 +373,9 @@ test('linha grande com quebra chega intacta nos três terminais nativos', async 
     payload,
   })
 
-  assert.equal(normalizarQuebras(recebido), payload)
+  assert.equal(
+    normalizarQuebras(recebido),
+    payload,
+    `linha grande alterada — ${describeDivergence(payload, normalizarQuebras(recebido))}`,
+  )
 })

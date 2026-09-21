@@ -116,10 +116,13 @@ test('runChild sempre coleta uma amostra inicial e não mantém o timer do timeo
 })
 
 test('runChild consegue ler RSS de um processo real', async () => {
-  const result = await runChild(process.execPath, ['-e', 'setTimeout(() => {}, 1500)'], {
+  // No Windows cada amostra (PowerShell/CIM) pode levar mais de 1,5 s num runner carregado:
+  // com o filho vivo só 1,5 s, nenhuma amostra chegava antes de ele sair (CI do #75, 21/09).
+  // O filho vive o bastante para sobrar tempo a pelo menos uma amostra.
+  const result = await runChild(process.execPath, ['-e', 'setTimeout(() => {}, 6000)'], {
     cwd: process.cwd(),
     env: process.env,
-    timeoutMs: 5_000,
+    timeoutMs: 20_000,
   })
   assert.equal(result.code, 0)
   assert.ok(result.samples.some((sample) => sample.rssBytes > 0), JSON.stringify(result.samples))
