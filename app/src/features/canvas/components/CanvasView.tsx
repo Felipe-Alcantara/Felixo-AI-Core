@@ -62,7 +62,6 @@ import { toolbarColumnOffset } from './toolbar-flyout'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
 import { CanvasToolPanels } from './CanvasToolPanels'
-import { TOOL_LABELS } from './tools/canvas-tool-labels'
 import { TerminalsPanel } from './tools/TerminalsPanel'
 import { moveById } from './tools/terminals-panel-reorder'
 import { CanvasPanel } from './tools/CanvasPanel'
@@ -2470,9 +2469,6 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <CanvasTopbar
         onOpenSearch={() => setActiveTool('search')}
-        activeToolLabel={activeTool ? TOOL_LABELS[activeTool] : null}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={() => onSidebarCollapsedChange(!sidebarCollapsed)}
         trailing={
           <DictationButton
             dictation={dictation}

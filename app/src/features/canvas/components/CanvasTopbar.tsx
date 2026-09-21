@@ -1,13 +1,9 @@
 import type { ReactNode } from 'react'
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { FelixoLockup } from '../../shared/brand/FelixoMark'
 
 type CanvasTopbarProps = {
   onOpenSearch: () => void
-  /** Rótulo da ferramenta aberta no momento (Projetos, Notas…); `null` sem nenhuma. */
-  activeToolLabel?: string | null
-  sidebarCollapsed: boolean
-  onToggleSidebar: () => void
   /** Ações do lado direito da barra (ex.: o botão de ditado por voz). */
   trailing?: ReactNode
 }
@@ -16,13 +12,7 @@ type CanvasTopbarProps = {
  * Chrome persistente do workspace. As ações continuam delegadas ao CanvasView
  * para que busca e enquadramento mantenham exatamente os mesmos fluxos.
  */
-export function CanvasTopbar({
-  onOpenSearch,
-  activeToolLabel = null,
-  sidebarCollapsed,
-  onToggleSidebar,
-  trailing,
-}: CanvasTopbarProps) {
+export function CanvasTopbar({ onOpenSearch, trailing }: CanvasTopbarProps) {
   return (
     <header className="felixo-canvas-topbar" aria-label="Barra do workspace" data-felixo-region="topbar">
       <div className="felixo-topbar-ambient" aria-hidden="true">
@@ -43,23 +33,6 @@ export function CanvasTopbar({
         <FelixoLockup size={18} />
       </div>
       <span className="felixo-topbar-divider" aria-hidden="true" />
-
-      <button
-        type="button"
-        className="felixo-topbar-sidebar-toggle felixo-btn-icon"
-        onClick={onToggleSidebar}
-        title={sidebarCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
-        aria-label={sidebarCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
-        aria-pressed={sidebarCollapsed}
-      >
-        {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-      </button>
-
-      <div className="felixo-topbar-context" aria-label="Contexto atual">
-        <span>Canvas</span>
-        <ChevronDown size={13} aria-hidden="true" />
-        {activeToolLabel && <span className="felixo-topbar-context-tool">{activeToolLabel}</span>}
-      </div>
 
       <button
         type="button"
