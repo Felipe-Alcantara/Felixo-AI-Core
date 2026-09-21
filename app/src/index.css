@@ -2546,8 +2546,19 @@ div::-webkit-scrollbar-thumb {
   color: #686868;
 }
 
+/* O menu reparte a própria altura: rótulo e busca ficam fixos e a lista
+   recebe o que sobra. Antes a lista herdava o `max-height` do menu inteiro e
+   ignorava o padding, o rótulo e a busca — o excedente caía fora do
+   `overflow: hidden` do menu, então a última opção ("Adicionar pasta…")
+   ficava cortada e inalcançável, sem scrollbar que denunciasse a sobra. */
+.felixo-select-menu {
+  display: flex;
+  flex-direction: column;
+}
+
 .felixo-select-options {
-  max-height: inherit;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
