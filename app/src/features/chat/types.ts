@@ -196,6 +196,9 @@ export type ChatSession = {
 // chat); re-exportados aqui para os imports existentes continuarem valendo.
 export type {
   SystemDesignConfig,
+  SystemDesignConfigChange,
+  SystemDesignDeliveredSource,
+  SystemDesignSyncState,
   SystemDesignDocument,
   SystemDesignDocumentSummary,
 } from '../shared/system-design/types'

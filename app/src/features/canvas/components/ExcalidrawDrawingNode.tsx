@@ -1,4 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useMemo, useRef } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   Position,
@@ -65,8 +66,8 @@ function ExcalidrawDrawingNodeComponent({ id, data, selected }: NodeProps) {
     <div className="felixo-canvas-card felixo-canvas-card-excalidraw flex h-full w-full flex-col overflow-hidden rounded-lg border border-zinc-700 bg-white shadow-xl">
       <NodeResizer
         isVisible={selected}
-        minWidth={360}
-        minHeight={280}
+        minWidth={NODE_MIN_SIZE.excalidrawDrawing.width}
+        minHeight={NODE_MIN_SIZE.excalidrawDrawing.height}
         lineClassName="!border-black/20"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-black/40"
       />

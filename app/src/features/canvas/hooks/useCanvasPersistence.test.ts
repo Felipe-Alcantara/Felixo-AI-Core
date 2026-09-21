@@ -182,3 +182,21 @@ describe('canvas persistence boundaries', () => {
     expect((persisted.data as Record<string, unknown>).onDataChange).toBeUndefined()
   })
 })
+
+describe('frameColor (cor de moldura)', () => {
+  it('sobrevive ao ciclo persistir → carregar em todo tipo de bloco', () => {
+    const types: CanvasNodeType[] = ['terminal', 'note', 'group', 'file', 'webpage', 'notionTasks', 'drawing', 'excalidrawDrawing']
+    for (const type of types) {
+      const original = node(`n-${type}`, { frameColor: 'violet' }, type)
+      const roundTrip = toPersistedNode(toFlowNode(original))
+      expect(roundTrip.data.frameColor).toBe('violet')
+    }
+  })
+
+  it('nota antiga mantém a cor de papel e não ganha moldura', () => {
+    const legacy = node('n1', { color: 'rose', text: 'oi' }, 'note')
+    const roundTrip = toPersistedNode(toFlowNode(legacy))
+    expect(roundTrip.data.color).toBe('rose')
+    expect(roundTrip.data.frameColor).toBeUndefined()
+  })
+})

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { FelixoLockup } from '../../shared/brand/FelixoMark'
 
@@ -7,6 +8,8 @@ type CanvasTopbarProps = {
   activeToolLabel?: string | null
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
+  /** Ações do lado direito da barra (ex.: o botão de ditado por voz). */
+  trailing?: ReactNode
 }
 
 /**
@@ -18,6 +21,7 @@ export function CanvasTopbar({
   activeToolLabel = null,
   sidebarCollapsed,
   onToggleSidebar,
+  trailing,
 }: CanvasTopbarProps) {
   return (
     <header className="felixo-canvas-topbar" aria-label="Barra do workspace" data-felixo-region="topbar">
@@ -66,6 +70,8 @@ export function CanvasTopbar({
         <Search size={16} aria-hidden />
         <span>Pesquisar no canvas ou executar comando…</span>
       </button>
+
+      {trailing && <div className="felixo-topbar-trailing ml-auto flex items-center gap-1">{trailing}</div>}
 
     </header>
   )

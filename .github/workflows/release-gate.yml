@@ -1,0 +1,65 @@
+name: Release gate
+
+# Decide, depois do CI de um commit em `main` passar, se ele merece um
+# instalador novo — e só então dispara o workflow `Release` (por
+# `workflow_dispatch`). Commits que mudam apenas documentação, testes ou o
+# `ci.yml` não publicam nada (~11 min e uma versão sem mudança de app a menos).
+#
+# Isto NÃO pode ser um filtro dentro do `release.yml`: o `concurrency` dele
+# cancela o Release em andamento quando outra run entra, e um commit só de docs
+# cancelaria a publicação de um commit de app anterior. Aqui, um commit
+# irrelevante nem chega a entrar no grupo de concorrência do Release.
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - main
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  gate:
+    name: Decide release
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+
+      - name: Decide whether the app changed
+        id: decide
+        shell: bash
+        run: |
+          source .github/scripts/release-relevant.sh
+          # Qualquer falha ao ler o diff cai em `true`: na dúvida, publica.
+          FILES="$(git diff --name-only HEAD^ HEAD 2>/dev/null || true)"
+          RELEVANT="$(printf '%s\n' "$FILES" | release_relevant)"
+          echo "Arquivos alterados neste commit:"
+          printf '%s\n' "$FILES"
+          echo "Release relevante: $RELEVANT"
+          echo "relevant=$RELEVANT" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch Release
+        if: steps.decide.outputs.relevant == 'true'
+        shell: bash
+        run: |
+          gh workflow run release.yml --ref main -f commit_sha="$TARGET_SHA"
+          echo "Release disparado para $TARGET_SHA."
+
+      - name: Skip Release
+        if: steps.decide.outputs.relevant != 'true'
+        shell: bash
+        run: |
+          echo "Commit $TARGET_SHA só mexe em documentação, teste ou CI; nenhum instalador novo é publicado."

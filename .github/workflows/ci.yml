@@ -6,6 +6,13 @@ on:
     branches:
       - main
 
+# Em PR, um push novo cancela a run anterior da mesma branch: sem isto, cada push
+# deixava a run velha gastando runner (o Windows leva ~13 min) e atrasando a fila
+# da run que importa. Na `main` NUNCA cancela: o Release depende do CI de cada commit.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   dependency-policy:
     name: Dependency policy
@@ -40,11 +47,19 @@ jobs:
       - name: Audit npm dependency graph (complete)
         shell: bash
         run: |
-          set +e
-          npm audit --json > build/dependency-policy/npm-audit-full.json
-          status=$?
+          # Até 3 tentativas SÓ quando o npm não devolveu relatório (registro fora
+          # do ar: 400/503 em 19/09). Com relatório, vale a primeira resposta — o
+          # gate não é afrouxado, só deixa de cair por um soluço do registro.
+          for attempt in 1 2 3; do
+            set +e
+            npm audit --json > build/dependency-policy/npm-audit-full.json
+            status=$?
+            set -e
+            if grep -q '"auditReportVersion"' build/dependency-policy/npm-audit-full.json; then break; fi
+            echo "npm audit sem relatório (tentativa $attempt/3); o registro do npm pode estar indisponível."
+            if [ "$attempt" -lt 3 ]; then sleep 20; fi
+          done
           printf '%s\n' "$status" > build/dependency-policy/npm-audit-full.exit
-          set -e
 
       # Este comparativo representa somente o que o npm considera produção.
       # Ele é um gate separado porque o resultado não pode substituir o audit
@@ -52,11 +67,19 @@ jobs:
       - name: Audit npm dependency graph (omit dev, required gate)
         shell: bash
         run: |
-          set +e
-          npm audit --omit=dev --json > build/dependency-policy/npm-audit-production.json
-          status=$?
+          # Até 3 tentativas SÓ quando o npm não devolveu relatório (registro fora
+          # do ar: 400/503 em 19/09). Com relatório, vale a primeira resposta — o
+          # gate não é afrouxado, só deixa de cair por um soluço do registro.
+          for attempt in 1 2 3; do
+            set +e
+            npm audit --omit=dev --json > build/dependency-policy/npm-audit-production.json
+            status=$?
+            set -e
+            if grep -q '"auditReportVersion"' build/dependency-policy/npm-audit-production.json; then break; fi
+            echo "npm audit sem relatório (tentativa $attempt/3); o registro do npm pode estar indisponível."
+            if [ "$attempt" -lt 3 ]; then sleep 20; fi
+          done
           printf '%s\n' "$status" > build/dependency-policy/npm-audit-production.exit
-          set -e
 
       - name: Generate npm SBOM
         run: npm sbom --package-lock-only --sbom-format=cyclonedx --sbom-type=application > build/dependency-policy/npm-sbom.cdx.json
@@ -65,6 +88,7 @@ jobs:
       # npm-runtime observável no artefato, em vez de inventariar somente o
       # package-lock.
       - name: Build unpacked application
+        timeout-minutes: 10
         run: npm run pack
 
       - name: Inventory packaged application
@@ -75,6 +99,7 @@ jobs:
       # falha funcional ou violação de budget em gate; alternativas ausentes
       # ficam registradas no JSON sem tornar o job dependente delas.
       - name: Benchmark package managers in packaged application
+        timeout-minutes: 10
         shell: bash
         run: >-
           npm run benchmark:package-managers:check --
@@ -82,6 +107,7 @@ jobs:
           --out=build/dependency-policy/package-managers.json
 
       - name: Benchmark package-manager operational cost in packaged application
+        timeout-minutes: 15
         shell: bash
         run: >-
           npm run benchmark:package-managers:performance:check --
@@ -225,9 +251,15 @@ jobs:
       - name: Test release-version.sh
         run: bash .github/scripts/release-version.test.sh
 
+      - name: Test release-relevant.sh
+        run: bash .github/scripts/release-relevant.test.sh
+
   validate:
     name: Validate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # Teto do job: o mais lento medido é ~13 min no Windows; um passo pendurado
+    # (26 min em 19/09) passa a falhar claro em vez de ocupar o runner por horas.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -258,68 +290,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # O npm que chega ao instalador é uma árvore própria, não o npm do
-      # runner. A bancada compara a política anterior com a atual e executa
-      # instalação/atualização offline usando o Electron em cada SO.
-      - name: Benchmark npm runtime
-        shell: bash
-        run: npm run benchmark:npm-runtime:check -- --iterations=2 --out=npm-runtime-${{ matrix.os }}.json
-
-      - name: Upload npm runtime benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: npm-runtime-${{ matrix.os }}
-          path: app/npm-runtime-${{ matrix.os }}.json
-          if-no-files-found: ignore
-
-      # Esta bancada compara o npm-runtime com pnpm/Yarn e mede Corepack como
-      # ponte de bootstrap. Alternativas indisponíveis no runner não bloqueiam
-      # a matriz, mas qualquer alternativa encontrada que falhe no smoke deixa
-      # o job vermelho. O JSON registra a disponibilidade por sistema.
-      - name: Benchmark package-manager alternatives
-        shell: bash
-        run: npm run benchmark:package-managers -- --iterations=2 --check --out=package-manager-alternatives-${{ matrix.os }}.json
-
-      - name: Upload package-manager alternatives benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: package-manager-alternatives-${{ matrix.os }}
-          path: app/package-manager-alternatives-${{ matrix.os }}.json
-          if-no-files-found: ignore
-
-      - name: Benchmark package-manager operational cost
-        shell: bash
-        run: npm run benchmark:package-managers:performance:check -- --iterations=2 --agents=1,2,5,10 --out=package-manager-operational-${{ matrix.os }}.json
-
-      - name: Upload package-manager operational benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: package-manager-operational-${{ matrix.os }}
-          path: app/package-manager-operational-${{ matrix.os }}.json
-          if-no-files-found: ignore
-
-      # Fatia 4/4 de "Performance — correlacionar instalação do gerenciador
-      # com responsividade e energia no artefato": junta as fatias 1-3
-      # (metadados de ambiente, primeiro output do terminal, proxy de
-      # energia) numa matriz real nos três SOs do CI. Não é gate — é medição
-      # exploratória; uma regressão aqui não bloqueia PR, mas fica arquivada
-      # pra comparação entre execuções.
-      - name: Benchmark terminal responsiveness during install
-        shell: bash
-        continue-on-error: true
-        run: npm run benchmark:terminal-responsiveness -- --iterations=2 --out=terminal-responsiveness-${{ matrix.os }}.json
-
-      - name: Upload terminal responsiveness benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: terminal-responsiveness-${{ matrix.os }}
-          path: app/terminal-responsiveness-${{ matrix.os }}.json
-          if-no-files-found: ignore
-
       # O cache contém somente os tsbuildinfo do renderer. O tsc valida os
       # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
       # mudança de código nunca transforma um resultado antigo em verde.
@@ -332,6 +302,7 @@ jobs:
             typecheck-${{ runner.os }}-
 
       - name: Test
+        timeout-minutes: 15
         run: npm test
 
       # Mantém a cobertura que depende de node-pty visível no log da matriz.
@@ -339,11 +310,13 @@ jobs:
       # próprio launch spec (Linux direto, macOS shell de login, Windows
       # cmd.exe/ConPTY).
       - name: Test native PTY integration
+        timeout-minutes: 10
         run: npm run test:native
 
       # O reporter padrão do Vitest registra "Test Files" e "Tests" no log.
       # Sem --passWithNoTests, uma coleta vazia falha o job em vez de ficar verde.
       - name: Test frontend
+        timeout-minutes: 10
         env:
           # A matriz de 50 repetições roda no gate E2E logo abaixo; o conjunto
           # geral mantém uma passada para não duplicar o custo.
@@ -354,6 +327,7 @@ jobs:
       # iniciar CLIs autenticadas: o teste usa o store/manager reais, o
       # escritor/leitor de artefatos e um PTY fake determinístico.
       - name: Test Canvas initial context E2E
+        timeout-minutes: 10
         env:
           FELIXO_CONTEXT_MATRIX_RUNS: 50
           FELIXO_CONTEXT_MATRIX_REPORT: build/canvas-context-matrix-${{ matrix.os }}.json
@@ -377,55 +351,43 @@ jobs:
       # hidratação, oclusão, foco/teclado, handles, persistência e viewport
       # mínimo. O PTY fake não inicia uma CLI ou shell real.
       #
-      # Só macOS e Windows por enquanto: no Linux (ubuntu-latest e
-      # ubuntu-24.04-arm), sob xvfb-run, o Electron nunca chega a abrir a
-      # porta CDP — medido em três tentativas (runs 34827616284, 34828636528,
-      # 34829476404), inclusive depois de ampliar o timeout pra 60s e de
-      # desativar o sandbox do Chromium (`--no-sandbox`, só na instância de
-      # automação). Nenhuma resolveu; `createDetached` roda com
-      # `stdio: 'ignore'`, então o stderr do Chromium nunca chega ao log — a
-      # próxima tentativa precisa capturar esse stderr antes de adivinhar de
-      # novo. Ver a task "Canvas — criar gate CI de evidência visual" no
-      # Notion para o registro completo e a task de investigação aberta.
+      # Roda nos três SOs. No Linux o Electron sobe sob `xvfb-run`; a causa do
+      # antigo "nunca abre CDP" era o Chromium abortar na checagem do sandbox
+      # SUID (`chrome-sandbox` sem root/4755), ANTES do main.cjs — o
+      # `appendSwitch('no-sandbox')` chegava tarde. `felixo devtools launch` agora
+      # passa `--no-sandbox` na linha de comando no Linux (diagnóstico real: log
+      # do Electron do run 35540428944). O log fica em FELIXO_DEVTOOLS_DEBUG_LOG e
+      # sobe como artefato se o passo falhar. Execuções verdes no Linux antes de
+      # virar gate: PR #70 (push da correção), main do #70 e o CI do PR que o
+      # reativou (que só entrou na main por ter passado).
       - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
-        if: runner.os != 'Linux'
-        shell: bash
-        run: npm run test:canvas-smoke
-
-      - name: Upload Canvas PR smoke failure screenshot
-        if: failure() && runner.os != 'Linux'
-        uses: actions/upload-artifact@v6
-        with:
-          name: canvas-smoke-failure-${{ matrix.os }}
-          path: app/build/canvas-smoke-failure-*.png
-          if-no-files-found: ignore
-
-      # O scrollback adaptativo só pode ser habilitado depois de medir a
-      # combinação real Electron + xterm + PTY nos três runners. O check usa
-      # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
-      # contra o baseline fixo de 20k. Linux precisa do display virtual; os
-      # outros dois runners abrem a mesma janela Electron nativamente.
-      - name: Benchmark terminal scrollback policy
+        timeout-minutes: 10
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            mkdir -p build
+            export FELIXO_DEVTOOLS_DEBUG_LOG="$GITHUB_WORKSPACE/app/build/electron-devtools-${{ matrix.os }}.log"
+            xvfb-run -a npm run test:canvas-smoke
           else
-            npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            npm run test:canvas-smoke
           fi
 
-      - name: Upload terminal scrollback benchmark
-        if: always()
+      - name: Upload Canvas PR smoke failure screenshot
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: terminal-scrollback-${{ matrix.os }}
-          path: app/terminal-scrollback-${{ matrix.os }}.json
+          name: canvas-smoke-failure-${{ matrix.os }}
+          path: |
+            app/build/canvas-smoke-failure-*.png
+            app/build/electron-devtools-*.log
           if-no-files-found: ignore
 
       - name: Lint
+        timeout-minutes: 5
         run: npm run lint
 
       - name: Build renderer
+        timeout-minutes: 10
         run: npm run build
 
       # A divisão do bundle só é válida se os chunks relativos continuarem
@@ -433,6 +395,7 @@ jobs:
       # abre o menu de ferramentas e carrega Fetch All; Linux usa o mesmo
       # display virtual da bancada de scrollback.
       - name: Benchmark renderer bundle
+        timeout-minutes: 10
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
@@ -487,3 +450,146 @@ jobs:
           if [ $found -gt 0 ]; then
             exit 1
           fi
+
+  benchmarks:
+    name: Benchmarks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # Roda EM PARALELO ao job Validate (era tudo em série: ~4,8 min de benchmarks no
+    # Windows somados a ~7 min de testes). Os mesmos passos, os mesmos gates — só em
+    # outra máquina ao mesmo tempo. O benchmark do bundle fica no Validate: precisa do build.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+          # Runner hospedado arm64 gratuito em repositório público — cobre a
+          # validação do node-pty (dependência nativa) nessa arquitetura sem
+          # precisar de dispositivo físico. Ver task "Release — validar
+          # node-pty empacotado no Linux arm64".
+          - ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # O npm que chega ao instalador é uma árvore própria, não o npm do
+      # runner. A bancada compara a política anterior com a atual e executa
+      # instalação/atualização offline usando o Electron em cada SO.
+      - name: Benchmark npm runtime
+        timeout-minutes: 10
+        shell: bash
+        run: npm run benchmark:npm-runtime:check -- --iterations=2 --out=npm-runtime-${{ matrix.os }}.json
+
+      - name: Upload npm runtime benchmark
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: npm-runtime-${{ matrix.os }}
+          path: app/npm-runtime-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+      # Esta bancada compara o npm-runtime com pnpm/Yarn e mede Corepack como
+      # ponte de bootstrap. Alternativas indisponíveis no runner não bloqueiam
+      # a matriz, mas qualquer alternativa encontrada que falhe no smoke deixa
+      # o job vermelho. O JSON registra a disponibilidade por sistema.
+      - name: Benchmark package-manager alternatives
+        timeout-minutes: 10
+        shell: bash
+        run: npm run benchmark:package-managers -- --iterations=2 --check --out=package-manager-alternatives-${{ matrix.os }}.json
+
+      - name: Upload package-manager alternatives benchmark
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: package-manager-alternatives-${{ matrix.os }}
+          path: app/package-manager-alternatives-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+      - name: Benchmark package-manager operational cost
+        timeout-minutes: 15
+        shell: bash
+        run: npm run benchmark:package-managers:performance:check -- --iterations=2 --agents=1,2,5,10 --out=package-manager-operational-${{ matrix.os }}.json
+
+      - name: Upload package-manager operational benchmark
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: package-manager-operational-${{ matrix.os }}
+          path: app/package-manager-operational-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+      # Fatia 4/4 de "Performance — correlacionar instalação do gerenciador
+      # com responsividade e energia no artefato": junta as fatias 1-3
+      # (metadados de ambiente, primeiro output do terminal, proxy de
+      # energia) numa matriz real nos três SOs do CI. Não é gate — é medição
+      # exploratória; uma regressão aqui não bloqueia PR, mas fica arquivada
+      # pra comparação entre execuções.
+      - name: Benchmark terminal responsiveness during install
+        timeout-minutes: 10
+        shell: bash
+        continue-on-error: true
+        run: npm run benchmark:terminal-responsiveness -- --iterations=2 --out=terminal-responsiveness-${{ matrix.os }}.json
+
+      - name: Upload terminal responsiveness benchmark
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-responsiveness-${{ matrix.os }}
+          path: app/terminal-responsiveness-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+      # O scrollback adaptativo só pode ser habilitado depois de medir a
+      # combinação real Electron + xterm + PTY nos três runners. O check usa
+      # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
+      # contra o baseline fixo de 20k. Linux precisa do display virtual; os
+      # outros dois runners abrem a mesma janela Electron nativamente.
+      - name: Benchmark terminal scrollback policy
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          run_benchmark() {
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              xvfb-run -a npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            else
+              npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            fi
+          }
+          # O node-pty derruba o processo de vez em quando no runner Windows: segfault
+          # (exit 139, "AttachConsole failed" — PR #51 e #66) e abort() no encerramento
+          # depois do benchmark já ter impresso o resultado (exit 3, "PostQueuedCompletionStatus:
+          # (6) The handle is invalid" — PR #72, 20/09). Só ESSES códigos de crash são
+          # repetidos (até 3 vezes): uma falha real do benchmark (exit 1, ou qualquer
+          # outro código) falha na hora.
+          for attempt in 1 2 3; do
+            set +e
+            run_benchmark
+            status=$?
+            set -e
+            if [ "$status" -ne 139 ] && [ "$status" -ne 3 ]; then exit "$status"; fi
+            echo "benchmark terminou com crash do node-pty (código $status), tentativa $attempt/3"
+          done
+          exit "$status"
+
+      - name: Upload terminal scrollback benchmark
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-scrollback-${{ matrix.os }}
+          path: app/terminal-scrollback-${{ matrix.os }}.json
+          if-no-files-found: ignore

@@ -10,6 +10,7 @@ const {
   criarLinkDeDiretorio,
 } = require('../electron/__fixtures__/link-fixtures.cjs')
 const {
+  settleOrphans,
   aggregateSamples,
   createEnvironment,
   findPackagedRuntime,
@@ -115,10 +116,13 @@ test('runChild sempre coleta uma amostra inicial e não mantém o timer do timeo
 })
 
 test('runChild consegue ler RSS de um processo real', async () => {
-  const result = await runChild(process.execPath, ['-e', 'setTimeout(() => {}, 1500)'], {
+  // No Windows cada amostra (PowerShell/CIM) pode levar mais de 1,5 s num runner carregado:
+  // com o filho vivo só 1,5 s, nenhuma amostra chegava antes de ele sair (CI do #75, 21/09).
+  // O filho vive o bastante para sobrar tempo a pelo menos uma amostra.
+  const result = await runChild(process.execPath, ['-e', 'setTimeout(() => {}, 6000)'], {
     cwd: process.cwd(),
     env: process.env,
-    timeoutMs: 5_000,
+    timeoutMs: 20_000,
   })
   assert.equal(result.code, 0)
   assert.ok(result.samples.some((sample) => sample.rssBytes > 0), JSON.stringify(result.samples))
@@ -208,4 +212,29 @@ test('validateReport exige npm-runtime, cenários frios/quentes e métricas de p
     },
   }, 2, [1]), [])
   assert.match(validateReport({ managers: { 'npm-runtime': { available: false, scenarios: [] } } }, 1, [1]).join('; '), /npm-runtime/)
+})
+
+test('settleOrphans: filho que sai da tabela de processos durante a espera não é órfão', async () => {
+  const respostas = [[101, 102], [101], []]
+  let chamadas = 0
+  const esperas = []
+  const resultado = await settleOrphans(async () => respostas[Math.min(chamadas++, respostas.length - 1)], {
+    sleep: async (ms) => { esperas.push(ms) },
+  })
+  assert.deepEqual(resultado, [])
+  assert.equal(chamadas, 3)
+  assert.deepEqual(esperas, [500, 500])
+})
+
+test('settleOrphans: filho que PERMANECE depois do prazo continua reportado (gate não afrouxa)', async () => {
+  let esperado = 0
+  const resultado = await settleOrphans(async () => [7], { settleMs: 2000, intervalMs: 500, sleep: async (ms) => { esperado += ms } })
+  assert.deepEqual(resultado, [7])
+  assert.equal(esperado, 2000)
+})
+
+test('settleOrphans: sem órfãos não espera nada', async () => {
+  let dormiu = false
+  assert.deepEqual(await settleOrphans(async () => [], { sleep: async () => { dormiu = true } }), [])
+  assert.equal(dormiu, false)
 })

@@ -5,6 +5,7 @@ import { ADD_FOLDER_VALUE, type AgentConfig, type AgentConfigProject } from '../
 import { ProviderMark } from '../../shared/brand/ProviderMark'
 import { providerIdentity } from '../../shared/brand/provider-identity'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
+import { AgentPresetFields } from './AgentPresetFields'
 
 type Props = {
   config: AgentConfig
@@ -129,6 +130,8 @@ export function AgentConfigFields({
           />
         </>
       )}
+
+      <AgentPresetFields config={config} />
 
       <label htmlFor={`${prefixo}-agent`} className={ROTULO}>
         Agente
@@ -337,6 +340,21 @@ export function AgentConfigFields({
                   <span className="felixo-checkbox-meta">Acesso total, sem confirmações</span>
                 </span>
               </label>
+
+              {config.fastSupported && (
+                <label className="felixo-checkbox-field mb-3">
+                  <input
+                    type="checkbox"
+                    checked={config.fast}
+                    onChange={(event) => config.setFast(event.target.checked)}
+                    className="felixo-checkbox"
+                  />
+                  <span className="felixo-checkbox-copy">
+                    <span className="felixo-checkbox-label">Modo fast</span>
+                    <span className="felixo-checkbox-meta">Mais rápido, gasta mais do limite</span>
+                  </span>
+                </label>
+              )}
 
               <label htmlFor={`${prefixo}-planning-file`} className={ROTULO}>
                 Arquivo de planejamento

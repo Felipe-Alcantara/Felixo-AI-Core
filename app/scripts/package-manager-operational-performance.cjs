@@ -283,10 +283,24 @@ async function findOrphans(samples) {
   const orphans = await check()
   if (process.platform !== 'win32' || orphans.length === 0) return orphans
   // Windows can emit `close` while a short-lived cmd/node child is still
-  // leaving the process table. Recheck after teardown has settled, while
-  // retaining identity checks so a genuinely persistent child still fails.
-  await new Promise((resolve) => setTimeout(resolve, 750))
-  return check()
+  // leaving the process table. Recheck while teardown settles, retaining the
+  // identity checks so a genuinely persistent child still fails.
+  return settleOrphans(check)
+}
+
+/**
+ * Reverifica os órfãos até sumirem ou até `settleMs`: um único recheck de 750 ms
+ * não bastava no runner Windows (yarn-classic falhou em PRs #52, #55 e na main de
+ * 20/09 com filhos que saíam da tabela de processos logo depois). Um filho que
+ * PERMANECE depois do prazo continua sendo reportado — o gate não é afrouxado.
+ */
+async function settleOrphans(check, { settleMs = 6000, intervalMs = 500, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  let remaining = await check()
+  for (let waited = 0; remaining.length > 0 && waited < settleMs; waited += intervalMs) {
+    await sleep(intervalMs)
+    remaining = await check()
+  }
+  return remaining
 }
 
 function processSnapshot(pid, { platform = process.platform, execFileSyncImpl = execFileSync } = {}) {
@@ -797,6 +811,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  settleOrphans,
   aggregateSamples,
   createEnvironment,
   discoverManagers,

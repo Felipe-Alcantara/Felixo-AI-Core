@@ -27,7 +27,18 @@ const ACOES_ACEITAS = [
   'canvas-listar',
   'canvas-ler',
   'canvas-escrever',
+  'perguntar',
 ]
+
+/** Limites de uma pergunta com opções (o diálogo precisa caber numa tela). */
+const PERGUNTA_MAX = 500
+const OPCOES_MIN = 2
+const OPCOES_MAX = 4
+const OPCAO_LABEL_MAX = 120
+const OPCAO_DESCRICAO_MAX = 300
+
+/** Nome de perfil do navegador interno citado num pedido (igual ao limite do repositório). */
+const PERFIL_NOME_MAX = 40
 
 /** Tamanho máximo do conteúdo que um pedido de escrita pode carregar. */
 const CONTEUDO_ESCRITA_MAX = 20000
@@ -77,7 +88,17 @@ function normalizarPedido(acao, opcoes = {}) {
       )
     }
 
-    return { acao: nome, comCommit: false, url, modo }
+    // Perfil do navegador interno (por NOME; o app resolve). Só faz sentido no
+    // bloco embutido — o navegador do sistema tem os perfis dele.
+    const perfil = typeof opcoes?.perfil === 'string' ? opcoes.perfil.trim() : ''
+    if (perfil && modo !== 'embutido') {
+      throw new Error('O perfil so vale com --embedded (bloco Pagina Web).')
+    }
+    if (perfil.length > PERFIL_NOME_MAX) {
+      throw new Error(`Nome de perfil muito grande (maximo ${PERFIL_NOME_MAX} caracteres).`)
+    }
+
+    return { acao: nome, comCommit: false, url, modo, ...(perfil ? { perfil } : {}) }
   }
 
   // Leitura: nada aqui decide SE o elemento existe (isso é responsabilidade
@@ -113,6 +134,35 @@ function normalizarPedido(acao, opcoes = {}) {
     }
 
     return { acao: nome, comCommit: false, idDoElemento, conteudo }
+  }
+
+  // Pergunta: a pessoa responde clicando numa das opções. O pedido carrega
+  // só texto — quem responde é sempre um humano, e a resposta devolvida ao
+  // agente é uma das opções que ELE mesmo ofereceu (nunca texto livre).
+  if (nome === 'perguntar') {
+    const pergunta = typeof opcoes?.pergunta === 'string' ? opcoes.pergunta.trim() : ''
+    if (!pergunta) throw new Error('Informe a pergunta.')
+    if (pergunta.length > PERGUNTA_MAX) {
+      throw new Error(`Pergunta muito grande (máximo ${PERGUNTA_MAX} caracteres).`)
+    }
+    const bruto = Array.isArray(opcoes?.opcoes) ? opcoes.opcoes : []
+    const lista = bruto.map((item) => {
+      const label = typeof item === 'string' ? item : item?.label
+      const descricao = typeof item === 'object' && typeof item?.descricao === 'string' ? item.descricao.trim() : ''
+      const texto = typeof label === 'string' ? label.trim() : ''
+      if (!texto) throw new Error('Toda opção precisa de um texto.')
+      if (texto.length > OPCAO_LABEL_MAX) {
+        throw new Error(`Opção muito grande (máximo ${OPCAO_LABEL_MAX} caracteres).`)
+      }
+      if (descricao.length > OPCAO_DESCRICAO_MAX) {
+        throw new Error(`Descrição da opção muito grande (máximo ${OPCAO_DESCRICAO_MAX} caracteres).`)
+      }
+      return descricao ? { label: texto, descricao } : { label: texto }
+    })
+    if (lista.length < OPCOES_MIN || lista.length > OPCOES_MAX) {
+      throw new Error(`Informe de ${OPCOES_MIN} a ${OPCOES_MAX} opções.`)
+    }
+    return { acao: nome, comCommit: false, pergunta, opcoes: lista }
   }
 
   return { acao: nome, comCommit: opcoes?.comCommit === true }
@@ -285,6 +335,8 @@ function criarRepositorioDePedidos(opcoes) {
 module.exports = {
   ACOES_ACEITAS,
   CONTEUDO_ESCRITA_MAX,
+  OPCOES_MAX,
+  OPCOES_MIN,
   ESTADOS,
   MODOS_ABERTURA_PAGINA,
   VALIDADE_MS,

@@ -143,7 +143,66 @@ const PANEL_TOP_OFFSET = 64
 const PANEL_BOTTOM_MARGIN = 48
 
 export function getPanelMaxHeight(viewportHeight: number): number {
-  return Math.max(240, viewportHeight - PANEL_TOP_OFFSET - PANEL_BOTTOM_MARGIN)
+  return Math.max(PANEL_MIN_HEIGHT, viewportHeight - PANEL_TOP_OFFSET - PANEL_BOTTOM_MARGIN)
+}
+
+/**
+ * Menor altura útil de um painel redimensionado: cabeçalho e algumas linhas de
+ * conteúdo. É também o piso de `getPanelMaxHeight`, então o intervalo
+ * [mínimo, máximo] nunca se inverte, por menor que seja a janela.
+ */
+export const PANEL_MIN_HEIGHT = 240
+
+const HEIGHT_STORAGE_PREFIX = 'felixo:canvas-panel-height:'
+
+/**
+ * Altura escolhida pela pessoa, trazida para dentro da faixa da janela atual.
+ * A faixa vai do piso ao teto de `getPanelMaxHeight`, o mesmo teto que o painel
+ * já respeitava: redimensionar na vertical não cria uma posição nova que o
+ * painel não pudesse ocupar antes (e por isso não disputa espaço com as outras
+ * superfícies, que só concorrem pela LARGURA — ver `canvas-surfaces.ts`).
+ */
+export function clampPanelHeight(height: number, viewportHeight: number): number {
+  const maxHeight = getPanelMaxHeight(viewportHeight)
+  const minHeight = Math.min(PANEL_MIN_HEIGHT, maxHeight)
+  return Math.min(Math.max(Math.round(height), minHeight), maxHeight)
+}
+
+/** Altura salva do painel, ou `null` se a pessoa nunca a ajustou (fica na altura do conteúdo). */
+export function readPanelHeight(
+  storage: Pick<Storage, 'getItem'>,
+  panelId: string,
+  viewportHeight: number,
+): number | null {
+  let stored: number
+  try {
+    const raw = storage.getItem(`${HEIGHT_STORAGE_PREFIX}${panelId}`)
+    if (raw === null) return null
+    stored = Number(raw)
+  } catch {
+    return null
+  }
+  return Number.isFinite(stored) && stored > 0 ? clampPanelHeight(stored, viewportHeight) : null
+}
+
+export function writePanelHeight(
+  storage: Pick<Storage, 'setItem'>,
+  panelId: string,
+  height: number,
+): void {
+  try {
+    storage.setItem(`${HEIGHT_STORAGE_PREFIX}${panelId}`, String(Math.round(height)))
+  } catch {
+    // Sem armazenamento o painel só perde a memória do arrasto entre sessões.
+  }
+}
+
+export function clearPanelHeight(storage: Pick<Storage, 'removeItem'>, panelId: string): void {
+  try {
+    storage.removeItem(`${HEIGHT_STORAGE_PREFIX}${panelId}`)
+  } catch {
+    // Falhar aqui não impede o painel de voltar à altura do conteúdo.
+  }
 }
 
 /**

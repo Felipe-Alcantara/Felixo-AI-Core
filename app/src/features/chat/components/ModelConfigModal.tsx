@@ -8,6 +8,9 @@ import {
   getEffortLevels,
   isEffortValidForModel,
 } from '../../canvas/services/agent-launch-options'
+import { modelSupportsFastMode, resolveFastMode } from '../services/model-fast-mode'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type ModelConfigModalProps = {
   isOpen: boolean
@@ -110,10 +113,12 @@ export function ModelConfigModal({
   onClose,
   onUpdateModel,
 }: ModelConfigModalProps) {
+  const dialog = useResizableDialog('model-config')
   const [providerModel, setProviderModel] = useState(model.providerModel ?? '')
   const [reasoningEffort, setReasoningEffort] = useState<'' | ReasoningEffort>(
     model.reasoningEffort ?? '',
   )
+  const [fastMode, setFastMode] = useState(model.fastMode === true)
 
   if (!isOpen) {
     return null
@@ -122,6 +127,7 @@ export function ModelConfigModal({
   const capabilities = getModelCapabilities(model)
   const providerOptions = getProviderModelOptions(model)
   const effortOptions = getReasoningEffortOptions(model, providerModel)
+  const fastSupported = modelSupportsFastMode({ cliType: model.cliType, providerModel })
   const selectedSpec = providerModel ? providerModelSpecs[providerModel] ?? null : null
 
   function handleProviderModelChange(value: string) {
@@ -140,6 +146,7 @@ export function ModelConfigModal({
       ...model,
       providerModel: providerModel || undefined,
       reasoningEffort: (reasoningEffort as ReasoningEffort) || undefined,
+      fastMode: resolveFastMode({ cliType: model.cliType, providerModel }, fastMode),
     })
     onClose()
   }
@@ -150,7 +157,8 @@ export function ModelConfigModal({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[80vh] w-full max-w-[400px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[80vh] w-full max-w-[400px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -235,6 +243,21 @@ export function ModelConfigModal({
                 />
               </div>
             )}
+
+            {fastSupported && (
+              <label className="felixo-checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={fastMode}
+                  onChange={(event) => setFastMode(event.target.checked)}
+                  className="felixo-checkbox"
+                />
+                <span className="felixo-checkbox-copy">
+                  <span className="felixo-checkbox-label">Modo fast</span>
+                  <span className="felixo-checkbox-meta">Mais rápido, gasta mais do limite</span>
+                </span>
+              </label>
+            )}
           </section>
 
           <button
@@ -245,6 +268,7 @@ export function ModelConfigModal({
             Salvar
           </button>
         </form>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

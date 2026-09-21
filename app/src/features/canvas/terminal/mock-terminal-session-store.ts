@@ -1,3 +1,4 @@
+import { containsControlChars } from '../services/dictation'
 import type { AgentSessionReference } from '../services/agent-session'
 import {
   promptInsertionSourceForContextKind,
@@ -151,6 +152,20 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
     if (session.terminalElement) {
       session.terminalElement.value = session.transcript
     }
+    this.notify(session)
+    return { delivered: true }
+  }
+
+  async typeText(id: string, text: string): Promise<SendTextResult> {
+    const session = this.sessions.get(id)
+    if (!session || !text) return { delivered: false, reason: 'no-session' }
+    // Mesma recusa do store real: controle nunca é digitado.
+    if (containsControlChars(text)) {
+      return { delivered: false, reason: 'rejected', message: 'O texto tem caracteres de controle e não foi digitado.' }
+    }
+    session.transcript += text
+    session.shellHistory += text
+    if (session.terminalElement) session.terminalElement.value = session.transcript
     this.notify(session)
     return { delivered: true }
   }

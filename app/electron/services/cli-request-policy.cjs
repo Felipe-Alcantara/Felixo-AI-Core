@@ -78,6 +78,8 @@ function normalizeAvailableModel(value) {
       typeof model.reasoningEffort === 'string' && model.reasoningEffort.trim()
         ? model.reasoningEffort.trim()
         : undefined,
+    // Sem isto o campo morre aqui e o adapter nunca vê o pedido de fast.
+    ...(model.fastMode === true ? { fastMode: true } : {}),
   }
 }
 

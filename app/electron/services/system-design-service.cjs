@@ -12,8 +12,14 @@ const {
 
 const execFileAsync = promisify(execFile)
 
-const DEFAULT_REPO_URL = 'https://github.com/Felipe-Alcantara/Felixo-System-Design.git'
-const DEFAULT_BRANCH = 'main'
+// O default vive só em `core/system-design-source.cjs`; reexportado abaixo
+// para quem já importava daqui.
+const {
+  DEFAULT_BRANCH,
+  DEFAULT_REPO_URL,
+  sourcesEqual,
+} = require('../core/system-design-source.cjs')
+
 const GIT_TIMEOUT_MS = 60000
 const MAX_BUFFER = 32 * 1024 * 1024
 
@@ -44,7 +50,18 @@ async function syncSystemDesignRepository({
 
   await fsp.mkdir(cacheDir, { recursive: true })
   const repoPath = path.join(cacheDir, 'repo')
-  const isFreshClone = !(await pathExists(path.join(repoPath, '.git')))
+  let isFreshClone = !(await pathExists(path.join(repoPath, '.git')))
+
+  // Um clone que já existe só serve se o `origin` dele for a fonte PEDIDA.
+  // Sem isto, trocar a URL configurada nunca trocava de repositório: o
+  // `fetch`/`reset` abaixo rodava no `origin` antigo e o conteúdo da fonte
+  // anterior era gravado como se fosse da nova (medido no app real em
+  // 21/09/2026). Origin que não dá para ler conta como fonte desconhecida.
+  if (!isFreshClone && !(await cloneMatchesSource(run, repoPath, repoUrl))) {
+    logger?.warn?.('o clone em cache é de outra fonte; descartando e clonando a fonte configurada.')
+    await fsp.rm(repoPath, { recursive: true, force: true })
+    isFreshClone = true
+  }
 
   if (isFreshClone) {
     await run(
@@ -100,6 +117,32 @@ async function syncSystemDesignRepository({
     indexedCount: documents.length,
     removedCount,
     repoPath,
+  }
+}
+
+/**
+ * O `origin` do clone em cache é o mesmo repositório que `repoUrl`?
+ *
+ * Compara sem credencial, sem `.git` final, sem barra final e sem diferença de
+ * caixa no host — variações que não mudam o repositório. Só o endereço importa
+ * aqui: a branch é tratada pelo `fetch`/re-clone logo abaixo.
+ */
+async function cloneMatchesSource(run, repoPath, repoUrl) {
+  try {
+    const origin = (
+      await run(repoPath, ['remote', 'get-url', 'origin'], {
+        stage: 'ler o origin',
+        repoUrl,
+      })
+    ).trim()
+    if (!origin) return false
+
+    return sourcesEqual(
+      { repoUrl: sanitizeGitRemoteUrl(origin), branch: '-' },
+      { repoUrl: sanitizeGitRemoteUrl(repoUrl), branch: '-' },
+    )
+  } catch {
+    return false
   }
 }
 

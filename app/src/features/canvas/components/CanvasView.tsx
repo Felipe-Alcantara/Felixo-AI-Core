@@ -25,6 +25,16 @@ import '@xyflow/react/dist/style.css'
 import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
+import { AgentQuestionDialog } from './AgentQuestionDialog'
+import { DictationButton } from './DictationButton'
+import { useDictation } from '../hooks/useDictation'
+import { useDictationShortcut } from '../hooks/useDictationShortcut'
+import { formatShortcut, matchesShortcut } from '../services/dictation'
+import { buildPresetInstruction } from '../services/agent-preset-prompt'
+import { NodeColorMenu } from './NodeColorMenu'
+import { frameClassName } from './frame-colors'
+import { notificationClassName, unreadCategoryByNode } from '../terminal/notification-category'
+import { initialAutoFitState, markAutoFitExecuted, planAutoFit, registerViewportMove } from '../services/viewport-auto-fit'
 import { DrawingNode } from './DrawingNode'
 import { ExcalidrawDrawingNode } from './ExcalidrawDrawingNode'
 import { GroupNode } from './GroupNode'
@@ -93,8 +103,12 @@ import {
   buildQualityStandardMessage,
   composeTerminalInitialText,
   isTerminalInitialTextReady,
+  qualityStandardSourceFrom,
+  resolveQualityStandardPrompt,
   resolveTerminalInitialText,
+  type QualityStandardSource,
 } from '../services/quality-standard-prompt'
+import { subscribeSystemDesignConfig } from '../../shared/system-design/system-design-events'
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
@@ -407,10 +421,19 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
   const [zoomPercent, setZoomPercent] = useState(100)
   const zoomPercentRef = useRef(100)
+  // Estado do enquadramento automático (ver `viewport-auto-fit.ts`): depois que a
+  // pessoa mexe na visão, mudança de layout não pode mais reenquadrar.
+  const autoFitStateRef = useRef(initialAutoFitState())
   const handleCanvasMove = useCallback((
-    _event: unknown,
+    event: unknown,
     viewport: { zoom: number },
   ) => {
+    // `event` é null para movimento programático (nosso ajuste, botões de zoom, foco).
+    autoFitStateRef.current = registerViewportMove(
+      autoFitStateRef.current,
+      performance.now(),
+      event !== null && event !== undefined,
+    )
     const nextZoomPercent = Math.round(viewport.zoom * 100)
     if (nextZoomPercent === zoomPercentRef.current) return
     zoomPercentRef.current = nextZoomPercent
@@ -804,6 +827,31 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     },
     [],
   )
+  // O texto que vai para o agente é resolvido em UM lugar, a partir de três
+  // entradas: o que a pessoa gravou (`stored`, vazio = "sem personalização"),
+  // se o lembrete está ligado e a fonte do System Design que vale agora.
+  // Criação, retomada e reabertura de terminal leem o mesmo resultado (é o
+  // `qualityStandard` acima), então a fonte citada não pode divergir entre elas.
+  const qualityStoredPromptRef = useRef<string | null>(null)
+  const qualityEnabledRef = useRef(true)
+  const qualitySourceRef = useRef<QualityStandardSource | null>(null)
+  const refreshQualityStandard = useCallback(() => {
+    applyQualityStandard({
+      prompt: resolveQualityStandardPrompt({
+        stored: qualityStoredPromptRef.current,
+        source: qualitySourceRef.current,
+      }),
+      enabled: qualityEnabledRef.current,
+    })
+  }, [applyQualityStandard])
+  const applySavedQualityStandard = useCallback(
+    (value: { prompt: string; enabled: boolean }) => {
+      qualityStoredPromptRef.current = value.prompt
+      qualityEnabledRef.current = value.enabled
+      refreshQualityStandard()
+    },
+    [refreshQualityStandard],
+  )
   // Agent terminals that already existed on disk the moment the app booted —
   // i.e. left open from a previous run, so whatever they were doing may not
   // have finished. Captured once, right when hydration lands, from the raw
@@ -1010,7 +1058,19 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       return undefined
     }
 
-    const frame = window.requestAnimationFrame(() => fitCanvasViewSafely(0))
+    // `fitCanvasViewSafely` muda a cada mudança de layout; sem este plano cada
+    // abrir/fechar de gaveta ou painel jogava fora o pan e o zoom da pessoa.
+    const plan = planAutoFit(autoFitStateRef.current, canvasRevision)
+    autoFitStateRef.current = plan.state
+    if (!plan.fit) {
+      return undefined
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      // A janela de "movimento nosso" abre agora, na execução (não no plano).
+      autoFitStateRef.current = markAutoFitExecuted(autoFitStateRef.current, performance.now())
+      fitCanvasViewSafely(0)
+    })
     return () => window.cancelAnimationFrame(frame)
   }, [canvasRevision, fitCanvasViewSafely, flowReady, hydrated])
 
@@ -1041,18 +1101,32 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         bootstrapPromptRef.current = result.prompt
       }
     })
-    void window.felixo?.canvas?.getQualityStandard?.().then((result) => {
-      if (result?.ok) {
-        applyQualityStandard({
-          prompt:
-            typeof result.prompt === 'string' && result.prompt.trim()
-              ? result.prompt
-              : DEFAULT_QUALITY_STANDARD_PROMPT,
-          enabled: result.enabled !== false,
-        })
+    void Promise.all([
+      window.felixo?.canvas?.getQualityStandard?.(),
+      window.felixo?.systemDesign?.getConfig?.(),
+    ]).then(([quality, systemDesign]) => {
+      if (systemDesign?.ok) {
+        qualitySourceRef.current = qualityStandardSourceFrom(systemDesign.config)
+      }
+      if (quality?.ok) {
+        qualityStoredPromptRef.current = typeof quality.prompt === 'string' ? quality.prompt : null
+        qualityEnabledRef.current = quality.enabled !== false
+        refreshQualityStandard()
       }
     })
-  }, [applyQualityStandard])
+  }, [refreshQualityStandard])
+
+  // A fonte do System Design pode mudar com o canvas aberto (o painel de
+  // configurações troca a fonte, a sincronização falha ou termina). Terminais
+  // já abertos não são reescritos; os próximos citam a fonte de agora.
+  useEffect(
+    () =>
+      subscribeSystemDesignConfig((config) => {
+        qualitySourceRef.current = qualityStandardSourceFrom(config)
+        refreshQualityStandard()
+      }),
+    [refreshQualityStandard],
+  )
 
   // 'Q' toggles select/pan, but only when the canvas itself is focused — never
   // while typing in a field, terminal or tool panel.
@@ -1321,6 +1395,34 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
     [expandedTerminalId, store],
   )
 
+  // Ditado por voz: o texto vai para a linha de entrada do terminal aberto
+  // (expandido), SEM Enter. Sem terminal aberto, copia — mesmo recurso que os
+  // prompts do catálogo já usam.
+  const dictation = useDictation({
+    deliver: async (text) => {
+      if (expandedTerminalId) {
+        const result = await store.typeText(expandedTerminalId, text)
+        return result.delivered ? null : 'Não consegui digitar no terminal. O texto foi copiado.'
+      }
+      await navigator.clipboard?.writeText(text)
+      return 'Nenhum terminal aberto: copiei o texto ditado. Cole onde quiser.'
+    },
+  })
+  const { shortcut: dictationShortcut } = useDictationShortcut()
+  const dictationToggle = dictation.toggle
+  useEffect(() => {
+    const platform = window.felixo?.platform ?? 'linux'
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!matchesShortcut(event, dictationShortcut, platform)) return
+      event.preventDefault()
+      event.stopPropagation()
+      dictationToggle()
+    }
+    // Captura: vale mesmo com o foco dentro do terminal (o xterm consome teclas).
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [dictationShortcut, dictationToggle])
+
   const addNodeRef = useRef<(sourceId: string, url: string) => void>(() => {})
 
   // Inject render-time concerns: the header drag handle (so only the header
@@ -1507,10 +1609,23 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
   // Groups must render before their children so they sit behind them.
   const orderedNodes = useMemo(() => {
-    const groups = renderedNodes.filter((node) => node.type === 'group')
-    const rest = renderedNodes.filter((node) => node.type !== 'group')
+    // A moldura escolhida vira classe no wrapper do nó; o realce mora no CSS.
+    // Notificação não lida vira um segundo realce, na cor da categoria (a mesma
+    // do painel); o CSS a declara depois da moldura, então ela vence enquanto existir.
+    const notifyByNode = unreadCategoryByNode(notificationHistory)
+    const framed = renderedNodes.map((node) => {
+      const frame = frameClassName(node.data?.frameColor)
+      const category = notifyByNode.get(node.id)
+      const extra = [frame, category ? notificationClassName(category) : undefined].filter(Boolean)
+      return extra.length ? { ...node, className: [node.className, ...extra].filter(Boolean).join(' ') } : node
+    })
+    const groups = framed.filter((node) => node.type === 'group')
+    const rest = framed.filter((node) => node.type !== 'group')
     return [...groups, ...rest]
-  }, [renderedNodes])
+  }, [notificationHistory, renderedNodes])
+
+  const [colorMenu, setColorMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
+  const closeColorMenu = useCallback(() => setColorMenu(null), [])
 
   // Route each edge through the handles on the facing sides of its two nodes,
   // computed from their current positions. Handles aren't persisted, so without
@@ -1716,10 +1831,16 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   )
 
   const openWebpageFromAgent = useCallback(
-    (url: string) => {
+    (url: string, profileId?: string) => {
       const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
       const position = findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
-      const id = addNode('webpage', { url }, position)
+      // `felixo browser open --embedded --profile=Nome`: o processo principal
+      // já resolveu o nome; o Padrão é o bloco sem `profileId`.
+      const id = addNode(
+        'webpage',
+        { url, ...(profileId && profileId !== 'default' ? { profileId } : {}) },
+        position,
+      )
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
@@ -1729,9 +1850,9 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   )
 
   useEffect(() => {
-    const unsubscribe = window.felixo?.canvas?.onAgentBrowserOpen?.(({ url }) => {
+    const unsubscribe = window.felixo?.canvas?.onAgentBrowserOpen?.(({ url, profileId }) => {
       if (typeof url === 'string' && url.trim()) {
-        openWebpageFromAgent(url)
+        openWebpageFromAgent(url, typeof profileId === 'string' ? profileId : undefined)
       }
     })
 
@@ -1793,6 +1914,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
       const planningInstruction = isContextAwareCommand
         ? buildPlanningFileInstruction(options.planningFile)
         : undefined
+      // Preset de agente: contexto e skills dele entram no mesmo initialText,
+      // que o session-store entrega por arquivo. Passagem de responsabilidade
+      // (handoff) carrega o próprio pedido e não recebe preset.
+      const presetInstruction = isContextAwareCommand && !options.handoffText
+        ? buildPresetInstruction(options.preset, availableSkillsRef.current)
+        : undefined
       const handoffSections = isContextAwareCommand && options.handoffText
         ? composeTerminalInitialText(
             quality.enabled ? buildQualityStandardMessage(quality.prompt) : undefined,
@@ -1814,6 +1941,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
                   availableSkillsRef.current,
                 )
               : undefined,
+            presetInstruction,
             planningInstruction,
           )
         : undefined
@@ -1826,6 +1954,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         ...(options.accountId ? { accountId: options.accountId } : {}),
         ...(options.providerId ? { providerId: options.providerId } : {}),
         ...(options.launchMode ? { launchMode: options.launchMode } : {}),
+        ...(options.preset?.color ? { frameColor: options.preset.color } : {}),
         ...(initialText && !options.handoffText ? { initialText } : {}),
         ...(options.handoffText ? { handoffText: initialText } : {}),
       }
@@ -2141,7 +2270,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   const arrangeableCount = countArrangeableNodes(nodes)
 
   return (
-    <div className="flex h-full w-full" data-felixo-canvas-ready>
+    <div
+      className="flex h-full w-full"
+      data-felixo-canvas-ready
+      // Sinal explícito de prontidão para o smoke (em vez de ler o texto da barra de status).
+      data-felixo-hydrated={hydrated ? 'true' : 'false'}
+    >
       <div
         ref={flowContainerRef}
         className="relative h-full min-w-0 flex-1"
@@ -2157,6 +2291,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         activeToolLabel={activeTool ? TOOL_LABELS[activeTool] : null}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => onSidebarCollapsedChange(!sidebarCollapsed)}
+        trailing={
+          <DictationButton
+            dictation={dictation}
+            shortcutLabel={formatShortcut(dictationShortcut, window.felixo?.platform ?? 'linux')}
+          />
+        }
       />
       {layoutWarning && (
         <div
@@ -2199,8 +2339,12 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onAddFile={addFileNode}
         onOpenFile={() => void pickAndOpenTextFile()}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
-        onAddWebpage={(url, name) =>
-          addNode('webpage', { url, ...(name ? { label: name } : {}) })
+        onAddWebpage={(url, name, profileId) =>
+          addNode('webpage', {
+            url,
+            ...(name ? { label: name } : {}),
+            ...(profileId ? { profileId } : {}),
+          })
         }
         canvasMode={canvasMode}
         onToggleMode={() =>
@@ -2297,7 +2441,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         onBootstrapSaved={(prompt) => {
           bootstrapPromptRef.current = prompt
         }}
-        onQualityStandardSaved={applyQualityStandard}
+        onQualityStandardSaved={applySavedQualityStandard}
       />
 
       {detailsTerminalId && (() => {
@@ -2332,6 +2476,11 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
           }}
           onNodesChange={onNodesChange}
           onNodeDragStop={onNodeDragStop}
+          onNodeContextMenu={(event, node) => {
+            event.preventDefault()
+            setColorMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
+          }}
+          onPaneClick={closeColorMenu}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onMove={handleCanvasMove}
@@ -2401,6 +2550,19 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
             />
           )}
         </ReactFlow>
+        <AgentQuestionDialog />
+        {colorMenu && (
+          <NodeColorMenu
+            x={colorMenu.x}
+            y={colorMenu.y}
+            current={nodes.find((node) => node.id === colorMenu.nodeId)?.data?.frameColor}
+            onSelect={(color) => {
+              updateNodeData(colorMenu.nodeId, { frameColor: color })
+              closeColorMenu()
+            }}
+            onClose={closeColorMenu}
+          />
+        )}
         <CanvasStatusBar
           nodeCount={nodes.length}
           edgeCount={edges.length}

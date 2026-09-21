@@ -34,6 +34,20 @@ export function readVisibleColumns(
   }
 }
 
+/** A pessoa já escolheu colunas para esta database (mesmo que seja "nenhuma")? Sem escolha vale o padrão. */
+export function hasVisibleColumnsPreference(
+  connectionId: string,
+  dataSourceId: string,
+  storage: StorageLike | undefined = getStorage(),
+): boolean {
+  if (!storage || !connectionId || !dataSourceId) return false
+  try {
+    return storage.getItem(storageKey(connectionId, dataSourceId)) !== null
+  } catch {
+    return false
+  }
+}
+
 export function saveVisibleColumns(
   connectionId: string,
   dataSourceId: string,

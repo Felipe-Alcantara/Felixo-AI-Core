@@ -48,12 +48,13 @@ function createModelsRepository(database) {
              cli_type,
              provider_model,
              reasoning_effort,
+             fast_mode,
              metadata_json,
              created_at,
              updated_at,
              archived_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, NULL)
            ON CONFLICT(id) DO UPDATE SET
              name = excluded.name,
              command = excluded.command,
@@ -61,6 +62,7 @@ function createModelsRepository(database) {
              cli_type = excluded.cli_type,
              provider_model = excluded.provider_model,
              reasoning_effort = excluded.reasoning_effort,
+             fast_mode = excluded.fast_mode,
              updated_at = excluded.updated_at,
              archived_at = NULL`,
         )
@@ -72,6 +74,7 @@ function createModelsRepository(database) {
           normalized.cliType,
           normalized.providerModel ?? null,
           normalized.reasoningEffort ?? null,
+          normalized.fastMode ? 1 : 0,
           now,
           now,
         )
@@ -107,6 +110,8 @@ function normalizeModel(model) {
   const reasoningEffort = VALID_REASONING_EFFORTS.has(model.reasoningEffort)
     ? model.reasoningEffort
     : undefined
+  // Só o booleano true liga; qualquer outro valor é "sem fast".
+  const fastMode = model.fastMode === true
 
   return {
     id,
@@ -116,6 +121,7 @@ function normalizeModel(model) {
     cliType,
     providerModel,
     reasoningEffort,
+    ...(fastMode ? { fastMode: true } : {}),
   }
 }
 
@@ -128,6 +134,7 @@ function mapModelRow(row) {
     cliType: row.cli_type,
     providerModel: row.provider_model ?? undefined,
     reasoningEffort: row.reasoning_effort ?? undefined,
+    ...(row.fast_mode === 1 ? { fastMode: true } : {}),
   }
 }
 

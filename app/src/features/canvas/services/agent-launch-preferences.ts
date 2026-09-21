@@ -1,6 +1,7 @@
 import {
   getAgent,
   isEffortValidForModel,
+  supportsFastMode,
   type AgentId,
 } from './agent-launch-options'
 
@@ -15,6 +16,8 @@ export type AgentLaunchPreferences = {
   model: string
   effort: string
   yolo: boolean
+  /** Modo fast do Codex (`service_tier=priority`). */
+  fast: boolean
   projectId: string
   planningFile: string
   /** Interface e modelo do Openia; a chave nunca é persistida aqui. */
@@ -39,6 +42,7 @@ const DEFAULT_PREFERENCES: AgentLaunchPreferences = {
   model: '',
   effort: '',
   yolo: false,
+  fast: false,
   projectId: '',
   planningFile: '',
   openiaInterface: 'orchat',
@@ -97,6 +101,10 @@ function normalizePreferences(
         ? requestedEffort
         : '',
     yolo: typeof value.yolo === 'boolean' ? value.yolo : fallback.yolo,
+    // Só vale para um agente/modelo que aceita fast; um valor salvo para outro
+    // agente não pode ligar o tier escondido em quem não tem o campo.
+    fast:
+      typeof value.fast === 'boolean' && supportsFastMode(agent, model) ? value.fast : false,
     projectId: stringValue(value.projectId),
     planningFile: stringValue(value.planningFile),
     openiaInterface: stringValue(value.openiaInterface) || fallback.openiaInterface,

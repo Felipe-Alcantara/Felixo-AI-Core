@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { AlignLeft, Bug, Download, FileJson, FileText, X } from 'lucide-react'
 import type { ExportFormat } from '../services/chat-export'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type ChatExportModalProps = {
   isOpen: boolean
@@ -17,6 +19,7 @@ export function ChatExportModal({
   onClose,
   onExport,
 }: ChatExportModalProps) {
+  const dialog = useResizableDialog('chat-export')
   const [fileName, setFileName] = useState(suggestedFileName)
 
   if (!isOpen) {
@@ -31,7 +34,8 @@ export function ChatExportModal({
       onClick={onClose}
     >
       <section
-        className="w-full max-w-[460px] rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex flex-col w-full max-w-[460px] rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -113,6 +117,7 @@ export function ChatExportModal({
             <Download size={15} aria-hidden="true" className="ml-auto" />
           </button>
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

@@ -179,6 +179,219 @@ listar/ler, este comando NAO espera resposta — o pedido pode ficar minutos
 esperando um clique — so registra e devolve na hora, apontando pra
 `felixo canvas ver-pedido <id>`.
 
+## Perguntas com opcoes de um agente (felixo perguntar)
+
+Decisao registrada (task "perguntas interativas com opcoes para o Codex").
+Verificado no protocolo real do Codex 0.154.0 (`codex app-server
+generate-json-schema --experimental`): o app-server tem
+`item/tool/requestUserInput` (perguntas + opcoes, resposta por id), mas o
+app-server so serve o chat/orquestrador — os terminais do canvas rodam o TUI
+do Codex por PTY, entao esse caminho nao alcancaria o agente do canvas. A flag
+nativa `default_mode_request_user_input` esta "under development" (desligada)
+e a pergunta so aparece dentro do TUI, por teclado. Escolhido: comando
+`felixo perguntar "<pergunta>" "<opcao>" ...` na mesma fila `agent-requests`,
+que serve Codex, Claude e Gemini.
+
+`agent-question-ipc-handlers.cjs` guarda a pergunta como pedido pendente e so
+a resolve quando a pessoa clica no `AgentQuestionDialog` (global no
+CanvasView: quem perguntou esta bloqueado, entao o dialogo nao pode depender
+de um painel aberto). O renderer manda apenas o INDICE da opcao; o texto
+devolvido ao agente vem do pedido gravado, nunca do que chega do renderer.
+De 2 a 4 opcoes, limites de tamanho em `agent-requests.cjs`. A CLI ao
+contrario de `canvas escrever`, BLOQUEIA ate responderem (5 min): codigo 0 =
+escolha no stdout, 3 = dispensada, 1 = sem resposta no prazo.
+
+## Modo fast do Codex ao criar agente
+
+Contrato confirmado no proprio Codex 0.154.0, nao por documentacao: cada
+modelo do `~/.codex/models_cache.json` (e `Model.serviceTiers` do protocolo
+do app-server) declara `serviceTiers: [{ id: "priority", name: "Fast" }]`
+com "1.5x/2x speed, increased usage"; `codex features list` mostra
+`fast_mode` estavel e ligado. A chave e `service_tier = "priority"`; um
+`codex app-server --config service_tier="priority"` mais `config/read`
+devolve `priority` como valor efetivo (sem o override, `default`).
+
+No canvas, `AgentDefinition.fastModels` (agent-launch-options.ts) lista os
+modelos compativeis e `supportsFastMode` decide se o campo "Modo fast"
+aparece; o modelo vazio (padrao) conta como compativel. `buildAgentArgs` so
+envia `-c service_tier=priority` para Codex e modelo compativel, e
+`describeLaunch` poe "⚡ fast" no rotulo — que e o cabecalho do terminal.
+O estado vive em `useAgentConfig` (mesmo padrao do yolo), e a preferencia
+salva so vale para agente/modelo que suporta, para um `fast` antigo nao
+ligar o tier escondido. `model-options.cjs` faz o mesmo nos dois caminhos
+(exec e app-server) quando `model.fastMode === true`. Sem o pedido, nada e
+enviado: vale o `service_tier` do `~/.codex/config.toml` da pessoa.
+
+No modelo de chat, `Model.fastMode` (so o booleano `true`; ausente = sem fast)
+e uma coluna propria (`fast_mode`, migration 014, default 0) em
+`models-repository.cjs`. `modelSupportsFastMode`/`resolveFastMode`
+(`chat/services/model-fast-mode.ts`) reusam `supportsFastMode` do canvas e
+so guardam `true` onde o modelo suporta — trocar para um modelo sem o tier
+limpa o campo em vez de deixa-lo ligado escondido. Tres pontos do caminho
+renderer -> spawn precisaram conhecer o campo: `normalizeAvailableModel`
+(`cli-request-policy.cjs`, que descarta campos desconhecidos) e
+`createModelSessionKey` (o processo persistente do Codex e reaproveitado por
+essa chave; sem o fast nela, alternar o campo reusaria o processo aberto com
+o tier antigo). UI: checkbox no `ModelConfigModal` e botao "⚡ Fast" no
+`Composer`.
+
+## Presets de agente (fatia 1)
+
+"Pre-treinado" nao e treinar modelo: e uma receita salva (`AgentPreset` em
+`agent-preset.ts`): CLI, modelo, esforco, fast, yolo, contexto inicial,
+skills, cor e pasta. O modulo e so o formato — validar, normalizar e
+(de)serializar — para o formato salvo e o de troca terem teste. Valor que a
+versao atual nao conhece (modelo removido, esforco que o modelo recusa, fast em
+modelo sem o tier) vira o padrao em vez de um argumento que a CLI recusaria.
+O arquivo de troca (`felixo-agent-preset`, `version: 1`) omite id, pasta e a
+marca de nativo, e a importacao recusa versao maior que a que conhece.
+
+Nativos (Tasks do Notion, Revisor de PR, Depurador) moram no codigo: atualizam
+com o app e nao se editam — duplica-se. Os da pessoa ficam no SQLite (migration
+015, `agent-presets-repository.cjs`, soft-delete; nativo e recusado no banco).
+O repositorio guarda o objeto como veio; quem repara valores antigos e o
+renderer, ao ler.
+
+Escolher um preset no formulario de novo agente so PREENCHE a configuracao
+(`useAgentConfig.applyPreset`); o agente nasce pelo botao de sempre. O contexto
+e as skills do preset entram no `initialText` do terminal
+(`buildPresetInstruction`), que o session-store ja entrega por ARQUIVO — um
+contexto grande de preset nunca e digitado inteiro no PTY. A cor do preset vira
+a moldura (`frameColor`) do terminal.
+
+### Gerenciar presets (fatia 2)
+
+`AgentPresetsPanel` (ferramenta "Presets de agente") edita todos os campos de
+um preset da pessoa, escolhe as skills no catalogo (`listAvailableSkills`),
+duplica, exclui e troca arquivos `.fxpreset`. As regras de edicao ficam em
+`agent-preset-editor.ts` (puro): trocar de CLI zera modelo/esforco/fast; trocar
+de modelo so mantem esforco e fast que o novo modelo aceita. Exportar usa o
+mesmo `files.saveTextFile` do `.fxcanvas`; importar le o arquivo no renderer,
+valida formato e versao (`parsePresetFile`), da outro id e, se o nome ja
+existe, numera como copia — nunca sobrescreve um preset. A pasta padrao e do
+preset mas nao vai no arquivo. Skill citada que o catalogo nao tem mais e
+avisada na edicao e ignorada ao abrir o agente. Como o formulario de spawn e a
+tela usam instancias separadas de `useAgentPresets`, a lista muda por um
+evento de janela (`felixo:agent-presets-changed`).
+
+## Perfis do navegador interno
+
+Cada bloco Pagina Web tem um perfil, e cada perfil e uma particao propria do
+Electron (`persist:felixo-webview-<id>`): logins de perfis diferentes nao se
+misturam. O perfil "Padrao" e a particao que JA existia (`persist:felixo-webview`)
+e e virtual (nao mora no banco); bloco sem `profileId` continua nela, entao
+ninguem e deslogado na atualizacao. Os perfis da pessoa ficam no SQLite
+(migration 016, `webview-profiles-repository.cjs`; nome unico sem diferenciar
+maiuscula) e uma store externa (`webview-profiles-store.ts`) os compartilha entre
+todos os blocos e o seletor de criacao.
+
+Decisoes com motivo: (1) a particao do webview sai DIRETO do `profileId` do
+bloco, nunca da lista de perfis — a lista carrega de forma assincrona e um
+bloco de "Trabalho" abriria primeiro na sessao Padrao, carregando a pagina
+logado como outra pessoa; (2) bloco de perfil excluido mantem a particao (agora
+vazia) e aparece como "Perfil removido", nunca e empurrado em silencio para a
+sessao Padrao; (3) excluir um perfil limpa a sessao (`clearStorageData` +
+`clearCache`) ANTES de tira-lo da lista, e o handler recusa o id `default` — o
+Padrao e a sessao de todos os blocos antigos; (4) o id do perfil entra num nome
+de particao, entao renderer e processo principal validam com a mesma regra
+(teste de paridade). Trocar de perfil recria o webview na mesma pagina.
+
+`felixo browser open --embedded --profile=Nome` leva o NOME no pedido; o
+processo principal o resolve (Padrao/default sem consultar o banco) e um nome
+inexistente FALHA em vez de cair no Padrao. `interpretarArgumentos` passou a
+aceitar `--chave=valor`; as flags booleanas continuam como eram.
+
+## Ditado por voz
+
+Decisao tomada sem medicao: a task pedia escolher o motor medindo latencia,
+qualidade em portugues e custo, mas nao havia microfone funcional e o ambiente
+nao sobe o Electron (`/dev/shm` bloqueado) — entao nem a Web Speech API foi
+testada. Escolhido (pelo Felipe, entre nuvem, so-base e adiar): transcricao na
+nuvem por uma API compativel com a da OpenAI (`POST {baseUrl}/audio/transcriptions`),
+igual nos 3 SOs e sem binarios, com o motor atras de uma fronteira estreita
+(`speech-transcription.cjs`) para trocar por whisper local depois.
+
+Fluxo: o renderer grava (`voice-recorder.ts`, getUserMedia + MediaRecorder) e
+manda o audio ao processo principal (`speech:transcribe`), que le a chave
+cifrada e chama a API; so o texto volta. A chave fica em arquivo proprio,
+cifrada pelo `safeStorage` (`speech-settings-store.cjs`), e o renderer so sabe
+SE ela existe. Sem cifra disponivel (Linux sem keyring) a chave NAO e gravada
+em texto puro. O endereco so aceita https (ou http em loopback), e vem da
+config guardada no processo principal — o renderer nao escolhe para onde a
+chave vai. Mensagens de erro da API passam pela redacao (elas costumam ecoar
+parte da chave).
+
+O texto transcrito vem de uma API externa e vai para um shell/agente, entao:
+`sanitizeDictatedText` troca quebras por espaco e remove todo controle
+(inclusive ESC/CSI) e o que disfarca texto (marcas de direcao, largura zero),
+e `TerminalSessionStore.typeText` RECUSA qualquer controle por conta propria —
+duas camadas para que um chamador futuro nao consiga enviar/executar sem
+querer. `typeText` digita como o teclado (sem arquivo de contexto e sem Enter);
+o alvo e o terminal aberto (`expandedTerminalId`) e, sem terminal, o texto e
+copiado — mesmo recurso dos prompts do catalogo.
+
+Permissao: `speech:microphone-status` (macOS/Windows respondem; Linux devolve
+`unknown`) e `speech:request-microphone` (so o macOS pede pelo processo
+principal). Negado vira mensagem com o caminho das configuracoes de cada SO.
+No macOS empacotado o `NSMicrophoneUsageDescription` e obrigatorio e agora
+esta em `package.json` (`mac.extendInfo`, com teste-guarda). Ainda falta, SE as
+builds do macOS passarem a ser assinadas (hoje nao sao, ver release.yml), o
+entitlement `com.apple.security.device.audio-input` com hardened runtime — nao
+foi adicionado porque hoje seria letra morta e a pipeline nao e testavel aqui.
+
+### Servidor local de transcricao (motor offline)
+
+Nao ha motor local embutido. O caminho local e um servidor de transcricao
+rodando na propria maquina, apontado pelo campo "Endereco da API" (ou pelo
+motor "Servidor local" nas configuracoes). Quando o endereco e de loopback
+(`localhost`, `127.0.0.1`, `[::1]`; `isLoopbackBaseUrl`, com paridade testada
+contra `isLoopbackEndpoint` do renderer), a chave NAO e exigida e nenhum
+cabecalho `Authorization` e enviado — o audio nao sai da maquina. Fora do
+loopback a chave continua obrigatoria e a requisicao nunca sai sem credencial.
+Com chave configurada, ela e usada mesmo no local.
+
+Contrato que o servidor precisa cumprir (o que o cliente faz de fato, coberto
+por teste contra um servidor HTTP real em loopback): `POST {baseUrl}/audio/
+transcriptions`, corpo `multipart/form-data` com `file` (audio; nome
+`ditado.<ext>`; tipo `audio/webm` — o que o Chromium grava, sem parametros),
+`model`, `language` (2 letras) e `response_format=json`; resposta JSON
+`{ "text": "..." }`. Erros HTTP viram mensagem (401/403 chave, 404 modelo ou
+endereco, 413 tamanho, 429 limite, demais com a mensagem da API redigida).
+Servidor desligado diz para conferir se ele esta rodando.
+
+NAO verificado: nenhum servidor real foi rodado (nada instalado aqui e sem
+microfone). O contrato acima e o do CLIENTE; que um servidor especifico o aceite
+— inclusive o formato webm/opus, que alguns exigem converter — e justamente o
+experimento pendente. Nenhum servidor e recomendado antes de medido.
+
+## Layout: altura dos paineis
+
+Os paineis de ferramenta redimensionam a LARGURA (arrasto, `useResizablePanelWidth`,
+que passa por `reportPanelWidth` no coordenador de superficies) e, desde a fatia
+1 da task de layout, tambem a ALTURA (`useResizablePanelHeight`, alca na borda
+de baixo, setas e `Home`). A altura nao fala com o coordenador: o painel ancora
+no topo, so concorre com as outras superficies pela largura, e a altura tem o
+mesmo teto que ele ja respeitava (`getPanelMaxHeight`, topo 64 + rodape 48) —
+esticar na vertical nao cria uma posicao nova e, por isso, nao reabre o loop de
+painel x gaveta de 12/09 (leitura circular entre superficies, ver
+`splitHorizontalSpace`). Inventario completo, com o que ainda nao redimensiona:
+`docs/projeto/LAYOUT-SUPERFICIES.md`.
+
+## Cor de moldura dos blocos do canvas
+
+Todo tipo de bloco aceita `data.frameColor` (`FrameColor` em `types.ts`), um
+token de paleta curta (`frame-colors.ts`), nunca hex livre. E separado de
+`NoteNodeData.color`, que segue sendo o papel da nota: notas antigas mantem a
+cor que tinham sem migracao, porque nenhum campo existente muda de nome ou
+significado. O CanvasView transforma o token em classe (`felixo-frame-*`) no
+wrapper do no do React Flow; o CSS pinta so o contorno e um halo no primeiro
+filho (o card), entao o conteudo — inclusive o terminal — nao e colorido. Um
+valor desconhecido vindo de disco (`readFrameColor`) vira "sem cor". A escolha
+e feita por um menu de clique direito unico (`NodeColorMenu.tsx`) e persiste
+pelo mesmo `updateNodeData` das outras edicoes. Prioridade com notificacao:
+o realce de notificacao, quando existir, deve ser declarado depois do bloco
+`.felixo-frame` no CSS — a cor dela vence.
+
 ## Fetch All e inventario multiplataforma
 
 O scanner em `services/fetch-all/repo-scanner.cjs` separa a descoberta de
@@ -401,6 +614,30 @@ evento do QA Logger ou resposta IPC. O diagnóstico mantém etapa, código,
 branch e destino seguro, usa stderr apenas depois da redação e elimina a linha
 de comando completa. A migração de configuração também regrava URLs e erros
 legados já sanitizados no SQLite.
+
+### Fonte do System Design: contrato e precedência
+
+`electron/core/system-design-source.cjs` é a única definição do padrão da fonte e
+da migração da configuração (`schemaVersion` 2). Só a escolha explícita é gravada
+(`sourceMode: custom` + `customSource`); no modo `default` a fonte é resolvida na
+leitura, então um novo padrão do app alcança quem o segue e nunca uma fonte
+escolhida. A precedência é **escolha do usuário > padrão do app**; o fallback
+offline não é uma terceira fonte, é o último conteúdo entregue (`delivered`), que
+segue valendo enquanto a sincronização falha.
+
+A migração do v1 (que gravava `repoUrl`/`branch` sempre) trata como "segue o
+padrão" o que for igual ao padrão atual ou a um padrão histórico
+(`LEGACY_DEFAULT_SOURCES` — ao trocar o padrão do app, acrescente o que está
+saindo), e como escolha explícita o restante, preservando `enabled`, sha, data e
+erro.
+
+`system-design:save-config` aceita só `enabled`, `sourceMode: 'default'`, `repoUrl`
+e `branch` (lista branca); sha, data, erro e fonte entregue só o processo principal
+escreve, e URL inválida é recusada sem gravar. O serviço descarta um clone em cache
+cujo `origin` não é a fonte pedida (antes o `fetch` rodava no `origin` antigo e o
+conteúdo da fonte anterior era gravado como da nova). O renderer não tem cópia do
+padrão; recebe a configuração já resolvida com `syncState` (`disabled`,
+`never-synced`, `synced`, `offline-fallback`, `pending-source-change`) e `delivered`.
 
 ## Providers e contas
 
@@ -641,3 +878,21 @@ produção e tem cobertura própria de unidade.
   atualização do checkout.
 - [`GUIA-USUARIO.md`](../guias/GUIA-USUARIO.md): instalação e operação do
   canvas.
+
+
+## Layout: modais redimensionáveis
+
+Os 12 modais (exceto o `AgentQuestionDialog`, bloqueante) redimensionam nos dois
+eixos com `useResizableDialog` e `DialogResizeHandles` (`features/shared/dialog/`).
+A regra vive em `dialog-sizing.ts` (puro): clamp em [320x240, janela - 16 px],
+crescimento `2*dx` por o modal ser centralizado, persistencia por modal e
+`swallowNextClick`, que impede o clique gerado ao soltar o mouse fora da moldura
+de fechar o modal pelo fundo. O hook devolve `frameProps` (ref por funcao + estilo)
+para espalhar na moldura; um objeto com `ref` nomeado disparava `react-hooks/refs`.
+
+## Terminal: rolagem do Claude Code
+
+`terminal-scroll-preference.ts` guarda a opção (padrão desligada). No spawn, o store envia
+`classicScreen` (booleano) e `PtyProcessManager` o traduz em
+`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` só para o executável `claude` (`isClaudeCommandName`).
+O renderer não escolhe nome nem valor de variável de ambiente.

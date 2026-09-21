@@ -6,6 +6,7 @@ const path = require('node:path')
 const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
+  isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,
   WIN32_MAX_PATH,
@@ -1020,4 +1021,22 @@ test('o PTY recusa conta incompatível antes de compor o ambiente', () => {
   )
   assert.equal(ambienteMontado, false)
   assert.equal(calls.length, 0)
+})
+
+test('classicScreen: só o Claude Code recebe CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, e só quando pedido', () => {
+  const envDe = (command, classicScreen) => {
+    const { calls, spawnPty } = createFakePty()
+    new PtyProcessManager({ spawnPty, platform: fakePosixPlatform }).spawn('t', { command, classicScreen })
+    return calls[0].options.env
+  }
+  assert.equal(envDe('claude', true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, '1')
+  assert.equal(envDe('claude', false).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+  assert.equal(envDe('claude', 'true').CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+  assert.equal(envDe('codex', true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+  assert.equal(envDe(undefined, true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+})
+
+test('isClaudeCommandName reconhece só o executável do Claude Code', () => {
+  for (const c of ['claude', 'claude.exe', 'C:\\a\\claude.cmd', '/usr/bin/claude']) assert.equal(isClaudeCommandName(c), true, c)
+  for (const c of ['codex', 'bash', 'claude-helper', 'myclaude', '', undefined, 3]) assert.equal(isClaudeCommandName(c), false, String(c))
 })

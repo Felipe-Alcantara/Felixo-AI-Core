@@ -1,14 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { SystemDesignConfig, SystemDesignDocumentSummary } from './types'
+import { announceSystemDesignConfig, subscribeSystemDesignConfig } from './system-design-events'
+import type {
+  SystemDesignConfig,
+  SystemDesignConfigChange,
+  SystemDesignDocumentSummary,
+} from './types'
 
-const DEFAULT_CONFIG: SystemDesignConfig = {
-  // Mirror of defaultConfig() in system-design-ipc-handlers.cjs.
-  // Enabled by default so new users benefit from Felixo System Design without
-  // needing to discover the toggle.
+/**
+ * Placeholder de ANTES da primeira leitura — não é o default do produto.
+ *
+ * O default (e a precedência entre a fonte escolhida e ele) é resolvido só no
+ * processo principal, em `electron/core/system-design-source.cjs`; antes havia
+ * aqui um espelho dele que precisava ser mantido igual à mão. `loaded: false`
+ * no estado indica que estes valores ainda não vieram de lá, e `repoUrl`
+ * vazio impede qualquer tela de mostrar uma fonte que ninguém confirmou.
+ */
+export const UNLOADED_CONFIG: SystemDesignConfig = {
+  schemaVersion: 0,
   enabled: true,
-  repoUrl: 'https://github.com/Felipe-Alcantara/Felixo-System-Design.git',
-  branch: 'main',
+  repoUrl: '',
+  branch: '',
+  sourceMode: 'default',
+  label: '',
+  syncState: 'never-synced',
+  delivered: null,
   lastSha: null,
   lastSyncedAt: null,
   lastError: null,
@@ -28,7 +44,7 @@ export type SystemDesignSettingsState = {
 
 export function useSystemDesignSettings() {
   const [state, setState] = useState<SystemDesignSettingsState>({
-    config: DEFAULT_CONFIG,
+    config: UNLOADED_CONFIG,
     documents: [],
     loaded: false,
     syncing: false,
@@ -57,7 +73,7 @@ export function useSystemDesignSettings() {
     }
     try {
       const result = await window.felixo.systemDesign.getConfig()
-      const config = result.ok && result.config ? result.config : DEFAULT_CONFIG
+      const config = result.ok && result.config ? result.config : UNLOADED_CONFIG
       previousEnabledRef.current = config.enabled
       setState((current) => ({
         ...current,
@@ -65,6 +81,7 @@ export function useSystemDesignSettings() {
         loaded: true,
         error: result.ok ? null : result.message ?? 'Falha ao carregar config.',
       }))
+      if (result.ok && result.config) announceSystemDesignConfig(result.config)
       await refreshDocuments()
 
       // Once-per-session auto-sync when the toggle is enabled. Picks up new
@@ -97,13 +114,19 @@ export function useSystemDesignSettings() {
           syncing: false,
           error: null,
         }))
+        announceSystemDesignConfig(result.config)
         await refreshDocuments()
       } else {
+        // A falha já foi gravada no processo principal (estado "usando o último
+        // conteúdo"). Sem reler, esta tela continuaria dizendo "sincronizado".
+        const fresh = await window.felixo.systemDesign.getConfig?.()
         setState((current) => ({
           ...current,
+          config: fresh?.ok && fresh.config ? fresh.config : current.config,
           syncing: false,
           error: result.message ?? 'Falha no sync.',
         }))
+        if (fresh?.ok && fresh.config) announceSystemDesignConfig(fresh.config)
       }
     } catch (error) {
       setState((current) => ({
@@ -115,16 +138,26 @@ export function useSystemDesignSettings() {
   }, [refreshDocuments])
 
   const updateConfig = useCallback(
-    async (partial: Partial<SystemDesignConfig>) => {
+    async (change: SystemDesignConfigChange) => {
       if (!window.felixo?.systemDesign?.saveConfig) {
         return
       }
-      const result = await window.felixo.systemDesign.saveConfig(partial)
-      if (result.ok && result.config) {
+      const result = await window.felixo.systemDesign.saveConfig(change)
+      if (!result.ok) {
+        // O processo principal recusa o que não valida (ex.: URL inválida) sem
+        // gravar nada — a pessoa precisa ver o motivo, não um botão que não fez nada.
+        setState((current) => ({
+          ...current,
+          error: result.message ?? 'Não foi possível salvar a configuração.',
+        }))
+        return
+      }
+      if (result.config) {
         const wasEnabled = previousEnabledRef.current
         const willEnable = result.config.enabled
         previousEnabledRef.current = willEnable
-        setState((current) => ({ ...current, config: result.config! }))
+        setState((current) => ({ ...current, config: result.config!, error: null }))
+        announceSystemDesignConfig(result.config)
         // First time the user turns it on AND nothing has been synced yet → trigger sync.
         if (
           willEnable &&
@@ -151,12 +184,29 @@ export function useSystemDesignSettings() {
         config: result.config!,
         documents: [],
       }))
+      announceSystemDesignConfig(result.config)
     }
   }, [])
 
   useEffect(() => {
     syncRef.current = sync
   }, [sync])
+
+  // Outra instância deste hook (o painel do canvas e o modal do chat montam
+  // cada uma a sua) pode ter mudado a configuração. Sem escutar o aviso, esta
+  // tela continuaria mostrando a fonte e o estado de antes.
+  useEffect(
+    () =>
+      subscribeSystemDesignConfig((incoming) => {
+        previousEnabledRef.current = incoming.enabled
+        setState((current) =>
+          JSON.stringify(current.config) === JSON.stringify(incoming)
+            ? current
+            : { ...current, config: incoming },
+        )
+      }),
+    [],
+  )
 
   useEffect(() => {
     void loadConfig()

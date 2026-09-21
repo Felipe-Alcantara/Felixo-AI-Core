@@ -9,13 +9,10 @@ name: Release
 # precisar de um push novo. O SHA é obrigatório para impedir que o dispatch
 # publique o topo de `main` sem CI correspondente.
 on:
-  workflow_run:
-    workflows:
-      - CI
-    branches:
-      - main
-    types:
-      - completed
+  # Disparado pelo workflow `Release gate` (release-gate.yml), que só o aciona para
+  # commits que mudam o app, e à mão para republicar um commit já validado. O
+  # gatilho `workflow_run` antigo publicava TODO commit em `main`, inclusive os só
+  # de documentação/teste.
   workflow_dispatch:
     inputs:
       commit_sha:

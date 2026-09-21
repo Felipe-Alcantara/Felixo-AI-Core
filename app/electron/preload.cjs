@@ -195,6 +195,13 @@ contextBridge.exposeInMainWorld('felixo', {
     // evento só avisa o renderer pra aplicar o mesmo `data` no nó vivo, sem
     // esperar um reload nem deixar a próxima autosave sobrescrever com a
     // cópia velha que o React ainda tem em memória.
+    listQuestions: () => ipcRenderer.invoke('canvas:list-questions'),
+    answerQuestion: (params) => ipcRenderer.invoke('canvas:answer-question', params),
+    onQuestions: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('canvas:agent-questions', handler)
+      return () => ipcRenderer.removeListener('canvas:agent-questions', handler)
+    },
     onNodeUpdated: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('canvas:agent-node-updated', handler)
@@ -245,6 +252,25 @@ contextBridge.exposeInMainWorld('felixo', {
     list: () => ipcRenderer.invoke('models:list'),
     save: (model) => ipcRenderer.invoke('models:save', model),
     delete: (modelId) => ipcRenderer.invoke('models:delete', modelId),
+  },
+  speech: {
+    getConfig: () => ipcRenderer.invoke('speech:get-config'),
+    saveConfig: (config) => ipcRenderer.invoke('speech:save-config', config),
+    setKey: (key) => ipcRenderer.invoke('speech:set-key', key),
+    clearKey: () => ipcRenderer.invoke('speech:clear-key'),
+    transcribe: (params) => ipcRenderer.invoke('speech:transcribe', params),
+    getMicrophoneStatus: () => ipcRenderer.invoke('speech:microphone-status'),
+    requestMicrophone: () => ipcRenderer.invoke('speech:request-microphone'),
+  },
+  webviewProfiles: {
+    list: () => ipcRenderer.invoke('webview-profiles:list'),
+    save: (profile) => ipcRenderer.invoke('webview-profiles:save', profile),
+    delete: (profileId) => ipcRenderer.invoke('webview-profiles:delete', profileId),
+  },
+  agentPresets: {
+    list: () => ipcRenderer.invoke('agent-presets:list'),
+    save: (preset) => ipcRenderer.invoke('agent-presets:save', preset),
+    delete: (presetId) => ipcRenderer.invoke('agent-presets:delete', presetId),
   },
   // Modelos que cada CLI de agente oferece hoje: `get` lê o cache (imediato,
   // é o que abre o menu), `refresh` consulta as CLIs em background.
@@ -324,6 +350,8 @@ contextBridge.exposeInMainWorld('felixo', {
   // abertura do app instalado, e o status vira um indicador discreto.
   cliSetup: {
     getStatus: () => ipcRenderer.invoke('clis:get-setup-status'),
+    // Só lê: explica por que uma CLI não é vista, sem instalar nada.
+    diagnose: () => ipcRenderer.invoke('clis:diagnose'),
     retry: () => ipcRenderer.invoke('clis:retry-setup'),
     onStatus: (callback) => {
       const handler = (_event, data) => callback(data)

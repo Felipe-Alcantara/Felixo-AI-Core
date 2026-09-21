@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   Position,
@@ -21,6 +22,8 @@ import {
   shouldRemoveOnDetach,
   staleGuests,
 } from '../services/webview-mount'
+import { WebviewProfileMenu } from './WebviewProfileMenu'
+import { partitionForWebviewProfile } from '../services/webview-profile'
 import type { WebpageNodeData } from '../types'
 
 /**
@@ -30,10 +33,6 @@ import type { WebpageNodeData } from '../types'
 type WebpageNodeDataWithHandler = WebpageNodeData & {
   onDataChange?: (nodeId: string, patch: Partial<WebpageNodeData>) => void
 }
-
-/** All partitions share one session, so logging in on one block carries over
- *  to any other — the point of a mini-browser docked in the canvas. */
-const SHARED_WEBVIEW_PARTITION = 'persist:felixo-webview'
 
 /**
  * A mini-browser docked in the canvas: an embedded <webview> with an address
@@ -54,6 +53,11 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // useState com inicializador (e não useRef lido no render): o valor é
   // calculado uma única vez, na montagem, e ler `.current` de um ref durante o
   // render é justamente o que o React não garante em modo concorrente.
+  // Blocos do mesmo perfil compartilham a sessão (logar num vale para os
+  // outros); perfis diferentes têm partições diferentes. A partição sai direto
+  // do id gravado no bloco, nunca da lista de perfis (que carrega depois): assim
+  // um bloco de outro perfil nunca abre, nem por um instante, na sessão Padrão.
+  const partition = partitionForWebviewProfile(nodeData.profileId)
   const [initialUrl] = useState(() => nodeData.url || 'https://www.google.com')
   const [addressInput, setAddressInput] = useState(initialUrl)
   // Tracks where the page actually is, so a remount recreates the webview on
@@ -119,7 +123,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     const element = document.createElement('webview') as WebviewTag
     element.className = 'nodrag nowheel nopan h-full w-full'
     element.setAttribute('allowpopups', '')
-    element.setAttribute('partition', SHARED_WEBVIEW_PARTITION)
+    element.setAttribute('partition', partition)
     element.setAttribute(
       'webpreferences',
       'contextIsolation=yes,nodeIntegration=no,sandbox=yes',
@@ -132,9 +136,10 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     container.prepend(element)
     webviewRef.current = element
     setWebview(element)
-    // `initialUrl` is frozen at mount, so this identity is stable for the
-    // node's lifetime — the callback is never torn down mid-session.
-  }, [initialUrl])
+    // A identidade só muda quando o perfil (partição) muda: o React chama o
+    // callback antigo com null (remove o guest) e o novo com o container, que
+    // recria o webview na MESMA página (`currentUrlRef`) com a outra sessão.
+  }, [initialUrl, partition])
 
   // Depends on the mounted element, not just `id`: ref callbacks run before
   // effects, so on a remount the effect below would read an already-cleared
@@ -204,8 +209,8 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     <div className="felixo-canvas-card felixo-canvas-card-web flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-graphite)] text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
-        minWidth={360}
-        minHeight={280}
+        minWidth={NODE_MIN_SIZE.webpage.width}
+        minHeight={NODE_MIN_SIZE.webpage.height}
         lineClassName="!border-white/30"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
         onResizeStart={() => setIsResizing(true)}
@@ -219,7 +224,12 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         onTitleChange={handleLabelChange}
         className="bg-white/[0.04] text-[var(--f-core-white)]"
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
-      />
+      >
+        <WebviewProfileMenu
+          profileId={nodeData.profileId}
+          onChange={(profileId) => nodeData.onDataChange?.(id, { profileId })}
+        />
+      </NodeHeader>
 
       <div className="nodrag nowheel nopan flex items-center gap-1 border-b border-white/10 bg-white/[0.04] px-2 py-1">
         <button

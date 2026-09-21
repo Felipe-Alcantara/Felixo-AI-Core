@@ -139,6 +139,11 @@ export type WebpageNodeData = {
   url?: string
   /** Human label shown on the node header (searchable). */
   label?: string
+  /**
+   * Perfil do navegador interno (uma partição por perfil). Ausente = o perfil
+   * Padrão, que é a partição que já existia — blocos antigos não mudam.
+   */
+  profileId?: string
 }
 
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'
@@ -203,6 +208,18 @@ export type OrderedNodeData = {
   orderIndex?: number
 }
 
+/**
+ * Cor de moldura comum a todos os tipos de bloco (terminal, nota, arquivo,
+ * página, Notion, desenho, grupo). É só o contorno/realce — nunca pinta o
+ * conteúdo. Token, não hex livre, para manter contraste nos temas. Separada
+ * de `NoteNodeData.color`, que é o papel da nota e segue como estava.
+ */
+export type FrameColor = 'sky' | 'emerald' | 'amber' | 'rose' | 'violet' | 'zinc'
+
+export type FramedNodeData = {
+  frameColor?: FrameColor
+}
+
 export type CanvasNodeData = TerminalNodeData &
   NoteNodeData &
   GroupNodeData &
@@ -210,7 +227,8 @@ export type CanvasNodeData = TerminalNodeData &
   WebpageNodeData &
   DrawingNodeData &
   ExcalidrawDrawingNodeData &
-  OrderedNodeData
+  OrderedNodeData &
+  FramedNodeData
 
 /** Shape persisted through the `window.felixo.canvas` bridge. */
 export type PersistedCanvasNode = {
@@ -309,6 +327,22 @@ export type CanvasWriteAgentRequest = {
   acao: 'canvas-escrever'
   idDoElemento: string
   conteudo: string
+  estado: 'pendente' | 'aceito' | 'recusado'
+  pedidoEm: string
+  origem: string
+  resolvidoEm?: string
+}
+
+/**
+ * Pergunta com opções que um agente deixou pelo comando `felixo perguntar`.
+ * A pessoa responde clicando; a resposta devolvida ao agente é sempre uma das
+ * opções que o próprio pedido carrega.
+ */
+export type CanvasAgentQuestion = {
+  id: string
+  acao: 'perguntar'
+  pergunta: string
+  opcoes: Array<{ label: string; descricao?: string }>
   estado: 'pendente' | 'aceito' | 'recusado'
   pedidoEm: string
   origem: string

@@ -5666,3 +5666,654 @@ A sessão expõe a última inserção no snapshot e em `SessionMetadata`. O canv
 **Estado.** Implementação e documentação prontas para commit, push, CI e encerramento da task.
 
 **Evidência de origem.** Task Notion: https://app.notion.com/p/Felixo-AI-Core-Prompts-definir-metadados-de-nome-ID-origem-e-composi-o-da-inje-o-3ce91f95497e810d998ad77cfe057677
+## Fechamento de trabalho — 2026-09-19: canvas, cor de moldura em qualquer bloco
+
+### Contexto
+
+Task "Canvas — escolher a cor de qualquer elemento do canvas": só notas tinham
+cor (`NoteColor`, papel da nota). Critério: todo tipo aceita cor, ela
+sobrevive a reiniciar e notas antigas mantêm a que tinham.
+
+### Decisões
+
+- Campo novo `frameColor` (token de 6 cores), em vez de reaproveitar
+  `color`: em nota, `color` é o *papel* (fundo claro); a task pede moldura
+  sem pintar conteúdo. Campos separados = notas antigas intactas sem
+  migração, o que cumpre o critério pelo caminho mais seguro.
+- Um único ponto de aplicação: classe no wrapper do nó (CanvasView) + CSS no
+  primeiro filho, em vez de mexer nos 8 componentes de bloco. Um único menu de
+  clique direito (`NodeColorMenu`) cobre também grupo, que não tem NodeHeader.
+- Prioridade com a notificação: ainda não existe realce de notificação por
+  nó (task irmã aberta); a regra ficou documentada no CSS (declarar depois).
+
+### Validação
+
+Testes: `frame-colors.test.ts` (3) e round-trip de persistência em todos os
+8 tipos + nota antiga (2). eslint, tsc e testes rodados antes do push.
+Sem verificação visual ao vivo (`felixo devtools connect` ainda travado — task
+própria) — o aspecto do halo/contorno não foi visto na tela.
+
+## Fechamento de trabalho — 2026-09-19: perguntas com opções para o Codex (`felixo perguntar`)
+
+### Contexto
+
+Task "Agentes — perguntas interativas com opções para o Codex no canvas".
+Critério: um agente Codex faz uma pergunta com 2 a 4 opções, o Felipe escolhe
+clicando e a resposta volta sem digitar; o caminho escolhido fica no IA.md.
+
+### O que foi medido (Codex 0.154.0, protocolo real)
+
+`codex app-server generate-json-schema --experimental` mostra
+`item/tool/requestUserInput` (`ToolRequestUserInputParams`: perguntas com id,
+header, opções label/descrição, `isOther`, `isSecret`; resposta:
+`answers[id].answers[]`). `codex features list`:
+`default_mode_request_user_input` = *under development*, **false** — a
+ferramenta nativa só existe fora do plan mode atrás dessa flag. Confirmou a
+divergência com a anotação: o Codex tem a ferramenta, mas instável.
+
+### Decisão (perguntada ao Felipe; escolha: `felixo perguntar`)
+
+1. Flag nativa no PTY: instável e a pergunta fica dentro do TUI, por
+   teclado — não cumpre "clicando". Descartada como caminho principal.
+2. Diálogo do app-server: o app-server só serve chat/orquestrador; os
+   terminais do canvas rodam o TUI por PTY, então não alcançaria o agente do
+   canvas. Descartada.
+3. **`felixo perguntar`** na fila `agent-requests`: agnóstico de agente
+   (Codex/Claude/Gemini), reaproveita o canal já construído. Escolhida. O
+   Felipe também notou que o Codex às vezes já pergunta sozinho, mas pior que
+   o Claude — coerente com não depender da flag.
+
+### O que foi feito
+
+- `agent-requests.cjs`: ação `perguntar` (pergunta ≤500, 2–4 opções ≤120,
+  descrição ≤300).
+- `agent-question-ipc-handlers.cjs`: nunca auto-resolve; o renderer envia só o
+  ÍNDICE e o texto devolvido ao agente vem do pedido gravado (o que chega do
+  renderer nunca vira a resposta). Índice inválido não resolve nem fecha a
+  pergunta.
+- `AgentQuestionDialog` global no CanvasView (quem perguntou está bloqueado;
+  não pode depender de painel aberto): clique, teclas 1–4, Esc dispensa.
+- CLI `felixo perguntar "<pergunta>" "<op1>" "<op2>"…`: ao contrário de
+  `canvas escrever`, BLOQUEIA até a resposta (5 min). Saída: texto da opção
+  (0), dispensada (3), sem resposta no prazo (1), uso inválido (2).
+- Skill `perguntar-com-opcoes`; `ARQUITETURA.md` com a decisão.
+
+### Validação
+
+Testes novos: 1 em `agent-requests`, 5 no handler, 6 na CLI, 4 de lógica pura
+do diálogo (vitest). Resultado completo de `npm test`/vitest/eslint/tsc no PR.
+Sem verificação visual/ao vivo: `felixo devtools connect` segue travado (task
+própria) e o diálogo não foi visto na tela; um Codex real também não foi
+posto a usar o comando — a skill ensina, mas não medi se ele a segue.
+
+## Fechamento de trabalho — 2026-09-19: modo fast ao criar agente Codex
+
+### Contexto
+
+Task "Agentes — opção de modo fast ao criar agente Codex". A investigação
+anterior só tinha strings do binário (`service_tier`, `fast_mode`) e mandava
+confirmar o contrato. Feito antes de codar.
+
+### O que foi medido
+
+- `~/.codex/models_cache.json`: todo modelo (gpt-5.6-sol/terra/luna, gpt-5.5…)
+  traz `service_tiers: [{id:"priority", name:"Fast", description:"1.5x/2x
+  speed, increased usage"}]` e `additional_speed_tiers: ["fast"]`.
+- `codex features list`: `fast_mode` = stable, true. O `~/.codex/config.toml`
+  da máquina tem `service_tier = "default"`.
+- Prova ponta a ponta sem gastar uso: `codex app-server` + `config/read` →
+  `service_tier` efetivo `"default"` sem override e `"priority"` com
+  `--config service_tier="priority"`. Contrato: chave `service_tier`, valor
+  `priority` (o `id`, não o nome "Fast").
+
+### Decisões
+
+- Sem fast, **nada é enviado** (não forço `service_tier="default"`): isso
+  sobrescreveria uma escolha da própria pessoa no `config.toml`. Consequência
+  conhecida: quem já tem `priority` no config.toml roda fast mesmo sem marcar.
+- Compatibilidade por modelo vem do catálogo do Codex (`fastModels`); modelo
+  padrão (vazio) conta como compatível.
+- Cabeçalho: o rótulo do terminal (`describeLaunch`) ganha "⚡ fast".
+- `fast` salvo em preferências só vale para agente/modelo que suporta.
+
+### O que foi feito
+
+`agent-launch-options.ts` (`fastModels`, `supportsFastMode`, arg, rótulo),
+`agent-launch-preferences.ts`, `useAgentConfig.ts`, checkbox "Modo fast" em
+`AgentConfigFields.tsx` (só onde suporta; a HandoffDialog herda) e
+`model-options.cjs` (exec + app-server via `model.fastMode === true`).
+
+### Não feito / pendente
+
+O campo `fastMode` do `Model` de chat (ModelConfigModal + coluna SQLite em
+`models-repository`) não foi criado: hoje só o fluxo de criar agente no
+canvas expõe o modo; os dois caminhos de `model-options.cjs` já sabem
+aplicá-lo (testado), faltando persistir/mostrar no modelo de chat. Também
+falta o preset de agente nativo (task irmã) guardar a opção. **Não conferi
+`/status` numa sessão Codex real** (critério de aceite original): a prova foi
+a config efetiva do app-server, não uma sessão de verdade.
+
+### Validação
+
+Testes: 4 em `model-options.test.cjs`, 6 em `agent-launch-options.test.ts`, 1
+em `agent-launch-preferences.test.ts` (+ expectativas com `fast`). Resultado
+completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: modo fast no modelo de chat do Codex
+
+### Contexto
+
+Pendência da task do modo fast (PR #53): o modo já existia ao criar agente no
+canvas e nos args de `model-options.cjs`, mas o `Model` de chat não tinha o
+campo.
+
+### O que foi feito
+
+- Migration `014_models_fast_mode.sql` (`fast_mode INTEGER NOT NULL DEFAULT 0`);
+  `models-repository.cjs` grava/lê e só devolve `fastMode: true` quando ligado.
+- `Model.fastMode`; `modelSupportsFastMode`/`resolveFastMode` (uma fonte só,
+  `supportsFastMode`); checkbox no `ModelConfigModal`, botão "⚡ Fast" no
+  `Composer`; `model-storage` preserva/mescla o campo.
+- **Duas armadilhas do caminho renderer → spawn** (não estavam na task):
+  1. `normalizeAvailableModel` (`cli-request-policy.cjs`) reconstrói o modelo
+     campo a campo — sem tocar nela, o `fastMode` morreria ali e o adapter
+     nunca o veria (cobrido por teste).
+  2. `createModelSessionKey` identifica o processo persistente do Codex; sem o
+     fast na chave, alternar o campo reaproveitaria o processo aberto com o
+     tier antigo (cobrido por teste).
+
+### Não feito
+
+Item 4 da task (preset de agente nativo guardar o fast): o recurso de presets
+ainda não existe (task "criar agentes nativos pré-configurados", em Entrada);
+quando existir, basta o preset carregar `fastMode` no `Model`/escolhas já
+prontos. `/status` numa sessão Codex real segue sem conferência.
+
+### Validação
+
+Testes: 3 no repositório (round-trip real em SQLite + upgrade pela
+backward-compatibility), 1 na política, 2 na chave de sessão, 2 do helper.
+Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: presets de agente (fatia 1)
+
+### Contexto
+
+Task "criar agentes nativos pré-configurados" (Esforço: Dias). "Pré-treinado"
+= receita salva, não treino de modelo. Fatiada: esta entrega cobre o núcleo
+(formato, nativos, persistência, salvar/aplicar no formulário, contexto por
+arquivo); a tela de gerenciar fica para a fatia 2.
+
+### Decisões
+
+- **Formato versionado e puro** (`agent-preset.ts`, `felixo-agent-preset` v1):
+  normalizar repara valores antigos para o padrão; o arquivo de troca omite id,
+  pasta (caminho da máquina de origem) e marca de nativo; importar recusa
+  versão maior com mensagem clara.
+- **Nativos no código, da pessoa no SQLite** (migration 015): nativo atualiza
+  com o app e não se edita (duplica-se); o banco recusa gravar nativo.
+- **Escolher preset só preenche o formulário**; o agente nasce pelo botão de
+  sempre. Contexto e skills seguem no `initialText` → entregues por arquivo
+  pelo session-store, atendendo "nunca digitar prompt gigante no PTY" sem
+  criar mecanismo novo. Cor do preset vira `frameColor` (reuso da task de cor).
+- Modo fast e yolo entram no preset (fast só vale onde o modelo suporta).
+
+### Não feito (fatia 2, task própria)
+
+Tela de gerenciar (editar campos do preset, escolher skills, exportar/
+importar arquivo). Hoje: criar via "Salvar como preset" (mantém as skills do
+preset ativo), duplicar e excluir; skills de preset da pessoa só vêm de
+duplicar um nativo. O formato de exportar/importar já existe e tem teste;
+falta a UI que o usa.
+Não verificado ao vivo: `felixo devtools connect` segue travado, então nem o
+formulário nem um agente nascendo de preset foram vistos rodando; a validação
+foi por testes do formato, do repositório (inclui reabrir o banco) e do
+prompt.
+
+### Validação
+
+Testes: 12 do formato, 5 do prompt, 6 do repositório. Resultado completo dos
+gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: presets de agente (fatia 2, tela)
+
+### Contexto
+
+Fatia 2 da task de presets (fatia 1: PR #55): tela para editar, escolher
+skills, exportar e importar.
+
+### O que foi feito
+
+- Ferramenta "Presets de agente" (`AgentPresetsPanel`): lista com nativos e da
+  pessoa; novo, editar (todos os campos), duplicar, excluir, exportar,
+  importar. Nativo não se edita.
+- Regras de edição puras em `agent-preset-editor.ts`: trocar de CLI zera
+  modelo/esforço/fast; trocar de modelo só mantém esforço e fast válidos;
+  `checkPresetDraft` valida e normaliza antes de salvar; `presetFileName`
+  gera nome de arquivo seguro.
+- Skills escolhidas numa lista do catálogo; skill citada que o catálogo não
+  tem mais é avisada na tela (e ignorada ao abrir o agente, como já era).
+- Exportar reaproveita `files.saveTextFile` (extensão `.fxpreset`); importar
+  lê o arquivo no renderer, valida formato/versão, dá outro id e numera o nome
+  se colidir — nunca sobrescreve. Limite de 256 KB no arquivo.
+- `useAgentPresets` avisa outras instâncias por evento de janela: a tela e o
+  formulário de spawn são instâncias separadas, e sem isso o formulário
+  mostraria a lista velha depois de uma edição.
+
+### Não verificado
+
+Nenhuma tela foi vista rodando (`felixo devtools connect` segue travado):
+painel, exportar (diálogo nativo) e importar (seletor de arquivo) só têm
+cobertura pela lógica pura e pelo formato (ida e volta testada na fatia 1). O
+critério "importar em outra instância e ver o mesmo agente nascer" foi coberto
+até o formato, não numa segunda instância de verdade.
+
+### Validação
+
+10 testes novos do editor. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: perfis separados no navegador interno
+
+### Contexto
+
+Task "Navegador — perfis separados no navegador interno (uma partição por
+perfil)". Todos os blocos Página Web usavam `persist:felixo-webview`, então não
+dava para ter duas contas do mesmo site nem separar trabalho de pessoal.
+
+### Decisões (com o motivo)
+
+- **A partição sai do `profileId` do bloco, nunca da lista de perfis.** A lista
+  carrega de forma assíncrona; se a partição dependesse dela, um bloco do perfil
+  "Trabalho" abriria primeiro na sessão Padrão e só depois remontaria — a página
+  carregaria por um instante logada como outra pessoa. Cobri o risco no desenho
+  (e a lógica de exibição separada: `describeWebviewProfile`).
+- **Padrão = a partição antiga, virtual.** Bloco sem `profileId` continua nela:
+  ninguém é deslogado. O id `default` é recusado no banco e no handler de
+  exclusão — excluir o Padrão apagaria o login de todos os blocos antigos.
+- **Excluir limpa a sessão antes de tirar o perfil da lista**; se a limpeza
+  falha, o perfil continua (não sobra sessão logada sem dono). Bloco de perfil
+  excluído mantém a partição vazia e aparece como "Perfil removido" — não é
+  empurrado em silêncio para o Padrão.
+- **Agente:** `felixo browser open --embedded --profile=Nome` leva o NOME; o
+  processo principal resolve. Perfil inexistente **falha** em vez de cair no
+  Padrão (abriria numa sessão logada que o agente não escolheu). O CLI passou a
+  aceitar `--chave=valor` (booleanas seguem iguais); `--profile` sem valor e
+  perfil sem `--embedded` são erro de uso.
+- Renderer e processo principal validam o id do perfil com a mesma regra (vai em
+  nome de partição) — teste de paridade lê o `.cjs`.
+- Erro meu pego a tempo: um `sub` de script aplicou o seletor no componente
+  errado (`NamedCreateButton`, markup idêntico ao `UrlCreateButton`); `tsc`
+  acusou e refiz no lugar certo.
+
+### O que foi feito
+
+Migration 016 + repositório + IPC (`webview-profiles:*`); store externa e hook;
+menu no cabeçalho do bloco (ver, trocar, criar, excluir; em portal porque o card
+corta overflow); seletor de perfil ao criar o bloco (só aparece se existir perfil
+da pessoa); caminho do agente; skill `abrir-paginas-no-navegador` atualizada.
+
+### Não verificado
+
+**Critério de aceite não conferido de verdade:** "dois blocos do mesmo site em
+perfis diferentes mantêm logins independentes depois de reiniciar o app". Não
+foi testado em app real (`felixo devtools connect` segue travado; e exigiria
+login numa conta real). O que está coberto: a partição por perfil (unidade), a
+persistência da lista (reabrir o banco), a limpeza ao excluir (com doubles) e
+o caminho do agente. O comportamento do Electron com `persist:` por partição é
+o esperado pela documentação, mas não o medi aqui. Também não vi o menu na tela.
+
+### Validação
+
+Testes: 4 partição, 6 repositório, 4 IPC, 4 handler do agente, 1+4 pedido/CLI,
+11 formato, 7 store. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: entrada de voz (ditado), sem verificação com microfone real
+
+### Contexto
+
+Task "Entrada de voz — ditar prompts pelo microfone em qualquer SO". O passo 1
+da task é escolher o motor **medindo** latência, qualidade em português e
+custo. Não deu para medir: o microfone do notebook do Felipe está com defeito
+e este ambiente não sobe o Electron (`/dev/shm` bloqueado → FATAL), então nem a
+Web Speech API (a "armadilha provável" da task) foi testada.
+
+### Decisão (do Felipe, via pergunta: nuvem / só a base / adiar)
+
+Nuvem + motor plugável: API de transcrição compatível com a da OpenAI. Igual
+nos 3 SOs, sem binários. **Escolha sem medição** — registrada como tal. Não
+cito latência/custo/qualidade porque não medi; whisper local, Web Speech e APIs
+nativas ficam como alternativas não avaliadas.
+
+### O que foi feito
+
+- Processo principal: `speech-settings-store` (config + chave **cifrada** pelo
+  `safeStorage`; sem cifra a chave não é gravada), `speech-transcription`
+  (multipart, limites, erros mapeados, redação de eco de chave), IPC
+  `speech:*`, status/pedido de permissão do microfone.
+- Renderer: gravador (`getUserMedia` + `MediaRecorder`, libera o microfone
+  sempre), máquina de estados, hook, botão com indicador de gravação/cronômetro
+  na barra superior, atalho configurável (padrão Ctrl/Cmd+Shift+M), seção em
+  Configurações (chave, endereço, modelo, idioma, atalho, status do microfone).
+- macOS: `NSMicrophoneUsageDescription` em `package.json` + teste-guarda.
+- **Segurança do texto ditado** (vem de API externa e vai para um shell): duas
+  camadas — `sanitizeDictatedText` (quebra vira espaço; remove controle e
+  caracteres invisíveis/direcionais) e `typeText`, que recusa controle por conta
+  própria. O texto **nunca** é enviado: só digitado na linha de entrada.
+- O endereço da API só aceita https (ou http em loopback) e vem da config no
+  processo principal: o renderer não decide para onde a chave e o áudio vão.
+- Erro meu pego pelo ambiente: o primeiro comando com caracteres de controle/
+  bidi literais foi barrado pela ferramenta; refiz montando-os por código
+  (`String.fromCharCode`) — o fonte e os testes não carregam invisíveis.
+
+### NÃO verificado (o essencial)
+
+**Nada foi ouvido com microfone real, em nenhum SO.** Critério de aceite
+("apertar o atalho, falar uma frase em português e ver o texto no terminal",
+nos três SOs) **não conferido**. Cobertura: lógica pura, gravador com dublês,
+cliente de transcrição com `fetch` falso, IPC com dublês, `typeText` contra o
+harness real do store. Não foi vista a UI (botão, popover de erro, seção de
+configurações), nem o comportamento real de `MediaRecorder`/permissão no
+Electron, nem o diálogo de permissão do macOS/Windows.
+
+### Pendências (task nova)
+
+Validar com microfone real nos 3 SOs; medir latência e qualidade em português
+com a API escolhida; comparar com whisper local; entitlement de áudio se o macOS
+passar a ser assinado; timeout/limite reais de gravação em uso.
+
+### Validação
+
+Testes: 18 do processo principal (config, transcrição, IPC), 1 de empacotamento,
+19 do ditado (sanitização, erros, estados, atalho), 7 do gravador, 3 do
+`typeText`. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: motor de transcrição local (parcial, sem teste real)
+
+### Contexto
+
+Task "Entrada de voz — motor de transcrição local (offline)". O Felipe pediu
+para seguir **sem teste real por enquanto** (microfone com defeito). A task é de
+pesquisa/decisão: o passo 2 (medir latência/qualidade no notebook modesto) e a
+decisão de embutir whisper dependem de medição e ficam pendentes.
+
+### O que foi feito (só o que é verificável sem microfone)
+
+- **Achado que bloqueava o caminho local:** o cliente exigia chave sempre, então
+  apontar para `localhost` não funcionava sem uma chave inútil. Agora, com
+  endereço de loopback, a chave é opcional e nenhum `Authorization` é enviado;
+  fora do loopback a chave continua obrigatória e nada sai sem credencial.
+- Config expõe `keyRequired`; o pré-teste do ditado e a tela usam isso (servidor
+  local não pede chave).
+- Configurações: motor "Nuvem × Servidor local" (o modo sai do endereço, mesma
+  regra do processo principal, com teste de paridade), com aviso explícito de
+  que o servidor local não foi testado com um servidor real.
+- Servidor desligado diz para conferir se ele está rodando (mensagem própria).
+- **Teste com servidor HTTP de verdade (loopback, sem `fetch` falso):** o pedido
+  chega como multipart válido, no caminho `/v1/audio/transcriptions`, com
+  `model`, `language`, `response_format=json`, arquivo `ditado.webm`/`audio/webm`
+  e tamanho correto; sem chave não há `Authorization`; com chave há o Bearer;
+  500 vira mensagem; porta fechada (recusa de conexão real) vira a mensagem do
+  servidor local. Contrato documentado em `ARQUITETURA.md`.
+
+### Não feito / NÃO verificado
+
+- **Nenhum servidor de transcrição real foi rodado** (nenhum instalado aqui, e
+  sem microfone/áudio real). Não sei se um servidor específico aceita o webm/opus
+  que o app grava (alguns exigem conversão) — é exatamente o experimento
+  pendente. Não recomendo servidor nenhum antes de medido.
+- **Sem medição:** latência e qualidade em português no notebook do Felipe, nos
+  tamanhos de modelo do whisper. Sem número, a decisão (documentar o servidor
+  local × embutir whisper.cpp × outra) **não foi tomada** e continua sendo do
+  Felipe (custo de empacotamento/tamanho).
+- O critério de aceite ("ditar sem internet e ver o texto no terminal, com
+  latência medida") **não foi cumprido**.
+
+### Validação
+
+Testes: 8 novos no processo principal (5 contra servidor HTTP real em loopback,
+2 do store, 1 de recusa sem chave), 2 do renderer (incl. paridade). Resultado
+completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: layout, altura dos painéis (fatia 1) — sem verificação visual
+
+### Contexto
+
+Task "Layout — redimensionar painéis e janelas nos dois eixos sem quebrar em telas
+pequenas" (Esforço: Dias, risco alto: o loop painel × gaveta de 12/09 saiu de
+uma leitura circular entre superfícies). Fatiada.
+
+### O que foi feito
+
+- **Inventário** (`docs/projeto/LAYOUT-SUPERFICIES.md`): cada superfície, se
+  redimensiona, em qual eixo e o mínimo útil — levantado **lendo o código**, não
+  medido numa janela. Achados: painéis só redimensionavam a largura; a altura só
+  tinha teto; nenhum dos 13 modais redimensiona (todos têm `max-h` em `vh`, então
+  não estouram a janela); o Tarefas Notion tem mínimo de 760×460 (em 800 px cobre
+  quase tudo).
+- **Altura dos painéis de ferramenta**: `clampPanelHeight`/`read`/`write`/`clear`
+  em `panel-sizing.ts` + `useResizablePanelHeight` + alça na borda de baixo do
+  `CanvasPanel` (arrasto, setas ↑↓, `Home`/duplo clique = altura do conteúdo).
+- **Por que não reabre o loop de 12/09:** a altura NÃO fala com o coordenador de
+  superfícies. O painel ancora no topo e só concorre com as outras superfícies
+  pela LARGURA; a altura usa o mesmo teto que o painel já respeitava
+  (`getPanelMaxHeight`), então esticar não cria uma posição nova. A largura
+  continua passando por `reportPanelWidth`, intocada.
+- **Invariante testada:** em 11 alturas de janela (200 a 2400) × 9 pedidos (de
+  negativo a `MAX_SAFE_INTEGER`) a altura fica entre o piso e o teto e cabe na
+  janela; o intervalo nunca se inverte, nem em janela mais baixa que o piso.
+- **Smoke de viewport** (`canvas-smoke.cjs`): em 1366×768, 1024×640 e 800×600
+  abre o painel, confere que ele fica dentro da janela nos 4 lados, cresce pela
+  alça de altura respeitando o teto e volta com `Home`. **Só roda no CI**
+  (macOS/Windows); não rodei localmente.
+
+### NÃO verificado
+
+- Nada foi visto numa janela real: o `felixo devtools connect` segue travado e o
+  ambiente não sobe o Electron. A alça de baixo (posição, cursor, sobreposição
+  com a alça da direita no canto) e a rolagem interna com altura fixa estão
+  cobertas só pela lógica pura e pelo smoke do CI.
+- O smoke novo foi escrito sem poder executá-lo antes do push: pode precisar de
+  ajuste depois do primeiro resultado do CI.
+- O critério de aceite ("toda superfície do inventário redimensiona nos dois
+  eixos") **não foi cumprido**: modais, gaveta (vertical) e inspector ficam
+  pendentes.
+
+### Pendente (tasks novas)
+
+Modais redimensionáveis (13); gaveta e inspector; revisar o mínimo do Tarefas
+Notion; conferir tudo numa janela real.
+
+### Validação
+
+12 testes novos em `panel-sizing.test.ts`. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-19: layout, gaveta/inspector/Tarefas Notion (fatia 2) — duas decisões de não mudar
+
+### Contexto
+
+Task "Layout — gaveta do terminal e inspector: redimensionar e revisar o mínimo do
+Tarefas Notion". Três itens, com riscos bem diferentes; a largura é a parte que já
+gerou o loop de 12/09.
+
+### Decisões (com o motivo; a pessoa pode revertê-las)
+
+- **Gaveta: sem eixo vertical.** É uma coluna de altura total (`h-full` numa linha
+  flex), não uma janela — não há altura a redimensionar sem transformá-la numa
+  janela flutuante (outra feature). Mantém largura arrastável, recolher e maximizar.
+- **Inspector: continua com 288 fixo.** `INSPECTOR_WIDTH` é constante lida pelo
+  coordenador, pelas invariantes e pelo painel; torná-lo variável o faria um terceiro
+  disputante em `splitHorizontalSpace` — o acoplamento do loop de 12/09 — para uma
+  superfície que já devolve espaço ao recolher (puck, reserva 0). Ganho não paga o
+  risco. **Nenhuma linha do caminho da largura foi tocada.**
+- **Tarefas Notion: mínimo 760×460 → 480×320.** O bloco rola por dentro
+  (`overflow-auto`) e o painel usa colunas flexíveis (`min-w-0`).
+
+### O que foi feito (código)
+
+- `NODE_MIN_SIZE` (`node-geometry.ts`) como fonte ÚNICA dos mínimos dos 8 blocos;
+  os `NodeResizer` de cada componente e `getDefaultNodeSize` leem dela (antes o
+  número estava copiado em cada componente).
+- **Bug real achado pelo teste de invariante:** a NOTA nascia com 158×115 em janela
+  estreita, abaixo do próprio mínimo (180×120) — e o Tarefas Notion com 749 contra
+  760 numa janela de 800. `getDefaultNodeSize` agora aplica o piso. O teste
+  falhou antes do piso (`note @320: 158 < 180`) e passa depois.
+- Teste: em 10 larguras de janela (320–3840) × 8 tipos, nenhum bloco nasce menor
+  que o mínimo; o mínimo cabe no padrão de tela grande; em tela grande o tamanho
+  padrão é o de sempre.
+
+### NÃO verificado
+
+- Nada foi visto numa janela real (`felixo devtools connect` travado; sem Electron
+  aqui). Não vi o Tarefas Notion em 480×320 — se a tabela fica legível ali é
+  inferência do código (`min-w-0`, `overflow-auto`), não observação.
+- O smoke de viewport não exercita o Tarefas Notion; a cobertura é o teste de
+  invariante, não uma janela.
+- "Tarefas Notion utilizável em 800 px" não foi conferido visualmente.
+- As invariantes de largura do coordenador (`layout-invariants.ts`) já existiam e
+  não foram alteradas — como nenhuma largura mudou, não escrevi teste novo delas.
+
+### Validação
+
+4 testes novos em `node-geometry.test.ts`. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-21: diagnóstico de CLI (PATH, shims, estado gerenciado) — fatia 1, backend
+
+### Contexto
+
+Task "Felixo AI Core/CLI — diagnosticar PATH, shims e estado gerenciado antes de
+propor reinstalação" (Esforço: Dias). O detector devolvia só `detected: false` com
+uma mensagem genérica, e o `catch { continue }` de `detectCli` jogava fora a razão
+real (arquivo inexistente, permissão negada, atalho quebrado, timeout). A UI não
+tinha como separar "não instalada" de "instalada mas invisível ao Electron".
+
+### O que foi feito (código)
+
+- `cli-detector.cjs`: `detectCli` passa a devolver `attempts` (cada variante
+  tentada, caminho resolvido, se rodou via shell, desfecho) e `reason`
+  (`not-found`, `permission`, `timeout`, `shim-broken`, `exit-error`, `unknown`).
+  Só CÓDIGOS são guardados — nunca a saída crua do erro. Um "não achei" só vale
+  quando nenhuma variante resolveu um arquivo; se uma variante achou o arquivo e
+  falhou ao executar, o motivo é o dela. `EINVAL` (recusa do Node a `.cmd` sem
+  shell, CVE-2024-27980) é tratado como atalho quebrado.
+- `services/cli-diagnostics.cjs` (novo): `buildCliDiagnosis` / `diagnoseClis` /
+  `formatDiagnosisForSupport`. Read-only: nada instala, nada altera PATH ou
+  configuração, nenhum comando vem do ambiente. `recommendInstall` só é `true`
+  para "não instalada" e "pacote gerenciado incompleto"; binário válido, PATH,
+  permissão, timeout, atalho e rede nunca recomendam reinstalar.
+- Minimização para suporte: home vira `~`, nome de usuário (inclusive de OUTRA
+  conta, inclusive com espaço) vira `<usuario>`, URLs viram `[url]`, tokens
+  rotulados / `Bearer` / `_authToken` / sequências longas viram `[oculto]`.
+- `cli-auto-install.cjs`: a mensagem da instalação é redigida ANTES de ir para o
+  status, o arquivo `cli-auto-install.json` e o log de QA; novo IPC read-only
+  `clis:diagnose` (+ `cliSetup.diagnose` no preload e no `vite-env.d.ts`).
+
+### NÃO verificado
+
+- Nada foi visto no app real: só testes unitários e de integração do serviço.
+  Nenhuma máquina Windows com CLI quebrada de verdade foi exercitada.
+- **A apresentação na UI (instrução específica por causa, botão "verificar
+  instalação", "copiar diagnóstico") NÃO foi feita.** O backend entrega
+  `nextAction.text` e `supportText` prontos, mas nenhum componente os consome —
+  o critério "A UI não recomenda instalar quando encontra binário válido" só
+  está garantido no plano de instalação, não numa tela nova.
+- "Alias" é dito no texto de "não instalada", mas não é detectável: um alias de
+  shell é invisível ao Electron por definição, e o app não lê rc files nem roda
+  comando do ambiente (restrição da própria task).
+- Cobertura de "múltiplos usuários" é por caminho (`C:\Users\Ana Silva\…` visto
+  por outra conta); não houve teste com duas contas reais.
+
+### Validação
+
+`npm test` 1477/1477 (era 1246 no último registro de gate, o resto veio de outros
+agentes), `npm run test:frontend` 1119 passed / 1 skipped, `eslint .` e `tsc -b`
+limpos, `git diff --check` limpo. Testes novos: 9 do detector (`.cmd` com espaço,
+`.exe`, ENOENT, EACCES, EINVAL, timeout, saída de shim) e 17 do serviço; 2 de
+integração em `cli-auto-install.test.cjs`. Mutação feita em duas regras (ready
+recomendando instalar; mensagem persistida sem redação) — os testes correspondentes
+falharam e foram restaurados.
+
+## Fechamento de trabalho — 2026-09-21: System Design, fonte padrão configurável sem quebrar instalações existentes
+
+### Contexto
+
+Task "Felixo AI Core/System Design — tornar a fonte padrão configurável sem quebrar
+instalações existentes" (Esforço: Dias, task híbrida: decisões perguntadas antes de
+codar). O default (Felixo/main) vivia copiado em serviço, handlers, hook do renderer
+e texto do prompt, e a configuração gravada SEMPRE carregava `repoUrl`/`branch` —
+o default era copiado para o disco na primeira sincronização. Não dava para separar
+"a pessoa escolheu esta fonte" de "o app copiou o padrão", então trocar o default
+ou nunca alcançaria quem já o tinha gravado, ou o reinterpretaria em silêncio.
+
+### Decisões (perguntadas ao dono do produto; todas na opção recomendada)
+
+1. Migração: gravado igual ao default = "segue o padrão"; diferente = escolha explícita.
+2. Precedência: usuário > default, com o fallback offline sendo o último conteúdo
+   entregue. "Projeto" NÃO entrou (hoje não existe config por projeto).
+3. Prompt gerado da fonte efetiva, não texto fixo do Felixo.
+4. "Não atualizar automaticamente" = nunca trocar a fonte escolhida; o conteúdo dela
+   continua sincronizando por sessão.
+
+### O que foi feito (código)
+
+- `electron/core/system-design-source.cjs` (novo): contrato único — default,
+  migração v1→v2, precedência, `syncState`, fonte entregue (`delivered`) separada da
+  configurada, `applyConfigChange` com lista branca e validação de URL.
+  `LEGACY_DEFAULT_SOURCES` cobre quem pula de uma versão v1 direto para uma com
+  novo default.
+- `system-design-ipc-handlers.cjs`: sobre o contrato; migração gravada na primeira
+  leitura (idempotente); `save-config` só aceita `enabled`, `sourceMode:'default'`,
+  `repoUrl`, `branch` (antes `{...current, ...partial}` deixava o renderer escrever
+  `lastSha`); a entrega é registrada com a fonte REALMENTE sincronizada (há teste de
+  troca de fonte durante o clone).
+- `system-design-service.cjs`: o default deixou de ser copiado aqui; e **um clone em
+  cache cujo `origin` não é a fonte pedida é descartado** (ver "Bug achado").
+- Renderer: sem cópia do default (`UNLOADED_CONFIG`); `syncState`/`delivered` nos
+  tipos; presenter puro; seção mostra fonte, selo "escolhida por você", estado e
+  "Voltar ao padrão do app"; hook relê a config após falha e escuta um evento para
+  duas instâncias não divergirem.
+- Prompts: bloco do orquestrador cita a fonte ENTREGUE e avisa quando é diferente da
+  configurada; lembrete de padrão de qualidade gerado da fonte (para o default é
+  **idêntico byte a byte** ao texto histórico — teste com o literal original tirado
+  do git). O painel passou a gravar vazio quando o texto é o padrão (antes gravava o
+  padrão intocado como se fosse da pessoa, congelando a fonte do dia).
+
+### Bug achado só no app real
+
+Trocar a URL configurada nunca trocava de repositório: com um clone já em cache, o
+serviço fazia `fetch`/`reset` no `origin` ANTIGO e gravava o conteúdo como da fonte
+nova. Só apareceu ao exercitar o app: a tela dizia "System Design (Openia) @ cc4aae7"
+e `cc4aae7` era o SHA do Felixo (confirmado com `git remote get-url origin` no cache).
+Os testes do serviço usam git falso e não pegariam isso. Corrigido, com teste que
+falhou antes e passa depois; reverificado no app: entregue = Openia `@ 9bb9099`, 34
+documentos dela.
+
+### Validação
+
+`npm test` 1514/1514, `npm run test:frontend` 1146 passed / 1 skipped, `eslint .` e
+`tsc -b` limpos. Testes novos: 30 do contrato, 7 de integração dos handlers (SQLite
+real), 4 do serviço (origin), 7 do bloco do orquestrador, 8 do presenter, 15 do texto
+do lembrete. Mutação feita em duas regras (lista de defaults históricos; registrar a
+entrega com a fonte errada) — os testes falharam e foram restaurados. No app real
+(instância isolada, Windows): sincronização do default, escolha de fonte própria,
+sincronização pelo botão, URL inválida recusada, fonte inalcançável (falha real: os
+agentes seguem recebendo a fonte anterior e a tela diz isso), "Voltar ao padrão do
+app"; captura de tela conferida.
+
+### NÃO verificado / limitações
+
+- **Nenhuma instalação v1 real foi migrada**: a migração está coberta por testes com
+  SQLite real e configs v1 sintéticas, mas o app foi exercitado em perfil isolado novo.
+- **Não há campo na UI para digitar URL/branch** (sempre foi assim; só o IPC permite
+  fonte própria). A escolha de fonte própria foi exercitada pelo IPC; a UI oferece
+  mostrar e voltar ao padrão, não editar.
+- **Camada "projeto" fora do escopo** por decisão; o contrato foi escrito para
+  aceitá-la depois.
+- O texto do toggle e o parágrafo explicativo da seção continuam dizendo "Felixo
+  System Design", mesmo com fonte própria (é o nome da função; o estado e a fonte
+  mostrados logo abaixo são os reais).
+- Terminais já abertos não têm o lembrete reescrito ao trocar de fonte; só os novos.
+- Se a troca de fonte falhar no clone, o clone antigo já foi descartado (os documentos
+  indexados no SQLite continuam, então a fonte anterior segue entregue); o próximo
+  sync da fonte antiga re-clona em vez de dar `fetch`.
+- Um "aviso de mudança de default" para quem segue o padrão não existe: ao mudar o
+  default do app, quem o segue passa a recebê-lo sem aviso (decisão 1).

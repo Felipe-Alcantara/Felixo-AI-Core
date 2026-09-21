@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { BrainCircuit, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import type { SkillPrompt } from '../types'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type SkillsModalProps = {
   isOpen: boolean
@@ -16,6 +18,7 @@ export function SkillsModal({
   onClose,
   onSaveSkills,
 }: SkillsModalProps) {
+  const dialog = useResizableDialog('skills')
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -111,7 +114,8 @@ export function SkillsModal({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[86vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[86vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -286,6 +290,7 @@ export function SkillsModal({
             </div>
           </form>
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

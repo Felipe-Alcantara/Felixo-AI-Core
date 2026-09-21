@@ -153,6 +153,10 @@ class PtyProcessManager {
       ...createCliEnv(),
       ...this.buildAccountEnv(options.accountId, accountValidation.providerId),
     }
+    // Rolagem no Claude Code: sem alternate screen o xterm guarda scrollback.
+    if (options.classicScreen === true && isClaudeCommandName(options.command)) {
+      env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'
+    }
     const args = Array.isArray(options.args) ? options.args : []
     const defaultShell = options.defaultShell || this.platform.getDefaultShell(env)
     const requestedCommand = options.command || defaultShell
@@ -1122,8 +1126,16 @@ function isCodexCommand(command) {
     .toLowerCase() === 'codex'
 }
 
+/** O comando é o Claude Code? A variável de tela clássica só existe nele. */
+function isClaudeCommandName(command) {
+  if (typeof command !== 'string') return false
+  const name = command.replace(/\\/g, '/').split('/').pop() || ''
+  return /^claude(\.exe|\.cmd)?$/i.test(name)
+}
+
 module.exports = {
   PtyProcessManager,
+  isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,
   WIN32_MAX_PATH,

@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   NodeResizer,
@@ -30,8 +31,8 @@ export function NotionTasksNode({ id, selected }: NodeProps) {
     <div className="felixo-canvas-card felixo-canvas-card-notion flex h-full w-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 shadow-2xl">
       <NodeResizer
         isVisible={selected}
-        minWidth={760}
-        minHeight={460}
+        minWidth={NODE_MIN_SIZE.notionTasks.width}
+        minHeight={NODE_MIN_SIZE.notionTasks.height}
         lineClassName="!border-white/30"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-active)]"
       />

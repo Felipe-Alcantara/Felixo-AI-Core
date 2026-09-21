@@ -344,3 +344,55 @@ test('CLI sem suporte a perfil recusa criar conta', () => {
     env.cleanup()
   }
 })
+
+test('criar a conta que falha ao gravar o registro não deixa pasta de perfil órfã (nem o ssh espelhado)', () => {
+  let falhar = true
+  const fileSystem = {
+    ...fs,
+    writeFileSync(caminho, ...resto) {
+      if (falhar && String(caminho).endsWith('cli-accounts.json')) {
+        const erro = new Error('ENOSPC: no space left on device')
+        erro.code = 'ENOSPC'
+        throw erro
+      }
+      return fs.writeFileSync(caminho, ...resto)
+    },
+  }
+  const env = createEnvironment({ fileSystem, comHome: true })
+
+  try {
+    assert.throws(() => env.store.create({ providerId: 'gemini', label: 'pessoal' }), /ENOSPC/)
+    // Sem conta registrada E sem pasta sobrando: o Gemini espelha .ssh para dentro dela.
+    assert.deepEqual(env.store.list('gemini'), [])
+    const base = path.join(env.userData, 'cli-profiles', 'gemini')
+    assert.deepEqual(fs.existsSync(base) ? fs.readdirSync(base) : [], [])
+
+    // Uma nova tentativa (o problema passou) funciona normalmente.
+    falhar = false
+    const conta = env.store.create({ providerId: 'gemini', label: 'pessoal' })
+    assert.equal(env.store.list('gemini').length, 1)
+    assert.equal(fs.existsSync(path.join(base, conta.id)), true)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('se a limpeza do perfil também falhar, o erro que sobe continua sendo o da criação', () => {
+  const fileSystem = {
+    ...fs,
+    writeFileSync(caminho, ...resto) {
+      if (String(caminho).endsWith('cli-accounts.json')) throw Object.assign(new Error('ENOSPC original'), { code: 'ENOSPC' })
+      return fs.writeFileSync(caminho, ...resto)
+    },
+    rmSync() {
+      throw Object.assign(new Error('EBUSY na limpeza'), { code: 'EBUSY' })
+    },
+  }
+  const env = createEnvironment({ fileSystem })
+
+  try {
+    assert.throws(() => env.store.create({ providerId: 'codex', label: 'x' }), /ENOSPC original/)
+  } finally {
+    env.cleanup()
+  }
+})

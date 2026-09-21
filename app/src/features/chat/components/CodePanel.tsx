@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { GitProjectSummary, Project } from '../types'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 type CodePanelProps = {
   isOpen: boolean
@@ -24,6 +26,7 @@ export function CodePanel({
   activeProjectIds,
   onClose,
 }: CodePanelProps) {
+  const dialog = useResizableDialog('code-panel')
   const projectOptions = useMemo(() => {
     const activeProjects = projects.filter((project) =>
       activeProjectIds.has(project.id),
@@ -191,7 +194,8 @@ export function CodePanel({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[86vh] w-full max-w-[820px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[86vh] w-full max-w-[820px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -301,6 +305,7 @@ export function CodePanel({
             <GitSummary summary={displayedSummary} isLoading={isLoading || isMutating} />
           )}
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

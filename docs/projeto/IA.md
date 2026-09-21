@@ -3206,3 +3206,346 @@ auditoria determinística de acessibilidade; axe-core continua fora do workspace
 
 Validação: `npm test` 1.336 pass em 52 suítes; frontend 958 pass/1 skip;
 native 5/5; typecheck, lint, build, testes focados e `test:canvas-smoke` verdes.
+
+
+## 2026-09-19 — Modais redimensionáveis nos dois eixos
+
+12 modais ganham alças (direita, inferior, canto) via `useResizableDialog` +
+`DialogResizeHandles`; regra pura em `features/shared/dialog/dialog-sizing.ts`
+(10 testes: invariante de janela em várias resoluções, `2*dx`, persistência,
+lixo salvo, armazenamento que lança, engolir o clique de soltar). Risco tratado: o
+fundo fecha o modal no `click`, e soltar o mouse fora da moldura após arrastar o
+dispara. Não verificado numa janela real (nada foi visto rodando).
+Validação: tsc, eslint e vitest (1089 pass) verdes.
+
+## 2026-09-19 — Rolagem no terminal do Claude Code (alternate screen)
+
+Causa (já conhecida): o Claude Code entra no alternate screen (`ESC[?1049h`) e liga rastreio
+de mouse no boot; o xterm.js não tem scrollback nesse buffer. **Confirmado no binário da CLI
+2.1.278** (leitura das strings): `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` "forces the classic
+renderer any time"; existe também `/tui fullscreen` / `CLAUDE_CODE_NO_FLICKER=1` para o caminho
+inverso (a própria CLI desliga o fullscreen sozinha após falhas de boot).
+
+Medição do boot num PTY (30×100, 10 s, sem enviar prompt): sem a variável, `?1049h` = sim e
+rastreio de mouse (`?1000h/1002h/1003h`) = sim; com a variável, ambos = não.
+
+Implementação: opção global "Rolagem no terminal do Claude Code" (Configurações, **desligada por
+padrão**, `felixo-ai-core.claude-terminal-scroll`). O store manda só `classicScreen: boolean` no
+`pty:spawn`; o processo principal converte em `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` **apenas**
+para o executável `claude` (nunca ambiente arbitrário vindo do renderer). Vale para terminais novos.
+
+NÃO verificado: `scrollHeight` vs `clientHeight` do xterm com a variável (falta janela real),
+efeito em menus, seleção com o mouse (`terminal-mouse-selection.ts`), cópia e flicker — por isso
+o padrão continua desligado. O teste que detecta a volta do `?1049h` no boot não entrou: exige o
+`claude` instalado e autenticado, que o CI não tem.
+
+## 2026-09-20 — CI: flakes do Validate do Windows (tetos, smoke, audit do npm)
+
+Evidência: nesta semana o smoke de montagem (`checarMontagem`, 20 s) falhou 5 vezes no runner
+Windows e passou no rerun (a última em 19/09 no CI da main do #62, run 35461628950, com o app
+montando logo depois); um benchmark ficou ~26 min pendurado; o `npm audit` recebeu 400/503.
+
+Feito: (1) `timeout-minutes` em todos os passos de teste/benchmark/build dos jobs Validate e
+Dependency policy e teto de 45 min no job Validate (o mais lento medido é ~13 min no Windows;
+tetos = várias vezes a duração medida do passo); (2) o app expõe `data-felixo-hydrated` e o smoke
+espera esse sinal em vez do texto da barra de status; teto de 45 s no Windows (20 s nos outros) e
+o tempo real de cada subida passa a sair no log (`canvas pronto em N ms`) — **p50/p95 ainda NÃO
+medidos: falta acumular execuções**; (3) a falha do smoke diferencia "APP LENTO" (canvas montou e
+segue carregando) de "APP NÃO MONTOU" (`canvas-smoke-diagnostics.cjs`, com teste); (4) `npm audit`
+tenta até 3 vezes só quando NÃO veio relatório e `verify-dependency-policy.cjs` diz que o erro do
+registro não é vulnerabilidade — continua falhando fechado.
+
+Não feito: decidir quais benchmarks bloqueiam o PR (só o de responsividade já é informativo) e o
+destino do pre-release parcial v0.1.368 (decisão do Felipe). O efeito real dos tetos e do timeout
+maior só se comprova nas próximas execuções do CI.
+
+## 2026-09-20 — Borda colorida no nó com notificação não lida
+
+A anotação de 14/09 pedia cores "sincronizadas com as das notificações", mas o painel usava uma
+cor só (`--color-error`): não existiam categorias. Criadas em `terminal/notification-category.ts`,
+a partir do `SessionSnapshot` da notificação: **Precisa de resposta** (`waiting_approval`, âmbar,
+pulsa), **Terminou** (`idle` ou saída 0, verde) e **Falhou** (saída ≠ 0 ou `error`, rosa).
+
+A cor mora em UM lugar, no CSS (`--felixo-notify-<categoria>`, com valor próprio no tema de alto
+contraste); o item do painel e a borda do nó usam o mesmo token. Só notificação NÃO lida pinta o
+nó (ler remove a borda); no mesmo nó vence a mais urgente (falhou > precisa de resposta >
+terminou). A borda é declarada depois da moldura escolhida pela pessoa (`frameColor`), então a
+notificação vence a moldura enquanto existir. A pulsação respeita `prefers-reduced-motion` e o
+Modo Performance. Testes: mapeamento snapshot→categoria, borda só enquanto não lida, prioridade,
+e o teste que confere que os tokens existem nos dois temas e que a borda usa o mesmo token.
+
+NÃO verificado: nada visto numa janela real (contraste real das três cores sobre o canvas, a
+pulsação, e os nós que não são terminal); sem cobertura no smoke.
+
+## 2026-09-20 — Benchmark operacional (Windows): espera dos órfãos passou de 750 ms para até 6 s
+
+"processos órfãos detectados em yarn-classic" derrubou o Validate/Windows três vezes (PR #52, PR #55
+e o CI da main do #65, run 35519847921); o log mostra o benchmark inteiro passando e só o recheck
+de órfãos falhando, sem relação com o diff. `findOrphans` reverificava UMA vez após 750 ms; agora
+`settleOrphans` reverifica a cada 500 ms por até 6 s (mantendo a checagem de identidade do processo).
+Um filho que permanece depois do prazo continua reportado — o gate não foi afrouxado. Testes: filho
+que some durante a espera, filho que permanece e caso sem órfãos. NÃO verificado no runner: só o CI
+mostra se 6 s bastam; se ainda falhar, o log do processo remanescente é o próximo dado.
+
+Também em 20/09 (PR #66): o passo "Benchmark terminal scrollback policy" do Windows morreu com
+segfault do node-pty (exit 139, `AttachConsole failed`), igual ao do PR #51. O passo agora repete
+até 3 vezes SOMENTE quando o código de saída é 139; qualquer outro código falha na hora (laço
+testado com funções falsas: recupera no 3º segfault e não repete falha real). Não verificado no
+runner: se o segfault for determinístico numa máquina, as 3 tentativas também falham.
+
+Ainda em 20/09 (CI da main do #66): o smoke do Windows falhou no `waitFor` de 5 s do painel de busca
+(`checarPainelNosDoisEixos`, o mesmo que já tinha caído nos PRs #48 e #55). O screenshot de falha
+mostra o painel "Pesquisar" ABERTO — apareceu depois do teto, ou seja, runner lento. Os 13
+`timeout: 5_000` de interação do smoke viraram `INTERACTION_TIMEOUT_MS` (20 s no Windows, 5 s nos
+demais). Não verificado: só as próximas execuções do Windows mostram se 20 s bastam.
+
+E na reexecução da mesma main (20/09): "arrasto pequeno da nota nao persistiu" (`checarInteracoes`). Não
+era timeout: o smoke esperava 800 ms FIXOS depois de soltar o mouse e lia a posição salva; a gravação
+tem atraso e no runner Windows passou disso. O arrasto e a criação de conexão agora esperam a mudança
+aparecer no armazenamento (polling de 200 ms até `INTERACTION_TIMEOUT_MS`); se nunca aparecer, o erro
+continua sendo o mesmo de antes (falha real). Não verificado: o screenshot da falha mostra a nota SELECIONADA
+(o mouse chegou nela) mas não permite ver se ela se moveu — inconclusivo; só o CI do Windows mostra se o
+polling resolve. Se ainda falhar mesmo esperando até 20 s, o arrasto pode ser um problema real.
+
+Erro meu no mesmo PR (#67): a 1ª versão do polling usava `page.waitForFunction(async () => ...)`, que
+NÃO espera — a Promise devolvida já é "verdadeira" e a espera termina na hora. Resultado: como eu
+tinha REMOVIDO os 800 ms fixos, o smoke passou a ler a posição sem esperar nada e falhou em ~1,5 s no
+macOS (o CI do PR pegou). Corrigido com `esperarAte` (`scripts/canvas-smoke-wait.cjs`, polling no lado
+do Node com `page.evaluate`, 4 testes com relógio falso, inclusive o caso "Promise que resolve falsa
+não conta"). Não reproduzi o `waitForFunction` num navegador (não há um aqui): a conclusão vem do tempo
+da falha (1,5 s < 5 s de teto) e do comportamento documentado; o teste do helper protege o novo código.
+
+## 2026-09-20 — Criar perfil de conta (Codex/Claude/Gemini): reprodução e pasta órfã
+
+Task: reproduzir a falha ao criar perfil depois da correção de 07/09 (dependência opcional
+`@openai/codex-win32-x64`, que continua no manifesto e com testes: `managed-cli-manifest`,
+`cli-auto-install`, `managed-cli-health`).
+
+Reprodução feita aqui (Linux, CLIs reais instaladas, `userData` temporário, o próprio
+`createCliAccountStore` + `buildProfileEnv` do app): `create` OK nas três CLIs, pasta criada
+(vazia em Codex/Claude; `.gitconfig` espelhado no Gemini) e a CLI respondeu com o isolamento
+certo (`codex login status` → "Not logged in"; `claude auth status --json` → `loggedIn:false`
+com `configDirectory` na pasta do perfil; `gemini --version` OK). O "exit 1" de codex/claude é
+o estado normal "não logado". NÃO reproduzido: Windows (a máquina do Felipe) e o fluxo
+interativo de login — a anotação de 14/09 não diz qual CLI nem qual mensagem, e não há log
+persistido; sem isso a falha original segue sem causa conhecida.
+
+Defeito real achado na investigação e corrigido: `create` fazia `mkdir` + espelhamento (no Gemini
+copia `.ssh`) + gravação do registro; se qualquer passo depois do `mkdir` falhasse (disco cheio,
+permissão), sobrava uma pasta órfã — com chaves ssh copiadas — sem conta registrada, invisível
+para `remove`, e cada nova tentativa criava outra. Agora a criação desfaz a pasta em caso de erro
+(o erro que sobe é o da criação, mesmo se a limpeza falhar). 2 testes novos (o primeiro falhava
+antes do conserto). Item 4 da task (pastas de tentativas antigas): na máquina do Felipe, pastas
+em `cli-profiles/<cli>/` cujo id NÃO consta em `config/cli-accounts.json` são órfãs e podem ser
+apagadas à mão; o app não faz essa varredura.
+
+## 2026-09-20 — Decisão: como um agente controla um navegador de verdade
+
+**Decisão:** o caminho principal é o **3 — o navegador do próprio AI Core como ferramenta**, exposto
+a qualquer agente (Codex, Claude, Gemini) pelo comando `felixo` (fila `agent-requests`, lista de
+ações fechada), operando o `webContents` dos blocos Página Web. O **2 — MCP de navegador no Codex CLI**
+fica como complemento imediato para sites externos fora do canvas. O **1 — embutir o app do Codex —
+está descartado**.
+
+**Fontes oficiais lidas em 20/09/2026** (`learn.chatgpt.com`, para onde as URLs antigas de
+`developers.openai.com` redirecionam; lidas por resumo, não por cópia integral):
+- *Browser* do Codex: disponível no app desktop do ChatGPT e na web; "não está disponível no Codex
+  CLI nem na extensão de IDE".
+- Extensão para Chrome: "Chrome, Edge, Brave, Opera ou Vivaldi" — **não Firefox**.
+- Codex CLI **suporta MCP**: `codex mcp add <nome> -- <comando stdio>` ou `[mcp_servers.<nome>]` no
+  `config.toml` (stdio: `command`/`args`/`env`/`cwd`; HTTP: `url`); "Playwright: Control and inspect a
+  browser using Playwright" está entre os exemplos.
+- O `codex` local (0.154.0) tem `codex mcp add|list|get|remove|login|logout`.
+
+**Prova de conceito 2 (MCP), sem credenciais e com perfil em memória.** `@playwright/mcp` 0.0.82
+(`--headless --isolated`, Chromium do Playwright), falando JSON-RPC por stdio com uma página local:
+`initialize` → 25 ferramentas (`browser_navigate`, `browser_snapshot`, `browser_click`,
+`browser_fill_form`, `browser_evaluate`, …) → abriu a página, achou o botão por referência (`e2`),
+clicou e leu o texto novo (`segredo-do-clique-42`). O Codex registrou o servidor num `CODEX_HOME`
+temporário (`[mcp_servers.playwright]`, status *enabled*). O servidor também aceita
+`--cdp-endpoint` e `--browser firefox` (build do Playwright, NÃO o Firefox instalado da pessoa).
+
+**Prova de conceito 3 (navegador do AI Core), no app real** (Electron 41 sob Xvfb, build `dist`,
+`FELIXO_DEVTOOLS_PORT`, perfil isolado, `FELIXO_DEVTOOLS_MOCK_PTY=1`): um cliente CDP puro
+salvou um bloco `webpage` apontando para uma página local; o `webview` apareceu como alvo CDP
+(`type: webview`); um clique real (`Input.dispatchMouseEvent`, com `mouseMoved` antes) no botão da
+página mudou o texto, lido depois (`segredo-do-webview-77`). Nada de cookies ou sessão reais.
+
+**Por que 3 e não os outros**
+- **1 (embutir o app do Codex):** o Browser dele mora no app do ChatGPT, outro processo Electron; não
+  existe webview de outro app, e reparent de janela é frágil e diferente em cada SO. Não resolve
+  Codex CLI, Claude nem Gemini.
+- **2 (MCP Playwright):** funciona hoje, mas só para o Codex (cada CLI configura MCP do seu jeito),
+  abre um navegador à parte (não é o bloco do canvas que a pessoa está vendo), baixa um navegador
+  (~115 MB) e não usa o perfil isolado do navegador interno. Serve para sites fora do canvas.
+- **3:** um único canal para os três agentes, no bloco que a pessoa vê, com o perfil escolhido
+  (`--profile`). O canal já existe (`felixo browser open`), falta ampliar as ações.
+
+**Como fazer o 3 sem abrir a porta de depuração:** a PoC usou a porta CDP da instância de
+automação, que expõe o app inteiro (inclusive `window.felixo`) a qualquer processo local; não
+serve como recurso. A versão de produto deve ser uma lista FECHADA de ações no `felixo browser`
+(`snapshot`, `ler`, `clicar`, `preencher`), resolvidas no processo principal pelo `webContents` do
+bloco, e pedir confirmação (`felixo perguntar`) para ações sensíveis em perfis com login.
+
+**Achado de ambiente (útil para o `felixo devtools`):** aqui o app só respondeu ao CDP depois de
+passar `--no-sandbox` na LINHA DE COMANDO do Electron; o `appendSwitch('no-sandbox')` do
+`main.cjs` chega tarde para o zygote e o renderer morre ("Unable to access /dev/shm"), deixando o
+alvo aberto mas mudo — a mesma aparência do travamento de `felixo devtools connect`. Isso vale
+para este ambiente restrito; não foi verificado no Windows nem no macOS.
+
+**NÃO verificado:** um turno real do Codex chamando as ferramentas do Playwright MCP (só o
+registro e o servidor foram testados; um turno usaria a conta/limite da pessoa); o Firefox
+real da pessoa (nenhuma via oficial o controla: a extensão só cobre Chromium); a PoC 3 fora do
+CDP (o canal `felixo browser` com ações de controle ainda não existe).
+
+## 2026-09-20 — Electron sob Xvfb no Linux: instrumentação antes de qualquer flag nova
+
+A task pedia capturar o stderr real ANTES de mais uma tentativa (três às cegas já falharam). Feito, sem
+mudar o padrão do CLI: (1) `FELIXO_DEVTOOLS_DEBUG_LOG=<arquivo>` liga stdout+stderr do Electron
+detached num arquivo (`createDetached`; sem a variável continua `stdio: 'ignore'`); (2) o erro do
+`felixo devtools launch` agora diz se o Electron **encerrou** antes de abrir o CDP (código e sinal) ou
+**seguia vivo e mudo**, e anexa o fim do log quando ele existe — antes os dois casos eram o mesmo
+"fetch failed"; (3) o CI ganhou um passo **informativo** no Linux (`continue-on-error`) que roda o
+smoke sob `xvfb-run` com o log ligado e sobe `electron-devtools-*.log` como artefato. 3 testes novos
+no `felixo-devtools.test.cjs`. O gate do Linux (`if: runner.os != 'Linux'`) continua como estava até
+haver causa documentada e 2-3 execuções verdes.
+
+Pista independente (NÃO é a causa provada dos runners): num ambiente Linux restrito local o app só
+respondeu ao CDP com `--no-sandbox` na LINHA DE COMANDO; o `appendSwitch('no-sandbox')` do `main.cjs`
+chega tarde para o zygote e para a checagem do sandbox SUID, que roda antes do `main.cjs`. Se o log do
+CI mostrar `FATAL ... sandbox`, a correção provável é passar `--no-sandbox` no `launch` (só Linux, só
+instância de automação) — a decidir com o log real na mão, não antes.
+
+**Causa raiz (evidência real do CI, run 35540428944, x64 e ARM idênticos):**
+`FATAL:sandbox/linux/suid/client/setuid_sandbox_host.cc:166 The SUID sandbox helper binary was found, but
+is not configured correctly. Rather than run without sandboxing I'm aborting now. ... chrome-sandbox is
+owned by root and has mode 4755.` O Chromium checa o sandbox SUID ao iniciar o processo do navegador,
+ANTES do `main.cjs`; por isso o `appendSwitch('no-sandbox')` da 3ª tentativa nunca teve como funcionar.
+Correção: `felixo devtools launch` passa `--no-sandbox` na linha de comando no Linux (só na instância de
+automação; 1 teste novo). O passo do Linux segue informativo até 2-3 execuções verdes seguidas; só então
+o `if: runner.os != 'Linux'` sai.
+
+**Gate reativado no Linux (20/09/2026).** Com a causa corrigida, o smoke rodou verde no Linux
+(ubuntu-latest e ubuntu-24.04-arm) em: (1) o CI do PR #70 depois do push da correção (run 35540981631),
+(2) o CI da main do #70 (run 35541689317) e (3) o CI do PR que reativou o gate. O passo "Test Canvas PR
+smoke" agora roda nos três SOs (Linux sob `xvfb-run`, log do Electron em `FELIXO_DEVTOOLS_DEBUG_LOG` e
+sobe como artefato se falhar) e o passo informativo do diagnóstico foi removido. Limitações honestas:
+3 execuções verdes não provam determinismo absoluto (a flake do Windows mostrou isso); a 3ª foi um PR,
+não uma reexecução da main, porque reexecutar o CI da main dispara outro Release e o `release.yml` tem
+`cancel-in-progress: true` — uma reexecução com Release em andamento poderia cancelar a publicação.
+
+## 2026-09-20 — Notion no canvas: database genérica, papéis de tarefa e um bug de escrita
+
+Observação da instância REAL da pessoa (captura só da janela do AI Core, feita a pedido, guardada só
+na pasta temporária da sessão e não enviada a lugar nenhum): o bloco Tarefas Notion (database
+"Tarefas — HOME", 55 linhas) mostrava **Estado = "Felixo-AI-Core"** em todas as linhas. A leitura já era
+genérica; o que assumia papéis de tarefa era a heurística, e ela estava errada para essa database.
+
+**Leitura corrigida (`normalizePage`).** O estado vinha da PRIMEIRA `status`/`select` da página
+(`Repositório` antes de `Etapa`); o checkbox "Em andamento" contava como "concluída". Agora
+`pickStatusPropertyName` escolhe: `status` com nome de estado (Etapa, Estado, Status, Situação, Fase);
+`select` com esse nome; o primeiro `status`; o primeiro `select`. `pickDoneCheckboxName` só aceita
+checkbox com nome de conclusão, ou o único checkbox de uma database SEM coluna de estado. O renderer
+repete a regra em `findStatusPropertyName` (`notion-task-sort.ts`) com teste de paridade contra o
+módulo do processo principal.
+
+**Bug de escrita achado ao verificar (não era pedido, mas altera dados):** `buildPageProperties` usava o
+primeiro checkbox e caía no primeiro `status`/`select` quando nenhum nome batia — na database real,
+"Concluir" pela tela gravava em **Esforço** e marcava "Em andamento"; numa database só com
+`Repositório` (select) gravaria "Concluído" no repositório. Provado com testes na estrutura real (3
+falhavam antes do conserto). A escrita agora usa a mesma regra da leitura, só escreve em `status` ou
+em coluna com nome de estado, e a prioridade não cai mais em coluna qualquer. NÃO verificado: se algum
+dado real já foi gravado errado por esse caminho — vale conferir "Esforço" e "Em andamento" no Notion.
+
+**Database genérica (fatia 1, só leitura).** `readPropertyValue` agora entrega valor legível para
+people, files, relation (ids), unique_id, created_by/last_edited_by e rollup (button/verification → null).
+`notion-table-view.ts` formata por tipo: relação vira contagem ("3 relações", o título de cada página
+custaria uma consulta por linha) e tipo sem valor legível vira **"não suportado (tipo)"**, nunca vazio.
+Sem estado/data/select/checkbox a tabela é genérica: só Nome + todas as colunas (sem Estado/Prioridade/
+Prazo vazios nem botão de concluir); a escolha de colunas da pessoa continua valendo
+(`hasVisibleColumnsPreference` separa "nunca escolheu" de "escolheu nenhuma"). A ordenação já calculava
+uma chave por célula; a tabela agora monta 200 linhas por vez ("Mostrar mais 200"), e cada célula é
+formatada uma vez só. O aviso de truncamento (>2.000 linhas) já existia, com teste.
+
+NÃO verificado: nada disto foi visto rodando (a instância da pessoa é a versão instalada, sem esta
+mudança) e a edição por tipo, os quadros/listas e o título das páginas relacionadas ficam para depois.
+
+## 2026-09-20 — Canvas resetava a visualização sozinho
+
+Relato da pessoa: "o canvas toda hora fica resetando a visualização". Causa (por leitura do código, sem
+reprodução em janela real): o efeito que enquadra o canvas (`CanvasView`, `fitCanvasViewSafely(0)`)
+tinha a própria função nas dependências, e ela é recriada a cada mudança de `occupancy` (gaveta do
+terminal, painéis, inspector) via `getSafeCanvasScreenRect`. Qualquer abrir/fechar/redimensionar de
+superfície refazia o "ver tudo" e jogava fora o pan e o zoom da pessoa.
+
+Correção: `viewport-auto-fit.ts` decide quando reenquadrar. Enquadra na primeira vez de cada revisão do
+canvas e em mudanças de layout ENQUANTO a pessoa ainda não mexeu na visão (medida tardia das
+superfícies no boot); depois que ela move o viewport — pan, zoom, botões de zoom, foco em bloco, "Ver
+tudo" — a visão é dela e mudança de layout não reenquadra mais. O movimento causado pelo próprio
+enquadramento (janela de 400 ms) não conta como da pessoa. Um canvas novo (importar arquivo) volta ao
+automático. 6 testes cobrem os casos, inclusive o do bug.
+
+NÃO verificado: não vi o reset acontecendo nem a correção funcionando numa janela real; a instância da
+pessoa é a versão instalada. Se o reset persistir depois desta correção, há outra fonte de reenquadramento
+ainda não achada (por exemplo, remontar o React Flow por `canvasRevision` inesperadamente).
+
+Também em 20/09 (CI do PR #72): o benchmark de scrollback do Windows terminou com **exit 3** depois de
+imprimir o JSON completo e sem nenhuma linha de erro do benchmark (`PostQueuedCompletionStatus: (6) The
+handle is invalid`) — `abort()` do Electron no encerramento, mesma família do crash do node-pty do #51. O
+retry do passo (antes só o 139) agora repete também o 3, até 3 vezes; outros códigos (o 1 de falha real do
+benchmark, por exemplo) falham na hora, e um crash persistente sai com o código real. Laço testado com
+funções falsas. Não verificado no runner: só as próximas execuções mostram se 3 tentativas bastam.
+
+## 2026-09-21 — Correção da janela do enquadramento automático (regressão do #73)
+
+O smoke do Windows do PR #75 falhou com "grupo fixture ocluido por topbar" (bloco sob a barra do topo) num boot
+lento (`canvas pronto em 14968 ms`). Causa, no que eu mesmo entreguei em `viewport-auto-fit.ts` (v0.1.395): a
+janela de 400 ms que separa "movimento do nosso ajuste" de "movimento da pessoa" abria no PLANEJAMENTO do ajuste;
+num PC/runner lento o `requestAnimationFrame` executa depois da janela, o ajuste era tratado como movimento da
+pessoa e os reenquadramentos por mudança de layout paravam — o enquadramento inicial, calculado com a medida
+antiga das superfícies, ficava errado. Corrigido: a janela conta da EXECUÇÃO do ajuste (`markAutoFitExecuted`),
+movimento programático com ajuste pendente é "nosso", e evento DOM real (mouse/roda/toque, `onMove` com evento)
+é sempre da pessoa. 9 testes, incluindo o cenário lento (plano em t=1000, execução em t=16000). NÃO verificado:
+o smoke do Windows passar de forma estável com esta correção (só o CI mostra) e nada foi visto numa janela real.
+
+Ainda em 20/09 (CI da main do #73): o teste de integração nativo "payload grande chega inteiro e o marcador
+posterior preserva a ordem" (`pty-write-queue.integration.test.cjs`) falhou UMA vez no Windows: o recebido tinha
+**9 caracteres a mais** que o esperado no meio da linha 131 de um payload de ~43 mil (nada faltou). Passou na
+reexecução. Não é do diff (viewport e CI) e é intermitente, mas o teste é de CORREÇÃO do produto: pode ser o
+ConPTY injetando sequência de escape numa escrita grande (o que afetaria colar prompt grande no Windows) ou
+ruído do teste. O `assert.equal` do Node trunca o texto, então os bytes não apareceram. Instrumentação:
+`describeDivergence` (`__fixtures__/text-divergence.cjs`, 3 testes) mostra o índice da primeira divergência, os
+tamanhos e o trecho com controles escapados; usada nos três testes de payload. NÃO investigado: a causa — só a
+próxima falha, agora com os bytes na mensagem, permite decidir entre bug real e ruído do teste.
+
+E2E de contexto (`canvas-context-e2e.test.ts`, cenário "claude-confianca-de-pasta"), Windows, 3 falhas em runs do #75:
+`expect(contextIndex).toBeGreaterThan(decisionIndex)` recebeu -1 com a decisão de confiança presente. Mecanismo (lido
+no código do fake): `write()` junta ao buffer de referência QUALQUER escrita que chegue até 40 ms depois de um trecho de
+contexto; se um Enter cai nessa janela, o evento vira `context-submitted` e o teste, que procura `context`, não acha. Há
+invariantes em outros cenários exigindo ZERO `context-submitted` (o produto não pode enviar contexto sozinho), então
+aceitar os dois tipos no teste poderia esconder um bug real. Ainda não se sabe QUEM mandou o Enter. A mensagem da falha
+agora traz a sequência completa de eventos; só a próxima falha decide entre artefato de tempo do fake e bug do produto.
+
+## 2026-09-21 — Ciclo de PR mais rápido
+
+Medição (Windows, run da main do #76): ~12 min de passos, dos quais os benchmarks somam ~4,8 min (custo
+operacional 145 s, scrollback 74 s, responsividade 50 s), o smoke 134 s e o E2E de contexto 81 s, tudo em série.
+Ciclo por PR ≈ CI do PR (~13 min) + CI da main (~13 min) + Release (~11 min).
+
+Feito (autorizado pela pessoa, que escolheu as três opções propostas):
+1. `concurrency` no `ci.yml`: em PR um push novo cancela a run anterior da branch; na `main` nunca cancela (o
+   Release depende do CI de cada commit).
+2. **Auto-merge ligado** no repositório (`allow_auto_merge`): `gh pr merge --auto --squash` faz o PR entrar sozinho
+   quando os checks obrigatórios passam.
+3. **Release só quando o app muda.** Novo workflow `Release gate` (`release-gate.yml`) roda depois do CI da `main`,
+   decide com `release-relevant.sh` (14 casos de teste; na dúvida publica) e só então dispara o `Release` por
+   `workflow_dispatch`. Commits só de docs/teste/`ci.yml` não publicam. O filtro NÃO fica dentro do `release.yml`
+   porque o `concurrency` dele cancelaria uma publicação em andamento por causa de um commit irrelevante. O
+   `release.yml` perdeu o gatilho `workflow_run` (fica só `workflow_dispatch`).
+4. **Benchmarks em job paralelo.** O job `Benchmarks (<os>)` roda em paralelo ao `Validate` os passos que não
+   dependem de build (npm runtime, alternativas, custo operacional, responsividade, scrollback); o do bundle
+   continua no `Validate`. Mesmos passos, mesmos gates, outra máquina ao mesmo tempo: o Windows deve cair de ~13
+   para ~8 min. As verificações obrigatórias da `main` ganharam `Benchmarks (ubuntu|windows|macos-latest)`.
+NÃO feito de propósito: paralelizar passos DENTRO do mesmo job (os testes sensíveis a tempo já falham de forma
+intermitente no Windows e a contenção pioraria isso). NÃO verificado: o `Release gate` só roda de verdade na `main`
+depois do merge; se ele falhar, nenhum instalador sai e é preciso disparar `Release` à mão (`workflow_dispatch`).

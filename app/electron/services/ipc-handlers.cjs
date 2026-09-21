@@ -336,6 +336,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
           modelName: model?.name,
           providerModel: model?.providerModel,
           reasoningEffort: model?.reasoningEffort,
+          fastMode: model?.fastMode === true,
           command,
           args,
           stdin: Boolean(stdinInput),

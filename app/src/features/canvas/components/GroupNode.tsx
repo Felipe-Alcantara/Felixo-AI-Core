@@ -1,4 +1,5 @@
 import { memo, useState } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { Trash2 } from 'lucide-react'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
@@ -22,8 +23,8 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
     <div className="felixo-canvas-group h-full w-full rounded-xl border-2 border-dashed border-white/10 bg-[var(--f-core-white)]/5">
       <NodeResizer
         isVisible={selected}
-        minWidth={240}
-        minHeight={180}
+        minWidth={NODE_MIN_SIZE.group.width}
+        minHeight={NODE_MIN_SIZE.group.height}
         lineClassName="!border-white/30"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-active)]"
       />

@@ -71,7 +71,14 @@ function interpretarArgumentos(argumentos) {
 
   for (const item of argumentos) {
     if (item.startsWith('--')) {
-      opcoes[item.slice(2)] = true
+      // `--chave=valor` guarda o valor (texto); `--chave` sozinha é uma opção
+      // ligada. Só `--profile=Nome` usa o valor; o resto continua booleano.
+      const igual = item.indexOf('=')
+      if (igual > 2) {
+        opcoes[item.slice(2, igual)] = item.slice(igual + 1)
+      } else {
+        opcoes[item.slice(2)] = true
+      }
     }
   }
 
@@ -85,6 +92,8 @@ function interpretarArgumentos(argumentos) {
     // "o argumento nem foi passado".
     argumento2: positivos[3] ?? '',
     argumento2Fornecido: positivos.length > 3,
+    // `perguntar "<pergunta>" <opção> <opção> ...`: tudo depois do verbo.
+    restantes: positivos.slice(2),
     opcoes,
   }
 }
@@ -98,6 +107,11 @@ const VERBOS_BROWSER_ABRIR = ['open', 'abrir']
 const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 const VERBOS_CANVAS_LISTAR = ['listar']
 const VERBOS_CANVAS_LER = ['ler']
+const FERRAMENTAS_PERGUNTAR = ['perguntar']
+// Pergunta espera um clique humano, que demora mais que uma leitura: o agente
+// precisa da resposta no stdout, então este comando BLOQUEIA até responderem.
+const PERGUNTAR_ESPERA_MAXIMA_MS = 5 * 60 * 1000
+const PERGUNTAR_ESPERA_INTERVALO_MS = 500
 const VERBOS_CANVAS_ESCREVER = ['escrever']
 const VERBOS_CANVAS_STATUS = ['ver-pedido']
 // Leitura é auto-resolvida pelo app (sem confirmação humana — ver
@@ -141,7 +155,7 @@ async function executar(argumentos, dependencias = {}) {
     lerEstado = lerEstadoPadrao,
   } = dependencias
 
-  const { ferramenta, verbo, argumento, argumento2, argumento2Fornecido, opcoes } =
+  const { ferramenta, verbo, argumento, argumento2, argumento2Fornecido, restantes, opcoes } =
     interpretarArgumentos(argumentos)
 
   if (FERRAMENTAS_BROWSER.includes(ferramenta)) {
@@ -151,9 +165,14 @@ async function executar(argumentos, dependencias = {}) {
       }
 
       try {
+        const perfil = opcoes.profile ?? opcoes.perfil
+        if (perfil === true) {
+          return { saida: '', erro: 'Informe o perfil com --profile=<nome> (sem espaço antes do nome).', codigo: 2 }
+        }
         const pedido = criarPedidos().registrar('abrir-pagina', {
           url: argumento,
           modo: opcoes.embedded === true || opcoes.embutido === true ? 'embutido' : 'externo',
+          ...(typeof perfil === 'string' ? { perfil } : {}),
           origem: diretorioAtual(),
         })
 
@@ -166,6 +185,7 @@ async function executar(argumentos, dependencias = {}) {
             `Pedido registrado: ${pedido.id}`,
             `URL: ${pedido.url}`,
             `Destino: ${pedido.modo}`,
+            ...(pedido.perfil ? [`Perfil: ${pedido.perfil}`] : []),
             '',
             'O app vai atender o pedido pela fila compartilhada com o Fetch All.',
             `Para acompanhar: felixo browser status ${pedido.id}`,
@@ -195,6 +215,49 @@ async function executar(argumentos, dependencias = {}) {
     }
 
     return { saida: `${AJUDA}\n\n${obterAjudaDevtools()}`, codigo: 2 }
+  }
+
+  if (FERRAMENTAS_PERGUNTAR.includes(ferramenta)) {
+    const { esperar = esperarPadrao, esperaMaximaMs = PERGUNTAR_ESPERA_MAXIMA_MS } = dependencias
+    // O "verbo" posicional é a própria pergunta; as opções vêm depois dela.
+    const pergunta = verbo
+    if (!pergunta) {
+      return { saida: '', erro: 'Informe a pergunta: felixo perguntar "<pergunta>" "<opção 1>" "<opção 2>" ...', codigo: 2 }
+    }
+
+    let pedido
+    try {
+      pedido = criarPedidos().registrar('perguntar', { pergunta, opcoes: restantes, origem: diretorioAtual() })
+    } catch (error) {
+      return { saida: '', erro: error instanceof Error ? error.message : 'Não foi possível registrar a pergunta.', codigo: 2 }
+    }
+
+    const resolvido = await aguardarResolucao(criarPedidos(), pedido.id, esperar, {
+      maximoMs: esperaMaximaMs,
+      intervaloMs: PERGUNTAR_ESPERA_INTERVALO_MS,
+    })
+
+    if (!resolvido) {
+      return {
+        saida: [
+          `Pergunta registrada (${pedido.id}), mas ninguém respondeu a tempo.`,
+          `Para conferir depois: felixo canvas ver-pedido ${pedido.id}`,
+        ].join('\n'),
+        codigo: 1,
+      }
+    }
+
+    if (resolvido.estado !== 'aceito' || !resolvido.resultado?.ok) {
+      return {
+        saida: opcoes.json ? JSON.stringify({ ok: false, pedido: resolvido.id, estado: resolvido.estado }, null, 2) : 'A pessoa dispensou a pergunta sem escolher uma opção.',
+        codigo: 3,
+      }
+    }
+
+    return {
+      saida: opcoes.json ? JSON.stringify(resolvido.resultado, null, 2) : resolvido.resultado.label,
+      codigo: 0,
+    }
   }
 
   if (FERRAMENTAS_CANVAS.includes(ferramenta)) {
@@ -442,12 +505,12 @@ function esperarPadrao(ms) {
  * @param {(ms: number) => Promise<void>} esperar
  * @returns {Promise<object|null>} o pedido resolvido, ou `null` se o prazo estourou.
  */
-async function aguardarResolucao(pedidos, id, esperar) {
-  const tentativas = Math.ceil(CANVAS_ESPERA_MAXIMA_MS / CANVAS_ESPERA_INTERVALO_MS)
+async function aguardarResolucao(pedidos, id, esperar, { maximoMs = CANVAS_ESPERA_MAXIMA_MS, intervaloMs = CANVAS_ESPERA_INTERVALO_MS } = {}) {
+  const tentativas = Math.ceil(maximoMs / intervaloMs)
   for (let tentativa = 0; tentativa < tentativas; tentativa += 1) {
     const pedido = pedidos.ler(id)
     if (pedido && pedido.estado !== 'pendente') return pedido
-    await esperar(CANVAS_ESPERA_INTERVALO_MS)
+    await esperar(intervaloMs)
   }
   return null
 }
@@ -497,6 +560,7 @@ function descreverPedido(pedido) {
     pedido.acao ? `  ação: ${pedido.acao}` : null,
     pedido.acao === 'abrir-pagina' ? `  url: ${pedido.url}` : null,
     pedido.acao === 'abrir-pagina' ? `  destino: ${pedido.modo}` : null,
+    pedido.acao === 'abrir-pagina' && pedido.perfil ? `  perfil: ${pedido.perfil}` : null,
     `  estado: ${pedido.estado} (${estados[pedido.estado] ?? 'desconhecido'})`,
     `  pedido em: ${pedido.pedidoEm}`,
     pedido.resolvidoEm ? `  resolvido em: ${pedido.resolvidoEm}` : null,

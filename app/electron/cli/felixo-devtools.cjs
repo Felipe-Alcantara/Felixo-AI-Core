@@ -144,14 +144,33 @@ async function waitForCdp(port, { fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT
   throw new Error(`O Electron não abriu CDP na porta ${port}. ${lastError?.message ?? ''}`.trim())
 }
 function createDetached(command, args, options, deps = {}) {
-  const child = (deps.spawn ?? spawn)(command, args, {
-    ...options,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: options.windowsHide ?? true,
-  })
-  child.unref?.()
-  return child
+  // `debugLog`: caminho de um arquivo que recebe stdout+stderr do processo. Só o
+  // launch do Electron liga isso (FELIXO_DEVTOOLS_DEBUG_LOG); sem ele o processo
+  // continua silencioso (`stdio: 'ignore'`), como sempre foi.
+  const { debugLog, ...spawnOptions } = options
+  const fileSystem = deps.fs ?? fs
+  const logFd = debugLog ? fileSystem.openSync(debugLog, 'a') : null
+  try {
+    const child = (deps.spawn ?? spawn)(command, args, {
+      ...spawnOptions,
+      detached: true,
+      stdio: logFd === null ? 'ignore' : ['ignore', logFd, logFd],
+      windowsHide: options.windowsHide ?? true,
+    })
+    child.unref?.()
+    return child
+  } finally {
+    // O filho já herdou o descritor; o pai não precisa mantê-lo aberto.
+    if (logFd !== null) fileSystem.closeSync(logFd)
+  }
+}
+/** Fim do arquivo de log do Electron, para a mensagem de erro do launch (vazio se não houver). */
+function readLogTail(debugLog, deps = {}, maxChars = 4000) {
+  if (!debugLog) return ''
+  try {
+    const text = (deps.fs ?? fs).readFileSync(debugLog, 'utf8')
+    return text.length > maxChars ? `…${text.slice(-maxChars)}` : text
+  } catch { return '' }
 }
 async function ensureVite(deps = {}) {
   const probe = deps.probeVite ?? probeFelixoVite
@@ -212,14 +231,33 @@ async function launch(options, deps = {}) {
     FELIXO_DEVTOOLS_HEADLESS: options.visible ? '0' : '1',
   }
   delete env.ELECTRON_RUN_AS_NODE
+  const debugLog = env.FELIXO_DEVTOOLS_DEBUG_LOG || ''
+  // Linux: o Chromium checa o sandbox SUID ao iniciar o processo do navegador, ANTES
+  // do main.cjs — sem `chrome-sandbox` root/4755 (contêiner, CI, AppImage) ele aborta com
+  // "SUID sandbox helper binary was found, but is not configured correctly" e o CDP nunca
+  // abre (log real do CI, 20/09, ubuntu-latest e ubuntu-24.04-arm). O appendSwitch do
+  // main.cjs chega tarde; a flag tem de ir na linha de comando. Só nesta instância de
+  // automação: o app normal da pessoa nunca recebe isto.
+  const platform = deps.platform ?? process.platform
+  const sandboxArgs = platform === 'linux' ? ['--no-sandbox'] : []
   const child = packaged
-    ? createDetached(packaged, [], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible }, deps)
-    : createDetached(deps.electronPath ?? electronPath(), ['.'], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible }, deps)
+    ? createDetached(packaged, sandboxArgs, { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
+    : createDetached(deps.electronPath ?? electronPath(), ['.', ...sandboxArgs], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
   const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid, createdAt: new Date().toISOString() }
   writeState(state, deps)
+  // Distingue "o Electron morreu ao subir" de "ficou vivo e mudo": sem isso os dois
+  // viravam o mesmo 'fetch failed' no fim do timeout (task de CDP sob Xvfb, 20/09).
+  let exited = null
+  child.once?.('exit', (code, signal) => { exited = { code, signal } })
   try {
     await (deps.waitForCdp ?? waitForCdp)(port, { timeoutMs: options.timeout ?? DEFAULT_TIMEOUT })
   } catch (error) {
+    const tail = readLogTail(debugLog, deps)
+    const detalhes = [
+      exited ? `O processo do Electron ENCERROU antes de abrir o CDP (código ${exited.code ?? 'nenhum'}, sinal ${exited.signal ?? 'nenhum'}).` : (child.once ? 'O processo do Electron seguia vivo, mas não abriu o CDP.' : ''),
+      tail ? `Saída do Electron (${debugLog}):\n${tail}` : (debugLog ? `Log do Electron vazio (${debugLog}).` : ''),
+    ].filter(Boolean)
+    if (detalhes.length) error.message = `${error.message}\n${detalhes.join('\n')}`
     killTree(child.pid, deps)
     if (vitePid) killTree(vitePid, deps)
     if (!options.realProfile) {

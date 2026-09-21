@@ -6,6 +6,7 @@ import {
   getAgent,
   getEffortLevels,
   isEffortValidForModel,
+  supportsFastMode,
   type AgentDefinition,
   type EffortLevel,
 } from '../services/agent-launch-options'
@@ -16,6 +17,8 @@ import {
   type AgentLaunchPreferences,
 } from '../services/agent-launch-preferences'
 import { useAgentModelCatalog } from './useAgentModelCatalog'
+import { useAgentPresets } from './useAgentPresets'
+import type { AgentPreset, AgentPresetAgentId } from '../services/agent-preset'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import {
   buildOpeniaRunArgs,
@@ -72,6 +75,13 @@ export function useAgentConfig(
   const [model, setModel] = useState(inicial.model)
   const [effort, setEffort] = useState(inicial.effort)
   const [yolo, setYolo] = useState(inicial.yolo)
+  const [fast, setFast] = useState(inicial.fast)
+  // Preset aplicado + o contexto editável do agente. O contexto é um rascunho
+  // próprio (não o do preset): dá para ajustá-lo antes de abrir e salvar o
+  // resultado como um preset novo.
+  const agentPresets = useAgentPresets()
+  const [activePreset, setActivePreset] = useState<AgentPreset | null>(null)
+  const [contextDraft, setContextDraft] = useState('')
   const [projectId, setProjectId] = useState(inicial.projectId)
   const [planningFile, setPlanningFile] = useState(inicial.planningFile)
   const [name, setName] = useState('')
@@ -99,6 +109,7 @@ export function useAgentConfig(
       ? undefined
       : (agents.find((item) => item.id === agentValue) ?? getAgent(agentValue))
   const effortLevels = agent ? getEffortLevels(agent, model) : null
+  const fastSupported = supportsFastMode(agent, model)
 
   const setOpeniaInterfaceKey = useCallback((value: string) => {
     openiaInterfaceRef.current = value
@@ -409,6 +420,9 @@ export function useAgentConfig(
     setAgentValue(valor)
     setModel('')
     setEffort('')
+    setFast(false)
+    // Um preset descreve uma CLI: trocar de agente sai do preset.
+    setActivePreset((atual) => (atual && atual.agentId === valor ? atual : null))
   }, [])
 
   const refreshOpenia = useCallback(() => {
@@ -561,8 +575,61 @@ export function useAgentConfig(
       if (agent && !isEffortValidForModel(agent, valor, effort)) {
         setEffort('')
       }
+      if (!supportsFastMode(agent, valor)) {
+        setFast(false)
+      }
     },
     [agent, effort],
+  )
+
+  /** Carrega a receita de um preset no formulário (`null` = voltar ao manual). */
+  const applyPreset = useCallback(
+    (preset: AgentPreset | null) => {
+      if (!preset) {
+        setActivePreset(null)
+        setContextDraft('')
+        return
+      }
+      // Trocar de CLI zera conta/modelo/esforço; só chama quando muda de fato,
+      // para não perder a conta escolhida ao aplicar um preset da mesma CLI.
+      if (agentValue !== preset.agentId) {
+        changeAgent(preset.agentId)
+      }
+      setModel(preset.model)
+      setEffort(preset.effort)
+      setFast(preset.fast)
+      setYolo(preset.yolo)
+      const project = preset.cwd ? projects.find((item) => item.path === preset.cwd) : undefined
+      if (project) setProjectId(project.id)
+      setContextDraft(preset.contextPrompt)
+      setActivePreset(preset)
+    },
+    [agentValue, changeAgent, projects],
+  )
+
+  /** Salva a configuração atual como preset novo (mantém as skills do preset ativo). */
+  const saveAsPreset = useCallback(
+    async (presetName: string) => {
+      if (!agent || agent.isLauncher || agentValue === SHELL_AGENT_VALUE) return null
+      const project = projects.find((item) => item.id === projectId)
+      const saved = await agentPresets.create({
+        name: presetName,
+        description: '',
+        icon: activePreset?.icon ?? '',
+        ...(activePreset?.color ? { color: activePreset.color } : {}),
+        agentId: agent.id as AgentPresetAgentId,
+        model,
+        effort,
+        fast: fast && fastSupported,
+        yolo,
+        contextPrompt: contextDraft,
+        skillIds: activePreset?.skillIds ?? [],
+        cwd: project?.path ?? '',
+      })
+      if (saved) setActivePreset(saved)
+      return saved
+    },
+    [activePreset, agent, agentPresets, agentValue, contextDraft, effort, fast, fastSupported, model, projectId, projects, yolo],
   )
 
   const savePreferences = useCallback(() => {
@@ -571,6 +638,7 @@ export function useAgentConfig(
       model,
       effort,
       yolo,
+      fast: fast && fastSupported,
       projectId,
       planningFile,
       openiaInterface: openiaInterfaceRef.current,
@@ -580,6 +648,8 @@ export function useAgentConfig(
   }, [
     agentValue,
     effort,
+    fast,
+    fastSupported,
     model,
     planningFile,
     projectId,
@@ -596,6 +666,7 @@ export function useAgentConfig(
   }, [
     accountId,
     effort,
+    fast,
     model,
     openiaInterfaceKey,
     openiaModel,
@@ -625,6 +696,7 @@ export function useAgentConfig(
       model: model || undefined,
       effort: (effort || undefined) as EffortLevel | undefined,
       yolo,
+      fast: fast && fastSupported,
     }
     if (agent.isLauncher) {
       const launcherArgs = buildOpeniaRunArgs(
@@ -648,18 +720,38 @@ export function useAgentConfig(
         launchMode: 'launcher',
       }
     }
+    // Contexto/skills/cor do preset acompanham o terminal desde o nascimento.
+    // Sem preset nem contexto digitado, nada é acrescentado.
+    const context = contextDraft.trim()
+    const preset =
+      activePreset || context
+        ? {
+            id: activePreset?.id,
+            name: activePreset?.name ?? 'Contexto do agente',
+            contextPrompt: context,
+            skillIds: activePreset?.skillIds ?? [],
+            ...(activePreset?.color ? { color: activePreset.color } : {}),
+          }
+        : undefined
     return {
       accountId: conta,
       providerId: agent.id,
       command: agent.command,
       args: buildAgentArgs(choices) ?? undefined,
       cwd: project?.path,
-      label: customName || `${describeLaunch(choices)} · ${place}`,
+      label:
+        customName ||
+        (activePreset ? `${activePreset.name} · ${place}` : `${describeLaunch(choices)} · ${place}`),
       planningFile: planningFile.trim() || undefined,
+      ...(preset ? { preset } : {}),
     }
   }, [
+    activePreset,
     agent,
+    contextDraft,
     effort,
+    fast,
+    fastSupported,
     model,
     name,
     openiaInterfaces,
@@ -681,6 +773,15 @@ export function useAgentConfig(
     effortLevels,
     yolo,
     setYolo,
+    fast,
+    setFast,
+    fastSupported,
+    presets: agentPresets,
+    activePreset,
+    applyPreset,
+    saveAsPreset,
+    contextDraft,
+    setContextDraft,
     projectId,
     setProjectId,
     planningFile,

@@ -13,6 +13,19 @@ const CODEX_FULL_ACCESS_ENV = 'FELIXO_CODEX_FULL_ACCESS'
 const GEMINI_FULL_ACCESS_ENV = 'FELIXO_GEMINI_FULL_ACCESS'
 const DEFAULT_CLAUDE_PERMISSION_MODE = 'bypassPermissions'
 
+/**
+ * Modo fast do Codex: `service_tier = "priority"` (o Codex rotula o tier como
+ * "Fast": mais rápido, mais uso do limite). Só é passado quando pedido — sem
+ * o pedido, nada é enviado e vale o que a pessoa tem no `~/.codex/config.toml`.
+ */
+const CODEX_FAST_SERVICE_TIER = 'priority'
+
+function createCodexServiceTierArgs(context = {}) {
+  return context.model?.fastMode === true
+    ? ['--config', createTomlStringConfig('service_tier', CODEX_FAST_SERVICE_TIER)]
+    : []
+}
+
 function createCodexExecOptionArgs(context = {}) {
   const args = []
   const providerModel = getProviderModel(context)
@@ -27,6 +40,8 @@ function createCodexExecOptionArgs(context = {}) {
   if (reasoningEffort) {
     args.push('--config', createTomlStringConfig('model_reasoning_effort', reasoningEffort))
   }
+
+  args.push(...createCodexServiceTierArgs(context))
 
   return args
 }
@@ -52,6 +67,8 @@ function createCodexConfigOptionArgs(context = {}) {
   if (reasoningEffort) {
     args.push('--config', createTomlStringConfig('model_reasoning_effort', reasoningEffort))
   }
+
+  args.push(...createCodexServiceTierArgs(context))
 
   return args
 }

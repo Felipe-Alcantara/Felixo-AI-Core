@@ -53,6 +53,15 @@ const { registerGitIpcHandlers } = require('./services/git-ipc-handlers.cjs')
 const {
   registerFetchAllIpcHandlers,
 } = require('./services/fetch-all-ipc-handlers.cjs')
+const {
+  registerSpeechIpcHandlers,
+} = require('./services/speech/speech-ipc-handlers.cjs')
+const {
+  registerWebviewProfilesIpcHandlers,
+} = require('./services/webview-profiles-ipc-handlers.cjs')
+const {
+  registerAgentPresetsIpcHandlers,
+} = require('./services/agent-presets-ipc-handlers.cjs')
 const { registerNotionIpcHandlers } = require('./services/notion-ipc-handlers.cjs')
 const {
   registerAgentBrowserIpcHandlers,
@@ -63,6 +72,9 @@ const {
 const {
   registerAgentCanvasWriteIpcHandlers,
 } = require('./services/agent-canvas-write-ipc-handlers.cjs')
+const {
+  registerAgentQuestionIpcHandlers,
+} = require('./services/agent-question-ipc-handlers.cjs')
 const {
   instalarComandoDoAgente: installAgentCommand,
 } = require('./services/agent-command-install.cjs')
@@ -128,6 +140,7 @@ let notionHandlers = null
 let agentBrowserWatching = null
 let agentCanvasReadWatching = null
 let agentCanvasWriteWatching = null
+let agentQuestionWatching = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -154,6 +167,11 @@ if (Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535)
   // vir daqui. Exclusivo desta instância — o app normal do usuário nunca
   // recebe FELIXO_DEVTOOLS_PORT e mantém o sandbox do Chromium ativo.
   app.commandLine.appendSwitch('no-sandbox')
+  // ATENÇÃO: este switch chega TARDE para a checagem do sandbox SUID, que roda ao
+  // iniciar o processo do navegador, antes deste arquivo (log real do CI em 20/09:
+  // "SUID sandbox helper binary was found, but is not configured correctly").
+  // Por isso `felixo devtools launch` também passa `--no-sandbox` na linha de
+  // comando no Linux; sem isso o Electron aborta e o CDP nunca abre.
 }
 
 if (isReleaseSmoke && process.env.FELIXO_RELEASE_SMOKE_USER_DATA) {
@@ -485,6 +503,8 @@ app.whenReady().then(async () => {
   })
   registerAutomationsIpcHandlers({ database: storageDatabase })
   registerModelsIpcHandlers({ database: storageDatabase })
+  registerAgentPresetsIpcHandlers({ database: storageDatabase })
+  registerSpeechIpcHandlers({ userData: appPaths.userData })
   registerAgentModelsIpcHandlers(appPaths)
   registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
   registerChatHistoryIpcHandlers({ database: storageDatabase })
@@ -494,7 +514,10 @@ app.whenReady().then(async () => {
     appPaths,
     database: storageDatabase,
   })
-  agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths)
+  const webviewProfiles = registerWebviewProfilesIpcHandlers({ database: storageDatabase })
+  agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths, {
+    findProfileByName: (name) => webviewProfiles.repository.findByName(name),
+  })
   agentCanvasReadWatching = registerAgentCanvasReadIpcHandlers({
     database: storageDatabase,
     appPaths,
@@ -505,6 +528,7 @@ app.whenReady().then(async () => {
     database: storageDatabase,
     appPaths,
   })
+  agentQuestionWatching = registerAgentQuestionIpcHandlers({ getMainWindow, appPaths })
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
@@ -589,6 +613,15 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     agentCanvasWriteWatching = null
+  }
+
+  if (agentQuestionWatching) {
+    try {
+      agentQuestionWatching.pararDeObservarPedidos()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentQuestionWatching = null
   }
 
   if (agentUsageWatching) {

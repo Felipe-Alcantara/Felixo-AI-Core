@@ -35,6 +35,7 @@ import type {
   ModelId,
   ReasoningEffort,
 } from '../types'
+import { modelSupportsFastMode, resolveFastMode } from '../services/model-fast-mode'
 import {
   getAgent,
   getEffortLevels,
@@ -133,7 +134,7 @@ function getCodexReasoningEffortOptions(providerModel: string): ReasoningEffortO
 }
 
 type ModelRuntimeConfigPatch = Partial<
-  Pick<Model, 'providerModel' | 'reasoningEffort'>
+  Pick<Model, 'providerModel' | 'reasoningEffort' | 'fastMode'>
 >
 
 type ComposerProps = {
@@ -208,7 +209,20 @@ export function Composer({
     onChangeModelConfig({
       providerModel: providerModel || undefined,
       ...(effortStillValid ? {} : { reasoningEffort: undefined }),
+      // Trocar para um modelo sem o tier não pode deixar o fast ligado escondido.
+      ...(selectedModel.fastMode &&
+      !resolveFastMode({ cliType: selectedModel.cliType, providerModel }, true)
+        ? { fastMode: undefined }
+        : {}),
     })
+  }
+
+  function toggleFastMode() {
+    if (!selectedModel || isStreaming) {
+      return
+    }
+
+    onChangeModelConfig({ fastMode: selectedModel.fastMode === true ? undefined : true })
   }
 
   function changeReasoningEffort(value: '' | ReasoningEffort) {
@@ -290,6 +304,7 @@ export function Composer({
     selectedModel,
     reasoningEffortOptions,
   )
+  const fastSupported = modelSupportsFastMode(selectedModel)
   const isReasoningEffortDisabled =
     !selectedModel || isStreaming || reasoningEffortOptions.length <= 1
 
@@ -395,6 +410,23 @@ export function Composer({
                   label: option.label,
                 }))}
               />
+
+              {fastSupported && (
+                <button
+                  type="button"
+                  onClick={toggleFastMode}
+                  disabled={isStreaming}
+                  aria-pressed={selectedModel?.fastMode === true}
+                  title="Modo fast: mais rápido, gasta mais do limite"
+                  className={`felixo-btn rounded-full px-2.5 py-1 text-xs disabled:opacity-50 ${
+                    selectedModel?.fastMode === true
+                      ? 'bg-white/[0.14] text-zinc-50'
+                      : 'text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100'
+                  }`}
+                >
+                  ⚡ Fast
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-1">

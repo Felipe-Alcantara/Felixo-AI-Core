@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useExitAnimation } from '../../hooks/useExitAnimation'
+import { useResizablePanelHeight } from '../../hooks/useResizablePanelHeight'
 import { useResizablePanelWidth } from '../../hooks/useResizablePanelWidth'
 import { PANEL_EXIT_MS } from '../../services/animation-timing'
 import { getPanelMaxHeight, type PanelSize } from '../../services/panel-sizing'
@@ -70,6 +71,7 @@ export function CanvasPanel({
     useResizablePanelWidth(panelId, size, collapsed)
   const { occupancy, reportPanelWidth, viewport } = useCanvasSurfaces()
   const panelRef = useRef<HTMLDivElement>(null)
+  const heightResize = useResizablePanelHeight(panelId, panelRef)
   const headingId = useId()
   const contentId = useId()
   const isWorkspace = variant === 'workspace'
@@ -98,6 +100,18 @@ export function CanvasPanel({
     const active = document.activeElement
     if (!(active instanceof HTMLElement) || !panel.contains(active)) panel.focus()
   }, [])
+
+  const onHeightResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Home') {
+      event.preventDefault()
+      heightResize.reset()
+      return
+    }
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+    event.preventDefault()
+    const direction = event.key === 'ArrowDown' ? 1 : -1
+    heightResize.resizeBy(direction * (event.shiftKey ? 80 : 24))
+  }
 
   const onResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Home') {
@@ -144,7 +158,10 @@ export function CanvasPanel({
         // filhos conseguem `height: 100%` e rolar cada coluna por dentro.
         // Só com max-height a altura fica "auto" e a rolagem interna nunca
         // acontece — a tela inteira do painel rola, com cabeçalho e tudo.
-        height: isWorkspace ? maxHeight : undefined,
+        //
+        // Painel comum: altura do conteúdo até o teto — ou a que a pessoa
+        // escolheu arrastando a borda de baixo. Recolhido, volta ao automático.
+        height: isWorkspace ? maxHeight : collapsed ? undefined : (heightResize.height ?? undefined),
       }}
       data-felixo-canvas-panel={panelId}
       className={`absolute z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl focus-within:z-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
@@ -211,6 +228,29 @@ export function CanvasPanel({
           title="Arraste para redimensionar; dois cliques para o tamanho padrão"
           className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
             resizing ? 'bg-white/20' : 'hover:bg-white/10'
+          }`}
+        />
+      )}
+
+      {/* Borda de baixo: altura. Setas ajustam, Home devolve a altura do
+          conteúdo. O limite é o mesmo teto que o painel já respeitava. */}
+      {!isWorkspace && !collapsed && (
+        <div
+          onMouseDown={heightResize.startResize}
+          onDoubleClick={heightResize.reset}
+          onKeyDown={onHeightResizeKeyDown}
+          role="separator"
+          aria-label={`Redimensionar altura do painel ${title}`}
+          aria-orientation="horizontal"
+          aria-valuenow={heightResize.height ?? undefined}
+          aria-valuemin={heightResize.minHeight}
+          aria-valuemax={heightResize.maxHeight}
+          aria-description="Use as setas para cima e para baixo para ajustar e Home para voltar à altura do conteúdo."
+          tabIndex={0}
+          title="Arraste para ajustar a altura; dois cliques para a altura do conteúdo"
+          data-felixo-panel-height-handle={panelId}
+          className={`absolute bottom-0 left-0 h-1.5 w-full cursor-row-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
+            heightResize.resizing ? 'bg-white/20' : 'hover:bg-white/10'
           }`}
         />
       )}

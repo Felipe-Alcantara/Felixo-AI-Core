@@ -17,11 +17,13 @@ import type {
   QaLogEntryInput,
   StreamEvent,
   SystemDesignConfig,
+  SystemDesignConfigChange,
   SystemDesignDocument,
   SystemDesignDocumentSummary,
   TerminalOutputEvent,
 } from './features/chat/types'
 import type {
+  CanvasAgentQuestion,
   CanvasNodeData,
   CanvasWriteAgentRequest,
   FetchAllActionResult,
@@ -421,6 +423,8 @@ declare global {
           fallbackCommand?: string
           /** Keeps the terminal interactive after the command exits (run-a-file). */
           keepShellOpen?: boolean
+          /** Claude Code: mantém a saída no buffer normal (rolagem), sem o alternate screen. */
+          classicScreen?: boolean
           accountId?: string
           /** Provider of the CLI; validated against the account in the main process. */
           providerId?: string
@@ -640,7 +644,7 @@ declare global {
           hiddenBuiltinIds?: string[]
         }) => Promise<CliInvokeResult>
         onAgentBrowserOpen: (
-          callback: (data: { requestId: string; url: string }) => void,
+          callback: (data: { requestId: string; url: string; profileId?: string }) => void,
         ) => () => void
         listWriteRequests: () => Promise<
           CliInvokeResult & { requests?: CanvasWriteAgentRequest[] }
@@ -656,6 +660,19 @@ declare global {
         >
         onWriteRequests: (
           callback: (data: { requests: CanvasWriteAgentRequest[] }) => void,
+        ) => () => void
+        listQuestions: () => Promise<CliInvokeResult & { requests?: CanvasAgentQuestion[] }>
+        answerQuestion: (params: {
+          id: string
+          indice: number | null
+        }) => Promise<
+          CliInvokeResult & {
+            resolved?: CanvasAgentQuestion | null
+            resultado?: { ok: boolean; indice?: number; label?: string }
+          }
+        >
+        onQuestions: (
+          callback: (data: { requests: CanvasAgentQuestion[] }) => void,
         ) => () => void
         onNodeUpdated: (
           callback: (data: { id: string; data: CanvasNodeData }) => void,
@@ -762,6 +779,54 @@ declare global {
         save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>
         delete: (modelId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      speech?: {
+        getConfig: () => Promise<
+          CliInvokeResult & {
+            config?: {
+              baseUrl: string
+              model: string
+              language: string
+              keyConfigured: boolean
+              keyRequired: boolean
+            }
+          }
+        >
+        saveConfig: (config: { baseUrl: string; model: string; language: string }) => Promise<
+          CliInvokeResult & {
+            config?: {
+              baseUrl: string
+              model: string
+              language: string
+              keyConfigured: boolean
+              keyRequired: boolean
+            }
+          }
+        >
+        setKey: (key: string) => Promise<CliInvokeResult>
+        clearKey: () => Promise<CliInvokeResult>
+        transcribe: (params: {
+          audio: Uint8Array
+          mimeType: string
+        }) => Promise<CliInvokeResult & { text?: string }>
+        getMicrophoneStatus: () => Promise<
+          CliInvokeResult & { status?: string; platform?: string }
+        >
+        requestMicrophone: () => Promise<CliInvokeResult & { status?: string; platform?: string }>
+      }
+      webviewProfiles?: {
+        list: () => Promise<CliInvokeResult & { profiles?: Record<string, unknown>[] }>
+        save: (
+          profile: Record<string, unknown>,
+        ) => Promise<CliInvokeResult & { profile?: Record<string, unknown> }>
+        delete: (profileId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
+      agentPresets?: {
+        list: () => Promise<CliInvokeResult & { presets?: Record<string, unknown>[] }>
+        save: (
+          preset: Record<string, unknown>,
+        ) => Promise<CliInvokeResult & { preset?: Record<string, unknown> }>
+        delete: (presetId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
+      }
       agentModels?: {
         get: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
         refresh: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
@@ -813,7 +878,7 @@ declare global {
           CliInvokeResult & { config?: SystemDesignConfig }
         >
         saveConfig: (
-          partial: Partial<SystemDesignConfig>,
+          change: SystemDesignConfigChange,
         ) => Promise<CliInvokeResult & { config?: SystemDesignConfig }>
         listDocuments: () => Promise<
           CliInvokeResult & { documents?: SystemDesignDocumentSummary[] }
@@ -895,6 +960,23 @@ declare global {
       cliSetup?: {
         getStatus: () => Promise<CliInvokeResult & { status?: CliSetupStatus }>
         retry: () => Promise<CliInvokeResult & { status?: CliSetupStatus }>
+        /**
+         * Só lê: explica por que cada CLI não é vista, sem instalar nada.
+         * `supportText` já sai minimizado (sem usuário, URL ou segredo).
+         */
+        diagnose: () => Promise<
+          CliInvokeResult & {
+            diagnoses?: Array<{
+              id: string
+              name: string
+              status: 'ready' | 'unavailable'
+              cause: string | null
+              recommendInstall: boolean
+              nextAction: { kind: string; text: string }
+            }>
+            supportText?: string
+          }
+        >
         onStatus: (callback: (status: CliSetupStatus) => void) => () => void
       }
       fileOpen?: {

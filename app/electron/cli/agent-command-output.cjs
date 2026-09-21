@@ -153,9 +153,12 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
   felixo fetch-all ver-pedido <id> [--json]
       Diz se um pedido já foi confirmado, recusado ou continua esperando.
 
-  felixo browser open <url> [--embedded] [--json]
+  felixo browser open <url> [--embedded] [--profile=<nome>] [--json]
       Pede ao app para abrir uma página no navegador do sistema. Com
-      --embedded, a página vira um bloco Webpage persistido no canvas.
+      --embedded, a página vira um bloco Webpage persistido no canvas; com
+      --profile=<nome> (só junto de --embedded) o bloco abre nesse perfil do
+      navegador interno — logins separados por perfil. "Padrão" é o perfil
+      que já existia. Perfil inexistente falha em vez de cair no Padrão.
 
   felixo browser status <id> [--json]
       Mostra o desfecho de um pedido de abertura.
@@ -179,6 +182,13 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       fica pendente até a pessoa confirmar no painel "Pedidos de escrita" do
       canvas — este comando só registra o pedido e devolve na hora, sem
       esperar a confirmação. Só "note" aceita escrita nesta fatia.
+
+  felixo perguntar "<pergunta>" "<opção 1>" "<opção 2>" [... até 4] [--json]
+      Faz uma pergunta com 2 a 4 opções e BLOQUEIA até a pessoa clicar numa
+      delas no diálogo do app; imprime o texto da opção escolhida (código 0).
+      Código 3 = a pessoa dispensou a pergunta; código 1 = ninguém respondeu em
+      5 minutos (o id do pedido fica no texto, para conferir depois com
+      "felixo canvas ver-pedido <id>"). Quem responde é sempre uma pessoa.
 
   felixo canvas ver-pedido <id> [--json]
       Confere o desfecho de um pedido de canvas (leitura ou escrita).

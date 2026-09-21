@@ -1,4 +1,5 @@
 import { memo, useState } from 'react'
+import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
   Position,
@@ -39,8 +40,8 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
     >
       <NodeResizer
         isVisible={selected}
-        minWidth={180}
-        minHeight={120}
+        minWidth={NODE_MIN_SIZE.note.width}
+        minHeight={NODE_MIN_SIZE.note.height}
         lineClassName="!border-black/20"
         handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-black/40"
       />

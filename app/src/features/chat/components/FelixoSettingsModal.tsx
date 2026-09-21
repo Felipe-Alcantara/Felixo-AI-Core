@@ -7,6 +7,8 @@ import { FelixoToggle } from '../../shared/components/FelixoToggle'
 import { GraphicsRecoverySection } from '../../shared/graphics/GraphicsRecoverySection'
 import { PerformanceModeSection } from '../../shared/performance/PerformanceModeSection'
 import { SystemDesignSettingsSection } from '../../shared/system-design/SystemDesignSettingsSection'
+import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
+import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
 
 const THEME_OPTIONS: FelixoSelectOption[] = [
   { value: 'dark', label: 'Escuro' },
@@ -56,6 +58,7 @@ function FelixoSettingsDialog({
   onThemeChange,
   onSaveOrchestratorSettings,
 }: Omit<FelixoSettingsModalProps, 'isOpen'>) {
+  const dialog = useResizableDialog('felixo-settings')
   const [settingsDraft, setSettingsDraft] = useState(orchestratorSettings)
 
   function saveGlobalSettings(event: FormEvent<HTMLFormElement>) {
@@ -88,7 +91,8 @@ function FelixoSettingsDialog({
       onClick={onClose}
     >
       <section
-        className="flex max-h-[86vh] w-full max-w-[620px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        {...dialog.frameProps}
+        className="relative flex max-h-[86vh] w-full max-w-[620px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
@@ -292,6 +296,7 @@ function FelixoSettingsDialog({
             </div>
           </section>
         </div>
+        <DialogResizeHandles dialog={dialog} />
       </section>
     </div>
   )

@@ -10,11 +10,21 @@
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
+const { diagnosticarMontagem } = require('./canvas-smoke-diagnostics.cjs')
+const { esperarAte } = require('./canvas-smoke-wait.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
 const MIN_VIEWPORT = { width: 375, height: 667 }
-const HYDRATION_TIMEOUT_MS = 20_000
+// O runner Windows do GitHub sobe o app bem mais devagar (falhou 5 vezes em
+// 19/09 por 20 s, com o app montando logo depois): teto maior só lá. O tempo
+// medido de cada subida vai para o log, para decidir o número com dados.
+const HYDRATION_TIMEOUT_MS = process.platform === 'win32' ? 45_000 : 20_000
+// Espera por uma reação da interface (abrir painel, fechar gaveta...). 5 s falhou
+// 6 vezes no runner Windows (PRs #48, #55 e a main do #66 em 20/09); o screenshot
+// da última mostrou o painel de busca ABERTO, só que depois do teto — lentidão do
+// runner (o painel é um chunk carregado sob demanda), não painel quebrado.
+const INTERACTION_TIMEOUT_MS = process.platform === 'win32' ? 20_000 : 5_000
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 
 const FIXTURE_NODES = [
@@ -109,11 +119,27 @@ async function withDevtoolsSession(action) {
 }
 
 async function checarMontagem(page) {
-  await page.waitForFunction(
-    () => document.body.innerText.includes('Canvas pronto'),
-    null,
-    { timeout: HYDRATION_TIMEOUT_MS },
-  )
+  const started = Date.now()
+  try {
+    await page.waitForFunction(
+      () => document.querySelector('[data-felixo-hydrated="true"]') !== null,
+      null,
+      { timeout: HYDRATION_TIMEOUT_MS },
+    )
+  } catch (error) {
+    const info = await page
+      .evaluate(() => {
+        const root = document.querySelector('[data-felixo-canvas-ready]')
+        return {
+          rootPresent: root !== null,
+          hydrated: root?.getAttribute('data-felixo-hydrated') ?? null,
+          status: (document.querySelector('footer, [data-felixo-region="statusbar"]')?.textContent ?? '').trim().slice(0, 80),
+        }
+      })
+      .catch(() => ({ rootPresent: false, hydrated: null, status: '(página indisponível)' }))
+    throw new Error(`${diagnosticarMontagem(info, HYDRATION_TIMEOUT_MS)} Causa original: ${error.message.split('\n')[0]}`)
+  }
+  console.log(`[canvas-smoke] canvas pronto em ${Date.now() - started} ms (teto ${HYDRATION_TIMEOUT_MS} ms)`)
 }
 
 const LAYOUT_REGIONS = ['topbar', 'sidebar', 'canvas']
@@ -159,7 +185,7 @@ async function checarNavegacaoPorTab(page) {
 async function checarFocoAoAbrirFerramenta(page) {
   await page.getByRole('button', { name: 'Buscar' }).click()
   const panel = page.locator('[data-felixo-canvas-panel="search"]')
-  await panel.waitFor({ state: 'visible', timeout: 5_000 })
+  await panel.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   const focused = await page.evaluate(() => {
     const panelElement = document.querySelector('[data-felixo-canvas-panel="search"]')
     const input = panelElement?.querySelector('input')
@@ -293,7 +319,18 @@ async function checarInteracoes(page) {
   await page.mouse.down()
   await page.mouse.move(dragX + 14, dragY + 9, { steps: 5 })
   await page.mouse.up()
-  await page.waitForTimeout(800)
+  // A posição é gravada depois do arrasto (com atraso); uma espera fixa de 800 ms
+  // falhou no runner Windows (main do #66, 20/09). Espera a mudança aparecer até o
+  // teto: se ela nunca vier, o erro abaixo continua sendo o de arrasto que não persistiu.
+  if (before) {
+    await esperarAte(
+      async () => {
+        const atual = await page.evaluate(async () => (await window.felixo.canvas.list()).nodes.find((node) => node.id === 'fixture-note')?.position)
+        return Boolean(atual) && (atual.x !== before.x || atual.y !== before.y)
+      },
+      { timeoutMs: INTERACTION_TIMEOUT_MS },
+    )
+  }
   const after = await page.evaluate(async () => (await window.felixo.canvas.list()).nodes.find((node) => node.id === 'fixture-note')?.position)
   if (!before || !after || (before.x === after.x && before.y === after.y)) {
     throw new Error(`[canvas-smoke] arrasto pequeno da nota nao persistiu: antes=${JSON.stringify(before)} depois=${JSON.stringify(after)}`)
@@ -308,7 +345,11 @@ async function checarInteracoes(page) {
   await page.mouse.down()
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 })
   await page.mouse.up()
-  await page.waitForTimeout(500)
+  // Mesma razão do arrasto acima: espera a conexão aparecer no armazenamento (até o teto).
+  await esperarAte(
+    async () => (await page.evaluate(async () => (await window.felixo.canvas.listEdges()).edges || [])).length >= 2,
+    { timeoutMs: INTERACTION_TIMEOUT_MS },
+  )
   const edgesAfterConnect = await page.evaluate(async () => (await window.felixo.canvas.listEdges()).edges || [])
   if (edgesAfterConnect.length < 2) {
     throw new Error(`[canvas-smoke] conexao por handle nao persistiu: ${JSON.stringify(edgesAfterConnect)}`)
@@ -320,12 +361,12 @@ async function checarInteracoes(page) {
   // deterministic while still exercising the real open/close handlers.
   await terminalTrigger.focus()
   await terminalTrigger.click()
-  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: 5_000 })
-  await page.locator('[data-felixo-mock-terminal="fixture-terminal"]').waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  await page.locator('[data-felixo-mock-terminal="fixture-terminal"]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   const terminalFocused = await page.evaluate(() => document.activeElement?.getAttribute('data-felixo-mock-terminal') === 'fixture-terminal')
   if (!terminalFocused) throw new Error('[canvas-smoke] abrir a gaveta nao focou o terminal fake')
   await page.getByRole('button', { name: 'Fechar terminal' }).click()
-  await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: INTERACTION_TIMEOUT_MS })
   const focusAfterDrawer = await page.evaluate(() => ({
     returned: document.activeElement?.getAttribute('data-terminal-expand-trigger') === 'fixture-terminal',
     tag: document.activeElement?.tagName,
@@ -338,18 +379,18 @@ async function checarInteracoes(page) {
   const bell = page.locator('[data-notifications-trigger]')
   await bell.click()
   const notifications = page.locator('#canvas-notifications-panel')
-  await notifications.waitFor({ state: 'visible', timeout: 5_000 })
+  await notifications.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   await page.waitForFunction(
     () => document.activeElement?.id === 'canvas-notifications-panel',
     null,
-    { timeout: 5_000 },
+    { timeout: INTERACTION_TIMEOUT_MS },
   )
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => !document.querySelector('#canvas-notifications-panel'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => !document.querySelector('#canvas-notifications-panel'), null, { timeout: INTERACTION_TIMEOUT_MS })
   await page.waitForFunction(
     () => document.activeElement?.hasAttribute('data-notifications-trigger'),
     null,
-    { timeout: 5_000 },
+    { timeout: INTERACTION_TIMEOUT_MS },
   )
 
   const webpageButton = page.getByRole('button', { name: 'Página Web' })
@@ -357,9 +398,9 @@ async function checarInteracoes(page) {
   const urlInput = page.locator('input[aria-label="Endereço do site"]')
   await urlInput.fill('javascript:alert(1)')
   await page.getByRole('button', { name: 'Criar' }).last().click()
-  await page.waitForFunction(() => document.body.innerText.includes('Informe um endereço de site válido'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => document.body.innerText.includes('Informe um endereço de site válido'), null, { timeout: INTERACTION_TIMEOUT_MS })
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => !document.querySelector('input[aria-label="Endereço do site"]'), null, { timeout: 5_000 })
+  await page.waitForFunction(() => !document.querySelector('input[aria-label="Endereço do site"]'), null, { timeout: INTERACTION_TIMEOUT_MS })
 }
 
 async function checarReloadSemDuplicacao(page) {
@@ -390,6 +431,91 @@ async function checarReloadSemDuplicacao(page) {
   }
 }
 
+// Janelas em que o painel precisa continuar dentro da tela e redimensionável.
+// 1366x768 é o notebook do relato; 800x600 é o piso em que o painel ainda abre
+// pelo botão da barra lateral (abaixo disso só o overflow é conferido).
+const VIEWPORTS_DO_PAINEL = [
+  { width: 1366, height: 768 },
+  { width: 1024, height: 640 },
+  { width: 800, height: 600 },
+]
+
+// Espelha `getPanelMaxHeight` (panel-sizing.ts): topo 64 + rodapé 48, piso 240.
+function alturaMaximaEsperada(viewportHeight) {
+  return Math.max(240, viewportHeight - 64 - 48)
+}
+
+// O painel entra com uma animacao que inclui `scale`: medido no meio dela,
+// `getBoundingClientRect` devolve uma altura menor que a real (visto no CI do
+// macOS: 108,9 contra 118,4, razao ~0,92). Por isso a altura comparada e a de
+// LAYOUT (`offsetHeight`, que ignora transform) e a medicao espera as animacoes
+// acabarem; o retangulo so serve para conferir que o painel esta dentro da janela.
+async function aguardarPainelAssentado(page, panelId) {
+  await page.waitForFunction(
+    (id) => {
+      const element = document.querySelector(`[data-felixo-canvas-panel="${id}"]`)
+      return Boolean(element) && element.getAnimations().length === 0
+    },
+    panelId,
+    { timeout: INTERACTION_TIMEOUT_MS },
+  )
+}
+
+async function medirPainel(page, panelId) {
+  await aguardarPainelAssentado(page, panelId)
+  return page.evaluate((id) => {
+    const element = document.querySelector(`[data-felixo-canvas-panel="${id}"]`)
+    if (!element) return null
+    const rect = element.getBoundingClientRect()
+    return {
+      left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+      height: element.offsetHeight,
+      viewportWidth: window.innerWidth, viewportHeight: window.innerHeight,
+    }
+  }, panelId)
+}
+
+async function checarPainelNosDoisEixos(page) {
+  for (const viewport of VIEWPORTS_DO_PAINEL) {
+    const rotulo = `${viewport.width}x${viewport.height}`
+    await page.setViewportSize(viewport)
+    await page.waitForTimeout(250)
+    await page.getByRole('button', { name: 'Buscar' }).click()
+    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+
+    const antes = await medirPainel(page, 'search')
+    if (!antes) throw new Error(`[canvas-smoke] painel Buscar nao encontrado em ${rotulo}`)
+    // O painel nunca escapa da janela, em nenhum dos quatro lados.
+    if (antes.left < 0 || antes.top < 0 || antes.right > antes.viewportWidth + 1 || antes.bottom > antes.viewportHeight + 1) {
+      throw new Error(`[canvas-smoke] painel fora da janela em ${rotulo}: ${JSON.stringify(antes)}`)
+    }
+
+    // Altura pelo teclado: a alça de baixo cresce o painel e respeita o teto.
+    const alca = page.locator('[data-felixo-panel-height-handle="search"]')
+    await alca.focus()
+    for (let i = 0; i < 12; i += 1) await page.keyboard.press('ArrowDown')
+    const depois = await medirPainel(page, 'search')
+    const teto = alturaMaximaEsperada(depois.viewportHeight)
+    if (antes.height + 24 <= teto && !(depois.height > antes.height)) {
+      throw new Error(`[canvas-smoke] a alca de altura nao cresceu o painel em ${rotulo}: ${antes.height} -> ${depois.height}`)
+    }
+    if (depois.height > teto + 1 || depois.bottom > depois.viewportHeight + 1) {
+      throw new Error(`[canvas-smoke] painel passou do teto de altura em ${rotulo}: ${JSON.stringify({ depois, teto })}`)
+    }
+
+    // Home devolve a altura do conteudo.
+    await alca.focus()
+    await page.keyboard.press('Home')
+    const restaurado = await medirPainel(page, 'search')
+    if (Math.abs(restaurado.height - antes.height) > 2) {
+      throw new Error(`[canvas-smoke] Home nao restaurou a altura em ${rotulo}: ${antes.height} vs ${restaurado.height}`)
+    }
+
+    await page.getByRole('button', { name: 'Buscar' }).click()
+    await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'detached', timeout: INTERACTION_TIMEOUT_MS })
+  }
+}
+
 async function checarViewportMinimo(page) {
   await page.setViewportSize(MIN_VIEWPORT)
   await page.waitForTimeout(250)
@@ -416,6 +542,7 @@ async function main() {
       await checarAuditoriaDeAcessibilidade(page)
       await checarInteracoes(page)
       await checarReloadSemDuplicacao(page)
+      await checarPainelNosDoisEixos(page)
       await checarViewportMinimo(page)
     } catch (error) {
       const output = path.join(APP_DIR, 'build', `canvas-smoke-failure-${process.platform}.png`)
@@ -431,7 +558,7 @@ async function main() {
       await browser.close()
     }
   })
-  console.log('[canvas-smoke] mount + fixture + oclusao + interacoes + reload + viewport minimo: ok')
+  console.log('[canvas-smoke] mount + fixture + oclusao + interacoes + reload + painel nos dois eixos + viewport minimo: ok')
 }
 
 main().catch((error) => {

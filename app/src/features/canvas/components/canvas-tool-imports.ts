@@ -88,6 +88,11 @@ export const loadSettingsPanel = () =>
     markToolLoaded('settings')
     return { default: SettingsPanel }
   })
+export const loadAgentPresetsPanel = () =>
+  import('./tools/AgentPresetsPanel').then(({ AgentPresetsPanel }) => {
+    markToolLoaded('agentPresets')
+    return { default: AgentPresetsPanel }
+  })
 export const loadAgentCanvasWriteRequestsPanel = () =>
   import('./tools/AgentCanvasWriteRequestsPanel').then(({ AgentCanvasWriteRequestsPanel }) => {
     markToolLoaded('agentCanvasWrite')

@@ -4,7 +4,7 @@
  *
  * Flags verified against the installed CLIs (`<cli> --help`):
  * - Claude Code: --model <m> · --effort <low|medium|high|max> · --dangerously-skip-permissions
- * - Codex:       --model <m> · -c model_reasoning_effort=<...> · --dangerously-bypass-approvals-and-sandbox
+ * - Codex:       --model <m> · -c model_reasoning_effort=<...> · -c service_tier=priority (fast) · --dangerously-bypass-approvals-and-sandbox
  * - Gemini:      --model <m> · (no effort) · --yolo
  *
  * Codex model slugs and their supported effort levels come straight from
@@ -31,6 +31,13 @@ export type AgentDefinition = {
    * Either a flat list shared by every model, or a per-model lookup (Codex).
    */
   effortLevels: EffortLevel[] | Record<string, EffortLevel[]> | null
+  /**
+   * Modelos que aceitam o modo fast (`service_tier = "priority"`, rotulado
+   * "Fast" pelo próprio Codex: mais rápido, mais uso do limite). Vem do
+   * catálogo de modelos do Codex (`serviceTiers` de cada modelo). Ausente =
+   * a CLI não tem o modo.
+   */
+  fastModels?: string[]
 }
 
 export const AGENTS: AgentDefinition[] = [
@@ -51,6 +58,7 @@ export const AGENTS: AgentDefinition[] = [
       'gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
       'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
     },
+    fastModels: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
   },
   {
     id: 'gemini',
@@ -95,6 +103,18 @@ export function getEffortLevels(
   return effortLevels[model] ?? null
 }
 
+/**
+ * True quando o modo fast pode ser oferecido/aplicado para `agent` + `model`.
+ * Modelo vazio ("padrão") conta como compatível: todo modelo do Codex que o
+ * Felixo lista aceita o tier, então o padrão também.
+ */
+export function supportsFastMode(agent: AgentDefinition | undefined, model: string): boolean {
+  if (!agent?.fastModels?.length) {
+    return false
+  }
+  return !model || agent.fastModels.includes(model)
+}
+
 /** True when `effort` is a valid choice for `agent` + `model` (empty effort is always valid — it means "default"). */
 export function isEffortValidForModel(
   agent: AgentDefinition,
@@ -137,6 +157,8 @@ export type AgentLaunchChoices = {
   model?: string
   effort?: EffortLevel
   yolo?: boolean
+  /** Modo fast do Codex; ignorado quando o agente/modelo não o suporta. */
+  fast?: boolean
 }
 
 /**
@@ -170,6 +192,10 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
     }
   }
 
+  if (choices.fast && agent.id === 'codex' && supportsFastMode(agent, choices.model ?? '')) {
+    args.push('-c', 'service_tier=priority')
+  }
+
   if (choices.yolo) {
     if (agent.id === 'claude') {
       args.push('--dangerously-skip-permissions')
@@ -189,6 +215,10 @@ export function describeLaunch(choices: AgentLaunchChoices): string {
   const parts = [agent?.label ?? choices.agentId]
   if (choices.model) {
     parts.push(choices.model)
+  }
+  // Aparece no cabeçalho do terminal: fast gasta mais limite, a pessoa precisa ver.
+  if (choices.fast && supportsFastMode(agent, choices.model ?? '')) {
+    parts.push('⚡ fast')
   }
   if (choices.yolo) {
     parts.push('yolo')

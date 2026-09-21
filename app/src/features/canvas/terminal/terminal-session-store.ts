@@ -40,6 +40,7 @@ import {
   splitInitialContext,
   promptInsertionSourceForContextKind,
 } from '../services/context-file-delivery'
+import { containsControlChars } from '../services/dictation'
 import type { ContextFileKind } from '../services/context-file-delivery'
 import {
   createManualPromptInsertion,
@@ -74,6 +75,7 @@ import {
   readInputLineState,
 } from './terminal-screen-state'
 import type { SendTextInput } from './terminal-session-api'
+import { loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
 import {
   TERMINAL_REPLAY_BUFFER_CHARS,
   terminalScrollbackForSessionCount,
@@ -841,6 +843,7 @@ export class TerminalSessionStore {
         reuseExisting: true,
         fallbackCommand: options.fallbackCommand,
         keepShellOpen: options.keepShellOpen,
+        classicScreen: shouldUseClassicScreen(options.command, loadClaudeTerminalScroll()),
         accountId: options.accountId,
         providerId: options.providerId,
       })
@@ -1335,6 +1338,48 @@ export class TerminalSessionStore {
         reason: 'error',
         message: error instanceof Error ? error.message : String(error),
       }
+    })
+    return outcome
+  }
+
+  /**
+   * Digita texto puro no PTY como o teclado faria: sem arquivo de contexto e
+   * sem Enter — o texto fica na linha de entrada esperando a pessoa revisar e
+   * enviar. Usado pelo ditado por voz.
+   *
+   * Recusa qualquer caractere de controle por conta própria (defesa em
+   * profundidade): um `\r`/`\n` executaria o que foi ditado, e um ESC mexeria
+   * no terminal. Quem chama já limpa o texto; esta guarda existe para que um
+   * chamador futuro que esqueça não consiga enviar sem querer.
+   */
+  async typeText(id: string, text: string): Promise<SendTextResult> {
+    const session = this.sessions.get(id)
+    if (!session || session.disposed || !text) {
+      return { delivered: false, reason: 'no-session' }
+    }
+    if (containsControlChars(text)) {
+      return { delivered: false, reason: 'rejected', message: 'O texto tem caracteres de controle e não foi digitado.' }
+    }
+
+    let outcome: SendTextResult = { delivered: false, reason: 'error' }
+    const delivery = session.sendChain.then(async () => {
+      if (session.disposed) {
+        outcome = { delivered: false, reason: 'no-session' }
+        return
+      }
+      const ptyResult: { ok?: boolean; delivered?: boolean; erro?: string } | undefined =
+        await window.felixo?.pty?.write({ sessionId: session.ptySessionId, data: text })
+      if (!ptyResult?.ok || ptyResult.delivered === false) {
+        outcome = { delivered: false, reason: 'rejected', message: ptyResult?.erro }
+        return
+      }
+      session.inputTouched = true
+      outcome = { delivered: true }
+    })
+    // Uma falha não pode travar as entregas seguintes desta sessão.
+    session.sendChain = delivery.catch(() => {})
+    await delivery.catch((error) => {
+      outcome = { delivered: false, reason: 'error', message: error instanceof Error ? error.message : String(error) }
     })
     return outcome
   }

@@ -8,59 +8,36 @@ const {
 const {
   createSystemDesignRepository,
 } = require('./storage/system-design-repository.cjs')
+const { syncSystemDesignRepository } = require('./system-design-service.cjs')
 const {
-  DEFAULT_BRANCH,
-  DEFAULT_REPO_URL,
-  syncSystemDesignRepository,
-} = require('./system-design-service.cjs')
+  applyConfigChange,
+  migrateStoredConfig,
+  recordClearedCache,
+  recordFailedSync,
+  recordSuccessfulSync,
+  resolveConfiguredSource,
+  toPublicConfig,
+} = require('../core/system-design-source.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
 const { toErrorResult } = require('./ipc-result.cjs')
 const {
   createRedactedGitError,
   sanitizeGitErrorText,
-  sanitizeGitRemoteUrl,
 } = require('./git-secret-redaction.cjs')
 
 const SYSTEM_DESIGN_CONFIG_KEY = 'system-design.config'
 
+/**
+ * Forma que o renderer lê quando nada foi gravado. O default vive em
+ * `core/system-design-source.cjs` — aqui não há mais cópia dele.
+ */
 function defaultConfig() {
-  return {
-    // Enabled by default so users new to the app benefit from the Felixo
-    // System Design guidelines without having to know what it is. Users can
-    // turn it off in Configuracoes.
-    enabled: true,
-    repoUrl: DEFAULT_REPO_URL,
-    branch: DEFAULT_BRANCH,
-    lastSha: null,
-    lastSyncedAt: null,
-    lastError: null,
-  }
+  return toPublicConfig(migrateStoredConfig(null))
 }
 
+/** Lê qualquer coisa gravada (v1 legado, v2 ou lixo) na forma que o renderer lê. */
 function normalizeConfig(value) {
-  const base = defaultConfig()
-  if (!value || typeof value !== 'object') {
-    return base
-  }
-  return {
-    enabled:
-      typeof value.enabled === 'boolean' ? value.enabled : base.enabled,
-    repoUrl:
-      typeof value.repoUrl === 'string' && value.repoUrl.trim()
-        ? sanitizeGitRemoteUrl(value.repoUrl)
-        : base.repoUrl,
-    branch:
-      typeof value.branch === 'string' && value.branch.trim()
-        ? value.branch.trim()
-        : base.branch,
-    lastSha: typeof value.lastSha === 'string' ? value.lastSha : null,
-    lastSyncedAt:
-      typeof value.lastSyncedAt === 'string' ? value.lastSyncedAt : null,
-    lastError:
-      typeof value.lastError === 'string'
-        ? sanitizeGitErrorText(value.lastError) || null
-        : null,
-  }
+  return toPublicConfig(migrateStoredConfig(value))
 }
 
 function registerSystemDesignIpcHandlers(appPaths, options = {}) {
@@ -71,27 +48,32 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
   const systemDesignRepository = createSystemDesignRepository(options.database)
   const cacheDir = path.join(appPaths.config, 'system-design')
 
-  function loadConfig() {
+  /**
+   * Lê o que está gravado já na forma v2.
+   *
+   * A migração do v1 é gravada de volta na primeira leitura (é idempotente):
+   * além de sanear credenciais que uma versão anterior possa ter deixado, ela
+   * marca de uma vez quem segue o padrão e quem escolheu uma fonte, antes que
+   * qualquer mudança de default do app possa reinterpretar o v1.
+   */
+  function loadStored() {
     const raw = settingsRepository.get(SYSTEM_DESIGN_CONFIG_KEY)
-    const normalized = normalizeConfig(raw)
+    const stored = migrateStoredConfig(raw)
 
-    // Remove credenciais que possam ter sido gravadas por uma versão anterior
-    // assim que a configuração for lida, antes de ela chegar ao renderer.
-    if (
-      raw &&
-      typeof raw === 'object' &&
-      (raw.repoUrl !== normalized.repoUrl || raw.lastError !== normalized.lastError)
-    ) {
-      settingsRepository.set(SYSTEM_DESIGN_CONFIG_KEY, normalized)
+    if (raw && typeof raw === 'object' && JSON.stringify(raw) !== JSON.stringify(stored)) {
+      settingsRepository.set(SYSTEM_DESIGN_CONFIG_KEY, stored)
     }
 
-    return normalized
+    return stored
   }
 
-  function saveConfig(config) {
-    const normalized = normalizeConfig(config)
-    settingsRepository.set(SYSTEM_DESIGN_CONFIG_KEY, normalized)
-    return normalized
+  function saveStored(stored) {
+    settingsRepository.set(SYSTEM_DESIGN_CONFIG_KEY, stored)
+    return stored
+  }
+
+  function loadConfig() {
+    return toPublicConfig(loadStored())
   }
 
   activeIpcMain.handle('system-design:get-config', () => {
@@ -104,9 +86,12 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
 
   activeIpcMain.handle('system-design:save-config', (_event, partial) => {
     try {
-      const current = loadConfig()
-      const next = saveConfig({ ...current, ...partial })
-      return { ok: true, config: next }
+      const change = applyConfigChange(loadStored(), partial)
+      if (!change.ok) {
+        return { ok: false, message: change.message }
+      }
+
+      return { ok: true, config: toPublicConfig(saveStored(change.stored)) }
     } catch (error) {
       return toErrorResult(error, 'Falha ao salvar configuracao do System Design.')
     }
@@ -132,13 +117,16 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
   })
 
   activeIpcMain.handle('system-design:sync', async () => {
-    let current = null
+    // A fonte usada é a de AGORA; se a pessoa mudar a configuração durante o
+    // clone (leva até um minuto), a entrega é registrada com a fonte que de
+    // fato foi sincronizada, não com a que estiver gravada quando terminar.
+    let source = null
 
     try {
-      current = loadConfig()
+      source = resolveConfiguredSource(loadStored())
       const result = await syncRepository({
-        repoUrl: current.repoUrl,
-        branch: current.branch,
+        repoUrl: source.repoUrl,
+        branch: source.branch,
         cacheDir,
         repository: systemDesignRepository,
         logger: {
@@ -150,12 +138,16 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
             }),
         },
       })
-      const updatedConfig = saveConfig({
-        ...current,
-        lastSha: result.headSha,
-        lastSyncedAt: new Date().toISOString(),
-        lastError: null,
-      })
+      const updatedConfig = toPublicConfig(
+        saveStored(
+          recordSuccessfulSync(loadStored(), {
+            repoUrl: source.repoUrl,
+            branch: source.branch,
+            sha: result.headSha,
+            syncedAt: new Date().toISOString(),
+          }),
+        ),
+      )
       logQaEvent({
         level: 'info',
         scope: 'system-design:sync',
@@ -172,12 +164,11 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
         ? sanitizeGitErrorText(error.message)
         : createRedactedGitError(error, {
             stage: error?.stage ?? 'sincronização',
-            repoUrl: current?.repoUrl,
-            branch: current?.branch,
+            repoUrl: source?.repoUrl,
+            branch: source?.branch,
           }).message
       try {
-        const latest = current ?? loadConfig()
-        saveConfig({ ...latest, lastError: message })
+        saveStored(recordFailedSync(loadStored(), message))
       } catch {
         // ignore
       }
@@ -193,12 +184,7 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
   activeIpcMain.handle('system-design:reset-cache', () => {
     try {
       const cleared = systemDesignRepository.clear()
-      const current = loadConfig()
-      const updatedConfig = saveConfig({
-        ...current,
-        lastSha: null,
-        lastSyncedAt: null,
-      })
+      const updatedConfig = toPublicConfig(saveStored(recordClearedCache(loadStored())))
       return { ok: true, cleared, config: updatedConfig }
     } catch (error) {
       return toErrorResult(error, 'Falha ao limpar cache do System Design.')

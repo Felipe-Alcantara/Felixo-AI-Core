@@ -145,8 +145,11 @@ async function detectCli(cliInfo, env, options = {}) {
     category: cliInfo.category,
     installUrl: cliInfo.installUrl,
     error: null,
+    reason: null,
+    attempts: [],
   }
 
+  const attempts = []
   const commandsToTry = [cliInfo.command]
 
   if (adapter.name === 'win32' && cliInfo.windowsAliases) {
@@ -154,12 +157,16 @@ async function detectCli(cliInfo, env, options = {}) {
   }
 
   for (const command of commandsToTry) {
+    // Declaradas fora do `try` para o registro de tentativas enxergar o que
+    // foi resolvido mesmo quando o exec falha logo depois.
+    let commandPath = null
+    let useShell = false
     try {
-      const commandPath = adapter.name === 'win32'
+      commandPath = adapter.name === 'win32'
         ? resolvePath(command, env, { platform: adapter.name })
         : null
       const executable = commandPath || command
-      const useShell = adapter.name === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
+      useShell = adapter.name === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
       // `execFile` com `shell: true` no Windows concatena o comando cru para o
       // `cmd.exe /c` em vez de citá-lo — sem aspas, um caminho com espaço (ex.:
       // "C:\Users\Felipe Martins\...") quebra ao meio e cmd.exe tenta rodar só
@@ -190,14 +197,99 @@ async function detectCli(cliInfo, env, options = {}) {
       result.detected = true
       result.version = parseVersionFromOutput(output)
       result.path = commandPath || resolvePath(command, env, { platform: adapter.name })
+      attempts.push({ command, resolvedPath: commandPath, viaShell: useShell, outcome: 'ok', reason: null })
+      result.attempts = attempts
       return result
-    } catch {
+    } catch (error) {
+      // Só o código de motivo é guardado: a mensagem crua do erro pode trazer
+      // saída da CLI, e este registro é copiado para suporte.
+      attempts.push({
+        command,
+        resolvedPath: commandPath,
+        viaShell: useShell,
+        outcome: 'failed',
+        reason: classifyExecutionFailure(error),
+      })
       continue
     }
   }
 
+  result.attempts = attempts
+  result.reason = summarizeFailureReason(attempts)
   result.error = `${cliInfo.name} não foi executado: nenhum comando compatível respondeu a ${cliInfo.versionFlag}. Verifique o PATH e o instalador da CLI.`
   return result
+}
+
+/**
+ * Motivos de falha de execução que a interface sabe explicar.
+ *
+ * Fechado de propósito: quem consome faz `switch` sobre estes valores para
+ * escolher a próxima ação, e um valor novo e silencioso cairia no genérico.
+ */
+const FAILURE_REASONS = Object.freeze({
+  NOT_FOUND: 'not-found',
+  PERMISSION: 'permission',
+  TIMEOUT: 'timeout',
+  SHIM_BROKEN: 'shim-broken',
+  EXIT_ERROR: 'exit-error',
+  UNKNOWN: 'unknown',
+})
+
+const SHIM_FAILURE_OUTPUT =
+  /(?:is not recognized|não é reconhecido|cannot find the path|não pode encontrar o caminho|no such file or directory.*(?:node|env))/i
+
+/**
+ * Classifica por que `<cli> --version` não respondeu.
+ *
+ * Olha o código do erro do Node antes do texto: texto muda com idioma e versão
+ * da CLI, o código não. O texto só entra para separar "a CLI rodou e falhou"
+ * de "o atalho `.cmd` não achou o Node que ele mesmo chama".
+ *
+ * @param {any} error
+ * @returns {string} Um valor de {@link FAILURE_REASONS}.
+ */
+function classifyExecutionFailure(error) {
+  const code = error?.code
+
+  if (code === 'ENOENT') return FAILURE_REASONS.NOT_FOUND
+  if (code === 'EACCES' || code === 'EPERM') return FAILURE_REASONS.PERMISSION
+  // EINVAL: o Node recusa spawn de `.cmd`/`.bat` sem shell desde a correção da
+  // CVE-2024-27980 — o atalho existe, mas quem executa não sabe rodá-lo.
+  if (code === 'EINVAL') return FAILURE_REASONS.SHIM_BROKEN
+  if (code === 'ETIMEDOUT' || error?.killed === true) return FAILURE_REASONS.TIMEOUT
+
+  if (typeof code === 'number') {
+    const output = `${error?.stderr ?? ''}\n${error?.stdout ?? ''}`
+    return SHIM_FAILURE_OUTPUT.test(output)
+      ? FAILURE_REASONS.SHIM_BROKEN
+      : FAILURE_REASONS.EXIT_ERROR
+  }
+
+  return FAILURE_REASONS.UNKNOWN
+}
+
+/**
+ * Motivo que melhor explica um conjunto de tentativas que falharam.
+ *
+ * Um "não achei" só vale quando NENHUMA tentativa encontrou algo no disco: se
+ * uma variante resolveu para um arquivo e falhou ao executar, o problema é o
+ * arquivo, e é ele que a pessoa precisa ouvir.
+ *
+ * @param {Array<{ resolvedPath: string | null, reason: string | null }>} attempts
+ * @returns {string | null}
+ */
+function summarizeFailureReason(attempts) {
+  if (attempts.length === 0) return null
+
+  const foundOnDisk = attempts.find(
+    (attempt) => attempt.resolvedPath && attempt.reason !== FAILURE_REASONS.NOT_FOUND,
+  )
+  if (foundOnDisk) return foundOnDisk.reason
+
+  const specific = attempts.find(
+    (attempt) => attempt.reason && attempt.reason !== FAILURE_REASONS.NOT_FOUND,
+  )
+  return specific ? specific.reason : FAILURE_REASONS.NOT_FOUND
 }
 
 /**
@@ -311,8 +403,11 @@ function resolveCommandPath(command, env, options = {}) {
 }
 
 module.exports = {
+  FAILURE_REASONS,
   SUPPORTED_CLIS,
+  classifyExecutionFailure,
   createCliNotFoundMessage,
+  summarizeFailureReason,
   detectAllClis,
   detectCli,
   detectProviderClis,
