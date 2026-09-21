@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextSortState, readSortState, saveSortState, schemaOptionOrder, sortTasks } from './notion-task-sort'
+import { findStatusPropertyName, nextSortState, readSortState, saveSortState, schemaOptionOrder, sortTasks } from './notion-task-sort'
 import type { NotionSchemaProperty, NotionTask } from '../../shared/types/notion'
 
 function storage(initial?: Record<string, string>) {
@@ -343,5 +343,28 @@ describe('schemaOptionOrder', () => {
   it('propriedade indefinida ou de tipo sem opções devolve lista vazia', () => {
     expect(schemaOptionOrder(undefined)).toEqual([])
     expect(schemaOptionOrder({ id: 'x', name: 'x', type: 'number' })).toEqual([])
+  })
+})
+
+describe('findStatusPropertyName — paridade com o backend', () => {
+  it('escolhe a mesma propriedade que o processo principal, em vários schemas', async () => {
+    const { createRequire } = await import('node:module')
+    const main = createRequire(import.meta.url)('../../../../electron/services/notion-client.cjs') as {
+      pickStatusPropertyName: (schema: unknown) => string | null
+    }
+    const def = (name: string, type: string) => ({ id: name, name, type })
+    const schemas: Array<Record<string, ReturnType<typeof def>>> = [
+      { Tarefa: def('Tarefa', 'title'), Esforço: def('Esforço', 'status'), Etapa: def('Etapa', 'status'), Repositório: def('Repositório', 'select') },
+      { Repositório: def('Repositório', 'select'), Status: def('Status', 'select') },
+      { A: def('A', 'select'), B: def('B', 'status') },
+      { A: def('A', 'select'), B: def('B', 'select') },
+      { Nome: def('Nome', 'title'), Feito: def('Feito', 'checkbox') },
+      {},
+    ]
+    for (const schema of schemas) {
+      expect(findStatusPropertyName(schema) ?? null, JSON.stringify(Object.keys(schema))).toBe(main.pickStatusPropertyName(schema))
+    }
+    // O caso real: a Etapa vence o Repositório e o Esforço.
+    expect(findStatusPropertyName(schemas[0])).toBe('Etapa')
   })
 })

@@ -3433,3 +3433,39 @@ sobe como artefato se falhar) e o passo informativo do diagnóstico foi removido
 3 execuções verdes não provam determinismo absoluto (a flake do Windows mostrou isso); a 3ª foi um PR,
 não uma reexecução da main, porque reexecutar o CI da main dispara outro Release e o `release.yml` tem
 `cancel-in-progress: true` — uma reexecução com Release em andamento poderia cancelar a publicação.
+
+## 2026-09-20 — Notion no canvas: database genérica, papéis de tarefa e um bug de escrita
+
+Observação da instância REAL da pessoa (captura só da janela do AI Core, feita a pedido, guardada só
+na pasta temporária da sessão e não enviada a lugar nenhum): o bloco Tarefas Notion (database
+"Tarefas — HOME", 55 linhas) mostrava **Estado = "Felixo-AI-Core"** em todas as linhas. A leitura já era
+genérica; o que assumia papéis de tarefa era a heurística, e ela estava errada para essa database.
+
+**Leitura corrigida (`normalizePage`).** O estado vinha da PRIMEIRA `status`/`select` da página
+(`Repositório` antes de `Etapa`); o checkbox "Em andamento" contava como "concluída". Agora
+`pickStatusPropertyName` escolhe: `status` com nome de estado (Etapa, Estado, Status, Situação, Fase);
+`select` com esse nome; o primeiro `status`; o primeiro `select`. `pickDoneCheckboxName` só aceita
+checkbox com nome de conclusão, ou o único checkbox de uma database SEM coluna de estado. O renderer
+repete a regra em `findStatusPropertyName` (`notion-task-sort.ts`) com teste de paridade contra o
+módulo do processo principal.
+
+**Bug de escrita achado ao verificar (não era pedido, mas altera dados):** `buildPageProperties` usava o
+primeiro checkbox e caía no primeiro `status`/`select` quando nenhum nome batia — na database real,
+"Concluir" pela tela gravava em **Esforço** e marcava "Em andamento"; numa database só com
+`Repositório` (select) gravaria "Concluído" no repositório. Provado com testes na estrutura real (3
+falhavam antes do conserto). A escrita agora usa a mesma regra da leitura, só escreve em `status` ou
+em coluna com nome de estado, e a prioridade não cai mais em coluna qualquer. NÃO verificado: se algum
+dado real já foi gravado errado por esse caminho — vale conferir "Esforço" e "Em andamento" no Notion.
+
+**Database genérica (fatia 1, só leitura).** `readPropertyValue` agora entrega valor legível para
+people, files, relation (ids), unique_id, created_by/last_edited_by e rollup (button/verification → null).
+`notion-table-view.ts` formata por tipo: relação vira contagem ("3 relações", o título de cada página
+custaria uma consulta por linha) e tipo sem valor legível vira **"não suportado (tipo)"**, nunca vazio.
+Sem estado/data/select/checkbox a tabela é genérica: só Nome + todas as colunas (sem Estado/Prioridade/
+Prazo vazios nem botão de concluir); a escolha de colunas da pessoa continua valendo
+(`hasVisibleColumnsPreference` separa "nunca escolheu" de "escolheu nenhuma"). A ordenação já calculava
+uma chave por célula; a tabela agora monta 200 linhas por vez ("Mostrar mais 200"), e cada célula é
+formatada uma vez só. O aviso de truncamento (>2.000 linhas) já existia, com teste.
+
+NÃO verificado: nada disto foi visto rodando (a instância da pessoa é a versão instalada, sem esta
+mudança) e a edição por tipo, os quadros/listas e o título das páginas relacionadas ficam para depois.
