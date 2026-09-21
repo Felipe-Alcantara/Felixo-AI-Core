@@ -3488,3 +3488,10 @@ automático. 6 testes cobrem os casos, inclusive o do bug.
 NÃO verificado: não vi o reset acontecendo nem a correção funcionando numa janela real; a instância da
 pessoa é a versão instalada. Se o reset persistir depois desta correção, há outra fonte de reenquadramento
 ainda não achada (por exemplo, remontar o React Flow por `canvasRevision` inesperadamente).
+
+Também em 20/09 (CI do PR #72): o benchmark de scrollback do Windows terminou com **exit 3** depois de
+imprimir o JSON completo e sem nenhuma linha de erro do benchmark (`PostQueuedCompletionStatus: (6) The
+handle is invalid`) — `abort()` do Electron no encerramento, mesma família do crash do node-pty do #51. O
+retry do passo (antes só o 139) agora repete também o 3, até 3 vezes; outros códigos (o 1 de falha real do
+benchmark, por exemplo) falham na hora, e um crash persistente sai com o código real. Laço testado com
+funções falsas. Não verificado no runner: só as próximas execuções mostram se 3 tentativas bastam.
