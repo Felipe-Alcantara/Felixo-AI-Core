@@ -3525,3 +3525,16 @@ contexto; se um Enter cai nessa janela, o evento vira `context-submitted` e o te
 invariantes em outros cenários exigindo ZERO `context-submitted` (o produto não pode enviar contexto sozinho), então
 aceitar os dois tipos no teste poderia esconder um bug real. Ainda não se sabe QUEM mandou o Enter. A mensagem da falha
 agora traz a sequência completa de eventos; só a próxima falha decide entre artefato de tempo do fake e bug do produto.
+
+## 2026-09-21 — Ciclo de PR mais rápido
+
+Medição (Windows, run da main do #76): ~12 min de passos, dos quais os benchmarks somam ~4,8 min (custo
+operacional 145 s, scrollback 74 s, responsividade 50 s), o smoke 134 s e o E2E de contexto 81 s, tudo em série.
+Ciclo por PR ≈ CI do PR (~13 min) + CI da main (~13 min) + Release (~11 min).
+
+Feito: `concurrency` no `ci.yml` — em PR um push novo cancela a run anterior da branch; na `main` nunca cancela
+(o Release depende do CI de cada commit). NÃO feito de propósito, por dependerem de decisão: (1) dividir o job do
+Windows em jobs paralelos — a proteção da `main` exige os nomes `Validate (windows-latest)` etc. e `strict: true`;
+(2) ligar auto-merge no repositório (`allow_auto_merge` está desligado); (3) pular o Release de commits só de
+docs/teste; (4) paralelizar passos dentro do mesmo job — os testes sensíveis a tempo já falham de forma
+intermitente no Windows e a contenção pioraria isso.

@@ -6,6 +6,13 @@ on:
     branches:
       - main
 
+# Em PR, um push novo cancela a run anterior da mesma branch: sem isto, cada push
+# deixava a run velha gastando runner (o Windows leva ~13 min) e atrasando a fila
+# da run que importa. Na `main` NUNCA cancela: o Release depende do CI de cada commit.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   dependency-policy:
     name: Dependency policy
