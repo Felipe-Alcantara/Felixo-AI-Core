@@ -350,6 +350,8 @@ contextBridge.exposeInMainWorld('felixo', {
   // abertura do app instalado, e o status vira um indicador discreto.
   cliSetup: {
     getStatus: () => ipcRenderer.invoke('clis:get-setup-status'),
+    // Só lê: explica por que uma CLI não é vista, sem instalar nada.
+    diagnose: () => ipcRenderer.invoke('clis:diagnose'),
     retry: () => ipcRenderer.invoke('clis:retry-setup'),
     onStatus: (callback) => {
       const handler = (_event, data) => callback(data)

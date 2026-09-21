@@ -14,6 +14,7 @@
  */
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { ipcMain } = require('electron')
 const { detectCli } = require('../core/cli-detector.cjs')
@@ -34,6 +35,11 @@ const {
   summarizeAutoInstall,
 } = require('./cli-auto-install-plan.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
+const {
+  diagnoseClis,
+  formatDiagnosisForSupport,
+  redactDiagnosticText,
+} = require('./cli-diagnostics.cjs')
 
 const STATE_FILE_NAME = 'cli-auto-install.json'
 const STARTUP_DELAY_MS = 4000
@@ -201,22 +207,30 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         },
       })
 
+      // O que sai daqui vai para a interface, para o arquivo de estado e para
+      // o log de QA — os três podem ser copiados para suporte. A saída do npm
+      // pode ecoar URL de registry com credencial ou um `_authToken`, e o
+      // caminho traz o nome de usuário; por isso a redação acontece antes de
+      // qualquer persistência, não depois.
+      const redactOptions = { homeDir: os.homedir() }
+      const safeMessage = redactDiagnosticText(result.message, redactOptions)
+
       updateCliProgress(progress, cli.id, {
         state: result.ok ? 'installed' : 'failed',
-        message: result.message,
+        message: safeMessage,
       })
       attempts[cli.id] = {
         version: appVersion,
         ok: result.ok,
-        message: result.message,
+        message: safeMessage,
         at: new Date().toISOString(),
       }
 
       logQaEvent({
         level: result.ok ? 'info' : 'warn',
         scope: 'cli:auto-install',
-        message: result.message,
-        details: { id: cli.id, reason, output: result.output },
+        message: safeMessage,
+        details: { id: cli.id, reason, output: redactDiagnosticText(result.output, redactOptions) },
       })
     }
 
@@ -248,6 +262,23 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   }
 
   ipcMain.handle('clis:get-setup-status', () => ({ ok: true, status }))
+  // Verificação read-only: detecta e explica, sem instalar nem tocar em PATH ou
+  // configuração. Existe para a interface separar "não instalada" de
+  // "instalada mas invisível" antes de sugerir reinstalar.
+  ipcMain.handle('clis:diagnose', async () => {
+    const diagnoses = await diagnoseClis({
+      catalog: getAutoInstallableClis(listOfficialAiClis()),
+      detect,
+      env: createCliEnv(),
+      layout,
+      verifyInstallation,
+      attempts: readState(stateFilePath),
+      fileSystem,
+      context: { platformName, arch, appVersion, homeDir: os.homedir() },
+    })
+
+    return { ok: true, diagnoses, supportText: formatDiagnosisForSupport(diagnoses) }
+  })
   ipcMain.handle('clis:retry-setup', async () => {
     if (!enabled) {
       return { ok: false, message: status.message, status }

@@ -6175,3 +6175,59 @@ gerou o loop de 12/09.
 ### Validação
 
 4 testes novos em `node-geometry.test.ts`. Resultado completo dos gates no PR.
+
+## Fechamento de trabalho — 2026-09-21: diagnóstico de CLI (PATH, shims, estado gerenciado) — fatia 1, backend
+
+### Contexto
+
+Task "Felixo AI Core/CLI — diagnosticar PATH, shims e estado gerenciado antes de
+propor reinstalação" (Esforço: Dias). O detector devolvia só `detected: false` com
+uma mensagem genérica, e o `catch { continue }` de `detectCli` jogava fora a razão
+real (arquivo inexistente, permissão negada, atalho quebrado, timeout). A UI não
+tinha como separar "não instalada" de "instalada mas invisível ao Electron".
+
+### O que foi feito (código)
+
+- `cli-detector.cjs`: `detectCli` passa a devolver `attempts` (cada variante
+  tentada, caminho resolvido, se rodou via shell, desfecho) e `reason`
+  (`not-found`, `permission`, `timeout`, `shim-broken`, `exit-error`, `unknown`).
+  Só CÓDIGOS são guardados — nunca a saída crua do erro. Um "não achei" só vale
+  quando nenhuma variante resolveu um arquivo; se uma variante achou o arquivo e
+  falhou ao executar, o motivo é o dela. `EINVAL` (recusa do Node a `.cmd` sem
+  shell, CVE-2024-27980) é tratado como atalho quebrado.
+- `services/cli-diagnostics.cjs` (novo): `buildCliDiagnosis` / `diagnoseClis` /
+  `formatDiagnosisForSupport`. Read-only: nada instala, nada altera PATH ou
+  configuração, nenhum comando vem do ambiente. `recommendInstall` só é `true`
+  para "não instalada" e "pacote gerenciado incompleto"; binário válido, PATH,
+  permissão, timeout, atalho e rede nunca recomendam reinstalar.
+- Minimização para suporte: home vira `~`, nome de usuário (inclusive de OUTRA
+  conta, inclusive com espaço) vira `<usuario>`, URLs viram `[url]`, tokens
+  rotulados / `Bearer` / `_authToken` / sequências longas viram `[oculto]`.
+- `cli-auto-install.cjs`: a mensagem da instalação é redigida ANTES de ir para o
+  status, o arquivo `cli-auto-install.json` e o log de QA; novo IPC read-only
+  `clis:diagnose` (+ `cliSetup.diagnose` no preload e no `vite-env.d.ts`).
+
+### NÃO verificado
+
+- Nada foi visto no app real: só testes unitários e de integração do serviço.
+  Nenhuma máquina Windows com CLI quebrada de verdade foi exercitada.
+- **A apresentação na UI (instrução específica por causa, botão "verificar
+  instalação", "copiar diagnóstico") NÃO foi feita.** O backend entrega
+  `nextAction.text` e `supportText` prontos, mas nenhum componente os consome —
+  o critério "A UI não recomenda instalar quando encontra binário válido" só
+  está garantido no plano de instalação, não numa tela nova.
+- "Alias" é dito no texto de "não instalada", mas não é detectável: um alias de
+  shell é invisível ao Electron por definição, e o app não lê rc files nem roda
+  comando do ambiente (restrição da própria task).
+- Cobertura de "múltiplos usuários" é por caminho (`C:\Users\Ana Silva\…` visto
+  por outra conta); não houve teste com duas contas reais.
+
+### Validação
+
+`npm test` 1477/1477 (era 1246 no último registro de gate, o resto veio de outros
+agentes), `npm run test:frontend` 1119 passed / 1 skipped, `eslint .` e `tsc -b`
+limpos, `git diff --check` limpo. Testes novos: 9 do detector (`.cmd` com espaço,
+`.exe`, ENOENT, EACCES, EINVAL, timeout, saída de shim) e 17 do serviço; 2 de
+integração em `cli-auto-install.test.cjs`. Mutação feita em duas regras (ready
+recomendando instalar; mensagem persistida sem redação) — os testes correspondentes
+falharam e foram restaurados.

@@ -331,3 +331,79 @@ test(
     }
   },
 )
+
+test(
+  'a falha de instalação é redigida antes de ir para o status e para o disco',
+  async () => {
+    // O npm pode ecoar URL de registry com credencial e o caminho do usuário;
+    // o estado em disco e o status vão para a interface e para suporte.
+    const profile = createProfile()
+    const segredo = 'npm_SEGREDO_MUITO_SECRETO_123'
+
+    try {
+      const { service } = createRunner(profile, {
+        detect: detectedOnly(['codex', 'claude']),
+        installPackage: async () => ({
+          ok: false,
+          message: `falhou em https://usuario:${segredo}@registry.exemplo/pkg?token=${segredo} (${os.homedir()})`,
+          output: `//registry.exemplo/:_authToken=${segredo}`,
+        }),
+      })
+
+      const status = await service.run('startup')
+      service.stop()
+      // Instalação que falha termina a rodada em `error` — é o resultado
+      // esperado aqui, então o helper `assertPlanned` não serve.
+      assert.ok(status.clis.length > 0, 'a rodada não chegou a planejar nenhuma CLI')
+      assert.ok(status.clis.some((item) => item.state === 'failed'))
+
+      const persisted = fs.readFileSync(
+        path.join(profile.userData, 'config', 'cli-auto-install.json'),
+        'utf8',
+      )
+      for (const surface of [persisted, JSON.stringify(status)]) {
+        assert.equal(surface.includes(segredo), false, 'o segredo vazou')
+        assert.equal(surface.includes('registry.exemplo/pkg'), false, 'a URL vazou')
+        assert.equal(surface.includes(os.homedir()), false, 'o home vazou')
+      }
+    } finally {
+      profile.cleanup()
+    }
+  },
+)
+
+test(
+  'clis:diagnose só lê: separa ausente de invisível e nunca instala',
+  async () => {
+    const profile = createProfile({ managedClis: ['gemini'] })
+
+    try {
+      const { service, installed } = createRunner(profile, {
+        detect: async (cli) => ({
+          detected: cli.id === 'codex',
+          version: cli.id === 'codex' ? '1.0.0' : null,
+          path: null,
+          reason: cli.id === 'codex' ? null : 'not-found',
+          attempts: [],
+        }),
+        platformName: 'linux',
+        verifyInstallation: () => ({ ok: true }),
+      })
+
+      const { ok, diagnoses, supportText } = await handlers.get('clis:diagnose')()
+      service.stop()
+
+      assert.equal(ok, true)
+      const byId = Object.fromEntries(diagnoses.map((item) => [item.id, item]))
+      assert.equal(byId.codex.recommendInstall, false, 'binário válido não recomenda instalar')
+      assert.equal(byId.gemini.cause, 'path', 'instalada pelo app mas invisível é PATH')
+      assert.equal(byId.gemini.recommendInstall, false)
+      assert.equal(byId.claude.cause, 'not-installed')
+      assert.equal(byId.claude.recommendInstall, true)
+      assert.match(supportText, /próxima ação:/)
+      assert.deepEqual(installed, [], 'diagnosticar não pode instalar')
+    } finally {
+      profile.cleanup()
+    }
+  },
+)

@@ -959,6 +959,23 @@ declare global {
       cliSetup?: {
         getStatus: () => Promise<CliInvokeResult & { status?: CliSetupStatus }>
         retry: () => Promise<CliInvokeResult & { status?: CliSetupStatus }>
+        /**
+         * Só lê: explica por que cada CLI não é vista, sem instalar nada.
+         * `supportText` já sai minimizado (sem usuário, URL ou segredo).
+         */
+        diagnose: () => Promise<
+          CliInvokeResult & {
+            diagnoses?: Array<{
+              id: string
+              name: string
+              status: 'ready' | 'unavailable'
+              cause: string | null
+              recommendInstall: boolean
+              nextAction: { kind: string; text: string }
+            }>
+            supportText?: string
+          }
+        >
         onStatus: (callback: (status: CliSetupStatus) => void) => () => void
       }
       fileOpen?: {
