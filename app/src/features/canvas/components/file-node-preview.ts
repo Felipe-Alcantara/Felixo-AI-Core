@@ -14,13 +14,31 @@
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx'])
 
 /** Como o conteúdo deve ser exibido fora do modo de edição. */
-export type FilePreviewKind = 'markdown' | 'plain'
+export type FilePreviewKind = 'markdown' | 'plain' | 'image'
+
+/**
+ * Raster formats are rendered as pixels only. SVG stays available through the
+ * file actions, but is deliberately not turned into a data URL in the canvas:
+ * the preview must never become an executable HTML surface.
+ */
+const SAFE_IMAGE_PREVIEW_MIME_TYPES = new Set([
+  'image/avif',
+  'image/bmp',
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+])
 
 /**
  * @param fileName - Nome ou caminho do arquivo. Só a extensão importa.
  */
 export function resolvePreviewKind(fileName: string | undefined): FilePreviewKind {
   return isMarkdownFileName(fileName) ? 'markdown' : 'plain'
+}
+
+export function isSafeImagePreviewMimeType(mimeType: string | undefined): boolean {
+  return typeof mimeType === 'string' && SAFE_IMAGE_PREVIEW_MIME_TYPES.has(mimeType.toLowerCase())
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   Globe,
   Group,
   Hand,
+  Image as ImageIcon,
   LayoutGrid,
   Maximize,
   MessageSquare,
@@ -88,6 +89,8 @@ type CanvasToolbarProps = {
   onAddFile: (name?: string) => void
   /** Abre o seletor nativo e cria um bloco apontando para o arquivo escolhido. */
   onOpenFile: () => void
+  /** Abre o seletor nativo e cria um FileNode de imagem autorizado. */
+  onOpenImage: () => void
   onAddGroup: (name?: string) => void
   onAddWebpage: (url: string, name?: string, profileId?: string) => void
   canvasMode: 'select' | 'pan'
@@ -128,6 +131,7 @@ export function CanvasToolbar({
   onAddFolder,
   onAddFile,
   onOpenFile,
+  onOpenImage,
   onAddGroup,
   onAddWebpage,
   canvasMode,
@@ -253,6 +257,15 @@ export function CanvasToolbar({
               secondaryTitle="Abrir um arquivo de texto do disco num bloco do canvas"
               onSecondary={onOpenFile}
             />
+            <button
+              type="button"
+              onClick={onOpenImage}
+              className={TOOLBAR_BUTTON_CLASS}
+              title="Abrir uma imagem autorizada no bloco do canvas"
+            >
+              <ImageIcon size={16} />
+              Abrir imagem
+            </button>
             <NamedCreateButton
               icon={<Group size={16} />}
               buttonLabel="Grupo"

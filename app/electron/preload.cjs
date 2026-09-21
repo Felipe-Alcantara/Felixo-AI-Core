@@ -4,6 +4,9 @@ const WINDOW_FOCUS_CHANNEL = 'window:focus-state'
 const AGENT_BROWSER_CHANNEL = 'agent-browser:open-webpage'
 const pendingAgentBrowserEvents = []
 const agentBrowserListeners = new Set()
+const IMAGE_GENERATED_CHANNEL = 'canvas:image-generated'
+const pendingImageGeneratedEvents = []
+const imageGeneratedListeners = new Set()
 
 // The main process may deliver an embedded request at did-finish-load, before
 // React has mounted CanvasView and subscribed. Keep that small event in the
@@ -15,6 +18,15 @@ ipcRenderer.on(AGENT_BROWSER_CHANNEL, (_event, data) => {
   }
 
   for (const listener of agentBrowserListeners) listener(data)
+})
+
+ipcRenderer.on(IMAGE_GENERATED_CHANNEL, (_event, data) => {
+  if (imageGeneratedListeners.size === 0) {
+    pendingImageGeneratedEvents.push(data)
+    return
+  }
+
+  for (const listener of imageGeneratedListeners) listener(data)
 })
 
 contextBridge.exposeInMainWorld('felixo', {
@@ -207,6 +219,13 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('canvas:agent-node-updated', handler)
       return () => ipcRenderer.removeListener('canvas:agent-node-updated', handler)
     },
+    onImageGenerated: (callback) => {
+      imageGeneratedListeners.add(callback)
+      while (pendingImageGeneratedEvents.length > 0) {
+        callback(pendingImageGeneratedEvents.shift())
+      }
+      return () => imageGeneratedListeners.delete(callback)
+    },
   },
   canvasFiles: {
     list: () => ipcRenderer.invoke('canvas-file:list'),
@@ -327,6 +346,14 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('files:pick-context', params),
     readImageAttachment: (params) =>
       ipcRenderer.invoke('files:read-image-attachment', params),
+    pickImage: () => ipcRenderer.invoke('files:pick-image'),
+    saveGeneratedImage: (params) =>
+      ipcRenderer.invoke('files:save-generated-image', params),
+    openImage: (params) => ipcRenderer.invoke('files:open-image', params),
+    saveImageCopy: (params) => ipcRenderer.invoke('files:save-image-copy', params),
+    duplicateImage: (params) => ipcRenderer.invoke('files:duplicate-image', params),
+    removeGeneratedImage: (params) =>
+      ipcRenderer.invoke('files:remove-generated-image', params),
     saveAttachment: (params) => ipcRenderer.invoke('files:save-attachment', params),
     saveClipboardImage: () => ipcRenderer.invoke('files:save-clipboard-image'),
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
