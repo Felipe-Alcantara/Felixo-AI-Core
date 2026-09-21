@@ -166,6 +166,16 @@ export function FelixoSelect({
     return () => document.removeEventListener('pointerdown', handlePointerDown, true)
   }, [open])
 
+  // A lista rola sozinha até a opção ativa. Sem isto o destaque do teclado sai
+  // da área visível (o foco fica no gatilho, via aria-activedescendant, então
+  // o navegador não rola nada por conta própria) e a opção vira inalcançável.
+  useEffect(() => {
+    if (!open) return
+    document
+      .getElementById(`${listboxId}-option-${safeActiveIndex}`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [open, safeActiveIndex, listboxId])
+
   const close = useCallback(() => {
     setOpen(false)
     setQuery('')
