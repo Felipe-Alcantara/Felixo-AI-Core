@@ -3495,3 +3495,15 @@ handle is invalid`) — `abort()` do Electron no encerramento, mesma família do
 retry do passo (antes só o 139) agora repete também o 3, até 3 vezes; outros códigos (o 1 de falha real do
 benchmark, por exemplo) falham na hora, e um crash persistente sai com o código real. Laço testado com
 funções falsas. Não verificado no runner: só as próximas execuções mostram se 3 tentativas bastam.
+
+## 2026-09-21 — Correção da janela do enquadramento automático (regressão do #73)
+
+O smoke do Windows do PR #75 falhou com "grupo fixture ocluido por topbar" (bloco sob a barra do topo) num boot
+lento (`canvas pronto em 14968 ms`). Causa, no que eu mesmo entreguei em `viewport-auto-fit.ts` (v0.1.395): a
+janela de 400 ms que separa "movimento do nosso ajuste" de "movimento da pessoa" abria no PLANEJAMENTO do ajuste;
+num PC/runner lento o `requestAnimationFrame` executa depois da janela, o ajuste era tratado como movimento da
+pessoa e os reenquadramentos por mudança de layout paravam — o enquadramento inicial, calculado com a medida
+antiga das superfícies, ficava errado. Corrigido: a janela conta da EXECUÇÃO do ajuste (`markAutoFitExecuted`),
+movimento programático com ajuste pendente é "nosso", e evento DOM real (mouse/roda/toque, `onMove` com evento)
+é sempre da pessoa. 9 testes, incluindo o cenário lento (plano em t=1000, execução em t=16000). NÃO verificado:
+o smoke do Windows passar de forma estável com esta correção (só o CI mostra) e nada foi visto numa janela real.

@@ -34,7 +34,7 @@ import { buildPresetInstruction } from '../services/agent-preset-prompt'
 import { NodeColorMenu } from './NodeColorMenu'
 import { frameClassName } from './frame-colors'
 import { notificationClassName, unreadCategoryByNode } from '../terminal/notification-category'
-import { initialAutoFitState, planAutoFit, registerViewportMove } from '../services/viewport-auto-fit'
+import { initialAutoFitState, markAutoFitExecuted, planAutoFit, registerViewportMove } from '../services/viewport-auto-fit'
 import { DrawingNode } from './DrawingNode'
 import { ExcalidrawDrawingNode } from './ExcalidrawDrawingNode'
 import { GroupNode } from './GroupNode'
@@ -421,10 +421,15 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
   // pessoa mexe na visão, mudança de layout não pode mais reenquadrar.
   const autoFitStateRef = useRef(initialAutoFitState())
   const handleCanvasMove = useCallback((
-    _event: unknown,
+    event: unknown,
     viewport: { zoom: number },
   ) => {
-    autoFitStateRef.current = registerViewportMove(autoFitStateRef.current, performance.now())
+    // `event` é null para movimento programático (nosso ajuste, botões de zoom, foco).
+    autoFitStateRef.current = registerViewportMove(
+      autoFitStateRef.current,
+      performance.now(),
+      event !== null && event !== undefined,
+    )
     const nextZoomPercent = Math.round(viewport.zoom * 100)
     if (nextZoomPercent === zoomPercentRef.current) return
     zoomPercentRef.current = nextZoomPercent
@@ -1026,13 +1031,17 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
     // `fitCanvasViewSafely` muda a cada mudança de layout; sem este plano cada
     // abrir/fechar de gaveta ou painel jogava fora o pan e o zoom da pessoa.
-    const plan = planAutoFit(autoFitStateRef.current, canvasRevision, performance.now())
+    const plan = planAutoFit(autoFitStateRef.current, canvasRevision)
     autoFitStateRef.current = plan.state
     if (!plan.fit) {
       return undefined
     }
 
-    const frame = window.requestAnimationFrame(() => fitCanvasViewSafely(0))
+    const frame = window.requestAnimationFrame(() => {
+      // A janela de "movimento nosso" abre agora, na execução (não no plano).
+      autoFitStateRef.current = markAutoFitExecuted(autoFitStateRef.current, performance.now())
+      fitCanvasViewSafely(0)
+    })
     return () => window.cancelAnimationFrame(frame)
   }, [canvasRevision, fitCanvasViewSafely, flowReady, hydrated])
 
