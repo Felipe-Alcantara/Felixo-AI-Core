@@ -11,7 +11,6 @@ import {
   MIN_CANVAS_STRIP,
   PANEL_MIN_WIDTH,
 } from '../../services/canvas-surfaces'
-import { toolbarColumnOffset } from '../toolbar-flyout'
 
 type CanvasPanelProps = {
   title: string
@@ -31,11 +30,11 @@ type CanvasPanelProps = {
   /** Superfície ampla para ferramentas que trabalham como uma página, como a tabela do Notion. */
   variant?: 'panel' | 'workspace'
   /**
-   * Recolhida, a sidebar libera espaço à esquerda — o painel desliza pra
-   * mais perto da borda pra ocupá-lo, em vez de deixar um vão parado onde a
-   * navegação estava. Nome mantido por compatibilidade com o resto da
-   * cadeia de painéis de ferramenta (`CanvasToolPanels.tsx` e os ~13
-   * painéis individuais), que só repassam o valor sem interpretá-lo.
+   * Não é mais lido aqui: o painel se posiciona pela largura viva da sidebar
+   * que o `CanvasSurfacesProvider` publica (`occupancy.toolbar`), que já
+   * cobre recolhida, expandida e arrastada. Mantido na assinatura porque a
+   * cadeia de painéis de ferramenta (`CanvasToolPanels.tsx` e os ~13 painéis
+   * individuais) ainda repassa o valor.
    */
   toolsMenuOpen?: boolean
 }
@@ -63,7 +62,6 @@ export function CanvasPanel({
   id,
   size = 'sm',
   variant = 'panel',
-  toolsMenuOpen = false,
 }: CanvasPanelProps) {
   const { closing, close } = useExitAnimation(PANEL_EXIT_MS, onClose)
   const [collapsed, setCollapsed] = useState(false)
@@ -82,7 +80,7 @@ export function CanvasPanel({
   const workspaceWidth = Math.max(
     PANEL_MIN_WIDTH,
     viewport.width -
-      toolbarColumnOffset(toolsMenuOpen) -
+      occupancy.toolbar -
       occupancy.inspector -
       WORKSPACE_SIDE_GAP * 2 -
       MIN_CANVAS_STRIP,
@@ -140,7 +138,7 @@ export function CanvasPanel({
         }
       }}
       style={{
-        left: `calc(1rem + ${toolbarColumnOffset(toolsMenuOpen)}px)`,
+        left: `calc(1rem + ${occupancy.toolbar}px)`,
         width: collapsed
           ? COLLAPSED_SURFACE_WIDTH
           : isWorkspace
@@ -152,7 +150,7 @@ export function CanvasPanel({
             : undefined,
         maxWidth: isWorkspace
           ? undefined
-          : `${Math.max(PANEL_MIN_WIDTH, viewport.width - toolbarColumnOffset(toolsMenuOpen) - occupancy.inspector - WORKSPACE_SIDE_GAP * 2)}px`,
+          : `${Math.max(PANEL_MIN_WIDTH, viewport.width - occupancy.toolbar - occupancy.inspector - WORKSPACE_SIDE_GAP * 2)}px`,
         maxHeight,
         // Workspace é página: ocupa a altura toda, e com ela definida os
         // filhos conseguem `height: 100%` e rolar cada coluna por dentro.
@@ -226,9 +224,7 @@ export function CanvasPanel({
           aria-description="Use as setas para ajustar e Home para restaurar o tamanho padrão."
           tabIndex={0}
           title="Arraste para redimensionar; dois cliques para o tamanho padrão"
-          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
-            resizing ? 'bg-white/20' : 'hover:bg-white/10'
-          }`}
+          className={`felixo-resize-handle ${resizing ? 'is-resizing' : ''}`}
         />
       )}
 
@@ -249,9 +245,7 @@ export function CanvasPanel({
           tabIndex={0}
           title="Arraste para ajustar a altura; dois cliques para a altura do conteúdo"
           data-felixo-panel-height-handle={panelId}
-          className={`absolute bottom-0 left-0 h-1.5 w-full cursor-row-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
-            heightResize.resizing ? 'bg-white/20' : 'hover:bg-white/10'
-          }`}
+          className={`felixo-resize-handle felixo-resize-handle--horizontal ${heightResize.resizing ? 'is-resizing' : ''}`}
         />
       )}
     </div>

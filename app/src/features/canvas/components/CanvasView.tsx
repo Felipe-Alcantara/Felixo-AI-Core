@@ -56,6 +56,10 @@ import { CanvasZoomPill } from './CanvasZoomPill'
 import { CanvasAmbientLayer } from './CanvasAmbientLayer'
 import { CanvasSurfacesProvider } from './CanvasSurfacesProvider'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
+import {
+  useResizableSidebarWidth,
+  type ResizableSidebarWidth,
+} from '../hooks/useResizableSidebarWidth'
 import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-surfaces'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { toolbarColumnOffset } from './toolbar-flyout'
@@ -287,6 +291,7 @@ export function CanvasView({ onOpenChat }: CanvasViewProps) {
   // pra quem calcula `toolbarWidth` aqui. Lembrada entre sessões como as
   // outras preferências de layout (`panel-sizing.ts`, `terminal-drawer-pin.ts`).
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+  const sidebarResize = useResizableSidebarWidth()
 
   const changeSidebarCollapsed = useCallback((collapsed: boolean) => {
     setSidebarCollapsed(collapsed)
@@ -296,13 +301,14 @@ export function CanvasView({ onOpenChat }: CanvasViewProps) {
   return (
     <TerminalSessionProvider>
       <CanvasSurfacesProvider
-        toolbarWidth={toolbarColumnOffset(sidebarCollapsed)}
+        toolbarWidth={toolbarColumnOffset(sidebarCollapsed, sidebarResize.width)}
       >
         <CanvasProfilerBoundary>
           <CanvasInner
             onOpenChat={onOpenChat}
             sidebarCollapsed={sidebarCollapsed}
             onSidebarCollapsedChange={changeSidebarCollapsed}
+            sidebarResize={sidebarResize}
           />
         </CanvasProfilerBoundary>
       </CanvasSurfacesProvider>
@@ -313,9 +319,15 @@ export function CanvasView({ onOpenChat }: CanvasViewProps) {
 type CanvasInnerProps = CanvasViewProps & {
   sidebarCollapsed: boolean
   onSidebarCollapsedChange: (collapsed: boolean) => void
+  sidebarResize: ResizableSidebarWidth
 }
 
-function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }: CanvasInnerProps) {
+function CanvasInner({
+  onOpenChat,
+  sidebarCollapsed,
+  onSidebarCollapsedChange,
+  sidebarResize,
+}: CanvasInnerProps) {
   const store = useTerminalSessions()
   // minimap já vem pronto do provider — computado uma vez a partir de
   // occupancy/viewport internamente, não recalculado aqui.
@@ -2452,7 +2464,11 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
 
   return (
     <div
-      className="flex h-full w-full"
+      className={`flex h-full w-full ${sidebarResize.resizing ? 'is-sidebar-resizing' : ''}`}
+      // A largura da sidebar vira variável CSS aqui, na raiz: a própria
+      // sidebar, a barra superior, a de status e o pill de zoom leem dela,
+      // então arrastar move todos juntos sem uma segunda fonte de estado.
+      style={{ '--felixo-sidebar-width': `${sidebarResize.width}px` } as CSSProperties}
       data-felixo-canvas-ready
       // Sinal explícito de prontidão para o smoke (em vez de ler o texto da barra de status).
       data-felixo-hydrated={hydrated ? 'true' : 'false'}
@@ -2484,7 +2500,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
           data-canvas-layout-warning
           className="pointer-events-none absolute top-16 z-10 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-[var(--color-warning)] shadow-lg"
           style={{
-            left: toolbarColumnOffset(sidebarCollapsed) + 16,
+            left: occupancy.toolbar + 16,
             maxWidth: Math.max(180, freeArea.width - 32),
           }}
         >
@@ -2504,6 +2520,7 @@ function CanvasInner({ onOpenChat, sidebarCollapsed, onSidebarCollapsedChange }:
         }}
         sidebarCollapsed={sidebarCollapsed}
         onSidebarCollapsedChange={onSidebarCollapsedChange}
+        sidebarResize={sidebarResize}
         notificationCount={notificationCount}
         updatePresentation={updates.presentation}
         onInstallUpdate={updates.install}

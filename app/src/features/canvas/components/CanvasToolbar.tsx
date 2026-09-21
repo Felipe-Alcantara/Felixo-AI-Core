@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from 'react'
+import type { ResizableSidebarWidth } from '../hooks/useResizableSidebarWidth'
 import {
   Bell,
   ChevronDown,
@@ -113,6 +114,8 @@ type CanvasToolbarProps = {
    */
   sidebarCollapsed: boolean
   onSidebarCollapsedChange: (collapsed: boolean) => void
+  /** Largura arrastável da coluna expandida — mesma fonte que o provider lê. */
+  sidebarResize: ResizableSidebarWidth
 }
 
 export function CanvasToolbar({
@@ -145,11 +148,24 @@ export function CanvasToolbar({
   onOpenChat,
   sidebarCollapsed,
   onSidebarCollapsedChange,
+  sidebarResize,
 }: CanvasToolbarProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const appVersion = useAppVersion()
 
   const toggleSidebar = () => onSidebarCollapsedChange(!sidebarCollapsed)
+
+  const onResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Home') {
+      event.preventDefault()
+      sidebarResize.reset()
+      return
+    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const direction = event.key === 'ArrowRight' ? 1 : -1
+    sidebarResize.resizeBy(direction * (event.shiftKey ? 80 : 24))
+  }
 
   return (
     <aside
@@ -157,6 +173,24 @@ export function CanvasToolbar({
       aria-label="Navegação do canvas"
       data-felixo-region="sidebar"
     >
+      {!sidebarCollapsed && (
+        <div
+          onMouseDown={sidebarResize.startResize}
+          onDoubleClick={sidebarResize.reset}
+          onKeyDown={onResizeKeyDown}
+          role="separator"
+          aria-label="Redimensionar sidebar"
+          aria-orientation="vertical"
+          aria-valuenow={sidebarResize.width}
+          aria-valuemin={sidebarResize.minWidth}
+          aria-valuemax={sidebarResize.maxWidth}
+          aria-description="Use as setas para ajustar e Home para restaurar a largura padrão."
+          tabIndex={0}
+          title="Arraste para redimensionar; dois cliques para a largura padrão"
+          data-felixo-sidebar-resize-handle
+          className={`felixo-resize-handle ${sidebarResize.resizing ? 'is-resizing' : ''}`}
+        />
+      )}
       <nav className="felixo-activity-rail" aria-label="Ações principais">
         {/* O icone da secao abre e fecha a propria coluna, como a barra de
             atividades de um editor: clicar de novo recolhe. O enquadramento

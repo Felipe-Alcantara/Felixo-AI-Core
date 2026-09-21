@@ -5,11 +5,13 @@ import { SIDEBAR_RAIL_WIDTH, SIDEBAR_WIDTH } from '../services/canvas-surfaces'
  * — where a tool panel (see `CanvasPanel.tsx`) must start so it opens beside
  * the sidebar instead of on top of it.
  *
- * The sidebar collapses to just its activity rail (`SIDEBAR_RAIL_WIDTH`) or
- * sits fully expanded (`SIDEBAR_WIDTH`) — both fixed, CSS-defined widths
- * (`.felixo-workbench-sidebar` in index.css), so this is a plain lookup, not
- * a runtime measurement.
+ * Collapsed, the sidebar is just its activity rail (`SIDEBAR_RAIL_WIDTH`).
+ * Expanded, it is whatever width the person dragged it to
+ * (`useResizableSidebarWidth`), defaulting to `SIDEBAR_WIDTH`.
  */
-export function toolbarColumnOffset(sidebarCollapsed: boolean): number {
-  return sidebarCollapsed ? SIDEBAR_RAIL_WIDTH : SIDEBAR_WIDTH
+export function toolbarColumnOffset(
+  sidebarCollapsed: boolean,
+  expandedWidth: number = SIDEBAR_WIDTH,
+): number {
+  return sidebarCollapsed ? SIDEBAR_RAIL_WIDTH : expandedWidth
 }
