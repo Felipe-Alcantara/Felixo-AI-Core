@@ -3532,9 +3532,20 @@ Medição (Windows, run da main do #76): ~12 min de passos, dos quais os benchma
 operacional 145 s, scrollback 74 s, responsividade 50 s), o smoke 134 s e o E2E de contexto 81 s, tudo em série.
 Ciclo por PR ≈ CI do PR (~13 min) + CI da main (~13 min) + Release (~11 min).
 
-Feito: `concurrency` no `ci.yml` — em PR um push novo cancela a run anterior da branch; na `main` nunca cancela
-(o Release depende do CI de cada commit). NÃO feito de propósito, por dependerem de decisão: (1) dividir o job do
-Windows em jobs paralelos — a proteção da `main` exige os nomes `Validate (windows-latest)` etc. e `strict: true`;
-(2) ligar auto-merge no repositório (`allow_auto_merge` está desligado); (3) pular o Release de commits só de
-docs/teste; (4) paralelizar passos dentro do mesmo job — os testes sensíveis a tempo já falham de forma
-intermitente no Windows e a contenção pioraria isso.
+Feito (autorizado pela pessoa, que escolheu as três opções propostas):
+1. `concurrency` no `ci.yml`: em PR um push novo cancela a run anterior da branch; na `main` nunca cancela (o
+   Release depende do CI de cada commit).
+2. **Auto-merge ligado** no repositório (`allow_auto_merge`): `gh pr merge --auto --squash` faz o PR entrar sozinho
+   quando os checks obrigatórios passam.
+3. **Release só quando o app muda.** Novo workflow `Release gate` (`release-gate.yml`) roda depois do CI da `main`,
+   decide com `release-relevant.sh` (14 casos de teste; na dúvida publica) e só então dispara o `Release` por
+   `workflow_dispatch`. Commits só de docs/teste/`ci.yml` não publicam. O filtro NÃO fica dentro do `release.yml`
+   porque o `concurrency` dele cancelaria uma publicação em andamento por causa de um commit irrelevante. O
+   `release.yml` perdeu o gatilho `workflow_run` (fica só `workflow_dispatch`).
+4. **Benchmarks em job paralelo.** O job `Benchmarks (<os>)` roda em paralelo ao `Validate` os passos que não
+   dependem de build (npm runtime, alternativas, custo operacional, responsividade, scrollback); o do bundle
+   continua no `Validate`. Mesmos passos, mesmos gates, outra máquina ao mesmo tempo: o Windows deve cair de ~13
+   para ~8 min. As verificações obrigatórias da `main` ganharam `Benchmarks (ubuntu|windows|macos-latest)`.
+NÃO feito de propósito: paralelizar passos DENTRO do mesmo job (os testes sensíveis a tempo já falham de forma
+intermitente no Windows e a contenção pioraria isso). NÃO verificado: o `Release gate` só roda de verdade na `main`
+depois do merge; se ele falhar, nenhum instalador sai e é preciso disparar `Release` à mão (`workflow_dispatch`).

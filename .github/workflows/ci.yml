@@ -251,11 +251,212 @@ jobs:
       - name: Test release-version.sh
         run: bash .github/scripts/release-version.test.sh
 
+      - name: Test release-relevant.sh
+        run: bash .github/scripts/release-relevant.test.sh
+
   validate:
     name: Validate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     # Teto do job: o mais lento medido é ~13 min no Windows; um passo pendurado
     # (26 min em 19/09) passa a falhar claro em vez de ocupar o runner por horas.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+          # Runner hospedado arm64 gratuito em repositório público — cobre a
+          # validação do node-pty (dependência nativa) nessa arquitetura sem
+          # precisar de dispositivo físico. Ver task "Release — validar
+          # node-pty empacotado no Linux arm64".
+          - ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # O cache contém somente os tsbuildinfo do renderer. O tsc valida os
+      # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
+      # mudança de código nunca transforma um resultado antigo em verde.
+      - name: Restore TypeScript incremental cache
+        uses: actions/cache@v5
+        with:
+          path: app/node_modules/.tmp
+          key: typecheck-${{ runner.os }}-${{ hashFiles('app/package-lock.json', 'app/tsconfig*.json') }}
+          restore-keys: |
+            typecheck-${{ runner.os }}-
+
+      - name: Test
+        timeout-minutes: 15
+        run: npm test
+
+      # Mantém a cobertura que depende de node-pty visível no log da matriz.
+      # Estes testes não têm skip por SO: cada runner precisa provar seu
+      # próprio launch spec (Linux direto, macOS shell de login, Windows
+      # cmd.exe/ConPTY).
+      - name: Test native PTY integration
+        timeout-minutes: 10
+        run: npm run test:native
+
+      # O reporter padrão do Vitest registra "Test Files" e "Tests" no log.
+      # Sem --passWithNoTests, uma coleta vazia falha o job em vez de ficar verde.
+      - name: Test frontend
+        timeout-minutes: 10
+        env:
+          # A matriz de 50 repetições roda no gate E2E logo abaixo; o conjunto
+          # geral mantém uma passada para não duplicar o custo.
+          FELIXO_CONTEXT_MATRIX_RUNS: 1
+        run: npm run test:frontend
+
+      # Protege a fronteira contexto versus submissão nos três runners, sem
+      # iniciar CLIs autenticadas: o teste usa o store/manager reais, o
+      # escritor/leitor de artefatos e um PTY fake determinístico.
+      - name: Test Canvas initial context E2E
+        timeout-minutes: 10
+        env:
+          FELIXO_CONTEXT_MATRIX_RUNS: 50
+          FELIXO_CONTEXT_MATRIX_REPORT: build/canvas-context-matrix-${{ matrix.os }}.json
+        run: >-
+          npm run test:canvas-context --
+          --reporter=json
+          --outputFile=build/canvas-context-e2e-${{ matrix.os }}.json
+
+      - name: Upload Canvas initial context E2E report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-context-e2e-${{ matrix.os }}
+          path: |
+            app/build/canvas-context-e2e-${{ matrix.os }}.json
+            app/build/canvas-context-matrix-${{ matrix.os }}.json
+          if-no-files-found: warn
+
+      # Gate de interação e evidência visual: sobe a mesma sessão isolada do
+      # `felixo devtools` (Electron real, contra o Vite dev server) e confere
+      # hidratação, oclusão, foco/teclado, handles, persistência e viewport
+      # mínimo. O PTY fake não inicia uma CLI ou shell real.
+      #
+      # Roda nos três SOs. No Linux o Electron sobe sob `xvfb-run`; a causa do
+      # antigo "nunca abre CDP" era o Chromium abortar na checagem do sandbox
+      # SUID (`chrome-sandbox` sem root/4755), ANTES do main.cjs — o
+      # `appendSwitch('no-sandbox')` chegava tarde. `felixo devtools launch` agora
+      # passa `--no-sandbox` na linha de comando no Linux (diagnóstico real: log
+      # do Electron do run 35540428944). O log fica em FELIXO_DEVTOOLS_DEBUG_LOG e
+      # sobe como artefato se o passo falhar. Execuções verdes no Linux antes de
+      # virar gate: PR #70 (push da correção), main do #70 e o CI do PR que o
+      # reativou (que só entrou na main por ter passado).
+      - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            mkdir -p build
+            export FELIXO_DEVTOOLS_DEBUG_LOG="$GITHUB_WORKSPACE/app/build/electron-devtools-${{ matrix.os }}.log"
+            xvfb-run -a npm run test:canvas-smoke
+          else
+            npm run test:canvas-smoke
+          fi
+
+      - name: Upload Canvas PR smoke failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-smoke-failure-${{ matrix.os }}
+          path: |
+            app/build/canvas-smoke-failure-*.png
+            app/build/electron-devtools-*.log
+          if-no-files-found: ignore
+
+      - name: Lint
+        timeout-minutes: 5
+        run: npm run lint
+
+      - name: Build renderer
+        timeout-minutes: 10
+        run: npm run build
+
+      # A divisão do bundle só é válida se os chunks relativos continuarem
+      # carregando no renderer real. O benchmark abre o dist em Electron,
+      # abre o menu de ferramentas e carrega Fetch All; Linux usa o mesmo
+      # display virtual da bancada de scrollback.
+      - name: Benchmark renderer bundle
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run benchmark:bundle:check -- --out=bundle-load-${{ matrix.os }}.json
+          else
+            npm run benchmark:bundle:check -- --out=bundle-load-${{ matrix.os }}.json
+          fi
+
+      - name: Upload renderer bundle benchmark
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: bundle-load-${{ matrix.os }}
+          path: app/bundle-load-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+      - name: Check documentation exists
+        shell: bash
+        run: |
+          required_docs=(
+            "../docs/README.md"
+            "../docs/projeto/IA.md"
+            "../docs/projeto/ARQUITETURA.md"
+            "../docs/projeto/ROADMAP.md"
+            "../docs/projeto/POLITICA-VERSIONAMENTO.md"
+            "../docs/projeto/RODAR-VIA-CODIGO-FONTE.md"
+            "../docs/guias/GUIA-DESENVOLVEDOR.md"
+            "../docs/guias/GUIA-USUARIO.md"
+          )
+          missing=0
+          for doc in "${required_docs[@]}"; do
+            if [ ! -f "$doc" ]; then
+              echo "::warning::Missing required doc: $doc"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ $missing -gt 0 ]; then
+            echo "::warning::$missing required docs are missing"
+          fi
+
+      - name: Check for sensitive files
+        shell: bash
+        run: |
+          sensitive_patterns=(".env" ".env.local" ".env.production")
+          found=0
+          for pattern in "${sensitive_patterns[@]}"; do
+            if [ -f "$pattern" ]; then
+              echo "::error::Sensitive file found: $pattern"
+              found=$((found + 1))
+            fi
+          done
+          if [ $found -gt 0 ]; then
+            exit 1
+          fi
+
+  benchmarks:
+    name: Benchmarks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # Roda EM PARALELO ao job Validate (era tudo em série: ~4,8 min de benchmarks no
+    # Windows somados a ~7 min de testes). Os mesmos passos, os mesmos gates — só em
+    # outra máquina ao mesmo tempo. O benchmark do bundle fica no Validate: precisa do build.
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -353,98 +554,6 @@ jobs:
           path: app/terminal-responsiveness-${{ matrix.os }}.json
           if-no-files-found: ignore
 
-      # O cache contém somente os tsbuildinfo do renderer. O tsc valida os
-      # hashes/assinaturas das entradas antes de reutilizá-lo, portanto uma
-      # mudança de código nunca transforma um resultado antigo em verde.
-      - name: Restore TypeScript incremental cache
-        uses: actions/cache@v5
-        with:
-          path: app/node_modules/.tmp
-          key: typecheck-${{ runner.os }}-${{ hashFiles('app/package-lock.json', 'app/tsconfig*.json') }}
-          restore-keys: |
-            typecheck-${{ runner.os }}-
-
-      - name: Test
-        timeout-minutes: 15
-        run: npm test
-
-      # Mantém a cobertura que depende de node-pty visível no log da matriz.
-      # Estes testes não têm skip por SO: cada runner precisa provar seu
-      # próprio launch spec (Linux direto, macOS shell de login, Windows
-      # cmd.exe/ConPTY).
-      - name: Test native PTY integration
-        timeout-minutes: 10
-        run: npm run test:native
-
-      # O reporter padrão do Vitest registra "Test Files" e "Tests" no log.
-      # Sem --passWithNoTests, uma coleta vazia falha o job em vez de ficar verde.
-      - name: Test frontend
-        timeout-minutes: 10
-        env:
-          # A matriz de 50 repetições roda no gate E2E logo abaixo; o conjunto
-          # geral mantém uma passada para não duplicar o custo.
-          FELIXO_CONTEXT_MATRIX_RUNS: 1
-        run: npm run test:frontend
-
-      # Protege a fronteira contexto versus submissão nos três runners, sem
-      # iniciar CLIs autenticadas: o teste usa o store/manager reais, o
-      # escritor/leitor de artefatos e um PTY fake determinístico.
-      - name: Test Canvas initial context E2E
-        timeout-minutes: 10
-        env:
-          FELIXO_CONTEXT_MATRIX_RUNS: 50
-          FELIXO_CONTEXT_MATRIX_REPORT: build/canvas-context-matrix-${{ matrix.os }}.json
-        run: >-
-          npm run test:canvas-context --
-          --reporter=json
-          --outputFile=build/canvas-context-e2e-${{ matrix.os }}.json
-
-      - name: Upload Canvas initial context E2E report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: canvas-context-e2e-${{ matrix.os }}
-          path: |
-            app/build/canvas-context-e2e-${{ matrix.os }}.json
-            app/build/canvas-context-matrix-${{ matrix.os }}.json
-          if-no-files-found: warn
-
-      # Gate de interação e evidência visual: sobe a mesma sessão isolada do
-      # `felixo devtools` (Electron real, contra o Vite dev server) e confere
-      # hidratação, oclusão, foco/teclado, handles, persistência e viewport
-      # mínimo. O PTY fake não inicia uma CLI ou shell real.
-      #
-      # Roda nos três SOs. No Linux o Electron sobe sob `xvfb-run`; a causa do
-      # antigo "nunca abre CDP" era o Chromium abortar na checagem do sandbox
-      # SUID (`chrome-sandbox` sem root/4755), ANTES do main.cjs — o
-      # `appendSwitch('no-sandbox')` chegava tarde. `felixo devtools launch` agora
-      # passa `--no-sandbox` na linha de comando no Linux (diagnóstico real: log
-      # do Electron do run 35540428944). O log fica em FELIXO_DEVTOOLS_DEBUG_LOG e
-      # sobe como artefato se o passo falhar. Execuções verdes no Linux antes de
-      # virar gate: PR #70 (push da correção), main do #70 e o CI do PR que o
-      # reativou (que só entrou na main por ter passado).
-      - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            mkdir -p build
-            export FELIXO_DEVTOOLS_DEBUG_LOG="$GITHUB_WORKSPACE/app/build/electron-devtools-${{ matrix.os }}.log"
-            xvfb-run -a npm run test:canvas-smoke
-          else
-            npm run test:canvas-smoke
-          fi
-
-      - name: Upload Canvas PR smoke failure screenshot
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: canvas-smoke-failure-${{ matrix.os }}
-          path: |
-            app/build/canvas-smoke-failure-*.png
-            app/build/electron-devtools-*.log
-          if-no-files-found: ignore
-
       # O scrollback adaptativo só pode ser habilitado depois de medir a
       # combinação real Electron + xterm + PTY nos três runners. O check usa
       # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
@@ -484,72 +593,3 @@ jobs:
           name: terminal-scrollback-${{ matrix.os }}
           path: app/terminal-scrollback-${{ matrix.os }}.json
           if-no-files-found: ignore
-
-      - name: Lint
-        timeout-minutes: 5
-        run: npm run lint
-
-      - name: Build renderer
-        timeout-minutes: 10
-        run: npm run build
-
-      # A divisão do bundle só é válida se os chunks relativos continuarem
-      # carregando no renderer real. O benchmark abre o dist em Electron,
-      # abre o menu de ferramentas e carrega Fetch All; Linux usa o mesmo
-      # display virtual da bancada de scrollback.
-      - name: Benchmark renderer bundle
-        timeout-minutes: 10
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a npm run benchmark:bundle:check -- --out=bundle-load-${{ matrix.os }}.json
-          else
-            npm run benchmark:bundle:check -- --out=bundle-load-${{ matrix.os }}.json
-          fi
-
-      - name: Upload renderer bundle benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: bundle-load-${{ matrix.os }}
-          path: app/bundle-load-${{ matrix.os }}.json
-          if-no-files-found: ignore
-
-      - name: Check documentation exists
-        shell: bash
-        run: |
-          required_docs=(
-            "../docs/README.md"
-            "../docs/projeto/IA.md"
-            "../docs/projeto/ARQUITETURA.md"
-            "../docs/projeto/ROADMAP.md"
-            "../docs/projeto/POLITICA-VERSIONAMENTO.md"
-            "../docs/projeto/RODAR-VIA-CODIGO-FONTE.md"
-            "../docs/guias/GUIA-DESENVOLVEDOR.md"
-            "../docs/guias/GUIA-USUARIO.md"
-          )
-          missing=0
-          for doc in "${required_docs[@]}"; do
-            if [ ! -f "$doc" ]; then
-              echo "::warning::Missing required doc: $doc"
-              missing=$((missing + 1))
-            fi
-          done
-          if [ $missing -gt 0 ]; then
-            echo "::warning::$missing required docs are missing"
-          fi
-
-      - name: Check for sensitive files
-        shell: bash
-        run: |
-          sensitive_patterns=(".env" ".env.local" ".env.production")
-          found=0
-          for pattern in "${sensitive_patterns[@]}"; do
-            if [ -f "$pattern" ]; then
-              echo "::error::Sensitive file found: $pattern"
-              found=$((found + 1))
-            fi
-          done
-          if [ $found -gt 0 ]; then
-            exit 1
-          fi
