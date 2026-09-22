@@ -553,7 +553,7 @@ function OrganizeButton({
           id="canvas-organize-modes"
           role="group"
           aria-label="Modos de organização do canvas"
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
         >
           <button
             type="button"
@@ -693,7 +693,7 @@ function NamedCreateButton({
           id={popoverId}
           role="group"
           aria-label={`Criar bloco ${buttonLabel}`}
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
         >
           <input
             autoFocus
@@ -839,7 +839,7 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
           id={popoverId}
           role="group"
           aria-label={`Criar bloco ${buttonLabel}`}
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full rounded-lg bg-zinc-800 p-2 shadow-xl ring-1 ring-white/10"
         >
           <input
             ref={urlInputRef}
