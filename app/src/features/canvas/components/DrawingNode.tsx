@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
@@ -47,11 +47,26 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const { deleteElements } = useReactFlow()
 
+  // Reimportar um .fxcanvas que reaproveita o mesmo id de um desenho já
+  // montado atualiza `nodeData.strokes` sem remontar o componente — sem
+  // resincronizar, os traços antigos ficavam na tela. Mesmo padrão do
+  // NoteNode/GroupNode: guarda a última string que este componente mesmo
+  // produziu para distinguir "mudou por fora" de "fui eu que escrevi".
+  const lastSyncedStrokesRef = useRef(nodeData.strokes ?? '')
+  useEffect(() => {
+    const incoming = nodeData.strokes ?? ''
+    if (incoming === lastSyncedStrokesRef.current) return
+    lastSyncedStrokesRef.current = incoming
+    setStrokes(parseStrokes(incoming))
+  }, [nodeData.strokes])
+
   const onDataChange = nodeData.onDataChange
   const commitStrokes = useCallback(
     (next: DrawingStroke[]) => {
+      const serialized = next.length ? JSON.stringify(next) : ''
+      lastSyncedStrokesRef.current = serialized
       setStrokes(next)
-      onDataChange?.(id, { strokes: next.length ? JSON.stringify(next) : '' })
+      onDataChange?.(id, { strokes: serialized })
     },
     [id, onDataChange],
   )

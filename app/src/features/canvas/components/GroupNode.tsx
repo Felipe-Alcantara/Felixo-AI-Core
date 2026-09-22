@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { Trash2 } from 'lucide-react'
@@ -19,6 +19,18 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
   const [label, setLabel] = useState(nodeData.label ?? 'Grupo')
   const { deleteElements } = useReactFlow()
 
+  // Reimportar um .fxcanvas que reaproveita o mesmo id de um grupo já montado
+  // atualiza `nodeData.label` sem remontar o componente — sem resincronizar,
+  // o rótulo antigo ficava na tela até uma edição manual. Mesmo padrão do
+  // NoteNode: só resincroniza quando o valor não veio da própria digitação.
+  const lastSyncedLabelRef = useRef(nodeData.label ?? 'Grupo')
+  useEffect(() => {
+    const incoming = nodeData.label ?? 'Grupo'
+    if (incoming === lastSyncedLabelRef.current) return
+    lastSyncedLabelRef.current = incoming
+    setLabel(incoming)
+  }, [nodeData.label])
+
   return (
     <div className="felixo-canvas-group h-full w-full rounded-xl border-2 border-dashed border-white/10 bg-[var(--f-core-white)]/5">
       <NodeResizer
@@ -35,6 +47,7 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
           value={label}
           onChange={(event) => {
             const next = event.target.value
+            lastSyncedLabelRef.current = next
             setLabel(next)
             nodeData.onDataChange?.(id, { label: next })
           }}

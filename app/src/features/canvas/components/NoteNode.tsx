@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
@@ -33,6 +33,22 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
   const [preview, setPreview] = useState(false)
   const theme = resolveNoteTheme(nodeData.color)
   const { deleteElements } = useReactFlow()
+
+  // `nodeData.text` também muda por fora da digitação local — um agente pode
+  // escrever na nota via `felixo canvas escrever`, aprovado por clique humano
+  // (ver `canvas-write-agent-requests.ts`). Sem resincronizar aqui, a tela
+  // continuava mostrando o texto antigo depois da aprovação, e a próxima
+  // tecla digitada apagava a escrita já aceita. `lastSyncedTextRef` guarda o
+  // último valor que este componente mesmo produziu, para distinguir "o
+  // texto mudou por fora" de "acabei de ecoar minha própria digitação" —
+  // sem isso, o round-trip assíncrono via IPC faria o cursor pular a cada tecla.
+  const lastSyncedTextRef = useRef(nodeData.text ?? '')
+  useEffect(() => {
+    const incoming = nodeData.text ?? ''
+    if (incoming === lastSyncedTextRef.current) return
+    lastSyncedTextRef.current = incoming
+    setText(incoming)
+  }, [nodeData.text])
 
   return (
     <div
@@ -89,6 +105,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
           value={text}
           onChange={(event) => {
             const next = event.target.value
+            lastSyncedTextRef.current = next
             setText(next)
             nodeData.onDataChange?.(id, { text: next })
           }}
