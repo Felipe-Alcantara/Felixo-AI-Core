@@ -64,7 +64,11 @@ export function ProjectsModal({
     try {
       const folderPath = await window.felixo.projects.pickFolder()
       if (!folderPath) return
-      const name = folderPath.split('/').at(-1) ?? folderPath
+      // `pickFolder()` devolve o caminho nativo do SO — no Windows ele usa
+      // `\`, então dividir só por `/` não separava nada e o nome do projeto
+      // aparecia como o caminho absoluto inteiro. Mesma normalização de
+      // `model-storage.ts#getExecutableName`.
+      const name = folderPath.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? folderPath
       const alreadyAdded = projects.some((p) => p.path === folderPath)
       if (!alreadyAdded) {
         onAddProjects([{ id: crypto.randomUUID(), name, path: folderPath }])

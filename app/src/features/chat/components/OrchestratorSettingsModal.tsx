@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Save, X } from 'lucide-react'
 import type { Model, ModelAvailabilityStatus, OrchestratorSettings } from '../types'
@@ -26,6 +26,15 @@ export function OrchestratorSettingsModal({
     () => models.filter((model) => model.cliType !== 'unknown'),
     [models],
   )
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
 
   if (!isOpen) {
     return null

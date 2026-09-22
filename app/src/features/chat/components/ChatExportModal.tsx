@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlignLeft, Bug, Download, FileJson, FileText, X } from 'lucide-react'
 import type { ExportFormat } from '../services/chat-export'
 import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
@@ -21,6 +21,15 @@ export function ChatExportModal({
 }: ChatExportModalProps) {
   const dialog = useResizableDialog('chat-export')
   const [fileName, setFileName] = useState(suggestedFileName)
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
 
   if (!isOpen) {
     return null

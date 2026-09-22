@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { BrainCircuit, Save, X } from 'lucide-react'
 import type { CliType, Model, ReasoningEffort } from '../types'
@@ -119,6 +119,15 @@ export function ModelConfigModal({
     model.reasoningEffort ?? '',
   )
   const [fastMode, setFastMode] = useState(model.fastMode === true)
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
 
   if (!isOpen) {
     return null

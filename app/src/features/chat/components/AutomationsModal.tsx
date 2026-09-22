@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Play, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { AUTOMATION_SCOPE_LABELS } from '../../shared/types/automations'
@@ -45,6 +45,15 @@ export function AutomationsModal({
   const [description, setDescription] = useState('')
   const [prompt, setPrompt] = useState('')
   const [scope, setScope] = useState<AutomationScope>('planning')
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
 
   if (!isOpen) {
     return null

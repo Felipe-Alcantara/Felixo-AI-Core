@@ -198,7 +198,7 @@ export function TerminalMenu({
           aria-label="Configurar novo agente"
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 max-h-[calc(100vh-2rem)] w-full overflow-y-auto overscroll-contain rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10"
+          className="felixo-anim-sequential-panel felixo-sidebar-inline-panel mt-2 w-full rounded-lg bg-zinc-800 p-3 shadow-xl ring-1 ring-white/10"
         >
           <AgentConfigFields
             config={config}

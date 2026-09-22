@@ -113,6 +113,16 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   const [diagnosisFeedback, setDiagnosisFeedback] = useState('')
   const [linkMenuOpen, setLinkMenuOpen] = useState(false)
   const linkMenuRef = useRef<HTMLDivElement>(null)
+  // Timer do "copiado!" — guardado numa ref e limpo no unmount, senão copiar
+  // e fechar/remover o bloco antes de 1.5s chama `setState` num componente
+  // já desmontado.
+  const copiedTimeoutRef = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (copiedTimeoutRef.current !== null) window.clearTimeout(copiedTimeoutRef.current)
+    },
+    [],
+  )
   const { deleteElements } = useReactFlow()
 
   const mode: FileNodeMode = nodeData.mode ?? 'scratchpad'
@@ -241,8 +251,12 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   const copyPath = async () => {
     if (!absolutePath) return
     await navigator.clipboard?.writeText(absolutePath)
+    if (copiedTimeoutRef.current !== null) window.clearTimeout(copiedTimeoutRef.current)
     setCopied(true)
-    window.setTimeout(() => setCopied(false), 1500)
+    copiedTimeoutRef.current = window.setTimeout(() => {
+      copiedTimeoutRef.current = null
+      setCopied(false)
+    }, 1500)
   }
 
   const openImageInSystem = async () => {

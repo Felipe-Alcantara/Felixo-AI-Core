@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Palette, RotateCcw, Save, Settings } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { useReducedMotionPreference } from '../../../shared/accessibility/reduced-motion-preference'
@@ -180,6 +180,35 @@ function ReducedMotionNotice() {
   )
 }
 
+/**
+ * O "salvo!" que pisca por 1.5s depois de um save — usado por `PromptField` e
+ * `QualityStandardField`. Guarda o timer numa ref e limpa no unmount: sem
+ * isso, salvar e fechar o painel (ou remover o bloco) antes do timer disparar
+ * chamava `setState` num componente já desmontado.
+ */
+function useSavedFlash(durationMs = 1500) {
+  const [saved, setSaved] = useState(false)
+  const timeoutRef = useRef<number | null>(null)
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current)
+    },
+    [],
+  )
+
+  const flash = useCallback(() => {
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current)
+    setSaved(true)
+    timeoutRef.current = window.setTimeout(() => {
+      timeoutRef.current = null
+      setSaved(false)
+    }, durationMs)
+  }, [durationMs])
+
+  return [saved, flash] as const
+}
+
 type PromptFieldProps = {
   label: string
   help: ReactNode
@@ -198,7 +227,7 @@ function PromptField({
   onSaved,
 }: PromptFieldProps) {
   const [value, setValue] = useState(defaultValue)
-  const [saved, setSaved] = useState(false)
+  const [saved, flashSaved] = useSavedFlash()
 
   useEffect(() => {
     let cancelled = false
@@ -222,8 +251,7 @@ function PromptField({
   const save = async () => {
     await persist(value)
     onSaved?.(value)
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 1500)
+    flashSaved()
   }
 
   return (
@@ -274,7 +302,7 @@ function QualityStandardField({
   const [customText, setCustomText] = useState<string | null>(null)
   const [source, setSource] = useState<QualityStandardSource | null>(null)
   const [enabled, setEnabled] = useState(true)
-  const [saved, setSaved] = useState(false)
+  const [saved, flashSaved] = useSavedFlash()
   const defaultPrompt = buildDefaultQualityStandardPrompt(source)
   const prompt = customText ?? defaultPrompt
 
@@ -311,8 +339,7 @@ function QualityStandardField({
     const toStore = customText ?? ''
     await window.felixo?.canvas?.setQualityStandard?.({ prompt: toStore, enabled })
     onSaved?.({ prompt: toStore, enabled })
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 1500)
+    flashSaved()
   }
 
   return (

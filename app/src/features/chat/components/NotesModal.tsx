@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FilePlus, Save, Search, StickyNote, Trash2, X } from 'lucide-react'
 import type { ProjectNote } from '../types'
 import { createEmptyNote } from '../services/note-storage'
@@ -50,6 +50,15 @@ export function NotesModal({
   const selectedNote = selectedNoteId
     ? notes.find((note) => note.id === selectedNoteId) ?? null
     : filteredNotes[0] ?? null
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
 
   if (!isOpen) {
     return null

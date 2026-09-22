@@ -152,6 +152,15 @@ export function ModelManagerModal({
     return () => window.clearTimeout(timer)
   }, [isOpen, loadOfficialCatalog])
 
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeManager()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, closeManager])
+
   if (!isOpen) {
     return null
   }

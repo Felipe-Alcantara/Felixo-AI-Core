@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { BrainCircuit, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import type { SkillPrompt } from '../types'
@@ -23,6 +23,15 @@ export function SkillsModal({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [prompt, setPrompt] = useState('')
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
 
   if (!isOpen) {
     return null

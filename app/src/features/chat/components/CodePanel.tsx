@@ -182,6 +182,15 @@ export function CodePanel({
     })
   }, [isOpen, refreshSummary, selectedProject])
 
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
+
   if (!isOpen) {
     return null
   }

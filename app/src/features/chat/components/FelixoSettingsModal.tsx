@@ -1,5 +1,5 @@
 import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
@@ -60,6 +60,17 @@ function FelixoSettingsDialog({
 }: Omit<FelixoSettingsModalProps, 'isOpen'>) {
   const dialog = useResizableDialog('felixo-settings')
   const [settingsDraft, setSettingsDraft] = useState(orchestratorSettings)
+
+  // Este componente só existe montado enquanto o modal está aberto (o pai
+  // devolve `null` quando fechado), então o listener não precisa checar
+  // `isOpen` — ele nasce e morre junto com o modal.
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
 
   function saveGlobalSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
