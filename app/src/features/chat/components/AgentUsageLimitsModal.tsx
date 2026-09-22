@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, ExternalLink, Gauge, RefreshCw, Trash2, X } from 'lucide-react'
 import {
   AGENT_USAGE_STATUS_CLASSES,
@@ -50,6 +50,14 @@ export function AgentUsageLimitsModal({
   const [identityHint, setIdentityHint] = useState('')
   const [formMessage, setFormMessage] = useState<string | null>(null)
 
+  // "Atualizar agora", o auto-refresh e a cadeia de abertura (list + refresh)
+  // podem ter chamadas em voo ao mesmo tempo; sem um número de sequência, a
+  // que demorasse mais sobrescrevia dados mais recentes já exibidos, não
+  // importa qual tivesse sido disparada por último. Só a chamada mais nova
+  // (requestId === o valor atual da ref quando ela resolve) tem permissão de
+  // aplicar seu resultado.
+  const requestSeqRef = useRef(0)
+
   const loadDashboard = useCallback(async (refreshNow: boolean) => {
     const api = window.felixo?.agentUsage
     if (!api) {
@@ -57,11 +65,14 @@ export function AgentUsageLimitsModal({
       return
     }
 
+    const requestId = (requestSeqRef.current += 1)
     setLoading(true)
     setStatusMessage(null)
 
     try {
       const result = refreshNow ? await api.refresh() : await api.list()
+      if (requestId !== requestSeqRef.current) return
+
       if (!result.ok) {
         setStatusMessage(result.message ?? 'Não foi possível carregar o painel.')
         return
@@ -69,9 +80,10 @@ export function AgentUsageLimitsModal({
 
       setDashboard(result)
     } catch {
+      if (requestId !== requestSeqRef.current) return
       setStatusMessage('Não foi possível comunicar com o processo principal.')
     } finally {
-      setLoading(false)
+      if (requestId === requestSeqRef.current) setLoading(false)
     }
   }, [])
 
@@ -98,6 +110,15 @@ export function AgentUsageLimitsModal({
 
     return () => window.clearInterval(intervalId)
   }, [autoRefreshMinutes, isOpen, loadDashboard])
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
 
   const providers = useMemo(() => dashboard.providers ?? [], [dashboard.providers])
   const accounts = useMemo(() => dashboard.accounts ?? [], [dashboard.accounts])

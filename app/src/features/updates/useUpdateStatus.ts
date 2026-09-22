@@ -32,17 +32,22 @@ export function useUpdateStatus(): {
     if (!bridge) return
 
     let cancelled = false
+    // Se um evento `onStatus` chegar antes de `getStatus()` resolver, o
+    // snapshot inicial já está desatualizado quando a promise finalmente
+    // resolve — sem esta guarda, ele sobrescrevia o status mais novo já
+    // aplicado pelo evento e a interface "regredia" visualmente.
+    let receivedPush = false
 
     void bridge.getStatus().then((result) => {
-      if (!cancelled && result?.status) {
+      if (!cancelled && !receivedPush && result?.status) {
         setStatus(result.status)
       }
     })
 
     const unsubscribe = bridge.onStatus((next) => {
-      if (!cancelled) {
-        setStatus(next)
-      }
+      if (cancelled) return
+      receivedPush = true
+      setStatus(next)
     })
 
     return () => {
