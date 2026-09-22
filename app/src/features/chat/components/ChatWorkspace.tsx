@@ -1020,12 +1020,24 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         return currentMessages
       }
 
-      if (
-        streamItemId &&
-        targetMessage.streamItemId &&
-        targetMessage.streamItemId !== streamItemId &&
-        text.trim()
-      ) {
+      const isNewStreamItem =
+        Boolean(streamItemId) &&
+        Boolean(targetMessage.streamItemId) &&
+        targetMessage.streamItemId !== streamItemId
+
+      if (isNewStreamItem) {
+        // O primeiro chunk de um streamItemId novo pode chegar vazio/só
+        // espaço (comum em várias APIs de streaming). Sem este `return`
+        // antecipado, o ramo de baixo grudava esse chunk na mensagem atual
+        // e, junto, adotava o `streamItemId` novo nela — os chunks
+        // seguintes (já com texto) então deixavam de abrir uma bolha nova,
+        // porque `targetMessage.streamItemId` já tinha virado o novo id em
+        // silêncio. Ignorar o chunk vazio aqui mantém o id antigo até que
+        // texto de verdade chegue, e só então a bolha nova é criada.
+        if (!text.trim()) {
+          return currentMessages
+        }
+
         if (!targetMessage.content.trim()) {
           return currentMessages.map((message, index) =>
             index === targetIndex
