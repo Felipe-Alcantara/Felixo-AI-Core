@@ -5,13 +5,18 @@ import { tmpdir } from 'node:os'
 import { buildAgentArgs } from '../services/agent-launch-options'
 import { buildOpeniaRunArgs } from '../services/openia-launch-config'
 import {
+  DEFAULT_QUALITY_STANDARD_PROMPT,
   buildCanvasTerminalInitialText,
   isTerminalInitialTextReady,
+  qualityStandardSourceFrom,
+  resolveQualityStandardPrompt,
   resolveTerminalInitialText,
 } from '../services/quality-standard-prompt'
 import { splitInitialContext } from '../services/context-file-delivery'
 import { canResumeAgentSession } from '../services/agent-session'
 import { TerminalSessionStore } from './terminal-session-store'
+import { describeSystemDesignStatus } from '../../shared/system-design/system-design-presentation'
+import type { SystemDesignConfig } from '../../shared/system-design/types'
 
 // These CommonJS modules are the same writer and reader used by the packaged
 // app. The PTY fake below only replaces node-pty, so the file/shim boundary is
@@ -986,6 +991,80 @@ describe('E2E do contexto inicial do Canvas', () => {
     expect(harness.fakes.get(geminiProfile.sessionId)?.executions).toEqual([])
   }, 10_000)
 
+  it('entrega no arquivo de contexto a mesma fonte sincronizada que as configurações exibem', async () => {
+    harness = createHarness()
+    const configuracao: SystemDesignConfig = {
+      schemaVersion: 2,
+      enabled: true,
+      repoUrl: 'https://github.com/acme/padroes.git',
+      branch: 'release/qa',
+      sourceMode: 'custom',
+      label: 'Padrões de QA',
+      syncState: 'synced',
+      delivered: {
+        repoUrl: 'https://github.com/acme/padroes.git',
+        branch: 'release/qa',
+        sha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
+        syncedAt: '2026-09-24T14:00:00.000Z',
+        label: 'Padrões de QA',
+      },
+      lastSha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
+      lastSyncedAt: '2026-09-24T14:00:00.000Z',
+      lastError: null,
+    }
+    const estadoVisivel = describeSystemDesignStatus(configuracao, {
+      formatDate: () => '24/09/2026 11:00',
+    })
+    const promptEfetivo = resolveQualityStandardPrompt({
+      // Configurações antigas podem ter persistido o texto padrão intocado.
+      // Ele precisa acompanhar a fonte atual, em vez de congelar o Felixo.
+      stored: DEFAULT_QUALITY_STANDARD_PROMPT,
+      source: qualityStandardSourceFrom(configuracao),
+    })
+    const identidadeFonte = `${configuracao.label} · ${configuracao.branch}`
+    const contexto = buildCanvasTerminalInitialText(
+      promptEfetivo,
+      undefined,
+      [],
+      { agentName: 'Agente fonte sincronizada', cwd: TEST_CWD },
+    )
+
+    expect(estadoVisivel.detail).toContain(`${identidadeFonte} @ a1b2c3d`)
+    expect(promptEfetivo).toContain(`do ${configuracao.label}`)
+    expect(promptEfetivo).toContain(
+      'use a fonte: https://github.com/acme/padroes (branch: release/qa).',
+    )
+    expect(promptEfetivo).not.toContain('Felipe-Alcantara/Felixo-System-Design')
+
+    const profile = createAgentProfile(
+      harness,
+      'claude',
+      buildAgentArgs({ agentId: 'claude', model: 'sonnet', effort: 'high', yolo: true }) ?? [],
+      'Agente fonte sincronizada',
+      'claude-fonte-sincronizada',
+      { sessionId: 'canvas-context-source-identity' },
+    )
+    profile.initialText = contexto
+    harness.installProfile(profile)
+    const store = new TerminalSessionStore()
+    stores.push(store)
+    ensureProfile(store, profile)
+
+    const fake = await waitForInitialRead(harness, profile.sessionId, expectedReads(profile))
+    const corpoEntregue = fake.readBodies.find((body) => body.includes('Padrões de QA'))
+
+    if (!corpoEntregue) {
+      throw new Error('O prompt de padrão de qualidade não chegou no artefato de contexto.')
+    }
+
+    expect(corpoEntregue).toContain(configuracao.label)
+    expect(corpoEntregue).toContain(promptEfetivo)
+    expect(corpoEntregue).toContain(`branch: ${configuracao.branch}`)
+    expect(corpoEntregue).toContain('https://github.com/acme/padroes (branch: release/qa)')
+    expect(estadoVisivel.detail).toContain(configuracao.label)
+    expect(estadoVisivel.detail).toContain(configuracao.branch)
+  }, 10_000)
+
   it('prova a entrega ponta a ponta na matriz de restart, troca, concorrencia e recuperacao', async () => {
     const repetitions = matrixRepetitions()
     const reportPath = matrixReportPath()
@@ -1100,6 +1179,31 @@ describe('E2E do contexto inicial do Canvas', () => {
           expect(localHarness.fakes.get(simultaneous[1].sessionId)?.readArtifacts).toHaveLength(expectedReads(simultaneous[1]))
           expect(simultaneousStores).toHaveLength(2)
           report.scenarios.push({ iteration, name: 'dois-terminais-simultaneos', ok: true, deliveries: 2 })
+
+          const duplicated = [
+            profileFor(`matrix-duplicate-a-${iteration}`, 'claude'),
+            profileFor(`matrix-duplicate-b-${iteration}`, 'claude'),
+          ]
+          const duplicateStores = duplicated.map((profile) => {
+            const store = new TerminalSessionStore()
+            localStores.push(store)
+            ensureProfile(store, profile)
+            return store
+          })
+          const duplicateFakes = await Promise.all(
+            duplicated.map((profile) =>
+              waitForInitialRead(localHarness, profile.sessionId, expectedReads(profile)),
+            ),
+          )
+          const duplicateArtifacts = duplicateFakes.map((fake) => fake.readArtifacts[0])
+          expect(duplicateStores).toHaveLength(2)
+          expect(duplicateArtifacts[0]).toBeTruthy()
+          expect(duplicateArtifacts[1]).toBeTruthy()
+          expect(duplicateArtifacts[0]).not.toBe(duplicateArtifacts[1])
+          expect(duplicateFakes.every((fake) =>
+            fake.readBodies.some((body) => body.includes('Siga o padrão de qualidade da matriz.')),
+          )).toBe(true)
+          report.scenarios.push({ iteration, name: 'duplicacao-de-agente-isola-artefatos', ok: true, deliveries: 2 })
 
           const trustId = `matrix-claude-trust-${iteration}`
           const trustProfile = profileFor(trustId, 'claude', { trustPrompt: true })
