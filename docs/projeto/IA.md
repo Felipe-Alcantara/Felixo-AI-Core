@@ -3631,3 +3631,44 @@ chave, sem custo): o serviço passou os argumentos reais, incluindo um prompt qu
 NÃO verificado: nenhuma imagem foi gerada de verdade (exige chave e gasta crédito); o cancelamento cooperativo
 contra o Openia real (sem chave ele falha antes); o `taskkill /T /F` e o atalho `.cmd` do Windows só o CI
 exercita; a consulta do catálogo dentro do Electron empacotado (testada com `fetch` simulado e por `curl`).
+
+## 2026-09-24 — Instalador gerenciado: processo órfão no timeout/cancelamento (extraído para `core/process-tree.cjs`)
+
+Fatia da task "CLI — cobrir layout, scripts e reinício do instalador nos três sistemas" (esforço "Dias";
+recorte explícito abaixo). Achado ao ler `managed-cli-installer.cjs`: no timeout de 10 min o código matava só
+o processo do `npm` com `child.kill('SIGKILL')`, sem `detached: true` no spawn — quando `npm install` roda um
+script de pós-instalação (processo-neto), matar o npm não mata o script. No POSIX porque o processo herda o
+grupo do próprio app (sem `detached`, `process.kill(-pid)` nem seria seguro tentar); no Windows porque não
+existe kill de grupo por sinal nenhum. Também não existia NENHUM cancelamento externo — só o timeout.
+
+Esta é a mesma classe de bug de três ocorrências anteriores já documentadas neste repositório (duas
+`getManagedCliLayout`/`ensureManagedCliRuntime` usando separador do SO real em vez do pedido; a detecção de
+CLI no Windows não resolvendo `.cmd` antes de executar) — nos três casos, cada arquivo tinha sua própria
+implementação da mesma lógica sensível a plataforma, e ninguém varria as outras cópias quando uma delas era
+corrigida. `openia-image-service.cjs` já tinha uma implementação de "matar árvore de processo" testada e
+correta (a própria task de geração de imagem, mesma sessão anterior); extraí para `core/process-tree.cjs`
+(puro, sem Electron) em vez de escrever uma terceira cópia, e o instalador e o serviço de imagem passaram a
+compartilhar a mesma.
+
+Decisão pedida à pessoa: erro inesperado do kill (ex.: EPERM, não ESRCH) deve propagar ou ser engolido? As
+duas chamadas existentes acontecem em contexto fire-and-forget (`setTimeout`/callback de abort, sem `await`
+nem `.catch()`) — uma rejeição ali vira exceção não tratada e derruba o processo principal do app inteiro,
+pior que o órfão que o módulo existe para evitar. Resposta: nunca rejeitar; `onError` opcional para quem
+quiser logar.
+
+Corrigido em `managed-cli-installer.cjs`: spawn com `detached: platformName !== 'win32'`; timeout E
+cancelamento externo (`AbortSignal`, novo — não existia em nenhuma camada) agora chamam `killProcessTree` e
+SÓ resolvem depois (quem chama pode, na sequência, apagar a pasta temporária da instalação; resolver cedo
+arriscaria apagar um diretório que um script de pós-instalação ainda não soltou).
+
+Verificação: `core/process-tree.test.cjs` (10 testes: os dois ramos de plataforma isolados por injeção, e
+DOIS testes de PROCESSO REAL — avô→pai→neto — provando primeiro o bug reproduzido sem a correção, depois a
+correção matando o neto de verdade); `managed-cli-installer.test.cjs` ganhou 4 testes (árvore no timeout, não
+`child.kill` direto; `detached` correto por plataforma; cancelamento antes e durante a instalação; cancelar
+depois de já ter terminado não muda nada). `npm test` 1566/1566 (+14), `eslint` e `tsc -b` limpos.
+
+**Recorte desta sessão** (a task-mãe é "Dias" de esforço; entreguei a fatia de maior risco de confiabilidade,
+com prova real, não a matriz inteira): NÃO feito — matriz de instalação Python/script (só o caminho npm foi
+tocado), smoke empacotado real nos três SOs, mensagens de erro estáveis por ecossistema, e validação de que o
+`taskkill`/grupo POSIX funcionam de verdade fora do CI (só visto rodando em Linux aqui). Tasks de pendência
+abertas no Notion.

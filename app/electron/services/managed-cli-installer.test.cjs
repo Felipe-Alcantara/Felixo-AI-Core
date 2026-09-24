@@ -307,8 +307,8 @@ describe('managed-cli-installer', () => {
     assert.deepEqual(spawnCalls, ['install'])
   })
 
-  it('gives up after the timeout instead of hanging the setup forever', async () => {
-    const killed = []
+  it('gives up after the timeout instead of hanging the setup forever, matando a ARVORE do processo (nao so o npm)', async () => {
+    const killTreeCalls = []
     const result = await installManagedPackage({
       npmPackage: '@openai/codex',
       npmCliPath: '/npm/bin/npm-cli.js',
@@ -317,15 +317,119 @@ describe('managed-cli-installer', () => {
       timeoutMs: 5,
       spawn: () => {
         const child = new EventEmitter()
+        child.pid = 4242
         child.stdout = new EventEmitter()
         child.stderr = new EventEmitter()
-        child.kill = (signal) => killed.push(signal)
+        child.kill = () => assert.fail('o timeout deveria matar pela arvore (killTree), nao por child.kill direto')
         return child
+      },
+      killTree: async (options) => {
+        killTreeCalls.push(options)
       },
     })
 
     assert.equal(result.ok, false)
     assert.match(result.message, /tempo limite/)
-    assert.deepEqual(killed, ['SIGKILL'])
+    assert.deepEqual(killTreeCalls, [{ pid: 4242, platformName: killTreeCalls[0]?.platformName }])
+  })
+
+  // Nasce com `detached: true` no POSIX: é o que torna o processo lider de um
+  // grupo proprio, que `killProcessTree` consegue matar por inteiro (`process.kill(-pid)`).
+  // No Windows isso nao importa — o `killProcessTree` la usa `taskkill /T`, que nao
+  // depende de grupo de processo nenhum — entao o spawn continua sem `detached` la.
+  it('spawna detached no POSIX para o kill de grupo alcancar os netos; nao no Windows', () => {
+    for (const [platformName, esperado] of [['linux', true], ['darwin', true], ['win32', false]]) {
+      let spawnOptions
+      void installManagedPackage({
+        npmPackage: '@openai/codex',
+        npmCliPath: '/npm/bin/npm-cli.js',
+        nodeExecutable: '/opt/app/felixo',
+        layout: LAYOUT,
+        platformName,
+        spawn: (command, args, options) => {
+          spawnOptions = options
+          return createFakeChild({ stdout: 'ok' })
+        },
+      })
+
+      assert.equal(spawnOptions.detached, esperado, `platformName=${platformName}`)
+    }
+  })
+
+  it('a instalacao ja cancelada nem chega a nascer o processo', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    let spawnFoiChamado = false
+
+    const result = await installManagedPackage({
+      npmPackage: '@openai/codex',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      signal: controller.signal,
+      spawn: () => {
+        spawnFoiChamado = true
+        return createFakeChild({ stdout: 'ok' })
+      },
+    })
+
+    assert.equal(spawnFoiChamado, false)
+    assert.equal(result.ok, false)
+    assert.equal(result.cancelled, true)
+    assert.match(result.message, /cancelada/)
+  })
+
+  it('cancelar no meio da instalacao mata a arvore do processo e devolve cancelled:true', async () => {
+    const controller = new AbortController()
+    const killTreeCalls = []
+
+    const promessa = installManagedPackage({
+      npmPackage: '@openai/codex',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      signal: controller.signal,
+      spawn: () => {
+        const child = new EventEmitter()
+        child.pid = 9911
+        child.stdout = new EventEmitter()
+        child.stderr = new EventEmitter()
+        child.kill = () => assert.fail('cancelamento deveria matar pela arvore (killTree)')
+        return child
+      },
+      killTree: async (options) => {
+        killTreeCalls.push(options)
+      },
+    })
+
+    controller.abort()
+    const result = await promessa
+
+    assert.equal(result.ok, false)
+    assert.equal(result.cancelled, true)
+    assert.match(result.message, /cancelada/)
+    assert.deepEqual(killTreeCalls.map((call) => call.pid), [9911])
+  })
+
+  it('cancelar DEPOIS que a instalacao ja terminou nao muda o resultado (nao ha corrida)', async () => {
+    const controller = new AbortController()
+    const killTreeCalls = []
+
+    const result = await installManagedPackage({
+      npmPackage: '@openai/codex',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      signal: controller.signal,
+      spawn: () => createFakeChild({ stdout: 'added 1 package' }),
+      killTree: async (options) => {
+        killTreeCalls.push(options)
+      },
+    })
+
+    controller.abort() // depois do close: o listener de abort já foi removido
+
+    assert.equal(result.ok, true)
+    assert.deepEqual(killTreeCalls, [])
   })
 })
