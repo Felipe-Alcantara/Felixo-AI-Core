@@ -20,6 +20,8 @@ esperar false "só documentação" $'docs/projeto/IA.md\ndocs/projeto/ARQUITETUR
 esperar false "só teste" $'app/src/features/canvas/services/x.test.ts\napp/electron/services/y.test.cjs\n'
 esperar false "só fixtures e testes do launcher" $'app/electron/__fixtures__/text-divergence.cjs\ntests/test_launcher.py\n'
 esperar false "só o ci.yml" $'.github/workflows/ci.yml\n'
+esperar false "metadados locais e cópia do padrão de qualidade" $'.gitignore\nPadr├úo de qualidade - Felixo System Design/README.md\nPadr├úo de qualidade - Felixo System Design/scripts/powershell/install-felixo-powershell.ps1\n'
+esperar false "alteração no próprio seletor de release" $'.github/scripts/release-relevant.sh\n'
 esperar false "docs + teste + ci.yml juntos" $'docs/projeto/IA.md\napp/electron/services/pty.test.cjs\n.github/workflows/ci.yml\n'
 esperar true "código do app" $'app/src/features/canvas/components/CanvasView.tsx\n'
 esperar true "um arquivo de app no meio de docs" $'docs/projeto/IA.md\napp/electron/main.cjs\n'

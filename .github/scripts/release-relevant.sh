@@ -2,20 +2,23 @@
 # Decide se uma lista de arquivos alterados (um por linha, na entrada padrão)
 # exige publicar um instalador novo. Imprime `true` ou `false`.
 #
-# Só é "irrelevante" o commit em que TODO arquivo é documentação, teste ou CI
-# do workflow `ci.yml` — nada que vá dentro do instalador. Qualquer outro
-# arquivo (código, package.json, lockfile, release.yml, scripts de release) OU
-# uma lista vazia/ilegível vale `true`: na dúvida, publica. Perder um release
-# de app é pior que publicar um a mais.
+# Só é "irrelevante" o commit em que TODO arquivo é documentação, teste,
+# metadado da cópia local do padrão de qualidade ou CI do workflow `ci.yml` —
+# nada que vá dentro do instalador. Qualquer outro arquivo (código,
+# package.json, lockfile, release.yml, scripts de release) OU uma lista
+# vazia/ilegível vale `true`: na dúvida, publica. Perder um release de app é
+# pior que publicar um a mais.
 set -u
 
 is_irrelevant() {
   case "$1" in
-    docs/*|*.md) return 0 ;;
+    docs/*|*.md|.gitignore) return 0 ;;
     *.test.ts|*.test.tsx|*.test.js|*.test.cjs|*.test.sh|*.test.py) return 0 ;;
     app/electron/__fixtures__/*) return 0 ;;
     tests/*) return 0 ;;
     .github/workflows/ci.yml) return 0 ;;
+    .github/scripts/release-relevant.sh) return 0 ;;
+    Padr├úo\ de\ qualidade\ -\ Felixo\ System\ Design/*|Padrão\ de\ qualidade\ -\ Felixo\ System\ Design/*) return 0 ;;
     *) return 1 ;;
   esac
 }

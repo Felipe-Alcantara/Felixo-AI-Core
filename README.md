@@ -83,6 +83,17 @@ prompts dizem a fonte **entregue** (a do conteúdo em cache), que pode diferir d
 configurada até a próxima sincronização. Uma fonte escolhida nunca é trocada por um
 novo padrão do app; configurações antigas são migradas sem reset.
 
+Os agentes procuram uma cópia local dos guias em
+`Padrão de qualidade - Felixo System Design/`. Essa pasta é opcional e fica fora do
+versionamento; quando não existe, o prompt aponta para a URL e a branch da fonte
+configurada.
+
+Para voltar de uma fonte escolhida à fonte padrão do app, abra **Configurações →
+System Design** e use **Voltar ao padrão do app**; a tela troca a configuração e
+inicia a sincronização. Se uma sincronização falhar, a tela e o prompt informam qual
+fonte ficou entregue e mantêm o último conteúdo sincronizado. A interface não guarda
+histórico nem permite selecionar um SHA anterior.
+
 ---
 
 ## Stack
