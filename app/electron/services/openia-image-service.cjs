@@ -31,9 +31,9 @@ const os = require('node:os')
 const path = require('node:path')
 const { randomUUID } = require('node:crypto')
 const spawnChildProcess = require('cross-spawn')
-const { spawn } = require('node:child_process')
 const { ipcMain } = require('electron')
 const { resolveOpeniaSpawn } = require('./openia-service.cjs')
+const { killProcessTree } = require('../core/process-tree.cjs')
 const { MAX_ATTACHMENT_BYTES, isPathInside } = require('./file-attachments-ipc-handlers.cjs')
 
 const IMAGE_MODELS_URL = 'https://openrouter.ai/api/v1/images/models'
@@ -590,7 +590,12 @@ function runOpeniaImageProcess({
           // Sem o arquivo, o aviso educado não chega: vale a interrupção abaixo.
         }
       }
-      graceTimer = setTimeout(() => killProcessTree(child, killGraceMs), cooperativeGraceMs)
+      // Fire-and-forget: `done()` é disparado pelo `child.once('close', ...)` quando o
+      // processo realmente morrer, não por esta chamada — o próprio módulo compartilhado
+      // já aguarda internamente a escalada SIGTERM→SIGKILL (ou o taskkill no Windows).
+      graceTimer = setTimeout(() => {
+        void killProcessTree({ pid: child.pid, graceMs: killGraceMs })
+      }, cooperativeGraceMs)
     }
     if (signal?.aborted) onAbort()
     else signal?.addEventListener('abort', onAbort, { once: true })
@@ -598,27 +603,6 @@ function runOpeniaImageProcess({
     child.once('error', () => done({ started: false }))
     child.once('close', (code) => done({ started: true, ok: code === 0, exitCode: code, stdout }))
   })
-}
-
-function killProcessTree(child, graceMs) {
-  if (!child?.pid) return
-  if (process.platform === 'win32') {
-    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).on('error', () => {})
-    return
-  }
-  const signalGroup = (signal) => {
-    try {
-      process.kill(-child.pid, signal)
-    } catch {
-      try {
-        child.kill(signal)
-      } catch {
-        // já saiu
-      }
-    }
-  }
-  signalGroup('SIGTERM')
-  setTimeout(() => signalGroup('SIGKILL'), graceMs).unref()
 }
 
 /**

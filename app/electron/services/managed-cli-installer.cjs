@@ -15,6 +15,7 @@ const path = require('node:path')
 const platformAdapter = require('../core/platform/index.cjs')
 const { createNodeEnv } = require('../core/node-runtime.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
+const { killProcessTree } = require('../core/process-tree.cjs')
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const OUTPUT_LIMIT = 12000
@@ -157,8 +158,10 @@ function createNpmViewIntegrityArgs({ npmCliPath, npmPackage }) {
  * @param {string} options.nodeExecutable
  * @param {Record<string, string>} options.env
  * @param {string} options.cwd
+ * @param {AbortSignal} [options.signal] - Cancelamento externo.
  * @param {Function} [options.spawn]
  * @param {number} [options.timeoutMs]
+ * @param {string} [options.platformName]
  * @returns {Promise<{ ok: boolean, message: string, output: string }>}
  */
 async function verifyManagedPackageIntegrity({
@@ -168,8 +171,11 @@ async function verifyManagedPackageIntegrity({
   nodeExecutable,
   env,
   cwd,
+  signal,
   spawn = spawnChildProcess,
   timeoutMs = INSTALL_TIMEOUT_MS,
+  platformName = platformAdapter.name,
+  killTree = killProcessTree,
 }) {
   const args = createNpmViewIntegrityArgs({ npmCliPath, npmPackage })
 
@@ -178,8 +184,11 @@ async function verifyManagedPackageIntegrity({
     args,
     env,
     cwd,
+    signal,
     spawn,
     timeoutMs,
+    platformName,
+    killTree,
     successMessage: `Hash de ${npmPackage} consultado.`,
     failureMessage: `Nao foi possivel consultar o hash de ${npmPackage}.`,
   })
@@ -218,9 +227,11 @@ async function verifyManagedPackageIntegrity({
  * @param {string} [options.expectedIntegrity] - Hash esperado, do manifesto.
  * @param {string} [options.cacheDir] - Cache offline do npm (`getNpmRegistryCacheDir`).
  * @param {(line: string) => void} [options.onLog]
+ * @param {AbortSignal} [options.signal] - Cancelamento externo (ex.: a pessoa fechou o diálogo de instalação).
  * @param {Function} [options.spawn] - Injetável nos testes.
  * @param {number} [options.timeoutMs]
- * @returns {Promise<{ ok: boolean, message: string, output: string }>}
+ * @param {string} [options.platformName]
+ * @returns {Promise<{ ok: boolean, message: string, output: string, cancelled?: boolean }>}
  */
 async function installManagedPackage({
   npmPackage,
@@ -230,8 +241,11 @@ async function installManagedPackage({
   expectedIntegrity,
   cacheDir,
   onLog,
+  signal,
   spawn = spawnChildProcess,
   timeoutMs = INSTALL_TIMEOUT_MS,
+  platformName = platformAdapter.name,
+  killTree = killProcessTree,
 }) {
   const env = createManagedInstallEnv({ layout })
 
@@ -243,8 +257,11 @@ async function installManagedPackage({
       nodeExecutable,
       env,
       cwd: layout.root,
+      signal,
       spawn,
       timeoutMs,
+      platformName,
+      killTree,
     })
 
     if (!integrityCheck.ok) {
@@ -266,24 +283,49 @@ async function installManagedPackage({
     env,
     cwd: layout.root,
     onLog,
+    signal,
     spawn,
     timeoutMs,
+    platformName,
+    killTree,
     successMessage: `${npmPackage} instalado.`,
     failureMessage: `Nao foi possivel instalar ${npmPackage}.`,
   })
 }
 
+/**
+ * Roda um comando, com dois jeitos de interromper: o `timeoutMs` de sempre e um
+ * `signal` (`AbortSignal`) para cancelamento pedido de fora — hoje nenhuma camada
+ * acima oferece cancelamento externo de instalação; este é o ponto que passa a
+ * aceitar, para quem vier a oferecer (ex.: um botão "cancelar" na interface).
+ *
+ * Nos dois casos, a árvore de processos inteira é encerrada antes de resolver —
+ * não só o processo imediato do `npm`. Um `npm install` roda scripts de
+ * pós-instalação como processos-filho do próprio npm; matar só o npm deixa esses
+ * netos vivos (reproduzido com processo real em `core/process-tree.test.cjs`).
+ * No POSIX isso exige nascer com `detached: true` (vira líder de um grupo de
+ * processos próprio, que é o que `killProcessTree` consegue matar por inteiro);
+ * sem isso o processo herdaria o grupo do próprio app, e matar o grupo mataria
+ * o app junto — por isso o `detached` é condicional à plataforma, nunca fixo.
+ */
 function runCommand({
   command,
   args,
   env,
   cwd,
   onLog,
+  signal,
   spawn,
   timeoutMs,
+  platformName,
+  killTree = killProcessTree,
   successMessage,
   failureMessage,
 }) {
+  if (signal?.aborted) {
+    return Promise.resolve({ ok: false, cancelled: true, message: `${failureMessage} A instalacao foi cancelada.`, output: '' })
+  }
+
   return new Promise((resolve) => {
     let output = ''
     let settled = false
@@ -293,6 +335,9 @@ function runCommand({
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
+      // Só no POSIX: no Windows não existe kill de grupo por sinal, e
+      // `killProcessTree` usa `taskkill /T` ali, que não depende disto.
+      detached: platformName !== 'win32',
     })
 
     const collect = (chunk) => {
@@ -304,20 +349,43 @@ function runCommand({
     child.stdout?.on('data', collect)
     child.stderr?.on('data', collect)
 
+    const cleanup = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+    }
+
     const finish = (result) => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
+      cleanup()
       resolve({ ...result, output: output.trim() })
     }
 
+    // Espera a tentativa de matar a árvore terminar antes de resolver: quem
+    // chama isto pode, na sequência, apagar a pasta temporária da instalação
+    // (`cwd`) — resolver cedo demais arriscaria apagar um diretório que um
+    // script de pós-instalação ainda não tinha soltado.
+    const finishAfterKill = async (result) => {
+      if (settled) return
+      await killTree({ pid: child.pid, platformName })
+      finish(result)
+    }
+
     const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      finish({
+      void finishAfterKill({
         ok: false,
         message: `${failureMessage} A instalacao passou do tempo limite.`,
       })
     }, timeoutMs)
+
+    const onAbort = () => {
+      void finishAfterKill({
+        ok: false,
+        cancelled: true,
+        message: `${failureMessage} A instalacao foi cancelada.`,
+      })
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
 
     child.once('error', (error) => {
       finish({
