@@ -3,8 +3,8 @@
 # exige publicar um instalador novo. Imprime `true` ou `false`.
 #
 # Só é "irrelevante" o commit em que TODO arquivo é documentação, teste,
-# metadado da cópia local do padrão de qualidade ou CI do workflow `ci.yml` —
-# nada que vá dentro do instalador. Qualquer outro arquivo (código,
+# metadado da cópia local do padrão de qualidade ou configuração dos workflows
+# de CI/release gate — nada que vá dentro do instalador. Qualquer outro arquivo (código,
 # package.json, lockfile, release.yml, scripts de release) OU uma lista
 # vazia/ilegível vale `true`: na dúvida, publica. Perder um release de app é
 # pior que publicar um a mais.
@@ -17,6 +17,7 @@ is_irrelevant() {
     app/electron/__fixtures__/*) return 0 ;;
     tests/*) return 0 ;;
     .github/workflows/ci.yml) return 0 ;;
+    .github/workflows/release-gate.yml) return 0 ;;
     .github/scripts/release-relevant.sh) return 0 ;;
     Padr├úo\ de\ qualidade\ -\ Felixo\ System\ Design/*|Padrão\ de\ qualidade\ -\ Felixo\ System\ Design/*) return 0 ;;
     *) return 1 ;;

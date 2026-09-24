@@ -2,8 +2,8 @@ name: Release gate
 
 # Decide, depois do CI de um commit em `main` passar, se ele merece um
 # instalador novo — e só então dispara o workflow `Release` (por
-# `workflow_dispatch`). Commits que mudam apenas documentação, testes ou o
-# `ci.yml` não publicam nada (~11 min e uma versão sem mudança de app a menos).
+# `workflow_dispatch`). Commits que mudam apenas documentação, testes ou a
+# configuração dos workflows não publicam nada (~11 min e uma versão sem mudança de app a menos).
 #
 # Isto NÃO pode ser um filtro dentro do `release.yml`: o `concurrency` dele
 # cancela o Release em andamento quando outra run entra, e um commit só de docs
@@ -44,7 +44,9 @@ jobs:
         run: |
           source .github/scripts/release-relevant.sh
           # Qualquer falha ao ler o diff cai em `true`: na dúvida, publica.
-          FILES="$(git diff --name-only HEAD^ HEAD 2>/dev/null || true)"
+          # Preserve UTF-8 path names: core.quotePath's default C escapes stop
+          # the selector from recognizing ignored non-ASCII local-copy paths.
+          FILES="$(git -c core.quotePath=false diff --name-only HEAD^ HEAD 2>/dev/null || true)"
           RELEVANT="$(printf '%s\n' "$FILES" | release_relevant)"
           echo "Arquivos alterados neste commit:"
           printf '%s\n' "$FILES"
