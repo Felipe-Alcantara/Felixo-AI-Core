@@ -6317,3 +6317,36 @@ app"; captura de tela conferida.
   sync da fonte antiga re-clona em vez de dar `fetch`.
 - Um "aviso de mudança de default" para quem segue o padrão não existe: ao mudar o
   default do app, quem o segue passa a recebê-lo sem aviso (decisão 1).
+
+## 2026-09-24 — validação do rollout do prompt de System Design no contexto do Canvas
+
+Tarefa Notion: [Felixo AI Core/System Design — validar rollout do novo padrão e compatibilidade do prompt](https://app.notion.com/p/Felixo-AI-Core-System-Design-validar-rollout-do-novo-padr-o-e-compatibilidade-do-prompt-3ce91f95497e81c69f3aef2b2da0dadd).
+
+### Achado e correção
+
+A cópia local versionada dos guias estava numa pasta cujo nome foi gravado com mojibake (`Padr├úo de qualidade - Felixo System Design/`). Eram 37 arquivos de um snapshot antigo, enquanto README e prompt procuram o nome correto (`Padrão de qualidade - Felixo System Design/`). A cópia errada nunca era encontrada; em checkout limpo, o comportamento esperado é o prompt usar a URL e a branch da fonte configurada. Removi a cópia obsoleta, mantive no `.gitignore` os dois nomes (correto e corrompido) e documentei fallback e rollback em Configurações → System Design → “Voltar ao padrão do app”.
+
+Também corrigi o release gate para pedir ao Git caminhos UTF-8 sem escape C. Sem isso, nomes acentuados podiam chegar entre aspas ao seletor e uma limpeza só documental pareceria alteração do instalador. O gate agora classifica as mudanças da cópia local e do próprio workflow como irrelevantes; alterações no app continuam relevantes.
+
+### Cobertura e compatibilidade
+
+- O texto do prompt padrão permanece igual ao texto histórico; a suíte mantém a verificação byte a byte.
+- Novo E2E atravessa configuração sincronizada, presenter de status e leitor/escritor do arquivo de contexto: label, branch, URL e SHA exibidos correspondem à fonte entregue, sem perda do prompt.
+- A matriz existente exercita criação, retomada/reabertura, restart, troca de agente, fontes ausente/customizada, falhas/offline, atualização e fallback. Acrescentei a duplicação de dois perfis Claude, verificando sessões e artefatos distintos com o prompt correto em ambas.
+- Falha de sync continua preservando o último conteúdo entregue. A interface informa a fonte efetivamente entregue. Rollback para o padrão do app está descrito no README; a UI não oferece seleção de SHA anterior.
+
+### Verificações
+
+- `npm test`: 1566/1566 aprovados.
+- `npm run test:frontend`: 1149 aprovados, 1 ignorado.
+- `npm run lint`: aprovado.
+- `npm run build`: aprovado (`tsc -b` e Vite); Vite ainda sinaliza chunks acima de 500 kB.
+- `bash .github/scripts/release-relevant.test.sh`: todos os cenários aprovados, incluindo cópia local Unicode e configuração do gate.
+- CI `fd4a982` e `e683a27`: concluído com sucesso. A validação E2E, testes, lint e build passaram em Linux, macOS e Windows; o workflow também validou Linux ARM.
+- Release gate `e683a27`: sucesso, publicação ignorada porque nenhum arquivo de runtime do app mudou. O smoke do artefato empacotado mais recente segue verde nos três sistemas no release `36010195177`, SHA de runtime `d357e5b`.
+
+Não executei uma nova instalação interativa em cada SO nesta rodada: o código de runtime não mudou. A migração de uma instalação v1 real permanece na tarefa já aberta [Felixo System Design — validar migração do padrão de qualidade](https://app.notion.com/p/3e291f95497e8173a8c9cabe3e1cf3df). Terminais já abertos não recebem o lembrete reescrito depois de troca da fonte; novos contextos usam a fonte configurada/sincronizada.
+
+Commits enviados a `origin/main`: `1ace937` (remoção da cópia corrompida, ignore, README e seletor), `fd4a982` (E2E de identidade da fonte e duplicação) e `e683a27` (caminhos UTF-8 no release gate).
+
+Janela local registrada às 12:18 (-03): 11:21–12:18, 57 minutos.
