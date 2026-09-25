@@ -1903,6 +1903,17 @@ div::-webkit-scrollbar-thumb {
   .felixo-notifications-badge {
     animation: none;
   }
+
+  /* Ver o bloco :root[data-performance-mode='on'] abaixo — mesma faixa de
+     chrome que se desloca por layout (não só composição), agora também sob
+     reduced motion do sistema. */
+  .felixo-canvas-topbar,
+  .felixo-canvas-statusbar,
+  .felixo-notifications-trigger,
+  .felixo-workbench-sidebar,
+  .felixo-zoom-pill-panel {
+    transition: none;
+  }
 }
 
 /* Modo Performance corta a mesma coreografia do bloco de
@@ -1932,6 +1943,22 @@ div::-webkit-scrollbar-thumb {
 :root[data-performance-mode='on'] .felixo-anim-corner-dock-collapsed,
 :root[data-performance-mode='on'] .felixo-anim-corner-puck-hidden {
   transform: none;
+}
+
+/* Chrome do canvas que se desloca quando painel/gaveta/sidebar abrem ou
+   fecham — `left`/`right`/`width`/`margin-left` são propriedades de layout
+   (disparam reflow, não só composição). A coreografia de drawer/painel/
+   toolbar acima já era cortada; esta faixa (topbar, barra de status, sino de
+   notificações, sidebar, pill de zoom) ficara de fora, mesmo animando toda
+   vez que qualquer superfície muda de largura. Achado ao investigar a task
+   "Performance — alternar modo normal/performance" (pedido do Felipe de
+   remover os efeitos que a refatoração visual de 12-13/09 acrescentou). */
+:root[data-performance-mode='on'] .felixo-canvas-topbar,
+:root[data-performance-mode='on'] .felixo-canvas-statusbar,
+:root[data-performance-mode='on'] .felixo-notifications-trigger,
+:root[data-performance-mode='on'] .felixo-workbench-sidebar,
+:root[data-performance-mode='on'] .felixo-zoom-pill-panel {
+  transition: none;
 }
 
 :root[data-performance-mode='on'] .felixo-toolbar-expanding,
