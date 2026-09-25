@@ -202,12 +202,17 @@ jobs:
       # electron-builder que será publicado. Cada SO entrega seu JSON
       # sanitizado e o --check bloqueia a publicação se houver falha ou
       # ultrapassagem dos budgets de tempo, memória, processos ou disco.
+      # `--managers=npm-runtime`: o release só distribui o npm-runtime, então
+      # é ele que precisa passar no gate aqui. A comparação com
+      # pnpm/Yarn/Corepack é pergunta arquitetural e roda no CI (job
+      # `Dependency policy` em todo PR) e no workflow `Nightly` (quatro SOs).
       - name: Benchmark package managers in release artifact
         shell: bash
         run: >-
           node scripts/package-manager-alternatives-performance.cjs
           --check
           --iterations=2
+          --managers=npm-runtime
           --out="release/package-manager-alternatives-${{ matrix.os }}.json"
 
       - name: Upload package manager benchmark
@@ -225,6 +230,7 @@ jobs:
           --check
           --iterations=2
           --agents=1,2,5,10
+          --managers=npm-runtime
           --out="release/package-manager-operational-${{ matrix.os }}.json"
 
       - name: Upload package-manager operational benchmark
