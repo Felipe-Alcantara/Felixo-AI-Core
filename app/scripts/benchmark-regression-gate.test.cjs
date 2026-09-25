@@ -2,7 +2,20 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { compareReports, formatReport, heapStreamDeltaBytes, scenarioKey } = require('./benchmark-regression-gate.cjs')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { compareReports, formatReport, heapStreamDeltaBytes, main, scenarioKey } = require('./benchmark-regression-gate.cjs')
+
+function tempDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-regression-gate-'))
+}
+
+function writeJson(dir, name, value) {
+  const file = path.join(dir, name)
+  fs.writeFileSync(file, JSON.stringify(value))
+  return file
+}
 
 function scenario(overrides = {}) {
   return {
@@ -172,4 +185,67 @@ test('formatReport nomeia o cenário e a métrica na regressão, para leitura hu
   assert.match(text, /abc123/)
   assert.match(text, /def456/)
   assert.match(text, /\+50%/)
+})
+
+test('excludeMetrics com chave desconhecida é rejeitado — um erro de digitação não pode manter a métrica em silêncio', () => {
+  const report = { results: [scenario()] }
+  assert.throws(
+    () => compareReports({ baseline: report, current: report, excludeMetrics: ['resumems'] }),
+    /desconhecida.*resumems/,
+  )
+})
+
+test('o relatório diz o critério usado e o que ficou fora dele, mesmo sem regressão', () => {
+  const report = { results: [scenario()] }
+  const result = compareReports({ baseline: report, current: report, thresholdPercent: 60, excludeMetrics: ['resumeMs'] })
+
+  const text = formatReport(result)
+
+  assert.match(text, /Critério: RSS renderer p95 \(MiB\), delta de heap do stream \(bytes\)/)
+  assert.match(text, /60%/)
+  assert.match(text, /fora do critério.*resume \(ms\)/)
+})
+
+test('main cita commit e run do baseline e o commit atual vindos do CI por argumento', () => {
+  const dir = tempDir()
+  const baseline = writeJson(dir, 'baseline.json', { results: [scenario()] })
+  const current = writeJson(dir, 'current.json', { results: [scenario()] })
+  const out = path.join(dir, 'gate.txt')
+
+  const code = main([
+    `--baseline=${baseline}`,
+    `--current=${current}`,
+    '--baseline-commit=aaa111',
+    '--baseline-run-url=https://github.com/o/r/actions/runs/1',
+    '--current-commit=bbb222',
+    `--out=${out}`,
+  ])
+
+  assert.equal(code, 0)
+  const text = fs.readFileSync(out, 'utf8')
+  assert.match(text, /Baseline: aaa111 — https:\/\/github\.com\/o\/r\/actions\/runs\/1/)
+  assert.match(text, /Atual: bbb222/)
+})
+
+test('sem baseline e com --baseline-missing-ok, main não falha e ainda escreve o --out dizendo isso', () => {
+  const dir = tempDir()
+  const current = writeJson(dir, 'current.json', { results: [scenario()] })
+  const out = path.join(dir, 'gate.txt')
+
+  const code = main([
+    `--baseline=${path.join(dir, 'nao-existe.json')}`,
+    `--current=${current}`,
+    '--baseline-missing-ok',
+    `--out=${out}`,
+  ])
+
+  assert.equal(code, 0)
+  assert.match(fs.readFileSync(out, 'utf8'), /sem baseline disponível/)
+})
+
+test('sem baseline e sem --baseline-missing-ok, main falha de forma explícita', () => {
+  const dir = tempDir()
+  const current = writeJson(dir, 'current.json', { results: [scenario()] })
+
+  assert.throws(() => main([`--baseline=${path.join(dir, 'nao-existe.json')}`, `--current=${current}`]), /Baseline não encontrado/)
 })

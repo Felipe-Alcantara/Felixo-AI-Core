@@ -18,6 +18,7 @@
  */
 
 const fs = require('node:fs')
+const path = require('node:path')
 
 const DEFAULT_THRESHOLD_PERCENT = 20
 const MAX_THRESHOLD_PERCENT = 200
@@ -91,6 +92,13 @@ function compareReports({
     throw new Error(`thresholdPercent deve ser um número entre 0 (exclusivo) e ${MAX_THRESHOLD_PERCENT}.`)
   }
 
+  const knownKeys = new Set(METRICS.map((metric) => metric.key))
+  const unknown = excludeMetrics.filter((key) => !knownKeys.has(key))
+  // Um erro de digitação aqui (ex.: "resumems") manteria a métrica no critério
+  // em silêncio — exatamente o tipo de falso positivo que a exclusão evita.
+  if (unknown.length) {
+    throw new Error(`excludeMetrics desconhecida(s): ${unknown.join(', ')}. Válidas: ${[...knownKeys].join(', ')}.`)
+  }
   const excluded = new Set(excludeMetrics)
   const activeMetrics = METRICS.filter((metric) => !excluded.has(metric.key))
   const baselineByKey = new Map((baseline?.results ?? []).map((result) => [scenarioKey(result), result]))
@@ -134,14 +142,33 @@ function compareReports({
     if (scenarioCompared) compared += 1
   }
 
-  return { ok: regressions.length === 0, regressions, compared, skipped }
+  return {
+    ok: regressions.length === 0,
+    regressions,
+    compared,
+    skipped,
+    thresholdPercent,
+    checkedMetrics: activeMetrics.map((metric) => metric.label),
+    excludedMetrics: METRICS.filter((metric) => excluded.has(metric.key)).map((metric) => metric.label),
+  }
 }
 
-function formatReport(result, { baselineCommit, currentCommit } = {}) {
+function formatReport(result, { baselineCommit, currentCommit, baselineRunUrl } = {}) {
   const lines = []
   lines.push(`Gate de regressão de performance — ${result.compared} cenário(s) comparado(s).`)
-  if (baselineCommit) lines.push(`Baseline: ${baselineCommit}`)
+  if (baselineCommit || baselineRunUrl) {
+    lines.push(`Baseline: ${[baselineCommit, baselineRunUrl].filter(Boolean).join(' — ')}`)
+  }
   if (currentCommit) lines.push(`Atual: ${currentCommit}`)
+  if (result.checkedMetrics?.length) {
+    lines.push(
+      `Critério: ${result.checkedMetrics.join(', ')} — falha se piorar mais de ` +
+        `${result.thresholdPercent}% E passar do piso absoluto da métrica.`,
+    )
+  }
+  if (result.excludedMetrics?.length) {
+    lines.push(`Medidas mas fora do critério (ruído entre runners): ${result.excludedMetrics.join(', ')}.`)
+  }
 
   if (result.ok) {
     lines.push('Nenhuma regressão acima do limiar.')
@@ -179,6 +206,12 @@ function parseArgs(argv) {
       options.thresholdPercent = Number(arg.slice('--threshold='.length))
     } else if (arg.startsWith('--exclude-metric=')) {
       options.excludeMetrics.push(arg.slice('--exclude-metric='.length))
+    } else if (arg.startsWith('--baseline-commit=')) {
+      options.baselineCommit = arg.slice('--baseline-commit='.length)
+    } else if (arg.startsWith('--baseline-run-url=')) {
+      options.baselineRunUrl = arg.slice('--baseline-run-url='.length)
+    } else if (arg.startsWith('--current-commit=')) {
+      options.currentCommit = arg.slice('--current-commit='.length)
     } else if (arg.startsWith('--out=')) {
       options.outputPath = arg.slice('--out='.length)
     } else {
@@ -201,6 +234,9 @@ Opções:
   --exclude-metric=chave    ignora uma métrica no pass/fail (repetível); chaves
                             válidas: ${METRICS.map((metric) => metric.key).join(', ')}
   --baseline-missing-ok     não falha se --baseline não existir (ex.: artefato expirado)
+  --baseline-commit=sha     commit do baseline, citado no relatório
+  --baseline-run-url=url    run do CI que gerou o baseline, citado no relatório
+  --current-commit=sha      commit avaliado, citado no relatório
   --out=arquivo.txt         também escreve o relatório legível nesse caminho
   --help                    mostra esta ajuda
 `)
@@ -218,7 +254,9 @@ function main(argv = process.argv.slice(2)) {
 
   if (!options.baselinePath || !fs.existsSync(options.baselinePath)) {
     if (options.baselineMissingOk) {
-      console.log('[benchmark-regression-gate] sem baseline disponível; nada para comparar (não é falha).')
+      // Escreve o --out também aqui: o resumo do job no CI mostra o relatório,
+      // e "sem baseline" precisa aparecer lá explicitamente, não como silêncio.
+      writeOutput(options.outputPath, 'Gate de regressão de performance — sem baseline disponível (artefato de main ausente ou expirado); nada comparado, não é falha.')
       return 0
     }
     throw new Error(`Baseline não encontrado: ${options.baselinePath ?? '(não informado)'}`)
@@ -232,21 +270,27 @@ function main(argv = process.argv.slice(2)) {
     thresholdPercent: options.thresholdPercent,
     excludeMetrics: options.excludeMetrics,
   })
-  const text = formatReport(result, {
-    baselineCommit: baseline?.commit,
-    currentCommit: current?.commit,
-  })
-
-  console.log(text)
-  if (options.outputPath) {
-    fs.mkdirSync(require('node:path').dirname(options.outputPath), { recursive: true })
-    fs.writeFileSync(options.outputPath, `${text}\n`, 'utf8')
-  }
+  // O relatório do benchmark não carrega o commit; ele vem do CI por argumento.
+  writeOutput(
+    options.outputPath,
+    formatReport(result, {
+      baselineCommit: options.baselineCommit || baseline?.commit,
+      baselineRunUrl: options.baselineRunUrl,
+      currentCommit: options.currentCommit || current?.commit,
+    }),
+  )
 
   return result.ok ? 0 : 1
 }
 
-module.exports = { compareReports, formatReport, scenarioKey, heapStreamDeltaBytes, METRICS }
+function writeOutput(outputPath, text) {
+  console.log(text)
+  if (!outputPath) return
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  fs.writeFileSync(outputPath, `${text}\n`, 'utf8')
+}
+
+module.exports = { compareReports, formatReport, heapStreamDeltaBytes, main, METRICS, parseArgs, scenarioKey }
 
 if (require.main === module) {
   try {
