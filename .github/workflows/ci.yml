@@ -382,6 +382,14 @@ jobs:
             app/build/electron-devtools-*.log
           if-no-files-found: ignore
 
+      - name: Upload Canvas visual regression evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-visual-regression-${{ matrix.os }}
+          path: app/build/canvas-visual-regression/**
+          if-no-files-found: warn
+
       - name: Lint
         timeout-minutes: 5
         run: npm run lint

@@ -15,6 +15,7 @@ is_irrelevant() {
     docs/*|*.md|.gitignore) return 0 ;;
     *.test.ts|*.test.tsx|*.test.js|*.test.cjs|*.test.sh|*.test.py) return 0 ;;
     app/electron/__fixtures__/*) return 0 ;;
+    app/scripts/canvas-smoke.cjs|app/scripts/canvas-smoke-visual.cjs) return 0 ;;
     tests/*) return 0 ;;
     .github/workflows/ci.yml) return 0 ;;
     .github/workflows/release-gate.yml) return 0 ;;
