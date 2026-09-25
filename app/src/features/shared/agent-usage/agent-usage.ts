@@ -146,10 +146,48 @@ export function groupAgentUsageAccounts(
   }))
 }
 
+// Espelha STALE_AFTER_MS de agent-usage-service.cjs. O backend já marca a
+// amostra como `stale` quando a rodada é feita — mas se o painel ficar aberto
+// sem nenhum refresh (auto-refresh desligado é o padrão; o aviso de arquivo
+// mudado só cobre Codex/Claude), o selo "Atualizado" continuaria o mesmo
+// para sempre, mesmo o relógio andando bem além da janela de validade. Ver a
+// task "Limites — tornar o painel transparente sobre medição, stale, erro e
+// timestamp".
+export const AGENT_USAGE_STALE_AFTER_MS = 15 * 60 * 1000
+
+/**
+ * Reavalia `current` → `stale` usando o relógio de agora, não o do momento em
+ * que o dashboard foi buscado. Os outros status (`stale`/`unavailable`/
+ * `error`) já são definitivos e não precisam de reavaliação: só `current` é
+ * uma alegação sobre "quão recente" que o tempo pode desmentir sozinho.
+ */
+export function deriveDisplayStatus(
+  sample: AgentUsageSample | null | undefined,
+  now: () => number = Date.now,
+): AgentUsageStatus {
+  if (!sample) {
+    return 'unavailable'
+  }
+
+  if (sample.status !== 'current') {
+    return sample.status
+  }
+
+  const measuredAt = getAgentUsageMeasuredAt(sample) ?? sample.collectedAt
+  const timestamp = Date.parse(measuredAt)
+
+  if (!Number.isFinite(timestamp)) {
+    return sample.status
+  }
+
+  return now() - timestamp > AGENT_USAGE_STALE_AFTER_MS ? 'stale' : 'current'
+}
+
 export function getAccountStatus(
   account: AgentUsageAccount,
+  now: () => number = Date.now,
 ): AgentUsageStatus {
-  return account.latestSample?.status ?? 'unavailable'
+  return deriveDisplayStatus(account.latestSample, now)
 }
 
 export function formatAgentUsageStatus(status: AgentUsageStatus): string {
@@ -367,6 +405,7 @@ function optionalDetailString(value: AgentUsageStatusDetailValue | undefined): s
 
 export function summarizeAgentUsage(
   accounts: AgentUsageAccount[],
+  now: () => number = Date.now,
 ): Record<AgentUsageStatus, number> {
   const summary: Record<AgentUsageStatus, number> = {
     current: 0,
@@ -376,7 +415,7 @@ export function summarizeAgentUsage(
   }
 
   for (const account of accounts) {
-    summary[getAccountStatus(account)] += 1
+    summary[getAccountStatus(account, now)] += 1
   }
 
   return summary

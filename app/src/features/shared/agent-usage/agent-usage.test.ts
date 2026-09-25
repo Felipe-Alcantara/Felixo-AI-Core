@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_USAGE_STALE_AFTER_MS,
   agentUsagePercent,
+  deriveDisplayStatus,
   formatAgentUsageMetric,
   formatAgentUsageNumber,
   formatAgentUsageReset,
@@ -87,14 +89,68 @@ describe('agent usage presentation', () => {
       account('error', 'error'),
       account('empty', null),
     ]
+    // As amostras nascem com `collectedAt` fixo (2026-08-28): sem fixar o
+    // relógio aqui, `getAccountStatus`/`summarizeAgentUsage` reavaliariam
+    // "current" contra o `Date.now()` real e o rebaixariam para "stale" só
+    // por a fixture ser antiga — não é isso que este teste quer provar.
+    const now = () => Date.parse('2026-08-28T12:05:00.000Z')
 
-    expect(summarizeAgentUsage(accounts)).toEqual({
+    expect(summarizeAgentUsage(accounts, now)).toEqual({
       current: 1,
       stale: 1,
       unavailable: 2,
       error: 1,
     })
-    expect(getAccountStatus(accounts[4])).toBe('unavailable')
+    expect(getAccountStatus(accounts[4], now)).toBe('unavailable')
+  })
+
+  describe('deriveDisplayStatus', () => {
+    it('rebaixa "current" para "stale" quando measuredAt já passou da janela de validade, mesmo sem nova rodada', () => {
+      const medida = sample('current')
+      medida.metadata = { measuredAt: '2026-08-28T12:00:00.000Z' }
+
+      const logoDepois = () => Date.parse('2026-08-28T12:05:00.000Z')
+      const bemDepois = () =>
+        Date.parse('2026-08-28T12:00:00.000Z') + AGENT_USAGE_STALE_AFTER_MS + 1
+
+      expect(deriveDisplayStatus(medida, logoDepois)).toBe('current')
+      expect(deriveDisplayStatus(medida, bemDepois)).toBe('stale')
+    })
+
+    it('nunca promove "stale"/"unavailable"/"error" de volta para "current" só porque o relógio está perto', () => {
+      for (const status of ['stale', 'unavailable', 'error'] as const) {
+        const medida = sample(status)
+        medida.metadata = { measuredAt: '2026-08-28T12:00:00.000Z' }
+        expect(deriveDisplayStatus(medida, () => Date.parse('2026-08-28T12:00:01.000Z'))).toBe(
+          status,
+        )
+      }
+    })
+
+    it('sem sample nenhum é "unavailable", sem lançar', () => {
+      expect(deriveDisplayStatus(null)).toBe('unavailable')
+      expect(deriveDisplayStatus(undefined)).toBe('unavailable')
+    })
+
+    it('measuredAt hostil/ausente não lança e mantém o status original', () => {
+      const medida = sample('current')
+      medida.metadata = { measuredAt: 'não é uma data' }
+      expect(() => deriveDisplayStatus(medida, () => Date.now())).not.toThrow()
+      expect(deriveDisplayStatus(medida, () => Date.now())).toBe('current')
+
+      const semMetadata = sample('current')
+      // Sem `measuredAt`, cai no `collectedAt` da amostra — mesma regra do
+      // backend (`normalizeDashboardSample`, agent-usage-service.cjs).
+      expect(
+        deriveDisplayStatus(semMetadata, () => Date.parse('2026-08-28T12:05:00.000Z')),
+      ).toBe('current')
+      expect(
+        deriveDisplayStatus(
+          semMetadata,
+          () => Date.parse('2026-08-28T12:00:00.000Z') + AGENT_USAGE_STALE_AFTER_MS + 1,
+        ),
+      ).toBe('stale')
+    })
   })
 
   it('keeps source and collection time beside a number', () => {

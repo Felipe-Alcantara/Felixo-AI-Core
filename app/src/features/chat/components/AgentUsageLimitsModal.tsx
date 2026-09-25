@@ -111,6 +111,17 @@ export function AgentUsageLimitsModal({
     return () => window.clearInterval(intervalId)
   }, [autoRefreshMinutes, isOpen, loadDashboard])
 
+  // Ver o mesmo tick em AgentUsagePanel.tsx: `getAccountStatus` reavalia
+  // `current` → `stale` pelo relógio de agora, mas o React só rerenderiza
+  // quando algum estado muda — sem isto, o modal aberto e sem auto-refresh
+  // continuaria com o selo "Atualizado" bem depois de a amostra envelhecer.
+  const [, forceStatusTick] = useState(0)
+  useEffect(() => {
+    if (!isOpen) return
+    const intervalId = window.setInterval(() => forceStatusTick((n) => n + 1), 30_000)
+    return () => window.clearInterval(intervalId)
+  }, [isOpen])
+
   useEffect(() => {
     if (!isOpen) return
     function handleKey(event: KeyboardEvent) {

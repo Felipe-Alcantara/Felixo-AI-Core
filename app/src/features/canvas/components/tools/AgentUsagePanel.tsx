@@ -182,6 +182,17 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
     return () => window.clearInterval(intervalId)
   }, [autoRefreshMinutes, load])
 
+  // `getAccountStatus` reavalia `current` → `stale` pelo relógio de agora
+  // (ver agent-usage.ts). Sem este tick, um painel aberto e sem auto-refresh
+  // (o padrão) continuaria mostrando "Atualizado" indefinidamente, porque o
+  // React só rerenderiza quando algum estado muda — nunca porque o tempo
+  // passou sozinho. Só força rerender; não busca nada de novo.
+  const [, forceStatusTick] = useState(0)
+  useEffect(() => {
+    const intervalId = window.setInterval(() => forceStatusTick((n) => n + 1), 30_000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
   const groups = useMemo(
     () =>
       groupAgentUsageAccounts(
