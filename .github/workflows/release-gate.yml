@@ -2,8 +2,10 @@ name: Release gate
 
 # Decide, depois do CI de um commit em `main` passar, se ele merece um
 # instalador novo — e só então dispara o workflow `Release` (por
-# `workflow_dispatch`). Commits que mudam apenas documentação, testes ou a
-# configuração dos workflows não publicam nada (~11 min e uma versão sem mudança de app a menos).
+# `workflow_dispatch`). Só publica o commit que muda algo que entra no
+# instalador ou que o Release executa como gate (lista de inclusão em
+# `.github/scripts/release-relevant.sh`); docs, testes, launcher e CI não
+# publicam nada (~11 min e uma versão sem mudança de app a menos).
 #
 # Isto NÃO pode ser um filtro dentro do `release.yml`: o `concurrency` dele
 # cancela o Release em andamento quando outra run entra, e um commit só de docs
@@ -64,4 +66,4 @@ jobs:
         if: steps.decide.outputs.relevant != 'true'
         shell: bash
         run: |
-          echo "Commit $TARGET_SHA só mexe em documentação, teste ou CI; nenhum instalador novo é publicado."
+          echo "Commit $TARGET_SHA não muda nada que entra no instalador nem os gates do Release; nenhum instalador novo é publicado."

@@ -3672,3 +3672,142 @@ com prova real, não a matriz inteira): NÃO feito — matriz de instalação Py
 tocado), smoke empacotado real nos três SOs, mensagens de erro estáveis por ecossistema, e validação de que o
 `taskkill`/grupo POSIX funcionam de verdade fora do CI (só visto rodando em Linux aqui). Tasks de pendência
 abertas no Notion.
+
+## 2026-09-25 — CI e Release mais curtos sem perder cobertura (workflows e shell)
+
+Decisões da pessoa aplicadas: todos os ganhos sem perda; node-pty com prebuild no Windows; comparação
+yarn/pnpm/corepack só no Linux por PR (o `Dependency policy` continua completo) + nightly nos 4 SOs; o E2E de
+contexto continua com 50 repetições.
+
+1. **Main reaproveita o CI do PR.** Job `reuse` no `ci.yml` (só em push): acha o PR mergeado do commit,
+   compara a árvore Git do commit da main com a do head do PR e procura a run `pull_request` verde do head
+   (SHA completo). Tudo batendo, os outros jobs são pulados e a run fica verde; o job copia da run do PR os
+   artefatos `terminal-scrollback-<os>` (baseline do gate de regressão). Nunca derruba a run
+   (`continue-on-error` + saída 0); push direto, PR desatualizado, run ausente ou erro de API = CI completo.
+   Achado ao testar: em erro HTTP o `gh api` imprime o corpo JSON no stdout — sem validar o formato (SHA de
+   40 hex), duas respostas de erro iguais pareceriam árvores iguais.
+2. **Seletor de release por inclusão** (`release-relevant.sh`): só publica o que entra no instalador
+   (`build.files`, `extraResources`, hooks, entradas do vite build, package.json/lock) ou gateia o Release.
+   Corrige um bug: `app/resources/skills/*/SKILL.md` casava com `*.md` e nunca publicava.
+3. **Cortes no caminho crítico:** responsividade do terminal em job exploratório; lint só no Ubuntu;
+   bancadas de gerenciador do PR e do release com `--managers=npm-runtime` (flag implementada na frente de
+   scripts) e novo `nightly.yml` com a comparação completa nos 4 SOs + audits; Windows do release com
+   `-c.npmRebuild=false` (node-pty 1.1.0 traz prebuild N-API win32-x64; o rebuild levava 107 s); smokes de
+   cmd.exe/path longo em job próprio depois do publish; `vite build` sem o `tsc -b` repetido; removidos o
+   cache de TypeScript, os `if` mortos de `workflow_run` e o `apt-get install xvfb`.
+
+Verificação: PyYAML nos 5 workflows; actionlint 1.7.12 + shellcheck 0.11.0 sem achado novo em relação à
+main (o único é o SC2016 informativo pré-existente no aviso do Gatekeeper); `release-relevant.test.sh` com
+20 casos novos (8 falham contra o seletor antigo); o passo `decide` rodado contra commits reais da main
+(14 merges de PR recentes, de #90 para trás → reuso; `e3c4204`, push direto → CI completo; #75, sem run
+`pull_request` verde para o head → CI completo) e contra um `gh` falso (árvores diferentes, erro nas duas árvores, erro no `run list`); download
+dos 4 artefatos de uma run real de PR; electron-builder 26.15.3 num projeto-sonda confirmou "skipped
+dependencies rebuild reason=npmRebuild is set to false"; os 15 checks obrigatórios da main continuam com
+os mesmos nomes. NÃO verificado: nenhum workflow rodou no GitHub (só roda depois do merge); o empacotamento
+Windows com o prebuild só o Release real prova, pelo smoke do app instalado.
+
+**Ajustes na junção das duas frentes (mesmo dia), a partir da revisão adversarial e de testes contra dados
+reais:**
+
+- A decisão de reuso saiu do YAML para `.github/scripts/ci-reuse.sh`, com 12 cenários em `ci-reuse.test.sh`
+  (um `gh` falso no PATH), rodados no job `Release scripts`. Ela passou a rejeitar run verde que seja de PR
+  para outra base, mas **só com evidência**: a API esvazia `pull_requests` quando a branch do PR é apagada,
+  o que acontece em todo merge daqui (medido na run 36170804309 do #90). Exigir a base na lista faria o
+  reuso nunca acontecer; com a regra final, o merge do #90 é reaproveitado e um push direto (`e3c4204`) não.
+- A lista de inclusão do seletor de release tinha divergido na própria junção: `package-manager-selection.cjs`,
+  exigido pelos dois gates de gerenciador do `release.yml`, não disparava release. O novo
+  `.github/scripts/release-inputs.cjs` deriva do `release.yml` e do `build` do `package.json` o que o Release
+  executa ou empacota (com o fecho dos `require` locais), e o teste exige que tudo isso dispare release. Sem a
+  correção, o teste falha nos casos certos. `.gitattributes` também entrou na lista (muda os bytes que o
+  checkout do Windows empacota).
+- A bancada de alternativas passou a recusar `--check` sem `npm-runtime`, como a operacional. É gate do
+  Release e, antes, passaria sem medir o npm que o app usa.
+- O smoke do Windows registra a ACL também do `conpty.node`, que o node-pty 1.1.0 carrega por padrão no
+  Windows 10+ (o `pty.node` é o fallback winpty), e o job exploratório usa caminho relativo no `source`.
+
+Validação da árvore combinada, nesta máquina: `npm test` 1640/1640, frontend 1182 + 1 ignorado, lint, build,
+os 4 testes de `.github/scripts`, actionlint sem achado novo, e as duas bancadas com os argumentos exatos do
+CI (`--check --managers=npm-runtime`): alternativas em 17,9 s e operacional em 44,6 s, com pnpm, Yarn e
+Corepack como `not-selected`.
+
+**Limitação declarada:** o repasse de `--managers` dentro do `main()` das duas bancadas não tem teste
+unitário; só executar o `main()` pegaria sua remoção, e isso instalaria pacotes reais dentro do `npm test`
+de todo PR. Se regredir, o custo é só de tempo (o CI volta a medir a matriz inteira), visível no JSON que o
+job publica.
+
+**Bancadas Electron que falhavam com o passo verde (mesmo dia, a partir da primeira run do PR):** a run
+36188414436 (`ab8e043`) caiu em `Benchmarks (macos-latest)` com `posix_spawnp failed` na bancada de
+scrollback. A causa é que o `spawn-helper` do node-pty vem sem permissão de execução no tarball do npm, e só
+a bancada de responsividade o corrigia. Com a separação dos jobs, a de scrollback passou a rodar sem essa
+correção. Agora ela chama `ensureNodePtySpawnHelperExecutable` antes de carregar o node-pty. Ao investigar,
+apareceu uma falha pior: no processo principal do Electron, `process.exitCode = 1` não derruba o passo.
+Medido com o Electron 41.10.7 do projeto: erro depois de `app.quit()` sai com 0, e erro antes do app ficar
+pronto deixa o processo pendurado até o teto do job. Só `app.exit(1)` sai com 1 nos dois casos. As quatro
+bancadas Electron (scrollback, bundle, conexões do canvas, saída do terminal) passaram a usar um helper
+único, `app/scripts/electron-exit.cjs`, com 4 testes. Prova na bancada de scrollback com `--counts=99`
+(argumento inválido): a versão da main fica pendurada (exit 124 no `timeout`) e a nova sai com 1.
+
+A correção expôs a bancada de bundle quebrada desde `be69f76` (12/09). Nesse commit, "Ferramentas" deixou de
+ser um botão com `title` e virou o grupo recolhível `SidebarSection` da sidebar do canvas. A bancada procurava
+o botão antigo, o `throw` dentro do `executeJavaScript` chegava só como "Script failed to execute", e o job
+`Validate` ficava verde com 0/5 amostras em toda run da main desde então. Agora a bancada abre o grupo pelo
+cabeçalho (`button[aria-expanded]` com o texto "Ferramentas"), espera só o `data-felixo-canvas-ready` e
+devolve o motivo como texto em vez de `throw`. Nesta máquina, `benchmark:bundle:check` voltou a medir 5/5:
+startup p50 1323 ms, menu p50 71 ms, Fetch All sob demanda p50 414 ms, chunk do Fetch All fora do startup.
+Também foram corrigidos três textos com mojibake (dois na bancada de conexões e um no
+`canvas-context-e2e.test.ts`). O comentário em `pty-process-manager.cjs:960` ficou como estava porque cita a
+forma quebrada de propósito.
+
+No Windows, a mesma correção de saída revelou uma terceira falha escondida. A bancada de bundle lançava
+`EPERM` ao apagar o userData temporário dentro do `finally`, e isso acontecia em toda run: as quatro últimas
+runs verdes da `main` (`b8cc9ad`, `a51d692`, `b9f1f48`, `aadb01d`) têm o `[bundle] falhou: EPERM` no job
+`Validate (windows-latest)`. A primeira tentativa (`e80fb07`, `maxRetries` no `rmSync`) não resolveu, e a run
+36198231288 continuou com EPERM. Uma sonda com o Electron 41.10.7 mostrou o motivo: o Chromium grava o perfil
+(`Local State`, `Preferences`, índice do `Cache`) durante o próprio encerramento, depois de qualquer JS. A
+remoção em `finally`, `will-quit`, `quit` e `process.on('exit')` deixou a pasta recriada com 9 arquivos no
+Linux. No Windows esses arquivos ainda estão abertos, daí o EPERM. Por isso a limpeza virou
+`removeBenchmarkUserData`, que tenta e só avisa, como a `removeTemporaryDirectory` do `release-smoke.cjs`.
+Lançar ali também trocava o erro real da bancada pelo EPERM. Sobram ~32 KB por execução na pasta temporária,
+um custo aceito: os runners são descartáveis e um processo externo só para apagar isso seria desproporcional.
+O teste novo falha se a função voltar a lançar (provado revertendo a correção).
+
+## 2026-09-25 — Registro retroativo: política de performance, matriz visual e gate de regressão (PRs #86–#90)
+
+Estes cinco PRs entraram na `main` em 25/09 sem entrada neste arquivo, o que descumpre o passo de
+documentação do fluxo de trabalho. Esta entrada foi escrita no mesmo dia, depois dos merges, com os fatos
+tirados dos commits e das runs. Ela não reescreve nada anterior.
+
+**#86 (`b8cc9ad`) — política do Modo Performance.** `docs/projeto/POLITICA-PERFORMANCE.md` converte em metas
+por cenário o baseline já medido (20 terminais × 8.000 linhas no Linux, `5cfc40a`: renderer RSS p95 de 706 MiB
+com scrollback fixo contra 565 MiB com o adaptativo) e mapeia no código os quatro modos: normal, performance,
+reduced motion e safe mode pós-crash. O orçamento também virou código, em
+`app/src/features/shared/performance/performance-budget.ts` com teste, para não depender só da prosa. O
+mapeamento achou quatro lacunas: o reduced motion do SO não cobre minimapa nem céu animado; o modo não entra
+sozinho por carga; o safe mode não existe; não há telemetria. Elas foram abertas como tasks e não
+implementadas neste PR.
+
+**#87 (`15723a3`) e #88 (`a51d692`) — matriz visual.** A matriz tema × viewport × DPR do
+`app/scripts/canvas-smoke.cjs` só fotografava o layout base. Ela passou a abrir o painel Buscar, o menu de
+contexto e o modal de handoff em dois viewports críticos, e a cobrir fonte maior, reduced motion e locale no
+viewport de 320 px. Por custo de CI, entrou um viewport por dimensão nova, e não a combinação completa.
+Surgiram três achados em telas menores que 768 px, abertos como tasks: o painel de ferramentas vaza ~8 px
+porque o `PANEL_MIN_WIDTH` nunca cede; a dock de terminais recolhidos intercepta cliques mesmo vazia; e, com
+fonte maior, "Selecionar" e "Enquadrar" aparecem colados. O CI também revelou dois flakes que não se
+reproduziam localmente. No #87, o bounds-check de 2 px do modal foi relaxado. No #88, o clique em
+"Enquadrar todos os blocos", que o Playwright às vezes dava como fora da viewport, passou a ser disparado
+via DOM.
+
+**#89 (`b9f1f48`) e #90 (`aadb01d`) — gate de regressão entre commits.** Antes só existiam limiares fixos
+dentro de uma mesma execução, e um PR que piorasse todos os cenários por igual passava. Agora
+`app/scripts/benchmark-regression-gate.cjs` compara o benchmark de terminal do PR com o artefato
+`terminal-scrollback-<os>` do último run verde da `main`. Sem baseline disponível, o gate não falha, porque
+a ausência de baseline não prova regressão. A calibração saiu do ruído medido em quatro rodadas no próprio
+PR: o mesmo commit variou até 63% em resume e 72,8% em heap num cenário de base pequena. Por isso o CI
+passa `--threshold=60`, aplica um piso absoluto por métrica e usa `--exclude-metric=resumeMs` (o resume
+continua medido, só não decide). O #90 fez o gate citar no resumo do job o commit e a run do baseline, o
+head do PR e o critério. Uma chave desconhecida em `--exclude-metric` passou a ser erro. Os releases
+v0.1.416 (#86), v0.1.417 (#89) e v0.1.418 (#90) saíram pelo Release gate.
+
+Validação à época: CI verde nos 4 SOs em cada PR. No #90, o CI da `main` falhou uma vez num passo que o PR
+não tocou (órfão intermitente do yarn-classic no Windows). O rerun passou e o problema foi aberto como task.
+Os detalhes de cada PR estão nas páginas das tasks no Notion e no relatório diário de 25/09.

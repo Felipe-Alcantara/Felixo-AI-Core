@@ -506,7 +506,10 @@ também registra o tamanho do runtime e os tempos do npm no artefato real.
 Para avaliar uma substituição sem mudar o produto, use
 `npm run benchmark:package-managers -- --check` em `app/`. A bancada mede o
 npm-runtime, pnpm, Yarn Classic, Yarn moderno e Corepack em prefixos
-descartáveis, com bootstrap e fixtures locais; publica um JSON por SO no CI.
+descartáveis, com bootstrap e fixtures locais. Em cada PR a comparação completa
+roda no Linux (os outros SOs medem só o npm-runtime); o workflow
+`.github/workflows/nightly.yml` repete a comparação completa nos quatro SOs
+todo dia e publica um JSON por SO.
 O resultado Linux de 03/09/2026 manteve o npm como recomendação: pnpm foi
 funcional, mas maior e mais lento; Yarn Classic preservou global install com
 layout próprio; Yarn moderno não ofereceu o global install exigido; e Corepack
@@ -520,7 +523,9 @@ um SBOM CycloneDX e inventaria o `app.asar` junto do `npm-runtime` que realmente
 entra no pacote. A árvore de produção precisa estar sem vulnerabilidades e o
 grafo completo não pode conter advisories críticos; advisories não críticos de
 ferramentas continuam registrados para as atualizações do Dependabot. O launcher
-Python também é auditado com `pip-audit` e publica seu SBOM.
+Python também é auditado com `pip-audit` e publica seu SBOM. O workflow
+`nightly.yml` repete esses audits todo dia, com os mesmos gates, para que um
+advisory publicado sem nenhum commit novo apareça sem esperar o próximo PR.
 
 Para repetir localmente:
 

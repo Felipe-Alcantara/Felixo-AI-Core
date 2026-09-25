@@ -18,6 +18,7 @@ const path = require('node:path')
 const os = require('node:os')
 const { performance } = require('node:perf_hooks')
 const { gzipSync } = require('node:zlib')
+const { reportFailureAndExit } = require('./electron-exit.cjs')
 
 const DEFAULT_ITERATIONS = 5
 const MAX_ITERATIONS = 10
@@ -256,7 +257,7 @@ async function measureIteration(BrowserWindow, indexPath, timeoutMs, expectsLazy
     await withTimeout(browserWindow.loadFile(indexPath), timeoutMs, 'Carregamento do renderer')
     await waitForExpression(
       browserWindow,
-      `Boolean(document.querySelector('[data-felixo-canvas-ready]')) || Boolean(document.querySelector('button[title="Ferramentas"]'))`,
+      `Boolean(document.querySelector('[data-felixo-canvas-ready]'))`,
       timeoutMs,
       'Canvas inicial',
     )
@@ -265,13 +266,17 @@ async function measureIteration(BrowserWindow, indexPath, timeoutMs, expectsLazy
     const initialFetchAllChunkMarks = await readFetchAllChunkMarks(browserWindow)
     const interactionStartedAt = performance.now()
 
-    await browserWindow.webContents.executeJavaScript(`(() => {
-      const button = Array.from(document.querySelectorAll('button'))
-        .find((candidate) => candidate.title === 'Ferramentas')
-      if (!button) throw new Error('Botão Ferramentas não encontrado')
-      button.click()
-      return true
+    // "Ferramentas" é o grupo recolhível da sidebar do canvas (SidebarSection),
+    // não mais um botão com title. Um throw dentro do executeJavaScript chega
+    // aqui só como "Script failed to execute", então o motivo volta como texto.
+    const toolsOpenFailure = await browserWindow.webContents.executeJavaScript(`(() => {
+      const heading = Array.from(document.querySelectorAll('button[aria-expanded]'))
+        .find((candidate) => candidate.textContent?.trim() === 'Ferramentas')
+      if (!heading) return 'grupo Ferramentas não encontrado na sidebar do canvas'
+      if (heading.getAttribute('aria-expanded') !== 'true') heading.click()
+      return null
     })()`, true)
+    if (toolsOpenFailure) throw new Error(toolsOpenFailure)
 
     await waitForExpression(
       browserWindow,
@@ -315,6 +320,32 @@ async function measureIteration(BrowserWindow, indexPath, timeoutMs, expectsLazy
     }
   } finally {
     if (!browserWindow.isDestroyed()) browserWindow.destroy()
+  }
+}
+
+/**
+ * Tenta apagar o userData temporário da bancada, sem nunca lançar.
+ *
+ * De dentro do próprio processo não dá para apagar essa pasta de forma
+ * confiável. Medido em 25/09/2026 com o Electron 41.10.7: o Chromium grava o
+ * perfil (`Local State`, `Preferences`, índice do `Cache`) durante o próprio
+ * encerramento, depois do último JS. Isso vale para remoção no `finally`, em
+ * `will-quit`, em `quit` e em `process.on('exit')`. No Linux a pasta é apagada
+ * e recriada, e sobram ~32 KB por execução. No Windows os arquivos ainda estão
+ * abertos e a remoção falha com EPERM (run 36198231288, mesmo com 5 tentativas
+ * em 1 s). Esse EPERM, lançado deste `finally`, derrubava a bancada em toda run
+ * do Windows e trocava o erro real dela pelo EPERM. Como em
+ * `release-smoke.cjs`, falha ao limpar pasta temporária não é falha de medição.
+ *
+ * @param {string} directory
+ * @param {{ fileSystem?: Pick<typeof fs, 'rmSync'>, log?: (line: string) => void }} [options]
+ */
+function removeBenchmarkUserData(directory, { fileSystem = fs, log = console.warn } = {}) {
+  try {
+    fileSystem.rmSync(directory, { recursive: true, force: true })
+  } catch (error) {
+    const reason = error && typeof error === 'object' && 'code' in error ? error.code : String(error)
+    log(`[bundle] pasta temporária não removida (${reason}): ${directory}`)
   }
 }
 
@@ -454,8 +485,8 @@ async function run() {
       throw new Error(allFailures.join('; '))
     }
   } finally {
-    await app.quit()
-    fs.rmSync(benchmarkUserData, { recursive: true, force: true })
+    app.quit()
+    removeBenchmarkUserData(benchmarkUserData)
   }
 }
 
@@ -463,10 +494,7 @@ async function run() {
 // set `require.main` to that entry. The explicit process.type guard keeps the
 // script runnable both as an Electron benchmark and as a Node-test module.
 if (process.versions.electron && process.type === 'browser') {
-  run().catch((error) => {
-    console.error(`[bundle] falhou: ${error instanceof Error ? error.message : String(error)}`)
-    process.exitCode = 1
-  })
+  run().catch((error) => reportFailureAndExit(error, '[bundle] falhou:'))
 } else if (require.main === module) {
   run().catch((error) => {
     console.error(`[bundle] falhou: ${error instanceof Error ? error.message : String(error)}`)
@@ -478,6 +506,7 @@ module.exports = {
   collectBundleAssets,
   parseArgs,
   percentile,
+  removeBenchmarkUserData,
   summarize,
   validateReport,
 }

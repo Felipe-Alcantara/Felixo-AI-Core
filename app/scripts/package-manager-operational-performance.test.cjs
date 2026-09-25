@@ -10,9 +10,11 @@ const {
   criarLinkDeDiretorio,
 } = require('../electron/__fixtures__/link-fixtures.cjs')
 const {
+  MANAGER_IDS,
   settleOrphans,
   aggregateSamples,
   createEnvironment,
+  discoverManagers,
   findPackagedRuntime,
   measureTree,
   parseArgs,
@@ -58,6 +60,89 @@ test('parseArgs aplica limites e preserva os cenários de concorrência', () => 
   assert.equal(options.out, path.resolve('report.json'))
   assert.throws(() => parseArgs(['--agents=1,1']), /contagens únicas/)
   assert.throws(() => parseArgs(['--iterations=0']), /iterations deve estar entre/)
+})
+
+test('parseArgs sem --managers mede todos os gerenciadores conhecidos', () => {
+  assert.deepEqual(MANAGER_IDS, ['npm-runtime', 'pnpm', 'yarn-classic', 'corepack'])
+  assert.deepEqual(parseArgs([]).managers, MANAGER_IDS)
+  assert.deepEqual(parseArgs(['--check']).managers, MANAGER_IDS)
+})
+
+test('parseArgs aceita --managers com ids conhecidos e recusa o resto com erro claro', () => {
+  assert.deepEqual(parseArgs(['--managers=npm-runtime']).managers, ['npm-runtime'])
+  assert.deepEqual(parseArgs(['--check', '--managers=npm-runtime,corepack']).managers, ['npm-runtime', 'corepack'])
+  assert.deepEqual(parseArgs(['--managers= pnpm , yarn-classic ']).managers, ['pnpm', 'yarn-classic'])
+  assert.throws(
+    () => parseArgs(['--managers=npm-runtime,bun']),
+    /Gerenciador desconhecido em --managers: bun\. Válidos: npm-runtime, pnpm, yarn-classic, corepack\./,
+  )
+  assert.throws(() => parseArgs(['--managers=']), /--managers precisa listar ids/)
+  assert.throws(() => parseArgs(['--managers=pnpm,,npm-runtime']), /--managers precisa listar ids/)
+  assert.throws(() => parseArgs(['--managers=pnpm,pnpm']), /ids únicos/)
+})
+
+test('parseArgs recusa --check sem a linha de base npm-runtime', () => {
+  assert.throws(() => parseArgs(['--check', '--managers=pnpm']), /--check exige npm-runtime/)
+  assert.throws(() => parseArgs(['--managers=pnpm', '--check']), /--check exige npm-runtime/)
+  // Sem --check a medição exploratória de uma alternativa isolada continua possível.
+  assert.deepEqual(parseArgs(['--managers=pnpm']).managers, ['pnpm'])
+})
+
+/**
+ * PATH com pnpm, yarn e corepack falsos e um npm-runtime desempacotado falso:
+ * sem filtro, todos aparecem disponíveis — é o que prova que o filtro, e não a
+ * máquina, decide quem fica de fora.
+ */
+function criarHostComTodosOsGerenciadores() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-package-manager-discovery-'))
+  const binDir = path.join(root, 'bin')
+  const runtimeRoot = path.join(root, 'npm-runtime')
+  fs.mkdirSync(binDir, { recursive: true })
+  fs.mkdirSync(path.join(runtimeRoot, 'bin'), { recursive: true })
+  fs.writeFileSync(path.join(runtimeRoot, 'bin', 'npm-cli.js'), '', 'utf8')
+  for (const command of ['pnpm', 'yarn', 'corepack']) fs.writeFileSync(path.join(binDir, command), '', 'utf8')
+  return { root, runtimeRoot, env: { PATH: binDir } }
+}
+
+function resumoDaDescoberta(managers) {
+  return managers.map(({ id, available, source, availabilityReason }) => ({ id, available, source, availabilityReason }))
+}
+
+test('discoverManagers com --managers=npm-runtime não procura nem mede as alternativas', () => {
+  const host = criarHostComTodosOsGerenciadores()
+  try {
+    const managers = discoverManagers({ env: host.env, runtimeRoot: host.runtimeRoot, managers: ['npm-runtime'] })
+    assert.deepEqual(resumoDaDescoberta(managers), [
+      { id: 'npm-runtime', available: true, source: 'artifact', availabilityReason: null },
+      { id: 'pnpm', available: false, source: 'not-selected', availabilityReason: 'not-selected' },
+      { id: 'yarn-classic', available: false, source: 'not-selected', availabilityReason: 'not-selected' },
+      { id: 'corepack', available: false, source: 'not-selected', availabilityReason: 'not-selected' },
+    ])
+    assert.equal(managers.find((manager) => manager.id === 'pnpm').command, null)
+  } finally {
+    fs.rmSync(host.root, { recursive: true, force: true })
+  }
+})
+
+test('discoverManagers sem --managers descobre exatamente o mesmo que antes da flag', () => {
+  const host = criarHostComTodosOsGerenciadores()
+  try {
+    const semFlag = discoverManagers({ env: host.env, runtimeRoot: host.runtimeRoot })
+    assert.deepEqual(resumoDaDescoberta(semFlag), [
+      { id: 'npm-runtime', available: true, source: 'artifact', availabilityReason: null },
+      { id: 'pnpm', available: true, source: 'path', availabilityReason: null },
+      { id: 'yarn-classic', available: true, source: 'path', availabilityReason: null },
+      { id: 'corepack', available: true, source: 'path', availabilityReason: null },
+    ])
+    assert.deepEqual(
+      semFlag.map(({ installMode }) => installMode),
+      ['global-prefix', 'global-dir', 'local-project', 'global-dir-via-corepack'],
+    )
+    const todosExplicitos = discoverManagers({ env: host.env, runtimeRoot: host.runtimeRoot, managers: [...MANAGER_IDS] })
+    assert.deepEqual(resumoDaDescoberta(todosExplicitos), resumoDaDescoberta(semFlag))
+  } finally {
+    fs.rmSync(host.root, { recursive: true, force: true })
+  }
 })
 
 test('percentis e resumos ignoram amostras não numéricas', () => {
@@ -218,6 +303,30 @@ test('validateReport exige npm-runtime, cenários frios/quentes e métricas de p
     },
   }, 2, [1]), [])
   assert.match(validateReport({ managers: { 'npm-runtime': { available: false, scenarios: [] } } }, 1, [1]).join('; '), /npm-runtime/)
+})
+
+test('validateReport aceita o relatório só com npm-runtime e ainda exige a linha de base', () => {
+  const scenario = {
+    successful: true,
+    cold: { sampling: { processTree: true, rss: true } },
+    hot: { sampling: { processTree: true, rss: true } },
+  }
+  const naoSelecionado = { source: 'not-selected', available: false, availabilityReason: 'not-selected', scenarios: [] }
+  assert.deepEqual(validateReport({
+    managers: {
+      'npm-runtime': { source: 'artifact', available: true, scenarios: [scenario] },
+      pnpm: naoSelecionado,
+      'yarn-classic': naoSelecionado,
+      corepack: naoSelecionado,
+    },
+  }, 1, [1]), [])
+  // A linha de base continua obrigatória e funcional mesmo com o filtro.
+  assert.match(validateReport({
+    managers: { 'npm-runtime': { source: 'artifact', available: true, scenarios: [{ ...scenario, successful: false }] } },
+  }, 1, [1]).join('; '), /falha funcional em npm-runtime/)
+  assert.match(validateReport({
+    managers: { 'npm-runtime': naoSelecionado, pnpm: { source: 'path', available: true, scenarios: [scenario] } },
+  }, 1, [1]).join('; '), /npm-runtime ficou fora de --managers/)
 })
 
 test('settleOrphans: filho que sai da tabela de processos durante a espera não é órfão', async () => {

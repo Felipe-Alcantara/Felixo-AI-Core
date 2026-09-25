@@ -18,6 +18,7 @@ const { execFile, execFileSync } = require('node:child_process')
 const { promisify } = require('node:util')
 const spawn = require('cross-spawn')
 const { performance } = require('node:perf_hooks')
+const { NOT_SELECTED, parseManagerSelection } = require('./package-manager-selection.cjs')
 
 const execFileAsync = promisify(execFile)
 
@@ -29,6 +30,8 @@ const MAX_TIMEOUT_MS = 600_000
 const DEFAULT_AGENT_COUNTS = [1, 2, 5, 10]
 const FIXTURE_NAME = 'felixo-package-manager-benchmark-cli'
 const FIXTURE_COMMAND = 'felixo-package-manager-benchmark-cli'
+/** Linha de base de toda comparação e do gate `--check`. */
+const BASELINE_MANAGER_ID = 'npm-runtime'
 
 function parseBoundedInteger(value, min, max, name) {
   const parsed = Number(value)
@@ -47,6 +50,7 @@ function parseArgs(argv = []) {
     out: null,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     runtimeRoot: null,
+    managers: [...MANAGER_IDS],
   }
 
   for (const argument of argv) {
@@ -68,9 +72,16 @@ function parseArgs(argv = []) {
       const value = argument.slice(15).trim()
       if (!value) throw new Error('--runtime-root precisa apontar para uma pasta.')
       options.runtimeRoot = path.resolve(value)
+    } else if (argument.startsWith('--managers=')) {
+      options.managers = parseManagerSelection(argument.slice('--managers='.length), MANAGER_IDS)
     } else {
       throw new Error(`Argumento desconhecido: ${argument}`)
     }
+  }
+  // Sem a linha de base o --check reprovaria só no fim da bancada inteira;
+  // falhar aqui poupa os minutos de instalação que não poderiam passar.
+  if (options.check && !options.managers.includes(BASELINE_MANAGER_ID)) {
+    throw new Error(`--check exige ${BASELINE_MANAGER_ID} em --managers: ele é a linha de base do gate.`)
   }
   return options
 }
@@ -157,12 +168,12 @@ function executableOnPath(command, env = process.env) {
   return null
 }
 
-function discoverManagers({ env = process.env, runtimeRoot = null } = {}) {
+function discoverNpmRuntime({ runtimeRoot }) {
   const packagedRuntime = runtimeRoot ?? findPackagedRuntime()
   const npmCli = packagedRuntime
     ? path.join(packagedRuntime, 'bin', 'npm-cli.js')
     : path.join(APP_ROOT, 'node_modules', 'npm', 'bin', 'npm-cli.js')
-  const managers = [{
+  return {
     id: 'npm-runtime',
     label: 'npm-runtime',
     command: process.execPath,
@@ -172,29 +183,28 @@ function discoverManagers({ env = process.env, runtimeRoot = null } = {}) {
     source: packagedRuntime ? 'artifact' : 'source-runtime',
     installMode: 'global-prefix',
     availabilityReason: fs.existsSync(npmCli) ? null : 'npm-runtime-not-found',
-  }]
-
-  for (const [id, command, versionArgs, installArgs] of [
-    ['pnpm', 'pnpm', ['--version'], (root, fixture) => ['add', '--global', '--offline', '--global-dir', root, fixture]],
-    ['yarn-classic', 'yarn', ['--version'], (root, fixture) => ['--cwd', root, 'add', '--offline', fixture]],
-  ]) {
-    const executable = executableOnPath(command, env)
-    managers.push({
-      id,
-      label: id,
-      command: executable ?? command,
-      versionArgs,
-      installArgs,
-      available: Boolean(executable),
-      source: executable ? 'path' : 'unavailable',
-      installMode: id === 'pnpm' ? 'global-dir' : 'local-project',
-      availabilityReason: executable ? null : `${command}-not-found`,
-    })
   }
+}
 
+function discoverPathManager({ id, command, versionArgs, installArgs, installMode, env }) {
+  const executable = executableOnPath(command, env)
+  return {
+    id,
+    label: id,
+    command: executable ?? command,
+    versionArgs,
+    installArgs,
+    available: Boolean(executable),
+    source: executable ? 'path' : 'unavailable',
+    installMode,
+    availabilityReason: executable ? null : `${command}-not-found`,
+  }
+}
+
+function discoverCorepack({ env }) {
   const corepack = executableOnPath('corepack', env)
   const pnpm = executableOnPath('pnpm', env)
-  managers.push({
+  return {
     id: 'corepack',
     label: 'corepack',
     command: corepack ?? 'corepack',
@@ -204,8 +214,59 @@ function discoverManagers({ env = process.env, runtimeRoot = null } = {}) {
     source: corepack && pnpm ? 'path' : 'unavailable',
     installMode: 'global-dir-via-corepack',
     availabilityReason: corepack && pnpm ? null : 'corepack-ou-pnpm-not-found',
-  })
-  return managers
+  }
+}
+
+/** Como descobrir cada gerenciador; a ordem das chaves é a ordem da medição. */
+const MANAGER_DISCOVERY = {
+  'npm-runtime': discoverNpmRuntime,
+  pnpm: ({ env }) => discoverPathManager({
+    id: 'pnpm',
+    command: 'pnpm',
+    versionArgs: ['--version'],
+    installArgs: (root, fixture) => ['add', '--global', '--offline', '--global-dir', root, fixture],
+    installMode: 'global-dir',
+    env,
+  }),
+  'yarn-classic': ({ env }) => discoverPathManager({
+    id: 'yarn-classic',
+    command: 'yarn',
+    versionArgs: ['--version'],
+    installArgs: (root, fixture) => ['--cwd', root, 'add', '--offline', fixture],
+    installMode: 'local-project',
+    env,
+  }),
+  corepack: discoverCorepack,
+}
+
+/** Ids aceitos por `--managers`. */
+const MANAGER_IDS = Object.freeze(Object.keys(MANAGER_DISCOVERY))
+
+/**
+ * Gerenciador fora de `--managers`: nem é procurado no PATH/artefato. Fica no
+ * relatório como indisponível por escolha, para quem lê o JSON não confundir
+ * "não medido nesta execução" com "não existe neste SO".
+ */
+function notSelectedManager(id) {
+  return {
+    id,
+    label: id,
+    command: null,
+    versionArgs: [],
+    installArgs: null,
+    available: false,
+    source: NOT_SELECTED,
+    installMode: null,
+    availabilityReason: NOT_SELECTED,
+  }
+}
+
+function discoverManagers({ env = process.env, runtimeRoot = null, managers = MANAGER_IDS } = {}) {
+  return MANAGER_IDS.map((id) => (
+    managers.includes(id)
+      ? MANAGER_DISCOVERY[id]({ env, runtimeRoot })
+      : notSelectedManager(id)
+  ))
 }
 
 function emptySnapshot() {
@@ -725,7 +786,9 @@ function validateReport(report, expectedIterations, expectedAgentCounts) {
     diskMiB: 512,
   }
   const available = Object.values(report.managers ?? {}).filter((manager) => manager.available)
-  if (!report.managers?.['npm-runtime']?.available) failures.push('npm-runtime do artefato não foi encontrado')
+  const baseline = report.managers?.[BASELINE_MANAGER_ID]
+  if (baseline?.source === NOT_SELECTED) failures.push(`${BASELINE_MANAGER_ID} ficou fora de --managers; o gate exige a linha de base`)
+  else if (!baseline?.available) failures.push('npm-runtime do artefato não foi encontrado')
   if (available.length === 0) failures.push('nenhum gerenciador disponível')
   for (const [id, manager] of Object.entries(report.managers ?? {})) {
     if (!manager.available) continue
@@ -758,11 +821,12 @@ async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv)
   if (options.help) {
     process.stdout.write([
-      'Uso: node scripts/package-manager-alternatives-performance.cjs [opções]',
+      'Uso: node scripts/package-manager-operational-performance.cjs [opções]',
       '',
       '--check                 exige npm-runtime e métricas completas',
       '--iterations=N          repete cada cenário (1–5; padrão 2)',
       '--agents=1,2,5,10       contagens concorrentes (1–10)',
+      `--managers=LISTA        mede só estes ids (${MANAGER_IDS.join(', ')}); padrão: todos`,
       '--runtime-root=PASTA    usa o npm-runtime desempacotado do artefato',
       '--timeout-ms=N          limite por processo (1000–600000)',
       '--out=ARQUIVO            grava JSON sanitizado',
@@ -770,7 +834,7 @@ async function main(argv = process.argv.slice(2)) {
     ].join('\n'))
     return null
   }
-  const managers = discoverManagers({ runtimeRoot: options.runtimeRoot })
+  const managers = discoverManagers({ runtimeRoot: options.runtimeRoot, managers: options.managers })
   const report = createReport(options, managers)
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-package-managers-'))
   try {
@@ -811,6 +875,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MANAGER_IDS,
   settleOrphans,
   aggregateSamples,
   createEnvironment,

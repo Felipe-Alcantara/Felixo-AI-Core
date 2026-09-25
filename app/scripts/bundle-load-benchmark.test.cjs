@@ -10,6 +10,7 @@ const {
   collectBundleAssets,
   parseArgs,
   percentile,
+  removeBenchmarkUserData,
   summarize,
   validateReport,
 } = require('./bundle-load-benchmark.cjs')
@@ -92,4 +93,26 @@ test('bundle check requires a lazy JavaScript asset and complete samples', () =>
     }, 0).join('\n'),
     /referência.*asset.*não encontrada/s,
   )
+})
+
+test('limpeza do userData temporário não lança: EPERM do Windows vira aviso', () => {
+  // Regressão: o rmSync dentro do `finally` lançava EPERM em toda run do
+  // Windows e trocava o erro real da bancada por ele.
+  const avisos = []
+  const eperm = Object.assign(new Error('EPERM, Permission denied'), { code: 'EPERM' })
+  assert.doesNotThrow(() => removeBenchmarkUserData('C:\\Temp\\felixo-bundle-benchmark-x', {
+    fileSystem: { rmSync: () => { throw eperm } },
+    log: (linha) => avisos.push(linha),
+  }))
+  assert.equal(avisos.length, 1)
+  assert.match(avisos[0], /^\[bundle\] pasta temporária não removida \(EPERM\)/)
+})
+
+test('limpeza do userData temporário apaga a pasta quando o SO permite', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-bundle-benchmark-test-'))
+  fs.writeFileSync(path.join(directory, 'Local State'), '{}')
+  const avisos = []
+  removeBenchmarkUserData(directory, { log: (linha) => avisos.push(linha) })
+  assert.equal(fs.existsSync(directory), false)
+  assert.deepEqual(avisos, [])
 })

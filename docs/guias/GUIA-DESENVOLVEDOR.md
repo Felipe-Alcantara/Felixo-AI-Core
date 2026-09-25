@@ -223,7 +223,7 @@ test(cli-detector): add version parsing edge cases
 
 ## Política de release
 
-- Uma execução verde do CI para um commit em `main` dispara o workflow `release.yml`.
+- Uma execução verde do CI para um commit em `main` aciona o `Release gate`, que só dispara o workflow `release.yml` quando o commit muda algo que entra no instalador ou que o Release executa como gate (lista de inclusão em `.github/scripts/release-relevant.sh`, com testes em `release-relevant.test.sh`). O teste confere a lista contra `.github/scripts/release-inputs.cjs`, que deriva do próprio `release.yml` e do bloco `build` do `app/package.json` tudo o que o Release executa ou empacota: um script novo usado pelo Release faz o teste falhar até entrar na lista.
 - O workflow também aceita execução manual, mas exige o SHA exato de um commit que passou no CI.
 - O workflow gera builds para Linux, Windows e macOS.
 - O workflow cria primeiro uma pré-release, publica todos os artefatos e só então a promove para release normal.
@@ -255,6 +255,15 @@ validados antes de qualquer migração. O CI executa o check na matriz e publica
 um JSON por SO. A recomendação atual, baseada no resultado Linux de
 03/09/2026, é manter o npm-runtime.
 
+Para medir só parte da matriz, passe `--managers=` com ids separados por
+vírgula (`npm-runtime`, `pnpm`, `yarn-classic`, `yarn-modern`). Com
+`--managers=npm-runtime` a bancada mede apenas a política npm montada a partir
+de `node_modules/npm` e nem procura o Corepack; o `--check` (inclusive com
+`--strict`) passa a exigir só o que foi pedido. O Corepack não é um id: ele
+entra sozinho como ponte quando alguma alternativa é pedida. Os que ficam de
+fora aparecem no JSON com `status: "not-selected"`. Um id desconhecido encerra
+a bancada com a lista dos válidos.
+
 ### Smoke do artefato de release
 
 Depois de `electron-builder --publish never`, o workflow instala ou extrai o
@@ -271,6 +280,12 @@ artefato real do sistema e executa `npm run release:smoke`. O smoke:
   tempo até o app ficar pronto, resultado do PTY, versão do npm e diagnósticos
   nativos em
   `release/release-smoke-<plataforma>.json`.
+
+No Windows, o instalador empacota o prebuild N-API que o próprio `node-pty`
+publica (`prebuilds/win32-x64/`): o build usa `-c.npmRebuild=false` e o smoke
+acima continua sendo o gate do PTY empacotado. Os smokes extras de `cmd.exe` e
+de path longo rodam no job `windows-exploratory-smoke`, depois da publicação,
+sobre o mesmo instalador já enviado à release, e não bloqueiam o release.
 
 Para medir a árvore antes de empacotar, use a comparação offline entre a
 política anterior e a atual:
@@ -323,6 +338,12 @@ com npm e um ranking dentro dos budgets do check. A descoberta automática usa
 que a execução veio do código-fonte. O CI guarda o relatório Linux no job de
 dependências e o workflow de release repete o gate no artefato real dos três
 sistemas operacionais.
+
+`--managers=` restringe a medição aos ids pedidos (`npm-runtime`, `pnpm`,
+`yarn-classic`, `corepack`); os demais nem são procurados no PATH e aparecem no
+JSON como indisponíveis com `availabilityReason: "not-selected"`. Como o
+`npm-runtime` é a linha de base do gate, `--check` sem ele na lista é recusado
+antes de qualquer instalação.
 
 ## Testes
 
@@ -430,12 +451,31 @@ e 3.13 e executa `start_app.py --help`. O job `python-dependency-audit` roda
 `pip-audit==2.10.1` contra o mesmo lock, falha se houver advisory ou erro de
 coleta e publica o SBOM do launcher. O job `release-scripts` valida os scripts
 Bash usados na publicação. O job `validate` testa o app nos três sistemas com
-Node 22, `npm test`, `npm run lint` e `npm run build`, além de verificar os
-arquivos de documentação vigentes. Como `npm run build` chama o typecheck
-incremental oficial, o CI reutiliza o cache quando o runner o tiver; uma
-auditoria forçada pode ser executada separadamente com `npm run typecheck:full`
-sem alterar o caminho de produção. O workflow de Release repete o inventário
-no diretório produzido em cada SO e anexa o JSON à execução e à release.
+Node 22, `npm test` e `npm run build`, além de verificar os arquivos de
+documentação vigentes; `npm run lint` roda uma vez, no Ubuntu, porque o ESLint
+analisa o código-fonte e dá o mesmo resultado em qualquer SO. Como
+`npm run build` chama o typecheck incremental oficial, o CI reutiliza o cache
+quando o runner o tiver; uma auditoria forçada pode ser executada separadamente
+com `npm run typecheck:full` sem alterar o caminho de produção. O workflow de
+Release repete o inventário no diretório produzido em cada SO e anexa o JSON à
+execução e à release.
+
+O job `benchmarks` mede, em cada SO, só o npm-runtime nas bancadas de
+gerenciador (`--managers=npm-runtime`); a comparação completa com
+pnpm/Yarn/Corepack roda em todo PR no `dependency-policy` (Linux) e, nos quatro
+SOs, no workflow `.github/workflows/nightly.yml` (diário e sob demanda), que
+também repete os audits npm e `pip-audit`. A bancada de responsividade do
+terminal durante a instalação fica no job `benchmarks-exploratory`, fora dos
+checks obrigatórios.
+
+No push em `main`, o job `reuse` pode dispensar o resto do CI: se a árvore Git
+do commit for idêntica à do head do PR que o originou e a run `pull_request`
+desse head estiver verde, os demais jobs são pulados e a run fica verde (os
+artefatos `terminal-scrollback-<os>`, baseline do gate de regressão dos
+próximos PRs, são copiados da run do PR). Push direto, PR desatualizado ou
+qualquer erro de API caem no CI completo. A decisão mora em
+`.github/scripts/ci-reuse.sh`, testada com um `gh` falso em `ci-reuse.test.sh`
+(job `Release scripts`).
 
 ---
 

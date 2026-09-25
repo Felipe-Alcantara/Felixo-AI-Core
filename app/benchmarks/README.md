@@ -646,10 +646,14 @@ medir CLIs reais, memória, proxy e primeiro uso sem rede.
 
 Referências de comportamento: [npm install global](https://docs.npmjs.com/cli/v11/commands/npm-install/), [pnpm install offline](https://pnpm.io/cli/install), [pnpm setup e PNPM_HOME](https://pnpm.io/cli/setup), [Yarn Classic global](https://classic.yarnpkg.com/lang/en/docs/cli/global/), [Yarn moderno `dlx`](https://yarnpkg.com/cli/dlx), [PnP do Yarn](https://yarnpkg.com/features/pnp) e [Corepack](https://github.com/nodejs/corepack#offline-workflow).
 
-No CI, `ci.yml` executa `--check` na matriz Ubuntu/Windows/macOS e publica um
-JSON por runner. A ausência de um gerenciador opcional fica explícita como
-`unavailable`; se ele estiver presente e falhar no smoke, o job falha. `--strict`
-fica disponível para uma bancada que exija pnpm e Yarn Classic no host.
+No CI, `ci.yml` executa `--check` e publica um JSON por runner. Em cada PR, a
+matriz de SOs do job `benchmarks` mede só o npm-runtime
+(`--managers=npm-runtime`) e o job `dependency-policy` roda a comparação
+completa no Linux, sobre o app empacotado. A comparação completa nos quatro SOs
+roda no workflow `nightly.yml`. A ausência de um gerenciador opcional fica
+explícita como `unavailable`; se ele estiver presente e falhar no smoke, o job
+falha. `--strict` fica disponível para uma bancada que exija pnpm e Yarn
+Classic no host.
 
 ## E2E do contexto inicial do Canvas
 

@@ -765,7 +765,7 @@ describe('E2E do contexto inicial do Canvas', () => {
             `O contexto inicial não chegou no caminho ${caso.nome}; ` +
               `escritas=${fake.written.length}; ` +
               `eventos=${fake.events.map((event) => event.kind).join('>')}; ` +
-              `solicitaÃ§Ãµes=${harness.spawnRequests.length}`,
+              `solicitações=${harness.spawnRequests.length}`,
           )
         }
         const contextWrites = fake.written.filter((data) => data.includes(CONTEXT_HEADER))

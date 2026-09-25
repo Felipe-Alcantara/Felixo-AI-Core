@@ -22,6 +22,8 @@ const os = require('node:os')
 const path = require('node:path')
 const { execFile } = require('node:child_process')
 const { performance } = require('node:perf_hooks')
+const { reportFailureAndExit } = require('./electron-exit.cjs')
+const { ensureNodePtySpawnHelperExecutable } = require('../electron/services/pty-native-assets.cjs')
 
 const DEFAULT_COUNTS = [1, 5, 10, 20]
 const DEFAULT_SCROLLBACKS = [5_000, 20_000]
@@ -753,6 +755,15 @@ async function run(argv = process.argv.slice(2)) {
   // O require só acontece dentro da execução Electron: o mesmo arquivo pode
   // ser importado pelos testes Node para validar os limites e percentis.
   const { app, BrowserWindow } = require('electron')
+  // O app prepara o spawn-helper do node-pty antes de abrir um PTY
+  // (pty-process-manager.cjs); a bancada faz o mesmo. O pacote npm traz o
+  // helper do macOS sem permissão de execução, e sem este passo o spawn
+  // falha com `posix_spawnp failed` — a bancada só passava no macOS quando
+  // outra bancada do mesmo job tinha corrigido a permissão antes.
+  const helperState = ensureNodePtySpawnHelperExecutable()
+  if (!helperState.ok) {
+    console.warn(`[benchmark] spawn-helper do node-pty não preparado: ${helperState.reason ?? 'motivo desconhecido'}`)
+  }
   const { spawn: spawnPty } = require('node-pty')
 
   app.commandLine.appendSwitch('enable-precise-memory-info')
@@ -910,10 +921,7 @@ function commandLineArguments() {
 }
 
 function runAndReportErrors() {
-  run(commandLineArguments()).catch((error) => {
-    console.error(`[benchmark] ${error instanceof Error ? error.stack || error.message : String(error)}`)
-    process.exitCode = 1
-  })
+  run(commandLineArguments()).catch((error) => reportFailureAndExit(error, '[benchmark]'))
 }
 
 // Electron loads an app entry through its browser process and does not always

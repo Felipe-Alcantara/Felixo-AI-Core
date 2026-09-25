@@ -10,8 +10,9 @@ const {
   captureWindowsAcl,
   createCliLayout,
   extractNativeErrors,
-  findFileRecursive,
+  findFilesRecursive,
   findPackagedAppRoot,
+  findPackagedPtyNode,
   getArtifactKind,
   getPackagedResourcesPath,
   parseArgs,
@@ -56,16 +57,102 @@ test('simulateQuarantine se declara não simulado fora do macOS', () => {
   }
 })
 
-test('findFileRecursive acha um arquivo aninhado sem precisar do caminho exato', () => {
+test('findFilesRecursive acha todas as ocorrências aninhadas até o limite de profundidade', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-find-file-'))
   try {
     fs.mkdirSync(path.join(root, 'a', 'b'), { recursive: true })
+    fs.mkdirSync(path.join(root, 'c'), { recursive: true })
     fs.writeFileSync(path.join(root, 'a', 'b', 'pty.node'), '')
+    fs.writeFileSync(path.join(root, 'c', 'pty.node'), '')
 
-    assert.equal(findFileRecursive(root, 'pty.node', 5), path.join(root, 'a', 'b', 'pty.node'))
-    assert.equal(findFileRecursive(root, 'nao-existe.node', 5), null)
+    assert.deepEqual(
+      findFilesRecursive(root, 'pty.node', 5).sort(),
+      [path.join(root, 'a', 'b', 'pty.node'), path.join(root, 'c', 'pty.node')].sort(),
+    )
+    assert.deepEqual(findFilesRecursive(root, 'pty.node', 1), [path.join(root, 'c', 'pty.node')])
+    assert.deepEqual(findFilesRecursive(root, 'nao-existe.node', 5), [])
+    assert.deepEqual(findFilesRecursive(path.join(root, 'nao-existe'), 'pty.node', 5), [])
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+/**
+ * resources/ de um artefato com o node-pty desempacotado. `buildRelease`
+ * simula o binário compilado localmente; sem ele, só existem os prebuilds que
+ * o pacote npm do node-pty traz (o Windows passou a usar o prebuild).
+ */
+function criarResourcesComNodePty({ prebuilds, buildRelease = false }) {
+  const resources = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-node-'))
+  const nodePty = path.join(resources, 'app.asar.unpacked', 'node_modules', 'node-pty')
+  for (const alvo of prebuilds) {
+    fs.mkdirSync(path.join(nodePty, 'prebuilds', alvo), { recursive: true })
+    fs.writeFileSync(path.join(nodePty, 'prebuilds', alvo, 'pty.node'), '')
+    // Como no pacote real, só os prebuilds do Windows trazem o ConPTY.
+    if (alvo.startsWith('win32-')) {
+      fs.writeFileSync(path.join(nodePty, 'prebuilds', alvo, 'conpty.node'), '')
+    }
+  }
+  if (buildRelease) {
+    fs.mkdirSync(path.join(nodePty, 'build', 'Release'), { recursive: true })
+    fs.writeFileSync(path.join(nodePty, 'build', 'Release', 'pty.node'), '')
+  }
+  return { resources, nodePty }
+}
+
+const PREBUILDS_DO_PACOTE = ['darwin-arm64', 'darwin-x64', 'win32-arm64', 'win32-x64']
+
+test('findPackagedPtyNode usa o prebuild do SO atual, não o primeiro da árvore', () => {
+  // Regressão: a busca em profundidade/ordem alfabética achava
+  // prebuilds/darwin-arm64/pty.node e registrava a ACL do binário do macOS.
+  const { resources, nodePty } = criarResourcesComNodePty({ prebuilds: PREBUILDS_DO_PACOTE })
+  try {
+    assert.equal(
+      findPackagedPtyNode(resources, { platform: 'win32', arch: 'x64' }),
+      path.join(nodePty, 'prebuilds', 'win32-x64', 'pty.node'),
+    )
+    assert.equal(
+      findPackagedPtyNode(resources, { platform: 'darwin', arch: 'arm64' }),
+      path.join(nodePty, 'prebuilds', 'darwin-arm64', 'pty.node'),
+    )
+  } finally {
+    fs.rmSync(resources, { recursive: true, force: true })
+  }
+})
+
+test('findPackagedPtyNode prefere build/Release, como o carregador do node-pty', () => {
+  const { resources, nodePty } = criarResourcesComNodePty({ prebuilds: PREBUILDS_DO_PACOTE, buildRelease: true })
+  try {
+    assert.equal(
+      findPackagedPtyNode(resources, { platform: 'win32', arch: 'x64' }),
+      path.join(nodePty, 'build', 'Release', 'pty.node'),
+    )
+  } finally {
+    fs.rmSync(resources, { recursive: true, force: true })
+  }
+})
+
+test('findPackagedPtyNode acha o conpty.node do SO atual — o binário que o Windows 10+ carrega por padrão', () => {
+  const { resources, nodePty } = criarResourcesComNodePty({ prebuilds: PREBUILDS_DO_PACOTE })
+  try {
+    assert.equal(
+      findPackagedPtyNode(resources, { platform: 'win32', arch: 'x64', filename: 'conpty.node' }),
+      path.join(nodePty, 'prebuilds', 'win32-x64', 'conpty.node'),
+    )
+    // Não existe ConPTY fora do Windows: nada de pegar o de outro SO.
+    assert.equal(findPackagedPtyNode(resources, { platform: 'darwin', arch: 'arm64', filename: 'conpty.node' }), null)
+  } finally {
+    fs.rmSync(resources, { recursive: true, force: true })
+  }
+})
+
+test('findPackagedPtyNode não troca por binário de outro SO quando falta o do SO atual', () => {
+  const { resources } = criarResourcesComNodePty({ prebuilds: ['darwin-arm64', 'darwin-x64', 'win32-arm64'] })
+  try {
+    assert.equal(findPackagedPtyNode(resources, { platform: 'win32', arch: 'x64' }), null)
+    assert.equal(findPackagedPtyNode(resources, { platform: 'linux', arch: 'x64' }), null)
+  } finally {
+    fs.rmSync(resources, { recursive: true, force: true })
   }
 })
 
