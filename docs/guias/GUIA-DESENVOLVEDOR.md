@@ -223,7 +223,7 @@ test(cli-detector): add version parsing edge cases
 
 ## Política de release
 
-- Uma execução verde do CI para um commit em `main` dispara o workflow `release.yml`.
+- Uma execução verde do CI para um commit em `main` aciona o `Release gate`, que só dispara o workflow `release.yml` quando o commit muda algo que entra no instalador ou que o Release executa como gate (lista de inclusão em `.github/scripts/release-relevant.sh`, com testes em `release-relevant.test.sh`).
 - O workflow também aceita execução manual, mas exige o SHA exato de um commit que passou no CI.
 - O workflow gera builds para Linux, Windows e macOS.
 - O workflow cria primeiro uma pré-release, publica todos os artefatos e só então a promove para release normal.
@@ -280,6 +280,12 @@ artefato real do sistema e executa `npm run release:smoke`. O smoke:
   tempo até o app ficar pronto, resultado do PTY, versão do npm e diagnósticos
   nativos em
   `release/release-smoke-<plataforma>.json`.
+
+No Windows, o instalador empacota o prebuild N-API que o próprio `node-pty`
+publica (`prebuilds/win32-x64/`): o build usa `-c.npmRebuild=false` e o smoke
+acima continua sendo o gate do PTY empacotado. Os smokes extras de `cmd.exe` e
+de path longo rodam no job `windows-exploratory-smoke`, depois da publicação,
+sobre o mesmo instalador já enviado à release, e não bloqueiam o release.
 
 Para medir a árvore antes de empacotar, use a comparação offline entre a
 política anterior e a atual:
@@ -445,12 +451,29 @@ e 3.13 e executa `start_app.py --help`. O job `python-dependency-audit` roda
 `pip-audit==2.10.1` contra o mesmo lock, falha se houver advisory ou erro de
 coleta e publica o SBOM do launcher. O job `release-scripts` valida os scripts
 Bash usados na publicação. O job `validate` testa o app nos três sistemas com
-Node 22, `npm test`, `npm run lint` e `npm run build`, além de verificar os
-arquivos de documentação vigentes. Como `npm run build` chama o typecheck
-incremental oficial, o CI reutiliza o cache quando o runner o tiver; uma
-auditoria forçada pode ser executada separadamente com `npm run typecheck:full`
-sem alterar o caminho de produção. O workflow de Release repete o inventário
-no diretório produzido em cada SO e anexa o JSON à execução e à release.
+Node 22, `npm test` e `npm run build`, além de verificar os arquivos de
+documentação vigentes; `npm run lint` roda uma vez, no Ubuntu, porque o ESLint
+analisa o código-fonte e dá o mesmo resultado em qualquer SO. Como
+`npm run build` chama o typecheck incremental oficial, o CI reutiliza o cache
+quando o runner o tiver; uma auditoria forçada pode ser executada separadamente
+com `npm run typecheck:full` sem alterar o caminho de produção. O workflow de
+Release repete o inventário no diretório produzido em cada SO e anexa o JSON à
+execução e à release.
+
+O job `benchmarks` mede, em cada SO, só o npm-runtime nas bancadas de
+gerenciador (`--managers=npm-runtime`); a comparação completa com
+pnpm/Yarn/Corepack roda em todo PR no `dependency-policy` (Linux) e, nos quatro
+SOs, no workflow `.github/workflows/nightly.yml` (diário e sob demanda), que
+também repete os audits npm e `pip-audit`. A bancada de responsividade do
+terminal durante a instalação fica no job `benchmarks-exploratory`, fora dos
+checks obrigatórios.
+
+No push em `main`, o job `reuse` pode dispensar o resto do CI: se a árvore Git
+do commit for idêntica à do head do PR que o originou e a run `pull_request`
+desse head estiver verde, os demais jobs são pulados e a run fica verde (os
+artefatos `terminal-scrollback-<os>`, baseline do gate de regressão dos
+próximos PRs, são copiados da run do PR). Push direto, PR desatualizado ou
+qualquer erro de API caem no CI completo.
 
 ---
 
