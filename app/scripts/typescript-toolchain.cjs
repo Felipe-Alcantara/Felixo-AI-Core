@@ -127,6 +127,19 @@ function pacoteDono(arquivo) {
   }
 }
 
+/**
+ * O lançador JS do TS 7 (`bin/tsc`) substitui o próprio processo pelo
+ * executável nativo via `process.execve` quando ela existe (Node >= 22.15) e o
+ * SO não é Windows; caso contrário, roda o executável como processo filho.
+ * Só no primeiro caso o PID iniciado pelo npm/benchmark é o do compilador.
+ */
+function compiladorRodaNoProcessoIniciado(
+  plataforma = process.platform,
+  temExecve = typeof process.execve === 'function',
+) {
+  return plataforma !== 'win32' && temExecve
+}
+
 function versaoMaior(versao) {
   const maior = Number.parseInt(String(versao).split('.')[0], 10)
   return Number.isInteger(maior) ? maior : null
@@ -138,6 +151,7 @@ module.exports = {
   PACOTE_API,
   PACOTE_COMPILADOR,
   caminhoDoCompilador,
+  compiladorRodaNoProcessoIniciado,
   diretorioDoPacote,
   extrairAlvoDoShimCmd,
   pacoteDono,

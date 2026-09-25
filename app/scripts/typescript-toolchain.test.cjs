@@ -70,6 +70,15 @@ describe('parser do shim .cmd do npm (Windows)', () => {
   })
 })
 
+describe('lançador do TS 7 e medição de RSS', () => {
+  it('só considera o PID iniciado como o compilador quando há execve fora do Windows', () => {
+    assert.equal(toolchain.compiladorRodaNoProcessoIniciado('linux', true), true)
+    assert.equal(toolchain.compiladorRodaNoProcessoIniciado('darwin', true), true)
+    assert.equal(toolchain.compiladorRodaNoProcessoIniciado('linux', false), false)
+    assert.equal(toolchain.compiladorRodaNoProcessoIniciado('win32', true), false)
+  })
+})
+
 describe('fiação instalada em node_modules', () => {
   it('node_modules/.bin/tsc aponta para o TypeScript 7 (@typescript/native)', () => {
     const alvo = toolchain.resolverAlvoDoBinNpm(DIRETORIO_BIN, 'tsc')

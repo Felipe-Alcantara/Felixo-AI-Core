@@ -9,8 +9,15 @@
  *
  * O benchmark move os tsbuildinfo anteriores para um diretório temporário
  * próprio quando faz uma amostra fria. Ele não apaga arquivos do projeto.
- * RSS é coletado durante cada processo tsc; em plataformas sem uma consulta
- * disponível, o relatório deixa o valor como null em vez de inventá-lo.
+ *
+ * O compilador medido é o mesmo do `npm run typecheck`: o `tsc` do TypeScript
+ * 7 instalado como `@typescript/native` (ver scripts/typescript-toolchain.cjs).
+ * O pacote `typescript` do app é só a API do TS 6 para o typescript-eslint.
+ * RSS é coletado do processo iniciado; quando o lançador do TS 7 roda o
+ * executável nativo como processo filho (Windows, ou Node sem
+ * `process.execve`), esse PID não é o do compilador e o relatório deixa o
+ * valor como null em vez de publicar a memória do lançador. Em plataformas
+ * sem uma consulta disponível, o valor também fica null.
  */
 
 const fs = require('node:fs')
@@ -19,10 +26,6 @@ const path = require('node:path')
 const { execFileSync, spawn } = require('node:child_process')
 const { performance } = require('node:perf_hooks')
 
-// O compilador do build é o TypeScript 7, instalado pelo alias
-// `@typescript/native`; o pacote `typescript` do app é só a API do 6 para o
-// typescript-eslint e não tem mais o bin `tsc`. Os caminhos vêm da fonte
-// única da fiação lado a lado.
 const toolchain = require('./typescript-toolchain.cjs')
 
 const APP_ROOT = toolchain.APP_ROOT
@@ -150,7 +153,7 @@ function moveCacheFiles(temporaryDirectory, iteration) {
   }
 }
 
-function runBuild(extraArgs = []) {
+function runBuild(extraArgs = [], { sampleRss = toolchain.compiladorRodaNoProcessoIniciado() } = {}) {
   return new Promise((resolve) => {
     const startedAt = performance.now()
     const child = spawn(process.execPath, [TSC_PATH, ...buildTscArgs(extraArgs)], {
@@ -167,6 +170,7 @@ function runBuild(extraArgs = []) {
     })
 
     const sample = () => {
+      if (!sampleRss) return
       const rss = readRssKb(child.pid)
       if (rss != null && (peakRssKb == null || rss > peakRssKb)) peakRssKb = rss
     }
@@ -233,6 +237,12 @@ async function main(argv = process.argv.slice(2)) {
     typescript: toolchain.versaoDoCompilador(APP_ROOT),
     projects: PROJECTS,
     modes: {},
+  }
+
+  if (!toolchain.compiladorRodaNoProcessoIniciado()) {
+    console.log(
+      '[typecheck] RSS n/d: neste SO/Node o lançador do TS 7 roda o compilador nativo como processo filho; a memória do lançador não é publicada como a do compilador.',
+    )
   }
 
   try {
