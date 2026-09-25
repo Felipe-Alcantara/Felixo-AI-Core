@@ -134,6 +134,18 @@ comparações, não tem "commit anterior" útil para comparar consigo mesma.
 disponível (repositório novo, artefato expirado) — ausência de baseline não é
 evidência de regressão.
 
+O relatório do benchmark não carrega o commit, então o CI passa
+`--baseline-commit`, `--baseline-run-url` e `--current-commit` (SHA do head do
+PR). O texto do gate cita esses três, o critério usado e as métricas medidas
+mas fora do critério, e vai para o resumo do job — visível na página do PR sem
+baixar artefato. Uma chave desconhecida em `--exclude-metric` é erro, não é
+ignorada: um erro de digitação manteria a métrica no critério em silêncio.
+
+O baseline anda sozinho a cada run verde de `main` — ou seja, só por PR
+mesclado que passou pelo próprio gate. Limitação conhecida de baseline
+móvel: várias pioras pequenas, cada uma abaixo do limiar, podem se acumular
+sem nenhuma falhar isoladamente.
+
 Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
 existe de um lado (nova contagem testada, por exemplo) é ignorado, não conta
 como regressão nem falha o gate. Cada métrica também tem um piso de diferença

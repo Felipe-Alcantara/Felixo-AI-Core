@@ -630,12 +630,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p benchmark-baseline
-          run_id=$(gh run list --repo "${{ github.repository }}" --workflow=ci.yml --branch=main \
-            --status=success --json databaseId --limit 1 --jq '.[0].databaseId' || true)
-          if [ -z "$run_id" ]; then
+          baseline=$(gh run list --repo "${{ github.repository }}" --workflow=ci.yml --branch=main \
+            --status=success --json databaseId,headSha --limit 1 \
+            --jq '.[0] | "\(.databaseId) \(.headSha)"' || true)
+          run_id=${baseline%% *}
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
             echo "sem run verde de main ainda; gate segue sem baseline"
             exit 0
           fi
+          # O relatório do benchmark não carrega commit; o gate precisa citá-lo
+          # ("qual main estou comparando?") para a triagem de uma falha.
+          echo "BASELINE_SHA=${baseline#* }" >> "$GITHUB_ENV"
+          echo "BASELINE_RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/$run_id" >> "$GITHUB_ENV"
           gh run download "$run_id" --repo "${{ github.repository }}" \
             --name "terminal-scrollback-${{ matrix.os }}" --dir benchmark-baseline || \
             echo "artefato do run $run_id não encontrado (provavelmente expirado); gate segue sem baseline"
@@ -645,13 +651,31 @@ jobs:
         shell: bash
         working-directory: app
         run: |
+          report=benchmark-regression-gate-${{ matrix.os }}.txt
+          set +e
           node scripts/benchmark-regression-gate.cjs \
             --baseline=benchmark-baseline/terminal-scrollback-${{ matrix.os }}.json \
             --current=terminal-scrollback-${{ matrix.os }}.json \
             --baseline-missing-ok \
             --threshold=60 \
             --exclude-metric=resumeMs \
-            --out=benchmark-regression-gate-${{ matrix.os }}.txt
+            --baseline-commit="${BASELINE_SHA:-}" \
+            --baseline-run-url="${BASELINE_RUN_URL:-}" \
+            --current-commit="${{ github.event.pull_request.head.sha }}" \
+            --out="$report"
+          status=$?
+          set -e
+          # Resumo do job: o resultado aparece na própria página do PR, sem
+          # precisar baixar o artefato para saber qual métrica/commit falhou.
+          if [ -f "$report" ]; then
+            {
+              echo "### Gate de regressão de performance (${{ matrix.os }})"
+              echo '```'
+              cat "$report"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
 
       - name: Upload benchmark regression gate report
         if: always() && github.event_name == 'pull_request'
