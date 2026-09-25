@@ -16,8 +16,10 @@
  * RSS é coletado do processo iniciado; quando o lançador do TS 7 roda o
  * executável nativo como processo filho (Windows, ou Node sem
  * `process.execve`), esse PID não é o do compilador e o relatório deixa o
- * valor como null em vez de publicar a memória do lançador. Em plataformas
- * sem uma consulta disponível, o valor também fica null.
+ * valor como null em vez de publicar a memória do lançador. No Linux e no
+ * macOS o lançador vira o compilador no mesmo PID (`execve`), e as amostras
+ * de antes da troca, ainda do Node, são descartadas. Em plataformas sem uma
+ * consulta disponível, o valor também fica null.
  */
 
 const fs = require('node:fs')
@@ -143,6 +145,46 @@ function readRssKb(pid) {
   }
 }
 
+/**
+ * Caminho do executável que o PID está rodando agora, ou null se não der para
+ * saber (processo já saiu, ou SO sem a consulta).
+ */
+function readExecutablePath(pid, { platform = process.platform } = {}) {
+  try {
+    if (platform === 'linux') return fs.realpathSync(`/proc/${pid}/exe`)
+    if (platform === 'win32') return null
+    const output = execFileSync('ps', ['-o', 'comm=', '-p', String(pid)], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    return output || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * No Linux e no macOS, o lançador do TS 7 (`bin/tsc`, um script Node) chama
+ * `process.execve` e vira o compilador nativo no MESMO PID. Até essa troca, o
+ * PID amostrado ainda é o Node do lançador. Num build incremental sem mudança,
+ * esse Node (~40 MB) pesa mais que o compilador (~20 MB), e o pico publicava a
+ * memória do lançador: medido na revisão de 25/09/2026, `tsc -b` pelo lançador
+ * deu ~46.600 KB contra ~20.500 KB do binário nativo direto. Amostra tirada
+ * enquanto o PID ainda é o Node é descartada.
+ */
+function isStillNodeLauncher(executablePath, nodePath = process.execPath) {
+  if (!executablePath) return false
+  let node = nodePath
+  try {
+    node = fs.realpathSync(nodePath)
+  } catch {
+    // Mantém o caminho como veio.
+  }
+  if (executablePath === node) return true
+  // `ps -o comm=` no macOS pode trazer só o nome do executável.
+  return !executablePath.includes(path.sep) && executablePath === path.basename(node)
+}
+
 function moveCacheFiles(temporaryDirectory, iteration) {
   for (const project of PROJECTS) {
     const cacheName = project.replace(/\.json$/, '') + '.tsbuildinfo'
@@ -171,6 +213,7 @@ function runBuild(extraArgs = [], { sampleRss = toolchain.compiladorRodaNoProces
 
     const sample = () => {
       if (!sampleRss) return
+      if (isStillNodeLauncher(readExecutablePath(child.pid))) return
       const rss = readRssKb(child.pid)
       if (rss != null && (peakRssKb == null || rss > peakRssKb)) peakRssKb = rss
     }
@@ -291,7 +334,9 @@ if (require.main === module) {
 
 module.exports = {
   TSC_PATH,
+  isStillNodeLauncher,
   parseArgs,
+  readExecutablePath,
   percentile,
   summarize,
   validateReport,

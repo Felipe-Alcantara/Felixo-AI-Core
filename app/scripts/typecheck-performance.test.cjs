@@ -89,3 +89,28 @@ test('o modo check rejeita amostras incompletas ou falhas', () => {
     /falha em cold/,
   )
 })
+
+test('amostra de RSS tirada enquanto o PID ainda é o Node do lançador é descartada', () => {
+  // Regressão: no Linux o pico do build incremental publicava o Node do
+  // lançador (~46.600 KB) em vez do compilador nativo (~20.500 KB).
+  assert.equal(benchmark.isStillNodeLauncher('/usr/bin/node', '/usr/bin/node'), true)
+  assert.equal(benchmark.isStillNodeLauncher('node', '/usr/local/bin/node'), true)
+  const nativo = '/app/node_modules/@typescript/typescript-linux-x64/lib/tsc'
+  assert.equal(benchmark.isStillNodeLauncher(nativo, '/usr/bin/node'), false)
+  assert.equal(benchmark.isStillNodeLauncher(null, '/usr/bin/node'), false)
+})
+
+test('o executável lido do PID distingue o Node de outro programa', { skip: process.platform === 'win32' }, async () => {
+  const { spawn } = require('node:child_process')
+  const esperar = (filho) => new Promise((resolve) => filho.once('spawn', resolve))
+  const nodeFilho = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], { stdio: 'ignore' })
+  const outroFilho = spawn('sleep', ['5'], { stdio: 'ignore' })
+  try {
+    await Promise.all([esperar(nodeFilho), esperar(outroFilho)])
+    assert.equal(benchmark.isStillNodeLauncher(benchmark.readExecutablePath(nodeFilho.pid)), true)
+    assert.equal(benchmark.isStillNodeLauncher(benchmark.readExecutablePath(outroFilho.pid)), false)
+  } finally {
+    nodeFilho.kill()
+    outroFilho.kill()
+  }
+})

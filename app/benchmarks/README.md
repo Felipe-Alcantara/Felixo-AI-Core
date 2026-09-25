@@ -516,6 +516,14 @@ medido na `main` antes da troca; o TS 7, depois, em outro momento de carga:
 | Frio | 34,34 / 35,44 s | 3,12 / 3,20 s | 775.220 / 776.588 KiB | 470.164 / 484.564 KiB |
 | Sem mudança (incremental) | 0,35 / 0,50 s | 0,11 / 0,12 s | 71.944 / 72.228 KiB | 19.796 / 19.872 KiB |
 
+O RSS incremental do TS 7 nessa tabela veio de uma rodada em que o amostrador
+não caiu na fase do lançador. A revisão mostrou que isso não era garantido: no
+Linux, o lançador (um Node) roda algumas centenas de ms no mesmo PID antes do
+`execve`, e uma rodada chegou a 40.820 / 41.000 KB. Agora a bancada descarta as
+amostras em que o PID ainda é o Node. Três rodadas depois do filtro deram
+17.160 / 18.568, 19.604 / 19.626 e 19.252 / 19.677 KB (p50/p95). A mesma
+máquina, com o filtro removido, deu entre 11.712 e 35.328 KB.
+
 Na `main`, três `tsc -b --force` isolados do TS 6 levaram 33,3 / 36,6 / 34,3 s
 com pico de 778.208–783.016 KiB. As três primeiras execuções do TS 7, logo
 depois de um `npm ci` limpo e sem load average registrado naquele momento,

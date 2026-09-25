@@ -404,8 +404,15 @@ antigo como `tsc6`. O motivo e os números estão no
   `node_modules/.bin/tsc` (link no POSIX, shim `.cmd` no Windows), executa
   `npm exec -- tsc -v` e confere a API resolvida pelo typescript-eslint.
 - Se `npx tsc -v` mostrar 6.x, o conflito de bin entre o 7 e o
-  `@typescript/old` foi resolvido a favor do 6: reinstale com `npm ci` (npm 10
-  ou 11). Yarn Berry e Bun resolvem esse conflito de outro jeito
+  `@typescript/old` foi resolvido a favor do 6. O conserto leve é
+  `npm rebuild --ignore-scripts`; o `npm ci` também resolve. Isso vale para o npm
+  10 e o 11. O gatilho conhecido é um `npm install` ou `npm update` incremental
+  que troque só a versão do `@typescript/old` (por exemplo, um 6.0.x novo). O npm
+  retira os links pelo NOME do bin (`tsc`), e não por quem é o dono do link, e
+  depois religa só o pacote alterado, que é o 6. A revisão de 25/09/2026
+  reproduziu isso no POSIX e no shim do Windows. O `npm test` pega a troca com a
+  mensagem "o bin tsc pertence a typescript@6.x", e a CI não é afetada, porque
+  usa `npm ci` limpo. Yarn Berry e Bun resolvem esse conflito de outro jeito
   (microsoft/typescript-go#4567) e não são suportados.
 - Para comparar os dois compiladores no mesmo código, `npx tsc6 -b --force`
   roda o TypeScript 6.0.3 e `npx tsc -b --force`, o 7.
@@ -419,7 +426,10 @@ antigo como `tsc6`. O motivo e os números estão no
 - A bancada de typecheck mede o `tsc` do 7. No Windows, e em Node sem
   `process.execve` (anterior a 22.15), o lançador do 7 roda o executável nativo
   como processo filho; nesses casos o RSS sai `null` em vez de medir o
-  lançador.
+  lançador. No Linux e no macOS o lançador vira o compilador no mesmo PID
+  (`execve`), e as amostras de antes da troca, quando o PID ainda é o Node, são
+  descartadas. Sem esse filtro, o RSS do incremental oscilava entre 11.712 e
+  35.328 KB. Com ele, ficou entre 17.160 e 19.677 KB (medido em 25/09/2026).
 
 O comando de integração de PTY deve ser executado no sistema que se quer
 validar: Linux usa o launch direto, macOS o shell de login e Windows o
