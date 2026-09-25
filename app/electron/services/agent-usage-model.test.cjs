@@ -17,12 +17,14 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
+  classifyUsageCapability,
   cloneValue,
   normalizeMetrics,
   normalizeNumber,
   normalizeSample,
   normalizeTimestamp,
 } = require('./agent-usage-model.cjs')
+const { listAgentUsageSources } = require('./agent-usage-sources.cjs')
 
 function baseSample(overrides = {}) {
   return {
@@ -297,4 +299,49 @@ test('cloneValue nunca devolve a mesma referência (evita normalizador escrever 
 
 test('cloneValue preserva undefined em vez de lançar', () => {
   assert.equal(cloneValue(undefined), undefined)
+})
+
+test('classifyUsageCapability: cada fonte real de agent-usage-sources.cjs cai numa capability conhecida', () => {
+  const capabilidades = new Map(
+    listAgentUsageSources().map((source) => [source.id, classifyUsageCapability(source)]),
+  )
+
+  // Codex, Claude e Openia têm consulta ao vivo (ou arquivo local, no caso do
+  // Codex) — algum caminho real para o número existir.
+  assert.equal(capabilidades.get('codex'), 'available')
+  assert.equal(capabilidades.get('claude'), 'available')
+  assert.equal(capabilidades.get('openia'), 'available')
+  // Gemini só publica quota dentro do /stats interativo: sem auth, sem
+  // consulta ao vivo, sem arquivo local — é o caso que a task "Limites —
+  // incluir Openia e Gemini" pede para não aparecer como zero/100%.
+  assert.equal(capabilidades.get('gemini'), 'interactive-only')
+})
+
+test('classifyUsageCapability marca kind "unsupported" como unsupported, mesmo com auth/liveQuery presentes', () => {
+  assert.equal(
+    classifyUsageCapability({
+      auth: { command: 'x' },
+      liveQuery: 'algo',
+      usage: { kind: 'unsupported' },
+    }),
+    'unsupported',
+  )
+})
+
+test('classifyUsageCapability considera disponível uma fonte só com leitura local, sem auth nem liveQuery', () => {
+  assert.equal(
+    classifyUsageCapability({
+      auth: null,
+      localProbe: 'algum-arquivo',
+      usage: { kind: 'local-execution' },
+    }),
+    'available',
+  )
+})
+
+test('classifyUsageCapability não lança para entrada hostil e cai em unsupported por padrão', () => {
+  for (const garbage of [null, undefined, 42, 'string', [], () => {}, {}]) {
+    assert.doesNotThrow(() => classifyUsageCapability(garbage))
+    assert.equal(classifyUsageCapability(garbage), 'unsupported')
+  }
 })

@@ -117,6 +117,7 @@ describe('agent usage presentation', () => {
           label: 'codex login status',
           docsUrl: null,
           limitation: 'Não informa quota.',
+          capability: 'available',
         },
       },
       {
@@ -131,6 +132,7 @@ describe('agent usage presentation', () => {
           label: 'status line',
           docsUrl: null,
           limitation: 'Aguardando evento.',
+          capability: 'interactive-only',
         },
       },
     ]

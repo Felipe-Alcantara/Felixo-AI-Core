@@ -73,6 +73,11 @@ export type AgentUsageProvider = {
     label: string
     docsUrl: string | null
     limitation: string
+    // Por que a fonte pode não ter número, independente de qualquer rodada:
+    // `unsupported` (sem fonte), `interactive-only` (só existe dentro de
+    // sessão interativa, ex.: Gemini) ou `available` (existe algum caminho —
+    // consulta ao vivo, comando ou arquivo local).
+    capability: 'unsupported' | 'interactive-only' | 'available'
   }
 }
 

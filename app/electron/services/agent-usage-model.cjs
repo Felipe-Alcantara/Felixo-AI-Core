@@ -429,6 +429,44 @@ function maskIdentity(identity) {
   return 'identidade informada pela CLI'
 }
 
+/**
+ * Por que um provider pode não ter número, antes de qualquer tentativa de
+ * consulta — não confundir com o `status` da amostra (`unavailable`/`error`),
+ * que é o resultado de uma rodada real. Isto classifica a FONTE declarada em
+ * `agent-usage-sources.cjs`, sempre a mesma para o mesmo provider:
+ *
+ * - `unsupported`: não há fonte nenhuma (provider desconhecido/sem entrada).
+ * - `interactive-only`: a quota só existe dentro de uma sessão interativa
+ *   real e a fonte não tem consulta ao vivo nem arquivo local para ler —
+ *   caso do Gemini, cujo `/stats model` não responde em modo não interativo.
+ * - `available`: existe algum caminho para obter o número (consulta ao vivo,
+ *   comando de autenticação com quota embutida, ou leitura local de arquivo).
+ *
+ * Não cobre `network-disabled` nem `auth-required`: esses dependem do
+ * resultado de uma rodada (rede bloqueada agora, sessão deslogada agora), não
+ * da fonte em si — ver a task de continuação sobre capability em runtime.
+ */
+function classifyUsageCapability(source) {
+  if (!source || typeof source !== 'object' || !source.usage) {
+    return 'unsupported'
+  }
+
+  if (source.usage.kind === 'unsupported') {
+    return 'unsupported'
+  }
+
+  const hasLiveOrLocalPath =
+    source.usage.kind === 'live-query' ||
+    Boolean(source.localProbe) ||
+    Boolean(source.liveQuery)
+
+  if (!source.auth && !hasLiveOrLocalPath) {
+    return 'interactive-only'
+  }
+
+  return 'available'
+}
+
 function sampleHasMetrics(sample) {
   return Array.isArray(sample?.metrics) && sample.metrics.length > 0
 }
@@ -440,6 +478,7 @@ function cloneValue(value) {
 module.exports = {
   VALID_SAMPLE_STATUSES,
   VALID_SOURCE_KINDS,
+  classifyUsageCapability,
   cloneValue,
   createIdentityFingerprint,
   maskIdentity,
