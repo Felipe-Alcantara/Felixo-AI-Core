@@ -459,8 +459,17 @@ async function run() {
       throw new Error(allFailures.join('; '))
     }
   } finally {
+    // `app.quit()` não devolve Promise (é `void`); `await` nele não espera o
+    // encerramento real, só o próximo microtask. No Windows os handles do
+    // cache do Chromium (GPUCache, Local State) ainda estão abertos quando o
+    // rmSync roda a seguir, e um handle aberto vira EPERM ali (no POSIX,
+    // unlink de arquivo aberto é permitido, por isso só aparecia aqui).
+    // `maxRetries`/`retryDelay` são a forma que o próprio Node.js documenta
+    // para isso, sem inventar um sleep manual. Medido: EPERM em toda run do
+    // Windows desde antes de 12/09, mascarado até agora pelo bug de exit code
+    // corrigido em electron-exit.cjs (o processo saía 0 mesmo com esta falha).
     await app.quit()
-    fs.rmSync(benchmarkUserData, { recursive: true, force: true })
+    fs.rmSync(benchmarkUserData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
   }
 }
 
