@@ -109,6 +109,40 @@ nos cenários de 10/20 sessões. O RSS continua publicado como evidência
 observacional do custo do processo. Se um SO falhar esse contrato, o artefato
 adaptativo não deve ser habilitado naquele release.
 
+## Gate de regressão entre commits
+
+`--check` (acima) compara a política `current` com a `adaptive` DENTRO da
+mesma execução — não protege contra o benchmark inteiro piorando de um commit
+para outro (ex.: os dois ficarem mais lentos igualmente). Para isso existe
+`scripts/benchmark-regression-gate.cjs`, que compara o relatório do PR contra
+o baseline de um commit anterior:
+
+```bash
+node scripts/benchmark-regression-gate.cjs \
+  --baseline=terminal-scrollback-baseline.json \
+  --current=terminal-scrollback-ubuntu-latest.json \
+  --threshold=20
+```
+
+No CI (job `benchmarks`, `.github/workflows/ci.yml`), o baseline é sempre o
+artefato `terminal-scrollback-<os>` do último run bem-sucedido do workflow CI
+em `main` — decisão explícita: sem armazenamento próprio (banco, branch
+dedicado), ao custo de depender da retenção padrão de artefatos do GitHub
+Actions. Roda só em `pull_request`; `main` é o baseline das próximas
+comparações, não tem "commit anterior" útil para comparar consigo mesma.
+`--baseline-missing-ok` faz o gate não falhar quando não há baseline
+disponível (repositório novo, artefato expirado) — ausência de baseline não é
+evidência de regressão.
+
+Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
+existe de um lado (nova contagem testada, por exemplo) é ignorado, não conta
+como regressão nem falha o gate. As métricas comparadas são resume (ms), RSS
+p95 do renderer e delta de heap do stream — as mesmas que `--check` já usa
+para comparar `current` vs `adaptive`. O limiar padrão (20%) é
+deliberadamente mais folgado que os 5%/25% usados internamente pelo
+`--check`: aqui o ruído é entre execuções de runners diferentes ao longo do
+tempo, não dentro da mesma janela de medição.
+
 ## Degradação do Canvas no Linux
 
 A investigação de 03/09/2026 separou duas perguntas que costumavam aparecer

@@ -601,3 +601,48 @@ jobs:
           name: terminal-scrollback-${{ matrix.os }}
           path: app/terminal-scrollback-${{ matrix.os }}.json
           if-no-files-found: ignore
+
+      # Gate de regressão real, entre commits — diferente do `--check` acima,
+      # que só compara política current vs adaptive DENTRO da mesma execução.
+      # O baseline é sempre o artefato do último run verde em `main` (mesmo
+      # workflow, mesmo OS da matriz): sem infraestrutura de armazenamento
+      # nova, ao custo de depender da retenção padrão de artefatos do GitHub
+      # Actions. Só roda em PR — a própria main não tem "commit anterior" para
+      # comparar de forma útil aqui, ela É o baseline das próximas comparações.
+      # Sem baseline (PR contra um repo novo, ou artefato expirado), o gate
+      # não falha: não há sinal de regressão sem ter contra o que comparar.
+      - name: Baixar baseline do benchmark de terminal (último run verde em main)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p benchmark-baseline
+          run_id=$(gh run list --repo "${{ github.repository }}" --workflow=ci.yml --branch=main \
+            --status=success --json databaseId --limit 1 --jq '.[0].databaseId' || true)
+          if [ -z "$run_id" ]; then
+            echo "sem run verde de main ainda; gate segue sem baseline"
+            exit 0
+          fi
+          gh run download "$run_id" --repo "${{ github.repository }}" \
+            --name "terminal-scrollback-${{ matrix.os }}" --dir benchmark-baseline || \
+            echo "artefato do run $run_id não encontrado (provavelmente expirado); gate segue sem baseline"
+
+      - name: Gate de regressão do benchmark de terminal
+        if: github.event_name == 'pull_request'
+        shell: bash
+        working-directory: app
+        run: |
+          node scripts/benchmark-regression-gate.cjs \
+            --baseline=../benchmark-baseline/terminal-scrollback-${{ matrix.os }}.json \
+            --current=terminal-scrollback-${{ matrix.os }}.json \
+            --baseline-missing-ok \
+            --out=benchmark-regression-gate-${{ matrix.os }}.txt
+
+      - name: Upload benchmark regression gate report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v6
+        with:
+          name: benchmark-regression-gate-${{ matrix.os }}
+          path: app/benchmark-regression-gate-${{ matrix.os }}.txt
+          if-no-files-found: ignore
