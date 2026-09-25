@@ -3811,3 +3811,14 @@ v0.1.416 (#86), v0.1.417 (#89) e v0.1.418 (#90) saíram pelo Release gate.
 Validação à época: CI verde nos 4 SOs em cada PR. No #90, o CI da `main` falhou uma vez num passo que o PR
 não tocou (órfão intermitente do yarn-classic no Windows). O rerun passou e o problema foi aberto como task.
 Os detalhes de cada PR estão nas páginas das tasks no Notion e no relatório diário de 25/09.
+
+**Release real do #91 (mesmo dia, 20:07–20:17):** a `main` reaproveitou o CI do PR. A run 36199742100 levou
+14 s: só o job `Reaproveitar CI do PR` rodou, citando a run 36199170625, e os 4 artefatos de baseline foram
+copiados. O Release 36199766874 publicou a v0.1.419 8m13s depois do merge (a mediana medida antes era
+19m25s). O `Publish windows-latest`, já com o prebuild do node-pty, levou 7m17s e passou no smoke do app
+instalado. O job novo `Smoke exploratório (Windows)` aparecia com X vermelho: o smoke de path longo falhava
+com o diagnóstico do próprio app (`pty-spawn-error-long-path`, 318 caracteres), como já falhava nas releases
+v0.1.416 a v0.1.418, quando ainda era um passo com `continue-on-error` dentro do publish. Isso não é
+regressão. O que mudou foi a apresentação: o `continue-on-error` ficou só no job, que pintava vermelho em
+todo release. Agora os dois smokes têm `continue-on-error` também no passo. O tratamento do path longo
+segue nas tasks de Terminal do Notion.

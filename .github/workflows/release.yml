@@ -347,6 +347,12 @@ jobs:
       # entre os dois shells é informação, não motivo pra travar o release
       # quando o padrão (PowerShell) já passou.
       - name: Validar node-pty em cmd.exe (Windows)
+        # No passo, não só no job: com o `continue-on-error` apenas no job,
+        # uma falha aqui pintava o job de vermelho em todo release, embora a
+        # run seguisse verde. No passo, a falha vira anotação e o job
+        # continua verde, como era dentro do publish antes do #91. O job
+        # mantém o seu `continue-on-error` para o caso de o download falhar.
+        continue-on-error: true
         shell: bash
         env:
           FELIXO_RELEASE_SMOKE_SHELL: cmd.exe
@@ -369,8 +375,17 @@ jobs:
       # longo é uma característica conhecida do Windows, não necessariamente
       # um bug do node-pty — a evidência importa mais que travar o release.
       # Roda mesmo se o smoke de cmd.exe falhar (os dois são independentes).
+      # Resultado esperado hoje: falha com o diagnóstico do próprio app
+      # (`pty-spawn-error-long-path`, "318 caracteres, limite prático é ~260").
+      # Foi assim em toda release conferida (v0.1.416 a v0.1.419). A causa é
+      # o limite do Windows para a pasta de trabalho de um processo, e o
+      # tratamento está em aberto nas tasks do Notion "Terminal — investigar
+      # suporte real a path longo no Windows para o node-pty" e "decidir
+      # tratamento para node-pty falhando em cwd com path longo no Windows".
+      # O relatório JSON é a evidência; a falha vira anotação, não X vermelho.
       - name: Validar node-pty em pasta com path longo (Windows)
         if: ${{ !cancelled() && steps.download.outcome == 'success' }}
+        continue-on-error: true
         shell: bash
         env:
           FELIXO_RELEASE_SMOKE_LONG_PATH: '1'
