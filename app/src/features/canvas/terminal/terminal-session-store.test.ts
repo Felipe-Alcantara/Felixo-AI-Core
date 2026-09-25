@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionStore } from './terminal-session-store'
 import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
 
@@ -216,17 +216,35 @@ function contextWrites(writes: string[]): string[] {
   return writes.filter((data) => data.includes('CONTEXTO ENTREGUE EM'))
 }
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+/*
+ * Relógio falso nas suítes que dependem dos prazos do store.
+ *
+ * As esperas do store (silêncio antes de digitar, reenvio do aceite, prazo de
+ * emergência, confirmação do contexto) são `setTimeout` + `Date.now`. Com o
+ * relógio real o arquivo levava ~44 s só esperando. O `vi.useFakeTimers()` do
+ * vitest 4 falsifica timers, `Date` e `performance`, mas deixa `queueMicrotask`
+ * e `process.nextTick` reais (padrão `toFake` da versão instalada) — a
+ * notificação de ouvintes do store continua rodando como em produção.
+ * `vi.advanceTimersByTimeAsync(ms)` dispara cada timer vencido e cede um turno
+ * real entre eles, então as promises das escritas na ponte resolvem entre um
+ * timer e o próximo, na mesma ordem que teriam com o relógio real.
+ *
+ * O relógio falso é ligado ANTES de `createHarness`, para o xterm e o store
+ * agendarem nele, e desligado DEPOIS do `store.clear()`: timers que sobrarem
+ * são descartados em vez de dispararem no teste seguinte.
+ */
 
 describe('TerminalSessionStore: entrega do texto de contexto', () => {
   let harness: Harness | undefined
 
   beforeEach(() => {
     harness = undefined
+    vi.useFakeTimers()
   })
 
   afterEach(() => {
     harness?.store.clear()
+    vi.useRealTimers()
   })
 
   it('cria o xterm compacto quando o canvas já tem dez terminais', () => {
@@ -245,7 +263,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const output = `${Array.from({ length: 5_001 }, (_, index) => `output-${index}`).join('\r\n')}\r\n`
 
     harness.feed(output)
-    await wait(50)
+    await vi.advanceTimersByTimeAsync(50)
 
     expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
       limit: 5_000,
@@ -260,34 +278,34 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
     // Bem depois do delay inicial (1200 ms) e de várias voltas da espera: sem
     // nada desenhado na tela, não existe linha de entrada para receber o texto.
-    await wait(2200)
+    await vi.advanceTimersByTimeAsync(2200)
 
     expect(contextWrites(harness.writes)).toEqual([])
-  }, 10000)
+  })
 
   it('não escreve o contexto dentro do aviso do modo yolo', async () => {
     harness = createHarness()
     harness.feed(BOOT_ESCAPES)
     harness.feed(BYPASS_WARNING)
 
-    await wait(2200)
+    await vi.advanceTimersByTimeAsync(2200)
 
     expect(contextWrites(harness.writes)).toEqual([])
-  }, 10000)
+  })
 
   it('aceita o aviso do modo yolo escolhendo "Yes, I accept"', async () => {
     harness = createHarness()
     harness.feed(BOOT_ESCAPES)
     harness.feed(BYPASS_WARNING)
 
-    await wait(600)
+    await vi.advanceTimersByTimeAsync(600)
 
     // Seta para baixo e Enter em escritas separadas: a seleção começa em
     // "1. No, exit", e as duas teclas juntas a CLI ignora.
     expect(harness.writes).toContain('\x1b[B')
     expect(harness.writes).toContain('\r')
     expect(harness.writes.indexOf('\x1b[B')).toBeLessThan(harness.writes.indexOf('\r'))
-  }, 10000)
+  })
 
   it('reenvia o aceite enquanto o aviso continuar na tela', async () => {
     harness = createHarness()
@@ -295,28 +313,28 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness.feed(BYPASS_WARNING)
 
     // A tela nunca sai do aviso: as teclas se perderam no redesenho.
-    await wait(1600)
+    await vi.advanceTimersByTimeAsync(1600)
 
     expect(harness.writes.filter((data) => data === '\x1b[B').length).toBeGreaterThan(1)
-  }, 10000)
+  })
 
   it('escreve o contexto quando a linha de entrada aparece', async () => {
     harness = createHarness()
     harness.feed(BOOT_ESCAPES)
     harness.feed(BYPASS_WARNING)
-    await wait(1500)
+    await vi.advanceTimersByTimeAsync(1500)
     expect(contextWrites(harness.writes)).toEqual([])
 
     // A pessoa (ou o aceite automático) respondeu o aviso: o REPL subiu.
     harness.feed('\x1b[2J\x1b[H')
     harness.feed(READY_PROMPT)
-    await wait(1600)
+    await vi.advanceTimersByTimeAsync(1600)
 
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
     const [reference] = contextWrites(harness.writes)
     expect(reference).toContain('felixo context read "felixo-context-1-initial-context.txt"')
     expect(reference).not.toMatch(/(?:\/Users|[A-Za-z]:\\|\/home\/|\/tmp\/)/)
-  }, 15000)
+  })
 
   // Bug real: a checagem de confiança de workspace aparece mesmo em modo
   // yolo (`--dangerously-skip-permissions`), e o código antes assumia que o
@@ -328,24 +346,24 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness.feed(BOOT_ESCAPES)
     harness.feed(TRUST_PROMPT)
 
-    await wait(2200)
+    await vi.advanceTimersByTimeAsync(2200)
 
     expect(contextWrites(harness.writes)).toEqual([])
-  }, 10000)
+  })
 
   it('aceita a checagem de confiança de workspace escolhendo "Yes, I trust this folder"', async () => {
     harness = createHarness()
     harness.feed(BOOT_ESCAPES)
     harness.feed(TRUST_PROMPT)
 
-    await wait(600)
+    await vi.advanceTimersByTimeAsync(600)
 
     // Seta para baixo e Enter em escritas separadas: a seleção começa em
     // "No, exit", e as duas teclas juntas a CLI ignora.
     expect(harness.writes).toContain('\x1b[B')
     expect(harness.writes).toContain('\r')
     expect(harness.writes.indexOf('\x1b[B')).toBeLessThan(harness.writes.indexOf('\r'))
-  }, 10000)
+  })
 
   it('reenvia o aceite enquanto a checagem de confiança continuar na tela', async () => {
     harness = createHarness()
@@ -353,25 +371,25 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness.feed(TRUST_PROMPT)
 
     // A tela nunca sai da checagem: as teclas se perderam no redesenho.
-    await wait(1600)
+    await vi.advanceTimersByTimeAsync(1600)
 
     expect(harness.writes.filter((data) => data === '\x1b[B').length).toBeGreaterThan(1)
-  }, 10000)
+  })
 
   it('escreve o contexto quando o REPL sobe depois da checagem de confiança', async () => {
     harness = createHarness()
     harness.feed(BOOT_ESCAPES)
     harness.feed(TRUST_PROMPT)
-    await wait(1500)
+    await vi.advanceTimersByTimeAsync(1500)
     expect(contextWrites(harness.writes)).toEqual([])
 
     // A pessoa (ou o aceite automático) confiou na pasta: o REPL subiu.
     harness.feed('\x1b[2J\x1b[H')
     harness.feed(READY_PROMPT)
-    await wait(1600)
+    await vi.advanceTimersByTimeAsync(1600)
 
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
-  }, 15000)
+  })
 
   it('não força o contexto num prompt de decisão nem depois do prazo de emergência de uma CLI desconhecida', async () => {
     // `gemini` não tem leitor de linha de entrada dedicado (INPUT_LINE_READERS),
@@ -381,10 +399,10 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness.feed(BOOT_ESCAPES)
     harness.feed(['Apply this change?', '❯ 1. Yes', '  2. No'].join('\r\n'))
 
-    await wait(10400)
+    await vi.advanceTimersByTimeAsync(10400)
 
     expect(contextWrites(harness.writes)).toEqual([])
-  }, 15000)
+  })
 
   it('escreve no Codex assim que o compositor aparece, sem esperar silêncio extra', async () => {
     harness = createHarness(CONTEXT, 'codex')
@@ -393,10 +411,10 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
     // O detector do compositor já confirma que o TUI aceita entrada; não há
     // motivo para aguardar os 500 ms usados apenas pelo fallback genérico.
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
-  }, 10000)
+  })
 
   it('escreve no Codex mesmo com a sugestão da CLI dentro do compositor', async () => {
     harness = createHarness(CONTEXT, 'codex')
@@ -406,17 +424,17 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     // Enquanto a prontidão exigia o compositor em branco — tela que o Codex não
     // mostra — o contexto só saía quando a espera de emergência estourava, e o
     // agente parecia demorar dezenas de segundos para receber o prompt.
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
-  }, 10000)
+  })
 
   it('volta ao inline com aviso quando a entrega por arquivo falha', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
 
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     const fallback = harness.writes.find((data) =>
       data.startsWith('AVISO DO FELIXO AI CORE'),
@@ -428,13 +446,13 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toContain(
       'fallback inline',
     )
-  }, 10000)
+  })
 
   it('não aplica o recorte de handoff a um prompt de catálogo no fallback', async () => {
     harness = createHarness('', 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     const longPrompt = `catálogo começo\n${'x'.repeat(160_100)}\ncatálogo fim`
     await harness.store.sendText(SESSION_ID, `${longPrompt}\r`, { kind: 'catalog-prompt' })
@@ -445,24 +463,24 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(fallback).toContain('catálogo começo')
     expect(fallback).toContain('catálogo fim')
     expect(fallback).not.toContain('trecho do meio do histórico omitido')
-  }, 10000)
+  })
 
   it('sendText devolve delivered:true quando a PTY confirma a escrita', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
 
     expect(result).toEqual({ delivered: true })
-  }, 10000)
+  })
 
   it('typeText digita o texto ditado SEM Enter e SEM arquivo de contexto', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
     const antes = harness.writes.length
 
     const result = await harness.store.typeText(SESSION_ID, 'listar os arquivos do projeto')
@@ -473,13 +491,13 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     // Nada de Enter, e o texto curto não vira "arquivo de contexto".
     expect(novos.join('')).not.toMatch(/[\r\n]/)
     expect(contextWrites(novos)).toEqual([])
-  }, 10000)
+  })
 
   it('typeText RECUSA controle (Enter/ESC) mesmo se o chamador esquecer de limpar', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
     const antes = harness.writes.length
 
     for (const perigoso of ['rm -rf /\r', 'ls\n', 'x\x1b[2Jy', 'a\x00b']) {
@@ -487,7 +505,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       expect(result.delivered).toBe(false)
     }
     expect(harness.writes.length).toBe(antes)
-  }, 10000)
+  })
 
   it('typeText sem sessão ou com texto vazio não entrega nada', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
@@ -499,7 +517,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     const insertion = createCatalogPromptInsertion(
       { id: 'catalog-123', name: 'Revisão', prompt: 'revisar o diff' },
@@ -522,7 +540,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       timestamp: '2026-09-16T12:00:00.000Z',
     })
     expect(harness.store.getSessionMetadata(SESSION_ID)?.lastPromptInsertion?.id).toBe('catalog-123')
-  }, 10000)
+  })
 
   it('mantém a mesma metadata quando o arquivo cai no fallback inline', async () => {
     const insertion = createCatalogPromptInsertion(
@@ -533,7 +551,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const delivered = createHarness('', 'codex', true)
     delivered.feed(BOOT_ESCAPES)
     delivered.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
     await delivered.store.sendText(SESSION_ID, 'instrução protegida\r', {
       kind: 'catalog-prompt',
       insertion,
@@ -544,7 +562,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const fallback = createHarness('', 'codex', false)
     fallback.feed(BOOT_ESCAPES)
     fallback.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
     await fallback.store.sendText(SESSION_ID, 'instrução protegida\r', {
       kind: 'catalog-prompt',
       insertion,
@@ -554,13 +572,13 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       deliveredMetadata,
     )
     expect(fallback.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('fallback inline')
-  }, 10000)
+  })
 
   it('marca envio digitado pelo painel como manual e sem nome', async () => {
     harness = createHarness('', 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     const result = await harness.store.sendText(SESSION_ID, 'texto escrito\r', {
       kind: 'manual-prompt',
@@ -577,13 +595,13 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       autoSubmit: true,
     })
     expect(harness.store.getSnapshot(SESSION_ID)?.lastPromptInsertion?.name).toBeUndefined()
-  }, 10000)
+  })
 
   it('sendText devolve delivered:false quando a PTY rejeita a escrita', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
     ;(
       globalThis as unknown as {
         window: { felixo: { pty: { write: () => Promise<unknown> } } }
@@ -593,13 +611,13 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
 
     expect(result).toEqual({ delivered: false, reason: 'rejected', message: 'sessão fechada' })
-  }, 10000)
+  })
 
   it('sendText devolve delivered:false quando o IPC de escrita lança', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
     ;(
       globalThis as unknown as {
         window: { felixo: { pty: { write: () => Promise<unknown> } } }
@@ -611,7 +629,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
 
     expect(result).toEqual({ delivered: false, reason: 'error', message: 'ponte indisponível' })
-  }, 10000)
+  })
 
   it('sendText devolve delivered:false sem terminal correspondente', async () => {
     harness = createHarness(CONTEXT, 'codex', false)
@@ -629,7 +647,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness = createHarness(CONTEXT, 'codex', false)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     const first = harness.store.sendText(SESSION_ID, 'primeiro\r', { kind: 'catalog-prompt' })
     const second = harness.store.sendText(SESSION_ID, 'segundo\r', { kind: 'catalog-prompt' })
@@ -643,7 +661,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const segundoIndex = harness.writes.findIndex((data) => data.includes('segundo'))
     expect(primeiroIndex).toBeGreaterThanOrEqual(0)
     expect(segundoIndex).toBeGreaterThan(primeiroIndex)
-  }, 10000)
+  })
 
   it('retry após falha não apaga o artefato de outra entrega da mesma sessão', async () => {
     // `contextFiles.release` limpa TODOS os arquivos da sessão de uma vez —
@@ -653,7 +671,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness = createHarness(CONTEXT, 'codex', true)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     let shouldFail = true
     ;(
@@ -688,13 +706,13 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const [failedName, retryName] = harness.contextFileNames.slice(filesBeforeAttempts)
     expect(failedName).not.toBe(retryName)
     expect(harness.releaseCalls).toEqual([])
-  }, 10000)
+  })
 
   it('preserva Unicode, Markdown e quebras de linha do catálogo ponta a ponta', async () => {
     harness = createHarness(CONTEXT, 'codex', true)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     const prompt = [
       '## Título com acentuação: café, ação, emoji 🚀',
@@ -716,13 +734,13 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(body).toContain('`código`')
     expect(body).toContain('segunda linha\ncom quebra explícita')
     expect(body).toContain('> citação em bloco')
-  }, 10000)
+  })
 
   it('aguarda o dreno da PTY antes de resolver — não confirma cedo demais', async () => {
     harness = createHarness(CONTEXT, 'codex', true)
     harness.feed(BOOT_ESCAPES)
     harness.feed(CODEX_READY_PROMPT)
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     let releaseDrain: (() => void) | undefined
     const drainGate = new Promise<void>((resolve) => {
@@ -744,14 +762,14 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       settled = true
     })
 
-    await wait(50)
+    await vi.advanceTimersByTimeAsync(50)
     expect(settled).toBe(false) // ainda preso no dreno — não pode ter confirmado
 
     releaseDrain?.()
     const result = await pending
     expect(settled).toBe(true)
     expect(result).toEqual({ delivered: true })
-  }, 10000)
+  })
 
   it('não escreve enquanto o Codex pergunta se a pasta é confiável', async () => {
     harness = createHarness(CONTEXT, 'codex')
@@ -766,10 +784,10 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
     // A tela de confiança usa o mesmo marcador do compositor: escrever aqui
     // seria digitar dentro de um menu de decisão.
-    await wait(400)
+    await vi.advanceTimersByTimeAsync(400)
 
     expect(contextWrites(harness.writes)).toEqual([])
-  }, 10000)
+  })
 
   it('reescreve o contexto se ele não aparecer na linha de entrada', async () => {
     harness = createHarness()
@@ -777,16 +795,16 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     harness.feed(READY_PROMPT)
 
     // A tela continua mostrando a entrada vazia: o texto não chegou na CLI.
-    await wait(3000)
+    await vi.advanceTimersByTimeAsync(3000)
 
     expect(contextWrites(harness.writes).length).toBeGreaterThan(1)
-  }, 15000)
+  })
 
   it('não reescreve quando o contexto está na linha de entrada', async () => {
     harness = createHarness()
     harness.feed(BOOT_ESCAPES)
     harness.feed(READY_PROMPT)
-    await wait(1600)
+    await vi.advanceTimersByTimeAsync(1600)
     expect(contextWrites(harness.writes)).toHaveLength(1)
 
     // A CLI redesenha a entrada com o texto: entrega confirmada.
@@ -798,10 +816,10 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
         '─'.repeat(60),
       ].join('\r\n'),
     )
-    await wait(2500)
+    await vi.advanceTimersByTimeAsync(2500)
 
     expect(contextWrites(harness.writes)).toHaveLength(1)
-  }, 15000)
+  })
 })
 
 /**
@@ -817,10 +835,12 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
 
   beforeEach(() => {
     harness = undefined
+    vi.useFakeTimers()
   })
 
   afterEach(() => {
     harness?.store.clear()
+    vi.useRealTimers()
   })
 
   it('não marca erro quando a CLI desenha antes de o spawn responder', async () => {
@@ -829,30 +849,30 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
     // A CLI já está de pé e pintando: a sessão sai de 'starting'.
     harness.feed(BOOT_ESCAPES)
     harness.feed(READY_PROMPT)
-    await wait(50)
+    await vi.advanceTimersByTimeAsync(50)
     expect(harness.store.getSnapshot(SESSION_ID)?.activity).not.toBe('starting')
 
     // Só agora o IPC volta, com o sucesso que sempre foi verdade.
     harness.resolveSpawn()
-    await wait(50)
+    await vi.advanceTimersByTimeAsync(50)
 
     const snapshot = harness.store.getSnapshot(SESSION_ID)
     expect(snapshot?.activity).not.toBe('error')
     expect(snapshot?.message).toBeUndefined()
-  }, 10000)
+  })
 
   it('entrega o texto inicial mesmo com a saída chegando primeiro', async () => {
     harness = createHarness(CONTEXT, 'claude', true, true)
 
     harness.feed(BOOT_ESCAPES)
     harness.feed(READY_PROMPT)
-    await wait(50)
+    await vi.advanceTimersByTimeAsync(50)
 
     harness.resolveSpawn()
-    await wait(1600)
+    await vi.advanceTimersByTimeAsync(1600)
 
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
-  }, 15000)
+  })
 
   it('ainda marca erro quando o spawn falha antes de qualquer saída', async () => {
     harness = createHarness(CONTEXT, 'claude', true, true)
@@ -869,12 +889,12 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
       cwd: '/tmp',
       initialText: CONTEXT,
     })
-    await wait(50)
+    await vi.advanceTimersByTimeAsync(50)
 
     const snapshot = harness.store.getSnapshot(SESSION_ID)
     expect(snapshot?.activity).toBe('error')
     expect(snapshot?.message).toBe('comando não encontrado')
-  }, 10000)
+  })
 
   it('insere referências de arquivos arrastados sem enviar Enter', async () => {
     harness = createHarness('')
@@ -885,7 +905,7 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
       { name: 'um arquivo.txt' } as File,
       { name: 'ação.png' } as File,
     ])
-    await wait(0)
+    await vi.advanceTimersByTimeAsync(0)
 
     const dropped = harness.writes.find((data) => data.includes('Arquivos arrastados'))
     expect(dropped).toContain('"/tmp/um arquivo.txt"')
@@ -903,7 +923,7 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
       cwd: '/tmp',
       capturedAt: 123,
     })
-    await wait(0)
+    await vi.advanceTimersByTimeAsync(0)
 
     const metadata = harness.store.getSessionMetadata(SESSION_ID)
     expect(metadata?.agentSessionId).toBe('codex-session-123')
@@ -925,7 +945,7 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
         capturedAt: 123,
       },
     })
-    await wait(0)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(harness.spawnArgs).toEqual([
       'resume',
@@ -950,7 +970,7 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
         capturedAt: 123,
       },
     })
-    await wait(0)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(harness.spawnArgs).toEqual(['--yolo'])
     expect(harness.spawnArgs).not.toContain('gemini-session-123')
@@ -965,7 +985,7 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
       accountId: 'claude-pessoal',
       providerId: 'claude',
     })
-    await wait(0)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(harness.spawnRequests.at(-1)).toEqual({
       accountId: 'claude-pessoal',
@@ -981,7 +1001,7 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
       cwd: '/tmp',
       providerId: 'claude',
     })
-    await wait(0)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(harness.spawnRequests.at(-1)).toEqual({
       accountId: undefined,
@@ -996,7 +1016,7 @@ describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
 
     harness.store.remove(SESSION_ID)
     harness.store.handleFileDrop(SESSION_ID, [{ name: 'encerrado.txt' } as File])
-    await wait(0)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(harness.writes).toEqual([])
   })
