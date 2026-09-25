@@ -223,7 +223,7 @@ test(cli-detector): add version parsing edge cases
 
 ## Política de release
 
-- Uma execução verde do CI para um commit em `main` aciona o `Release gate`, que só dispara o workflow `release.yml` quando o commit muda algo que entra no instalador ou que o Release executa como gate (lista de inclusão em `.github/scripts/release-relevant.sh`, com testes em `release-relevant.test.sh`).
+- Uma execução verde do CI para um commit em `main` aciona o `Release gate`, que só dispara o workflow `release.yml` quando o commit muda algo que entra no instalador ou que o Release executa como gate (lista de inclusão em `.github/scripts/release-relevant.sh`, com testes em `release-relevant.test.sh`). O teste confere a lista contra `.github/scripts/release-inputs.cjs`, que deriva do próprio `release.yml` e do bloco `build` do `app/package.json` tudo o que o Release executa ou empacota: um script novo usado pelo Release faz o teste falhar até entrar na lista.
 - O workflow também aceita execução manual, mas exige o SHA exato de um commit que passou no CI.
 - O workflow gera builds para Linux, Windows e macOS.
 - O workflow cria primeiro uma pré-release, publica todos os artefatos e só então a promove para release normal.
@@ -473,7 +473,9 @@ do commit for idêntica à do head do PR que o originou e a run `pull_request`
 desse head estiver verde, os demais jobs são pulados e a run fica verde (os
 artefatos `terminal-scrollback-<os>`, baseline do gate de regressão dos
 próximos PRs, são copiados da run do PR). Push direto, PR desatualizado ou
-qualquer erro de API caem no CI completo.
+qualquer erro de API caem no CI completo. A decisão mora em
+`.github/scripts/ci-reuse.sh`, testada com um `gh` falso em `ci-reuse.test.sh`
+(job `Release scripts`).
 
 ---
 

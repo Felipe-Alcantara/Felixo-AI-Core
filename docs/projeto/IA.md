@@ -3705,3 +3705,32 @@ dos 4 artefatos de uma run real de PR; electron-builder 26.15.3 num projeto-sond
 dependencies rebuild reason=npmRebuild is set to false"; os 15 checks obrigatórios da main continuam com
 os mesmos nomes. NÃO verificado: nenhum workflow rodou no GitHub (só roda depois do merge); o empacotamento
 Windows com o prebuild só o Release real prova, pelo smoke do app instalado.
+
+**Ajustes na junção das duas frentes (mesmo dia), a partir da revisão adversarial e de testes contra dados
+reais:**
+
+- A decisão de reuso saiu do YAML para `.github/scripts/ci-reuse.sh`, com 12 cenários em `ci-reuse.test.sh`
+  (um `gh` falso no PATH), rodados no job `Release scripts`. Ela passou a rejeitar run verde que seja de PR
+  para outra base, mas **só com evidência**: a API esvazia `pull_requests` quando a branch do PR é apagada,
+  o que acontece em todo merge daqui (medido na run 36170804309 do #90). Exigir a base na lista faria o
+  reuso nunca acontecer; com a regra final, o merge do #90 é reaproveitado e um push direto (`e3c4204`) não.
+- A lista de inclusão do seletor de release tinha divergido na própria junção: `package-manager-selection.cjs`,
+  exigido pelos dois gates de gerenciador do `release.yml`, não disparava release. O novo
+  `.github/scripts/release-inputs.cjs` deriva do `release.yml` e do `build` do `package.json` o que o Release
+  executa ou empacota (com o fecho dos `require` locais), e o teste exige que tudo isso dispare release. Sem a
+  correção, o teste falha nos casos certos. `.gitattributes` também entrou na lista (muda os bytes que o
+  checkout do Windows empacota).
+- A bancada de alternativas passou a recusar `--check` sem `npm-runtime`, como a operacional. É gate do
+  Release e, antes, passaria sem medir o npm que o app usa.
+- O smoke do Windows registra a ACL também do `conpty.node`, que o node-pty 1.1.0 carrega por padrão no
+  Windows 10+ (o `pty.node` é o fallback winpty), e o job exploratório usa caminho relativo no `source`.
+
+Validação da árvore combinada, nesta máquina: `npm test` 1640/1640, frontend 1182 + 1 ignorado, lint, build,
+os 4 testes de `.github/scripts`, actionlint sem achado novo, e as duas bancadas com os argumentos exatos do
+CI (`--check --managers=npm-runtime`): alternativas em 17,9 s e operacional em 44,6 s, com pnpm, Yarn e
+Corepack como `not-selected`.
+
+**Limitação declarada:** o repasse de `--managers` dentro do `main()` das duas bancadas não tem teste
+unitário; só executar o `main()` pegaria sua remoção, e isso instalaria pacotes reais dentro do `npm test`
+de todo PR. Se regredir, o custo é só de tempo (o CI volta a medir a matriz inteira), visível no JSON que o
+job publica.
