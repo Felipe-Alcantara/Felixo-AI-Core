@@ -547,7 +547,11 @@ jobs:
           path: app/build/canvas-visual-regression/**
           if-no-files-found: warn
 
+      # ESLint analisa o código-fonte, não o SO: o resultado é o mesmo nos
+      # quatro runners. Uma passada no Ubuntu basta e poupa o tempo do lint
+      # nos runners mais lentos (Windows/macOS).
       - name: Lint
+        if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 5
         run: npm run lint
 
