@@ -165,9 +165,24 @@ jobs:
       - name: Build renderer
         run: npm run build
 
+      # No Windows o electron-builder não recompila dependências nativas
+      # (`npmRebuild=false`, opção de topo no electron-builder 26; na 27 ela
+      # muda para `nativeModules.npmRebuild`). O node-pty 1.1.0 é N-API e traz
+      # prebuilds `prebuilds/win32-x64/` (pty.node, conpty.node, conpty.dll,
+      # winpty) que o `npm ci` mantém e o `loadNativeModule` do node-pty
+      # carrega quando não existe `build/Release`. O rebuild contra os headers
+      # do Electron levava 107 s por release só para reproduzir um binário que
+      # o N-API já torna compatível. O gate continua sendo o smoke do app
+      # INSTALADO logo abaixo, que abre um PTY real com o binário empacotado.
+      # Linux e macOS seguem com o rebuild padrão.
       - name: Build installers
         shell: bash
-        run: npx electron-builder --publish never
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            npx electron-builder --publish never -c.npmRebuild=false
+          else
+            npx electron-builder --publish never
+          fi
 
       # O inventário é produzido a partir do diretório unpacked gerado pelo
       # mesmo empacotamento que será enviado. Ele comprova o npm-runtime fora
