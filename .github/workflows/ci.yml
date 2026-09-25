@@ -44,46 +44,27 @@ jobs:
       REPO: ${{ github.repository }}
 
     steps:
+      # Checkout mínimo: só o script da decisão (a lógica e o teste dela moram
+      # em .github/scripts/ci-reuse{,.test}.sh, testados no job Release scripts).
+      - name: Checkout do script de decisão
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+          fetch-depth: 1
+
       - name: Decidir se o CI do PR vale para este commit
         id: decide
         shell: bash
         run: |
           set +e
-          reuse=false
-          source_run=
-          pr_head=
-          main_tree=
-          # Em erro HTTP o `gh api` escreve o corpo JSON do erro no stdout: sem
-          # validar o formato, duas respostas de erro iguais pareceriam duas
-          # árvores iguais. Só um SHA de 40 hex (ou um id numérico) é aceito.
-          is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
-          decide() {
-            pr_head=$(gh api "repos/$REPO/commits/$GITHUB_SHA/pulls" \
-              --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0].head.sha // empty') || pr_head=
-            if ! is_sha "$pr_head"; then
-              pr_head=
-              echo "Nenhum PR mergeado em main aponta para $GITHUB_SHA (push direto ou erro de API); CI completo."
-              return
-            fi
-            local head_tree
-            main_tree=$(gh api "repos/$REPO/git/commits/$GITHUB_SHA" --jq .tree.sha) || main_tree=
-            head_tree=$(gh api "repos/$REPO/git/commits/$pr_head" --jq .tree.sha) || head_tree=
-            echo "Árvore do commit da main: ${main_tree:-?}; árvore do head do PR ($pr_head): ${head_tree:-?}"
-            if ! is_sha "$main_tree" || [ "$main_tree" != "$head_tree" ]; then
-              echo "Árvores diferentes ou ilegíveis (ex.: PR desatualizado com a main no merge); CI completo."
-              return
-            fi
-            # `--commit` exige o SHA completo: um prefixo abreviado não casa com nenhuma run.
-            source_run=$(gh run list -R "$REPO" --workflow ci.yml --commit "$pr_head" \
-              --event pull_request --status success --json databaseId --jq '.[0].databaseId // empty') || source_run=
-            if ! [[ "$source_run" =~ ^[0-9]+$ ]]; then
-              source_run=
-              echo "Nenhuma run verde do CI (pull_request) para o head $pr_head; CI completo."
-              return
-            fi
-            reuse=true
-          }
-          decide
+          # O script sempre sai 0 e, em qualquer dúvida, devolve reuse=false:
+          # o CI completo roda. Só as linhas `chave=valor` vão para o output.
+          saida="$(bash .github/scripts/ci-reuse.sh "$GITHUB_SHA")"
+          grep -E '^(reuse|source_run|pr_head|main_tree)=' <<< "$saida" >> "$GITHUB_OUTPUT"
+          reuse="$(sed -n 's/^reuse=//p' <<< "$saida")"
+          source_run="$(sed -n 's/^source_run=//p' <<< "$saida")"
+          pr_head="$(sed -n 's/^pr_head=//p' <<< "$saida")"
+          main_tree="$(sed -n 's/^main_tree=//p' <<< "$saida")"
           if [ "$reuse" = true ]; then
             run_url="$GITHUB_SERVER_URL/$REPO/actions/runs/$source_run"
             echo "CI reaproveitado da run $run_url (head $pr_head, árvore $main_tree)."
@@ -92,13 +73,7 @@ jobs:
               echo "Commit \`$GITHUB_SHA\` tem a mesma árvore Git (\`$main_tree\`) do head \`$pr_head\`,"
               echo "que passou no CI em [$source_run]($run_url). Os demais jobs foram pulados."
             } >> "$GITHUB_STEP_SUMMARY"
-          else
-            source_run=
           fi
-          {
-            echo "reuse=$reuse"
-            echo "source_run=$source_run"
-          } >> "$GITHUB_OUTPUT"
           exit 0
 
       # O gate de regressão dos PRs usa como baseline o artefato
@@ -411,6 +386,9 @@ jobs:
 
       - name: Test release-relevant.sh
         run: bash .github/scripts/release-relevant.test.sh
+
+      - name: Test ci-reuse.sh
+        run: bash .github/scripts/ci-reuse.test.sh
 
   validate:
     name: Validate (${{ matrix.os }})
