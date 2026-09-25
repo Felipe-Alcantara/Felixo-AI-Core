@@ -16,6 +16,7 @@
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { reportFailureAndExit } = require('./electron-exit.cjs')
 const { spawn } = require('node:child_process')
 
 const DEFAULT_SCENARIOS = [
@@ -490,17 +491,7 @@ function commandLineArguments() {
 }
 
 function runAndReportErrors() {
-  run(commandLineArguments()).catch((error) => {
-    console.error(
-      `[terminal-output-benchmark] ${error instanceof Error ? error.stack || error.message : String(error)}`,
-    )
-    const { app } = require('electron')
-    if (app.isReady()) {
-      app.exit(1)
-      return
-    }
-    process.exitCode = 1
-  })
+  run(commandLineArguments()).catch((error) => reportFailureAndExit(error, '[terminal-output-benchmark]'))
 }
 
 function waitForChild(child) {

@@ -10,6 +10,7 @@
  */
 
 const fs = require('node:fs')
+const { reportFailureAndExit } = require('./electron-exit.cjs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
@@ -399,12 +400,7 @@ function commandLineArguments() {
 }
 
 function runAndReportErrors() {
-  run(commandLineArguments()).catch((error) => {
-    console.error(
-      `[canvas-benchmark] ${error instanceof Error ? error.stack || error.message : String(error)}`,
-    )
-    process.exitCode = 1
-  })
+  run(commandLineArguments()).catch((error) => reportFailureAndExit(error, '[canvas-benchmark]'))
 }
 
 function waitForChild(child) {
@@ -433,13 +429,13 @@ async function runWithDevelopmentServer(argv = commandLineArguments()) {
   const initialVite = await probeFelixoVite()
   if (initialVite.status === 'foreign') {
     throw new Error(
-      '[canvas-benchmark] A porta 5173 estÃ¡ ocupada por outro processo; o benchmark nÃ£o vai encerrÃ¡-lo automaticamente.',
+      '[canvas-benchmark] A porta 5173 está ocupada por outro processo; o benchmark não vai encerrá-lo automaticamente.',
     )
   }
   if (initialVite.status === 'felixo') {
     const cleanup = await stopFelixoVite({ probe: probeFelixoVite })
     if (!cleanup.stopped) {
-      throw new Error('[canvas-benchmark] NÃ£o foi possÃ­vel liberar o Vite anterior do Felixo.')
+      throw new Error('[canvas-benchmark] Não foi possível liberar o Vite anterior do Felixo.')
     }
   }
   const viteChild = spawnVite({ env: process.env })
