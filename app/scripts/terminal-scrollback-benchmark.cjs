@@ -399,12 +399,15 @@ function buildEmitterCode({ lines, burst, intervalMs, holdMs, sessionIndex, line
         output += prefix + body + '\\n'
         line += 1
       }
-      if (output) process.stdout.write(output)
-      if (line < total) {
-        setTimeout(next, intervalMs)
-      } else {
-        setTimeout(() => process.exit(0), holdMs)
-      }
+      // No Windows a escrita num TTY (o ConPTY) é assíncrona, e process.exit()
+      // descarta o que ainda não drenou. O exit só é agendado depois do
+      // callback da ÚLTIMA escrita (as escritas terminam em ordem). Os pedaços
+      // intermediários não esperam, então o ritmo das sessões ativas não muda.
+      const last = line >= total
+      const finish = () => setTimeout(() => process.exit(0), holdMs)
+      if (output) process.stdout.write(output, last ? finish : undefined)
+      else if (last) finish()
+      if (!last) setTimeout(next, intervalMs)
     }
     next()
   `

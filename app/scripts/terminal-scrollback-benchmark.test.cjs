@@ -168,3 +168,56 @@ test('o emissor nativo não injeta valores fora dos parâmetros do cenário', ()
   assert.match(source, /sessionIndex = 3/)
   assert.match(source, /longPromptChars = 16/)
 })
+
+// Executa o código do emissor num contexto isolado, com stdout, timers e exit
+// falsos, para observar a ORDEM entre a última escrita e o process.exit.
+function runEmitter(source, { flushWrites }) {
+  const vm = require('node:vm')
+  const timers = []
+  const pendingCallbacks = []
+  const events = []
+  const fakeProcess = {
+    stdout: {
+      write(chunk, callback) {
+        events.push(`write:${String(chunk).split('\n').length - 1}`)
+        if (callback) pendingCallbacks.push(callback)
+        return true
+      },
+    },
+    exit(code) {
+      events.push(`exit:${code}`)
+    },
+  }
+  vm.runInNewContext(source, {
+    process: fakeProcess,
+    setTimeout: (fn) => timers.push(fn),
+  })
+  // Roda os timers até esgotar; `flushWrites` decide se o SO já drenou.
+  for (let guard = 0; guard < 1000 && (timers.length || (flushWrites && pendingCallbacks.length)); guard += 1) {
+    if (flushWrites) while (pendingCallbacks.length) pendingCallbacks.shift()()
+    if (timers.length) timers.shift()()
+  }
+  return events
+}
+
+test('o emissor só agenda o exit depois que a última escrita drenou', () => {
+  // Regressão: no Windows a escrita num TTY (ConPTY) é assíncrona, e
+  // process.exit() descarta o que ainda não drenou. Com 20 PTYs, uma sessão
+  // ociosa (tudo num write só) parou em 1110 de 2003 linhas em duas runs
+  // (36197035555 e 36200639956).
+  const source = benchmark.buildEmitterCode({
+    lines: 6, burst: 6, intervalMs: 0, holdMs: 0, sessionIndex: 1, lineWidth: 40, longPromptChars: 0, longEvery: 2000,
+  })
+  assert.deepEqual(runEmitter(source, { flushWrites: false }), ['write:6'])
+  assert.deepEqual(runEmitter(source, { flushWrites: true }), ['write:6', 'exit:0'])
+})
+
+test('sessões ativas continuam no mesmo ritmo e saem depois do último pedaço', () => {
+  const source = benchmark.buildEmitterCode({
+    lines: 5, burst: 2, intervalMs: 4, holdMs: 0, sessionIndex: 0, lineWidth: 40, longPromptChars: 0, longEvery: 2000,
+  })
+  // Os pedaços intermediários não esperam o dreno (ritmo inalterado); só o
+  // exit espera a última escrita.
+  assert.deepEqual(runEmitter(source, { flushWrites: false }), ['write:2', 'write:2', 'write:1'])
+  assert.deepEqual(runEmitter(source, { flushWrites: true }), ['write:2', 'write:2', 'write:1', 'exit:0'])
+})

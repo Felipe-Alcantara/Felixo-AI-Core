@@ -3822,3 +3822,16 @@ v0.1.416 a v0.1.418, quando ainda era um passo com `continue-on-error` dentro do
 regressão. O que mudou foi a apresentação: o `continue-on-error` ficou só no job, que pintava vermelho em
 todo release. Agora os dois smokes têm `continue-on-error` também no passo. O tratamento do path longo
 segue nas tasks de Terminal do Notion.
+
+**Flake do PTY no Windows: hipótese e correção no emissor (mesmo dia, 20:30).** A falha apareceu de novo no
+CI da `main` do `3c7c668` (run 36200639956): `native count=20`, uma sessão parada em **1.110** de 2.003
+linhas, o mesmo número da run 36197035555. Nas duas vezes a sessão travada era ociosa (índices 17 e 12), ou
+seja, uma das que escrevem as 2.000 linhas num único `process.stdout.write` e chamam `process.exit(0)`
+`holdMs` (5 s) depois. No Windows, a escrita num TTY (o ConPTY) é assíncrona, e a documentação do Node avisa
+que `process.exit()` descarta escritas pendentes em `process.stdout`. Com 20 PTYs disputando CPU, 5 s podem
+não bastar para drenar ~240 KB. Por isso o emissor agora só agenda o exit no callback da última escrita, e os
+pedaços intermediários seguem sem esperar, então o ritmo das sessões ativas não muda. Dois testes novos rodam
+o emissor com stdout, timers e exit falsos: falham antes da correção e passam depois. A bancada real com
+`--counts=1,20` completou tudo no Linux. A hipótese só se confirma com runs do Windows sem
+`output-complete=false`; a task do Notion "CI — sessão PTY para no meio no benchmark de scrollback do Windows
+(count=20)" continua aberta até lá.
