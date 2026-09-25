@@ -56,6 +56,24 @@ esperar true "hook afterPack do electron-builder" $'app/scripts/fix-native-pty-p
 esperar true "smoke do artefato (gate do release)" $'app/scripts/release-smoke.cjs\n'
 esperar true "require local da bancada de gerenciadores" $'app/scripts/npm-runtime-performance.cjs\n'
 esperar true "script de versão usado no finalize" $'.github/scripts/release-version.sh\n'
+esperar true "seleção de gerenciadores (require dos gates do release)" $'app/scripts/package-manager-selection.cjs\n'
+esperar true "normalização de fim de linha (muda bytes empacotados no Windows)" $'.gitattributes\n'
+
+# Sincronia: tudo que o Release executa ou empacota (derivado do release.yml e
+# do bloco build do package.json, com os require locais) tem de disparar
+# release. Sem isto a lista de inclusão diverge em silêncio quando um gate
+# passa a exigir um script novo.
+if ! command -v node >/dev/null 2>&1; then
+  echo "FALHOU: node ausente — sem ele não dá para derivar as entradas do Release"
+  falhas=$((falhas + 1))
+else
+  derivados="$(node "$DIR/release-inputs.cjs")" || { echo "FALHOU: release-inputs.cjs não executou"; falhas=$((falhas + 1)); }
+  [[ -z "$derivados" ]] && { echo "FALHOU: release-inputs.cjs não derivou nenhuma entrada"; falhas=$((falhas + 1)); }
+  while IFS= read -r entrada; do
+    [[ -z "$entrada" ]] && continue
+    esperar true "entrada derivada do Release: $entrada" "$entrada"$'\n'
+  done <<< "$derivados"
+fi
 
 if [[ "$falhas" -ne 0 ]]; then
   echo "$falhas teste(s) falharam." >&2

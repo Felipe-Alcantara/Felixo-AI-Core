@@ -13,7 +13,10 @@
 # A lista espelha `build.files`, `extraResources`, `beforePack`/`afterPack` do
 # `app/package.json` e os scripts que `.github/workflows/release.yml` roda (com
 # os `require` locais deles). Um arquivo novo que precise entrar no instalador
-# tem de entrar aqui também — o teste `release-relevant.test.sh` fixa os casos.
+# tem de entrar aqui também. O teste `release-relevant.test.sh` fixa os casos e
+# confere esta lista contra `release-inputs.cjs`, que deriva o que o Release
+# executa direto do release.yml e do package.json — um script novo usado pelo
+# Release quebra o teste até entrar aqui.
 # Lista vazia/ilegível continua valendo `true`: sem diff não dá para afirmar
 # que nada do app mudou, e perder um release de app é pior que publicar um a mais.
 set -u
@@ -40,7 +43,11 @@ is_release_input() {
     app/scripts/release-smoke.cjs|app/scripts/package-inventory.cjs) return 0 ;;
     app/scripts/package-manager-alternatives-performance.cjs) return 0 ;;
     app/scripts/package-manager-operational-performance.cjs) return 0 ;;
+    app/scripts/package-manager-selection.cjs) return 0 ;;
     app/scripts/npm-runtime-performance.cjs) return 0 ;;
+    # Normalização de fim de linha: muda os bytes que o checkout do runner
+    # Windows entrega ao empacotamento (ex.: SKILL.md em app/resources).
+    .gitattributes) return 0 ;;
     # O próprio pipeline de publicação e os scripts que ele carrega.
     .github/workflows/release.yml) return 0 ;;
     .github/scripts/retry.sh|.github/scripts/release-version.sh) return 0 ;;
