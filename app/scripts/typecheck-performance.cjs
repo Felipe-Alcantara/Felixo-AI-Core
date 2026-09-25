@@ -9,8 +9,17 @@
  *
  * O benchmark move os tsbuildinfo anteriores para um diretório temporário
  * próprio quando faz uma amostra fria. Ele não apaga arquivos do projeto.
- * RSS é coletado durante cada processo tsc; em plataformas sem uma consulta
- * disponível, o relatório deixa o valor como null em vez de inventá-lo.
+ *
+ * O compilador medido é o mesmo do `npm run typecheck`: o `tsc` do TypeScript
+ * 7 instalado como `@typescript/native` (ver scripts/typescript-toolchain.cjs).
+ * O pacote `typescript` do app é só a API do TS 6 para o typescript-eslint.
+ * RSS é coletado do processo iniciado; quando o lançador do TS 7 roda o
+ * executável nativo como processo filho (Windows, ou Node sem
+ * `process.execve`), esse PID não é o do compilador e o relatório deixa o
+ * valor como null em vez de publicar a memória do lançador. No Linux e no
+ * macOS o lançador vira o compilador no mesmo PID (`execve`), e as amostras
+ * de antes da troca, ainda do Node, são descartadas. Em plataformas sem uma
+ * consulta disponível, o valor também fica null.
  */
 
 const fs = require('node:fs')
@@ -19,8 +28,10 @@ const path = require('node:path')
 const { execFileSync, spawn } = require('node:child_process')
 const { performance } = require('node:perf_hooks')
 
-const APP_ROOT = path.resolve(__dirname, '..')
-const TSC_PATH = path.join(APP_ROOT, 'node_modules', 'typescript', 'bin', 'tsc')
+const toolchain = require('./typescript-toolchain.cjs')
+
+const APP_ROOT = toolchain.APP_ROOT
+const TSC_PATH = toolchain.caminhoDoCompilador(APP_ROOT)
 const PROJECTS = ['tsconfig.app.json', 'tsconfig.node.json']
 
 function buildTscArgs(extraArgs = []) {
@@ -134,6 +145,46 @@ function readRssKb(pid) {
   }
 }
 
+/**
+ * Caminho do executável que o PID está rodando agora, ou null se não der para
+ * saber (processo já saiu, ou SO sem a consulta).
+ */
+function readExecutablePath(pid, { platform = process.platform } = {}) {
+  try {
+    if (platform === 'linux') return fs.realpathSync(`/proc/${pid}/exe`)
+    if (platform === 'win32') return null
+    const output = execFileSync('ps', ['-o', 'comm=', '-p', String(pid)], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    return output || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * No Linux e no macOS, o lançador do TS 7 (`bin/tsc`, um script Node) chama
+ * `process.execve` e vira o compilador nativo no MESMO PID. Até essa troca, o
+ * PID amostrado ainda é o Node do lançador. Num build incremental sem mudança,
+ * esse Node (~40 MB) pesa mais que o compilador (~20 MB), e o pico publicava a
+ * memória do lançador: medido na revisão de 25/09/2026, `tsc -b` pelo lançador
+ * deu ~46.600 KB contra ~20.500 KB do binário nativo direto. Amostra tirada
+ * enquanto o PID ainda é o Node é descartada.
+ */
+function isStillNodeLauncher(executablePath, nodePath = process.execPath) {
+  if (!executablePath) return false
+  let node = nodePath
+  try {
+    node = fs.realpathSync(nodePath)
+  } catch {
+    // Mantém o caminho como veio.
+  }
+  if (executablePath === node) return true
+  // `ps -o comm=` no macOS pode trazer só o nome do executável.
+  return !executablePath.includes(path.sep) && executablePath === path.basename(node)
+}
+
 function moveCacheFiles(temporaryDirectory, iteration) {
   for (const project of PROJECTS) {
     const cacheName = project.replace(/\.json$/, '') + '.tsbuildinfo'
@@ -144,7 +195,7 @@ function moveCacheFiles(temporaryDirectory, iteration) {
   }
 }
 
-function runBuild(extraArgs = []) {
+function runBuild(extraArgs = [], { sampleRss = toolchain.compiladorRodaNoProcessoIniciado() } = {}) {
   return new Promise((resolve) => {
     const startedAt = performance.now()
     const child = spawn(process.execPath, [TSC_PATH, ...buildTscArgs(extraArgs)], {
@@ -161,6 +212,8 @@ function runBuild(extraArgs = []) {
     })
 
     const sample = () => {
+      if (!sampleRss) return
+      if (isStillNodeLauncher(readExecutablePath(child.pid))) return
       const rss = readRssKb(child.pid)
       if (rss != null && (peakRssKb == null || rss > peakRssKb)) peakRssKb = rss
     }
@@ -224,9 +277,15 @@ async function main(argv = process.argv.slice(2)) {
     generatedAt: new Date().toISOString(),
     node: process.version,
     platform: `${process.platform}-${process.arch}`,
-    typescript: require(path.join(APP_ROOT, 'node_modules', 'typescript', 'package.json')).version,
+    typescript: toolchain.versaoDoCompilador(APP_ROOT),
     projects: PROJECTS,
     modes: {},
+  }
+
+  if (!toolchain.compiladorRodaNoProcessoIniciado()) {
+    console.log(
+      '[typecheck] RSS n/d: neste SO/Node o lançador do TS 7 roda o compilador nativo como processo filho; a memória do lançador não é publicada como a do compilador.',
+    )
   }
 
   try {
@@ -274,7 +333,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  TSC_PATH,
+  isStillNodeLauncher,
   parseArgs,
+  readExecutablePath,
   percentile,
   summarize,
   validateReport,

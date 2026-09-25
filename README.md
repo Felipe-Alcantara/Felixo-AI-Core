@@ -101,11 +101,51 @@ histórico nem permite selecionar um SHA anterior.
 | Camada | Tecnologia |
 |--------|-----------|
 | Desktop | Electron 41 |
-| Frontend | React 19 + TypeScript 6 + Vite 8 |
+| Frontend | React 19 + TypeScript 7 + Vite 8 |
 | Estilos | Tailwind CSS 3 |
 | Ícones | lucide-react |
-| Tooling | ESLint 10, Node 25.9.0 via `.nvmrc` |
+| Tooling | ESLint 10 + typescript-eslint (sobre a API do TypeScript 6), Node 25.9.0 via `.nvmrc` |
 | Testes | `node:test` nativo + Vitest |
+
+### TypeScript 7 lado a lado com a API do 6
+
+O `tsc` do projeto é o TypeScript 7 (compilador nativo), usado por
+`npm run typecheck` e `npm run build`. O TypeScript 7.0 ainda não publica uma
+API programática, e o typescript-eslint só aceita `typescript` abaixo de 6.1
+enquanto a issue typescript-eslint#10940 está aberta. Por isso o `app/package.json`
+segue a forma oficial do anúncio do 7.0 ("Running Side-by-Side with TypeScript
+6.0") e instala os dois lado a lado por alias npm:
+
+```json
+"@typescript/native": "npm:typescript@^7.0.2",
+"typescript": "npm:@typescript/typescript6@^6.0.2"
+```
+
+- `@typescript/native` é o TypeScript 7 e fornece o bin `tsc`;
+- `typescript` é o pacote de compatibilidade do 6: `require('typescript')`
+  (o que o typescript-eslint faz) recebe a API do TypeScript 6 e o bin dele se
+  chama `tsc6`.
+
+O nome do alias importa: o pacote do 6 também traz um `tsc`, e o npm resolve o
+conflito pela ordem do nome (microsoft/typescript-go#4567). Com
+`@typescript/native` o `node_modules/.bin/tsc` aponta para o 7 no npm 10 e no
+npm 11; outros gerenciadores (Yarn Berry, Bun) resolvem esse conflito de outro
+jeito e não são suportados aqui. Para conferir:
+
+```bash
+cd app
+npx tsc -v                                  # Version 7.x
+node -p "require('typescript').version"     # 6.0.x
+```
+
+O `npm test` confere essa fiação em cada SO onde roda, inclusive nos runners
+Linux, macOS e Windows da CI (`app/scripts/typescript-toolchain.test.cjs`). No
+notebook de referência (2 núcleos, 4 threads), o typecheck a frio caiu de
+25,8 s para 3,2 s (p50) e o pico de RSS de 756 MiB para 452 MiB; números e
+método em
+[`app/benchmarks/README.md`](app/benchmarks/README.md#benchmark-do-typecheck).
+Quando o typescript-eslint suportar o TypeScript 7, o alias do 6 pode sair e o
+`typescript` volta a ser o pacote normal.
 
 ---
 
@@ -491,10 +531,12 @@ os estados `written`, `path-typed` e `read` no JSONL diário do QA em
 `logs/qa/qa-AAAA-MM-DD.jsonl`; uma leitura ausente ou erro registra `failed` e
 faz a matriz falhar.
 
-`npm run typecheck` usa o cache incremental do `tsc -b` sem relaxar a
-verificação. Para uma auditoria limpa dos dois projetos TypeScript, use
-`npm run typecheck:full`; para comparar cinco execuções frias e cinco
-incrementais, use `npm run benchmark:typecheck:check`.
+`npm run typecheck` usa o cache incremental do `tsc -b` (TypeScript 7) sem
+relaxar a verificação. Para uma auditoria limpa dos dois projetos TypeScript,
+use `npm run typecheck:full`; para comparar cinco execuções frias e cinco
+incrementais, use `npm run benchmark:typecheck:check`. O `npm run lint` continua
+lendo os `.ts` com a API do TypeScript 6 (ver
+[TypeScript 7 lado a lado com a API do 6](#typescript-7-lado-a-lado-com-a-api-do-6)).
 
 O instalador leva um `npm-runtime` próprio para instalar CLIs sem Node/npm
 externo. A política de empacotamento remove apenas documentação e artefatos de

@@ -113,6 +113,21 @@ os projetos e libera o heap do compilador. `npm run typecheck:full` usa
 `--force` para reproduzir uma verificação limpa quando necessário. Nenhuma
 fonte é excluída e o caminho incremental não usa `noCheck`.
 
+Desde 25/09/2026 o toolchain TypeScript tem duas versões com papéis
+separados, instaladas lado a lado por alias npm:
+
+| Consumidor | Pacote instalado | Versão |
+|---|---|---|
+| `tsc -b` de `npm run typecheck`/`build` e a bancada de typecheck | `@typescript/native` → `typescript@^7` (bin `tsc`) | 7.0.x |
+| `require('typescript')`: typescript-eslint no `npm run lint` | `typescript` → `@typescript/typescript6` (API via `@typescript/old`) | 6.0.x |
+| Vite e Vitest | nenhum: transpilam com oxc e não importam o pacote `typescript` | — |
+
+O 7.0 não publica API programática e o typescript-eslint ainda exige
+`typescript` < 6.1, por isso a API do 6 continua disponível só para o lint.
+A fiação (qual pacote é dono do bin `tsc` em cada SO) fica em
+`app/scripts/typescript-toolchain.cjs` e é provada pelo `npm test`. O motivo e a
+forma oficial estão no [README](../../README.md#typescript-7-lado-a-lado-com-a-api-do-6).
+
 ## Autorizacao de caminhos locais
 
 Uma pasta de projeto so entra no banco depois de ser escolhida no seletor nativo

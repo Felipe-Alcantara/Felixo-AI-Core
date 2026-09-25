@@ -2,8 +2,22 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
 
 const benchmark = require('./typecheck-performance.cjs')
+const toolchain = require('./typescript-toolchain.cjs')
+
+test('a bancada executa o tsc do TypeScript 7 (@typescript/native), não a API do 6', () => {
+  const esperado = path.join(toolchain.APP_ROOT, 'node_modules', '@typescript', 'native', 'bin', 'tsc')
+  assert.equal(benchmark.TSC_PATH, esperado)
+  assert.ok(
+    fs.existsSync(benchmark.TSC_PATH),
+    `compilador ausente em ${benchmark.TSC_PATH}; rode npm ci em app/`,
+  )
+  // A versão gravada no relatório vem do mesmo pacote que a bancada executa.
+  assert.equal(toolchain.versaoMaior(toolchain.versaoDoCompilador()), 7)
+})
 
 test('a bancada mede o build mode oficial sem noCheck', () => {
   assert.deepEqual(benchmark.buildTscArgs(), [
@@ -74,4 +88,29 @@ test('o modo check rejeita amostras incompletas ou falhas', () => {
     ),
     /falha em cold/,
   )
+})
+
+test('amostra de RSS tirada enquanto o PID ainda é o Node do lançador é descartada', () => {
+  // Regressão: no Linux o pico do build incremental publicava o Node do
+  // lançador (~46.600 KB) em vez do compilador nativo (~20.500 KB).
+  assert.equal(benchmark.isStillNodeLauncher('/usr/bin/node', '/usr/bin/node'), true)
+  assert.equal(benchmark.isStillNodeLauncher('node', '/usr/local/bin/node'), true)
+  const nativo = '/app/node_modules/@typescript/typescript-linux-x64/lib/tsc'
+  assert.equal(benchmark.isStillNodeLauncher(nativo, '/usr/bin/node'), false)
+  assert.equal(benchmark.isStillNodeLauncher(null, '/usr/bin/node'), false)
+})
+
+test('o executável lido do PID distingue o Node de outro programa', { skip: process.platform === 'win32' }, async () => {
+  const { spawn } = require('node:child_process')
+  const esperar = (filho) => new Promise((resolve) => filho.once('spawn', resolve))
+  const nodeFilho = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], { stdio: 'ignore' })
+  const outroFilho = spawn('sleep', ['5'], { stdio: 'ignore' })
+  try {
+    await Promise.all([esperar(nodeFilho), esperar(outroFilho)])
+    assert.equal(benchmark.isStillNodeLauncher(benchmark.readExecutablePath(nodeFilho.pid)), true)
+    assert.equal(benchmark.isStillNodeLauncher(benchmark.readExecutablePath(outroFilho.pid)), false)
+  } finally {
+    nodeFilho.kill()
+    outroFilho.kill()
+  }
 })
