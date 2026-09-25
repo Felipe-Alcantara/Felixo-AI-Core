@@ -614,6 +614,7 @@ jobs:
       - name: Baixar baseline do benchmark de terminal (último run verde em main)
         if: github.event_name == 'pull_request'
         shell: bash
+        working-directory: app
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -634,7 +635,7 @@ jobs:
         working-directory: app
         run: |
           node scripts/benchmark-regression-gate.cjs \
-            --baseline=../benchmark-baseline/terminal-scrollback-${{ matrix.os }}.json \
+            --baseline=benchmark-baseline/terminal-scrollback-${{ matrix.os }}.json \
             --current=terminal-scrollback-${{ matrix.os }}.json \
             --baseline-missing-ok \
             --out=benchmark-regression-gate-${{ matrix.os }}.txt
