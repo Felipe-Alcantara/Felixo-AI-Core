@@ -701,26 +701,6 @@ jobs:
           path: app/package-manager-operational-${{ matrix.os }}.json
           if-no-files-found: ignore
 
-      # Fatia 4/4 de "Performance — correlacionar instalação do gerenciador
-      # com responsividade e energia no artefato": junta as fatias 1-3
-      # (metadados de ambiente, primeiro output do terminal, proxy de
-      # energia) numa matriz real nos três SOs do CI. Não é gate — é medição
-      # exploratória; uma regressão aqui não bloqueia PR, mas fica arquivada
-      # pra comparação entre execuções.
-      - name: Benchmark terminal responsiveness during install
-        timeout-minutes: 10
-        shell: bash
-        continue-on-error: true
-        run: npm run benchmark:terminal-responsiveness -- --iterations=2 --out=terminal-responsiveness-${{ matrix.os }}.json
-
-      - name: Upload terminal responsiveness benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: terminal-responsiveness-${{ matrix.os }}
-          path: app/terminal-responsiveness-${{ matrix.os }}.json
-          if-no-files-found: ignore
-
       # O scrollback adaptativo só pode ser habilitado depois de medir a
       # combinação real Electron + xterm + PTY nos três runners. O check usa
       # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
@@ -842,4 +822,59 @@ jobs:
         with:
           name: benchmark-regression-gate-${{ matrix.os }}
           path: app/benchmark-regression-gate-${{ matrix.os }}.txt
+          if-no-files-found: ignore
+
+  # Fatia 4/4 de "Performance — correlacionar instalação do gerenciador com
+  # responsividade e energia no artefato": junta as fatias 1-3 (metadados de
+  # ambiente, primeiro output do terminal, proxy de energia) numa matriz real
+  # nos SOs do CI. Não é gate — é medição exploratória, arquivada para
+  # comparação entre execuções. Saiu do job `benchmarks` para não ocupar o
+  # caminho crítico dele (~50 s no Windows) e fica FORA dos checks
+  # obrigatórios: `continue-on-error` no job impede que uma falha aqui derrube
+  # a run (e o Release que depende dela); o resultado fica no log e no
+  # artefato `terminal-responsiveness-<os>`.
+  benchmarks-exploratory:
+    name: Benchmarks exploratórios (${{ matrix.os }})
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+          - ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Benchmark terminal responsiveness during install
+        timeout-minutes: 10
+        shell: bash
+        run: npm run benchmark:terminal-responsiveness -- --iterations=2 --out=terminal-responsiveness-${{ matrix.os }}.json
+
+      - name: Upload terminal responsiveness benchmark
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-responsiveness-${{ matrix.os }}
+          path: app/terminal-responsiveness-${{ matrix.os }}.json
           if-no-files-found: ignore
