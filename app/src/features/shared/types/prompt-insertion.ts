@@ -195,6 +195,50 @@ export function toPromptInsertionMetadata(
   }
 }
 
+/** What the terminal card shows for the most recent prompt. */
+export type PromptDisplayLabel = {
+  /** Short, human label — the catalog/skill name when one exists. */
+  label: string
+  /** Full text for a tooltip/expanded view; never shorter than `label`. */
+  detail: string
+  /** Whether `label` came from provenance (name/combinedNames) or is raw content. */
+  named: boolean
+}
+
+/**
+ * Resolves what a terminal card should show for its most recent prompt.
+ *
+ * `lastPrompt` is the exact text delivered to the PTY — which, when the
+ * prompt body was too large to type inline, is a context-file reference
+ * (e.g. `felixo context read <id>`) rather than the prompt itself. Showing
+ * that raw text left the card unable to say what was actually sent — the gap
+ * behind the "Terminal — mostrar nome do prompt" task, including its
+ * "caminho temporário" case. Provenance (`insertion.name`/`combinedNames`)
+ * takes priority whenever it exists; a manual prompt has none by design (see
+ * `createManualPromptInsertion`), so it falls back to its own content, which
+ * — unlike a context-file reference — already IS the prompt.
+ */
+export function resolvePromptDisplayLabel(
+  lastPrompt: string | null | undefined,
+  insertion: Pick<PromptInsertionMetadata, 'name' | 'combinedNames'> | null | undefined,
+): PromptDisplayLabel | null {
+  const detail = typeof lastPrompt === 'string' ? lastPrompt.trim() : ''
+  if (!detail) {
+    return null
+  }
+
+  const cleanCombinedNames = (insertion?.combinedNames ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean)
+  const name = insertion?.name?.trim() || cleanCombinedNames.join(', ')
+
+  if (name) {
+    return { label: name, detail, named: true }
+  }
+
+  return { label: detail, detail, named: false }
+}
+
 /** Accepts legacy/string callers while keeping the explicit object contract. */
 export function isPromptInsertion(value: unknown): value is PromptInsertion {
   if (!value || typeof value !== 'object') return false

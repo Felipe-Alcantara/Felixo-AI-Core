@@ -32,7 +32,10 @@ import {
   canResumeAgentSession,
   type AgentSessionReference,
 } from '../services/agent-session'
-import { toPromptInsertionMetadata } from '../../shared/types/prompt-insertion'
+import {
+  resolvePromptDisplayLabel,
+  toPromptInsertionMetadata,
+} from '../../shared/types/prompt-insertion'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
@@ -129,6 +132,10 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     onDataChange(id, { lastPromptInsertion: safe })
   }, [id, onDataChange, persistedInsertion, snapshot?.lastPromptInsertion])
 
+  const promptDisplay = resolvePromptDisplayLabel(
+    snapshot?.lastPrompt,
+    snapshot?.lastPromptInsertion ?? persistedInsertion,
+  )
   const repository = repositoryLabel(nodeData.cwd)
   const provider = providerIdentity(nodeData.command)
   const configuredModel = configuredAgentModel(nodeData.command, nodeData.args)
@@ -233,13 +240,13 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         aria-label={`Abrir ${nodeData.label || provider.label}`}
       >
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
-        {snapshot?.lastPrompt && (
+        {promptDisplay && (
           <div
             className="shrink-0 rounded border border-white/10 bg-[var(--f-core-white)]/10 px-1.5 py-1 text-[10px] leading-snug text-[var(--f-core-white-soft)]"
-            title={snapshot.lastPrompt}
+            title={promptDisplay.detail}
           >
             <span className="mr-1 font-semibold text-[var(--f-core-white-soft)]">›</span>
-            <span className="line-clamp-2">{snapshot.lastPrompt}</span>
+            <span className="line-clamp-2">{promptDisplay.label}</span>
           </div>
         )}
         {snapshot?.contextWarning && (
