@@ -6350,3 +6350,64 @@ Não executei uma nova instalação interativa em cada SO nesta rodada: o códig
 Commits enviados a `origin/main`: `1ace937` (remoção da cópia corrompida, ignore, README e seletor), `fd4a982` (E2E de identidade da fonte e duplicação) e `e683a27` (caminhos UTF-8 no release gate).
 
 Janela local registrada às 12:18 (-03): 11:21–12:18, 57 minutos.
+
+## Fechamento de trabalho — 2026-09-24: reprodução real de instalação repetida de CLIs no Windows (fatia 1)
+
+### Contexto
+
+Task "Felixo AI Core/Windows — reproduzir instalação repetida de CLIs em app empacotado e após
+upgrade" (Esforço: Dias). A task-mãe (18/08) já corrigiu a causa original (detecção `.cmd` no
+Windows); esta pedia provar o ciclo completo — instalação global, gerenciada, upgrade, reinício,
+ausência de rede — de verdade, não simulado, e um fixture/runner automatizado para isso.
+
+### O que foi feito
+
+`app/scripts/cli-auto-install-real-repro.cjs` (novo, `npm run repro:cli-auto-install -- --cli <id>`):
+roda o ciclo real de `registerCliAutoInstallHandlers` (o mesmo módulo de produção, sem mocks de
+`detect`/`installPackage`) contra o npm/npm gerenciado do próprio projeto, em 4 rodadas: instalação
+real, segunda abertura (não deve reinstalar), "upgrade" de versão com binário intacto (não deve
+reinstalar) e "upgrade" com o binário apagado (deve reinstalar).
+
+**Achado real, medido nesta máquina**: sem isolar `HOME`/`APPDATA`/`LOCALAPPDATA` e
+`FELIXO_USER_DATA_DIR`, a reprodução nunca instalava nada — `createCliEnv`
+(`cli-process-manager.cjs`) monta os candidatos de PATH a partir do ambiente REAL do processo
+(`process.env.APPDATA`, `getAppPaths()`), não do `userData` isolado passado para
+`registerCliAutoInstallHandlers` — que só controla onde o app grava o próprio estado
+(`cli-auto-install.json`). Numa máquina de desenvolvimento com CLIs já instaladas (globalmente via
+npm e por uma instalação gerenciada real do Felixo), a detecção sempre as achava primeiro. Não é um
+bug de produção (numa máquina real só existe um ambiente); é a lacuna que precisa ser fechada para
+simular uma máquina "limpa" dentro do mesmo processo. Resolvido isolando HOME/APPDATA/LOCALAPPDATA
+para diretórios temporários e usando `FELIXO_USER_DATA_DIR` (que `getAppPaths()` já respeita).
+
+### Resultado da reprodução (Windows real, CLI `gemini`, 2 execuções)
+
+Nenhuma reinstalação indevida: instalação real (~50-65s, rede de verdade) → segunda abertura não
+reinstala (idle, ~3s) → "upgrade" de versão não reinstala (idle, ~3s) → binário apagado é detectado
+e reinstalado (~12-15s). **O sintoma relatado ("pede instalação a cada abertura") não reproduz no
+ciclo detecção→plano→instalação para uma CLI puramente JS.**
+
+**Achado separado, real**: instalar o catálogo completo (codex+claude+gemini) juntos fez o Codex
+falhar com "Missing optional dependency @openai/codex-win32-x64" — reproduz ao vivo um caso que
+`managed-cli-health.cjs` já documentava só em comentário ("o npm pode terminar com código 0 quando
+uma optionalDependency de plataforma não foi baixada"). Confirmado, não investigada a causa raiz
+(por que o npm não baixa o pacote nativo da plataforma nesta instalação).
+
+### NÃO verificado / limitações
+
+- **App empacotado de verdade** (instalador NSIS): não exercitado nesta task — a reprodução roda do
+  código-fonte com o npm/Node do próprio projeto, que é o mesmo runtime do app empacotado
+  (`resolveNpmCliPath` cai para `node_modules/npm` fora do pacote), mas não é o binário instalado.
+- **Ausência de rede**: não simulada (exigiria bloquear DNS/proxy para o processo, não feito).
+- **`.cmd`, aliases, npm global do usuário, caminho com espaço**: o `PATH` real desta máquina já
+  tinha `claude`/`codex` globais com espaço no perfil (`C:\Users\Felipe Martins\...`) e isso não
+  quebrou a detecção nas tasks anteriores, mas não foi testado especificamente NESTA reprodução
+  (que isola o HOME de propósito).
+- **CI Windows automatizado**: o runner funciona manualmente (rede real, minutos de duração); não
+  foi integrado ao workflow do CI — um `Sincronizar`/instalar real a cada PR não é apropriado (custo
+  e flakiness de rede); fica como decisão em aberto se deve rodar só no release ou sob demanda.
+- Causa raiz do Codex/`optionalDependency` ausente não investigada.
+
+### Validação
+
+Duas execuções completas no Windows real (`npm run repro:cli-auto-install -- --cli gemini`):
+resultado idêntico nas duas. `eslint` limpo no script novo.
