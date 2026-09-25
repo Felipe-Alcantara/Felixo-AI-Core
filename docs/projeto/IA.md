@@ -3734,3 +3734,26 @@ Corepack como `not-selected`.
 unitário; só executar o `main()` pegaria sua remoção, e isso instalaria pacotes reais dentro do `npm test`
 de todo PR. Se regredir, o custo é só de tempo (o CI volta a medir a matriz inteira), visível no JSON que o
 job publica.
+
+**Bancadas Electron que falhavam com o passo verde (mesmo dia, a partir da primeira run do PR):** a run
+36188414436 (`ab8e043`) caiu em `Benchmarks (macos-latest)` com `posix_spawnp failed` na bancada de
+scrollback. A causa é que o `spawn-helper` do node-pty vem sem permissão de execução no tarball do npm, e só
+a bancada de responsividade o corrigia. Com a separação dos jobs, a de scrollback passou a rodar sem essa
+correção. Agora ela chama `ensureNodePtySpawnHelperExecutable` antes de carregar o node-pty. Ao investigar,
+apareceu uma falha pior: no processo principal do Electron, `process.exitCode = 1` não derruba o passo.
+Medido com o Electron 41.10.7 do projeto: erro depois de `app.quit()` sai com 0, e erro antes do app ficar
+pronto deixa o processo pendurado até o teto do job. Só `app.exit(1)` sai com 1 nos dois casos. As quatro
+bancadas Electron (scrollback, bundle, conexões do canvas, saída do terminal) passaram a usar um helper
+único, `app/scripts/electron-exit.cjs`, com 4 testes. Prova na bancada de scrollback com `--counts=99`
+(argumento inválido): a versão da main fica pendurada (exit 124 no `timeout`) e a nova sai com 1.
+
+A correção expôs a bancada de bundle quebrada desde `be69f76` (12/09). Nesse commit, "Ferramentas" deixou de
+ser um botão com `title` e virou o grupo recolhível `SidebarSection` da sidebar do canvas. A bancada procurava
+o botão antigo, o `throw` dentro do `executeJavaScript` chegava só como "Script failed to execute", e o job
+`Validate` ficava verde com 0/5 amostras em toda run da main desde então. Agora a bancada abre o grupo pelo
+cabeçalho (`button[aria-expanded]` com o texto "Ferramentas"), espera só o `data-felixo-canvas-ready` e
+devolve o motivo como texto em vez de `throw`. Nesta máquina, `benchmark:bundle:check` voltou a medir 5/5:
+startup p50 1323 ms, menu p50 71 ms, Fetch All sob demanda p50 414 ms, chunk do Fetch All fora do startup.
+Também foram corrigidos três textos com mojibake (dois na bancada de conexões e um no
+`canvas-context-e2e.test.ts`). O comentário em `pty-process-manager.cjs:960` ficou como estava porque cita a
+forma quebrada de propósito.

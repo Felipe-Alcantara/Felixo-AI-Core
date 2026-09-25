@@ -18,6 +18,7 @@ const path = require('node:path')
 const os = require('node:os')
 const { performance } = require('node:perf_hooks')
 const { gzipSync } = require('node:zlib')
+const { reportFailureAndExit } = require('./electron-exit.cjs')
 
 const DEFAULT_ITERATIONS = 5
 const MAX_ITERATIONS = 10
@@ -256,7 +257,7 @@ async function measureIteration(BrowserWindow, indexPath, timeoutMs, expectsLazy
     await withTimeout(browserWindow.loadFile(indexPath), timeoutMs, 'Carregamento do renderer')
     await waitForExpression(
       browserWindow,
-      `Boolean(document.querySelector('[data-felixo-canvas-ready]')) || Boolean(document.querySelector('button[title="Ferramentas"]'))`,
+      `Boolean(document.querySelector('[data-felixo-canvas-ready]'))`,
       timeoutMs,
       'Canvas inicial',
     )
@@ -265,13 +266,17 @@ async function measureIteration(BrowserWindow, indexPath, timeoutMs, expectsLazy
     const initialFetchAllChunkMarks = await readFetchAllChunkMarks(browserWindow)
     const interactionStartedAt = performance.now()
 
-    await browserWindow.webContents.executeJavaScript(`(() => {
-      const button = Array.from(document.querySelectorAll('button'))
-        .find((candidate) => candidate.title === 'Ferramentas')
-      if (!button) throw new Error('Botão Ferramentas não encontrado')
-      button.click()
-      return true
+    // "Ferramentas" é o grupo recolhível da sidebar do canvas (SidebarSection),
+    // não mais um botão com title. Um throw dentro do executeJavaScript chega
+    // aqui só como "Script failed to execute", então o motivo volta como texto.
+    const toolsOpenFailure = await browserWindow.webContents.executeJavaScript(`(() => {
+      const heading = Array.from(document.querySelectorAll('button[aria-expanded]'))
+        .find((candidate) => candidate.textContent?.trim() === 'Ferramentas')
+      if (!heading) return 'grupo Ferramentas não encontrado na sidebar do canvas'
+      if (heading.getAttribute('aria-expanded') !== 'true') heading.click()
+      return null
     })()`, true)
+    if (toolsOpenFailure) throw new Error(toolsOpenFailure)
 
     await waitForExpression(
       browserWindow,
@@ -463,10 +468,7 @@ async function run() {
 // set `require.main` to that entry. The explicit process.type guard keeps the
 // script runnable both as an Electron benchmark and as a Node-test module.
 if (process.versions.electron && process.type === 'browser') {
-  run().catch((error) => {
-    console.error(`[bundle] falhou: ${error instanceof Error ? error.message : String(error)}`)
-    process.exitCode = 1
-  })
+  run().catch((error) => reportFailureAndExit(error, '[bundle] falhou:'))
 } else if (require.main === module) {
   run().catch((error) => {
     console.error(`[bundle] falhou: ${error instanceof Error ? error.message : String(error)}`)
