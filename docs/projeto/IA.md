@@ -3672,3 +3672,36 @@ com prova real, não a matriz inteira): NÃO feito — matriz de instalação Py
 tocado), smoke empacotado real nos três SOs, mensagens de erro estáveis por ecossistema, e validação de que o
 `taskkill`/grupo POSIX funcionam de verdade fora do CI (só visto rodando em Linux aqui). Tasks de pendência
 abertas no Notion.
+
+## 2026-09-25 — CI e Release mais curtos sem perder cobertura (workflows e shell)
+
+Decisões da pessoa aplicadas: todos os ganhos sem perda; node-pty com prebuild no Windows; comparação
+yarn/pnpm/corepack só no Linux por PR (o `Dependency policy` continua completo) + nightly nos 4 SOs; o E2E de
+contexto continua com 50 repetições.
+
+1. **Main reaproveita o CI do PR.** Job `reuse` no `ci.yml` (só em push): acha o PR mergeado do commit,
+   compara a árvore Git do commit da main com a do head do PR e procura a run `pull_request` verde do head
+   (SHA completo). Tudo batendo, os outros jobs são pulados e a run fica verde; o job copia da run do PR os
+   artefatos `terminal-scrollback-<os>` (baseline do gate de regressão). Nunca derruba a run
+   (`continue-on-error` + saída 0); push direto, PR desatualizado, run ausente ou erro de API = CI completo.
+   Achado ao testar: em erro HTTP o `gh api` imprime o corpo JSON no stdout — sem validar o formato (SHA de
+   40 hex), duas respostas de erro iguais pareceriam árvores iguais.
+2. **Seletor de release por inclusão** (`release-relevant.sh`): só publica o que entra no instalador
+   (`build.files`, `extraResources`, hooks, entradas do vite build, package.json/lock) ou gateia o Release.
+   Corrige um bug: `app/resources/skills/*/SKILL.md` casava com `*.md` e nunca publicava.
+3. **Cortes no caminho crítico:** responsividade do terminal em job exploratório; lint só no Ubuntu;
+   bancadas de gerenciador do PR e do release com `--managers=npm-runtime` (flag implementada na frente de
+   scripts) e novo `nightly.yml` com a comparação completa nos 4 SOs + audits; Windows do release com
+   `-c.npmRebuild=false` (node-pty 1.1.0 traz prebuild N-API win32-x64; o rebuild levava 107 s); smokes de
+   cmd.exe/path longo em job próprio depois do publish; `vite build` sem o `tsc -b` repetido; removidos o
+   cache de TypeScript, os `if` mortos de `workflow_run` e o `apt-get install xvfb`.
+
+Verificação: PyYAML nos 5 workflows; actionlint 1.7.12 + shellcheck 0.11.0 sem achado novo em relação à
+main (o único é o SC2016 informativo pré-existente no aviso do Gatekeeper); `release-relevant.test.sh` com
+20 casos novos (8 falham contra o seletor antigo); o passo `decide` rodado contra commits reais da main
+(14 merges de PR recentes, de #90 para trás → reuso; `e3c4204`, push direto → CI completo; #75, sem run
+`pull_request` verde para o head → CI completo) e contra um `gh` falso (árvores diferentes, erro nas duas árvores, erro no `run list`); download
+dos 4 artefatos de uma run real de PR; electron-builder 26.15.3 num projeto-sonda confirmou "skipped
+dependencies rebuild reason=npmRebuild is set to false"; os 15 checks obrigatórios da main continuam com
+os mesmos nomes. NÃO verificado: nenhum workflow rodou no GitHub (só roda depois do merge); o empacotamento
+Windows com o prebuild só o Release real prova, pelo smoke do app instalado.
