@@ -3757,3 +3757,16 @@ startup p50 1323 ms, menu p50 71 ms, Fetch All sob demanda p50 414 ms, chunk do 
 Também foram corrigidos três textos com mojibake (dois na bancada de conexões e um no
 `canvas-context-e2e.test.ts`). O comentário em `pty-process-manager.cjs:960` ficou como estava porque cita a
 forma quebrada de propósito.
+
+No Windows, a mesma correção de saída revelou uma terceira falha escondida. A bancada de bundle lançava
+`EPERM` ao apagar o userData temporário dentro do `finally`, e isso acontecia em toda run: as quatro últimas
+runs verdes da `main` (`b8cc9ad`, `a51d692`, `b9f1f48`, `aadb01d`) têm o `[bundle] falhou: EPERM` no job
+`Validate (windows-latest)`. A primeira tentativa (`e80fb07`, `maxRetries` no `rmSync`) não resolveu, e a run
+36198231288 continuou com EPERM. Uma sonda com o Electron 41.10.7 mostrou o motivo: o Chromium grava o perfil
+(`Local State`, `Preferences`, índice do `Cache`) durante o próprio encerramento, depois de qualquer JS. A
+remoção em `finally`, `will-quit`, `quit` e `process.on('exit')` deixou a pasta recriada com 9 arquivos no
+Linux. No Windows esses arquivos ainda estão abertos, daí o EPERM. Por isso a limpeza virou
+`removeBenchmarkUserData`, que tenta e só avisa, como a `removeTemporaryDirectory` do `release-smoke.cjs`.
+Lançar ali também trocava o erro real da bancada pelo EPERM. Sobram ~32 KB por execução na pasta temporária,
+um custo aceito: os runners são descartáveis e um processo externo só para apagar isso seria desproporcional.
+O teste novo falha se a função voltar a lançar (provado revertendo a correção).

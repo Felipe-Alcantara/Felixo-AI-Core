@@ -323,6 +323,32 @@ async function measureIteration(BrowserWindow, indexPath, timeoutMs, expectsLazy
   }
 }
 
+/**
+ * Tenta apagar o userData temporário da bancada, sem nunca lançar.
+ *
+ * De dentro do próprio processo não dá para apagar essa pasta de forma
+ * confiável. Medido em 25/09/2026 com o Electron 41.10.7: o Chromium grava o
+ * perfil (`Local State`, `Preferences`, índice do `Cache`) durante o próprio
+ * encerramento, depois do último JS. Isso vale para remoção no `finally`, em
+ * `will-quit`, em `quit` e em `process.on('exit')`. No Linux a pasta é apagada
+ * e recriada, e sobram ~32 KB por execução. No Windows os arquivos ainda estão
+ * abertos e a remoção falha com EPERM (run 36198231288, mesmo com 5 tentativas
+ * em 1 s). Esse EPERM, lançado deste `finally`, derrubava a bancada em toda run
+ * do Windows e trocava o erro real dela pelo EPERM. Como em
+ * `release-smoke.cjs`, falha ao limpar pasta temporária não é falha de medição.
+ *
+ * @param {string} directory
+ * @param {{ fileSystem?: Pick<typeof fs, 'rmSync'>, log?: (line: string) => void }} [options]
+ */
+function removeBenchmarkUserData(directory, { fileSystem = fs, log = console.warn } = {}) {
+  try {
+    fileSystem.rmSync(directory, { recursive: true, force: true })
+  } catch (error) {
+    const reason = error && typeof error === 'object' && 'code' in error ? error.code : String(error)
+    log(`[bundle] pasta temporária não removida (${reason}): ${directory}`)
+  }
+}
+
 function validateReport(report, expectedIterations) {
   const failures = []
   if (!report.assets.initialJavaScript) {
@@ -459,17 +485,8 @@ async function run() {
       throw new Error(allFailures.join('; '))
     }
   } finally {
-    // `app.quit()` não devolve Promise (é `void`); `await` nele não espera o
-    // encerramento real, só o próximo microtask. No Windows os handles do
-    // cache do Chromium (GPUCache, Local State) ainda estão abertos quando o
-    // rmSync roda a seguir, e um handle aberto vira EPERM ali (no POSIX,
-    // unlink de arquivo aberto é permitido, por isso só aparecia aqui).
-    // `maxRetries`/`retryDelay` são a forma que o próprio Node.js documenta
-    // para isso, sem inventar um sleep manual. Medido: EPERM em toda run do
-    // Windows desde antes de 12/09, mascarado até agora pelo bug de exit code
-    // corrigido em electron-exit.cjs (o processo saía 0 mesmo com esta falha).
-    await app.quit()
-    fs.rmSync(benchmarkUserData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    app.quit()
+    removeBenchmarkUserData(benchmarkUserData)
   }
 }
 
@@ -489,6 +506,7 @@ module.exports = {
   collectBundleAssets,
   parseArgs,
   percentile,
+  removeBenchmarkUserData,
   summarize,
   validateReport,
 }
