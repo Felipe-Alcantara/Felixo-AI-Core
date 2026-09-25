@@ -6545,3 +6545,65 @@ anterior de hoje, resolvida com o mesmo padrão de extração).
 do TypeScript com `let` capturado em closure — resolvido trocando por um objeto mutável). Mutação
 confirmada em dois pontos (cleanup idempotente; o `ResizeObserver` de fato chamado com o callback
 certo). App real: sessão isolada aberta e fechada sem erro após a refatoração.
+
+## Fechamento de trabalho — 2026-09-25: CI mais rápido — frente de código Node (`--managers`, relógio falso, `pty.node` do SO)
+
+### Contexto
+
+Parte da rodada de ganhos de tempo do CI sem perda de cobertura. Decisões que valem para esta
+frente: a comparação npm × pnpm/Yarn/Corepack roda por PR só no Linux (o job `dependency-policy`
+continua completo) e em nightly nos quatro SOs; o Windows passa a usar o prebuild do `node-pty` no
+release; o E2E de contexto continua com 50 repetições. A troca de workflow é de outra frente — aqui
+entram só os scripts e testes que ela usa.
+
+### O que foi feito
+
+- **`--managers=<ids>` nas duas bancadas de gerenciador** (validação comum em
+  `app/scripts/package-manager-selection.cjs`: lista vazia, id repetido e id desconhecido falham
+  com a lista dos válidos).
+  - `package-manager-operational-performance.cjs` aceita `npm-runtime`, `pnpm`, `yarn-classic` e
+    `corepack`. Quem fica de fora nem é procurado no PATH e aparece no JSON como indisponível com
+    `availabilityReason: "not-selected"`. Como o `npm-runtime` é a linha de base, `--check` sem ele
+    é recusado antes de instalar qualquer coisa, e o `validateReport` continua exigindo-o
+    disponível e funcional. A ajuda citava o nome do outro script; corrigido.
+  - `package-manager-alternatives-performance.cjs` aceita `npm-runtime`, `pnpm`, `yarn-classic` e
+    `yarn-modern`. Aqui o `npm-runtime` é a política montada de `node_modules/npm` com o Electron
+    de `node_modules`, e as alternativas vêm do Corepack com versões fixas; por isso
+    `--managers=npm-runtime` mede só o npm e nem procura o Corepack (que não é id: entra sozinho
+    como ponte quando alguma alternativa é pedida). O `validateReport` pula candidatos
+    `not-selected`, inclusive no `--strict`, exigindo só o que foi pedido.
+- **`terminal-session-store.test.ts` com relógio falso.** As esperas reais (`setTimeout` do
+  helper `wait`) viraram `vi.advanceTimersByTimeAsync(ms)`, com `vi.useFakeTimers()` no
+  `beforeEach` (antes de criar a bancada) e `vi.useRealTimers()` no `afterEach` (depois do
+  `store.clear()`). No vitest 4.1.11 instalado, o `toFake` padrão falsifica timers, `Date` e
+  `performance` e deixa `queueMicrotask`/`process.nextTick` reais — conferido no código do próprio
+  vitest (`useFakeTimers` filtra essas duas APIs). `vitest.config.ts` não foi tocado.
+- **`release-smoke.cjs` registra a ACL do `pty.node` certo.** `findPackagedPtyNode` segue a ordem
+  de carga do `node-pty` 1.1.0 (`loadNativeModule`: `build/Release`, `build/Debug`,
+  `prebuilds/<platform>-<arch>`) e ignora prebuilds de outro SO. Antes, sem `build/Release`, a
+  busca em profundidade devolvia `prebuilds/darwin-arm64/pty.node` (reproduzido com a versão de
+  `main` numa árvore com os quatro prebuilds).
+
+### Validação
+
+- `terminal-session-store.test.ts`: 47/47 antes (45,8 s; testes 44,1 s) e 47/47 depois (3,1 s;
+  testes 0,67 s). Mutações temporárias no store, depois revertidas, derrubam os mesmos testes com
+  o relógio real e com o falso: `CONTEXT_CONFIRM_DELAY_MS` 2000→4000 (1 teste),
+  `SCREEN_ACCEPT_DELAY_MS` 150→701 (4 testes; em 700 o relógio falso reprova só 2, porque o
+  segundo aceite cai exatamente no fim dos 1600 ms esperados e o relógio falso é exato na
+  fronteira) e a tela de decisão ignorada (1 teste). `IDLE_AFTER_MS` não é coberto por este
+  arquivo em nenhum dos dois relógios.
+- Execução real das bancadas com `--managers=npm-runtime`: alternativas com `--check --strict`
+  passou em 11 s (npm `passed`, resto `not-selected`); operacional com `--check --agents=1,2`
+  passou em 9 s. `--check --managers=pnpm` e `--managers=bun` saem com exit 1 e a mensagem
+  esperada. Sem a flag, a versão de `main` e a nova geraram relatórios com a mesma forma, status,
+  validação e decisão (host com Corepack: pnpm, Yarn Classic e Yarn moderno medidos).
+- `node --test` das quatro suítes alteradas (seleção, operacional, alternativas, release-smoke):
+  49/49. `npm test` 1638/1638. `npm run lint` limpo e `npm run build` (`tsc -b` + Vite) passou.
+
+### NÃO verificado / limitações
+
+- O ganho de tempo nos runners de CI depende da troca de workflow feita por outra frente; aqui só
+  a medição local.
+- A escolha do `pty.node` no Windows real não foi executada nesta máquina Linux: a cobertura vem
+  dos testes com árvore sintética (`platform`/`arch` injetados) e da reprodução do erro antigo.
