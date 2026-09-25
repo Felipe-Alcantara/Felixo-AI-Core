@@ -333,7 +333,9 @@ jobs:
         id: download
         shell: bash
         run: |
-          source "$GITHUB_WORKSPACE/.github/scripts/retry.sh"
+          # Caminho relativo (o job roda em app/): não depende de o Git Bash
+          # aceitar o D:\a\... de $GITHUB_WORKSPACE, que nenhum job Windows usava.
+          source ../.github/scripts/retry.sh
           mkdir -p release
           retry 3 5 -- gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern '*-win-x64.exe' --dir release --clobber
@@ -393,7 +395,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          source "$GITHUB_WORKSPACE/.github/scripts/retry.sh"
+          # Caminho relativo (o job roda em app/): não depende de o Git Bash
+          # aceitar o D:\a\... de $GITHUB_WORKSPACE, que nenhum job Windows usava.
+          source ../.github/scripts/retry.sh
           reports=()
           for report in release/release-smoke-cmd-windows-latest.json release/release-smoke-longpath-windows-latest.json; do
             if [[ -f "$report" ]]; then reports+=("$report"); fi

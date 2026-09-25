@@ -375,17 +375,23 @@ function simulateQuarantine(appRoot) {
 }
 
 /**
- * Captura a ACL real (`icacls`) do executável do app e do binário nativo do
- * node-pty (`pty.node`) dentro do artefato instalado — task "validar
- * node-pty empacotado no Windows (ACL/path longo/shell)" pede confirmação
- * de que a ACL do instalador não bloqueia o binário. Não é gate: registra a
- * ACL real como evidência (o smoke de PTY logo depois já prova
- * funcionalmente se ela bloqueia ou não).
+ * Captura a ACL real (`icacls`) do executável do app e dos binários nativos do
+ * node-pty dentro do artefato instalado — task "validar node-pty empacotado
+ * no Windows (ACL/path longo/shell)" pede confirmação de que a ACL do
+ * instalador não bloqueia o binário. Não é gate: registra a ACL real como
+ * evidência (o smoke de PTY logo depois já prova funcionalmente se ela
+ * bloqueia ou não).
+ *
+ * São dois binários porque o node-pty 1.1.0 escolhe em runtime: no Windows 10
+ * build 18309+ carrega o `conpty.node` (`lib/windowsPtyAgent.js`), e o
+ * `pty.node` (winpty) só entra no fallback `useConpty: false`.
  */
 function captureWindowsAcl(resourcesPath, executablePath) {
+  const conptyNode = findPackagedPtyNode(resourcesPath, { filename: 'conpty.node' })
   const ptyNode = findPackagedPtyNode(resourcesPath)
   const targets = [
     { label: 'executavel', path: executablePath },
+    { label: 'conpty.node', path: conptyNode },
     { label: 'pty.node', path: ptyNode },
   ].filter((target) => target.path)
 
@@ -400,6 +406,7 @@ function captureWindowsAcl(resourcesPath, executablePath) {
   })
 
   return {
+    conptyNodeFound: Boolean(conptyNode),
     ptyNodeFound: Boolean(ptyNode),
     entries,
   }
@@ -420,16 +427,22 @@ function nativePtyLoadOrder(platform, arch) {
 }
 
 /**
- * O `pty.node` que o app empacotado realmente carrega neste SO.
+ * O binário nativo do node-pty (`pty.node` por padrão, ou `conpty.node`) que o
+ * app empacotado realmente carrega neste SO.
  *
  * O pacote traz prebuilds de vários SOs (`prebuilds/darwin-arm64`,
  * `prebuilds/win32-x64`...). Sem `build/Release` — caso do Windows, que usa o
- * prebuild —, pegar o primeiro `pty.node` da árvore registraria a ACL do
- * binário do macOS. Por isso a escolha segue a ordem de carga do node-pty e
- * ignora prebuilds de outro SO/arquitetura; sem candidato válido, `null`.
+ * prebuild —, pegar o primeiro binário da árvore registraria a ACL do binário
+ * do macOS. Por isso a escolha segue a ordem de carga do node-pty e ignora
+ * prebuilds de outro SO/arquitetura; sem candidato válido, `null`.
  */
-function findPackagedPtyNode(resourcesPath, { platform = process.platform, arch = process.arch, maxDepth = 8 } = {}) {
-  const found = findFilesRecursive(resourcesPath, 'pty.node', maxDepth)
+function findPackagedPtyNode(resourcesPath, {
+  platform = process.platform,
+  arch = process.arch,
+  maxDepth = 8,
+  filename = 'pty.node',
+} = {}) {
+  const found = findFilesRecursive(resourcesPath, filename, maxDepth)
   for (const directory of nativePtyLoadOrder(platform, arch)) {
     const match = found.find((file) => path.dirname(file).endsWith(`${path.sep}${directory}`))
     if (match) return match

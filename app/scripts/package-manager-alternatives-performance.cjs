@@ -125,6 +125,12 @@ function parseArgs(argv = []) {
     throw new Error(`Argumento desconhecido: ${argument}`)
   }
 
+  // Esta bancada é gate do Release: um --check que não mede o npm passaria sem
+  // conferir o gerenciador que o app usa. Mesma regra da bancada operacional.
+  if (options.check && !options.managers.includes(NPM_MANAGER_ID)) {
+    throw new Error(`--check exige ${NPM_MANAGER_ID} em --managers: ele é o gerenciador que o app usa.`)
+  }
+
   return options
 }
 

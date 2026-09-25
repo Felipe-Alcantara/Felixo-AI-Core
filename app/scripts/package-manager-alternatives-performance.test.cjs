@@ -129,6 +129,14 @@ test('--managers aceita só ids conhecidos; Corepack é ponte, não id', () => {
   assert.throws(() => benchmark.parseArgs(['--managers=pnpm,pnpm']), /ids únicos/)
 })
 
+test('--check sem npm-runtime é recusado: a bancada é gate do Release e o npm é o que o app usa', () => {
+  assert.throws(() => benchmark.parseArgs(['--check', '--managers=pnpm']), /--check exige npm-runtime/)
+  assert.throws(() => benchmark.parseArgs(['--check', '--strict', '--managers=pnpm,yarn-classic']), /--check exige npm-runtime/)
+  assert.deepEqual(benchmark.parseArgs(['--check', '--managers=npm-runtime,pnpm']).managers, ['npm-runtime', 'pnpm'])
+  // Sem --check a seleção livre continua valendo (medição exploratória).
+  assert.deepEqual(benchmark.parseArgs(['--managers=pnpm']).managers, ['pnpm'])
+})
+
 test('--managers=npm-runtime mede só o npm e deixa o Corepack de fora', () => {
   const soNpm = benchmark.planMeasurements(['npm-runtime'])
   assert.equal(soNpm.npm, true)

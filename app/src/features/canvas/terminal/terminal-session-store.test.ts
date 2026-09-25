@@ -222,12 +222,12 @@ function contextWrites(writes: string[]): string[] {
  * As esperas do store (silêncio antes de digitar, reenvio do aceite, prazo de
  * emergência, confirmação do contexto) são `setTimeout` + `Date.now`. Com o
  * relógio real o arquivo levava ~44 s só esperando. O `vi.useFakeTimers()` do
- * vitest 4 falsifica timers, `Date` e `performance`, mas deixa `queueMicrotask`
- * e `process.nextTick` reais (padrão `toFake` da versão instalada) — a
- * notificação de ouvintes do store continua rodando como em produção.
- * `vi.advanceTimersByTimeAsync(ms)` dispara cada timer vencido e cede um turno
- * real entre eles, então as promises das escritas na ponte resolvem entre um
- * timer e o próximo, na mesma ordem que teriam com o relógio real.
+ * vitest 4 falsifica timers, `Date` e `performance`; Promises nativas nunca são
+ * falsificadas. `vi.advanceTimersByTimeAsync(ms)` cede um turno real antes de
+ * cada timer vencido e entre um e outro, então as promises das escritas na
+ * ponte resolvem entre um timer e o próximo, na mesma ordem que teriam com o
+ * relógio real. (A notificação de ouvintes do store é síncrona e não depende
+ * de nada disso.)
  *
  * O relógio falso é ligado ANTES de `createHarness`, para o xterm e o store
  * agendarem nele, e desligado DEPOIS do `store.clear()`: timers que sobrarem
@@ -572,6 +572,9 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       deliveredMetadata,
     )
     expect(fallback.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('fallback inline')
+    // Este teste não usa o `harness` do afterEach: sem o clear, os timers do
+    // store do fallback ficariam pendurados para além deste teste.
+    fallback.store.clear()
   })
 
   it('marca envio digitado pelo painel como manual e sem nome', async () => {

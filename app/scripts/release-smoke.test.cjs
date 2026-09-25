@@ -88,6 +88,10 @@ function criarResourcesComNodePty({ prebuilds, buildRelease = false }) {
   for (const alvo of prebuilds) {
     fs.mkdirSync(path.join(nodePty, 'prebuilds', alvo), { recursive: true })
     fs.writeFileSync(path.join(nodePty, 'prebuilds', alvo, 'pty.node'), '')
+    // Como no pacote real, só os prebuilds do Windows trazem o ConPTY.
+    if (alvo.startsWith('win32-')) {
+      fs.writeFileSync(path.join(nodePty, 'prebuilds', alvo, 'conpty.node'), '')
+    }
   }
   if (buildRelease) {
     fs.mkdirSync(path.join(nodePty, 'build', 'Release'), { recursive: true })
@@ -123,6 +127,20 @@ test('findPackagedPtyNode prefere build/Release, como o carregador do node-pty',
       findPackagedPtyNode(resources, { platform: 'win32', arch: 'x64' }),
       path.join(nodePty, 'build', 'Release', 'pty.node'),
     )
+  } finally {
+    fs.rmSync(resources, { recursive: true, force: true })
+  }
+})
+
+test('findPackagedPtyNode acha o conpty.node do SO atual — o binário que o Windows 10+ carrega por padrão', () => {
+  const { resources, nodePty } = criarResourcesComNodePty({ prebuilds: PREBUILDS_DO_PACOTE })
+  try {
+    assert.equal(
+      findPackagedPtyNode(resources, { platform: 'win32', arch: 'x64', filename: 'conpty.node' }),
+      path.join(nodePty, 'prebuilds', 'win32-x64', 'conpty.node'),
+    )
+    // Não existe ConPTY fora do Windows: nada de pegar o de outro SO.
+    assert.equal(findPackagedPtyNode(resources, { platform: 'darwin', arch: 'arm64', filename: 'conpty.node' }), null)
   } finally {
     fs.rmSync(resources, { recursive: true, force: true })
   }
