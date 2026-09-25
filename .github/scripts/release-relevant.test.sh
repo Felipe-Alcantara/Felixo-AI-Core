@@ -19,6 +19,7 @@ esperar() {
 esperar false "só documentação" $'docs/projeto/IA.md\ndocs/projeto/ARQUITETURA.md\n'
 esperar false "só teste" $'app/src/features/canvas/services/x.test.ts\napp/electron/services/y.test.cjs\n'
 esperar false "só fixtures e testes do launcher" $'app/electron/__fixtures__/text-divergence.cjs\ntests/test_launcher.py\n'
+esperar false "smoke visual do canvas" $'app/scripts/canvas-smoke.cjs\napp/scripts/canvas-smoke-visual.cjs\napp/scripts/canvas-smoke-visual.test.cjs\n'
 esperar false "só o ci.yml" $'.github/workflows/ci.yml\n'
 esperar false "ajuste de caminhos no release gate" $'.github/workflows/release-gate.yml\n'
 esperar false "metadados locais e cópia do padrão de qualidade" $'.gitignore\nPadr├úo de qualidade - Felixo System Design/README.md\nPadr├úo de qualidade - Felixo System Design/scripts/powershell/install-felixo-powershell.ps1\n'
