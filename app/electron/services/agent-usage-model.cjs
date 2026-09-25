@@ -36,8 +36,14 @@ const SAFE_METADATA_KEYS = new Set([
   // também dentro deste objeto, sem deixar a saída crua chegar ao renderer.
   'statusDetails',
 ])
+// Inclui o formato de um JWT (`eyJ...`, o `{"alg":...}` em base64url) — sem
+// isto, um token bancado nesse formato passava como texto comum porque não
+// contém nenhuma das palavras-chave (api_key, bearer, secret...) que o resto
+// do padrão procura. Achado ao fuzzar `normalizeSample` com valores desse
+// formato (ver agent-usage-model.test.cjs) durante a task "Limites — validar
+// carga, privacidade, relógio e schema /status em múltiplas contas".
 const SECRET_PATTERN =
-  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9])/i
+  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9]|eyJ[a-z0-9_-]{8,})/i
 
 function normalizeAccountInput(account, { requireId = true } = {}) {
   if (!account || typeof account !== 'object') {
@@ -423,6 +429,44 @@ function maskIdentity(identity) {
   return 'identidade informada pela CLI'
 }
 
+/**
+ * Por que um provider pode não ter número, antes de qualquer tentativa de
+ * consulta — não confundir com o `status` da amostra (`unavailable`/`error`),
+ * que é o resultado de uma rodada real. Isto classifica a FONTE declarada em
+ * `agent-usage-sources.cjs`, sempre a mesma para o mesmo provider:
+ *
+ * - `unsupported`: não há fonte nenhuma (provider desconhecido/sem entrada).
+ * - `interactive-only`: a quota só existe dentro de uma sessão interativa
+ *   real e a fonte não tem consulta ao vivo nem arquivo local para ler —
+ *   caso do Gemini, cujo `/stats model` não responde em modo não interativo.
+ * - `available`: existe algum caminho para obter o número (consulta ao vivo,
+ *   comando de autenticação com quota embutida, ou leitura local de arquivo).
+ *
+ * Não cobre `network-disabled` nem `auth-required`: esses dependem do
+ * resultado de uma rodada (rede bloqueada agora, sessão deslogada agora), não
+ * da fonte em si — ver a task de continuação sobre capability em runtime.
+ */
+function classifyUsageCapability(source) {
+  if (!source || typeof source !== 'object' || !source.usage) {
+    return 'unsupported'
+  }
+
+  if (source.usage.kind === 'unsupported') {
+    return 'unsupported'
+  }
+
+  const hasLiveOrLocalPath =
+    source.usage.kind === 'live-query' ||
+    Boolean(source.localProbe) ||
+    Boolean(source.liveQuery)
+
+  if (!source.auth && !hasLiveOrLocalPath) {
+    return 'interactive-only'
+  }
+
+  return 'available'
+}
+
 function sampleHasMetrics(sample) {
   return Array.isArray(sample?.metrics) && sample.metrics.length > 0
 }
@@ -434,6 +478,7 @@ function cloneValue(value) {
 module.exports = {
   VALID_SAMPLE_STATUSES,
   VALID_SOURCE_KINDS,
+  classifyUsageCapability,
   cloneValue,
   createIdentityFingerprint,
   maskIdentity,

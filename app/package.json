@@ -48,6 +48,7 @@
     "heap-snapshot:analyze": "node scripts/heap-snapshot-analysis.cjs",
     "benchmark:fetch-all": "node scripts/fetch-all-scanner-benchmark.cjs",
     "inventory:package": "node scripts/package-inventory.cjs",
+    "repro:cli-auto-install": "node scripts/cli-auto-install-real-repro.cjs",
     "release:smoke": "node scripts/release-smoke.cjs",
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",

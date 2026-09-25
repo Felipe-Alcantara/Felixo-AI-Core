@@ -73,6 +73,11 @@ export type AgentUsageProvider = {
     label: string
     docsUrl: string | null
     limitation: string
+    // Por que a fonte pode não ter número, independente de qualquer rodada:
+    // `unsupported` (sem fonte), `interactive-only` (só existe dentro de
+    // sessão interativa, ex.: Gemini) ou `available` (existe algum caminho —
+    // consulta ao vivo, comando ou arquivo local).
+    capability: 'unsupported' | 'interactive-only' | 'available'
   }
 }
 
@@ -141,10 +146,81 @@ export function groupAgentUsageAccounts(
   }))
 }
 
+// Espelha STALE_AFTER_MS de agent-usage-service.cjs. O backend já marca a
+// amostra como `stale` quando a rodada é feita — mas se o painel ficar aberto
+// sem nenhum refresh (auto-refresh desligado é o padrão; o aviso de arquivo
+// mudado só cobre Codex/Claude), o selo "Atualizado" continuaria o mesmo
+// para sempre, mesmo o relógio andando bem além da janela de validade. Ver a
+// task "Limites — tornar o painel transparente sobre medição, stale, erro e
+// timestamp".
+export const AGENT_USAGE_STALE_AFTER_MS = 15 * 60 * 1000
+
+/**
+ * Reavalia `current` → `stale` usando o relógio de agora, não o do momento em
+ * que o dashboard foi buscado. Os outros status (`stale`/`unavailable`/
+ * `error`) já são definitivos e não precisam de reavaliação: só `current` é
+ * uma alegação sobre "quão recente" que o tempo pode desmentir sozinho.
+ */
+export function deriveDisplayStatus(
+  sample: AgentUsageSample | null | undefined,
+  now: () => number = Date.now,
+): AgentUsageStatus {
+  if (!sample) {
+    return 'unavailable'
+  }
+
+  if (sample.status !== 'current') {
+    return sample.status
+  }
+
+  const measuredAt = getAgentUsageMeasuredAt(sample) ?? sample.collectedAt
+  const timestamp = Date.parse(measuredAt)
+
+  if (!Number.isFinite(timestamp)) {
+    return sample.status
+  }
+
+  return now() - timestamp > AGENT_USAGE_STALE_AFTER_MS ? 'stale' : 'current'
+}
+
 export function getAccountStatus(
   account: AgentUsageAccount,
+  now: () => number = Date.now,
 ): AgentUsageStatus {
-  return account.latestSample?.status ?? 'unavailable'
+  return deriveDisplayStatus(account.latestSample, now)
+}
+
+export type AgentUsageSchedulerState = {
+  /** Minutos escolhidos no painel; `0`/negativo é "só ao abrir/atualizar". */
+  autoRefreshMinutes: number
+  documentHidden: boolean
+  performanceMode: boolean
+}
+
+/**
+ * Decide se um disparo agendado deve rodar de verdade uma rodada completa
+ * (`refresh()`), que abre sessão PTY por conta do Claude, consulta rede do
+ * Openia e comandos do Codex — nada barato.
+ *
+ * Sem esta checagem, o `setInterval` do painel disparava `refresh()` mesmo
+ * com a aba/janela oculta ou o Modo Performance ligado: exatamente o oposto
+ * do critério de aceite "App oculto/fechado não mantém timer/processo" da
+ * task "Limites — implementar scheduler contínuo com backoff, visibilidade e
+ * deduplicação". Não decide backoff nem orçamento entre providers — só a
+ * pausa mais barata e mais óbvia de aplicar primeiro.
+ */
+export function shouldRunScheduledAgentUsageRefresh(
+  state: AgentUsageSchedulerState,
+): boolean {
+  if (state.autoRefreshMinutes <= 0) {
+    return false
+  }
+
+  if (state.documentHidden || state.performanceMode) {
+    return false
+  }
+
+  return true
 }
 
 export function formatAgentUsageStatus(status: AgentUsageStatus): string {
@@ -362,6 +438,7 @@ function optionalDetailString(value: AgentUsageStatusDetailValue | undefined): s
 
 export function summarizeAgentUsage(
   accounts: AgentUsageAccount[],
+  now: () => number = Date.now,
 ): Record<AgentUsageStatus, number> {
   const summary: Record<AgentUsageStatus, number> = {
     current: 0,
@@ -371,7 +448,7 @@ export function summarizeAgentUsage(
   }
 
   for (const account of accounts) {
-    summary[getAccountStatus(account)] += 1
+    summary[getAccountStatus(account, now)] += 1
   }
 
   return summary

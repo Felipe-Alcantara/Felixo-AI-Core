@@ -12,6 +12,7 @@ const {
   listAgentUsageSources,
 } = require('./agent-usage-sources.cjs')
 const {
+  classifyUsageCapability,
   createIdentityFingerprint,
   normalizeTimestamp,
   sampleHasMetrics,
@@ -1180,6 +1181,7 @@ function buildProviders(catalog, accounts) {
           label: source.usage.label,
           docsUrl: source.usage.docsUrl ?? null,
           limitation: source.usage.limitation,
+          capability: classifyUsageCapability(source),
         },
       }
     }),
@@ -1197,6 +1199,7 @@ function buildProviders(catalog, accounts) {
           label: 'Fonte não catalogada',
           docsUrl: null,
           limitation: 'Este provider ainda não tem fonte de uso configurada.',
+          capability: 'unsupported',
         },
       }))
       .filter((provider, index, all) =>

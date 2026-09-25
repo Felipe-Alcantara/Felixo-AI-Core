@@ -16,6 +16,7 @@ import {
   getAgentUsagePlan,
   getLastKnownAgentUsage,
   groupAgentUsageAccounts,
+  shouldRunScheduledAgentUsageRefresh,
 } from '../../../shared/agent-usage/agent-usage'
 import type {
   AgentUsageAccount,
@@ -175,12 +176,34 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
       return
     }
 
-    const intervalId = window.setInterval(
-      () => void load(true),
-      autoRefreshMinutes * 60_000,
-    )
+    // A cada disparo, não só a cada troca de opção: a aba pode ficar oculta
+    // ou o Modo Performance pode ligar no meio do intervalo escolhido — não
+    // dá pra decidir isso só uma vez, quando o efeito monta.
+    const intervalId = window.setInterval(() => {
+      const shouldRun = shouldRunScheduledAgentUsageRefresh({
+        autoRefreshMinutes,
+        documentHidden: document.hidden,
+        performanceMode:
+          document.documentElement.getAttribute('data-performance-mode') === 'on',
+      })
+
+      if (shouldRun) {
+        void load(true)
+      }
+    }, autoRefreshMinutes * 60_000)
     return () => window.clearInterval(intervalId)
   }, [autoRefreshMinutes, load])
+
+  // `getAccountStatus` reavalia `current` → `stale` pelo relógio de agora
+  // (ver agent-usage.ts). Sem este tick, um painel aberto e sem auto-refresh
+  // (o padrão) continuaria mostrando "Atualizado" indefinidamente, porque o
+  // React só rerenderiza quando algum estado muda — nunca porque o tempo
+  // passou sozinho. Só força rerender; não busca nada de novo.
+  const [, forceStatusTick] = useState(0)
+  useEffect(() => {
+    const intervalId = window.setInterval(() => forceStatusTick((n) => n + 1), 30_000)
+    return () => window.clearInterval(intervalId)
+  }, [])
 
   const groups = useMemo(
     () =>

@@ -23,6 +23,7 @@ import type { AgentSessionReference } from '../services/agent-session'
 import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
+import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
@@ -250,23 +251,7 @@ export function TerminalDrawer({
       return
     }
 
-    store.attach(sessionId, container)
-    store.fit(sessionId)
-
-    const rafId = window.requestAnimationFrame(() => {
-      store.fit(sessionId)
-    })
-
-    // Re-fit whenever the mount box settles (open animation ends, window
-    // resizes, drawer width changes). Without this the last row can stay
-    // clipped because the first fit ran mid-animation on a smaller box.
-    const observer = new ResizeObserver(() => store.fit(sessionId))
-    observer.observe(container)
-
-    return () => {
-      window.cancelAnimationFrame(rafId)
-      observer.disconnect()
-    }
+    return attachTerminalFitLifecycle(container, store, sessionId)
   }, [store, sessionId, snapshot?.generation])
 
   // Keep the terminal fitted as the drawer width changes. Expanding also

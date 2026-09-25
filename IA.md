@@ -6350,3 +6350,198 @@ Não executei uma nova instalação interativa em cada SO nesta rodada: o códig
 Commits enviados a `origin/main`: `1ace937` (remoção da cópia corrompida, ignore, README e seletor), `fd4a982` (E2E de identidade da fonte e duplicação) e `e683a27` (caminhos UTF-8 no release gate).
 
 Janela local registrada às 12:18 (-03): 11:21–12:18, 57 minutos.
+
+## Fechamento de trabalho — 2026-09-24: reprodução real de instalação repetida de CLIs no Windows (fatia 1)
+
+### Contexto
+
+Task "Felixo AI Core/Windows — reproduzir instalação repetida de CLIs em app empacotado e após
+upgrade" (Esforço: Dias). A task-mãe (18/08) já corrigiu a causa original (detecção `.cmd` no
+Windows); esta pedia provar o ciclo completo — instalação global, gerenciada, upgrade, reinício,
+ausência de rede — de verdade, não simulado, e um fixture/runner automatizado para isso.
+
+### O que foi feito
+
+`app/scripts/cli-auto-install-real-repro.cjs` (novo, `npm run repro:cli-auto-install -- --cli <id>`):
+roda o ciclo real de `registerCliAutoInstallHandlers` (o mesmo módulo de produção, sem mocks de
+`detect`/`installPackage`) contra o npm/npm gerenciado do próprio projeto, em 4 rodadas: instalação
+real, segunda abertura (não deve reinstalar), "upgrade" de versão com binário intacto (não deve
+reinstalar) e "upgrade" com o binário apagado (deve reinstalar).
+
+**Achado real, medido nesta máquina**: sem isolar `HOME`/`APPDATA`/`LOCALAPPDATA` e
+`FELIXO_USER_DATA_DIR`, a reprodução nunca instalava nada — `createCliEnv`
+(`cli-process-manager.cjs`) monta os candidatos de PATH a partir do ambiente REAL do processo
+(`process.env.APPDATA`, `getAppPaths()`), não do `userData` isolado passado para
+`registerCliAutoInstallHandlers` — que só controla onde o app grava o próprio estado
+(`cli-auto-install.json`). Numa máquina de desenvolvimento com CLIs já instaladas (globalmente via
+npm e por uma instalação gerenciada real do Felixo), a detecção sempre as achava primeiro. Não é um
+bug de produção (numa máquina real só existe um ambiente); é a lacuna que precisa ser fechada para
+simular uma máquina "limpa" dentro do mesmo processo. Resolvido isolando HOME/APPDATA/LOCALAPPDATA
+para diretórios temporários e usando `FELIXO_USER_DATA_DIR` (que `getAppPaths()` já respeita).
+
+### Resultado da reprodução (Windows real, CLI `gemini`, 2 execuções)
+
+Nenhuma reinstalação indevida: instalação real (~50-65s, rede de verdade) → segunda abertura não
+reinstala (idle, ~3s) → "upgrade" de versão não reinstala (idle, ~3s) → binário apagado é detectado
+e reinstalado (~12-15s). **O sintoma relatado ("pede instalação a cada abertura") não reproduz no
+ciclo detecção→plano→instalação para uma CLI puramente JS.**
+
+**Achado separado, real**: instalar o catálogo completo (codex+claude+gemini) juntos fez o Codex
+falhar com "Missing optional dependency @openai/codex-win32-x64" — reproduz ao vivo um caso que
+`managed-cli-health.cjs` já documentava só em comentário ("o npm pode terminar com código 0 quando
+uma optionalDependency de plataforma não foi baixada"). Confirmado, não investigada a causa raiz
+(por que o npm não baixa o pacote nativo da plataforma nesta instalação).
+
+### NÃO verificado / limitações
+
+- **App empacotado de verdade** (instalador NSIS): não exercitado nesta task — a reprodução roda do
+  código-fonte com o npm/Node do próprio projeto, que é o mesmo runtime do app empacotado
+  (`resolveNpmCliPath` cai para `node_modules/npm` fora do pacote), mas não é o binário instalado.
+- **Ausência de rede**: não simulada (exigiria bloquear DNS/proxy para o processo, não feito).
+- **`.cmd`, aliases, npm global do usuário, caminho com espaço**: o `PATH` real desta máquina já
+  tinha `claude`/`codex` globais com espaço no perfil (`C:\Users\Felipe Martins\...`) e isso não
+  quebrou a detecção nas tasks anteriores, mas não foi testado especificamente NESTA reprodução
+  (que isola o HOME de propósito).
+- **CI Windows automatizado**: o runner funciona manualmente (rede real, minutos de duração); não
+  foi integrado ao workflow do CI — um `Sincronizar`/instalar real a cada PR não é apropriado (custo
+  e flakiness de rede); fica como decisão em aberto se deve rodar só no release ou sob demanda.
+- Causa raiz do Codex/`optionalDependency` ausente não investigada.
+
+### Validação
+
+Duas execuções completas no Windows real (`npm run repro:cli-auto-install -- --cli gemini`):
+resultado idêntico nas duas. `eslint` limpo no script novo.
+
+## Fechamento de trabalho — 2026-09-24: Canvas — reduced motion/Modo Performance não removia o atraso de fechamento (fatia 1)
+
+### Contexto
+
+Task "Felixo AI Core/Canvas — estabilizar notificações, flyouts e animações concorrentes"
+(Esforço: Dias). A evidência original da task cita `NotificationsMenu.tsx`, que não existe mais
+(virou `NotificationsPanel.tsx` num refactor anterior) — parte do problema descrito já foi
+resolvida por outro trabalho. Investigação encontrou o hook compartilhado real por trás de toda
+abertura/fechamento animado do canvas (`CanvasPanel`, `TerminalDrawer`): `useExitAnimation.ts`,
+sem NENHUM teste.
+
+### O que foi medido
+
+`index.css` já corta a animação CSS (`animation: none`) tanto por `prefers-reduced-motion: reduce`
+quanto por `[data-performance-mode='on']` (Modo Performance do app, mantido em sincronia de
+propósito com o primeiro). `useExitAnimation` (JS) não sabia de nenhum dos dois: o
+`setTimeout(onClosed, durationMs)` sempre esperava os 160-190ms inteiros antes de desmontar, mesmo
+sem nenhuma animação de verdade tocando — o elemento ficava parado e totalmente visível (sem
+`animation:none` remover o `opacity`/`transform` do frame final da saída) por esse tempo. É
+exatamente o "loop que o Modo Performance/reduced motion deveriam remover" que o critério de
+aceite da task cobra.
+
+### O que foi feito
+
+- `exit-animation-controller.ts` (novo): núcleo sem React (timer, idempotência de `close()`,
+  `dispose()`) — este repositório não usa jsdom/`@testing-library/react` (`vitest.config.ts`:
+  `environment: 'node'`, só `.ts`), então a lógica precisou ser extraída da casca de hooks
+  (`useState`/`useEffect`) para ser testável, seguindo a convenção real do repositório.
+- `useExitAnimation.ts`: casca fina sobre o controlador; `close()` agora lê, no INSTANTE da
+  chamada, `prefers-reduced-motion` OU `data-performance-mode='on'` e usa delay 0 nesse caso, sem
+  mudar a assinatura pública do hook (`CanvasPanel.tsx`/`TerminalDrawer.tsx` não precisaram mudar).
+- 9 testes novos no controlador: timing normal, idempotência de `close()` repetido (inclusive com
+  duração diferente na segunda chamada), skip por reduced-motion/Modo Performance, leitura da
+  preferência no instante certo (não fixada na criação), `dispose()` cancela sem chamar `onClosed`
+  (garante que nada mede componente desmontado), ciclos sucessivos no mesmo controlador, e ausência
+  de timer pendente ao final.
+
+### NÃO verificado / limitações
+
+- **Medição de tempo real no app**: tentei medir o tempo entre clicar em fechar e o painel sumir do
+  DOM, no app real (Windows, `felixo devtools`) com Modo Performance ligado. Não foi confiável —
+  a janela do devtools é invisível/sem foco, e `requestAnimationFrame` parece sofrer throttling de
+  background do Chromium nesse estado (a primeira leitura de frame já veio em ~300ms). O
+  funcional foi confirmado (abre e fecha corretamente, com e sem Modo Performance), mas o
+  NÚMERO exato de ms no app real não foi medido com confiança — a prova de timing é só a unitária
+  (com relógio falso determinístico e mutação confirmando que os testes pegam a regressão).
+- **Escopo original da task não coberto nesta fatia**: "cancelar animação anterior por chave de
+  superfície" (item 1), "prioridade entre drag/resize, abertura automática, foco e refresh" (item
+  3), "testar transição interrompida em qualquer frame" (mais amplo que o que foi testado aqui) e
+  "logs só no diagnóstico" — nenhum desses foi investigado a fundo; ficam em task de continuação.
+- Não foi encontrado, nesta investigação, nenhum caso real de "reabrir enquanto fecha" causando
+  estado inconsistente na arquitetura atual (o parent sempre desmonta/remonta o painel via uma
+  única posição condicional; o `dispose()` no cleanup do efeito já cancela timers órfãos). Pode
+  haver casos reais que a fatia 2 encontre com mais tempo de investigação.
+
+### Validação
+
+`npm test` 1565/1565 (Node), `npm run test:frontend` 1158/1158 (+1 skip preexistente), `eslint .` e
+`tsc -b` limpos. Mutação (removendo o `? 0 :`) derrubou exatamente as 2 asserções que dependiam do
+comportamento novo, confirmando que os 9 testes não são vácuos. Confirmado funcionalmente no app
+real: abrir/fechar o painel de busca funciona com e sem Modo Performance ligado.
+
+## Fechamento de trabalho — 2026-09-24: Canvas — auditoria de medição geométrica e cleanup de observer (fatia 1)
+
+### Contexto
+
+Task "Felixo AI Core/Canvas — unificar medição geométrica e eliminar feedback infinito" (Esforço:
+Dias). Origem: "derivada do tremor" — a hipótese de vários donos medindo/escrevendo geometria em
+resposta uns aos outros, entre flyouts, drawer, notificações e canvas.
+
+### O que a investigação encontrou (a maior parte já estava resolvida)
+
+- O bug concreto de referência circular (painel × gaveta entrando em loop se espremendo) **já foi
+  corrigido em 12/09/2026** — `CanvasSurfacesProvider.tsx` calcula os dois NUMA PASSADA SÓ a partir
+  do que cada um quer (`desiredPanel`/`desiredDrawer`), nunca lendo o valor já cortado do outro; há
+  regressão explícita em `canvas-surfaces.test.ts` provando que a mesma entrada sempre dá a mesma
+  saída (`splitHorizontalSpace` chamado duas vezes com os mesmos números não diverge).
+- `toolbar-flyout.ts`, citado na evidência original como quem "mede/clampa posição", **não existe
+  mais como medidor** — é hoje uma função pura de 17 linhas (`toolbarColumnOffset`) sem nenhum
+  `getBoundingClientRect`/observer. A evidência da task está parcialmente desatualizada (mesmo
+  padrão encontrado nas duas tasks anteriores desta sessão, sobre notificações/flyouts).
+- O minimapa é um valor puramente derivado (`miniMapSize(freeCanvasArea(...).width)`), não um
+  medidor independente — não tem risco de retroalimentação próprio.
+- `layout-invariants.test.ts` já cobre painel+gaveta+inspector+sidebar em vários viewports.
+
+### O que ficou real e sem teste: o `ResizeObserver` do `TerminalDrawer`
+
+`TerminalDrawer.tsx` tinha um `useEffect` com `ResizeObserver` + `requestAnimationFrame` para
+manter o `fit()` do xterm em dia, sem NENHUM teste (este arquivo é `.tsx`; `vitest.config.ts` só
+roda `.ts`, então um componente nunca é testado renderizando — mesma limitação encontrada na task
+anterior de hoje, resolvida com o mesmo padrão de extração).
+
+- **Confirmado, por leitura**: `store.fit(sessionId)` lê o tamanho do container (que vem de fora,
+  via CSS/flex) e ajusta linhas/colunas do terminal por dentro — nunca escreve de volta na dimensão
+  que o próprio `ResizeObserver` observa. Não há retroalimentação aqui.
+- Extraído para `terminal-fit-lifecycle.ts` (função `attachTerminalFitLifecycle`, sem React) para
+  poder testar exatamente os critérios de aceite da task sobre cleanup: "garantir cleanup de
+  observer/RAF/listener" e "unmount/remount não duplica observers/timers".
+
+### O que foi feito
+
+- `app/src/features/canvas/components/terminal-fit-lifecycle.ts` (novo): mesma lógica do
+  `useEffect` original, extraída verbatim, com RAF/ResizeObserver injetáveis.
+- `TerminalDrawer.tsx`: o `useEffect` agora só chama
+  `return attachTerminalFitLifecycle(container, store, sessionId)` — refatoração pura, corpo do
+  efeito idêntico ao anterior.
+- 6 testes novos: anexa e ajusta imediatamente + no próximo frame + a cada resize; prova (indireta,
+  via objeto do container permanecer vazio depois de disparar o observer 3x) de que não há
+  escrita de volta; cleanup cancela o RAF e desconecta o observer; cleanup chamado duas vezes é
+  idempotente (não desconecta/cancela duas vezes); remount cria um observer NOVO sem herdar nem
+  duplicar o antigo, com exatamente um attach+fit por montagem.
+
+### NÃO verificado / limitações
+
+- **A grande maioria da task (mapear TODOS os reads/writes de clientRect/style, pipeline formal de
+  medir→resolver→aplicar→notificar, coalescer RAF entre múltiplos consumidores, warning de update
+  dentro do ciclo de medida) não foi feita** — o que já existia (CanvasSurfacesProvider) já segue
+  boa parte desse desenho; o que faltava era só o ponto do `TerminalDrawer` encontrado aqui.
+- Não testei no app real com um terminal de verdade dentro do drawer (só um `pty.spawn` cru, que
+  não cria o nó visual — precisaria passar pelo menu "Agente" da sidebar). A confiança vem da
+  extração ser verbatim (mesmo corpo de efeito) + dos 6 testes com mutação.
+- Critérios "medida oscilante, viewport pequeno, drawer fechado e zoom" da task não foram
+  cobertos por teste novo nesta fatia (viewport pequeno e drawer fechado já tinham alguma cobertura
+  em `layout-invariants.test.ts`/`panel-sizing.test.ts`, não revisados a fundo aqui; zoom não foi
+  investigado).
+
+### Validação
+
+`npm test` 1565/1565 (Node), `npm run test:frontend` 1164/1164 (+1 skip preexistente), `eslint .` e
+`tsc -b` limpos (typecheck exigiu reestruturar um teste que batia num caso de estreitamento de tipo
+do TypeScript com `let` capturado em closure — resolvido trocando por um objeto mutável). Mutação
+confirmada em dois pontos (cleanup idempotente; o `ResizeObserver` de fato chamado com o callback
+certo). App real: sessão isolada aberta e fechada sem erro após a refatoração.
