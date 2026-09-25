@@ -2,8 +2,22 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
 
 const benchmark = require('./typecheck-performance.cjs')
+
+test('a bancada executa o tsc do TypeScript 7 (@typescript/native), não a API do 6', () => {
+  const pacote = path.resolve(__dirname, '..', 'node_modules', '@typescript', 'native')
+  assert.equal(benchmark.TSC_PATH, path.join(pacote, 'bin', 'tsc'))
+  assert.ok(
+    fs.existsSync(benchmark.TSC_PATH),
+    `compilador ausente em ${benchmark.TSC_PATH}; rode npm ci em app/`,
+  )
+  // A versão gravada no relatório vem do mesmo pacote que a bancada executa.
+  const { version } = JSON.parse(fs.readFileSync(path.join(pacote, 'package.json'), 'utf8'))
+  assert.equal(version.split('.')[0], '7')
+})
 
 test('a bancada mede o build mode oficial sem noCheck', () => {
   assert.deepEqual(benchmark.buildTscArgs(), [
