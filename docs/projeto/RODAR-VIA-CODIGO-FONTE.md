@@ -183,6 +183,11 @@ essa comparação na matriz dos três SOs. A recomendação vigente é manter o
 npm-runtime até validar versões/hash, cache offline, scripts nativos e CLIs
 oficiais no artefato real.
 
+`--managers=npm-runtime` limita a execução à medição do npm (sem Corepack nem
+alternativas); outros ids aceitos são `pnpm`, `yarn-classic` e `yarn-modern`.
+O `--check` exige só o que foi pedido e o JSON marca o resto como
+`not-selected`.
+
 ### Custo operacional no artefato
 
 Para medir memória, CPU, processos, I/O e disco do gerenciador que executa uma
@@ -205,6 +210,10 @@ contra o `npm-runtime`. O `--check` aplica 120 s de p95, 512 MiB de RSS, 64
 processos e 512 MiB de disco; Yarn/Corepack ausentes são registrados sem tocar
 no ambiente do usuário. A responsividade do renderer/canvas/terminal e energia
 ficam fora deste runner e devem ser combinadas com os benchmarks Electron.
+`--managers=` (ids `npm-runtime`, `pnpm`, `yarn-classic`, `corepack`) mede só
+os gerenciadores pedidos; os demais nem são procurados e ficam como
+`not-selected` no JSON. Como o `npm-runtime` é a linha de base do gate,
+`--check` sem ele na lista é recusado de saída.
 
 O CI publica a medição Linux após o empacotamento; o workflow de release repete
 o gate no unpacked real de Linux, Windows e macOS e sobe um JSON por sistema.

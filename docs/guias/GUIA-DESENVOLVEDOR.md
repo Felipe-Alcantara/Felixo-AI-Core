@@ -255,6 +255,15 @@ validados antes de qualquer migração. O CI executa o check na matriz e publica
 um JSON por SO. A recomendação atual, baseada no resultado Linux de
 03/09/2026, é manter o npm-runtime.
 
+Para medir só parte da matriz, passe `--managers=` com ids separados por
+vírgula (`npm-runtime`, `pnpm`, `yarn-classic`, `yarn-modern`). Com
+`--managers=npm-runtime` a bancada mede apenas a política npm montada a partir
+de `node_modules/npm` e nem procura o Corepack; o `--check` (inclusive com
+`--strict`) passa a exigir só o que foi pedido. O Corepack não é um id: ele
+entra sozinho como ponte quando alguma alternativa é pedida. Os que ficam de
+fora aparecem no JSON com `status: "not-selected"`. Um id desconhecido encerra
+a bancada com a lista dos válidos.
+
 ### Smoke do artefato de release
 
 Depois de `electron-builder --publish never`, o workflow instala ou extrai o
@@ -323,6 +332,12 @@ com npm e um ranking dentro dos budgets do check. A descoberta automática usa
 que a execução veio do código-fonte. O CI guarda o relatório Linux no job de
 dependências e o workflow de release repete o gate no artefato real dos três
 sistemas operacionais.
+
+`--managers=` restringe a medição aos ids pedidos (`npm-runtime`, `pnpm`,
+`yarn-classic`, `corepack`); os demais nem são procurados no PATH e aparecem no
+JSON como indisponíveis com `availabilityReason: "not-selected"`. Como o
+`npm-runtime` é a linha de base do gate, `--check` sem ele na lista é recusado
+antes de qualquer instalação.
 
 ## Testes
 

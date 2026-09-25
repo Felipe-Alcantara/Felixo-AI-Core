@@ -9,6 +9,10 @@
  * Yarn moderno é registrado como incompatível com a instalação global que o
  * launcher precisa, e Corepack é medido como ponte/bootstrap, não como um
  * gerenciador que instala CLIs por si só.
+ *
+ * `--managers=npm-runtime` mede só o npm (a política atual montada a partir de
+ * `node_modules/npm` com o Electron de `node_modules`) e não toca no Corepack;
+ * as alternativas só entram quando os ids delas são pedidos.
  */
 
 const fs = require('node:fs')
@@ -19,6 +23,7 @@ const { spawn, spawnSync } = require('node:child_process')
 const tar = require('tar')
 const { ensureManagedCliRuntime } = require('../electron/services/managed-cli-runtime.cjs')
 const npmBenchmark = require('./npm-runtime-performance.cjs')
+const { NOT_SELECTED, parseManagerSelection } = require('./package-manager-selection.cjs')
 
 const APP_ROOT = path.join(__dirname, '..')
 const DEFAULT_ITERATIONS = 2
@@ -58,11 +63,19 @@ const MANAGER_SPECS = [
   },
 ]
 
+const NPM_MANAGER_ID = 'npm-runtime'
+/**
+ * Ids aceitos por `--managers`. O Corepack não é um deles: ele é a ponte que
+ * resolve as alternativas e entra sozinho quando alguma delas é pedida.
+ */
+const MANAGER_IDS = Object.freeze([NPM_MANAGER_ID, ...MANAGER_SPECS.map((spec) => spec.id)])
+
 function parseArgs(argv = []) {
   const options = {
     check: false,
     help: false,
     iterations: DEFAULT_ITERATIONS,
+    managers: [...MANAGER_IDS],
     out: null,
     strict: false,
     timeoutMs: DEFAULT_TIMEOUT_MS,
@@ -105,10 +118,29 @@ function parseArgs(argv = []) {
       options.out = path.resolve(outputPath)
       continue
     }
+    if (argument.startsWith('--managers=')) {
+      options.managers = parseManagerSelection(argument.slice('--managers='.length), MANAGER_IDS)
+      continue
+    }
     throw new Error(`Argumento desconhecido: ${argument}`)
   }
 
   return options
+}
+
+/**
+ * O que a execução mede, a partir de `--managers`: a política npm e/ou as
+ * alternativas via Corepack. Sem alternativa pedida, o Corepack nem é
+ * procurado.
+ *
+ * @param {readonly string[]} managers
+ * @returns {{ npm: boolean, specs: object[] }} `specs` na ordem de MANAGER_SPECS.
+ */
+function planMeasurements(managers = MANAGER_IDS) {
+  return {
+    npm: managers.includes(NPM_MANAGER_ID),
+    specs: MANAGER_SPECS.filter((spec) => managers.includes(spec.id)),
+  }
 }
 
 function parseBoundedInteger(value, minimum, maximum, label) {
@@ -868,13 +900,21 @@ function buildRecommendation(report) {
   }
 }
 
+/**
+ * Só exige o que a execução mediu: um candidato marcado como fora de
+ * `--managers` não reprova o check, nem no modo `--strict`. Sem a flag nenhum
+ * candidato vem marcado assim e as exigências são as de sempre.
+ */
 function validateReport(report, { strict = false } = {}) {
   const failures = []
   const npm = report.candidates?.npm
-  if (!npm || npm.status !== 'passed') failures.push('npm-runtime não concluiu o smoke atual.')
+  if (npm?.status !== NOT_SELECTED && (!npm || npm.status !== 'passed')) {
+    failures.push('npm-runtime não concluiu o smoke atual.')
+  }
 
   for (const id of ['pnpm', 'yarn-classic']) {
     const candidate = report.candidates?.[id]
+    if (candidate?.status === NOT_SELECTED) continue
     if (candidate?.status === 'available' && candidate.startup?.successful !== true) {
       failures.push(`${candidate.name} foi encontrado, mas não iniciou pelo Electron.`)
     }
@@ -950,6 +990,24 @@ async function benchmarkNpm(options, temporaryRoot, executable) {
   }
 }
 
+/** Sem alternativa pedida, o Corepack não é procurado: fica fora, e não "indisponível". */
+function corepackStatus(plan, corepackPath) {
+  if (corepackPath) return 'available'
+  return plan.specs.length > 0 ? 'unavailable' : NOT_SELECTED
+}
+
+/** Registro do npm quando `--managers` não o inclui: nada foi executado. */
+function notSelectedNpmCandidate() {
+  return {
+    name: NPM_MANAGER_ID,
+    status: NOT_SELECTED,
+    source: 'fora de --managers',
+    version: null,
+    runtime: null,
+    benchmark: null,
+  }
+}
+
 async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv)
   if (options.help) {
@@ -957,8 +1015,10 @@ async function main(argv = process.argv.slice(2)) {
       'Uso: node scripts/package-manager-alternatives-performance.cjs [opções]',
       '',
       '--check             falha se um gerenciador disponível reprovar o smoke',
-      '--strict            também exige pnpm e Yarn Classic disponíveis',
+      '--strict            também exige pnpm e Yarn Classic disponíveis (os pedidos em --managers)',
       '--iterations=N      repete cada instalação (1–5; padrão 2)',
+      `--managers=LISTA    mede só estes ids (${MANAGER_IDS.join(', ')}); padrão: todos.`,
+      '                    O Corepack entra sozinho como ponte das alternativas pedidas.',
       '--timeout-ms=N      timeout de cada processo (1000–600000)',
       '--out=ARQUIVO       grava o JSON de medição',
       '',
@@ -966,7 +1026,8 @@ async function main(argv = process.argv.slice(2)) {
     return null
   }
 
-  if (!pathExists(path.join(APP_ROOT, 'node_modules', 'npm', 'bin', 'npm-cli.js'))) {
+  const plan = planMeasurements(options.managers)
+  if (plan.npm && !pathExists(path.join(APP_ROOT, 'node_modules', 'npm', 'bin', 'npm-cli.js'))) {
     throw new Error('npm não encontrado em app/node_modules; rode npm ci antes da bancada.')
   }
 
@@ -974,10 +1035,12 @@ async function main(argv = process.argv.slice(2)) {
   options.temporaryRoot = temporaryRoot
   const report = createReport(options)
   const executable = resolveElectronExecutable()
-  const corepackPath = findExecutable('corepack')
+  const corepackPath = plan.specs.length > 0 ? findExecutable('corepack') : null
 
   try {
-    report.candidates.npm = await benchmarkNpm(options, temporaryRoot, executable)
+    report.candidates.npm = plan.npm
+      ? await benchmarkNpm(options, temporaryRoot, executable)
+      : notSelectedNpmCandidate()
 
     let corepackInventory = null
     if (corepackPath) {
@@ -1000,6 +1063,12 @@ async function main(argv = process.argv.slice(2)) {
         error: null,
       }
       report.candidates[spec.id] = candidate
+
+      if (!plan.specs.includes(spec)) {
+        candidate.status = NOT_SELECTED
+        candidate.source = 'fora de --managers'
+        continue
+      }
 
       if (!corepackPath) {
         candidate.error = 'Corepack não encontrado; a comparação alternativa foi registrada como indisponível neste host.'
@@ -1051,7 +1120,7 @@ async function main(argv = process.argv.slice(2)) {
 
     report.candidates.corepack = {
       name: 'Corepack',
-      status: corepackPath ? 'available' : 'unavailable',
+      status: corepackStatus(plan, corepackPath),
       source: 'ponte de seleção/bootstrap, não instalador persistente de CLI',
       version: corepackPath
         ? (await runProcess(corepackPath, ['--version'], {
@@ -1104,9 +1173,12 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MANAGER_IDS,
   buildRecommendation,
+  corepackStatus,
   findPackageManifest,
   measureTree,
   parseArgs,
+  planMeasurements,
   validateReport,
 }
