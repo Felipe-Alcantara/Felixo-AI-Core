@@ -246,7 +246,10 @@ jobs:
       # Mede o custo do gerenciador que realmente foi copiado para o unpacked
       # (e não o npm do runner). O --check transforma ausência de métricas,
       # falha funcional ou violação de budget em gate; alternativas ausentes
-      # ficam registradas no JSON sem tornar o job dependente delas.
+      # ficam registradas no JSON sem tornar o job dependente delas. Sem
+      # `--managers` de propósito: é aqui que a comparação COMPLETA com
+      # pnpm/Yarn/Corepack roda em todo PR (o job `benchmarks` mede só o
+      # npm-runtime; os quatro SOs completos ficam no workflow `Nightly`).
       - name: Benchmark package managers in packaged application
         timeout-minutes: 10
         shell: bash
@@ -675,14 +678,16 @@ jobs:
           path: app/npm-runtime-${{ matrix.os }}.json
           if-no-files-found: ignore
 
-      # Esta bancada compara o npm-runtime com pnpm/Yarn e mede Corepack como
-      # ponte de bootstrap. Alternativas indisponíveis no runner não bloqueiam
-      # a matriz, mas qualquer alternativa encontrada que falhe no smoke deixa
-      # o job vermelho. O JSON registra a disponibilidade por sistema.
+      # No PR, as duas bancadas de gerenciador medem só o npm-runtime (o que o
+      # app distribui) em cada SO, com os mesmos gates de --check. A
+      # comparação com pnpm/Yarn/Corepack continua COMPLETA em todo PR no job
+      # `Dependency policy` (Linux, sobre o app empacotado) e roda nos quatro
+      # SOs no workflow `Nightly` — decisão de 25/09/2026: a comparação é
+      # pergunta arquitetural, não muda por PR, e custava minutos em cada SO.
       - name: Benchmark package-manager alternatives
         timeout-minutes: 10
         shell: bash
-        run: npm run benchmark:package-managers -- --iterations=2 --check --out=package-manager-alternatives-${{ matrix.os }}.json
+        run: npm run benchmark:package-managers -- --iterations=2 --check --managers=npm-runtime --out=package-manager-alternatives-${{ matrix.os }}.json
 
       - name: Upload package-manager alternatives benchmark
         if: always()
@@ -695,7 +700,7 @@ jobs:
       - name: Benchmark package-manager operational cost
         timeout-minutes: 15
         shell: bash
-        run: npm run benchmark:package-managers:performance:check -- --iterations=2 --agents=1,2,5,10 --out=package-manager-operational-${{ matrix.os }}.json
+        run: npm run benchmark:package-managers:performance:check -- --iterations=2 --agents=1,2,5,10 --managers=npm-runtime --out=package-manager-operational-${{ matrix.os }}.json
 
       - name: Upload package-manager operational benchmark
         if: always()
