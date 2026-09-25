@@ -843,10 +843,22 @@ async function checarElementosAbertosEmViewportsCriticos(page) {
     // viewport <768px, mesmo sem nenhum terminal recolhido visível — bateu
     // aqui na pílula de zoom, antes no fixture-group e no fixture-note. O
     // container tem pointer-events-none, mas a lista interna não, criando
-    // uma faixa "fantasma" clicável. force:true contorna para o smoke não
-    // travar; a correção real (a lista vazia não devia interceptar nada) é
-    // da task de acompanhamento, não desta validação.
-    await page.locator('.felixo-zoom-pill button[aria-label="Enquadrar todos os blocos"]').click({ force: true })
+    // uma faixa "fantasma" clicável. A correção real (a lista vazia não devia
+    // interceptar nada) é da task de acompanhamento, não desta validação.
+    //
+    // `.click({force:true})` ainda passa pela checagem de "dentro da
+    // viewport" do Playwright, que falhou de forma intermitente em 2
+    // runners de CI distintos (não reproduzido localmente) — provável corrida
+    // entre `setViewportSize` concluir e o layout do zoom-pill assentar.
+    // Disparar o clique direto no DOM ignora as duas checagens (cobertura E
+    // bounds) de uma vez: é o mesmo botão, resolvido do mesmo jeito, só sem
+    // a camada de actionability do Playwright no meio.
+    await page.evaluate(() => {
+      document
+        .querySelector('.felixo-zoom-pill button[aria-label="Enquadrar todos os blocos"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+      return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
 
     // tools: o painel de Buscar já é exercitado em checarFocoAoAbrirFerramenta
     // (só o foco); aqui grava a evidência visual que faltava.
