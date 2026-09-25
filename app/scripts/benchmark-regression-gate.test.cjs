@@ -79,16 +79,45 @@ test('baseline zero ou negativo não gera regressão de "infinitos %"', () => {
 
 test('compara pelo delta de heap do stream quando os dois relatórios têm heap', () => {
   const baseline = {
-    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 100 } })],
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 20_000_000 } })],
   }
   const current = {
-    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 200 } })],
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 40_000_000 } })],
   }
 
   const result = compareReports({ baseline, current, thresholdPercent: 20 })
 
   assert.equal(result.ok, false)
   assert.ok(result.regressions.some((r) => r.metric.includes('heap')))
+})
+
+test('% grande sobre base pequena não é regressão quando a diferença absoluta fica abaixo do piso — caso real do PR #89', () => {
+  // count=1 no macOS: 19,8 → 34,2 MiB de heap, +72,8%, mas só ~13,7 MiB de
+  // diferença real — ruído do runner, não regressão de código.
+  const baseline = {
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 19_806_595 } })],
+  }
+  const current = {
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 34_221_347 } })],
+  }
+
+  const result = compareReports({ baseline, current, thresholdPercent: 60 })
+
+  assert.equal(result.ok, true)
+})
+
+test('% grande sobre base pequena AINDA é regressão quando a diferença absoluta também é grande', () => {
+  const baseline = {
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 20_000_000 } })],
+  }
+  const current = {
+    // +100%, e 20 MiB reais de diferença — acima do piso de 15 MiB.
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 40_000_000 } })],
+  }
+
+  const result = compareReports({ baseline, current, thresholdPercent: 60 })
+
+  assert.equal(result.ok, false)
 })
 
 test('métrica ausente dos dois lados não trava a comparação nem conta como regressão', () => {
@@ -98,6 +127,21 @@ test('métrica ausente dos dois lados não trava a comparação nem conta como r
   const result = compareReports({ baseline, current })
 
   assert.equal(result.ok, true)
+})
+
+test('excludeMetrics tira uma métrica do critério de pass/fail sem parar de reportá-la se estourar', () => {
+  const baseline = { results: [scenario({ resumeMs: 4_000 })] }
+  const current = { results: [scenario({ resumeMs: 6_000 })] } // +50%, estouraria sozinho
+
+  const result = compareReports({
+    baseline,
+    current,
+    thresholdPercent: 20,
+    excludeMetrics: ['resumeMs'],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.regressions.length, 0)
 })
 
 test('threshold fora do intervalo aceito é rejeitado', () => {

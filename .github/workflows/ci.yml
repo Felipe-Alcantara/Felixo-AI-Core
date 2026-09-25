@@ -612,12 +612,16 @@ jobs:
       # Sem baseline (PR contra um repo novo, ou artefato expirado), o gate
       # não falha: não há sinal de regressão sem ter contra o que comparar.
       #
-      # --threshold=60 (o default do script é 20%): medido no PR que introduziu
-      # este gate (#89), runners ubuntu-latest hospedados mostraram até 57% de
-      # variação em "resume (ms)" entre duas execuções do MESMO commit, sem
-      # nenhuma mudança de código relacionada — ruído real de máquina
-      # compartilhada, não regressão. RSS/heap (amostrados como p95) ficaram
-      # bem mais estáveis; resume é a métrica mais sensível a isso.
+      # --threshold=60 (o default do script é 20%) e --exclude-metric=resumeMs:
+      # medido no PR que introduziu este gate (#89), o mesmo commit, sem
+      # nenhuma mudança de código relacionada, variou resume em até 63% entre
+      # execuções do runner hospedado — mesmo com o limiar em 60% e um piso
+      # absoluto de 300ms. A variância cresce com a carga (mais sessões, mais
+      # tempo de resume, mais ruído absoluto também), então nenhum limiar fixo
+      # se provou confiável sem descartar regressões reais de outra ordem de
+      # grandeza. RSS/heap (p95, com piso absoluto próprio) se mostraram bem
+      # mais estáveis e continuam decidindo o gate. resume continua medido e
+      # publicado no relatório — só não decide pass/fail sozinho.
       - name: Baixar baseline do benchmark de terminal (último run verde em main)
         if: github.event_name == 'pull_request'
         shell: bash
@@ -646,6 +650,7 @@ jobs:
             --current=terminal-scrollback-${{ matrix.os }}.json \
             --baseline-missing-ok \
             --threshold=60 \
+            --exclude-metric=resumeMs \
             --out=benchmark-regression-gate-${{ matrix.os }}.txt
 
       - name: Upload benchmark regression gate report

@@ -37,17 +37,26 @@ function heapStreamDeltaBytes(result) {
 // Cada métrica: "menor é melhor" para tudo aqui (memória, latência) — uma
 // regressão é sempre um AUMENTO. Se um dia entrar uma métrica onde maior é
 // melhor (throughput), precisa de um campo `lowerIsBetter` por entrada.
+//
+// `minAbsoluteDelta` existe porque o limiar percentual sozinho falha em
+// cenários de baixa carga: medido no PR #89, count=1 no macOS mostrou heap
+// "regredindo" 72,8% (19,8 → 34,2 MiB) só porque a base é pequena — a
+// diferença real, ~14 MiB, é ruído de runner, não regressão. Uma métrica só
+// vira regressão quando os DOIS critérios batem: variou mais que o limiar
+// percentual E a diferença absoluta é grande o bastante pra importar.
 const METRICS = [
-  { key: 'resumeMs', label: 'resume (ms)', read: (result) => result.resumeMs },
+  { key: 'resumeMs', label: 'resume (ms)', read: (result) => result.resumeMs, minAbsoluteDelta: 300 },
   {
     key: 'rendererWorkingSetMiB.p95',
     label: 'RSS renderer p95 (MiB)',
     read: (result) => readPath(result, 'rendererWorkingSetMiB.p95'),
+    minAbsoluteDelta: 20,
   },
   {
     key: 'heapStreamDeltaBytes',
     label: 'delta de heap do stream (bytes)',
     read: heapStreamDeltaBytes,
+    minAbsoluteDelta: 15 * 1024 * 1024,
   },
 ]
 
@@ -67,13 +76,23 @@ function scenarioLabel(result) {
  * @param {object} options.baseline - Relatório JSON do último run verde em main.
  * @param {object} options.current - Relatório JSON da execução atual (PR/local).
  * @param {number} [options.thresholdPercent] - Regressão tolerada antes de falhar.
+ * @param {string[]} [options.excludeMetrics] - Chaves de METRICS a não usar como
+ *   critério de pass/fail. A métrica continua sendo reportada normalmente se
+ *   aparecer nos relatórios — só não decide o resultado do gate.
  * @returns {{ok: boolean, regressions: object[], compared: number, skipped: string[]}}
  */
-function compareReports({ baseline, current, thresholdPercent = DEFAULT_THRESHOLD_PERCENT }) {
+function compareReports({
+  baseline,
+  current,
+  thresholdPercent = DEFAULT_THRESHOLD_PERCENT,
+  excludeMetrics = [],
+}) {
   if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0 || thresholdPercent > MAX_THRESHOLD_PERCENT) {
     throw new Error(`thresholdPercent deve ser um número entre 0 (exclusivo) e ${MAX_THRESHOLD_PERCENT}.`)
   }
 
+  const excluded = new Set(excludeMetrics)
+  const activeMetrics = METRICS.filter((metric) => !excluded.has(metric.key))
   const baselineByKey = new Map((baseline?.results ?? []).map((result) => [scenarioKey(result), result]))
   const regressions = []
   const skipped = []
@@ -88,7 +107,7 @@ function compareReports({ baseline, current, thresholdPercent = DEFAULT_THRESHOL
     }
 
     let scenarioCompared = false
-    for (const metric of METRICS) {
+    for (const metric of activeMetrics) {
       const baselineValue = metric.read(baselineResult)
       const currentValue = metric.read(currentResult)
       if (!Number.isFinite(baselineValue) || !Number.isFinite(currentValue)) continue
@@ -97,8 +116,11 @@ function compareReports({ baseline, current, thresholdPercent = DEFAULT_THRESHOL
       if (baselineValue <= 0) continue
 
       scenarioCompared = true
-      const deltaPercent = ((currentValue - baselineValue) / baselineValue) * 100
-      if (deltaPercent > thresholdPercent) {
+      const absoluteDelta = currentValue - baselineValue
+      const deltaPercent = (absoluteDelta / baselineValue) * 100
+      const crossesPercentThreshold = deltaPercent > thresholdPercent
+      const crossesAbsoluteFloor = !Number.isFinite(metric.minAbsoluteDelta) || absoluteDelta >= metric.minAbsoluteDelta
+      if (crossesPercentThreshold && crossesAbsoluteFloor) {
         regressions.push({
           scenario: scenarioLabel(currentResult),
           metric: metric.label,
@@ -143,7 +165,7 @@ function formatReport(result, { baselineCommit, currentCommit } = {}) {
 }
 
 function parseArgs(argv) {
-  const options = { thresholdPercent: DEFAULT_THRESHOLD_PERCENT, baselineMissingOk: false }
+  const options = { thresholdPercent: DEFAULT_THRESHOLD_PERCENT, baselineMissingOk: false, excludeMetrics: [] }
   for (const arg of argv) {
     if (arg === '--help' || arg === '-h') {
       options.help = true
@@ -155,6 +177,8 @@ function parseArgs(argv) {
       options.currentPath = arg.slice('--current='.length)
     } else if (arg.startsWith('--threshold=')) {
       options.thresholdPercent = Number(arg.slice('--threshold='.length))
+    } else if (arg.startsWith('--exclude-metric=')) {
+      options.excludeMetrics.push(arg.slice('--exclude-metric='.length))
     } else if (arg.startsWith('--out=')) {
       options.outputPath = arg.slice('--out='.length)
     } else {
@@ -174,6 +198,8 @@ Opções:
   --baseline=arquivo.json   relatório do commit de referência (main)
   --current=arquivo.json    relatório da execução atual
   --threshold=20            regressão tolerada em % antes de falhar (default 20)
+  --exclude-metric=chave    ignora uma métrica no pass/fail (repetível); chaves
+                            válidas: ${METRICS.map((metric) => metric.key).join(', ')}
   --baseline-missing-ok     não falha se --baseline não existir (ex.: artefato expirado)
   --out=arquivo.txt         também escreve o relatório legível nesse caminho
   --help                    mostra esta ajuda
@@ -200,7 +226,12 @@ function main(argv = process.argv.slice(2)) {
 
   const baseline = JSON.parse(fs.readFileSync(options.baselinePath, 'utf8'))
   const current = JSON.parse(fs.readFileSync(options.currentPath, 'utf8'))
-  const result = compareReports({ baseline, current, thresholdPercent: options.thresholdPercent })
+  const result = compareReports({
+    baseline,
+    current,
+    thresholdPercent: options.thresholdPercent,
+    excludeMetrics: options.excludeMetrics,
+  })
   const text = formatReport(result, {
     baselineCommit: baseline?.commit,
     currentCommit: current?.commit,

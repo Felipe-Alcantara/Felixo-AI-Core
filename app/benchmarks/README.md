@@ -136,18 +136,25 @@ evidência de regressão.
 
 Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
 existe de um lado (nova contagem testada, por exemplo) é ignorado, não conta
-como regressão nem falha o gate. As métricas comparadas são resume (ms), RSS
-p95 do renderer e delta de heap do stream — as mesmas que `--check` já usa
-para comparar `current` vs `adaptive`.
+como regressão nem falha o gate. Cada métrica também tem um piso de diferença
+absoluta, além do percentual: um cenário de baixa carga (poucas sessões) pode
+mostrar um percentual grande sobre uma base pequena sem representar diferença
+real — medido no mesmo PR, o heap de `count=1` no macOS "regrediu" 72,8%
+(19,8 → 34,2 MiB) entre duas execuções do mesmo commit, mas a diferença real
+(~14 MiB) é ruído, não regressão.
 
-O limiar padrão do script é 20%, mas o CI passa `--threshold=60`: medido no PR
-que introduziu este gate (#89), dois runs do runner `ubuntu-latest` hospedado
-no MESMO commit, sem nenhuma mudança de código relacionada, mostraram até 57%
-de diferença em "resume (ms)" — ruído real de máquina compartilhada, não
-regressão. RSS e heap (amostrados como p95) ficaram bem mais estáveis; resume
-é a métrica mais sensível a isso. 20% continua o default para quem rodar o
-gate localmente contra dois benchmarks da mesma máquina, onde esse ruído não
-existe.
+O limiar padrão do script é 20%, mas o CI passa `--threshold=60`. Mesmo assim,
+"resume (ms)" continuou instável demais para decidir o gate: o mesmo cenário
+(`count=10`, `scrollback=20000`, política `current`) variou entre 47% e 63%
+comparando o MESMO commit consigo mesmo, em execuções diferentes do runner
+hospedado — a variância cresce com a carga (mais sessões, mais tempo de
+resume, mais ruído absoluto também), então nenhum limiar fixo pareceu confiável
+sem arriscar mascarar uma regressão real de outra ordem de grandeza. O CI passa
+`--exclude-metric=resumeMs`: resume continua medido e aparece no relatório,
+só não decide pass/fail. RSS e heap (p95, com piso absoluto) se mostraram bem
+mais estáveis e continuam sendo o critério do gate. 20% sem exclusões continua
+o default para quem rodar localmente contra dois benchmarks da mesma máquina,
+onde esse ruído entre runners não existe.
 
 ## Degradação do Canvas no Linux
 
