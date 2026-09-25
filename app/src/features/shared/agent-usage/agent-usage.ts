@@ -190,6 +190,39 @@ export function getAccountStatus(
   return deriveDisplayStatus(account.latestSample, now)
 }
 
+export type AgentUsageSchedulerState = {
+  /** Minutos escolhidos no painel; `0`/negativo é "só ao abrir/atualizar". */
+  autoRefreshMinutes: number
+  documentHidden: boolean
+  performanceMode: boolean
+}
+
+/**
+ * Decide se um disparo agendado deve rodar de verdade uma rodada completa
+ * (`refresh()`), que abre sessão PTY por conta do Claude, consulta rede do
+ * Openia e comandos do Codex — nada barato.
+ *
+ * Sem esta checagem, o `setInterval` do painel disparava `refresh()` mesmo
+ * com a aba/janela oculta ou o Modo Performance ligado: exatamente o oposto
+ * do critério de aceite "App oculto/fechado não mantém timer/processo" da
+ * task "Limites — implementar scheduler contínuo com backoff, visibilidade e
+ * deduplicação". Não decide backoff nem orçamento entre providers — só a
+ * pausa mais barata e mais óbvia de aplicar primeiro.
+ */
+export function shouldRunScheduledAgentUsageRefresh(
+  state: AgentUsageSchedulerState,
+): boolean {
+  if (state.autoRefreshMinutes <= 0) {
+    return false
+  }
+
+  if (state.documentHidden || state.performanceMode) {
+    return false
+  }
+
+  return true
+}
+
 export function formatAgentUsageStatus(status: AgentUsageStatus): string {
   return AGENT_USAGE_STATUS_LABELS[status]
 }

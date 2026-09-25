@@ -10,6 +10,7 @@ import {
   getAccountStatus,
   getLastKnownAgentUsage,
   groupAgentUsageAccounts,
+  shouldRunScheduledAgentUsageRefresh,
   summarizeAgentUsage,
 } from '../../shared/agent-usage/agent-usage'
 import { AgentUsageStatusDetailsView } from '../../shared/agent-usage/AgentUsageStatusDetails'
@@ -105,7 +106,16 @@ export function AgentUsageLimitsModal({
     }
 
     const intervalId = window.setInterval(() => {
-      void loadDashboard(true)
+      const shouldRun = shouldRunScheduledAgentUsageRefresh({
+        autoRefreshMinutes,
+        documentHidden: document.hidden,
+        performanceMode:
+          document.documentElement.getAttribute('data-performance-mode') === 'on',
+      })
+
+      if (shouldRun) {
+        void loadDashboard(true)
+      }
     }, autoRefreshMinutes * 60_000)
 
     return () => window.clearInterval(intervalId)
