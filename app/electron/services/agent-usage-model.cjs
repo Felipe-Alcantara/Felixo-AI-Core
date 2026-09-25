@@ -36,8 +36,14 @@ const SAFE_METADATA_KEYS = new Set([
   // também dentro deste objeto, sem deixar a saída crua chegar ao renderer.
   'statusDetails',
 ])
+// Inclui o formato de um JWT (`eyJ...`, o `{"alg":...}` em base64url) — sem
+// isto, um token bancado nesse formato passava como texto comum porque não
+// contém nenhuma das palavras-chave (api_key, bearer, secret...) que o resto
+// do padrão procura. Achado ao fuzzar `normalizeSample` com valores desse
+// formato (ver agent-usage-model.test.cjs) durante a task "Limites — validar
+// carga, privacidade, relógio e schema /status em múltiplas contas".
 const SECRET_PATTERN =
-  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9])/i
+  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9]|eyJ[a-z0-9_-]{8,})/i
 
 function normalizeAccountInput(account, { requireId = true } = {}) {
   if (!account || typeof account !== 'object') {
