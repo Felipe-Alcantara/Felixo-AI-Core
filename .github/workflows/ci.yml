@@ -9,13 +9,162 @@ on:
 # Em PR, um push novo cancela a run anterior da mesma branch: sem isto, cada push
 # deixava a run velha gastando runner (o Windows leva ~13 min) e atrasando a fila
 # da run que importa. Na `main` NUNCA cancela: o Release depende do CI de cada commit.
+#
+# Na `main`, a run de cada commit continua existindo e ficando verde (o Release
+# gate e o "Verify CI passed" do Release procuram por ela), mas pode REAPROVEITAR
+# o CI do PR em vez de repetir tudo: o job `reuse` compara a árvore Git do commit
+# da main com a do head do PR que o originou e, se forem idênticas e a run
+# `pull_request` desse head tiver passado, os demais jobs são pulados. Mesma
+# árvore = mesmos arquivos, byte a byte; rodar de novo só repetiria a prova.
+# Qualquer dúvida (push direto, PR desatualizado, run do PR ausente, erro de API)
+# cai no CI completo.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Só em push na main. Sem checkout: tudo vem da API. Este job NUNCA pode
+  # derrubar a run — `continue-on-error` no job e o script sempre sai 0; o
+  # pior caso é `reuse=false`, ou seja, o CI completo de hoje.
+  reuse:
+    name: Reaproveitar CI do PR
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      reuse: ${{ steps.decide.outputs.reuse }}
+      source_run: ${{ steps.decide.outputs.source_run }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: Decidir se o CI do PR vale para este commit
+        id: decide
+        shell: bash
+        run: |
+          set +e
+          reuse=false
+          source_run=
+          pr_head=
+          main_tree=
+          # Em erro HTTP o `gh api` escreve o corpo JSON do erro no stdout: sem
+          # validar o formato, duas respostas de erro iguais pareceriam duas
+          # árvores iguais. Só um SHA de 40 hex (ou um id numérico) é aceito.
+          is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+          decide() {
+            pr_head=$(gh api "repos/$REPO/commits/$GITHUB_SHA/pulls" \
+              --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0].head.sha // empty') || pr_head=
+            if ! is_sha "$pr_head"; then
+              pr_head=
+              echo "Nenhum PR mergeado em main aponta para $GITHUB_SHA (push direto ou erro de API); CI completo."
+              return
+            fi
+            local head_tree
+            main_tree=$(gh api "repos/$REPO/git/commits/$GITHUB_SHA" --jq .tree.sha) || main_tree=
+            head_tree=$(gh api "repos/$REPO/git/commits/$pr_head" --jq .tree.sha) || head_tree=
+            echo "Árvore do commit da main: ${main_tree:-?}; árvore do head do PR ($pr_head): ${head_tree:-?}"
+            if ! is_sha "$main_tree" || [ "$main_tree" != "$head_tree" ]; then
+              echo "Árvores diferentes ou ilegíveis (ex.: PR desatualizado com a main no merge); CI completo."
+              return
+            fi
+            # `--commit` exige o SHA completo: um prefixo abreviado não casa com nenhuma run.
+            source_run=$(gh run list -R "$REPO" --workflow ci.yml --commit "$pr_head" \
+              --event pull_request --status success --json databaseId --jq '.[0].databaseId // empty') || source_run=
+            if ! [[ "$source_run" =~ ^[0-9]+$ ]]; then
+              source_run=
+              echo "Nenhuma run verde do CI (pull_request) para o head $pr_head; CI completo."
+              return
+            fi
+            reuse=true
+          }
+          decide
+          if [ "$reuse" = true ]; then
+            run_url="$GITHUB_SERVER_URL/$REPO/actions/runs/$source_run"
+            echo "CI reaproveitado da run $run_url (head $pr_head, árvore $main_tree)."
+            {
+              echo "### CI reaproveitado do PR"
+              echo "Commit \`$GITHUB_SHA\` tem a mesma árvore Git (\`$main_tree\`) do head \`$pr_head\`,"
+              echo "que passou no CI em [$source_run]($run_url). Os demais jobs foram pulados."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            source_run=
+          fi
+          {
+            echo "reuse=$reuse"
+            echo "source_run=$source_run"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # O gate de regressão dos PRs usa como baseline o artefato
+      # `terminal-scrollback-<os>` do último run verde da main. Com o reuso,
+      # quem produz esse artefato é a run do PR: ele é trazido para esta run com
+      # o MESMO nome, e o passo "Baixar baseline do benchmark de terminal" segue
+      # igual. Artefato ausente não falha nada: o gate já trata falta de baseline.
+      # A lista de SOs é a matriz do job `benchmarks`.
+      - name: Baixar baseline de terminal da run do PR
+        if: steps.decide.outputs.reuse == 'true'
+        shell: bash
+        env:
+          SOURCE_RUN: ${{ steps.decide.outputs.source_run }}
+        run: |
+          set +e
+          for os in ubuntu-latest windows-latest macos-latest ubuntu-24.04-arm; do
+            name="terminal-scrollback-$os"
+            if ! gh run download "$SOURCE_RUN" -R "$REPO" -n "$name" -D "reused/$name"; then
+              echo "::warning::Artefato $name não encontrado na run $SOURCE_RUN; o gate dos próximos PRs segue sem baseline para $os."
+            fi
+          done
+          exit 0
+
+      - name: Reenviar baseline de terminal (ubuntu-latest)
+        if: steps.decide.outputs.reuse == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-scrollback-ubuntu-latest
+          path: reused/terminal-scrollback-ubuntu-latest/terminal-scrollback-ubuntu-latest.json
+          if-no-files-found: ignore
+
+      - name: Reenviar baseline de terminal (windows-latest)
+        if: steps.decide.outputs.reuse == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-scrollback-windows-latest
+          path: reused/terminal-scrollback-windows-latest/terminal-scrollback-windows-latest.json
+          if-no-files-found: ignore
+
+      - name: Reenviar baseline de terminal (macos-latest)
+        if: steps.decide.outputs.reuse == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-scrollback-macos-latest
+          path: reused/terminal-scrollback-macos-latest/terminal-scrollback-macos-latest.json
+          if-no-files-found: ignore
+
+      - name: Reenviar baseline de terminal (ubuntu-24.04-arm)
+        if: steps.decide.outputs.reuse == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-scrollback-ubuntu-24.04-arm
+          path: reused/terminal-scrollback-ubuntu-24.04-arm/terminal-scrollback-ubuntu-24.04-arm.json
+          if-no-files-found: ignore
+
+  # Todo job abaixo espera o `reuse` e só é pulado quando ele confirmou o reuso.
+  # `!cancelled()` é o que faz o job rodar quando o `reuse` é pulado (PR) ou
+  # falha — sem ele, o GitHub pularia os dependentes junto.
   dependency-policy:
     name: Dependency policy
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -138,6 +287,8 @@ jobs:
   # enough to catch cross-platform setup regressions before the heavier build.
   launcher:
     name: Launcher (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -179,6 +330,8 @@ jobs:
 
   python-dependency-audit:
     name: Python dependency audit
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -240,6 +393,8 @@ jobs:
   # não virar código que ninguém mais roda depois de escrito.
   release-scripts:
     name: Release scripts
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -256,6 +411,8 @@ jobs:
 
   validate:
     name: Validate (${{ matrix.os }})
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
     runs-on: ${{ matrix.os }}
     # Teto do job: o mais lento medido é ~13 min no Windows; um passo pendurado
     # (26 min em 19/09) passa a falhar claro em vez de ocupar o runner por horas.
@@ -461,6 +618,8 @@ jobs:
 
   benchmarks:
     name: Benchmarks (${{ matrix.os }})
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
     runs-on: ${{ matrix.os }}
     # Roda EM PARALELO ao job Validate (era tudo em série: ~4,8 min de benchmarks no
     # Windows somados a ~7 min de testes). Os mesmos passos, os mesmos gates — só em

@@ -51,6 +51,11 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
 
+      # A run do CI deste commit da main pode ter REAPROVEITADO o CI do PR (job
+      # `reuse` do ci.yml): ela só fica verde assim quando a árvore Git do
+      # commit é idêntica à do head do PR e a run `pull_request` desse head
+      # passou — os mesmos arquivos já foram validados. Por isso basta exigir
+      # uma run verde do CI para o commit, com ou sem reuso.
       - name: Verify CI passed for this exact commit
         shell: bash
         env:
