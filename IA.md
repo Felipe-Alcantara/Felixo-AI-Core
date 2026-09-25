@@ -6473,3 +6473,75 @@ aceite da task cobra.
 `tsc -b` limpos. Mutação (removendo o `? 0 :`) derrubou exatamente as 2 asserções que dependiam do
 comportamento novo, confirmando que os 9 testes não são vácuos. Confirmado funcionalmente no app
 real: abrir/fechar o painel de busca funciona com e sem Modo Performance ligado.
+
+## Fechamento de trabalho — 2026-09-24: Canvas — auditoria de medição geométrica e cleanup de observer (fatia 1)
+
+### Contexto
+
+Task "Felixo AI Core/Canvas — unificar medição geométrica e eliminar feedback infinito" (Esforço:
+Dias). Origem: "derivada do tremor" — a hipótese de vários donos medindo/escrevendo geometria em
+resposta uns aos outros, entre flyouts, drawer, notificações e canvas.
+
+### O que a investigação encontrou (a maior parte já estava resolvida)
+
+- O bug concreto de referência circular (painel × gaveta entrando em loop se espremendo) **já foi
+  corrigido em 12/09/2026** — `CanvasSurfacesProvider.tsx` calcula os dois NUMA PASSADA SÓ a partir
+  do que cada um quer (`desiredPanel`/`desiredDrawer`), nunca lendo o valor já cortado do outro; há
+  regressão explícita em `canvas-surfaces.test.ts` provando que a mesma entrada sempre dá a mesma
+  saída (`splitHorizontalSpace` chamado duas vezes com os mesmos números não diverge).
+- `toolbar-flyout.ts`, citado na evidência original como quem "mede/clampa posição", **não existe
+  mais como medidor** — é hoje uma função pura de 17 linhas (`toolbarColumnOffset`) sem nenhum
+  `getBoundingClientRect`/observer. A evidência da task está parcialmente desatualizada (mesmo
+  padrão encontrado nas duas tasks anteriores desta sessão, sobre notificações/flyouts).
+- O minimapa é um valor puramente derivado (`miniMapSize(freeCanvasArea(...).width)`), não um
+  medidor independente — não tem risco de retroalimentação próprio.
+- `layout-invariants.test.ts` já cobre painel+gaveta+inspector+sidebar em vários viewports.
+
+### O que ficou real e sem teste: o `ResizeObserver` do `TerminalDrawer`
+
+`TerminalDrawer.tsx` tinha um `useEffect` com `ResizeObserver` + `requestAnimationFrame` para
+manter o `fit()` do xterm em dia, sem NENHUM teste (este arquivo é `.tsx`; `vitest.config.ts` só
+roda `.ts`, então um componente nunca é testado renderizando — mesma limitação encontrada na task
+anterior de hoje, resolvida com o mesmo padrão de extração).
+
+- **Confirmado, por leitura**: `store.fit(sessionId)` lê o tamanho do container (que vem de fora,
+  via CSS/flex) e ajusta linhas/colunas do terminal por dentro — nunca escreve de volta na dimensão
+  que o próprio `ResizeObserver` observa. Não há retroalimentação aqui.
+- Extraído para `terminal-fit-lifecycle.ts` (função `attachTerminalFitLifecycle`, sem React) para
+  poder testar exatamente os critérios de aceite da task sobre cleanup: "garantir cleanup de
+  observer/RAF/listener" e "unmount/remount não duplica observers/timers".
+
+### O que foi feito
+
+- `app/src/features/canvas/components/terminal-fit-lifecycle.ts` (novo): mesma lógica do
+  `useEffect` original, extraída verbatim, com RAF/ResizeObserver injetáveis.
+- `TerminalDrawer.tsx`: o `useEffect` agora só chama
+  `return attachTerminalFitLifecycle(container, store, sessionId)` — refatoração pura, corpo do
+  efeito idêntico ao anterior.
+- 6 testes novos: anexa e ajusta imediatamente + no próximo frame + a cada resize; prova (indireta,
+  via objeto do container permanecer vazio depois de disparar o observer 3x) de que não há
+  escrita de volta; cleanup cancela o RAF e desconecta o observer; cleanup chamado duas vezes é
+  idempotente (não desconecta/cancela duas vezes); remount cria um observer NOVO sem herdar nem
+  duplicar o antigo, com exatamente um attach+fit por montagem.
+
+### NÃO verificado / limitações
+
+- **A grande maioria da task (mapear TODOS os reads/writes de clientRect/style, pipeline formal de
+  medir→resolver→aplicar→notificar, coalescer RAF entre múltiplos consumidores, warning de update
+  dentro do ciclo de medida) não foi feita** — o que já existia (CanvasSurfacesProvider) já segue
+  boa parte desse desenho; o que faltava era só o ponto do `TerminalDrawer` encontrado aqui.
+- Não testei no app real com um terminal de verdade dentro do drawer (só um `pty.spawn` cru, que
+  não cria o nó visual — precisaria passar pelo menu "Agente" da sidebar). A confiança vem da
+  extração ser verbatim (mesmo corpo de efeito) + dos 6 testes com mutação.
+- Critérios "medida oscilante, viewport pequeno, drawer fechado e zoom" da task não foram
+  cobertos por teste novo nesta fatia (viewport pequeno e drawer fechado já tinham alguma cobertura
+  em `layout-invariants.test.ts`/`panel-sizing.test.ts`, não revisados a fundo aqui; zoom não foi
+  investigado).
+
+### Validação
+
+`npm test` 1565/1565 (Node), `npm run test:frontend` 1164/1164 (+1 skip preexistente), `eslint .` e
+`tsc -b` limpos (typecheck exigiu reestruturar um teste que batia num caso de estreitamento de tipo
+do TypeScript com `let` capturado em closure — resolvido trocando por um objeto mutável). Mutação
+confirmada em dois pontos (cleanup idempotente; o `ResizeObserver` de fato chamado com o callback
+certo). App real: sessão isolada aberta e fechada sem erro após a refatoração.
