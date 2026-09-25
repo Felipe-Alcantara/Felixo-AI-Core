@@ -94,8 +94,11 @@ jobs:
   # continua porque o gate `verify-dependency-policy.cjs` exige o inventário
   # do app empacotado — é ele que decide, com as mesmas regras do PR, se um
   # advisory novo bloqueia.
+  # Nomes com "(nightly)": um check com o MESMO nome de um obrigatório da main
+  # ("Dependency policy") poderia, num workflow_dispatch numa branch de PR,
+  # aparecer como aquele check no commit do PR.
   dependency-policy:
-    name: Dependency policy
+    name: Dependency policy (nightly)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -190,7 +193,7 @@ jobs:
           if-no-files-found: error
 
   python-dependency-audit:
-    name: Python dependency audit
+    name: Python dependency audit (nightly)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
