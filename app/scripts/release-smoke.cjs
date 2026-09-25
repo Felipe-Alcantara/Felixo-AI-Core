@@ -383,7 +383,7 @@ function simulateQuarantine(appRoot) {
  * funcionalmente se ela bloqueia ou não).
  */
 function captureWindowsAcl(resourcesPath, executablePath) {
-  const ptyNode = findFileRecursive(resourcesPath, 'pty.node', 8)
+  const ptyNode = findPackagedPtyNode(resourcesPath)
   const targets = [
     { label: 'executavel', path: executablePath },
     { label: 'pty.node', path: ptyNode },
@@ -405,28 +405,54 @@ function captureWindowsAcl(resourcesPath, executablePath) {
   }
 }
 
-/** Busca em largura limitada — o binário nativo pode estar a vários níveis dentro de app.asar.unpacked. */
-function findFileRecursive(root, filename, maxDepth) {
-  if (maxDepth < 0) return null
+/**
+ * Pastas do pacote node-pty onde o `pty.node` pode estar, na ordem em que o
+ * próprio node-pty tenta carregá-lo (`loadNativeModule` em `lib/utils.js` do
+ * node-pty 1.1.0): `build/Release`, `build/Debug` e só então
+ * `prebuilds/<platform>-<arch>`.
+ */
+function nativePtyLoadOrder(platform, arch) {
+  return [
+    path.join('build', 'Release'),
+    path.join('build', 'Debug'),
+    path.join('prebuilds', `${platform}-${arch}`),
+  ]
+}
+
+/**
+ * O `pty.node` que o app empacotado realmente carrega neste SO.
+ *
+ * O pacote traz prebuilds de vários SOs (`prebuilds/darwin-arm64`,
+ * `prebuilds/win32-x64`...). Sem `build/Release` — caso do Windows, que usa o
+ * prebuild —, pegar o primeiro `pty.node` da árvore registraria a ACL do
+ * binário do macOS. Por isso a escolha segue a ordem de carga do node-pty e
+ * ignora prebuilds de outro SO/arquitetura; sem candidato válido, `null`.
+ */
+function findPackagedPtyNode(resourcesPath, { platform = process.platform, arch = process.arch, maxDepth = 8 } = {}) {
+  const found = findFilesRecursive(resourcesPath, 'pty.node', maxDepth)
+  for (const directory of nativePtyLoadOrder(platform, arch)) {
+    const match = found.find((file) => path.dirname(file).endsWith(`${path.sep}${directory}`))
+    if (match) return match
+  }
+  return null
+}
+
+/** Todas as ocorrências de `filename` até `maxDepth` níveis — o binário nativo pode estar fundo dentro de app.asar.unpacked. */
+function findFilesRecursive(root, filename, maxDepth) {
+  if (maxDepth < 0) return []
   let entries
   try {
     entries = fs.readdirSync(root, { withFileTypes: true })
   } catch {
-    return null
+    return []
   }
 
-  for (const entry of entries) {
-    if (entry.isFile() && entry.name === filename) {
-      return path.join(root, entry.name)
-    }
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const found = findFileRecursive(path.join(root, entry.name), filename, maxDepth - 1)
-      if (found) return found
-    }
-  }
-  return null
+  return entries.flatMap((entry) => {
+    const child = path.join(root, entry.name)
+    if (entry.isFile() && entry.name === filename) return [child]
+    if (entry.isDirectory()) return findFilesRecursive(child, filename, maxDepth - 1)
+    return []
+  })
 }
 
 function createPreparedArtifact(appRoot, installMode) {
@@ -1073,7 +1099,8 @@ module.exports = {
   getArtifactKind,
   getPackagedResourcesPath,
   captureWindowsAcl,
-  findFileRecursive,
+  findFilesRecursive,
+  findPackagedPtyNode,
   parseArgs,
   resolveReleaseArtifact,
   runBundledNpmSmoke,
