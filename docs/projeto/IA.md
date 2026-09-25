@@ -3835,3 +3835,96 @@ o emissor com stdout, timers e exit falsos: falham antes da correção e passam 
 `--counts=1,20` completou tudo no Linux. A hipótese só se confirma com runs do Windows sem
 `output-complete=false`; a task do Notion "CI — sessão PTY para no meio no benchmark de scrollback do Windows
 (count=20)" continua aberta até lá.
+
+## 2026-09-25 — TypeScript 7 lado a lado com a API do 6
+
+**Task.** Adotar o TypeScript 7.0.2 (compilador nativo em Go) sem perder o
+typescript-eslint, que ainda exige `typescript` >=4.8.4 <6.1.0 (conferido no
+registro: 8.69.0 instalado e 8.70.1, a mais nova, com o mesmo peer) e cuja
+issue de suporte ao 7 (typescript-eslint#10940) segue aberta. Decisão da
+pessoa: "lado a lado".
+
+**Forma oficial, conferida na fonte.** A seção "Running Side-by-Side with
+TypeScript 6.0" do anúncio do 7.0 recomenda, para ter o `tsc` do 7 e a API do 6:
+`"@typescript/native": "npm:typescript@^7.0.2"` e
+`"typescript": "npm:@typescript/typescript6@^6.0.2"`. O pacote
+`@typescript/typescript6` (6.0.2) reexporta a API de `@typescript/old`
+(`npm:typescript@^6`, hoje 6.0.3) e só declara o bin `tsc6`. O
+`@typescript/old`, porém, declara `tsc` e `tsserver`; na microsoft/typescript-go
+#4567 um mantenedor explicou que o npm decide o conflito de bin por ordem
+lexical e que o nome `@typescript/native` funciona no npm (Yarn Berry e Bun
+resolvem diferente). Provado aqui: `node_modules/.bin/tsc ->
+../@typescript/native/bin/tsc` após `npm ci` limpo com o npm 11.17.0 local e
+após `npx -y npm@10 ci --ignore-scripts` (npm 10.9.9) numa cópia do
+package.json/lockfile; nos dois, `tsc -v` = `Version 7.0.2` e
+`require('typescript').version` = `6.0.3`. `tsserver` continua sendo o do 6.
+
+**Mudanças.**
+- `app/package.json`/lockfile: os dois aliases. O lockfile traz os 20 pacotes
+  nativos opcionais `@typescript/typescript-<os>-<arch>` 7.0.2 (inclusive
+  win32-x64, darwin-arm64/x64, linux-x64/arm64 da matriz da CI). Nenhuma outra
+  entrada do lockfile mudou além de `typescript` (6.0.3 → compat 6.0.2) e das
+  novas `@typescript/native` e `@typescript/old`.
+- `scripts/typescript-toolchain.cjs` (novo): fonte única dos caminhos
+  (compilador em `@typescript/native`, API em `typescript`), leitura do alvo
+  real de `node_modules/.bin/tsc` (link no POSIX, shim `.cmd` no Windows) e a
+  regra do lançador do 7.
+- `scripts/typescript-toolchain.test.cjs` (novo, roda no `npm test` dos quatro
+  runners): o alvo do bin `tsc` pertence ao typescript 7.x; `npm exec -- tsc -v`
+  com o mesmo npm do teste (`npm_execpath`) imprime a versão do
+  `@typescript/native`; `require('typescript')` e o typescript-eslint resolvem a
+  mesma API 6.x. Sem rede: `npm exec` com bin local não consulta o registro
+  (conferido em `libnpmexec`). O parser do `.cmd` é testado em qualquer SO com o
+  shim real gerado pelo cmd-shim do npm 10.9 (7.0.0) e do npm 11 (8.0.0),
+  idênticos. O teste remove `npm_config_call`/`npm_config_package` herdados,
+  porque um `npm exec -c` externo quebrava o `npm exec` interno (EUSAGE).
+- `scripts/typecheck-performance.cjs`: executava `node_modules/typescript/bin/tsc`,
+  que não existe no pacote de compatibilidade; agora executa e reporta
+  `@typescript/native`. O lançador `bin/tsc` do 7 faz `process.execve` para o
+  executável nativo só fora do Windows e com Node >= 22.15 (docs do Node:
+  adicionado em v22.15.0/v23.11.0); fora disso o PID amostrado seria o do
+  lançador, então o RSS vai `null` com aviso no log.
+- Nenhum tsconfig mudou; `.github/` não foi tocado.
+
+**Validação (Linux x64, Node 25.9.0, npm 11.17.0).** `npm run build` (tsc -b +
+vite) ok; `npm test` 1628/1628; `npm run test:frontend` 123 arquivos, 1182
+testes ok e 1 pulado (o benchmark opt-in `FELIXO_CONNECTION_BENCHMARK=1`);
+`npm run lint` ok e `npm ls typescript` sem peer inválido. Os testes novos também
+passaram com Node 22.22.3 + npm 10.9.8 (a combinação da CI). O TS 7 não acusou
+erro novo no código; um arquivo temporário com erro de tipo, variável não usada
+e `enum` gerou TS2322/TS6133/TS1294 com saída 1, e foi removido. Um
+`.tsbuildinfo` gravado pelo 6 é rejeitado pelo 7 ("generated with version
+'6.0.3' that differs with current version '7.0.2'"), então o fallback
+`restore-keys` do cache de typecheck da CI não gera falso verde. `npm audit` e
+`npm audit --omit=dev`: `found 0 vulnerabilities`; `npm audit signatures`:
+1026 pacotes com assinatura verificada.
+
+**Medição no notebook de referência (i5-6200U, 2 núcleos/4 threads, ~2 GB
+livres, swap cheio; load average 5,8–7,5 por outros processos).** A/B
+intercalado, cinco pares de `tsc -b --force`: TS 6.0.3 (`tsc6`) mediana 25,82 s,
+33,27 s de CPU de usuário e 774.436 KiB de pico; TS 7.0.2 mediana 3,20 s,
+6,53 s e 462.596 KiB (−87,6% tempo, −80,4% CPU, −40,3% RSS). Na `main` antes da
+troca, `benchmark:typecheck` (3 amostras) deu frio p50 34,34 s / 775.220 KiB e
+incremental 0,35 s / 71.944 KiB; depois, frio 3,12 s / 470.164 KiB e incremental
+0,11 s / 19.796 KiB. Detalhes em `app/benchmarks/README.md`.
+
+**Não verificado / riscos.**
+- Windows e macOS só serão provados quando o `npm test` rodar na CI com o
+  teste novo; aqui só Linux.
+- `.github/dependabot.yml` com dependências em alias `npm:` não foi verificado
+  (o arquivo não foi alterado; há PR aberto mexendo em `.github/`). Hoje as
+  atualizações de versão do npm estão desligadas (`open-pull-requests-limit: 0`)
+  e só as de segurança ficam ativas.
+- O pacote `typescript` de compatibilidade não traz `lib/tsserver.js` (só
+  `typescript.js`, `tsserverlibrary.js` e `tsc.js`); o `tsserver` do 6 fica em
+  `node_modules/@typescript/old`. Não foi testado como um editor configurado
+  para "usar a versão do workspace" reage a isso.
+- O aviso `allow-scripts` do npm sobre `electron@41.10.7` aparece desde antes
+  da troca (o `allowScripts` do package.json cita 41.3.0) e não foi tocado.
+
+**Ideias para quem quiser contribuir.** Quando o typescript-eslint suportar o 7
+(ou o 7.1 publicar a API nova), remover o alias do 6 e voltar a
+`"typescript": "^7"`. Em máquinas com pouca RAM, avaliar `--singleThreaded`
+(opção do 7.0.2): em três pares intercalados mediu 4,18–5,31 s e
+361.248–375.196 KiB de pico, contra 3,18–3,49 s e 456.504–495.056 KiB do
+padrão, ou seja, troca ~1–2 s por ~90 MiB a menos; o projeto manteve o padrão.

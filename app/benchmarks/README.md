@@ -462,6 +462,13 @@ tempo de parede e pico de RSS durante o processo. `--check` exige cinco
 amostras completas e código de saída zero; em plataformas sem consulta de RSS,
 o relatório informa `null` em vez de estimar memória.
 
+Desde 25/09/2026 o `tsc` medido é o do TypeScript 7 (`@typescript/native`), o
+mesmo de `npm run typecheck`, e o campo `typescript` do relatório traz a versão
+dele. O lançador JS do 7 substitui o próprio processo pelo executável nativo
+via `process.execve` em Linux/macOS com Node >= 22.15; no Windows, ou em Node
+sem `execve`, o executável roda como processo filho e o RSS amostrado seria o
+do lançador, por isso o relatório grava `null` nesses casos.
+
 ### Resultado reproduzível em 01/09/2026
 
 Linux x64, Node 25.9.0, TypeScript 6.0.3, cinco amostras por modo, percentil
@@ -480,6 +487,53 @@ tipos: o tempo p50 variou 2,3% dentro da medição local, o p95 caiu 0,8% e o
 RSS caiu 1,5% no p50 e 2,2% no p95. Quando uma verificação limpa for necessária,
 `npm run typecheck:full` usa `--force`; o CI e o build normal usam o cache
 seguro, sem `noCheck`, exclusões novas ou permissões mais frouxas.
+
+### Resultado reproduzível em 25/09/2026: TypeScript 6.0.3 x 7.0.2
+
+Notebook de referência do projeto: Intel Core i5-6200U (2 núcleos, 4 threads),
+12 GB de RAM com cerca de 2 GB livres e swap cheio, Linux x64, Node 25.9.0.
+Mesmos tsconfigs, mesmos includes, mesmas regras; nenhum tsconfig mudou na
+troca. A máquina estava ocupada por outros processos (load average de 1 minuto
+entre 5,8 e 7,5 em 4 threads), então os números absolutos variam entre
+sessões; a comparação que vale é a intercalada.
+
+**A/B intercalado (o número principal).** Cinco pares alternando
+`npx tsc6 -b --force` (TypeScript 6.0.3, o mesmo código do `typescript@6.0.3`
+de antes) e `npx tsc -b --force` (TypeScript 7.0.2), medidos com
+`/usr/bin/time -v` no mesmo intervalo de carga. Mediana das cinco execuções:
+
+| Typecheck a frio (`tsc -b --force`) | TypeScript 6.0.3 | TypeScript 7.0.2 | Variação |
+| --- | ---: | ---: | ---: |
+| Tempo de parede (mín–máx) | 25,82 s (23,79–29,31) | 3,20 s (3,02–5,36) | −87,6% |
+| CPU de usuário | 33,27 s | 6,53 s | −80,4% |
+| Pico de RSS (mín–máx) | 774.436 KiB (772.000–782.664) | 462.596 KiB (449.536–482.124) | −40,3% |
+
+**`npm run benchmark:typecheck` (três amostras por modo, p50/p95).** O TS 6 foi
+medido na `main` antes da troca; o TS 7, depois, em outro momento de carga:
+
+| Modo | TS 6.0.3 p50/p95 | TS 7.0.2 p50/p95 | RSS TS 6 p50/p95 | RSS TS 7 p50/p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Frio | 34,34 / 35,44 s | 3,12 / 3,20 s | 775.220 / 776.588 KiB | 470.164 / 484.564 KiB |
+| Sem mudança (incremental) | 0,35 / 0,50 s | 0,11 / 0,12 s | 71.944 / 72.228 KiB | 19.796 / 19.872 KiB |
+
+Na `main`, três `tsc -b --force` isolados do TS 6 levaram 33,3 / 36,6 / 34,3 s
+com pico de 778.208–783.016 KiB. As três primeiras execuções do TS 7, logo
+depois de um `npm ci` limpo e sem load average registrado naquele momento,
+levaram 15,7 / 13,7 / 15,4 s com pico de 455.660–497.940 KiB: mesmo nesse pior
+caso observado, menos da metade do tempo do 6.
+
+O 7 detecta um `.tsbuildinfo` gravado pelo 6 e refaz os dois projetos
+("output for it was generated with version '6.0.3' that differs with current
+version '7.0.2'"), então o cache incremental restaurado pela CI não produz
+falso verde. Um arquivo temporário com erro de tipo, variável não usada e
+`enum` (proibido por `erasableSyntaxOnly`) gerou TS2322, TS6133 e TS1294 com
+código de saída 1: o 7 continua aplicando as mesmas regras.
+
+Para quem quiser explorar a memória em máquinas modestas: `tsc -b --force
+--singleThreaded` (opção existente no 7.0.2) mediu 4,18–5,31 s e
+361.248–375.196 KiB de pico contra 3,18–3,49 s e 456.504–495.056 KiB do
+padrão, em três pares intercalados. O projeto mantém o padrão; a troca de tempo por memória fica
+como ideia a avaliar.
 
 ## Benchmark do npm-runtime do instalador
 

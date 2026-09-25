@@ -136,7 +136,7 @@ Felixo-AI-Core/
 |---------|-----------|-----------|
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas Vite com limpeza coordenada |
-| `npm run typecheck` | app/ | Executa `tsc -b` incremental nos projetos app/node |
+| `npm run typecheck` | app/ | Executa `tsc -b` (TypeScript 7) incremental nos projetos app/node |
 | `npm run typecheck:full` | app/ | Força o typecheck completo dos dois projetos |
 | `npm run build` | app/ | Typecheck incremental + Vite |
 | `npm run benchmark:typecheck:check` | app/ | Compara cinco execuções frias e cinco incrementais |
@@ -389,6 +389,37 @@ O relatório separa cinco execuções frias de cinco sem mudanças, exibe p50/p9
 de tempo e RSS e valida que os dois projetos retornaram código zero. A bancada
 move apenas os caches que ela mesma controla para `/tmp`; ela não remove código
 nem altera o escopo dos tsconfigs.
+
+**TypeScript 7 e a API do 6, lado a lado.** Desde 25/09/2026 o `tsc` é o
+TypeScript 7 (compilador nativo), instalado pelo alias `@typescript/native`; o
+pacote `typescript` do app é o
+`@typescript/typescript6`, que reexporta a API do TypeScript 6 para o
+typescript-eslint (que ainda exige `typescript` < 6.1) e expõe o compilador
+antigo como `tsc6`. O motivo e os números estão no
+[README](../../README.md#typescript-7-lado-a-lado-com-a-api-do-6).
+
+- `npx tsc -v` deve imprimir `Version 7.x`, e
+  `node -p "require('typescript').version"`, `6.0.x`. O teste
+  `scripts/typescript-toolchain.test.cjs` (roda no `npm test`) confere o alvo de
+  `node_modules/.bin/tsc` (link no POSIX, shim `.cmd` no Windows), executa
+  `npm exec -- tsc -v` e confere a API resolvida pelo typescript-eslint.
+- Se `npx tsc -v` mostrar 6.x, o conflito de bin entre o 7 e o
+  `@typescript/old` foi resolvido a favor do 6: reinstale com `npm ci` (npm 10
+  ou 11). Yarn Berry e Bun resolvem esse conflito de outro jeito
+  (microsoft/typescript-go#4567) e não são suportados.
+- Para comparar os dois compiladores no mesmo código, `npx tsc6 -b --force`
+  roda o TypeScript 6.0.3 e `npx tsc -b --force`, o 7.
+- `node_modules/.bin/tsserver` continua sendo o do TypeScript 6
+  (`@typescript/old`); o pacote `typescript` de compatibilidade não traz
+  `lib/tsserver.js`.
+- O cache `node_modules/.tmp/*.tsbuildinfo` gravado pelo 6 não é reaproveitado
+  pelo 7: o build mode informa "output for it was generated with version
+  '6.0.3' that differs with current version '7.0.2'" e refaz os dois projetos, então um
+  cache antigo restaurado pela CI não produz falso verde.
+- A bancada de typecheck mede o `tsc` do 7. No Windows, e em Node sem
+  `process.execve` (anterior a 22.15), o lançador do 7 roda o executável nativo
+  como processo filho; nesses casos o RSS sai `null` em vez de medir o
+  lançador.
 
 O comando de integração de PTY deve ser executado no sistema que se quer
 validar: Linux usa o launch direto, macOS o shell de login e Windows o

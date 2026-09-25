@@ -108,7 +108,7 @@ npm run dev:web
 | `python3 start_app.py --skip-install` | raiz | **Atalho sem menu**: pula instalação de deps |
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas o Vite dev server com limpeza coordenada |
-| `npm run typecheck` | app/ | Executa `tsc -b` incremental nos projetos app/node |
+| `npm run typecheck` | app/ | Executa `tsc -b` (TypeScript 7) incremental nos projetos app/node |
 | `npm run typecheck:full` | app/ | Força o typecheck completo, ignorando o cache |
 | `npm run build` | app/ | Typecheck incremental + Vite bundle |
 | `npm run benchmark:typecheck:check` | app/ | Mede cinco runs frios e cinco incrementais do typecheck |
@@ -144,6 +144,20 @@ O benchmark mede tempo de parede e pico de RSS do comando real, valida cinco
 amostras de cada modo e move apenas seus próprios caches temporários. A
 otimização é de cache do compilador; ela não usa `noCheck`, não exclui fontes
 e não troca um typecheck por uma mera compilação Vite.
+
+Desde 25/09/2026 o `tsc` desses comandos é o TypeScript 7 (compilador nativo,
+alias `@typescript/native`), e o pacote `typescript` do app é o
+`@typescript/typescript6`, que entrega a API do TypeScript 6 ao
+typescript-eslint do `npm run lint`. Depois de `npm ci`, confira:
+
+```bash
+cd app
+npx tsc -v                                  # Version 7.x
+node -p "require('typescript').version"     # 6.0.x
+```
+
+O motivo do lado a lado está no
+[README](../../README.md#typescript-7-lado-a-lado-com-a-api-do-6).
 
 ### npm-runtime do instalador
 
@@ -441,6 +455,12 @@ rm -rf node_modules
 npm install
 npm run build
 ```
+
+Se o erro aparecer só em uma máquina, confira qual compilador ela está usando:
+`npx tsc -v` deve imprimir `Version 7.x`. Se imprimir 6.x, o `tsc` do pacote
+de compatibilidade do TypeScript 6 venceu o conflito de bin; reinstale com
+`npm ci` (npm 10 ou 11). Yarn Berry e Bun resolvem esse conflito de outro jeito
+e não são suportados pelo projeto.
 
 ---
 
