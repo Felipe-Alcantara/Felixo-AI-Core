@@ -6411,3 +6411,65 @@ uma optionalDependency de plataforma não foi baixada"). Confirmado, não invest
 
 Duas execuções completas no Windows real (`npm run repro:cli-auto-install -- --cli gemini`):
 resultado idêntico nas duas. `eslint` limpo no script novo.
+
+## Fechamento de trabalho — 2026-09-24: Canvas — reduced motion/Modo Performance não removia o atraso de fechamento (fatia 1)
+
+### Contexto
+
+Task "Felixo AI Core/Canvas — estabilizar notificações, flyouts e animações concorrentes"
+(Esforço: Dias). A evidência original da task cita `NotificationsMenu.tsx`, que não existe mais
+(virou `NotificationsPanel.tsx` num refactor anterior) — parte do problema descrito já foi
+resolvida por outro trabalho. Investigação encontrou o hook compartilhado real por trás de toda
+abertura/fechamento animado do canvas (`CanvasPanel`, `TerminalDrawer`): `useExitAnimation.ts`,
+sem NENHUM teste.
+
+### O que foi medido
+
+`index.css` já corta a animação CSS (`animation: none`) tanto por `prefers-reduced-motion: reduce`
+quanto por `[data-performance-mode='on']` (Modo Performance do app, mantido em sincronia de
+propósito com o primeiro). `useExitAnimation` (JS) não sabia de nenhum dos dois: o
+`setTimeout(onClosed, durationMs)` sempre esperava os 160-190ms inteiros antes de desmontar, mesmo
+sem nenhuma animação de verdade tocando — o elemento ficava parado e totalmente visível (sem
+`animation:none` remover o `opacity`/`transform` do frame final da saída) por esse tempo. É
+exatamente o "loop que o Modo Performance/reduced motion deveriam remover" que o critério de
+aceite da task cobra.
+
+### O que foi feito
+
+- `exit-animation-controller.ts` (novo): núcleo sem React (timer, idempotência de `close()`,
+  `dispose()`) — este repositório não usa jsdom/`@testing-library/react` (`vitest.config.ts`:
+  `environment: 'node'`, só `.ts`), então a lógica precisou ser extraída da casca de hooks
+  (`useState`/`useEffect`) para ser testável, seguindo a convenção real do repositório.
+- `useExitAnimation.ts`: casca fina sobre o controlador; `close()` agora lê, no INSTANTE da
+  chamada, `prefers-reduced-motion` OU `data-performance-mode='on'` e usa delay 0 nesse caso, sem
+  mudar a assinatura pública do hook (`CanvasPanel.tsx`/`TerminalDrawer.tsx` não precisaram mudar).
+- 9 testes novos no controlador: timing normal, idempotência de `close()` repetido (inclusive com
+  duração diferente na segunda chamada), skip por reduced-motion/Modo Performance, leitura da
+  preferência no instante certo (não fixada na criação), `dispose()` cancela sem chamar `onClosed`
+  (garante que nada mede componente desmontado), ciclos sucessivos no mesmo controlador, e ausência
+  de timer pendente ao final.
+
+### NÃO verificado / limitações
+
+- **Medição de tempo real no app**: tentei medir o tempo entre clicar em fechar e o painel sumir do
+  DOM, no app real (Windows, `felixo devtools`) com Modo Performance ligado. Não foi confiável —
+  a janela do devtools é invisível/sem foco, e `requestAnimationFrame` parece sofrer throttling de
+  background do Chromium nesse estado (a primeira leitura de frame já veio em ~300ms). O
+  funcional foi confirmado (abre e fecha corretamente, com e sem Modo Performance), mas o
+  NÚMERO exato de ms no app real não foi medido com confiança — a prova de timing é só a unitária
+  (com relógio falso determinístico e mutação confirmando que os testes pegam a regressão).
+- **Escopo original da task não coberto nesta fatia**: "cancelar animação anterior por chave de
+  superfície" (item 1), "prioridade entre drag/resize, abertura automática, foco e refresh" (item
+  3), "testar transição interrompida em qualquer frame" (mais amplo que o que foi testado aqui) e
+  "logs só no diagnóstico" — nenhum desses foi investigado a fundo; ficam em task de continuação.
+- Não foi encontrado, nesta investigação, nenhum caso real de "reabrir enquanto fecha" causando
+  estado inconsistente na arquitetura atual (o parent sempre desmonta/remonta o painel via uma
+  única posição condicional; o `dispose()` no cleanup do efeito já cancela timers órfãos). Pode
+  haver casos reais que a fatia 2 encontre com mais tempo de investigação.
+
+### Validação
+
+`npm test` 1565/1565 (Node), `npm run test:frontend` 1158/1158 (+1 skip preexistente), `eslint .` e
+`tsc -b` limpos. Mutação (removendo o `? 0 :`) derrubou exatamente as 2 asserções que dependiam do
+comportamento novo, confirmando que os 9 testes não são vácuos. Confirmado funcionalmente no app
+real: abrir/fechar o painel de busca funciona com e sem Modo Performance ligado.
