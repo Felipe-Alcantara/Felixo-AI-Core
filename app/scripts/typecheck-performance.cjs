@@ -19,12 +19,14 @@ const path = require('node:path')
 const { execFileSync, spawn } = require('node:child_process')
 const { performance } = require('node:perf_hooks')
 
-const APP_ROOT = path.resolve(__dirname, '..')
 // O compilador do build é o TypeScript 7, instalado pelo alias
 // `@typescript/native`; o pacote `typescript` do app é só a API do 6 para o
-// typescript-eslint e não tem mais o bin `tsc`.
-const COMPILER_DIR = path.join(APP_ROOT, 'node_modules', '@typescript', 'native')
-const TSC_PATH = path.join(COMPILER_DIR, 'bin', 'tsc')
+// typescript-eslint e não tem mais o bin `tsc`. Os caminhos vêm da fonte
+// única da fiação lado a lado.
+const toolchain = require('./typescript-toolchain.cjs')
+
+const APP_ROOT = toolchain.APP_ROOT
+const TSC_PATH = toolchain.caminhoDoCompilador(APP_ROOT)
 const PROJECTS = ['tsconfig.app.json', 'tsconfig.node.json']
 
 function buildTscArgs(extraArgs = []) {
@@ -228,7 +230,7 @@ async function main(argv = process.argv.slice(2)) {
     generatedAt: new Date().toISOString(),
     node: process.version,
     platform: `${process.platform}-${process.arch}`,
-    typescript: require(path.join(COMPILER_DIR, 'package.json')).version,
+    typescript: toolchain.versaoDoCompilador(APP_ROOT),
     projects: PROJECTS,
     modes: {},
   }
