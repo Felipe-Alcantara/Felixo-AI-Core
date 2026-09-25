@@ -3770,3 +3770,44 @@ Linux. No Windows esses arquivos ainda estão abertos, daí o EPERM. Por isso a 
 Lançar ali também trocava o erro real da bancada pelo EPERM. Sobram ~32 KB por execução na pasta temporária,
 um custo aceito: os runners são descartáveis e um processo externo só para apagar isso seria desproporcional.
 O teste novo falha se a função voltar a lançar (provado revertendo a correção).
+
+## 2026-09-25 — Registro retroativo: política de performance, matriz visual e gate de regressão (PRs #86–#90)
+
+Estes cinco PRs entraram na `main` em 25/09 sem entrada neste arquivo, o que descumpre o passo de
+documentação do fluxo de trabalho. Esta entrada foi escrita no mesmo dia, depois dos merges, com os fatos
+tirados dos commits e das runs. Ela não reescreve nada anterior.
+
+**#86 (`b8cc9ad`) — política do Modo Performance.** `docs/projeto/POLITICA-PERFORMANCE.md` converte em metas
+por cenário o baseline já medido (20 terminais × 8.000 linhas no Linux, `5cfc40a`: renderer RSS p95 de 706 MiB
+com scrollback fixo contra 565 MiB com o adaptativo) e mapeia no código os quatro modos: normal, performance,
+reduced motion e safe mode pós-crash. O orçamento também virou código, em
+`app/src/features/shared/performance/performance-budget.ts` com teste, para não depender só da prosa. O
+mapeamento achou quatro lacunas: o reduced motion do SO não cobre minimapa nem céu animado; o modo não entra
+sozinho por carga; o safe mode não existe; não há telemetria. Elas foram abertas como tasks e não
+implementadas neste PR.
+
+**#87 (`15723a3`) e #88 (`a51d692`) — matriz visual.** A matriz tema × viewport × DPR do
+`app/scripts/canvas-smoke.cjs` só fotografava o layout base. Ela passou a abrir o painel Buscar, o menu de
+contexto e o modal de handoff em dois viewports críticos, e a cobrir fonte maior, reduced motion e locale no
+viewport de 320 px. Por custo de CI, entrou um viewport por dimensão nova, e não a combinação completa.
+Surgiram três achados em telas menores que 768 px, abertos como tasks: o painel de ferramentas vaza ~8 px
+porque o `PANEL_MIN_WIDTH` nunca cede; a dock de terminais recolhidos intercepta cliques mesmo vazia; e, com
+fonte maior, "Selecionar" e "Enquadrar" aparecem colados. O CI também revelou dois flakes que não se
+reproduziam localmente. No #87, o bounds-check de 2 px do modal foi relaxado. No #88, o clique em
+"Enquadrar todos os blocos", que o Playwright às vezes dava como fora da viewport, passou a ser disparado
+via DOM.
+
+**#89 (`b9f1f48`) e #90 (`aadb01d`) — gate de regressão entre commits.** Antes só existiam limiares fixos
+dentro de uma mesma execução, e um PR que piorasse todos os cenários por igual passava. Agora
+`app/scripts/benchmark-regression-gate.cjs` compara o benchmark de terminal do PR com o artefato
+`terminal-scrollback-<os>` do último run verde da `main`. Sem baseline disponível, o gate não falha, porque
+a ausência de baseline não prova regressão. A calibração saiu do ruído medido em quatro rodadas no próprio
+PR: o mesmo commit variou até 63% em resume e 72,8% em heap num cenário de base pequena. Por isso o CI
+passa `--threshold=60`, aplica um piso absoluto por métrica e usa `--exclude-metric=resumeMs` (o resume
+continua medido, só não decide). O #90 fez o gate citar no resumo do job o commit e a run do baseline, o
+head do PR e o critério. Uma chave desconhecida em `--exclude-metric` passou a ser erro. Os releases
+v0.1.416 (#86), v0.1.417 (#89) e v0.1.418 (#90) saíram pelo Release gate.
+
+Validação à época: CI verde nos 4 SOs em cada PR. No #90, o CI da `main` falhou uma vez num passo que o PR
+não tocou (órfão intermitente do yarn-classic no Windows). O rerun passou e o problema foi aberto como task.
+Os detalhes de cada PR estão nas páginas das tasks no Notion e no relatório diário de 25/09.
