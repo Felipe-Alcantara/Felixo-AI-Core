@@ -23,9 +23,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # Só em push na main. Sem checkout: tudo vem da API. Este job NUNCA pode
-  # derrubar a run — `continue-on-error` no job e o script sempre sai 0; o
-  # pior caso é `reuse=false`, ou seja, o CI completo de hoje.
+  # Só em push na main. Faz checkout apenas de `.github/scripts` (o script da
+  # decisão); os fatos vêm da API. Este job NUNCA pode derrubar a run —
+  # `continue-on-error` no job e o script sempre sai 0; o pior caso é
+  # `reuse=false`, ou seja, o CI completo de hoje.
   reuse:
     name: Reaproveitar CI do PR
     if: github.event_name == 'push'
