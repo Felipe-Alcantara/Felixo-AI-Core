@@ -138,10 +138,16 @@ Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
 existe de um lado (nova contagem testada, por exemplo) é ignorado, não conta
 como regressão nem falha o gate. As métricas comparadas são resume (ms), RSS
 p95 do renderer e delta de heap do stream — as mesmas que `--check` já usa
-para comparar `current` vs `adaptive`. O limiar padrão (20%) é
-deliberadamente mais folgado que os 5%/25% usados internamente pelo
-`--check`: aqui o ruído é entre execuções de runners diferentes ao longo do
-tempo, não dentro da mesma janela de medição.
+para comparar `current` vs `adaptive`.
+
+O limiar padrão do script é 20%, mas o CI passa `--threshold=60`: medido no PR
+que introduziu este gate (#89), dois runs do runner `ubuntu-latest` hospedado
+no MESMO commit, sem nenhuma mudança de código relacionada, mostraram até 57%
+de diferença em "resume (ms)" — ruído real de máquina compartilhada, não
+regressão. RSS e heap (amostrados como p95) ficaram bem mais estáveis; resume
+é a métrica mais sensível a isso. 20% continua o default para quem rodar o
+gate localmente contra dois benchmarks da mesma máquina, onde esse ruído não
+existe.
 
 ## Degradação do Canvas no Linux
 
