@@ -412,9 +412,12 @@ export function TerminalDrawer({
         transition: resizing ? undefined : 'width 180ms cubic-bezier(0.16,1,0.3,1)',
       }}
     >
+      {/* Borda de arrasto. O duplo clique devolve a largura com que a gaveta
+          abre — o mesmo que Home, agora também ao alcance do mouse. */}
       {!collapsed && !maximized && (
         <div
           onMouseDown={onMouseDown}
+          onDoubleClick={resetDrawerWidth}
           onKeyDown={onResizeKeyDown}
           role="separator"
           aria-label={`Redimensionar terminal ${title}`}
@@ -424,6 +427,8 @@ export function TerminalDrawer({
           aria-valuemax={getDrawerMaxWidth(window.innerWidth)}
           aria-description="Seta para esquerda amplia, seta para direita reduz e Home restaura o tamanho padrão."
           tabIndex={0}
+          title="Arraste para redimensionar; dois cliques para a largura padrão"
+          data-felixo-terminal-drawer-resize-handle
           className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-(--f-core-white)/40 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-emerald-400"
         />
       )}
