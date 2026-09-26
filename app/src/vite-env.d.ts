@@ -36,6 +36,7 @@ import type {
 } from './features/canvas/types'
 import type { CliAccount } from './features/shared/types/cli-accounts'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
+import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   AgentUsageDashboard,
@@ -381,6 +382,10 @@ declare global {
         acknowledgeGpuFallback?: () => Promise<{ ok: boolean }>
         /** Avisa quando a placa volta sozinha para Automático no meio da sessão. */
         onGpuPreferenceChange?: (callback: (gpu: GpuPreferenceStatus) => void) => () => void
+      }
+      hardware?: {
+        /** CPUs lógicas e se a máquina está na classe em que o Modo Performance foi medido. */
+        getProfile: () => Promise<HardwareProfile>
       }
       autostart?: {
         getConfig: () => Promise<{

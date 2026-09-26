@@ -104,6 +104,28 @@ a ser a composição (9 a 18 s de composição numa janela de 6 s). Isso confirm
 modo é necessário mas não suficiente; o próximo ganho precisa vir de virtualização ou de menos camadas por
 nó, não de decoração.
 
+#### Sugestão em máquina com poucas CPUs (26/09/2026)
+
+Em máquina com **até 4 CPUs lógicas** o app mostra, uma vez, a sugestão
+**Ligar o Modo Performance?**, com o número de CPUs da máquina e o ganho medido.
+O limiar é a própria máquina de referência (2 núcleos/4 threads), a única onde o
+ganho foi medido (+16% a +23% de FPS, tabela acima); acima de 4 não há medição,
+e o app não sugere.
+
+- **Nunca liga sozinho.** Só o botão **Ligar Modo Performance** (ou o toggle
+  nas Configurações) liga o modo.
+- **A resposta fica lembrada** (`localStorage`, chave
+  `felixo-ai-core.performance-suggestion`): depois de **Ligar** ou **Agora não**,
+  a sugestão não volta, nem se a pessoa desligar o modo mais tarde.
+- **Automação**: na instância com porta CDP (`felixo devtools`, smoke e matriz
+  visual) a sugestão fica desligada, porque os runners de CI têm 4 vCPUs e ela
+  cobriria botões e entraria nas capturas. `FELIXO_DEVTOOLS_HARDWARE_NOTICES=1`
+  a liga para testes.
+- Código: `electron/core/hardware-profile.cjs` (contagem por
+  `os.availableParallelism()` e limiar), IPC `hardware:get-profile`,
+  `src/features/shared/performance/performance-suggestion.ts` e
+  `src/features/shared/hardware/HardwareNotices.tsx`.
+
 ### Reduced motion (existe, parcial — gap real encontrado nesta investigação)
 `prefers-reduced-motion` do sistema operacional já é lido
 (`reduced-motion-preference.ts`) e combinado com `performanceMode` em DOIS

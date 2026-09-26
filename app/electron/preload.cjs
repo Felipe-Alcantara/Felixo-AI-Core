@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener(GPU_PREFERENCE_CHANGED_CHANNEL, handler)
     },
   },
+  hardware: {
+    getProfile: () => ipcRenderer.invoke('hardware:get-profile'),
+  },
   autostart: {
     getConfig: () => ipcRenderer.invoke('autostart:get-config'),
     setEnabled: (enabled) => ipcRenderer.invoke('autostart:set-enabled', enabled),

@@ -121,6 +121,7 @@ const { applyGpuLaunchPlan } = require('./core/gpu-preference.cjs')
 const { prepareGpuStart } = require('./core/gpu-start-guard.cjs')
 const { createGpuInfoWatcher } = require('./core/gpu-info-watcher.cjs')
 const { createGpuPreferenceSession } = require('./services/gpu-preference-session.cjs')
+const { describeHardwareProfile } = require('./core/hardware-profile.cjs')
 const { getAutoStartStatus, setAutoStartEnabled } = require('./core/autostart.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
@@ -411,6 +412,19 @@ app.whenReady().then(async () => {
       },
     })
   }
+
+  // CPUs lógicas: a interface sugere o Modo Performance em máquina com poucas.
+  // Na instância de automação a sugestão só aparece com pedido explícito
+  // (FELIXO_DEVTOOLS_HARDWARE_NOTICES=1), para não cobrir botões nem entrar nas
+  // capturas da matriz visual.
+  ipcMain.handle('hardware:get-profile', () =>
+    describeHardwareProfile({
+      automation:
+        Number.isInteger(devtoolsPort) &&
+        devtoolsPort > 0 &&
+        process.env.FELIXO_DEVTOOLS_HARDWARE_NOTICES !== '1',
+    }),
+  )
 
   ipcMain.handle('graphics:get-config', async () => ({
     ok: true,

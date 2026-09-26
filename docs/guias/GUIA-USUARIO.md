@@ -206,6 +206,15 @@ Abra **Ferramentas → Configurações** para ajustar:
 
 As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma tela de cadastro de chaves de API.
 
+### Modo Performance em computador mais fraco
+
+Em **Configurações**, o **Modo Performance** desliga o céu animado, o minimapa e
+as transições de painéis, sem mudar nada de lugar. Em computadores com até 4
+processadores lógicos, o Felixo sugere ligá-lo uma vez (**Ligar o Modo
+Performance?**): o modo só liga se você clicar em **Ligar Modo Performance**, e
+**Agora não** faz a sugestão não aparecer de novo. Dá para ligar ou desligar
+depois nas Configurações.
+
 ### Placa de vídeo (opção avançada)
 
 Em computadores com duas placas de vídeo (por exemplo, uma integrada e uma
