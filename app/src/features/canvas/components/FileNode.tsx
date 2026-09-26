@@ -322,13 +322,11 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="felixo-canvas-card felixo-canvas-card-file flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-graphite)] text-zinc-200 shadow-xl">
+    <div className="felixo-canvas-card felixo-canvas-card-file flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-(--f-core-graphite) text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.file.width}
         minHeight={NODE_MIN_SIZE.file.height}
-        lineClassName="!border-white/30"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
       />
       <FourSideHandles />
       <NodeHeader
@@ -336,22 +334,22 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         editableValue={nodeData.label ?? displayName}
         placeholder={displayName || 'arquivo.md'}
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
-        className="bg-white/[0.04] text-[var(--f-core-white)]"
+        className="bg-white/4 text-(--f-core-white)"
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
       >
         <button
           type="button"
-          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => void copyPath()}
           title="Copiar caminho do arquivo (para dar ao agente)"
           aria-label="Copiar caminho"
         >
-          {copied ? <Check size={13} className="text-[var(--f-core-white-soft)]" /> : <Copy size={13} />}
+          {copied ? <Check size={13} className="text-(--f-core-white-soft)" /> : <Copy size={13} />}
         </button>
         {!isImage && (
           <button
             type="button"
-            className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+            className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
             onClick={() => setEditing((value) => !value)}
             // O rótulo diz o que a visualização vai fazer neste arquivo: markdown
             // formatado só onde isso significa alguma coisa. Num `.py`, dizer
@@ -384,18 +382,18 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       */}
       {isExternal ? (
         <div
-          className="nodrag truncate border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-[var(--f-core-secondary)]"
+          className="nodrag truncate border-b border-white/10 bg-white/4 px-2 py-1 text-[11px] text-(--f-core-secondary)"
           title={absolutePath || filePath}
         >
           {absolutePath || 'Referência local indisponível — selecione reparar.'}
         </div>
       ) : (
-        <div className="nodrag flex items-center gap-1 border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[11px]">
-          <span className="inline-flex overflow-hidden rounded ring-1 ring-white/10">
+        <div className="nodrag flex items-center gap-1 border-b border-white/10 bg-white/4 px-2 py-1 text-[11px]">
+          <span className="inline-flex overflow-hidden rounded-sm ring-1 ring-white/10">
             <button
               type="button"
               onClick={() => setMode('scratchpad')}
-              className={`felixo-btn px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-white/[0.10] text-[var(--f-core-white)]' : 'text-[var(--f-core-white-soft)] hover:bg-white/5'}`}
+              className={`felixo-btn px-1.5 py-0.5 ${mode === 'scratchpad' ? 'bg-white/10 text-(--f-core-white)' : 'text-(--f-core-white-soft) hover:bg-white/5'}`}
               title="Modo scratchpad: log vivo e leve"
             >
               Scratchpad
@@ -403,7 +401,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               onClick={() => setMode('plan')}
-              className={`felixo-btn px-1.5 py-0.5 ${mode === 'plan' ? 'bg-white/[0.10] text-[var(--f-core-white)]' : 'text-[var(--f-core-white-soft)] hover:bg-white/5'}`}
+              className={`felixo-btn px-1.5 py-0.5 ${mode === 'plan' ? 'bg-white/10 text-(--f-core-white)' : 'text-(--f-core-white-soft) hover:bg-white/5'}`}
               title="Modo plano: gerar diagnóstico do repositório"
             >
               Plano
@@ -414,7 +412,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               onClick={() => void generateDiagnosis()}
               disabled={diagnosing}
-              className="felixo-btn nodrag ml-auto inline-flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-0.5 text-[var(--f-core-white)] hover:bg-white/[0.16] disabled:opacity-50"
+              className="felixo-btn nodrag ml-auto inline-flex items-center gap-1 rounded-sm bg-white/10 px-1.5 py-0.5 text-(--f-core-white) hover:bg-white/16 disabled:opacity-50"
               title="Pedir ao terminal conectado um diagnóstico do repositório"
             >
               <Stethoscope size={12} />
@@ -425,13 +423,13 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       )}
 
       {!isImage && document.error && (
-        <div className="nodrag border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-[var(--color-error)]">
+        <div className="nodrag border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-theme-error">
           {document.error}
         </div>
       )}
 
       {!isExternal && mode === 'plan' && diagnosisFeedback && (
-        <div className="nodrag border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-[var(--f-core-white-soft)]">
+        <div className="nodrag border-b border-white/10 bg-white/4 px-2 py-1 text-[11px] text-(--f-core-white-soft)">
           {diagnosisFeedback}
         </div>
       )}
@@ -460,7 +458,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           onChange={(event) => save(event.target.value)}
           aria-label="Conteúdo do arquivo"
           placeholder={isExternal ? 'Arquivo vazio.' : '# Conteúdo do arquivo .md'}
-          className="nodrag nowheel nopan min-h-0 w-full flex-1 resize-none overflow-auto bg-transparent p-3 font-mono text-xs text-zinc-200 outline-none"
+          className="nodrag nowheel nopan min-h-0 w-full flex-1 resize-none overflow-auto bg-transparent p-3 font-mono text-xs text-zinc-200 outline-hidden"
         />
       ) : content.trim() ? (
         previewKind === 'markdown' ? (
@@ -563,10 +561,10 @@ function ImageArtifactPreview({
         aria-label={`Preview da imagem ${name}`}
         tabIndex={0}
         onKeyDown={handlePreviewKeyDown}
-        className="min-h-20 flex-1 overflow-auto rounded border border-white/10 bg-black/20 outline-none focus:ring-2 focus:ring-white/25"
+        className="min-h-20 flex-1 overflow-auto rounded-sm border border-white/10 bg-black/20 outline-hidden focus:ring-2 focus:ring-white/25"
       >
         {preview.loading ? (
-          <div className="flex h-full min-h-24 items-center justify-center text-xs text-[var(--f-core-secondary)]">
+          <div className="flex h-full min-h-24 items-center justify-center text-xs text-(--f-core-secondary)">
             Carregando preview…
           </div>
         ) : hasPreview ? (
@@ -583,14 +581,14 @@ function ImageArtifactPreview({
         ) : (
           <div
             role="status"
-            className="flex h-full min-h-24 flex-col items-center justify-center gap-2 px-4 text-center text-xs text-[var(--f-core-secondary)]"
+            className="flex h-full min-h-24 flex-col items-center justify-center gap-2 px-4 text-center text-xs text-(--f-core-secondary)"
           >
             <ImageIcon size={22} className="opacity-60" aria-hidden="true" />
             <span>{preview.error || 'Preview indisponível.'}</span>
             {onRepair && (
               <button
                 type="button"
-                className="felixo-btn inline-flex items-center gap-1 rounded bg-white/[0.10] px-2 py-1 text-[var(--f-core-white)] hover:bg-white/[0.16] disabled:opacity-50"
+                className="felixo-btn inline-flex items-center gap-1 rounded-sm bg-white/10 px-2 py-1 text-(--f-core-white) hover:bg-white/16 disabled:opacity-50"
                 onClick={onRepair}
                 disabled={repairing}
                 title="Escolher novamente o arquivo de imagem"
@@ -603,12 +601,12 @@ function ImageArtifactPreview({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-1 text-[10px] text-[var(--f-core-secondary)]">
+      <div className="flex items-center justify-between gap-1 text-[10px] text-(--f-core-secondary)">
         <span aria-live="polite">Zoom {Math.round(zoom * 100)}% · + / − / 0</span>
         <span className="flex items-center gap-0.5">
           <button
             type="button"
-            className="felixo-btn-icon rounded p-1 hover:bg-white/10 disabled:opacity-40"
+            className="felixo-btn-icon rounded-sm p-1 hover:bg-white/10 disabled:opacity-40"
             onClick={() => onZoomChange(Math.max(0.5, Number((zoom - 0.25).toFixed(2))))}
             disabled={!hasPreview || zoom <= 0.5}
             title="Diminuir zoom"
@@ -618,7 +616,7 @@ function ImageArtifactPreview({
           </button>
           <button
             type="button"
-            className="felixo-btn-icon rounded p-1 hover:bg-white/10 disabled:opacity-40"
+            className="felixo-btn-icon rounded-sm p-1 hover:bg-white/10 disabled:opacity-40"
             onClick={() => onZoomChange(Math.min(3, Number((zoom + 0.25).toFixed(2))))}
             disabled={!hasPreview || zoom >= 3}
             title="Aumentar zoom"
@@ -628,7 +626,7 @@ function ImageArtifactPreview({
           </button>
           <button
             type="button"
-            className="felixo-btn-icon rounded px-1 py-0.5 hover:bg-white/10 disabled:opacity-40"
+            className="felixo-btn-icon rounded-sm px-1 py-0.5 hover:bg-white/10 disabled:opacity-40"
             onClick={() => onZoomChange(1)}
             disabled={!hasPreview || zoom === 1}
             title="Redefinir zoom"
@@ -644,7 +642,7 @@ function ImageArtifactPreview({
       <div className="flex flex-wrap gap-1 border-t border-white/10 pt-1.5">
         <button
           type="button"
-          className="felixo-btn inline-flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-1 text-[10px] text-[var(--f-core-white)] hover:bg-white/[0.16] disabled:opacity-40"
+          className="felixo-btn inline-flex items-center gap-1 rounded-sm bg-white/10 px-1.5 py-1 text-[10px] text-(--f-core-white) hover:bg-white/16 disabled:opacity-40"
           onClick={onOpen}
           disabled={!path}
           title="Abrir a imagem no aplicativo padrão do sistema"
@@ -654,7 +652,7 @@ function ImageArtifactPreview({
         </button>
         <button
           type="button"
-          className="felixo-btn inline-flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-1 text-[10px] text-[var(--f-core-white)] hover:bg-white/[0.16] disabled:opacity-40"
+          className="felixo-btn inline-flex items-center gap-1 rounded-sm bg-white/10 px-1.5 py-1 text-[10px] text-(--f-core-white) hover:bg-white/16 disabled:opacity-40"
           onClick={onSaveCopy}
           disabled={!path}
           title="Salvar uma cópia da imagem"
@@ -664,7 +662,7 @@ function ImageArtifactPreview({
         </button>
         <button
           type="button"
-          className="felixo-btn inline-flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-1 text-[10px] text-[var(--f-core-white)] hover:bg-white/[0.16] disabled:opacity-40"
+          className="felixo-btn inline-flex items-center gap-1 rounded-sm bg-white/10 px-1.5 py-1 text-[10px] text-(--f-core-white) hover:bg-white/16 disabled:opacity-40"
           onClick={onDuplicate}
           disabled={!path || duplicating}
           title="Criar uma cópia interna deste artefato"
@@ -675,7 +673,7 @@ function ImageArtifactPreview({
         {metadata?.temporary && (
           <button
             type="button"
-            className="felixo-btn inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-1.5 py-1 text-[10px] text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_24%,transparent)] disabled:opacity-40"
+            className="felixo-btn inline-flex items-center gap-1 rounded-sm bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-1.5 py-1 text-[10px] text-theme-error hover:bg-[color-mix(in_srgb,var(--color-error)_24%,transparent)] disabled:opacity-40"
             onClick={onRemoveTemporary}
             disabled={!path}
             title="Remover o arquivo temporário e este bloco"
@@ -687,7 +685,7 @@ function ImageArtifactPreview({
       </div>
 
       {feedback && (
-        <div role="status" aria-live="polite" className="text-[10px] text-[var(--f-core-white-soft)]">
+        <div role="status" aria-live="polite" className="text-[10px] text-(--f-core-white-soft)">
           {feedback}
         </div>
       )}
@@ -710,8 +708,8 @@ function ImageMetadata({ metadata }: { metadata?: CanvasImageMetadata }) {
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[10px]">
       {items.map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="text-[var(--f-core-secondary)]">{label}</dt>
-          <dd className="truncate text-[var(--f-core-white-soft)]" title={value}>
+          <dt className="text-(--f-core-secondary)">{label}</dt>
+          <dd className="truncate text-(--f-core-white-soft)" title={value}>
             {value}
           </dd>
         </div>
@@ -751,14 +749,12 @@ function FourSideHandles() {
             type="source"
             id={`s-${id}`}
             position={position}
-            className="!h-2.5 !w-2.5 !bg-[var(--f-core-white)]"
           />
           {/* Target sits on top of the source so either drag direction works. */}
           <Handle
             type="target"
             id={`t-${id}`}
             position={position}
-            className="!h-2.5 !w-2.5 !border-none !bg-transparent"
           />
         </span>
       ))}
@@ -795,11 +791,11 @@ function LinkedAgentsPanel({
   onUnlink,
 }: LinkedAgentsPanelProps) {
   return (
-    <div className="nodrag relative mt-auto border-t border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11px]">
-      <div className="mb-1 flex items-center gap-1 text-[var(--f-core-white-soft)]">
+    <div className="nodrag relative mt-auto border-t border-white/10 bg-white/4 px-2 py-1.5 text-[11px]">
+      <div className="mb-1 flex items-center gap-1 text-(--f-core-white-soft)">
         <Link2 size={11} />
         <span>Agentes ligados</span>
-        <span className="rounded bg-white/[0.08] px-1 text-[10px] text-[var(--f-core-white)]">
+        <span className="rounded-sm bg-white/8 px-1 text-[10px] text-(--f-core-white)">
           {connectedAgents.length}
         </span>
       </div>
@@ -809,15 +805,15 @@ function LinkedAgentsPanel({
           {connectedAgents.map((agent) => (
             <li
               key={agent.id}
-              className="group flex items-center gap-1 rounded px-1 py-0.5 hover:bg-white/5"
+              className="group flex items-center gap-1 rounded-sm px-1 py-0.5 hover:bg-white/5"
             >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--f-core-active)]" />
-              <span className="min-w-0 flex-1 truncate text-[var(--f-core-white)]">{agent.label}</span>
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-(--f-core-active)" />
+              <span className="min-w-0 flex-1 truncate text-(--f-core-white)">{agent.label}</span>
               {canUnlink && (
                 <button
                   type="button"
                   onClick={() => onUnlink(agent.id)}
-                  className="felixo-btn-icon rounded p-0.5 text-[var(--f-core-secondary)] opacity-0 hover:bg-black/20 hover:text-[var(--color-error)] group-hover:opacity-100"
+                  className="felixo-btn-icon rounded-sm p-0.5 text-(--f-core-secondary) opacity-0 hover:bg-black/20 hover:text-theme-error group-hover:opacity-100"
                   title="Desligar este agente"
                   aria-label={`Desligar ${agent.label}`}
                 >
@@ -828,7 +824,7 @@ function LinkedAgentsPanel({
           ))}
         </ul>
       ) : (
-        <p className="text-[var(--f-core-secondary)]">Nenhum agente ligado ainda.</p>
+        <p className="text-(--f-core-secondary)">Nenhum agente ligado ainda.</p>
       )}
 
       {canLink && (
@@ -836,7 +832,7 @@ function LinkedAgentsPanel({
           <button
             type="button"
             onClick={onToggleMenu}
-            className="felixo-btn inline-flex items-center gap-1 rounded bg-white/[0.10] px-1.5 py-0.5 text-[var(--f-core-white)] hover:bg-white/[0.16]"
+            className="felixo-btn inline-flex items-center gap-1 rounded-sm bg-white/10 px-1.5 py-0.5 text-(--f-core-white) hover:bg-white/16"
             title="Ligar este arquivo a um agente do canvas"
           >
             <Plus size={11} />
@@ -844,21 +840,21 @@ function LinkedAgentsPanel({
           </button>
 
           {menuOpen && (
-            <div className="nowheel absolute bottom-full left-0 z-10 mb-1 max-h-44 w-44 overflow-auto rounded-md border border-white/10 bg-[var(--f-core-graphite)] py-1 shadow-xl">
+            <div className="nowheel absolute bottom-full left-0 z-10 mb-1 max-h-44 w-44 overflow-auto rounded-md border border-white/10 bg-(--f-core-graphite) py-1 shadow-xl">
               {availableAgents.length > 0 ? (
                 availableAgents.map((agent) => (
                   <button
                     key={agent.id}
                     type="button"
                     onClick={() => onLink(agent.id)}
-                    className="felixo-btn flex w-full items-center gap-1 px-2 py-1 text-left text-[var(--f-core-white)] hover:bg-white/[0.16]"
+                    className="felixo-btn flex w-full items-center gap-1 px-2 py-1 text-left text-(--f-core-white) hover:bg-white/16"
                   >
                     <Link2 size={11} className="shrink-0 opacity-60" />
                     <span className="min-w-0 flex-1 truncate">{agent.label}</span>
                   </button>
                 ))
               ) : (
-                <p className="px-2 py-1 text-[var(--f-core-secondary)]">
+                <p className="px-2 py-1 text-(--f-core-secondary)">
                   Nenhum agente disponível. Crie um terminal primeiro.
                 </p>
               )}

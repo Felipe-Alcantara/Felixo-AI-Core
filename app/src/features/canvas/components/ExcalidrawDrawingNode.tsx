@@ -68,10 +68,8 @@ function ExcalidrawDrawingNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.excalidrawDrawing.width}
         minHeight={NODE_MIN_SIZE.excalidrawDrawing.height}
-        lineClassName="!border-black/20"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-black/40"
       />
-      <Handle type="target" position={Position.Left} className="!bg-black/40" />
+      <Handle type="target" position={Position.Left} />
       <NodeHeader
         editableValue={nodeData.label ?? ''}
         placeholder="Desenho (Excalidraw)"
@@ -92,7 +90,7 @@ function ExcalidrawDrawingNodeComponent({ id, data, selected }: NodeProps) {
           <LazyExcalidrawCanvas initialScene={initialScene} onSceneChange={handleSceneChange} />
         </Suspense>
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-black/40" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

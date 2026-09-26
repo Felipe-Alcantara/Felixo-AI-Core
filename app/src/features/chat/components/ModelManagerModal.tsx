@@ -500,15 +500,15 @@ export function ModelManagerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={closeManager}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[85vh] w-full max-w-[480px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex max-h-[85vh] w-full max-w-[480px] flex-col rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">
               Gerenciar modelos
@@ -522,7 +522,7 @@ export function ModelManagerModal({
             type="button"
             title="Fechar"
             onClick={closeManager}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -546,7 +546,7 @@ export function ModelManagerModal({
                 </button>
               )}
             </div>
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-2xl border border-white/[0.08] bg-black/15 p-2">
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-2xl border border-white/8 bg-black/15 p-2">
               {models.length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-zinc-500">
                   Nenhum modelo importado ainda.
@@ -562,7 +562,7 @@ export function ModelManagerModal({
                         <span className="truncate font-medium text-zinc-100">
                           {model.name}
                         </span>
-                        <span className="shrink-0 rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+                        <span className="shrink-0 rounded-full border border-white/8 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
                           {model.cliType}
                         </span>
                       </div>
@@ -595,7 +595,7 @@ export function ModelManagerModal({
                 title="Atualizar detecção"
                 onClick={() => void loadOfficialCatalog()}
                 disabled={isLoadingOfficialClis}
-                className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
                   size={14}
@@ -627,7 +627,7 @@ export function ModelManagerModal({
                 ))}
 
                 {pendingSwitch.sessions.length > 0 && (
-                  <ul className="space-y-1 rounded-xl border border-white/[0.08] bg-black/20 p-2 font-mono text-[10px] text-zinc-400">
+                  <ul className="space-y-1 rounded-xl border border-white/8 bg-black/20 p-2 font-mono text-[10px] text-zinc-400">
                     {pendingSwitch.sessions.map((session) => (
                       <li key={session.sessionId} className="truncate">
                         {formatSessionLabel(session)}
@@ -641,7 +641,7 @@ export function ModelManagerModal({
                     type="button"
                     onClick={() => setPendingSwitch(null)}
                     disabled={busyOfficialCliId !== null}
-                    className="felixo-btn-icon h-8 rounded-lg px-3 text-xs text-zinc-300 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="felixo-btn-icon h-8 rounded-lg px-3 text-xs text-zinc-300 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Cancelar
                   </button>
@@ -659,7 +659,7 @@ export function ModelManagerModal({
               </div>
             )}
 
-            <div className="space-y-2 rounded-2xl border border-white/[0.08] bg-black/10 p-2">
+            <div className="space-y-2 rounded-2xl border border-white/8 bg-black/10 p-2">
               {officialClis.length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-zinc-500">
                   Nenhuma CLI oficial detectada ainda.
@@ -673,7 +673,7 @@ export function ModelManagerModal({
                   return (
                     <div
                       key={cli.id}
-                      className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3"
+                      className="rounded-xl border border-white/6 bg-white/3 p-3"
                     >
                       <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
@@ -716,7 +716,7 @@ export function ModelManagerModal({
                               title="Abrir menu manual do Openia"
                               onClick={() => void openOfficialLogin(cli)}
                               disabled={isAnyOfficialCliBusy}
-                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Terminal size={14} aria-hidden="true" />
                               <span className="sr-only">Abrir menu manual do Openia</span>
@@ -731,7 +731,7 @@ export function ModelManagerModal({
                               }
                               onClick={() => importOfficialModels(cli.models)}
                               disabled={isImported || isAnyOfficialCliBusy}
-                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Plus size={14} aria-hidden="true" />
                               <span className="sr-only">
@@ -750,7 +750,7 @@ export function ModelManagerModal({
                               }
                               onClick={() => void installOfficialCli(cli)}
                               disabled={isImported || isAnyOfficialCliBusy}
-                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Download size={14} aria-hidden="true" />
                               <span className="sr-only">
@@ -764,7 +764,7 @@ export function ModelManagerModal({
                             title={`Login ${cli.name}`}
                             onClick={() => void openOfficialLogin(cli)}
                             disabled={!cli.detected || isAnyOfficialCliBusy}
-                            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <LogIn size={14} aria-hidden="true" />
                             <span className="sr-only">Login {cli.name}</span>
@@ -779,7 +779,7 @@ export function ModelManagerModal({
                                   void checkOfficialAccountStatus(cli)
                                 }
                                 disabled={!cli.detected || isAnyOfficialCliBusy}
-                                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 <KeyRound size={14} aria-hidden="true" />
                                 <span className="sr-only">
@@ -812,7 +812,7 @@ export function ModelManagerModal({
             </div>
           </div>
 
-          <form className="space-y-3 rounded-2xl border border-white/[0.08] bg-black/10 p-3" onSubmit={handleSubmit}>
+          <form className="space-y-3 rounded-2xl border border-white/8 bg-black/10 p-3" onSubmit={handleSubmit}>
             <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
               <Plus size={14} aria-hidden="true" />
               Adicionar CLI
@@ -833,13 +833,13 @@ export function ModelManagerModal({
                   placeholder="codex, claude ou gemini"
                   value={formCommand}
                   onChange={(event) => setFormCommand(event.target.value)}
-                  className="h-10 min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="h-10 min-w-0 flex-1 rounded-2xl border border-white/8 bg-(--color-input) px-3 font-mono text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <button
                   type="button"
                   title="Escolher script legado"
                   onClick={() => fileInputRef.current?.click()}
-                  className="felixo-btn-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+                  className="felixo-btn-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/8 text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
                 >
                   <FolderOpen size={16} aria-hidden="true" />
                   <span className="sr-only">Escolher script legado</span>
@@ -853,7 +853,7 @@ export function ModelManagerModal({
                 placeholder="Codex CLI"
                 value={formName}
                 onChange={(event) => setFormName(event.target.value)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--color-input) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -863,20 +863,20 @@ export function ModelManagerModal({
                 placeholder="CLI instalada no sistema"
                 value={formSource}
                 onChange={(event) => setFormSource(event.target.value)}
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[var(--color-input)] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--color-input) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
             <button
               type="submit"
-              className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[var(--color-panel)]"
+              className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-(--color-panel)"
             >
               <Plus size={16} aria-hidden="true" />
               Adicionar CLI
             </button>
 
             {status && (
-              <p className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-zinc-400">
+              <p className="rounded-2xl border border-white/8 bg-white/4 px-3 py-2 text-xs text-zinc-400">
                 {status}
               </p>
             )}

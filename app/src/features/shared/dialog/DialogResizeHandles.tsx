@@ -38,7 +38,7 @@ export function DialogResizeHandles({ dialog }: { dialog: ResizableDialog<HTMLEl
           aria-label={label}
           tabIndex={0}
           data-felixo-dialog-handle={name}
-          className={`absolute z-10 rounded-full outline-none transition-colors hover:bg-white/15 focus-visible:bg-white/25 ${className}`}
+          className={`absolute z-10 rounded-full outline-hidden transition-colors hover:bg-white/15 focus-visible:bg-white/25 ${className}`}
           onMouseDown={(event) => dialog.startResize(event, axes)}
           onDoubleClick={dialog.reset}
           onClick={(event) => event.stopPropagation()}

@@ -83,7 +83,7 @@ export function AutomationsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
@@ -91,7 +91,7 @@ export function AutomationsModal({
         className="relative flex max-h-[86vh] w-full max-w-[860px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">
               Automações
@@ -105,7 +105,7 @@ export function AutomationsModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -117,7 +117,7 @@ export function AutomationsModal({
             {automations.map((automation) => (
               <article
                 key={automation.id}
-                className="rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+                className="rounded-2xl border border-white/8 bg-black/10 p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -125,12 +125,12 @@ export function AutomationsModal({
                       <Sparkles
                         size={14}
                         aria-hidden="true"
-                        className="shrink-0 text-[var(--f-core-white-soft)]"
+                        className="shrink-0 text-(--f-core-white-soft)"
                       />
                       <h3 className="truncate text-sm font-medium text-zinc-100">
                         {automation.name}
                       </h3>
-                      <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] text-zinc-500">
+                      <span className="rounded-full border border-white/8 px-2 py-0.5 text-[10px] text-zinc-500">
                         {formatScope(automation.scope)}
                       </span>
                       {automation.isDefault && (
@@ -163,7 +163,7 @@ export function AutomationsModal({
                       type="button"
                       title="Usar automação"
                       onClick={() => onApplyAutomation(automation)}
-                      className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] text-zinc-200 hover:bg-white/[0.08]"
+                      className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 text-zinc-200 hover:bg-white/8"
                     >
                       <Play size={14} aria-hidden="true" />
                       <span className="sr-only">Usar automação</span>
@@ -175,7 +175,7 @@ export function AutomationsModal({
           </div>
 
           <form
-            className="space-y-3 rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+            className="space-y-3 rounded-2xl border border-white/8 bg-black/10 p-3"
             onSubmit={handleSubmit}
           >
             <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
@@ -189,7 +189,7 @@ export function AutomationsModal({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Revisar release"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -199,7 +199,7 @@ export function AutomationsModal({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Quando usar este fluxo"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -221,7 +221,7 @@ export function AutomationsModal({
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="Instrucao base da automacao"
                 rows={5}
-                className="mt-1 min-h-28 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 min-h-28 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 

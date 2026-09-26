@@ -91,7 +91,7 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
     if (!session) return
 
     const textarea = document.createElement('textarea')
-    textarea.className = 'xterm nodrag nowheel nopan h-full w-full resize-none bg-transparent p-2 font-mono text-xs text-zinc-300 outline-none'
+    textarea.className = 'xterm nodrag nowheel nopan h-full w-full resize-none bg-transparent p-2 font-mono text-xs text-zinc-300 outline-hidden'
     textarea.setAttribute('aria-label', `Terminal ${session.metadata.label ?? 'mock'}`)
     textarea.setAttribute('data-felixo-mock-terminal', id)
     textarea.value = session.transcript

@@ -31,8 +31,8 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
         aria-label={title}
         title={title}
         data-dictation-state={state.phase}
-        className={`felixo-btn-icon flex items-center gap-1.5 rounded px-2 py-1 text-xs ${
-          recording ? 'bg-red-500/20 text-red-200' : 'text-[var(--f-core-white-soft)] hover:bg-white/10'
+        className={`felixo-btn-icon flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs ${
+          recording ? 'bg-red-500/20 text-red-200' : 'text-(--f-core-white-soft) hover:bg-white/10'
         } disabled:opacity-60`}
       >
         {transcribing ? (
@@ -55,7 +55,7 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
           onClick={cancel}
           aria-label="Descartar gravação"
           title="Descartar gravação"
-          className="felixo-btn-icon rounded p-1 text-zinc-300 hover:bg-white/10"
+          className="felixo-btn-icon rounded-sm p-1 text-zinc-300 hover:bg-white/10"
         >
           <X size={12} aria-hidden />
         </button>
@@ -63,7 +63,7 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
       {(failed || notice) && (
         <div
           role={failed ? 'alert' : 'status'}
-          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-white/10 bg-[var(--f-surface-panel)] p-2 text-[11px] leading-relaxed text-[var(--f-core-white-soft)] shadow-xl"
+          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-white/10 bg-(--f-surface-panel) p-2 text-[11px] leading-relaxed text-(--f-core-white-soft) shadow-xl"
         >
           <p className={failed ? 'text-red-300' : undefined}>{failed ? state.message : notice}</p>
           <button type="button" onClick={dismiss} className="mt-1 text-[10px] opacity-70 hover:opacity-100">

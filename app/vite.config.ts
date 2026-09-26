@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // Identifies this project's dev server so the Electron launch script can
 // tell it apart from an unrelated dev server that happens to already be
@@ -26,7 +27,9 @@ export default defineConfig({
   // abre em branco. O caminho relativo funciona nos dois casos, porque em
   // dev o Vite serve a partir da raiz do próprio servidor.
   base: './',
-  plugins: [react(), felixoDevMarkerPlugin()],
+  // Tailwind 4 pelo plugin dedicado do Vite (recomendação do guia oficial de
+  // upgrade no lugar do plugin PostCSS); a configuração vive em src/index.css.
+  plugins: [react(), tailwindcss(), felixoDevMarkerPlugin()],
   optimizeDeps: {
     include: [
       'highlight.js/lib/core',

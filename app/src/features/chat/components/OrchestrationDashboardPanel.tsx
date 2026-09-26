@@ -14,10 +14,10 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  running: 'bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)] border-white/10',
-  completed: 'bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)] border-white/10',
-  error: 'bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] text-[var(--color-error)] border-[color-mix(in_srgb,var(--color-error)_38%,transparent)]',
-  fallback: 'bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)] border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)]',
+  running: 'bg-(--f-core-white)/15 text-(--f-core-white-soft) border-white/10',
+  completed: 'bg-(--f-core-white)/15 text-(--f-core-white-soft) border-white/10',
+  error: 'bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] text-theme-error border-[color-mix(in_srgb,var(--color-error)_38%,transparent)]',
+  fallback: 'bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning) border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)]',
 }
 
 export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
@@ -35,7 +35,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
     <section
       data-felixo-tech="orchestration"
       data-open={isOpen ? 'true' : 'false'}
-      className="felixo-tech-strip border-t border-white/[0.08]"
+      className="felixo-tech-strip border-t border-white/8"
     >
       {/* Mesma anatomia da faixa do QA Logger ao lado: ícone, nome, pílula com
           a contagem e uma seta. Parada, a faixa não narra "0 runs · 0/0
@@ -45,7 +45,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
         <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-zinc-400">
           <Network size={13} aria-hidden="true" />
           <span>Orquestração</span>
-          <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+          <span className="rounded-full border border-white/8 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
             {runs.length}
           </span>
           {totalAgents > 0 ? (
@@ -54,7 +54,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
             </span>
           ) : null}
           {limitedModels.length > 0 ? (
-            <span className="truncate font-normal text-[var(--color-warning)]">
+            <span className="truncate font-normal text-(--color-warning)">
               {limitedModels.length} modelo(s) com limite
             </span>
           ) : null}
@@ -63,7 +63,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
           type="button"
           title={isOpen ? 'Recolher orquestração' : 'Abrir orquestração'}
           onClick={onToggleOpen}
-          className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
+          className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/6 hover:text-zinc-200"
         >
           {isOpen ? (
             <ChevronDown size={14} aria-hidden="true" />
@@ -85,21 +85,21 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
 
           {limitedModels.length > 0 ? (
             <div>
-              <h4 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-warning)]">
+              <h4 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-(--color-warning)">
                 Modelos com limite
               </h4>
               <ul className="space-y-1">
                 {limitedModels.map((entry) => (
                   <li
                     key={`${entry.cliType}:${entry.modelId ?? 'cli-wide'}`}
-                    className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-xs text-[var(--color-warning)]"
+                    className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-xs text-(--color-warning)"
                   >
                     <div className="font-medium">
                       {entry.modelName ?? entry.modelId ?? entry.cliType}
-                      <span className="ml-1 text-[var(--color-warning)]">({entry.cliType})</span>
+                      <span className="ml-1 text-(--color-warning)">({entry.cliType})</span>
                     </div>
                     {entry.resetLabel ? (
-                      <div className="text-[11px] text-[var(--color-warning)]">
+                      <div className="text-[11px] text-(--color-warning)">
                         Reset previsto: {entry.resetLabel}
                       </div>
                     ) : null}
@@ -144,7 +144,7 @@ export function OrchestrationDashboardPanel({ isOpen, onToggleOpen }: Props) {
                         {agent.modelName ? ` · ${agent.modelName}` : ''}
                       </div>
                       {agent.fallbackHistory.length > 0 ? (
-                        <div className="text-[11px] text-[var(--color-warning)]">
+                        <div className="text-[11px] text-(--color-warning)">
                           {agent.fallbackHistory.map((entry, index) => (
                             <span key={index} className="block">
                               ↻ {entry.fromCliType} → {entry.toCliType}

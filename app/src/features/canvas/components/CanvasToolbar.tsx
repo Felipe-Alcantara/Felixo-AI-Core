@@ -58,8 +58,11 @@ import type { NewTerminalOptions } from '../services/new-terminal-options'
  */
 const TOOLBAR_BUTTON_FRAME = 'w-full rounded-md'
 
-/** A superfície clicável: fundo, cor e o realce que segue o ponteiro. */
-const TOOLBAR_BUTTON_SURFACE = 'bg-transparent text-zinc-100 hover:bg-[var(--f-core-structural)]'
+/** A superfície clicável: fundo, cor e o realce que segue o ponteiro.
+ *  O `!` do hover mantém o realce do Tailwind 3: lá as variantes saíam no fim
+ *  da folha e venciam `.felixo-sidebar-action:hover` (index.css); no Tailwind 4
+ *  o CSS próprio fica fora de camada e venceria sem ele. */
+const TOOLBAR_BUTTON_SURFACE = 'bg-transparent text-zinc-100 hover:bg-(--f-core-structural)!'
 
 /** Shape shared by every toolbar button; the press depth comes from the
  *  felixo-btn / felixo-btn-icon each call site adds. */
@@ -226,7 +229,7 @@ export function CanvasToolbar({
           <Bell size={18} />
           {notificationCount > 0 && (
             <span
-              className="felixo-notifications-badge pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-error)] px-1 text-[9px] font-bold text-[var(--f-core-black-deep)] ring-2 ring-[var(--f-core-black-deep)]"
+              className="felixo-notifications-badge pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-theme-error px-1 text-[9px] font-bold text-(--f-core-black-deep) ring-2 ring-(--f-core-black-deep)"
               aria-hidden
             >
               {notificationCount}
@@ -523,7 +526,7 @@ function OrganizeButton({
           type="button"
           onClick={() => organize('single')}
           disabled={disabled}
-          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-[var(--f-core-structural)] px-3 py-2 text-sm text-[var(--f-core-white-soft)] enabled:hover:bg-[#303030] disabled:cursor-not-allowed"
+          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-(--f-core-structural) px-3 py-2 text-sm text-(--f-core-white-soft) enabled:hover:bg-[#303030] disabled:cursor-not-allowed"
           title={
             disabled
               ? 'Adicione pelo menos dois blocos para organizá-los'
@@ -540,7 +543,7 @@ function OrganizeButton({
           aria-label="Modos de organização"
           aria-expanded={open}
           aria-controls="canvas-organize-modes"
-          className="felixo-btn-flat flex items-center border-l border-white/10 bg-[var(--f-core-structural)] px-1.5 text-[var(--f-core-secondary)] enabled:hover:bg-[#303030] disabled:cursor-not-allowed"
+          className="felixo-btn-flat flex items-center border-l border-white/10 bg-(--f-core-structural) px-1.5 text-(--f-core-secondary) enabled:hover:bg-[#303030] disabled:cursor-not-allowed"
           title="Modos de organização"
         >
           <ChevronDown size={14} />
@@ -558,7 +561,7 @@ function OrganizeButton({
           <button
             type="button"
             onClick={() => organize('single')}
-            className="felixo-btn w-full rounded px-2 py-1.5 text-left text-sm text-[var(--f-core-white-soft)] hover:bg-white/[0.06]"
+            className="felixo-btn w-full rounded-sm px-2 py-1.5 text-left text-sm text-(--f-core-white-soft) hover:bg-white/6"
           >
             Matriz única
             <span className="mt-0.5 block text-[11px] text-zinc-400">
@@ -568,7 +571,7 @@ function OrganizeButton({
           <button
             type="button"
             onClick={() => organize('by-repository')}
-            className="felixo-btn mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-[var(--f-core-white-soft)] hover:bg-white/[0.06]"
+            className="felixo-btn mt-1 w-full rounded-sm px-2 py-1.5 text-left text-sm text-(--f-core-white-soft) hover:bg-white/6"
           >
             Uma matriz por repositório
             <span className="mt-0.5 block text-[11px] text-zinc-400">
@@ -578,7 +581,7 @@ function OrganizeButton({
           <button
             type="button"
             onClick={() => organize('by-repository-row')}
-            className="felixo-btn mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-[var(--f-core-white-soft)] hover:bg-white/[0.06]"
+            className="felixo-btn mt-1 w-full rounded-sm px-2 py-1.5 text-left text-sm text-(--f-core-white-soft) hover:bg-white/6"
           >
             Uma linha por pasta
             <span className="mt-0.5 block text-[11px] text-zinc-400">
@@ -712,7 +715,7 @@ function NamedCreateButton({
             }}
             placeholder={placeholder}
             aria-label={placeholder}
-            className="mb-2 felixo-field w-full px-2 py-1.5 text-sm outline-none"
+            className="mb-2 felixo-field w-full px-2 py-1.5 text-sm outline-hidden"
           />
           <button
             type="button"
@@ -731,7 +734,7 @@ function NamedCreateButton({
                 window.requestAnimationFrame(() => triggerRef.current?.focus())
               }}
               title={secondaryTitle}
-              className="felixo-btn mt-2 w-full rounded border-t border-white/10 px-3 py-1.5 pt-2.5 text-sm text-[var(--f-core-secondary)] hover:bg-white/[0.06] hover:text-[var(--f-core-white)]"
+              className="felixo-btn mt-2 w-full rounded-sm border-t border-white/10 px-3 py-1.5 pt-2.5 text-sm text-(--f-core-secondary) hover:bg-white/6 hover:text-(--f-core-white)"
             >
               {secondaryLabel}
             </button>
@@ -864,7 +867,7 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
             aria-label="Endereço do site"
             aria-invalid={urlError ? true : undefined}
             aria-describedby={urlError ? `${popoverId}-error` : undefined}
-            className="mb-1.5 felixo-field w-full px-2 py-1.5 text-sm outline-none"
+            className="mb-1.5 felixo-field w-full px-2 py-1.5 text-sm outline-hidden"
           />
           {urlError && (
             <p id={`${popoverId}-error`} role="alert" className="mb-2 text-xs text-red-300">
@@ -887,7 +890,7 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
             }}
             placeholder="Nome (opcional)"
             aria-label="Nome do bloco (opcional)"
-            className="mb-2 felixo-field w-full px-2 py-1.5 text-sm outline-none"
+            className="mb-2 felixo-field w-full px-2 py-1.5 text-sm outline-hidden"
           />
           {profiles.length > 0 && (
             <div className="mb-2">

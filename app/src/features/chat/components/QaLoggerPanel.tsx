@@ -101,13 +101,13 @@ export function QaLoggerPanel({
       <section
         data-felixo-tech="qa"
         data-open="false"
-        className="felixo-tech-strip shrink-0 border-t border-white/[0.08] text-zinc-400"
+        className="felixo-tech-strip shrink-0 border-t border-white/8 text-zinc-400"
       >
         <header className="flex h-full items-center justify-between px-3">
           <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium">
             <Terminal size={13} aria-hidden="true" />
             <span>QA Logger</span>
-            <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+            <span className="rounded-full border border-white/8 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
               {entries.length}
             </span>
           </div>
@@ -116,7 +116,7 @@ export function QaLoggerPanel({
             type="button"
             title="Abrir QA Logger"
             onClick={onToggleOpen}
-            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/6 hover:text-zinc-200"
           >
             <ChevronUp size={14} aria-hidden="true" />
             <span className="sr-only">Abrir QA Logger</span>
@@ -130,7 +130,7 @@ export function QaLoggerPanel({
     <section
       style={{ height }}
       className={[
-        'relative shrink-0 border-t border-white/[0.08] bg-[#10100f] text-zinc-300',
+        'relative shrink-0 border-t border-white/8 bg-[#10100f] text-zinc-300',
         dragging ? '' : 'transition-[height] duration-300 ease-in-out',
       ].join(' ')}
     >
@@ -138,7 +138,7 @@ export function QaLoggerPanel({
         <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-zinc-400">
           <Terminal size={13} aria-hidden="true" />
           <span>QA Logger</span>
-          <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+          <span className="rounded-full border border-white/8 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
             {entries.length}
           </span>
         </div>
@@ -149,7 +149,7 @@ export function QaLoggerPanel({
             title="Limpar logs"
             onClick={clearLogs}
             disabled={entries.length === 0}
-            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/6 hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
           >
             <Trash2 size={13} aria-hidden="true" />
             <span className="sr-only">Limpar logs</span>
@@ -158,7 +158,7 @@ export function QaLoggerPanel({
             type="button"
             title="Recolher QA Logger"
             onClick={onToggleOpen}
-            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/6 hover:text-zinc-200"
           >
             <ChevronDown size={14} aria-hidden="true" />
             <span className="sr-only">Recolher QA Logger</span>
@@ -173,14 +173,14 @@ export function QaLoggerPanel({
           entries.map((entry) => (
             <div
               key={entry.id}
-              className="grid grid-cols-[4.25rem_3.75rem_5.5rem_minmax(0,1fr)] gap-2 border-b border-white/[0.03] py-1 last:border-b-0"
+              className="grid grid-cols-[4.25rem_3.75rem_5.5rem_minmax(0,1fr)] gap-2 border-b border-white/3 py-1 last:border-b-0"
             >
               <span className="text-zinc-600">{formatTime(entry.createdAt)}</span>
               <span className={getLevelClassName(entry.level)}>
                 {entry.level.toUpperCase()}
               </span>
               <span className="truncate text-zinc-500">{entry.scope}</span>
-              <span className="min-w-0 whitespace-pre-wrap break-words text-zinc-300">
+              <span className="min-w-0 whitespace-pre-wrap wrap-break-word text-zinc-300">
                 {entry.message}
                 {entry.sessionId && (
                   <span className="text-zinc-600"> [{entry.sessionId.slice(0, 8)}]</span>
@@ -227,11 +227,11 @@ function getLevelClassName(level: QaLogEntry['level']) {
   }
 
   if (level === 'warn') {
-    return 'text-[var(--color-warning)]'
+    return 'text-(--color-warning)'
   }
 
   if (level === 'debug') {
-    return 'text-[var(--f-core-white-soft)]'
+    return 'text-(--f-core-white-soft)'
   }
 
   return 'text-theme-success'

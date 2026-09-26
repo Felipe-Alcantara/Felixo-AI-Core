@@ -203,7 +203,7 @@ export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelP
                 {spawnableModels.map((model) => (
                   <div
                     key={model.id}
-                    className="rounded-md border border-white/[0.06] bg-black/20 px-2 py-1.5"
+                    className="rounded-md border border-white/6 bg-black/20 px-2 py-1.5"
                   >
                     <div className="truncate text-[11px] text-zinc-200">{model.name}</div>
                     <div className="truncate font-mono text-[10px] text-zinc-600">
@@ -285,10 +285,10 @@ const AGENT_STATUS_LABEL: Record<string, string> = {
 }
 
 const AGENT_STATUS_CLASS: Record<string, string> = {
-  running: 'border-white/10 bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)]',
-  completed: 'border-white/10 bg-[var(--f-core-white)]/15 text-[var(--f-core-white-soft)]',
-  error: 'border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] text-[var(--color-error)]',
-  fallback: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
+  running: 'border-white/10 bg-(--f-core-white)/15 text-(--f-core-white-soft)',
+  completed: 'border-white/10 bg-(--f-core-white)/15 text-(--f-core-white-soft)',
+  error: 'border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] text-theme-error',
+  fallback: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)',
 }
 
 /**
@@ -313,7 +313,7 @@ function LiveRuns() {
 
   if (runs.length === 0 && limitedModels.length === 0) {
     return (
-      <p className="mb-3 rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[11px] text-zinc-500">
+      <p className="mb-3 rounded-md border border-white/10 bg-white/2 px-2 py-1.5 text-[11px] text-zinc-500">
         Nenhuma orquestração ativa. Quando o orquestrador delegar tarefas, os
         sub-agentes e fallbacks aparecem aqui.
       </p>
@@ -332,14 +332,14 @@ function LiveRuns() {
           {limitedModels.map((entry) => (
             <li
               key={`${entry.cliType}:${entry.modelId ?? 'cli-wide'}`}
-              className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-warning)]"
+              className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-(--color-warning)"
             >
               <span className="font-medium">
                 {entry.modelName ?? entry.modelId ?? entry.cliType}
               </span>
-              <span className="ml-1 text-[var(--color-warning)]">({entry.cliType})</span>
+              <span className="ml-1 text-(--color-warning)">({entry.cliType})</span>
               {entry.resetLabel && (
-                <span className="block text-[var(--color-warning)]">
+                <span className="block text-(--color-warning)">
                   Reset previsto: {entry.resetLabel}
                 </span>
               )}
@@ -349,14 +349,14 @@ function LiveRuns() {
       )}
 
       {agentsByRun.map((run) => (
-        <div key={run.runId} className="rounded-md border border-white/[0.06] p-1.5">
+        <div key={run.runId} className="rounded-md border border-white/6 p-1.5">
           <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500">
             <span className="truncate font-mono">{run.runId}</span>
             <span className="shrink-0">{run.agents.length} agente(s)</span>
           </div>
           <ul className="space-y-1">
             {run.agents.map((agent) => (
-              <li key={agent.agentId} className="rounded bg-white/5 px-1.5 py-1 text-[11px]">
+              <li key={agent.agentId} className="rounded-sm bg-white/5 px-1.5 py-1 text-[11px]">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-zinc-100">{agent.agentId}</span>
                   <span
@@ -372,7 +372,7 @@ function LiveRuns() {
                   {agent.modelName ? ` · ${agent.modelName}` : ''}
                 </div>
                 {agent.fallbackHistory.map((entry, index) => (
-                  <div key={index} className="text-[10px] text-[var(--color-warning)]">
+                  <div key={index} className="text-[10px] text-(--color-warning)">
                     ↻ {entry.fromCliType} → {entry.toCliType}
                     {entry.spreadFromCliType
                       ? ` (espalhado de ${entry.spreadFromCliType})`

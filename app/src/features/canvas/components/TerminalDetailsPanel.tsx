@@ -45,7 +45,7 @@ export function TerminalDetailsPanel({
       toolsMenuOpen={toolsMenuOpen}
     >
       <div className="space-y-3 text-xs text-zinc-300">
-        <div className="flex items-center gap-2 text-sm font-medium text-[var(--f-core-white-soft)]">
+        <div className="flex items-center gap-2 text-sm font-medium text-(--f-core-white-soft)">
           <TerminalIcon size={14} />
           <span className="truncate">{value(data.label, 'Terminal')}</span>
         </div>
@@ -66,7 +66,7 @@ export function TerminalDetailsPanel({
         {agentSession && (
           <button
             type="button"
-            className="rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] px-2 py-1 text-left text-[11px] text-[var(--color-warning)] hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]"
+            className="rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] px-2 py-1 text-left text-[11px] text-(--color-warning) hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]"
             onClick={() => {
               if (window.confirm('Remover a associação desta conversa? O terminal atual não será encerrado.')) {
                 onClearAgentSession()
@@ -89,8 +89,8 @@ function Detail({ label, value, copy, mono = false }: { label: string; value: st
   return (
     <div className="space-y-1">
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="flex items-start gap-1 rounded border border-white/5 bg-black/20 px-2 py-1.5">
-        <span className={`min-w-0 flex-1 break-words ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</span>
+      <div className="flex items-start gap-1 rounded-sm border border-white/5 bg-black/20 px-2 py-1.5">
+        <span className={`min-w-0 flex-1 wrap-break-word ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</span>
         {copy && <button type="button" className="shrink-0 text-zinc-500 hover:text-zinc-100" aria-label={`Copiar ${label}`} onClick={() => void navigator.clipboard?.writeText(copy)}><Copy size={12} /></button>}
       </div>
     </div>

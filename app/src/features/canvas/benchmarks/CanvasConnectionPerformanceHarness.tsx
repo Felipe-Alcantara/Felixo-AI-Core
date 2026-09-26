@@ -529,13 +529,13 @@ function PerformanceNode({ id, data, selected }: NodeProps) {
       data-canvas-performance-node="true"
       data-canvas-performance-node-id={id}
       className={`relative flex h-full w-full flex-col justify-between rounded-lg border px-2 py-1 text-[10px] text-zinc-100 shadow-lg ${
-        selected ? 'border-white/10 bg-white/[0.04]' : 'border-white/15 bg-zinc-900/90'
+        selected ? 'border-white/10 bg-white/4' : 'border-white/15 bg-zinc-900/90'
       }`}
     >
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-[var(--f-core-white)]" />
+      <Handle type="target" position={Position.Left} />
       <span className="truncate font-semibold">{label}</span>
       <span className="text-zinc-400">conexões: {connections}</span>
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-[var(--f-core-white)]" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }
@@ -642,8 +642,8 @@ export function CanvasConnectionPerformanceHarness() {
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100">
-      <div className="pointer-events-none fixed left-3 top-3 z-10 rounded border border-white/10 bg-zinc-950/80 px-3 py-2 text-xs">
-        <div className="font-semibold text-[var(--f-core-white)]">Canvas connection benchmark</div>
+      <div className="pointer-events-none fixed left-3 top-3 z-10 rounded-sm border border-white/10 bg-zinc-950/80 px-3 py-2 text-xs">
+        <div className="font-semibold text-(--f-core-white)">Canvas connection benchmark</div>
         <div className="text-zinc-400">{status}</div>
       </div>
       {surface ? (

@@ -94,7 +94,7 @@ export function AgentPresetFields({ config }: Props) {
             type="button"
             onClick={() => void handleSave()}
             disabled={!newName.trim() || saving || !config.agent || config.agent.isLauncher}
-            className="felixo-btn felixo-secondary-action rounded px-2 py-1 text-[11px] disabled:opacity-50"
+            className="felixo-btn felixo-secondary-action rounded-sm px-2 py-1 text-[11px] disabled:opacity-50"
           >
             {saving ? 'Salvando…' : 'Salvar como preset'}
           </button>
@@ -105,7 +105,7 @@ export function AgentPresetFields({ config }: Props) {
             <button
               type="button"
               onClick={() => void duplicate(active)}
-              className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded px-2 py-1 text-[11px]"
+              className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded-sm px-2 py-1 text-[11px]"
             >
               <Copy size={11} aria-hidden /> Duplicar
             </button>
@@ -117,7 +117,7 @@ export function AgentPresetFields({ config }: Props) {
                     if (ok) config.applyPreset(null)
                   })
                 }}
-                className="felixo-btn flex items-center gap-1 rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                className="felixo-btn flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
               >
                 <Trash2 size={11} aria-hidden /> Excluir
               </button>

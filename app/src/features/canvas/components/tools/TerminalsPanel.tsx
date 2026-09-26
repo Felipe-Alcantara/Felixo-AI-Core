@@ -70,12 +70,12 @@ type TerminalsPanelProps = {
 }
 
 const ACTIVITY_DOT_CLASS: Record<SessionActivity, string> = {
-  starting: 'bg-[var(--f-core-secondary)]',
-  working: 'bg-[var(--f-core-active)]',
-  waiting_approval: 'bg-[var(--color-warning)]',
-  idle: 'bg-[var(--f-core-structural)]',
-  exited: 'bg-[var(--f-core-structural)]',
-  error: 'bg-[var(--color-error)]',
+  starting: 'bg-(--f-core-secondary)',
+  working: 'bg-(--f-core-active)',
+  waiting_approval: 'bg-(--color-warning)',
+  idle: 'bg-(--f-core-structural)',
+  exited: 'bg-(--f-core-structural)',
+  error: 'bg-theme-error',
 }
 
 const TYPE_ICON: Record<CanvasNodeType, typeof TerminalIcon> = {
@@ -482,7 +482,7 @@ export function TerminalsPanel({
           aria-label="Recolher elementos"
           aria-expanded={!collapsed}
           tabIndex={collapsed ? -1 : 0}
-          className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded text-left hover:text-white"
+          className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left hover:text-white"
         >
           <TerminalIcon size={15} className="shrink-0" />
           <span className="truncate">Elementos</span>
@@ -501,8 +501,8 @@ export function TerminalsPanel({
           title="Enviar mensagens diferentes para vários terminais"
           aria-label="Alternar modo de enviar mensagens em massa"
           aria-pressed={composeMode}
-          className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
-            composeMode ? 'text-[var(--f-core-active)]' : 'text-zinc-400'
+          className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 ${
+            composeMode ? 'text-(--f-core-active)' : 'text-zinc-400'
           }`}
         >
           <MessagesSquare size={14} />
@@ -514,7 +514,7 @@ export function TerminalsPanel({
             type="button"
             onClick={sendAllDrafts}
             disabled={pendingIds.length === 0}
-            className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded felixo-primary-action px-2 py-1.5 text-xs font-medium text-white  disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:opacity-50"
+            className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded-sm felixo-primary-action px-2 py-1.5 text-xs font-medium text-white  disabled:cursor-not-allowed disabled:bg-zinc-700! disabled:opacity-50"
           >
             <Send size={12} />
             Enviar para todos {pendingIds.length > 0 ? `(${pendingIds.length})` : ''}
@@ -542,7 +542,7 @@ export function TerminalsPanel({
             commitActive()
           }
         }}
-        className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/40 ${
+        className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/40 ${
           // The stagger plays as the dock unfolds; while a row is being dragged
           // it must not re-run and fight the drag's own transform.
           collapsed || drag ? '' : 'felixo-anim-stagger-list'
@@ -629,7 +629,7 @@ function RepositoryHeading({
         className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500"
       >
         <span className="h-px min-w-2 flex-1 bg-white/10" aria-hidden />
-        <span role="heading" aria-level={3} className="max-w-[15rem] truncate">
+        <span role="heading" aria-level={3} className="max-w-60 truncate">
           {label}
         </span>
         <span className="tabular-nums text-zinc-600">{count}</span>
@@ -680,12 +680,12 @@ function ElementRow({
     <li
       data-element-row
       style={{ transform: translateY ? `translateY(${translateY}px)` : undefined }}
-      className={`rounded ${
+      className={`rounded-sm ${
         dragging
           ? // No transition on the dragged row: it must track the pointer
             // 1:1, while the rows making room animate into place.
             'relative z-10 bg-zinc-800 shadow-lg ring-1 ring-white/25'
-          : 'transition-transform duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+          : 'transition-transform duration-180 ease-[cubic-bezier(0.16,1,0.3,1)]'
       }`}
     >
       <div className="flex items-start">
@@ -706,11 +706,11 @@ function ElementRow({
           type="button"
           onClick={onSelect}
           title={elementTitle(node)}
-          className={`felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
+          className={`felixo-btn flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/5 ${
             active ? 'felixo-inspector-row-active bg-white/10' : ''
           }`}
         >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-black/30 text-[10px] font-semibold tabular-nums text-[var(--f-core-white-soft)]">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-black/30 text-[10px] font-semibold tabular-nums text-(--f-core-white-soft)">
             {index}
           </span>
           {isTerminal ? (
@@ -721,12 +721,12 @@ function ElementRow({
           ) : (
             <Icon size={13} className="mt-0.5 shrink-0 text-zinc-400" />
           )}
-          <span className="min-w-0 flex-1 whitespace-normal break-words text-sm text-zinc-100">
+          <span className="min-w-0 flex-1 whitespace-normal wrap-break-word text-sm text-zinc-100">
             {elementTitle(node)}
           </span>
           {isTerminal &&
             (activity === 'working' ? (
-              <Loader2 size={11} className="mt-0.5 shrink-0 animate-spin text-[var(--f-core-white-soft)]" />
+              <Loader2 size={11} className="mt-0.5 shrink-0 animate-spin text-(--f-core-white-soft)" />
             ) : (
               <span
                 className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${ACTIVITY_DOT_CLASS[activity]}`}
@@ -778,7 +778,7 @@ function RowComposer({
         onClick={(event) => event.stopPropagation()}
         placeholder="Mensagem para este terminal…"
         aria-label={`Mensagem para "${terminalTitle}"`}
-        className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-white/40"
+        className="min-w-0 flex-1 rounded-sm bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-hidden ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-white/40"
       />
       <button
         type="button"
@@ -789,7 +789,7 @@ function RowComposer({
         disabled={!draft.trim()}
         title="Enviar"
         aria-label={`Enviar mensagem para "${terminalTitle}"`}
-        className="felixo-btn-icon shrink-0 rounded felixo-primary-action p-1 text-white  disabled:opacity-40"
+        className="felixo-btn-icon shrink-0 rounded-sm felixo-primary-action p-1 text-white  disabled:opacity-40"
       >
         <Send size={12} />
       </button>

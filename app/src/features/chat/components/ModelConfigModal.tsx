@@ -162,15 +162,15 @@ export function ModelConfigModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[80vh] w-full max-w-[400px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex max-h-[80vh] w-full max-w-[400px] flex-col rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">
               {model.name}
@@ -184,7 +184,7 @@ export function ModelConfigModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -195,10 +195,10 @@ export function ModelConfigModal({
           className="min-h-0 space-y-4 overflow-y-auto px-5 py-5"
           onSubmit={handleSubmit}
         >
-          <div className="rounded-2xl border border-white/[0.06] bg-black/15 p-3 text-xs text-zinc-400">
+          <div className="rounded-2xl border border-white/6 bg-black/15 p-3 text-xs text-zinc-400">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium text-zinc-200">{model.name}</span>
-              <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+              <span className="rounded-full border border-white/8 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
                 {model.cliType}
               </span>
             </div>
@@ -212,7 +212,7 @@ export function ModelConfigModal({
             </ul>
           </div>
 
-          <section className="space-y-3 rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+          <section className="space-y-3 rounded-2xl border border-white/8 bg-black/10 p-3">
             <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
               <BrainCircuit size={14} aria-hidden="true" />
               Execução
@@ -271,7 +271,7 @@ export function ModelConfigModal({
 
           <button
             type="submit"
-            className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[var(--color-panel)]"
+            className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-(--color-panel)"
           >
             <Save size={16} aria-hidden="true" />
             Salvar
@@ -285,7 +285,7 @@ export function ModelConfigModal({
 
 function SpecCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2">
+    <div className="rounded-xl border border-white/6 bg-black/15 px-3 py-2">
       <span className="block text-[10px] uppercase text-zinc-600">{label}</span>
       <span className="mt-0.5 block text-[11px] text-zinc-200">{value}</span>
     </div>

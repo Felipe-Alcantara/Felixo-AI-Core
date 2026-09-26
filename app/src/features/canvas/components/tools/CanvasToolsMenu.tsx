@@ -102,7 +102,7 @@ export function CanvasToolsMenu({
       aria-label="Ferramentas auxiliares"
       data-canvas-tool-menu-trigger
       tabIndex={-1}
-      className="felixo-sidebar-tool-list focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+      className="felixo-sidebar-tool-list focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400"
     >
       {TOOL_GROUPS.map((group) => (
         <div key={group.label} className="felixo-sidebar-tool-group">

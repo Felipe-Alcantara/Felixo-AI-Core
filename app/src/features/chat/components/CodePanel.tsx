@@ -199,7 +199,7 @@ export function CodePanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
@@ -207,7 +207,7 @@ export function CodePanel({
         className="relative flex max-h-[86vh] w-full max-w-[820px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">Code</h2>
             <p className="mt-1 text-xs text-zinc-500">
@@ -219,7 +219,7 @@ export function CodePanel({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -243,7 +243,7 @@ export function CodePanel({
               title="Atualizar Git"
               onClick={() => refreshSummary(selectedProject?.path ?? '')}
               disabled={!selectedProject || isLoading}
-              className="felixo-btn-icon flex h-10 w-10 items-center justify-center rounded-2xl border border-white/[0.08] text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+              className="felixo-btn-icon flex h-10 w-10 items-center justify-center rounded-2xl border border-white/8 text-zinc-300 hover:bg-white/8 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
             >
               <RefreshCw
                 size={16}
@@ -254,12 +254,12 @@ export function CodePanel({
             </button>
           </div>
 
-          <div className="mb-4 grid gap-2 rounded-2xl border border-white/[0.08] bg-black/10 p-3 md:grid-cols-[auto_auto_minmax(0,1fr)_auto]">
+          <div className="mb-4 grid gap-2 rounded-2xl border border-white/8 bg-black/10 p-3 md:grid-cols-[auto_auto_minmax(0,1fr)_auto]">
             <button
               type="button"
               onClick={stageAll}
               disabled={!selectedProject || isLoading || isMutating || summary?.isClean}
-              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-3 text-xs font-medium text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/8 px-3 text-xs font-medium text-zinc-300 hover:bg-white/8 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
             >
               <CheckCircle2 size={14} aria-hidden="true" />
               Stage tudo
@@ -269,7 +269,7 @@ export function CodePanel({
               type="button"
               onClick={unstageAll}
               disabled={!selectedProject || isLoading || isMutating || summary?.isClean}
-              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-3 text-xs font-medium text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/8 px-3 text-xs font-medium text-zinc-300 hover:bg-white/8 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
             >
               <Undo2 size={14} aria-hidden="true" />
               Unstage
@@ -279,7 +279,7 @@ export function CodePanel({
               value={commitMessage}
               onChange={(event) => setCommitMessage(event.target.value)}
               placeholder="Mensagem do commit"
-              className="h-10 min-w-0 rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+              className="h-10 min-w-0 rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
             />
 
             <button
@@ -337,7 +337,7 @@ function GitSummary({
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+      <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-300">
           <GitBranch size={14} aria-hidden="true" />
           Status
@@ -354,7 +354,7 @@ function GitSummary({
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+      <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-300">
           <FileText size={14} aria-hidden="true" />
           Diff stat
@@ -364,7 +364,7 @@ function GitSummary({
         </pre>
       </section>
 
-      <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3 md:col-span-2">
+      <section className="rounded-2xl border border-white/8 bg-black/10 p-3 md:col-span-2">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-300">
           <GitCommit size={14} aria-hidden="true" />
           Commits recentes

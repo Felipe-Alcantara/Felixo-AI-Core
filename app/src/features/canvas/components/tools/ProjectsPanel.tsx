@@ -283,7 +283,7 @@ export function ProjectsPanel({
           <button
             type="button"
             onClick={goUp}
-            className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+            className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
             title="Voltar"
             aria-label="Voltar para a pasta anterior"
           >
@@ -300,7 +300,7 @@ export function ProjectsPanel({
             Carregando…
           </div>
         )}
-        {loadError && <div className="px-2 py-2 text-xs text-[var(--color-error)]">{loadError}</div>}
+        {loadError && <div className="px-2 py-2 text-xs text-theme-error">{loadError}</div>}
         {entries && entries.length === 0 && (
           <div className="px-2 py-2 text-xs text-zinc-500">Pasta vazia.</div>
         )}
@@ -310,7 +310,7 @@ export function ProjectsPanel({
               <button
                 type="button"
                 onClick={() => openEntry(entry)}
-                className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
+                className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-zinc-100 hover:bg-white/5"
                 title={entryClickTitle(entry)}
               >
                 {entry.isDirectory ? (
@@ -331,7 +331,7 @@ export function ProjectsPanel({
                 <button
                   type="button"
                   onClick={() => runFile(entry)}
-                  className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] focus-visible:opacity-100 group-hover:opacity-100"
+                  className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-(--f-core-white-soft) focus-visible:opacity-100 group-hover:opacity-100"
                   title={`Rodar ${entry.name} num terminal`}
                   aria-label={`Rodar ${entry.name}`}
                 >
@@ -342,7 +342,7 @@ export function ProjectsPanel({
                 <button
                   type="button"
                   onClick={() => void openFileInCanvas(entry)}
-                  className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] focus-visible:opacity-100 group-hover:opacity-100"
+                  className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-(--f-core-white-soft) focus-visible:opacity-100 group-hover:opacity-100"
                   title={`Abrir ${entry.name} num bloco do canvas`}
                   aria-label={`Abrir ${entry.name} no canvas`}
                 >
@@ -369,7 +369,7 @@ export function ProjectsPanel({
         type="button"
         onClick={() => void addProject()}
         disabled={busy}
-        className="felixo-btn mb-3 flex w-full items-center justify-center gap-2 rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16] disabled:opacity-50"
+        className="felixo-btn mb-3 flex w-full items-center justify-center gap-2 rounded-sm felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/16 disabled:opacity-50"
       >
         <FolderPlus size={15} />
         {busy ? 'Adicionando…' : 'Adicionar pasta'}
@@ -383,7 +383,7 @@ export function ProjectsPanel({
             pendingRemovalId === project.id ? (
               <li
                 key={project.id}
-                className="flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] px-2 py-1.5 ring-1 ring-[color-mix(in_srgb,var(--color-error)_38%,transparent)]"
+                className="flex items-center gap-1 rounded-sm bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] px-2 py-1.5 ring-1 ring-[color-mix(in_srgb,var(--color-error)_38%,transparent)]"
               >
                 <span className="min-w-0 flex-1 truncate text-xs text-zinc-300">
                   Tirar <span className="text-zinc-100">{project.name}</span> da lista?
@@ -391,14 +391,14 @@ export function ProjectsPanel({
                 <button
                   type="button"
                   onClick={() => void removeProject(project.id)}
-                  className="felixo-btn shrink-0 rounded bg-[var(--color-error)] px-2 py-1 text-xs font-medium text-[var(--f-core-black-deep)] hover:bg-[color-mix(in_srgb,var(--color-error)_82%,white)]"
+                  className="felixo-btn shrink-0 rounded-sm bg-theme-error px-2 py-1 text-xs font-medium text-(--f-core-black-deep) hover:bg-[color-mix(in_srgb,var(--color-error)_82%,white)]"
                 >
                   Remover
                 </button>
                 <button
                   type="button"
                   onClick={() => setPendingRemovalId(null)}
-                  className="felixo-btn shrink-0 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                  className="felixo-btn shrink-0 rounded-sm px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
                 >
                   Cancelar
                 </button>
@@ -406,12 +406,12 @@ export function ProjectsPanel({
             ) : (
               <li
                 key={project.id}
-                className="group flex items-center gap-1 rounded bg-zinc-800/60 px-2 py-1.5"
+                className="group flex items-center gap-1 rounded-sm bg-zinc-800/60 px-2 py-1.5"
               >
                 <button
                   type="button"
                   onClick={() => openProject(project)}
-                  className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded text-left"
+                  className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left"
                   title="Abrir a pasta e rodar arquivos dela num terminal"
                 >
                   <Folder size={14} className="shrink-0 text-zinc-400" />
@@ -428,7 +428,7 @@ export function ProjectsPanel({
                   onClick={() => setPendingRemovalId(project.id)}
                   // Sempre no DOM (só transparente) para a linha não mudar de
                   // largura no hover e empurrar o nome da pasta.
-                  className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-[var(--color-error)] focus-visible:opacity-100 group-hover:opacity-100"
+                  className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-500 opacity-0 transition-opacity duration-200 hover:bg-white/10 hover:text-theme-error focus-visible:opacity-100 group-hover:opacity-100"
                   title={`Tirar ${project.name} da lista de projetos`}
                   aria-label={`Remover ${project.name} dos projetos`}
                 >

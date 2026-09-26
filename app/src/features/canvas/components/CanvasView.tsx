@@ -2498,7 +2498,7 @@ function CanvasInner({
           aria-live="polite"
           aria-atomic="true"
           data-canvas-layout-warning
-          className="pointer-events-none absolute top-16 z-10 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-[var(--color-warning)] shadow-lg"
+          className="pointer-events-none absolute top-16 z-10 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-(--color-warning) shadow-lg"
           style={{
             left: occupancy.toolbar + 16,
             maxWidth: Math.max(180, freeArea.width - 32),
@@ -2558,7 +2558,7 @@ function CanvasInner({
       {activeTool === 'notifications' && (
         <CanvasPanel
           title="Notificações"
-          icon={<Bell size={15} className="text-[var(--color-error)]" />}
+          icon={<Bell size={15} className="text-theme-error" />}
           panelId="notifications"
           id="canvas-notifications-panel"
           onClose={() => {
@@ -2732,7 +2732,7 @@ function CanvasInner({
               pannable
               zoomable
               position="bottom-right"
-              className="felixo-canvas-minimap !mb-10"
+              className="felixo-canvas-minimap mb-10!"
               style={{
                 transition: 'width 160ms ease, height 160ms ease',
                 width: miniMap.width,

@@ -41,8 +41,8 @@ type FetchAllPanelProps = {
 }
 
 const TONE_CLASSES = {
-  action: 'text-[var(--f-core-white-soft)]',
-  warning: 'text-[var(--color-warning)]',
+  action: 'text-(--f-core-white-soft)',
+  warning: 'text-(--color-warning)',
   neutral: 'text-zinc-500',
 } as const
 
@@ -287,14 +287,14 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       toolsMenuOpen={toolsMenuOpen}
     >
       {pendingRequest && (
-        <div className="mb-3 rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] p-2.5">
+        <div className="mb-3 rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] p-2.5">
           <div className="flex items-start gap-2">
-            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-(--color-warning)" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs leading-relaxed text-[var(--color-warning)]">
+              <p className="text-xs leading-relaxed text-(--color-warning)">
                 {describeAgentRequest(pendingRequest)}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--color-warning)]">
+              <p className="mt-1 text-[11px] text-(--color-warning)">
                 Pedido às {formatRequestTime(pendingRequest)}
               </p>
             </div>
@@ -304,7 +304,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
               <button
                 type="button"
                 onClick={() => void resolveRequest(pendingRequest.id, true)}
-                className="felixo-btn flex-1 rounded bg-[var(--color-warning)] px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)]"
+                className="felixo-btn flex-1 rounded-sm bg-(--color-warning) px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)]"
                 title="Aplica o plano acima; cada repositório é revalidado antes da escrita"
               >
                 Aplicar o plano revisado
@@ -314,7 +314,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                 type="button"
                 onClick={() => void scan(false)}
                 disabled={busy || !scanAllowed}
-                className="felixo-btn flex-1 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
+                className="felixo-btn flex-1 rounded-sm bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
                 title={
                   scanAllowed
                     ? 'Varre para você revisar o plano antes de autorizar qualquer escrita'
@@ -328,7 +328,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
               type="button"
               onClick={() => void resolveRequest(pendingRequest.id, false)}
               disabled={busy}
-              className="felixo-btn rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+              className="felixo-btn rounded-sm bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
             >
               Recusar
             </button>
@@ -337,14 +337,14 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       )}
 
       {scopeLoading && (
-        <p className="mb-3 rounded bg-zinc-800/60 p-2 text-xs text-zinc-400">
+        <p className="mb-3 rounded-sm bg-zinc-800/60 p-2 text-xs text-zinc-400">
           Calculando o escopo disponível…
         </p>
       )}
 
       {scope && (
         <div
-          className={`mb-3 rounded border p-2.5 ${
+          className={`mb-3 rounded-sm border p-2.5 ${
             scope.requiresConfirmation
               ? 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]'
               : 'border-white/10 bg-zinc-800/60'
@@ -354,7 +354,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
             <AlertTriangle
               size={14}
               className={`mt-0.5 shrink-0 ${
-                scope.requiresConfirmation ? 'text-[var(--color-warning)]' : 'text-zinc-400'
+                scope.requiresConfirmation ? 'text-(--color-warning)' : 'text-zinc-400'
               }`}
             />
             <div className="min-w-0 flex-1">
@@ -375,7 +375,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
           </div>
 
           {scope.resolved.length > 0 && (
-            <div className="mt-2 rounded bg-zinc-950/30 px-2 py-1.5">
+            <div className="mt-2 rounded-sm bg-zinc-950/30 px-2 py-1.5">
               <p className="text-[11px] font-medium text-zinc-300">
                 Raízes configuradas
               </p>
@@ -399,7 +399,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                 Discos locais disponíveis para confirmação ({scope.available.length})
               </p>
               {scope.available.length > 0 ? (
-                <ul className="mt-1 max-h-20 overflow-auto rounded bg-zinc-950/30 px-2 py-1.5">
+                <ul className="mt-1 max-h-20 overflow-auto rounded-sm bg-zinc-950/30 px-2 py-1.5">
                   {scope.available.map((root) => (
                     <li
                       key={root}
@@ -419,10 +419,10 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                 type="button"
                 onClick={confirmScope}
                 disabled={busy || !scope.available.length}
-                className={`mt-2 w-full rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+                className={`mt-2 w-full rounded-sm px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
                   scopeConfirmed
-                    ? 'bg-white/[0.04] text-[var(--f-core-white)] ring-1 ring-white/25 hover:bg-white/[0.16]'
-                    : 'bg-[var(--color-warning)] text-zinc-950 hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)]'
+                    ? 'bg-white/4 text-(--f-core-white) ring-1 ring-white/25 hover:bg-white/16'
+                    : 'bg-(--color-warning) text-zinc-950 hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)]'
                 }`}
                 title={
                   scopeConfirmed
@@ -435,7 +435,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                   : 'Confirmar escopo amplo e habilitar varredura'}
               </button>
               {scopeConfirmed && (
-                <p className="mt-1 text-[11px] text-[var(--f-core-white-soft)]">
+                <p className="mt-1 text-[11px] text-(--f-core-white-soft)">
                   Confirmação registrada para este escopo. Se os discos mudarem, será
                   necessário confirmar novamente.
                 </p>
@@ -450,7 +450,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
           type="button"
           onClick={() => void scan(false)}
           disabled={busy || !scanAllowed}
-          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
+          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded-sm bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
           title={
             scanAllowed
               ? 'Varre o escopo exibido e faz fetch em cada repositório'
@@ -464,7 +464,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
           type="button"
           onClick={() => void scan(true)}
           disabled={busy || !scanAllowed}
-          className="felixo-btn flex items-center gap-2 rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+          className="felixo-btn flex items-center gap-2 rounded-sm bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
           title={
             scanAllowed
               ? 'Reaproveita a lista da última varredura completa (não encontra repositórios novos)'
@@ -477,7 +477,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       </div>
 
       {busy && (
-        <div className="mb-3 flex items-center gap-2 rounded bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300">
+        <div className="mb-3 flex items-center gap-2 rounded-sm bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300">
           <RefreshCw size={13} className="animate-spin" />
           <span className="min-w-0 flex-1 truncate">
             {progressLabel || 'Preparando…'}
@@ -485,7 +485,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
           <button
             type="button"
             onClick={() => void window.felixo?.fetchAll?.cancel()}
-            className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+            className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
             title="Cancelar a passada"
           >
             <X size={13} />
@@ -494,25 +494,25 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
       )}
 
       {error && (
-        <p className="mb-2 rounded bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] p-2 text-xs text-[var(--color-error)]">{error}</p>
+        <p className="mb-2 rounded-sm bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] p-2 text-xs text-theme-error">{error}</p>
       )}
 
       {plan && (
-        <div className="mb-3 rounded bg-zinc-800/60 p-2 text-xs text-zinc-400">
+        <div className="mb-3 rounded-sm bg-zinc-800/60 p-2 text-xs text-zinc-400">
           <p>
             <span className="text-zinc-200">{plan.total}</span> repositório(s)
             {scanMode ? ` · varredura ${scanMode}` : ''}
           </p>
           <p className="mt-1 flex flex-wrap gap-x-3">
-            <span className="text-[var(--f-core-white-soft)]">
+            <span className="text-(--f-core-white-soft)">
               <ArrowDownToLine size={11} className="mr-1 inline" />
               {plan.toPull.length} pull
             </span>
-            <span className="text-[var(--f-core-white-soft)]">
+            <span className="text-(--f-core-white-soft)">
               <ArrowUpFromLine size={11} className="mr-1 inline" />
               {plan.toPush.length} push
             </span>
-            <span className="text-[var(--color-warning)]">
+            <span className="text-(--color-warning)">
               <AlertTriangle size={11} className="mr-1 inline" />
               {plan.problems.length} pendência(s)
             </span>
@@ -526,7 +526,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
           <h3 className={`mb-1 text-xs font-medium ${TONE_CLASSES[section.tone]}`}>
             {section.label} ({section.repos.length})
           </h3>
-          <ul className="max-h-40 overflow-auto rounded bg-zinc-800/40">
+          <ul className="max-h-40 overflow-auto rounded-sm bg-zinc-800/40">
             {section.repos.map((repo) => (
               <li
                 key={repo.path}
@@ -549,7 +549,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                   type="button"
                   onClick={() => void ignorePath(repo.path)}
                   disabled={busy}
-                  className="felixo-btn-icon rounded p-1 text-zinc-600 opacity-0 transition-opacity hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100 disabled:opacity-0"
+                  className="felixo-btn-icon rounded-sm p-1 text-zinc-600 opacity-0 transition-opacity hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100 disabled:opacity-0"
                   title="Ignorar esta pasta nas próximas varreduras"
                 >
                   <EyeOff size={13} />
@@ -586,14 +586,14 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                 type="button"
                 onClick={() => void execute()}
                 disabled={busy}
-                className="felixo-btn flex-1 rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16] disabled:opacity-50"
+                className="felixo-btn flex-1 rounded-sm felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/16 disabled:opacity-50"
               >
                 Confirmar execução
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmingExecute(false)}
-                className="felixo-btn rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-600"
+                className="felixo-btn rounded-sm bg-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-600"
               >
                 Cancelar
               </button>
@@ -603,7 +603,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
               type="button"
               onClick={() => setConfirmingExecute(true)}
               disabled={busy || !canExecute}
-              className="felixo-btn rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16] disabled:opacity-50"
+              className="felixo-btn rounded-sm felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/16 disabled:opacity-50"
               title={
                 canExecute
                   ? 'Executa pull --ff-only e push apenas nos repositórios seguros'
@@ -632,13 +632,13 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
               {reportPath}
             </p>
           )}
-          <ul className="mt-2 max-h-40 overflow-auto rounded bg-zinc-800/40">
+          <ul className="mt-2 max-h-40 overflow-auto rounded-sm bg-zinc-800/40">
             {results
               .filter((result) => !result.ok)
               .map((result, index) => (
                 <li
                   key={`${result.status.path}-${result.action}-${index}`}
-                  className="border-b border-white/5 px-2 py-1.5 text-[11px] text-[var(--color-error)] last:border-b-0"
+                  className="border-b border-white/5 px-2 py-1.5 text-[11px] text-theme-error last:border-b-0"
                 >
                   <span className="text-zinc-300">
                     {result.status.name} · {result.action}
@@ -661,7 +661,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
         </button>
 
         {showIgnored && (
-          <ul className="mt-2 rounded bg-zinc-800/40">
+          <ul className="mt-2 rounded-sm bg-zinc-800/40">
             {settings?.ignoredPaths.length ? (
               settings.ignoredPaths.map((ignoredPath) => (
                 <li
@@ -677,7 +677,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                   <button
                     type="button"
                     onClick={() => void unignorePath(ignoredPath)}
-                    className="felixo-btn-icon rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+                    className="felixo-btn-icon rounded-sm p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
                     title="Voltar a varrer esta pasta"
                   >
                     <X size={12} />

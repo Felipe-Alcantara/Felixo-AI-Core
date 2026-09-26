@@ -160,17 +160,17 @@ function ReducedMotionNotice() {
   return (
     <div
       role="status"
-      className="mb-3 rounded border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_8%,transparent)] p-2.5 text-xs leading-relaxed text-[var(--f-core-white)]/90"
+      className="mb-3 rounded-sm border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_8%,transparent)] p-2.5 text-xs leading-relaxed text-(--f-core-white)/90"
     >
       <div className="flex gap-2">
-        <CircleAlert className="mt-0.5 shrink-0 text-[var(--f-core-white-soft)]" size={15} />
+        <CircleAlert className="mt-0.5 shrink-0 text-(--f-core-white-soft)" size={15} />
         <div>
-          <p className="font-medium text-[var(--f-core-white)]">As animações estão desligadas pelo sistema.</p>
-          <p className="mt-1 text-[var(--f-core-white)]/75">
+          <p className="font-medium text-(--f-core-white)">As animações estão desligadas pelo sistema.</p>
+          <p className="mt-1 text-(--f-core-white)/75">
             Isso não é um defeito: o Felixo respeita a preferência de movimento
             reduzido do seu sistema.
           </p>
-          <p className="mt-1 text-[var(--f-core-white)]/75">
+          <p className="mt-1 text-(--f-core-white)/75">
             No Windows, ajuste em Configurações → Acessibilidade → Efeitos visuais
             → Efeitos de animação.
           </p>
@@ -265,13 +265,13 @@ function PromptField({
         value={value}
         onChange={(event) => setValue(event.target.value)}
         rows={10}
-        className="mb-2 w-full resize-y rounded bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-none"
+        className="mb-2 w-full resize-y rounded-sm bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-hidden"
       />
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => void save()}
-          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16]"
+          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded-sm felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/16"
         >
           <Save size={14} />
           {saved ? 'Salvo' : 'Salvar'}
@@ -279,7 +279,7 @@ function PromptField({
         <button
           type="button"
           onClick={() => setValue(defaultValue)}
-          className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
+          className="felixo-btn flex items-center justify-center gap-2 rounded-sm bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
           title="Restaurar o texto padrão"
         >
           <RotateCcw size={14} />
@@ -365,13 +365,13 @@ function QualityStandardField({
         }
         rows={6}
         disabled={!enabled}
-        className="mb-2 w-full resize-y rounded bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-none disabled:opacity-50"
+        className="mb-2 w-full resize-y rounded-sm bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-hidden disabled:opacity-50"
       />
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => void save()}
-          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/[0.16]"
+          className="felixo-btn flex flex-1 items-center justify-center gap-2 rounded-sm felixo-primary-action px-3 py-1.5 text-sm font-medium text-white hover:bg-white/16"
         >
           <Save size={14} />
           {saved ? 'Salvo' : 'Salvar'}
@@ -379,7 +379,7 @@ function QualityStandardField({
         <button
           type="button"
           onClick={() => setCustomText(null)}
-          className="felixo-btn flex items-center justify-center gap-2 rounded bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
+          className="felixo-btn flex items-center justify-center gap-2 rounded-sm bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600"
           title="Restaurar o texto padrão"
         >
           <RotateCcw size={14} />

@@ -92,7 +92,7 @@ export function WebviewProfileMenu({ profileId, onChange }: Props) {
         aria-haspopup="menu"
         aria-expanded={open}
         title={`Perfil do navegador: ${current.name}`}
-        className="felixo-btn nodrag flex max-w-[7rem] items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[var(--f-core-white-soft)] hover:bg-white/10"
+        className="felixo-btn nodrag flex max-w-28 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-(--f-core-white-soft) hover:bg-white/10"
       >
         {dot ? (
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dot }} aria-hidden />
@@ -109,7 +109,7 @@ export function WebviewProfileMenu({ profileId, onChange }: Props) {
             ref={menuRef}
             role="menu"
             aria-label="Perfil do navegador"
-            className="fixed z-[70] w-52 rounded-lg border border-white/10 bg-[var(--f-surface-panel)] p-1.5 text-xs text-[var(--f-core-white-soft)] shadow-2xl"
+            className="fixed z-70 w-52 rounded-lg border border-white/10 bg-(--f-surface-panel) p-1.5 text-xs text-(--f-core-white-soft) shadow-2xl"
             style={{ left: position.left, top: position.top }}
           >
             {items.map((item) => {
@@ -124,7 +124,7 @@ export function WebviewProfileMenu({ profileId, onChange }: Props) {
                       onChange(item.id)
                       setOpen(false)
                     }}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-2 py-1 text-left hover:bg-white/10"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-2 py-1 text-left hover:bg-white/10"
                   >
                     {item.color ? (
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: FRAME_COLOR_SWATCHES[item.color] }} aria-hidden />
@@ -140,7 +140,7 @@ export function WebviewProfileMenu({ profileId, onChange }: Props) {
                       onClick={() => void handleRemove(item.id as string, item.name)}
                       aria-label={`Excluir o perfil ${item.name}`}
                       title="Excluir perfil (apaga os logins dele)"
-                      className="rounded p-1 text-red-300 hover:bg-red-500/10"
+                      className="rounded-sm p-1 text-red-300 hover:bg-red-500/10"
                     >
                       <Trash2 size={11} aria-hidden />
                     </button>
@@ -164,14 +164,14 @@ export function WebviewProfileMenu({ profileId, onChange }: Props) {
                 }}
                 placeholder="Novo perfil…"
                 aria-label="Nome do novo perfil"
-                className="felixo-field min-w-0 flex-1 px-1.5 py-1 text-xs outline-none"
+                className="felixo-field min-w-0 flex-1 px-1.5 py-1 text-xs outline-hidden"
               />
               <button
                 type="button"
                 onClick={() => void handleCreate()}
                 disabled={!newName.trim()}
                 aria-label="Criar perfil"
-                className="rounded p-1 hover:bg-white/10 disabled:opacity-40"
+                className="rounded-sm p-1 hover:bg-white/10 disabled:opacity-40"
               >
                 <Plus size={12} aria-hidden />
               </button>

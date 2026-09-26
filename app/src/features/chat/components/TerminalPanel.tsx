@@ -193,18 +193,18 @@ export function TerminalPanel({
 
   if (!isOpen) {
     return (
-      <aside className="flex w-11 shrink-0 flex-col items-center border-l border-white/[0.08] bg-[#111110] pt-3 text-zinc-500 max-[1020px]:hidden">
+      <aside className="flex w-11 shrink-0 flex-col items-center border-l border-white/8 bg-[#111110] pt-3 text-zinc-500 max-[1020px]:hidden">
         <button
           type="button"
           title="Abrir logs da CLI"
           onClick={onToggleOpen}
-          className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/[0.06] hover:text-zinc-200"
+          className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/6 hover:text-zinc-200"
         >
           <Terminal size={15} aria-hidden="true" />
           <span className="sr-only">Abrir logs da CLI</span>
         </button>
         {sessions.some((session) => session.status === 'running') && (
-          <span className="mt-2 h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-warning)]" />
+          <span className="mt-2 h-1.5 w-1.5 animate-pulse rounded-full bg-(--color-warning)" />
         )}
       </aside>
     )
@@ -214,7 +214,7 @@ export function TerminalPanel({
     <aside
       style={{ width }}
       className={[
-        'relative flex shrink-0 flex-col border-l border-white/[0.08] bg-[#111110] text-zinc-300 max-[1020px]:hidden',
+        'relative flex shrink-0 flex-col border-l border-white/8 bg-[#111110] text-zinc-300 max-[1020px]:hidden',
         dragging ? '' : 'transition-[width] duration-300 ease-in-out',
       ].join(' ')}
     >
@@ -222,7 +222,7 @@ export function TerminalPanel({
         <div className="flex min-w-0 items-center gap-2 text-[12px] font-medium text-zinc-300">
           <Terminal size={15} aria-hidden="true" />
           <span>Atividade</span>
-          <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+          <span className="rounded-full border border-white/8 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
             {visibleSessions.length}
           </span>
         </div>
@@ -233,7 +233,7 @@ export function TerminalPanel({
             title="Limpar atividade"
             onClick={onClear}
             disabled={visibleSessions.length === 0}
-            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/6 hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700 disabled:hover:bg-transparent"
           >
             <Trash2 size={13} aria-hidden="true" />
             <span className="sr-only">Limpar logs da CLI</span>
@@ -242,7 +242,7 @@ export function TerminalPanel({
             type="button"
             title="Recolher atividade"
             onClick={onToggleOpen}
-            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"
+            className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/6 hover:text-zinc-200"
           >
             <ChevronRight size={15} aria-hidden="true" />
             <span className="sr-only">Recolher logs da CLI</span>
@@ -257,8 +257,8 @@ export function TerminalPanel({
           className={[
             'felixo-btn h-7 flex-1 rounded-lg text-[11px]',
             viewMode === 'threads'
-              ? 'bg-white/[0.08] text-zinc-100'
-              : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
+              ? 'bg-white/8 text-zinc-100'
+              : 'text-zinc-500 hover:bg-white/4 hover:text-zinc-300',
           ].join(' ')}
         >
           Execuções
@@ -269,8 +269,8 @@ export function TerminalPanel({
           className={[
             'felixo-btn h-7 flex-1 rounded-lg text-[11px]',
             viewMode === 'orchestrator'
-              ? 'bg-white/[0.08] text-zinc-100'
-              : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
+              ? 'bg-white/8 text-zinc-100'
+              : 'text-zinc-500 hover:bg-white/4 hover:text-zinc-300',
           ].join(' ')}
         >
           Orquestração
@@ -295,7 +295,7 @@ export function TerminalPanel({
                     isChild ? 'pl-5' : 'pl-2',
                     effectiveSelectedSessionId === session.sessionId
                       ? 'bg-white/[0.07] text-zinc-100'
-                      : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300',
+                      : 'text-zinc-500 hover:bg-white/4 hover:text-zinc-300',
                   ].join(' ')}
                 >
                   <span
@@ -310,7 +310,7 @@ export function TerminalPanel({
                         {formatSessionRole(session)}
                       </span>
                       <span
-                        className="shrink-0 rounded border border-white/[0.08] px-1.5 py-px font-mono text-[9px] uppercase leading-none text-zinc-500"
+                        className="shrink-0 rounded-sm border border-white/8 px-1.5 py-px font-mono text-[9px] uppercase leading-none text-zinc-500"
                         title={session.sessionId}
                       >
                         ID {formatExecutionId(session)}
@@ -341,7 +341,7 @@ export function TerminalPanel({
 
       <div className="flex min-h-0 flex-1 flex-col">
         {viewMode === 'threads' && selectedSession && (
-          <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
+          <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/6 px-3">
             <span className="font-mono text-[10px] text-zinc-500">
               {selectedSession
                 ? `Execução ID ${formatExecutionId(selectedSession)} · ${formatTime(selectedSession.updatedAt)}`
@@ -374,7 +374,7 @@ export function TerminalPanel({
                 visibleSessions.some((session) => session.droppedChunkCount > 0)) && (
                 <div
                   role="status"
-                  className="mb-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-2 py-1.5 text-[10px] leading-relaxed text-[var(--color-warning)]"
+                  className="mb-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-2 py-1.5 text-[10px] leading-relaxed text-(--color-warning)"
                 >
                   A orquestração mostra somente a janela visual mais recente de
                   cada execução (até {TERMINAL_OUTPUT_VISUAL_POLICY.maxOrchestratorChunks}{' '}
@@ -390,7 +390,7 @@ export function TerminalPanel({
                   {orchestratorEntries.map((entry) => (
                     <div
                       key={`${entry.sessionId}-${entry.chunk.id}`}
-                      className="rounded-lg border border-white/[0.04] bg-black/10 p-2"
+                      className="rounded-lg border border-white/4 bg-black/10 p-2"
                     >
                       <div className="mb-1 font-mono text-[10px] text-zinc-600">
                         Execução {entry.sessionId.slice(0, 8)}
@@ -419,7 +419,7 @@ export function TerminalPanel({
               type="button"
               title="Ir para o fim"
               onClick={jumpToBottom}
-              className="felixo-btn-icon absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-[#242423] text-zinc-300 shadow-soft hover:bg-[#30302f] hover:text-white"
+              className="felixo-btn-icon absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-[#242423] text-zinc-300 shadow-soft hover:bg-[#30302f] hover:text-white"
             >
               <ArrowDown size={14} aria-hidden="true" />
               <span className="sr-only">Ir para o fim</span>
@@ -455,11 +455,11 @@ const TerminalChunk = memo(function TerminalChunk({
           {chunk.title ?? formatSource(chunk.source)}
         </span>
       </div>
-      <div className="whitespace-pre-wrap break-words text-[11px] normal-case tracking-normal">
+      <div className="whitespace-pre-wrap wrap-break-word text-[11px] normal-case tracking-normal">
         {chunk.chunk}
       </div>
       {chunk.isTextTruncated && (
-        <div className="mt-1 text-[10px] text-[var(--color-warning)]">
+        <div className="mt-1 text-[10px] text-(--color-warning)">
           Parte anterior deste evento está fora da janela visual.
         </div>
       )}
@@ -468,7 +468,7 @@ const TerminalChunk = memo(function TerminalChunk({
           {metadata.map((item) => (
             <span
               key={item.label}
-              className="max-w-full truncate rounded border border-white/[0.06] px-1.5 py-0.5 text-[10px] text-zinc-500"
+              className="max-w-full truncate rounded-sm border border-white/6 px-1.5 py-0.5 text-[10px] text-zinc-500"
             >
               {item.label}: {item.value}
             </span>
@@ -489,7 +489,7 @@ function HistoryWindowNotice({ session }: { session: TerminalOutputSession }) {
   return (
     <div
       role="status"
-      className="mb-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-2 py-1.5 text-[10px] leading-relaxed text-[var(--color-warning)]"
+      className="mb-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] px-2 py-1.5 text-[10px] leading-relaxed text-(--color-warning)"
     >
       Exibindo os últimos {retained} de {total} eventos desta execução.{' '}
       {exportMessage}
@@ -689,17 +689,17 @@ function formatSessionEventCount(session: TerminalOutputSession) {
 
 function getSessionRoleClassName(session: TerminalOutputSession) {
   const base =
-    'shrink-0 rounded border px-1 py-px text-[9px] uppercase leading-none'
+    'shrink-0 rounded-sm border px-1 py-px text-[9px] uppercase leading-none'
 
   if (!session.parentThreadId || session.parentThreadId === session.sessionId) {
-    return `${base} border-white/10 text-[var(--f-core-white)]`
+    return `${base} border-white/10 text-(--f-core-white)`
   }
 
   if (session.sessionId.includes('orchestrator-turn')) {
-    return `${base} border-white/10 text-[var(--f-core-white)]`
+    return `${base} border-white/10 text-(--f-core-white)`
   }
 
-  return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-[var(--color-warning)]`
+  return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-(--color-warning)`
 }
 
 function isOrchestratorTurnSession(session: TerminalOutputSession) {
@@ -726,7 +726,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'stderr') {
-    return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-[var(--color-warning)]`
+    return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-(--color-warning)`
   }
 
   if (chunk.source === 'stdout') {
@@ -738,7 +738,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.severity === 'warn') {
-    return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-[var(--color-warning)]`
+    return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-(--color-warning)`
   }
 
   return `${base} border-theme-error/60 text-theme-error`
@@ -746,7 +746,7 @@ function getChunkClassName(chunk: TerminalOutputChunk) {
 
 function getTitleClassName(chunk: TerminalOutputChunk) {
   if (chunk.kind === 'assistant') {
-    return 'min-w-0 truncate text-[var(--f-core-white)]'
+    return 'min-w-0 truncate text-(--f-core-white)'
   }
 
   if (chunk.kind === 'metrics') {
@@ -754,7 +754,7 @@ function getTitleClassName(chunk: TerminalOutputChunk) {
   }
 
   if (chunk.kind === 'tool') {
-    return 'min-w-0 truncate text-[var(--color-warning)]'
+    return 'min-w-0 truncate text-(--color-warning)'
   }
 
   if (chunk.kind === 'error') {
@@ -778,7 +778,7 @@ function formatSource(source: TerminalOutputChunk['source']) {
 
 function getStatusDotClassName(status: TerminalSessionStatus) {
   if (status === 'running') {
-    return 'animate-pulse bg-[var(--color-warning)]'
+    return 'animate-pulse bg-(--color-warning)'
   }
 
   if (status === 'error') {
@@ -794,7 +794,7 @@ function getStatusDotClassName(status: TerminalSessionStatus) {
 
 function getStatusBadgeClassName(status: TerminalSessionStatus) {
   if (status === 'running') {
-    return 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]'
+    return 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)'
   }
 
   if (status === 'error') {

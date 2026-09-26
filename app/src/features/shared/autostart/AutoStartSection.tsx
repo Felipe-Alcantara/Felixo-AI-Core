@@ -56,7 +56,7 @@ export function AutoStartSection() {
   if (!window.felixo?.autostart || !config) return null
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+    <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-300">
         <Power size={14} aria-hidden="true" />
         Iniciar com o sistema
@@ -79,7 +79,7 @@ export function AutoStartSection() {
         </p>
       )}
       {message && (
-        <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-warning)]">{message}</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-(--color-warning)">{message}</p>
       )}
     </section>
   )

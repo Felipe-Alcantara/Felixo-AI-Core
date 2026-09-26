@@ -344,21 +344,21 @@ export function PromptsPanel({
       toolsMenuOpen={toolsMenuOpen}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <label className="flex min-w-[14rem] flex-1 items-center gap-2 rounded bg-zinc-800/70 px-2 py-1.5 text-xs text-zinc-400">
+        <label className="flex min-w-56 flex-1 items-center gap-2 rounded-sm bg-zinc-800/70 px-2 py-1.5 text-xs text-zinc-400">
           <ListFilter size={14} />
           <span className="sr-only">Filtrar prompts</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filtrar por tema, nome ou texto…"
-            className="min-w-0 flex-1 bg-transparent text-zinc-200 outline-none placeholder:text-zinc-600"
+            className="min-w-0 flex-1 bg-transparent text-zinc-200 outline-hidden placeholder:text-zinc-600"
           />
         </label>
         <button
           type="button"
           onClick={startCustomAutomation}
           disabled={Boolean(draft)}
-          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16]"
+          className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2 py-1.5 text-xs font-medium text-white hover:bg-white/16"
         >
           <Plus size={13} />
           Novo prompt
@@ -366,18 +366,18 @@ export function PromptsPanel({
       </div>
 
       {draft && (
-        <section className="mb-3 rounded border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_6%,transparent)] p-2.5">
+        <section className="mb-3 rounded-sm border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_6%,transparent)] p-2.5">
           <div className="mb-1 flex items-center gap-2">
             <input
               value={draft.name}
               onChange={(event) => updateDraft({ name: event.target.value })}
               placeholder="Nome do prompt"
-              className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-hidden"
             />
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Cancelar novo prompt"
             >
               ×
@@ -387,14 +387,14 @@ export function PromptsPanel({
             value={draft.description}
             onChange={(event) => updateDraft({ description: event.target.value })}
             placeholder="Descrição curta…"
-            className="mb-1 w-full bg-transparent text-xs text-zinc-500 outline-none placeholder:text-zinc-600"
+            className="mb-1 w-full bg-transparent text-xs text-zinc-500 outline-hidden placeholder:text-zinc-600"
           />
           <textarea
             value={draft.prompt}
             onChange={(event) => updateDraft({ prompt: event.target.value })}
             placeholder="Texto do prompt…"
             rows={2}
-            className="mb-1 w-full resize-y rounded bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-none placeholder:text-zinc-600"
+            className="mb-1 w-full resize-y rounded-sm bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-hidden placeholder:text-zinc-600"
           />
           <div className="flex items-center justify-between gap-2">
             <FelixoSelect
@@ -402,19 +402,19 @@ export function PromptsPanel({
               options={SCOPE_OPTIONS}
               onChange={(value) => updateDraft({ scope: value as AutomationScope })}
               aria-label="Escopo do prompt"
-              className="min-w-[11rem]"
+              className="min-w-44"
             />
             <button
               type="button"
               onClick={() => void createDraftAutomation()}
               disabled={isCreatingDraft}
-              className="felixo-btn rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
+              className="felixo-btn rounded-sm felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/16"
             >
               {isCreatingDraft ? 'Criando…' : 'Criar prompt'}
             </button>
           </div>
           {feedbackId === 'draft' ? (
-            <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--color-error)]">
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-theme-error">
               <CircleAlert size={11} />
               {feedbackText}
             </p>
@@ -426,11 +426,11 @@ export function PromptsPanel({
         </section>
       )}
 
-      <div className="mb-3 rounded border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_6%,transparent)] p-2.5 text-xs leading-relaxed text-[var(--f-core-white)]/80">
+      <div className="mb-3 rounded-sm border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_6%,transparent)] p-2.5 text-xs leading-relaxed text-(--f-core-white)/80">
         Marque um ou vários prompts para montar uma única tarefa. Os textos são
         enviados na ordem do catálogo, com o nome de cada prompt preservado.
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[var(--f-core-white)]/60">
+          <span className="text-(--f-core-white)/60">
             {selectedPrompts.length === 0
               ? 'Nenhum prompt selecionado.'
               : `${selectedPrompts.length} selecionado${selectedPrompts.length === 1 ? '' : 's'}.`}
@@ -439,7 +439,7 @@ export function PromptsPanel({
             type="button"
             onClick={() => void insertSelected()}
             disabled={selectedPrompts.length === 0 || pendingId === 'combined'}
-            className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-40"
+            className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {pendingId === 'combined' ? (
               <SendHorizontal size={13} className="animate-pulse" />
@@ -458,7 +458,7 @@ export function PromptsPanel({
           </button>
         </div>
         {feedbackId === 'combined' && (
-          <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-[var(--color-error)]' : 'text-[var(--f-core-white-soft)]'}`}>
+          <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}>
             {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
             {feedbackText}
           </p>
@@ -482,7 +482,7 @@ export function PromptsPanel({
           const isPending = pendingId === prompt.id
 
           return (
-            <li key={prompt.id} className="rounded bg-zinc-800/60 p-2">
+            <li key={prompt.id} className="rounded-sm bg-zinc-800/60 p-2">
               <div className="mb-1 flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -498,10 +498,10 @@ export function PromptsPanel({
                       editCustomAutomation(prompt.id, { name: event.target.value })
                     }
                     placeholder="Nome do prompt"
-                    className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-hidden"
                   />
                 ) : (
-                  <span className="min-w-0 flex-1 break-words text-sm font-medium text-zinc-100">
+                  <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-zinc-100">
                     {prompt.name}
                     {isOverridden && (
                       <span className="ml-1.5 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-normal text-zinc-500">
@@ -514,7 +514,7 @@ export function PromptsPanel({
                   <button
                     type="button"
                     onClick={() => setDetailId(prompt.id)}
-                    className="felixo-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
+                    className="felixo-btn flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
                     title="Ver e editar o texto completo do prompt"
                   >
                     <Eye size={13} />
@@ -525,7 +525,7 @@ export function PromptsPanel({
                   type="button"
                   onClick={() => void insertPrompt(prompt)}
                   disabled={isPending}
-                  className="felixo-btn flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="felixo-btn flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                   title={
                     failed
                       ? 'O terminal não confirmou o recebimento — clique para tentar de novo'
@@ -539,12 +539,12 @@ export function PromptsPanel({
                     </>
                   ) : inserted ? (
                     <>
-                      <Check size={13} className="text-[var(--f-core-white-soft)]" />
+                      <Check size={13} className="text-(--f-core-white-soft)" />
                       Feito
                     </>
                   ) : failed ? (
                     <>
-                      <CircleAlert size={13} className="text-[var(--color-error)]" />
+                      <CircleAlert size={13} className="text-theme-error" />
                       Tentar de novo
                     </>
                   ) : (
@@ -558,7 +558,7 @@ export function PromptsPanel({
                   <button
                     type="button"
                     onClick={() => void removeCustomAutomation(prompt.id)}
-                    className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)]"
+                    className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-theme-error"
                     aria-label="Remover prompt"
                   >
                     <Trash2 size={14} />
@@ -574,7 +574,7 @@ export function PromptsPanel({
                       editCustomAutomation(prompt.id, { description: event.target.value })
                     }
                     placeholder="Descrição curta…"
-                    className="mb-1 w-full bg-transparent text-xs text-zinc-500 outline-none placeholder:text-zinc-600"
+                    className="mb-1 w-full bg-transparent text-xs text-zinc-500 outline-hidden placeholder:text-zinc-600"
                   />
                   <textarea
                     value={prompt.prompt}
@@ -583,7 +583,7 @@ export function PromptsPanel({
                     }
                     placeholder="Texto do prompt…"
                     rows={2}
-                    className="mb-1 w-full resize-y rounded bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-none placeholder:text-zinc-600"
+                    className="mb-1 w-full resize-y rounded-sm bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-hidden placeholder:text-zinc-600"
                   />
                   <FelixoSelect
                     value={prompt.scope}
@@ -594,7 +594,7 @@ export function PromptsPanel({
                       })
                     }
                     aria-label="Escopo do prompt"
-                    className="min-w-[11rem]"
+                    className="min-w-44"
                   />
                 </>
               ) : (
@@ -604,7 +604,7 @@ export function PromptsPanel({
               )}
 
               {feedbackId === prompt.id && (
-                <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-[var(--color-error)]' : 'text-[var(--f-core-white-soft)]'}`}>
+                <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}>
                   {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
                   {feedbackText}
                 </p>

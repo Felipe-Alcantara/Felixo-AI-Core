@@ -101,7 +101,7 @@ export function SearchPanel({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Buscar blocos por título, arquivo, nota ou comando…"
-        className="mb-3 w-full rounded border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-white/10"
+        className="mb-3 w-full rounded-sm border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:border-white/10"
       />
 
       {query.trim() && hits.length === 0 && (
@@ -116,7 +116,7 @@ export function SearchPanel({
               <button
                 type="button"
                 onClick={() => onFocusNode(hit.id)}
-                className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                className="felixo-btn flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/5"
               >
                 <Icon size={14} className="mt-0.5 shrink-0 text-zinc-400" />
                 <span className="min-w-0">

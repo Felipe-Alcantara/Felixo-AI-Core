@@ -124,10 +124,8 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.drawing.width}
         minHeight={NODE_MIN_SIZE.drawing.height}
-        lineClassName="!border-white/20"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-white/40"
       />
-      <Handle type="target" position={Position.Left} className="!bg-white/40" />
+      <Handle type="target" position={Position.Left} />
       <NodeHeader
         editableValue={nodeData.label ?? ''}
         placeholder="Desenho"
@@ -155,7 +153,7 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
               onClick={() => setPenWidth(width)}
               aria-label={`Espessura ${width}px`}
               title={`Espessura ${width}px`}
-              className={`felixo-btn-icon flex h-4 w-4 items-center justify-center rounded p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 ${
+              className={`felixo-btn-icon flex h-4 w-4 items-center justify-center rounded-sm p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 ${
                 penWidth === width ? 'bg-white/20 opacity-100' : ''
               }`}
             >
@@ -169,7 +167,7 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             onClick={undoLastStroke}
             disabled={!strokes.length}
-            className="felixo-btn-icon ml-1 rounded p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 disabled:opacity-30"
+            className="felixo-btn-icon ml-1 rounded-sm p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 disabled:opacity-30"
             aria-label="Desfazer último traço"
             title="Desfazer"
           >
@@ -179,7 +177,7 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             onClick={clearAllStrokes}
             disabled={!strokes.length}
-            className="felixo-btn-icon rounded p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 disabled:opacity-30"
+            className="felixo-btn-icon rounded-sm p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 disabled:opacity-30"
             aria-label="Limpar desenho"
             title="Limpar tudo"
           >
@@ -209,7 +207,7 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
         ))}
         <path data-preview="" stroke={color} strokeWidth={penWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
       </svg>
-      <Handle type="source" position={Position.Right} className="!bg-white/40" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

@@ -98,15 +98,15 @@ function FelixoSettingsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[86vh] w-full max-w-[620px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex max-h-[86vh] w-full max-w-[620px] flex-col rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">Felixo</h2>
             <p className="mt-1 text-xs text-zinc-500">
@@ -118,7 +118,7 @@ function FelixoSettingsDialog({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -126,7 +126,7 @@ function FelixoSettingsDialog({
         </header>
 
         <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-5">
-          <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+          <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
               <User size={14} aria-hidden="true" />
               Perfil local
@@ -138,7 +138,7 @@ function FelixoSettingsDialog({
           </section>
 
           <form
-            className="rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+            className="rounded-2xl border border-white/8 bg-black/10 p-3"
             onSubmit={saveGlobalSettings}
           >
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
@@ -158,7 +158,7 @@ function FelixoSettingsDialog({
                 }
                 rows={5}
                 placeholder="Preferências, fatos estáveis e cuidados que o orquestrador deve lembrar."
-                className="mt-1 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -174,7 +174,7 @@ function FelixoSettingsDialog({
                 }
                 rows={4}
                 placeholder="Preferências de execução, restrições e cuidados recorrentes."
-                className="mt-1 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -189,7 +189,7 @@ function FelixoSettingsDialog({
                       defaultWorkflow: event.target.value,
                     }))
                   }
-                  className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
               </label>
 
@@ -247,7 +247,7 @@ function FelixoSettingsDialog({
               />
             </div>
 
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-black/15 px-3 py-2 text-xs text-zinc-300">
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-xs text-zinc-300">
               Confirmar ações sensíveis
               <FelixoToggle
                 checked={settingsDraft.requireConfirmationForSensitiveActions}
@@ -264,7 +264,7 @@ function FelixoSettingsDialog({
             <div className="mt-3 flex justify-end">
               <button
                 type="submit"
-                className="felixo-btn flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
+                className="felixo-btn flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
               >
                 <Save size={14} aria-hidden="true" />
                 Salvar
@@ -272,7 +272,7 @@ function FelixoSettingsDialog({
             </div>
           </form>
 
-          <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+          <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
               <MonitorCog size={14} aria-hidden="true" />
               Estado do app
@@ -290,7 +290,7 @@ function FelixoSettingsDialog({
 
           <SystemDesignSettingsSection />
 
-          <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+          <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
               <Palette size={14} aria-hidden="true" />
               Aparência
@@ -315,7 +315,7 @@ function FelixoSettingsDialog({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2">
+    <div className="rounded-xl border border-white/6 bg-black/15 px-3 py-2">
       <span className="block text-[10px] uppercase text-zinc-600">{label}</span>
       <span className="mt-1 block truncate font-mono text-zinc-200">{value}</span>
     </div>
@@ -344,7 +344,7 @@ function NumberField({
         step={step}
         value={value}
         onChange={onChange}
-        className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-white/25"
+        className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden focus:ring-2 focus:ring-white/25"
       />
     </label>
   )

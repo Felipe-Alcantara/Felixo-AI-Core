@@ -174,13 +174,11 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div data-activity={activity} className="felixo-canvas-card felixo-canvas-card-terminal flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-black-surface)] text-zinc-200 shadow-xl">
+    <div data-activity={activity} className="felixo-canvas-card felixo-canvas-card-terminal flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-(--f-core-black-surface) text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.terminal.width}
         minHeight={NODE_MIN_SIZE.terminal.height}
-        lineClassName="!border-white/30"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
       />
       <TerminalSideHandles />
       <NodeHeader
@@ -189,7 +187,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         placeholder="Terminal"
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
         onTitleCommit={(label) => nodeData.onRenameCommit?.(id, label)}
-        className="bg-white/[0.04] text-[var(--f-core-white)]"
+        className="bg-white/4 text-(--f-core-white)"
         onRemove={() => {
           store.remove(id)
           void deleteElements({ nodes: [{ id }] })
@@ -198,7 +196,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         <CopyButton onCopy={() => store.copy(id)} />
         <button
           type="button"
-          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={restart}
           aria-label="Reiniciar terminal"
           title="Reiniciar terminal"
@@ -207,7 +205,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <button
           type="button"
-          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => nodeData.onDetails?.(id)}
           aria-label="Ver detalhes do terminal"
           title="Ver detalhes"
@@ -216,7 +214,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <button
           type="button"
-          className="felixo-btn-icon nodrag rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
           onClick={() => nodeData.onExpand?.(id)}
           data-terminal-expand-trigger={id}
           aria-label="Expandir terminal"
@@ -242,16 +240,16 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
         {promptDisplay && (
           <div
-            className="shrink-0 rounded border border-white/10 bg-[var(--f-core-white)]/10 px-1.5 py-1 text-[10px] leading-snug text-[var(--f-core-white-soft)]"
+            className="shrink-0 rounded-sm border border-white/10 bg-(--f-core-white)/10 px-1.5 py-1 text-[10px] leading-snug text-(--f-core-white-soft)"
             title={promptDisplay.detail}
           >
-            <span className="mr-1 font-semibold text-[var(--f-core-white-soft)]">›</span>
+            <span className="mr-1 font-semibold text-(--f-core-white-soft)">›</span>
             <span className="line-clamp-2">{promptDisplay.label}</span>
           </div>
         )}
         {snapshot?.contextWarning && (
           <div
-            className="shrink-0 rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-[var(--color-warning)]"
+            className="shrink-0 rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-(--color-warning)"
             title={snapshot.contextWarning}
           >
             {snapshot.contextWarning}
@@ -260,7 +258,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         {scrollbackNotice && (
           <div
             role="status"
-            className="shrink-0 rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-[var(--color-warning)]"
+            className="shrink-0 rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-(--color-warning)"
             title={scrollbackNotice}
           >
             {scrollbackNotice}
@@ -268,7 +266,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         )}
         <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">
           {snapshot?.message ? (
-            <span className="text-[var(--color-error)]">{snapshot.message}</span>
+            <span className="text-theme-error">{snapshot.message}</span>
           ) : preview.length > 0 ? (
             preview.map((line, index) => (
               <div key={index} className="overflow-hidden text-ellipsis whitespace-nowrap">
@@ -305,13 +303,11 @@ function TerminalSideHandles() {
             type="source"
             id={`s-${id}`}
             position={position}
-            className="!h-2.5 !w-2.5 !bg-[var(--f-core-white)]"
           />
           <Handle
             type="target"
             id={`t-${id}`}
             position={position}
-            className="!h-2.5 !w-2.5 !border-none !bg-transparent"
           />
         </span>
       ))}
@@ -327,18 +323,18 @@ function ActivityBadge({
   exitCode?: number
 }) {
   const config: Record<SessionActivity, { label: string; className: string }> = {
-    starting: { label: 'iniciando…', className: 'text-[var(--color-warning)]' },
-    working: { label: 'trabalhando', className: 'text-[var(--f-core-white-soft)]' },
+    starting: { label: 'iniciando…', className: 'text-(--color-warning)' },
+    working: { label: 'trabalhando', className: 'text-(--f-core-white-soft)' },
     waiting_approval: {
       label: 'aguardando aprovação',
-      className: 'text-[var(--color-warning)]',
+      className: 'text-(--color-warning)',
     },
-    idle: { label: 'aguardando', className: 'text-[var(--f-core-white-soft)]' },
+    idle: { label: 'aguardando', className: 'text-(--f-core-white-soft)' },
     exited: {
       label: `encerrado${exitCode != null ? ` (${exitCode})` : ''}`,
       className: 'text-zinc-500',
     },
-    error: { label: 'erro', className: 'text-[var(--color-error)]' },
+    error: { label: 'erro', className: 'text-theme-error' },
   }
   const { label, className } = config[activity]
 
@@ -346,7 +342,7 @@ function ActivityBadge({
     <span className={`felixo-node-activity flex items-center gap-1 text-[11px] font-medium ${className}`}>
       {activity === 'working' && <Loader2 size={11} className="animate-spin" />}
       {activity === 'waiting_approval' && <AlertCircle size={11} />}
-      {activity === 'idle' && <span className="h-1.5 w-1.5 rounded-full bg-[var(--f-core-active)]" />}
+      {activity === 'idle' && <span className="h-1.5 w-1.5 rounded-full bg-(--f-core-active)" />}
       {label}
     </span>
   )

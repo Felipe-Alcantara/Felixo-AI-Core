@@ -78,15 +78,15 @@ export function OrchestratorSettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[82vh] w-full max-w-[640px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex max-h-[82vh] w-full max-w-[640px] flex-col rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">
               Orquestrador
@@ -100,7 +100,7 @@ export function OrchestratorSettingsModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -108,7 +108,7 @@ export function OrchestratorSettingsModal({
         </header>
 
         <form className="min-h-0 overflow-y-auto px-5 py-5" onSubmit={submit}>
-          <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+          <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
             <div className="mb-3 text-xs font-medium text-zinc-300">
               Modelos para spawn
             </div>
@@ -125,7 +125,7 @@ export function OrchestratorSettingsModal({
                   return (
                     <div
                       key={model.id}
-                      className="grid gap-3 rounded-2xl border border-white/[0.06] bg-black/15 px-3 py-2 text-xs text-zinc-400 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+                      className="grid gap-3 rounded-2xl border border-white/6 bg-black/15 px-3 py-2 text-xs text-zinc-400 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -168,7 +168,7 @@ export function OrchestratorSettingsModal({
           <div className="mt-4 flex justify-end">
             <button
               type="submit"
-              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
+              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
             >
               <Save size={16} aria-hidden="true" />
               Salvar
@@ -220,11 +220,11 @@ const statusConfig: Record<
   },
   no_login: {
     label: 'Sem login',
-    className: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
+    className: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)',
   },
   limit_reached: {
     label: 'Limite atingido',
-    className: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
+    className: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)',
   },
   unknown: {
     label: 'Desconhecido',

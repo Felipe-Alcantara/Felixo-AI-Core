@@ -101,15 +101,15 @@ export function NotesModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex h-[82vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex h-[82vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">Notas</h2>
             <p className="mt-1 text-xs text-zinc-500">
@@ -121,7 +121,7 @@ export function NotesModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -129,12 +129,12 @@ export function NotesModal({
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)] max-md:grid-cols-1">
-          <aside className="flex min-h-0 flex-col border-r border-white/[0.08] p-3 max-md:hidden">
+          <aside className="flex min-h-0 flex-col border-r border-white/8 p-3 max-md:hidden">
             <div className="mb-3 flex gap-2">
               <button
                 type="button"
                 onClick={createNote}
-                className="felixo-btn flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] text-xs text-zinc-200 hover:bg-white/[0.08]"
+                className="felixo-btn flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/8 text-xs text-zinc-200 hover:bg-white/8"
               >
                 <FilePlus size={14} aria-hidden="true" />
                 Nova
@@ -143,7 +143,7 @@ export function NotesModal({
                 type="button"
                 onClick={onCreateFromChat}
                 disabled={!hasMessages}
-                className="felixo-btn flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] text-xs text-zinc-200 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn flex h-9 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/8 text-xs text-zinc-200 hover:bg-white/8 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <StickyNote size={14} aria-hidden="true" />
                 Chat
@@ -160,7 +160,7 @@ export function NotesModal({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Buscar"
-                className="h-9 w-full rounded-2xl border border-white/[0.08] bg-black/15 pl-9 pr-3 text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="h-9 w-full rounded-2xl border border-white/8 bg-black/15 pl-9 pr-3 text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -178,8 +178,8 @@ export function NotesModal({
                     className={[
                       'felixo-btn w-full rounded-2xl px-3 py-2 text-left text-xs',
                       selectedNoteId === note.id
-                        ? 'bg-[var(--f-core-active)]/10 text-[var(--f-core-white)]'
-                        : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200',
+                        ? 'bg-(--f-core-active)/10 text-(--f-core-white)'
+                        : 'text-zinc-400 hover:bg-white/6 hover:text-zinc-200',
                     ].join(' ')}
                   >
                     <span className="block truncate font-medium">{note.title}</span>
@@ -204,7 +204,7 @@ export function NotesModal({
                       updatedAt: new Date().toISOString(),
                     })
                   }
-                  className="mb-3 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mb-3 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm font-medium text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <textarea
                   value={selectedNote.content}
@@ -215,13 +215,13 @@ export function NotesModal({
                       updatedAt: new Date().toISOString(),
                     })
                   }
-                  className="min-h-0 flex-1 resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-3 font-mono text-[13px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="min-h-0 flex-1 resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-3 font-mono text-[13px] leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => onUseAsContext(selectedNote)}
-                    className="felixo-btn h-9 rounded-2xl border border-white/[0.08] px-3 text-xs text-zinc-200 hover:bg-white/[0.08]"
+                    className="felixo-btn h-9 rounded-2xl border border-white/8 px-3 text-xs text-zinc-200 hover:bg-white/8"
                   >
                     Usar como contexto
                   </button>
@@ -248,7 +248,7 @@ export function NotesModal({
                 <button
                   type="button"
                   onClick={createNote}
-                  className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-4 text-sm text-zinc-200 hover:bg-white/[0.08]"
+                  className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl border border-white/8 px-4 text-sm text-zinc-200 hover:bg-white/8"
                 >
                   <FilePlus size={16} aria-hidden="true" />
                   Criar nota

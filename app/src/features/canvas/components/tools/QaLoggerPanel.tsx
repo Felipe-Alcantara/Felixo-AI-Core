@@ -77,7 +77,7 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
       toolsMenuOpen={toolsMenuOpen}
     >
       <div className="mb-2 flex items-center gap-2">
-        <span className="rounded-full border border-white/[0.08] px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+        <span className="rounded-full border border-white/8 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
           {entries.length}
         </span>
         <button
@@ -85,7 +85,7 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
           onClick={() => void buildReport()}
           disabled={reportState.status === 'building'}
           title="Gera um pacote com versão, SO, as últimas entradas do log e o estado das CLIs — pronto pra anexar numa task, sem segredo nenhum dentro."
-          className="felixo-btn ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 disabled:opacity-50"
+          className="felixo-btn ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/6 hover:text-zinc-200 disabled:opacity-50"
         >
           <FileWarning size={12} />
           {reportState.status === 'building' ? 'Gerando…' : 'Reportar problema'}
@@ -93,7 +93,7 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
         <button
           type="button"
           onClick={() => window.felixo?.qaLogger?.clear()}
-          className="felixo-btn flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
+          className="felixo-btn flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/6 hover:text-zinc-200"
         >
           <Trash2 size={12} />
           Limpar
@@ -101,12 +101,12 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
       </div>
 
       {reportState.status === 'done' && (
-        <p className="mb-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 text-[11px] text-zinc-400">
+        <p className="mb-2 rounded-md border border-white/8 bg-white/3 px-2 py-1.5 text-[11px] text-zinc-400">
           Relatório salvo em <span className="break-all text-zinc-300">{reportState.filePath}</span>. Anexe este arquivo na task.
         </p>
       )}
       {reportState.status === 'error' && (
-        <p className="mb-2 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-2 py-1.5 text-[11px] text-[var(--color-warning)]">
+        <p className="mb-2 rounded-md border border-(--color-warning)/30 bg-(--color-warning)/10 px-2 py-1.5 text-[11px] text-(--color-warning)">
           Não foi possível gerar o relatório: {reportState.message}
         </p>
       )}
@@ -118,7 +118,7 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
           {entries.map((entry) => (
             <div
               key={entry.id}
-              className="border-b border-white/[0.03] py-1 last:border-b-0"
+              className="border-b border-white/3 py-1 last:border-b-0"
             >
               <div className="flex items-baseline gap-2">
                 <span className="shrink-0 text-zinc-600">
@@ -129,14 +129,14 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
                 </span>
                 <span className="truncate text-zinc-500">{entry.scope}</span>
               </div>
-              <p className="whitespace-pre-wrap break-words text-zinc-300">
+              <p className="whitespace-pre-wrap wrap-break-word text-zinc-300">
                 {entry.message}
                 {entry.sessionId && (
                   <span className="text-zinc-600"> [{entry.sessionId.slice(0, 8)}]</span>
                 )}
               </p>
               {entry.details !== null && (
-                <p className="whitespace-pre-wrap break-words text-zinc-500">
+                <p className="whitespace-pre-wrap wrap-break-word text-zinc-500">
                   {formatDetails(entry.details)}
                 </p>
               )}
@@ -167,11 +167,11 @@ function getLevelClassName(level: QaLogEntry['level']) {
   }
 
   if (level === 'warn') {
-    return 'text-[var(--color-warning)]'
+    return 'text-(--color-warning)'
   }
 
   if (level === 'debug') {
-    return 'text-[var(--f-core-white-soft)]'
+    return 'text-(--f-core-white-soft)'
   }
 
   return 'text-theme-success'

@@ -123,35 +123,35 @@ export function ProjectsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs"
       onClick={closeModal}
     >
       <div
         {...dialog.frameProps}
-        className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/[0.08] bg-[#1e1e1d] shadow-2xl"
+        className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/8 bg-[#1e1e1d] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <h2 className="text-[14px] font-semibold text-zinc-200">Projetos</h2>
           <button
             type="button"
             onClick={closeModal}
-            className="felixo-btn-icon rounded p-1 text-zinc-500 hover:text-zinc-300"
+            className="felixo-btn-icon rounded-sm p-1 text-zinc-500 hover:text-zinc-300"
           >
             <X size={14} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-white/[0.08] px-5 pt-3">
+        <div className="flex gap-1 border-b border-white/8 px-5 pt-3">
           {(['repo', 'workspace'] as Tab[]).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => { setTab(t); setDetected([]); setSelected(new Set()) }}
               className={[
-                'felixo-btn mb-[-1px] border-b-2 px-3 pb-2.5 text-[12px]',
+                'felixo-btn -mb-px border-b-2 px-3 pb-2.5 text-[12px]',
                 tab === t
                   ? 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-zinc-200'
                   : 'border-transparent text-zinc-500 hover:text-zinc-300',
@@ -172,7 +172,7 @@ export function ProjectsModal({
                 type="button"
                 disabled={loading}
                 onClick={pickRepo}
-                className="felixo-btn flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                className="felixo-btn flex h-9 items-center gap-2 rounded-lg border border-white/8 bg-white/4 px-3 text-[12px] text-zinc-300 hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
                 Selecionar pasta
@@ -183,13 +183,13 @@ export function ProjectsModal({
           {tab === 'workspace' && (
             <>
               <p className="text-[12px] text-zinc-500">
-                Selecione uma pasta com vários repositórios. O app detecta subpastas com <code className="rounded bg-white/[0.06] px-1 text-zinc-400">.git</code> automaticamente.
+                Selecione uma pasta com vários repositórios. O app detecta subpastas com <code className="rounded-sm bg-white/6 px-1 text-zinc-400">.git</code> automaticamente.
               </p>
               <button
                 type="button"
                 disabled={loading}
                 onClick={pickWorkspace}
-                className="felixo-btn flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                className="felixo-btn flex h-9 items-center gap-2 rounded-lg border border-white/8 bg-white/4 px-3 text-[12px] text-zinc-300 hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
                 Selecionar workspace
@@ -197,11 +197,11 @@ export function ProjectsModal({
 
               {detected.length > 0 && (
                 <>
-                  <div className="max-h-48 overflow-y-auto rounded-lg border border-white/[0.08]">
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-white/8">
                     {detected.map((repo) => (
                       <label
                         key={repo.path}
-                        className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition hover:bg-white/[0.04]"
+                        className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition hover:bg-white/4"
                       >
                         <input
                           type="checkbox"
@@ -221,7 +221,7 @@ export function ProjectsModal({
                     type="button"
                     disabled={selected.size === 0}
                     onClick={confirmWorkspace}
-                    className="felixo-btn flex h-9 items-center gap-2 self-end rounded-lg bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-4 text-[12px] text-[var(--color-warning)] hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="felixo-btn flex h-9 items-center gap-2 self-end rounded-lg bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-4 text-[12px] text-(--color-warning) hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Plus size={13} />
                     Adicionar {selected.size} {selected.size === 1 ? 'repositório' : 'repositórios'}
@@ -240,7 +240,7 @@ export function ProjectsModal({
 
         {/* Project list */}
         {projects.length > 0 && (
-          <div className="border-t border-white/[0.08] px-5 py-4">
+          <div className="border-t border-white/8 px-5 py-4">
             <p className="mb-2 text-[11px] text-zinc-600">Projetos adicionados</p>
             <div className="max-h-64 space-y-1 overflow-y-auto">
               {projects.map((project) => (
@@ -259,9 +259,9 @@ export function ProjectsModal({
                         )
                       }
                       className={[
-                        'felixo-btn-icon shrink-0 rounded p-1',
+                        'felixo-btn-icon shrink-0 rounded-sm p-1',
                         editingProjectId === project.id
-                          ? 'text-[var(--color-warning)]'
+                          ? 'text-(--color-warning)'
                           : 'text-zinc-600 hover:text-zinc-300',
                       ].join(' ')}
                       title="Configurar instruções"
@@ -271,7 +271,7 @@ export function ProjectsModal({
                     <button
                       type="button"
                       onClick={() => onRemoveProject(project)}
-                      className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-600 hover:text-theme-error"
+                      className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-600 hover:text-theme-error"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -308,7 +308,7 @@ function ProjectInstructionsEditor({
   const [docsDirectory, setDocsDirectory] = useState(project.docsDirectory ?? '')
 
   return (
-    <div className="mx-2 mb-2 flex flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+    <div className="mx-2 mb-2 flex flex-col gap-3 rounded-lg border border-white/6 bg-white/2 px-3 py-3">
       <div className="flex flex-col gap-1">
         <label className="text-[11px] font-medium text-zinc-500">
           Instruções do projeto
@@ -319,7 +319,7 @@ function ProjectInstructionsEditor({
           maxLength={4000}
           rows={4}
           placeholder="Instruções persistentes para quando este projeto estiver ativo. Ex: 'Use TypeScript strict, siga o padrão de pastas src/features/, testes com Vitest...'"
-          className="resize-y rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-2 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] focus:outline-none"
+          className="resize-y rounded-md border border-white/8 bg-white/4 px-2.5 py-2 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] focus:outline-hidden"
         />
         <span className="text-right text-[10px] text-zinc-700">
           {instructions.length}/4000
@@ -335,7 +335,7 @@ function ProjectInstructionsEditor({
           value={docsDirectory}
           onChange={(e) => setDocsDirectory(e.target.value)}
           placeholder="docs"
-          className="h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] focus:outline-none"
+          className="h-8 rounded-md border border-white/8 bg-white/4 px-2.5 text-[12px] text-zinc-300 placeholder:text-zinc-700 focus:border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] focus:outline-hidden"
         />
         <p className="text-[10px] text-zinc-700">
           Caminho relativo ao projeto. Os arquivos .md deste diretório serão indexados e o agente poderá consultá-los por tópico.
@@ -351,7 +351,7 @@ function ProjectInstructionsEditor({
             docsDirectory: docsDirectory.trim() || undefined,
           })
         }
-        className="felixo-btn flex h-8 items-center gap-1.5 self-end rounded-lg bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 text-[11px] text-[var(--color-warning)] hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]"
+        className="felixo-btn flex h-8 items-center gap-1.5 self-end rounded-lg bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 text-[11px] text-(--color-warning) hover:bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]"
       >
         <Check size={12} />
         Salvar

@@ -59,20 +59,20 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
       ].join(' ')}
     >
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-white/[0.08] px-3">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-white/8 px-3">
         <Search size={13} className="shrink-0 text-zinc-500" />
         <input
           ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Pesquisar chats..."
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-600 outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-600 outline-hidden"
         />
         {query && (
           <button
             type="button"
             onClick={() => setQuery('')}
-            className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:text-zinc-300"
+            className="felixo-btn-icon shrink-0 rounded-sm p-0.5 text-zinc-500 hover:text-zinc-300"
           >
             <X size={12} />
           </button>
@@ -80,7 +80,7 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
         <button
           type="button"
           onClick={closePanel}
-          className="felixo-btn shrink-0 rounded px-1.5 py-0.5 text-[11px] text-zinc-500 hover:text-zinc-300"
+          className="felixo-btn shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] text-zinc-500 hover:text-zinc-300"
         >
           Esc
         </button>
@@ -108,7 +108,7 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
                   onSelectSession(session)
                   closePanel()
                 }}
-                className="felixo-btn flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-white/[0.05]"
+                className="felixo-btn flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-white/5"
               >
                 <span className="text-[12px] font-medium text-zinc-300">
                   {highlight(session.title, query)}

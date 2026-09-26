@@ -9,8 +9,8 @@ import { useSystemDesignSettings } from './useSystemDesignSettings'
 import { FelixoToggle } from '../components/FelixoToggle'
 
 const TONE_CLASS: Record<SystemDesignStatusTone, string> = {
-  ok: 'text-[var(--color-success)]',
-  warn: 'text-[var(--color-warning)]',
+  ok: 'text-theme-success',
+  warn: 'text-(--color-warning)',
   muted: 'text-zinc-400',
 }
 
@@ -32,12 +32,12 @@ export function SystemDesignSettingsSection() {
   }
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+    <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
       <header className="mb-2 flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-100">
           <BookOpen size={14} aria-hidden="true" />
           Felixo System Design
-          <span className="rounded-full border border-white/10 bg-[var(--f-core-white)]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--f-core-white-soft)]">
+          <span className="rounded-full border border-white/10 bg-(--f-core-white)/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-(--f-core-white-soft)">
             Recomendado
           </span>
         </h3>
@@ -113,7 +113,7 @@ export function SystemDesignSettingsSection() {
       </div>
 
       {error || config.lastError ? (
-        <p className="mt-2 rounded-md border border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] px-2 py-1 text-[11px] text-[var(--color-error)]">
+        <p className="mt-2 rounded-md border border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] px-2 py-1 text-[11px] text-theme-error">
           {error ?? config.lastError}
         </p>
       ) : null}

@@ -410,7 +410,7 @@ export function TerminalDrawer({
           close()
         }
       }}
-      className={`felixo-terminal-drawer relative z-20 flex h-full flex-col border-l border-white/10 bg-[var(--f-core-black-surface)] focus-within:z-30 ${
+      className={`felixo-terminal-drawer relative z-20 flex h-full flex-col border-l border-white/10 bg-(--f-core-black-surface) focus-within:z-30 ${
         closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
       }`}
       style={{
@@ -435,7 +435,7 @@ export function TerminalDrawer({
           aria-valuemax={getDrawerMaxWidth(window.innerWidth)}
           aria-description="Seta para esquerda amplia, seta para direita reduz e Home restaura o tamanho padrão."
           tabIndex={0}
-          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--f-core-white)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
+          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-(--f-core-white)/40 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-emerald-400"
         />
       )}
       <div
@@ -451,7 +451,7 @@ export function TerminalDrawer({
           aria-expanded={!collapsed}
           aria-controls="canvas-terminal-output"
           title={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
-          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 transition-transform duration-150 hover:bg-white/10 hover:text-zinc-100"
+          className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 transition-transform duration-150 hover:bg-white/10 hover:text-zinc-100"
         >
           {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
@@ -495,12 +495,12 @@ export function TerminalDrawer({
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${
                 snapshot?.activity === 'working'
-                  ? 'bg-[var(--f-core-active)]'
+                  ? 'bg-(--f-core-active)'
                   : snapshot?.activity === 'idle'
-                    ? 'bg-[var(--f-core-active)]'
+                    ? 'bg-(--f-core-active)'
                     : snapshot?.activity === 'exited'
                       ? 'bg-zinc-600'
-                      : 'bg-[var(--color-warning)]'
+                      : 'bg-(--color-warning)'
               }`}
               title={snapshot?.activity ?? ''}
             />
@@ -510,7 +510,7 @@ export function TerminalDrawer({
             <button
               type="button"
               onClick={toggleMaximized}
-              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label={maximized ? 'Restaurar largura' : 'Maximizar terminal'}
               aria-pressed={maximized}
               title={maximized ? 'Restaurar largura' : 'Maximizar terminal'}
@@ -522,7 +522,7 @@ export function TerminalDrawer({
             <button
               type="button"
               onClick={restart}
-              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Reiniciar terminal"
               title="Reiniciar terminal"
             >
@@ -536,7 +536,7 @@ export function TerminalDrawer({
             <button
               type="button"
               onClick={openRenderedPreview}
-              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Ver arquivo em modo renderizado"
               title="Ver o arquivo aberto (nano/vim) em modo renderizado, igual ao site"
             >
@@ -552,7 +552,7 @@ export function TerminalDrawer({
               type="button"
               onClick={startResponsibilityHandoff}
               data-canvas-handoff-trigger
-              className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+              className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Passar responsabilidade para outro agente"
               title="Passar responsabilidade para outro agente"
             >
@@ -562,8 +562,8 @@ export function TerminalDrawer({
           {!collapsed && <button
             type="button"
             onClick={togglePinned}
-            className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
-              pinned ? 'text-[var(--f-core-white-soft)] hover:text-[var(--f-core-white-soft)]' : 'text-zinc-400 hover:text-zinc-100'
+            className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 ${
+              pinned ? 'text-(--f-core-white-soft) hover:text-(--f-core-white-soft)' : 'text-zinc-400 hover:text-zinc-100'
             }`}
             aria-label={pinned ? 'Desafixar terminal' : 'Fixar terminal'}
             title={pinned ? 'Desafixar (fecha ao clicar fora)' : 'Fixar (mantém aberto ao clicar fora)'}
@@ -573,7 +573,7 @@ export function TerminalDrawer({
           <button
             type="button"
             onClick={close}
-            className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+            className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
             aria-label="Fechar terminal"
             title="Fechar terminal"
           >
@@ -582,27 +582,27 @@ export function TerminalDrawer({
         </div>
       </div>
       {!collapsed && snapshot?.message && (
-        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-[var(--color-error)]">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-theme-error">
           {snapshot.message}
         </div>
       )}
       {!collapsed && snapshot?.contextWarning && (
-        <div className="border-b border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-[var(--color-warning)]">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-(--color-warning)">
           {snapshot.contextWarning}
         </div>
       )}
       {!collapsed && scrollbackNotice && (
-        <div role="status" className="border-b border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-[var(--color-warning)]">
+        <div role="status" className="border-b border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-(--color-warning)">
           {scrollbackNotice}
         </div>
       )}
       {!collapsed && handoffError && (
-        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-[var(--color-error)]">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-theme-error">
           {handoffError}
         </div>
       )}
       {!collapsed && previewError && (
-        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-[var(--color-error)]">
+        <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-theme-error">
           {previewError}
         </div>
       )}

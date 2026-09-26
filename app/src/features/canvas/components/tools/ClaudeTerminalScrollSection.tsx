@@ -17,7 +17,7 @@ export function ClaudeTerminalScrollSection() {
   }
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+    <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">

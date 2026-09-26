@@ -82,7 +82,7 @@ export function PromptDetailPanel({
       <button
         type="button"
         onClick={back}
-        className="felixo-btn -mt-1 flex items-center gap-1 self-start rounded px-1 py-0.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+        className="felixo-btn -mt-1 flex items-center gap-1 self-start rounded-sm px-1 py-0.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
       >
         <ArrowLeft size={13} />
         Voltar à lista
@@ -94,7 +94,7 @@ export function PromptDetailPanel({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-white/25"
+            className="mt-1 w-full rounded-sm bg-zinc-800/60 px-2 py-1.5 text-sm text-zinc-100 outline-hidden focus:ring-1 focus:ring-white/25"
           />
         </label>
 
@@ -104,7 +104,7 @@ export function PromptDetailPanel({
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Descrição curta…"
-            className="mt-1 w-full rounded bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300 outline-none placeholder:text-zinc-600 focus:ring-1 focus:ring-white/25"
+            className="mt-1 w-full rounded-sm bg-zinc-800/60 px-2 py-1.5 text-xs text-zinc-300 outline-hidden placeholder:text-zinc-600 focus:ring-1 focus:ring-white/25"
           />
         </label>
 
@@ -125,7 +125,7 @@ export function PromptDetailPanel({
             value={text}
             onChange={(event) => setText(event.target.value)}
             rows={18}
-            className="mt-1 min-h-[20rem] flex-1 resize-y rounded bg-zinc-800/60 p-2 font-mono text-xs leading-relaxed text-zinc-200 outline-none focus:ring-1 focus:ring-white/25"
+            className="mt-1 min-h-80 flex-1 resize-y rounded-sm bg-zinc-800/60 p-2 font-mono text-xs leading-relaxed text-zinc-200 outline-hidden focus:ring-1 focus:ring-white/25"
           />
         </label>
 
@@ -141,14 +141,14 @@ export function PromptDetailPanel({
           <button
             type="button"
             onClick={cancelDraft}
-            className="felixo-btn rounded px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-zinc-100"
+            className="felixo-btn rounded-sm px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-zinc-100"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={saveDraft}
-            className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16]"
+            className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/16"
           >
             <Check size={13} />
             Salvar
@@ -161,7 +161,7 @@ export function PromptDetailPanel({
           type="button"
           onClick={onReset}
           disabled={!canResetToPreset}
-          className="felixo-btn flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          className="felixo-btn flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
           title="Descartar edições salvas e voltar ao texto padrão do preset"
         >
           <RotateCcw size={13} />
@@ -176,7 +176,7 @@ export function PromptDetailPanel({
               ? 'Salve ou cancele as edições pendentes antes de inserir'
               : 'Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)'
           }
-          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.16]"
+          className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/16!"
         >
           {justSaved ? (
             <>

@@ -135,7 +135,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
       {(message || error) && (
         <p
           role="status"
-          className={`mb-3 rounded p-2 text-xs ${
+          className={`mb-3 rounded-sm p-2 text-xs ${
             message?.tone === 'ok' && !error
               ? 'bg-emerald-500/10 text-emerald-400'
               : 'bg-red-500/10 text-red-400'
@@ -187,7 +187,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
                 role="radio"
                 aria-checked={!draft.color}
                 onClick={() => setDraft({ ...draft, color: undefined })}
-                className={`rounded border px-2 py-1 text-[11px] ${!draft.color ? 'border-white/60' : 'border-white/10'}`}
+                className={`rounded-sm border px-2 py-1 text-[11px] ${!draft.color ? 'border-white/60' : 'border-white/10'}`}
               >
                 Sem cor
               </button>
@@ -200,7 +200,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
                   aria-label={FRAME_COLOR_LABELS[color]}
                   title={FRAME_COLOR_LABELS[color]}
                   onClick={() => setDraft({ ...draft, color })}
-                  className={`h-6 w-6 rounded border ${draft.color === color ? 'border-white' : 'border-white/10'}`}
+                  className={`h-6 w-6 rounded-sm border ${draft.color === color ? 'border-white' : 'border-white/10'}`}
                   style={{ backgroundColor: FRAME_COLOR_SWATCHES[color] }}
                 />
               ))}
@@ -295,7 +295,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
 
           <fieldset>
             <legend className={ROTULO}>Skills</legend>
-            <div className="mt-1 max-h-44 space-y-1 overflow-auto rounded border border-white/10 p-2">
+            <div className="mt-1 max-h-44 space-y-1 overflow-auto rounded-sm border border-white/10 p-2">
               {skills.length === 0 && (
                 <p className="text-[11px] text-zinc-500">Nenhuma skill disponível no catálogo.</p>
               )}
@@ -327,14 +327,14 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
             <button
               type="button"
               onClick={() => void handleSave()}
-              className="felixo-btn flex-1 rounded bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-white"
+              className="felixo-btn flex-1 rounded-sm bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-white"
             >
               Salvar
             </button>
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="felixo-btn rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700"
+              className="felixo-btn rounded-sm bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700"
             >
               Cancelar
             </button>
@@ -346,14 +346,14 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
             <button
               type="button"
               onClick={startNew}
-              className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded px-2 py-1 text-xs"
+              className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded-sm px-2 py-1 text-xs"
             >
               <FilePlus2 size={12} aria-hidden /> Novo preset
             </button>
             <button
               type="button"
               onClick={() => importRef.current?.click()}
-              className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded px-2 py-1 text-xs"
+              className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded-sm px-2 py-1 text-xs"
             >
               <Upload size={12} aria-hidden /> Importar
             </button>
@@ -369,7 +369,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
 
           <ul className="space-y-2">
             {presets.map((preset) => (
-              <li key={preset.id} className="rounded border border-white/10 p-2">
+              <li key={preset.id} className="rounded-sm border border-white/10 p-2">
                 <p className="text-sm font-medium">
                   {preset.icon ? `${preset.icon} ` : ''}
                   {preset.name}
@@ -387,7 +387,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
                     <button
                       type="button"
                       onClick={() => { setMessage(null); setDraft(preset) }}
-                      className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded px-2 py-1 text-[11px]"
+                      className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded-sm px-2 py-1 text-[11px]"
                     >
                       <Pencil size={11} aria-hidden /> Editar
                     </button>
@@ -395,14 +395,14 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
                   <button
                     type="button"
                     onClick={() => void duplicate(preset)}
-                    className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded px-2 py-1 text-[11px]"
+                    className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded-sm px-2 py-1 text-[11px]"
                   >
                     <Copy size={11} aria-hidden /> Duplicar
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleExport(preset)}
-                    className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded px-2 py-1 text-[11px]"
+                    className="felixo-btn felixo-secondary-action flex items-center gap-1 rounded-sm px-2 py-1 text-[11px]"
                   >
                     <Download size={11} aria-hidden /> Exportar
                   </button>
@@ -410,7 +410,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
                     <button
                       type="button"
                       onClick={() => void handleRemove(preset)}
-                      className="felixo-btn flex items-center gap-1 rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                      className="felixo-btn flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
                     >
                       <Trash2 size={11} aria-hidden /> Excluir
                     </button>

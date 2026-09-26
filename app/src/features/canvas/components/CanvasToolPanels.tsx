@@ -107,7 +107,7 @@ function ToolPanelError({
         </p>
         <button
           type="button"
-          className="felixo-btn rounded bg-zinc-700 px-3 py-2 text-xs text-zinc-100 hover:bg-zinc-600"
+          className="felixo-btn rounded-sm bg-zinc-700 px-3 py-2 text-xs text-zinc-100 hover:bg-zinc-600"
           onClick={() => window.location.reload()}
         >
           Recarregar app

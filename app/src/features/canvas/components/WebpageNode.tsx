@@ -206,23 +206,21 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="felixo-canvas-card felixo-canvas-card-web flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-[var(--f-core-graphite)] text-zinc-200 shadow-xl">
+    <div className="felixo-canvas-card felixo-canvas-card-web flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-(--f-core-graphite) text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.webpage.width}
         minHeight={NODE_MIN_SIZE.webpage.height}
-        lineClassName="!border-white/30"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-white)]"
         onResizeStart={() => setIsResizing(true)}
         onResizeEnd={() => setIsResizing(false)}
       />
-      <Handle type="target" position={Position.Left} className="!bg-[var(--f-core-white)]" />
+      <Handle type="target" position={Position.Left} />
       <NodeHeader
         icon={<Globe size={13} />}
         editableValue={nodeData.label ?? ''}
         placeholder="Página Web"
         onTitleChange={handleLabelChange}
-        className="bg-white/[0.04] text-[var(--f-core-white)]"
+        className="bg-white/4 text-(--f-core-white)"
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
       >
         <WebviewProfileMenu
@@ -231,12 +229,12 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         />
       </NodeHeader>
 
-      <div className="nodrag nowheel nopan flex items-center gap-1 border-b border-white/10 bg-white/[0.04] px-2 py-1">
+      <div className="nodrag nowheel nopan flex items-center gap-1 border-b border-white/10 bg-white/4 px-2 py-1">
         <button
           type="button"
           onClick={() => webviewRef.current?.goBack()}
           disabled={!canGoBack}
-          className="felixo-btn-icon rounded p-1 text-[var(--f-core-white-soft)] hover:bg-white/10 hover:text-[var(--f-core-white)] disabled:cursor-not-allowed disabled:opacity-30"
+          className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white) disabled:cursor-not-allowed disabled:opacity-30"
           title="Voltar"
           aria-label="Voltar"
         >
@@ -246,7 +244,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           onClick={() => webviewRef.current?.goForward()}
           disabled={!canGoForward}
-          className="felixo-btn-icon rounded p-1 text-[var(--f-core-white-soft)] hover:bg-white/10 hover:text-[var(--f-core-white)] disabled:cursor-not-allowed disabled:opacity-30"
+          className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white) disabled:cursor-not-allowed disabled:opacity-30"
           title="Avançar"
           aria-label="Avançar"
         >
@@ -255,7 +253,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         <button
           type="button"
           onClick={() => webviewRef.current?.reload()}
-          className="felixo-btn-icon rounded p-1 text-[var(--f-core-white-soft)] hover:bg-white/10 hover:text-[var(--f-core-white)]"
+          className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white)"
           title="Recarregar"
           aria-label="Recarregar"
         >
@@ -272,12 +270,12 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
           }}
           placeholder="URL (ex: google.com)"
           aria-label="Endereço da página"
-          className="min-w-0 flex-1 rounded bg-white/[0.04] px-2 py-1 text-xs text-[var(--f-core-white)] outline-none ring-1 ring-white/10 placeholder:text-[var(--f-core-secondary)] focus:ring-white/25"
+          className="min-w-0 flex-1 rounded-sm bg-white/4 px-2 py-1 text-xs text-(--f-core-white) outline-hidden ring-1 ring-white/10 placeholder:text-(--f-core-secondary) focus:ring-white/25"
         />
       </div>
 
       {loadError && (
-        <div className="nodrag border-b border-white/10 bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-[var(--color-error)]">
+        <div className="nodrag border-b border-white/10 bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-theme-error">
           {loadError}
         </div>
       )}
@@ -296,7 +294,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         />
       </div>
 
-      <Handle type="source" position={Position.Right} className="!bg-[var(--f-core-white)]" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

@@ -94,30 +94,30 @@ export function AgentCanvasWriteRequestsPanel({
       toolsMenuOpen={toolsMenuOpen}
     >
       {lastApplied && !pendingRequest && (
-        <p className="mb-3 rounded bg-emerald-500/10 p-2 text-xs text-emerald-400">
+        <p className="mb-3 rounded-sm bg-emerald-500/10 p-2 text-xs text-emerald-400">
           Escrita aplicada.
         </p>
       )}
 
       {error && (
-        <p className="mb-3 rounded bg-red-500/10 p-2 text-xs text-red-400">{error}</p>
+        <p className="mb-3 rounded-sm bg-red-500/10 p-2 text-xs text-red-400">{error}</p>
       )}
 
       {pendingRequest ? (
-        <div className="rounded border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] p-2.5">
+        <div className="rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] p-2.5">
           <div className="flex items-start gap-2">
-            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-(--color-warning)" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs leading-relaxed text-[var(--color-warning)]">
+              <p className="text-xs leading-relaxed text-(--color-warning)">
                 {describeWriteRequest(pendingRequest, nodes)}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--color-warning)]">
+              <p className="mt-1 text-[11px] text-(--color-warning)">
                 Pedido às {formatWriteRequestTime(pendingRequest)}
               </p>
             </div>
           </div>
 
-          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-black/20 p-2 text-[11px] text-zinc-200">
+          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-sm bg-black/20 p-2 text-[11px] text-zinc-200">
             {previewWriteContent(pendingRequest) || '(vazio — a nota ficaria em branco)'}
           </pre>
 
@@ -126,7 +126,7 @@ export function AgentCanvasWriteRequestsPanel({
               type="button"
               onClick={() => void resolveRequest(pendingRequest.id, true)}
               disabled={busy}
-              className="felixo-btn flex-1 rounded bg-[var(--color-warning)] px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)] disabled:opacity-50"
+              className="felixo-btn flex-1 rounded-sm bg-(--color-warning) px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)] disabled:opacity-50"
             >
               {busy ? 'Aplicando…' : 'Aceitar e escrever'}
             </button>
@@ -134,7 +134,7 @@ export function AgentCanvasWriteRequestsPanel({
               type="button"
               onClick={() => void resolveRequest(pendingRequest.id, false)}
               disabled={busy}
-              className="felixo-btn rounded bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+              className="felixo-btn rounded-sm bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
             >
               Recusar
             </button>
@@ -143,7 +143,7 @@ export function AgentCanvasWriteRequestsPanel({
       ) : (
         <p className="text-xs text-zinc-500">
           Nenhum pedido de escrita esperando. Um agente pede com{' '}
-          <code className="rounded bg-zinc-800 px-1 py-0.5">felixo canvas escrever</code>; nada é
+          <code className="rounded-sm bg-zinc-800 px-1 py-0.5">felixo canvas escrever</code>; nada é
           escrito sem confirmação aqui.
         </p>
       )}

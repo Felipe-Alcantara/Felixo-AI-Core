@@ -34,31 +34,31 @@ export const DEFAULT_NOTE_COLOR: NoteColor = 'amber'
 export const NOTE_THEMES: Record<NoteColor, NoteTheme> = {
   amber: {
     container: 'border-black/10 bg-[#ede9e0] text-[#151515]',
-    header: 'bg-black/[0.06] text-[#262626]',
+    header: 'bg-black/6 text-[#262626]',
     text: 'text-[#151515] placeholder:text-black/35',
     swatch: 'bg-[#ede9e0]',
   },
   emerald: {
     container: 'border-black/10 bg-[#e6ebe7] text-[#151515]',
-    header: 'bg-black/[0.06] text-[#262626]',
+    header: 'bg-black/6 text-[#262626]',
     text: 'text-[#151515] placeholder:text-black/35',
     swatch: 'bg-[#e6ebe7]',
   },
   sky: {
     container: 'border-black/10 bg-[#e4e9ee] text-[#151515]',
-    header: 'bg-black/[0.06] text-[#262626]',
+    header: 'bg-black/6 text-[#262626]',
     text: 'text-[#151515] placeholder:text-black/35',
     swatch: 'bg-[#e4e9ee]',
   },
   rose: {
     container: 'border-black/10 bg-[#efe6e7] text-[#151515]',
-    header: 'bg-black/[0.06] text-[#262626]',
+    header: 'bg-black/6 text-[#262626]',
     text: 'text-[#151515] placeholder:text-black/35',
     swatch: 'bg-[#efe6e7]',
   },
   zinc: {
     container: 'border-black/10 bg-[#ededea] text-[#151515]',
-    header: 'bg-black/[0.06] text-[#262626]',
+    header: 'bg-black/6 text-[#262626]',
     text: 'text-[#151515] placeholder:text-black/35',
     swatch: 'bg-[#ededea]',
   },

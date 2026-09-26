@@ -128,6 +128,83 @@ A fiação (qual pacote é dono do bin `tsc` em cada SO) fica em
 `app/scripts/typescript-toolchain.cjs` e é provada pelo `npm test`. O motivo e a
 forma oficial estão no [README](../../README.md#typescript-7-lado-a-lado-com-a-api-do-6).
 
+## Tailwind 4 e a cascata do CSS próprio
+
+Desde 25/09/2026 o renderer usa o Tailwind 4 pelo plugin `@tailwindcss/vite`;
+a configuração (`@import 'tailwindcss' source('.')`, `@theme`, `@utility`) mora
+em `app/src/index.css`. A decisão que importa para quem escreve CSS é a da
+cascata.
+
+**Como era no v3.** Sem camadas nativas e sem `@tailwind variants` no
+`index.css`, a folha saía nesta ordem, e a disputa era só especificidade +
+ordem:
+
+1. xterm.css (importado antes do `index.css` no `main.tsx`);
+2. Preflight e o `@layer components` do app (`.markdown-content`);
+3. utilities **sem** variante e os tokens de `@layer utilities`;
+4. todo o CSS próprio do `index.css` (`.felixo-*`, regras de elemento,
+   overrides de `.react-flow__*`);
+5. utilities **com** variante (`hover:`, `focus:`, `disabled:`, `sm:`,
+   `[@media…]:`), que o v3 anexava no fim da folha;
+6. CSS do React Flow e do Excalidraw (chunks carregados sob demanda).
+
+**Como ficou no v4.** O Tailwind emite `theme`, `base`, `components` e
+`utilities` em `@layer`, e CSS fora de camada vence qualquer camada.
+
+| CSS | Onde ficou | Por quê |
+|---|---|---|
+| Regras de elemento e variáveis globais (`:root`, `*`, `body`, `button`, `select`, `textarea`, scrollbars, `::selection`) | `@layer base` | No v3 qualquer classe as vencia por especificidade; fora de camada, `button, select, textarea { font: inherit }` apagaria `text-xs`/`font-mono` de todo botão e campo. |
+| `.markdown-content` (CSS do highlight.js) | `@layer components` | Já era `@layer components` no v3. |
+| Tokens de tema (`text-theme-error`, `rounded-theme`...) | `@utility` | Forma do v4 para utility própria; aceita variantes. |
+| Classes próprias e overrides de biblioteca | sem camada | Mantém o v3 em empate com utility sem variante (a classe própria vence) e mantém a disputa só por especificidade com o CSS do React Flow/Excalidraw/xterm, que também é sem camada. |
+
+O guia oficial sugere `@layer components` para CSS próprio. Aqui isso foi
+medido e descartado: com a análise estática da cascata (design system do
+próprio v4 para as utilities, regras do `index.css` e as expressões
+`className` do código), 607 pares utility × regra própria na mesma
+propriedade trocariam de vencedor — por exemplo, a borda de nó selecionado
+(`.react-flow__node.selected .felixo-canvas-card`) perderia para
+`border-white/10` —, e todo override do CSS das bibliotecas perderia para o
+CSS delas, que é sem camada.
+
+**O que muda de propósito e como foi tratado.** Nenhuma disposição de camadas
+do v4 reproduz a ordem acima (as utilities sem e com variante saem juntas na
+mesma camada), então restam dois casos, conferidos na interface real:
+
+- utility **com variante** que empatava ou vencia uma regra própria (vinha
+  depois) agora perde para ela. Os casos encontrados recebem `!` na utility,
+  que devolve o resultado do v3 só nesse ponto:
+  `hover:bg-(--f-core-structural)!` nas linhas de ação das sidebars do canvas e
+  do chat (senão o realce virava o de `.felixo-sidebar-action:hover`);
+  `focus-visible:outline-sky-400!` no fechar dos painéis;
+  `[@media(max-height:620px)]:hidden!` nas sugestões e dicas do composer;
+  `focus:outline-hidden!` no Salvar de quatro modais do chat;
+  `disabled:bg-zinc-700!` no "enviar rascunhos" do painel de terminais; e
+  `disabled:hover:bg-white/16!` no inserir do detalhe de prompt;
+- utility `!important` contra regra própria `!important`: no v3 a regra
+  própria vencia (mesma especificidade ou maior e vinha depois); no v4
+  importante em camada vence importante sem camada. As classes `!` dos
+  handles e redimensionadores do React Flow (`h-2.5! w-2.5! bg-...!`,
+  `lineClassName`, `handleClassName`) nunca tiveram efeito — o estilo
+  computado no v3 era o das regras `!important` do `index.css` — e foram
+  removidas; mantê-las faria os pontos e linhas brancos aparecerem nos nós.
+
+Diferença residual aceita: passar o mouse sobre um `.felixo-primary-action`
+**desabilitado** que também tem `hover:bg-white/16` (17 botões de painéis)
+mantém o cinza de desabilitado do design system, em vez do branco a 16% que o
+v3 pintava por cima.
+
+**Como foi conferido.** Além da análise estática, os estilos computados de
+todos os elementos foram capturados com o app real (`felixo devtools`, perfil
+isolado, fixture do `canvas-smoke`) em 19 estados — canvas nos dois temas,
+13 painéis, menu, gaveta, modal e chat — com `:hover` e `:focus-visible`
+forçados via CDP em cada elemento interativo, no v3 (`main`) e no v4, e
+comparados elemento a elemento. As diferenças que sobram são os padrões novos
+do v4 listados no registro de 25/09/2026 do [IA.md](IA.md).
+
+O v4 exige Chromium 111+ (`color-mix()`, `@property`); o Electron 41 traz o
+Chromium 146.
+
 ## Autorizacao de caminhos locais
 
 Uma pasta de projeto so entra no banco depois de ser escolhida no seletor nativo
