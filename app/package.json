@@ -21,6 +21,7 @@
     "rebuild:node": "npm rebuild node-pty",
     "typecheck": "tsc -b --pretty false",
     "typecheck:full": "tsc -b --pretty false --force",
+    "benchmark:ui-render": "node scripts/ui-render-performance.cjs",
     "benchmark:typecheck": "node scripts/typecheck-performance.cjs",
     "benchmark:typecheck:check": "npm run benchmark:typecheck -- --check",
     "benchmark:npm-runtime": "node scripts/npm-runtime-performance.cjs",

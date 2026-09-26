@@ -3928,3 +3928,35 @@ incremental 0,35 s / 71.944 KiB; depois, frio 3,12 s / 470.164 KiB e incremental
 (opção do 7.0.2): em três pares intercalados mediu 4,18–5,31 s e
 361.248–375.196 KiB de pico, contra 3,18–3,49 s e 456.504–495.056 KiB do
 padrão, ou seja, troca ~1–2 s por ~90 MiB a menos; o projeto manteve o padrão.
+
+## 2026-09-25 — Bancada de renderização da UI com Modo Performance e escolha de GPU
+
+**Por quê.** A task "Performance — comparar Modo Performance ligado vs desligado no benchmark" pedia o ganho
+real do modo, e o Felipe pediu medições nesta máquina com o modo ligado e desligado e nas duas GPUs (Intel HD
+520 e GeForce 920MX). Nenhuma bancada media isso: as de conexões e de saída do terminal comparam estruturas
+de dados e não ligam o modo.
+
+**O que entrou.** `app/scripts/ui-render-performance.cjs` (`npm run benchmark:ui-render`) sobe o app real com
+o `dist` de produção num perfil temporário, popula o canvas pela ponte `window.felixo.canvas`, alterna o modo
+pelo `localStorage` da tela de Configurações e repete a mesma interação em rodadas intercaladas. Ela mede FPS,
+p95/p99 de quadro, estilo/layout/paint/composição pelo tracing (total e por quadro) e long tasks. A GPU que
+renderizou vem do CDP, e a bancada falha se não for a pedida. 11 testes unitários.
+
+**Achados no caminho, todos medidos:**
+1. A instância de automação (porta CDP) rasterizava sempre por software (`disable-gpu`), então nenhuma
+   automação media a GPU: o primeiro relatório dizia `GPU: Disabled`. A decisão virou
+   `shouldUseSoftwareRendering` em `electron/core/graphics-mode.cjs`. A automação continua em software por
+   padrão, mas aceita `FELIXO_GRAPHICS_MODE=hardware` explícito no lançamento. O modo salvo no perfil não
+   conta, e assim `--real-profile` segue no padrão seguro. Quatro testes novos, um deles falha com a regra
+   antiga. O app normal não muda.
+2. No X11 com PRIME, o offload da NVIDIA pelo GLX derruba o GL do Chromium (`ANGLE Display::initialize error
+   12289: Invalid visual ID requested`), e o Electron fica preso. O ANGLE sobre Vulkan funciona e renderiza na
+   920MX. Isso vale como dado para a task "Hardware — oferecer escolha de GPU": no Linux, uma opção de GPU
+   dedicada precisa lançar o app com Vulkan, não só com as variáveis de offload.
+3. Com Vulkan, o Chromium escolhe a dedicada por conta própria (`__VK_LAYER_NV_optimus=non_NVIDIA_only` e
+   `MESA_VK_DEVICE_SELECT` não mudaram isso). A integrada é medida pelo GL, o caminho padrão do app.
+
+**Primeiros números (não são o resultado).** Uma rodada curta de validação, com dois workflows rodando em
+paralelo, já mostrou o Modo Performance multiplicando o FPS: Intel/GL de 19,2 para 32; NVIDIA/Vulkan de 28,8
+para 49,6. Com a máquina ocupada, esses números só provam que a bancada funciona. A medição de verdade, com a
+máquina quieta e várias rodadas, fica registrada numa entrada própria.

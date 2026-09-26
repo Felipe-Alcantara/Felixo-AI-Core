@@ -439,6 +439,63 @@ jitter de criação de processos; o p95 melhorou, e o caminho comum do canvas
 teve a redução principal no startup. O build final termina sem o aviso de chunk
 JavaScript acima de 500 kB.
 
+## Renderização da UI com Modo Performance e GPU
+
+`npm run benchmark:ui-render` (`scripts/ui-render-performance.cjs`) mede o custo
+de desenhar a interface real, que nenhuma outra bancada mede. A de conexões e a
+de saída do terminal comparam estruturas de dados, e nenhuma delas liga o Modo
+Performance.
+
+A bancada sobe o app de verdade (`electron .` com o `dist` de produção, sem
+Vite) num perfil temporário e popula o canvas pela ponte `window.felixo.canvas`
+(notas, arquivos, grupos e conexões). Depois ela alterna o Modo Performance pelo
+mesmo `localStorage` que a tela de Configurações grava e repete a mesma
+interação em rodadas intercaladas: zoom e pan no canvas, abrir e fechar grupos da
+sidebar e hover nos blocos. Por rodada, ela registra:
+
+- intervalos entre quadros (`requestAnimationFrame`): FPS, p95/p99 e quadros
+  acima de 25 ms;
+- o tempo do Chromium em estilo, layout, paint e composição, pelo tracing
+  `devtools.timeline`, também normalizado por quadro, porque o modo que desenha
+  mais quadros soma mais paint no total só por isso;
+- long tasks do renderer.
+
+O relatório registra a GPU que de fato renderizou (CDP `SystemInfo.getInfo`), e a
+bancada falha se ela não for a pedida.
+
+```bash
+npx vite build
+node scripts/ui-render-performance.cjs --gpu=integrada --rounds=3 --out=ui-integrada.json
+node scripts/ui-render-performance.cjs --gpu=dedicada --angle=vulkan --rounds=3 --out=ui-dedicada.json
+node scripts/ui-render-performance.cjs --render=software --out=ui-software.json
+```
+
+`--app-dir` aponta outro checkout (por exemplo, um worktree com outra versão do
+CSS), que precisa ter o próprio `dist` e `node_modules`. A janela precisa ficar
+visível, porque escondida o Chromium estrangula o `requestAnimationFrame`.
+
+**GPU no Linux com PRIME (medido em 25/09/2026, Electron 41, X11, driver NVIDIA
+580).** Três pontos foram medidos:
+
+- A instância de automação (porta CDP aberta) rasterizava sempre por software, e
+  por isso nenhuma bancada media a GPU. Agora ela aceita
+  `FELIXO_GRAPHICS_MODE=hardware` explícito no lançamento
+  (`shouldUseSoftwareRendering` em `electron/core/graphics-mode.cjs`). O app
+  normal não muda.
+- O offload da NVIDIA pelo GLX (`__GLX_VENDOR_LIBRARY_NAME=nvidia`) derruba o GL
+  do Chromium com `ANGLE Display::initialize error 12289: Invalid visual ID
+  requested`: o visual X vem da GLX padrão (Mesa), e o Electron fica preso. O
+  caminho que funciona é o ANGLE sobre Vulkan (`--use-angle=vulkan` com
+  `__NV_PRIME_RENDER_OFFLOAD=1` e `__VK_LAYER_NV_optimus=NVIDIA_only`), que
+  renderizou na GeForce 920MX.
+- Com Vulkan, o Chromium escolhe a GPU dedicada por conta própria: nem
+  `__VK_LAYER_NV_optimus=non_NVIDIA_only` nem `MESA_VK_DEVICE_SELECT` trouxeram a
+  Intel de volta. Por isso a integrada é medida pelo caminho padrão do app (ANGLE
+  sobre GL) e a dedicada pelo Vulkan. A comparação reflete o que cada GPU entrega
+  de verdade, com o backend que ela consegue usar.
+
+A escolha de GPU só existe no Linux. Nos outros SOs, use `--gpu=padrao`.
+
 ## Benchmark do typecheck
 
 Os projetos TypeScript do renderer usam `noEmit`, mas ainda precisam manter o
