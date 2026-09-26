@@ -56,7 +56,7 @@ test('o modo check valida que todos os cenários entregaram a carga', () => {
       linesBySession: [4, 3],
       timedOut: true,
     }],
-  }), ['native count=20: timeout', 'native count=20: saída incompleta'])
+  }, { platform: 'linux' }), ['native count=20: timeout', 'native count=20: saída incompleta'])
 })
 
 test('o modo check detecta perda de identidade e regressão da política adaptativa', () => {
