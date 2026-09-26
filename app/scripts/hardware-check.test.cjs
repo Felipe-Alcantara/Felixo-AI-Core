@@ -4,7 +4,10 @@ const assert = require('node:assert/strict')
 const path = require('node:path')
 const test = require('node:test')
 
-const { ALL_SCENARIOS, parseArgs, sameGpu } = require('./hardware-check.cjs')
+const fs = require('node:fs')
+const os = require('node:os')
+
+const { ALL_SCENARIOS, parseArgs, resolveLaunchCommand, sameGpu } = require('./hardware-check.cjs')
 
 test('aceita os cenários conhecidos e os vendorIds esperados', () => {
   const options = parseArgs(['--scenarios=dedicada,pendente', '--expect-integrada=0x8086', '--expect-dedicada=0x10de'])
@@ -28,6 +31,24 @@ test('roda os cenários de relançamento também no pacote AppImage', () => {
   assert.equal(parseArgs([]).appImage, '')
   assert.ok(ALL_SCENARIOS.includes('relancamento-perdido'))
   assert.ok(ALL_SCENARIOS.includes('relancamento-em-andamento'))
+})
+
+test('flags do runtime do AppImage vão antes das do app, e só com --app-image', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-args-'))
+  try {
+    const appImage = path.join(directory, 'Felixo.AppImage')
+    fs.writeFileSync(appImage, '')
+    const options = parseArgs([`--app-image=${appImage}`, '--app-image-arg=--appimage-extract-and-run'])
+    assert.deepEqual(options.appImageArgs, ['--appimage-extract-and-run'])
+    const launch = resolveLaunchCommand(options, ['--disable-gpu-compositing'])
+    assert.equal(launch.command, appImage)
+    assert.equal(launch.args[0], '--appimage-extract-and-run')
+    assert.equal(launch.args.at(-1), '--disable-gpu-compositing')
+    assert.throws(() => parseArgs(['--app-image-arg=--no-sandbox']), /flags do runtime/)
+    assert.throws(() => resolveLaunchCommand(parseArgs(['--app-image-arg=--appimage-extract-and-run']), []), /só vale com --app-image/)
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 test('a GPU da tela e a do CDP batem por fornecedor e dispositivo, sem a versão do driver', () => {

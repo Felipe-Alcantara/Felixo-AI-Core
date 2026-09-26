@@ -674,7 +674,8 @@ desligada, o ambiente do `prime-run` e um relançamento que não voltou. Passe
 `--expect-integrada=0x8086 --expect-dedicada=0x10de` (vendorIds da máquina) para
 exigir a GPU certa em cada cenário; sem eles, só relata. Com
 `--app-image=<arquivo.AppImage>` os cenários rodam no pacote AppImage em vez de
-`electron .`.
+`electron .`, e `--app-image-arg=--appimage-extract-and-run` roda o pacote sem
+FUSE (extraído).
 
 `npm run typecheck` usa o cache incremental do `tsc -b` (TypeScript 7) sem
 relaxar a verificação. Para uma auditoria limpa dos dois projetos TypeScript,

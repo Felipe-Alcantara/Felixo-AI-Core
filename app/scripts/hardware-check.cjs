@@ -53,7 +53,9 @@
  * uma captura da tela em cada cenário, para revisar o visual.
  * `--app-image=<arquivo.AppImage>` roda os cenários no pacote AppImage (de
  * `electron-builder --linux AppImage`) em vez de `electron .`: o
- * relançamento só falhava empacotado assim.
+ * relançamento só falhava empacotado assim. `--app-image-arg=<flag>` (pode
+ * repetir) passa uma flag do runtime do AppImage antes das do app, por
+ * exemplo `--app-image-arg=--appimage-extract-and-run` para rodar sem FUSE.
  */
 
 const fs = require('node:fs')
@@ -88,6 +90,7 @@ function parseArgs(argv) {
   const options = {
     appDir: path.resolve(__dirname, '..'),
     appImage: '',
+    appImageArgs: [],
     scenarios: [...ALL_SCENARIOS],
     expectIntegrada: null,
     expectDedicada: null,
@@ -126,6 +129,10 @@ function parseArgs(argv) {
       case 'app-image':
         if (!value) throw new Error('--app-image precisa do caminho do .AppImage.')
         options.appImage = path.resolve(value)
+        break
+      case 'app-image-arg':
+        if (!value.startsWith('--appimage-')) throw new Error('--app-image-arg aceita só flags do runtime do AppImage (--appimage-...).')
+        options.appImageArgs.push(value)
         break
       default:
         throw new Error(`Argumento desconhecido: ${argument}`)
@@ -187,8 +194,10 @@ function resolveLaunchCommand(options, args) {
   const sandbox = process.platform === 'linux' ? ['--no-sandbox'] : []
   if (options.appImage) {
     if (!fs.existsSync(options.appImage)) throw new Error(`AppImage não encontrado: ${options.appImage}.`)
-    return { command: options.appImage, args: [...sandbox, ...args] }
+    // As flags do runtime vêm primeiro; ele as consome e não as passa ao app.
+    return { command: options.appImage, args: [...options.appImageArgs, ...sandbox, ...args] }
   }
+  if (options.appImageArgs.length > 0) throw new Error('--app-image-arg só vale com --app-image.')
   const indexPath = path.join(options.appDir, 'dist', 'index.html')
   if (!fs.existsSync(indexPath)) {
     throw new Error(`Build do renderer ausente: ${indexPath}. Rode \`npx vite build\` em ${options.appDir}.`)
@@ -755,6 +764,7 @@ async function run(options) {
     pacote: options.appImage ? `AppImage ${path.basename(options.appImage)}` : 'electron . (dist)',
     resultados: results,
   }
+  if (options.appImageArgs.length > 0) report.flagsDoRuntime = options.appImageArgs
   if (options.out) {
     fs.mkdirSync(path.dirname(options.out), { recursive: true })
     fs.writeFileSync(options.out, `${JSON.stringify(report, null, 2)}\n`)
@@ -770,4 +780,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { ALL_SCENARIOS, parseArgs, processesUsingProfile, sameGpu }
+module.exports = { ALL_SCENARIOS, parseArgs, processesUsingProfile, resolveLaunchCommand, sameGpu }
