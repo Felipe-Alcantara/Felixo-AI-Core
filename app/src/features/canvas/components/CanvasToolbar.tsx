@@ -30,6 +30,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { CanvasToolsMenu, type CanvasTool } from './tools/CanvasToolsMenu'
+import { GenerateImageButton } from './GenerateImageButton'
 import { FelixoLockup } from '../../shared/brand/FelixoMark'
 import { SidebarSection } from '../../shared/components/SidebarSection'
 import { TerminalMenu } from './TerminalMenu'
@@ -303,6 +304,9 @@ export function CanvasToolbar({
               <ImageIcon size={16} />
               Abrir imagem
             </button>
+            {/* A imagem gerada chega sozinha ao canvas (evento `canvas:image-generated`,
+                escutado pelo CanvasView): o botão não precisa de callback do canvas. */}
+            <GenerateImageButton triggerClassName={TOOLBAR_BUTTON_CLASS} />
             <NamedCreateButton
               icon={<Group size={16} />}
               buttonLabel="Grupo"
