@@ -4668,3 +4668,120 @@ sempre assim (ex.: `/etc/environment`) não chega a ver a Integrada, que seria j
 **Ideias para quem quiser contribuir.**
 - Contar as placas no Linux sem depender do acesso à GPU (ex.: pelo `/sys/bus/pci`) para esse caso.
 - Rodar `check:hardware` numa máquina Windows e numa macOS com duas placas e registrar o resultado.
+
+## 2026-09-26 — Placa de vídeo: não bloqueantes da segunda revisão e limitações conhecidas
+
+**Contexto.** A segunda revisão da branch `feat/hardware-gpu-cpu` (três lentes: contagem de placas, relançamento
+e spawn, comportamento padrão) não achou bloqueante e deixou não bloqueantes. Esta rodada corrige os escolhidos e
+registra os que ficam para depois. Vem depois das entradas "Hardware: escolha de placa de vídeo e ajuste pelo
+número de CPUs" e "Placa de vídeo: correções da revisão" e não as reescreve. Base: `9ec3922c`. Registro gravado
+às 12:57.
+
+**Corrigido (cada item com teste que falhava antes, em commits pequenos).**
+1. **Abertura durante o relançamento.** Abrir o app de novo enquanto o relançado da Integrada + `prime-run` ainda
+   nascia (cerca de 2 s de montagem do AppImage, sem janela) revertia a escolha para Automático com
+   `relaunch-failed`, e o relançado nascia no Automático: duas instâncias e a escolha trocada.
+   - `relaunchApp` devolve o pid do `.AppImage` reaberto (ele vira o processo do app), e o início o anota em
+     `pendingRelaunch` antes do `app.exit`.
+   - `prepareGpuStart` trata o pedido como em andamento com menos de 30 s (`RELAUNCH_GRACE_MS`, que cobre o
+     `app.relaunch()` sem pid) ou com o pid vivo. Nesse caso não grava nada, não aplica GPU e devolve
+     `notApplied: 'relaunch-in-progress'`, que a tela explica.
+   - O pid vivo só conta até 5 min depois do pedido (`RELAUNCH_PID_MAX_AGE_MS`): um pid reaproveitado não prende
+     a escolha. Passado o prazo e com o pid morto, vale o comportamento anterior.
+2. **Escolha salva escondida.** Com Integrada ou Dedicada salva, o campo aparece mesmo sem duas placas nesta
+   abertura (modo compatível, em que o `getGPUInfo` é recusado; eGPU desconectada; MUX só na dedicada). Só
+   Automático fica habilitado, com o motivo. O `check:hardware` achou no app real um defeito dessa mudança: salvar
+   Automático escondia o campo no mesmo clique, junto com a confirmação. Agora o campo fica depois de salvar
+   (`shouldShowGpuChoice(status, { justSaved })`).
+3. **Aviso do modo compatível.** `evaluateGpuAfterReady` decidia só pelo primeiro `gpu-info-update`. Na sequência
+   medida (`enabled` e, 41 ms depois, `disabled_software`), quem estava no Automático perdia o aviso. Agora lê o
+   status a cada evento durante 2 s (`GPU_STATUS_SETTLE_MS`) e no fim da janela. Incompatibilidade grava na hora;
+   uma leitura saudável depois não apaga; a recomendação antiga só é limpa com a janela inteira saudável. A espera
+   pelo primeiro evento, que tirou o falso positivo do `whenReady`, continua.
+4. **macOS com placa NVIDIA.** A lista de bugs do Chromium 146 (`gpu_driver_bug_list.json`, entrada 326: macosx,
+   0x10de, qualquer categoria de multi-GPU) liga `force_low_power_gpu`, que o `SetupGLDisplayManagerEGL` testa
+   antes do `force_high_performance_gpu` (conferido na fonte da tag). `describeGpuDevices` devolve
+   `unavailablePreferences: { dedicada: 'macos-nvidia-forced-low-power' }` e a tela desliga só a Dedicada, com o
+   motivo.
+5. **AppImage.**
+   - `resolveRunningAppImage` exige `APPDIR` absoluto, existente e diferente da raiz, e `APPIMAGE` absoluto e
+     arquivo regular.
+   - Compara `realpath(execPath)` com `realpath(APPDIR)`, o que resolve o TMPDIR atrás de link simbólico (como
+     no Silverblue).
+   - O relançado sai sem as entradas da montagem antiga no `PATH`, `LD_LIBRARY_PATH`, `XDG_DATA_DIRS` e
+     `GSETTINGS_SCHEMA_DIR`.
+   - Com o app extraído (`appimage_extracted_*`), o relançado recebe `APPIMAGE_EXTRACT_AND_RUN=1`: o runtime
+     consome a flag `--appimage-extract-and-run`, e sem a variável o relançado tentava montar por FUSE.
+6. **Relançamento recusado.** `applyGpuLaunchPlan` guarda o valor anterior das variáveis que mexe, e
+   `restoreGpuLaunchEnv` as devolve quando o spawn é recusado. Os terminais da sessão, que segue no Automático,
+   voltam a herdar as variáveis do `prime-run`.
+7. **Ligação no `main.cjs`.** O início da placa saiu para `electron/core/gpu-launch.cjs` (`startGpuPreference`).
+   Os testes cobrem a ordem (plano aplicado antes do relançamento) e a marca `FELIXO_GPU_ENV_SANITIZED` apagada
+   nos outros ramos. Conferido por mutação: trocar a ordem ou deixar a marca faz os testes falharem.
+8. **Guarda morta.** Saiu o `relaunchingForGpu` do `whenReady`. Medido de novo num Electron 41.10.7: depois de um
+   `app.exit(0)` antes do ready, nada roda (nem no mesmo tick, `nextTick`, timer ou `whenReady`).
+9. **Pequenos.**
+   - Os testes do Apple Silicon usam `deviceId` 0 (o AGXAccelerator só traz vendor-id).
+   - O comentário de `gpu-devices.cjs` agora diz que cada switch precisa só da própria marca e de
+     `GpuCount() > 1`.
+   - O tipo diz que `devices`, no Windows, pode incluir NPUs e não serve para contar placas.
+
+**Limitações conhecidas (ficam como task; nada disso foi corrigido nesta rodada).**
+- **Custo do `getGPUInfo('basic')` a cada abertura no Windows.** As Configurações e o `HardwareNotices` pedem
+  `graphics:get-config`, que espera a lista de placas também para quem nunca mexeu na opção. No Windows isso
+  inclui `CollectNPUInformation` (carrega o `DXCore.dll`) e a enumeração do DXGI na thread principal do
+  navegador. No Linux a resposta chegou em até 16 ms depois do `did-finish-load`; no Windows ainda não foi
+  medido, e é preciso medir numa máquina Windows antes de decidir (ex.: só ler as placas quando a opção abre).
+- **Descritores herdados pelo relançado.** O Electron não marca como CLOEXEC os fds do processo principal, e o
+  filho do spawn herda sockets, eventfds, `icudtl.dat`, o snapshot do V8 e o pipe de manutenção do runtime do
+  primeiro AppImage. Por isso o daemon FUSE e a montagem antiga ficam de pé durante a sessão relançada (visto
+  de novo nesta rodada: um processo com o `APPDIR` antigo continua vivo). Depois da limpeza do item 5, nenhum
+  caminho do relançado aponta para ela. Fechar esses fds antes do spawn exige um passo nativo ou um lançador
+  intermediário.
+- **`relaunch-failed` atribuído errado com perfil sem escrita no nascimento do relançado.** Se o perfil não
+  aceita escrita quando o relançado nasce, ele abre no Automático (`profile-unwritable`) sem apagar o pedido.
+  Quando a escrita volta, a abertura seguinte acusa `relaunch-failed`, embora o relançamento tenha acontecido. O
+  pedido não fica preso; só a mensagem erra a causa.
+- **Linux com duas dedicadas, BMC ou passthrough.**
+  - Duas dedicadas (AMD+NVIDIA, duas NVIDIA) ou BMC ASPEED + NVIDIA: a opção aparece, mas a Integrada não muda
+    nada, e a Dedicada cai na primeira `DISCRETE` do Vulkan (ANGLE `vulkan_icd.cpp`), que pode ser a que já
+    desenha.
+  - Intel+NVIDIA com `prime-select nvidia`: a Integrada não faz nada.
+  - Dedicada sem driver Vulkan: o ANGLE usa a integrada, e a tela diz "Nesta abertura: Dedicada". O "Em uso
+    agora" mostra a verdade.
+  - VM VMware (SVGA 0x15ad) com NVIDIA em passthrough: a contagem dá 1 placa e a opção some, embora a Dedicada
+    por Vulkan funcionasse.
+  - Uma saída possível: depois do início, comparar o fornecedor do renderizador do WebGL com o da placa pedida
+    e avisar.
+- **Também sem correção.**
+  - `ok: true` do relançamento só quer dizer que o exec deu certo. Um runtime que morre depois não é visto na
+    hora; com o pid anotado, a abertura seguinte depois de 30 s volta para Automático.
+  - Extraído, o relançado usa o mesmo `appimage_extracted_<md5>` que o processo que sai apaga. Aqui funcionou
+    porque o md5 do `.AppImage` (cerca de 1,5 s) termina depois da limpeza (cerca de 0,16 s, medido na revisão).
+    Um disco muito mais rápido no md5 poderia inverter a ordem.
+
+**Validação.**
+- Gates (depois do último commit de código): `npm run lint` ok; `npm run build` ok; `npm test` 1790/1790;
+  `npm run test:frontend` 1336 ok e 1 pulado.
+- `check:hardware` com `electron .` (dist), sob o flock, com `--expect-integrada=0x8086
+  --expect-dedicada=0x10de`: 11/11 ok. Os cenários novos:
+  - `relancamento-em-andamento`: pedido com o pid vivo e 90 s de idade. Ficou no Automático com
+    `relaunch-in-progress`, sem mexer no arquivo, sem aviso e sem relançar.
+  - `escolha-salva-compativel`: Dedicada salva no modo compatível. Só Automático habilitado, o motivo na tela,
+    e a escolha voltou para `auto` pela tela.
+  - `relancamento-perdido` agora usa um pedido de 10 min sem pid.
+- AppImage x64 reconstruído desta branch (electron-builder 26.15.3):
+  - `dedicada`, `integrada-prime-run`, `relancamento-perdido`, `relancamento-em-andamento` e
+    `escolha-salva-compativel`: 5/5.
+  - `integrada-prime-run` com o TMPDIR atrás de link simbólico: ok. O mesmo caso no pacote da rodada anterior
+    reproduziu o defeito: o CDP não abriu em 60 s, porque o app fechou sem voltar.
+  - `integrada-prime-run` com `--app-image-arg=--appimage-extract-and-run`: ok. O relançado rodou com
+    `APPIMAGE_EXTRACT_AND_RUN=1` e `APPDIR` em `appimage_extracted_*`.
+  - Com a checagem nova do ambiente, o pacote anterior falha com "o PATH do relançado tem a montagem antiga", e
+    o desta branch passa.
+- Não sobrou montagem nem extração de teste em `/tmp`.
+
+**Ideias para quem quiser contribuir.**
+- Medir o custo do `getGPUInfo('basic')` numa máquina Windows, com e sem NPU.
+- Um lançador intermediário que feche os fds herdados antes de reabrir o `.AppImage`.
+- Avisar quando o renderizador do WebGL não é da placa pedida (Linux com duas dedicadas ou sem Vulkan).
