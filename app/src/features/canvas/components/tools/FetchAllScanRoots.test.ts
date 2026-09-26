@@ -33,6 +33,9 @@ describe('FetchAllScanRoots', () => {
     expect(html).toContain('aria-label="Deixar de varrer /home/pessoa/repos"')
     expect(html).toContain('aria-label="Deixar de varrer /dados/git"')
     expect(html).not.toContain('Nenhuma pasta escolhida.')
+    // O nome da pasta vem antes do caminho, que o corte encurta pelo fim.
+    expect(html).toContain('<span class="shrink-0 text-zinc-300">repos</span>')
+    expect(html).toContain('<span class="shrink-0 text-zinc-300">git</span>')
     // A lista é nomeada pelo título visível, não por um texto escondido.
     const titleId = /<p id="([^"]+)"[^>]*>Raízes configuradas/.exec(html)?.[1]
     expect(titleId).toBeTruthy()

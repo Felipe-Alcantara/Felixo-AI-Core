@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { addPickedRoots, removeScanRoot } from './fetch-all-roots'
+import { addPickedRoots, removeScanRoot, scanRootName } from './fetch-all-roots'
+
+describe('scanRootName', () => {
+  it('usa a última pasta do caminho, com barra de qualquer sistema', () => {
+    expect(scanRootName('/home/pessoa/repos')).toBe('repos')
+    expect(scanRootName('/home/pessoa/repos/')).toBe('repos')
+    expect(scanRootName('D:\\Projetos\\git')).toBe('git')
+  })
+
+  it('raiz de volume continua legível', () => {
+    expect(scanRootName('/')).toBe('/')
+    expect(scanRootName('C:\\')).toBe('C:')
+  })
+})
 
 describe('addPickedRoots', () => {
   it('acrescenta as pastas escolhidas depois das que já estavam', () => {

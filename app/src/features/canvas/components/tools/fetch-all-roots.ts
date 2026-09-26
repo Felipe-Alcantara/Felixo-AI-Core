@@ -51,6 +51,17 @@ export function addPickedRoots(
   return roots.length > current.length ? { roots, error: null } : NOTHING_TO_SAVE
 }
 
+/**
+ * Nome curto de uma raiz: a última pasta do caminho, em qualquer sistema.
+ *
+ * O caminho inteiro raramente cabe na largura do painel, e o que distingue
+ * duas raízes costuma estar no fim dele; sem o nome à frente, duas pastas
+ * irmãs apareceriam iguais depois do corte.
+ */
+export function scanRootName(root: string): string {
+  return root.split(/[\\/]+/).filter(Boolean).at(-1) ?? root
+}
+
 /** Tira uma pasta das raízes; se ela não estava na lista, não há o que gravar. */
 export function removeScanRoot(current: readonly string[], root: string): ScanRootsEdit {
   const roots = current.filter((item) => item !== root)

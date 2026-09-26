@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import { FolderPlus, X } from 'lucide-react'
+import { scanRootName } from './fetch-all-roots'
 
 type FetchAllScanRootsProps = {
   /** Pastas-raiz salvas, na ordem em que o processo principal as devolve. */
@@ -38,8 +39,11 @@ export function FetchAllScanRoots({
         <ul aria-labelledby={titleId} className="mt-1 max-h-24 overflow-auto">
           {roots.map((root) => (
             <li key={root} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500" title={root}>
-                {root}
+              {/* Nome à frente, caminho inteiro depois: o corte come o fim do
+                  caminho, que é justamente o que distingue pastas irmãs. */}
+              <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-[11px]" title={root}>
+                <span className="shrink-0 text-zinc-300">{scanRootName(root)}</span>
+                <span className="min-w-0 truncate text-zinc-500">{root}</span>
               </span>
               <button
                 type="button"
