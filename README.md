@@ -102,7 +102,7 @@ histórico nem permite selecionar um SHA anterior.
 |--------|-----------|
 | Desktop | Electron 41 |
 | Frontend | React 19 + TypeScript 7 + Vite 8 |
-| Estilos | Tailwind CSS 3 |
+| Estilos | Tailwind CSS 4 (plugin `@tailwindcss/vite`) |
 | Ícones | lucide-react |
 | Tooling | ESLint 10 + typescript-eslint (sobre a API do TypeScript 6), Node 25.9.0 via `.nvmrc` |
 | Testes | `node:test` nativo + Vitest |
@@ -146,6 +146,28 @@ método em
 [`app/benchmarks/README.md`](app/benchmarks/README.md#benchmark-do-typecheck).
 Quando o typescript-eslint suportar o TypeScript 7, o alias do 6 pode sair e o
 `typescript` volta a ser o pacote normal.
+
+### Tailwind CSS 4
+
+O renderer usa o Tailwind 4 pelo plugin oficial `@tailwindcss/vite`, registrado
+em `app/vite.config.ts`. Não existem mais `tailwind.config.js` nem
+`postcss.config.js`: a configuração mora no próprio `app/src/index.css` —
+`@import 'tailwindcss' source('.')` (varre só `src/`), `@theme` com as fontes e
+sombras extras e `@utility` para os tokens de tema (`text-theme-error`,
+`rounded-theme`...).
+
+Onde pôr CSS novo no `index.css` (motivo e medição em
+[ARQUITETURA.md](docs/projeto/ARQUITETURA.md#tailwind-4-e-a-cascata-do-css-próprio)):
+
+- regra de elemento ou variável global (`button`, `select`, `body`, `:root`):
+  dentro de `@layer base`;
+- classe própria (`.felixo-*`, override de `.react-flow__*`): fora de camada,
+  como o resto do arquivo — ela vence qualquer utility sem `!`;
+- utility reaproveitável que precisa de variantes (`hover:`, `disabled:`):
+  `@utility`.
+
+O Tailwind 4 exige Chromium 111+ (`color-mix()`, `@property`); o Electron 41 do
+projeto traz o Chromium 146.
 
 ---
 

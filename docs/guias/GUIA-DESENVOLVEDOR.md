@@ -113,10 +113,10 @@ Felixo-AI-Core/
 │   │   ├── features/shared/       # Tipos e serviços compartilhados
 │   │   ├── App.tsx               # Componente raiz
 │   │   ├── main.tsx              # Entry point React
-│   │   └── index.css             # Estilos globais + design tokens
+│   │   └── index.css             # Estilos globais, tokens e config do Tailwind 4 (@theme)
 │   ├── public/                   # Assets estáticos
 │   ├── package.json              # Deps e scripts
-│   └── vite.config.ts            # Configuração Vite
+│   └── vite.config.ts            # Configuração Vite (inclui o plugin @tailwindcss/vite)
 ├── felixo_launcher/              # Launcher Python e atualização do checkout
 ├── tests/                        # Testes do launcher
 ├── docs/                         # Documentação vigente
@@ -127,6 +127,36 @@ Felixo-AI-Core/
 ├── start_app.py                  # Script de inicialização
 └── README.md                     # Visão geral
 ```
+
+### Estilos (Tailwind CSS 4)
+
+O Tailwind 4 entra pelo plugin `@tailwindcss/vite` (`app/vite.config.ts`); não
+há `tailwind.config.js` nem `postcss.config.js`. Tudo o que era configuração
+fica no topo de `app/src/index.css`: `@import 'tailwindcss' source('.')`,
+`@theme` (fontes `sans`/`mono`, sombras `shell`/`soft`) e os `@utility` dos
+tokens de tema.
+
+No v4 o Tailwind emite tudo em camadas nativas (`theme`, `base`, `components`,
+`utilities`) e **CSS fora de camada vence qualquer camada**. Por isso:
+
+- regra de elemento ou variável global vai em `@layer base` — fora de camada,
+  `button { font: inherit }` apagaria `text-xs`/`font-mono` de todo botão;
+- classe própria (`.felixo-*`, override de `.react-flow__*`) fica fora de
+  camada: ela vence qualquer utility do mesmo elemento, inclusive
+  `hover:`/`focus-visible:`/`disabled:`. Se a variante precisa ganhar da classe
+  própria, use `!` na utility (ex.: `hover:bg-(--f-core-structural)!` no
+  `CanvasToolbar`) ou mova o estado para o CSS da própria classe;
+- utility `!` vence até regra própria com `!important` (importante em camada
+  vence importante sem camada). Não use `!` para brigar com as regras
+  `!important` dos handles do React Flow no `index.css`: elas são o desenho do
+  handle.
+
+Ao subir de versão do Tailwind com `npx @tailwindcss/upgrade`, revise o diff
+inteiro: a ferramenta trata qualquer string de código como possível classe (na
+migração para o 4 ela trocou o evento `'blur'` por `'blur-sm'` em
+`removeEventListener`, num tipo `Pick<HTMLElement, ...>` e no teste que cobria o
+caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
+`npm run build` (o typecheck pega parte disso) e compare a interface.
 
 ---
 

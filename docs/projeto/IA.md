@@ -4022,3 +4022,139 @@ uma execução descartada. Os números abaixo são da v2.
 - **Tailwind 4 × 3:** sem regressão. FPS, p95, estilo e paint iguais dentro do ruído nas duas GPUs e nos
   dois modos, e a abertura (2,4–2,7 s) também. O único sinal é a composição total, 10–20% maior no v4, sem
   efeito em FPS nem em p95.
+
+## 2026-09-25 — Tailwind 4: migração do major com a cascata do v3 preservada
+
+**Task.** Migrar o app do Tailwind 3.4.19 para o major mais recente (4.3.3,
+`latest` no npm), um PR só para esse major, aceitando os padrões novos do v4 e
+mantendo a precedência entre o CSS próprio e as utilities como era no v3. Base:
+`main` em 6ba115d (TypeScript 7 já dentro). Registro gravado em 26/09/2026,
+00:43 (o trabalho atravessou a meia-noite).
+
+**Fonte conferida.** Guia oficial de upgrade e páginas de instalação com Vite,
+detecção de fontes, estilos próprios e Preflight lidos no código-fonte do site
+(tailwindlabs/tailwindcss.com); tipos e comportamento do `@tailwindcss/vite`
+4.3.3 lidos no pacote instalado (a raiz de varredura padrão é o `root` do Vite,
+`app/`); CSS de cada utility tirado do design system do próprio v4
+(`__unstable__loadDesignSystem(...).candidatesToCss`).
+
+**O que mudou (5 commits).**
+- Dependências: `tailwindcss` ^4.3.3 e `@tailwindcss/vite` ^4.3.3 (plugin
+  recomendado pelo guia para Vite, em `vite.config.ts`); saem `autoprefixer`
+  (o v4 prefixa), o `postcss` direto (o Vite 8 já depende dele),
+  `postcss.config.js` e `tailwind.config.js`. Lock: +29 pacotes (Tailwind,
+  oxide e lightningcss com binários por plataforma) e −44 (cadeia PostCSS do
+  v3); nenhuma outra versão mudou.
+- `index.css`: `@import 'tailwindcss' source('.')` (mesmo escopo do `content`
+  do v3; a saída ficou idêntica à da detecção automática de `app/`), `@theme`
+  com fontes e sombras do antigo config, tokens `@layer utilities` viraram
+  `@utility`, `.markdown-content` segue em `@layer components`, regras de
+  elemento em `@layer base`, classes próprias sem camada e
+  `button:not(:disabled) { cursor: pointer }` (o Preflight do v3 devolvia
+  `cursor: default` aos desabilitados; o do v4 não tem essa regra). Motivo e
+  medição da cascata em `ARQUITETURA.md` ("Tailwind 4 e a cascata do CSS
+  próprio").
+- Templates: saída do `npx @tailwindcss/upgrade@4.3.3` revisada troca a troca
+  (1072 trocas em 83 arquivos) + 10 `rounded` isolados que a ferramenta pulou
+  dentro de template literal, renomeados à mão.
+- Cascata: 32 atributos `!` mortos dos handles/redimensionadores do React Flow
+  removidos e 11 usos de 6 utilities com variante ganharam `!` (lista na ARQUITETURA).
+
+**Reescritas da ferramenta revertidas.** A ferramenta trata qualquer string
+como classe. Voltaram ao original: `terminal-session-store.ts:1056`
+`removeEventListener('blur-sm', …)` (vazaria o listener de blur da janela);
+`focus-restore.ts:17` `Pick<HTMLElement, … | 'blur-sm'>` (TS2344, conferido
+rodando o `tsc`); `useFocusRestore.ts:15` e `:88` (tipo e evento reenviado
+`'blur-sm'`) e os comentários `:85`/`:117`; `useFocusRestore.test.ts:119, 129,
+147, 170, 177` (o teste tinha sido reescrito junto e passaria com o bug);
+`canvas-starfield.test.ts:17, 37` (`shadow` → `shadow-sm` no nome do teste);
+`terminal-drawer-pin.test.ts:56` (`rounded` → `rounded-sm`). No `index.css`:
+`@utility markdown-content` + 18 `@utility hljs-*` gerados de CSS de terceiro
+(voltou `@layer components`) e o bloco de compatibilidade que forçava borda
+gray-200 (a decisão foi aceitar o `currentColor` do v4). Mantido, conferido: o
+comentário de `menu-panel-timing.ts:3` (`duration-[180ms]` → `duration-180`)
+acompanha a classe dos botões.
+
+**Descoberta que mudou a análise.** Sem `@tailwind variants` no `index.css`, o
+v3 anexava as utilities com variante no FIM da folha, depois do CSS próprio.
+Ou seja, a precedência antiga era: utility sem variante < classe própria <
+utility com variante (empates). Nenhuma disposição de camadas do v4 reproduz
+isso, porque as duas famílias de utility saem juntas em `@layer utilities`.
+
+**Validação.**
+- `npm run build` ok; `npm test` 1659/1659; `npm run test:frontend` 123
+  arquivos, 1182 testes ok e 1 pulado (benchmark opt-in); `npm run lint` sem
+  problemas; `npx tsc -b` ok depois de cada commit de código.
+- `npm audit` e `npm audit --omit=dev`: `found 0 vulnerabilities`;
+  `npm audit signatures`: 990 pacotes com assinatura verificada e 252 com
+  atestação.
+- Navegador: o Electron 41.10.7 instalado traz Chromium 146.0.7680.216
+  (`process.versions.chrome`); o v4 exige 111+.
+- Comparação visual: estilos computados de todos os elementos do app real
+  (`felixo devtools`, perfil isolado, fixture do `canvas-smoke`, 1280×800) em
+  19 estados — canvas nos temas escuro e alto contraste, 13 painéis, menu de
+  cor, gaveta, modal de handoff e chat — com `:hover` e `:focus-visible`
+  forçados via CDP em cada elemento interativo, v3 (`main`) × v4, primeiro com
+  o dev server e por fim contra o `dist/` de cada lado (modo `--packaged`).
+  Na rodada final, sem o painel de limites (cujo estado de carregamento mudou
+  entre as duas execuções): 9.280 elementos em repouso e 10.336 leituras
+  forçadas; o que sobra de diferença é só a lista de mudanças esperadas abaixo
+  e ruído de conteúdo (rótulo "última sincronização" do System Design, tamanho
+  interno do canvas do Excalidraw). Duas capturas do v3 entre si deram 0
+  diferenças.
+
+**Mudanças visuais esperadas (padrões do v4, aceitos).**
+- Paleta padrão em OKLCH: zinc/sky/emerald etc. mudam um pouco (zinc-400
+  161,161,170 → 159,159,169; foco sky-400 56,189,248 → 0,188,255; accent
+  sky-500 14,165,233 → 0,166,244; emerald-400 52,211,153 → 0,212,146); em tela
+  P3 os saturados ficam mais vivos.
+- Placeholder sem cor própria: gray-400 → cor do texto a 50% (72 campos nos
+  estados medidos, ex. título dos nós).
+- `text-xs/sm/base` têm altura de linha proporcional no v4 (1,333/1,4286/1,5)
+  e não mais em rem: onde o CSS próprio troca o `font-size` ou o filho usa
+  `text-[10px]/[11px]`, a linha encolhe — ações da sidebar ~1 px mais baixas,
+  cabeçalho da gaveta do terminal 57 → 48 px, cabeçalhos de painel 73 → 69 px.
+- `space-y-*`/`divide-*`: a margem/borda vai para a base do item anterior em vez
+  do topo do seguinte (mesmo espaço; muda se o último filho estiver oculto).
+- 31 usos (17 classes) de `*-(--var)/N` passam a pintar; no v3 não geravam CSS
+  (lista no relatório da PR); o mais visível é o botão do aviso de CLI
+  (`CliSetupNotice.tsx:121`), que ganha fundo branco a 90%.
+- Botão de espessura ativo do desenho (`DrawingNode`, `opacity-70` +
+  `opacity-100`): 70% → 100% (ordem das utilities do v4).
+- Hover sobre `.felixo-primary-action` desabilitado com `hover:bg-white/16` (17
+  botões) mantém o cinza de desabilitado; o v3 pintava branco 16% por cima.
+- Borda sem cor = `currentColor`: nos estados medidos nenhuma borda visível
+  dependia do gray-200; na análise estática só `ModelManagerModal.tsx:610` e
+  `:654` (cores `border-theme-error/30` e `/40` que nunca existiram) passam de
+  gray-200 para a cor do texto.
+- `hover:` só vale com `@media (hover: hover)`; no Electron desktop medido é
+  `true`, então só muda em dispositivo cujo ponteiro principal é toque.
+- `transition`/`transition-colors` passam a animar também `outline-color` (e
+  `translate`/`scale`/`rotate`).
+
+**Medição (notebook de referência, 2 núcleos/4 threads).** CSS principal
+`index-*.css`: 136.322 → 171.770 bytes (+26,0%), gzip -9 24.044 → 27.172
+(+13,0%; o Vite reporta 24,49 → 27,74 kB). Todos os CSS do `dist`: 293.731 →
+329.179 bytes (+12,1%), gzip 48.794 → 51.922 (+6,4%). O crescimento vem dos
+fallbacks de `color-mix()` (178 `@supports`), 58 `@property` e das 5 camadas;
+o CSS próprio sem camada é 88,7 KB dos 171,8 KB. `vite build` (A/B em duas
+rodadas, 3 execuções cada): v3 med. 10,65 s (load ~8) e 8,11 s (load ~4–5);
+v4 med. 5,55 s (load ~3–4) e 5,15 s (load ~4,4). `npm run build` (typecheck
+incremental + vite): v3 15,2 s e 12,7 s; v4 8,4 s e 8,2 s.
+
+**Não verificado / riscos.**
+- Windows e macOS só serão provados pela CI (aqui só Linux x64).
+- A comparação visual cobre os 19 estados listados; modais do chat, Notion com
+  dados e telas estreitas não foram capturados — para eles valem a análise
+  estática (cascata, bordas sem cor, renomes) e a revisão do diff.
+- O painel de limites ficou fora da rodada final por diferença de dados entre
+  as execuções; na rodada com dev server ele não mostrou mudança fora da lista.
+- Ferramenta de comparação ficou fora do repo (scripts de sessão); não há
+  teste automático que pegue regressão de cascata no futuro.
+
+**Ideias para quem quiser contribuir.** Transformar a captura de estilos
+computados (v3 × v4 com estados forçados via CDP) num `npm run` de regressão
+visual reutilizável; revisar as 31 classes `*-(--var)/N` e as duas
+`border-theme-error/30|40` que nunca existiram para decidir se ficam como o v4
+pinta; avaliar se os 17 botões primários devem ganhar `enabled:hover:` para
+deixar a intenção explícita.
