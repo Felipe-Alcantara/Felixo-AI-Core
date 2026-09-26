@@ -653,7 +653,7 @@ export function ModelManagerModal({
             </div>
 
             {pendingSwitch && (
-              <div className="mb-2 space-y-2 rounded-2xl border border-theme-error/30 bg-theme-error/[0.06] p-3 text-[11px] text-zinc-300">
+              <div className="mb-2 space-y-2 rounded-2xl border border-theme-error/30 bg-theme-error/6 p-3 text-[11px] text-zinc-300">
                 <p className="text-xs font-medium text-zinc-100">
                   Trocar a conta de {pendingSwitch.cli.name}?
                 </p>
