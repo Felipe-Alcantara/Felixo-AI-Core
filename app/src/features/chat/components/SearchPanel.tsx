@@ -61,12 +61,17 @@ export function SearchPanel({
     : sessions
 
   return (
+    // Fechado, o painel continua montado (para o fade) e só fica transparente:
+    // `inert` o tira do Tab, senão o foco passava por cada conversa — e pela
+    // lixeira dela — sem nada visível. Mesmo recurso da sidebar do canvas.
     <div
       className={[
         'absolute inset-0 z-20 flex flex-col bg-[#272727]',
         'transition-opacity duration-200',
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
       ].join(' ')}
+      aria-hidden={!isOpen}
+      inert={!isOpen}
     >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-white/8 px-3">
         <Search size={13} className="shrink-0 text-zinc-500" />
