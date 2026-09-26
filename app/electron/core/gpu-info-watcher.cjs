@@ -19,21 +19,37 @@ const DEFAULT_GPU_INFO_TIMEOUT_MS = 30_000
 
 /**
  * @param {{ on: (event: string, listener: () => void) => void }} app
- * @returns {{ isReady: () => boolean, wait: (timeoutMs?: number) => Promise<boolean> }}
+ * @returns {{
+ *   isReady: () => boolean,
+ *   wait: (timeoutMs?: number) => Promise<boolean>,
+ *   onUpdate: (listener: () => void) => () => void,
+ * }}
  */
 function createGpuInfoWatcher(app) {
   let ready = false
   const waiters = new Set()
+  const subscribers = new Set()
 
   app.on('gpu-info-update', () => {
-    if (ready) return
-    ready = true
-    for (const resolve of waiters) resolve(true)
-    waiters.clear()
+    if (!ready) {
+      ready = true
+      for (const resolve of waiters) resolve(true)
+      waiters.clear()
+    }
+    for (const listener of [...subscribers]) listener()
   })
 
   return {
     isReady: () => ready,
+    /**
+     * Avisa cada `gpu-info-update` (não só o primeiro): o status da GPU pode
+     * mudar logo depois, como quando ela cai para software. Devolve a função
+     * que cancela.
+     */
+    onUpdate(listener) {
+      subscribers.add(listener)
+      return () => subscribers.delete(listener)
+    },
     /** `true` quando a GPU já respondeu; `false` se o prazo acabar antes. */
     wait(timeoutMs = DEFAULT_GPU_INFO_TIMEOUT_MS) {
       if (ready) return Promise.resolve(true)

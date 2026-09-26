@@ -307,6 +307,10 @@ app.whenReady().then(async () => {
       // No whenReady o status ainda é o padrão `disabled_software`: sem esta
       // espera, toda abertura podia recomendar o modo compatível à toa.
       waitForGpuInfo: () => gpuInfoWatcher.wait(),
+      // E o primeiro evento não é o veredito: a GPU pode cair para software
+      // logo depois (41 ms, medido), então os seguintes, numa janela curta,
+      // também contam.
+      onGpuInfoUpdate: (listener) => gpuInfoWatcher.onUpdate(listener),
       alreadyUsingSoftwareRendering: useSoftwareRendering,
     }).catch(() => {})
   }

@@ -9,6 +9,10 @@ const GRAPHICS_RECOMMENDATION_FILE = 'graphics-recommendation.json'
 // problema (driver continua igual) não voltar a incomodar — só um sinal
 // genuinamente diferente (outra feature desligada) justifica perguntar de novo.
 const GRAPHICS_DISMISSED_SIGNAL_FILE = 'graphics-dismissed-signal.json'
+// Quanto tempo depois do primeiro `gpu-info-update` o status ainda pode mudar.
+// Medido em 26/09/2026 (Electron 41.10.7, --use-angle=d3d11): o segundo evento
+// chegou 41 ms depois do primeiro, trocando `enabled` por `disabled_software`.
+const GPU_STATUS_SETTLE_MS = 2_000
 
 /**
  * @module graphics-recommendation
@@ -119,6 +123,14 @@ function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
  * whenReady) nem sobrescreve `graphics-mode.json`: só persiste uma
  * recomendação, pra próxima abertura mostrar e a pessoa decidir.
  *
+ * O primeiro `gpu-info-update` não é o veredito: a GPU pode cair para
+ * software logo depois dele. Com `onGpuInfoUpdate`, o status é lido de novo
+ * a cada evento durante `settleMs` e mais uma vez no fim da janela (o status
+ * final). Um sinal de incompatibilidade em qualquer leitura grava a
+ * recomendação na hora, e uma leitura saudável depois, dentro da janela, não
+ * a apaga; a recomendação antiga só é limpa no fim, se a janela inteira foi
+ * saudável.
+ *
  * @param {object} options
  * @param {string} options.userDataPath
  * @param {() => (Record<string, string> | Promise<Record<string, string>>)} [options.getGPUFeatureStatus] -
@@ -127,17 +139,23 @@ function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
  *   `gpu-info-update` (ver `gpu-info-watcher.cjs`). Antes dele o status é o
  *   padrão `disabled_software` (medido em 26/09/2026) e viraria uma
  *   recomendação falsa; sem resposta no prazo, não avalia.
+ * @param {(listener: () => void) => (() => void)} [options.onGpuInfoUpdate] -
+ *   Assina os `gpu-info-update` seguintes e devolve a função que cancela.
+ *   Sem ela, o status é lido uma vez só.
+ * @param {number} [options.settleMs] - A janela depois do primeiro evento.
  * @param {boolean} [options.alreadyUsingSoftwareRendering] - Se a sessão já
  *   está em software (manual ou heurística de memória) — nesse caso não há
  *   nada a recomendar, e uma recomendação antiga (de antes da troca) é limpa.
  * @param {() => string} [options.now]
  * @param {typeof fs} [options.fileSystem]
- * @returns {Promise<{ evaluated: boolean, recommended: boolean, recommendation?: object }>}
+ * @returns {Promise<{ evaluated: boolean, recommended: boolean, recommendation?: object, dismissed?: boolean }>}
  */
 async function evaluateGpuAfterReady({
   userDataPath,
   getGPUFeatureStatus,
   waitForGpuInfo,
+  onGpuInfoUpdate,
+  settleMs = GPU_STATUS_SETTLE_MS,
   alreadyUsingSoftwareRendering = false,
   now = () => new Date().toISOString(),
   fileSystem = fs,
@@ -155,40 +173,60 @@ async function evaluateGpuAfterReady({
     return { evaluated: false, recommended: false }
   }
 
-  let featureStatus
-  try {
-    featureStatus = await getGPUFeatureStatus()
-  } catch {
-    // Uma falha ao consultar a GPU não é, em si, um sinal de incompatibilidade
-    // — só significa que não dá pra avaliar agora. Não mexe na recomendação
-    // existente (pode já ter sido detectada num boot anterior).
-    return { evaluated: false, recommended: false }
+  const seen = { healthy: false, dismissed: false, recommendation: null }
+  async function readStatusOnce() {
+    let featureStatus
+    try {
+      featureStatus = await getGPUFeatureStatus()
+    } catch {
+      // Uma falha ao consultar a GPU não é, em si, um sinal de incompatibilidade
+      // — só significa que não dá pra avaliar agora. Não mexe na recomendação
+      // existente (pode já ter sido detectada num boot anterior).
+      return
+    }
+    const signal = detectGpuIncompatibility({ featureStatus })
+    if (!signal.incompatible) {
+      seen.healthy = true
+      return
+    }
+    // Mesmo sinal que a pessoa já recusou explicitamente — fica quieto. Só um
+    // sinal DIFERENTE (outra feature quebrou) justifica perguntar de novo.
+    const dismissedFeatures = readDismissedSignal(userDataPath, fileSystem)
+    if (dismissedFeatures && sameFeatureSet(dismissedFeatures, signal.disabledFeatures)) {
+      seen.dismissed = true
+      return
+    }
+    seen.recommendation = persistGraphicsRecommendation({
+      userDataPath,
+      reason: signal.reason,
+      disabledFeatures: signal.disabledFeatures,
+      detectedAt: now(),
+      fileSystem,
+    })
   }
 
-  const signal = detectGpuIncompatibility({ featureStatus })
-  if (!signal.incompatible) {
-    clearGraphicsRecommendation(userDataPath, fileSystem)
-    return { evaluated: true, recommended: false }
+  await readStatusOnce()
+  if (typeof onGpuInfoUpdate === 'function' && settleMs > 0) {
+    // Uma leitura por vez, na ordem dos eventos.
+    let readings = Promise.resolve()
+    const stop = onGpuInfoUpdate(() => {
+      readings = readings.then(readStatusOnce)
+    })
+    await new Promise((resolve) => setTimeout(resolve, settleMs))
+    if (typeof stop === 'function') stop()
+    readings = readings.then(readStatusOnce)
+    await readings
   }
 
-  // Mesmo sinal que a pessoa já recusou explicitamente — fica quieto. Só um
-  // sinal DIFERENTE (outra feature quebrou) justifica perguntar de novo.
-  const dismissedFeatures = readDismissedSignal(userDataPath, fileSystem)
-  if (dismissedFeatures && sameFeatureSet(dismissedFeatures, signal.disabledFeatures)) {
-    return { evaluated: true, recommended: false, dismissed: true }
-  }
-
-  const recommendation = persistGraphicsRecommendation({
-    userDataPath,
-    reason: signal.reason,
-    disabledFeatures: signal.disabledFeatures,
-    detectedAt: now(),
-    fileSystem,
-  })
-  return { evaluated: true, recommended: true, recommendation }
+  if (seen.recommendation) return { evaluated: true, recommended: true, recommendation: seen.recommendation }
+  if (seen.dismissed) return { evaluated: true, recommended: false, dismissed: true }
+  if (!seen.healthy) return { evaluated: false, recommended: false }
+  clearGraphicsRecommendation(userDataPath, fileSystem)
+  return { evaluated: true, recommended: false }
 }
 
 module.exports = {
+  GPU_STATUS_SETTLE_MS,
   GRAPHICS_DISMISSED_SIGNAL_FILE,
   GRAPHICS_RECOMMENDATION_FILE,
   clearGraphicsRecommendation,

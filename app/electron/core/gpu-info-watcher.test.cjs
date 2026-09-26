@@ -26,3 +26,16 @@ test('sem o evento dentro do prazo, devolve false', async () => {
   assert.equal(await watcher.wait(10), false)
   assert.equal(watcher.isReady(), false)
 })
+
+test('avisa cada gpu-info-update a quem assina, até cancelar', () => {
+  const app = new EventEmitter()
+  const watcher = createGpuInfoWatcher(app)
+  const seen = []
+  const stop = watcher.onUpdate(() => seen.push(watcher.isReady()))
+  app.emit('gpu-info-update')
+  app.emit('gpu-info-update')
+  stop()
+  app.emit('gpu-info-update')
+  // Quem assina já vê o observador pronto.
+  assert.deepEqual(seen, [true, true])
+})
