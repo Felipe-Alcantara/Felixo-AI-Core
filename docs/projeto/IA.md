@@ -5076,3 +5076,107 @@ Registro gravado às 16:23.
 - App real (`felixo devtools`, perfil isolado, sob o lock): `felixo devtools main "ipcProbe.snapshot()"` lista os
   canais do boot; depois de um `onboarding.read()` pelo renderer, `onboarding:read` sobe de 1 para 2 e
   `devtools:main-eval` conta a própria leitura. O snapshot é congelado e o objeto exposto só tem `snapshot`.
+
+## 2026-09-26 — Tutorial do canvas: cenários no canvas-smoke (commit 11 do plano)
+
+Registro gravado às 18:01.
+
+**O que ficou pronto.**
+- `scripts/canvas-smoke-onboarding.cjs`: os cenários do tutorial, com a página e os helpers injetados pelo
+  `canvas-smoke.cjs`. Sessão A (a de sempre, abertura suprimida): SA0 logo depois da montagem e SA1–SA10 no fim,
+  sobre a fixture. Sessão B (nova, `FELIXO_DEVTOOLS_ONBOARDING=1` e `FELIXO_DEVTOOLS_HARDWARE_NOTICES=1`, perfil
+  novo e canvas vazio): SB1–SB8.
+- Sondas em volta dos percursos completos (SA1 e SB2): `ipcProbe.snapshot()` antes e depois (nenhum canal de
+  PTY, CLI, rede, crédito, git, arquivo, voz, webview, preset ou escrita no canvas; canais vistos contidos numa
+  janela ociosa de controle com a mesma duração, mais `onboarding:*`), requisições para fora da origem do app,
+  contagem de blocos, terminais, gavetas e webviews, e diff do localStorage (só a remoção do marcador de primeiro
+  boot é permitida).
+- `scripts/canvas-smoke-onboarding-geometry.cjs` com N-geo: `rectInside`, `contains`, `intersects`, `inflate`,
+  `clipToViewport`, `contrastRatio` (WCAG, com composição de alfa), `flattenLayers`, `containingBlockReason`,
+  `diffChannels`, `forbiddenChannels`, `channelsOutside`, `diffStorage`, `storageViolations` e
+  `externalRequests`, todos com casos que precisam reprovar. A lista de canais proibidos é conferida contra os
+  canais reais do `preload.cjs`.
+- `withDevtoolsSession(action, { env })` define e restaura variáveis extras. As capturas de falha das duas
+  sessões começam com `canvas-smoke-failure`, o glob que o CI já anexa.
+- `ui-render-performance.cjs --onboarding`: abre o tour pela Ajuda antes de cada rodada (e do aquecimento) e
+  confere que ele continua aberto no fim. Uso manual.
+
+**Bugs de produto achados pelo smoke (corrigidos antes de qualquer push).**
+- **Laço de troca de alvo (SA8).** Com a sidebar recolhida no passo 2 (alvo "menu do canvas"), abrir a sidebar
+  fazia o alvo alternar entre `rail-menu` e `criar-agente` dentro do mesmo quadro, até o React parar com
+  "Maximum update depth exceeded" e o boundary derrubar o tour. Causa: o teste de alvo aceitava o alvo quando o
+  próprio card estava por cima dele; ancorado no menu, o card cobria a moldura "Agente" e a fazia passar;
+  ancorado na moldura, o card saía de cima e ela era rejeitada. Correção: o `elementFromPoint` da camada olha
+  através do card e do aviso (`pointer-events: none` só durante a leitura), então a escolha do alvo não depende
+  de onde o card está. Entrou como fixup no commit 8 (camada do tour).
+- **Alvo preso no fallback depois de um deslocamento (SA3).** Abrir a gaveta do terminal rola o contêiner do
+  shell (`overflow: hidden`) uns 438 px de lado por um instante, pelo foco que vai para o terminal. Nesse
+  instante a moldura "Agente" sai da tela e o tour cai, com razão, no menu do canvas; mas quando o shell volta,
+  nada disparava um novo cálculo (os alvos só mudaram de lugar, não de tamanho), e o card ficava no menu por
+  cima da sidebar, cobrindo a metade "Agente". Visto no smoke completo, de forma intermitente; o diagnóstico
+  anexado à falha mostrou a moldura visível, sem nada por cima e sem ancestral rolado, ou seja, só faltava
+  recalcular. Correção em duas partes, fixup no commit 8: (1) a camada escuta `scroll` em captura no documento
+  e recalcula quando a rolagem move um candidato (a do xterm é ignorada), no lugar da escuta que existia só no
+  `.felixo-sidebar-scroll`; (2) enquanto o tour aponta uma alternativa ao alvo preferido, a posição é
+  conferida de novo a cada 500 ms, porque um contêiner pode voltar ao lugar (ou um overlay sair) sem disparar
+  evento nenhum. No alvo preferido não há verificação periódica. O SA3 agora exige que o anel volte para a
+  moldura depois de fechar a gaveta, e a falha de espera por âncora passou a anexar o diagnóstico do alvo.
+- **Volta do chat puxava o foco (SA9).** Um tour aberto pela Ajuda (foco "mover") voltava do chat com o foco no
+  card: a camada remonta antes de o canvas hidratar, e o `canvasReady`, que trocava o foco para "manter", chegava
+  tarde. Correção: `canvasUnmounted()` já marca o tour aberto com foco "manter". O teste da store passou a exigir
+  isso logo depois de desmontar. Entrou como fixup no commit 5 (store).
+- As correções do laço e do foco foram conferidas ao contrário: sem elas, o SA8 e o SA9 reprovam. A do
+  deslocamento não dá para reverter de forma determinística (depende de outro observador disparar ou não), então
+  a conferência foi medir a posição da moldura e a âncora com a gaveta aberta e fechada: sem a correção a
+  âncora podia ficar no menu; com ela, volta sempre para a moldura.
+- Achado à parte, fora deste PR: o deslocamento lateral do shell ao abrir a gaveta do terminal é visível e vale
+  investigar por conta própria.
+
+**Desvios, com motivo.**
+- SB7 "forma inválida": a ponte recusa `schemaVersion: 0` (contrato do commit 4: inteiro ≥ 1), então o estado
+  inválido chega como num arquivo danificado: `corromperEstadoNoPerfil` trunca o JSON da linha
+  `onboarding.state` direto no SQLite do perfil isolado (recusa perfil real). O SB7 também confere que a ponte
+  recusa o `schemaVersion: 0`. Não há gancho de escrita no `main-eval`.
+- SA1 tira o bloco Excalidraw da fixture antes das sondas. Achado à parte: com o canvas parado, esse bloco
+  regrava a si mesmo cerca de uma vez por segundo (`canvas:save` com a cena igual; só o `updatedAt` muda), o
+  que tornava impossível provar "zero escritas no canvas" durante o percurso. Fica registrado como pendência
+  fora deste PR.
+- As sondas esperam o app parar de gravar sozinho antes de abrir a janela (uma amostra de 1,5 s sem canal
+  proibido): o smoke chega ao SA1 vindo de 320×720, e o canvas regrava posição e tamanho com atraso depois do
+  resize.
+- SA2: o Shift+Tab em Pular cai no último controle da sidebar, que hoje é "Limpar" (ordem do documento). A regra
+  "o foco nunca passa por Agente nem Limpar" vale para o foco depois de cada ação do tour (abrir, Tab dentro do
+  card, Voltar, Próximo, Esc); as saídas do card com Tab/Shift+Tab conferem só que o foco saiu para o lugar
+  certo.
+- SA3: o gatilho do terminal da fixture é acionado pelo teclado (foco + Enter), porque dependendo do
+  enquadramento a dock cobre o bloco.
+- SA5: o zoom +3 é aplicado numa janela de 720×500 (≈ 417×289 CSS px, o caso compacto citado no plano), depois
+  de 1280×800, 375×667 e 320×720. Em 417×289 a folha cobre o alvo do passo 1, o que o plano permite no modo
+  folha.
+- SA9: a ida ao chat vem antes do reload, para cobrir o tour aberto pela Ajuda (foco "mover"); depois do reload o
+  tour já volta como retomada.
+- SB1: a convivência com o `NoticeToast` depende do perfil de hardware que o próprio app devolve
+  (`lowCpu && suggestPerformanceMode`), e não de contar CPUs no script; sem a sugestão, o cenário registra que
+  pulou e por quê. O clique no aviso é feito no fim do SB2, porque clicar antes tiraria o foco do card no meio do
+  percurso só por teclado.
+- `ui-render-performance`: a interação que abre e fecha grupos da sidebar passou a excluir o botão Ajuda (que
+  também tem `aria-expanded`). Sem isso, a sequência de cliques mudaria só por existir um botão a mais, e os
+  números deixariam de ser comparáveis com as medições anteriores.
+- `ui-render-performance --onboarding`: a primeira medição com o tour aberto deu MAIS FPS que sem ele, porque o
+  card do passo 1 cobre parte da sidebar e os cliques reais nos grupos cobertos caíam no card (a rodada fazia
+  menos trabalho). Com a flag, um grupo coberto pelo tour é acionado pelo DOM (o mesmo handler, como o teclado
+  faria); sem a flag, nada muda. O `isCoveredByTour` tem teste.
+
+**Validação.**
+- N-geo (`scripts/canvas-smoke-onboarding-geometry.test.cjs`): 15/15, com casos que precisam reprovar em cada
+  helper. `ui-render-performance.test.cjs`: 13/13 (flag `--onboarding` e o seletor sem o botão Ajuda).
+  `npx vitest run src/features/onboarding`: 683/683. `npm run lint` dos arquivos tocados e `npm run build`: ok.
+- `npm run test:canvas-smoke` completo, sob o lock, perfil isolado: exit 0 em 9 min 23 s nesta máquina
+  (17:50–18:00), com as duas sessões e todos os cenários (SA0–SA10 e SB1–SB8). Destaques: sondas do SA1 com
+  delta `{"devtools:main-eval":1,"onboarding:write":2}` e 8 requisições, todas locais; SB2 com
+  `{"devtools:main-eval":1,"onboarding:write":1}`; contraste em alto contraste de 21:1 no texto e 14,1:1 no anel;
+  convivência com o `NoticeToast` conferida (4 CPUs lógicas). As quatro execuções anteriores reprovaram e
+  levaram às correções acima: as escritas do Excalidraw no SA1 e o alvo preso no SA3 três vezes (sem correção,
+  só com a escuta de rolagem e na rodada que anexou o diagnóstico).
+- Conferências ao contrário: sem a correção da store, o SA9 reprova ("voltar do chat puxou o foco para o
+  tour"); antes da correção do teste de alvo, o SA8 reprovava com "Maximum update depth exceeded".

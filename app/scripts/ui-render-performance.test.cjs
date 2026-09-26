@@ -23,6 +23,7 @@ test('argumentos inválidos falham com mensagem que diz o formato certo', () => 
   assert.throws(() => bench.parseArgs(['--nodes=1001']), /entre 4 e 1000/)
   assert.equal(bench.parseArgs(['--nodes=1000']).nodes, 1000)
   assert.throws(() => bench.parseArgs(['--desconhecido']), /Argumento desconhecido/)
+  assert.throws(() => bench.parseArgs(['--onboarding=sim']), /não recebe valor/)
 })
 
 test('GPU dedicada pede offload PRIME no GLX; integrada limpa o offload herdado', () => {
@@ -129,4 +130,35 @@ test('a medição falha se a GPU que renderizou não é a pedida', () => {
   assert.throws(() => bench.assertRequestedGpu('dedicada', intel), /pedida a GPU dedicada/)
   assert.throws(() => bench.assertRequestedGpu('dedicada', semGpu), /não subiu/)
   assert.doesNotThrow(() => bench.assertRequestedGpu('padrao', semGpu))
+})
+
+test('--onboarding abre o tutorial antes das rodadas; sem a flag o tour fica fechado', () => {
+  assert.equal(bench.parseArgs([]).onboarding, false)
+  assert.equal(bench.parseArgs(['--onboarding']).onboarding, true)
+})
+
+test('a interação só alterna grupos da sidebar: o botão Ajuda fica de fora', () => {
+  assert.match(bench.SIDEBAR_GROUPS_SELECTOR, /button\[aria-expanded\]/)
+  assert.match(bench.SIDEBAR_GROUPS_SELECTOR, /:not\(\[data-felixo-help-trigger\]\)/)
+})
+
+test('um grupo debaixo do card do tutorial conta como coberto; sem o tour, nunca', () => {
+  const card = { closest: (selector) => (selector === '[data-felixo-onboarding]' ? card : null) }
+  const outro = { closest: () => null }
+  const filho = { closest: () => null }
+  const heading = () => ({ getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 10 }), contains: (node) => node === filho })
+  const withHit = (hit, run) => {
+    const previous = globalThis.document
+    globalThis.document = { elementFromPoint: () => hit }
+    try {
+      return run()
+    } finally {
+      globalThis.document = previous
+    }
+  }
+  assert.equal(withHit(card, () => bench.isCoveredByTour(heading())), true)
+  assert.equal(withHit(outro, () => bench.isCoveredByTour(heading())), false)
+  assert.equal(withHit(null, () => bench.isCoveredByTour(heading())), false)
+  // O próprio grupo (ou um filho dele) no centro: não está coberto.
+  assert.equal(withHit(filho, () => bench.isCoveredByTour(heading())), false)
 })
