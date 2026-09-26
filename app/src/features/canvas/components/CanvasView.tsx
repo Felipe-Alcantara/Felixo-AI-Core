@@ -144,9 +144,10 @@ import {
   findFreeNodePositions,
   getNodeSize,
   isInside,
-  nearestSides,
   type CanvasBounds,
 } from '../services/node-geometry'
+import { edgeHandlesBetween } from '../services/edge-handle-routing'
+import { summarizeCanvasSelection } from '../services/canvas-selection'
 import {
   agentLabelOf,
   announceFileNodeToTerminalNode,
@@ -202,6 +203,12 @@ type FlowPositionMapper = {
     options?: { duration?: number },
   ) => void
   getNodes?: () => Node[]
+  /** O que a tecla Delete chama: dispara onNodesChange/onEdgesChange com
+   *  `remove` e leva junto as conexões dos blocos removidos. */
+  deleteElements?: (params: {
+    nodes?: Array<{ id: string }>
+    edges?: Array<{ id: string }>
+  }) => Promise<unknown>
   // `getNodesBounds` is generic over the node union supplied to React Flow;
   // `never[]` keeps this local mapper assignable to any concrete instance.
   getNodesBounds?: (nodes: never[]) => {
@@ -1743,7 +1750,9 @@ function CanvasInner({
   // Route each edge through the handles on the facing sides of its two nodes,
   // computed from their current positions. Handles aren't persisted, so without
   // this every edge (button- or drag-created) falls back to the top handle.
-  // Recomputing here also re-routes wires as nodes are dragged around.
+  // Recomputing here also re-routes wires as nodes are dragged around. Blocks
+  // without side handles (note, Notion tasks...) keep their single handle —
+  // asking them for `t-top` made React Flow drop the edge from the screen.
   const edgesWithHandles = useMemo(() => {
     const byId = new Map(nodes.map((node) => [node.id, node]))
     return edges.map((edge) => {
@@ -1752,11 +1761,9 @@ function CanvasInner({
       if (!source || !target) {
         return edge
       }
-      const sides = nearestSides(source, target)
       return {
         ...edge,
-        sourceHandle: `s-${sides.source}`,
-        targetHandle: `t-${sides.target}`,
+        ...edgeHandlesBetween(source, target),
         className: [
           edge.className,
           activeRouteKeys.has(routeKey(edge)) ? 'felixo-edge-route-active' : undefined,
@@ -1831,6 +1838,21 @@ function CanvasInner({
     },
     [setEdges],
   )
+
+  // Seleção lida do próprio estado (campo `selected`), para a barra de status.
+  const selection = useMemo(() => summarizeCanvasSelection(nodes, edges), [nodes, edges])
+
+  // "Remover" da barra de status: o mesmo deleteElements que a tecla
+  // Delete/Backspace chama, então passa por onEdgesChange → deleteCanvasEdge
+  // e onNodesChange → removeNode, e os blocos levam junto as suas conexões.
+  const removeSelection = useCallback(() => {
+    const { nodeIds, edgeIds } = summarizeCanvasSelection(nodesRef.current, edgesRef.current)
+    if (nodeIds.length === 0 && edgeIds.length === 0) return
+    void flowInstanceRef.current?.deleteElements?.({
+      nodes: nodeIds.map((id) => ({ id })),
+      edges: edgeIds.map((id) => ({ id })),
+    })
+  }, [])
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -2630,6 +2652,12 @@ function CanvasInner({
         onRunFile={runFileInTerminal}
         onOpenFileInCanvas={openTextFileNode}
         onActivateSkill={activateSkill}
+        onSkillsCatalogChange={(skills) => {
+          // Sem isto a lista só era lida ao montar o canvas: ocultar ou
+          // restaurar uma skill, ligar/desligar terceiros ou salvar uma skill
+          // própria só chegava aos agentes novos depois de reiniciar o app.
+          availableSkillsRef.current = skills
+        }}
         onInsertPrompt={insertPrompt}
         onPromptSaved={(prompt) => {
           fileLinkPromptRef.current = prompt
@@ -2763,6 +2791,9 @@ function CanvasInner({
           nodeCount={nodes.length}
           edgeCount={edges.length}
           hydrated={hydrated && edgesHydrated}
+          selectionLabel={selection.label}
+          onRemoveSelection={removeSelection}
+          removeDisabled={canvasLocked}
         />
       </div>
 

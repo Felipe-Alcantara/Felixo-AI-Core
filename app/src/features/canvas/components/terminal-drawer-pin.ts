@@ -38,6 +38,23 @@ export function clampDrawerWidth(
   return Math.min(Math.max(width, effectiveMin), maxWidth)
 }
 
+/** Teto da largura padrão: em tela larga a gaveta não passa disso ao abrir. */
+export const DRAWER_DEFAULT_WIDTH = 720
+const DRAWER_DEFAULT_VIEWPORT_SHARE = 0.45
+
+/**
+ * Largura com que a gaveta abre sem preferência salva — e a mesma para onde
+ * Home e o duplo clique na alça a devolvem. Uma fonte só, para "restaurar"
+ * nunca cair numa largura diferente da de abertura.
+ */
+export function getDefaultDrawerWidth(viewportWidth: number, minWidth: number): number {
+  return clampDrawerWidth(
+    Math.min(DRAWER_DEFAULT_WIDTH, Math.floor(viewportWidth * DRAWER_DEFAULT_VIEWPORT_SHARE)),
+    viewportWidth,
+    minWidth,
+  )
+}
+
 export function readCollapsedPreference(storage: Pick<Storage, 'getItem'>): boolean {
   return storage.getItem(COLLAPSED_STORAGE_KEY) === '1'
 }

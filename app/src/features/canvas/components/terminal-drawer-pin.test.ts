@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   clampDrawerWidth,
+  DRAWER_DEFAULT_WIDTH,
+  getDefaultDrawerWidth,
   getDrawerMaxWidth,
   readCollapsedPreference,
   readPinnedPreference,
@@ -70,6 +72,38 @@ describe('responsive drawer width', () => {
   it('keeps the normal minimum on a desktop-sized viewport', () => {
     expect(clampDrawerWidth(320, 1200, 440)).toBe(440)
     expect(clampDrawerWidth(1600, 1200, 440)).toBe(1000)
+  })
+})
+
+describe('getDefaultDrawerWidth', () => {
+  it('caps at the default width on a wide screen', () => {
+    expect(getDefaultDrawerWidth(1920, 440)).toBe(DRAWER_DEFAULT_WIDTH)
+  })
+
+  it('takes 45% of a mid-sized viewport', () => {
+    expect(getDefaultDrawerWidth(1366, 440)).toBe(614)
+  })
+
+  it('never goes below the minimum while there is room for it', () => {
+    expect(getDefaultDrawerWidth(900, 440)).toBe(440)
+  })
+
+  it('shrinks with the viewport instead of overflowing it', () => {
+    expect(getDefaultDrawerWidth(576, 440)).toBe(getDrawerMaxWidth(576))
+  })
+
+  // Antes, o estado inicial e o reset (Home) calculavam a largura padrão com
+  // duas expressões diferentes. Esta varredura prende a de abertura, para o
+  // reset nunca voltar a uma largura diferente da que a gaveta abre.
+  it('matches the width the drawer used to open with on every viewport', () => {
+    for (let viewport = 320; viewport <= 3840; viewport += 7) {
+      const openingWidth = clampDrawerWidth(
+        Math.min(DRAWER_DEFAULT_WIDTH, Math.max(440, Math.floor(viewport * 0.45))),
+        viewport,
+        440,
+      )
+      expect(getDefaultDrawerWidth(viewport, 440)).toBe(openingWidth)
+    }
   })
 })
 

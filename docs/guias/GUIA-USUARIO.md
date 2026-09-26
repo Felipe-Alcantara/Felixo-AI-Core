@@ -163,12 +163,15 @@ Se o comando funcionar no terminal, mas não no app, reinicie o Felixo. Em insta
 
 ### Modelos
 
-No canvas, abra **Ferramentas → Modelos** para abrir **Gerenciar modelos**.
+O gerenciador **Gerenciar modelos** abre pela tela Chat, no ícone **Configurar
+modelos** da barra lateral. No canvas, **Ferramentas → Modelos** lista os modelos
+importados e permite remover um.
 
 Você pode:
 
 - Ver os modelos/CLIs importados.
 - Detectar CLIs oficiais instaladas.
+- Diagnosticar por que uma CLI não aparece, sem instalar nada: em **CLIs oficiais**, o ícone **Diagnosticar CLIs** (ao lado de **Atualizar detecção**) mostra, em cada cartão de Codex, Claude Code e Gemini, a causa ("Não instalada", "Instalada, mas invisível ao app", "Bloqueada por permissão"…) e a próxima ação. Com o diagnóstico na tela, **Instalar** só aparece onde reinstalar resolve. **Copiar texto para o suporte** copia um resumo sem nome de usuário, URL nem segredo. Fechar o gerenciador descarta o diagnóstico.
 - Instalar CLIs oficiais usando o instalador configurado para cada provider.
 - Abrir login oficial da CLI no terminal do sistema.
 - Adicionar uma CLI pelo comando, por exemplo `codex`, `claude` ou `gemini`.
@@ -233,6 +236,14 @@ branch e o repositório sem a credencial. O stderr, cabeçalhos de autorização
 a linha de comando completa não são persistidos no SQLite, enviados ao QA
 Logger nem devolvidos ao renderer.
 
+Para ler um guia sem sair do app, abra **Ver índice (N documentos)** e clique no
+guia (ou use Enter/Espaço com o foco nele). Ele abre renderizado logo abaixo do
+item, numa moldura com rolagem própria. Fica um guia aberto por vez: abrir outro
+fecha o anterior, e clicar de novo fecha. O conteúdo vem do cache da última
+sincronização, então a leitura funciona sem rede. Pelo teclado, Tab entra no
+texto e as setas ou PageDown rolam. A mesma seção aparece nas Configurações do
+canvas (engrenagem no rodapé do rail) e no modal de Configurações do chat.
+
 ### Projetos, Code, Notas e Exportação
 
 - **Projetos:** adicione um repositório individual ou detecte vários repositórios dentro de um workspace. A lista aparece em ordem alfabética, e o mesmo vale para os arquivos ao abrir um projeto (pastas primeiro). A ordenação ignora acento e maiúscula — `Álbum` fica junto de `alfa`, não no fim — e compara número por valor, então `projeto2` vem antes de `projeto10`.
@@ -244,6 +255,11 @@ Logger nem devolvidos ao renderer.
   consegue consultar as notas persistidas.
 - **Exportar:** exporte sessões de chat legadas em JSON compacto, Markdown ou
   texto simples.
+- **Excluir uma conversa do chat legado:** passe o mouse (ou chegue com Tab) na
+  linha da conversa em **Recentes**, ou no painel **Pesquisar** para as mais
+  antigas, e clique na lixeira. Depois de confirmar, a conversa é arquivada no
+  banco local e some da lista. Se estava aberta, a tela volta para um chat novo.
+  Ainda não há como restaurá-la pela interface.
 
 Para usar um arquivo de um projeto no canvas, a pasta precisa ter sido escolhida
 no seletor nativo de projetos. Caminhos digitados ou enviados por outro fluxo
@@ -303,6 +319,17 @@ Cole com o atalho normal do sistema (`Ctrl+V`, ou `Cmd+V` no macOS) dentro do te
 
 Vale tanto para uma imagem copiada (captura de tela, "copiar imagem" no navegador) quanto para um arquivo de imagem copiado no gerenciador de arquivos. O app lê a área de transferência pelo próprio sistema operacional, então não é preciso instalar `xclip` ou `wl-paste` no Linux, e o atalho é o mesmo em todos os sistemas e para qualquer CLI de agente — que passa a receber sempre um caminho de arquivo, a única forma de imagem que um terminal consegue transportar.
 
+### Gerar uma imagem no canvas
+
+Na seção **Criar** da barra lateral, **Gerar imagem** (logo abaixo de **Abrir imagem**) abre um painel com dois campos:
+
+1. **Descrição da imagem**, obrigatória, com até 4.000 caracteres.
+2. **Modelo de imagem**, escolhido no catálogo público do OpenRouter (tem busca).
+
+Depois, clique em **Gerar** ou use Ctrl/Cmd+Enter. Quem gera é o Openia, com a chave do OpenRouter configurada nele. O Felixo não lê essa chave, e cada geração pode consumir créditos da sua conta. Por isso, na primeira vez nenhum modelo vem escolhido; depois, o último escolhido é lembrado.
+
+Enquanto gera, o painel mostra o tempo decorrido, e **Cancelar** interrompe o pedido. Esc ou um clique fora fecham o painel sem interromper a geração. A imagem pronta entra no canvas como um bloco de imagem temporário; **Remover temporário** apaga o bloco e o arquivo. Se faltar a chave, o crédito acabar, o modelo sair do catálogo ou a rede cair, o painel diz qual foi o problema. É preciso ter o Openia instalado e configurado.
+
 ### Notificações dos agentes
 
 O botão **Notificações** registra, enquanto o app estiver aberto, agentes que terminaram um trabalho, encerraram a sessão ou estão aguardando aprovação/resposta. Quando há itens, ele recebe borda vermelha e um contador externo, sem cobrir o ícone ou o texto. O painel abre ao lado do botão com animação; cada item mostra o agente e a última mensagem útil do terminal. Clique nele para abrir o terminal e remover o aviso. O histórico é limpo ao fechar o app.
@@ -318,7 +345,8 @@ O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que f
 
 - **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas, editáveis ali mesmo e também legíveis pelo modo de chat legado.
 - **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
-- **Fetch All** mostra primeiro o escopo efetivo, as raízes configuradas, o motivo da escolha e o custo esperado. Raízes configuradas são usadas diretamente; quando nenhuma foi configurada, os discos locais aparecem apenas como candidatos e a interface exige uma confirmação explícita antes de iniciar uma varredura ampla. Sem essa confirmação, nenhuma varredura recursiva começa — em particular, a configuração vazia nunca dispara `/` silenciosamente. Pull (sempre `--ff-only`), push e o commit automático dos repositórios cuja única pendência é commitar acontecem num segundo passo, depois de você revisar o plano e confirmar — e o estado de cada repositório é conferido de novo imediatamente antes de qualquer escrita. Cada passada gera um relatório em Markdown na pasta de relatórios do app. A varredura **rápida** reaproveita a lista da última varredura completa somente se raízes, exclusões, ignorados, montagens e discos detectados forem os mesmos (é mais rápida, mas não encontra repositórios novos), e o ícone ao lado de um repositório passa a **ignorar** aquela pasta nas próximas varreduras — a lista de ignoradas fica no rodapé do painel.
+- **Skills** lista, em **Skills do sistema**, as skills que todo agente novo recebe. O ícone de olho cortado ao lado de **Ativar** ("Não enviar aos agentes") tira uma skill dessa lista. O recolhível **Ocultas (N)**, logo abaixo, mostra as que foram tiradas, e o X de cada uma a devolve. A escolha vale para os próximos agentes, sem reiniciar o app, e continua valendo nas próximas sessões. Uma skill oculta também sai dos presets que a citam.
+- **Fetch All** mostra primeiro o escopo efetivo, as raízes configuradas, o motivo da escolha e o custo esperado. As pastas-raiz se escolhem no próprio cartão **Escopo da varredura**: **Adicionar pasta** abre o seletor do sistema (dá para escolher uma ou várias pastas), e o X ao lado de cada raiz a tira da lista. Cada linha mostra o nome da pasta e o caminho completo. Não é preciso editar `fetch-all-settings.json` à mão. Prefira escolher as pastas onde ficam os seus repositórios, porque varrer os discos inteiros é bem mais caro, sobretudo numa máquina modesta. Com pelo menos uma raiz, a varredura fica só nelas e não pede confirmação. Quando nenhuma foi configurada, os discos locais aparecem apenas como alternativa ("Ou varra todos os discos locais") e a interface exige uma confirmação explícita antes de iniciar uma varredura ampla. Sem essa confirmação, nenhuma varredura recursiva começa — em particular, a configuração vazia nunca dispara `/` silenciosamente. Pull (sempre `--ff-only`), push e o commit automático dos repositórios cuja única pendência é commitar acontecem num segundo passo, depois de você revisar o plano e confirmar — e o estado de cada repositório é conferido de novo imediatamente antes de qualquer escrita. Cada passada gera um relatório em Markdown na pasta de relatórios do app. A varredura **rápida** reaproveita a lista da última varredura completa somente se raízes, exclusões, ignorados, montagens e discos detectados forem os mesmos (é mais rápida, mas não encontra repositórios novos), e o ícone ao lado de um repositório passa a **ignorar** aquela pasta nas próximas varreduras — a lista de ignoradas fica no rodapé do painel.
 - Se uma execução confirmada falhar, o painel mostra o diagnóstico, mantém o pedido pendente e preserva o plano para uma nova revisão; o pedido só sai da fila depois que `resultado.ok` confirma a execução.
 
 No Windows, o Fetch All considera as unidades locais fixas e removíveis que
@@ -341,6 +369,8 @@ macOS e no Windows, para que o pedido chegue ao painel correto.
 - **Selecionar / Mover tela:** o botão da barra (ou a tecla `Q`, com o canvas em foco) alterna entre arrastar uma caixa de seleção e arrastar a tela. Dentro do conteúdo de um bloco (nota, terminal, arquivo), o arrasto não move a tela — interaja normalmente com o bloco.
 - **Scroll:** a roda do mouse sobre o conteúdo de um bloco rola o conteúdo; sobre o fundo do canvas, controla o zoom.
 - **Ver tudo:** enquadra todos os blocos na tela de uma vez.
+- **Remover o que está selecionado:** clique numa conexão ou no cabeçalho de um bloco (Shift+clique ou a caixa de seleção para vários). A barra de status do rodapé diz o que está selecionado ("1 conexão selecionada", "N blocos selecionados" ou "N itens selecionados") e mostra o botão **Remover [Delete]**. O botão faz o mesmo que as teclas Delete e Backspace: remover blocos leva junto as conexões ligadas a eles, e não há confirmação nem desfazer. Com o canvas travado (cadeado na pílula de zoom), o botão fica desativado.
+- **Largura da gaveta do terminal:** arraste o grip da borda esquerda da gaveta. Dois cliques nele (ou **Home**, com o foco nele) voltam à largura padrão; as setas ajustam pelo teclado, e com Shift o passo é maior.
 - Blocos fora da área visível não são renderizados, o que mantém o canvas leve mesmo com muitos terminais abertos.
 
 O canvas considera como área útil o espaço que sobra depois da barra superior,
@@ -355,6 +385,20 @@ notificações ou diálogos com retorno ao controle que os abriu. Botões, campo
 separadores do canvas têm rótulos para leitores de tela. Ao recarregar o app,
 os nós e as conexões persistidos voltam uma única vez; a validação automatizada
 usa um PTY fake para não executar comandos externos.
+
+### Zoom da janela
+
+O menu **Exibir** tem **Aumentar zoom** (Ctrl/Cmd + `+` ou `=`), **Diminuir zoom**
+(Ctrl/Cmd + `-`) e **Tamanho real** (Ctrl/Cmd + `0`). Esse zoom aumenta ou diminui a
+interface inteira, em passos pequenos e com limite de cerca de 58% a 173%. Se a
+interface ficou pequena ou grande sem querer, **Exibir → Tamanho real** ou Ctrl+0 a
+devolve ao normal.
+
+Ele é diferente do zoom do canvas, que é a pílula com a porcentagem e a roda do
+mouse sobre o fundo do canvas e só aproxima ou afasta os blocos.
+
+Ctrl+Shift+- (Ctrl+_) não muda o zoom: a combinação chega ao terminal, onde é o
+"desfazer" do readline, do emacs e de várias CLIs de agente.
 
 ### Canvas portátil
 
@@ -415,7 +459,7 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 ## 6. Limitações conhecidas
 
 - O app depende das CLIs externas estarem instaladas, autenticadas e acessíveis no `PATH`.
-- O modo de chat está depreciado: pode ser usado para compatibilidade e exportação de histórico, mas não recebe novos fluxos de produto; use o canvas para trabalho novo.
+- O modo de chat está depreciado: pode ser usado para compatibilidade, exportação de histórico e exclusão de conversas antigas, mas não recebe novos fluxos de produto; use o canvas para trabalho novo.
 - No painel **Logs da CLI** do chat, a tela mostra uma janela limitada para permanecer navegável. A exportação **Markdown para análise** conserva o histórico completo da execução enquanto o app estiver aberto; limpar os logs ou encerrar o app remove esse arquivo temporário.
 - O auto-update silencioso também existe no launcher do código-fonte; no macOS, o prompt de atualização forçada vem confirmado por padrão. `npm run dev` direto não executa atualização Git.
 - No Linux, prefira AppImage para o fluxo de auto-update. `.deb` exige reinstalação/atualização tradicional.
@@ -460,7 +504,9 @@ Também é o mesmo bloqueio, e o download não está corrompido. Neste caso o bo
 
 **Uma CLI não foi detectada.**
 
-Rode `claude --version`, `codex --version`, `gemini --version` ou `git --version` no terminal. Se funcionar fora do app, reinicie o Felixo ou configure `FELIXO_CLI_PATHS`.
+Primeiro, peça o diagnóstico ao próprio app. Ele fica no ícone **Diagnosticar CLIs** do **Gerenciar modelos** (tela Chat → **Configurar modelos** → **CLIs oficiais**) ou no botão **Ver diagnóstico** do aviso de falha da instalação. Ele diz se a CLI não está instalada, está fora do `PATH` que o app enxerga, está sem permissão de execução, tem um atalho quebrado ou não respondeu, e indica o que fazer. Nada é instalado nesse passo.
+
+Depois, rode `claude --version`, `codex --version`, `gemini --version` ou `git --version` no terminal. Se funcionar fora do app, reinicie o Felixo ou configure `FELIXO_CLI_PATHS`.
 
 **Um arquivo `.PY` não inicia no macOS.**
 

@@ -101,13 +101,30 @@ test('nenhuma resposta de IPC (guard) vaza o token — fim a fim, com o client e
       'VAZAMENTO: o token apareceu na resposta de IPC de notion:connections:test',
     )
 
-    const schema = await handlers.get('notion:database:schema')(null, {
+    // listTasks resolve a data source (e o schema dela) pela mesma chamada ao
+    // client — é por aqui que o schema chega ao renderer.
+    const tarefas = await handlers.get('notion:tasks:list')(null, {
       connectionId,
       dataSourceId: 'source-1',
     })
-    assert.equal(schema.ok, false)
-    assert.equal(JSON.stringify(schema).includes(TOKEN), false)
+    assert.equal(tarefas.ok, false)
+    assert.equal(JSON.stringify(tarefas).includes(TOKEN), false)
   } finally {
     fs.rmSync(globalThis.__felixoTestUserData, { recursive: true, force: true })
   }
+})
+
+test('o schema da database não tem canal próprio: só chega junto com as tarefas', () => {
+  const handlers = new Map()
+  registerNotionIpcHandlers({
+    ipc: { handle: (name, handler) => handlers.set(name, handler) },
+    electronSafeStorage: null,
+    createStore: () => ({}),
+    createCache: () => ({}),
+    createService: () => ({}),
+  })
+
+  assert.equal(handlers.has('notion:database:schema'), false)
+  assert.equal(typeof handlers.get('notion:tasks:list'), 'function')
+  assert.equal(typeof handlers.get('notion:tasks:cached'), 'function')
 })

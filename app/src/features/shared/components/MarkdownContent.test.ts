@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { MarkdownContent } from './MarkdownContent'
 import { MAX_MARKDOWN_CONTENT_CHARS } from './markdown-content-safety'
 
@@ -69,6 +69,57 @@ describe('MarkdownContent', () => {
     expect(html).toContain('href="mailto:time@example.com"')
     expect(html).toContain('target="_blank"')
     expect(html).not.toMatch(/href="(?:javascript|file|gopher|data):/i)
+  })
+
+  it('link sem destino seguro vira texto, sem href vazio abrindo janela nova', () => {
+    const html = renderMarkdown(`
+[outro guia](OUTRO.md)
+[subindo](../docs/GUIA.md)
+[javascript](javascript:alert(1))
+<a href="notas.md">HTML relativo</a>
+`)
+
+    // Antes: <a href="" target="_blank">, e o clique abria o navegador do
+    // sistema na raiz do próprio renderer.
+    expect(html).not.toContain('href=""')
+    expect(html).not.toContain('target="_blank"')
+    expect(html).not.toMatch(/<(?:a|button)\b/)
+    for (const text of ['outro guia', 'subindo', 'javascript', 'HTML relativo']) {
+      expect(html).toContain(`<span>${text}</span>`)
+    }
+  })
+
+  it('âncora fica no próprio conteúdo: sem janela nova e com o título marcado como destino', () => {
+    const html = renderMarkdown(`
+## 🚀 Como Contribuir
+
+[ir para Como Contribuir](#-como-contribuir)
+`)
+
+    expect(html).toMatch(/<h2[^>]*data-markdown-anchor="-como-contribuir"[^>]*>🚀 Como Contribuir<\/h2>/)
+    expect(html).toMatch(/<a [^>]*href="#-como-contribuir"[^>]*>ir para Como Contribuir<\/a>/)
+    expect(html).not.toContain('target="_blank"')
+  })
+
+  it('com resolvedor, link relativo que o documento conhece vira botão; o resto vira texto', () => {
+    const open = vi.fn()
+    const resolveRelativeLink = vi.fn((href: string) =>
+      href === 'OUTRO.md' ? { description: 'Abrir OUTRO.md', open } : null,
+    )
+    const html = renderToStaticMarkup(
+      createElement(MarkdownContent, {
+        content: '[outro](OUTRO.md) e [sumido](SUMIU.md) e [site](https://example.com/)',
+        resolveRelativeLink,
+      }),
+    )
+
+    expect(resolveRelativeLink).toHaveBeenCalledWith('OUTRO.md')
+    expect(resolveRelativeLink).toHaveBeenCalledWith('SUMIU.md')
+    expect(html).toMatch(/<button type="button"[^>]*title="Abrir OUTRO.md"[^>]*>outro<\/button>/)
+    expect(html).toContain('<span>sumido</span>')
+    expect(html).toMatch(/<a [^>]*href="https:\/\/example.com\/"[^>]*target="_blank"[^>]*>site<\/a>/)
+    expect(html).not.toContain('href=""')
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('converte imagem remota em texto e mantém data raster e arquivos autorizados', () => {

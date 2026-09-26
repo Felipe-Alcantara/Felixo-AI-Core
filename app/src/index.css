@@ -266,6 +266,10 @@
   border-color: var(--color-success);
 }
 
+@utility bg-theme-error/6 {
+  background-color: color-mix(in srgb, var(--color-error) 6%, transparent);
+}
+
 @utility bg-theme-error/10 {
   background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
@@ -280,6 +284,14 @@
 
 @utility border-theme-error/20 {
   border-color: color-mix(in srgb, var(--color-error) 20%, transparent);
+}
+
+@utility border-theme-error/30 {
+  border-color: color-mix(in srgb, var(--color-error) 30%, transparent);
+}
+
+@utility border-theme-error/40 {
+  border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
 }
 
 @utility border-theme-error/50 {
@@ -1131,6 +1143,46 @@
   color: var(--color-accent);
 }
 
+/* Remover a seleção. A barra inteira deixa o clique passar para o canvas
+   (pointer-events: none); só este botão o captura. Cabe na altura da barra. */
+.felixo-statusbar-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 1.375rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--f-core-radius-xs);
+  background: transparent;
+  color: var(--f-core-white-soft);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.felixo-statusbar-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error);
+}
+
+.felixo-statusbar-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.felixo-statusbar-kbd {
+  padding: 0 0.25rem;
+  border: 1px solid rgba(247, 247, 244, 0.14);
+  border-radius: 0.25rem;
+  color: var(--f-core-muted);
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 500;
+  line-height: 1.1rem;
+}
+
 /* Mesmo respiro do Mini Map (19rem, recolhe pra 1rem com o inspector no
    puck) — o sino fica alinhado com ele no canto direito da tela. */
 .felixo-notifications-trigger {
@@ -1166,9 +1218,9 @@
   transition: none !important;
 }
 
-/* Alça de redimensionar, compartilhada por sidebar e painéis de ferramenta.
-   O "grip" no meio fica sempre visível (fraco) pra denunciar que a borda é
-   arrastável — a versão só-no-hover ninguém achava. */
+/* Alça de redimensionar, compartilhada por sidebar, painéis de ferramenta e
+   gaveta do terminal. O "grip" no meio fica sempre visível (fraco) pra
+   denunciar que a borda é arrastável — a versão só-no-hover ninguém achava. */
 .felixo-resize-handle {
   --felixo-grip-length: 2.25rem;
   position: absolute;
@@ -1215,6 +1267,13 @@
 .felixo-resize-handle:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+}
+
+/* Gaveta do terminal: ela abre pela direita, então a borda arrastável é a
+   da esquerda. */
+.felixo-resize-handle--left {
+  right: auto;
+  left: 0;
 }
 
 .felixo-resize-handle--horizontal {
@@ -2226,6 +2285,16 @@
 .felixo-field:focus {
   border-color: rgba(247, 247, 244, 0.42);
   outline: none;
+}
+
+/* Campo recusado (aria-invalid): o mesmo aro do `.felixo-select-trigger.is-invalid`,
+   para a mensagem de erro não ser o único sinal de onde está o problema. */
+.felixo-field[aria-invalid='true'] {
+  border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
+}
+
+.felixo-field[aria-invalid='true']:focus {
+  border-color: color-mix(in srgb, var(--color-error) 72%, transparent);
 }
 
 /* Pílula de zoom no formato da prancha da marca: um controle horizontal
@@ -3737,7 +3806,10 @@
   background: var(--f-core-white);
 }
 
-.felixo-sidebar-model-remove {
+/* Lixeira de linha (modelo, conversa): some sem hover para a lista não virar
+   uma coluna de lixeiras, e o foco por teclado a mostra. */
+.felixo-sidebar-model-remove,
+.felixo-session-remove {
   display: flex;
   width: 1.6rem;
   height: 1.6rem;
@@ -3752,18 +3824,39 @@
 }
 
 .felixo-sidebar-model:hover .felixo-sidebar-model-remove,
-.felixo-sidebar-model-remove:focus-visible {
+.felixo-sidebar-model-remove:focus-visible,
+.felixo-session-row:hover .felixo-session-remove,
+.felixo-session-remove:focus-visible {
   opacity: 1;
 }
 
-.felixo-sidebar-model-remove:hover {
+.felixo-sidebar-model-remove:hover,
+.felixo-session-remove:hover {
   color: var(--color-error);
+}
+
+/* Linha de conversa — em "Recentes" e na busca —: abrir de um lado, excluir
+   do outro, dois botões irmãos para um clique não disparar o outro. */
+.felixo-session-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.felixo-sidebar-session-row {
+  border-radius: var(--f-core-radius-xs);
+  transition: background-color 140ms var(--f-core-ease);
+}
+
+.felixo-sidebar-session-row:hover {
+  background: rgba(255, 255, 255, 0.045);
 }
 
 /* Sessões: título e horário na mesma linha, sem card. */
 .felixo-sidebar-session {
   display: flex;
-  width: 100%;
+  min-width: 0;
+  flex: 1;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.6rem;
@@ -3772,11 +3865,10 @@
   color: var(--f-core-secondary);
   font-size: 0.75rem;
   text-align: left;
-  transition: background-color 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+  transition: color 140ms var(--f-core-ease);
 }
 
-.felixo-sidebar-session:hover {
-  background: rgba(255, 255, 255, 0.045);
+.felixo-sidebar-session-row:hover .felixo-sidebar-session {
   color: var(--f-core-white-soft);
 }
 

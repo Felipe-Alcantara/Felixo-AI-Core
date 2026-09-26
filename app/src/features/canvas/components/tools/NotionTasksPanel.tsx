@@ -24,7 +24,6 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { CanvasPanel } from './CanvasPanel'
 import { DeferredMarkdownContent } from '../../../shared/components/DeferredMarkdownContent'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import type {
@@ -54,13 +53,6 @@ import {
 } from '../../services/notion-sync-status'
 import { createRefreshCoordinator, targetChanged } from '../../services/notion-refresh-coordinator'
 import { nextAutoSyncDelayMs } from '../../services/notion-sync-backoff'
-
-type NotionTasksPanelProps = {
-  onClose: () => void
-  toolsMenuOpen?: boolean
-  /** Renderiza somente o conteúdo para o bloco persistente do Canvas. */
-  embedded?: boolean
-}
 
 type TaskDraft = {
   title: string
@@ -117,7 +109,11 @@ function SortableHeader({ column, label, sort, onSort }: SortableHeaderProps) {
   )
 }
 
-export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: NotionTasksPanelProps) {
+/**
+ * Conteúdo do bloco "Tarefas Notion" do canvas (`NotionTasksNode`). Cabeçalho,
+ * mover, redimensionar e fechar pertencem ao bloco — aqui fica só a lista.
+ */
+export function NotionTasksPanel() {
   const api = window.felixo?.notion
   const [connections, setConnections] = useState<NotionConnection[]>([])
   const [secureStorage, setSecureStorage] = useState<{ ok: boolean; reason: string | null } | null>(null)
@@ -715,7 +711,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
 
   const selectedConnection = connections.find((connection) => connection.id === connectionId) || null
 
-  const content = (
+  return (
     <div className="min-h-full text-xs text-zinc-300">
         <header className="flex flex-wrap items-center gap-3 border-b border-white/10 pb-3">
           <div className="min-w-0 flex-1">
@@ -1083,24 +1079,6 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
           </>
         )}
       </div>
-  )
-
-  if (embedded) {
-    return content
-  }
-
-  return (
-    <CanvasPanel
-      title="Tarefas Notion"
-      icon={<ListTodo size={15} />}
-      panelId="notion-tasks"
-      size="xl"
-      variant="workspace"
-      onClose={onClose}
-      toolsMenuOpen={toolsMenuOpen}
-    >
-      {content}
-    </CanvasPanel>
   )
 }
 

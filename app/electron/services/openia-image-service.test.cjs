@@ -433,6 +433,27 @@ test('cancelar: avisa o filho, devolve "cancelled", não grava, não anuncia e l
   assert.equal(h.service.cancel({ requestId: '../x' }).ok, false)
 })
 
+test('consultar estado devolve a mesma mensagem fixa do pedido, para a interface se recuperar sem a promessa', async () => {
+  // Se a janela recarrega no meio da geração, a resposta de `generate` se perde; a interface
+  // reconsulta o estado e precisa mostrar a MESMA mensagem fixa (nunca texto do filho).
+  const h = harness({ runImage: child({ stdout: failureEnvelope('rate_limit'), exitCode: 5 }) })
+  await h.service.generate({ prompt: 'x', model: MODEL, requestId: 'req-status-erro' })
+  const erro = h.service.status({ requestId: 'req-status-erro' })
+  assert.equal(erro.state, 'error')
+  assert.equal(erro.code, 'limit_error')
+  assert.equal(erro.message, MESSAGES.limit_error)
+  assert.equal(JSON.stringify(erro).includes(SECRET), false)
+
+  const ok = harness({ runImage: child() })
+  await ok.service.generate({ prompt: 'x', model: MODEL, requestId: 'req-status-ok' })
+  const sucesso = ok.service.status({ requestId: 'req-status-ok' })
+  assert.equal(sucesso.state, 'success')
+  assert.equal(sucesso.count, 1)
+  assert.equal('message' in sucesso, false)
+
+  assert.deepEqual(ok.service.status({ requestId: 'req-nunca-visto' }), { ok: true, requestId: 'req-nunca-visto', state: 'unknown' })
+})
+
 test('estourar o tempo interrompe o filho e devolve "timeout"', async () => {
   const runImage = ({ signal }) =>
     new Promise((resolve) => signal.addEventListener('abort', () => resolve({ started: true, ok: false, exitCode: 130, stdout: '' })))

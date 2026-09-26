@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_INLINE_MARKDOWN_IMAGE_BYTES,
   dirnameOf,
+  isRelativeMarkdownLink,
   resolveMarkdownImageSrc,
   sanitizeMarkdownUrl,
 } from './markdown-image-src'
@@ -101,6 +102,39 @@ describe('sanitizeMarkdownUrl', () => {
     expect(sanitizeMarkdownUrl('javascript:alert(1)', 'src')).toBe('')
     expect(sanitizeMarkdownUrl('file:///tmp/foto.png', 'src')).toBe('')
     expect(sanitizeMarkdownUrl('data:image/svg+xml;base64,PHN2Zy8+', 'src')).toBe('')
+  })
+})
+
+describe('isRelativeMarkdownLink', () => {
+  it('reconhece caminho relativo a outro documento, com ou sem fragmento', () => {
+    for (const href of [
+      'OUTRO.md',
+      ' ./OUTRO.md ',
+      '../docs/GUIA.md#secao',
+      'pasta/',
+      '/core/GUIA.md',
+    ]) {
+      expect(isRelativeMarkdownLink(href)).toBe(true)
+    }
+  })
+
+  it('recusa o que já é destino por si ou não é caminho', () => {
+    for (const href of [
+      '',
+      '   ',
+      '#secao',
+      '?query=1',
+      '//exemplo.com/guia.md',
+      '\\\\servidor\\guia.md',
+      'C:\\guias\\guia.md',
+      'https://exemplo.com/guia.md',
+      'mailto:time@exemplo.com',
+      'javascript:alert(1)',
+      'file:///etc/passwd',
+      'guia.md\njavascript:alert(1)',
+    ]) {
+      expect(isRelativeMarkdownLink(href)).toBe(false)
+    }
   })
 })
 

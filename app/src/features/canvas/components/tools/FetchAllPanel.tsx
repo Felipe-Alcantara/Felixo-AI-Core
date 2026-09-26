@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { FetchAllScanRoots } from './FetchAllScanRoots'
 import {
   buildPlanSections,
   countAutoCommitCandidates,
@@ -25,6 +26,7 @@ import {
   formatRequestTime,
   pickPendingRequest,
 } from './fetch-all-agent-requests'
+import { addPickedRoots, removeScanRoot, type ScanRootsEdit } from './fetch-all-roots'
 import type {
   FetchAllActionResult,
   FetchAllAgentRequest,
@@ -39,6 +41,10 @@ type FetchAllPanelProps = {
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
 }
+
+/** Por que os botões de varrer estão desabilitados, e as duas saídas. */
+const SCAN_BLOCKED_HINT =
+  'Adicione as pastas a varrer ou confirme o escopo amplo antes de iniciar a varredura'
 
 const TONE_CLASSES = {
   action: 'text-(--f-core-white-soft)',
@@ -69,6 +75,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
   const [autoCommit, setAutoCommit] = useState(false)
   const [confirmingExecute, setConfirmingExecute] = useState(false)
   const [showIgnored, setShowIgnored] = useState(false)
+  const [editingRoots, setEditingRoots] = useState(false)
   const [requests, setRequests] = useState<FetchAllAgentRequest[]>([])
   const mountedRef = useRef(true)
 
@@ -277,6 +284,58 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
     }
   }, [])
 
+  // Grava a configuração inteira que está na tela trocando só as raízes:
+  // mandar apenas `scanRoots` apagaria as pastas ignoradas, porque o serviço
+  // completa o que falta com o padrão. Sem a configuração lida, não há o que
+  // gravar com segurança.
+  const editScanRoots = useCallback(
+    async (edit: (current: string[]) => ScanRootsEdit | Promise<ScanRootsEdit>) => {
+      if (!settings) return
+      setEditingRoots(true)
+      setError(null)
+
+      try {
+        const { roots, error: editError } = await edit(settings.scanRoots)
+        if (!mountedRef.current) return
+        if (editError) {
+          setError(editError)
+          return
+        }
+        if (!roots) return
+
+        const result = await window.felixo?.fetchAll?.saveSettings({
+          ...settings,
+          scanRoots: roots,
+        })
+        if (!mountedRef.current) return
+        if (!result?.ok || !result.settings) {
+          setError(result?.message ?? 'Falha ao salvar as pastas da varredura.')
+          return
+        }
+        setSettings(result.settings)
+        // Precisar ou não confirmar a varredura ampla depende das raízes: o
+        // escopo exibido é recalculado junto, senão a tela anuncia o anterior.
+        await loadScope()
+      } finally {
+        if (mountedRef.current) setEditingRoots(false)
+      }
+    },
+    [loadScope, settings],
+  )
+
+  const addScanRoots = useCallback(
+    () =>
+      editScanRoots(async (current) =>
+        addPickedRoots(current, await window.felixo?.fetchAll?.pickRoots()),
+      ),
+    [editScanRoots],
+  )
+
+  const removeRoot = useCallback(
+    (root: string) => editScanRoots((current) => removeScanRoot(current, root)),
+    [editScanRoots],
+  )
+
   return (
     <CanvasPanel
       title="Fetch All"
@@ -318,7 +377,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                 title={
                   scanAllowed
                     ? 'Varre para você revisar o plano antes de autorizar qualquer escrita'
-                    : 'Confirme o escopo amplo exibido antes de iniciar a varredura'
+                    : SCAN_BLOCKED_HINT
                 }
               >
                 {busy ? 'Varrendo…' : 'Varrer para revisar'}
@@ -374,29 +433,18 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
             </div>
           </div>
 
-          {scope.resolved.length > 0 && (
-            <div className="mt-2 rounded-sm bg-zinc-950/30 px-2 py-1.5">
-              <p className="text-[11px] font-medium text-zinc-300">
-                Raízes configuradas
-              </p>
-              <ul className="mt-1 max-h-20 overflow-auto">
-                {scope.resolved.map((root) => (
-                  <li
-                    key={root}
-                    className="truncate text-[11px] text-zinc-500"
-                    title={root}
-                  >
-                    {root}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <FetchAllScanRoots
+            roots={settings?.scanRoots ?? scope.configured}
+            disabled={busy || editingRoots || !settings}
+            saving={editingRoots}
+            onAdd={() => void addScanRoots()}
+            onRemove={(root) => void removeRoot(root)}
+          />
 
           {scope.requiresConfirmation && (
             <div className="mt-2">
               <p className="text-[11px] font-medium text-zinc-300">
-                Discos locais disponíveis para confirmação ({scope.available.length})
+                Ou varra todos os discos locais ({scope.available.length})
               </p>
               {scope.available.length > 0 ? (
                 <ul className="mt-1 max-h-20 overflow-auto rounded-sm bg-zinc-950/30 px-2 py-1.5">
@@ -454,7 +502,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
           title={
             scanAllowed
               ? 'Varre o escopo exibido e faz fetch em cada repositório'
-              : 'Confirme o escopo amplo exibido antes de iniciar a varredura'
+              : SCAN_BLOCKED_HINT
           }
         >
           <Search size={14} />
@@ -468,7 +516,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
           title={
             scanAllowed
               ? 'Reaproveita a lista da última varredura completa (não encontra repositórios novos)'
-              : 'Confirme o escopo amplo exibido antes de iniciar a varredura'
+              : SCAN_BLOCKED_HINT
           }
         >
           <RotateCcw size={14} />

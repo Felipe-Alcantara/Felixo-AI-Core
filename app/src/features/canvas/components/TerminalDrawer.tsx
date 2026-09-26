@@ -27,6 +27,7 @@ import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
+  getDefaultDrawerWidth,
   getDrawerMaxWidth,
   readCollapsedPreference,
   readPinnedPreference,
@@ -75,7 +76,6 @@ type TerminalDrawerProps = {
 }
 
 const MIN_WIDTH = DRAWER_MIN_WIDTH
-const DEFAULT_WIDTH = 720
 
 /**
  * Right-side drawer that hosts the live, interactive terminal for the expanded
@@ -104,21 +104,15 @@ export function TerminalDrawer({
   const containerRef = useRef<HTMLDivElement>(null)
   const collapsedTriggerRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
-  const [width, setWidth] = useState(() =>
-    (() => {
-      const maxWidth = getDrawerMaxWidth(window.innerWidth)
-      return readWidthPreference(
-        localStorage,
-        clampDrawerWidth(
-          Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.45))),
-          window.innerWidth,
-          MIN_WIDTH,
-        ),
-        Math.min(MIN_WIDTH, maxWidth),
-        maxWidth,
-      )
-    })(),
-  )
+  const [width, setWidth] = useState(() => {
+    const maxWidth = getDrawerMaxWidth(window.innerWidth)
+    return readWidthPreference(
+      localStorage,
+      getDefaultDrawerWidth(window.innerWidth, MIN_WIDTH),
+      Math.min(MIN_WIDTH, maxWidth),
+      maxWidth,
+    )
+  })
   const draggingRef = useRef(false)
   const latestResizeClientXRef = useRef<number | null>(null)
   const resizeFrameRef = useRef<number | null>(null)
@@ -375,12 +369,7 @@ export function TerminalDrawer({
   }, [])
 
   const resetDrawerWidth = useCallback(() => {
-    const suggested = clampDrawerWidth(
-      Math.min(DEFAULT_WIDTH, Math.floor(window.innerWidth * 0.45)),
-      window.innerWidth,
-      MIN_WIDTH,
-    )
-    updateDrawerWidth(suggested)
+    updateDrawerWidth(getDefaultDrawerWidth(window.innerWidth, MIN_WIDTH))
   }, [updateDrawerWidth])
 
   const onResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -423,9 +412,12 @@ export function TerminalDrawer({
         transition: resizing ? undefined : 'width 180ms cubic-bezier(0.16,1,0.3,1)',
       }}
     >
+      {/* Borda de arrasto. O duplo clique devolve a largura com que a gaveta
+          abre — o mesmo que Home, agora também ao alcance do mouse. */}
       {!collapsed && !maximized && (
         <div
           onMouseDown={onMouseDown}
+          onDoubleClick={resetDrawerWidth}
           onKeyDown={onResizeKeyDown}
           role="separator"
           aria-label={`Redimensionar terminal ${title}`}
@@ -435,7 +427,9 @@ export function TerminalDrawer({
           aria-valuemax={getDrawerMaxWidth(window.innerWidth)}
           aria-description="Seta para esquerda amplia, seta para direita reduz e Home restaura o tamanho padrão."
           tabIndex={0}
-          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-(--f-core-white)/40 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-emerald-400"
+          title="Arraste para redimensionar; dois cliques para a largura padrão"
+          data-felixo-terminal-drawer-resize-handle
+          className={`felixo-resize-handle felixo-resize-handle--left ${resizing ? 'is-resizing' : ''}`}
         />
       )}
       <div

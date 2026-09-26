@@ -47,7 +47,6 @@ import type {
   NotionDatabaseResult,
   NotionListResult,
   NotionSchemaProperty,
-  NotionSchemaResult,
   NotionTask,
   NotionTaskContentResult,
   NotionTasksResult,
@@ -439,8 +438,9 @@ declare global {
         listImageModels: () => Promise<CliInvokeResult & { code?: string; models?: OpeniaImageModel[] }>
         generateImage: (params: { prompt: string; model: string; requestId?: string }) => Promise<OpeniaImageResult>
         cancelImage: (params: { requestId: string }) => Promise<CliInvokeResult & { cancelled?: boolean }>
+        /** Estado de um pedido; em erro/cancelamento traz a mesma mensagem fixa que `generateImage` daria. */
         imageStatus: (params: { requestId: string }) => Promise<
-          CliInvokeResult & { requestId?: string; state?: OpeniaImageState; code?: string }
+          CliInvokeResult & { requestId?: string; state?: OpeniaImageState; code?: string; count?: number }
         >
       }
       pty?: {
@@ -549,11 +549,6 @@ declare global {
           connectionId: string
           query?: string
         }) => Promise<NotionDatabaseResult>
-        getSchema: (input: {
-          connectionId: string
-          databaseId?: string
-          dataSourceId?: string
-        }) => Promise<NotionSchemaResult>
         listTasks: (input: {
           connectionId: string
           databaseId?: string
@@ -670,7 +665,14 @@ declare global {
           skills: CanvasSkill[],
         ) => Promise<CliInvokeResult & { skills?: CanvasSkill[] }>
         listAvailableSkills: () => Promise<
-          CliInvokeResult & { skills?: CanvasSkill[]; communityEnabled?: boolean }
+          CliInvokeResult & {
+            skills?: CanvasSkill[]
+            communityEnabled?: boolean
+            /** Skills do sistema tiradas da lista dos agentes, como gravadas. */
+            hiddenBuiltinIds?: string[]
+            /** As ocultas com nome e origem, para o painel poder restaurar. */
+            hiddenSkills?: CanvasSkill[]
+          }
         >
         setSkillsSettings: (params: {
           communityEnabled?: boolean
@@ -939,9 +941,6 @@ declare global {
         list: (params?: {
           limit?: number
         }) => Promise<CliInvokeResult & { sessions?: unknown[] }>
-        get: (chatId: string) => Promise<
-          CliInvokeResult & { session?: unknown | null }
-        >
         save: (session: ChatSession) => Promise<
           CliInvokeResult & { session?: unknown }
         >
@@ -957,17 +956,6 @@ declare global {
           type?: string
         }) => Promise<ReadImageAttachmentResult>
         pickImage: () => Promise<PickImageResult>
-        saveGeneratedImage: (params: {
-          name?: string
-          type: string
-          data: ArrayBuffer
-          prompt?: string
-          model?: string
-          createdAt?: string
-          cost?: number
-          requestId?: string
-          temporary?: boolean
-        }) => Promise<SaveGeneratedImageResult>
         openImage: (params: { path: string }) => Promise<CliInvokeResult>
         saveImageCopy: (params: {
           path: string
@@ -1178,6 +1166,12 @@ declare global {
           ok: boolean
           message?: string
           settings?: FetchAllSettings
+        }>
+        /** Seletor nativo de pastas; cancelar devolve `paths` vazio. Não grava nada. */
+        pickRoots: () => Promise<{
+          ok: boolean
+          message?: string
+          paths?: string[]
         }>
         getScope: () => Promise<{
           ok: boolean

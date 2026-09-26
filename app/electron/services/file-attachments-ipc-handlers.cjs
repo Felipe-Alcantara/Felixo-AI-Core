@@ -52,13 +52,6 @@ function registerFileAttachmentIpcHandlers(appPaths, options = {}) {
       showOpenDialog: options.showOpenDialog,
     }),
   )
-  ipcMain.handle('files:save-generated-image', async (_event, params) => {
-    const result = await saveGeneratedImage(params, generatedImageDir)
-    if (result.ok) {
-      sendGeneratedImage(options.getMainWindow, result.artifact)
-    }
-    return result
-  })
   ipcMain.handle('files:open-image', async (_event, params) =>
     openImageArtifact(params, {
       attachmentDir,
@@ -438,7 +431,9 @@ async function resolveAuthorizedImagePath(filePath, options = {}) {
 /**
  * Stores bytes produced by a trusted generation flow. The renderer receives
  * only a sanitized artifact reference; no provider response, header, URL or
- * key crosses this boundary.
+ * key crosses this boundary. Only the main process calls this (the image
+ * service wired in main.cjs): there is deliberately no IPC channel for the
+ * renderer to write generated images.
  */
 async function saveGeneratedImage(params, generatedImageDir) {
   const mimeType = normalizeImageMimeType(params?.type)
@@ -629,14 +624,6 @@ async function removeGeneratedImage(params, generatedImageDir) {
       return { ok: true, deleted: false }
     }
     return { ok: false, message: 'Nao foi possivel remover a imagem temporaria.' }
-  }
-}
-
-function sendGeneratedImage(getMainWindow, artifact) {
-  if (typeof getMainWindow !== 'function' || !artifact) return
-  const window = getMainWindow()
-  if (window && !window.isDestroyed()) {
-    window.webContents.send('canvas:image-generated', artifact)
   }
 }
 

@@ -45,7 +45,10 @@ function getZoomAction(input) {
     return 'in'
   }
 
-  if (key === '-' || key === '_') {
+  // Só o '-': o '_' (Ctrl+Shift+-) é o Ctrl+_ do terminal, que envia 0x1F —
+  // o "desfazer" do readline, do emacs e de CLIs de agente. Tratá-lo como zoom
+  // fazia o before-input-event engolir a tecla antes de ela chegar ao xterm.
+  if (key === '-') {
     return 'out'
   }
 

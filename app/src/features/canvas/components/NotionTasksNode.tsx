@@ -49,7 +49,7 @@ export function NotionTasksNode({ id, selected }: NodeProps) {
             </div>
           }
         >
-          <LazyNotionTasksPanel embedded onClose={() => void deleteElements({ nodes: [{ id }] })} />
+          <LazyNotionTasksPanel />
         </Suspense>
       </div>
       <Handle type="source" position={Position.Right} />

@@ -162,7 +162,6 @@ contextBridge.exposeInMainWorld('felixo', {
     testConnection: (connectionId) =>
       ipcRenderer.invoke('notion:connections:test', connectionId),
     listDatabases: (input) => ipcRenderer.invoke('notion:databases:list', input),
-    getSchema: (input) => ipcRenderer.invoke('notion:database:schema', input),
     listTasks: (input) => ipcRenderer.invoke('notion:tasks:list', input),
     getCachedTasks: (input) => ipcRenderer.invoke('notion:tasks:cached', input),
     getTaskContent: (input) => ipcRenderer.invoke('notion:tasks:content', input),
@@ -343,7 +342,6 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   chats: {
     list: (params) => ipcRenderer.invoke('chats:list', params),
-    get: (chatId) => ipcRenderer.invoke('chats:get', chatId),
     save: (session) => ipcRenderer.invoke('chats:save', session),
     delete: (chatId) => ipcRenderer.invoke('chats:delete', chatId),
   },
@@ -353,8 +351,6 @@ contextBridge.exposeInMainWorld('felixo', {
     readImageAttachment: (params) =>
       ipcRenderer.invoke('files:read-image-attachment', params),
     pickImage: () => ipcRenderer.invoke('files:pick-image'),
-    saveGeneratedImage: (params) =>
-      ipcRenderer.invoke('files:save-generated-image', params),
     openImage: (params) => ipcRenderer.invoke('files:open-image', params),
     saveImageCopy: (params) => ipcRenderer.invoke('files:save-image-copy', params),
     duplicateImage: (params) => ipcRenderer.invoke('files:duplicate-image', params),
@@ -417,6 +413,9 @@ contextBridge.exposeInMainWorld('felixo', {
     getSettings: () => ipcRenderer.invoke('fetch-all:get-settings'),
     saveSettings: (settings) =>
       ipcRenderer.invoke('fetch-all:save-settings', { settings }),
+    // Só abre o seletor nativo e devolve as pastas escolhidas; gravar as
+    // raízes continua sendo `saveSettings`.
+    pickRoots: () => ipcRenderer.invoke('fetch-all:pick-roots'),
     getScope: () => ipcRenderer.invoke('fetch-all:get-scope'),
     scan: (params) => ipcRenderer.invoke('fetch-all:scan', params),
     execute: (params) => ipcRenderer.invoke('fetch-all:execute', params),

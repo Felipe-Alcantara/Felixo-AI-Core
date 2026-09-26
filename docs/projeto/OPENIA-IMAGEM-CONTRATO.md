@@ -75,3 +75,14 @@ processos (Windows: `taskkill /T /F`) e, depois de 2 s, `SIGKILL`.
 - No máximo 2 gerações ao mesmo tempo; estados `pending` → `success` | `error` | `cancelled`.
 - Mensagens ao renderer são fixas por código (`MESSAGES` no serviço): nunca stderr, chave, mensagem do
   filho ou traceback.
+- A consulta de estado (`openia:image-status`) devolve, em erro e cancelamento, a mesma `message` fixa que a
+  geração daria (desde 26/09/2026). Assim a interface que perdeu a resposta, por exemplo com a janela
+  recarregada no meio, mostra o mesmo texto sem manter uma tabela própria de códigos.
+
+## 4. Onde a interface usa este contrato
+
+Canvas → seção **Criar** → **Gerar imagem** (`app/src/features/canvas/components/GenerateImageButton.tsx`). O
+estado da geração fica fora do componente, em `app/src/features/canvas/services/openia-image-store.ts`, porque
+o pedido pode durar minutos e sobreviver ao botão desmontar. O id do pedido pendente vai para o
+`sessionStorage` e é reconsultado por `openia:image-status` depois de uma recarga. A imagem chega ao canvas
+pelo evento `canvas:image-generated`, como antes.

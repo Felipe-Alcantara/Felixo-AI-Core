@@ -4169,3 +4169,339 @@ Windows, `native count=20` com timeout ou saída incompleta vira anotação `::w
 contagens 1, 5 e 10 no Windows e toda a fase do renderer. Dois testes fixam as duas fronteiras. A investigação
 continua na task "CI — sessão PTY para no meio no benchmark de scrollback do Windows", que também registra o
 risco de o app real perder saída ao abrir muitos terminais logo depois de fechar outros no Windows.
+
+## 2026-09-26 — Funções que existiam sem acesso pela interface
+
+**Contexto.** O pedido foi: "acho que tem algumas funções inacessíveis pela interface". Uma auditoria no app
+real confirmou quais funções tinham backend e ponte (`window.felixo`) prontos, mas nenhum caminho na tela, e
+quais trechos eram código morto. Cada achado virou um item numa branch própria. A branch
+`feat/ui-funcoes-sem-acesso` reúne os dez itens: são 35 commits trazidos por cherry-pick, sem conflito textual.
+Os arquivos mexidos por mais de um item foram conferidos à mão: `index.css` (4 itens), `vite-env.d.ts` (4),
+`preload.cjs` (2), `CanvasView.tsx` (2) e `CanvasToolPanels.tsx` (2). Abaixo, cada função, o caminho na UI, as
+decisões e a validação.
+
+**1. Fetch All: escolher as pastas-raiz.** Caminho: Canvas → barra lateral → **Ferramentas** → **Fetch All** →
+cartão "Escopo da varredura" → "Raízes configuradas (N)". **Adicionar pasta** abre o seletor nativo (uma ou
+várias pastas). O X de cada linha ("Deixar de varrer esta pasta") tira a raiz. Cada linha mostra o nome da pasta
+e o caminho completo. Sem nenhuma raiz, continua valendo a alternativa "Ou varra todos os discos locais (N)",
+que exige confirmação. Com pelo menos uma raiz, essa alternativa some e a varredura fica liberada.
+- Canal novo `fetch-all:pick-roots` (ponte `fetchAll.pickRoots()`): ele só abre o seletor, preso à janela, e
+  devolve `{ ok, paths }` (vazio ao cancelar) ou `{ ok: false, message }`. Quem grava continua sendo
+  `saveSettings`, que já valida e normaliza.
+- O `projects:pick-folder` não foi reusado porque ele também concede à pasta o acesso de projeto. Escolher onde
+  varrer não é abrir um projeto.
+- O painel grava `{ ...settings, scanRoots }`. Mandar só `scanRoots` faria `normalizeSettings` completar o resto
+  com o padrão e apagaria as pastas ignoradas. Um teste do serviço fixa esse contrato.
+- A lógica pura (cancelar ou repetir pasta não grava; nome curto da raiz) fica em `tools/fetch-all-roots.ts`. A
+  lista é o componente `tools/FetchAllScanRoots.tsx`.
+- Ficam de fora `excludeDirs` e `analyzeWorkers`. Essa decisão continua em aberto na auditoria, que recomenda não
+  expor `excludeDirs` e calcular os workers pelo hardware.
+- Validação: `node --test` do handler e do serviço (89 testes; os 3 novos do handler falhavam antes), vitest de
+  `fetch-all-roots` e `FetchAllScanRoots` (13 testes) e o app real num Xvfb próprio sem DBus, com o diálogo GTK
+  dirigido por xdotool (21 checagens).
+
+**2. Chat legado: excluir conversa.** Caminho: tela Chat → "Recentes" → passar o mouse numa conversa (ou chegar
+nela com Tab) → lixeira à direita → confirmar `Excluir a conversa "<título>"?`. A mesma lixeira aparece no painel
+**Pesquisar**, que alcança as conversas além das cinco recentes. Se a conversa estava aberta, a tela volta para
+um chat novo. A exclusão arquiva no SQLite (`archived_at`, canal `chats:delete`). Hoje não há restauração pela
+interface.
+- A confirmação (`window.confirm`, o padrão do `NotesModal`) e a regra ficam num lugar só, `deleteSession` no
+  `ChatWorkspace`, que atende as duas entradas. O componente novo é `DeleteSessionButton`. O CSS da lixeira é o
+  mesmo da lista de modelos, por seletor agrupado.
+- Armadilha: `chats:save` zera `archived_at` (ON CONFLICT), então qualquer save depois da exclusão reativaria a
+  conversa. Por isso `deletedChatSessionIdsRef` bloqueia os saves desde antes de esperar o backend, e excluir a
+  conversa aberta usa `clearConversation()`, um reset sem salvar.
+- Contrato: `deleteChatSessionFromBackend` passou de booleano para `ChatSessionDeletion` (`archived`,
+  `local-only` ou `failed` com `message`). Ele não tinha chamador.
+- O `SearchPanel` fechado ficava montado e transparente, com os botões ainda na ordem do Tab. Agora ele ganha
+  `inert` e `aria-hidden`.
+- Validação: vitest de `chat-history-storage`, `DeleteSessionButton` e `SearchPanel` (8 dos testes falhavam antes)
+  e o app real com 9 conversas semeadas (21 checagens, inclusive exclusão só pelo teclado e recarga).
+
+**3. Openia: gerar imagem pelo canvas.** Caminho: Canvas → barra lateral → **Criar** → **Gerar imagem**, logo
+abaixo de "Abrir imagem". O popover pede a descrição (até 4.000 caracteres; Ctrl/Cmd+Enter gera) e o modelo, do
+catálogo público de imagem do OpenRouter, que só é carregado quando o popover abre. A imagem entra no canvas como
+bloco temporário, com "Remover temporário". A chave do OpenRouter fica no Openia: o Felixo não a lê. Gerar pode
+custar créditos.
+- O gatilho é `canvas/components/GenerateImageButton.tsx`. O estado fica numa store externa
+  (`canvas/services/openia-image-store.ts` + `useOpeniaImageGeneration`), porque a geração dura até minutos e o
+  botão desmonta quando a seção recolhe ou quando se vai ao Chat. O `CanvasView` não mudou: a imagem continua
+  chegando pelo `canvas:image-generated`.
+- Se a janela recarregar no meio, o id do pedido fica em `sessionStorage` e o desfecho vem de
+  `openia.imageStatus` (a cada 2 s). Por isso o `status()` do serviço agora devolve também a `message` fixa em
+  erro e cancelamento. O último modelo escolhido fica em `localStorage`. Na primeira vez não há escolha
+  automática, porque gerar custa dinheiro.
+- "Gerar" e "Cancelar" são dois botões fixos com `aria-disabled`. Na primeira versão, um botão só trocava de
+  papel, e no app real um clique em Cancelar que chegou junto com o fim da geração disparou outra geração.
+- `.felixo-field[aria-invalid='true']` ganhou o aro de erro, que vale também para o campo de URL de Página Web.
+- Validação: `node --test` do serviço (o teste novo de `status()` falhava antes), vitest da store (13 testes) e o
+  app real com um Openia falso na frente do PATH (`FELIXO_CLI_PATHS`) e o catálogo real. Nenhuma geração real
+  foi feita, para não gastar créditos.
+
+**4. Diagnóstico das CLIs de IA.** O IPC `clis:diagnose`, que só lê e nunca instala, ganhou dois pontos de acesso:
+- tela Chat → ícone **Configurar modelos** → "Gerenciar modelos" → "CLIs oficiais" → ícone **Diagnosticar
+  CLIs**, ao lado de "Atualizar detecção";
+- o aviso "Não foi possível instalar as CLIs de IA" (só aparece quando a instalação automática falha), que ganhou
+  **Ver diagnóstico** antes de "Tentar de novo".
+
+Cada CLI com instalação automática (Codex, Claude, Gemini) mostra a causa, como "Não instalada", "Instalada, mas
+invisível ao app" ou "Bloqueada por permissão", e a próxima ação. **Copiar texto para o suporte** copia o
+`supportText`, que o processo principal já minimiza. Com diagnóstico na tela, **Instalar** só aparece quando
+`recommendInstall` é verdadeiro. Reinstalar não resolve PATH, permissão, atalho quebrado, timeout nem rede. O
+diagnóstico é uma fotografia: fechar o gerenciador o descarta, e no aviso uma falha nova remonta o painel pela
+identidade do aviso (`noticeKey`).
+- Arquivos novos em `app/src/features/setup`: `cli-diagnosis.ts`, `useCliDiagnosis.ts` e `CliDiagnosisView.tsx`.
+- Bug corrigido: no Tailwind 3, a opacidade sobre cor arbitrária com `var()` (`bg-[var(--x)]/90`) não gera CSS,
+  e isso deixava "Tentar de novo" quase invisível. A correção usa `color-mix`. A guarda
+  `setup-tailwind-classes.test.ts` cobre só `src/features/setup`; o mesmo padrão aparece em cerca de 30 classes de
+  outras telas (`grep -rnoE "[a-z:-]+-\[var\(--[a-z0-9-]+\)\]/[0-9]+" app/src`).
+- Validação: vitest de setup e chat (85 testes, inclusive paridade com `cli-diagnostics.cjs`) e o app real com
+  HOME/PATH mínimos e `FELIXO_MANAGED_CLI_ROOT` de fixture (22 checagens). O aviso de falha foi simulado com
+  `felixo devtools main "mainWindow.webContents.send('clis:setup-status', …)"`.
+
+**5. Felixo System Design: ler cada guia.** Caminho: Canvas → engrenagem **Configurações** no rodapé do rail →
+seção "Felixo System Design" → "Ver índice (N documentos)" → clicar num guia. O mesmo vale no modal
+"Configurações" do Chat. O guia abre renderizado em Markdown logo abaixo do item, numa moldura com rolagem
+própria. Fica um guia aberto por vez. O conteúdo vem do cache da última sincronização, sem rede.
+- O canal `system-design:get-document` existia na ponte, mas nenhuma tela o usava. Arquivos novos em
+  `app/src/features/shared/system-design/`: `system-design-document.ts` (leitor que nunca rejeita) e
+  `SystemDesignDocumentIndex.tsx` (acordeão que reaproveita `DeferredMarkdownContent`).
+- A moldura tem `role=region`, rótulo "Conteúdo de <caminho>" e `tabIndex=0`, para rolar pelo teclado. O botão tem
+  `aria-expanded` e `aria-controls`.
+- Performance: a prévia é memoizada e a chave é `caminho@sourceSha`. Sem isso, cada sincronização re-analisava o
+  Markdown aberto: 4,4–5,6 s de thread principal bloqueada contra 0,85–1,16 s depois, medido com o maior guia
+  (~49 KB) no notebook de 2 núcleos, em build de dev.
+- Validação: vitest (15 testes novos), `node --test` do canal `get-document` e o app real com 32 guias
+  sincronizados.
+
+**6. Zoom da janela no menu Exibir.** Caminho: barra de menu → **Exibir** → "Aumentar zoom", "Diminuir zoom" e
+"Tamanho real". Os atalhos Ctrl/Cmd + `=` `+` `-` `0` não mudaram.
+- Os itens chamam `applyZoomAction`, a mesma função do atalho. Os roles `zoomIn`/`zoomOut`/`resetZoom` não
+  servem: no Electron 41 instalado eles mudam o nível em 0,5 sem teto nem piso e agem no `webContents` focado,
+  que pode ser um `<webview>` do canvas.
+- O acelerador é só exibido (`registerAccelerator: false`, opção só do Linux/Windows). A tecla continua tratada
+  no `before-input-event`, cujo `preventDefault` também bloqueia o atalho do menu no macOS. Isso não foi testado
+  num Mac.
+- Correção: `Ctrl+_` (Ctrl+Shift+-) deixou de diminuir o zoom e volta a chegar ao terminal, onde é o "desfazer"
+  do readline e de CLIs de agente.
+- Validação: `node --test` de `app-menu` e `window-zoom-shortcuts` (20 testes; os novos falhavam antes) e o app
+  real sob Xvfb, com clique real no menu, limites de ±3 e atalho sem disparo duplo (18 checagens).
+
+**7. Remover conexão ou blocos pela barra de status.** Caminho: Canvas → clicar numa conexão ou no cabeçalho de
+um bloco (Shift+clique ou caixa de seleção para vários). A barra de status do rodapé mostra "1 conexão
+selecionada", "N blocos selecionados" ou "N itens selecionados" e o botão **Remover [Delete]**. Com o canvas
+travado, o botão fica desativado ("Destrave o canvas para remover"). O botão chama o mesmo `deleteElements` do
+React Flow que a tecla Delete usa, então os blocos levam junto as conexões ligadas a eles. Não há confirmação nem
+desfazer, igual à tecla.
+- Bug corrigido no caminho: `edgesWithHandles` forçava os handles `s-<lado>`/`t-<lado>` em todo bloco, mas só
+  terminal e arquivo os desenham. Uma conexão com nota, desenho, Excalidraw, Página Web ou Tarefas Notion ficava
+  gravada e contada na barra, mas sem desenho e sem como clicar para apagar. A regra foi para
+  `services/edge-handle-routing.ts` (`SIDE_HANDLE_NODE_TYPES`), com teste que confere a lista contra os
+  componentes. Quem der handles laterais a outro bloco precisa incluir o tipo ali.
+- Decisão: corrigir no roteamento e não dar handles ao bloco Notion, porque o defeito atingia os cinco tipos sem
+  handles laterais.
+- Validação: vitest (20 testes novos) e o app real antes (conexões invisíveis reproduzidas) e depois (22
+  checagens).
+
+**8. Gaveta do terminal: largura padrão com o mouse.** Caminho: Canvas → abrir um terminal → borda esquerda da
+gaveta. O grip agora é visível, igual ao da sidebar e dos painéis, com a dica "Arraste para redimensionar; dois
+cliques para a largura padrão". Dois cliques devolvem a largura de abertura. Pelo teclado, continua valendo Home
+com foco na alça, e as setas ajustam (seta para a direita estreita).
+- A largura padrão (45% da janela, entre 440 e 720 px) vem de uma fonte só, `getDefaultDrawerWidth` em
+  `terminal-drawer-pin.ts`, usada ao abrir e ao restaurar. Um teste varre viewports de 320 a 3840 px contra a
+  fórmula antiga.
+- A alça usa `felixo-resize-handle` com o modificador novo `felixo-resize-handle--left`.
+- Validação: vitest (50 testes) e o app real com mouse de verdade (arrastar, dois cliques, Home).
+
+**9. Skills do sistema: não enviar aos agentes.** Caminho: Canvas → **Ferramentas** → **Skills** → bloco "Skills do
+sistema (N)" → ícone de olho cortado ao lado de "Ativar" ("Não enviar aos agentes"). O recolhível **Ocultas (N)**,
+logo abaixo, lista as ocultas, e o X de cada uma as restaura. A escolha fica na configuração
+`canvas.skills.hidden` e vale entre sessões. Antes, isso só era possível pelo DevTools.
+- `canvas:list-available-skills` ganhou `hiddenBuiltinIds` e `hiddenSkills`, só com campos novos.
+  `canvas:set-skills-settings` agora limpa os ids: aceita só strings, sem vazios e sem repetidos.
+- Bug corrigido: o `CanvasView` lia o catálogo de skills uma vez só, ao montar. Ocultar uma skill, ligar skills
+  de terceiros ou salvar uma skill própria só chegava aos agentes novos depois de reiniciar o app. Agora o
+  painel avisa (`onCatalogChange`) e o canvas atualiza a lista.
+- O ícone fica sempre visível, e não só no hover, porque o problema a resolver era justamente a função não ser
+  encontrada.
+- Validação: `node --test` (5 testes novos que falhavam antes), vitest do catálogo e o app real antes e depois
+  da correção. Uma CLI `claude` falsa em `FELIXO_CLI_PATHS` deixa criar um "Agente" sem abrir o Claude de
+  verdade, e o `initialText` persistido mostra o que o agente recebeu.
+
+**10. Código morto removido.** Não cria caminho novo. O que saiu:
+- `ChatSuggestion`, `chatSuggestions` e `quickPrompts` (a tela inicial do chat usa `ideaStarters`);
+- o painel flutuante de Tarefas Notion: ele existe só como bloco do canvas, e o menu Ferramentas → Tarefas Notion
+  cria ou foca esse bloco;
+- `core/shell-adapter.cjs` e a variável `FELIXO_SHELL`, que só ele lia e que nunca teve efeito no PTY. O shell do
+  terminal vem de `platform.getDefaultShell`, e as regras foram testadas em `electron/core/platform/index.test.cjs`;
+- `getTerminationStrategy` e `getPlatformInfo` dos adaptadores de plataforma, que só o shell-adapter chamava;
+- os canais `files:save-generated-image`, `chats:get` e `notion:database:schema`, com o preload e os tipos. A
+  ponte não expõe mais `files.saveGeneratedImage`, `chats.get` nem `notion.getSchema`. `saveGeneratedImage`
+  continua no processo principal, chamado pelo serviço de imagem.
+
+Cada remoção de canal tem um teste que falhava antes. A tabela de variáveis de `RODAR-VIA-CODIGO-FONTE.md`
+perdeu `FELIXO_SHELL`. Os documentos em `docs/_legado/` que ainda citam `shell-adapter.cjs`, `FELIXO_SHELL` e
+`quickPrompts` ficaram como estavam, porque são registro histórico.
+
+**Documentação atualizada junto.**
+- `README.md`: exclusão de conversa, bloco Tarefas Notion, leitura dos guias, remover pela barra, gaveta,
+  diagnóstico das CLIs e geração de imagem.
+- `docs/guias/GUIA-USUARIO.md`: cada função no seu lugar, mais a seção "Zoom da janela". O guia dizia que
+  **Ferramentas → Modelos** abria o "Gerenciar modelos", mas aquele painel do canvas só lista e remove modelos. O
+  gerenciador abre pela tela Chat, e o texto foi corrigido.
+- `docs/guias/GUIA-DESENVOLVEDOR.md`: exemplo de teste que citava o shell-adapter, dicas de verificação com
+  `felixo devtools` e o padrão de "função que só tinha atalho".
+- `docs/projeto/OPENIA-IMAGEM-CONTRATO.md`: `message` no `image-status` e onde a interface usa o contrato.
+
+**Validação da integração (26/09/2026, Linux, notebook de 2 núcleos).**
+- `npm run lint`: sem avisos.
+- `npm run build`: `tsc -b` e `vite build` ok, só com o aviso de chunk > 500 kB que já existia.
+- `npm test`: 1691/1691.
+- `npm run test:frontend`: 137 arquivos e 1286 testes; 1 arquivo e 1 teste pulados, o benchmark opt-in que já
+  existia.
+- No app real, um script `felixo devtools` percorreu o caminho principal de cada item na branch integrada: 59
+  checagens, 0 falhas. Ele cobriu:
+  - a ponte (canais novos presentes, mortos ausentes);
+  - o menu Exibir (Aumentar zoom → 0,5; Tamanho real → 0);
+  - a conexão nota→arquivo desenhada e removida pela barra;
+  - o popover "Gerar imagem" (foco, Esc);
+  - o aviso de falha com "Ver diagnóstico";
+  - ocultar e restaurar uma skill;
+  - gravar uma raiz do Fetch All e tirá-la pelo X, com a pasta ignorada preservada;
+  - o bloco Tarefas Notion sem painel;
+  - os dois cliques na alça da gaveta (584 → 512 → 584 px);
+  - um guia do System Design renderizado;
+  - a lixeira do chat arquivando no backend;
+  - o diagnóstico no gerenciador de modelos.
+
+Os scripts de verificação ficaram fora do repositório.
+
+**Achado da integração, anterior a esta branch.** Com a gaveta de um terminal aberta, a barra de status do canvas
+fica muito estreita: 160 px medidos numa janela de 1320 px, porque ela reserva 18rem à direita para o inspector
+"Elementos". O conteúdo quebra em duas linhas e vaza da altura da barra. As regras de `.felixo-canvas-statusbar`
+não mudaram nesta branch, e o conteúdo que a barra já tinha ("Meu canvas · N blocos · N conexões · Canvas
+pronto") passa de 160 px. Ou seja, o defeito é anterior. O item 7 piora o caso, porque abrir a gaveta seleciona o
+terminal e acrescenta "1 bloco selecionado" e o botão Remover. O botão continua visível e clicável. Medido no app
+com a barra forçada a várias larguras e um bloco selecionado: a 900 px tudo cabe; a 640 px e a 520 px os itens já
+quebram de linha, mas o botão fica inteiro; a 420 px o botão sai da caixa da barra. Não foi corrigido aqui porque
+é uma decisão de layout da barra: `nowrap`, container query que esconda primeiro o que não muda, ou a barra passar
+por baixo do inspector.
+
+**Riscos que ficam.**
+- A exclusão de conversa, a remoção pela barra e a remoção de raiz do Fetch All não têm "desfazer". As duas
+  primeiras seguem o padrão já existente (confirm / tecla Delete); a terceira não é destrutiva.
+- Remover métodos de `window.felixo` quebraria um script externo que os chamasse. No repositório não há nenhum
+  chamador.
+- Windows e macOS não foram testados à mão em nenhum item. A estrutura do menu por plataforma está coberta por
+  teste unitário.
+- `CliDiagnosis` está duplicado entre `cli-diagnosis.ts` e `vite-env.d.ts`, no mesmo padrão de `CliSetupStatus`.
+  Um teste de paridade compara com a saída real do backend.
+
+**Ideias para quem quiser contribuir.**
+- Restaurar conversas arquivadas pela interface.
+- Mostrar o preço por modelo no seletor de imagem: hoje o serviço descarta o `pricing` do catálogo.
+- Ampliar a guarda contra `-[var(--x)]/NN` para todo o `src` e corrigir as ~30 classes que hoje não geram CSS.
+- Unificar `TerminalSideHandles`/`FourSideHandles` num componente comum para nota, desenho, Página Web e Tarefas
+  Notion, para o traço sair pelo lado mais próximo nesses blocos também.
+- Traduzir o `aria-label` padrão das conexões do React Flow ("Edge from X to Y").
+- Fazer o `canvas-smoke` conferir as conexões no DOM (`.react-flow__edge`), e não só a persistência.
+- Levar para `app/scripts/` os métodos de bancada usados aqui:
+  - o seletor nativo dirigido num Xvfb sem DBus;
+  - CLIs falsas via `FELIXO_CLI_PATHS`;
+  - o aviso de falha simulado por `devtools main`.
+
+## 2026-09-26 — Funções sem acesso sobre o Tailwind 4: rebase e classes na sintaxe nova
+
+**Task.** A branch `feat/ui-funcoes-sem-acesso` (PR #94, 38 commits) foi escrita sobre o Tailwind 3, e a `main`
+recebeu o Tailwind 4.3.3 (PR #93, cc34310) logo depois. O trabalho foi rebasear sobre a `main`, passar para a
+sintaxe do v4 as classes que o PR acrescentou e provar que toda classe usada nos arquivos do PR gera CSS. Registro
+gravado em 26/09/2026, 06:06.
+
+**Rebase (38 commits, conflito em 8 arquivos).** Em cada um ficaram a função nova do PR e a sintaxe do v4:
+- `FetchAllPanel.tsx`: a lista "Raízes configuradas" da `main` deu lugar ao `FetchAllScanRoots` do PR.
+- `SearchPanel.tsx`: a linha virou `div.felixo-session-row` com a lixeira; o `hover:bg-white/[0.05]` do PR entrou
+  como `hover:bg-white/5`.
+- `ModelManagerModal.tsx`: o botão "Diagnosticar CLIs" ao lado de "Atualizar detecção", com `hover:bg-white/8`.
+- `CliSetupNotice.tsx`: "Tentar de novo / Depois" passou para `CliSetupFailureActions`.
+- `TerminalDrawer.tsx` (dois commits): primeiro o `title` e o `data-*` do duplo clique sobre a classe da `main`;
+  depois a alça passa a `felixo-resize-handle felixo-resize-handle--left`, sem utility.
+- `SkillsPanel.tsx`: a lista com ocultar/restaurar.
+- `MarkdownContent.tsx`: o `<a>` virou `MarkdownLink`.
+- `IA.md`: as duas entradas, a do Tailwind 4 antes desta série.
+
+Quando o lado do PR reescrevia a linha inteira, entrou o texto do PR e a troca de sintaxe foi para o commit de
+conversão, para não conflitar de novo nos commits seguintes.
+
+**Conversão (25 linhas em 7 arquivos).** Um script de sessão leu só as linhas adicionadas
+(`git diff origin/main...HEAD`), extraiu os literais de string e passou cada token pelo design system do próprio
+v4 (`candidatesToCss`, `canonicalizeCandidates`) e pela tabela de renomes do guia. Cada troca foi revisada à mão,
+só dentro de lista de classe. As trocas:
+- Renomes que mantêm o visual do v3: `rounded-sm` → `rounded-xs` (1), `outline-none` → `outline-hidden` (2) e
+  `focus-visible:outline` → `focus-visible:outline-solid` (1).
+- Grafia canônica, com o mesmo CSS: `rounded` → `rounded-sm` (11), `text-[var(--x)]` → `text-(--x)`,
+  `text-[var(--color-error)]` → `text-theme-error`, `/[0.08]` → `/8`, `/[0.06]` → `/6` e `break-words` →
+  `wrap-break-word`.
+- "Tentar de novo" voltou a `bg-(--f-core-white)/90`, a forma da `main`. O `color-mix` do PR só existia porque o
+  v3 descartava essa classe.
+
+Não foram trocados dois falsos positivos: `!hasUrlScheme(...)` (negação em JS) e o comentário do teste que cita a
+forma do v3. O PR não tem `shadow`, `blur`, `ring` sem largura, `flex-shrink`/`flex-grow` nem `!` prefixado.
+
+**Cascata.** Todo o CSS que o PR põe no `index.css` são classes próprias sem camada, como manda a regra da `main`.
+O PR não usa `@apply` nem seletor com utility. A análise estática cruzou cada utility das linhas novas com as regras
+próprias do mesmo elemento. Nenhuma utility com variante (`hover:`, `focus-visible:`, `disabled:`) disputa
+propriedade com regra própria, então nenhuma precisou de `!`.
+
+**Prova contra o CSS do build.** `npx vite build` e depois todos os tokens de classe dos 44 `.ts/.tsx` do PR (sem
+testes), tirados de `className`/`*ClassName`, `cn()` e das constantes que essas expressões citam. Cada token foi
+conferido como seletor em `dist/assets/index-*.css`, com o escape do `CSS.escape`. O resultado final: 499
+tokens, 486 com seletor. Os 13 restantes não são classe ou são ganchos:
+- Valores de JS que a heurística das constantes pegou: `\n`, `info`, `neutral`, `pan`, `select`, `status` e
+  `syncing`.
+- `contains-task-list` e `task-list-item`: classes do remark-gfm que o código lê com `className?.includes`.
+- `hljs` e `language-*`: a convenção do highlight.js.
+- `nopan` e `nowheel`: ganchos do React Flow.
+
+A prova achou três defeitos, corrigidos em commits próprios:
+- Três classes `felixo-*` sem regra nem leitor foram removidas: `felixo-statusbar-selection`, criada neste PR, e
+  `felixo-shell` e `felixo-chat-sidebar`, da `main`, que nunca tiveram CSS (conferido com `git log -S`).
+- `border-theme-error/30`, `border-theme-error/40` e `bg-theme-error/[0.06]` do gerenciador de modelos nunca
+  geraram CSS. É a pendência que a entrada do Tailwind 4 registrou. Ganharam `@utility` na família
+  `theme-error`, e `/[0.06]` passou a `/6`.
+
+**Guarda do aviso das CLIs.** `setup-tailwind-classes.test.ts` procurava `bg-[var(--x)]/N`, que o v4 gera. Agora o
+teste compila o `index.css` com o `compile` do `tailwindcss` e exige que toda classe das listas dos `.tsx` da pasta
+saia no CSS. Conferido que falha: com `shadow-inset` enxertado, acusa "CliDiagnosisView.tsx: shadow-inset". O
+limite é que um literal só conta como lista quando ao menos metade dos tokens gera CSS. O v4.3.3 ainda gera
+`flex-shrink-*`, `decoration-slice` e `overflow-ellipsis`, então a guarda não os pega; por isso os renomes do guia
+passam pela revisão do diff.
+
+**Validação.** `npm ci` (Tailwind 4.3.3 e `@tailwindcss/vite` 4.3.3 no `node_modules`), `npm run lint` sem
+problemas, `npm run build` ok, `npm test` 1691/1691 e `npm run test:frontend` com 140 arquivos, 1306 testes ok e 1
+pulado. No app real (`felixo devtools`, perfil isolado, dev server deste worktree, sob o `flock`), o roteiro de
+integração da série foi repetido: 59 checagens, 0 falhas, mais uma captura do zoom pelo menu Exibir. As capturas `tw4-*.png` foram comparadas com as `integracao-*.png`
+(Tailwind 3), do mesmo roteiro e na mesma janela 1320×710: a lista de Recentes do chat saiu idêntica pixel a pixel. Nas outras
+oito, de 0,58% a 1,84% dos pixels diferem, e a diferença é só deslocamento vertical de 1 a 4 px de texto (a altura de
+linha proporcional do v4 na barra lateral e nas listas do gerenciador de modelos). Não há diferença de cor, borda,
+raio ou fundo nos elementos do PR: "Remover" da barra de estado, popover "Gerar imagem", "Tentar de novo" (branco a
+90%), ícones de ocultar skill, raiz do Fetch All, grip da alça da gaveta, guia do System Design e botão
+"Diagnosticar CLIs".
+
+**Mudanças visuais esperadas.** São as da entrada do Tailwind 4: altura de linha proporcional (itens da barra
+lateral ~1 px mais altos no topo), paleta em OKLCH. A única mudança de propósito é no gerenciador de modelos. O
+aviso "Trocar a conta de…" passa a ter borda vermelha a 30% e fundo vermelho a 6%, e "Desconectar e abrir login"
+borda vermelha a 40%. No v4 eles pintavam `currentColor`.
+
+**Não verificado / riscos.**
+- O aviso de troca de conta do gerenciador não foi capturado, porque exige o fluxo de login de uma CLI oficial. A
+  correção foi conferida no CSS gerado: os seletores existem, com `color-mix` e fallback.
+- `hover:bg-theme-error/20` em `AgentConfigFields.tsx`, arquivo que este PR não toca, também não gera CSS; ficou
+  fora do escopo.
+- Os scripts de análise (linhas adicionadas, cascata e prova contra o `dist`) são de sessão e ficaram fora do
+  repositório.
+- Windows e macOS só serão cobertos pela CI.
+
+**Ideias para quem quiser contribuir.**
+- Levar a prova contra o `dist` para um `npm run` que rode sobre todo o `src`.
+- Pôr `--color-theme-error` no `@theme` para que `bg-theme-error/N` funcione em qualquer degrau, sem uma `@utility`
+  por valor.

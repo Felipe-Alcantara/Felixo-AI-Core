@@ -235,27 +235,17 @@ const SKILL_DIRECTORIES = [
 ]
 
 /**
- * Monta a lista de skills disponiveis, ja com a origem marcada.
- *
- * Funcao pura: recebe o que resolveu os caminhos e o que veio das
- * configuracoes, e nao toca em disco. Assim a ordem e a filtragem tem teste.
+ * Skills do sistema (biblioteca do app + terceiros, se ligados) antes de
+ * aplicar o que a pessoa ocultou. Base comum das disponiveis e das ocultas,
+ * para as duas listas nunca divergirem sobre o que e "do sistema".
  *
  * @param {object} options
  * @param {(slug: string) => string} options.resolveBuiltinPath - caminho do SKILL.md.
  * @param {boolean} [options.communityEnabled] - inclui as skills de terceiros.
- * @param {Array<object>} [options.userSkills] - skills cadastradas pela pessoa.
- * @param {Array<string>} [options.hiddenBuiltinIds] - built-ins que a pessoa removeu.
  * @returns {Array<{id: string, name: string, description: string, path: string, source: string, origin?: string}>}
  */
-function listAvailableSkills(options = {}) {
-  const {
-    resolveBuiltinPath,
-    communityEnabled = true,
-    userSkills = [],
-    hiddenBuiltinIds = [],
-  } = options
-
-  const hidden = new Set(hiddenBuiltinIds)
+function listSystemSkills(options = {}) {
+  const { resolveBuiltinPath, communityEnabled = true } = options
 
   const builtin = BUILTIN_SKILLS.map((skill) => ({
     id: `builtin-${skill.slug}`,
@@ -263,10 +253,10 @@ function listAvailableSkills(options = {}) {
     description: skill.description,
     path: typeof resolveBuiltinPath === 'function' ? resolveBuiltinPath(skill.slug) : '',
     source: 'builtin',
-  })).filter((skill) => skill.path && !hidden.has(skill.id))
+  })).filter((skill) => skill.path)
 
   const community = communityEnabled
-    ? COMMUNITY_SKILLS.filter((skill) => !hidden.has(skill.id)).map((skill) => ({
+    ? COMMUNITY_SKILLS.map((skill) => ({
         id: skill.id,
         name: skill.name,
         description: skill.description,
@@ -276,10 +266,33 @@ function listAvailableSkills(options = {}) {
       }))
     : []
 
+  return [...builtin, ...community]
+}
+
+/**
+ * Monta a lista de skills disponiveis, ja com a origem marcada.
+ *
+ * Funcao pura: recebe o que resolveu os caminhos e o que veio das
+ * configuracoes, e nao toca em disco. Assim a ordem e a filtragem tem teste.
+ *
+ * @param {object} options
+ * @param {(slug: string) => string} options.resolveBuiltinPath - caminho do SKILL.md.
+ * @param {boolean} [options.communityEnabled] - inclui as skills de terceiros.
+ * @param {Array<object>} [options.userSkills] - skills cadastradas pela pessoa.
+ * @param {Array<string>} [options.hiddenBuiltinIds] - skills do sistema (built-in
+ *   ou de terceiros) que a pessoa tirou da lista que todo agente recebe.
+ * @returns {Array<{id: string, name: string, description: string, path: string, source: string, origin?: string}>}
+ */
+function listAvailableSkills(options = {}) {
+  const { userSkills = [], hiddenBuiltinIds = [] } = options
+
+  const hidden = new Set(hiddenBuiltinIds)
+  const system = listSystemSkills(options).filter((skill) => !hidden.has(skill.id))
+
   // As do usuario vem por ultimo e vencem: um id repetido substitui o do
   // catalogo, para dar como editar uma skill que acompanha o app.
   const porId = new Map()
-  for (const skill of [...builtin, ...community]) {
+  for (const skill of system) {
     porId.set(skill.id, skill)
   }
   for (const skill of userSkills) {
@@ -297,9 +310,25 @@ function listAvailableSkills(options = {}) {
   return [...porId.values()]
 }
 
+/**
+ * Skills do sistema que a pessoa ocultou e que voltariam para a lista se ela
+ * restaurasse. Sem isto o painel so teria ids crus para mostrar.
+ *
+ * Um terceiro oculto com terceiros desligados fica de fora: restaura-lo nao o
+ * traria de volta. Id que nao existe mais no catalogo tambem fica de fora.
+ *
+ * @param {object} options - mesmas opcoes de `listAvailableSkills`, sem `userSkills`.
+ * @returns {Array<{id: string, name: string, description: string, path: string, source: string, origin?: string}>}
+ */
+function listHiddenSkills(options = {}) {
+  const hidden = new Set(options.hiddenBuiltinIds ?? [])
+  return listSystemSkills(options).filter((skill) => hidden.has(skill.id))
+}
+
 module.exports = {
   BUILTIN_SKILLS,
   COMMUNITY_SKILLS,
   SKILL_DIRECTORIES,
   listAvailableSkills,
+  listHiddenSkills,
 }

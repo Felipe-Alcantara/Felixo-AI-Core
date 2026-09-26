@@ -22,6 +22,7 @@ const {
 } = require('./system-design-ipc-handlers.cjs')
 const { registerQaLoggerIpcHandlers } = require('./qa-logger.cjs')
 const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
+const { createSystemDesignRepository } = require('./storage/system-design-repository.cjs')
 Module._load = originalLoad
 
 function appPaths() {
@@ -379,4 +380,32 @@ test('limpar o cache esquece o conteúdo entregue', (t) => {
   assert.equal(result.ok, true)
   assert.equal(result.config.delivered, null)
   assert.equal(result.config.syncState, 'never-synced')
+})
+
+// A tela de Configurações abre cada guia do índice por este canal.
+test('get-document entrega o conteúdo do guia que o índice lista e recusa caminho desconhecido', (t) => {
+  const { database } = setupHandlers(t)
+  createSystemDesignRepository(database).save({
+    path: 'core/GUIA_MINIMO_QUALIDADE.md',
+    title: 'Guia mínimo de qualidade',
+    summary: 'Contrato curto.',
+    content: '# Guia mínimo\n\nTexto do guia.',
+  })
+
+  const listed = handlers.get('system-design:list-documents')()
+  assert.equal(listed.ok, true)
+  assert.equal('content' in listed.documents[0], false, 'o índice só traz o resumo')
+
+  const found = handlers.get('system-design:get-document')(null, listed.documents[0].path)
+  assert.equal(found.ok, true)
+  assert.equal(found.document.content, '# Guia mínimo\n\nTexto do guia.')
+  assert.equal(found.document.updatedAt, listed.documents[0].updatedAt)
+
+  const missing = handlers.get('system-design:get-document')(null, 'core/nao-existe.md')
+  assert.equal(missing.ok, false)
+  assert.ok(missing.message)
+
+  const invalid = handlers.get('system-design:get-document')(null, 42)
+  assert.equal(invalid.ok, false)
+  assert.ok(invalid.message)
 })

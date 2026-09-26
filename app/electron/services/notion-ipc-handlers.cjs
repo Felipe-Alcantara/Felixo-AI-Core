@@ -34,9 +34,6 @@ function registerNotionIpcHandlers({
   ipc.handle('notion:databases:list', (_event, input) =>
     guard(() => service.listDatabases(input || {})),
   )
-  ipc.handle('notion:database:schema', (_event, input) =>
-    guard(() => service.getSchema(input || {})),
-  )
   ipc.handle('notion:tasks:list', (_event, input) =>
     guard(() => service.listTasks(input || {})),
   )

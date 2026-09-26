@@ -11,9 +11,9 @@ Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicaç
 Uma aplicação desktop que transforma as CLIs de IA que você já usa no terminal — Claude, Codex, Gemini e outros — em blocos de trabalho conectados num canvas visual.
 
 O canvas é a superfície principal e recomendada do produto. O modo de chat foi
-depreciado: continua acessível apenas como caminho legado para consultar ou
-exportar sessões antigas, mas novas funcionalidades e fluxos devem ser criados
-no canvas.
+depreciado: continua acessível apenas como caminho legado para consultar,
+exportar ou excluir sessões antigas, mas novas funcionalidades e fluxos devem
+ser criados no canvas.
 
 O objetivo de longo prazo é evoluir para um sistema capaz de escolher modelos, coordenar agentes, manter memória persistente e executar pipelines inteligentes com base em custo, contexto e objetivo da tarefa.
 
@@ -38,7 +38,7 @@ fica preservada apenas como referência histórica.
 Base funcional entregue:
 
 - Canvas visual como superfície principal, com agentes, arquivos, notas, grupos e páginas web
-- Modo de chat legado, mantido somente para compatibilidade com sessões e exportações antigas
+- Modo de chat legado, mantido somente para compatibilidade com sessões e exportações antigas; uma conversa pode ser excluída pela lixeira que aparece ao passar o mouse (ou chegar com Tab) na linha dela em **Recentes** ou no painel **Pesquisar**, depois de confirmar. A conversa é arquivada no banco local, sai da lista e, se estava aberta, a tela volta para um chat novo. Ainda não há como restaurá-la pela interface.
 - Logs da CLI do chat com janela visual limitada, batching por frame e exportação de análise a partir do histórico completo da execução
 - Backend Electron executando CLIs reais em streaming
 - Adapters para `claude`, `codex` e `gemini`
@@ -55,7 +55,7 @@ Base funcional entregue:
 - **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
 - Entrega de contexto inicial por artefatos somente leitura, com trilha persistida `written → path-typed → read` em `logs/qa` para diagnosticar reinícios e trocas de terminal/agente
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI; no Codex, também mostra a quantidade, validade e detalhes dos resets bancados por conta, com uso protegido por confirmação
-- Painel **Tarefas Notion** no canvas, com conexão própria cifrada, seleção de database compartilhada, cache offline e CRUD de tarefas
+- Bloco **Tarefas Notion** no canvas (**Ferramentas → Tarefas Notion** cria o bloco ou foca o que já existe), com conexão própria cifrada, seleção de database compartilhada, cache offline e CRUD de tarefas
 - Preview de Markdown com sanitização de HTML/URLs externos, remoção de ANSI, limite de 200.000 caracteres e imagens remotas bloqueadas por padrão; GFM e imagens locais seguem a autorização do arquivo
 - Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
@@ -93,6 +93,13 @@ System Design** e use **Voltar ao padrão do app**; a tela troca a configuraçã
 inicia a sincronização. Se uma sincronização falhar, a tela e o prompt informam qual
 fonte ficou entregue e mantêm o último conteúdo sincronizado. A interface não guarda
 histórico nem permite selecionar um SHA anterior.
+
+Os guias também podem ser lidos dentro do app. Em **Configurações → Felixo System
+Design → Ver índice**, clicar num guia (ou usar Enter/Espaço) o abre renderizado logo
+abaixo do item, numa moldura com rolagem própria. Fica um guia aberto por vez, e clicar
+de novo o fecha. O conteúdo vem do cache da última sincronização, então a leitura
+funciona sem rede. Pelo teclado, Tab entra no texto e as setas ou PageDown rolam. A
+mesma seção aparece nas Configurações do canvas e no modal de Configurações do chat.
 
 ---
 
@@ -332,6 +339,27 @@ retorno continue funcionando mesmo quando o culling tira um nó da área visíve
 Esses fluxos são exercitados pelo smoke do Canvas com um PTY fake, sem iniciar
 uma CLI ou shell real.
 
+A gaveta do terminal se redimensiona pela borda esquerda, onde fica o mesmo grip
+visível da sidebar e dos painéis. Dois cliques nesse grip (ou **Home**, com o foco
+nele) devolvem a gaveta à largura padrão: 45% da janela, entre 440 e 720 px,
+encolhendo em janela estreita. As setas ajustam a largura pelo teclado, e com Shift
+o passo é maior.
+
+### Remover o que está selecionado
+
+Além das teclas Delete e Backspace, a barra de status do canvas oferece um botão
+para remover a seleção. Com algo selecionado, ela diz o quê ("1 conexão
+selecionada", "N blocos selecionados" ou "N itens selecionados") e mostra
+**Remover [Delete]**. Para selecionar vários, use Shift+clique ou a caixa de
+seleção. O botão faz o mesmo que a tecla: remover blocos leva junto as conexões
+ligadas a eles, um terminal removido encerra a sessão, e não há confirmação nem
+desfazer. Com o canvas travado (cadeado na pílula de zoom), o botão fica
+desativado.
+
+Conexões com blocos que têm um único ponto de ligação (nota, desenho, Excalidraw,
+Página Web e Tarefas Notion) também aparecem no canvas e podem ser clicadas para
+remover. Antes elas ficavam gravadas, mas não eram desenhadas.
+
 ### Conta da CLI oficial: ver e trocar
 
 No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações de conta — hoje o Codex — ganha dois botões:
@@ -342,6 +370,17 @@ No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações
 **Efeito sobre terminais abertos.** O app não encerra nenhum processo durante a troca: o cartão, o diretório e o histórico do terminal continuam no canvas. Isso não é o mesmo que preservar a autenticação — um processo que já estava rodando pode perder a autorização no meio do trabalho, porque a credencial que ele carregou é a da conta anterior. Quando isso acontecer, reinicie aquele terminal pelo botão de reiniciar do próprio cartão: o nó e o diretório são reaproveitados; o contexto interno da CLI, não.
 
 **Recuperação manual.** Se o app não conseguir abrir um terminal para o login, a troca informa o comando a rodar à mão (`codex login`). Para conferir o estado a qualquer momento, `codex login status` no terminal responde o mesmo que o botão.
+
+### Diagnóstico das CLIs
+
+Quando uma CLI de IA não aparece, o app explica o motivo sem instalar nada. Há dois caminhos:
+
+- em **Gerenciar modelos** (tela Chat, ícone **Configurar modelos** da barra lateral), seção **CLIs oficiais**, o ícone **Diagnosticar CLIs**, ao lado de **Atualizar detecção**;
+- no aviso **Não foi possível instalar as CLIs de IA**, que só aparece quando a instalação automática falha, o botão **Ver diagnóstico**.
+
+Cada CLI com instalação automática (Codex, Claude Code e Gemini) ganha uma linha com a causa e a próxima ação. As causas possíveis são: pronta, não instalada, instalada mas invisível ao app (fora do `PATH`), bloqueada por permissão, sem resposta a tempo, atalho que não executa, falha ao responder, instalação incompleta ou falha de rede. Com o diagnóstico na tela, **Instalar** só continua onde reinstalar resolve, isto é, em "não instalada" e "instalação incompleta". **Copiar texto para o suporte** copia um resumo que o processo principal já limpa: sem nome de usuário, URL nem segredo.
+
+O diagnóstico é uma fotografia. Fechar o gerenciador o descarta, e **Atualizar detecção** o refaz se ele estiver na tela. O Openia não entra no diagnóstico e mantém o **Instalar** de sempre.
 
 ## Openia como launcher de OpenRouter
 
@@ -369,6 +408,27 @@ nasce com `openia run <interface> --provider --model <id> --dir <projeto>` (ou
 `--no-model`), sem o prompt de interface, modelo ou pasta. Se Python, `pip` ou o
 comando `openia` não estiverem disponíveis, o cartão informa a falha e o restante
 do app continua utilizável. A versão pode ser conferida com `openia --version`.
+
+### Gerar imagem pelo canvas
+
+Na seção **Criar** da barra lateral do canvas, **Gerar imagem** (logo abaixo de
+**Abrir imagem**) abre um painel com dois campos. O primeiro é a descrição da
+imagem, com até 4.000 caracteres (Ctrl/Cmd+Enter gera). O segundo é o modelo,
+escolhido no catálogo público de imagem do OpenRouter. O Openia gera com a chave
+do OpenRouter configurada **nele**: o Felixo nunca lê essa chave, e a geração pode
+consumir créditos da conta. Na primeira vez nenhum modelo vem escolhido; depois,
+o último escolhido é lembrado.
+
+Durante a geração, o painel mostra "Gerando imagem…" com os segundos decorridos,
+e **Cancelar** interrompe o pedido. Fechar o painel (Esc ou clique fora) não
+interrompe a geração: o botão da barra continua em "Gerando imagem…" e, se a
+geração falhar com o painel fechado, ganha um ícone de alerta. Ao
+terminar, a imagem entra no canvas como bloco temporário, com **Remover
+temporário**. Os erros aparecem com mensagens fixas: chave ausente ou recusada,
+limite ou créditos, modelo indisponível, rede, tempo esgotado ou catálogo
+indisponível (com **Tentar de novo**). É preciso ter o Openia instalado e com a
+chave configurada, e rede para o catálogo. O contrato com o Openia está em
+[`docs/projeto/OPENIA-IMAGEM-CONTRATO.md`](docs/projeto/OPENIA-IMAGEM-CONTRATO.md).
 
 ### Limites e uso por conta
 

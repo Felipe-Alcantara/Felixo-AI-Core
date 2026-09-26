@@ -16,7 +16,53 @@
  * O que muda em relação ao padrão: o item de fechar janela continua existindo
  * (dá para fechar de propósito, pelo menu), mas SEM acelerador. Fechar passa a
  * exigir intenção.
+ *
+ * O menu também é onde uma função que só tinha atalho fica À VISTA. O zoom da
+ * janela (Ctrl/Cmd + = - 0) não aparecia em lugar nenhum: quem apertasse Ctrl+-
+ * sem querer encolhia o app sem ter como descobrir o Ctrl+0. Os itens de zoom de
+ * "Exibir" mostram o atalho e fazem a mesma coisa que ele — sem criar um segundo
+ * caminho de teclado (ver `itemDeZoom`).
  */
+
+const { applyZoomAction } = require('../services/window-zoom-shortcuts.cjs')
+
+/**
+ * Item de menu que aplica uma ação de zoom na janela focada.
+ *
+ * Por que não os roles `zoomIn`/`zoomOut`/`resetZoom`: eles somam 0,5 ao zoom sem
+ * teto nem piso e agem no webContents focado — que pode ser um `<webview>` do
+ * canvas, não a janela. Chamar `applyZoomAction` garante o mesmo passo e o mesmo
+ * limite de ±3 do atalho de teclado.
+ *
+ * Por que `registerAccelerator: false`: a tecla já é tratada pelo
+ * `before-input-event` de `window-zoom-shortcuts.cjs`, que cobre '=' e '+' dos
+ * vários layouts. O acelerador aqui é só para EXIBIR o atalho. No macOS a opção
+ * não existe, mas o `preventDefault` daquele handler já impede o menu de
+ * disparar junto.
+ *
+ * A janela vem do segundo argumento do `click` (a janela focada, como em
+ * `fecharJanela`), e não de `BrowserWindow.getFocusedWindow()`: assim este
+ * arquivo continua sem depender do módulo `electron` e o teste roda em Node puro.
+ *
+ * @param {string} label
+ * @param {'in'|'out'|'reset'} acao
+ * @param {string} acelerador
+ * @returns {object}
+ */
+function itemDeZoom(label, acao, acelerador) {
+  return {
+    label,
+    accelerator: acelerador,
+    registerAccelerator: false,
+    click: (_item, janela) => {
+      // Sem janela focada, ou numa janela sem página (BaseWindow), não há o
+      // que ampliar.
+      if (janela?.webContents) {
+        applyZoomAction(janela.webContents, acao)
+      }
+    },
+  }
+}
 
 /**
  * Monta o template do menu para uma plataforma.
@@ -82,6 +128,10 @@ function construirTemplateDoMenu({ plataforma = process.platform, nomeDoApp = 'F
       { role: 'reload', label: 'Recarregar' },
       { role: 'forceReload', label: 'Recarregar ignorando cache' },
       { role: 'toggleDevTools', label: 'Ferramentas de desenvolvedor' },
+      { type: 'separator' },
+      itemDeZoom('Aumentar zoom', 'in', 'CmdOrCtrl+Plus'),
+      itemDeZoom('Diminuir zoom', 'out', 'CmdOrCtrl+-'),
+      itemDeZoom('Tamanho real', 'reset', 'CmdOrCtrl+0'),
       { type: 'separator' },
       { role: 'togglefullscreen', label: 'Tela cheia' },
     ],

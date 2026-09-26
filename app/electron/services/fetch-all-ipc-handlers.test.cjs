@@ -66,6 +66,85 @@ test('execução falha não resolve o pedido como aceito nem o tira da fila', as
   }
 })
 
+/** Diálogo nativo falso: registra a chamada e devolve a resposta programada. */
+function fakeDialog(response) {
+  const calls = []
+
+  return {
+    calls,
+    showOpenDialog: async (...args) => {
+      calls.push(args)
+      if (response instanceof Error) throw response
+      return response
+    },
+  }
+}
+
+/** Registra os handlers com um serviço vazio e o diálogo informado. */
+function registerWithDialog(dialog, getMainWindow = () => undefined) {
+  handlers.clear()
+  const paths = appPaths()
+  const controller = registerFetchAllIpcHandlers(getMainWindow, paths, {
+    createService: () => ({}),
+    dialog,
+  })
+
+  return {
+    pickRoots: handlers.get('fetch-all:pick-roots'),
+    cleanup() {
+      controller.pararDeObservarPedidos()
+      fs.rmSync(paths.root, { recursive: true, force: true })
+    },
+  }
+}
+
+test('escolher raízes abre o seletor de pastas preso à janela e devolve os caminhos', async () => {
+  const window = { isDestroyed: () => false }
+  const dialog = fakeDialog({ canceled: false, filePaths: ['/home/pessoa/repos', '/dados/git'] })
+  const { pickRoots, cleanup } = registerWithDialog(dialog, () => window)
+
+  try {
+    const result = await pickRoots(null)
+
+    assert.deepEqual(result, { ok: true, paths: ['/home/pessoa/repos', '/dados/git'] })
+    assert.equal(dialog.calls.length, 1)
+    const [parent, options] = dialog.calls[0]
+    assert.equal(parent, window)
+    // Só pastas, e várias de uma vez: a pessoa costuma ter mais de um lugar
+    // onde guarda repositórios.
+    assert.deepEqual(options.properties, ['openDirectory', 'multiSelections'])
+  } finally {
+    cleanup()
+  }
+})
+
+test('cancelar o seletor de raízes devolve lista vazia, sem erro', async () => {
+  const dialog = fakeDialog({ canceled: true, filePaths: [] })
+  const { pickRoots, cleanup } = registerWithDialog(dialog)
+
+  try {
+    assert.deepEqual(await pickRoots(null), { ok: true, paths: [] })
+    // Sem janela viva, o diálogo abre solto em vez de quebrar.
+    assert.equal(dialog.calls[0].length, 1)
+  } finally {
+    cleanup()
+  }
+})
+
+test('falha do seletor de raízes vira mensagem legível', async () => {
+  const dialog = fakeDialog(new Error('Portal de arquivos indisponível.'))
+  const { pickRoots, cleanup } = registerWithDialog(dialog)
+
+  try {
+    assert.deepEqual(await pickRoots(null), {
+      ok: false,
+      message: 'Portal de arquivos indisponível.',
+    })
+  } finally {
+    cleanup()
+  }
+})
+
 test('IPC repassa a confirmação do escopo e sua identidade ao serviço', async () => {
   handlers.clear()
   const paths = appPaths()

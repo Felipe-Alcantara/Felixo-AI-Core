@@ -173,6 +173,30 @@ test('descreve o escopo da varredura para a interface', async () => {
   assert.equal(typeof scope.scopeKey, 'string')
 })
 
+test('raízes salvas pela interface dispensam a confirmação e preservam as ignoradas', async () => {
+  const workspace = makeWorkspace()
+  const { service } = makeService([], { mountSkipPathsFn: async () => [] })
+  const ignored = path.join(workspace, 'arquivo-morto')
+
+  await service.ignorePath(ignored)
+  // O painel grava a configuração inteira que tem na tela, trocando só as raízes.
+  const settings = await service.getSettings()
+  const saved = await service.saveSettings({ ...settings, scanRoots: [workspace] })
+
+  assert.deepEqual(saved.ignoredPaths, [ignored])
+
+  const scope = await service.describeScanScope()
+
+  assert.equal(scope.requiresConfirmation, false)
+  assert.deepEqual(scope.resolved, [workspace])
+  assert.equal((await service.scan()).plan.total, 1)
+
+  // Tirar a última raiz volta a exigir a confirmação explícita da varredura ampla.
+  await service.saveSettings({ ...saved, scanRoots: [] })
+
+  assert.equal((await service.describeScanScope()).requiresConfirmation, true)
+})
+
 test('configuração vazia não inicia varredura nem deixa o serviço ocupado', async () => {
   const events = []
   const { service } = makeService(events)

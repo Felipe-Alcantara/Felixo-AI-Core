@@ -277,7 +277,10 @@ function createOpeniaImageService({
     const requestId = typeof params?.requestId === 'string' ? params.requestId : ''
     if (!REQUEST_ID_PATTERN.test(requestId)) return { ok: false, code: 'invalid_request', message: MESSAGES.invalid_request }
     const known = history.get(requestId)
-    return known ? { ok: true, ...known } : { ok: true, requestId, state: 'unknown' }
+    if (!known) return { ok: true, requestId, state: 'unknown' }
+    // Mesma mensagem fixa que `generate` devolveria: a interface que perdeu a resposta (janela
+    // recarregada no meio) reconsulta aqui e mostra o mesmo texto, sem tabela própria de códigos.
+    return known.code ? { ok: true, ...known, message: MESSAGES[known.code] ?? MESSAGES.generation_failed } : { ok: true, ...known }
   }
 
   /** Ao iniciar: apaga pastas e arquivos de cancelamento de execuções que sobraram de uma queda do app. */

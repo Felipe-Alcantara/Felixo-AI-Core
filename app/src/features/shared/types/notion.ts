@@ -51,18 +51,6 @@ export type NotionDatabaseResult = {
   databases?: NotionDatabase[]
 }
 
-export type NotionSchemaResult = {
-  ok: boolean
-  message?: string
-  database?: {
-    id: string
-    name: string
-    databaseId: string | null
-    dataSourceId: string
-  }
-  schema?: Record<string, NotionSchemaProperty>
-}
-
 /**
  * Estado real de sincronização, além do boolean `stale` legado (mantido só
  * por compatibilidade): `success` veio da rede agora; `stale` é cache local
