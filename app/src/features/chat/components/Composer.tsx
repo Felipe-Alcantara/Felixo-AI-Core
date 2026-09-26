@@ -314,7 +314,7 @@ export function Composer({
       className={
         isHome
           ? ''
-          : 'shrink-0 border-t border-white/[0.08] bg-[var(--color-main-bg)] px-5 py-4 max-sm:px-3 max-sm:py-3 [@media(max-height:620px)]:py-2'
+          : 'shrink-0 border-t border-white/8 bg-(--color-main-bg) px-5 py-4 max-sm:px-3 max-sm:py-3 [@media(max-height:620px)]:py-2'
       }
     >
       <div
@@ -341,7 +341,7 @@ export function Composer({
             disabled={isStreaming}
             rows={isHome ? 3 : 2}
             placeholder="Envie uma mensagem para o Felixo..."
-            className="max-h-36 min-h-16 w-full resize-none bg-transparent px-5 py-4 text-[13px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:text-zinc-500 max-sm:px-4 max-sm:py-3 [@media(max-height:620px)]:min-h-12"
+            className="max-h-36 min-h-16 w-full resize-none bg-transparent px-5 py-4 text-[13px] leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:text-zinc-500 max-sm:px-4 max-sm:py-3 [@media(max-height:620px)]:min-h-12"
           />
 
           <div className="felixo-composer-footer">
@@ -351,7 +351,7 @@ export function Composer({
                 title="Adicionar arquivos de qualquer tipo"
                 onClick={() => void handlePickContext('files')}
                 disabled={isStreaming}
-                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <Plus size={17} aria-hidden="true" />
                 <span className="sr-only">Adicionar arquivos</span>
@@ -362,7 +362,7 @@ export function Composer({
                 title="Adicionar pasta inteira"
                 onClick={() => void handlePickContext('directory')}
                 disabled={isStreaming}
-                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <FolderOpen size={16} aria-hidden="true" />
                 <span className="sr-only">Adicionar pasta</span>
@@ -421,7 +421,7 @@ export function Composer({
                   className={`felixo-btn rounded-full px-2.5 py-1 text-xs disabled:opacity-50 ${
                     selectedModel?.fastMode === true
                       ? 'bg-white/[0.14] text-zinc-50'
-                      : 'text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100'
+                      : 'text-zinc-400 hover:bg-white/8 hover:text-zinc-100'
                   }`}
                 >
                   ⚡ Fast
@@ -434,7 +434,7 @@ export function Composer({
                 type="button"
                 title="Voz"
                 disabled={isStreaming}
-                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
+                className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-transparent"
               >
                 <Mic size={15} aria-hidden="true" />
                 <span className="sr-only">Voz</span>
@@ -457,7 +457,7 @@ export function Composer({
           </div>
 
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 border-t border-white/[0.06] px-4 py-2.5 max-sm:px-3">
+            <div className="flex flex-wrap gap-2 border-t border-white/6 px-4 py-2.5 max-sm:px-3">
               {attachments.map((attachment) => (
                 <AttachmentPreview
                   key={attachment.id}
@@ -513,16 +513,16 @@ function AttachmentPreview({
     return (
       <div
         title={attachment.path || attachment.name}
-        className="relative flex w-48 max-w-full flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-black/20 text-zinc-300"
+        className="relative flex w-48 max-w-full flex-col overflow-hidden rounded-lg border border-white/8 bg-black/20 text-zinc-300"
       >
-        <div className="flex aspect-[4/3] w-full items-center justify-center bg-black/25">
+        <div className="flex aspect-4/3 w-full items-center justify-center bg-black/25">
           <img
             src={attachment.previewUrl}
             alt={attachment.name}
             className="h-full w-full object-contain"
           />
         </div>
-        <div className="flex min-w-0 items-center gap-1.5 border-t border-white/[0.06] px-2 py-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 border-t border-white/6 px-2 py-1.5">
           <span className="min-w-0 flex-1 truncate text-[11px]">
             {attachment.name}
           </span>
@@ -534,7 +534,7 @@ function AttachmentPreview({
             title="Remover anexo"
             onClick={() => onRemove(attachment.id)}
             disabled={isStreaming}
-            className="felixo-btn-icon flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+            className="felixo-btn-icon flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
           >
             <X size={12} aria-hidden="true" />
             <span className="sr-only">Remover anexo</span>
@@ -547,7 +547,7 @@ function AttachmentPreview({
   return (
     <span
       title={attachment.path || attachment.name}
-      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/[0.08] bg-black/15 px-2.5 py-1 text-[11px] text-zinc-300"
+      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/8 bg-black/15 px-2.5 py-1 text-[11px] text-zinc-300"
     >
       <span className="max-w-40 truncate">{attachment.name}</span>
       <span className="shrink-0 font-mono text-zinc-600">
@@ -558,7 +558,7 @@ function AttachmentPreview({
         title="Remover anexo"
         onClick={() => onRemove(attachment.id)}
         disabled={isStreaming}
-        className="felixo-btn-icon ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+        className="felixo-btn-icon ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
       >
         <X size={11} aria-hidden="true" />
         <span className="sr-only">Remover anexo</span>

@@ -3,9 +3,9 @@ import type { UpdatePresentation } from './update-presentation'
 
 const TONE_TEXT: Record<UpdatePresentation['tone'], string> = {
   neutral: 'text-slate-300',
-  info: 'text-[var(--f-core-white-soft)]',
-  success: 'text-[var(--f-core-white-soft)]',
-  error: 'text-[var(--color-error)]',
+  info: 'text-(--f-core-white-soft)',
+  success: 'text-(--f-core-white-soft)',
+  error: 'text-theme-error',
 }
 
 type UpdateIndicatorProps = {

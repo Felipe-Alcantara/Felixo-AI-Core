@@ -48,7 +48,7 @@ export function AgentUsageResetCreditsView({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
-          <span className="mt-0.5 rounded-md bg-[var(--f-core-active)]/10 p-1.5 text-[var(--f-core-white)]">
+          <span className="mt-0.5 rounded-md bg-(--f-core-active)/10 p-1.5 text-(--f-core-white)">
             <Gift size={13} aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -58,14 +58,14 @@ export function AgentUsageResetCreditsView({
             </p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full border border-white/10 bg-[var(--f-core-active)]/10 px-2 py-1 text-[10px] font-medium text-[var(--f-core-white)]">
+        <span className="shrink-0 rounded-full border border-white/10 bg-(--f-core-active)/10 px-2 py-1 text-[10px] font-medium text-(--f-core-white)">
           {resetCredits.availableCount} disponível
           {resetCredits.availableCount === 1 ? '' : 'is'}
         </span>
       </div>
 
       {resetCredits.credits.length === 0 ? (
-        <p className="mt-2 rounded-md border border-white/[0.06] bg-black/10 px-2 py-1.5 text-[10px] leading-snug text-zinc-500">
+        <p className="mt-2 rounded-md border border-white/6 bg-black/10 px-2 py-1.5 text-[10px] leading-snug text-zinc-500">
           {resetCredits.availableCount > 0
             ? 'A CLI informou a quantidade, mas não trouxe os detalhes individuais destes créditos.'
             : 'Nenhum reset bancado disponível para esta conta.'}
@@ -84,7 +84,7 @@ export function AgentUsageResetCreditsView({
       )}
 
       {!canUse && resetCredits.availableCount > 0 && (
-        <p className="mt-2 text-[10px] leading-snug text-[var(--color-warning)]">
+        <p className="mt-2 text-[10px] leading-snug text-(--color-warning)">
           Atualize os limites para habilitar o uso seguro dos créditos desta conta.
         </p>
       )}
@@ -95,7 +95,7 @@ export function AgentUsageResetCreditsView({
 function UnavailableResetCreditsCard() {
   return (
     <section
-      className="mt-3 rounded-lg border border-white/[0.08] bg-white/[0.02] p-2.5"
+      className="mt-3 rounded-lg border border-white/8 bg-white/2 p-2.5"
       aria-label="Resets bancados desta conta"
     >
       <div className="flex items-center gap-2">
@@ -187,7 +187,7 @@ function ResetCreditCard({
             type="button"
             disabled={busy}
             onClick={() => void handleUse()}
-            className="felixo-btn flex shrink-0 items-center gap-1 rounded-md bg-[var(--f-core-active)]/15 px-2 py-1 text-[10px] font-medium text-[var(--f-core-white)] ring-1 ring-white/25 hover:bg-[var(--f-core-active)]/25 disabled:cursor-wait disabled:opacity-50"
+            className="felixo-btn flex shrink-0 items-center gap-1 rounded-md bg-(--f-core-active)/15 px-2 py-1 text-[10px] font-medium text-(--f-core-white) ring-1 ring-white/25 hover:bg-(--f-core-active)/25 disabled:cursor-wait disabled:opacity-50"
           >
             <RotateCcw size={11} className={busy ? 'animate-spin' : undefined} aria-hidden="true" />
             {busy ? 'Usando…' : 'Usar reset'}
@@ -215,7 +215,7 @@ function ResetCreditCard({
         </p>
       )}
       {message && (
-        <p className="mt-1.5 text-[10px] text-[var(--color-warning)]" role="status">
+        <p className="mt-1.5 text-[10px] text-(--color-warning)" role="status">
           {message}
         </p>
       )}

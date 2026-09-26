@@ -71,11 +71,11 @@ export function AgentUsageStatusDetailsView({
   }
 
   return (
-    <details open className="mt-2 rounded-md border border-white/[0.06] bg-black/15 px-2 py-1.5">
+    <details open className="mt-2 rounded-md border border-white/6 bg-black/15 px-2 py-1.5">
       <summary className="cursor-pointer text-[10px] font-medium text-zinc-400">
         Dados completos do /status
       </summary>
-      <div className="mt-2 border-t border-white/[0.06] pt-2">
+      <div className="mt-2 border-t border-white/6 pt-2">
         <DetailValue value={visibleDetails} />
       </div>
     </details>
@@ -93,7 +93,7 @@ function DetailValue({
     return (
       <ul className="space-y-0.5 text-[10px] text-zinc-500">
         {value.map((item, index) => (
-          <li key={`${index}-${String(item)}`} className="break-words">
+          <li key={`${index}-${String(item)}`} className="wrap-break-word">
             {typeof item === 'object' ? <DetailValue value={item} depth={depth + 1} /> : String(item)}
           </li>
         ))}
@@ -103,10 +103,10 @@ function DetailValue({
 
   if (typeof value === 'object' && value !== null) {
     return (
-      <div className={depth > 0 ? 'ml-2 space-y-1 border-l border-white/[0.06] pl-2' : 'space-y-1'}>
+      <div className={depth > 0 ? 'ml-2 space-y-1 border-l border-white/6 pl-2' : 'space-y-1'}>
         {Object.entries(value).map(([key, item]) => (
           key === 'lines' ? (
-            <details key={key} open className="rounded border border-white/[0.05] px-1.5 py-1">
+            <details key={key} open className="rounded-sm border border-white/5 px-1.5 py-1">
               <summary className="cursor-pointer text-[10px] text-zinc-600">
                 Texto completo publicado pela CLI
               </summary>
@@ -125,5 +125,5 @@ function DetailValue({
     )
   }
 
-  return <span className="break-words text-[10px] text-zinc-500">{String(value)}</span>
+  return <span className="wrap-break-word text-[10px] text-zinc-500">{String(value)}</span>
 }

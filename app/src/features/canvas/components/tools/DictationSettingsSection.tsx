@@ -109,7 +109,7 @@ export function DictationSettingsSection() {
   }
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+    <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
       <header className="mb-2">
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-100">
           <Mic size={14} aria-hidden="true" />
@@ -142,7 +142,7 @@ export function DictationSettingsSection() {
       </fieldset>
 
       {message && (
-        <p role="status" className={`mb-2 rounded p-2 text-[11px] ${message.tone === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+        <p role="status" className={`mb-2 rounded-sm p-2 text-[11px] ${message.tone === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
           {message.text}
         </p>
       )}
@@ -159,11 +159,11 @@ export function DictationSettingsSection() {
           placeholder={config?.keyConfigured ? 'Chave já configurada (digite para trocar)' : 'sk-…'}
           className={`${CAMPO} min-w-0 flex-1`}
         />
-        <button type="button" onClick={() => void saveKey()} disabled={!keyDraft.trim()} className="felixo-btn felixo-secondary-action rounded px-2 py-1 text-[11px] disabled:opacity-50">
+        <button type="button" onClick={() => void saveKey()} disabled={!keyDraft.trim()} className="felixo-btn felixo-secondary-action rounded-sm px-2 py-1 text-[11px] disabled:opacity-50">
           Guardar
         </button>
         {config?.keyConfigured && (
-          <button type="button" onClick={() => void clearKey()} className="felixo-btn rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10">
+          <button type="button" onClick={() => void clearKey()} className="felixo-btn rounded-sm px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10">
             Remover
           </button>
         )}
@@ -194,7 +194,7 @@ export function DictationSettingsSection() {
           <input id="dictation-lang" value={config?.language ?? ''} onChange={(event) => setConfig((current) => (current ? { ...current, language: event.target.value } : current))} placeholder="pt" className={CAMPO} />
         </div>
       </div>
-      <button type="button" onClick={() => void saveConfig()} className="felixo-btn felixo-secondary-action mb-3 rounded px-2 py-1 text-[11px]">
+      <button type="button" onClick={() => void saveConfig()} className="felixo-btn felixo-secondary-action mb-3 rounded-sm px-2 py-1 text-[11px]">
         Salvar endereço, modelo e idioma
       </button>
 
@@ -203,7 +203,7 @@ export function DictationSettingsSection() {
         <button
           type="button"
           onClick={() => setCapturing((value) => !value)}
-          className="felixo-btn felixo-secondary-action rounded px-2 py-1 text-[11px]"
+          className="felixo-btn felixo-secondary-action rounded-sm px-2 py-1 text-[11px]"
           aria-pressed={capturing}
         >
           {capturing ? 'Pressione as teclas… (Esc cancela)' : formatShortcut(shortcut, platform)}
@@ -222,7 +222,7 @@ export function DictationSettingsSection() {
         {blocked}
         {(micStatus === 'unknown' || !micStatus) && 'Este sistema não informa o estado; a permissão é pedida ao gravar.'}
       </p>
-      <button type="button" onClick={() => void allowMic()} className="felixo-btn felixo-secondary-action rounded px-2 py-1 text-[11px]">
+      <button type="button" onClick={() => void allowMic()} className="felixo-btn felixo-secondary-action rounded-sm px-2 py-1 text-[11px]">
         Verificar/permitir microfone
       </button>
     </section>

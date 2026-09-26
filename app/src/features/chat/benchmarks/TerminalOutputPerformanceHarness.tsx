@@ -548,8 +548,8 @@ export function TerminalOutputPerformanceHarness() {
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100">
-      <div className="pointer-events-none fixed left-3 top-3 z-10 rounded border border-white/10 bg-zinc-950/80 px-3 py-2 text-xs">
-        <div className="font-semibold text-[var(--f-core-white)]">CLI log benchmark</div>
+      <div className="pointer-events-none fixed left-3 top-3 z-10 rounded-sm border border-white/10 bg-zinc-950/80 px-3 py-2 text-xs">
+        <div className="font-semibold text-(--f-core-white)">CLI log benchmark</div>
         <div className="text-zinc-400">{status}</div>
       </div>
       <Profiler id={PROFILER_ID} onRender={onRender}>

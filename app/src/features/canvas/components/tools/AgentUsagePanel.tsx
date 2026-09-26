@@ -324,19 +324,19 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
             options={AUTO_REFRESH_SELECT_OPTIONS}
             onChange={(value) => setAutoRefreshMinutes(Number(value))}
             aria-label="Intervalo de reconsulta"
-            className="min-w-[10rem]"
+            className="min-w-40"
           />
         </div>
       </div>
 
       {statusMessage && (
-        <p className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-warning)]">
+        <p className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-(--color-warning)">
           {statusMessage}
         </p>
       )}
 
       {!hasContent && (
-        <p className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-4 text-center text-[12px] text-zinc-500">
+        <p className="rounded-md border border-white/10 bg-white/2 px-3 py-4 text-center text-[12px] text-zinc-500">
           {loading ? 'Consultando as CLIs instaladas…' : 'Nenhuma CLI foi detectada nesta máquina.'}
         </p>
       )}
@@ -387,17 +387,17 @@ function ProviderCard({
   onToggleStatusline: (enable: boolean) => Promise<void>
 }) {
   return (
-    <section className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+    <section className="rounded-lg border border-white/10 bg-white/2 p-2.5">
       <header className="flex items-center gap-2">
         <span className="text-[13px] font-medium text-zinc-100">{group.name}</span>
         {group.detected ? (
           group.version && (
-            <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-zinc-400">
+            <span className="rounded-sm bg-white/6 px-1.5 py-0.5 text-[10px] text-zinc-400">
               v{group.version}
             </span>
           )
         ) : (
-          <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-zinc-500">
+          <span className="rounded-sm bg-white/6 px-1.5 py-0.5 text-[10px] text-zinc-500">
             não instalada
           </span>
         )}
@@ -478,7 +478,7 @@ function ClaudeStatuslineControl({
 
   if (state.conflictingStatusLine) {
     return (
-      <p className="mt-2 text-[10px] leading-snug text-[var(--color-warning)]">
+      <p className="mt-2 text-[10px] leading-snug text-(--color-warning)">
         Você já tem uma status line configurada no Claude Code. O app não
         sobrescreve a sua — remova-a para poder ligar a coleta aqui.
       </p>
@@ -533,18 +533,18 @@ function AccountRow({
   const measuredAt = getAgentUsageMeasuredAt(sample)
 
   return (
-    <div className="rounded-md border border-white/[0.06] bg-black/20 p-2">
+    <div className="rounded-md border border-white/6 bg-black/20 p-2">
       <div className="flex items-center gap-1.5">
         <span className="truncate text-[12px] text-zinc-200" title={account.label}>
           {account.identityDisplay ?? account.label}
         </span>
         {plan && (
-          <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-warning)]">
+          <span className="rounded-sm bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] uppercase text-(--color-warning)">
             {plan}
           </span>
         )}
         <span
-          className={`ml-auto shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${AGENT_USAGE_STATUS_CLASSES[status]}`}
+          className={`ml-auto shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] ${AGENT_USAGE_STATUS_CLASSES[status]}`}
         >
           {formatAgentUsageStatus(status)}
         </span>
@@ -553,7 +553,7 @@ function AccountRow({
           onClick={onRemove}
           title={`Remover "${account.label}" do painel`}
           aria-label={`Remover a conta "${account.label}" do painel`}
-          className="felixo-btn flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
+          className="felixo-btn flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
         >
           <Trash2 size={12} aria-hidden="true" />
           Remover
@@ -665,7 +665,7 @@ function barToneClass(percent: number): string {
   }
 
   if (percent >= 60) {
-    return 'bg-[var(--color-warning)]'
+    return 'bg-(--color-warning)'
   }
 
   return 'bg-theme-success'
@@ -714,7 +714,7 @@ function AddAccountForm({
       <button
         type="button"
         onClick={onToggle}
-        className="felixo-btn flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-[11px] text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
+        className="felixo-btn flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-[11px] text-zinc-400 hover:bg-white/4 hover:text-zinc-200"
       >
         <Plus size={12} />
         Adicionar outra conta
@@ -739,14 +739,14 @@ function AddAccountForm({
             value={label}
             onChange={(event) => setLabel(event.target.value)}
             placeholder="Nome local (ex.: conta do trabalho)"
-            className="w-full rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600"
+            className="w-full rounded-sm border border-white/10 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600"
           />
 
           <input
             value={identityHint}
             onChange={(event) => setIdentityHint(event.target.value)}
             placeholder="e-mail ou ID exibido pela CLI (opcional)"
-            className="w-full rounded border border-white/10 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600"
+            className="w-full rounded-sm border border-white/10 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600"
           />
 
           {message && <p className="text-[10px] text-theme-error">{message}</p>}

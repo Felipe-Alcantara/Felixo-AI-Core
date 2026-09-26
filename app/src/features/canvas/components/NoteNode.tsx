@@ -58,10 +58,10 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.note.width}
         minHeight={NODE_MIN_SIZE.note.height}
-        lineClassName="!border-black/20"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-black/40"
+        lineClassName="border-black/20!"
+        handleClassName="h-2.5! w-2.5! rounded-xs! bg-black/40!"
       />
-      <Handle type="target" position={Position.Left} className="!bg-black/40" />
+      <Handle type="target" position={Position.Left} className="bg-black/40!" />
       <NodeHeader
         editableValue={nodeData.label ?? ''}
         placeholder="Nota"
@@ -81,7 +81,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
           <button
             type="button"
             onClick={() => setPreview((current) => !current)}
-            className="felixo-btn-icon ml-1 rounded p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
+            className="felixo-btn-icon ml-1 rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
             aria-label={preview ? 'Editar nota' : 'Visualizar nota'}
             title={preview ? 'Editar' : 'Visualizar'}
           >
@@ -92,7 +92,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
 
       {preview ? (
         <div className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto p-2">
-          <div className="markdown-content rounded bg-zinc-900/90 p-3 text-sm text-zinc-100">
+          <div className="markdown-content rounded-sm bg-zinc-900/90 p-3 text-sm text-zinc-100">
             {text.trim() ? (
               <DeferredMarkdownContent content={text} />
             ) : (
@@ -111,10 +111,10 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
           }}
           aria-label="Conteúdo da nota"
           placeholder="Markdown: # titulo, - [ ] tarefa, **negrito**…"
-          className={`nodrag nowheel nopan min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm outline-none ${theme.text}`}
+          className={`nodrag nowheel nopan min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm outline-hidden ${theme.text}`}
         />
       )}
-      <Handle type="source" position={Position.Right} className="!bg-black/40" />
+      <Handle type="source" position={Position.Right} className="bg-black/40!" />
     </div>
   )
 }

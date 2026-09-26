@@ -247,17 +247,17 @@ export function AgentUsageLimitsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-5 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-5 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[92vh] w-full max-w-[1040px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex max-h-[92vh] w-full max-w-[1040px] flex-col rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-start justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-start justify-between border-b border-white/8 px-5 py-4">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-xl bg-[var(--f-core-active)]/10 p-2 text-[var(--f-core-white)]">
+            <div className="mt-0.5 rounded-xl bg-(--f-core-active)/10 p-2 text-(--f-core-white)">
               <Gauge size={17} aria-hidden="true" />
             </div>
             <div>
@@ -275,7 +275,7 @@ export function AgentUsageLimitsModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -299,14 +299,14 @@ export function AgentUsageLimitsModal({
                   options={AUTO_REFRESH_OPTIONS}
                   onChange={(value) => setAutoRefreshMinutes(Number(value))}
                   aria-label="Atualização automática"
-                  className="min-w-[9.5rem]"
+                  className="min-w-38"
                 />
               </div>
               <button
                 type="button"
                 disabled={loading}
                 onClick={() => void loadDashboard(true)}
-                className="felixo-btn flex h-8 items-center gap-2 rounded-xl border border-white/[0.08] px-3 text-[11px] text-zinc-200 hover:bg-white/[0.08] disabled:cursor-wait disabled:text-zinc-600"
+                className="felixo-btn flex h-8 items-center gap-2 rounded-xl border border-white/8 px-3 text-[11px] text-zinc-200 hover:bg-white/8 disabled:cursor-wait disabled:text-zinc-600"
               >
                 <RefreshCw size={13} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
                 Atualizar agora
@@ -315,8 +315,8 @@ export function AgentUsageLimitsModal({
           </div>
 
           {(statusMessage || dashboard.refreshedAt) && (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/[0.06] bg-black/10 px-3 py-2 text-[11px] text-zinc-500">
-              <span className={statusMessage ? 'text-[var(--color-warning)]' : ''}>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/10 px-3 py-2 text-[11px] text-zinc-500">
+              <span className={statusMessage ? 'text-(--color-warning)' : ''}>
                 {statusMessage ?? 'Última atualização'}
               </span>
               {dashboard.refreshedAt && (
@@ -343,7 +343,7 @@ export function AgentUsageLimitsModal({
             </div>
 
             <form
-              className="h-fit space-y-3 rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+              className="h-fit space-y-3 rounded-2xl border border-white/8 bg-black/10 p-3"
               onSubmit={handleAddAccount}
             >
               <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
@@ -374,7 +374,7 @@ export function AgentUsageLimitsModal({
                   onChange={(event) => setLabel(event.target.value)}
                   placeholder="Conta principal"
                   maxLength={80}
-                  className="mt-1 h-9 w-full rounded-xl border border-white/[0.08] bg-[#1a1a19] px-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mt-1 h-9 w-full rounded-xl border border-white/8 bg-[#1a1a19] px-2 text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
               </label>
 
@@ -385,14 +385,14 @@ export function AgentUsageLimitsModal({
                   onChange={(event) => setIdentityHint(event.target.value)}
                   placeholder="e-mail ou ID exibido pela CLI"
                   maxLength={160}
-                  className="mt-1 h-9 w-full rounded-xl border border-white/[0.08] bg-[#1a1a19] px-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mt-1 h-9 w-full rounded-xl border border-white/8 bg-[#1a1a19] px-2 text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <span className="mt-1 block text-[10px] text-zinc-600">
                   Não informe chave, token, cookie ou senha.
                 </span>
               </label>
 
-              {formMessage && <p className="text-[11px] text-[var(--color-warning)]">{formMessage}</p>}
+              {formMessage && <p className="text-[11px] text-(--color-warning)">{formMessage}</p>}
 
               <button
                 type="submit"
@@ -423,12 +423,12 @@ function ProviderSection({
   ) => Promise<AgentUsageMutationResult>
 }) {
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+    <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-medium text-zinc-100">{group.name}</h3>
-            <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] text-zinc-500">
+            <span className="rounded-full border border-white/8 px-2 py-0.5 text-[10px] text-zinc-500">
               {group.provider}
             </span>
             <span
@@ -518,7 +518,7 @@ function AccountCard({
       {metricsSample && metricsSample.metrics.length > 0 ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {metricsSample.metrics.map((metric) => (
-            <div key={metric.key} className="rounded-lg border border-white/[0.06] bg-black/15 px-2.5 py-2">
+            <div key={metric.key} className="rounded-lg border border-white/6 bg-black/15 px-2.5 py-2">
               <div className="text-[11px] font-medium text-zinc-300">{metric.label}</div>
               <div className="mt-1 text-[11px] text-zinc-400">{formatAgentUsageMetric(metric)}</div>
               <div className="mt-1 text-[10px] text-zinc-600">
@@ -541,7 +541,7 @@ function AccountCard({
           {latest?.errorMessage ? ` · ${latest.errorMessage}` : ''}
         </span>
         {isLastKnown && latest && (
-          <span className="text-[var(--color-warning)]">
+          <span className="text-(--color-warning)">
             Última consulta: {formatAgentUsageDate(latest.collectedAt)}
           </span>
         )}
@@ -569,7 +569,7 @@ function AccountCard({
           href={latest.sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-[10px] text-[var(--f-core-white-soft)] hover:text-[var(--f-core-white)]"
+          className="mt-2 inline-flex items-center gap-1 text-[10px] text-(--f-core-white-soft) hover:text-(--f-core-white)"
         >
           Documentação da fonte
           <ExternalLink size={10} aria-hidden="true" />
@@ -589,9 +589,9 @@ function SummaryBadge({
   tone?: 'default' | 'success' | 'warning' | 'error'
 }) {
   const classes = {
-    default: 'border-white/[0.08] text-zinc-400',
+    default: 'border-white/8 text-zinc-400',
     success: 'border-theme-success/20 bg-theme-success/10 text-theme-success',
-    warning: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
+    warning: 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)',
     error: 'border-theme-error/20 bg-theme-error/10 text-theme-error',
   }[tone]
 

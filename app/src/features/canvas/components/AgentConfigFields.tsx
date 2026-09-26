@@ -156,14 +156,14 @@ export function AgentConfigFields({
       {config.agent && (
         <>
           {config.agent.isLauncher ? (
-            <div className="mb-3 rounded bg-zinc-900/70 px-2 py-2 ring-1 ring-white/10">
+            <div className="mb-3 rounded-sm bg-zinc-900/70 px-2 py-2 ring-1 ring-white/10">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-zinc-200">Configuração do Openia</p>
                 <button
                   type="button"
                   onClick={config.refreshOpenia}
                   disabled={config.openiaLoading}
-                  className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
+                  className="felixo-btn-icon rounded-sm p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
                   title="Atualizar interfaces, modelos e estado da chave"
                   aria-label="Atualizar configuração do Openia"
                 >
@@ -254,7 +254,7 @@ export function AgentConfigFields({
                   type="button"
                   onClick={() => void config.saveOpeniaKey()}
                   disabled={config.openiaSaving || !config.openiaKeyDraft.trim()}
-                  className="felixo-btn felixo-secondary-action rounded px-2 text-[11px] disabled:opacity-50"
+                  className="felixo-btn felixo-secondary-action rounded-sm px-2 text-[11px] disabled:opacity-50"
                 >
                   {config.openiaSaving ? 'Salvando…' : 'Salvar'}
                 </button>
@@ -269,7 +269,7 @@ export function AgentConfigFields({
                     : 'A chave será enviada ao armazenamento do Openia para o login do sistema e não ficará no canvas.'}
               </p>
               {config.openiaError && (
-                <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-error)]">{config.openiaError}</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-theme-error">{config.openiaError}</p>
               )}
             </div>
           ) : (
@@ -282,7 +282,7 @@ export function AgentConfigFields({
                   type="button"
                   onClick={config.refresh}
                   disabled={config.refreshing}
-                  className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
+                  className="felixo-btn-icon rounded-sm p-0.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:opacity-50"
                   title="Buscar de novo os modelos que as CLIs oferecem"
                   aria-label="Atualizar lista de modelos"
                 >
@@ -531,7 +531,7 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
             aria-label={`Remover a conta "${contaAtual.label}"`}
             onClick={() => void remover()}
             disabled={removendo}
-            className="felixo-btn flex shrink-0 items-center gap-1 rounded bg-theme-error/10 px-2 py-1.5 text-[11px] text-theme-error hover:bg-theme-error/20 disabled:cursor-wait disabled:opacity-50"
+            className="felixo-btn flex shrink-0 items-center gap-1 rounded-sm bg-theme-error/10 px-2 py-1.5 text-[11px] text-theme-error hover:bg-theme-error/20 disabled:cursor-wait disabled:opacity-50"
           >
             <Trash2 size={13} aria-hidden="true" />
             {removendo ? 'Removendo…' : 'Remover'}
@@ -552,7 +552,7 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
       )}
 
       {criando && (
-        <div className="mb-3 rounded border border-white/10 bg-black/20 p-2">
+        <div className="mb-3 rounded-sm border border-white/10 bg-black/20 p-2">
           <p className="mb-2 text-[11px] leading-snug text-zinc-500">
             {pedeChave
               ? 'A conta guarda a chave do OpenRouter, cifrada pelo sistema.'
@@ -584,7 +584,7 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
               type="button"
               disabled={!nome.trim() || salvando}
               onClick={() => void criar()}
-              className="felixo-btn flex-1 rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600 disabled:opacity-40"
+              className="felixo-btn flex-1 rounded-sm bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600 disabled:opacity-40"
             >
               {salvando ? 'Criando…' : 'Criar conta'}
             </button>
@@ -594,7 +594,7 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
                 setCriando(false)
                 setErro(null)
               }}
-              className="felixo-btn rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/[0.06]"
+              className="felixo-btn rounded-sm px-2 py-1 text-xs text-zinc-400 hover:bg-white/6"
             >
               Cancelar
             </button>

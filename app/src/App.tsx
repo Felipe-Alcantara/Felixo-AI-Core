@@ -20,7 +20,7 @@ const ChatWorkspace = lazy(() =>
 function ScreenLoading() {
   return (
     <div
-      className="flex h-full items-center justify-center bg-[var(--color-main-bg)] text-sm text-zinc-400"
+      className="flex h-full items-center justify-center bg-(--color-main-bg) text-sm text-zinc-400"
       role="status"
       aria-live="polite"
     >
@@ -48,7 +48,7 @@ function App() {
     <ThemeProvider>
       <PerformanceModeProvider>
         <div
-          className="relative h-screen overflow-hidden bg-[var(--color-main-bg)] text-zinc-50"
+          className="relative h-screen overflow-hidden bg-(--color-main-bg) text-zinc-50"
           data-felixo-app-shell
         >
           <Suspense fallback={<ScreenLoading />}>

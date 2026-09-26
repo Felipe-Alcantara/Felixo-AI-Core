@@ -139,7 +139,7 @@ export function NotesPanel({
         <button
           type="button"
           onClick={onAddNote}
-          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
+          className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/16"
         >
           <Plus size={13} />
           Nova nota
@@ -158,10 +158,10 @@ export function NotesPanel({
                 <button
                   type="button"
                   onClick={() => onFocusNode(node.id)}
-                  className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                  className="felixo-btn flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/5"
                   title="Centralizar esta nota no canvas"
                 >
-                  <StickyNote size={14} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
+                  <StickyNote size={14} className="mt-0.5 shrink-0 text-(--color-warning)" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-zinc-100">{title}</span>
                     {data.text && (
@@ -186,7 +186,7 @@ export function NotesPanel({
         <button
           type="button"
           onClick={onAddDrawing}
-          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
+          className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/16"
         >
           <Plus size={13} />
           Novo desenho
@@ -205,10 +205,10 @@ export function NotesPanel({
                 <button
                   type="button"
                   onClick={() => onFocusNode(node.id)}
-                  className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                  className="felixo-btn flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/5"
                   title="Centralizar este desenho no canvas"
                 >
-                  <Pencil size={14} className="mt-0.5 shrink-0 text-[var(--f-core-white-soft)]" />
+                  <Pencil size={14} className="mt-0.5 shrink-0 text-(--f-core-white-soft)" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-zinc-100">{title}</span>
                   </span>
@@ -228,7 +228,7 @@ export function NotesPanel({
         <button
           type="button"
           onClick={onAddExcalidrawDrawing}
-          className="felixo-btn flex items-center gap-1 rounded felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/[0.16]"
+          className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2 py-1 text-xs font-medium text-white hover:bg-white/16"
           title="Modo avançado: formas, texto, setas — carrega o Excalidraw sob demanda"
         >
           <Plus size={13} />
@@ -248,10 +248,10 @@ export function NotesPanel({
                 <button
                   type="button"
                   onClick={() => onFocusNode(node.id)}
-                  className="felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5"
+                  className="felixo-btn flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/5"
                   title="Centralizar este desenho no canvas"
                 >
-                  <PenTool size={14} className="mt-0.5 shrink-0 text-[var(--f-core-white-soft)]" />
+                  <PenTool size={14} className="mt-0.5 shrink-0 text-(--f-core-white-soft)" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-zinc-100">{title}</span>
                   </span>
@@ -271,7 +271,7 @@ export function NotesPanel({
         <button
           type="button"
           onClick={() => void addSavedNote()}
-          className="felixo-btn flex items-center gap-1 rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600"
+          className="felixo-btn flex items-center gap-1 rounded-sm bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600"
         >
           <Plus size={13} />
           Nova
@@ -283,17 +283,17 @@ export function NotesPanel({
       ) : (
         <ul className="felixo-anim-stagger-list flex flex-col gap-2">
           {notes.map((note) => (
-            <li key={note.id} className="rounded bg-zinc-800/60 p-2">
+            <li key={note.id} className="rounded-sm bg-zinc-800/60 p-2">
               <div className="mb-1 flex items-center gap-2">
                 <input
                   value={note.title}
                   onChange={(event) => editNote(note.id, { title: event.target.value })}
-                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-none"
+                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-100 outline-hidden"
                 />
                 <button
                   type="button"
                   onClick={() => void removeSavedNote(note.id)}
-                  className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)]"
+                  className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-theme-error"
                   aria-label="Remover nota"
                 >
                   <Trash2 size={14} />
@@ -304,7 +304,7 @@ export function NotesPanel({
                 onChange={(event) => editNote(note.id, { content: event.target.value })}
                 placeholder="Conteúdo…"
                 rows={2}
-                className="w-full resize-y rounded bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-none placeholder:text-zinc-600"
+                className="w-full resize-y rounded-sm bg-zinc-900/60 p-2 text-xs text-zinc-300 outline-hidden placeholder:text-zinc-600"
               />
             </li>
           ))}

@@ -162,19 +162,19 @@ export function CanvasPanel({
         height: isWorkspace ? maxHeight : collapsed ? undefined : (heightResize.height ?? undefined),
       }}
       data-felixo-canvas-panel={panelId}
-      className={`absolute z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl focus-within:z-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400 ${
+      className={`absolute z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl focus-within:z-30 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400 ${
         isWorkspace ? 'top-4 rounded-xl' : 'top-16 rounded-lg'
       } ${
         resizing
           ? ''
-          : 'transition-[left] duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
+          : 'transition-[left] duration-180 ease-[cubic-bezier(0.16,1,0.3,1)]'
       } ${closing ? 'felixo-anim-panel-out' : 'felixo-anim-panel-in'}`}
     >
       <div className={`flex items-center justify-between border-b border-white/10 ${collapsed ? 'flex-col gap-2 px-1 py-2' : isWorkspace ? 'px-4 py-3' : 'px-3 py-2'}`}>
         <button
           type="button"
           onClick={() => setCollapsed((current) => !current)}
-          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+          className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400"
           aria-label={collapsed ? `Expandir painel ${title}` : `Recolher painel ${title}`}
           aria-expanded={!collapsed}
           aria-controls={contentId}
@@ -194,7 +194,7 @@ export function CanvasPanel({
         <button
           type="button"
           onClick={close}
-          className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+          className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
           aria-label={`Fechar painel ${title}`}
         >
           <X size={15} />

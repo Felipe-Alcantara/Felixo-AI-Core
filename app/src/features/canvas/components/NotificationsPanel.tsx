@@ -110,7 +110,7 @@ export function NotificationsPanel({
           type="button"
           onClick={onMarkAllRead}
           disabled={unreadCount === 0}
-          className="felixo-btn-icon ml-auto rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+          className="felixo-btn-icon ml-auto rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
           title="Marcar todas como lidas"
           aria-label="Marcar todas como lidas"
         >
@@ -122,7 +122,7 @@ export function NotificationsPanel({
         <button
           type="button"
           onClick={() => onSoundEnabledChange(!soundEnabled)}
-          className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
+          className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
           title={soundEnabled ? 'Mutar notificações' : 'Ativar som das notificações'}
           aria-label={soundEnabled ? 'Mutar notificações' : 'Ativar som das notificações'}
           aria-pressed={!soundEnabled}
@@ -149,14 +149,14 @@ export function NotificationsPanel({
         </span>
       </div>
 
-      <label className="flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-white/10 focus-within:text-[var(--f-core-white-soft)]">
+      <label className="flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-white/10 focus-within:text-(--f-core-white-soft)">
         <Search size={13} aria-hidden />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar notificações…"
           aria-label="Buscar notificações"
-          className="min-w-0 flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600"
+          className="min-w-0 flex-1 bg-transparent text-xs text-zinc-200 outline-hidden placeholder:text-zinc-600"
         />
         {query && (
           <button type="button" onClick={() => setQuery('')} aria-label="Limpar busca">
@@ -180,7 +180,7 @@ export function NotificationsPanel({
           <button
             type="button"
             onClick={onClearRead}
-            className="felixo-btn ml-auto flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+            className="felixo-btn ml-auto flex items-center gap-1 rounded-sm px-1.5 py-1 text-[11px] text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
             title="Limpar notificações lidas"
           >
             <Trash2 size={12} />
@@ -195,7 +195,7 @@ export function NotificationsPanel({
 
       {visibleItems.length === 0 && !showUpdateItem ? (
         <div className="flex items-center gap-2 px-1 py-5 text-xs text-zinc-500">
-          <CheckCircle2 size={15} className="text-[var(--f-core-white-soft)]" />
+          <CheckCircle2 size={15} className="text-(--f-core-white-soft)" />
           {filter === 'unread'
             ? 'Nenhum agente aguardando ação.'
             : query
@@ -251,7 +251,7 @@ export function NotificationsPanel({
                     <button
                       type="button"
                       onClick={() => onMarkRead(notification.id)}
-                      className="felixo-btn-icon rounded bg-zinc-800 p-1 text-zinc-400 hover:text-white"
+                      className="felixo-btn-icon rounded-sm bg-zinc-800 p-1 text-zinc-400 hover:text-white"
                       title="Marcar como lida"
                       aria-label={`Marcar como lida: ${node.data.label || node.id}`}
                     >
@@ -261,7 +261,7 @@ export function NotificationsPanel({
                   <button
                     type="button"
                     onClick={() => onRemove(notification.id)}
-                    className="felixo-btn-icon rounded bg-zinc-800 p-1 text-zinc-400 hover:text-white"
+                    className="felixo-btn-icon rounded-sm bg-zinc-800 p-1 text-zinc-400 hover:text-white"
                     title="Remover notificação"
                     aria-label={`Remover notificação: ${node.data.label || node.id}`}
                   >
@@ -279,9 +279,9 @@ export function NotificationsPanel({
 
 const UPDATE_TONE_TEXT: Record<UpdatePresentation['tone'], string> = {
   neutral: 'text-slate-300',
-  info: 'text-[var(--f-core-white-soft)]',
-  success: 'text-[var(--f-core-white-soft)]',
-  error: 'text-[var(--color-error)]',
+  info: 'text-(--f-core-white-soft)',
+  success: 'text-(--f-core-white-soft)',
+  error: 'text-theme-error',
 }
 
 /** Item fixo no topo do painel quando há uma atualização em andamento ou
@@ -304,7 +304,7 @@ function UpdateNotificationRow({ item }: { item: UpdateNotificationItem }) {
               aria-valuemax={100}
             >
               <div
-                className="h-full rounded-full bg-[var(--f-core-active)] transition-[width] duration-300"
+                className="h-full rounded-full bg-(--f-core-active) transition-[width] duration-300"
                 style={{ width: `${presentation.progress}%` }}
               />
             </div>
@@ -314,7 +314,7 @@ function UpdateNotificationRow({ item }: { item: UpdateNotificationItem }) {
               <button
                 type="button"
                 onClick={onInstall}
-                className="felixo-btn rounded-md bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-[var(--f-core-active)]"
+                className="felixo-btn rounded-md bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-(--f-core-active)"
               >
                 Reiniciar agora
               </button>
@@ -331,7 +331,7 @@ function UpdateNotificationRow({ item }: { item: UpdateNotificationItem }) {
         <button
           type="button"
           onClick={onDismiss}
-          className="felixo-btn-icon -mr-1 -mt-1 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+          className="felixo-btn-icon -mr-1 -mt-1 rounded-sm p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
           aria-label="Dispensar aviso de atualização"
         >
           <X size={13} />

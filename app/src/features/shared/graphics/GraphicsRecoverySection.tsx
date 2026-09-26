@@ -126,7 +126,7 @@ export function GraphicsRecoverySection() {
   }
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-black/10 p-3">
+    <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-300">
         <Cpu size={14} aria-hidden="true" />
         Renderização e recuperação
@@ -138,11 +138,11 @@ export function GraphicsRecoverySection() {
       </p>
       {config?.recommendation && (
         <div className="mt-3 rounded-xl border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] p-2.5">
-          <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-warning)]">
+          <div className="flex items-center gap-2 text-xs font-medium text-(--color-warning)">
             <AlertTriangle size={14} aria-hidden="true" />
             Modo compatível recomendado
           </div>
-          <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-warning)]">
+          <p className="mt-1 text-[11px] leading-relaxed text-(--color-warning)">
             Numa abertura anterior, o driver de vídeo recusou{' '}
             {config.recommendation.disabledFeatures.join(', ')}. Isso costuma
             causar tela preta ou travamento na janela. Recomendamos trocar
@@ -161,7 +161,7 @@ export function GraphicsRecoverySection() {
               type="button"
               onClick={() => void dismissRecommendation()}
               disabled={recommendationBusy}
-              className="felixo-btn flex h-8 items-center justify-center rounded-lg border border-white/10 px-3 text-[11px] text-zinc-300 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+              className="felixo-btn flex h-8 items-center justify-center rounded-lg border border-white/10 px-3 text-[11px] text-zinc-300 hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Manter GPU normal
             </button>
@@ -186,13 +186,13 @@ export function GraphicsRecoverySection() {
       <button
         type="button"
         onClick={() => void saveMode()}
-        className="felixo-btn mt-3 flex h-9 items-center justify-center gap-2 rounded-2xl border border-white/10 px-3 text-xs font-medium text-zinc-200 hover:bg-white/[0.08]"
+        className="felixo-btn mt-3 flex h-9 items-center justify-center gap-2 rounded-2xl border border-white/10 px-3 text-xs font-medium text-zinc-200 hover:bg-white/8"
       >
         <Save size={14} aria-hidden="true" />
         Salvar modo gráfico
       </button>
       {message && (
-        <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-warning)]">{message}</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-(--color-warning)">{message}</p>
       )}
       <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
         Se a interface travar, o botão “Recarregar interface” recupera somente

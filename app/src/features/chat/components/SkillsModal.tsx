@@ -119,15 +119,15 @@ export function SkillsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[86vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex max-h-[86vh] w-full max-w-[900px] flex-col rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">Skills</h2>
             <p className="mt-1 text-xs text-zinc-500">
@@ -139,7 +139,7 @@ export function SkillsModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -149,14 +149,14 @@ export function SkillsModal({
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px] gap-4 overflow-y-auto px-5 py-5 max-md:grid-cols-1">
           <div className="space-y-3">
             {skills.length === 0 ? (
-              <p className="rounded-2xl border border-white/[0.08] bg-black/10 px-3 py-6 text-center text-sm text-zinc-500">
+              <p className="rounded-2xl border border-white/8 bg-black/10 px-3 py-6 text-center text-sm text-zinc-500">
                 Nenhuma skill cadastrada.
               </p>
             ) : (
               skills.map((skill) => (
                 <article
                   key={skill.id}
-                  className="rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+                  className="rounded-2xl border border-white/8 bg-black/10 p-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -164,7 +164,7 @@ export function SkillsModal({
                         <BrainCircuit
                           size={14}
                           aria-hidden="true"
-                          className="shrink-0 text-[var(--f-core-white)]"
+                          className="shrink-0 text-(--f-core-white)"
                         />
                         <h3 className="truncate text-sm font-medium text-zinc-100">
                           {skill.name}
@@ -193,7 +193,7 @@ export function SkillsModal({
                     <div className="flex shrink-0 items-center gap-1">
                       <label
                         title={skill.enabled ? 'Desativar' : 'Ativar'}
-                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100"
+                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/8 hover:text-zinc-100"
                       >
                         <input
                           type="checkbox"
@@ -209,7 +209,7 @@ export function SkillsModal({
                         type="button"
                         title="Editar skill"
                         onClick={() => editSkill(skill)}
-                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.08] hover:text-zinc-100"
+                        className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/8 hover:text-zinc-100"
                       >
                         <Pencil size={14} aria-hidden="true" />
                         <span className="sr-only">Editar {skill.name}</span>
@@ -231,7 +231,7 @@ export function SkillsModal({
           </div>
 
           <form
-            className="space-y-3 rounded-2xl border border-white/[0.08] bg-black/10 p-3"
+            className="space-y-3 rounded-2xl border border-white/8 bg-black/10 p-3"
             onSubmit={handleSubmit}
           >
             <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
@@ -249,7 +249,7 @@ export function SkillsModal({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Django REST"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -259,7 +259,7 @@ export function SkillsModal({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Quando aplicar"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -270,7 +270,7 @@ export function SkillsModal({
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="Instrucao persistente da skill"
                 rows={8}
-                className="mt-1 min-h-44 w-full resize-none rounded-2xl border border-white/[0.08] bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 min-h-44 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -279,7 +279,7 @@ export function SkillsModal({
                 <button
                   type="button"
                   onClick={clearDraft}
-                  className="felixo-btn flex h-10 flex-1 items-center justify-center rounded-2xl border border-white/[0.08] text-sm font-medium text-zinc-300 hover:bg-white/[0.08]"
+                  className="felixo-btn flex h-10 flex-1 items-center justify-center rounded-2xl border border-white/8 text-sm font-medium text-zinc-300 hover:bg-white/8"
                 >
                   Cancelar
                 </button>

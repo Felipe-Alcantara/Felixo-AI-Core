@@ -4,9 +4,9 @@ import type { CliSetupPresentation } from './cli-setup-presentation'
 
 const TONE_TEXT: Record<CliSetupPresentation['tone'], string> = {
   neutral: 'text-slate-300',
-  info: 'text-[var(--f-core-white-soft)]',
-  success: 'text-[var(--f-core-white-soft)]',
-  error: 'text-[var(--color-error)]',
+  info: 'text-(--f-core-white-soft)',
+  success: 'text-(--f-core-white-soft)',
+  error: 'text-theme-error',
 }
 
 /**
@@ -86,7 +86,7 @@ export function CliSetupToast() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-auto fixed bottom-4 right-4 z-50 w-80 rounded-xl border border-white/10 bg-slate-900/95 p-4 shadow-xl backdrop-blur"
+      className="pointer-events-auto fixed bottom-4 right-4 z-50 w-80 rounded-xl border border-white/10 bg-slate-900/95 p-4 shadow-xl backdrop-blur-sm"
     >
       <div className="flex items-start gap-3">
         <Icon
@@ -107,7 +107,7 @@ export function CliSetupToast() {
               aria-valuemax={100}
             >
               <div
-                className="h-full rounded-full bg-[var(--f-core-active)] transition-[width] duration-300"
+                className="h-full rounded-full bg-(--f-core-active) transition-[width] duration-300"
                 style={{ width: `${presentation.progress}%` }}
               />
             </div>
@@ -118,7 +118,7 @@ export function CliSetupToast() {
               <button
                 type="button"
                 onClick={retry}
-                className="rounded-md bg-[var(--f-core-white)]/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-[var(--f-core-active)]"
+                className="rounded-md bg-(--f-core-white)/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-(--f-core-active)"
               >
                 Tentar de novo
               </button>

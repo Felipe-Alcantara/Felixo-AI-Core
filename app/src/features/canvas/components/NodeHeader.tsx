@@ -62,7 +62,7 @@ export function NodeHeader({
         <button
           type="button"
           // nodrag so clicking the close button never starts a drag.
-          className="felixo-btn-icon nodrag rounded p-0.5 opacity-60 hover:bg-black/20 hover:opacity-100"
+          className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-60 hover:bg-black/20 hover:opacity-100"
           onClick={onRemove}
           aria-label="Remover no"
           title="Remover bloco"
@@ -116,7 +116,7 @@ function TitleInput({
         }
       }}
       // nodrag so editing the title doesn't drag the node.
-      className="nodrag min-w-0 flex-1 bg-transparent font-medium outline-none placeholder:opacity-50"
+      className="nodrag min-w-0 flex-1 bg-transparent font-medium outline-hidden placeholder:opacity-50"
     />
   )
 }

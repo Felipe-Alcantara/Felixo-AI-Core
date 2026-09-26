@@ -34,7 +34,7 @@ const DEFAULT_WIDTH = 244
  * `felixo-sidebar-action` dá a moldura; o resto é o mesmo Tailwind de lá.
  */
 const PRIMARY_ROW =
-  'felixo-btn felixo-sidebar-action flex w-full items-center gap-2 rounded-md bg-transparent px-2 py-1.5 text-xs text-zinc-100 hover:bg-[var(--f-core-structural)]'
+  'felixo-btn felixo-sidebar-action flex w-full items-center gap-2 rounded-md bg-transparent px-2 py-1.5 text-xs text-zinc-100 hover:bg-(--f-core-structural)'
 
 function formatSessionDate(value: string) {
   const date = new Date(value)
@@ -172,7 +172,7 @@ export function AppSidebar({
     <aside
       style={isOpen ? { width } : undefined}
       className={[
-        'felixo-chat-sidebar relative flex shrink-0 flex-col overflow-hidden border-r border-white/[0.08] bg-[var(--color-sidebar)] text-zinc-300',
+        'felixo-chat-sidebar relative flex shrink-0 flex-col overflow-hidden border-r border-white/8 bg-(--color-sidebar) text-zinc-300',
         dragging ? '' : 'transition-[width] duration-300 ease-in-out',
         'max-[920px]:hidden',
         isOpen ? '' : 'w-0 border-r-0',

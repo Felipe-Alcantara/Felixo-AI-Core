@@ -194,7 +194,7 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
     a({ children, href }) {
       return (
         <a
-          className="font-medium text-[var(--f-core-white)] underline decoration-white/30 underline-offset-4 hover:text-[var(--f-core-white)]"
+          className="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)"
           href={href}
           rel="noreferrer"
           target="_blank"
@@ -253,11 +253,11 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
       )
     },
     hr() {
-      return <hr className="my-3 border-white/[0.08]" />
+      return <hr className="my-3 border-white/8" />
     },
     table({ children }) {
       return (
-        <div className="max-w-full overflow-x-auto rounded-lg border border-white/[0.08]">
+        <div className="max-w-full overflow-x-auto rounded-lg border border-white/8">
           <table className="w-full min-w-max border-collapse text-left text-[12px]">
             {children}
           </table>
@@ -265,24 +265,24 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
       )
     },
     thead({ children }) {
-      return <thead className="bg-white/[0.05] text-zinc-200">{children}</thead>
+      return <thead className="bg-white/5 text-zinc-200">{children}</thead>
     },
     tbody({ children }) {
-      return <tbody className="divide-y divide-white/[0.06]">{children}</tbody>
+      return <tbody className="divide-y divide-white/6">{children}</tbody>
     },
     tr({ children }) {
       return <tr>{children}</tr>
     },
     th({ children }) {
       return (
-        <th className="border-r border-white/[0.06] px-3 py-2 font-semibold last:border-r-0">
+        <th className="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">
           {children}
         </th>
       )
     },
     td({ children }) {
       return (
-        <td className="border-r border-white/[0.06] px-3 py-2 text-zinc-300 last:border-r-0">
+        <td className="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">
           {children}
         </td>
       )
@@ -337,7 +337,7 @@ function MarkdownImage({
   if (hasError) {
     return (
       <span
-        className="inline-flex max-w-full items-center rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[12px] text-zinc-300"
+        className="inline-flex max-w-full items-center rounded-md border border-white/8 bg-white/4 px-2 py-1 text-[12px] text-zinc-300"
         title={typeof src === 'string' ? src : title}
       >
         {alt || 'Imagem indisponível'}
@@ -348,7 +348,7 @@ function MarkdownImage({
   return (
     <img
       alt={alt ?? ''}
-      className="max-h-64 max-w-full rounded-lg border border-white/[0.08] object-contain"
+      className="max-h-64 max-w-full rounded-lg border border-white/8 object-contain"
       loading="lazy"
       onError={() => setHasError(true)}
       src={resolvedSrc}
@@ -370,8 +370,8 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   }
 
   return (
-    <div className="max-w-full overflow-hidden rounded-xl border border-white/[0.08] bg-black/25">
-      <div className="flex h-7 items-center justify-between border-b border-white/[0.06] px-3 font-mono text-[10px] uppercase text-zinc-500">
+    <div className="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25">
+      <div className="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500">
         <span>{language || 'código'}</span>
         <button
           type="button"
@@ -381,8 +381,8 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
         >
           {copied ? (
             <>
-              <Check size={11} className="text-[var(--f-core-white-soft)]" />
-              <span className="normal-case text-[var(--f-core-white-soft)]">copiado</span>
+              <Check size={11} className="text-(--f-core-white-soft)" />
+              <span className="normal-case text-(--f-core-white-soft)">copiado</span>
             </>
           ) : (
             <>
@@ -428,7 +428,7 @@ export function MarkdownContent({ content, baseDir }: MarkdownContentProps) {
       </ReactMarkdown>
       {normalizedContent.truncated && (
         <p
-          className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-2 py-1 text-[11px] text-[var(--color-warning)]"
+          className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-2 py-1 text-[11px] text-(--color-warning)"
           role="status"
         >
           Conteúdo truncado após {MAX_MARKDOWN_CONTENT_CHARS.toLocaleString('pt-BR')}{' '}

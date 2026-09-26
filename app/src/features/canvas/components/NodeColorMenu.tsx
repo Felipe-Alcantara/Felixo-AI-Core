@@ -36,7 +36,7 @@ export function NodeColorMenu({ x, y, current, onSelect, onClose }: NodeColorMen
     <div
       role="menu"
       aria-label="Cor da moldura"
-      className="fixed z-50 w-44 rounded-lg border border-white/10 bg-[var(--f-surface-panel)] p-2 text-xs text-[var(--f-core-white-soft)] shadow-2xl"
+      className="fixed z-50 w-44 rounded-lg border border-white/10 bg-(--f-surface-panel) p-2 text-xs text-(--f-core-white-soft) shadow-2xl"
       style={{ left: x, top: y }}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -53,7 +53,7 @@ export function NodeColorMenu({ x, y, current, onSelect, onClose }: NodeColorMen
             aria-label={FRAME_COLOR_LABELS[color]}
             title={FRAME_COLOR_LABELS[color]}
             onClick={() => onSelect(color)}
-            className="flex h-7 items-center justify-center rounded border border-white/10 hover:border-white/40"
+            className="flex h-7 items-center justify-center rounded-sm border border-white/10 hover:border-white/40"
             style={{ backgroundColor: FRAME_COLOR_SWATCHES[color] }}
           >
             {active === color && <Check size={13} className="text-black/70" aria-hidden />}
@@ -65,7 +65,7 @@ export function NodeColorMenu({ x, y, current, onSelect, onClose }: NodeColorMen
         role="menuitem"
         onClick={() => onSelect(undefined)}
         disabled={!active}
-        className="mt-2 w-full rounded px-2 py-1 text-left hover:bg-white/10 disabled:opacity-40"
+        className="mt-2 w-full rounded-sm px-2 py-1 text-left hover:bg-white/10 disabled:opacity-40"
       >
         Sem cor
       </button>

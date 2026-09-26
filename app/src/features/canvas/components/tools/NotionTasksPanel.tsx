@@ -79,14 +79,14 @@ type TaskContentState = {
 
 
 const inputClass =
-  'w-full rounded border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-white/10'
+  'w-full rounded-sm border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-hidden focus:border-white/10'
 const STATUS_SCOPE_OPTIONS: FelixoSelectOption[] = [
   { value: 'all', label: 'Todos os estados' },
   { value: 'open', label: 'Só abertas' },
   { value: 'done', label: 'Só concluídas' },
 ]
 const buttonClass =
-  'felixo-btn flex items-center justify-center gap-1.5 rounded bg-zinc-700 px-2 py-1.5 text-xs text-zinc-100 hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50'
+  'felixo-btn flex items-center justify-center gap-1.5 rounded-sm bg-zinc-700 px-2 py-1.5 text-xs text-zinc-100 hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50'
 
 type SortableHeaderProps = {
   column: string
@@ -721,10 +721,10 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Workspace / database</p>
             <div className="flex min-w-0 items-center gap-2">
-              <Database size={16} className="shrink-0 text-[var(--f-core-white-soft)]" />
+              <Database size={16} className="shrink-0 text-(--f-core-white-soft)" />
               {databases.length > 0 ? (
                 <FelixoSelect
-                  className="min-w-0 max-w-[34rem] flex-1"
+                  className="min-w-0 max-w-136 flex-1"
                   value={dataSourceId}
                   options={databases.map((database) => ({ value: database.id, label: database.name }))}
                   onChange={setDataSourceId}
@@ -754,7 +754,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
             {connectionId && dataSourceId && (
               <button
                 type="button"
-                className="felixo-btn flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16] disabled:opacity-50"
+                className="felixo-btn flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:opacity-50"
                 onClick={startCreatingTask}
                 disabled={busy}
               >
@@ -768,7 +768,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
           <section className="mt-3 grid gap-3 rounded-lg border border-white/10 bg-zinc-950/45 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]" aria-label="Configuração do Notion">
             <div className="min-w-0 space-y-2">
               <div className="flex items-center gap-2">
-                <KeyRound size={14} className="text-[var(--f-core-white-soft)]" />
+                <KeyRound size={14} className="text-(--f-core-white-soft)" />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-zinc-100">Conexão</p>
                   <p className="text-[11px] text-zinc-500">O token fica cifrado e não chega ao renderer.</p>
@@ -791,17 +791,17 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                     onChange={setConnectionId}
                     aria-label="Conexão Notion"
                   />
-                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] disabled:opacity-50" onClick={() => void testConnection()} disabled={busy || !selectedConnection?.hasToken} aria-label="Testar conexão" title="Testar conexão"><Check size={14} /></button>
-                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)] disabled:opacity-50" onClick={() => void removeConnection()} disabled={busy} aria-label="Remover conexão" title="Remover conexão"><Trash2 size={14} /></button>
+                  <button type="button" className="felixo-btn-icon rounded-sm p-1.5 text-zinc-400 hover:bg-white/10 hover:text-(--f-core-white-soft) disabled:opacity-50" onClick={() => void testConnection()} disabled={busy || !selectedConnection?.hasToken} aria-label="Testar conexão" title="Testar conexão"><Check size={14} /></button>
+                  <button type="button" className="felixo-btn-icon rounded-sm p-1.5 text-zinc-400 hover:bg-white/10 hover:text-theme-error disabled:opacity-50" onClick={() => void removeConnection()} disabled={busy} aria-label="Remover conexão" title="Remover conexão"><Trash2 size={14} /></button>
                 </div>
-              ) : <p className="rounded border border-dashed border-white/10 px-2 py-2 text-[11px] text-zinc-500">Adicione uma conexão para começar e compartilhe a database no Notion com ela.</p>}
+              ) : <p className="rounded-sm border border-dashed border-white/10 px-2 py-2 text-[11px] text-zinc-500">Adicione uma conexão para começar e compartilhe a database no Notion com ela.</p>}
             </div>
 
             <div className="min-w-0 space-y-2">
               <div className="flex items-center gap-2">
-                <Database size={14} className="text-[var(--f-core-white-soft)]" />
+                <Database size={14} className="text-(--f-core-white-soft)" />
                 <p className="font-medium text-zinc-100">Database compartilhada</p>
-                <button type="button" className="felixo-btn-icon ml-auto rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadDatabases()} disabled={busy || !connectionId} aria-label="Atualizar tabelas" title="Atualizar tabelas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
+                <button type="button" className="felixo-btn-icon ml-auto rounded-sm p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadDatabases()} disabled={busy || !connectionId} aria-label="Atualizar tabelas" title="Atualizar tabelas"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /></button>
               </div>
               <div className="flex gap-1.5">
                 <input className={`${inputClass} h-8 min-w-0 flex-1`} value={databaseQuery} onChange={(event) => setDatabaseQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadDatabases() }} placeholder="Filtrar tabelas compartilhadas" aria-label="Buscar database Notion" />
@@ -818,8 +818,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                   <input className={`${inputClass} h-8`} type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder={selectedConnection?.hasToken ? 'Token configurado — deixe vazio para manter' : 'Token do Notion'} autoComplete="new-password" aria-label="Token do Notion" />
                 </div>
                 <div className="flex items-center gap-2">
-                  {secureStorage && !secureStorage.ok && <p className="min-w-0 flex-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-warning)]">{secureStorage.reason}</p>}
-                  <button type="button" className="felixo-btn ml-auto flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16] disabled:opacity-50" onClick={() => void saveConnection()} disabled={busy || secureStorage?.ok === false}><Save size={13} /> Guardar conexão</button>
+                  {secureStorage && !secureStorage.ok && <p className="min-w-0 flex-1 rounded-sm bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-(--color-warning)">{secureStorage.reason}</p>}
+                  <button type="button" className="felixo-btn ml-auto flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:opacity-50" onClick={() => void saveConnection()} disabled={busy || secureStorage?.ok === false}><Save size={13} /> Guardar conexão</button>
                 </div>
               </div>
             )}
@@ -827,14 +827,14 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
         )}
 
         {secureStorage && !secureStorage.ok && !showWorkspaceSettings && (
-          <p className="mt-3 rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] text-[var(--color-warning)]">{secureStorage.reason}</p>
+          <p className="mt-3 rounded-sm bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] text-(--color-warning)">{secureStorage.reason}</p>
         )}
         {(message || error || hasMoreTasks) && (
           <div className="mt-3 space-y-1.5">
-            {message && <p className="rounded bg-white/[0.04] px-2.5 py-2 text-[11px] text-[var(--f-core-white)]" role="status">{message}</p>}
-            {error && <p className="rounded bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2.5 py-2 text-[11px] text-[var(--color-error)]" role="alert">{error}</p>}
+            {message && <p className="rounded-sm bg-white/4 px-2.5 py-2 text-[11px] text-(--f-core-white)" role="status">{message}</p>}
+            {error && <p className="rounded-sm bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2.5 py-2 text-[11px] text-theme-error" role="alert">{error}</p>}
             {hasMoreTasks && (
-              <p className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] text-[var(--color-warning)]" role="status">
+              <p className="rounded-sm bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] text-(--color-warning)" role="status">
                 Esta tabela tem mais linhas do que o Felixo carrega de uma vez — ordenação, filtro e busca valem só para as que já chegaram. Refine a busca pra reduzir o total.
               </p>
             )}
@@ -842,8 +842,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
         )}
 
         {!connectionId || !dataSourceId ? (
-          <div className="flex min-h-[19rem] flex-col items-center justify-center text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--f-core-white)]/10 text-[var(--f-core-white-soft)]"><ListTodo size={22} /></div>
+          <div className="flex min-h-76 flex-col items-center justify-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--f-core-white)/10 text-(--f-core-white-soft)"><ListTodo size={22} /></div>
             <h2 className="mt-3 text-sm font-medium text-zinc-100">Sua lista do Notion aparece aqui</h2>
             <p className="mt-1 max-w-sm text-xs leading-5 text-zinc-500">Configure uma conexão e escolha uma database para abrir as tarefas em uma tabela, como no Notion.</p>
             <button type="button" className="felixo-btn mt-4 flex items-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5" onClick={() => setShowWorkspaceSettings(true)}><Settings2 size={13} /> Configurar agora</button>
@@ -861,14 +861,14 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                 </p>
               </div>
               <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5 sm:flex-none">
-                <label className="relative min-w-[13rem] flex-1 sm:w-56 sm:flex-none">
+                <label className="relative min-w-52 flex-1 sm:w-56 sm:flex-none">
                   <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
                   <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar tarefas" aria-label="Buscar tarefas Notion" />
                 </label>
                 <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy || syncing} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy || syncing ? 'animate-spin' : ''} /></button>
                 <button
                   type="button"
-                  className={`felixo-btn-icon rounded-md border p-1.5 ${autoSyncEnabled ? 'border-white/10 text-[var(--f-core-white-soft)] hover:bg-[var(--f-core-white)]/10' : 'border-white/10 text-zinc-500 hover:bg-white/5 hover:text-zinc-100'}`}
+                  className={`felixo-btn-icon rounded-md border p-1.5 ${autoSyncEnabled ? 'border-white/10 text-(--f-core-white-soft) hover:bg-(--f-core-white)/10' : 'border-white/10 text-zinc-500 hover:bg-white/5 hover:text-zinc-100'}`}
                   onClick={() => setAutoSyncEnabled((value) => !value)}
                   aria-pressed={autoSyncEnabled}
                   aria-label={autoSyncEnabled ? 'Desligar sincronização automática' : 'Ligar sincronização automática (a cada minuto)'}
@@ -879,7 +879,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                 <div className="relative">
                   <button
                     type="button"
-                    className={`felixo-btn-icon rounded-md border p-1.5 ${visibleColumns.length > 0 ? 'border-white/10 text-[var(--f-core-white-soft)] hover:bg-[var(--f-core-white)]/10' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
+                    className={`felixo-btn-icon rounded-md border p-1.5 ${visibleColumns.length > 0 ? 'border-white/10 text-(--f-core-white-soft) hover:bg-(--f-core-white)/10' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
                     onClick={() => setShowColumnPicker((value) => !value)}
                     aria-expanded={showColumnPicker}
                     aria-label="Escolher colunas da tabela"
@@ -895,7 +895,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       ) : (
                         <div className="max-h-64 space-y-0.5 overflow-y-auto">
                           {columnableProperties.map((name) => (
-                            <label key={name} className="flex items-center gap-2 rounded px-1 py-1 text-[11px] text-zinc-300 hover:bg-white/5">
+                            <label key={name} className="flex items-center gap-2 rounded-sm px-1 py-1 text-[11px] text-zinc-300 hover:bg-white/5">
                               <input type="checkbox" checked={visibleColumns.includes(name)} onChange={() => toggleColumn(name)} />
                               <span className="truncate" title={name}>{name}</span>
                             </label>
@@ -919,7 +919,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       type="button"
                       role="tab"
                       aria-selected={isActive}
-                      className={`rounded px-1.5 py-1 text-[11px] ${isActive ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
+                      className={`rounded-sm px-1.5 py-1 text-[11px] ${isActive ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
                       onClick={() => setActiveViewId(view.id)}
                       title={editable && view.propertyFilters[0] ? `${view.propertyFilters[0].property}: ${view.propertyFilters[0].values.join(', ')}` : undefined}
                     >
@@ -927,8 +927,8 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                     </button>
                     {editable && (
                       <span className="hidden items-center gap-0.5 group-hover:flex">
-                        <button type="button" className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-[var(--f-core-white-soft)]" onClick={() => startEditingView(view)} aria-label={`Editar visualização ${view.name}`} title="Editar visualização"><Pencil size={11} /></button>
-                        <button type="button" className="felixo-btn-icon rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-[var(--color-error)]" onClick={() => deleteView(view)} aria-label={`Excluir visualização ${view.name}`} title="Excluir visualização"><Trash2 size={11} /></button>
+                        <button type="button" className="felixo-btn-icon rounded-sm p-0.5 text-zinc-500 hover:bg-white/10 hover:text-(--f-core-white-soft)" onClick={() => startEditingView(view)} aria-label={`Editar visualização ${view.name}`} title="Editar visualização"><Pencil size={11} /></button>
+                        <button type="button" className="felixo-btn-icon rounded-sm p-0.5 text-zinc-500 hover:bg-white/10 hover:text-theme-error" onClick={() => deleteView(view)} aria-label={`Excluir visualização ${view.name}`} title="Excluir visualização"><Trash2 size={11} /></button>
                       </span>
                     )}
                   </div>
@@ -941,7 +941,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
               <form className="mt-3 space-y-3 rounded-lg border border-white/10 bg-zinc-950/50 p-3" onSubmit={submitViewBuilder}>
                 <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1"><p className="font-medium text-zinc-100">{editingViewId ? 'Editar visualização' : 'Nova visualização'}</p><p className="text-[11px] text-zinc-500">Filtra tarefas por uma propriedade da database, como “Repositório” no Notion.</p></div>
-                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={cancelViewBuilder} aria-label="Fechar editor de visualização" title="Fechar"><X size={14} /></button>
+                  <button type="button" className="felixo-btn-icon rounded-sm p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={cancelViewBuilder} aria-label="Fechar editor de visualização" title="Fechar"><X size={14} /></button>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input className={`${inputClass} h-9`} value={viewDraft.name} onChange={(event) => setViewDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Nome da visualização" aria-label="Nome da visualização" required />
@@ -968,16 +968,16 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                         {filterableProperties.find((property) => property.name === viewDraft.property)?.options.map((option) => {
                           const checked = viewDraft.values.includes(option)
                           return (
-                            <button key={option} type="button" className={`rounded-full border px-2.5 py-1 text-[11px] ${checked ? 'border-white/10 bg-[var(--f-core-white)]/15 text-[var(--f-core-white)]' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`} onClick={() => toggleViewDraftValue(option)}>{option}</button>
+                            <button key={option} type="button" className={`rounded-full border px-2.5 py-1 text-[11px] ${checked ? 'border-white/10 bg-(--f-core-white)/15 text-(--f-core-white)' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`} onClick={() => toggleViewDraftValue(option)}>{option}</button>
                           )
                         })}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <p className="rounded border border-dashed border-white/10 px-2 py-2 text-[11px] text-zinc-500">Esta database não tem propriedades do tipo seleção para filtrar (select, multi-select ou status).</p>
+                  <p className="rounded-sm border border-dashed border-white/10 px-2 py-2 text-[11px] text-zinc-500">Esta database não tem propriedades do tipo seleção para filtrar (select, multi-select ou status).</p>
                 )}
-                <div className="flex justify-end gap-2"><button type="button" className="felixo-btn rounded-md px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={cancelViewBuilder}>Cancelar</button><button type="submit" className="felixo-btn flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16] disabled:opacity-50"><Save size={13} /> {editingViewId ? 'Salvar alterações' : 'Criar visualização'}</button></div>
+                <div className="flex justify-end gap-2"><button type="button" className="felixo-btn rounded-md px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={cancelViewBuilder}>Cancelar</button><button type="submit" className="felixo-btn flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:opacity-50"><Save size={13} /> {editingViewId ? 'Salvar alterações' : 'Criar visualização'}</button></div>
               </form>
             )}
 
@@ -985,7 +985,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
               <form className="mt-3 space-y-3 rounded-lg border border-white/10 bg-zinc-950/50 p-3" onSubmit={(event) => void submitTask(event)}>
                 <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1"><p className="font-medium text-zinc-100">{editingId ? 'Editar tarefa' : 'Nova tarefa'}</p><p className="text-[11px] text-zinc-500">Os campos seguem as propriedades reconhecidas pela database.</p></div>
-                  <button type="button" className="felixo-btn-icon rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={cancelTaskComposer} aria-label="Fechar editor" title="Fechar editor"><X size={14} /></button>
+                  <button type="button" className="felixo-btn-icon rounded-sm p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={cancelTaskComposer} aria-label="Fechar editor" title="Fechar editor"><X size={14} /></button>
                 </div>
                 <div className="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_minmax(9rem,1fr)_auto]">
                   <input className={`${inputClass} h-9`} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Título" aria-label="Título da tarefa" required />
@@ -999,28 +999,28 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                     aria-label="Estado da tarefa"
                   />
                   <input className={`${inputClass} h-9`} type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} aria-label="Prazo da tarefa" />
-                  <label className="flex h-9 items-center gap-2 rounded border border-white/10 px-2 text-xs text-zinc-300"><input type="checkbox" checked={draft.completed} onChange={(event) => setDraft((current) => ({ ...current, completed: event.target.checked }))} /> Concluída</label>
+                  <label className="flex h-9 items-center gap-2 rounded-sm border border-white/10 px-2 text-xs text-zinc-300"><input type="checkbox" checked={draft.completed} onChange={(event) => setDraft((current) => ({ ...current, completed: event.target.checked }))} /> Concluída</label>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <input className={`${inputClass} h-9 min-w-[12rem] flex-1`} value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} placeholder="Prioridade (se houver)" aria-label="Prioridade da tarefa" />
-                  <textarea className={`${inputClass} min-h-9 min-w-[18rem] flex-[2] resize-y`} value={draft.text} onChange={(event) => setDraft((current) => ({ ...current, text: event.target.value }))} placeholder="Descrição (se a tabela tiver texto)" aria-label="Descrição da tarefa" />
+                  <input className={`${inputClass} h-9 min-w-48 flex-1`} value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} placeholder="Prioridade (se houver)" aria-label="Prioridade da tarefa" />
+                  <textarea className={`${inputClass} min-h-9 min-w-[18rem] flex-2 resize-y`} value={draft.text} onChange={(event) => setDraft((current) => ({ ...current, text: event.target.value }))} placeholder="Descrição (se a tabela tiver texto)" aria-label="Descrição da tarefa" />
                 </div>
-                <div className="flex justify-end gap-2"><button type="button" className="felixo-btn rounded-md px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={cancelTaskComposer}>Cancelar</button><button type="submit" className="felixo-btn flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.16] disabled:opacity-50" disabled={busy}><Save size={13} /> {editingId ? 'Salvar alterações' : 'Criar tarefa'}</button></div>
+                <div className="flex justify-end gap-2"><button type="button" className="felixo-btn rounded-md px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={cancelTaskComposer}>Cancelar</button><button type="submit" className="felixo-btn flex items-center gap-1.5 rounded-md felixo-primary-action px-3 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:opacity-50" disabled={busy}><Save size={13} /> {editingId ? 'Salvar alterações' : 'Criar tarefa'}</button></div>
               </form>
             )}
 
             <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/35">
               <div className="overflow-x-auto">
                 <table className="min-w-[760px] w-full table-fixed border-collapse text-xs" aria-label="Tarefas do Notion">
-                  <thead className="bg-white/[0.03] text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                  <thead className="bg-white/3 text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                     <tr className="border-b border-white/10">
                       {taskMode && <th className="sticky left-0 z-10 w-12 bg-zinc-950 px-3 py-2 font-medium" scope="col"><span className="sr-only">Concluída</span></th>}
-                      <th className={`sticky ${taskMode ? 'left-12' : 'left-0'} z-10 w-[22rem] bg-zinc-950 px-3 py-2 font-medium`} scope="col"><SortableHeader column="title" label={taskMode ? 'Tarefa' : 'Nome'} sort={sortState} onSort={toggleSort} /></th>
+                      <th className={`sticky ${taskMode ? 'left-12' : 'left-0'} z-10 w-88 bg-zinc-950 px-3 py-2 font-medium`} scope="col"><SortableHeader column="title" label={taskMode ? 'Tarefa' : 'Nome'} sort={sortState} onSort={toggleSort} /></th>
                       {taskMode && <th className="w-36 px-3 py-2 font-medium" scope="col"><SortableHeader column="status" label="Estado" sort={sortState} onSort={toggleSort} /></th>}
                       {taskMode && <th className="w-32 px-3 py-2 font-medium" scope="col"><SortableHeader column="priority" label="Prioridade" sort={sortState} onSort={toggleSort} /></th>}
                       {taskMode && <th className="w-36 px-3 py-2 font-medium" scope="col"><SortableHeader column="dueDate" label="Prazo" sort={sortState} onSort={toggleSort} /></th>}
                       {visibleColumns.map((name) => (
-                        <th key={name} className="w-[9rem] px-3 py-2 font-medium" scope="col"><SortableHeader column={name} label={name} sort={sortState} onSort={toggleSort} /></th>
+                        <th key={name} className="w-36 px-3 py-2 font-medium" scope="col"><SortableHeader column={name} label={name} sort={sortState} onSort={toggleSort} /></th>
                       ))}
                       <th className="w-24 px-3 py-2 text-right font-medium" scope="col"><span className="sr-only">Ações</span></th>
                     </tr>
@@ -1049,9 +1049,9 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                             </td>}
                             <td className={`sticky ${taskMode ? 'left-12' : 'left-0'} z-10 bg-zinc-950 px-3 py-2.5 group-hover:bg-zinc-900`}>
                               <div className="flex min-w-0 items-center gap-1">
-                                {hasDetails ? <button type="button" className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200" onClick={() => toggleTaskDetails(task)} aria-label={isExpanded ? `Recolher ${task.title}` : `Ver detalhes de ${task.title}`} title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button> : <span className="w-[19px] shrink-0" />}
-                                <span className={`min-w-0 flex-1 whitespace-normal break-words font-medium ${task.completed ? 'line-through' : 'text-zinc-100'}`} title={task.title}>{task.title}</span>
-                                {task.url && <a className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-600 opacity-0 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] group-hover:opacity-100" href={task.url} target="_blank" rel="noreferrer" aria-label={`Abrir ${task.title}`} title="Abrir no Notion"><ExternalLink size={13} /></a>}
+                                {hasDetails ? <button type="button" className="felixo-btn-icon shrink-0 rounded-sm p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200" onClick={() => toggleTaskDetails(task)} aria-label={isExpanded ? `Recolher ${task.title}` : `Ver detalhes de ${task.title}`} title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button> : <span className="w-[19px] shrink-0" />}
+                                <span className={`min-w-0 flex-1 whitespace-normal wrap-break-word font-medium ${task.completed ? 'line-through' : 'text-zinc-100'}`} title={task.title}>{task.title}</span>
+                                {task.url && <a className="felixo-btn-icon shrink-0 rounded-sm p-0.5 text-zinc-600 opacity-0 hover:bg-white/10 hover:text-(--f-core-white-soft) group-hover:opacity-100" href={task.url} target="_blank" rel="noreferrer" aria-label={`Abrir ${task.title}`} title="Abrir no Notion"><ExternalLink size={13} /></a>}
                               </div>
                             </td>
                             {taskMode && <td className="px-3 py-2.5"><span className={`inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(task)}`}>{task.completed ? 'Concluída' : task.status || 'Sem estado'}</span></td>}
@@ -1061,9 +1061,9 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                               const cell = formatPropertyValue(task.fields?.[name], schema[name]?.type)
                               return <td key={name} className="px-3 py-2.5"><span className="block truncate text-[11px] text-zinc-400" title={cell}>{cell || '—'}</span></td>
                             })}
-                            <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--f-core-white-soft)] disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)] disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
+                            <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-(--f-core-white-soft) disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-theme-error disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
                           </tr>
-                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/[0.02]"><td colSpan={fixedColumnCount + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/[0.08] bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="break-words text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/[0.08] bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-[var(--color-warning)]"><span>{taskContent.message}</span><button type="button" className="text-[var(--f-core-white-soft)] underline hover:text-[var(--f-core-white)]" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-[var(--f-core-white-soft)] hover:text-[var(--f-core-white)]" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-[var(--f-core-white-soft)]" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/2"><td colSpan={fixedColumnCount + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/8 bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="wrap-break-word text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/8 bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-(--color-warning)"><span>{taskContent.message}</span><button type="button" className="text-(--f-core-white-soft) underline hover:text-(--f-core-white)" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-(--f-core-white-soft) hover:text-(--f-core-white)" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-(--f-core-white-soft)" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
                         </Fragment>
                       )
                     })}
@@ -1071,7 +1071,7 @@ export function NotionTasksPanel({ onClose, toolsMenuOpen, embedded = false }: N
                       <tr>
                         <td colSpan={fixedColumnCount + visibleColumns.length} className="px-3 py-3 text-center text-[11px] text-zinc-500">
                           Mostrando {rowLimit} de {visibleTasks.length} linhas.{' '}
-                          <button type="button" className="text-[var(--f-core-white-soft)] underline hover:text-[var(--f-core-white)]" onClick={() => setRowLimitState({ key: dataSourceId, limit: nextRowLimit(rowLimit, visibleTasks.length) })}>Mostrar mais {ROW_PAGE_SIZE}</button>
+                          <button type="button" className="text-(--f-core-white-soft) underline hover:text-(--f-core-white)" onClick={() => setRowLimitState({ key: dataSourceId, limit: nextRowLimit(rowLimit, visibleTasks.length) })}>Mostrar mais {ROW_PAGE_SIZE}</button>
                         </td>
                       </tr>
                     )}
@@ -1146,7 +1146,7 @@ function getTaskProperties(
 }
 
 function statusBadgeClass(task: NotionTask): string {
-  if (task.completed) return 'border-white/10 bg-[var(--f-core-white)]/10 text-[var(--f-core-white-soft)]'
+  if (task.completed) return 'border-white/10 bg-(--f-core-white)/10 text-(--f-core-white-soft)'
   if (!task.status) return 'border-zinc-500/25 bg-zinc-500/10 text-zinc-400'
-  return 'border-white/10 bg-[var(--f-core-white)]/10 text-[var(--f-core-white-soft)]'
+  return 'border-white/10 bg-(--f-core-white)/10 text-(--f-core-white-soft)'
 }

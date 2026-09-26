@@ -59,7 +59,7 @@ export function ModelsPanel({ onClose, toolsMenuOpen }: ModelsPanelProps) {
           {models.map((model) => (
             <li
               key={model.id}
-              className="flex items-center gap-2 rounded bg-zinc-800/60 px-2 py-1.5"
+              className="flex items-center gap-2 rounded-sm bg-zinc-800/60 px-2 py-1.5"
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm text-zinc-100">{model.name}</div>
@@ -70,7 +70,7 @@ export function ModelsPanel({ onClose, toolsMenuOpen }: ModelsPanelProps) {
               <button
                 type="button"
                 onClick={() => void removeModel(model.id)}
-                className="felixo-btn-icon rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-[var(--color-error)]"
+                className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-theme-error"
                 aria-label={`Remover ${model.name}`}
               >
                 <Trash2 size={14} />

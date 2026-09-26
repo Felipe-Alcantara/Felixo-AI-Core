@@ -92,7 +92,7 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                 className={`flex min-w-0 items-end gap-2 ${isUser ? 'justify-end' : ''}`}
               >
                 {!isUser && (
-                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]">
+                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)">
                     <Bot size={16} aria-hidden="true" />
                   </span>
                 )}
@@ -100,8 +100,8 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                 <div
                   className={`min-w-0 max-w-[78%] rounded-[1.45rem] border px-4 py-3 shadow-soft max-sm:max-w-[86%] ${
                     isUser
-                      ? 'rounded-br-md border-white/[0.15] bg-white/[0.06]'
-                      : 'rounded-bl-md border-white/[0.08] bg-[#252524]'
+                      ? 'rounded-br-md border-white/15 bg-white/6'
+                      : 'rounded-bl-md border-white/8 bg-[#252524]'
                   }`}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-4">
@@ -135,13 +135,13 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                   )}
                   <span>
                     {message.isStreaming && (
-                      <span className="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--color-warning)] align-middle" />
+                      <span className="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-full bg-(--color-warning) align-middle" />
                     )}
                   </span>
                 </div>
 
                 {isUser && (
-                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.10] text-[var(--f-core-white)]">
+                  <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-(--f-core-white)">
                     <User size={15} aria-hidden="true" />
                   </span>
                 )}
@@ -177,10 +177,10 @@ function CopyButton({ text, title }: { text: string; title: string }) {
       type="button"
       title={title}
       onClick={handleCopy}
-      className="felixo-btn-icon flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:text-zinc-300"
+      className="felixo-btn-icon flex h-5 w-5 items-center justify-center rounded-sm text-zinc-500 hover:text-zinc-300"
     >
       {copied ? (
-        <Check size={12} className="text-[var(--f-core-white-soft)]" aria-hidden="true" />
+        <Check size={12} className="text-(--f-core-white-soft)" aria-hidden="true" />
       ) : (
         <Copy size={12} aria-hidden="true" />
       )}
@@ -206,13 +206,13 @@ function MessageAttachments({
         (Boolean(attachment.previewUrl) || Boolean(attachment.path)) ? (
           <figure
             key={attachment.id}
-            className="overflow-hidden rounded-lg border border-white/[0.12] bg-black/20"
+            className="overflow-hidden rounded-lg border border-white/12 bg-black/20"
           >
             <button
               type="button"
               title={`Expandir ${attachment.name}`}
               onClick={() => onOpenImage(attachment)}
-              className="felixo-btn-icon group relative flex max-h-72 min-h-32 w-full items-center justify-center bg-black/20 outline-none focus:ring-2 focus:ring-white/25"
+              className="felixo-btn-icon group relative flex max-h-72 min-h-32 w-full items-center justify-center bg-black/20 outline-hidden focus:ring-2 focus:ring-white/25"
             >
               {attachment.previewUrl ? (
                 <img
@@ -229,7 +229,7 @@ function MessageAttachments({
                 <Maximize2 size={14} aria-hidden="true" />
               </span>
             </button>
-            <figcaption className="flex min-w-0 items-center justify-between gap-3 border-t border-white/[0.06] px-2.5 py-1.5 text-[11px] text-zinc-400">
+            <figcaption className="flex min-w-0 items-center justify-between gap-3 border-t border-white/6 px-2.5 py-1.5 text-[11px] text-zinc-400">
               <span className="min-w-0 truncate">{attachment.name}</span>
               <span className="shrink-0 font-mono text-[10px] text-zinc-600">
                 {formatFileSize(attachment.size)}
@@ -240,7 +240,7 @@ function MessageAttachments({
           <div
             key={attachment.id}
             title={attachment.path || attachment.name}
-            className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-white/[0.12] bg-black/15 px-2.5 py-1.5 text-[11px] text-zinc-300"
+            className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-white/12 bg-black/15 px-2.5 py-1.5 text-[11px] text-zinc-300"
           >
             <span className="min-w-0 truncate">{attachment.name}</span>
             <span className="shrink-0 font-mono text-[10px] text-zinc-600">
@@ -281,13 +281,13 @@ function ImageLightbox({
           onClose()
         }
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs"
     >
       <section
         onMouseDown={(event) => event.stopPropagation()}
         className="flex max-h-[92vh] w-full max-w-[min(96vw,1200px)] flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-950 shadow-shell"
       >
-        <header className="flex min-h-12 items-center justify-between gap-3 border-b border-white/[0.08] px-3 py-2">
+        <header className="flex min-h-12 items-center justify-between gap-3 border-b border-white/8 px-3 py-2">
           <div className="min-w-0">
             <div className="truncate text-[12px] font-medium text-zinc-100">
               {image.name}
@@ -298,13 +298,13 @@ function ImageLightbox({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {image.isLoadingOriginal && (
-              <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--f-core-white-soft)]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-(--f-core-white-soft)" />
             )}
             <button
               type="button"
               title="Fechar imagem"
               onClick={onClose}
-              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+              className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
             >
               <X size={16} aria-hidden="true" />
               <span className="sr-only">Fechar imagem</span>

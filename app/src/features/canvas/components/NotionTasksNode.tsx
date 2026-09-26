@@ -33,14 +33,14 @@ export function NotionTasksNode({ id, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.notionTasks.width}
         minHeight={NODE_MIN_SIZE.notionTasks.height}
-        lineClassName="!border-white/30"
-        handleClassName="!h-2.5 !w-2.5 !rounded-sm !bg-[var(--f-core-active)]"
+        lineClassName="border-white/30!"
+        handleClassName="h-2.5! w-2.5! rounded-xs! bg-(--f-core-active)!"
       />
-      <Handle type="target" position={Position.Left} className="!bg-[var(--f-core-active)]" />
+      <Handle type="target" position={Position.Left} className="bg-(--f-core-active)!" />
       <NodeHeader
         title="Tarefas Notion"
         icon={<ListTodo size={13} />}
-        className="bg-white/[0.04] text-[var(--f-core-white)]"
+        className="bg-white/4 text-(--f-core-white)"
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
       />
       <div className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto bg-zinc-900 p-3">
@@ -54,7 +54,7 @@ export function NotionTasksNode({ id, selected }: NodeProps) {
           <LazyNotionTasksPanel embedded onClose={() => void deleteElements({ nodes: [{ id }] })} />
         </Suspense>
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-[var(--f-core-active)]" />
+      <Handle type="source" position={Position.Right} className="bg-(--f-core-active)!" />
     </div>
   )
 }

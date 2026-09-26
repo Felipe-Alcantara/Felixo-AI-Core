@@ -174,7 +174,7 @@ export function TerminalMenu({
           type="button"
           onClick={() => void openTerminal()}
           disabled={launching}
-          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-transparent px-3 py-2 text-sm text-[var(--f-core-white-soft)] hover:bg-white/[0.06] disabled:opacity-50"
+          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-transparent px-3 py-2 text-sm text-(--f-core-white-soft) hover:bg-white/6 disabled:opacity-50"
         >
           <TerminalSquare size={16} />
           Agente
@@ -212,7 +212,7 @@ export function TerminalMenu({
               type="button"
               onClick={() => void openTerminal()}
               disabled={launching}
-              className="felixo-btn flex-1 rounded felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50"
+              className="felixo-btn flex-1 rounded-sm felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50"
             >
               Abrir agente
             </button>
@@ -222,7 +222,7 @@ export function TerminalMenu({
               disabled={launching}
               title="Adicionar esta configuração à fila, para iniciar vários terminais de uma vez"
               aria-label="Adicionar à fila de terminais"
-              className="felixo-btn-icon flex items-center justify-center rounded bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"
+              className="felixo-btn-icon flex items-center justify-center rounded-sm bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"
             >
               <Plus size={14} />
             </button>
@@ -246,14 +246,14 @@ export function TerminalMenu({
                 {queue.map((item, index) => (
                   <li
                     key={index}
-                    className="flex items-center gap-1 rounded bg-zinc-900 px-1.5 py-1"
+                    className="flex items-center gap-1 rounded-sm bg-zinc-900 px-1.5 py-1"
                   >
                     <input
                       value={item.label}
                       onChange={(event) => renameQueued(index, event.target.value)}
                       title="Renomear antes de iniciar"
                       aria-label={`Renomear "${item.label}" antes de iniciar`}
-                      className="min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs text-zinc-200 outline-none ring-1 ring-transparent hover:ring-white/10 focus:bg-zinc-950 focus:ring-white/40"
+                      className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-xs text-zinc-200 outline-hidden ring-1 ring-transparent hover:ring-white/10 focus:bg-zinc-950 focus:ring-white/40"
                     />
                     <button
                       type="button"
@@ -269,7 +269,7 @@ export function TerminalMenu({
               <button
                 type="button"
                 onClick={startQueue}
-                className="felixo-btn w-full rounded felixo-primary-action px-3 py-1.5 text-sm "
+                className="felixo-btn w-full rounded-sm felixo-primary-action px-3 py-1.5 text-sm "
               >
                 Iniciar {queue.length} terminais
               </button>

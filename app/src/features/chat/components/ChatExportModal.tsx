@@ -39,15 +39,15 @@ export function ChatExportModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <section
         {...dialog.frameProps}
-        className="relative flex flex-col w-full max-w-[460px] rounded-3xl border border-white/10 bg-[var(--color-panel)] shadow-shell"
+        className="relative flex flex-col w-full max-w-[460px] rounded-3xl border border-white/10 bg-(--color-panel) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">
               Exportar chat
@@ -64,7 +64,7 @@ export function ChatExportModal({
             type="button"
             title="Fechar"
             onClick={onClose}
-            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+            className="felixo-btn-icon flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-zinc-100"
           >
             <X size={16} aria-hidden="true" />
             <span className="sr-only">Fechar</span>
@@ -78,7 +78,7 @@ export function ChatExportModal({
               type="text"
               value={fileName}
               onChange={(event) => setFileName(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-white/20 disabled:cursor-not-allowed disabled:text-zinc-600"
+              className="mt-2 w-full rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-zinc-100 outline-hidden transition placeholder:text-zinc-600 focus:border-white/20 disabled:cursor-not-allowed disabled:text-zinc-600"
               placeholder={suggestedFileName}
             />
           </label>
@@ -86,7 +86,7 @@ export function ChatExportModal({
           <button
             type="button"
             onClick={() => onExport('analysis', fileName)}
-            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-[var(--f-core-active)]/5 px-4 py-3 text-left text-sm text-[var(--f-core-white)] hover:bg-[var(--f-core-active)]/10"
+            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-(--f-core-active)/5 px-4 py-3 text-left text-sm text-(--f-core-white) hover:bg-(--f-core-active)/10"
           >
             <Bug size={18} aria-hidden="true" />
             Markdown para analise
@@ -97,7 +97,7 @@ export function ChatExportModal({
             type="button"
             disabled={chatExportDisabled}
             onClick={() => onExport('json', fileName)}
-            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
+            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 hover:bg-white/8 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
             <FileJson size={18} aria-hidden="true" />
             JSON compacto
@@ -108,7 +108,7 @@ export function ChatExportModal({
             type="button"
             disabled={chatExportDisabled}
             onClick={() => onExport('markdown', fileName)}
-            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
+            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 hover:bg-white/8 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
             <FileText size={18} aria-hidden="true" />
             Markdown
@@ -119,7 +119,7 @@ export function ChatExportModal({
             type="button"
             disabled={chatExportDisabled}
             onClick={() => onExport('text', fileName)}
-            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
+            className="felixo-btn flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-left text-sm text-zinc-200 hover:bg-white/8 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:hover:bg-black/10"
           >
             <AlignLeft size={18} aria-hidden="true" />
             Texto simples

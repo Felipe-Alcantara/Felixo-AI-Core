@@ -18,7 +18,7 @@ export function CopyButton({ onCopy }: CopyButtonProps) {
     <button
       type="button"
       // nodrag so the button works inside a draggable node header.
-      className="felixo-btn-icon nodrag rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+      className="felixo-btn-icon nodrag rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
       onClick={async () => {
         const text = await onCopy()
         if (text) {
@@ -29,7 +29,7 @@ export function CopyButton({ onCopy }: CopyButtonProps) {
       title="Copiar seleção (ou a tela visível)"
       aria-label="Copiar do terminal"
     >
-      {copied ? <Check size={15} className="text-[var(--f-core-white-soft)]" /> : <Copy size={15} />}
+      {copied ? <Check size={15} className="text-(--f-core-white-soft)" /> : <Copy size={15} />}
     </button>
   )
 }

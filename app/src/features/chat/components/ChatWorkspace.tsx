@@ -1220,7 +1220,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   return (
     <div
       data-theme={theme}
-      className="felixo-shell flex h-full min-h-0 bg-[var(--color-app-bg)] text-zinc-100"
+      className="felixo-shell flex h-full min-h-0 bg-(--color-app-bg) text-zinc-100"
     >
       <AppSidebar
         models={models}
@@ -1246,7 +1246,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         onRemoveModel={removeModel}
       />
 
-      <main className="flex min-w-0 flex-1 flex-col bg-[var(--color-main-bg)]">
+      <main className="flex min-w-0 flex-1 flex-col bg-(--color-main-bg)">
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div
             className={[
@@ -1259,7 +1259,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
               type="button"
               title="Abrir sidebar"
               onClick={() => setIsSidebarOpen(true)}
-              className="felixo-btn-icon rounded p-0.5 hover:text-zinc-300"
+              className="felixo-btn-icon rounded-sm p-0.5 hover:text-zinc-300"
             >
               <PanelLeft size={13} />
             </button>
@@ -1285,8 +1285,8 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
             <>
               <ChatThread models={models} messages={messages} />
               {orchestrationStatusText && (
-                <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.07] bg-[var(--color-status-bg)] px-5 py-2 text-[12px] text-zinc-400">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-warning)]" />
+                <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.07] bg-(--color-status-bg) px-5 py-2 text-[12px] text-zinc-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-(--color-warning)" />
                   <span className="min-w-0 truncate">{orchestrationStatusText}</span>
                 </div>
               )}
