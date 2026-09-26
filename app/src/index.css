@@ -3,8 +3,8 @@
 
    source('.') limita a varredura de classes a src/, como o `content` do v3
    (os .ts/.tsx de src/; o index.html não usa classes). Sem isso o v4 varreria
-   app/ inteiro (electron/, scripts/, resources/...) e geraria utilities a
-   partir de palavras soltas desses arquivos. */
+   app/ inteiro (electron/, scripts/, resources/...); hoje a saída é a mesma
+   (medido), mas texto desses arquivos poderia virar utility no futuro. */
 @import 'tailwindcss' source('.');
 
 @theme {
@@ -20,18 +20,19 @@
 
    O v4 emite tudo em camadas nativas (theme, base, components, utilities) e
    CSS fora de camada vence QUALQUER camada, seja qual for a especificidade. No
-   v3 não havia camadas: este arquivo inteiro vinha depois das utilities e a
-   disputa era só especificidade + ordem. Para manter o mesmo resultado:
+   v3 não havia camadas: este arquivo vinha depois das utilities sem variante
+   e antes das com variante (hover:, focus:, disabled:... iam para o fim da
+   folha), e a disputa era só especificidade + ordem. Por isso:
 
    - regras de elemento e variáveis globais (:root, *, body, button, select,
      textarea...) ficam em @layer base: no v3 qualquer classe as vencia por
      especificidade, e fora de camada no v4 elas passariam a vencer as
      utilities (ex.: `font: inherit` apagaria text-xs/font-mono em botões);
    - as classes próprias (.felixo-*, overrides de .react-flow__* etc.)
-     continuam SEM camada, como no v3: vencem utilities da mesma
-     especificidade (o que o código já assume, ex. `top` da sidebar) e seguem
-     disputando só especificidade/ordem com o CSS das bibliotecas (React Flow,
-     Excalidraw, xterm), que também é sem camada. */
+     continuam SEM camada, como no v3: vencem as utilities do mesmo elemento
+     e seguem disputando só especificidade/ordem com o CSS das bibliotecas
+     (React Flow, Excalidraw, xterm), que também é sem camada. Onde uma
+     variante precisa vencer a classe própria, a utility leva `!`. */
 @layer base {
   :root {
     /* Felixo AI Core — aliases semânticos sobre os tokens oficiais do Brand Kit.
