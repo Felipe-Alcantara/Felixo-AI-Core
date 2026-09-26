@@ -36,6 +36,7 @@ const os = require('node:os')
 const path = require('node:path')
 const net = require('node:net')
 const { spawn } = require('node:child_process')
+const { performance } = require('node:perf_hooks')
 
 const DEFAULT_ROUNDS = 3
 const MAX_ROUNDS = 10
@@ -594,12 +595,17 @@ async function run(options) {
   const nodes = buildFixtureNodes(options.nodes)
   const edges = buildFixtureEdges(nodes)
   const nodeIds = nodes.map((node) => node.id)
+  // Abertura: do spawn do Electron até o canvas hidratado (com o canvas
+  // ainda vazio, antes do fixture). Inclui ler e aplicar o CSS do app.
+  const launchStartedAt = performance.now()
   const app = await launchApp(options)
   let browser
   try {
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${app.port}`)
     const page = await findAppPage(browser, options.launchTimeoutMs)
     await page.waitForFunction(() => document.querySelector('[data-felixo-hydrated="true"]') !== null, null, { timeout: options.launchTimeoutMs })
+    const aberturaMs = Number((performance.now() - launchStartedAt).toFixed(1))
+    console.log(`[ui-render] abertura até o canvas hidratado: ${aberturaMs} ms`)
     await populateCanvas(page, nodes, edges)
     const gpu = await readGpuInfo(browser)
     console.log(`[ui-render] GPU: ${gpu.renderer ?? 'desconhecida'} (${gpu.vendor ?? 's/ fornecedor'})`)
@@ -634,6 +640,7 @@ async function run(options) {
       angle: options.angle,
       gpu,
       config: { rounds: options.rounds, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length },
+      aberturaMs,
       runs,
       summary: summarizeRuns(runs),
     }
