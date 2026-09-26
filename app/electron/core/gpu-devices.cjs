@@ -16,13 +16,16 @@
  *
  * - Em todo sistema saem os renderizadores por software, pelo mesmo critério
  *   do Chromium (`GPUDevice::IsSoftwareRenderer`).
- * - Windows e macOS: `force_low_power_gpu` e `force_high_performance_gpu` só
- *   escolhem algo quando existe uma placa marcada como de baixo consumo E outra
- *   como de alto desempenho (`SetupGLDisplayManagerEGL`,
- *   `gpu/ipc/service/gpu_init.cc`). O Chromium só marca (`gpuPreference`) com
- *   duas placas reais ou mais (`gpu_info_collector_win.cc`,
- *   `gpu_info_collector_mac.mm`), e as NPUs nunca são marcadas. A escolha
- *   aparece exatamente quando tem efeito.
+ * - Windows e macOS: cada switch só escolhe algo com `GpuCount() > 1` e uma
+ *   placa com a PRÓPRIA marca: `force_low_power_gpu` precisa de uma marcada
+ *   como de baixo consumo, `force_high_performance_gpu` de uma marcada como de
+ *   alto desempenho (`SetupGLDisplayManagerEGL`, `gpu/ipc/service/gpu_init.cc`).
+ *   O Chromium só marca (`gpuPreference`) com duas placas reais ou mais
+ *   (`gpu_info_collector_win.cc`, `gpu_info_collector_mac.mm`), e as NPUs
+ *   nunca são marcadas. Exigir as DUAS marcas é escolha do app, para oferecer
+ *   as duas opções, e bate com o efeito: quando só a de baixo consumo está
+ *   marcada (o DXGI devolveu a mesma placa para as duas consultas), ela é a
+ *   placa padrão, e a Integrada não mudaria nada.
  * - Linux: o Chromium não marca consumo (medido em 26/09/2026: `gpuPreference`
  *   0 nas duas placas); vale a contagem das placas reais.
  */

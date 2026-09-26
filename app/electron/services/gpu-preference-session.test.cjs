@@ -189,7 +189,7 @@ test('aviso reconhecido pela IPC some do estado', async () => {
 })
 
 test('uma placa só não mostra a escolha', async () => {
-  const { session } = setup({ gpuInfo: { gpuDevice: [{ vendorId: 0x106b, deviceId: 1 }] } })
+  const { session } = setup({ gpuInfo: { gpuDevice: [{ vendorId: 0x106b, deviceId: 0 }] } })
   assert.equal((await session.describe()).multipleGpus, false)
 })
 

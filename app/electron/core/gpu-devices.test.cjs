@@ -58,7 +58,16 @@ test('Windows com duas placas sem as marcas de consumo não oferece: os switches
 test('macOS: Intel + AMD marcados oferece; Apple Silicon com uma GPU não', () => {
   const amd = { vendorId: 0x1002, deviceId: 0x7340, gpuPreference: HIGH }
   assert.equal(describeGpuDevices({ gpuDevice: [{ ...INTEL, gpuPreference: LOW }, amd] }, 'darwin').multipleGpus, true)
-  assert.equal(describeGpuDevices({ gpuDevice: [{ vendorId: 0x106b, deviceId: 0x1, gpuPreference: 0 }] }, 'darwin').multipleGpus, false)
+  // O AGXAccelerator do Apple Silicon só traz vendor-id (ANGLE
+  // SystemInfo_macos.mm): a entrada chega com deviceId 0 e continua sendo uma
+  // placa real, que não é renderizador por software.
+  const appleSilicon = { vendorId: 0x106b, deviceId: 0, gpuPreference: 0 }
+  assert.equal(isSoftwareRendererDevice(appleSilicon), false)
+  assert.deepEqual(describeGpuDevices({ gpuDevice: [appleSilicon] }, 'darwin'), {
+    devices: [{ vendorId: 0x106b, deviceId: 0 }],
+    multipleGpus: false,
+    unavailablePreferences: {},
+  })
 })
 
 test('macOS com placa NVIDIA não oferece a Dedicada: a lista de bugs do Chromium força a de baixo consumo', () => {
