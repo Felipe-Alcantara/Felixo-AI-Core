@@ -118,6 +118,26 @@ function normalizePositiveInteger(value) {
   return Number.isFinite(value) && value > 0 ? Math.round(value) : null
 }
 
+/**
+ * Decide se o processo rasteriza por software.
+ *
+ * A instância de automação do `felixo devtools` (porta CDP aberta) usa
+ * software por padrão, para que a captura de uma janela oculta seja
+ * confiável. Uma bancada que precise medir a GPU pede hardware explicitamente
+ * NAQUELE lançamento (`FELIXO_GRAPHICS_MODE=hardware` ou
+ * `--felixo-graphics-mode=hardware`). O modo salvo no perfil não conta, para
+ * que uma sessão `--real-profile` continue no padrão seguro. Sem porta CDP,
+ * nada muda: vale só o perfil gráfico.
+ */
+function shouldUseSoftwareRendering({ devtoolsActive, graphicsProfile }) {
+  if (graphicsProfile.useSoftwareRendering) return true
+  if (!devtoolsActive) return false
+  const explicitHardware =
+    graphicsProfile.mode === 'hardware' &&
+    (graphicsProfile.source === 'environment' || graphicsProfile.source === 'cli')
+  return !explicitHardware
+}
+
 module.exports = {
   GRAPHICS_MODE_ARG,
   GRAPHICS_MODE_ENV,
@@ -130,4 +150,5 @@ module.exports = {
   readModeFromArgv,
   readPersistedGraphicsMode,
   resolveGraphicsProfile,
+  shouldUseSoftwareRendering,
 }

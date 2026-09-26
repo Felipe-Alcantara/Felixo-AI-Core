@@ -11,6 +11,7 @@ const {
   persistGraphicsMode,
   readPersistedGraphicsMode,
   resolveGraphicsProfile,
+  shouldUseSoftwareRendering,
 } = require('./graphics-mode.cjs')
 
 function createProfile(overrides = {}) {
@@ -83,4 +84,34 @@ test('lê e grava o modo persistente sem aceitar JSON inválido', () => {
   } finally {
     fs.rmSync(userDataPath, { recursive: true, force: true })
   }
+})
+
+test('automação do DevTools rasteriza por software por padrão', () => {
+  const graphicsProfile = resolveGraphicsProfile({ argv: [], environment: {}, platformName: 'linux', fileSystem: { readFileSync: () => { throw new Error('ENOENT') } } })
+  assert.equal(shouldUseSoftwareRendering({ devtoolsActive: true, graphicsProfile }), true)
+  assert.equal(shouldUseSoftwareRendering({ devtoolsActive: false, graphicsProfile }), false)
+})
+
+test('automação do DevTools usa a GPU quando o lançamento pede hardware explicitamente', () => {
+  // Sem isto nenhuma bancada media a GPU: a porta CDP forçava disable-gpu sempre.
+  const semPerfil = { readFileSync: () => { throw new Error('ENOENT') } }
+  const porAmbiente = resolveGraphicsProfile({ argv: [], environment: { FELIXO_GRAPHICS_MODE: 'hardware' }, platformName: 'linux', fileSystem: semPerfil })
+  const porArgumento = resolveGraphicsProfile({ argv: ['--felixo-graphics-mode=hardware'], environment: {}, platformName: 'linux', fileSystem: semPerfil })
+  assert.equal(shouldUseSoftwareRendering({ devtoolsActive: true, graphicsProfile: porAmbiente }), false)
+  assert.equal(shouldUseSoftwareRendering({ devtoolsActive: true, graphicsProfile: porArgumento }), false)
+})
+
+test('modo hardware salvo no perfil não liga a GPU numa sessão de automação', () => {
+  // `felixo devtools launch --real-profile` precisa continuar no padrão seguro.
+  const perfilComHardware = { readFileSync: () => JSON.stringify({ mode: 'hardware' }) }
+  const graphicsProfile = resolveGraphicsProfile({ argv: [], environment: {}, platformName: 'linux', userDataPath: '/perfil', fileSystem: perfilComHardware })
+  assert.equal(graphicsProfile.source, 'profile')
+  assert.equal(shouldUseSoftwareRendering({ devtoolsActive: true, graphicsProfile }), true)
+})
+
+test('modo compatível continua em software com ou sem automação', () => {
+  const semPerfil = { readFileSync: () => { throw new Error('ENOENT') } }
+  const graphicsProfile = resolveGraphicsProfile({ argv: [], environment: { FELIXO_GRAPHICS_MODE: 'software' }, platformName: 'linux', fileSystem: semPerfil })
+  assert.equal(shouldUseSoftwareRendering({ devtoolsActive: false, graphicsProfile }), true)
+  assert.equal(shouldUseSoftwareRendering({ devtoolsActive: true, graphicsProfile }), true)
 })

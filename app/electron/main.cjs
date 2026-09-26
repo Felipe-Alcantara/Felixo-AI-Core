@@ -109,6 +109,7 @@ const { isReleaseSmokeProcess } = require('./core/release-smoke-mode.cjs')
 const {
   persistGraphicsMode,
   resolveGraphicsProfile,
+  shouldUseSoftwareRendering,
 } = require('./core/graphics-mode.cjs')
 const {
   clearGraphicsRecommendation,
@@ -198,13 +199,15 @@ if (devUserDataOverride) {
 // A aceleração precisa ser decidida antes de `app.whenReady()`. O modo padrão
 // preserva o GPU; só o heurístico explícito de Windows com pouca memória ou a
 // escolha manual de modo compatível ativa rasterização por software. DevTools
-// continua sempre seguro para captura de janela oculta.
+// continua seguro para captura de janela oculta, salvo pedido explícito de
+// hardware no lançamento (ver `shouldUseSoftwareRendering`).
 const graphicsProfile = resolveGraphicsProfile({
   userDataPath: app.getPath('userData'),
 })
-const useSoftwareRendering =
-  (Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535) ||
-  graphicsProfile.useSoftwareRendering
+const useSoftwareRendering = shouldUseSoftwareRendering({
+  devtoolsActive: Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535,
+  graphicsProfile,
+})
 if (useSoftwareRendering) {
   app.commandLine.appendSwitch('disable-gpu')
 }
