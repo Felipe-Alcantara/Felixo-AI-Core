@@ -1275,7 +1275,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   return (
     <div
       data-theme={theme}
-      className="felixo-shell flex h-full min-h-0 bg-(--color-app-bg) text-zinc-100"
+      className="flex h-full min-h-0 bg-(--color-app-bg) text-zinc-100"
     >
       <AppSidebar
         models={models}

@@ -41,7 +41,7 @@ export function CanvasStatusBar({
         {selectionLabel && (
           <>
             <span className="felixo-statusbar-separator" aria-hidden />
-            <span className="felixo-statusbar-item felixo-statusbar-selection">
+            <span className="felixo-statusbar-item">
               <MousePointer2 size={13} aria-hidden />
               {selectionLabel}
             </span>

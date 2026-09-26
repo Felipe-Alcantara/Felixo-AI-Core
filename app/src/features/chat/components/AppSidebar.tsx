@@ -177,7 +177,7 @@ export function AppSidebar({
     <aside
       style={isOpen ? { width } : undefined}
       className={[
-        'felixo-chat-sidebar relative flex shrink-0 flex-col overflow-hidden border-r border-white/8 bg-(--color-sidebar) text-zinc-300',
+        'relative flex shrink-0 flex-col overflow-hidden border-r border-white/8 bg-(--color-sidebar) text-zinc-300',
         dragging ? '' : 'transition-[width] duration-300 ease-in-out',
         'max-[920px]:hidden',
         isOpen ? '' : 'w-0 border-r-0',
