@@ -49,6 +49,7 @@ const EAGER_MODULES = [
   'onboarding-store.ts',
   'onboarding-boot-signals.ts',
   'onboarding-devtools.ts',
+  'onboarding-help-label.ts',
   'OnboardingMount.tsx',
   'OnboardingErrorBoundary.tsx',
 ]
@@ -97,6 +98,7 @@ describe('fronteiras do tutorial (sonda estática)', () => {
       if (/https?:\/\//.test(code)) found.push('URL http(s)')
       if (/\bwindow\.open\s*\(|\.click\s*\(\s*\)|dispatchEvent\s*\(|scrollIntoView/.test(code)) found.push('ação sintetizada')
       if (/\bpty\b|spawn\s*\(|child_process/i.test(code)) found.push('processo')
+      if (/\bconfirm\s*\(|\balert\s*\(|\bprompt\s*\(/.test(code)) found.push('diálogo nativo que trava o renderer')
       for (const match of code.matchAll(/felixo\??\.(\w+)/g)) {
         if (!['onboarding', 'qaLogger', 'devtools'].includes(match[1])) found.push(`window.felixo.${match[1]}`)
       }
@@ -120,6 +122,11 @@ describe('fronteiras do tutorial (sonda estática)', () => {
     const source = readFileSync(join(directory, 'OnboardingMount.tsx'), 'utf8')
     expect(source).toMatch(/lazy\(\(\) =>\s*import\('\.\/onboarding-ui-entry'\)/)
     expect(staticImports(source).sort()).toEqual(['./OnboardingErrorBoundary', './onboarding-store', 'react'].sort())
+  })
+
+  it('o botão Ajuda carrega o menu só por lazy(import(...)) do mesmo ponto de entrada', () => {
+    const toolbar = readFileSync(join(canvasDirectory, 'CanvasToolbar.tsx'), 'utf8')
+    expect(toolbar).toMatch(/lazy\(\(\) =>\s*import\('\.\.\/\.\.\/onboarding\/onboarding-ui-entry'\)/)
   })
 
   it('ninguém importa o ponto de entrada da interface de forma estática', () => {

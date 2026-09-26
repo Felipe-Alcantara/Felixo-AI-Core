@@ -17,6 +17,8 @@
  * real do alvo; mudar um rótulo na interface exige mudar o texto aqui.
  */
 
+import { HELP_BUTTON_LABEL, HELP_BUTTON_LABEL_WITH_NEWS } from './onboarding-help-label'
+
 export type Message = string | { one: string; other: string }
 
 export const PT_BR = {
@@ -80,8 +82,9 @@ export const PT_BR = {
   'aviso.agora-nao': 'Agora não',
 
   // Ajuda
-  'ajuda.botao': 'Ajuda',
-  'ajuda.botao-novidades': { one: 'Ajuda ({n} novidade)', other: 'Ajuda ({n} novidades)' },
+  // O botão do rail formata no chunk do canvas; as constantes são as mesmas.
+  'ajuda.botao': HELP_BUTTON_LABEL,
+  'ajuda.botao-novidades': { ...HELP_BUTTON_LABEL_WITH_NEWS },
   'ajuda.menu.rotulo': 'Ajuda',
   'ajuda.secao.tutorial': 'Tutorial do canvas',
   'ajuda.secao.novidades': 'Novidades',

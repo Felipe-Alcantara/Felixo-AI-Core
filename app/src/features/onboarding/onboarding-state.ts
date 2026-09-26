@@ -883,6 +883,8 @@ export type HelpEntry = {
   status: HelpStatus
   /** Passo (1-based) para "Em andamento" e "Interrompido no passo n". */
   passo: number | null
+  /** Id do mesmo passo, para "Continuar do passo n" reabrir exatamente nele. */
+  passoId: string | null
   totalPassos: number
   /** ISO de conclusão, formatado pela interface com `Intl.DateTimeFormat`. */
   concluidoEm: string | null
@@ -911,11 +913,16 @@ function helpStatus(
   }
 }
 
-function stepNumber(tour: TourDef, steps: StepDef[], record: TourRecord | undefined, live: LiveSession): number | null {
-  if (live?.tourId === tour.id) return live.stepIndex + 1
+function stepIndexOf(tour: TourDef, steps: StepDef[], record: TourRecord | undefined, live: LiveSession): number | null {
+  if (live?.tourId === tour.id) return live.stepIndex
   if (!record?.step) return null
   const index = steps.findIndex((step) => step.id === record.step)
-  return index >= 0 ? index + 1 : null
+  return index >= 0 ? index : null
+}
+
+function stepPosition(tour: TourDef, steps: StepDef[], record: TourRecord | undefined, live: LiveSession) {
+  const index = stepIndexOf(tour, steps, record, live)
+  return { passo: index === null ? null : index + 1, passoId: index === null ? null : steps[index]?.id ?? null }
 }
 
 /**
@@ -944,7 +951,7 @@ export function describeHelpEntries(
       titulo: tour.title,
       featureId: null,
       status: helpStatus(tour, record, options.live, steps.length > 0),
-      passo: stepNumber(tour, steps, record, options.live),
+      ...stepPosition(tour, steps, record, options.live),
       totalPassos: steps.length,
       concluidoEm: record?.status === 'concluido' ? record.completedAt : null,
     })
@@ -964,7 +971,7 @@ export function describeHelpEntries(
       titulo: feature.title,
       featureId: feature.id,
       status: helpStatus(tour, record, options.live, available),
-      passo: stepNumber(tour, steps, record, options.live),
+      ...stepPosition(tour, steps, record, options.live),
       totalPassos: steps.length,
       concluidoEm: record?.status === 'concluido' ? record.completedAt : null,
     })

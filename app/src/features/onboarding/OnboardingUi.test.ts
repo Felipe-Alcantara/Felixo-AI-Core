@@ -2,15 +2,19 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ONBOARDING_TOURS, type StepDef } from './onboarding-catalog'
-import type { MessageKey } from './onboarding-messages'
+import { helpButtonLabel } from './onboarding-help-label'
+import { formatOnboardingMessage, type MessageKey } from './onboarding-messages'
+import type { HelpEntry } from './onboarding-state'
 import type { NoticeSession, TourSession } from './onboarding-store'
 import {
+  describeHelpMenu,
   describeNotice,
   describeNoticeAnnouncement,
   describeTourAnnouncement,
   describeTourCard,
   stepTargetFor,
 } from './onboarding-ui-model'
+import { OnboardingHelpMenuContent } from './OnboardingHelpMenu'
 import { OnboardingNotice } from './OnboardingNotice'
 import { OnboardingTourCard } from './OnboardingTourCard'
 
@@ -203,5 +207,152 @@ describe('anúncios da região live', () => {
 
   it('o anúncio em en-XA leva o lang do pseudo-locale', () => {
     expect(describeTourAnnouncement('passo', tourAt(1, 'en-XA')).lang).toBe('en-XA')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Botão e menu Ajuda
+// ---------------------------------------------------------------------------
+
+function entry(overrides: Partial<HelpEntry> = {}): HelpEntry {
+  return {
+    tourId: 'inicial',
+    tipo: 'tutorial',
+    titulo: 'tour.inicial.titulo',
+    featureId: null,
+    status: 'nao-visto',
+    passo: null,
+    passoId: null,
+    totalPassos: 6,
+    concluidoEm: null,
+    ...overrides,
+  }
+}
+
+const novelty = (overrides: Partial<HelpEntry> = {}) =>
+  entry({
+    tourId: 'novidade-ajuda',
+    tipo: 'novidade',
+    titulo: 'novidade.ajuda.titulo',
+    featureId: 'feature.ajuda',
+    status: 'novo',
+    totalPassos: 1,
+    ...overrides,
+  })
+
+function renderMenu(ajuda: HelpEntry[], options: { confirming?: boolean; persistencia?: 'ok' | 'sem-ponte' | 'indisponivel' | 'somente-leitura' } = {}) {
+  const model = describeHelpMenu({ ajuda, persistencia: options.persistencia ?? 'ok', lang: 'pt-BR' })
+  return renderToStaticMarkup(createElement(OnboardingHelpMenuContent, { model, confirming: options.confirming ?? false }))
+}
+
+function actionsOf(html: string): string[] {
+  return [...html.matchAll(/data-felixo-onboarding-action="([^"]+)"/g)].map((match) => match[1])
+}
+
+describe('botão Ajuda', () => {
+  it('rótulo com plural pela contagem de novidades, igual ao catálogo de textos', () => {
+    expect(helpButtonLabel(0)).toBe('Ajuda')
+    expect(helpButtonLabel(1)).toBe('Ajuda (1 novidade)')
+    expect(helpButtonLabel(2)).toBe('Ajuda (2 novidades)')
+    for (const n of [1, 2, 5]) {
+      expect(helpButtonLabel(n)).toBe(formatOnboardingMessage('pt-BR', 'ajuda.botao-novidades', { n }))
+    }
+    expect(helpButtonLabel(Number.NaN)).toBe(formatOnboardingMessage('pt-BR', 'ajuda.botao'))
+  })
+
+  it('o rótulo nunca diz "Ferramentas" (o seletor da bancada de bundle procura esse título)', () => {
+    expect(helpButtonLabel(3)).not.toMatch(/Ferramentas/)
+  })
+})
+
+describe('menu Ajuda (todos os estados)', () => {
+  it.each<[string, Partial<HelpEntry>, string, string[]]>([
+    ['não visto', { status: 'nao-visto' }, 'Não visto', ['iniciar']],
+    ['em andamento', { status: 'em-andamento', passo: 2, passoId: 'agente' }, 'Em andamento', ['recomecar']],
+    [
+      'interrompido',
+      { status: 'interrompido', passo: 4, passoId: 'terminal' },
+      'Interrompido no passo 4',
+      ['continuar', 'recomecar'],
+    ],
+    ['pulado', { status: 'pulado', passo: 2, passoId: 'agente' }, 'Pulado', ['recomecar']],
+    ['concluído', { status: 'concluido', concluidoEm: '2026-09-26T12:00:00.000Z' }, 'Concluído em ', ['rever']],
+    ['atualizado', { status: 'atualizado', concluidoEm: '2026-09-26T12:00:00.000Z' }, 'Atualizado', ['rever']],
+    ['indisponível', { status: 'indisponivel' }, 'Indisponível nesta versão', []],
+  ])('tutorial %s', (_nome, overrides, status, actions) => {
+    const html = renderMenu([entry(overrides)])
+    expect(html).toContain('Tutorial do canvas')
+    expect(html).toContain(status)
+    expect(actionsOf(html)).toEqual([...actions, 'redefinir'])
+    expect(html).not.toMatch(/style="/)
+  })
+
+  it('"Continuar do passo n" reabre exatamente no passo onde a pessoa parou', () => {
+    const model = describeHelpMenu({
+      ajuda: [entry({ status: 'interrompido', passo: 4, passoId: 'terminal' })],
+      persistencia: 'ok',
+      lang: 'pt-BR',
+    })
+    expect(model.tutorial.itens[0].actions[0]).toMatchObject({
+      id: 'continuar',
+      label: 'Continuar do passo 4',
+      tourId: 'inicial',
+      stepId: 'terminal',
+    })
+    expect(model.tutorial.itens[0].actions[1]).toMatchObject({ id: 'recomecar', stepId: null })
+  })
+
+  it('concluído mostra a data no formato do locale', () => {
+    const model = describeHelpMenu({
+      ajuda: [entry({ status: 'concluido', concluidoEm: '2026-09-26T12:00:00.000Z' })],
+      persistencia: 'ok',
+      lang: 'pt-BR',
+    })
+    expect(model.tutorial.itens[0].status).toMatch(/^Concluído em \d{2}\/\d{2}\/\d{4}$/)
+  })
+
+  it('novidades: vazio, nova com "Ver" e indisponível sem ação', () => {
+    expect(renderMenu([entry()])).toContain('Nenhuma novidade por enquanto.')
+    const html = renderMenu([entry(), novelty()])
+    expect(html).not.toContain('Nenhuma novidade por enquanto.')
+    expect(html).toContain('Novo')
+    expect(actionsOf(html)).toEqual(['iniciar', 'ver', 'redefinir'])
+    const unavailable = renderMenu([entry(), novelty({ status: 'indisponivel' })])
+    expect(unavailable).toContain('Indisponível nesta versão')
+    expect(actionsOf(unavailable)).toEqual(['iniciar', 'redefinir'])
+  })
+
+  it('redefinir pede confirmação na própria tela, em dois cliques', () => {
+    const closed = renderMenu([entry()])
+    expect(closed).toContain('Redefinir tutoriais')
+    expect(closed).not.toContain('Redefinir o progresso de todos os tutoriais?')
+    const confirming = renderMenu([entry()], { confirming: true })
+    expect(confirming).toContain('Redefinir o progresso de todos os tutoriais?')
+    expect(actionsOf(confirming)).toEqual(['iniciar', 'confirmar-redefinir', 'cancelar-redefinir'])
+    expect(confirming).toMatch(/role="group" aria-labelledby="[^"]+"/)
+  })
+
+  it('persistência indisponível, somente leitura ou sem ponte avisa que o progresso não será salvo', () => {
+    expect(renderMenu([entry()], { persistencia: 'ok' })).not.toContain('não será salvo')
+    for (const persistencia of ['indisponivel', 'somente-leitura', 'sem-ponte'] as const) {
+      expect(renderMenu([entry()], { persistencia })).toContain('O progresso não será salvo nesta sessão.')
+    }
+  })
+
+  it('os botões de ação são descritos pelo contexto (seção e estado, ou título da novidade)', () => {
+    const html = renderMenu([entry(), novelty()])
+    const present = ids(html)
+    for (const match of html.matchAll(/aria-describedby="([^"]+)"/g)) {
+      for (const reference of match[1].split(' ')) expect(present.has(reference)).toBe(true)
+    }
+  })
+
+  it('o menu inteiro troca de idioma junto (tudo ou nada)', () => {
+    const model = describeHelpMenu({ ajuda: [entry(), novelty()], persistencia: 'ok', lang: 'en-XA' })
+    expect(model.lang).toBe('en-XA')
+    for (const text of [model.rotulo, model.tutorial.titulo, model.novidades.titulo, model.redefinir.label]) {
+      expect(text.startsWith('[')).toBe(true)
+    }
+    expect(describeHelpMenu({ ajuda: [entry()], persistencia: 'ok', lang: 'fr' }).lang).toBe('pt-BR')
   })
 })

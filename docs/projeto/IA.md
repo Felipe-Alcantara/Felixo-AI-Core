@@ -5004,3 +5004,50 @@ Registro gravado às 15:52.
   retomado no passo 2 de 6: Agente."; Próximo troca o texto e anuncia "Passo 3 de 6: Contexto"; o passo 4 fica à
   esquerda do cabeçalho "Elementos"; Esc no card fecha, limpa a sessão, anuncia "Tutorial fechado. Reabra em Ajuda."
   e devolve o foco à região do canvas (a Ajuda ainda não existe neste commit).
+
+## 2026-09-26 — Tutorial do canvas: Ajuda no rail (commit 9 do plano)
+
+Registro gravado às 16:13.
+
+**O que ficou pronto.**
+- Botão "Ajuda" (`CircleHelp`) no grupo superior do rail, depois de Notificações: `aria-expanded`,
+  `aria-controls`, `data-felixo-help-trigger`, âncora `rail-ajuda`, ponto estático de novidade e
+  `aria-label="Ajuda (1 novidade)"` com plural pela contagem. Abrir a Ajuda dispensa o aviso de novidade.
+- `OnboardingHelpMenu` (chunk preguiçoso, o mesmo do tour): `FelixoPopoverSurface` com `role="group"`, `nokey` e
+  `lang`; tutorial do canvas com estado e ação (Iniciar, Continuar do passo n, Rever, Recomeçar), novidades (vazio,
+  "Novo" com Ver, "Indisponível nesta versão"), "Redefinir tutoriais" com confirmação na própria tela (nunca
+  `window.confirm`) e a linha "O progresso não será salvo nesta sessão." sem persistência. Esc com o foco no menu e
+  clique fora fecham e devolvem o foco ao botão; abrir um tour fecha o menu e abre no quadro seguinte, com o foco já
+  no botão Ajuda (é para lá que ele volta no fim).
+
+**Desvios e acréscimos, com motivo.**
+- `onboarding-help-label.ts` (eager): o rótulo do botão existe antes de qualquer tour e não pode puxar o catálogo de
+  textos do chunk preguiçoso; `onboarding-messages.ts` reusa as mesmas constantes, sem texto duplicado. O botão fica
+  sempre em pt-BR, como o resto do rail.
+- `useOnboardingNovelties()` na store: a barra lateral só re-renderiza quando a contagem de novidades muda.
+- `HelpEntry.passoId`: "Continuar do passo n" reabre exatamente no passo salvo.
+- `FelixoPopoverSurface` ganhou a prop opcional `lang` (o menu precisa declarar o idioma do conteúdo).
+- `describeHelpMenu` em `onboarding-ui-model.ts` e `OnboardingHelpMenuContent` apresentacional, para o U-ui testar
+  todos os estados sem portal.
+- Clique fora só devolve o foco ao botão se ele não foi para outro controle (um clique no terminal não é desfeito).
+- U-cat confere que toda âncora do catálogo está marcada no código do canvas e que `criar-agente` fica na moldura.
+- **Bug achado na verificação no app real e corrigido no commit 8 (amend, antes de qualquer push):** o aviso de
+  novidade nunca era posicionado (ficava invisível). `onPlaced?.(placeSurface(...))` não avalia o argumento quando
+  `onPlaced` não existe, e o aviso não passa esse callback. A medição agora roda antes da chamada opcional.
+
+**Validação.**
+- `npx vitest run src/features/onboarding src/features/setup`: 708/708. `npm run lint` e `npm run build` ok (chunk
+  `onboarding-ui-entry` com 29,5 kB, 9,8 kB gzip).
+- App real (`felixo devtools`, perfil isolado, sob o lock), abertura suprimida: Ajuda com nome "Ajuda"; Enter abre o
+  menu com o foco em "Iniciar" e `aria-controls` igual ao id do menu; Esc fecha e devolve o foco ao botão; Iniciar
+  abre o tour com o foco no card; Tab percorre Pular → Voltar → Próximo e sai do card; Shift+Tab em Pular volta à
+  sidebar; Enter em Voltar no passo 1 não faz nada; Enter em Próximo até o passo 6 mantém o foco no mesmo botão e a
+  região live anuncia cada passo; Concluir anuncia a conclusão e devolve o foco à Ajuda; `read()` mostra o inicial
+  concluído (as ações da pessoa gravam mesmo com a automação suprimida). O menu mostra "Concluído em 26/09/2026" e
+  Rever; Redefinir pede confirmação com o foco em Cancelar; confirmar abre o inicial com foco e preserva
+  `knownFeatures`.
+- App real com `FELIXO_DEVTOOLS_ONBOARDING=1` e `FELIXO_DEVTOOLS_HARDWARE_NOTICES=1`: o primeiro uso abre sozinho
+  (decisão `aberto`, um card, foco no card, marcador removido, revisão 1) sem cruzar o `NoticeToast`; com o estado
+  semeado (inicial concluído, `knownFeatures` vazio) e reload, o aviso "Novidade: Ajuda" aparece ao lado da Ajuda
+  sem tirar o foco do body, a região live diz "Novidade em Ajuda: Ajuda.", o botão vira "Ajuda (1 novidade)" com o
+  ponto, e "Ver" abre o mini-tour com o foco no card, com o inicial ainda concluído.

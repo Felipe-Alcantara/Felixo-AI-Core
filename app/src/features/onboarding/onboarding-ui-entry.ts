@@ -5,3 +5,4 @@
  * ou aviso na tela ou com o menu Ajuda aberto.
  */
 export { OnboardingTourLayer } from './OnboardingTourLayer'
+export { OnboardingHelpMenu } from './OnboardingHelpMenu'

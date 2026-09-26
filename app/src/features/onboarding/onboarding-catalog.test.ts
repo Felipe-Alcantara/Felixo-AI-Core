@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { TOOL_LABELS } from '../canvas/components/tools/canvas-tool-labels'
 import type { CanvasTool } from '../canvas/components/tools/CanvasToolsMenu'
@@ -15,6 +18,18 @@ import {
   type TourDef,
 } from './onboarding-catalog'
 import { PT_BR, formatOnboardingMessage, type MessageKey } from './onboarding-messages'
+
+const canvasDirectory = fileURLToPath(new URL('../canvas/components/', import.meta.url))
+
+function readCanvasSource(file: string): string {
+  return readFileSync(join(canvasDirectory, file), 'utf8')
+}
+
+function canvasSources(): string[] {
+  return readdirSync(canvasDirectory, { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('.tsx'))
+    .map((file) => readFileSync(join(canvasDirectory, file), 'utf8'))
+}
 
 const ID_PATTERN = /^[a-z][a-z0-9-]*$/
 const FEATURE_PATTERN = /^feature\.[a-z][a-z0-9-]*$/
@@ -119,6 +134,19 @@ describe('catálogo do tutorial: textos', () => {
     const agente = ONBOARDING_TOURS.inicial.steps.find((step) => step.id === 'agente')
     expect(agente?.targets[0].anchor).toBe('criar-agente')
     expect(ONBOARDING_ANCHORS['criar-agente']).toBe('[data-felixo-tour-anchor="criar-agente"]')
+    // No código, o atributo está na moldura (div) do controle dividido, não num botão.
+    expect(readCanvasSource('TerminalMenu.tsx')).toMatch(
+      /<div\s+className="[^"]*felixo-sidebar-agent-trigger[^"]*"\s+data-felixo-tour-anchor="criar-agente"/,
+    )
+  })
+
+  it('toda âncora do catálogo está marcada no código da interface do canvas', () => {
+    const sources = canvasSources().join('\n')
+    const missing = (Object.keys(ONBOARDING_ANCHORS) as AnchorId[])
+      .filter((anchor) => anchor !== 'canvas')
+      .filter((anchor) => !new RegExp(`(tourAnchor|anchorId|data-felixo-tour-anchor)="${anchor}"`).test(sources))
+    expect(missing).toEqual([])
+    expect(sources).toContain('data-felixo-region="canvas"')
   })
 
   it('o roteiro inicial tem os 6 passos na ordem do plano', () => {

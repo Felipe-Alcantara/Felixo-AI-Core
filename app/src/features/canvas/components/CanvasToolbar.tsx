@@ -2,17 +2,22 @@
 // seleção/pan e exportar/importar/limpar o canvas. Puramente presentacional —
 // as ações chegam por props do CanvasView.
 import {
+  Suspense,
+  lazy,
+  useCallback,
   useEffect,
   useId,
   useRef,
   useState,
   type ChangeEvent,
   type ReactNode,
+  type Ref,
 } from 'react'
 import type { ResizableSidebarWidth } from '../hooks/useResizableSidebarWidth'
 import {
   Bell,
   ChevronDown,
+  CircleHelp,
   FileText,
   FolderOpen,
   Globe,
@@ -46,6 +51,15 @@ import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import type { AnchorId } from '../../onboarding/onboarding-catalog'
+import { helpButtonLabel } from '../../onboarding/onboarding-help-label'
+import { OnboardingErrorBoundary } from '../../onboarding/OnboardingErrorBoundary'
+import { onboardingStore, useOnboardingNovelties } from '../../onboarding/onboarding-store'
+import type { HelpMenuCloseReason } from '../../onboarding/OnboardingHelpMenu'
+
+/** O menu Ajuda vem do mesmo chunk preguiçoso do tutorial, só quando é aberto. */
+const LazyOnboardingHelpMenu = lazy(() =>
+  import('../../onboarding/onboarding-ui-entry').then((module) => ({ default: module.OnboardingHelpMenu })),
+)
 
 /**
  * A moldura de um controle da barra: largura, canto, sombra e aro — o que
@@ -157,6 +171,7 @@ export function CanvasToolbar({
 }: CanvasToolbarProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const appVersion = useAppVersion()
+  const help = useHelpMenu()
 
   const toggleSidebar = () => onSidebarCollapsedChange(!sidebarCollapsed)
 
@@ -243,6 +258,28 @@ export function CanvasToolbar({
             </span>
           )}
         </ActivityRailButton>
+        {/* Ajuda fica no grupo de cima: no de baixo seria recortada na altura
+            mínima da janela. Um botão novo acima dela exige rever essa conta. */}
+        <ActivityRailButton
+          label={helpButtonLabel(help.novidades)}
+          active={help.open}
+          expanded={help.open}
+          controls={help.menuId}
+          onClick={help.toggle}
+          tourAnchor="rail-ajuda"
+          helpTrigger
+          buttonRef={help.triggerRef}
+        >
+          <CircleHelp size={18} />
+          {help.novidades > 0 && <span className="felixo-onboarding-help-dot" aria-hidden="true" />}
+        </ActivityRailButton>
+        {help.open && (
+          <OnboardingErrorBoundary store={onboardingStore} resetKey={help.session}>
+            <Suspense fallback={null}>
+              <LazyOnboardingHelpMenu id={help.menuId} triggerRef={help.triggerRef} onClose={help.close} />
+            </Suspense>
+          </OnboardingErrorBoundary>
+        )}
         <div className="mt-auto">
           <ActivityRailButton label="Configurações" onClick={() => onSelectTool('settings')}>
             <Settings size={18} />
@@ -406,16 +443,57 @@ export function CanvasToolbar({
   )
 }
 
+/**
+ * Estado do botão Ajuda: aberto/fechado, a contagem de novidades (só ela
+ * re-renderiza a barra) e a volta do foco ao botão quando o menu fecha.
+ */
+function useHelpMenu() {
+  const [open, setOpen] = useState(false)
+  const [session, setSession] = useState(0)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
+  const novidades = useOnboardingNovelties()
+
+  const toggle = () => {
+    if (!open) {
+      // Abrir a Ajuda dispensa o aviso de novidade: a novidade fica "Novo" no menu.
+      onboardingStore.dismissNotice()
+      setSession((current) => current + 1)
+    }
+    setOpen(!open)
+  }
+
+  const close = useCallback((reason: HelpMenuCloseReason) => {
+    setOpen(false)
+    const trigger = triggerRef.current
+    if (reason === 'acao') {
+      // Antes de o tour abrir (no quadro seguinte): é para cá que o foco volta depois.
+      trigger?.focus({ preventScroll: true })
+      return
+    }
+    window.requestAnimationFrame(() => {
+      // Um clique fora que já levou o foco a outro controle (terminal, campo) não é desfeito.
+      const active = document.activeElement
+      if (reason === 'escape' || !active || active === document.body) trigger?.focus({ preventScroll: true })
+    })
+  }, [])
+
+  return { open, session, triggerRef, menuId, novidades, toggle, close }
+}
+
 function ActivityRailButton({
   label,
   active = false,
   expanded,
+  controls,
   onClick,
   dataCanvasToolTrigger,
   children,
   highlight = false,
   notificationsTrigger = false,
   tourAnchor,
+  helpTrigger = false,
+  buttonRef,
 }: {
   label: string
   active?: boolean
@@ -439,9 +517,15 @@ function ActivityRailButton({
   notificationsTrigger?: boolean
   /** Âncora estável do tutorial do canvas (só marca o botão; o tour nunca o aciona). */
   tourAnchor?: AnchorId
+  /** `aria-controls` do que o botão abre (o menu Ajuda). */
+  controls?: string
+  /** Marca o botão Ajuda: o tutorial devolve o foco a ele quando fecha. */
+  helpTrigger?: boolean
+  buttonRef?: Ref<HTMLButtonElement>
 }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`felixo-btn-icon felixo-activity-rail-button relative ${active ? 'is-active' : ''} ${
         highlight ? 'felixo-activity-rail-button-highlight' : ''
@@ -455,6 +539,8 @@ function ActivityRailButton({
       {...(notificationsTrigger ? { 'data-notifications-trigger': true } : {})}
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
       {...(tourAnchor ? { 'data-felixo-tour-anchor': tourAnchor } : {})}
+      {...(controls ? { 'aria-controls': controls } : {})}
+      {...(helpTrigger ? { 'data-felixo-help-trigger': true } : {})}
     >
       {children}
     </button>

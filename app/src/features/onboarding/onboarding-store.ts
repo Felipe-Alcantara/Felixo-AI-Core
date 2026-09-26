@@ -812,3 +812,15 @@ export const onboardingStore = createOnboardingStore({
 export function useOnboardingSnapshot(store: OnboardingStore = onboardingStore): OnboardingSnapshot {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot)
 }
+
+/**
+ * Só a contagem de novidades (badge da Ajuda): a barra lateral re-renderiza
+ * quando o número muda, não a cada passo ou anúncio do tour.
+ */
+export function useOnboardingNovelties(store: OnboardingStore = onboardingStore): number {
+  return useSyncExternalStore(
+    store.subscribe,
+    () => store.getSnapshot().novidades,
+    () => store.getServerSnapshot().novidades,
+  )
+}

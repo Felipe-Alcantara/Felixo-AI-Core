@@ -586,11 +586,13 @@ describe('describeHelpEntries (visto × disponível)', () => {
     expect(describeHelpEntries(claimed, { live: { tourId: 'inicial', stepIndex: 2 }, availability: available })[0]).toMatchObject({
       status: 'em-andamento',
       passo: 3,
+      passoId: 'contexto',
     })
     const interrupted = apply(claimed, [{ tipo: 'ABRIR', tourId: 'inicial', origem: 'ajuda', stepId: 'terminal' }])
     expect(describeHelpEntries(interrupted, { live, availability: available })[0]).toMatchObject({
       status: 'interrompido',
       passo: 4,
+      passoId: 'terminal',
     })
     const skipped = apply(claimed, [{ tipo: 'PULAR', tourId: 'inicial', via: 'botao', stepId: 'agente' }])
     expect(describeHelpEntries(skipped, { live, availability: available })[0].status).toBe('pulado')
