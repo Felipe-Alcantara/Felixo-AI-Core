@@ -1,5 +1,7 @@
-import { AlertTriangle, CheckCircle2, Download, Loader2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, Loader2, Stethoscope, X } from 'lucide-react'
 import { useCliSetupStatus } from './useCliSetupStatus'
+import { useCliDiagnosis } from './useCliDiagnosis'
+import { CliDiagnosisFooter, CliDiagnosisList } from './CliDiagnosisView'
 import type { CliSetupPresentation } from './cli-setup-presentation'
 
 const TONE_TEXT: Record<CliSetupPresentation['tone'], string> = {
@@ -70,7 +72,7 @@ export function CliSetupIndicator() {
  * quando o resultado chega, porque aí a notícia é outra.
  */
 export function CliSetupToast() {
-  const { presentation, dismissed, dismiss, retry } = useCliSetupStatus()
+  const { presentation, noticeKey, dismissed, dismiss, retry } = useCliSetupStatus()
 
   if (!presentation.showToast || dismissed) {
     return null
@@ -114,22 +116,10 @@ export function CliSetupToast() {
           )}
 
           {presentation.canRetry && (
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={retry}
-                className="rounded-md bg-(--f-core-white)/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-(--f-core-active)"
-              >
-                Tentar de novo
-              </button>
-              <button
-                type="button"
-                onClick={dismiss}
-                className="rounded-md px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
-              >
-                Depois
-              </button>
-            </div>
+            // A chave amarra o diagnóstico a esta falha: quando chega outro
+            // resultado, o painel remonta vazio em vez de mostrar a fotografia
+            // da falha anterior.
+            <CliSetupFailureActions key={noticeKey} onRetry={retry} onDismiss={dismiss} />
           )}
         </div>
 
@@ -143,5 +133,67 @@ export function CliSetupToast() {
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Ações do aviso de falha. "Ver diagnóstico" vem antes de "Tentar de novo":
+ * se a CLI está no disco e só não é vista pelo app (PATH, permissão, atalho),
+ * reinstalar não resolve, e a pessoa precisa saber disso antes de repetir.
+ *
+ * O diagnóstico entra ACIMA dos botões: o aviso cresce para cima (está preso
+ * ao canto inferior), então os botões não saem de baixo do ponteiro.
+ */
+function CliSetupFailureActions({
+  onRetry,
+  onDismiss,
+}: {
+  onRetry: () => void
+  onDismiss: () => void
+}) {
+  const diagnosis = useCliDiagnosis()
+  const { running, report } = diagnosis.state
+
+  return (
+    <>
+      {diagnosis.active && (
+        <div className="mt-3 space-y-2">
+          {report && <CliDiagnosisList diagnoses={report.diagnoses} />}
+          <CliDiagnosisFooter state={diagnosis.state} />
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {diagnosis.available && (
+          <button
+            type="button"
+            onClick={diagnosis.run}
+            disabled={running}
+            className="felixo-btn inline-flex items-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {running ? (
+              <Loader2 size={13} aria-hidden="true" className="animate-spin" />
+            ) : (
+              <Stethoscope size={13} aria-hidden="true" />
+            )}
+            {running ? 'Diagnosticando…' : report ? 'Diagnosticar de novo' : 'Ver diagnóstico'}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-md bg-[var(--f-core-white)]/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-[var(--f-core-active)]"
+        >
+          Tentar de novo
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="rounded-md px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
+        >
+          Depois
+        </button>
+      </div>
+    </>
   )
 }

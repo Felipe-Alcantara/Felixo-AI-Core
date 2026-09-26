@@ -18,6 +18,12 @@ import {
  */
 export function useCliSetupStatus(): {
   presentation: CliSetupPresentation
+  /**
+   * Identidade do aviso atual (ver `cliSetupNoticeKey`). Muda quando chega um
+   * resultado novo — quem guarda estado ligado a um aviso usa isto para não
+   * levá-lo ao próximo.
+   */
+  noticeKey: string | null
   dismissed: boolean
   dismiss: () => void
   retry: () => void
@@ -85,5 +91,5 @@ export function useCliSetupStatus(): {
 
   const dismissed = dismissedKey !== null && dismissedKey === noticeKey
 
-  return { presentation, dismissed, dismiss, retry }
+  return { presentation, noticeKey, dismissed, dismiss, retry }
 }
