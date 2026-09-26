@@ -1206,9 +1206,9 @@
   transition: none !important;
 }
 
-/* Alça de redimensionar, compartilhada por sidebar e painéis de ferramenta.
-   O "grip" no meio fica sempre visível (fraco) pra denunciar que a borda é
-   arrastável — a versão só-no-hover ninguém achava. */
+/* Alça de redimensionar, compartilhada por sidebar, painéis de ferramenta e
+   gaveta do terminal. O "grip" no meio fica sempre visível (fraco) pra
+   denunciar que a borda é arrastável — a versão só-no-hover ninguém achava. */
 .felixo-resize-handle {
   --felixo-grip-length: 2.25rem;
   position: absolute;
@@ -1255,6 +1255,13 @@
 .felixo-resize-handle:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+}
+
+/* Gaveta do terminal: ela abre pela direita, então a borda arrastável é a
+   da esquerda. */
+.felixo-resize-handle--left {
+  right: auto;
+  left: 0;
 }
 
 .felixo-resize-handle--horizontal {

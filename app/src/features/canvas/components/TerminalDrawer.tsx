@@ -429,7 +429,7 @@ export function TerminalDrawer({
           tabIndex={0}
           title="Arraste para redimensionar; dois cliques para a largura padrão"
           data-felixo-terminal-drawer-resize-handle
-          className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-(--f-core-white)/40 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-emerald-400"
+          className={`felixo-resize-handle felixo-resize-handle--left ${resizing ? 'is-resizing' : ''}`}
         />
       )}
       <div
