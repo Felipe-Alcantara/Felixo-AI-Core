@@ -4158,3 +4158,14 @@ visual reutilizável; revisar as 31 classes `*-(--var)/N` e as duas
 `border-theme-error/30|40` que nunca existiram para decidir se ficam como o v4
 pinta; avaliar se os 17 botões primários devem ganhar `enabled:hover:` para
 deixar a intenção explícita.
+
+## 2026-09-26 — Quarentena do flake do PTY no Windows (decisão do Felipe)
+
+Três correções na bancada (`7b6907a`, `c4e0fb0`, `c129913`) reduziram, mas não acabaram com a perda de saída
+da fase nativa com 20 PTYs no Windows: ainda falhava em cerca de metade das runs, e o experimento controlado
+não isolou a causa fora do contexto completo da bancada. O Felipe escolheu a **quarentena só desse item**. No
+Windows, `native count=20` com timeout ou saída incompleta vira anotação `::warning::` no CI
+(`quarantineWarnings`) e não reprova o `--check`. Continuam bloqueando o `count=20` nos outros SOs, as
+contagens 1, 5 e 10 no Windows e toda a fase do renderer. Dois testes fixam as duas fronteiras. A investigação
+continua na task "CI — sessão PTY para no meio no benchmark de scrollback do Windows", que também registra o
+risco de o app real perder saída ao abrir muitos terminais logo depois de fechar outros no Windows.

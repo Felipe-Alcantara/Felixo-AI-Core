@@ -301,3 +301,20 @@ test('a desmontagem desiste no teto e devolve quem continua vivo', async () => {
   const vivos = await benchmark.waitForProcessesToExit([111, 222], { timeoutMs: 120, pollMs: 20, isAlive: (pid) => pid === 222 })
   assert.deepEqual(vivos, [222])
 })
+
+test('quarentena: no Windows a saída incompleta da fase nativa count=20 vira aviso, não falha', () => {
+  const nativo = (count) => ({ phase: 'native-pty', count, timedOut: true, linesPerTerminal: 2000, linesBySession: [2000, 1178] })
+  const relatorio = { results: [nativo(20)] }
+  assert.deepEqual(benchmark.validateReport(relatorio, { platform: 'win32' }), [])
+  assert.deepEqual(benchmark.quarantineWarnings(relatorio, { platform: 'win32' }), [
+    'native count=20: timeout',
+    'native count=20: saída incompleta',
+  ])
+})
+
+test('quarentena não vale fora do Windows nem para as outras contagens', () => {
+  const nativo = (count) => ({ phase: 'native-pty', count, timedOut: false, linesPerTerminal: 2000, linesBySession: [2000, 1500] })
+  assert.deepEqual(benchmark.validateReport({ results: [nativo(20)] }, { platform: 'linux' }), ['native count=20: saída incompleta'])
+  assert.deepEqual(benchmark.validateReport({ results: [nativo(10)] }, { platform: 'win32' }), ['native count=10: saída incompleta'])
+  assert.deepEqual(benchmark.quarantineWarnings({ results: [nativo(10)] }, { platform: 'win32' }), [])
+})

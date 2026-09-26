@@ -81,17 +81,39 @@ function heapStreamDeltaBytes(result) {
   return afterStream - before
 }
 
-function validateReport(report) {
+// Quarentena decidida pelo Felipe em 26/09/2026: no Windows, a perda de saída
+// da fase nativa com 20 PTYs (ConPTY sob carga; task "CI — sessão PTY para no
+// meio no benchmark de scrollback do Windows") vira aviso visível em vez de
+// reprovar o --check, enquanto a causa é investigada. Todo o resto continua
+// bloqueando: count=20 nos outros SOs, count 1/5/10 no Windows e o renderer.
+const NATIVE_QUARANTINE = Object.freeze({ platform: 'win32', count: 20 })
+
+function isQuarantinedNative(result, platform) {
+  return platform === NATIVE_QUARANTINE.platform && result.count === NATIVE_QUARANTINE.count
+}
+
+function nativeIssues(result) {
+  const issues = []
+  if (result.timedOut) issues.push(`native count=${result.count}: timeout`)
+  if (result.linesBySession?.some((lineCount) => lineCount < result.linesPerTerminal)) {
+    issues.push(`native count=${result.count}: saída incompleta`)
+  }
+  return issues
+}
+
+/** Problemas em quarentena: aparecem como aviso, não reprovam o --check. */
+function quarantineWarnings(report, { platform = process.platform } = {}) {
+  return (report.results ?? [])
+    .filter((result) => result.phase === 'native-pty' && isQuarantinedNative(result, platform))
+    .flatMap(nativeIssues)
+}
+
+function validateReport(report, { platform = process.platform } = {}) {
   const failures = []
   const currentBaselines = new Map()
   for (const result of report.results ?? []) {
     if (result.phase === 'native-pty') {
-      if (result.timedOut) {
-        failures.push(`native count=${result.count}: timeout`)
-      }
-      if (result.linesBySession?.some((lineCount) => lineCount < result.linesPerTerminal)) {
-        failures.push(`native count=${result.count}: saída incompleta`)
-      }
+      if (!isQuarantinedNative(result, platform)) failures.push(...nativeIssues(result))
       continue
     }
 
@@ -944,6 +966,10 @@ async function run(argv = process.argv.slice(2)) {
   console.log(encoded)
   console.log('TERMINAL_SCROLLBACK_BENCHMARK_JSON_END')
   if (options.check) {
+    for (const warning of quarantineWarnings(report)) {
+      // Anotação visível no resumo do GitHub Actions, sem reprovar o passo.
+      console.log(`::warning title=Bancada de scrollback (quarentena)::${warning} — perda de saída do ConPTY com 20 PTYs no Windows, em investigação`)
+    }
     const failures = validateReport(report)
     if (failures.length) {
       throw new Error(`Regressão na bancada:\n- ${failures.join('\n- ')}`)
@@ -991,5 +1017,6 @@ module.exports = {
   percentile,
   summarize,
   heapStreamDeltaBytes,
+  quarantineWarnings,
   validateReport,
 }
