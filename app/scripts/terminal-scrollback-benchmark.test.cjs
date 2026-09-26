@@ -221,3 +221,64 @@ test('sessões ativas continuam no mesmo ritmo e saem depois do último pedaço'
   assert.deepEqual(runEmitter(source, { flushWrites: false }), ['write:2', 'write:2', 'write:1'])
   assert.deepEqual(runEmitter(source, { flushWrites: true }), ['write:2', 'write:2', 'write:1', 'exit:0'])
 })
+
+// PTY falso: entrega a saída no ritmo pedido e sai antes do último pedaço,
+// como o ConPTY sob carga faz no Windows.
+function fakeSpawnPty(schedule) {
+  return () => {
+    const dataListeners = []
+    const exitListeners = []
+    for (const step of schedule) {
+      setTimeout(() => {
+        if (step.exit) exitListeners.forEach((listener) => listener({ exitCode: 0 }))
+        else dataListeners.forEach((listener) => listener(step.data))
+      }, step.at)
+    }
+    return {
+      pid: 2 ** 22 + 12345,
+      onData: (listener) => dataListeners.push(listener),
+      onExit: (listener) => exitListeners.push(listener),
+      kill() {},
+    }
+  }
+}
+
+const NATIVE_OPTIONS = {
+  nativeLinesPerTerminal: 4,
+  chunkLines: 4,
+  activeIntervalMs: 4,
+  nativeHoldMs: 0,
+  nativeDrainMs: 600,
+  timeoutMs: 10_000,
+  sampleIntervalMs: 5_000,
+  lineWidth: 40,
+  longPromptChars: 0,
+  longEvery: 2_000,
+}
+
+test('o dreno do PTY nativo espera enquanto a saída ainda chega depois que o filho saiu', async () => {
+  // Regressão: a janela contava da saída do filho, e a bancada declarava
+  // "saída incompleta" com o ConPTY ainda entregando (runs 36218374141 e
+  // 36218883853, 1.826 e 977 de 2.003 linhas).
+  const spawnPty = fakeSpawnPty([
+    { at: 10, data: 'a\nb\n' },
+    { at: 40, exit: true },
+    { at: 450, data: 'c\n' },
+    { at: 900, data: 'd\n' },
+  ])
+  const result = await benchmark.benchmarkNativePtys({ spawnPty, count: 1, ...NATIVE_OPTIONS })
+  assert.deepEqual(result.linesBySession, [4])
+  assert.equal(result.timedOut, false)
+})
+
+test('o dreno do PTY nativo desiste quando a saída para de chegar', async () => {
+  const spawnPty = fakeSpawnPty([
+    { at: 10, data: 'a\n' },
+    { at: 40, exit: true },
+  ])
+  const startedAt = Date.now()
+  const result = await benchmark.benchmarkNativePtys({ spawnPty, count: 1, ...NATIVE_OPTIONS })
+  assert.deepEqual(result.linesBySession, [1])
+  assert.equal(result.timedOut, true)
+  assert.ok(Date.now() - startedAt < 5_000, 'não espera até o teto quando nada mais chega')
+})

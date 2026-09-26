@@ -3960,3 +3960,17 @@ renderizou vem do CDP, e a bancada falha se não for a pedida. 11 testes unitár
 paralelo, já mostrou o Modo Performance multiplicando o FPS: Intel/GL de 19,2 para 32; NVIDIA/Vulkan de 28,8
 para 49,6. Com a máquina ocupada, esses números só provam que a bancada funciona. A medição de verdade, com a
 máquina quieta e várias rodadas, fica registrada numa entrada própria.
+
+## 2026-09-26 — Dreno do PTY nativo espera o fim da saída, não uma janela fixa
+
+A correção de 25/09 (`7b6907a`, em que o emissor só sai depois de drenar a última escrita) não acabou com o flake
+do Windows. Houve mais duas ocorrências já com ela, no CI do PR #93 (runs 36218374141 e 36218883853), com
+sessões paradas em 1.826 e 977 de 2.003 linhas: uma ativa e outra ociosa. Somando as de 25/09 (1.110 nas
+três), os cortes variam, o que aponta para **tempo** e não para um limite fixo. A causa estava na bancada:
+depois que os filhos saíam, ela esperava uma janela fixa de `nativeDrainMs` (2 s) a partir da saída e
+desistia. No Windows, com 20 ConPTYs disputando 4 vCPUs, o conhost continua entregando saída depois que o
+processo sai, e a bancada chamava de "saída incompleta" uma entrega apenas lenta. Agora a janela conta a partir
+do **último dado recebido**. Ela desiste só quando nada chega por 2 s, e o teto continua sendo o
+`settleDeadline`. Dois testes com um PTY falso cobrem os dois lados: a saída que chega depois do filho sair é
+esperada (falha com a regra antiga), e sem mais saída a bancada desiste rápido, sem ir até o teto. A bancada
+real `--counts=1,20` completou no Linux. A confirmação no Windows depende das próximas runs.

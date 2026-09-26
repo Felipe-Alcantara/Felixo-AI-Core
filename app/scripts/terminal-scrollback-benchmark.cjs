@@ -480,6 +480,7 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
   const linesBySession = Array(count).fill(0)
   const exitedBySession = Array(count).fill(false)
   const outputStartedAt = performance.now()
+  let lastDataAt = Date.now()
 
   for (let index = 0; index < count; index += 1) {
     const active = index < activeCount
@@ -507,6 +508,7 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
     ptys.push(pty)
 
     pty.onData((data) => {
+      lastDataAt = Date.now()
       const text = String(data)
       bytesBySession[index] += Buffer.byteLength(text)
       linesBySession[index] += text.split('\n').length - 1
@@ -571,10 +573,14 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
     if (childrenGone) {
       childrenGoneSince ??= Date.now()
       // node-pty may deliver the final onData callbacks after the child is
-      // already gone. Keep a short drain window so a fast burst is not
-      // reported as a partial PTY merely because the benchmark stopped
-      // observing one event-loop turn too early.
-      if (Date.now() - childrenGoneSince >= options.nativeDrainMs) break
+      // already gone. A janela de dreno conta a partir do ÚLTIMO dado
+      // recebido, não da saída dos filhos: no Windows, com 20 ConPTYs
+      // disputando CPU, o conhost segue entregando saída depois que o
+      // processo saiu, e uma janela fixa de 2 s cortava sessões que ainda
+      // estavam recebendo (1.826 e 977 de 2.003 linhas nas runs 36218374141
+      // e 36218883853). O teto continua sendo o settleDeadline.
+      const quietFor = Date.now() - Math.max(childrenGoneSince, lastDataAt)
+      if (quietFor >= options.nativeDrainMs) break
     } else {
       childrenGoneSince = null
     }
@@ -947,6 +953,7 @@ module.exports = {
   MAX_LINES_PER_TERMINAL,
   MAX_NATIVE_LINES_PER_TERMINAL,
   MAX_SCROLLBACK,
+  benchmarkNativePtys,
   buildEmitterCode,
   parseArgs,
   parsePolicies,
