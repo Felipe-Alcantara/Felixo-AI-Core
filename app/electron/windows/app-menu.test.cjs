@@ -108,6 +108,110 @@ test('clicar em fechar sem janela focada não estoura', () => {
   assert.doesNotThrow(() => fechar.click(null, undefined))
 })
 
+/** Submenu "Exibir" do template, onde mora o zoom da janela. */
+function menuExibir(template) {
+  return template.find((item) => item.label === 'Exibir').submenu
+}
+
+function itemPorLabel(template, label) {
+  return todosOsItens(template).find((item) => item.label === label)
+}
+
+/** webContents falso com o mesmo contrato que `applyZoomAction` usa. */
+function criarWebContentsFalso(nivelInicial = 0) {
+  return {
+    nivel: nivelInicial,
+    getZoomLevel() {
+      return this.nivel
+    },
+    setZoomLevel(valor) {
+      this.nivel = valor
+    },
+  }
+}
+
+test('Exibir oferece aumentar, diminuir e restaurar o zoom, antes de Tela cheia', () => {
+  // O zoom da janela só existia como atalho invisível: quem apertasse Ctrl+-
+  // sem querer encolhia o app sem ter como descobrir o Ctrl+0.
+  for (const plataforma of ['darwin', 'win32', 'linux']) {
+    const labels = menuExibir(construirTemplateDoMenu({ plataforma })).map(
+      (item) => item.label ?? item.type,
+    )
+    const inicioDoZoom = labels.indexOf('Aumentar zoom')
+
+    assert.deepEqual(
+      labels.slice(inicioDoZoom),
+      ['Aumentar zoom', 'Diminuir zoom', 'Tamanho real', 'separator', 'Tela cheia'],
+      `ordem do zoom errada em ${plataforma}`,
+    )
+    assert.equal(labels[inicioDoZoom - 1], 'separator')
+  }
+})
+
+test('itens de zoom mostram o atalho, mas quem trata a tecla é o before-input-event', () => {
+  const template = construirTemplateDoMenu({ plataforma: 'linux' })
+  const esperado = {
+    'Aumentar zoom': 'CmdOrCtrl+Plus',
+    'Diminuir zoom': 'CmdOrCtrl+-',
+    'Tamanho real': 'CmdOrCtrl+0',
+  }
+
+  for (const [label, acelerador] of Object.entries(esperado)) {
+    const item = itemPorLabel(template, label)
+
+    assert.equal(item.accelerator, acelerador, `atalho exibido errado em ${label}`)
+    // Registrar o acelerador faria o menu disputar a tecla com o handler de
+    // atalhos, que já cobre '=' e '+' dos vários layouts de teclado.
+    assert.equal(item.registerAccelerator, false, `${label} registraria o atalho`)
+  }
+})
+
+test('zoom não usa os roles do Electron, que não respeitam o limite de ±3', () => {
+  // Os roles zoomIn/zoomOut fazem `zoomLevel += 0.5` sem teto nem piso e agem
+  // no webContents focado — que pode ser um <webview> do canvas, não a janela.
+  const roles = rolesDe(construirTemplateDoMenu({ plataforma: 'darwin' }))
+
+  for (const role of ['zoomIn', 'zoomOut', 'resetZoom']) {
+    assert.equal(roles.includes(role), false, `sobrou o role ${role}`)
+  }
+})
+
+test('clicar nos itens de zoom aplica o mesmo passo e os mesmos limites do atalho', () => {
+  const template = construirTemplateDoMenu({ plataforma: 'linux' })
+  const clicar = (label, janela) => itemPorLabel(template, label).click(null, janela)
+  const webContents = criarWebContentsFalso()
+  const janela = { webContents }
+
+  clicar('Aumentar zoom', janela)
+  assert.equal(webContents.nivel, 0.5)
+
+  clicar('Diminuir zoom', janela)
+  clicar('Diminuir zoom', janela)
+  assert.equal(webContents.nivel, -0.5)
+
+  clicar('Tamanho real', janela)
+  assert.equal(webContents.nivel, 0)
+
+  webContents.nivel = 3
+  clicar('Aumentar zoom', janela)
+  assert.equal(webContents.nivel, 3, 'passou do zoom máximo')
+
+  webContents.nivel = -3
+  clicar('Diminuir zoom', janela)
+  assert.equal(webContents.nivel, -3, 'passou do zoom mínimo')
+})
+
+test('clicar em zoom sem janela focada (ou numa janela sem página) não estoura', () => {
+  const template = construirTemplateDoMenu({ plataforma: 'linux' })
+
+  for (const label of ['Aumentar zoom', 'Diminuir zoom', 'Tamanho real']) {
+    const item = itemPorLabel(template, label)
+
+    assert.doesNotThrow(() => item.click(null, undefined), `${label} sem janela`)
+    assert.doesNotThrow(() => item.click(null, {}), `${label} sem webContents`)
+  }
+})
+
 test('instalar constrói a partir do template e aplica no app', () => {
   const chamadas = []
   const Menu = {
