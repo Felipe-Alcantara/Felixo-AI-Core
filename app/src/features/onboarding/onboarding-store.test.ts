@@ -176,7 +176,12 @@ describe('store do tutorial: uso anterior, updates e novidades', () => {
     const snapshot = h.snapshot()
     expect(snapshot.fase).toBe('aviso')
     expect(snapshot.tour).toBeNull()
-    expect(snapshot.aviso).toEqual({ featureId: 'feature.ajuda', tourId: 'novidade-ajuda' })
+    expect(snapshot.aviso).toEqual({
+      featureId: 'feature.ajuda',
+      tourId: 'novidade-ajuda',
+      titulo: 'novidade.ajuda.titulo',
+      lang: 'pt-BR',
+    })
     expect(snapshot.ajuda[0]).toMatchObject({ tourId: 'inicial', status: 'nao-visto' })
     expect(snapshot.novidades).toBe(1)
     expect(h.disk.writes.map((write) => write.applied)).toEqual([true, true])
@@ -215,7 +220,7 @@ describe('store do tutorial: uso anterior, updates e novidades', () => {
     const h = createHarness({ disk, catalog: CATALOG_WITH_NEW_FEATURE })
     h.store.canvasReady(3)
     await h.store.settled()
-    expect(h.snapshot().aviso).toEqual({ featureId: 'feature.nova', tourId: 'novidade-nova' })
+    expect(h.snapshot().aviso).toMatchObject({ featureId: 'feature.nova', tourId: 'novidade-nova' })
     expect(h.disk.writes).toHaveLength(1)
     expect(tourStatus(disk)).toBe('concluido')
 
@@ -576,7 +581,22 @@ describe('store do tutorial: ações da pessoa', () => {
     const h = createHarness()
     h.store.announce('Passo 2 de 6: Agente')
     h.store.announce('Passo 2 de 6: Agente')
-    expect(h.snapshot().anuncio).toEqual({ texto: 'Passo 2 de 6: Agente', seq: 2 })
+    expect(h.snapshot().anuncio).toEqual({ texto: 'Passo 2 de 6: Agente', seq: 2, lang: 'pt-BR' })
+    h.store.announce('[Ƥȧşşǿ 2]', 'en-XA')
+    expect(h.snapshot().anuncio).toEqual({ texto: '[Ƥȧşşǿ 2]', seq: 3, lang: 'en-XA' })
+  })
+
+  it('a abertura captura o título do tour e o lang do documento (a camada não lê o DOM no render)', () => {
+    const h = createHarness()
+    h.store.open('inicial', 'ajuda')
+    expect(h.snapshot().tour).toMatchObject({ titulo: 'tour.inicial.titulo', lang: 'pt-BR' })
+  })
+
+  it('reportFailure leva a pilha de componentes ao log quando o boundary a informa', () => {
+    const h = createHarness()
+    h.store.reportFailure(new Error('render quebrou'), '\n    at OnboardingTourLayer')
+    const entry = h.logs.find((item) => item.level === 'error')
+    expect(entry?.details).toMatchObject({ message: 'render quebrou', componentStack: '\n    at OnboardingTourLayer' })
   })
 
   it('o snapshot de servidor é constante e nunca mostra tour', () => {

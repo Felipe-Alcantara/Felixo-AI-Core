@@ -14,6 +14,7 @@ import {
   migrateRaw,
   normalizeOnboardingState,
   observeCanvasTypes,
+  nodeTypesKeyOf,
   parseNodeTypesKey,
   parseSessionRecord,
   serializeOnboardingState,
@@ -564,6 +565,8 @@ describe('gatilho de canvas (catálogo de fixture)', () => {
   it('a chave de tipos do canvas é ordenada e sem repetição', () => {
     expect(parseNodeTypesKey('terminal, file,terminal,,image')).toEqual(['file', 'image', 'terminal'])
     expect(parseNodeTypesKey('')).toEqual([])
+    expect(nodeTypesKeyOf(['terminal', 'file', undefined, 'terminal', '', null, 'image'])).toBe('file,image,terminal')
+    expect(parseNodeTypesKey(nodeTypesKeyOf(['group', 'note']))).toEqual(['group', 'note'])
   })
 })
 

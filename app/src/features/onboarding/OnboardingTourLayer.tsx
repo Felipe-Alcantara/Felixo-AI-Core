@@ -1,0 +1,436 @@
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
+import { ONBOARDING_ANCHORS, type StepTarget } from './onboarding-catalog'
+import {
+  LAYOUT_MARGIN,
+  computeCardPlacement,
+  computeRingRect,
+  computeSidebarReveal,
+  decideFocusOnOpen,
+  hasOpenModal,
+  isCompactViewport,
+  resolveReturnFocus,
+  resolveStepTarget,
+  toRect,
+  type TargetEnv,
+  type TargetResolution,
+} from './onboarding-layout'
+import {
+  useOnboardingSnapshot,
+  type NoticeSession,
+  type OnboardingStore,
+  type TourSession,
+} from './onboarding-store'
+import {
+  describeNotice,
+  describeNoticeAnnouncement,
+  describeTourAnnouncement,
+  describeTourCard,
+  type TourAnnouncementKind,
+} from './onboarding-ui-model'
+import { OnboardingNotice } from './OnboardingNotice'
+import { OnboardingTourCard } from './OnboardingTourCard'
+
+/**
+ * Casca do tutorial: mede, posiciona, observa e cuida do teclado e do foco.
+ * Os textos vêm de `onboarding-ui-model.ts`, o desenho dos componentes
+ * apresentacionais e as regras de geometria e foco de `onboarding-layout.ts`.
+ *
+ * Posição sem re-render: `top`, `left`, `width`, `max-height` e `data-modo` são
+ * escritos pela ref dentro do callback de layout (molde do FelixoSelect, sem
+ * `setState` por quadro). O React só re-renderiza em troca de passo ou de alvo.
+ * O card nasce invisível (CSS sem `data-modo`) e é medido e posicionado no mesmo
+ * quadro, sem piscar.
+ *
+ * Recálculo (no máximo um rAF por quadro, só com tour ou aviso na tela):
+ * `resize` (o zoom também dispara), `scroll` da sidebar ou de qualquer ancestral
+ * dos candidatos (um contêiner sem barra de rolagem, rolado pelo foco, move o
+ * alvo sem mudar o tamanho de nada), `ResizeObserver` nos candidatos e no card,
+ * fim de transição/animação da sidebar e do inspector, `MutationObserver` de
+ * estrutura só na sidebar e de atributos nos candidatos e seus ancestrais até a
+ * região do canvas, e uma conferência a cada meio segundo só enquanto o tour
+ * aponta uma alternativa ao alvo preferido. Nunca há observador no body nem na
+ * dock, onde a saída do xterm muta o DOM sem parar.
+ *
+ * O tour nunca clica, foca, expande nem rola nada além do contêiner da sidebar:
+ * só destaca (anel) e explica (card).
+ */
+
+const SIDEBAR_SCROLL_SELECTOR = '.felixo-sidebar-scroll'
+const SIDEBAR_REGION_SELECTOR = '[data-felixo-region="sidebar"]'
+const CANVAS_REGION_SELECTOR = '[data-felixo-region="canvas"]'
+const HELP_TRIGGER_SELECTOR = '[data-felixo-help-trigger]'
+const OBSTACLE_SELECTOR = '[data-felixo-tour-avoid], [data-canvas-layout-warning]'
+const ANIMATED_CHROME_SELECTOR = '.felixo-workbench-sidebar, .felixo-elements-inspector'
+const OBSERVED_ATTRIBUTES = ['class', 'inert', 'aria-hidden', 'hidden', 'style']
+const OWN_SURFACES_SELECTOR = '[data-felixo-onboarding="card"], [data-felixo-onboarding="aviso"]'
+/**
+ * Com o alvo preferido fora de alcance, o tour aponta uma alternativa (o menu do
+ * canvas, por exemplo). Algo que só cobriu ou deslocou o preferido por um
+ * instante (um contêiner rolado pelo foco, um overlay saindo) pode sumir sem
+ * disparar nenhum dos gatilhos; então, só nesse estado, a posição é conferida
+ * de novo a cada meio segundo. No alvo preferido não há verificação periódica.
+ */
+const FALLBACK_RECHECK_MS = 500
+
+/** O aviso de novidade fica ao lado da Ajuda. */
+const NOTICE_TARGETS: readonly StepTarget[] = Object.freeze([
+  { anchor: 'rail-ajuda', body: 'passo.ajuda-novidade.corpo', label: 'Ajuda', side: 'direita' },
+])
+
+/**
+ * `elementFromPoint` que olha através do card e do aviso. Sem isto a resolução
+ * dependia de onde o próprio card estava: ancorado ao lado do alvo A, ele cobria
+ * o alvo B e o fazia passar ("superfície do próprio tour"); ancorado em B, ele
+ * saía de cima, B era rejeitado e o alvo voltava para A. Com a sidebar abrindo
+ * no meio de um passo, isso virava um laço síncrono de `retarget` (React:
+ * "Maximum update depth exceeded") e o boundary derrubava o tour. O anel já é
+ * `pointer-events: none`; as superfícies ficam assim só durante a leitura.
+ */
+function hitTestBehindTour(x: number, y: number): Element | null {
+  const surfaces = Array.from(document.querySelectorAll<HTMLElement>(OWN_SURFACES_SELECTOR))
+  const previous = surfaces.map((surface) => surface.style.pointerEvents)
+  for (const surface of surfaces) surface.style.pointerEvents = 'none'
+  try {
+    return document.elementFromPoint(x, y)
+  } finally {
+    surfaces.forEach((surface, index) => {
+      surface.style.pointerEvents = previous[index]
+    })
+  }
+}
+
+function domTargetEnv(): TargetEnv {
+  return {
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    query: (selector) => document.querySelector<HTMLElement>(selector),
+    style: (node) => {
+      const style = getComputedStyle(node as unknown as Element)
+      return { visibility: style.visibility, opacity: style.opacity }
+    },
+    scrollContainer: document.querySelector<HTMLElement>(SIDEBAR_SCROLL_SELECTOR),
+    elementFromPoint: hitTestBehindTour,
+  }
+}
+
+function readObstacles() {
+  return Array.from(document.querySelectorAll(OBSTACLE_SELECTOR), (element) =>
+    toRect(element.getBoundingClientRect()),
+  ).filter((rect) => rect.width > 0 && rect.height > 0)
+}
+
+/** Resolve o alvo e escreve a posição do card (ou aviso) e do anel direto no DOM. */
+function placeSurface(surface: HTMLElement, ring: HTMLElement | null, targets: readonly StepTarget[]) {
+  let env = domTargetEnv()
+  let resolution = resolveStepTarget({ targets }, env)
+  const scroller = env.scrollContainer as HTMLElement | null
+  if (resolution?.needsReveal && scroller) {
+    const next = computeSidebarReveal({
+      target: resolution.rect,
+      container: toRect(scroller.getBoundingClientRect()),
+      scrollTop: scroller.scrollTop,
+    })
+    // Instantâneo e só neste contêiner: nunca scrollIntoView (arrasta o shell).
+    if (next !== null) scroller.scrollTop = next
+    env = domTargetEnv()
+    resolution = resolveStepTarget({ targets }, env)
+  }
+
+  const viewport = env.viewport
+  surface.style.width = isCompactViewport(viewport) ? `${Math.max(0, viewport.width - LAYOUT_MARGIN * 2)}px` : ''
+  surface.style.maxHeight = ''
+  const natural = surface.getBoundingClientRect()
+  const input = {
+    viewport,
+    target: resolution?.rect ?? null,
+    card: { width: natural.width, height: natural.height },
+    preferredSide: resolution?.target.side,
+    obstacles: readObstacles(),
+  }
+  let placement = computeCardPlacement(input)
+  if (placement.mode === 'folha' && Math.abs(placement.width - natural.width) > 0.5) {
+    // A folha tem outra largura: o texto reflui e a altura muda; mede de novo.
+    surface.style.width = `${placement.width}px`
+    placement = computeCardPlacement({
+      ...input,
+      card: { width: placement.width, height: surface.getBoundingClientRect().height },
+    })
+  }
+  surface.style.top = `${placement.top}px`
+  surface.style.left = `${placement.left}px`
+  surface.style.width = `${placement.width}px`
+  surface.style.maxHeight = `${placement.maxHeight}px`
+  surface.dataset.modo = placement.mode
+  surface.dataset.lado = placement.side
+
+  if (ring) {
+    if (resolution) {
+      const rect = computeRingRect(resolution.rect, viewport)
+      ring.style.top = `${rect.top}px`
+      ring.style.left = `${rect.left}px`
+      ring.style.width = `${rect.width}px`
+      ring.style.height = `${rect.height}px`
+      ring.dataset.visivel = 'true'
+    } else {
+      delete ring.dataset.visivel
+    }
+  }
+  return resolution
+}
+
+type PlacementOptions = {
+  surfaceRef: RefObject<HTMLDivElement | null>
+  ringRef?: RefObject<HTMLDivElement | null>
+  targets: readonly StepTarget[]
+  /** Muda quando o que se observa muda (instância, passo, alvo): os observadores são refeitos. */
+  trackKey: string
+  onPlaced?: (resolution: TargetResolution | null) => void
+}
+
+function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, onPlaced }: PlacementOptions) {
+  /** Posiciona e diz se ficou numa alternativa (ou sem alvo) em vez do alvo preferido. */
+  const layout = useEffectEvent((): boolean => {
+    const surface = surfaceRef.current
+    if (!surface) return false
+    // Fora da chamada opcional: `onPlaced?.(placeSurface(...))` nem avaliaria o
+    // argumento sem `onPlaced`, e o aviso (que não passa callback) nunca era posicionado.
+    const resolution = placeSurface(surface, ringRef?.current ?? null, targets)
+    onPlaced?.(resolution)
+    return targets.length > 0 && resolution?.anchor !== targets[0].anchor
+  })
+  const candidates = useEffectEvent(() =>
+    targets
+      .map((target) => document.querySelector<HTMLElement>(ONBOARDING_ANCHORS[target.anchor]))
+      .filter((element): element is HTMLElement => element !== null),
+  )
+
+  useLayoutEffect(() => {
+    let onFallback = layout()
+
+    let frame = 0
+    const schedule = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        onFallback = layout()
+      })
+    }
+    const recheck = window.setInterval(() => {
+      if (onFallback) schedule()
+    }, FALLBACK_RECHECK_MS)
+    const elements = candidates()
+    const region = document.querySelector(CANVAS_REGION_SELECTOR)
+
+    const resize = new ResizeObserver(schedule)
+    elements.forEach((element) => resize.observe(element))
+    if (surfaceRef.current) resize.observe(surfaceRef.current)
+
+    const structure = new MutationObserver(schedule)
+    const sidebar = document.querySelector(SIDEBAR_REGION_SELECTOR)
+    if (sidebar) structure.observe(sidebar, { childList: true, subtree: true })
+
+    const attributes = new MutationObserver(schedule)
+    for (const element of elements) {
+      for (let node: Element | null = element; node && node !== region && node !== document.body; node = node.parentElement) {
+        attributes.observe(node, { attributes: true, attributeFilter: OBSERVED_ATTRIBUTES })
+      }
+    }
+
+    const onChromeMotionEnd = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest(ANIMATED_CHROME_SELECTOR)) schedule()
+    }
+    // Abrir a gaveta do terminal rola o shell (sem barra de rolagem) de lado por um
+    // instante: o alvo muda de lugar sem mudar de tamanho, e nenhum observador
+    // acima dispara. Só rolagens que movem um candidato contam (a do xterm, não).
+    const scroller = document.querySelector(SIDEBAR_SCROLL_SELECTOR)
+    const onScroll = (event: Event) => {
+      const target = event.target
+      if (target === document || target === scroller) schedule()
+      else if (target instanceof Node && elements.some((element) => target.contains(element))) schedule()
+    }
+    window.addEventListener('resize', schedule)
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    document.addEventListener('transitionend', onChromeMotionEnd, true)
+    document.addEventListener('animationend', onChromeMotionEnd, true)
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      window.clearInterval(recheck)
+      resize.disconnect()
+      structure.disconnect()
+      attributes.disconnect()
+      window.removeEventListener('resize', schedule)
+      document.removeEventListener('scroll', onScroll, true)
+      document.removeEventListener('transitionend', onChromeMotionEnd, true)
+      document.removeEventListener('animationend', onChromeMotionEnd, true)
+    }
+  }, [surfaceRef, trackKey])
+}
+
+/**
+ * Devolve o foco num rAF, só se ele estava no card (ou aviso) ao fechar e ninguém o
+ * levou para outro lugar: o salvo na abertura, a Ajuda ou a região do canvas.
+ */
+function returnFocusSoon(focusWasInside: boolean, saved: unknown) {
+  if (!focusWasInside) return
+  window.requestAnimationFrame(() => {
+    const target = resolveReturnFocus<HTMLElement>({
+      focusWasInside,
+      current: document.activeElement,
+      saved,
+      helpTrigger: document.querySelector<HTMLElement>(HELP_TRIGGER_SELECTOR),
+      canvas: document.querySelector<HTMLElement>(CANVAS_REGION_SELECTOR),
+    })
+    target?.focus({ preventScroll: true })
+  })
+}
+
+/** Falha de render forçada (só na instância devtools): prova que o canvas continua de pé. */
+function ForcedRenderFailure(): never {
+  throw new Error('Falha forçada do tutorial do canvas (felixo:onboarding:falha = render).')
+}
+
+function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSession }) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const ringRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const openedInstance = useRef<number | null>(null)
+  const shownStep = useRef<{ instancia: number; stepIndex: number } | null>(null)
+  const model = describeTourCard(tour)
+  const step = tour.passos[tour.stepIndex]
+
+  const announce = (kind: TourAnnouncementKind) => {
+    const { texto, lang } = describeTourAnnouncement(kind, tour)
+    store.announce(texto, lang)
+  }
+
+  useSurfacePlacement({
+    surfaceRef: cardRef,
+    ringRef,
+    targets: step?.targets ?? [],
+    trackKey: `${tour.instancia}:${tour.stepIndex}:${tour.ancora ?? ''}`,
+    onPlaced: (resolution) => {
+      const body = bodyRef.current
+      // O corpo só entra na ordem de Tab quando transborda (para rolar pelo teclado).
+      if (body) {
+        if (body.scrollHeight > body.clientHeight + 1) body.tabIndex = 0
+        else body.removeAttribute('tabindex')
+      }
+      if (resolution && resolution.anchor !== tour.ancora) store.retarget(resolution.anchor)
+    },
+  })
+
+  // Abertura: depois do posicionamento (efeito declarado antes), para o card já estar visível.
+  const onOpened = useEffectEvent(() => {
+    if (openedInstance.current === tour.instancia) return
+    openedInstance.current = tour.instancia
+    const card = cardRef.current
+    if (!card) return
+    const move = decideFocusOnOpen({
+      trigger: tour.trigger,
+      foco: tour.foco,
+      activeElement: document.activeElement,
+      canvasRegion: document.querySelector(CANVAS_REGION_SELECTOR),
+    })
+    if (move) {
+      // O leitor de tela lê nome e descrição do diálogo; não há anúncio extra.
+      card.focus({ preventScroll: true })
+      return
+    }
+    if (hasOpenModal(document)) return
+    if (tour.trigger === 'retomada') announce('retomado')
+    else if (tour.foco === 'mover') announce('aberto-sem-foco')
+  })
+  useLayoutEffect(() => onOpened(), [tour.instancia])
+
+  const onStepShown = useEffectEvent(() => {
+    const previous = shownStep.current
+    shownStep.current = { instancia: tour.instancia, stepIndex: tour.stepIndex }
+    if (!previous || previous.instancia !== tour.instancia || previous.stepIndex === tour.stepIndex) return
+    if (!hasOpenModal(document)) announce('passo')
+  })
+  useEffect(() => onStepShown(), [tour.instancia, tour.stepIndex])
+
+  const close = (kind: 'botao' | 'esc' | 'concluir') => {
+    const focusWasInside = Boolean(cardRef.current?.contains(document.activeElement))
+    const saved = store.focusBeforeOpen()
+    if (!hasOpenModal(document)) announce(kind === 'concluir' ? 'concluido' : 'fechado')
+    if (kind === 'concluir') store.complete()
+    else store.skip(kind)
+    returnFocusSoon(focusWasInside, saved)
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // Com um diálogo modal aberto o Esc é dele (AgentQuestionDialog, HandoffDialog).
+    if (event.key !== 'Escape' || event.defaultPrevented || hasOpenModal(document)) return
+    event.preventDefault()
+    event.stopPropagation()
+    close('esc')
+  }
+
+  return (
+    <>
+      <div ref={ringRef} className="felixo-onboarding-ring" aria-hidden="true" data-felixo-onboarding="anel" />
+      {model && (
+        <OnboardingTourCard
+          model={model}
+          cardRef={cardRef}
+          bodyRef={bodyRef}
+          onSkip={() => close('botao')}
+          onBack={() => store.back()}
+          onNext={() => (model.isLast ? close('concluir') : store.next())}
+          onKeyDown={onKeyDown}
+        />
+      )}
+      {tour.falhaForcada && <ForcedRenderFailure />}
+    </>
+  )
+}
+
+function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: NoticeSession }) {
+  const noticeRef = useRef<HTMLDivElement>(null)
+  const announced = useRef<string | null>(null)
+  const model = describeNotice(aviso)
+
+  useSurfacePlacement({ surfaceRef: noticeRef, targets: NOTICE_TARGETS, trackKey: aviso.featureId })
+
+  const onShown = useEffectEvent(() => {
+    if (announced.current === aviso.featureId) return
+    announced.current = aviso.featureId
+    if (hasOpenModal(document)) return
+    const { texto, lang } = describeNoticeAnnouncement(aviso)
+    store.announce(texto, lang)
+  })
+  useEffect(() => onShown(), [aviso.featureId])
+
+  const dismiss = () => {
+    const focusWasInside = Boolean(noticeRef.current?.contains(document.activeElement))
+    const saved = store.focusBeforeOpen()
+    store.dismissNotice()
+    returnFocusSoon(focusWasInside, saved)
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || hasOpenModal(document)) return
+    event.preventDefault()
+    event.stopPropagation()
+    dismiss()
+  }
+
+  return (
+    <OnboardingNotice
+      model={model}
+      noticeRef={noticeRef}
+      onView={() => store.viewNotice()}
+      onDismiss={dismiss}
+      onKeyDown={onKeyDown}
+    />
+  )
+}
+
+/** Camada do tutorial no canvas: o tour (anel + card) ou o aviso de novidade. */
+export function OnboardingTourLayer({ store }: { store: OnboardingStore }) {
+  const snapshot = useOnboardingSnapshot(store)
+  if (snapshot.tour) return <TourSurface store={store} tour={snapshot.tour} />
+  if (snapshot.aviso) return <NoticeSurface store={store} aviso={snapshot.aviso} />
+  return null
+}

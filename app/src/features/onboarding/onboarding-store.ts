@@ -6,6 +6,7 @@ import {
   type OnboardingCatalog,
   type StepDef,
 } from './onboarding-catalog'
+import type { MessageKey } from './onboarding-messages'
 import { readDevtoolsFault, type OnboardingFault } from './onboarding-devtools'
 import {
   EMPTY_CANVAS_OBSERVATION,
@@ -100,6 +101,10 @@ export type FocusIntent = 'mover' | 'manter'
 
 export type TourSession = {
   tourId: string
+  /** Título do tour ("Tutorial do canvas"), rótulo do card para o leitor de tela. */
+  titulo: MessageKey
+  /** `lang` do documento no instante da abertura; a camada resolve o catálogo de textos sem ler o DOM no render. */
+  lang: string
   stepIndex: number
   passos: readonly StepDef[]
   trigger: TourTrigger
@@ -113,10 +118,13 @@ export type TourSession = {
   falhaForcada: boolean
 }
 
+/** Aviso de novidade na tela; título e `lang` capturados no anúncio, como no tour. */
+export type NoticeSession = { featureId: string; tourId: string; titulo: MessageKey; lang: string }
+
 export type OnboardingSnapshot = {
   fase: OnboardingPhase
   tour: TourSession | null
-  aviso: { featureId: string; tourId: string } | null
+  aviso: NoticeSession | null
   persistencia: OnboardingPersistence
   automacao: { autoOpen: boolean; reason: string }
   /** Exposto em `data-felixo-onboarding-decisao` (ex.: `suprimido:abriria-inicial`). */
@@ -124,7 +132,7 @@ export type OnboardingSnapshot = {
   ajuda: readonly HelpEntry[]
   /** Badge da Ajuda: novidades anunciadas e ainda não vistas. */
   novidades: number
-  anuncio: { texto: string; seq: number } | null
+  anuncio: { texto: string; seq: number; lang: string } | null
 }
 
 type CommitOutcome = 'aplicado' | 'no-op' | 'memoria' | 'falhou'
@@ -392,6 +400,8 @@ export function createOnboardingStore(deps: OnboardingStoreDeps) {
     if (!tour || passos.length === 0) return false
     const next: TourSession = {
       tourId,
+      titulo: tour.title,
+      lang: deps.getLocale(),
       stepIndex: Math.min(Math.max(0, stepIndex), passos.length - 1),
       passos,
       trigger,
@@ -518,7 +528,11 @@ export function createOnboardingStore(deps: OnboardingStoreDeps) {
     }
     if (outcome === 'aplicado' && snapshot.fase === 'ocioso') {
       focusBeforeOpen = deps.getActiveElement()
-      update({ fase: 'aviso', aviso: { featureId, tourId: feature.tourId }, decisao: 'anunciado' })
+      update({
+        fase: 'aviso',
+        aviso: { featureId, tourId: feature.tourId, titulo: feature.title, lang: deps.getLocale() },
+        decisao: 'anunciado',
+      })
     } else {
       update()
     }
@@ -695,19 +709,24 @@ export function createOnboardingStore(deps: OnboardingStoreDeps) {
   }
 
   /** A camada do tutorial falhou no render: desativa na sessão, sem reabertura automática. */
-  function reportFailure(error?: unknown) {
+  function reportFailure(error?: unknown, componentStack?: string | null) {
     clearSession()
     update({ fase: 'desativado', tour: null, aviso: null })
+    const failure = error instanceof Error ? { message: error.message, stack: error.stack ?? null } : { message: String(error) }
     log({
       level: 'error',
       message: 'O tutorial do canvas falhou ao renderizar e foi desativado nesta sessão.',
-      details: error instanceof Error ? { message: error.message, stack: error.stack ?? null } : String(error),
+      details: componentStack ? { ...failure, componentStack } : failure,
     })
   }
 
-  /** Texto para a região live (a camada formata; o chunk eager não carrega mensagens). */
-  function announce(texto: string) {
-    update({ anuncio: { texto, seq: ++announceSeq } })
+  /**
+   * Texto para a região live (a camada formata; o chunk eager não carrega
+   * mensagens). `lang` é o do catálogo efetivamente usado, para o leitor de
+   * tela pronunciar o texto no idioma certo.
+   */
+  function announce(texto: string, lang = 'pt-BR') {
+    update({ anuncio: { texto, seq: ++announceSeq, lang } })
   }
 
   return {

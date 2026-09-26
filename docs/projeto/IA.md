@@ -4959,3 +4959,48 @@ baixo, cima, esquerda; desvio de `[data-felixo-tour-avoid]`), `computeRingRect`,
 card, só asserts relacionais, mais casos nomeados de alvo, foco, modal e containing block). Conferido com duas
 mutações de propósito (ignorar obstáculos; ignorar oclusão), que reprovaram 52 e 2 casos; o código voltou ao
 original. `npm run lint` e `npm run build` ok.
+
+## 2026-09-26 — Tutorial do canvas: tutorial não bloqueante no canvas (commit 8 do plano)
+
+Registro gravado às 15:52.
+
+**O que ficou pronto.**
+- `OnboardingMount` (eager), logo depois do `<CanvasToolbar/>` dentro de `[data-felixo-region="canvas"]`: região
+  live sempre montada e vazia, com `data-felixo-onboarding-decisao`; `canvasReady`, `canvasUnmounted` e
+  `canvasNodeTypes`; a camada entra só por `lazy(import('./onboarding-ui-entry'))` dentro do
+  `OnboardingErrorBoundary`.
+- Chunk preguiçoso único `onboarding-ui-entry` (22,4 kB, 8,1 kB gzip no build): mensagens, layout,
+  `onboarding-ui-model.ts` (textos prontos do card, do aviso e dos anúncios), `OnboardingTourLayer` (casca:
+  medição, observadores, posição pela ref, Esc, foco), `OnboardingTourCard` e `OnboardingNotice`
+  (apresentacionais). "Tutorial do canvas" só aparece nesse chunk.
+- CSS: tokens `--felixo-z-onboarding-ring: 54` e `--felixo-z-onboarding: 55`, classes `.felixo-onboarding-*` sem
+  animação nem transição, tamanhos em rem, foco visível na própria classe, alto contraste e forced-colors. As
+  classes do card, do anel e do aviso também entram nos blocos de reduced motion e de Modo Performance.
+- `CanvasView`: `nodeTypesKey` só é montada quando o catálogo tem gatilho de canvas (o v1 não tem).
+
+**Desvios e acréscimos, com motivo.**
+- Store: `TourSession` ganhou `titulo` e `lang`, o aviso ganhou `titulo` e `lang`, e o anúncio ganhou `lang`
+  (`announce(texto, lang)`). O `lang` do documento é capturado na abertura, como a falha forçada, para a camada
+  não ler o DOM no render; o anúncio leva o idioma do catálogo usado.
+- `reportFailure(error, componentStack)`: o boundary passa a pilha de componentes e a store registra um único erro no
+  QA Logger (escopo `renderer:onboarding`). O boundary não loga de novo, para a falha não aparecer duplicada.
+- `onboarding-ui-model.ts` é um arquivo a mais que o plano: separa a formatação dos textos (pura, testada no U-ui)
+  da casca e dos componentes.
+- O anel e o card ficam invisíveis por CSS até a camada escrever `data-visivel`/`data-modo` pela ref, em vez de
+  estilo inline (o U-ui confere que a marcação não tem `style` com posição).
+- `nokey` entrou na lista de marcadores do `setup-tailwind-classes.test.ts` (é lido pelo React Flow em JS), que agora
+  varre também `features/onboarding`, com caminho relativo portátil entre sistemas.
+- `nodeTypesKeyOf` em `onboarding-state.ts`, o inverso de `parseNodeTypesKey`, para o `CanvasView` montar a chave.
+
+**Validação.**
+- U-ui (card por passo × pt-BR/en-XA, contador, Voltar com `aria-disabled`, Concluir, ids de labelledby e
+  describedby, sem coordenadas, aviso sem `autofocus`, anúncios), U-bound (sonda estática de importações, rede,
+  processo e ponte; Mount só por lazy; métodos do boundary com store falsa e real) e U-css (conferido com três
+  mutações de propósito, que reprovaram; o CSS voltou ao original).
+- `npx vitest run src/features/onboarding src/features/setup`: 690/690. `npm run lint` e `npm run build` ok.
+- App real (`felixo devtools`, perfil isolado, sob o lock): com a abertura suprimida, a decisão exposta é
+  `suprimido:abriria-inicial`, sem card, e as 8 âncoras existem. Com sessão de retomada no passo 2 e reload, o card
+  aparece ancorado à direita da moldura "Agente" (anel no alvo), sem mover o foco, e a região live diz "Tutorial
+  retomado no passo 2 de 6: Agente."; Próximo troca o texto e anuncia "Passo 3 de 6: Contexto"; o passo 4 fica à
+  esquerda do cabeçalho "Elementos"; Esc no card fecha, limpa a sessão, anuncia "Tutorial fechado. Reabra em Ajuda."
+  e devolve o foco à região do canvas (a Ajuda ainda não existe neste commit).
