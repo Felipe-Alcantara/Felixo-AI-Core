@@ -15,7 +15,6 @@ import {
   LazyFetchAllPanel,
   LazyGitPanel,
   LazyModelsPanel,
-  LazyNotionTasksPanel,
   LazyNotesPanel,
   LazyOrchestratorPanel,
   LazyProjectsPanel,
@@ -258,8 +257,6 @@ export function CanvasToolPanels({
         return <LazyGitPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'fetchAll':
         return <LazyFetchAllPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
-      case 'notionTasks':
-        return <LazyNotionTasksPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentUsage':
         return <LazyAgentUsagePanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'orchestrator':

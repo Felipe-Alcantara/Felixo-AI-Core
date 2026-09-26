@@ -63,6 +63,8 @@ export const loadFetchAllPanel = () =>
     markToolLoaded('fetchAll')
     return { default: FetchAllPanel }
   })
+// Tarefas Notion não tem painel flutuante: a ferramenta abre o bloco
+// NotionTasksNode. Este loader só aquece o mesmo chunk no hover do menu.
 export const loadNotionTasksPanel = () =>
   import('./tools/NotionTasksPanel').then(({ NotionTasksPanel }) => {
     markToolLoaded('notionTasks')
