@@ -69,14 +69,14 @@ function createGpuPreferenceSession({
       devicesPromise = Promise.resolve()
         .then(() => app.getGPUInfo('basic'))
         .then((gpuInfo) => describeGpuDevices(gpuInfo, platformName))
-        .catch(() => ({ devices: [], multipleGpus: false }))
+        .catch(() => ({ devices: [], multipleGpus: false, unavailablePreferences: {} }))
     }
     return devicesPromise
   }
 
   async function describe() {
     const state = readGpuPreferenceState(userDataPath)
-    const { devices, multipleGpus } = await readDevices()
+    const { devices, multipleGpus, unavailablePreferences } = await readDevices()
     return {
       preference: state.preference,
       applied: appliedPreference,
@@ -87,6 +87,7 @@ function createGpuPreferenceSession({
       fallback: state.fallback,
       devices,
       multipleGpus,
+      unavailablePreferences,
     }
   }
 

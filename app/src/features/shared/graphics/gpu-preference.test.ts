@@ -81,6 +81,20 @@ describe('preferência de placa de vídeo', () => {
     expect(shouldShowGpuChoice({ ...compatible, preference: 'auto' })).toBe(false)
   })
 
+  it('no macOS com placa NVIDIA desliga só a Dedicada, com o motivo', () => {
+    const macNvidia: GpuPreferenceStatus = {
+      ...BASE_STATUS,
+      unavailablePreferences: { dedicada: 'macos-nvidia-forced-low-power' },
+    }
+    expect(shouldShowGpuChoice(macNvidia)).toBe(true)
+    expect(gpuPreferenceOptions(macNvidia).map((option) => [option.value, option.disabled ?? false])).toEqual([
+      ['auto', false],
+      ['integrada', false],
+      ['dedicada', true],
+    ])
+    expect(describeGpuChoiceLimit(macNvidia)).toMatch(/macOS.*NVIDIA.*Dedicada não teria efeito/)
+  })
+
   it('separa o que vale nesta abertura do que vale na próxima', () => {
     expect(describeAppliedGpu({ ...BASE_STATUS, preference: 'dedicada', applied: 'dedicada' })).toBe('Nesta abertura: Dedicada.')
     expect(describeAppliedGpu({ ...BASE_STATUS, preference: 'dedicada' })).toBe('Nesta abertura: Automático. Na próxima: Dedicada.')

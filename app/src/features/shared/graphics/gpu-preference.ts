@@ -34,8 +34,23 @@ export type GpuPreferenceStatus = {
   supported: boolean
   unsupportedReason: string | null
   fallback: GpuFallback | null
+  /**
+   * Entradas do `getGPUInfo` que não são renderizador por software. No Windows
+   * podem incluir NPUs (o Chromium as lista junto): não conte placas por aqui;
+   * quem diz se há escolha é `multipleGpus`.
+   */
   devices: { vendorId: number; deviceId: number }[]
   multipleGpus: boolean
+  /** Opções que não teriam efeito nesta máquina, com o motivo (ver `electron/core/gpu-devices.cjs`). */
+  unavailablePreferences?: Partial<Record<Exclude<GpuPreference, 'auto'>, GpuUnavailableReason>>
+}
+
+/** macOS com placa NVIDIA: a lista de bugs de driver do Chromium força a placa de baixo consumo. */
+export type GpuUnavailableReason = 'macos-nvidia-forced-low-power'
+
+const UNAVAILABLE_REASON_TEXT: Record<GpuUnavailableReason, string> = {
+  'macos-nvidia-forced-low-power':
+    'No macOS com placa NVIDIA, o próprio Chromium força a placa de baixo consumo, então a Dedicada não teria efeito.',
 }
 
 export const GPU_PREFERENCE_OPTIONS: FelixoSelectOption[] = [
@@ -90,7 +105,10 @@ export function shouldShowGpuChoice(status: GpuPreferenceStatus | null | undefin
  * três opções valem.
  */
 export function describeGpuChoiceLimit(status: GpuPreferenceStatus): string | null {
-  if (status.multipleGpus) return null
+  if (status.multipleGpus) {
+    const reasons = Object.values(status.unavailablePreferences ?? {})
+    return reasons.length > 0 ? reasons.map((reason) => UNAVAILABLE_REASON_TEXT[reason]).join(' ') : null
+  }
   if (status.notApplied === 'software-rendering') {
     return 'No modo compatível (sem GPU) o Felixo não lê as placas de vídeo e a escolha salva não tem efeito; só dá para voltar para Automático.'
   }
@@ -99,11 +117,12 @@ export function describeGpuChoiceLimit(status: GpuPreferenceStatus): string | nu
 
 /** As opções do seletor, com as que não valem nesta abertura desligadas e o motivo na descrição. */
 export function gpuPreferenceOptions(status: GpuPreferenceStatus): FelixoSelectOption[] {
-  const limit = describeGpuChoiceLimit(status)
-  if (!limit) return GPU_PREFERENCE_OPTIONS
-  return GPU_PREFERENCE_OPTIONS.map((option) =>
-    option.value === 'auto' ? option : { ...option, disabled: true, description: 'Indisponível nesta abertura.' },
-  )
+  return GPU_PREFERENCE_OPTIONS.map((option) => {
+    if (option.value === 'auto') return option
+    if (!status.multipleGpus) return { ...option, disabled: true, description: 'Indisponível nesta abertura.' }
+    const unavailable = status.unavailablePreferences?.[option.value as Exclude<GpuPreference, 'auto'>]
+    return unavailable ? { ...option, disabled: true, description: 'Sem efeito neste computador.' } : option
+  })
 }
 
 /** Texto do aviso de volta automática para Automático, em linguagem de quem usa. */

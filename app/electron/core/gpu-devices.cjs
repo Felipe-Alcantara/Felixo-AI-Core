@@ -29,6 +29,7 @@
 
 /** `gl::GpuPreference` (`ui/gl/gpu_preference.h`): kNone, kDefault, kLowPower, kHighPerformance. */
 const CHROMIUM_GPU_PREFERENCE = Object.freeze({ lowPower: 2, highPerformance: 3 })
+const NVIDIA_VENDOR_ID = 0x10de
 
 /** Espelho de `GPUInfo::GPUDevice::IsSoftwareRenderer` do Chromium 146. */
 function isSoftwareRendererDevice(device) {
@@ -49,23 +50,49 @@ function hasValidIds(device) {
 }
 
 /**
+ * Preferências que não teriam efeito nesta máquina, com o motivo.
+ *
+ * macOS com qualquer placa NVIDIA: a lista de bugs de driver do Chromium 146
+ * (`gpu/config/gpu_driver_bug_list.json`, entrada 326: `os` macosx,
+ * `vendor_id` 0x10de, `multi_gpu_category` any) liga `force_low_power_gpu`, e
+ * o `SetupGLDisplayManagerEGL` testa esse workaround antes do
+ * `force_high_performance_gpu` que a Dedicada pede. A Integrada e o Automático
+ * continuam valendo.
+ */
+function describeUnavailablePreferences(realGpus, platformName) {
+  if (platformName === 'darwin' && realGpus.some((device) => device.vendorId === NVIDIA_VENDOR_ID)) {
+    return { dedicada: 'macos-nvidia-forced-low-power' }
+  }
+  return {}
+}
+
+/**
  * @param {unknown} gpuInfo - Resultado de `app.getGPUInfo('basic')`.
  * @param {string} [platformName]
- * @returns {{ devices: { vendorId: number, deviceId: number }[], multipleGpus: boolean }}
+ * @returns {{
+ *   devices: { vendorId: number, deviceId: number }[],
+ *   multipleGpus: boolean,
+ *   unavailablePreferences: { dedicada?: 'macos-nvidia-forced-low-power' },
+ * }} `devices` são as entradas que não são renderizador por software. No
+ *   Windows elas podem incluir NPUs (o Chromium as põe na mesma lista, sem
+ *   marca de consumo): não use `devices.length` como número de placas de
+ *   vídeo; quem diz se há escolha é `multipleGpus`.
  */
 function describeGpuDevices(gpuInfo, platformName = process.platform) {
   const listed = Array.isArray(gpuInfo?.gpuDevice) ? gpuInfo.gpuDevice : []
   const realGpus = listed.filter((device) => hasValidIds(device) && !isSoftwareRendererDevice(device))
   const devices = realGpus.map((device) => ({ vendorId: device.vendorId, deviceId: device.deviceId }))
+  const unavailablePreferences = describeUnavailablePreferences(realGpus, platformName)
 
   if (platformName === 'win32' || platformName === 'darwin') {
     const marked = (preference) => realGpus.some((device) => device.gpuPreference === preference)
     return {
       devices,
       multipleGpus: marked(CHROMIUM_GPU_PREFERENCE.lowPower) && marked(CHROMIUM_GPU_PREFERENCE.highPerformance),
+      unavailablePreferences,
     }
   }
-  return { devices, multipleGpus: devices.length >= 2 }
+  return { devices, multipleGpus: devices.length >= 2, unavailablePreferences }
 }
 
 module.exports = {

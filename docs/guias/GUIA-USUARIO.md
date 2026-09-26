@@ -257,7 +257,9 @@ Como cada sistema escolhe a placa:
   o aviso, e ele não tenta reabrir de novo; para usar a Integrada nesse caso,
   abra o Felixo sem essas variáveis.
 - **Windows e macOS**: o app pede ao Chromium a placa de alto desempenho ou a de
-  baixo consumo.
+  baixo consumo. Num Mac com placa NVIDIA, a **Dedicada** aparece desligada: o
+  Chromium sempre usa a placa de baixo consumo nesses Macs, então ela não teria
+  efeito. Automático e Integrada continuam disponíveis.
 - Em outros sistemas a opção aparece desligada, com o motivo.
 
 ### Felixo System Design

@@ -221,3 +221,23 @@ test('Windows com integrada e dedicada marcadas pelo Chromium mostra a escolha',
     { vendorId: 0x8086, deviceId: 0x3e9b },
   ])
 })
+
+test('macOS com NVIDIA descreve a Dedicada como indisponível, sem esconder a escolha', async () => {
+  const gpuDevice = [
+    { vendorId: 0x8086, deviceId: 0x3e9b, gpuPreference: 2 },
+    { vendorId: 0x10de, deviceId: 0x1f91, gpuPreference: 3 },
+  ]
+  const { session } = setup({ platformName: 'darwin', preference: 'auto', gpuInfo: { gpuDevice } })
+  const status = await session.describe()
+  assert.equal(status.multipleGpus, true)
+  assert.deepEqual(status.unavailablePreferences, { dedicada: 'macos-nvidia-forced-low-power' })
+})
+
+test('sem a lista de placas (getGPUInfo recusado) nada fica indisponível por placa', async () => {
+  const { app, session } = setup({ preference: 'auto' })
+  app.getGPUInfo = async () => {
+    throw new Error('GPU access not allowed')
+  }
+  const status = await session.describe()
+  assert.deepEqual([status.multipleGpus, status.unavailablePreferences], [false, {}])
+})

@@ -394,7 +394,9 @@ fica em `gpu-preference.json`, no perfil, e é aplicada antes do
   documentados pelo Electron 41 e usados pelo Chromium só nesses sistemas. Eles só
   têm efeito quando o Chromium marca uma placa de baixo consumo e outra de alto
   desempenho (`gpuPreference` no `app.getGPUInfo('basic')`), e é só aí que a opção
-  aparece.
+  aparece. No macOS com placa NVIDIA a Dedicada aparece desligada, com o motivo: a
+  lista de bugs de driver do Chromium 146 (`gpu_driver_bug_list.json`, entrada 326)
+  liga `force_low_power_gpu` nessas máquinas, e ele vence o pedido da Dedicada.
 - **Quais placas contam** (`electron/core/gpu-devices.cjs`): saem os
   renderizadores por software, pelo critério do próprio Chromium, inclusive o
   "Microsoft Basic Render Driver" (WARP) que o Windows 8+ sempre lista; as NPUs

@@ -93,6 +93,12 @@ describe('opção de placa de vídeo nas Configurações', () => {
     expect(html).not.toMatch(/role="combobox"[^>]*disabled=""|disabled=""[^>]*role="combobox"/)
   })
 
+  it('no macOS com placa NVIDIA mostra por que a Dedicada não vale, sem esconder a escolha', () => {
+    const html = render({ status: { ...STATUS, unavailablePreferences: { dedicada: 'macos-nvidia-forced-low-power' } } })
+    expect(html).toContain('Este computador tem mais de uma placa de vídeo')
+    expect(html).toContain('a Dedicada não teria efeito')
+  })
+
   it('o aviso de volta automática tem papel de status e o botão Entendi', () => {
     const html = renderToStaticMarkup(
       createElement(GpuFallbackAlert, {

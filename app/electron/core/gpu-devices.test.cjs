@@ -61,6 +61,22 @@ test('macOS: Intel + AMD marcados oferece; Apple Silicon com uma GPU não', () =
   assert.equal(describeGpuDevices({ gpuDevice: [{ vendorId: 0x106b, deviceId: 0x1, gpuPreference: 0 }] }, 'darwin').multipleGpus, false)
 })
 
+test('macOS com placa NVIDIA não oferece a Dedicada: a lista de bugs do Chromium força a de baixo consumo', () => {
+  // gpu_driver_bug_list.json do Chromium 146, entrada 326 (os macosx,
+  // vendor_id 0x10de, multi_gpu_category any): force_low_power_gpu, que o
+  // SetupGLDisplayManagerEGL testa antes do force_high_performance_gpu.
+  const intelNvidia = { gpuDevice: [{ ...INTEL, gpuPreference: LOW }, { ...NVIDIA, gpuPreference: HIGH }] }
+  const described = describeGpuDevices(intelNvidia, 'darwin')
+  assert.equal(described.multipleGpus, true)
+  assert.deepEqual(described.unavailablePreferences, { dedicada: 'macos-nvidia-forced-low-power' })
+
+  // Só no macOS e só com NVIDIA.
+  const amd = { vendorId: 0x1002, deviceId: 0x7340, gpuPreference: HIGH }
+  assert.deepEqual(describeGpuDevices({ gpuDevice: [{ ...INTEL, gpuPreference: LOW }, amd] }, 'darwin').unavailablePreferences, {})
+  assert.deepEqual(describeGpuDevices(intelNvidia, 'win32').unavailablePreferences, {})
+  assert.deepEqual(describeGpuDevices({ gpuDevice: [INTEL, NVIDIA] }, 'linux').unavailablePreferences, {})
+})
+
 test('Linux conta as placas reais: o Chromium não marca consumo nesse sistema', () => {
   // Medido em 26/09/2026 (HD 520 + 920MX): as duas vêm com gpuPreference 0.
   const linux = [
@@ -74,7 +90,7 @@ test('Linux conta as placas reais: o Chromium não marca consumo nesse sistema',
 
 test('entradas sem id válido e listas ausentes são ignoradas', () => {
   assert.deepEqual(describeGpuDevices({ gpuDevice: [{ vendorId: 'x' }, INTEL] }, 'linux').devices, [{ vendorId: 0x8086, deviceId: 0x3e9b }])
-  assert.deepEqual(describeGpuDevices(null, 'win32'), { devices: [], multipleGpus: false })
+  assert.deepEqual(describeGpuDevices(null, 'win32'), { devices: [], multipleGpus: false, unavailablePreferences: {} })
 })
 
 test('renderizadores por software seguem o critério do Chromium', () => {
