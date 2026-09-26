@@ -5051,3 +5051,28 @@ Registro gravado às 16:13.
   semeado (inicial concluído, `knownFeatures` vazio) e reload, o aviso "Novidade: Ajuda" aparece ao lado da Ajuda
   sem tirar o foco do body, a região live diz "Novidade em Ajuda: Ajuda.", o botão vira "Ajuda (1 novidade)" com o
   ponto, e "Ver" abre o mini-tour com o foco no card, com o inicial ainda concluído.
+
+## 2026-09-26 — Tutorial do canvas: sonda de invocações IPC na automação (commit 10 do plano)
+
+Registro gravado às 16:23.
+
+**O que ficou pronto.**
+- `electron/core/ipc-invoke-probe.cjs`: `installIpcInvokeProbe(ipcMain)` envolve `handle` e `on` e conta as
+  invocações por canal, sem mudar retorno, exceção nem `this`. `snapshot()` devolve uma cópia congelada, com os
+  canais em ordem alfabética.
+- `main.cjs` instala a sonda logo depois de calcular `devtoolsPort`, só com porta válida (1 a 65535) e antes do
+  primeiro `ipcMain.handle`. O `devtools:main-eval` recebe `ipcProbe` apenas com `snapshot()`; o app normal
+  nunca a instala.
+
+**Acréscimos, com motivo.**
+- `handleOnce` e `once` não precisam de envoltório próprio: o Electron e o EventEmitter do Node os implementam
+  sobre `handle` e `on` da própria instância, então passam pela sonda (há teste). O listener contado guarda o
+  original em `.listener`, para `removeListener(canal, original)` continuar funcionando.
+- `uninstall()` existe só para os testes devolverem os métodos originais.
+
+**Validação.**
+- N-probe (`electron/core/ipc-invoke-probe.test.cjs`): 9/9. Três mutações de propósito (engolir a exceção do handler,
+  snapshot mutável, tirar o `.listener`) reprovaram 2, 2 e 1 casos; o código voltou ao original.
+- App real (`felixo devtools`, perfil isolado, sob o lock): `felixo devtools main "ipcProbe.snapshot()"` lista os
+  canais do boot; depois de um `onboarding.read()` pelo renderer, `onboarding:read` sobe de 1 para 2 e
+  `devtools:main-eval` conta a própria leitura. O snapshot é congelado e o objeto exposto só tem `snapshot`.

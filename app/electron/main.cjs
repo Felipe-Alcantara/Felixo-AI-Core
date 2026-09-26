@@ -92,6 +92,7 @@ const {
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
 const { registerOnboardingIpcHandlers } = require('./services/onboarding-ipc-handlers.cjs')
 const { resolveOnboardingAutomation } = require('./core/onboarding-automation.cjs')
+const { installIpcInvokeProbe } = require('./core/ipc-invoke-probe.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
@@ -163,6 +164,14 @@ let pendingFilePath = null
 // autoritativo, antes de qualquer acesso ao perfil normal da pessoa.
 const isReleaseSmoke = isReleaseSmokeProcess()
 const devtoolsPort = Number.parseInt(process.env.FELIXO_DEVTOOLS_PORT ?? '', 10)
+
+// Sonda de invocações IPC, só na instância de automação e antes de qualquer
+// módulo registrar canais: o smoke do tutorial prova com ela que percorrer o
+// tour não chama PTY, CLI, rede nem crédito. O app normal nunca a instala.
+const ipcProbe =
+  Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535
+    ? installIpcInvokeProbe(ipcMain)
+    : null
 
 // O Chromium só aceita a porta de depuração antes de ficar pronto. A flag é
 // exclusiva da instância que o `felixo devtools` criou; o app normal não abre
@@ -516,7 +525,9 @@ app.whenReady().then(async () => {
   // instância DevTools, que usa userData isolado e porta local aleatória. Ela
   // fornece captura nativa (que funciona mesmo quando a janela não pinta pelo
   // compositor Windows) e uma avaliação limitada, sem `require`/`process`.
+  // `ipcProbe` entra no contexto só com `snapshot()` (leitura dos contadores).
   if (Number.isInteger(devtoolsPort) && devtoolsPort > 0) {
+    const probeView = ipcProbe ? Object.freeze({ snapshot: () => ipcProbe.snapshot() }) : null
     ipcMain.handle('devtools:capture-page', async () => {
       const target = getMainWindow()
       if (!target || target.isDestroyed()) throw new Error('Janela DevTools indisponível.')
@@ -526,7 +537,11 @@ app.whenReady().then(async () => {
       if (typeof expression !== 'string' || expression.length > 20_000) {
         throw new Error('Expressão DevTools inválida.')
       }
-      return vm.runInNewContext(expression, { app, BrowserWindow, mainWindow }, { timeout: 1_000 })
+      return vm.runInNewContext(
+        expression,
+        { app, BrowserWindow, mainWindow, ipcProbe: probeView },
+        { timeout: 1_000 },
+      )
     })
   }
 
