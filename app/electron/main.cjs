@@ -396,6 +396,7 @@ app.whenReady().then(async () => {
         applied: gpuStart.applied,
         switches: gpuLaunch.switches,
         unsetEnv: gpuLaunch.unsetEnv,
+        restoredEnv: gpuLaunch.restoredEnv ?? [],
         notes: gpuStart.plan?.notes ?? [],
         revertedFromPreviousStart: gpuStart.revertedFromPreviousStart,
         relaunchFailure: gpuStart.relaunchFailure,

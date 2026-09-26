@@ -114,7 +114,11 @@ test('relançamento recusado: não sai, apaga a marca e segue no Automático com
 
   assert.equal(result.exiting, false)
   assert.deepEqual(events, ['relaunch'])
-  assert.equal('FELIXO_GPU_ENV_SANITIZED' in environment, false)
+  // Este processo segue aberto no Automático: os terminais e CLIs abertos por
+  // ele herdam o ambiente com que a pessoa abriu o app, sem a marca.
+  assert.deepEqual(environment, { ...PRIME_RUN_ENV })
+  assert.deepEqual(result.gpuLaunch.unsetEnv, [])
+  assert.deepEqual(result.gpuLaunch.restoredEnv, Object.keys(PRIME_RUN_ENV))
   assert.equal(result.gpuStart.applied, 'auto')
   assert.equal(result.gpuStart.relaunchFailure, 'appimage: o Felixo.AppImage não abriu')
   assert.equal(readGpuPreferenceState(userDataPath).fallback.reason, 'relaunch-failed')

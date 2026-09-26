@@ -15,7 +15,7 @@
  *   relançado, e os terminais e apps abertos a partir daqui não a herdam.
  */
 
-const { GPU_ENV_SANITIZED_FLAG, applyGpuLaunchPlan } = require('./gpu-preference.cjs')
+const { GPU_ENV_SANITIZED_FLAG, applyGpuLaunchPlan, restoreGpuLaunchEnv } = require('./gpu-preference.cjs')
 const { abandonGpuRelaunch, prepareGpuStart } = require('./gpu-start-guard.cjs')
 const { relaunchApp } = require('./app-relaunch.cjs')
 
@@ -33,7 +33,7 @@ const { relaunchApp } = require('./app-relaunch.cjs')
  * @param {typeof relaunchApp} [options.relaunch] - Injetável para teste.
  * @returns {{
  *   gpuStart: ReturnType<typeof prepareGpuStart>,
- *   gpuLaunch: ReturnType<typeof applyGpuLaunchPlan>,
+ *   gpuLaunch: ReturnType<typeof applyGpuLaunchPlan> & { restoredEnv?: string[] },
  *   exiting: boolean,
  * }} `exiting` é `true` quando o relançamento começou e `app.exit(0)` foi
  *   chamado (no Electron ele encerra na hora; nada depois roda).
@@ -75,7 +75,9 @@ function startGpuPreference({
   }
 
   // Sem processo novo, fechar deixaria a pessoa sem app: segue aqui, no
-  // Automático, com o aviso.
+  // Automático, com o aviso, e com o ambiente com que foi aberto (sem a marca,
+  // que o plano pôs).
+  const restoredEnv = restoreGpuLaunchEnv(gpuLaunch, environment)
   delete environment[GPU_ENV_SANITIZED_FLAG]
   return {
     gpuStart: abandonGpuRelaunch({
@@ -84,7 +86,7 @@ function startGpuPreference({
       detail: `${outcome.method}: ${outcome.detail}`,
       ...(now ? { now } : {}),
     }),
-    gpuLaunch,
+    gpuLaunch: { ...gpuLaunch, unsetEnv: [], restoredEnv },
     exiting: false,
   }
 }

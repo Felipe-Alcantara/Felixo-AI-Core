@@ -17,6 +17,7 @@ const {
   normalizeGpuPreference,
   persistGpuPreference,
   readGpuPreferenceState,
+  restoreGpuLaunchEnv,
   writeGpuPreferenceState,
 } = require('./gpu-preference.cjs')
 
@@ -202,6 +203,21 @@ test('aplica switch sem valor e limpa só as variáveis presentes', () => {
   const applied = applyGpuLaunchPlan(linuxPlan, { commandLine: fakeCommandLine(), environment })
   assert.deepEqual(applied.unsetEnv, ['__NV_PRIME_RENDER_OFFLOAD'])
   assert.deepEqual(environment, { PATH: '/usr/bin', [GPU_ENV_SANITIZED_FLAG]: '1' })
+})
+
+test('desfazer o plano devolve ao ambiente as variáveis apagadas e tira as que o plano pôs', () => {
+  // O relançamento pode ser recusado depois de o plano mexer no process.env:
+  // o processo segue aberto e os terminais dele precisam do ambiente original.
+  const environment = { ...PRIME_RUN_ENV, PATH: '/usr/bin' }
+  const plan = buildGpuLaunchPlan({ preference: 'integrada', platformName: 'linux', environment })
+  const applied = applyGpuLaunchPlan(plan, { commandLine: fakeCommandLine(), environment })
+  assert.deepEqual(environment, { PATH: '/usr/bin', [GPU_ENV_SANITIZED_FLAG]: '1' })
+
+  assert.deepEqual(restoreGpuLaunchEnv(applied, environment), Object.keys(PRIME_RUN_ENV))
+  assert.deepEqual(environment, { ...PRIME_RUN_ENV, PATH: '/usr/bin' })
+  // Sem plano, ou com um plano que não mexeu no ambiente, não há o que desfazer.
+  assert.deepEqual(restoreGpuLaunchEnv(applyGpuLaunchPlan(null, { commandLine: fakeCommandLine(), environment }), environment), [])
+  assert.deepEqual(environment, { ...PRIME_RUN_ENV, PATH: '/usr/bin' })
 })
 
 test('perfil sem arquivo, corrompido ou com valor desconhecido lê Automático', () => {

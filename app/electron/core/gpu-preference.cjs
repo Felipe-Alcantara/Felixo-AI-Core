@@ -193,19 +193,23 @@ function mergeFeatureList(current, additions) {
  *
  * @param {ReturnType<typeof buildGpuLaunchPlan>} plan
  * @param {{ commandLine: { appendSwitch: Function, getSwitchValue: Function }, environment: Record<string, string | undefined> }} target
- * @returns {{ switches: string[], unsetEnv: string[] }} O que foi aplicado, para o log.
+ * @returns {{ switches: string[], unsetEnv: string[], previousEnv: Record<string, string | undefined> }}
+ *   O que foi aplicado, para o log, e o valor anterior de cada variável que o
+ *   plano mexeu (`undefined` = não existia), para `restoreGpuLaunchEnv`.
  */
 function applyGpuLaunchPlan(plan, { commandLine, environment }) {
-  const applied = { switches: [], unsetEnv: [] }
+  const applied = { switches: [], unsetEnv: [], previousEnv: {} }
   if (!plan) return applied
 
   for (const key of plan.unsetEnv) {
     if (key in environment) {
+      applied.previousEnv[key] = environment[key]
       delete environment[key]
       applied.unsetEnv.push(key)
     }
   }
   for (const [key, value] of Object.entries(plan.setEnv)) {
+    if (!(key in applied.previousEnv)) applied.previousEnv[key] = environment[key]
     environment[key] = value
   }
   for (const entry of plan.switches) {
@@ -223,6 +227,29 @@ function applyGpuLaunchPlan(plan, { commandLine, environment }) {
     applied.switches.push(`--${ENABLE_FEATURES_SWITCH}=${merged}`)
   }
   return applied
+}
+
+/**
+ * Desfaz no ambiente o que `applyGpuLaunchPlan` mudou. Serve para quando o
+ * relançamento com o ambiente limpo é recusado: o processo segue aberto no
+ * Automático, e os terminais e CLIs que ele abre precisam herdar o ambiente
+ * com que a pessoa abriu o app (as variáveis do `prime-run` inclusive).
+ *
+ * @param {ReturnType<typeof applyGpuLaunchPlan>} applied
+ * @param {Record<string, string | undefined>} environment
+ * @returns {string[]} As variáveis que voltaram, para o log.
+ */
+function restoreGpuLaunchEnv(applied, environment) {
+  const restored = []
+  for (const [key, value] of Object.entries(applied?.previousEnv ?? {})) {
+    if (value === undefined) {
+      delete environment[key]
+    } else {
+      environment[key] = value
+      restored.push(key)
+    }
+  }
+  return restored
 }
 
 function getGpuPreferencePath(userDataPath) {
@@ -351,5 +378,6 @@ module.exports = {
   normalizeGpuPreference,
   persistGpuPreference,
   readGpuPreferenceState,
+  restoreGpuLaunchEnv,
   writeGpuPreferenceState,
 }
