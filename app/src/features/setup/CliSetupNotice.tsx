@@ -182,7 +182,7 @@ function CliSetupFailureActions({
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-md bg-[var(--f-core-white)]/90 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-[var(--f-core-active)]"
+          className="rounded-md bg-[color-mix(in_srgb,var(--f-core-white)_90%,transparent)] px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-[var(--f-core-active)]"
         >
           Tentar de novo
         </button>
