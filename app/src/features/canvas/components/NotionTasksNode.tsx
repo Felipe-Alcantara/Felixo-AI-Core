@@ -33,10 +33,8 @@ export function NotionTasksNode({ id, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.notionTasks.width}
         minHeight={NODE_MIN_SIZE.notionTasks.height}
-        lineClassName="border-white/30!"
-        handleClassName="h-2.5! w-2.5! rounded-xs! bg-(--f-core-active)!"
       />
-      <Handle type="target" position={Position.Left} className="bg-(--f-core-active)!" />
+      <Handle type="target" position={Position.Left} />
       <NodeHeader
         title="Tarefas Notion"
         icon={<ListTodo size={13} />}
@@ -54,7 +52,7 @@ export function NotionTasksNode({ id, selected }: NodeProps) {
           <LazyNotionTasksPanel embedded onClose={() => void deleteElements({ nodes: [{ id }] })} />
         </Suspense>
       </div>
-      <Handle type="source" position={Position.Right} className="bg-(--f-core-active)!" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

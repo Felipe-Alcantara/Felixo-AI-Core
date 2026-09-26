@@ -327,8 +327,6 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.file.width}
         minHeight={NODE_MIN_SIZE.file.height}
-        lineClassName="border-white/30!"
-        handleClassName="h-2.5! w-2.5! rounded-xs! bg-(--f-core-white)!"
       />
       <FourSideHandles />
       <NodeHeader
@@ -751,14 +749,12 @@ function FourSideHandles() {
             type="source"
             id={`s-${id}`}
             position={position}
-            className="h-2.5! w-2.5! bg-(--f-core-white)!"
           />
           {/* Target sits on top of the source so either drag direction works. */}
           <Handle
             type="target"
             id={`t-${id}`}
             position={position}
-            className="h-2.5! w-2.5! border-none! bg-transparent!"
           />
         </span>
       ))}

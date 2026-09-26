@@ -58,10 +58,8 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.note.width}
         minHeight={NODE_MIN_SIZE.note.height}
-        lineClassName="border-black/20!"
-        handleClassName="h-2.5! w-2.5! rounded-xs! bg-black/40!"
       />
-      <Handle type="target" position={Position.Left} className="bg-black/40!" />
+      <Handle type="target" position={Position.Left} />
       <NodeHeader
         editableValue={nodeData.label ?? ''}
         placeholder="Nota"
@@ -114,7 +112,7 @@ function NoteNodeComponent({ id, data, selected }: NodeProps) {
           className={`nodrag nowheel nopan min-h-0 w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm outline-hidden ${theme.text}`}
         />
       )}
-      <Handle type="source" position={Position.Right} className="bg-black/40!" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

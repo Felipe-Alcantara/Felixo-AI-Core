@@ -179,8 +179,6 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.terminal.width}
         minHeight={NODE_MIN_SIZE.terminal.height}
-        lineClassName="border-white/30!"
-        handleClassName="h-2.5! w-2.5! rounded-xs! bg-(--f-core-white)!"
       />
       <TerminalSideHandles />
       <NodeHeader
@@ -305,13 +303,11 @@ function TerminalSideHandles() {
             type="source"
             id={`s-${id}`}
             position={position}
-            className="h-2.5! w-2.5! bg-(--f-core-white)!"
           />
           <Handle
             type="target"
             id={`t-${id}`}
             position={position}
-            className="h-2.5! w-2.5! border-none! bg-transparent!"
           />
         </span>
       ))}

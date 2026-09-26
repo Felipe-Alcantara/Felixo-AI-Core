@@ -211,12 +211,10 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.webpage.width}
         minHeight={NODE_MIN_SIZE.webpage.height}
-        lineClassName="border-white/30!"
-        handleClassName="h-2.5! w-2.5! rounded-xs! bg-(--f-core-white)!"
         onResizeStart={() => setIsResizing(true)}
         onResizeEnd={() => setIsResizing(false)}
       />
-      <Handle type="target" position={Position.Left} className="bg-(--f-core-white)!" />
+      <Handle type="target" position={Position.Left} />
       <NodeHeader
         icon={<Globe size={13} />}
         editableValue={nodeData.label ?? ''}
@@ -296,7 +294,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         />
       </div>
 
-      <Handle type="source" position={Position.Right} className="bg-(--f-core-white)!" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

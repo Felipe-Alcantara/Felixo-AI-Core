@@ -532,10 +532,10 @@ function PerformanceNode({ id, data, selected }: NodeProps) {
         selected ? 'border-white/10 bg-white/4' : 'border-white/15 bg-zinc-900/90'
       }`}
     >
-      <Handle type="target" position={Position.Left} className="h-1.5! w-1.5! bg-(--f-core-white)!" />
+      <Handle type="target" position={Position.Left} />
       <span className="truncate font-semibold">{label}</span>
       <span className="text-zinc-400">conexões: {connections}</span>
-      <Handle type="source" position={Position.Right} className="h-1.5! w-1.5! bg-(--f-core-white)!" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

@@ -37,8 +37,6 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.group.width}
         minHeight={NODE_MIN_SIZE.group.height}
-        lineClassName="border-white/30!"
-        handleClassName="h-2.5! w-2.5! rounded-xs! bg-(--f-core-active)!"
       />
       <div
         className={`${NODE_DRAG_HANDLE_CLASS} flex cursor-grab items-center gap-1.5 rounded-t-lg bg-(--f-core-white)/20 px-2 py-1 active:cursor-grabbing`}

@@ -124,10 +124,8 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.drawing.width}
         minHeight={NODE_MIN_SIZE.drawing.height}
-        lineClassName="border-white/20!"
-        handleClassName="h-2.5! w-2.5! rounded-xs! bg-white/40!"
       />
-      <Handle type="target" position={Position.Left} className="bg-white/40!" />
+      <Handle type="target" position={Position.Left} />
       <NodeHeader
         editableValue={nodeData.label ?? ''}
         placeholder="Desenho"
@@ -209,7 +207,7 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
         ))}
         <path data-preview="" stroke={color} strokeWidth={penWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
       </svg>
-      <Handle type="source" position={Position.Right} className="bg-white/40!" />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }
