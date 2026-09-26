@@ -144,9 +144,9 @@ import {
   findFreeNodePositions,
   getNodeSize,
   isInside,
-  nearestSides,
   type CanvasBounds,
 } from '../services/node-geometry'
+import { edgeHandlesBetween } from '../services/edge-handle-routing'
 import {
   agentLabelOf,
   announceFileNodeToTerminalNode,
@@ -1743,7 +1743,9 @@ function CanvasInner({
   // Route each edge through the handles on the facing sides of its two nodes,
   // computed from their current positions. Handles aren't persisted, so without
   // this every edge (button- or drag-created) falls back to the top handle.
-  // Recomputing here also re-routes wires as nodes are dragged around.
+  // Recomputing here also re-routes wires as nodes are dragged around. Blocks
+  // without side handles (note, Notion tasks...) keep their single handle —
+  // asking them for `t-top` made React Flow drop the edge from the screen.
   const edgesWithHandles = useMemo(() => {
     const byId = new Map(nodes.map((node) => [node.id, node]))
     return edges.map((edge) => {
@@ -1752,11 +1754,9 @@ function CanvasInner({
       if (!source || !target) {
         return edge
       }
-      const sides = nearestSides(source, target)
       return {
         ...edge,
-        sourceHandle: `s-${sides.source}`,
-        targetHandle: `t-${sides.target}`,
+        ...edgeHandlesBetween(source, target),
         className: [
           edge.className,
           activeRouteKeys.has(routeKey(edge)) ? 'felixo-edge-route-active' : undefined,
