@@ -26,7 +26,10 @@
  *   para Automático nesta sessão, com aviso.
  * - `integrada-prime-run`: Integrada com as variáveis que o `prime-run`
  *   exporta; o app precisa relançar com o ambiente limpo, subir na integrada
- *   e o processo relançado apagar o pedido de relançamento.
+ *   e o processo relançado apagar o pedido de relançamento. No AppImage,
+ *   confere também que o `PATH` do relançado não tem a montagem do processo
+ *   que saiu e, com `--app-image-arg=--appimage-extract-and-run`, que o
+ *   relançado rodou extraído.
  * - `relancamento-perdido`: o perfil guarda um pedido de relançamento antigo
  *   (10 min, sem pid) que nenhum processo relançado assumiu (o que sobrava
  *   quando o relançamento falhava no AppImage); a abertura pelo `prime-run`
@@ -543,6 +546,36 @@ function gpuEnvironmentsOfProcesses(profile) {
   return [...new Set(environments)]
 }
 
+/** Diretório de montagem (`.mount_*`) ou de extração (`appimage_extracted_*`) de um caminho, ou `null`. */
+function appImageRootOf(entry) {
+  const match = /^(.*\/(?:\.mount_[^/]+|appimage_extracted_[^/]+))(?:\/|$)/.exec(entry)
+  return match ? match[1] : null
+}
+
+/**
+ * Como cada processo do app com este perfil nasceu no AppImage: de qual
+ * montagem ou extração (`APPDIR`), se pediu a extração ao runtime e quantas
+ * montagens diferentes aparecem no `PATH` (mais de uma = herdou a antiga).
+ */
+function appImageEnvironmentsOfProcesses(profile) {
+  return processesUsingProfile(profile).flatMap((pid) => {
+    try {
+      const entries = Object.fromEntries(
+        fs
+          .readFileSync(`/proc/${pid}/environ`, 'utf8')
+          .split('\0')
+          .filter(Boolean)
+          .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]),
+      )
+      if (!entries.APPDIR) return []
+      const mountsInPath = [...new Set((entries.PATH ?? '').split(':').map(appImageRootOf).filter(Boolean))]
+      return [{ pid, appDir: entries.APPDIR, extractAndRun: entries.APPIMAGE_EXTRACT_AND_RUN ?? null, mountsInPath }]
+    } catch {
+      return []
+    }
+  })
+}
+
 async function primeRunScenario(options) {
   if (process.platform !== 'linux') return { cenario: 'integrada-prime-run', pulado: 'só no Linux', falhas: [] }
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-prime-run-'))
@@ -553,6 +586,7 @@ async function primeRunScenario(options) {
       app: await appGpuStatus(page),
       arquivo: readPreferenceFile(profile),
       ambientesDosProcessos: gpuEnvironmentsOfProcesses(profile),
+      appImage: options.appImage ? appImageEnvironmentsOfProcesses(profile) : undefined,
     }))
     result.cenario = 'integrada-prime-run'
     result.falhas = []
@@ -562,6 +596,14 @@ async function primeRunScenario(options) {
     if (result.arquivo?.pendingRelaunch !== null) result.falhas.push('o pedido de relançamento ficou no perfil')
     if (result.arquivo?.preference !== 'integrada' || result.arquivo?.fallback) result.falhas.push('a escolha não ficou na Integrada')
     if (!result.ambientesDosProcessos.includes('FELIXO_GPU_ENV_SANITIZED=1')) result.falhas.push('nenhum processo relançado com o ambiente limpo')
+    if (result.appImage) {
+      // O relançado não pode herdar no PATH a montagem do processo que saiu.
+      if (result.appImage.some((entry) => entry.mountsInPath.length > 1)) result.falhas.push('o PATH do relançado tem a montagem antiga')
+      const extracted = options.appImageArgs.includes('--appimage-extract-and-run')
+      if (extracted && !result.appImage.some((entry) => entry.extractAndRun === '1' && /appimage_extracted_/.test(entry.appDir))) {
+        result.falhas.push('o relançado não rodou extraído')
+      }
+    }
     expectVendor(result, options.expectIntegrada, 'integrada-prime-run')
     return result
   } finally {
@@ -780,4 +822,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { ALL_SCENARIOS, parseArgs, processesUsingProfile, resolveLaunchCommand, sameGpu }
+module.exports = { ALL_SCENARIOS, appImageRootOf, parseArgs, processesUsingProfile, resolveLaunchCommand, sameGpu }

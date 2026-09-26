@@ -7,7 +7,7 @@ const test = require('node:test')
 const fs = require('node:fs')
 const os = require('node:os')
 
-const { ALL_SCENARIOS, parseArgs, resolveLaunchCommand, sameGpu } = require('./hardware-check.cjs')
+const { ALL_SCENARIOS, appImageRootOf, parseArgs, resolveLaunchCommand, sameGpu } = require('./hardware-check.cjs')
 
 test('aceita os cenários conhecidos e os vendorIds esperados', () => {
   const options = parseArgs(['--scenarios=dedicada,pendente', '--expect-integrada=0x8086', '--expect-dedicada=0x10de'])
@@ -68,4 +68,11 @@ test('a GPU da tela e a do CDP batem por fornecedor e dispositivo, sem a versão
     false,
   )
   assert.equal(sameGpu(null, 'ANGLE (Intel, x, y)'), false)
+})
+
+test('reconhece no PATH a montagem ou a extração de um AppImage', () => {
+  assert.equal(appImageRootOf('/tmp/.mount_FelixoAbc123/usr/sbin'), '/tmp/.mount_FelixoAbc123')
+  assert.equal(appImageRootOf('/tmp/.mount_FelixoAbc123'), '/tmp/.mount_FelixoAbc123')
+  assert.equal(appImageRootOf('/var/home/p/tmp/appimage_extracted_9c10/usr/sbin'), '/var/home/p/tmp/appimage_extracted_9c10')
+  assert.equal(appImageRootOf('/usr/bin'), null)
 })
