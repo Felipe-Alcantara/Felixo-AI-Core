@@ -23,7 +23,14 @@ test('espera o gpu-info-update e resolve todos os que aguardam', async () => {
 
 test('sem o evento dentro do prazo, devolve false', async () => {
   const watcher = createGpuInfoWatcher(new EventEmitter())
-  assert.equal(await watcher.wait(10), false)
+  // O prazo do watcher usa timer com unref (não segura o app aberto). No Node 22,
+  // sem outro handle vivo, o processo do teste acaba antes de o prazo vencer.
+  const segurarProcesso = setTimeout(() => {}, 1_000)
+  try {
+    assert.equal(await watcher.wait(10), false)
+  } finally {
+    clearTimeout(segurarProcesso)
+  }
   assert.equal(watcher.isReady(), false)
 })
 
