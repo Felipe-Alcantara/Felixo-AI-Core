@@ -4597,3 +4597,74 @@ Vulkan, e o renderer e o dispositivo no CDP são os mesmos.
 app (semeando `gpu-preference.json`) em vez das variáveis na linha de comando; testar a escolha numa máquina
 Windows/macOS com duas placas e registrar o resultado; oferecer a escolha do backend (GL × Vulkan) da
 integrada, se alguém medir ganho.
+
+## 2026-09-26 — Placa de vídeo: correções da revisão (relançamento no AppImage e contagem de placas no Windows)
+
+**Contexto.** A revisão da branch `feat/hardware-gpu-cpu` apontou dois defeitos. Este registro vem depois da
+entrada "Hardware: escolha de placa de vídeo e ajuste pelo número de CPUs" e não a reescreve. A base continua
+`d0496cd6` (#94). Registro gravado às 11:20.
+
+**1. Integrada + variáveis do `prime-run` no AppImage: o app fechava e não voltava.**
+- Reproduzido com uma sonda no Electron 41.10.7, empacotada pelo electron-builder 26.15.3 no alvo AppImage do
+  `package.json`. `app.relaunch()` e `app.relaunch({ execPath: APPIMAGE })` devolvem `true`, mas nenhum
+  processo novo nasce em 20 s. O binário mora na montagem `/tmp/.mount_*`, que o runtime desmonta quando o
+  app sai; o relauncher do Electron (`shell/browser/relauncher*.cc`) só executa depois disso. Desempacotado,
+  o relançado nasce em menos de 1 s. O `check:hardware` rodava `electron .` e por isso não pegava o caso.
+- O relançamento não gravava marcador. Por isso cada abertura relançava e fechava, sem aviso e sem volta
+  para Automático (reproduzido com o `prepareGpuStart` da branch, três aberturas seguidas).
+- Correção:
+  - `electron/core/app-relaunch.cjs`: no AppImage, reabre o próprio `.AppImage`, destacado. Só entra nesse
+    caminho quando o executável está dentro do `APPDIR`, para que um `APPIMAGE` herdado de outro programa
+    não conte; `APPIMAGE` e `APPDIR` são do runtime tipo 2 (docs.appimage.org).
+  - Fora do AppImage, continua o `app.relaunch()`, e o `false` que `App::Relaunch` devolve é tratado,
+    embora a tipagem diga `void`.
+  - `gpu-start-guard.cjs` grava `pendingRelaunch` antes de sair; o processo com `FELIXO_GPU_ENV_SANITIZED=1`
+    o apaga.
+  - Se uma abertura sem a marca ainda encontra o pedido, volta para Automático com o motivo novo
+    `relaunch-failed` e não relança de novo. Relançamento recusado na hora segue no Automático, com aviso.
+  - A marca deixou de vazar para os terminais e para os apps abertos pelo Felixo.
+- No AppImage, o processo relançado herda o pipe de manutenção do runtime do primeiro AppImage. Por isso
+  a primeira montagem (somente leitura, do mesmo arquivo) fica de pé enquanto o app relançado roda. Medido:
+  em até 10 s depois de o app fechar, os dois daemons saem e não sobra montagem.
+
+**2. Windows com uma placa via a opção como se tivesse duas.**
+- Conferido na fonte (Chromium 146.0.7680.216 e Electron 41.10.7):
+  - `CollectDriverInfoD3D` guarda todo adaptador do `EnumAdapters`, inclusive o "Microsoft Basic Render
+    Driver" (WARP, 0x1414:0x8c), que o Windows 8+ sempre lista (guia DXGI da Microsoft).
+  - `EnumerateFields` põe NPUs no mesmo `gpuDevice`.
+  - `SetupGLDisplayManagerEGL` ignora `force_low_power_gpu` e `force_high_performance_gpu` com
+    `GpuCount() <= 1`, e só acha a placa pedida pelo `gpuPreference` (2 = baixo consumo, 3 = alto
+    desempenho).
+  - O Chromium só marca `gpuPreference` com duas placas reais (`gpu_info_collector_win.cc` e
+    `gpu_info_collector_mac.mm`).
+- Correção em `electron/core/gpu-devices.cjs`:
+  - tira os renderizadores por software pelo critério de `IsSoftwareRenderer`;
+  - no Windows e no macOS, a opção só aparece com uma placa marcada 2 e outra marcada 3;
+  - no Linux, onde as duas vêm com `gpuPreference` 0, vale a contagem de placas reais.
+- Não testado em Windows nem em macOS reais: os formatos vieram da fonte e estão nos testes.
+
+**Validação.** Os testes novos falharam contra o código anterior: 5 do guard, 2 da sessão e o módulo novo.
+`npm run lint` ok; `npm run build` ok; `npm test` 1767/1767; `npm run test:frontend` 1331 ok e 1 pulado.
+No app real, sob o flock, rodaram `npm run check:hardware -- --expect-integrada=0x8086
+--expect-dedicada=0x10de` (8/8) e, com `--app-image`, o AppImage x64 desta branch (5/5).
+
+| Cenário | `electron .` (dist) | AppImage |
+| --- | --- | --- |
+| Automático | Intel HD 520, GL | Intel HD 520, GL |
+| Integrada | Intel HD 520, GL | Intel HD 520, GL |
+| Dedicada | GeForce 920MX, Vulkan (`enabled_on`) | GeForce 920MX, Vulkan |
+| Integrada + `prime-run` | Intel, compositing ligado, pedido apagado | idem, pelo `.AppImage` reaberto |
+| Relançamento perdido | Automático, `relaunch-failed`, aviso, sem relançar | idem |
+
+Pendente, GPU desligada e a sugestão de CPU também passaram. Nesta máquina a sessão lista 2 placas
+(0x10de e 0x8086) e mostra a escolha.
+
+**Achado, sem correção nesta rodada.** Aberto no Automático com as variáveis do `prime-run`, o GL cai para
+software e o Chromium nega acesso à GPU. O `app.getGPUInfo()` então rejeita antes de coletar
+(`GpuAccessAllowed`, `electron_api_app.cc`), a sessão fica sem placas e a opção some. Uma sonda fora do app,
+com as mesmas variáveis, lista as duas placas. Isso já acontecia antes desta correção: quem abre o Felixo
+sempre assim (ex.: `/etc/environment`) não chega a ver a Integrada, que seria justamente a saída.
+
+**Ideias para quem quiser contribuir.**
+- Contar as placas no Linux sem depender do acesso à GPU (ex.: pelo `/sys/bus/pci`) para esse caso.
+- Rodar `check:hardware` numa máquina Windows e numa macOS com duas placas e registrar o resultado.
