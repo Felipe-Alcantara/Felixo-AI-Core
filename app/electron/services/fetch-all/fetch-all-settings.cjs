@@ -8,6 +8,7 @@
  */
 
 const path = require('node:path')
+const { defaultAnalyzeWorkers, logicalCpuCount } = require('../../core/hardware-profile.cjs')
 const { DEFAULT_EXCLUDE_DIRS } = require('./repo-scanner.cjs')
 const { readJsonFile, writeJsonFile } = require('./json-file-store.cjs')
 
@@ -22,7 +23,12 @@ const DEFAULT_SETTINGS = Object.freeze({
   excludeDirs: [...DEFAULT_EXCLUDE_DIRS],
   /** Caminhos absolutos que a pessoa mandou ignorar, com os repositórios dentro. */
   ignoredPaths: [],
-  analyzeWorkers: 8,
+  /**
+   * `null` é automático: derivado das CPUs na hora de usar
+   * (`resolveAnalyzeWorkers`). Um número salvo é escolha de quem configurou e
+   * vale em qualquer máquina.
+   */
+  analyzeWorkers: null,
 })
 
 /**
@@ -62,7 +68,7 @@ function normalizePathList(value) {
  * tornaria a varredura lenta sem a pessoa pedir.
  *
  * @param {unknown} settings
- * @returns {{ scanRoots: string[], excludeDirs: string[], ignoredPaths: string[], analyzeWorkers: number }}
+ * @returns {{ scanRoots: string[], excludeDirs: string[], ignoredPaths: string[], analyzeWorkers: number | null }}
  */
 function normalizeSettings(settings) {
   const source = settings && typeof settings === 'object' ? settings : {}
@@ -78,6 +84,19 @@ function normalizeSettings(settings) {
         ? workers
         : DEFAULT_SETTINGS.analyzeWorkers,
   }
+}
+
+/**
+ * Análises simultâneas que a passada vai usar: o número salvo, ou, sem ele,
+ * duas por CPU lógica até 8 (`defaultAnalyzeWorkers`). Em máquina com 4 CPUs
+ * ou mais o resultado é o 8 de antes.
+ *
+ * @param {{ analyzeWorkers: number | null }} settings - Já normalizada.
+ * @param {number | null} [cpuCount]
+ * @returns {number}
+ */
+function resolveAnalyzeWorkers(settings, cpuCount = logicalCpuCount()) {
+  return settings?.analyzeWorkers ?? defaultAnalyzeWorkers(cpuCount)
 }
 
 /**
@@ -115,4 +134,5 @@ module.exports = {
   createFetchAllSettingsStore,
   normalizePathList,
   normalizeSettings,
+  resolveAnalyzeWorkers,
 }

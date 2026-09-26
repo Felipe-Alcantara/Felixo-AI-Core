@@ -8,6 +8,7 @@ const { DEFAULT_EXCLUDE_DIRS } = require('./repo-scanner.cjs')
 const {
   createFetchAllSettingsStore,
   normalizeSettings,
+  resolveAnalyzeWorkers,
 } = require('./fetch-all-settings.cjs')
 const {
   cacheMatchesRoots,
@@ -27,8 +28,23 @@ test('normalizeSettings aplica os padrões diante de lixo', () => {
   assert.deepEqual(settings.scanRoots, [])
   assert.deepEqual(settings.excludeDirs, DEFAULT_EXCLUDE_DIRS)
   assert.deepEqual(settings.ignoredPaths, [])
-  assert.equal(settings.analyzeWorkers, 8)
+  // Valor inválido volta para o automático (derivado das CPUs na hora de usar).
+  assert.equal(settings.analyzeWorkers, null)
   assert.deepEqual(normalizeSettings(null).excludeDirs, DEFAULT_EXCLUDE_DIRS)
+})
+
+test('análises simultâneas: sem valor salvo, derivadas das CPUs; o valor salvo nunca muda', () => {
+  const automatic = normalizeSettings({})
+  assert.equal(automatic.analyzeWorkers, null)
+  assert.equal(resolveAnalyzeWorkers(automatic, 1), 2)
+  assert.equal(resolveAnalyzeWorkers(automatic, 2), 4)
+  assert.equal(resolveAnalyzeWorkers(automatic, 4), 8)
+  assert.equal(resolveAnalyzeWorkers(automatic, 16), 8)
+
+  // Quem salvou um número (inclusive o 8 que versões anteriores gravavam
+  // sozinhas) continua com ele, em qualquer máquina.
+  assert.equal(resolveAnalyzeWorkers(normalizeSettings({ analyzeWorkers: 8 }), 2), 8)
+  assert.equal(resolveAnalyzeWorkers(normalizeSettings({ analyzeWorkers: 3 }), 16), 3)
 })
 
 test('normalizeSettings mescla de volta as exclusões padrão perdidas', () => {

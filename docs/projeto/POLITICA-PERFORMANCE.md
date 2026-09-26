@@ -126,6 +126,21 @@ e o app não sugere.
   `src/features/shared/performance/performance-suggestion.ts` e
   `src/features/shared/hardware/HardwareNotices.tsx`.
 
+#### Limites internos e o número de CPUs (26/09/2026)
+
+Mapa dos limites que rodam trabalho em paralelo e o que muda com as CPUs. Só é
+derivado o que disputa CPU com a interface; o que espera disco ou rede fica
+como está. Um valor que a pessoa salvou nunca é trocado.
+
+| Limite | Onde | Antes | Agora |
+| --- | --- | --- | --- |
+| Análises simultâneas do Fetch All (`analyzeWorkers`) | `fetch-all/fetch-all-settings.cjs`, `sync-planner.cjs` | 8 fixo | Sem valor salvo: 2 por CPU lógica, de 2 a 8 (`defaultAnalyzeWorkers`). Cada análise roda `git fetch` e `git status` num processo próprio. Com 4 CPUs ou mais continua 8; com 1 a 3 cai para 2 a 6. Um número salvo vale sempre, inclusive o 8 que versões anteriores gravavam sozinhas (não dá para distingui-lo de uma escolha). |
+| Listagens simultâneas da varredura do Fetch All | `fetch-all/repo-scanner.cjs` | 16 | Mantido: é I/O de disco, atendido pelo pool de threads do libuv, não pelas CPUs. |
+| Gerações de imagem simultâneas | `openia-image-service.cjs` | 2 | Mantido: espera de rede/API. |
+| Instalação de CLIs | `cli-auto-install.cjs` | uma por vez | Mantido. |
+| Detecção de CLIs na abertura | `cli-auto-install.cjs` (`detectWithSecondChance`) | todas juntas, com segunda chance | Mantido: processos curtos (`--version`), e a segunda chance já cobre a máquina ocupada. |
+| Scrollback adaptativo | `terminal-scrollback.ts` | a partir de 10 terminais | Mantido: é memória, não CPU. |
+
 ### Reduced motion (existe, parcial — gap real encontrado nesta investigação)
 `prefers-reduced-motion` do sistema operacional já é lido
 (`reduced-motion-preference.ts`) e combinado com `performanceMode` em DOIS

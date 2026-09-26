@@ -30,7 +30,7 @@ const {
   executePlan,
   planHasActions,
 } = require('./fetch-all/sync-planner.cjs')
-const { createFetchAllSettingsStore } = require('./fetch-all/fetch-all-settings.cjs')
+const { createFetchAllSettingsStore, resolveAnalyzeWorkers } = require('./fetch-all/fetch-all-settings.cjs')
 const {
   cacheMatchesRoots,
   cachedReposStillOnDisk,
@@ -318,7 +318,7 @@ function createFetchAllService({ appPaths, sendEvent, scanner = {} }) {
         )
 
         const statuses = await analyzeRepos(repoPaths, {
-          concurrency: settings.analyzeWorkers,
+          concurrency: resolveAnalyzeWorkers(settings),
           signal,
           onProgress: ({ analyzed, total, status }) =>
             publishProgress({
