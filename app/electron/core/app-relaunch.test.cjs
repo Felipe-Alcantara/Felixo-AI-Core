@@ -9,6 +9,10 @@ const test = require('node:test')
 
 const { relaunchApp, resolveRunningAppImage } = require('./app-relaunch.cjs')
 
+// A montagem de AppImage destes testes usa caminhos, links e o separador de PATH
+// do POSIX; o AppImage só existe no Linux (no macOS eles também valem).
+const SO_EM_POSIX = process.platform === 'win32' && 'montagem de AppImage com caminhos POSIX'
+
 /**
  * Um AppImage montado de verdade no disco: a montagem `.mount_*` dentro de um
  * TMPDIR real, o executável dentro dela, o `.AppImage` fora e um TMPDIR que é
@@ -100,7 +104,7 @@ test('no AppImage reabre o próprio .AppImage, destacado, com os mesmos argument
   assert.equal(calls[0].child.listenerCount('error'), 1)
 })
 
-test('o relançado não herda os caminhos da montagem antiga, e o resto do ambiente chega igual', () => {
+test('o relançado não herda os caminhos da montagem antiga, e o resto do ambiente chega igual', { skip: SO_EM_POSIX }, () => {
   // Medido em 26/09/2026: sem isso o PATH do relançado ficava com a montagem
   // nova, depois a antiga, e só então /usr/bin; e cada variável acumulava.
   const environment = appRunEnvironment(fixture.mount)
@@ -119,7 +123,7 @@ test('o relançado não herda os caminhos da montagem antiga, e o resto do ambie
   assert.deepEqual(environment, before)
 })
 
-test('TMPDIR por link simbólico (ex.: Silverblue) ainda é reconhecido como AppImage', () => {
+test('TMPDIR por link simbólico (ex.: Silverblue) ainda é reconhecido como AppImage', { skip: SO_EM_POSIX }, () => {
   // O runtime exporta o APPDIR pelo caminho do link; o execPath vem resolvido.
   const linkedMount = path.join(fixture.linkTmp, '.mount_FelixoAbc123')
   const environment = appRunEnvironment(linkedMount)
@@ -131,7 +135,7 @@ test('TMPDIR por link simbólico (ex.: Silverblue) ainda é reconhecido como App
   assert.equal('LD_LIBRARY_PATH' in calls[0].options.env, false)
 })
 
-test('com o AppImage extraído (--appimage-extract-and-run) o relançado também extrai, sem FUSE', () => {
+test('com o AppImage extraído (--appimage-extract-and-run) o relançado também extrai, sem FUSE', { skip: SO_EM_POSIX }, () => {
   // O runtime consome a flag e não a repassa: sem a variável o relançado
   // tentaria montar por FUSE, que é justamente o que falta nessa máquina.
   const environment = appRunEnvironment(fixture.extracted)
@@ -192,7 +196,7 @@ test('só é AppImage o executável que roda dentro do APPDIR, empacotado e no L
   assert.equal(resolveRunningAppImage({ ...base, environment: { APPIMAGE: fixture.appImage } }), null)
 })
 
-test('APPDIR e APPIMAGE forjados ou quebrados não viram relançamento de um binário qualquer', () => {
+test('APPDIR e APPIMAGE forjados ou quebrados não viram relançamento de um binário qualquer', { skip: SO_EM_POSIX }, () => {
   const base = { execPath: fixture.execPath, platformName: 'linux', isPackaged: true }
   const env = (overrides) => ({ environment: appRunEnvironment(fixture.mount, overrides) })
 
