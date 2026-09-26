@@ -31,30 +31,6 @@ function escapeArg(arg) {
   return arg
 }
 
-/** @returns {{ signal: string, canKillGroup: boolean, notes: string }} */
-function getTerminationStrategy() {
-  return {
-    signal: 'SIGTERM',
-    canKillGroup: true,
-    notes: 'Unix supports process group kill via -pid negative PID.',
-  }
-}
-
-/** @returns {object} */
-function getPlatformInfo() {
-  return {
-    defaultShell: '/bin/bash',
-    pathSeparator: ':',
-    supportsProcessGroups: true,
-    supportsAnsiColors: true,
-    notes: [
-      'Most CLIs work natively.',
-      'Permissions are file-based (chmod).',
-      'AppImage may have restricted PATH.',
-    ],
-  }
-}
-
 /** @returns {boolean} */
 function shouldDetachProcess() {
   return true
@@ -228,10 +204,8 @@ module.exports = {
   getDefaultShell,
   getExecutableExtensions,
   getPathEnvKey,
-  getPlatformInfo,
   getShellArgs,
   getSystemCliPaths,
-  getTerminationStrategy,
   getUserCliPaths,
   killProcess,
   shouldDetachProcess,

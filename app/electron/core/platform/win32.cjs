@@ -41,32 +41,6 @@ function escapeArg(arg) {
   return arg
 }
 
-/** @returns {{ signal: string, canKillGroup: boolean, notes: string }} */
-function getTerminationStrategy() {
-  return {
-    signal: 'SIGTERM',
-    canKillGroup: false,
-    notes: 'Windows uses TerminateProcess. No process group kill available via Node.js signals.',
-  }
-}
-
-/** @returns {object} */
-function getPlatformInfo() {
-  return {
-    defaultShell: 'cmd.exe',
-    pathSeparator: ';',
-    supportsProcessGroups: false,
-    supportsAnsiColors: true,
-    notes: [
-      'CMD uses different quoting rules.',
-      'PowerShell is recommended over CMD.',
-      'Process group termination requires alternative approach.',
-      'PATH uses semicolon separator.',
-      'CLIs may use .exe, .cmd, or .ps1 extensions.',
-    ],
-  }
-}
-
 /** @returns {boolean} */
 function shouldDetachProcess() {
   return false
@@ -206,10 +180,8 @@ module.exports = {
   getDefaultShell,
   getExecutableExtensions,
   getPathEnvKey,
-  getPlatformInfo,
   getShellArgs,
   getSystemCliPaths,
-  getTerminationStrategy,
   getUserCliPaths,
   killProcess,
   shouldDetachProcess,

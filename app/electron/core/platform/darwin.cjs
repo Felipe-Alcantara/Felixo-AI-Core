@@ -12,21 +12,6 @@ function getDefaultShell(env) {
   return env.SHELL || '/bin/zsh'
 }
 
-/** @returns {object} */
-function getPlatformInfo() {
-  return {
-    defaultShell: '/bin/zsh',
-    pathSeparator: ':',
-    supportsProcessGroups: true,
-    supportsAnsiColors: true,
-    notes: [
-      'Zsh is the default shell since macOS Catalina.',
-      'Gatekeeper may block unsigned apps.',
-      'Homebrew installs to /opt/homebrew on Apple Silicon.',
-    ],
-  }
-}
-
 /** @returns {string[]} */
 function getSystemCliPaths() {
   return ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin', '/usr/bin', '/bin']
@@ -67,6 +52,5 @@ module.exports = {
   createTerminalLaunchPlan,
   getCacheBase,
   getDefaultShell,
-  getPlatformInfo,
   getSystemCliPaths,
 }
