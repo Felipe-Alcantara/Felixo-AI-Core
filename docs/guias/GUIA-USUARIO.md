@@ -244,8 +244,11 @@ Como cada sistema escolhe a placa:
 - **Linux**: a Dedicada usa o ANGLE sobre Vulkan. A Integrada usa o caminho
   gráfico padrão; se o app foi aberto com variáveis que mandam o vídeo para a
   placa dedicada (como o `prime-run` ou o "abrir com a placa de vídeo dedicada"
-  do ambiente gráfico), o Felixo reabre sozinho uma vez, com essas variáveis
-  limpas.
+  do ambiente gráfico), o Felixo fecha e reabre sozinho uma vez, com essas
+  variáveis limpas (no AppImage e no `.deb`). Se a reabertura não acontecer, a
+  próxima vez que você abrir o Felixo a escolha volta para **Automático**, com
+  o aviso, e ele não tenta reabrir de novo; para usar a Integrada nesse caso,
+  abra o Felixo sem essas variáveis.
 - **Windows e macOS**: o app pede ao Chromium a placa de alto desempenho ou a de
   baixo consumo.
 - Em outros sistemas a opção aparece desligada, com o motivo.
@@ -531,8 +534,9 @@ somente o renderer, mantendo o processo principal e os terminais abertos. Isso
 permite recuperar a tela sem encerrar o aplicativo inteiro.
 
 Se o problema começou depois de escolher uma **placa de vídeo** (opção avançada
-na mesma seção), feche e abra o app de novo: um início que não termina faz a
-escolha voltar sozinha para **Automático** na abertura seguinte.
+na mesma seção), feche e abra o app de novo: um início que não termina (ou que
+fecha sem mostrar a janela, ao tentar reabrir na Integrada) faz a escolha voltar
+sozinha para **Automático** na abertura seguinte.
 
 **O app não abre no Linux.**
 

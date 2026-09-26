@@ -20,7 +20,9 @@
  *   Linux ele nasce de um zygote criado antes do `main.cjs` rodar (medido em
  *   `/proc/<pid>/environ`). Por isso Dedicada não mexe no ambiente, e
  *   Integrada, quando o shell herdou variáveis que forçam a NVIDIA (como as
- *   do `prime-run`), limpa o ambiente e relança o app uma vez.
+ *   do `prime-run`), limpa o ambiente e relança o app uma vez (como relançar,
+ *   inclusive no AppImage, está em `app-relaunch.cjs`; a rede de segurança do
+ *   relançamento, em `gpu-start-guard.cjs`).
  * - Windows e macOS: os workarounds `force_high_performance_gpu` e
  *   `force_low_power_gpu`, documentados pelo Electron 41
  *   (`docs/api/command-line-switches.md`). O Chromium os copia para o
@@ -48,6 +50,9 @@ const FALLBACK_REASONS = Object.freeze([
   'gpu-disabled',
   'vulkan-unavailable',
   'gpu-process-gone',
+  // O relançamento com o ambiente limpo (Integrada no Linux) não trouxe o
+  // app de volta: ver `pendingRelaunch` em `gpu-start-guard.cjs`.
+  'relaunch-failed',
 ])
 
 function normalizeGpuPreference(value) {
@@ -252,21 +257,28 @@ function normalizeFallback(value) {
  * Estado salvo no perfil. Arquivo ausente, corrompido ou com valor
  * desconhecido vira Automático — o padrão seguro.
  *
+ * - `pendingStart`: início que trocou a GPU e ainda não foi confirmado.
+ * - `pendingRelaunch`: o app saiu para reabrir com o ambiente limpo; o
+ *   processo relançado apaga, e uma abertura comum que o encontra sabe que
+ *   o relançado nunca nasceu.
+ *
  * @returns {{
  *   preference: 'auto' | 'integrada' | 'dedicada',
  *   pendingStart: { preference: 'integrada' | 'dedicada', startedAt: string | null } | null,
+ *   pendingRelaunch: { preference: 'integrada' | 'dedicada', startedAt: string | null } | null,
  *   fallback: { from: 'integrada' | 'dedicada', reason: string, at: string | null, detail: string | null } | null,
  * }}
  */
 function readGpuPreferenceState(userDataPath, fileSystem = fs) {
   const filePath = getGpuPreferencePath(userDataPath)
-  const empty = { preference: 'auto', pendingStart: null, fallback: null }
+  const empty = { preference: 'auto', pendingStart: null, pendingRelaunch: null, fallback: null }
   if (!filePath) return empty
   try {
     const payload = JSON.parse(fileSystem.readFileSync(filePath, 'utf8'))
     return {
       preference: normalizeGpuPreference(payload?.preference) ?? 'auto',
       pendingStart: normalizePendingStart(payload?.pendingStart),
+      pendingRelaunch: normalizePendingStart(payload?.pendingRelaunch),
       fallback: normalizeFallback(payload?.fallback),
     }
   } catch {
@@ -284,6 +296,7 @@ function writeGpuPreferenceState(userDataPath, state, fileSystem = fs) {
   const normalized = {
     preference: normalizeGpuPreference(state?.preference) ?? 'auto',
     pendingStart: normalizePendingStart(state?.pendingStart),
+    pendingRelaunch: normalizePendingStart(state?.pendingRelaunch),
     fallback: normalizeFallback(state?.fallback),
   }
   fileSystem.mkdirSync(path.dirname(filePath), { recursive: true })

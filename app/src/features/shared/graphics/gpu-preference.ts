@@ -11,6 +11,7 @@ export type GpuFallbackReason =
   | 'gpu-disabled'
   | 'vulkan-unavailable'
   | 'gpu-process-gone'
+  | 'relaunch-failed'
 
 export type GpuFallback = {
   from: Exclude<GpuPreference, 'auto'>
@@ -86,6 +87,8 @@ export function describeGpuFallback(fallback: GpuFallback): string {
       return `A ${placa} depende do Vulkan, e ele não ligou nesta abertura. ${nextStart}`
     case 'gpu-process-gone':
       return `O processo de vídeo caiu usando a ${placa}. ${nextStart}`
+    case 'relaunch-failed':
+      return `O Felixo foi aberto com variáveis que mandam o vídeo para a placa dedicada (como as do prime-run) e não conseguiu reabrir sozinho sem elas para usar a ${placa}. Por segurança, a escolha voltou para Automático. Para usar a integrada, abra o Felixo sem essas variáveis.`
   }
 }
 

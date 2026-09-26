@@ -97,7 +97,7 @@ test('janela que carrega antes de a GPU responder não reverte por um status que
   await flush()
 
   assert.equal((await session.describe()).sessionOutcome, 'healthy')
-  assert.deepEqual(readGpuPreferenceState(userDataPath), { preference: 'dedicada', pendingStart: null, fallback: null })
+  assert.deepEqual(readGpuPreferenceState(userDataPath), { preference: 'dedicada', pendingStart: null, pendingRelaunch: null, fallback: null })
 })
 
 test('GPU que nunca responde deixa o marcador para o próximo início decidir', async () => {

@@ -58,6 +58,9 @@ describe('preferência de placa de vídeo', () => {
     expect(describeGpuFallback({ from: 'integrada', reason: 'gpu-process-gone', at, detail: 'crashed' })).toMatch(
       /caiu usando a placa de vídeo integrada/,
     )
+    expect(describeGpuFallback({ from: 'integrada', reason: 'relaunch-failed', at, detail: null })).toMatch(
+      /não conseguiu reabrir sozinho.*voltou para Automático.*sem essas variáveis/,
+    )
   })
 })
 

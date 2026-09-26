@@ -206,16 +206,21 @@ test('aplica switch sem valor e limpa só as variáveis presentes', () => {
 
 test('perfil sem arquivo, corrompido ou com valor desconhecido lê Automático', () => {
   const profile = tempProfile()
-  assert.deepEqual(readGpuPreferenceState(profile), { preference: 'auto', pendingStart: null, fallback: null })
+  assert.deepEqual(readGpuPreferenceState(profile), { preference: 'auto', pendingStart: null, pendingRelaunch: null, fallback: null })
 
   fs.writeFileSync(path.join(profile, GPU_PREFERENCE_FILE), '{ corrompido')
   assert.equal(readGpuPreferenceState(profile).preference, 'auto')
 
   fs.writeFileSync(
     path.join(profile, GPU_PREFERENCE_FILE),
-    JSON.stringify({ preference: 'turbo', pendingStart: { preference: 'auto' }, fallback: { from: 'dedicada', reason: 'x' } }),
+    JSON.stringify({
+      preference: 'turbo',
+      pendingStart: { preference: 'auto' },
+      pendingRelaunch: { preference: 'turbo' },
+      fallback: { from: 'dedicada', reason: 'x' },
+    }),
   )
-  assert.deepEqual(readGpuPreferenceState(profile), { preference: 'auto', pendingStart: null, fallback: null })
+  assert.deepEqual(readGpuPreferenceState(profile), { preference: 'auto', pendingStart: null, pendingRelaunch: null, fallback: null })
   assert.equal(readGpuPreferenceState('').preference, 'auto')
 })
 
@@ -224,6 +229,7 @@ test('salvar a preferência valida, resolve o aviso e preserva o marcador da ses
   writeGpuPreferenceState(profile, {
     preference: 'auto',
     pendingStart: { preference: 'dedicada', startedAt: '2026-09-26T10:00:00.000Z' },
+    pendingRelaunch: { preference: 'integrada', startedAt: '2026-09-26T09:00:00.000Z' },
     fallback: { from: 'dedicada', reason: 'gpu-disabled', at: '2026-09-26T10:00:05.000Z' },
   })
 
@@ -231,6 +237,7 @@ test('salvar a preferência valida, resolve o aviso e preserva o marcador da ses
   assert.equal(saved.preference, 'integrada')
   assert.equal(saved.fallback, null)
   assert.deepEqual(saved.pendingStart, { preference: 'dedicada', startedAt: '2026-09-26T10:00:00.000Z' })
+  assert.deepEqual(saved.pendingRelaunch, { preference: 'integrada', startedAt: '2026-09-26T09:00:00.000Z' })
   assert.throws(() => persistGpuPreference({ userDataPath: profile, preference: 'hardware' }), /Placa de vídeo inválida/)
   assert.throws(() => persistGpuPreference({ userDataPath: '', preference: 'auto' }), /Pasta de dados/)
   assert.equal(fs.existsSync(path.join(profile, `${GPU_PREFERENCE_FILE}.tmp`)), false)
@@ -243,5 +250,5 @@ test('reconhecer o aviso de volta automática apaga só o aviso', () => {
     fallback: { from: 'dedicada', reason: 'previous-start-unfinished', at: '2026-09-26T10:00:05.000Z' },
   })
   const state = acknowledgeGpuFallback({ userDataPath: profile })
-  assert.deepEqual(state, { preference: 'auto', pendingStart: null, fallback: null })
+  assert.deepEqual(state, { preference: 'auto', pendingStart: null, pendingRelaunch: null, fallback: null })
 })

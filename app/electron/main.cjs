@@ -117,8 +117,9 @@ const {
   evaluateGpuAfterReady,
   readGraphicsRecommendation,
 } = require('./core/graphics-recommendation.cjs')
-const { applyGpuLaunchPlan } = require('./core/gpu-preference.cjs')
-const { prepareGpuStart } = require('./core/gpu-start-guard.cjs')
+const { GPU_ENV_SANITIZED_FLAG, applyGpuLaunchPlan } = require('./core/gpu-preference.cjs')
+const { abandonGpuRelaunch, prepareGpuStart } = require('./core/gpu-start-guard.cjs')
+const { relaunchApp } = require('./core/app-relaunch.cjs')
 const { createGpuInfoWatcher } = require('./core/gpu-info-watcher.cjs')
 const { createGpuPreferenceSession } = require('./services/gpu-preference-session.cjs')
 const { describeHardwareProfile } = require('./core/hardware-profile.cjs')
@@ -221,7 +222,7 @@ if (useSoftwareRendering) {
 // motivo: o processo de GPU só lê a linha de comando quando é lançado. Um
 // início anterior com a escolha que não terminou saudável volta para
 // Automático antes de aplicar (ver `electron/core/gpu-start-guard.cjs`).
-const gpuStart = isReleaseSmoke
+let gpuStart = isReleaseSmoke
   ? prepareGpuStart({ userDataPath: '' })
   : prepareGpuStart({
       userDataPath: app.getPath('userData'),
@@ -236,11 +237,28 @@ const gpuLaunch = applyGpuLaunchPlan(gpuStart.plan, {
 // Integrada com variáveis herdadas que mandam o GL para a NVIDIA (ex.: o
 // `prime-run`): elas já estão no zygote do Chromium, criado antes deste
 // arquivo, então só um processo novo, com o ambiente limpo, sobe na integrada.
-// O relançado leva `FELIXO_GPU_ENV_SANITIZED` e nunca relança de novo.
-const relaunchingForGpu = gpuStart.relaunch
-if (relaunchingForGpu) {
-  app.relaunch()
-  app.exit(0)
+// O relançado leva `FELIXO_GPU_ENV_SANITIZED` e nunca relança de novo; o
+// pedido gravado por `prepareGpuStart` cobre o relançado que não nasce.
+let relaunchingForGpu = false
+if (gpuStart.relaunch) {
+  const relaunch = relaunchApp({ app })
+  if (relaunch.ok) {
+    relaunchingForGpu = true
+    app.exit(0)
+  } else {
+    // Sem processo novo, fechar deixaria a pessoa sem app: segue aqui, no
+    // Automático, com o aviso.
+    delete process.env[GPU_ENV_SANITIZED_FLAG]
+    gpuStart = abandonGpuRelaunch({
+      userDataPath: app.getPath('userData'),
+      start: gpuStart,
+      detail: `${relaunch.method}: ${relaunch.detail}`,
+    })
+  }
+} else {
+  // A marca é só do processo relançado: os terminais e os apps abertos a
+  // partir daqui não a herdam.
+  delete process.env[GPU_ENV_SANITIZED_FLAG]
 }
 // Antes do whenReady, para não perder o primeiro `gpu-info-update`: só depois
 // dele `app.getGPUFeatureStatus()` deixa de ser o padrão `disabled_software`.
@@ -400,11 +418,12 @@ app.whenReady().then(async () => {
   gpuSession.register()
   // "App pronto + janela carregada + GPU saudável" apaga o marcador do início.
   gpuSession.watchWindow(mainWindow)
-  if (gpuStart.revertedFromPreviousStart || gpuLaunch.switches.length > 0 || gpuLaunch.unsetEnv.length > 0) {
+  if (gpuStart.revertedFromPreviousStart || gpuStart.relaunchFailure || gpuLaunch.switches.length > 0 || gpuLaunch.unsetEnv.length > 0) {
+    const reverted = Boolean(gpuStart.revertedFromPreviousStart || gpuStart.relaunchFailure)
     logQaEvent({
-      level: gpuStart.revertedFromPreviousStart ? 'warn' : 'info',
+      level: reverted ? 'warn' : 'info',
       scope: 'graphics:gpu-preference',
-      message: gpuStart.revertedFromPreviousStart ? 'reverted-before-start' : 'applied',
+      message: gpuStart.relaunchFailure ? 'relaunch-failed' : reverted ? 'reverted-before-start' : 'applied',
       details: {
         requested: gpuStart.requested,
         applied: gpuStart.applied,
@@ -412,6 +431,7 @@ app.whenReady().then(async () => {
         unsetEnv: gpuLaunch.unsetEnv,
         notes: gpuStart.plan?.notes ?? [],
         revertedFromPreviousStart: gpuStart.revertedFromPreviousStart,
+        relaunchFailure: gpuStart.relaunchFailure,
       },
     })
   }

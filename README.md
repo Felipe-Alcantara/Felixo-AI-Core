@@ -374,7 +374,12 @@ perfil, e é aplicada antes do `app.whenReady()` do próximo início:
   variáveis gravadas no processo principal não chegam ao processo de GPU (ele
   nasce de um zygote criado antes do `main.cjs`). Integrada é o GL padrão; com
   variáveis herdadas que forçam a dedicada (como as do `prime-run`), o app limpa o
-  ambiente e relança uma vez.
+  ambiente e relança uma vez. No AppImage o `app.relaunch()` não traz o app de
+  volta (o binário está na montagem que some quando ele sai), então o app abre de
+  novo o próprio `.AppImage` (`electron/core/app-relaunch.cjs`). Antes de sair ele
+  grava um pedido de relançamento, que o processo relançado apaga; uma abertura
+  que ainda o encontra volta para Automático, com aviso, em vez de relançar em
+  laço.
 - **Windows e macOS**: `force_high_performance_gpu` / `force_low_power_gpu`,
   documentados pelo Electron 41 e usados pelo Chromium só nesses sistemas.
 - **Rede de segurança**: todo início que troca a GPU grava um marcador pendente,

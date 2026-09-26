@@ -8,6 +8,7 @@ const test = require('node:test')
 
 const { GPU_PREFERENCE_FILE, persistGpuPreference, readGpuPreferenceState } = require('./gpu-preference.cjs')
 const {
+  abandonGpuRelaunch,
   confirmGpuStart,
   evaluateGpuStartHealth,
   prepareGpuStart,
@@ -15,6 +16,12 @@ const {
 } = require('./gpu-start-guard.cjs')
 
 const HEALTHY_VULKAN = Object.freeze({ gpu_compositing: 'enabled', vulkan: 'enabled_on' })
+/** O que o `prime-run` (ou o "abrir com a placa dedicada") deixa no ambiente. */
+const PRIME_RUN_ENV = Object.freeze({
+  __NV_PRIME_RENDER_OFFLOAD: '1',
+  __GLX_VENDOR_LIBRARY_NAME: 'nvidia',
+  __VK_LAYER_NV_optimus: 'NVIDIA_only',
+})
 const clock = () => '2026-09-26T12:00:00.000Z'
 
 const profiles = []
@@ -125,12 +132,92 @@ test('perfil sem escrita não aplica a escolha: sem marcador não há rede de se
   assert.equal(start.notApplied, 'profile-unwritable')
 })
 
-test('Integrada com ambiente do prime-run pede relançamento sem gravar marcador', () => {
+test('Integrada com ambiente do prime-run grava o pedido de relançamento antes de relançar', () => {
   const profile = profileWith('integrada')
-  const start = prepare(profile, { environment: { __NV_PRIME_RENDER_OFFLOAD: '1' } })
+  const start = prepare(profile, { environment: { ...PRIME_RUN_ENV } })
   assert.equal(start.relaunch, true)
   assert.equal(start.guarded, false)
-  assert.equal(readGpuPreferenceState(profile).pendingStart, null)
+  const state = readGpuPreferenceState(profile)
+  assert.equal(state.pendingStart, null)
+  assert.deepEqual(state.pendingRelaunch, { preference: 'integrada', startedAt: clock() })
+})
+
+test('relançado que nunca nasceu: a abertura seguinte volta para Automático, avisa e não relança de novo', () => {
+  // Medido em 26/09/2026: no AppImage o app.relaunch() antes do whenReady não
+  // traz o app de volta, e cada abertura parte do mesmo ambiente, sem a marca.
+  const profile = profileWith('integrada')
+  assert.equal(prepare(profile, { environment: { ...PRIME_RUN_ENV } }).relaunch, true)
+
+  const next = prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  assert.equal(next.relaunch, false)
+  assert.equal(next.requested, 'auto')
+  assert.equal(next.applied, 'auto')
+  assert.equal(next.revertedFromPreviousStart.reason, 'relaunch-failed')
+  assert.deepEqual(readGpuPreferenceState(profile), {
+    preference: 'auto',
+    pendingStart: null,
+    pendingRelaunch: null,
+    fallback: { from: 'integrada', reason: 'relaunch-failed', at: clock(), detail: `relançamento de ${clock()}` },
+  })
+
+  // Sem laço: a terceira abertura segue no Automático, sem relançar.
+  const third = prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  assert.equal(third.relaunch, false)
+  assert.equal(third.applied, 'auto')
+})
+
+test('o processo relançado assume o pedido e o apaga; a próxima abertura relança de novo sem voltar', () => {
+  const profile = profileWith('integrada')
+  prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+
+  // O relançado nasce com o ambiente limpo e a marca.
+  const relaunched = prepare(profile, { environment: { FELIXO_GPU_ENV_SANITIZED: '1' } })
+  assert.equal(relaunched.relaunch, false)
+  assert.equal(relaunched.applied, 'integrada')
+  assert.equal(relaunched.revertedFromPreviousStart, null)
+  assert.deepEqual(readGpuPreferenceState(profile), {
+    preference: 'integrada',
+    pendingStart: null,
+    pendingRelaunch: null,
+    fallback: null,
+  })
+
+  // Outra abertura pelo prime-run, dias depois: relança de novo, sem aviso.
+  const again = prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  assert.equal(again.relaunch, true)
+  assert.equal(readGpuPreferenceState(profile).fallback, null)
+})
+
+test('relançamento recusado na hora: este processo segue no Automático e a escolha volta com aviso', () => {
+  const profile = profileWith('integrada')
+  const start = prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+
+  const abandoned = abandonGpuRelaunch({ userDataPath: profile, start, detail: 'o .AppImage não abriu', now: clock })
+  assert.equal(abandoned.relaunch, false)
+  assert.equal(abandoned.applied, 'auto')
+  assert.equal(abandoned.relaunchFailure, 'o .AppImage não abriu')
+  assert.ok(abandoned.plan.notes.includes('relaunch-failed'))
+  assert.deepEqual(readGpuPreferenceState(profile), {
+    preference: 'auto',
+    pendingStart: null,
+    pendingRelaunch: null,
+    fallback: { from: 'integrada', reason: 'relaunch-failed', at: clock(), detail: 'o .AppImage não abriu' },
+  })
+  // A abertura seguinte não trata como relançamento perdido de novo.
+  assert.equal(prepare(profile, { environment: { ...PRIME_RUN_ENV } }).revertedFromPreviousStart, null)
+})
+
+test('pedido de relançamento sem perfil gravável não relança: fica no Automático', () => {
+  const profile = profileWith('integrada')
+  const readOnly = {
+    ...fs,
+    writeFileSync() {
+      throw Object.assign(new Error('somente leitura'), { code: 'EROFS' })
+    },
+  }
+  const start = prepare(profile, { environment: { ...PRIME_RUN_ENV }, fileSystem: readOnly })
+  assert.equal(start.relaunch, false)
+  assert.equal(start.notApplied, 'profile-unwritable')
 })
 
 test('Integrada no Linux sem variáveis forçando não muda a GPU e não é guardada', () => {
@@ -179,7 +266,12 @@ test('GPU saudável apaga o marcador e mantém a Dedicada', () => {
     now: clock,
   })
   assert.equal(outcome.status, 'healthy')
-  assert.deepEqual(readGpuPreferenceState(profile), { preference: 'dedicada', pendingStart: null, fallback: null })
+  assert.deepEqual(readGpuPreferenceState(profile), {
+    preference: 'dedicada',
+    pendingStart: null,
+    pendingRelaunch: null,
+    fallback: null,
+  })
 
   // O início seguinte aplica de novo, sem volta automática.
   assert.equal(prepare(profile).applied, 'dedicada')

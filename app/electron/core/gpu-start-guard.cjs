@@ -11,10 +11,19 @@
  * a janela carregou e a GPU subiu ligada. Se o início anterior não chegou lá
  * (travou, caiu ou a GPU subiu desligada), o próximo volta para Automático
  * ANTES de aplicar qualquer coisa, e a interface avisa.
+ *
+ * O relançamento com o ambiente limpo (Integrada no Linux com variáveis que
+ * forçam a dedicada) tem a sua própria rede: antes de sair, o app grava
+ * `pendingRelaunch`; o processo relançado, que nasce com
+ * `FELIXO_GPU_ENV_SANITIZED=1`, o apaga. Uma abertura SEM essa marca que ainda
+ * encontra o pedido sabe que o relançado nunca nasceu (medido em 26/09/2026:
+ * no AppImage, o `app.relaunch()` antes do `whenReady` não traz o app de
+ * volta) e volta para Automático em vez de relançar de novo.
  */
 
 const fs = require('node:fs')
 const {
+  GPU_ENV_SANITIZED_FLAG,
   buildGpuLaunchPlan,
   describeGpuPreferenceSupport,
   readGpuPreferenceState,
@@ -50,6 +59,7 @@ function planChangesGpu(plan) {
  *   relaunch: boolean,
  *   notApplied: 'software-rendering' | 'unsupported-platform' | 'profile-unwritable' | null,
  *   revertedFromPreviousStart: object | null,
+ *   relaunchFailure: string | null,
  * }}
  */
 function prepareGpuStart(options = {}) {
@@ -66,6 +76,7 @@ function prepareGpuStart(options = {}) {
       relaunch: false,
       notApplied: 'profile-unwritable',
       revertedFromPreviousStart: null,
+      relaunchFailure: null,
     }
   }
 }
@@ -96,10 +107,36 @@ function decideGpuStart({
         // Uma escolha feita depois daquele início continua valendo.
         preference: state.preference === failed ? 'auto' : state.preference,
         pendingStart: null,
+        pendingRelaunch: state.pendingRelaunch,
         fallback: revertedFromPreviousStart,
       },
       fileSystem,
     )
+  }
+
+  if (state.pendingRelaunch) {
+    if (environment[GPU_ENV_SANITIZED_FLAG] === '1') {
+      // Este é o processo relançado: o relançamento deu certo.
+      state = writeGpuPreferenceState(userDataPath, { ...state, pendingRelaunch: null }, fileSystem)
+    } else {
+      const failed = state.pendingRelaunch.preference
+      revertedFromPreviousStart = {
+        from: failed,
+        reason: 'relaunch-failed',
+        at: now(),
+        detail: state.pendingRelaunch.startedAt ? `relançamento de ${state.pendingRelaunch.startedAt}` : null,
+      }
+      state = writeGpuPreferenceState(
+        userDataPath,
+        {
+          preference: state.preference === failed ? 'auto' : state.preference,
+          pendingStart: null,
+          pendingRelaunch: null,
+          fallback: revertedFromPreviousStart,
+        },
+        fileSystem,
+      )
+    }
   }
 
   const requested = state.preference
@@ -111,6 +148,7 @@ function decideGpuStart({
     relaunch: false,
     notApplied: null,
     revertedFromPreviousStart,
+    relaunchFailure: null,
   }
   if (requested === 'auto') return result
   if (softwareRendering) return { ...result, notApplied: 'software-rendering' }
@@ -120,7 +158,14 @@ function decideGpuStart({
 
   const plan = buildGpuLaunchPlan({ preference: requested, platformName, environment, isDevelopment })
   if (plan.relaunch) {
-    // Sem marcador: quem decide de novo, e aplica, é o processo relançado.
+    // Quem decide de novo, e aplica, é o processo relançado. O pedido gravado
+    // antes de sair é o que deixa a abertura seguinte perceber se ele nunca
+    // nasceu.
+    writeGpuPreferenceState(
+      userDataPath,
+      { ...state, pendingRelaunch: { preference: requested, startedAt: now() } },
+      fileSystem,
+    )
     return { ...result, plan, relaunch: true }
   }
 
@@ -189,6 +234,36 @@ function revertGpuPreference({
 }
 
 /**
+ * O relançamento que `prepareGpuStart` pediu nem começou (o `app.relaunch()`
+ * recusou ou o `.AppImage` não abriu). Em vez de o app fechar sem reabrir,
+ * este processo segue no Automático, e a escolha volta para Automático com o
+ * aviso.
+ *
+ * @param {object} options
+ * @param {string} options.userDataPath
+ * @param {ReturnType<typeof prepareGpuStart>} options.start - O início que pediu o relançamento.
+ * @param {string | null} [options.detail] - Por que o relançamento falhou.
+ * @returns {ReturnType<typeof prepareGpuStart>} O início deste processo, agora no Automático.
+ */
+function abandonGpuRelaunch({ userDataPath, start, detail = null, now = defaultNow, fileSystem = fs } = {}) {
+  try {
+    revertGpuPreference({
+      userDataPath,
+      failedPreference: start.requested,
+      reason: 'relaunch-failed',
+      detail,
+      now,
+      fileSystem,
+    })
+  } catch {
+    // Sem gravar, o pedido de relançamento continua no perfil, e a próxima
+    // abertura volta para Automático pelo mesmo caminho.
+  }
+  const plan = start.plan ? { ...start.plan, relaunch: false, notes: [...start.plan.notes, 'relaunch-failed'] } : null
+  return { ...start, applied: 'auto', plan, guarded: false, relaunch: false, relaunchFailure: detail ?? 'sem detalhe' }
+}
+
+/**
  * Fecha o início guardado: com a GPU saudável, apaga o marcador; sem ela,
  * volta para Automático. Se não der para avaliar, deixa o marcador — o
  * próximo início trata como não confirmado, que é o lado seguro.
@@ -222,6 +297,7 @@ function confirmGpuStart({
 }
 
 module.exports = {
+  abandonGpuRelaunch,
   confirmGpuStart,
   evaluateGpuStartHealth,
   prepareGpuStart,
