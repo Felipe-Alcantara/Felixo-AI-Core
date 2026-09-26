@@ -439,8 +439,9 @@ declare global {
         listImageModels: () => Promise<CliInvokeResult & { code?: string; models?: OpeniaImageModel[] }>
         generateImage: (params: { prompt: string; model: string; requestId?: string }) => Promise<OpeniaImageResult>
         cancelImage: (params: { requestId: string }) => Promise<CliInvokeResult & { cancelled?: boolean }>
+        /** Estado de um pedido; em erro/cancelamento traz a mesma mensagem fixa que `generateImage` daria. */
         imageStatus: (params: { requestId: string }) => Promise<
-          CliInvokeResult & { requestId?: string; state?: OpeniaImageState; code?: string }
+          CliInvokeResult & { requestId?: string; state?: OpeniaImageState; code?: string; count?: number }
         >
       }
       pty?: {
