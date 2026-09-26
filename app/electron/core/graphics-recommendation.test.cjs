@@ -1,7 +1,10 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const { EventEmitter } = require('node:events')
 const test = require('node:test')
+
+const { createGpuInfoWatcher } = require('./gpu-info-watcher.cjs')
 
 const {
   clearGraphicsRecommendation,
@@ -176,6 +179,123 @@ test('evaluateGpuAfterReady: getGPUFeatureStatus que lança não derruba o app n
   // Recomendação de um boot anterior continua valendo — uma falha de
   // consulta não é evidência de que o problema sumiu.
   assert.notEqual(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('evaluateGpuAfterReady: espera a GPU responder antes de ler o status (sem falsa recomendação)', async () => {
+  // Medido em 26/09/2026 (Electron 41.10.7): no whenReady o status é sempre o
+  // padrão `disabled_software`, e só depois do `gpu-info-update` vira o real.
+  const fileSystem = fakeFileSystem()
+  let gpuResponded = false
+  const resultado = await evaluateGpuAfterReady({
+    userDataPath: '/perfil',
+    waitForGpuInfo: async () => {
+      gpuResponded = true
+      return true
+    },
+    getGPUFeatureStatus: () =>
+      gpuResponded
+        ? { gpu_compositing: 'enabled', webgl: 'enabled', rasterization: 'enabled' }
+        : { gpu_compositing: 'disabled_software', webgl: 'disabled_off', rasterization: 'disabled_software' },
+    fileSystem,
+  })
+
+  assert.equal(resultado.recommended, false)
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('evaluateGpuAfterReady: GPU que não responde no prazo não vira recomendação', async () => {
+  const fileSystem = fakeFileSystem()
+  const resultado = await evaluateGpuAfterReady({
+    userDataPath: '/perfil',
+    waitForGpuInfo: async () => false,
+    getGPUFeatureStatus: () => ({ gpu_compositing: 'disabled_software' }),
+    fileSystem,
+  })
+  assert.deepEqual(resultado, { evaluated: false, recommended: false })
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+const HEALTHY = Object.freeze({ gpu_compositing: 'enabled', webgl: 'enabled', rasterization: 'enabled' })
+const SOFTWARE = Object.freeze({ gpu_compositing: 'disabled_software', webgl: 'enabled', rasterization: 'disabled_software' })
+
+/**
+ * O `app` do Electron só com o evento e o status, e o observador real criado
+ * antes do "whenReady", como no main.cjs. `sequence` são os eventos, cada um
+ * com o status que passa a valer e o atraso desde o anterior.
+ */
+function gpuEvents(sequence) {
+  const app = new EventEmitter()
+  app.status = SOFTWARE // O padrão antes de a GPU responder.
+  const watcher = createGpuInfoWatcher(app)
+  const play = async () => {
+    for (const { status, afterMs } of sequence) {
+      await new Promise((resolve) => setTimeout(resolve, afterMs))
+      app.status = status
+      app.emit('gpu-info-update')
+    }
+  }
+  return {
+    options: {
+      getGPUFeatureStatus: () => app.status,
+      waitForGpuInfo: () => watcher.wait(1_000),
+      onGpuInfoUpdate: (listener) => watcher.onUpdate(listener),
+      settleMs: 250,
+    },
+    play,
+  }
+}
+
+test('evaluateGpuAfterReady: GPU que cai logo depois do primeiro evento ainda recomenda (sequência medida)', async () => {
+  // Medido em 26/09/2026 (Electron 41.10.7, --use-angle=d3d11): dois
+  // gpu-info-update com 41 ms de diferença; o primeiro com a composição
+  // ligada, o segundo (e o status final) com disabled_software.
+  const fileSystem = fakeFileSystem()
+  const { options, play } = gpuEvents([
+    { status: HEALTHY, afterMs: 5 },
+    { status: SOFTWARE, afterMs: 41 },
+  ])
+  const evaluation = evaluateGpuAfterReady({ userDataPath: '/perfil', fileSystem, ...options })
+  await play()
+  const resultado = await evaluation
+
+  assert.equal(resultado.recommended, true)
+  assert.deepEqual(readGraphicsRecommendation('/perfil', fileSystem).disabledFeatures, ['gpu_compositing', 'rasterization'])
+})
+
+test('evaluateGpuAfterReady: um evento saudável depois, dentro da janela, não apaga o aviso já salvo', async () => {
+  const fileSystem = fakeFileSystem()
+  const { options, play } = gpuEvents([
+    { status: SOFTWARE, afterMs: 5 },
+    { status: HEALTHY, afterMs: 41 },
+  ])
+  const evaluation = evaluateGpuAfterReady({ userDataPath: '/perfil', fileSystem, ...options })
+  await play()
+  const resultado = await evaluation
+
+  assert.equal(resultado.recommended, true)
+  assert.notEqual(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('evaluateGpuAfterReady: janela inteira saudável limpa a recomendação antiga só no fim', async () => {
+  const fileSystem = fakeFileSystem()
+  persistGraphicsRecommendation({
+    userDataPath: '/perfil',
+    reason: 'gpu-feature-disabled',
+    disabledFeatures: ['gpu_compositing'],
+    detectedAt: '2026-09-10T12:00:00.000Z',
+    fileSystem,
+  })
+  const { options, play } = gpuEvents([
+    { status: HEALTHY, afterMs: 5 },
+    { status: HEALTHY, afterMs: 41 },
+  ])
+  const evaluation = evaluateGpuAfterReady({ userDataPath: '/perfil', fileSystem, ...options })
+  await play()
+  // Ainda dentro da janela: nada decidido.
+  assert.notEqual(readGraphicsRecommendation('/perfil', fileSystem), null)
+
+  assert.deepEqual(await evaluation, { evaluated: true, recommended: false })
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
 })
 
 test('recomendação recusada: o MESMO sinal não volta a incomodar no próximo boot', async () => {

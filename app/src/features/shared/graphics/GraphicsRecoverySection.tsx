@@ -1,6 +1,7 @@
 import { AlertTriangle, Cpu, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { FelixoSelect, type FelixoSelectOption } from '../components/FelixoSelect'
+import { GpuPreferenceField } from './GpuPreferenceField'
 
 type GraphicsMode = 'auto' | 'hardware' | 'software'
 
@@ -194,6 +195,7 @@ export function GraphicsRecoverySection() {
       {message && (
         <p className="mt-2 text-[11px] leading-relaxed text-(--color-warning)">{message}</p>
       )}
+      <GpuPreferenceField />
       <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
         Se a interface travar, o botão “Recarregar interface” recupera somente
         o renderer e mantém os terminais vivos. O modo salvo é aplicado na

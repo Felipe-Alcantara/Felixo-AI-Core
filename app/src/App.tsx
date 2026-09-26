@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react'
 import { useFocusRestore } from './features/shared/focus/useFocusRestore'
 import { ThemeProvider } from './features/shared/theme/ThemeProvider'
 import { PerformanceModeProvider } from './features/shared/performance/PerformanceModeProvider'
+import { HardwareNotices } from './features/shared/hardware/HardwareNotices'
 
 type Screen = 'canvas' | 'chat'
 
@@ -58,6 +59,9 @@ function App() {
               <ChatWorkspace onBack={() => setScreen('canvas')} />
             )}
           </Suspense>
+          {/* Volta automática da placa de vídeo e sugestão do Modo Performance:
+              valem nas duas telas. */}
+          <HardwareNotices />
         </div>
       </PerformanceModeProvider>
     </ThemeProvider>

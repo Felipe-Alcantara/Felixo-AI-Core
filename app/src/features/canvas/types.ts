@@ -386,7 +386,8 @@ export type FetchAllSettings = {
   scanRoots: string[]
   excludeDirs: string[]
   ignoredPaths: string[]
-  analyzeWorkers: number
+  /** `null` = automático, derivado das CPUs no processo principal. */
+  analyzeWorkers: number | null
 }
 
 /** Escopo calculado antes da varredura, incluindo a prévia de discos locais. */

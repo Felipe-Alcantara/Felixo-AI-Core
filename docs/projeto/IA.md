@@ -4505,3 +4505,283 @@ borda vermelha a 40%. No v4 eles pintavam `currentColor`.
 - Levar a prova contra o `dist` para um `npm run` que rode sobre todo o `src`.
 - Pôr `--color-theme-error` no `@theme` para que `bg-theme-error/N` funcione em qualquer degrau, sem uma `@utility`
   por valor.
+
+## 2026-09-26 — Hardware: escolha de placa de vídeo e ajuste pelo número de CPUs
+
+**Task.** "Hardware — oferecer escolha de GPU e ajustar o app pelo número de CPUs". Decisões do Felipe:
+"Placa de vídeo: Automático / Integrada / Dedicada" como opção avançada, Dedicada experimental e com volta
+automática se a GPU falhar, valendo no próximo início; em máquina com poucas CPUs, sugerir o Modo
+Performance (nunca ligar sozinho) e derivar limites internos das CPUs. Branch `feat/hardware-gpu-cpu`,
+feita sobre `b4ca0fc9` e rebaseada sobre `d0496cd6` (#94) antes da entrega; tudo abaixo foi repetido depois
+do rebase. Registro gravado às 08:06.
+
+**Fonte conferida (Electron 41.10.7 = Chromium 146.0.7680.216).**
+- `use-angle`/`vulkan` em `ui/gl/gl_switches.cc` (e na lista que o `GpuProcessHost` copia para o processo
+  de GPU); features `Vulkan` (`gpu/config/gpu_finch_features.cc`), `DefaultANGLEVulkan` e `VulkanFromANGLE`
+  (`ui/gl/gl_switches.cc`).
+- `force_high_performance_gpu`/`force_low_power_gpu`: documentados em `docs/api/command-line-switches.md` do
+  Electron 41; são workarounds de driver que o `gpu_process_host.cc` copia para o processo de GPU e que
+  `SetupGLDisplayManagerEGL` (`gpu/ipc/service/gpu_init.cc`) usa só no Windows e no macOS.
+- O Electron relê o `--enable-features` depois do script principal (`PostEarlyInitialization`), então o
+  `appendSwitch` antes do `whenReady` vale; um segundo `appendSwitch` substitui o primeiro
+  (`base::CommandLine::AppendSwitchNative`), por isso as features são mescladas.
+- README do driver NVIDIA 580 ("PRIME Render Offload"): no Vulkan, `__NV_PRIME_RENDER_OFFLOAD` só carrega o
+  `VK_LAYER_NV_optimus`, que reordena a lista de GPUs.
+
+**Medido nesta máquina (i5-6200U, 4 CPUs lógicas, HD 520 + 920MX, X11, PRIME on-demand, driver 580.178.04).**
+1. O processo de GPU do Electron 41 no Linux nasce de um zygote criado antes do `main.cjs`: variáveis
+   gravadas em `process.env` no main não chegam a ele (`/proc/<pid>/environ` vazio para `__NV_*`; um processo
+   utilitário, lançado direto, recebe). A task pedia confirmar essa herança: ela não existe. Como o Chromium
+   já escolhe a NVIDIA sozinho com Vulkan, a Dedicada ficou só com os switches, sem mexer no ambiente (que
+   também vazaria para os terminais).
+2. Com as variáveis do `prime-run` herdadas do shell, o GL padrão falha (`ANGLE Display::initialize error
+   12289: Invalid visual ID requested`) e a janela cai para `disabled_software`. Por isso a Integrada, nesse
+   caso, limpa o ambiente e relança o app uma vez (`app.relaunch()` antes do `whenReady` funciona; o
+   relançado leva `FELIXO_GPU_ENV_SANITIZED=1` e não relança de novo).
+3. `app.getGPUInfo('basic'|'complete')` no Linux devolve a coleta de antes do processo de GPU: renderer vazio,
+   `gl=none` e a NVIDIA marcada como ativa mesmo desenhando na Intel. Serve para contar placas (2 aqui), não
+   para dizer qual está em uso; a tela lê o renderer pelo WebGL (a mesma string do CDP, sem a versão do
+   driver) e o CDP é a referência nas verificações.
+4. `app.getGPUFeatureStatus()` no `whenReady` é sempre `disabled_software`; o `gpu-info-update` chega 1,2 a
+   1,4 s depois, e o `did-finish-load` pode vir antes dele (8 ms antes, numa rodada com a dedicada). Isso
+   revelou um bug antigo: a recomendação do modo compatível era avaliada no `whenReady` e gravava uma
+   recomendação falsa em aberturas saudáveis (vista na tela de Configurações). Corrigido junto, com o mesmo
+   observador de `gpu-info-update` que a confirmação da placa usa.
+
+**O que entrou (7 commits de código e ferramenta, mais este registro).** `electron/core/gpu-preference.cjs` (preferência em `gpu-preference.json`,
+plano por SO, relançamento limpo), `gpu-start-guard.cjs` (marcador de início pendente, veredito, volta para
+Automático), `gpu-info-watcher.cjs`, `electron/services/gpu-preference-session.cjs` (confirmação depois de
+janela carregada + `gpu-info-update`, reversão se a GPU desligar ou o processo de GPU cair, IPC);
+`GpuPreferenceField` recolhido em "Opções avançadas: placa de vídeo" (só com 2+ placas), aviso de volta
+automática nas Configurações e no app; `hardware-profile.cjs` (CPUs por `os.availableParallelism()`, limiar
+4) e a sugestão do Modo Performance (lembra a resposta; desligada na automação, salvo
+`FELIXO_DEVTOOLS_HARDWARE_NOTICES=1`); `analyzeWorkers` do Fetch All derivado das CPUs quando não há valor
+salvo (2 por CPU, de 2 a 8: nada muda com 4 ou mais); `npm run check:hardware`.
+
+**Verificação no app real (`npm run check:hardware -- --expect-integrada=0x8086 --expect-dedicada=0x10de`,
+sob o flock), 7/7 cenários ok:**
+
+| Cenário | GPU em uso pelo CDP | Estado |
+| --- | --- | --- |
+| Automático | Intel HD 520, ANGLE/OpenGL | nada aplicado |
+| Integrada | Intel HD 520, ANGLE/OpenGL | escolhida pela tela, vale na reabertura |
+| Dedicada | GeForce 920MX, ANGLE/Vulkan (`vulkan: enabled_on`) | marcador confirmado, sessão saudável |
+| Início pendente deixado no perfil | Intel (Automático) | voltou para Automático antes de aplicar, aviso e "Entendi" |
+| Dedicada com `--disable-gpu-compositing` | 920MX, `gpu_compositing: disabled_software` | revertida nesta sessão, aviso na tela |
+| Integrada com o ambiente do `prime-run` | Intel, compositing ligado | relançou; processos só com `FELIXO_GPU_ENV_SANITIZED=1` |
+| Sugestão de CPU | — | aparece com "4 processadores lógicos", não liga sozinha, "Agora não" lembrado após recarregar, "Ligar" liga |
+
+"Em uso agora" bateu com o CDP em todas as aberturas, e nenhuma abertura saudável recomendou o modo
+compatível. Uma captura da tela real (`scrot`, janela visível por ~20 s) mostrou a Integrada e a Dedicada
+desenhando normalmente. Depois do rebase: `npm run lint` ok; `npm run build` ok; `npm test` 1747/1747;
+`npm run test:frontend` 1331 ok e 1 pulado; `npm run test:canvas-smoke` ok (matriz visual inclusa).
+
+**FPS.** Não foi medido de novo nesta rodada. A referência é a medição da bancada (tabela em
+`POLITICA-PERFORMANCE.md`: dedicada +9% a +15% a 48 blocos). A bancada lançou com as variáveis de PRIME na
+linha de comando e o app não as usa, mas pelo item 1 e pelo README da NVIDIA elas só reordenam a lista do
+Vulkan, e o renderer e o dispositivo no CDP são os mesmos.
+
+**Não verificado / riscos.**
+- Windows e macOS: switches conferidos na fonte, sem teste em máquina com duas placas. A rede de segurança
+  cobre falha de início, mas não prova que a placa pedida foi a usada; a tela mostra a GPU em uso.
+- Linux com outra combinação (AMD dedicada, Wayland): a Dedicada depende de o Chromium escolher a discreta
+  no Vulkan, medido só com NVIDIA no X11.
+- Prazo de 30 s para o `gpu-info-update`: sem resposta, o marcador fica e o próximo início volta para
+  Automático; fechar o app nos primeiros ~2 s de uma abertura com a escolha tem o mesmo efeito.
+- Na Integrada com o ambiente do `prime-run`, os terminais abertos pelo app deixam de herdar essas
+  variáveis (o ambiente limpo é o do processo relançado). Com o dev server do Vite, o relançamento é pulado
+  e só anotado.
+- Perfis antigos já têm `analyzeWorkers: 8` gravado pelas versões anteriores; esse valor é respeitado.
+
+**Ideias para quem quiser contribuir.** Levar a bancada `ui-render-performance.cjs` a medir pelo mecanismo do
+app (semeando `gpu-preference.json`) em vez das variáveis na linha de comando; testar a escolha numa máquina
+Windows/macOS com duas placas e registrar o resultado; oferecer a escolha do backend (GL × Vulkan) da
+integrada, se alguém medir ganho.
+
+## 2026-09-26 — Placa de vídeo: correções da revisão (relançamento no AppImage e contagem de placas no Windows)
+
+**Contexto.** A revisão da branch `feat/hardware-gpu-cpu` apontou dois defeitos. Este registro vem depois da
+entrada "Hardware: escolha de placa de vídeo e ajuste pelo número de CPUs" e não a reescreve. A base continua
+`d0496cd6` (#94). Registro gravado às 11:20.
+
+**1. Integrada + variáveis do `prime-run` no AppImage: o app fechava e não voltava.**
+- Reproduzido com uma sonda no Electron 41.10.7, empacotada pelo electron-builder 26.15.3 no alvo AppImage do
+  `package.json`. `app.relaunch()` e `app.relaunch({ execPath: APPIMAGE })` devolvem `true`, mas nenhum
+  processo novo nasce em 20 s. O binário mora na montagem `/tmp/.mount_*`, que o runtime desmonta quando o
+  app sai; o relauncher do Electron (`shell/browser/relauncher*.cc`) só executa depois disso. Desempacotado,
+  o relançado nasce em menos de 1 s. O `check:hardware` rodava `electron .` e por isso não pegava o caso.
+- O relançamento não gravava marcador. Por isso cada abertura relançava e fechava, sem aviso e sem volta
+  para Automático (reproduzido com o `prepareGpuStart` da branch, três aberturas seguidas).
+- Correção:
+  - `electron/core/app-relaunch.cjs`: no AppImage, reabre o próprio `.AppImage`, destacado. Só entra nesse
+    caminho quando o executável está dentro do `APPDIR`, para que um `APPIMAGE` herdado de outro programa
+    não conte; `APPIMAGE` e `APPDIR` são do runtime tipo 2 (docs.appimage.org).
+  - Fora do AppImage, continua o `app.relaunch()`, e o `false` que `App::Relaunch` devolve é tratado,
+    embora a tipagem diga `void`.
+  - `gpu-start-guard.cjs` grava `pendingRelaunch` antes de sair; o processo com `FELIXO_GPU_ENV_SANITIZED=1`
+    o apaga.
+  - Se uma abertura sem a marca ainda encontra o pedido, volta para Automático com o motivo novo
+    `relaunch-failed` e não relança de novo. Relançamento recusado na hora segue no Automático, com aviso.
+  - A marca deixou de vazar para os terminais e para os apps abertos pelo Felixo.
+- No AppImage, o processo relançado herda o pipe de manutenção do runtime do primeiro AppImage. Por isso
+  a primeira montagem (somente leitura, do mesmo arquivo) fica de pé enquanto o app relançado roda. Medido:
+  em até 10 s depois de o app fechar, os dois daemons saem e não sobra montagem.
+
+**2. Windows com uma placa via a opção como se tivesse duas.**
+- Conferido na fonte (Chromium 146.0.7680.216 e Electron 41.10.7):
+  - `CollectDriverInfoD3D` guarda todo adaptador do `EnumAdapters`, inclusive o "Microsoft Basic Render
+    Driver" (WARP, 0x1414:0x8c), que o Windows 8+ sempre lista (guia DXGI da Microsoft).
+  - `EnumerateFields` põe NPUs no mesmo `gpuDevice`.
+  - `SetupGLDisplayManagerEGL` ignora `force_low_power_gpu` e `force_high_performance_gpu` com
+    `GpuCount() <= 1`, e só acha a placa pedida pelo `gpuPreference` (2 = baixo consumo, 3 = alto
+    desempenho).
+  - O Chromium só marca `gpuPreference` com duas placas reais (`gpu_info_collector_win.cc` e
+    `gpu_info_collector_mac.mm`).
+- Correção em `electron/core/gpu-devices.cjs`:
+  - tira os renderizadores por software pelo critério de `IsSoftwareRenderer`;
+  - no Windows e no macOS, a opção só aparece com uma placa marcada 2 e outra marcada 3;
+  - no Linux, onde as duas vêm com `gpuPreference` 0, vale a contagem de placas reais.
+- Não testado em Windows nem em macOS reais: os formatos vieram da fonte e estão nos testes.
+
+**Validação.** Os testes novos falharam contra o código anterior: 5 do guard, 2 da sessão e o módulo novo.
+`npm run lint` ok; `npm run build` ok; `npm test` 1767/1767; `npm run test:frontend` 1331 ok e 1 pulado.
+No app real, sob o flock, rodaram `npm run check:hardware -- --expect-integrada=0x8086
+--expect-dedicada=0x10de` (8/8) e, com `--app-image`, o AppImage x64 desta branch (5/5).
+
+| Cenário | `electron .` (dist) | AppImage |
+| --- | --- | --- |
+| Automático | Intel HD 520, GL | Intel HD 520, GL |
+| Integrada | Intel HD 520, GL | Intel HD 520, GL |
+| Dedicada | GeForce 920MX, Vulkan (`enabled_on`) | GeForce 920MX, Vulkan |
+| Integrada + `prime-run` | Intel, compositing ligado, pedido apagado | idem, pelo `.AppImage` reaberto |
+| Relançamento perdido | Automático, `relaunch-failed`, aviso, sem relançar | idem |
+
+Pendente, GPU desligada e a sugestão de CPU também passaram. Nesta máquina a sessão lista 2 placas
+(0x10de e 0x8086) e mostra a escolha.
+
+**Achado, sem correção nesta rodada.** Aberto no Automático com as variáveis do `prime-run`, o GL cai para
+software e o Chromium nega acesso à GPU. O `app.getGPUInfo()` então rejeita antes de coletar
+(`GpuAccessAllowed`, `electron_api_app.cc`), a sessão fica sem placas e a opção some. Uma sonda fora do app,
+com as mesmas variáveis, lista as duas placas. Isso já acontecia antes desta correção: quem abre o Felixo
+sempre assim (ex.: `/etc/environment`) não chega a ver a Integrada, que seria justamente a saída.
+
+**Ideias para quem quiser contribuir.**
+- Contar as placas no Linux sem depender do acesso à GPU (ex.: pelo `/sys/bus/pci`) para esse caso.
+- Rodar `check:hardware` numa máquina Windows e numa macOS com duas placas e registrar o resultado.
+
+## 2026-09-26 — Placa de vídeo: não bloqueantes da segunda revisão e limitações conhecidas
+
+**Contexto.** A segunda revisão da branch `feat/hardware-gpu-cpu` (três lentes: contagem de placas, relançamento
+e spawn, comportamento padrão) não achou bloqueante e deixou não bloqueantes. Esta rodada corrige os escolhidos e
+registra os que ficam para depois. Vem depois das entradas "Hardware: escolha de placa de vídeo e ajuste pelo
+número de CPUs" e "Placa de vídeo: correções da revisão" e não as reescreve. Base: `9ec3922c`. Registro gravado
+às 12:57.
+
+**Corrigido (cada item com teste que falhava antes, em commits pequenos).**
+1. **Abertura durante o relançamento.** Abrir o app de novo enquanto o relançado da Integrada + `prime-run` ainda
+   nascia (cerca de 2 s de montagem do AppImage, sem janela) revertia a escolha para Automático com
+   `relaunch-failed`, e o relançado nascia no Automático: duas instâncias e a escolha trocada.
+   - `relaunchApp` devolve o pid do `.AppImage` reaberto (ele vira o processo do app), e o início o anota em
+     `pendingRelaunch` antes do `app.exit`.
+   - `prepareGpuStart` trata o pedido como em andamento com menos de 30 s (`RELAUNCH_GRACE_MS`, que cobre o
+     `app.relaunch()` sem pid) ou com o pid vivo. Nesse caso não grava nada, não aplica GPU e devolve
+     `notApplied: 'relaunch-in-progress'`, que a tela explica.
+   - O pid vivo só conta até 5 min depois do pedido (`RELAUNCH_PID_MAX_AGE_MS`): um pid reaproveitado não prende
+     a escolha. Passado o prazo e com o pid morto, vale o comportamento anterior.
+2. **Escolha salva escondida.** Com Integrada ou Dedicada salva, o campo aparece mesmo sem duas placas nesta
+   abertura (modo compatível, em que o `getGPUInfo` é recusado; eGPU desconectada; MUX só na dedicada). Só
+   Automático fica habilitado, com o motivo. O `check:hardware` achou no app real um defeito dessa mudança: salvar
+   Automático escondia o campo no mesmo clique, junto com a confirmação. Agora o campo fica depois de salvar
+   (`shouldShowGpuChoice(status, { justSaved })`).
+3. **Aviso do modo compatível.** `evaluateGpuAfterReady` decidia só pelo primeiro `gpu-info-update`. Na sequência
+   medida (`enabled` e, 41 ms depois, `disabled_software`), quem estava no Automático perdia o aviso. Agora lê o
+   status a cada evento durante 2 s (`GPU_STATUS_SETTLE_MS`) e no fim da janela. Incompatibilidade grava na hora;
+   uma leitura saudável depois não apaga; a recomendação antiga só é limpa com a janela inteira saudável. A espera
+   pelo primeiro evento, que tirou o falso positivo do `whenReady`, continua.
+4. **macOS com placa NVIDIA.** A lista de bugs do Chromium 146 (`gpu_driver_bug_list.json`, entrada 326: macosx,
+   0x10de, qualquer categoria de multi-GPU) liga `force_low_power_gpu`, que o `SetupGLDisplayManagerEGL` testa
+   antes do `force_high_performance_gpu` (conferido na fonte da tag). `describeGpuDevices` devolve
+   `unavailablePreferences: { dedicada: 'macos-nvidia-forced-low-power' }` e a tela desliga só a Dedicada, com o
+   motivo.
+5. **AppImage.**
+   - `resolveRunningAppImage` exige `APPDIR` absoluto, existente e diferente da raiz, e `APPIMAGE` absoluto e
+     arquivo regular.
+   - Compara `realpath(execPath)` com `realpath(APPDIR)`, o que resolve o TMPDIR atrás de link simbólico (como
+     no Silverblue).
+   - O relançado sai sem as entradas da montagem antiga no `PATH`, `LD_LIBRARY_PATH`, `XDG_DATA_DIRS` e
+     `GSETTINGS_SCHEMA_DIR`.
+   - Com o app extraído (`appimage_extracted_*`), o relançado recebe `APPIMAGE_EXTRACT_AND_RUN=1`: o runtime
+     consome a flag `--appimage-extract-and-run`, e sem a variável o relançado tentava montar por FUSE.
+6. **Relançamento recusado.** `applyGpuLaunchPlan` guarda o valor anterior das variáveis que mexe, e
+   `restoreGpuLaunchEnv` as devolve quando o spawn é recusado. Os terminais da sessão, que segue no Automático,
+   voltam a herdar as variáveis do `prime-run`.
+7. **Ligação no `main.cjs`.** O início da placa saiu para `electron/core/gpu-launch.cjs` (`startGpuPreference`).
+   Os testes cobrem a ordem (plano aplicado antes do relançamento) e a marca `FELIXO_GPU_ENV_SANITIZED` apagada
+   nos outros ramos. Conferido por mutação: trocar a ordem ou deixar a marca faz os testes falharem.
+8. **Guarda morta.** Saiu o `relaunchingForGpu` do `whenReady`. Medido de novo num Electron 41.10.7: depois de um
+   `app.exit(0)` antes do ready, nada roda (nem no mesmo tick, `nextTick`, timer ou `whenReady`).
+9. **Pequenos.**
+   - Os testes do Apple Silicon usam `deviceId` 0 (o AGXAccelerator só traz vendor-id).
+   - O comentário de `gpu-devices.cjs` agora diz que cada switch precisa só da própria marca e de
+     `GpuCount() > 1`.
+   - O tipo diz que `devices`, no Windows, pode incluir NPUs e não serve para contar placas.
+
+**Limitações conhecidas (ficam como task; nada disso foi corrigido nesta rodada).**
+- **Custo do `getGPUInfo('basic')` a cada abertura no Windows.** As Configurações e o `HardwareNotices` pedem
+  `graphics:get-config`, que espera a lista de placas também para quem nunca mexeu na opção. No Windows isso
+  inclui `CollectNPUInformation` (carrega o `DXCore.dll`) e a enumeração do DXGI na thread principal do
+  navegador. No Linux a resposta chegou em até 16 ms depois do `did-finish-load`; no Windows ainda não foi
+  medido, e é preciso medir numa máquina Windows antes de decidir (ex.: só ler as placas quando a opção abre).
+- **Descritores herdados pelo relançado.** O Electron não marca como CLOEXEC os fds do processo principal, e o
+  filho do spawn herda sockets, eventfds, `icudtl.dat`, o snapshot do V8 e o pipe de manutenção do runtime do
+  primeiro AppImage. Por isso o daemon FUSE e a montagem antiga ficam de pé durante a sessão relançada (visto
+  de novo nesta rodada: um processo com o `APPDIR` antigo continua vivo). Depois da limpeza do item 5, nenhum
+  caminho do relançado aponta para ela. Fechar esses fds antes do spawn exige um passo nativo ou um lançador
+  intermediário.
+- **`relaunch-failed` atribuído errado com perfil sem escrita no nascimento do relançado.** Se o perfil não
+  aceita escrita quando o relançado nasce, ele abre no Automático (`profile-unwritable`) sem apagar o pedido.
+  Quando a escrita volta, a abertura seguinte acusa `relaunch-failed`, embora o relançamento tenha acontecido. O
+  pedido não fica preso; só a mensagem erra a causa.
+- **Linux com duas dedicadas, BMC ou passthrough.**
+  - Duas dedicadas (AMD+NVIDIA, duas NVIDIA) ou BMC ASPEED + NVIDIA: a opção aparece, mas a Integrada não muda
+    nada, e a Dedicada cai na primeira `DISCRETE` do Vulkan (ANGLE `vulkan_icd.cpp`), que pode ser a que já
+    desenha.
+  - Intel+NVIDIA com `prime-select nvidia`: a Integrada não faz nada.
+  - Dedicada sem driver Vulkan: o ANGLE usa a integrada, e a tela diz "Nesta abertura: Dedicada". O "Em uso
+    agora" mostra a verdade.
+  - VM VMware (SVGA 0x15ad) com NVIDIA em passthrough: a contagem dá 1 placa e a opção some, embora a Dedicada
+    por Vulkan funcionasse.
+  - Uma saída possível: depois do início, comparar o fornecedor do renderizador do WebGL com o da placa pedida
+    e avisar.
+- **Também sem correção.**
+  - `ok: true` do relançamento só quer dizer que o exec deu certo. Um runtime que morre depois não é visto na
+    hora; com o pid anotado, a abertura seguinte depois de 30 s volta para Automático.
+  - Extraído, o relançado usa o mesmo `appimage_extracted_<md5>` que o processo que sai apaga. Aqui funcionou
+    porque o md5 do `.AppImage` (cerca de 1,5 s) termina depois da limpeza (cerca de 0,16 s, medido na revisão).
+    Um disco muito mais rápido no md5 poderia inverter a ordem.
+
+**Validação.**
+- Gates (depois do último commit de código): `npm run lint` ok; `npm run build` ok; `npm test` 1790/1790;
+  `npm run test:frontend` 1336 ok e 1 pulado.
+- `check:hardware` com `electron .` (dist), sob o flock, com `--expect-integrada=0x8086
+  --expect-dedicada=0x10de`: 11/11 ok. Os cenários novos:
+  - `relancamento-em-andamento`: pedido com o pid vivo e 90 s de idade. Ficou no Automático com
+    `relaunch-in-progress`, sem mexer no arquivo, sem aviso e sem relançar.
+  - `escolha-salva-compativel`: Dedicada salva no modo compatível. Só Automático habilitado, o motivo na tela,
+    e a escolha voltou para `auto` pela tela.
+  - `relancamento-perdido` agora usa um pedido de 10 min sem pid.
+- AppImage x64 reconstruído desta branch (electron-builder 26.15.3):
+  - `dedicada`, `integrada-prime-run`, `relancamento-perdido`, `relancamento-em-andamento` e
+    `escolha-salva-compativel`: 5/5.
+  - `integrada-prime-run` com o TMPDIR atrás de link simbólico: ok. O mesmo caso no pacote da rodada anterior
+    reproduziu o defeito: o CDP não abriu em 60 s, porque o app fechou sem voltar.
+  - `integrada-prime-run` com `--app-image-arg=--appimage-extract-and-run`: ok. O relançado rodou com
+    `APPIMAGE_EXTRACT_AND_RUN=1` e `APPDIR` em `appimage_extracted_*`.
+  - Com a checagem nova do ambiente, o pacote anterior falha com "o PATH do relançado tem a montagem antiga", e
+    o desta branch passa.
+- Não sobrou montagem nem extração de teste em `/tmp`.
+
+**Ideias para quem quiser contribuir.**
+- Medir o custo do `getGPUInfo('basic')` numa máquina Windows, com e sem NPU.
+- Um lançador intermediário que feche os fds herdados antes de reabrir o `.AppImage`.
+- Avisar quando o renderizador do WebGL não é da placa pedida (Linux com duas dedicadas ou sem Vulkan).

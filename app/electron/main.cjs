@@ -117,6 +117,10 @@ const {
   evaluateGpuAfterReady,
   readGraphicsRecommendation,
 } = require('./core/graphics-recommendation.cjs')
+const { startGpuPreference } = require('./core/gpu-launch.cjs')
+const { createGpuInfoWatcher } = require('./core/gpu-info-watcher.cjs')
+const { createGpuPreferenceSession } = require('./services/gpu-preference-session.cjs')
+const { describeHardwareProfile } = require('./core/hardware-profile.cjs')
 const { getAutoStartStatus, setAutoStartEnabled } = require('./core/autostart.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
 const platform = require('./core/platform/index.cjs')
@@ -212,6 +216,24 @@ if (useSoftwareRendering) {
   app.commandLine.appendSwitch('disable-gpu')
 }
 
+// Placa de vídeo (Automático / Integrada / Dedicada), decidida aqui pelo mesmo
+// motivo: o processo de GPU só lê a linha de comando quando é lançado. Um
+// início anterior com a escolha que não terminou saudável volta para
+// Automático antes de aplicar (ver `electron/core/gpu-start-guard.cjs`). Quando
+// o plano pede um relançamento com o ambiente limpo e ele começa, o
+// `app.exit(0)` lá dentro encerra este processo na hora (medido em 26/09/2026
+// no Electron 41.10.7): nada abaixo roda, nem o whenReady.
+const { gpuStart, gpuLaunch } = startGpuPreference({
+  app,
+  userDataPath: isReleaseSmoke ? '' : app.getPath('userData'),
+  environment: process.env,
+  softwareRendering: useSoftwareRendering,
+  isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
+})
+// Antes do whenReady, para não perder o primeiro `gpu-info-update`: só depois
+// dele `app.getGPUFeatureStatus()` deixa de ser o padrão `disabled_software`.
+const gpuInfoWatcher = createGpuInfoWatcher(app)
+
 function graphicsStatus() {
   return {
     mode: graphicsProfile.mode,
@@ -275,12 +297,23 @@ app.whenReady().then(async () => {
   // Só agora (depois de whenReady) app.getGPUFeatureStatus() existe de
   // verdade. Não bloqueia o boot (sem await aqui) nem afeta a sessão
   // corrente — só persiste uma recomendação pra próxima abertura mostrar,
-  // se houver sinal real de driver/GPU recusado pelo Chromium.
-  evaluateGpuAfterReady({
-    userDataPath: app.getPath('userData'),
-    getGPUFeatureStatus: () => app.getGPUFeatureStatus(),
-    alreadyUsingSoftwareRendering: useSoftwareRendering,
-  }).catch(() => {})
+  // se houver sinal real de driver/GPU recusado pelo Chromium. Quando este
+  // início trocou a placa de vídeo, uma GPU desligada é culpa da troca, e
+  // quem responde é a volta automática para Automático, não o modo compatível.
+  if (!gpuStart.guarded) {
+    evaluateGpuAfterReady({
+      userDataPath: app.getPath('userData'),
+      getGPUFeatureStatus: () => app.getGPUFeatureStatus(),
+      // No whenReady o status ainda é o padrão `disabled_software`: sem esta
+      // espera, toda abertura podia recomendar o modo compatível à toa.
+      waitForGpuInfo: () => gpuInfoWatcher.wait(),
+      // E o primeiro evento não é o veredito: a GPU pode cair para software
+      // logo depois (41 ms, medido), então os seguintes, numa janela curta,
+      // também contam.
+      onGpuInfoUpdate: (listener) => gpuInfoWatcher.onUpdate(listener),
+      alreadyUsingSoftwareRendering: useSoftwareRendering,
+    }).catch(() => {})
+  }
 
   const appPaths = initAppPaths()
   // Antes de qualquer outra coisa: sem isso, um crash no boot (ex.: banco
@@ -344,9 +377,67 @@ app.whenReady().then(async () => {
   mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository })
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
 
-  ipcMain.handle('graphics:get-config', () => ({
+  const gpuSession = createGpuPreferenceSession({
+    app,
+    ipcMain,
+    userDataPath: app.getPath('userData'),
+    gpuStart,
+    gpuInfoWatcher,
+    getMainWindow,
+    log: logQaEvent,
+  })
+  gpuSession.register()
+  // "App pronto + janela carregada + GPU saudável" apaga o marcador do início.
+  gpuSession.watchWindow(mainWindow)
+  const relaunchInProgress = gpuStart.notApplied === 'relaunch-in-progress'
+  if (
+    gpuStart.revertedFromPreviousStart ||
+    gpuStart.relaunchFailure ||
+    relaunchInProgress ||
+    gpuLaunch.switches.length > 0 ||
+    gpuLaunch.unsetEnv.length > 0
+  ) {
+    const reverted = Boolean(gpuStart.revertedFromPreviousStart || gpuStart.relaunchFailure)
+    logQaEvent({
+      level: reverted ? 'warn' : 'info',
+      scope: 'graphics:gpu-preference',
+      message: gpuStart.relaunchFailure
+        ? 'relaunch-failed'
+        : reverted
+          ? 'reverted-before-start'
+          : relaunchInProgress
+            ? 'relaunch-in-progress'
+            : 'applied',
+      details: {
+        requested: gpuStart.requested,
+        applied: gpuStart.applied,
+        notApplied: gpuStart.notApplied,
+        switches: gpuLaunch.switches,
+        unsetEnv: gpuLaunch.unsetEnv,
+        restoredEnv: gpuLaunch.restoredEnv ?? [],
+        notes: gpuStart.plan?.notes ?? [],
+        revertedFromPreviousStart: gpuStart.revertedFromPreviousStart,
+        relaunchFailure: gpuStart.relaunchFailure,
+      },
+    })
+  }
+
+  // CPUs lógicas: a interface sugere o Modo Performance em máquina com poucas.
+  // Na instância de automação a sugestão só aparece com pedido explícito
+  // (FELIXO_DEVTOOLS_HARDWARE_NOTICES=1), para não cobrir botões nem entrar nas
+  // capturas da matriz visual.
+  ipcMain.handle('hardware:get-profile', () =>
+    describeHardwareProfile({
+      automation:
+        Number.isInteger(devtoolsPort) &&
+        devtoolsPort > 0 &&
+        process.env.FELIXO_DEVTOOLS_HARDWARE_NOTICES !== '1',
+    }),
+  )
+
+  ipcMain.handle('graphics:get-config', async () => ({
     ok: true,
-    config: graphicsStatus(),
+    config: { ...graphicsStatus(), gpu: await gpuSession.describe() },
   }))
   ipcMain.handle('graphics:set-mode', (_event, mode) => {
     try {

@@ -59,6 +59,7 @@ Base funcional entregue:
 - Preview de Markdown com sanitização de HTML/URLs externos, remoção de ANSI, limite de 200.000 caracteres e imagens remotas bloqueadas por padrão; GFM e imagens locais seguem a autorização do arquivo
 - Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
+- Escolha da **placa de vídeo** (Automático, Integrada ou Dedicada experimental) como opção avançada, com volta automática para Automático se a GPU falhar, e sugestão do **Modo Performance** em máquina com até 4 CPUs lógicas
 - Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
 - Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL
@@ -360,6 +361,58 @@ Conexões com blocos que têm um único ponto de ligação (nota, desenho, Excal
 Página Web e Tarefas Notion) também aparecem no canvas e podem ser clicadas para
 remover. Antes elas ficavam gravadas, mas não eram desenhadas.
 
+### Placa de vídeo e máquinas com poucas CPUs
+
+Com duas placas de vídeo ou mais, **Configurações → Renderização e recuperação →
+Opções avançadas: placa de vídeo** oferece Automático (o padrão, sem mudança),
+Integrada ou Dedicada (experimental). Com uma escolha salva que não é Automático,
+o campo aparece mesmo sem duas placas nesta abertura (modo compatível, eGPU
+desconectada), só com Automático habilitado, para dar para desfazer. A escolha
+fica em `gpu-preference.json`, no perfil, e é aplicada antes do
+`app.whenReady()` do próximo início:
+
+- **Linux**: Dedicada liga o ANGLE sobre Vulkan (`--use-angle=vulkan` e as
+  features `Vulkan`, `VulkanFromANGLE` e `DefaultANGLEVulkan`, conferidas no
+  Chromium 146). O offload da NVIDIA pelo GLX derruba o GL do Chromium, e
+  variáveis gravadas no processo principal não chegam ao processo de GPU (ele
+  nasce de um zygote criado antes do `main.cjs`). Integrada é o GL padrão; com
+  variáveis herdadas que forçam a dedicada (como as do `prime-run`), o app limpa o
+  ambiente e relança uma vez. No AppImage o `app.relaunch()` não traz o app de
+  volta (o binário está na montagem que some quando ele sai), então o app abre de
+  novo o próprio `.AppImage` (`electron/core/app-relaunch.cjs`), reconhecido pelos
+  caminhos reais do `APPDIR` e do executável (TMPDIR atrás de link simbólico
+  também vale). O relançado sai sem os caminhos da montagem antiga no `PATH`,
+  `LD_LIBRARY_PATH`, `XDG_DATA_DIRS` e `GSETTINGS_SCHEMA_DIR`, e, se o app rodava
+  extraído (`--appimage-extract-and-run`), recebe `APPIMAGE_EXTRACT_AND_RUN=1`
+  para também não depender de FUSE. Antes de sair ele
+  grava um pedido de relançamento (com o pid do relançado, quando há), que o
+  processo relançado apaga. Uma abertura que ainda o encontra com o relançado
+  nascendo (pedido com menos de 30 s ou pid vivo) fica no Automático sem mexer em
+  nada; passado isso, volta para Automático, com aviso, em vez de relançar em
+  laço.
+- **Windows e macOS**: `force_high_performance_gpu` / `force_low_power_gpu`,
+  documentados pelo Electron 41 e usados pelo Chromium só nesses sistemas. Eles só
+  têm efeito quando o Chromium marca uma placa de baixo consumo e outra de alto
+  desempenho (`gpuPreference` no `app.getGPUInfo('basic')`), e é só aí que a opção
+  aparece. No macOS com placa NVIDIA a Dedicada aparece desligada, com o motivo: a
+  lista de bugs de driver do Chromium 146 (`gpu_driver_bug_list.json`, entrada 326)
+  liga `force_low_power_gpu` nessas máquinas, e ele vence o pedido da Dedicada.
+- **Quais placas contam** (`electron/core/gpu-devices.cjs`): saem os
+  renderizadores por software, pelo critério do próprio Chromium, inclusive o
+  "Microsoft Basic Render Driver" (WARP) que o Windows 8+ sempre lista; as NPUs
+  que o Windows põe na mesma lista nunca recebem a marca de consumo.
+- **Rede de segurança**: todo início que troca a GPU grava um marcador pendente,
+  apagado quando a janela carrega e a GPU responde ligada (`gpu-info-update` +
+  `gpu_compositing`, e Vulkan na Dedicada do Linux). Início anterior não
+  confirmado, GPU desligada ou processo de GPU caído voltam para Automático, com
+  aviso na tela.
+
+Em máquina com até 4 CPUs lógicas o app sugere, uma vez, ligar o Modo
+Performance; nunca liga sozinho e lembra a resposta. Sem valor salvo, as
+análises simultâneas do Fetch All passam a ser 2 por CPU lógica (de 2 a 8).
+Números, limiar e o mapa dos limites internos estão em
+[`docs/projeto/POLITICA-PERFORMANCE.md`](docs/projeto/POLITICA-PERFORMANCE.md).
+
 ### Conta da CLI oficial: ver e trocar
 
 No gerenciador de CLIs (Modelos > CLIs oficiais), uma CLI que expõe operações de conta — hoje o Codex — ganha dois botões:
@@ -612,6 +665,17 @@ guardar a evidência em um caminho específico, use
 os estados `written`, `path-typed` e `read` no JSONL diário do QA em
 `logs/qa/qa-AAAA-MM-DD.jsonl`; uma leitura ausente ou erro registra `failed` e
 faz a matriz falhar.
+
+`npm run check:hardware` (depois de `npx vite build`) confere no app real a
+escolha de placa de vídeo e a sugestão do Modo Performance: abre o app com um
+perfil temporário, escolhe a placa pela tela, reabre e lê a GPU em uso pelo CDP
+(`SystemInfo.getInfo`); também simula um início que travou, uma GPU que sobe
+desligada, o ambiente do `prime-run` e um relançamento que não voltou. Passe
+`--expect-integrada=0x8086 --expect-dedicada=0x10de` (vendorIds da máquina) para
+exigir a GPU certa em cada cenário; sem eles, só relata. Com
+`--app-image=<arquivo.AppImage>` os cenários rodam no pacote AppImage em vez de
+`electron .`, e `--app-image-arg=--appimage-extract-and-run` roda o pacote sem
+FUSE (extraído).
 
 `npm run typecheck` usa o cache incremental do `tsc -b` (TypeScript 7) sem
 relaxar a verificação. Para uma auditoria limpa dos dois projetos TypeScript,
