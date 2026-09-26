@@ -4505,3 +4505,95 @@ borda vermelha a 40%. No v4 eles pintavam `currentColor`.
 - Levar a prova contra o `dist` para um `npm run` que rode sobre todo o `src`.
 - Pôr `--color-theme-error` no `@theme` para que `bg-theme-error/N` funcione em qualquer degrau, sem uma `@utility`
   por valor.
+
+## 2026-09-26 — Hardware: escolha de placa de vídeo e ajuste pelo número de CPUs
+
+**Task.** "Hardware — oferecer escolha de GPU e ajustar o app pelo número de CPUs". Decisões do Felipe:
+"Placa de vídeo: Automático / Integrada / Dedicada" como opção avançada, Dedicada experimental e com volta
+automática se a GPU falhar, valendo no próximo início; em máquina com poucas CPUs, sugerir o Modo
+Performance (nunca ligar sozinho) e derivar limites internos das CPUs. Branch `feat/hardware-gpu-cpu`,
+feita sobre `b4ca0fc9` e rebaseada sobre `d0496cd6` (#94) antes da entrega; tudo abaixo foi repetido depois
+do rebase. Registro gravado às 08:06.
+
+**Fonte conferida (Electron 41.10.7 = Chromium 146.0.7680.216).**
+- `use-angle`/`vulkan` em `ui/gl/gl_switches.cc` (e na lista que o `GpuProcessHost` copia para o processo
+  de GPU); features `Vulkan` (`gpu/config/gpu_finch_features.cc`), `DefaultANGLEVulkan` e `VulkanFromANGLE`
+  (`ui/gl/gl_switches.cc`).
+- `force_high_performance_gpu`/`force_low_power_gpu`: documentados em `docs/api/command-line-switches.md` do
+  Electron 41; são workarounds de driver que o `gpu_process_host.cc` copia para o processo de GPU e que
+  `SetupGLDisplayManagerEGL` (`gpu/ipc/service/gpu_init.cc`) usa só no Windows e no macOS.
+- O Electron relê o `--enable-features` depois do script principal (`PostEarlyInitialization`), então o
+  `appendSwitch` antes do `whenReady` vale; um segundo `appendSwitch` substitui o primeiro
+  (`base::CommandLine::AppendSwitchNative`), por isso as features são mescladas.
+- README do driver NVIDIA 580 ("PRIME Render Offload"): no Vulkan, `__NV_PRIME_RENDER_OFFLOAD` só carrega o
+  `VK_LAYER_NV_optimus`, que reordena a lista de GPUs.
+
+**Medido nesta máquina (i5-6200U, 4 CPUs lógicas, HD 520 + 920MX, X11, PRIME on-demand, driver 580.178.04).**
+1. O processo de GPU do Electron 41 no Linux nasce de um zygote criado antes do `main.cjs`: variáveis
+   gravadas em `process.env` no main não chegam a ele (`/proc/<pid>/environ` vazio para `__NV_*`; um processo
+   utilitário, lançado direto, recebe). A task pedia confirmar essa herança: ela não existe. Como o Chromium
+   já escolhe a NVIDIA sozinho com Vulkan, a Dedicada ficou só com os switches, sem mexer no ambiente (que
+   também vazaria para os terminais).
+2. Com as variáveis do `prime-run` herdadas do shell, o GL padrão falha (`ANGLE Display::initialize error
+   12289: Invalid visual ID requested`) e a janela cai para `disabled_software`. Por isso a Integrada, nesse
+   caso, limpa o ambiente e relança o app uma vez (`app.relaunch()` antes do `whenReady` funciona; o
+   relançado leva `FELIXO_GPU_ENV_SANITIZED=1` e não relança de novo).
+3. `app.getGPUInfo('basic'|'complete')` no Linux devolve a coleta de antes do processo de GPU: renderer vazio,
+   `gl=none` e a NVIDIA marcada como ativa mesmo desenhando na Intel. Serve para contar placas (2 aqui), não
+   para dizer qual está em uso; a tela lê o renderer pelo WebGL (a mesma string do CDP, sem a versão do
+   driver) e o CDP é a referência nas verificações.
+4. `app.getGPUFeatureStatus()` no `whenReady` é sempre `disabled_software`; o `gpu-info-update` chega 1,2 a
+   1,4 s depois, e o `did-finish-load` pode vir antes dele (8 ms antes, numa rodada com a dedicada). Isso
+   revelou um bug antigo: a recomendação do modo compatível era avaliada no `whenReady` e gravava uma
+   recomendação falsa em aberturas saudáveis (vista na tela de Configurações). Corrigido junto, com o mesmo
+   observador de `gpu-info-update` que a confirmação da placa usa.
+
+**O que entrou (7 commits de código e ferramenta, mais este registro).** `electron/core/gpu-preference.cjs` (preferência em `gpu-preference.json`,
+plano por SO, relançamento limpo), `gpu-start-guard.cjs` (marcador de início pendente, veredito, volta para
+Automático), `gpu-info-watcher.cjs`, `electron/services/gpu-preference-session.cjs` (confirmação depois de
+janela carregada + `gpu-info-update`, reversão se a GPU desligar ou o processo de GPU cair, IPC);
+`GpuPreferenceField` recolhido em "Opções avançadas: placa de vídeo" (só com 2+ placas), aviso de volta
+automática nas Configurações e no app; `hardware-profile.cjs` (CPUs por `os.availableParallelism()`, limiar
+4) e a sugestão do Modo Performance (lembra a resposta; desligada na automação, salvo
+`FELIXO_DEVTOOLS_HARDWARE_NOTICES=1`); `analyzeWorkers` do Fetch All derivado das CPUs quando não há valor
+salvo (2 por CPU, de 2 a 8: nada muda com 4 ou mais); `npm run check:hardware`.
+
+**Verificação no app real (`npm run check:hardware -- --expect-integrada=0x8086 --expect-dedicada=0x10de`,
+sob o flock), 7/7 cenários ok:**
+
+| Cenário | GPU em uso pelo CDP | Estado |
+| --- | --- | --- |
+| Automático | Intel HD 520, ANGLE/OpenGL | nada aplicado |
+| Integrada | Intel HD 520, ANGLE/OpenGL | escolhida pela tela, vale na reabertura |
+| Dedicada | GeForce 920MX, ANGLE/Vulkan (`vulkan: enabled_on`) | marcador confirmado, sessão saudável |
+| Início pendente deixado no perfil | Intel (Automático) | voltou para Automático antes de aplicar, aviso e "Entendi" |
+| Dedicada com `--disable-gpu-compositing` | 920MX, `gpu_compositing: disabled_software` | revertida nesta sessão, aviso na tela |
+| Integrada com o ambiente do `prime-run` | Intel, compositing ligado | relançou; processos só com `FELIXO_GPU_ENV_SANITIZED=1` |
+| Sugestão de CPU | — | aparece com "4 processadores lógicos", não liga sozinha, "Agora não" lembrado após recarregar, "Ligar" liga |
+
+"Em uso agora" bateu com o CDP em todas as aberturas, e nenhuma abertura saudável recomendou o modo
+compatível. Uma captura da tela real (`scrot`, janela visível por ~20 s) mostrou a Integrada e a Dedicada
+desenhando normalmente. Depois do rebase: `npm run lint` ok; `npm run build` ok; `npm test` 1747/1747;
+`npm run test:frontend` 1331 ok e 1 pulado; `npm run test:canvas-smoke` ok (matriz visual inclusa).
+
+**FPS.** Não foi medido de novo nesta rodada. A referência é a medição da bancada (tabela em
+`POLITICA-PERFORMANCE.md`: dedicada +9% a +15% a 48 blocos). A bancada lançou com as variáveis de PRIME na
+linha de comando e o app não as usa, mas pelo item 1 e pelo README da NVIDIA elas só reordenam a lista do
+Vulkan, e o renderer e o dispositivo no CDP são os mesmos.
+
+**Não verificado / riscos.**
+- Windows e macOS: switches conferidos na fonte, sem teste em máquina com duas placas. A rede de segurança
+  cobre falha de início, mas não prova que a placa pedida foi a usada; a tela mostra a GPU em uso.
+- Linux com outra combinação (AMD dedicada, Wayland): a Dedicada depende de o Chromium escolher a discreta
+  no Vulkan, medido só com NVIDIA no X11.
+- Prazo de 30 s para o `gpu-info-update`: sem resposta, o marcador fica e o próximo início volta para
+  Automático; fechar o app nos primeiros ~2 s de uma abertura com a escolha tem o mesmo efeito.
+- Na Integrada com o ambiente do `prime-run`, os terminais abertos pelo app deixam de herdar essas
+  variáveis (o ambiente limpo é o do processo relançado). Com o dev server do Vite, o relançamento é pulado
+  e só anotado.
+- Perfis antigos já têm `analyzeWorkers: 8` gravado pelas versões anteriores; esse valor é respeitado.
+
+**Ideias para quem quiser contribuir.** Levar a bancada `ui-render-performance.cjs` a medir pelo mecanismo do
+app (semeando `gpu-preference.json`) em vez das variáveis na linha de comando; testar a escolha numa máquina
+Windows/macOS com duas placas e registrar o resultado; oferecer a escolha do backend (GL × Vulkan) da
+integrada, se alguém medir ganho.

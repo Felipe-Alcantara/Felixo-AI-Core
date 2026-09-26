@@ -104,6 +104,17 @@ a ser a composição (9 a 18 s de composição numa janela de 6 s). Isso confirm
 modo é necessário mas não suficiente; o próximo ganho precisa vir de virtualização ou de menos camadas por
 nó, não de decoração.
 
+#### Placa de vídeo (26/09/2026)
+
+Com a GPU dedicada (ANGLE sobre Vulkan), a mesma bancada mediu +15% de FPS no
+modo normal e +9% no Performance, com quadro p95 25–33% menor a 48 blocos, e
+nenhuma diferença a 1.000 blocos (o gargalo passa a ser CPU e composição). O
+ganho é real mas moderado e custa bateria, então a escolha é uma **opção
+avançada** nas Configurações (Automático, Integrada ou Dedicada experimental),
+nunca um padrão: Automático continua sendo o comportamento de antes. Todo início
+que troca a GPU é conferido, e uma falha volta sozinha para Automático (ver
+`README.md`, "Placa de vídeo e máquinas com poucas CPUs").
+
 #### Sugestão em máquina com poucas CPUs (26/09/2026)
 
 Em máquina com **até 4 CPUs lógicas** o app mostra, uma vez, a sugestão
