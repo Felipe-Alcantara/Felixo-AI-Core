@@ -4,7 +4,12 @@ const assert = require('node:assert/strict')
 const path = require('node:path')
 const { test } = require('node:test')
 
-const { BUILTIN_SKILLS, listAvailableSkills } = require('./skills-catalog.cjs')
+const {
+  BUILTIN_SKILLS,
+  COMMUNITY_SKILLS,
+  listAvailableSkills,
+  listHiddenSkills,
+} = require('./skills-catalog.cjs')
 const { installBuiltinSkills } = require('./skills-library.cjs')
 
 /** Sistema de arquivos em memória, com o mínimo que o instalador usa. */
@@ -164,6 +169,57 @@ test('built-in escondida pela pessoa nao volta na lista', () => {
   })
 
   assert.ok(!skills.some((s) => s.id === escondida))
+})
+
+test('ocultas trazem nome e origem para o painel poder restaurar', () => {
+  const builtin = `builtin-${SLUG}`
+  const terceiro = COMMUNITY_SKILLS[0].id
+
+  const ocultas = listHiddenSkills({
+    resolveBuiltinPath,
+    hiddenBuiltinIds: [builtin, terceiro],
+  })
+
+  assert.deepEqual(
+    ocultas.map((s) => [s.id, s.name, s.source]),
+    [
+      [builtin, BUILTIN_SKILLS[0].name, 'builtin'],
+      [terceiro, COMMUNITY_SKILLS[0].name, 'community'],
+    ],
+  )
+})
+
+test('ocultas e disponiveis nunca se sobrepoem e juntas cobrem o sistema', () => {
+  const hiddenBuiltinIds = [`builtin-${SLUG}`, COMMUNITY_SKILLS[0].id]
+
+  const disponiveis = listAvailableSkills({ resolveBuiltinPath, hiddenBuiltinIds })
+  const ocultas = listHiddenSkills({ resolveBuiltinPath, hiddenBuiltinIds })
+  const tudo = listAvailableSkills({ resolveBuiltinPath })
+
+  const idsDisponiveis = new Set(disponiveis.map((s) => s.id))
+  assert.ok(ocultas.every((s) => !idsDisponiveis.has(s.id)))
+  assert.equal(disponiveis.length + ocultas.length, tudo.length)
+})
+
+test('terceiro oculto some das ocultas quando terceiros estao desligados', () => {
+  // Restaurar um terceiro com terceiros desligados nao o traria de volta a
+  // lista, entao ele nao aparece como "oculta" nesse estado.
+  const ocultas = listHiddenSkills({
+    resolveBuiltinPath,
+    communityEnabled: false,
+    hiddenBuiltinIds: [`builtin-${SLUG}`, COMMUNITY_SKILLS[0].id],
+  })
+
+  assert.deepEqual(ocultas.map((s) => s.id), [`builtin-${SLUG}`])
+})
+
+test('id oculto que nao existe mais no catalogo e ignorado', () => {
+  const ocultas = listHiddenSkills({
+    resolveBuiltinPath,
+    hiddenBuiltinIds: ['builtin-skill-que-saiu-do-app'],
+  })
+
+  assert.deepEqual(ocultas, [])
 })
 
 test('skill do usuario com o mesmo id sobrescreve a do catalogo', () => {

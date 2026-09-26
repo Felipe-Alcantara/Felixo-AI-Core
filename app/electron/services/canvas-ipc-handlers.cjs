@@ -9,7 +9,10 @@
 
 const { ipcMain } = require('electron')
 const { toErrorResult } = require('./ipc-result.cjs')
-const { listAvailableSkills } = require('./skills/skills-catalog.cjs')
+const {
+  listAvailableSkills,
+  listHiddenSkills,
+} = require('./skills/skills-catalog.cjs')
 const { builtinSkillPath } = require('./skills/skills-library.cjs')
 const {
   createCanvasRepository,
@@ -34,8 +37,21 @@ const SKILLS_KEY = 'canvas.skills'
 // Skills de terceiros vem LIGADAS: elas cobrem trabalho que a biblioteca
 // propria nao cobre, e sao so referencia a fonte original (nada e baixado).
 const COMMUNITY_SKILLS_KEY = 'canvas.skills.communityEnabled'
-// Built-ins que a pessoa removeu do painel continuam removidas entre sessoes.
+// Skills do sistema (built-in ou de terceiros) que a pessoa tirou da lista que
+// todo agente recebe continuam fora entre sessoes.
 const HIDDEN_SKILLS_KEY = 'canvas.skills.hidden'
+
+/** Keeps only non-empty string ids, trimmed and without repeats. */
+function sanitizeSkillIds(value) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const ids = value
+    .filter((id) => typeof id === 'string')
+    .map((id) => id.trim())
+    .filter(Boolean)
+  return [...new Set(ids)]
+}
 
 /** Keeps only well-formed skill entries, coercing fields to strings. */
 function sanitizeSkills(value) {
@@ -250,16 +266,26 @@ function registerCanvasIpcHandlers(options = {}) {
   ipcMain.handle('canvas:list-available-skills', () => {
     try {
       const communityEnabled = settings.get(COMMUNITY_SKILLS_KEY) !== false
-      const hiddenBuiltinIds = Array.isArray(settings.get(HIDDEN_SKILLS_KEY))
-        ? settings.get(HIDDEN_SKILLS_KEY).map(String)
-        : []
-      const skills = listAvailableSkills({
+      const hiddenBuiltinIds = sanitizeSkillIds(settings.get(HIDDEN_SKILLS_KEY))
+      const catalogOptions = {
         resolveBuiltinPath: (slug) => builtinSkillPath(skillsDir, slug),
         communityEnabled,
-        userSkills: sanitizeSkills(settings.get(SKILLS_KEY)),
         hiddenBuiltinIds,
+      }
+      const skills = listAvailableSkills({
+        ...catalogOptions,
+        userSkills: sanitizeSkills(settings.get(SKILLS_KEY)),
       })
-      return { ok: true, skills, communityEnabled }
+      // O painel precisa dos ids crus (grava a lista inteira de volta, inclusive
+      // terceiros ocultos enquanto terceiros estao desligados) e das ocultas com
+      // nome, para mostrar o que da para restaurar.
+      return {
+        ok: true,
+        skills,
+        communityEnabled,
+        hiddenBuiltinIds,
+        hiddenSkills: listHiddenSkills(catalogOptions),
+      }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel listar as skills.')
     }
@@ -271,7 +297,7 @@ function registerCanvasIpcHandlers(options = {}) {
         settings.set(COMMUNITY_SKILLS_KEY, params.communityEnabled)
       }
       if (Array.isArray(params.hiddenBuiltinIds)) {
-        settings.set(HIDDEN_SKILLS_KEY, params.hiddenBuiltinIds.map(String))
+        settings.set(HIDDEN_SKILLS_KEY, sanitizeSkillIds(params.hiddenBuiltinIds))
       }
       return { ok: true }
     } catch (error) {

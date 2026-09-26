@@ -18,6 +18,7 @@ Module._load = originalLoad
 
 const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
 const { createCanvasRepository } = require('./storage/canvas-repository.cjs')
+const { BUILTIN_SKILLS } = require('./skills/skills-catalog.cjs')
 
 test('canvas IPC validates imports and restores files after a failed replacement', async () => {
   const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-canvas-ipc-'))
@@ -118,6 +119,48 @@ test('canvas IPC persists skills and drops malformed entries', async () => {
         { id: 'a', name: 'Revisar', description: 'guia', path: '/skills/review.md' },
       ],
     })
+  } finally {
+    database.close()
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  }
+})
+
+test('canvas IPC devolve as skills do sistema ocultas para o painel poder restaurar', async () => {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-canvas-hidden-skills-'))
+  const database = createStorageDatabase({ databaseDir })
+  const oculta = `builtin-${BUILTIN_SKILLS[0].slug}`
+
+  try {
+    registerCanvasIpcHandlers({ database, skillsDir: '/skills' })
+    const listar = () => handlers.get('canvas:list-available-skills')(null)
+
+    // Nada oculto por padrao.
+    const inicial = listar()
+    assert.equal(inicial.ok, true)
+    assert.deepEqual(inicial.hiddenBuiltinIds, [])
+    assert.deepEqual(inicial.hiddenSkills, [])
+    assert.ok(inicial.skills.some((skill) => skill.id === oculta))
+
+    // Entrada suja (repetida, vazia, nao-string) chega limpa ao armazenamento.
+    assert.deepEqual(
+      handlers.get('canvas:set-skills-settings')(null, {
+        hiddenBuiltinIds: [oculta, ` ${oculta} `, '', '  ', 42, null],
+      }),
+      { ok: true },
+    )
+    const depois = listar()
+    assert.deepEqual(depois.hiddenBuiltinIds, [oculta])
+    assert.ok(!depois.skills.some((skill) => skill.id === oculta))
+    assert.deepEqual(
+      depois.hiddenSkills.map((skill) => [skill.id, skill.name, skill.source]),
+      [[oculta, BUILTIN_SKILLS[0].name, 'builtin']],
+    )
+
+    // Restaurar = gravar a lista sem o id; a skill volta para todo agente novo.
+    handlers.get('canvas:set-skills-settings')(null, { hiddenBuiltinIds: [] })
+    const restaurada = listar()
+    assert.deepEqual(restaurada.hiddenSkills, [])
+    assert.ok(restaurada.skills.some((skill) => skill.id === oculta))
   } finally {
     database.close()
     fs.rmSync(databaseDir, { recursive: true, force: true })
