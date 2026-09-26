@@ -35,6 +35,7 @@ import type {
   FetchAllSettings,
 } from './features/canvas/types'
 import type { CliAccount } from './features/shared/types/cli-accounts'
+import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   AgentUsageDashboard,
@@ -356,6 +357,8 @@ declare global {
               disabledFeatures: string[]
               detectedAt: string | null
             } | null
+            /** Escolha da placa de vídeo; ver `electron/services/gpu-preference-session.cjs`. */
+            gpu?: GpuPreferenceStatus
           }
           message?: string
         }>
@@ -367,6 +370,17 @@ declare global {
         }>
         /** Descarta a recomendação pendente sem mudar o modo gráfico. */
         dismissRecommendation: () => Promise<{ ok: boolean }>
+        /** Salva a placa de vídeo para a próxima abertura. */
+        setGpuPreference?: (preference: GpuPreference) => Promise<{
+          ok: boolean
+          preference?: GpuPreference
+          requiresRestart?: boolean
+          message?: string
+        }>
+        /** A pessoa leu o aviso de volta automática para Automático. */
+        acknowledgeGpuFallback?: () => Promise<{ ok: boolean }>
+        /** Avisa quando a placa volta sozinha para Automático no meio da sessão. */
+        onGpuPreferenceChange?: (callback: (gpu: GpuPreferenceStatus) => void) => () => void
       }
       autostart?: {
         getConfig: () => Promise<{

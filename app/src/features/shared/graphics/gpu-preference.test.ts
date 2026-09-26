@@ -1,0 +1,105 @@
+import { describe, expect, it } from 'vitest'
+import { isSoftwareRenderer, readActiveGpuRenderer } from './active-gpu-renderer'
+import {
+  GPU_PREFERENCE_OPTIONS,
+  describeAppliedGpu,
+  describeGpuFallback,
+  isGpuPreference,
+  shouldShowGpuChoice,
+  type GpuPreferenceStatus,
+} from './gpu-preference'
+
+const BASE_STATUS: GpuPreferenceStatus = {
+  preference: 'auto',
+  applied: 'auto',
+  notApplied: null,
+  sessionOutcome: 'not-guarded',
+  supported: true,
+  unsupportedReason: null,
+  fallback: null,
+  devices: [
+    { vendorId: 0x10de, deviceId: 0x134f },
+    { vendorId: 0x8086, deviceId: 0x1916 },
+  ],
+  multipleGpus: true,
+}
+
+describe('preferência de placa de vídeo', () => {
+  it('oferece Automático, Integrada e Dedicada marcada como experimental', () => {
+    expect(GPU_PREFERENCE_OPTIONS.map((option) => option.value)).toEqual(['auto', 'integrada', 'dedicada'])
+    expect(GPU_PREFERENCE_OPTIONS[2].label).toBe('Dedicada (experimental)')
+    expect(GPU_PREFERENCE_OPTIONS[2].description).toMatch(/bateria/)
+  })
+
+  it('só aceita as três preferências', () => {
+    expect(isGpuPreference('dedicada')).toBe(true)
+    expect(isGpuPreference('hardware')).toBe(false)
+  })
+
+  it('só mostra a escolha com duas placas ou mais', () => {
+    expect(shouldShowGpuChoice(BASE_STATUS)).toBe(true)
+    expect(shouldShowGpuChoice({ ...BASE_STATUS, devices: [BASE_STATUS.devices[0]], multipleGpus: false })).toBe(false)
+    expect(shouldShowGpuChoice(null)).toBe(false)
+  })
+
+  it('separa o que vale nesta abertura do que vale na próxima', () => {
+    expect(describeAppliedGpu({ ...BASE_STATUS, preference: 'dedicada', applied: 'dedicada' })).toBe('Nesta abertura: Dedicada.')
+    expect(describeAppliedGpu({ ...BASE_STATUS, preference: 'dedicada' })).toBe('Nesta abertura: Automático. Na próxima: Dedicada.')
+    expect(describeAppliedGpu({ ...BASE_STATUS, preference: 'dedicada', notApplied: 'software-rendering' })).toMatch(/modo compatível/)
+  })
+
+  it('explica cada volta automática em linguagem de quem usa', () => {
+    const at = '2026-09-26T12:00:00.000Z'
+    expect(describeGpuFallback({ from: 'dedicada', reason: 'previous-start-unfinished', at, detail: null })).toMatch(
+      /não terminou de abrir da última vez.*voltou para Automático/,
+    )
+    expect(describeGpuFallback({ from: 'dedicada', reason: 'gpu-disabled', at, detail: null })).toMatch(/sem aceleração.*próxima vez/)
+    expect(describeGpuFallback({ from: 'dedicada', reason: 'vulkan-unavailable', at, detail: null })).toMatch(/Vulkan/)
+    expect(describeGpuFallback({ from: 'integrada', reason: 'gpu-process-gone', at, detail: 'crashed' })).toMatch(
+      /caiu usando a placa de vídeo integrada/,
+    )
+  })
+})
+
+describe('GPU em uso lida pelo WebGL', () => {
+  function canvasReturning(renderer: unknown, { debugInfo = true } = {}) {
+    const lost: string[] = []
+    const context = {
+      RENDERER: 0x1f01,
+      getExtension(name: string) {
+        if (name === 'WEBGL_debug_renderer_info') return debugInfo ? { UNMASKED_RENDERER_WEBGL: 0x9246 } : null
+        if (name === 'WEBGL_lose_context') return { loseContext: () => lost.push('perdido') }
+        return null
+      },
+      getParameter(parameter: number) {
+        return parameter === 0x9246 || parameter === 0x1f01 ? renderer : null
+      },
+    }
+    return { lost, create: () => ({ getContext: () => context }) }
+  }
+
+  it('devolve o renderer do ANGLE e descarta o contexto', () => {
+    const canvas = canvasReturning('ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA GeForce 920MX (0x0000134F)))')
+    expect(readActiveGpuRenderer(canvas.create)).toBe('ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA GeForce 920MX (0x0000134F)))')
+    expect(canvas.lost).toEqual(['perdido'])
+  })
+
+  it('usa o RENDERER comum quando a extensão de depuração não existe', () => {
+    expect(readActiveGpuRenderer(canvasReturning('WebKit WebGL', { debugInfo: false }).create)).toBe('WebKit WebGL')
+  })
+
+  it('sem WebGL ou com erro devolve null', () => {
+    expect(readActiveGpuRenderer(() => ({ getContext: () => null }))).toBeNull()
+    expect(
+      readActiveGpuRenderer(() => {
+        throw new Error('sem canvas')
+      }),
+    ).toBeNull()
+  })
+
+  it('reconhece a rasterização por software', () => {
+    expect(isSoftwareRenderer('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))')).toBe(true)
+    expect(isSoftwareRenderer(null)).toBe(true)
+    expect(isSoftwareRenderer('ANGLE (Intel, Mesa Intel(R) HD Graphics 520 (SKL GT2), OpenGL 4.6)')).toBe(false)
+  })
+})

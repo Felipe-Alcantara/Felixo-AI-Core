@@ -206,6 +206,41 @@ Abra **Ferramentas → Configurações** para ajustar:
 
 As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma tela de cadastro de chaves de API.
 
+### Placa de vídeo (opção avançada)
+
+Em computadores com duas placas de vídeo (por exemplo, uma integrada e uma
+dedicada), **Configurações → Renderização e recuperação → Opções avançadas:
+placa de vídeo** permite escolher:
+
+- **Automático** — o sistema decide, como sempre foi. É o padrão.
+- **Integrada** — gasta menos bateria.
+- **Dedicada (experimental)** — costuma deixar a interface mais fluida, mas
+  gasta mais bateria.
+
+A escolha vale a partir da **próxima abertura** do Felixo. A mesma tela mostra a
+placa que está desenhando o app agora ("Em uso agora") e o que vale nesta
+abertura e na próxima. Com uma placa só, a opção não aparece; no modo compatível
+(sem GPU), ela fica salva mas não tem efeito.
+
+**Volta automática.** Quando a escolha muda o jeito como o app liga a placa (a
+Dedicada em qualquer sistema; a Integrada no Windows e no macOS), cada abertura
+é conferida: se o Felixo não terminar de abrir (travou ou fechou antes), se a
+placa subir sem aceleração ou se o processo de vídeo cair, a escolha volta
+sozinha para **Automático** e o app mostra o aviso **Placa de vídeo voltou para
+Automático**. Depois de ler, clique em **Entendi**. Dá para escolher de novo
+quando quiser.
+
+Como cada sistema escolhe a placa:
+
+- **Linux**: a Dedicada usa o ANGLE sobre Vulkan. A Integrada usa o caminho
+  gráfico padrão; se o app foi aberto com variáveis que mandam o vídeo para a
+  placa dedicada (como o `prime-run` ou o "abrir com a placa de vídeo dedicada"
+  do ambiente gráfico), o Felixo reabre sozinho uma vez, com essas variáveis
+  limpas.
+- **Windows e macOS**: o app pede ao Chromium a placa de alto desempenho ou a de
+  baixo consumo.
+- Em outros sistemas a opção aparece desligada, com o motivo.
+
 ### Felixo System Design
 
 Em **Ferramentas → Configurações**, o bloco **Felixo System Design** sincroniza
@@ -485,6 +520,10 @@ causando a tela preta, escolha **Modo compatível (sem GPU)** e clique em
 Se a interface já estiver visível, o botão **Recarregar interface** recarrega
 somente o renderer, mantendo o processo principal e os terminais abertos. Isso
 permite recuperar a tela sem encerrar o aplicativo inteiro.
+
+Se o problema começou depois de escolher uma **placa de vídeo** (opção avançada
+na mesma seção), feche e abra o app de novo: um início que não termina faz a
+escolha voltar sozinha para **Automático** na abertura seguinte.
 
 **O app não abre no Linux.**
 
