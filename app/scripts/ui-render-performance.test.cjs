@@ -10,6 +10,8 @@ test('argumentos padrão medem a GPU padrão com três rodadas', () => {
   assert.equal(options.gpu, 'padrao')
   assert.equal(options.render, 'gpu')
   assert.equal(options.rounds, 3)
+  assert.equal(options.warmup, 1)
+  assert.equal(bench.parseArgs(['--warmup=0']).warmup, 0)
   assert.equal(options.appDir, path.resolve(__dirname, '..'))
 })
 
@@ -17,6 +19,7 @@ test('argumentos inválidos falham com mensagem que diz o formato certo', () => 
   assert.throws(() => bench.parseArgs(['--gpu=nvidia']), /padrao, integrada ou dedicada/)
   assert.throws(() => bench.parseArgs(['--render=cpu']), /gpu ou software/)
   assert.throws(() => bench.parseArgs(['--rounds=0']), /entre 1 e 10/)
+  assert.throws(() => bench.parseArgs(['--warmup=6']), /entre 0 e 5/)
   assert.throws(() => bench.parseArgs(['--nodes=1001']), /entre 4 e 1000/)
   assert.equal(bench.parseArgs(['--nodes=1000']).nodes, 1000)
   assert.throws(() => bench.parseArgs(['--desconhecido']), /Argumento desconhecido/)

@@ -72,6 +72,7 @@ function parseArgs(argv) {
     gpu: 'padrao',
     render: 'gpu',
     angle: 'gl',
+    warmup: 1,
     rounds: DEFAULT_ROUNDS,
     durationMs: DEFAULT_DURATION_MS,
     nodes: DEFAULT_NODES,
@@ -100,6 +101,9 @@ function parseArgs(argv) {
           throw new Error('--angle deve ser gl ou vulkan.')
         }
         options.angle = value
+        break
+      case '--warmup':
+        options.warmup = parseBoundedInteger(value, 1, 0, 5, 'warmup')
         break
       case '--rounds':
         options.rounds = parseBoundedInteger(value, DEFAULT_ROUNDS, 1, MAX_ROUNDS, 'rounds')
@@ -613,6 +617,18 @@ async function run(options) {
     // O domínio Tracing é do alvo browser, não da página: o trace sai de todos
     // os processos e `rendererPidFromTrace` isola o renderer da janela medida.
     const cdp = await browser.newBrowserCDPSession()
+    // Aquecimento descartado: medido em 26/09/2026, a 1ª rodada de cada
+    // execução saía sempre mais lenta (caches de shader, disco e JIT), e como
+    // ela é do modo `off`, inflava o ganho aparente do Modo Performance. Uma
+    // passada completa da interação, fora do relatório, tira esse viés.
+    for (let pass = 0; pass < options.warmup; pass += 1) {
+      await page.evaluate(({ key }) => window.localStorage.setItem(key, 'off'), { key: PERFORMANCE_MODE_STORAGE_KEY })
+      await page.reload()
+      await waitHydrated(page, nodeIds, options.launchTimeoutMs)
+      await page.waitForTimeout(1_500)
+      await interact(page, options.durationMs)
+      console.log(`[ui-render] aquecimento ${pass + 1}/${options.warmup} descartado`)
+    }
     const runs = []
     for (const { round, mode } of roundOrder(options.rounds)) {
       await page.evaluate(({ key, value }) => window.localStorage.setItem(key, value), { key: PERFORMANCE_MODE_STORAGE_KEY, value: mode })
@@ -639,7 +655,7 @@ async function run(options) {
       render: options.render,
       angle: options.angle,
       gpu,
-      config: { rounds: options.rounds, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length },
+      config: { rounds: options.rounds, warmup: options.warmup, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length },
       aberturaMs,
       runs,
       summary: summarizeRuns(runs),

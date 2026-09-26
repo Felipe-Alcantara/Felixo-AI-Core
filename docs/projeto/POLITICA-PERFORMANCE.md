@@ -79,6 +79,31 @@ buffer visual, nunca de estado. Ativar/desativar não reabre terminal nem
 perde handoff — confirmado pelo próprio design (scrollback só se aplica a
 sessões novas; sessões vivas mantêm o contrato que tinham ao nascer).
 
+#### Ganho medido (26/09/2026)
+
+Medido com `npm run benchmark:ui-render` (`app/scripts/ui-render-performance.cjs`) no notebook de
+referência do projeto: Intel Core i5-6200U (2 núcleos/4 threads), 11,6 GiB, Intel HD 520 e GeForce 920MX,
+Linux X11. O app real rodou com o `dist` de produção e o canvas com 48 blocos (notas, arquivos, grupos e
+conexões), repetindo a mesma interação (zoom, pan, grupos da sidebar e hover) por 6 s. Cada combinação teve
+6 rodadas, com o modo alternado dentro da execução e uma rodada de aquecimento descartada. A tabela mostra
+as medianas.
+
+| GPU | Modo | FPS | Quadro p95 | Quadros > 25 ms | Estilo por quadro | Paint por quadro |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Intel HD 520 (ANGLE/GL) | normal | 39,5 | 66,6 ms | 79 | 2,80 ms | 2,95 ms |
+| Intel HD 520 (ANGLE/GL) | Performance | **48,5** (+23%) | **50,0 ms** | 53 | **0,66 ms** | 2,64 ms |
+| GeForce 920MX (ANGLE/Vulkan) | normal | 45,5 | 50,0 ms | 66 | 2,37 ms | 2,69 ms |
+| GeForce 920MX (ANGLE/Vulkan) | Performance | **52,8** (+16%) | **33,4 ms** | 40,5 | **0,63 ms** | 2,38 ms |
+
+O ganho vem quase todo do estilo: sem céu animado, sem minimapa e sem transições, o recálculo de estilo por
+quadro cai cerca de 76%.
+
+No cenário **acima do orçamento** (1.000 blocos), o Modo Performance dobra o FPS, mas o app continua
+travado: de ~2 para ~4,3 FPS, com quadros p95 de 1,5 a 2,4 s nas duas GPUs, porque o custo dominante passa
+a ser a composição (9 a 18 s de composição numa janela de 6 s). Isso confirma que acima de 1.000 blocos o
+modo é necessário mas não suficiente; o próximo ganho precisa vir de virtualização ou de menos camadas por
+nó, não de decoração.
+
 ### Reduced motion (existe, parcial — gap real encontrado nesta investigação)
 `prefers-reduced-motion` do sistema operacional já é lido
 (`reduced-motion-preference.ts`) e combinado com `performanceMode` em DOIS

@@ -3998,3 +3998,27 @@ passou.
 **Risco de produto (hipótese, não medida no app):** o app também roda o node-pty no processo principal do
 Electron. Fechar muitos terminais e abrir muitos logo em seguida no Windows pode fazer as sessões novas
 perderem saída. Fica registrado na task do flake para ser medido no app real.
+
+## 2026-09-26 — Medição da renderização: Modo Performance, duas GPUs e Tailwind 4
+
+Primeira medição do custo de desenhar a UI real nesta máquina (i5-6200U, Intel HD 520 + GeForce 920MX),
+com a bancada `ui-render-performance.cjs`. A tabela completa está em `docs/projeto/POLITICA-PERFORMANCE.md`
+("Ganho medido").
+
+**Uma primeira matriz (05:04–05:23) saiu enviesada e foi descartada.** A execução `main` na Intel da 1ª
+repetição, a primeira da matriz com cache frio, ficou ruim em todas as rodadas (9 a 22 FPS), e isso fazia o
+Tailwind 4 parecer duas vezes mais rápido. A 1ª rodada de cada execução também era sempre mais lenta
+(aquecimento), e ela caía no modo `off`, o que inflava o ganho do Modo Performance. A bancada ganhou
+`--warmup` (padrão 1: uma passada da interação fora do relatório), e a matriz v2 (05:24–05:37) começou com
+uma execução descartada. Os números abaixo são da v2.
+
+- **Modo Performance:** +23% de FPS na Intel (39,5 → 48,5) e +16% na 920MX (45,5 → 52,8). O estilo por
+  quadro cai ~76%. Com 1.000 blocos (1ª matriz, sem esse viés relevante nessa ordem de grandeza) dobra o
+  FPS, de ~2 para ~4,3, mas a composição domina e o app continua travado.
+- **GPU dedicada** (ANGLE sobre Vulkan, o único caminho que funciona no X11 com PRIME): +15% de FPS no modo
+  normal e +9% no Performance, com quadro p95 25–33% menor, a 48 blocos. A 1.000 blocos, nenhuma diferença
+  (gargalo em CPU e composição). A opção de GPU da task de hardware "só entra se a medição mostrar ganho
+  real": o ganho existe mas é moderado, e a decisão fica com o Felipe.
+- **Tailwind 4 × 3:** sem regressão. FPS, p95, estilo e paint iguais dentro do ruído nas duas GPUs e nos
+  dois modos, e a abertura (2,4–2,7 s) também. O único sinal é a composição total, 10–20% maior no v4, sem
+  efeito em FPS nem em p95.
