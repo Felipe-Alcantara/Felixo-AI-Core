@@ -376,7 +376,12 @@ perfil, e é aplicada antes do `app.whenReady()` do próximo início:
   variáveis herdadas que forçam a dedicada (como as do `prime-run`), o app limpa o
   ambiente e relança uma vez. No AppImage o `app.relaunch()` não traz o app de
   volta (o binário está na montagem que some quando ele sai), então o app abre de
-  novo o próprio `.AppImage` (`electron/core/app-relaunch.cjs`). Antes de sair ele
+  novo o próprio `.AppImage` (`electron/core/app-relaunch.cjs`), reconhecido pelos
+  caminhos reais do `APPDIR` e do executável (TMPDIR atrás de link simbólico
+  também vale). O relançado sai sem os caminhos da montagem antiga no `PATH`,
+  `LD_LIBRARY_PATH`, `XDG_DATA_DIRS` e `GSETTINGS_SCHEMA_DIR`, e, se o app rodava
+  extraído (`--appimage-extract-and-run`), recebe `APPIMAGE_EXTRACT_AND_RUN=1`
+  para também não depender de FUSE. Antes de sair ele
   grava um pedido de relançamento (com o pid do relançado, quando há), que o
   processo relançado apaga. Uma abertura que ainda o encontra com o relançado
   nascendo (pedido com menos de 30 s ou pid vivo) fica no Automático sem mexer em
