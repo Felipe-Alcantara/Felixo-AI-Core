@@ -162,7 +162,6 @@ contextBridge.exposeInMainWorld('felixo', {
     testConnection: (connectionId) =>
       ipcRenderer.invoke('notion:connections:test', connectionId),
     listDatabases: (input) => ipcRenderer.invoke('notion:databases:list', input),
-    getSchema: (input) => ipcRenderer.invoke('notion:database:schema', input),
     listTasks: (input) => ipcRenderer.invoke('notion:tasks:list', input),
     getCachedTasks: (input) => ipcRenderer.invoke('notion:tasks:cached', input),
     getTaskContent: (input) => ipcRenderer.invoke('notion:tasks:content', input),

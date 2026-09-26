@@ -47,7 +47,6 @@ import type {
   NotionDatabaseResult,
   NotionListResult,
   NotionSchemaProperty,
-  NotionSchemaResult,
   NotionTask,
   NotionTaskContentResult,
   NotionTasksResult,
@@ -550,11 +549,6 @@ declare global {
           connectionId: string
           query?: string
         }) => Promise<NotionDatabaseResult>
-        getSchema: (input: {
-          connectionId: string
-          databaseId?: string
-          dataSourceId?: string
-        }) => Promise<NotionSchemaResult>
         listTasks: (input: {
           connectionId: string
           databaseId?: string
