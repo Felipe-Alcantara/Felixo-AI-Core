@@ -52,6 +52,8 @@ type CanvasToolPanelsProps = {
   /** Abre um arquivo do projeto num bloco do canvas, em vez de rodá-lo. */
   onOpenFileInCanvas: (filePath: string, fileName: string) => void
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
+  /** A lista de skills que todo agente novo recebe mudou no painel de Skills. */
+  onSkillsCatalogChange: (skills: CanvasSkill[]) => void
   onInsertPrompt: (prompt: PromptInsertion | string) => Promise<SkillActivationResult>
   onPromptSaved: (prompt: string) => void
   onBootstrapSaved: (prompt: string) => void
@@ -168,6 +170,7 @@ export function CanvasToolPanels({
   onRunFile,
   onOpenFileInCanvas,
   onActivateSkill,
+  onSkillsCatalogChange,
   onInsertPrompt,
   onPromptSaved,
   onBootstrapSaved,
@@ -246,6 +249,7 @@ export function CanvasToolPanels({
         return (
           <LazySkillsPanel
             onActivateSkill={onActivateSkill}
+            onCatalogChange={onSkillsCatalogChange}
             onClose={closeActiveTool}
             toolsMenuOpen={toolsMenuOpen}
           />

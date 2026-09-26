@@ -2652,6 +2652,12 @@ function CanvasInner({
         onRunFile={runFileInTerminal}
         onOpenFileInCanvas={openTextFileNode}
         onActivateSkill={activateSkill}
+        onSkillsCatalogChange={(skills) => {
+          // Sem isto a lista só era lida ao montar o canvas: ocultar ou
+          // restaurar uma skill, ligar/desligar terceiros ou salvar uma skill
+          // própria só chegava aos agentes novos depois de reiniciar o app.
+          availableSkillsRef.current = skills
+        }}
         onInsertPrompt={insertPrompt}
         onPromptSaved={(prompt) => {
           fileLinkPromptRef.current = prompt

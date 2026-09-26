@@ -25,6 +25,12 @@ export type SkillActivationResult = 'sent' | 'copied' | 'failed'
 type SkillsPanelProps = {
   /** Sends the skill to the expanded terminal, or copies it as a fallback. */
   onActivateSkill: (skill: CanvasSkill) => Promise<SkillActivationResult>
+  /**
+   * Avisa quem cria agentes que a lista que eles recebem mudou (skill oculta,
+   * restaurada, terceiros ligados/desligados, skill própria salva), para o
+   * próximo agente já nascer com a lista nova.
+   */
+  onCatalogChange?: (skills: CanvasSkill[]) => void
   onClose: () => void
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
@@ -72,6 +78,7 @@ function CommunityBadge({ origin }: { origin?: string }) {
  */
 export function SkillsPanel({
   onActivateSkill,
+  onCatalogChange,
   onClose,
   toolsMenuOpen,
 }: SkillsPanelProps) {
@@ -96,8 +103,9 @@ export function SkillsPanel({
     const estado = readSkillsCatalog(await window.felixo?.canvas?.listAvailableSkills?.())
     if (estado) {
       setCatalogo(estado)
+      onCatalogChange?.(estado.skills)
     }
-  }, [])
+  }, [onCatalogChange])
 
   useEffect(() => {
     let cancelled = false
