@@ -1,4 +1,5 @@
-import { memo, useEffect, useId, useState } from 'react'
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
 import { DeferredMarkdownContent } from '../components/DeferredMarkdownContent'
@@ -7,6 +8,7 @@ import {
   systemDesignDocumentRevision,
   type SystemDesignDocumentReadState,
 } from './system-design-document'
+import { systemDesignDocumentLinkResolver } from './system-design-links'
 import type { SystemDesignDocumentSummary } from './types'
 
 export type ReadSystemDesignDocument = (
@@ -23,12 +25,35 @@ type SystemDesignDocumentIndexProps = {
  * logo abaixo dele. Um guia aberto por vez: a seção vive dentro de painéis
  * estreitos (Configurações do canvas e do chat), e dois guias longos abertos
  * empurrariam o resto das opções para longe.
+ *
+ * Um link de um guia para outro do índice abre o citado no lugar do atual.
  */
 export function SystemDesignDocumentIndex({
   documents,
   readDocument,
 }: SystemDesignDocumentIndexProps) {
   const [openPath, setOpenPath] = useState<string | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  // Pela lista de caminhos, não pelo array: cada sincronização entrega um
+  // array novo com os mesmos guias, e um conjunto novo re-renderizaria o guia
+  // aberto (o que o `memo` da prévia existe para evitar).
+  const pathsKey = documents.map((doc) => doc.path).join('\n')
+  const documentPaths = useMemo<ReadonlySet<string>>(
+    () => new Set(pathsKey.split('\n')),
+    [pathsKey],
+  )
+
+  // O botão do link some junto com o guia de origem; o foco vai para o item
+  // do guia aberto, que também sobe para o topo do painel, com o conteúdo
+  // logo abaixo.
+  const openLinkedDocument = useCallback((documentPath: string) => {
+    flushSync(() => setOpenPath(documentPath))
+    const toggle = Array.from(
+      listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-document-path]') ?? [],
+    ).find((button) => button.dataset.documentPath === documentPath)
+    toggle?.scrollIntoView({ block: 'start' })
+    toggle?.focus({ preventScroll: true })
+  }, [])
 
   return (
     <details className="mt-3 text-[11px] text-zinc-300">
@@ -36,7 +61,7 @@ export function SystemDesignDocumentIndex({
         Ver índice ({documents.length} documento
         {documents.length === 1 ? '' : 's'})
       </summary>
-      <ul className="mt-1 space-y-0.5">
+      <ul ref={listRef} className="mt-1 space-y-0.5">
         {documents.map((doc) => (
           <SystemDesignDocumentItem
             key={doc.path}
@@ -44,6 +69,8 @@ export function SystemDesignDocumentIndex({
             expanded={openPath === doc.path}
             onToggle={() => setOpenPath((current) => (current === doc.path ? null : doc.path))}
             readDocument={readDocument}
+            documentPaths={documentPaths}
+            onOpenDocument={openLinkedDocument}
           />
         ))}
       </ul>
@@ -51,7 +78,13 @@ export function SystemDesignDocumentIndex({
   )
 }
 
-type SystemDesignDocumentItemProps = {
+/** Caminhos do índice e como abrir um deles: o destino dos links entre guias. */
+type SystemDesignDocumentLinks = {
+  documentPaths: ReadonlySet<string>
+  onOpenDocument: (documentPath: string) => void
+}
+
+type SystemDesignDocumentItemProps = SystemDesignDocumentLinks & {
   doc: SystemDesignDocumentSummary
   expanded: boolean
   onToggle: () => void
@@ -63,6 +96,8 @@ export function SystemDesignDocumentItem({
   expanded,
   onToggle,
   readDocument,
+  documentPaths,
+  onOpenDocument,
 }: SystemDesignDocumentItemProps) {
   const contentId = useId()
   const hasOwnTitle = Boolean(doc.title) && doc.title !== doc.path
@@ -74,6 +109,7 @@ export function SystemDesignDocumentItem({
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={expanded ? contentId : undefined}
+        data-document-path={doc.path}
         className="felixo-btn-flat flex w-full items-start gap-1 rounded-md px-1 py-0.5 text-left hover:bg-white/5"
       >
         {expanded ? (
@@ -94,13 +130,15 @@ export function SystemDesignDocumentItem({
           id={contentId}
           documentPath={doc.path}
           readDocument={readDocument}
+          documentPaths={documentPaths}
+          onOpenDocument={onOpenDocument}
         />
       ) : null}
     </li>
   )
 }
 
-type SystemDesignDocumentPreviewProps = {
+type SystemDesignDocumentPreviewProps = SystemDesignDocumentLinks & {
   id: string
   documentPath: string
   readDocument: ReadSystemDesignDocument
@@ -116,6 +154,8 @@ const SystemDesignDocumentPreview = memo(function SystemDesignDocumentPreview({
   id,
   documentPath,
   readDocument,
+  documentPaths,
+  onOpenDocument,
 }: SystemDesignDocumentPreviewProps) {
   const { state, retry } = useSystemDesignDocument(documentPath, readDocument)
 
@@ -123,13 +163,15 @@ const SystemDesignDocumentPreview = memo(function SystemDesignDocumentPreview({
     <SystemDesignDocumentContent
       id={id}
       documentPath={documentPath}
+      documentPaths={documentPaths}
+      onOpenDocument={onOpenDocument}
       state={state}
       onRetry={retry}
     />
   )
 })
 
-type SystemDesignDocumentContentProps = {
+type SystemDesignDocumentContentProps = SystemDesignDocumentLinks & {
   id: string
   documentPath: string
   state: SystemDesignDocumentReadState
@@ -140,9 +182,16 @@ type SystemDesignDocumentContentProps = {
 export function SystemDesignDocumentContent({
   id,
   documentPath,
+  documentPaths,
+  onOpenDocument,
   state,
   onRetry,
 }: SystemDesignDocumentContentProps) {
+  const resolveRelativeLink = useMemo(
+    () => systemDesignDocumentLinkResolver(documentPath, documentPaths, onOpenDocument),
+    [documentPath, documentPaths, onOpenDocument],
+  )
+
   return (
     <div
       id={id}
@@ -157,7 +206,12 @@ export function SystemDesignDocumentContent({
           Carregando documento…
         </p>
       ) : null}
-      {state.status === 'ready' ? <DeferredMarkdownContent content={state.content} /> : null}
+      {state.status === 'ready' ? (
+        <DeferredMarkdownContent
+          content={state.content}
+          resolveRelativeLink={resolveRelativeLink}
+        />
+      ) : null}
       {state.status === 'empty' ? (
         <p className="text-zinc-500">Este documento está vazio no cache local.</p>
       ) : null}

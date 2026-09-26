@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { prerender } from 'react-dom/static'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -23,15 +24,34 @@ function summary(overrides: Partial<SystemDesignDocumentSummary> = {}): SystemDe
 
 const neverRead = vi.fn(() => new Promise<SystemDesignDocumentReadState>(() => {}))
 
+const DOCUMENT_PATHS: ReadonlySet<string> = new Set([
+  'core/GUIA_MINIMO_QUALIDADE.md',
+  'core/DESIGN_SYSTEM_BACKEND.md',
+  'docs/GIT-POLITICA-DE-VERSIONAMENTO.md',
+])
+
+function contentElement(
+  state: SystemDesignDocumentReadState,
+  onOpenDocument: (documentPath: string) => void = () => {},
+) {
+  return createElement(SystemDesignDocumentContent, {
+    id: 'guia',
+    documentPath: 'core/GUIA_MINIMO_QUALIDADE.md',
+    documentPaths: DOCUMENT_PATHS,
+    onOpenDocument,
+    state,
+    onRetry: () => {},
+  })
+}
+
 function renderContent(state: SystemDesignDocumentReadState) {
-  return renderToStaticMarkup(
-    createElement(SystemDesignDocumentContent, {
-      id: 'guia',
-      documentPath: 'core/GUIA_MINIMO_QUALIDADE.md',
-      state,
-      onRetry: () => {},
-    }),
-  )
+  return renderToStaticMarkup(contentElement(state))
+}
+
+/** Espera a prévia Markdown (carregada sob demanda) em vez do fallback. */
+async function prerenderContent(state: SystemDesignDocumentReadState) {
+  const { prelude } = await prerender(contentElement(state))
+  return new Response(prelude).text()
 }
 
 describe('SystemDesignDocumentIndex', () => {
@@ -63,6 +83,8 @@ describe('SystemDesignDocumentIndex', () => {
         expanded: true,
         onToggle: () => {},
         readDocument: neverRead,
+        documentPaths: DOCUMENT_PATHS,
+        onOpenDocument: () => {},
       }),
     )
 
@@ -97,5 +119,30 @@ describe('SystemDesignDocumentContent', () => {
 
   it('documento vazio diz que está vazio em vez de uma moldura em branco', () => {
     expect(renderContent({ status: 'empty' })).toContain('Este documento está vazio no cache local.')
+  })
+
+  it('link para outro guia do índice vira botão; nenhum link abre o navegador na raiz do app', async () => {
+    const html = await prerenderContent({
+      status: 'ready',
+      content: [
+        '- Backend: [`DESIGN_SYSTEM_BACKEND.md`](DESIGN_SYSTEM_BACKEND.md)',
+        '- Git: [política](../docs/GIT-POLITICA-DE-VERSIONAMENTO.md#3-commits)',
+        '- Scripts: [pasta de scripts](../scripts/)',
+      ].join('\n'),
+    })
+
+    expect(html).toContain('markdown-content')
+    // O defeito: href saneado para "" e target=_blank mandavam o clique para
+    // o navegador do sistema, aberto na raiz do próprio renderer.
+    expect(html).not.toContain('href=""')
+    expect(html).not.toContain('target="_blank"')
+    expect(html).toMatch(
+      /<button type="button"[^>]*title="Abrir o guia core\/DESIGN_SYSTEM_BACKEND\.md neste índice"[^>]*><code>DESIGN_SYSTEM_BACKEND\.md<\/code><\/button>/,
+    )
+    expect(html).toMatch(
+      /<button type="button"[^>]*title="Abrir o guia docs\/GIT-POLITICA-DE-VERSIONAMENTO\.md neste índice"[^>]*>política<\/button>/,
+    )
+    // Pasta fora do índice não tem destino no app: fica como texto.
+    expect(html).toContain('<span>pasta de scripts</span>')
   })
 })
