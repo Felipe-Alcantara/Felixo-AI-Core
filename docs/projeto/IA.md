@@ -4811,3 +4811,36 @@ e o mapa aceite → teste (T1.a–T3.d), está em [`PLANO-TUTORIAL-CANVAS.md`](P
 
 **Estado.** Só o plano neste passo; o código entra nos commits seguintes, na ordem da seção "Ordem de
 commits" do plano.
+
+## 2026-09-26 — Tutorial do canvas: catálogo, textos e state machine (commit 3 do plano)
+
+Registro gravado às 15:01. Arquivos novos em `app/src/features/onboarding/`: `onboarding-catalog.ts`,
+`onboarding-messages.ts`, `onboarding-state.ts`, os testes U-cat, U-msg e U-state e
+`onboarding-test-fixtures.ts` (catálogos de fixture, PRNG semeado e geradores de fuzz, usados só pelos testes).
+
+**O que ficou pronto.**
+- Catálogo v1 com o tour `inicial` (6 passos), o mini-tour `novidade-ajuda`, a feature `feature.ajuda`
+  (`anunciarParaQuemJaUsa: true`), o livro de versões `CATALOG_HISTORY` e a guarda de compilação
+  `CANVAS_TOOL_FEATURES satisfies Record<CanvasTool, 'base' | FeatureId>`.
+- Textos pt-BR completos (passos, card, região live, aviso e Ajuda), plural por `Intl.PluralRules`, pseudo-locale
+  `en-XA` gerado do pt-BR e resolução de locale tudo ou nada por card.
+- State machine pura: `normalizeOnboardingState` (nunca lança; fuzz de 500 valores, metade mutações de um estado
+  válido), `applyOnboardingEvent` (devolve o mesmo objeto num no-op), `decideAutomaticOpening`, gatilho de canvas
+  ao vivo, `describeHelpEntries`, retomada por sessão e serialização que preserva extras e ids desconhecidos.
+
+**Desvios do plano, com motivo.**
+- `MessageKey` é derivado do próprio `PT_BR` (`satisfies Record<string, Message>`), em vez de uma união separada
+  mais `satisfies Record<MessageKey, Message>`. A garantia é a mesma (pt-BR completo por construção) sem manter
+  duas listas de ~60 chaves em sincronia.
+- Os nomes das ferramentas do passo 5 ("Notas" e "Prompts") estão escritos no texto pt-BR, e o U-cat confere
+  que são exatamente `TOOL_LABELS[citaFerramentas[i]]`. Formatar a partir de `TOOL_LABELS` em tempo de execução
+  exigiria importar o módulo do canvas no chunk das mensagens, e o próprio plano só permite `TOOL_LABELS` no
+  teste do catálogo.
+- Passo com `requires` fica oculto também com a capability `desconhecido` (o plano cita só `indisponivel`):
+  o tutorial nunca descreve o que pode não existir neste ambiente.
+- `resolveOnboardingLocale` só casa um pseudo-locale (`-XA`/`-XB`) pelo nome exato; sem isso, `en-US` cairia
+  em `en-XA` pelo idioma.
+- O teste de migração v1→v2 exercita `migrateRaw` com uma tabela de fixture (a normalização atual só conhece o
+  schema 1, então não existe versão menor para migrar dentro do próprio `normalize`).
+
+**Validação.** `npx vitest run src/features/onboarding`: 74 testes ok; `npm run typecheck` ok; `eslint` da pasta ok.

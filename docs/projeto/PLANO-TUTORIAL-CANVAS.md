@@ -1,4 +1,4 @@
-Status: aprovado para implementação (26/09/2026).
+Status: em desenvolvimento.
 
 # Plano: tutorial do canvas, Ajuda e novidades com estado versionado
 
