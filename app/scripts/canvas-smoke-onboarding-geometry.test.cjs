@@ -20,6 +20,7 @@ const {
   forbiddenChannels,
   inflate,
   intersects,
+  coversSmallTarget,
   rectInside,
   storageViolations,
 } = require('./canvas-smoke-onboarding-geometry.cjs')
@@ -54,6 +55,19 @@ test('intersects: sobreposição conta, encostar a borda não conta', () => {
   assert.equal(intersects(rect(0, 0, 100, 100), rect(200, 200, 10, 10)), false)
   // DEVE reprovar a checagem do smoke: card por cima do NoticeToast.
   assert.equal(intersects(rect(460, 600, 352, 180), rect(464, 680, 352, 104)), true)
+})
+
+test('coversSmallTarget: só um alvo maior que meia janela pode ficar sob o card', () => {
+  const pequena = { width: 416, height: 289 }
+  // DEVE reprovar: a folha de 720×500 com zoom +3 por cima do botão Projetos (medido no app).
+  assert.equal(coversSmallTarget(rect(12, 104, 392, 173), rect(7, 131, 38, 19), pequena), true)
+  // A mesma folha na coluna à direita do rail passa.
+  assert.equal(coversSmallTarget(rect(59, 12, 345, 190), rect(7, 131, 38, 19), pequena), false)
+  // A região do canvas (maior que meia janela) pode ficar sob a folha.
+  assert.equal(coversSmallTarget(rect(12, 12, 392, 173), rect(0, 0, 416, 289), pequena), false)
+  // Encostar a borda não conta.
+  assert.equal(coversSmallTarget(rect(49, 12, 345, 190), rect(7, 131, 42, 19), pequena), false)
+  assert.throws(() => coversSmallTarget(rect(0, 0, 1, 1), null, pequena), TypeError)
 })
 
 test('inflate e clipToViewport: contorno visível do anel e parte do alvo na janela', () => {

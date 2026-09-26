@@ -30,6 +30,7 @@ const {
   containingBlockReason,
   contains,
   contrastRatio,
+  coversSmallTarget,
   diffChannels,
   diffStorage,
   externalRequests,
@@ -65,6 +66,13 @@ const DECISOES_QUE_ABREM = new Set(['aberto', 'retomada', 'anunciado'])
 /** A ação da Ajuda que abre o tutorial do início, na ordem de preferência. */
 const ACOES_QUE_ABREM = ['iniciar', 'recomecar', 'rever', 'continuar']
 const VIEWPORT_PADRAO = { width: 1280, height: 800 }
+/**
+ * Espera curta por quadros estáveis depois de uma troca de passo ou de um Tab: o
+ * card é posto no mesmo quadro (useLayoutEffect) e qualquer reação do tour vem no
+ * quadro seguinte. A janela invisível da automação desenha poucos quadros por
+ * segundo, e a espera padrão (4 + 12 quadros) custaria segundos em cada passo.
+ */
+const QUADROS_CURTOS = Object.freeze({ settleFrames: 2, sampleFrames: 3 })
 
 /**
  * Espelho do catálogo (`onboarding-catalog.ts`). O U-cat confere o lado do
@@ -292,6 +300,32 @@ function medirCartaoInteiro() {
         }
       : null,
     botoes: buttons,
+  }
+}
+
+/** O card e o alvo que ele aponta agora (a âncora do próprio card), no mesmo quadro. */
+function medirAlvoDoCartao() {
+  const rectOf = (element) => {
+    const rect = element.getBoundingClientRect()
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+  }
+  const card = document.querySelector('[data-felixo-onboarding="card"]')
+  if (!card) return null
+  const anchor = card.dataset.ancora ?? null
+  const target =
+    anchor === 'canvas'
+      ? document.querySelector('[data-felixo-region="canvas"]')
+      : anchor
+        ? document.querySelector(`[data-felixo-tour-anchor="${anchor}"]`)
+        : null
+  return {
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    passo: card.dataset.passo ?? null,
+    ancora: anchor,
+    modo: card.dataset.modo ?? null,
+    lado: card.dataset.lado ?? null,
+    cartao: rectOf(card),
+    alvo: target ? rectOf(target) : null,
   }
 }
 
@@ -930,12 +964,28 @@ function criarCenariosDoTutorial(deps) {
     log('SA4 leitor de tela: ok (dialog nomeado e descrito, botões nomeados, "Passo 2 de 6: Agente" anunciado)')
   }
 
-  /** SA5: viewport, zoom e foco depois do resize (o card nunca remonta). */
+  /**
+   * SA5: viewport, zoom e foco depois do resize (o card nunca remonta). Em toda
+   * medida o card não cobre o alvo do passo, a não ser que o alvo seja maior que
+   * meia janela; no zoom alto da janela mínima, os seis passos são conferidos.
+   */
   async function sa5() {
     const cenario = 'SA5'
     await definirViewport(VIEWPORT_PADRAO)
     const aberto = await abrirTourPelaAjuda(cenario)
     await page.locator(`${SEL.cartao} ${acao('proximo')}`).focus()
+    /** `quadros`: opções da espera por geometria estável; `null` quando quem chama já esperou. */
+    const conferirAlvoAVista = async (rotulo, quadros = QUADROS_CURTOS) => {
+      if (quadros) await measureStableGeometry(page, `${cenario} ${rotulo}`, [SEL.cartao], quadros)
+      const medida = await page.evaluate(medirAlvoDoCartao)
+      exigir(medida?.alvo, cenario, `alvo do passo ausente em ${rotulo}`, medida)
+      exigir(
+        !coversSmallTarget(medida.cartao, medida.alvo, medida.viewport),
+        cenario,
+        `o card cobre o alvo ${medida.ancora} do passo ${medida.passo} em ${rotulo}`,
+        medida,
+      )
+    }
     const conferir = async (rotulo) => {
       await measureStableGeometry(page, `${cenario} ${rotulo}`, [SEL.cartao])
       const medida = await page.evaluate(medirCartaoInteiro)
@@ -950,24 +1000,47 @@ function criarCenariosDoTutorial(deps) {
         exigir(botao.alcancavel, cenario, `botão ${botao.acao} coberto em ${rotulo}`, botao)
       }
       await recordVisualEvidence(page, `tutorial-${rotulo}`, [SEL.cartao], { event: 'onboarding-viewport', viewport: medida.viewport, mode: medida.cartao.modo })
+      await conferirAlvoAVista(rotulo, null)
     }
     for (const viewport of [VIEWPORT_PADRAO, { width: 375, height: 667 }, { width: 320, height: 720 }]) {
       await definirViewport(viewport)
       await conferir(`${viewport.width}x${viewport.height}`)
     }
-    // Zoom +3 numa janela de 720×500 dá ~417×289 CSS px (o caso compacto do plano).
-    await definirViewport({ width: 720, height: 500 })
-    await mainEval('mainWindow.webContents.setZoomLevel(3)')
+    // Zoom alto na janela mínima: +3 em 720×500 dá ~416×289 CSS px (o caso compacto do
+    // plano) e +2,5 em 800×500 dá ~507×317. Nenhuma borda cabe a folha sem cobrir o
+    // rail ou a sidebar; a folha vai para a coluna ao lado do alvo. O percurso vai até o
+    // passo 6 no primeiro zoom e volta ao passo 1 no segundo (Voltar), com o foco parado
+    // no botão principal (clique pelo DOM).
+    const zooms = [
+      { janela: { width: 720, height: 500 }, nivel: 3, rotulo: 'zoom-3', passos: PASSOS_INICIAL.slice(1), botao: 'proximo' },
+      { janela: { width: 800, height: 500 }, nivel: 2.5, rotulo: 'zoom-2.5', passos: PASSOS_INICIAL.slice(0, -1).reverse(), botao: 'voltar' },
+    ]
+    let janela = VIEWPORT_PADRAO
     try {
-      await esperar(cenario, 'o zoom +3 aplicar', () => window.innerWidth < 500)
-      await conferir('zoom-3')
+      for (const [indice, zoom] of zooms.entries()) {
+        await mainEval('mainWindow.webContents.setZoomLevel(0)')
+        await definirViewport(zoom.janela)
+        janela = zoom.janela
+        await mainEval(`mainWindow.webContents.setZoomLevel(${zoom.nivel})`)
+        await esperar(cenario, `o zoom ${zoom.nivel} aplicar`, (largura) => window.innerWidth < largura * 0.7, zoom.janela.width)
+        // Depois de trocar o zoom, a espera completa (a janela muda de tamanho em vários quadros).
+        if (indice === 0) await conferir(zoom.rotulo)
+        else await conferirAlvoAVista(`${zoom.rotulo} passo ${PASSOS_INICIAL.at(-1)}`, {})
+        for (const passo of zoom.passos) {
+          await clicarNoTour(cenario, zoom.botao)
+          await esperarPasso(cenario, passo)
+          await conferirAlvoAVista(`${zoom.rotulo} passo ${passo}`)
+        }
+      }
     } finally {
       await mainEval('mainWindow.webContents.setZoomLevel(0)')
-      await page.waitForFunction(() => window.innerWidth === 720, null, { timeout })
+      await page.waitForFunction((largura) => window.innerWidth === largura, janela.width, { timeout })
     }
+    const depois = await foco()
+    exigir(['proximo', 'concluir'].includes(depois.acao), cenario, 'o foco saiu do botão principal durante o percurso com zoom', depois)
     await definirViewport(VIEWPORT_PADRAO)
     await fecharTourSeAberto(cenario)
-    log('SA5 viewport e zoom: ok (folha no compacto, botões alcançáveis, mesma instância e mesmo foco)')
+    log('SA5 viewport e zoom: ok (folha no compacto, alvo nunca coberto, botões alcançáveis, mesma instância e mesmo foco)')
   }
 
   /** SA6: fonte a 137,5% e pseudo-locale en-XA (+40%): nenhuma instrução cortada. */

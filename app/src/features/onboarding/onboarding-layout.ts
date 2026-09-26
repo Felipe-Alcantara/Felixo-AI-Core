@@ -33,6 +33,11 @@ export const COMPACT_MAX_HEIGHT = 360
 /** Menor altura aceitável para o card encolhido; abaixo disso ele cobre o obstáculo. */
 export const SHEET_MIN_HEIGHT = 160
 export const SHEET_HEIGHT_RATIO = 0.6
+/**
+ * Menor largura da folha em coluna ao lado do alvo: cabe "Pular tutorial" numa
+ * linha e o título do passo sem quebra. Abaixo disso a coluna não é oferecida.
+ */
+export const SHEET_MIN_COLUMN_WIDTH = 160
 /** O anel fica dentro da janela por esta folga, para o contorno não sumir na borda. */
 export const RING_INSET = 2
 /** Fração mínima do alvo que precisa estar visível na janela e no contêiner rolável. */
@@ -107,7 +112,11 @@ export type PlacementMode = 'ancorado' | 'folha'
 
 export type CardPlacement = {
   mode: PlacementMode
-  /** Lado do alvo no modo ancorado; borda da janela (`cima`/`baixo`) no modo folha. */
+  /**
+   * Lado do alvo no modo ancorado. No modo folha, a borda da janela (`cima`/`baixo`)
+   * ou, quando nenhuma borda cabe sem cobrir o alvo, a coluna ao lado dele
+   * (`direita`/`esquerda`).
+   */
   side: CardSide
   top: number
   left: number
@@ -215,6 +224,30 @@ function freeColumnBands(left: number, width: number, viewport: Viewport, obstac
   return bands
 }
 
+type Band = { top: number; end: number }
+
+/** A faixa livre da coluna mais próxima do centro do alvo, com pelo menos `minHeight`. */
+function nearestFreeBand(
+  column: { left: number; width: number },
+  center: number,
+  viewport: Viewport,
+  obstacles: readonly Rect[],
+  minHeight: number,
+): Band | null {
+  const distance = (band: Band) => (center < band.top ? band.top - center : center > band.end ? center - band.end : 0)
+  const bands = freeColumnBands(column.left, column.width, viewport, obstacles)
+    .filter((band) => band.end - band.top >= minHeight)
+    .sort((a, b) => distance(a) - distance(b) || a.top - b.top)
+  return bands[0] ?? null
+}
+
+/** Altura limitada à faixa, centrada no alvo e contida nela; o teto vai até o fim da faixa. */
+function fitInBand(band: Band, center: number, naturalHeight: number) {
+  const height = Math.min(naturalHeight, band.end - band.top)
+  const top = clamp(center - height / 2, band.top, band.end - height)
+  return { top, height, maxHeight: band.end - top }
+}
+
 function anchoredPlacement(input: PlacementInput, target: Rect): CardPlacement | null {
   const { viewport, card } = input
   const obstacles = input.obstacles ?? []
@@ -234,16 +267,59 @@ function anchoredPlacement(input: PlacementInput, target: Rect): CardPlacement |
   for (const side of sides.filter((item) => item === 'direita' || item === 'esquerda')) {
     const left = side === 'direita' ? right(inflated) + LAYOUT_GAP : inflated.left - LAYOUT_GAP - card.width
     if (left < LAYOUT_MARGIN || left + card.width > viewport.width - LAYOUT_MARGIN) continue
-    const distance = (band: { top: number; end: number }) =>
-      center < band.top ? band.top - center : center > band.end ? center - band.end : 0
-    const bands = freeColumnBands(left, card.width, viewport, obstacles)
-      .filter((band) => band.end - band.top >= SHEET_MIN_HEIGHT)
-      .sort((a, b) => distance(a) - distance(b) || a.top - b.top)
-    const band = bands[0]
+    const band = nearestFreeBand({ left, width: card.width }, center, viewport, obstacles, SHEET_MIN_HEIGHT)
     if (!band) continue
-    const height = Math.min(card.height, band.end - band.top)
-    const top = clamp(center - height / 2, band.top, band.end - height)
-    return anchored(side, { top, left, width: card.width, height }, band.end - top)
+    const fit = fitInBand(band, center, card.height)
+    return anchored(side, { top: fit.top, left, width: card.width, height: fit.height }, fit.maxHeight)
+  }
+  return null
+}
+
+/**
+ * Folha em coluna ao lado do alvo. Numa janela baixa (zoom alto na janela
+ * mínima: 416×289 CSS px), nenhuma borda recebe a folha de largura cheia sem
+ * cobrir um alvo do meio da altura (o rail, a sidebar), e a faixa acima ou
+ * abaixo dele tem menos de 160 px. Sobra a coluna à direita (ou à esquerda) do
+ * alvo, na altura inteira da janela: a folha fica nela, com a largura da coluna
+ * (no máximo a do card) e a altura da faixa livre mais próxima do alvo; o corpo
+ * rola e o rodapé continua visível. Colunas com menos de 160 px não contam.
+ *
+ * `respectObstacles` falso é o penúltimo recurso: cobrir um aviso (z 50) é o
+ * preço de não cobrir o alvo, e isso fica declarado em `coversObstacle`.
+ */
+function sheetBesideTarget(input: PlacementInput, target: Rect, respectObstacles: boolean): CardPlacement | null {
+  const { viewport, card } = input
+  const allObstacles = input.obstacles ?? []
+  const avoided = respectObstacles ? allObstacles : []
+  const inflated = inflateRect(target, TARGET_INFLATE)
+  const center = target.top + target.height / 2
+  const columns = (['direita', 'esquerda'] as const)
+    .map((side) => {
+      const start = side === 'direita' ? right(inflated) + LAYOUT_GAP : LAYOUT_MARGIN
+      const end = side === 'direita' ? viewport.width - LAYOUT_MARGIN : inflated.left - LAYOUT_GAP
+      return { side, start, room: end - start }
+    })
+    .filter((column) => column.room >= SHEET_MIN_COLUMN_WIDTH)
+    .sort(
+      (a, b) =>
+        Number(b.side === input.preferredSide) - Number(a.side === input.preferredSide) || b.room - a.room,
+    )
+  const minHeight = Math.min(SHEET_MIN_HEIGHT, viewport.height - LAYOUT_MARGIN * 2)
+  for (const column of columns) {
+    const width = Math.min(column.room, Math.max(card.width, SHEET_MIN_COLUMN_WIDTH))
+    // Encostada no alvo: à direita começa logo depois dele; à esquerda termina logo antes.
+    const left = column.side === 'direita' ? column.start : column.start + column.room - width
+    const band = nearestFreeBand({ left, width }, center, viewport, avoided, minHeight)
+    if (!band) continue
+    const fit = fitInBand(band, center, card.height)
+    const rect = { top: fit.top, left, width, height: fit.height }
+    return {
+      mode: 'folha',
+      side: column.side,
+      ...rect,
+      maxHeight: fit.maxHeight,
+      coversObstacle: allObstacles.some((item) => rectsIntersect(rect, item)),
+    }
   }
   return null
 }
@@ -273,9 +349,16 @@ function freeBand(edge: CardSide, target: Rect | null, viewport: Viewport, obsta
 }
 
 /**
- * Modo folha: largura cheia menos as margens, na borda oposta ao centro do
- * alvo. Com obstáculo nas duas bordas, encolhe para caber entre o obstáculo e o
- * alvo; abaixo de 160 px, cobre o obstáculo (limitação declarada).
+ * Modo folha, na ordem:
+ * 1. largura cheia menos as margens, na borda oposta ao centro do alvo, sem
+ *    tocar alvo nem obstáculo;
+ * 2. com obstáculo nas duas bordas, encolhida entre o obstáculo e o alvo (piso
+ *    de 160 px);
+ * 3. na coluna ao lado do alvo, quando nenhuma borda cabe sem cobri-lo;
+ * 4. cobrindo um obstáculo (limitação declarada: card em z 55 sobre o aviso em
+ *    z 50), na borda e depois na coluna, mas nunca o alvo;
+ * 5. só sem espaço nenhum (coluna com menos de 160 px dos dois lados), cobre o
+ *    alvo. Um alvo maior que meia janela não conta como alvo a desviar.
  */
 function sheetPlacement(input: PlacementInput): CardPlacement {
   const { viewport, target, card } = input
@@ -317,9 +400,19 @@ function sheetPlacement(input: PlacementInput): CardPlacement {
       return sheet(edge, { top, left: LAYOUT_MARGIN, width, height: h }, Math.min(cap, available))
     }
   }
-  const edge = edges.find((item) => !hitsTarget(at(item, height))) ?? edges[0]
-  const rect = at(edge, height)
-  return sheet(edge, rect, cap, obstacles.some((item) => rectsIntersect(rect, item)))
+  const beside = (respectObstacles: boolean) =>
+    target && blocking ? sheetBesideTarget(input, target, respectObstacles) : null
+  const column = beside(true)
+  if (column) return column
+  const coveringObstacle = edges.find((item) => !hitsTarget(at(item, height)))
+  if (coveringObstacle) {
+    const rect = at(coveringObstacle, height)
+    return sheet(coveringObstacle, rect, cap, obstacles.some((item) => rectsIntersect(rect, item)))
+  }
+  const columnCoveringObstacle = beside(false)
+  if (columnCoveringObstacle) return columnCoveringObstacle
+  const rect = at(edges[0], height)
+  return sheet(edges[0], rect, cap, obstacles.some((item) => rectsIntersect(rect, item)))
 }
 
 /**
@@ -327,8 +420,11 @@ function sheetPlacement(input: PlacementInput): CardPlacement {
  * sempre folha. Senão testa os lados na ordem: o preferido do passo (rail e
  * sidebar → direita; inspector → esquerda), baixo, cima, esquerda e direita,
  * alinhando ao alvo com clamp e sem cruzar o alvo inflado em 4 px. Obstáculos
- * são evitados sempre que há lado livre. Nenhum lado cabe → folha, o único modo
- * em que um alvo maior que meia janela pode ficar coberto. Determinístico.
+ * são evitados sempre que há lado livre. Nenhum lado cabe → folha. A folha
+ * também desvia do alvo (na borda oposta ou na coluna ao lado dele); só um alvo
+ * maior que meia janela pode ficar coberto, e, sem espaço nenhum (coluna com
+ * menos de 160 px dos dois lados), a limitação declarada de `sheetPlacement`.
+ * Determinístico.
  */
 export function computeCardPlacement(input: PlacementInput): CardPlacement {
   if (isCompactViewport(input.viewport) || !input.target) return sheetPlacement(input)

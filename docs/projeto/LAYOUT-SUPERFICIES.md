@@ -92,7 +92,7 @@ gaveta ou o inspector. A posição é calculada por `computeCardPlacement`
 
 | Superfície | Tamanho | Posição | Observação |
 |---|---|---|---|
-| Card do tour | `min(22rem, 100vw − 24px)`; altura até o espaço do lado escolhido | Ancorado ao lado do alvo (preferido do passo, depois baixo, cima, esquerda), a 10 px dele e a 12 px da borda | Nunca cruza o alvo. Viewport compacto (largura < 480 ou altura < 360 CSS px) vira **folha** de largura cheia na borda oposta ao alvo, com altura `max(160, 60%)`; o corpo rola e o rodapé fica visível |
+| Card do tour | `min(22rem, 100vw − 24px)`; altura até o espaço do lado escolhido | Ancorado ao lado do alvo (preferido do passo, depois baixo, cima, esquerda), a 10 px dele e a 12 px da borda | Nunca cruza o alvo. Viewport compacto (largura < 480 ou altura < 360 CSS px) vira **folha** de largura cheia na borda oposta ao alvo, com altura `max(160, 60%)`; o corpo rola e o rodapé fica visível. Quando nenhuma borda recebe a folha sem cobrir o alvo (zoom alto na janela mínima, ≈ 416×289, com o alvo no meio da altura), a folha vai para a **coluna ao lado do alvo** (no mínimo 160 px de largura, no máximo a do card), na faixa livre mais próxima dele. Só um alvo maior que meia janela (a região do canvas) pode ficar sob o card |
 | Anel | O retângulo do alvo, contido na janela | Sobre o alvo | `outline` de 2 px com 2 px de folga, `pointer-events: none` |
 | Aviso de novidade | `min(18rem, 100vw − 24px)` | Ancorado à direita da Ajuda, pelo mesmo cálculo | Sem timer e sem foco automático |
 | Menu Ajuda | Conteúdo, com `max-height` da janela − 16 px | À direita do botão Ajuda, contido na janela | `FelixoPopoverSurface` (portal) |
@@ -100,9 +100,12 @@ gaveta ou o inspector. A posição é calculada por `computeCardPlacement`
 **Obstáculos.** O card e o aviso desviam de `[data-felixo-tour-avoid]` (a caixa do
 toast das CLIs, no canto inferior direito, e a do `NoticeToast`, embaixo no centro)
 e de `[data-canvas-layout-warning]` sempre que há lado livre. Na folha, a borda sem
-obstáculo vence; com as duas ocupadas, a altura encolhe até o piso de 160 px e,
-abaixo disso, o card cobre o obstáculo (limitação declarada) até a pessoa avançar
-ou pular.
+obstáculo vence; com as duas ocupadas, a altura encolhe até o piso de 160 px; sem
+isso, vale a coluna ao lado do alvo; e só então o card cobre o obstáculo
+(limitação declarada: card em z 55 sobre o aviso em z 50) até a pessoa avançar ou
+pular. O alvo pequeno nunca é o preço: cobrir o obstáculo vem antes. A última
+limitação declarada é uma janela sem coluna de 160 px de nenhum lado do alvo e sem
+160 px acima ou abaixo dele; aí a folha cobre o alvo.
 
 **Escala de z.** statusbar e topbar (18) < dock e painéis (20/30) < sidebar (26) <
 overlay `isBusy`, toast das CLIs, `NoticeToast` e menu de cor (50) < anel (54) <

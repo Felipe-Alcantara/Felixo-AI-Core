@@ -88,6 +88,18 @@ function intersects(first, second) {
   )
 }
 
+/**
+ * O card cobre um alvo que devia ficar à vista? Só um alvo maior que meia janela
+ * (a região do canvas, a coluna do inspector) pode ficar sob o card; qualquer
+ * outro, em qualquer modo (ancorado ou folha), reprova.
+ */
+function coversSmallTarget(card, target, viewport) {
+  assertRect(card, 'card')
+  assertRect(target, 'target')
+  const huge = target.right - target.left > viewport.width / 2 || target.bottom - target.top > viewport.height / 2
+  return !huge && intersects(card, target)
+}
+
 /** Retângulo crescido `amount` px de cada lado (o contorno visível do anel). */
 function inflate(rect, amount) {
   assertRect(rect, 'rect')
@@ -270,6 +282,7 @@ module.exports = {
   containingBlockReason,
   contains,
   contrastRatio,
+  coversSmallTarget,
   diffChannels,
   diffStorage,
   externalRequests,

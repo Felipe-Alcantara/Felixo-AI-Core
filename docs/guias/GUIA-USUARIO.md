@@ -464,8 +464,9 @@ contorno e explica para que ele serve.
 - Com a barra lateral recolhida ou uma seção fechada, o passo aponta para o botão
   que a abre (o menu do canvas) e diz o que abrir. Quando você abre, o destaque vai
   para o controle certo. O tutorial nunca abre nada por você.
-- Em janela pequena (ou com zoom alto), o card vira uma folha na borda da janela, e o
-  texto rola por dentro; os botões ficam sempre visíveis.
+- Em janela pequena (ou com zoom alto), o card vira uma folha na borda da janela, ou
+  numa coluna ao lado do controle destacado quando a borda o cobriria, e o texto rola
+  por dentro; os botões e o controle destacado ficam sempre visíveis.
 - Recarregar a janela no meio do tutorial retoma no mesmo passo, sem puxar o foco.
   Ir ao chat e voltar também. Fechar o app e abrir de novo não reabre nada: o
   tutorial aparece como "Interrompido" na Ajuda.

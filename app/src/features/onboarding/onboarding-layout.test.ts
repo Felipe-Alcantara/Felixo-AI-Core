@@ -5,6 +5,7 @@ import {
   HIDDEN_ANCESTOR_SELECTOR,
   LAYOUT_MARGIN,
   OWN_SURFACE_SELECTOR,
+  SHEET_MIN_COLUMN_WIDTH,
   SHEET_MIN_HEIGHT,
   TARGET_INFLATE,
   ancestorCreatesContainingBlock,
@@ -111,6 +112,11 @@ function isRoomy(viewport: Viewport) {
   return viewport.width >= 720 && viewport.height >= 500
 }
 
+/** Só um alvo maior que meia janela (a região do canvas, a coluna do inspector) pode ficar sob o card. */
+function isHuge(target: Rect, viewport: Viewport) {
+  return target.width > viewport.width / 2 || target.height > viewport.height / 2
+}
+
 describe('computeCardPlacement (matriz relacional)', () => {
   for (const viewport of VIEWPORTS) {
     for (const targetCase of TARGETS) {
@@ -141,8 +147,8 @@ describe('computeCardPlacement (matriz relacional)', () => {
             // Viewport compacto → folha.
             if (isCompactViewport(viewport)) expect(placement.mode).toBe('folha')
 
-            // Ancorado nunca cruza o alvo inflado.
-            if (placement.mode === 'ancorado') {
+            // Nenhum modo cruza o alvo inflado, salvo alvo maior que meia janela (T2.c).
+            if (placement.mode === 'ancorado' || !isHuge(target, viewport)) {
               expect(rectsIntersect(rect, inflateRect(target, TARGET_INFLATE))).toBe(false)
             }
 
@@ -243,6 +249,48 @@ describe('computeCardPlacement (casos nomeados)', () => {
     expect(placement.mode).toBe('folha')
     expect(placement.coversObstacle).toBe(true)
     expect(rectsIntersect(placementRect(placement), toast)).toBe(true)
+  })
+
+  // Medidas do app real (CSS px) na janela mínima com zoom: 800×500 com zoom +3 dá
+  // 463×289 e 720×500 com zoom +3 dá 416×289. Nenhuma borda da janela cabe a folha
+  // sem cobrir o alvo; antes, a folha ficava por cima dele (revisão adversarial).
+  it.each<[string, Viewport, Rect, { width: number; height: number }]>([
+    ['Projetos em 463×289', { width: 463, height: 289 }, { left: 7, top: 131, width: 38, height: 19 }, { width: 439, height: 159 }],
+    ['Projetos em 416×289', { width: 416, height: 289 }, { left: 7, top: 131, width: 38, height: 19 }, { width: 392, height: 173 }],
+    ['Ajuda em 416×289', { width: 416, height: 289 }, { left: 7, top: 181, width: 38, height: 19 }, { width: 392, height: 173 }],
+    ['moldura Agente em 463×289', { width: 463, height: 289 }, { left: 60, top: 137, width: 166, height: 32 }, { width: 439, height: 173 }],
+    ['moldura Agente em 416×289', { width: 416, height: 289 }, { left: 60, top: 110, width: 166, height: 32 }, { width: 392, height: 173 }],
+    ['Novo bloco em 416×289', { width: 416, height: 289 }, { left: 60, top: 146, width: 166, height: 32 }, { width: 392, height: 159 }],
+  ])('zoom alto na janela mínima: a folha fica na coluna ao lado de %s, sem cobrir o alvo', (_nome, viewport, target, card) => {
+    const placement = computeCardPlacement({ viewport, target, card, preferredSide: 'direita' })
+    const rect = placementRect(placement)
+    expect(placement.mode).toBe('folha')
+    expect(placement.side).toBe('direita')
+    expect(rectsIntersect(rect, inflateRect(target, TARGET_INFLATE))).toBe(false)
+    expect(placement.width).toBeGreaterThanOrEqual(SHEET_MIN_COLUMN_WIDTH)
+    expect(rect.left + rect.width).toBeLessThanOrEqual(viewport.width - LAYOUT_MARGIN + EPSILON)
+    expect(rect.top).toBeGreaterThanOrEqual(LAYOUT_MARGIN - EPSILON)
+    expect(rect.top + rect.height).toBeLessThanOrEqual(viewport.height - LAYOUT_MARGIN + EPSILON)
+    // Remedido na largura da coluna (o texto reflui), continua na mesma coluna.
+    const again = computeCardPlacement({ viewport, target, card: { width: placement.width, height: 260 }, preferredSide: 'direita' })
+    expect(again).toMatchObject({ mode: 'folha', side: 'direita', left: placement.left, width: placement.width })
+    expect(rectsIntersect(placementRect(again), inflateRect(target, TARGET_INFLATE))).toBe(false)
+  })
+
+  it('alvo à direita (puck) numa janela baixa usa a coluna da esquerda', () => {
+    const viewport = { width: 416, height: 289 }
+    const target = { left: 300, top: 120, width: 80, height: 36 }
+    const placement = computeCardPlacement({ viewport, target, card: { width: 392, height: 200 }, preferredSide: 'esquerda' })
+    expect(placement).toMatchObject({ mode: 'folha', side: 'esquerda' })
+    expect(rectsIntersect(placementRect(placement), inflateRect(target, TARGET_INFLATE))).toBe(false)
+  })
+
+  it('sem nenhuma coluna nem borda utilizável a folha cobre o alvo (limitação declarada)', () => {
+    const viewport = { width: 300, height: 200 }
+    const target = { left: 100, top: 80, width: 100, height: 40 }
+    const placement = computeCardPlacement({ viewport, target, card: { width: 276, height: 200 } })
+    expect(placement.mode).toBe('folha')
+    expect(rectsIntersect(placementRect(placement), target)).toBe(true)
   })
 
   it('card mais alto que a janela fica ao lado com teto e corpo rolável', () => {
