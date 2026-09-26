@@ -58,8 +58,11 @@ import type { NewTerminalOptions } from '../services/new-terminal-options'
  */
 const TOOLBAR_BUTTON_FRAME = 'w-full rounded-md'
 
-/** A superfície clicável: fundo, cor e o realce que segue o ponteiro. */
-const TOOLBAR_BUTTON_SURFACE = 'bg-transparent text-zinc-100 hover:bg-(--f-core-structural)'
+/** A superfície clicável: fundo, cor e o realce que segue o ponteiro.
+ *  O `!` do hover mantém o realce do Tailwind 3: lá as variantes saíam no fim
+ *  da folha e venciam `.felixo-sidebar-action:hover` (index.css); no Tailwind 4
+ *  o CSS próprio fica fora de camada e venceria sem ele. */
+const TOOLBAR_BUTTON_SURFACE = 'bg-transparent text-zinc-100 hover:bg-(--f-core-structural)!'
 
 /** Shape shared by every toolbar button; the press depth comes from the
  *  felixo-btn / felixo-btn-icon each call site adds. */

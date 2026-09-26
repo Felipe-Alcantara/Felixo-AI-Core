@@ -174,7 +174,7 @@ export function CanvasPanel({
         <button
           type="button"
           onClick={() => setCollapsed((current) => !current)}
-          className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400"
+          className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400!"
           aria-label={collapsed ? `Expandir painel ${title}` : `Recolher painel ${title}`}
           aria-expanded={!collapsed}
           aria-controls={contentId}

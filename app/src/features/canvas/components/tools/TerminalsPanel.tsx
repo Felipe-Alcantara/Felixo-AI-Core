@@ -514,7 +514,7 @@ export function TerminalsPanel({
             type="button"
             onClick={sendAllDrafts}
             disabled={pendingIds.length === 0}
-            className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded-sm felixo-primary-action px-2 py-1.5 text-xs font-medium text-white  disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:opacity-50"
+            className="felixo-btn flex w-full items-center justify-center gap-1.5 rounded-sm felixo-primary-action px-2 py-1.5 text-xs font-medium text-white  disabled:cursor-not-allowed disabled:bg-zinc-700! disabled:opacity-50"
           >
             <Send size={12} />
             Enviar para todos {pendingIds.length > 0 ? `(${pendingIds.length})` : ''}

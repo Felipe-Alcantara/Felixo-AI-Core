@@ -176,7 +176,7 @@ export function PromptDetailPanel({
               ? 'Salve ou cancele as edições pendentes antes de inserir'
               : 'Inserir no terminal aberto (ou copiar, se nenhum estiver aberto)'
           }
-          className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/16"
+          className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/16!"
         >
           {justSaved ? (
             <>

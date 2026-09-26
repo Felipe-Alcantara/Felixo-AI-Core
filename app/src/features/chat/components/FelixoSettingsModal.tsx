@@ -264,7 +264,7 @@ function FelixoSettingsDialog({
             <div className="mt-3 flex justify-end">
               <button
                 type="submit"
-                className="felixo-btn flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white focus:outline-hidden focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
+                className="felixo-btn flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
               >
                 <Save size={14} aria-hidden="true" />
                 Salvar

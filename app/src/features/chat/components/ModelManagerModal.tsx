@@ -869,7 +869,7 @@ export function ModelManagerModal({
 
             <button
               type="submit"
-              className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-hidden focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-(--color-panel)"
+              className="felixo-btn flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-(--color-panel)"
             >
               <Plus size={16} aria-hidden="true" />
               Adicionar CLI

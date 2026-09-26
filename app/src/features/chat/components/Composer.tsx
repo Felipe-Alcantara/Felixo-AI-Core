@@ -470,7 +470,7 @@ export function Composer({
           )}
         </div>
 
-        <div className="felixo-chat-starters [@media(max-height:620px)]:hidden">
+        <div className="felixo-chat-starters [@media(max-height:620px)]:hidden!">
           {starters.map((starter) => {
             const Icone = STARTER_ICONS[starter] ?? SquareTerminal
             return (
@@ -490,7 +490,7 @@ export function Composer({
 
         {/* Dicas do composer: atalhos que já existem, escritos onde a pessoa
             está prestes a digitar. */}
-        <p className="felixo-composer-hints [@media(max-height:620px)]:hidden">
+        <p className="felixo-composer-hints [@media(max-height:620px)]:hidden!">
           <span><strong>@</strong> para mencionar</span>
           <span><strong>/</strong> para comandos</span>
           <span><strong>Shift + Enter</strong> para nova linha</span>

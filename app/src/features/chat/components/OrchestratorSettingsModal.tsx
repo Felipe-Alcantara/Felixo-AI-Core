@@ -168,7 +168,7 @@ export function OrchestratorSettingsModal({
           <div className="mt-4 flex justify-end">
             <button
               type="submit"
-              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-hidden focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
+              className="felixo-btn flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 text-sm font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
             >
               <Save size={16} aria-hidden="true" />
               Salvar
