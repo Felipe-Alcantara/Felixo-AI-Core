@@ -2228,6 +2228,16 @@
   outline: none;
 }
 
+/* Campo recusado (aria-invalid): o mesmo aro do `.felixo-select-trigger.is-invalid`,
+   para a mensagem de erro não ser o único sinal de onde está o problema. */
+.felixo-field[aria-invalid='true'] {
+  border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
+}
+
+.felixo-field[aria-invalid='true']:focus {
+  border-color: color-mix(in srgb, var(--color-error) 72%, transparent);
+}
+
 /* Pílula de zoom no formato da prancha da marca: um controle horizontal
    discreto no canto, em vez da pilha vertical padrão do React Flow. O `:has()`
    da sidebar recolhida move os dois offsets, igual ao resto do chrome. */
