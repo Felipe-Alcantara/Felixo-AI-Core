@@ -38,16 +38,44 @@ export async function saveChatSessionToBackend(
   }
 }
 
-export async function deleteChatSessionFromBackend(chatId: string): Promise<boolean> {
+/**
+ * Resultado de excluir uma conversa do histórico.
+ *
+ * - `archived`: o backend não lista mais a conversa. Inclui o caso em que ela
+ *   já não estava lá (arquivada em outra janela ou nunca salva) — para quem
+ *   pediu para excluir, o efeito é o mesmo.
+ * - `local-only`: não há backend (modo web); a conversa só existia na memória
+ *   da tela, então tirá-la da lista é a exclusão inteira.
+ * - `failed`: o backend recusou ou a ponte falhou; a conversa continua salva e
+ *   precisa continuar na lista, com o motivo para mostrar.
+ */
+export type ChatSessionDeletion =
+  | { status: 'archived' }
+  | { status: 'local-only' }
+  | { status: 'failed'; message: string }
+
+const DELETE_CHAT_FALLBACK_MESSAGE = 'Não foi possível excluir a conversa.'
+
+export async function deleteChatSessionFromBackend(
+  chatId: string,
+): Promise<ChatSessionDeletion> {
   if (!window.felixo?.chats?.delete) {
-    return false
+    return { status: 'local-only' }
   }
 
   try {
     const result = await window.felixo.chats.delete(chatId)
-    return result.ok && result.deleted === true
-  } catch {
-    return false
+
+    if (!result.ok) {
+      return { status: 'failed', message: result.message || DELETE_CHAT_FALLBACK_MESSAGE }
+    }
+
+    return { status: 'archived' }
+  } catch (error) {
+    return {
+      status: 'failed',
+      message: error instanceof Error && error.message ? error.message : DELETE_CHAT_FALLBACK_MESSAGE,
+    }
   }
 }
 
