@@ -124,7 +124,45 @@ propriedade animada e produz falso negativo. O mesmo vale para interação:
 evento sintético via `dispatchEvent` não dispara `mousedown`, então
 "clique fora" e ESC parecem quebrados quando estão corretos. Use input real.
 
-## 9. Antes de publicar
+## 9. Tutorial do canvas: o que a automação NÃO cobre
+
+O `npm run test:canvas-smoke` já cobre, via CDP e nos três sistemas do CI, o
+percurso pela Ajuda, o primeiro uso real, teclado, Esc em camadas, árvore de
+acessibilidade, viewport, zoom, fonte, pseudo-idioma, contraste, alvos
+invisíveis, retomada, chat, restart, update, downgrade, estado corrompido e
+redefinição (ver `app/scripts/canvas-smoke-onboarding.cjs`). O que segue depende
+de hardware, sistema ou tecnologia assistiva real e só vale como PASS se foi
+executado:
+
+- [ ] **Leitor de tela real** (Orca no Linux, NVDA no Windows, VoiceOver no
+      macOS): o card é lido como diálogo com título e texto, a troca de passo é
+      anunciada, e "Tutorial concluído. Reabra em Ajuda." chega ao fim.
+- [ ] **Janela visível com teclado e mouse reais**, não eventos do CDP (mesma
+      armadilha da seção 8): Tab, Shift+Tab, Enter, Esc e clique fora com o tour
+      aberto; o foco volta à Ajuda ao fechar.
+- [ ] **Pergunta de agente real por cima do tour** (`AgentQuestionDialog`, exige uma
+      CLI instalada): o diálogo fica acima, as teclas 1–4 e o Esc são dele, e o tour
+      continua no mesmo passo.
+- [ ] **Dois processos Electron no mesmo perfil** (abrir um `.fxai` com o app
+      aberto) no Windows e no macOS: o tutorial automático aparece uma vez só.
+- [ ] **macOS, janela recriada** (fechar a janela e reabrir pelo Dock, evento
+      `activate`): nada reabre sozinho; um tour em andamento aparece como
+      "Interrompido" na Ajuda.
+- [ ] **Reinstalação real pelo NSIS** no Windows preservando a pasta de dados: o
+      tutorial não reabre. Com a pasta de dados apagada à mão: abre uma vez.
+- [ ] **Escala de fonte do sistema** (Windows a 150%, fonte grande no macOS e no
+      GNOME): nenhum texto do card cortado, rodapé com os botões sempre visível.
+- [ ] **Primeiro boot do pacote numa máquina com até 4 CPUs lógicas**: o tutorial e
+      a sugestão do Modo Performance aparecem juntos sem se cobrir, e os dois
+      respondem a clique.
+- [ ] **Custo no hardware modesto de referência**:
+      `npm run benchmark:ui-render -- --gpu=integrada --onboarding` com o Modo
+      Performance ligado e desligado (a bancada alterna os dois), comparado com a
+      mesma execução sem `--onboarding`.
+- [ ] **Tradução real**: só existe pt-BR. O pseudo-idioma `en-XA` prova que texto
+      mais longo cabe, não que uma tradução está certa.
+
+## 10. Antes de publicar
 
 - [ ] `git status` revisado; nada de artefato solto entrando no commit
 - [ ] Sem `console.log`, `debugger` ou TODO nas linhas adicionadas

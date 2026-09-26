@@ -397,7 +397,7 @@ Ao arrastar uma conexão entre dois blocos de agentes, ambos recebem uma instru�
 
 ### Ferramentas do canvas
 
-O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que flutuam sobre o quadro sem escondê-lo: Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git, Fetch All e Configurações. Escolher uma ferramenta fecha o menu e abre o painel correspondente. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, as notificações continuam acessíveis ao lado do botão de expansão.
+A seção **Ferramentas** da barra lateral do canvas (fechada por padrão; clique no título para abrir) reúne painéis que flutuam sobre o quadro sem escondê-lo, como Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git, Fetch All e Configurações. Escolher uma ferramenta abre o painel correspondente. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, as notificações continuam acessíveis ao lado do botão de expansão.
 
 - **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas, editáveis ali mesmo e também legíveis pelo modo de chat legado.
 - **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
@@ -441,6 +441,63 @@ notificações ou diálogos com retorno ao controle que os abriu. Botões, campo
 separadores do canvas têm rótulos para leitores de tela. Ao recarregar o app,
 os nós e as conexões persistidos voltam uma única vez; a validação automatizada
 usa um PTY fake para não executar comandos externos.
+
+### Tutorial e Ajuda
+
+Na primeira vez que o app abre num computador, com o canvas vazio, um tutorial
+curto aparece sozinho ao lado da barra lateral, depois que o canvas termina de
+carregar. São seis passos: **Projeto**, **Agente**, **Contexto**, **Terminais**,
+**Ferramentas** e **Onde rever**. Cada passo destaca um controle de verdade com um
+contorno e explica para que ele serve.
+
+- O tutorial só mostra. Ele não clica, não abre seção nem painel e não cria nada:
+  nenhum agente é aberto, nenhum comando roda e nenhum crédito é gasto.
+- Ele não bloqueia o canvas: dá para continuar trabalhando com ele aberto, sem
+  escurecer a tela. **Pular tutorial**, **Voltar**, **Próximo** e **Concluir** ficam
+  no rodapé do card, e `Esc` com o foco no card fecha o tutorial. Se um diálogo
+  estiver aberto por cima (a pergunta de um agente, por exemplo), o `Esc` é do
+  diálogo.
+- Pelo teclado: no primeiro uso o foco entra no card, a não ser que você já esteja
+  digitando em outro lugar. `Tab` percorre os botões e segue para o canvas, e
+  `Shift+Tab` volta para a barra lateral; nada prende o foco. Um leitor de tela
+  ouve o nome e o texto do passo, e a troca de passo é anunciada.
+- Com a barra lateral recolhida ou uma seção fechada, o passo aponta para o botão
+  que a abre (o menu do canvas) e diz o que abrir. Quando você abre, o destaque vai
+  para o controle certo. O tutorial nunca abre nada por você.
+- Em janela pequena (ou com zoom alto), o card vira uma folha na borda da janela, e o
+  texto rola por dentro; os botões ficam sempre visíveis.
+- Recarregar a janela no meio do tutorial retoma no mesmo passo, sem puxar o foco.
+  Ir ao chat e voltar também. Fechar o app e abrir de novo não reabre nada: o
+  tutorial aparece como "Interrompido" na Ajuda.
+- Quem já usava o app antes desta versão não recebe o tutorial automático; ele fica
+  disponível na Ajuda. No lugar dele aparece uma vez um aviso pequeno ao lado da
+  Ajuda ("Novidade: Ajuda"), com **Ver** e **Agora não**. O aviso não tira o foco de
+  onde você está digitando e não some sozinho: fica até você responder, abrir a
+  Ajuda ou apertar `Esc` com o foco nele.
+
+**Ajuda** é o botão com o ponto de interrogação na barra de ícones da esquerda,
+logo abaixo de Notificações. Ela reúne:
+
+- **Tutorial do canvas**, com o estado (Não visto, Em andamento, Interrompido no
+  passo n, Pulado, Concluído em uma data ou Atualizado) e a ação que faz sentido:
+  Iniciar, Continuar do passo n, Rever ou Recomeçar.
+- **Novidades**: funções novas que ganharam um tour curto. Uma novidade que você
+  ainda não viu aparece como "Novo" e deixa um ponto no botão Ajuda.
+- **Redefinir tutoriais**, que pede confirmação na própria tela e abre o tutorial do
+  começo. As novidades que já foram anunciadas não voltam a aparecer.
+
+Quando o progresso não pode ser salvo (por exemplo, abrindo uma versão mais antiga
+do app depois de usar uma mais nova), a Ajuda avisa "O progresso não será salvo
+nesta sessão." O tutorial funciona normalmente naquela sessão e nada do que a
+versão mais nova gravou é apagado.
+
+O progresso fica no banco local (`database/felixo.sqlite`, na chave
+`onboarding.state`). Reinstalar o app por cima, inclusive pelo instalador do
+Windows, preserva a pasta de dados, então o tutorial não reabre. Só um perfil novo
+(a pasta de dados apagada à mão ou outro usuário do sistema) conta como primeiro
+uso. Várias janelas, ou duas instâncias do app abertas ao mesmo tempo, nunca
+mostram o tutorial automático duas vezes. Os textos existem só em português por
+enquanto.
 
 ### Zoom da janela
 

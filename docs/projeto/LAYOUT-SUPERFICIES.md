@@ -82,6 +82,38 @@ fora porque é bloqueante.
 flyouts da barra (`toolbar-flyout.ts`), `TerminalMenu`. Não redimensionam; o risco aqui
 não é tamanho, é ficar fora da tela em janela estreita.
 
+## Overlays do tutorial (não reservam largura)
+
+O tutorial do canvas (26/09/2026) não entra na disputa de largura: card, anel,
+aviso de novidade e menu Ajuda são `position: fixed` por cima do layout, fora de
+`splitHorizontalSpace` e de `useCanvasSurfaces`. Nenhum deles empurra o canvas, a
+gaveta ou o inspector. A posição é calculada por `computeCardPlacement`
+(`onboarding-layout.ts`, puro) e escrita pela ref, sem re-render por quadro.
+
+| Superfície | Tamanho | Posição | Observação |
+|---|---|---|---|
+| Card do tour | `min(22rem, 100vw − 24px)`; altura até o espaço do lado escolhido | Ancorado ao lado do alvo (preferido do passo, depois baixo, cima, esquerda), a 10 px dele e a 12 px da borda | Nunca cruza o alvo. Viewport compacto (largura < 480 ou altura < 360 CSS px) vira **folha** de largura cheia na borda oposta ao alvo, com altura `max(160, 60%)`; o corpo rola e o rodapé fica visível |
+| Anel | O retângulo do alvo, contido na janela | Sobre o alvo | `outline` de 2 px com 2 px de folga, `pointer-events: none` |
+| Aviso de novidade | `min(18rem, 100vw − 24px)` | Ancorado à direita da Ajuda, pelo mesmo cálculo | Sem timer e sem foco automático |
+| Menu Ajuda | Conteúdo, com `max-height` da janela − 16 px | À direita do botão Ajuda, contido na janela | `FelixoPopoverSurface` (portal) |
+
+**Obstáculos.** O card e o aviso desviam de `[data-felixo-tour-avoid]` (a caixa do
+toast das CLIs, no canto inferior direito, e a do `NoticeToast`, embaixo no centro)
+e de `[data-canvas-layout-warning]` sempre que há lado livre. Na folha, a borda sem
+obstáculo vence; com as duas ocupadas, a altura encolhe até o piso de 160 px e,
+abaixo disso, o card cobre o obstáculo (limitação declarada) até a pessoa avançar
+ou pular.
+
+**Escala de z.** statusbar e topbar (18) < dock e painéis (20/30) < sidebar (26) <
+overlay `isBusy`, toast das CLIs, `NoticeToast` e menu de cor (50) < anel (54) <
+card e aviso (55) < `AgentQuestionDialog` e `HandoffDialog` (60) <
+`WebviewProfileMenu` (70) < `FelixoSelect` e menu Ajuda (1000). Os tokens
+`--felixo-z-onboarding-ring` e `--felixo-z-onboarding` ficam em `index.css`.
+
+**Rail.** A Ajuda é o sexto botão do grupo de cima (≈ 271 px dentro de ≈ 289 px na
+altura mínima). Um botão novo acima dela exige refazer essa conta, senão o alvo do
+último passo é recortado.
+
 ## Decisões (podem ser revistas)
 
 **Gaveta do terminal: sem eixo vertical.** Ela é uma coluna encostada na direita, de

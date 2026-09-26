@@ -60,6 +60,7 @@ Base funcional entregue:
 - Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
 - Escolha da **placa de vídeo** (Automático, Integrada ou Dedicada experimental) como opção avançada, com volta automática para Automático se a GPU falhar, e sugestão do **Modo Performance** em máquina com até 4 CPUs lógicas
+- **Tutorial do canvas** no primeiro uso (projeto, agente, contexto, terminais, ferramentas e onde rever), não bloqueante e sem criar nada, e **Ajuda** na barra de ícones para reabrir o tutorial, ver novidades e redefinir. Quem já usava o app recebe só um aviso discreto da Ajuda, uma vez; o progresso fica versionado no SQLite local, sem reabrir a cada atualização (ver o [Guia do Usuário](docs/guias/GUIA-USUARIO.md#tutorial-e-ajuda))
 - Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
 - Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL

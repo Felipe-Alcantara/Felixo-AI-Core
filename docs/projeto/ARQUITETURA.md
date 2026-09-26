@@ -85,6 +85,12 @@ de captura e avaliação do processo principal só existe nessa instância, nunc
 app normal. `--real-profile` é uma exceção explícita e recusa iniciar quando os
 arquivos de singleton indicam que o perfil já está em uso.
 
+Nessa instância o main também instala uma sonda de invocações IPC
+(`core/ipc-invoke-probe.cjs`) antes de qualquer canal ser registrado. Ela conta
+as invocações por canal sem mudar retorno nem erro e chega ao
+`devtools:main-eval` só como `ipcProbe.snapshot()`. O smoke do tutorial compara
+duas fotos para provar que o percurso não acionou PTY, CLI, rede nem crédito.
+
 `felixo devtools heap-snapshot <arquivo>` e `felixo devtools metrics` expõem os
 domínios CDP `HeapProfiler`/`Performance` pela mesma conexão Playwright — um
 `.heapsnapshot` real (o mesmo formato que o DevTools do Chrome abre) e as
@@ -730,6 +736,71 @@ cujo `origin` não é a fonte pedida (antes o `fetch` rodava no `origin` antigo 
 conteúdo da fonte anterior era gravado como da nova). O renderer não tem cópia do
 padrão; recebe a configuração já resolvida com `syncState` (`disabled`,
 `never-synced`, `synced`, `offline-fallback`, `pending-source-change`) e `delivered`.
+
+## Tutorial do canvas, Ajuda e novidades
+
+O tutorial é uma camada de explicação por cima do canvas: destaca controles reais
+e nunca os aciona. O plano completo, com as decisões e as alternativas
+descartadas, está em [`PLANO-TUTORIAL-CANVAS.md`](PLANO-TUTORIAL-CANVAS.md).
+
+**Camadas do renderer (`app/src/features/onboarding/`).**
+
+| Módulo | Papel | Chunk |
+| --- | --- | --- |
+| `onboarding-boot-signals.ts` | Foto das chaves `felixo*` do localStorage e marcador de primeiro boot, tirada em `main.tsx` antes do `createRoot` (o tema e o Modo Performance gravam no mount) | entrada |
+| `onboarding-catalog.ts` | Tours, passos, âncoras, novidades e o livro de versões (`CATALOG_HISTORY`); só chaves de texto | canvas |
+| `onboarding-state.ts` | Schema v1, `normalize` (nunca lança), migrações, decisão automática e eventos puros | canvas |
+| `onboarding-store.ts` | Store singleton com `useSyncExternalStore`, compare-and-set com até 3 tentativas, sessão por janela e anúncios | canvas |
+| `OnboardingMount.tsx`, `OnboardingErrorBoundary.tsx` | Host na árvore, logo depois da sidebar (Tab: sidebar → tour → canvas), região live sempre montada e o boundary que isola falhas | canvas |
+| `onboarding-ui-entry.ts` e o que ele exporta | Textos (`onboarding-messages.ts`), posicionamento (`onboarding-layout.ts`), camada, card, anel, aviso e menu Ajuda | preguiçoso, um só |
+
+O chunk preguiçoso só é baixado com tour ou aviso na tela ou com o menu Ajuda
+aberto. Um teste estático (`onboarding-boundaries.test.ts`) proíbe no módulo
+imports de criação de nó, PTY, terminal, chat, rede e ponte fora de `onboarding`,
+`qaLogger` e `devtools`.
+
+**Persistência.** O main é a única autoridade: linha `onboarding.state` da tabela
+`settings` do SQLite, no envelope `{ "revision": n, "value": {…} }`.
+`onboarding-state-repository.cjs` faz o compare-and-set dentro de um
+`BEGIN IMMEDIATE` (um SELECT e um UPSERT); uma linha corrompida vira
+`corrupted: true` com revisão 0 e pode ser regravada. Não há espelho no
+localStorage. Só a retomada do passo fica em `sessionStorage`
+(`felixo:onboarding:sessao`, por janela).
+
+**Canais IPC** (`onboarding-ipc-handlers.cjs`, expostos em
+`window.felixo.onboarding`):
+- `onboarding:read` → `{ ok, revision, value, corrupted, appVersion, automation }`;
+- `onboarding:write({ expectedRevision, value })` → aplicado com a revisão nova, ou
+  conflito com o valor atual. O main recusa `value` que não seja objeto simples com
+  `schemaVersion` inteiro ≥ 1 e acima de 64 KiB.
+
+A versão do app chega na leitura só como contexto gravado; nenhuma decisão
+depende dela. A detecção de novidade é por identidade (id do catálogo fora de
+`knownFeatures`), nunca por versão, hash ou arquivo. Um schema mais novo que o
+build (downgrade) fica em somente leitura: nada abre sozinho e nada é gravado.
+
+**Política de automação** (`core/onboarding-automation.cjs`, decidida no main e
+devolvida em `onboarding:read`): o app normal abre e grava sozinho; toda instância
+com porta de depuração (`felixo devtools`, `canvas-smoke`, `ui-render-performance`,
+`hardware-check`) não abre nem grava nada sozinha, salvo `FELIXO_DEVTOOLS_ONBOARDING=1`;
+sem ponte (`dev:web`, bancada de bundle) nada é gravado. A decisão fica exposta em
+`data-felixo-onboarding-decisao` na região live (por exemplo,
+`suprimido:abriria-inicial`).
+
+**Convivência.** O card é `position: fixed` em z 55, o anel em z 54: acima dos
+toasts (z 50) e abaixo dos diálogos que bloqueiam agente (z 60). Nenhum ancestral
+do host pode criar containing block ou stacking context (o smoke confere). O
+posicionamento desvia de `[data-felixo-tour-avoid]` (toast das CLIs e
+`NoticeToast` dos HardwareNotices) e nunca usa `scrollIntoView`. O teste de alvo
+(`elementFromPoint`) olha através do próprio card e do aviso, para a escolha do
+alvo não depender de onde o card está. O recálculo acontece em resize, mudança de
+tamanho dos alvos e do card, estrutura da sidebar, atributos dos alvos, fim de
+transição da sidebar e do inspector e em qualquer rolagem que mova um alvo (abrir
+a gaveta do terminal rola o shell de lado por um instante), sempre com no máximo
+um quadro por vez e só com o tour ou o aviso na tela. Enquanto o tour aponta uma
+alternativa ao alvo preferido (o menu do canvas com a sidebar recolhida, por
+exemplo), a posição também é conferida a cada 500 ms: o que cobriu ou deslocou o
+alvo pode sumir sem disparar evento nenhum.
 
 ## Providers e contas
 

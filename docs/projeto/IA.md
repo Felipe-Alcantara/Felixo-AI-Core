@@ -5180,3 +5180,54 @@ Registro gravado às 18:01.
   só com a escuta de rolagem e na rodada que anexou o diagnóstico).
 - Conferências ao contrário: sem a correção da store, o SA9 reprova ("voltar do chat puxou o foco para o
   tour"); antes da correção do teste de alvo, o SA8 reprovava com "Maximum update depth exceeded".
+
+## 2026-09-26 — Tutorial do canvas: documentação, checklist e medição no HD 520 (commit 12 do plano)
+
+Registro gravado às 18:17.
+
+**O que mudou na documentação.**
+- `GUIA-USUARIO.md`: seção "Tutorial e Ajuda" (o que o tutorial faz e não faz, teclado, sidebar recolhida,
+  janela pequena, retomada, chat, aviso para quem já usava, o menu Ajuda, somente leitura, onde o progresso fica
+  e que reinstalar preserva o estado). A frase "menu Ferramentas (canto superior esquerdo)" virou a seção
+  Ferramentas da barra lateral, fechada por padrão.
+- `ARQUITETURA.md`: seção do tutorial (camadas e chunks, persistência com compare-and-set, canais IPC, política
+  de automação, convivência e recálculo) e a sonda IPC no DevTools isolado.
+- `LAYOUT-SUPERFICIES.md`: card, anel, aviso e menu Ajuda como overlays que não reservam largura (fora de
+  `splitHorizontalSpace`), tamanhos, modo folha, obstáculos, escala de z e a conta do rail.
+- `GUIA-DESENVOLVEDOR.md`: `FELIXO_DEVTOOLS_ONBOARDING`, falha forçada, sonda IPC, semear estados pela ponte,
+  como anunciar uma função nova no catálogo e os cenários do smoke; comandos `test:canvas-smoke` e
+  `benchmark:ui-render -- --onboarding` na tabela.
+- `MOTION.md`: o tour não anima em nenhum modo; o "empty state" que entrava em 200 ms não existe no canvas (a
+  orientação do primeiro uso é o tutorial).
+- `README.md`: a capacidade na lista do status atual, com link para o guia.
+- `RELEASE_CHECKLIST.md`: seção 9 com o que a automação NÃO cobre (leitor de tela real, janela visível com
+  input real, pergunta de agente real por cima do tour, dois processos no mesmo perfil no Windows e no macOS,
+  janela recriada no macOS, reinstalação real pelo NSIS, escala de fonte do sistema, primeiro boot do pacote numa
+  máquina com até 4 CPUs, custo no hardware de referência e tradução real).
+- `.claude/skills/rodar-app/SKILL.md`: o tutorial vem suprimido no perfil isolado e como ligar ou inspecionar.
+- `PLANO-TUTORIAL-CANVAS.md`: `Status: concluido.`
+
+**Medição no notebook de referência (i5-6200U, Intel HD 520, ANGLE/GL).** `ui-render-performance` com 48 blocos,
+Modo Performance alternado em cada execução, em pares intercalados sem e com `--onboarding` (4 rodadas cada).
+Média das medianas dos dois pares:
+
+| Tutorial | Modo | FPS | Quadro p95 | Estilo por quadro |
+| --- | --- | ---: | ---: | ---: |
+| fechado | normal | 16,2 | 192,7 ms | 5,00 ms |
+| aberto | normal | 15,8 | 195,8 ms | 6,11 ms |
+| fechado | Performance | 21,4 | 142,1 ms | 1,24 ms |
+| aberto | Performance | 22,1 | 144,3 ms | 1,35 ms |
+
+O tour aberto não tem custo mensurável (as diferenças ficam abaixo da variação entre pares de uma mesma
+condição), e o Modo Performance continua dando +40% de FPS com ele aberto. A máquina estava carregada (load
+average entre 8 e 11, com outras sessões e o app real abertos), então os valores absolutos ficaram abaixo dos
+da manhã e não devem ser comparados com eles. Detalhes em `POLITICA-PERFORMANCE.md`, "Tutorial do canvas
+aberto".
+
+**Pendências que ficam fora deste PR (viram tasks próprias).**
+- O bloco Excalidraw regrava a si mesmo cerca de uma vez por segundo com o canvas parado (`canvas:save` com a
+  cena igual), o que custa I/O no SQLite o tempo todo.
+- Abrir a gaveta do terminal rola o contêiner do shell de lado (uns 438 px) por um instante, pelo foco que vai
+  para o terminal.
+- O passo "`timeout-minutes: 10`" do smoke no CI: a sessão B e os cenários da sessão A somam alguns minutos ao
+  smoke (9 min 23 s no total nesta máquina); convém rever o teto no workflow, que este PR não toca.

@@ -1,4 +1,4 @@
-Status: em desenvolvimento.
+Status: concluido.
 
 # Plano: tutorial do canvas, Ajuda e novidades com estado versionado
 
