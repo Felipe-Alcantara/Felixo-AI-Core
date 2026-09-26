@@ -456,6 +456,7 @@ export function TerminalsPanel({
         aria-expanded={false}
         aria-hidden={!collapsed}
         tabIndex={collapsed ? 0 : -1}
+        data-felixo-tour-anchor="inspector-puck"
         className={`felixo-btn felixo-anim-corner-puck absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 shadow-2xl hover:bg-zinc-800 ${
           collapsed ? 'felixo-anim-corner-puck-shown' : 'felixo-anim-corner-puck-hidden'
         }`}
@@ -474,7 +475,11 @@ export function TerminalsPanel({
         }`}
         aria-hidden={collapsed}
       >
-      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100">
+      {/* Âncora do tutorial: a linha do cabeçalho "Elementos" (o tour só destaca). */}
+      <div
+        className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-sm font-medium text-zinc-100"
+        data-felixo-tour-anchor="inspector-elementos"
+      >
         <button
           type="button"
           onClick={toggleCollapsed}

@@ -4910,3 +4910,21 @@ Registro gravado às 15:19.
 
 **Validação (gates completos em `app/`).** `npm run lint` ok; `npm run build` ok; `npm test` 1811/1811;
 `npm run test:frontend` 1458 ok e 1 pulado (152 arquivos).
+
+## 2026-09-26 — Tutorial do canvas: âncoras estáveis e obstáculos de posicionamento (commit 6 do plano)
+
+Registro gravado às 15:33.
+
+**O que ficou pronto.** Só atributos, sem mudança de comportamento:
+- `data-felixo-tour-anchor`: `rail-menu` (toggle do menu do canvas) e `rail-projetos` no rail, pela prop opcional
+  `tourAnchor` do `ActivityRailButton`; `secao-criar` e `secao-ferramentas` no botão de título do
+  `SidebarSection` (prop opcional `anchorId`, que a sidebar do chat não passa); `criar-bloco` no gatilho do
+  "Novo bloco"; `criar-agente` na moldura `.felixo-sidebar-agent-trigger`, nunca nas metades (a metade "Agente"
+  lança a CLI); `inspector-elementos` na linha do cabeçalho "Elementos" e `inspector-puck` no puck.
+- `data-felixo-tour-avoid` no cartão do `CliSetupToast` e na caixa `role="status"` do `NoticeToast` dos
+  HardwareNotices, não no wrapper `inset-x-0` de largura total.
+
+**Desvio.** A prop `controls` do `ActivityRailButton` (`aria-controls`) fica para o commit 9, junto do botão
+Ajuda, o único que a usa. A âncora `rail-ajuda` também nasce com o botão.
+
+**Validação.** `npm run lint` e `npm run build` ok.

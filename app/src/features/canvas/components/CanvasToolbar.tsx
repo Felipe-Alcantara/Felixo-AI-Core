@@ -45,6 +45,7 @@ import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
+import type { AnchorId } from '../../onboarding/onboarding-catalog'
 
 /**
  * A moldura de um controle da barra: largura, canto, sombra e aro — o que
@@ -204,6 +205,7 @@ export function CanvasToolbar({
           active={!sidebarCollapsed}
           expanded={!sidebarCollapsed}
           onClick={toggleSidebar}
+          tourAnchor="rail-menu"
         >
           <LayoutGrid size={18} />
         </ActivityRailButton>
@@ -217,7 +219,11 @@ export function CanvasToolbar({
         >
           <Search size={18} />
         </ActivityRailButton>
-        <ActivityRailButton label="Projetos" onClick={() => onSelectTool('projects')}>
+        <ActivityRailButton
+          label="Projetos"
+          onClick={() => onSelectTool('projects')}
+          tourAnchor="rail-projetos"
+        >
           <FolderOpen size={18} />
         </ActivityRailButton>
         <ActivityRailButton
@@ -277,7 +283,7 @@ export function CanvasToolbar({
         </header>
 
         <div className="felixo-sidebar-scroll">
-          <SidebarSection title="Criar">
+          <SidebarSection title="Criar" anchorId="secao-criar">
             <TerminalMenu
               projects={projects}
               openRequest={agentMenuRequest}
@@ -288,6 +294,7 @@ export function CanvasToolbar({
             <NamedCreateButton
               icon={<FileText size={16} />}
               buttonLabel="Novo bloco"
+              tourAnchor="criar-bloco"
               placeholder="Nome do arquivo (opcional)"
               title="Bloco de arquivo .md compartilhado (agentes podem editar)"
               onCreate={onAddFile}
@@ -346,7 +353,7 @@ export function CanvasToolbar({
             </div>
           </SidebarSection>
 
-          <SidebarSection title="Ferramentas" defaultOpen={false}>
+          <SidebarSection title="Ferramentas" defaultOpen={false} anchorId="secao-ferramentas">
             <CanvasToolsMenu
               activeTool={activeTool}
               onSelect={onSelectTool}
@@ -408,6 +415,7 @@ function ActivityRailButton({
   children,
   highlight = false,
   notificationsTrigger = false,
+  tourAnchor,
 }: {
   label: string
   active?: boolean
@@ -429,6 +437,8 @@ function ActivityRailButton({
   /** Marca este botão como o gatilho do sino de notificações, para o painel
    *  devolver o foco a ele ao fechar (ver `canvas-smoke.cjs`). */
   notificationsTrigger?: boolean
+  /** Âncora estável do tutorial do canvas (só marca o botão; o tour nunca o aciona). */
+  tourAnchor?: AnchorId
 }) {
   return (
     <button
@@ -444,6 +454,7 @@ function ActivityRailButton({
         : {})}
       {...(notificationsTrigger ? { 'data-notifications-trigger': true } : {})}
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
+      {...(tourAnchor ? { 'data-felixo-tour-anchor': tourAnchor } : {})}
     >
       {children}
     </button>
@@ -614,6 +625,8 @@ type NamedCreateButtonProps = {
   secondaryLabel?: string
   secondaryTitle?: string
   onSecondary?: () => void
+  /** Âncora estável do tutorial no botão que abre o popover (o tour nunca o abre). */
+  tourAnchor?: AnchorId
 }
 
 /**
@@ -631,6 +644,7 @@ function NamedCreateButton({
   secondaryLabel,
   secondaryTitle,
   onSecondary,
+  tourAnchor,
 }: NamedCreateButtonProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -685,6 +699,7 @@ function NamedCreateButton({
         title={title}
         aria-expanded={open}
         aria-controls={popoverId}
+        data-felixo-tour-anchor={tourAnchor}
       >
         {icon}
         {buttonLabel}

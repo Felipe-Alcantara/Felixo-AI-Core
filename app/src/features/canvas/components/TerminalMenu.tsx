@@ -167,8 +167,14 @@ export function TerminalMenu({
         com a moldura parada em `transform: none`). As metades usam
         `felixo-btn-flat`, que mantém transição e anel de foco sem o `scale`.
         Mesmo conserto do controle dividido do Organizar (commit 83178b9).
+
+        A âncora do tutorial fica na moldura, nunca nas metades: o tour só
+        destaca, e a metade "Agente" lança a CLI.
       */}
-      <div className="felixo-btn felixo-sidebar-agent-trigger flex w-full overflow-hidden rounded-md">
+      <div
+        className="felixo-btn felixo-sidebar-agent-trigger flex w-full overflow-hidden rounded-md"
+        data-felixo-tour-anchor="criar-agente"
+      >
         <button
           ref={triggerRef}
           type="button"

@@ -40,9 +40,12 @@ export function NoticeToast({
 }: NoticeToastProps) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+      {/* O obstáculo do tutorial é a caixa, não o wrapper de largura total:
+          o card do tour desvia só do que a pessoa vê e clica. */}
       <div
         role="status"
         aria-live="polite"
+        data-felixo-tour-avoid
         className="pointer-events-auto w-[22rem] max-w-full rounded-xl border border-white/10 bg-slate-900/95 p-4 shadow-xl backdrop-blur-sm"
       >
         <div className="flex items-start gap-3">
