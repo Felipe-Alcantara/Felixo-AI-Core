@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 const WINDOW_FOCUS_CHANNEL = 'window:focus-state'
+const GPU_PREFERENCE_CHANGED_CHANNEL = 'graphics:gpu-preference-changed'
 const AGENT_BROWSER_CHANNEL = 'agent-browser:open-webpage'
 const pendingAgentBrowserEvents = []
 const agentBrowserListeners = new Set()
@@ -49,6 +50,15 @@ contextBridge.exposeInMainWorld('felixo', {
     getConfig: () => ipcRenderer.invoke('graphics:get-config'),
     setMode: (mode) => ipcRenderer.invoke('graphics:set-mode', mode),
     dismissRecommendation: () => ipcRenderer.invoke('graphics:dismiss-recommendation'),
+    setGpuPreference: (preference) => ipcRenderer.invoke('graphics:set-gpu-preference', preference),
+    acknowledgeGpuFallback: () => ipcRenderer.invoke('graphics:acknowledge-gpu-fallback'),
+    // A volta automática para Automático pode acontecer depois que a tela já
+    // leu a configuração (a GPU desliga no meio da sessão).
+    onGpuPreferenceChange: (callback) => {
+      const handler = (_event, gpu) => callback(gpu)
+      ipcRenderer.on(GPU_PREFERENCE_CHANGED_CHANNEL, handler)
+      return () => ipcRenderer.removeListener(GPU_PREFERENCE_CHANGED_CHANNEL, handler)
+    },
   },
   autostart: {
     getConfig: () => ipcRenderer.invoke('autostart:get-config'),
