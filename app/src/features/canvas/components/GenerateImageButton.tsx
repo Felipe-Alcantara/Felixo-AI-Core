@@ -15,7 +15,7 @@ type Props = {
 
 type FieldError = { field: 'prompt' | 'model' | 'generation'; message: string }
 
-const ERROR_TEXT = 'text-xs leading-snug text-[var(--color-error)]'
+const ERROR_TEXT = 'text-xs leading-snug text-theme-error'
 
 /**
  * Popover no padrão de "Página Web" (Esc e clique fora fecham e devolvem o foco
@@ -145,7 +145,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
         {pending ? (
           <LoaderCircle size={16} className="motion-safe:animate-spin" aria-hidden="true" />
         ) : failed && !open ? (
-          <CircleAlert size={16} className="text-[var(--color-error)]" aria-hidden="true" />
+          <CircleAlert size={16} className="text-theme-error" aria-hidden="true" />
         ) : (
           <WandSparkles size={16} aria-hidden="true" />
         )}
@@ -182,7 +182,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
             placeholder="Ex.: um gato astronauta em aquarela"
             aria-invalid={promptError ? true : undefined}
             aria-describedby={`${promptId}-hint${promptError ? ` ${promptId}-error` : ''}`}
-            className="felixo-field w-full resize-y px-2 py-1.5 text-sm outline-none"
+            className="felixo-field w-full resize-y px-2 py-1.5 text-sm outline-hidden"
           />
           <div
             id={`${promptId}-hint`}
@@ -231,7 +231,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
               <button
                 type="button"
                 onClick={() => void loadModels({ force: true })}
-                className="felixo-btn-icon inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
+                className="felixo-btn-icon inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
                 title="Consultar o catálogo de modelos de imagem de novo"
               >
                 <RotateCw size={11} aria-hidden="true" />
@@ -268,7 +268,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
               onClick={pending && !generation.cancelling ? () => void image.cancel() : undefined}
               aria-disabled={!pending || generation.cancelling || undefined}
               title={pending ? 'Interromper a geração em andamento' : 'Nada sendo gerado agora'}
-              className="felixo-btn rounded px-3 py-1.5 text-sm text-[var(--f-core-white-soft)] ring-1 ring-white/15 hover:bg-white/[0.06] aria-disabled:cursor-not-allowed aria-disabled:opacity-40 aria-disabled:hover:bg-transparent"
+              className="felixo-btn rounded-sm px-3 py-1.5 text-sm text-(--f-core-white-soft) ring-1 ring-white/15 hover:bg-white/6 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 aria-disabled:hover:bg-transparent"
             >
               {pending && generation.cancelling ? 'Cancelando…' : 'Cancelar'}
             </button>

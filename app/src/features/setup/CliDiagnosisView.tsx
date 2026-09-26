@@ -54,7 +54,7 @@ export function CliDiagnosisList({ diagnoses }: { diagnoses: CliDiagnosis[] }) {
       // Região rolável precisa ser alcançável pelo teclado.
       tabIndex={0}
       aria-label="Diagnóstico das CLIs de IA"
-      className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-white/[0.08] bg-black/20 p-2 outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+      className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-white/8 bg-black/20 p-2 outline-hidden focus-visible:ring-2 focus-visible:ring-white/25"
     >
       {diagnoses.map((diagnosis) => (
         <li key={diagnosis.id}>
@@ -128,10 +128,10 @@ export function CopySupportTextButton({ text }: { text: string }) {
         type="button"
         onClick={() => void copy()}
         title="Copia o diagnóstico, sem nome de usuário nem segredos, para colar num pedido de suporte"
-        className="felixo-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 text-xs text-zinc-300 hover:bg-white/[0.08] hover:text-zinc-100"
+        className="felixo-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/8 px-3 text-xs text-zinc-300 hover:bg-white/8 hover:text-zinc-100"
       >
         {feedback === 'copied' ? (
-          <Check size={13} aria-hidden="true" className="text-[var(--f-core-white-soft)]" />
+          <Check size={13} aria-hidden="true" className="text-(--f-core-white-soft)" />
         ) : (
           <Copy size={13} aria-hidden="true" />
         )}

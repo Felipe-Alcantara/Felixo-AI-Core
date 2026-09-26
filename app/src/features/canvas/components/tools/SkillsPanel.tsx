@@ -65,7 +65,7 @@ function focusTargetAfterRemoval(
 /** Marca de skill de terceiros, com o repositório de onde ela vem. */
 function CommunityBadge({ origin }: { origin?: string }) {
   return (
-    <span className="shrink-0 rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1 text-[10px] text-[var(--color-warning)]">
+    <span className="shrink-0 rounded-sm bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1 text-[10px] text-(--color-warning)">
       {origin ?? 'terceiros'}
     </span>
   )
@@ -308,7 +308,7 @@ export function SkillsPanel({
               <button
                 type="button"
                 onClick={() => void activate(item)}
-                className="felixo-btn ml-auto shrink-0 rounded px-1 text-[10px] text-[var(--f-core-white-soft)] hover:bg-white/10"
+                className="felixo-btn ml-auto shrink-0 rounded-sm px-1 text-[10px] text-(--f-core-white-soft) hover:bg-white/10"
                 title="Ativar agora no terminal aberto"
               >
                 Ativar
@@ -317,7 +317,7 @@ export function SkillsPanel({
                 type="button"
                 data-skill-action="ocultar"
                 onClick={(event) => void ocultarSkill(item, event.currentTarget)}
-                className="felixo-btn-icon shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+                className="felixo-btn-icon shrink-0 rounded-sm p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
                 title="Não enviar aos agentes"
                 aria-label={`Não enviar a skill ${item.name} aos agentes`}
               >
@@ -328,7 +328,7 @@ export function SkillsPanel({
         </ul>
 
         {erroSistema && (
-          <p role="alert" className="mt-1 text-[11px] text-[var(--color-error)]">
+          <p role="alert" className="mt-1 text-[11px] text-theme-error">
             {erroSistema}
           </p>
         )}
@@ -340,7 +340,7 @@ export function SkillsPanel({
             onClick={() => setMostrarOcultas((aberto) => !aberto)}
             aria-expanded={mostrarOcultas}
             aria-controls={listaOcultasId}
-            className="felixo-btn flex items-center gap-1.5 rounded text-[11px] text-zinc-400 hover:text-zinc-200"
+            className="felixo-btn flex items-center gap-1.5 rounded-sm text-[11px] text-zinc-400 hover:text-zinc-200"
           >
             <EyeOff size={12} aria-hidden />
             Ocultas ({catalogo.hiddenSkills.length})
@@ -354,7 +354,7 @@ export function SkillsPanel({
           {mostrarOcultas && (
             <ul
               id={listaOcultasId}
-              className="mt-1 max-h-32 overflow-y-auto rounded bg-zinc-800/40"
+              className="mt-1 max-h-32 overflow-y-auto rounded-sm bg-zinc-800/40"
             >
               {catalogo.hiddenSkills.length ? (
                 catalogo.hiddenSkills.map((item) => (
@@ -373,7 +373,7 @@ export function SkillsPanel({
                       type="button"
                       data-skill-action="restaurar"
                       onClick={(event) => void restaurarSkill(item, event.currentTarget)}
-                      className="felixo-btn-icon shrink-0 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+                      className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
                       title="Voltar a enviar aos agentes"
                       aria-label={`Voltar a enviar a skill ${item.name} aos agentes`}
                     >

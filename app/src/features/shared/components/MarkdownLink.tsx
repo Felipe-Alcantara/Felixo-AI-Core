@@ -24,7 +24,7 @@ type MarkdownLinkProps = {
 }
 
 const LINK_CLASS_NAME =
-  'font-medium text-[var(--f-core-white)] underline decoration-white/30 underline-offset-4 hover:text-[var(--f-core-white)]'
+  'font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)'
 
 /**
  * Link do Markdown. Só `http(s)` e `mailto` saem do app, numa janela nova que
@@ -60,7 +60,7 @@ export function MarkdownLink({ href = '', children, resolveRelativeLink }: Markd
     return link ? (
       <button
         type="button"
-        className={`felixo-btn-flat inline rounded-sm text-left ${LINK_CLASS_NAME}`}
+        className={`felixo-btn-flat inline rounded-xs text-left ${LINK_CLASS_NAME}`}
         title={link.description}
         onClick={() => link.open()}
       >

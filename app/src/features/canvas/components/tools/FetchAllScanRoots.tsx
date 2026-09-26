@@ -30,7 +30,7 @@ export function FetchAllScanRoots({
   const titleId = useId()
 
   return (
-    <div className="mt-2 rounded bg-zinc-950/30 px-2 py-1.5">
+    <div className="mt-2 rounded-sm bg-zinc-950/30 px-2 py-1.5">
       <p id={titleId} className="text-[11px] font-medium text-zinc-300">
         Raízes configuradas ({roots.length})
       </p>
@@ -49,7 +49,7 @@ export function FetchAllScanRoots({
                 type="button"
                 onClick={() => onRemove(root)}
                 disabled={disabled}
-                className="felixo-btn-icon rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
+                className="felixo-btn-icon rounded-sm p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
                 title="Deixar de varrer esta pasta"
                 aria-label={`Deixar de varrer ${root}`}
               >
@@ -69,7 +69,7 @@ export function FetchAllScanRoots({
         type="button"
         onClick={onAdd}
         disabled={disabled}
-        className="felixo-btn mt-2 flex w-full items-center justify-center gap-2 rounded bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+        className="felixo-btn mt-2 flex w-full items-center justify-center gap-2 rounded-sm bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
         title="Escolha uma ou mais pastas; a varredura passa a percorrer só as pastas da lista"
       >
         <FolderPlus size={13} />

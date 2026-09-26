@@ -117,7 +117,7 @@ export function SystemDesignDocumentItem({
         ) : (
           <ChevronRight size={12} aria-hidden="true" className="mt-0.5 shrink-0 text-zinc-500" />
         )}
-        <span className="min-w-0 break-words">
+        <span className="min-w-0 wrap-break-word">
           <span className="font-mono text-zinc-500">{doc.path}</span>
           {hasOwnTitle ? <span className="text-zinc-300"> — {doc.title}</span> : null}
         </span>
@@ -199,7 +199,7 @@ export function SystemDesignDocumentContent({
       aria-label={`Conteúdo de ${documentPath}`}
       // Focável para quem usa teclado conseguir rolar o guia com as setas.
       tabIndex={0}
-      className="mb-2 ml-4 mt-1 max-h-72 min-w-0 overflow-auto overscroll-contain rounded-md border border-white/[0.08] bg-black/20 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+      className="mb-2 ml-4 mt-1 max-h-72 min-w-0 overflow-auto overscroll-contain rounded-md border border-white/8 bg-black/20 p-3 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400"
     >
       {state.status === 'loading' ? (
         <p className="text-zinc-500" role="status">
@@ -216,12 +216,12 @@ export function SystemDesignDocumentContent({
         <p className="text-zinc-500">Este documento está vazio no cache local.</p>
       ) : null}
       {state.status === 'error' ? (
-        <div className="flex flex-wrap items-center gap-2 text-[var(--color-warning)]" role="alert">
+        <div className="flex flex-wrap items-center gap-2 text-(--color-warning)" role="alert">
           <span>{state.message}</span>
           <button
             type="button"
             onClick={onRetry}
-            className="felixo-btn text-[var(--f-core-white-soft)] underline hover:text-[var(--f-core-white)]"
+            className="felixo-btn text-(--f-core-white-soft) underline hover:text-(--f-core-white)"
           >
             Tentar novamente
           </button>
