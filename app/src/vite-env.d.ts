@@ -947,9 +947,6 @@ declare global {
         list: (params?: {
           limit?: number
         }) => Promise<CliInvokeResult & { sessions?: unknown[] }>
-        get: (chatId: string) => Promise<
-          CliInvokeResult & { session?: unknown | null }
-        >
         save: (session: ChatSession) => Promise<
           CliInvokeResult & { session?: unknown }
         >

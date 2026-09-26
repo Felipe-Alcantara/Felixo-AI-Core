@@ -343,7 +343,6 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   chats: {
     list: (params) => ipcRenderer.invoke('chats:list', params),
-    get: (chatId) => ipcRenderer.invoke('chats:get', chatId),
     save: (session) => ipcRenderer.invoke('chats:save', session),
     delete: (chatId) => ipcRenderer.invoke('chats:delete', chatId),
   },
