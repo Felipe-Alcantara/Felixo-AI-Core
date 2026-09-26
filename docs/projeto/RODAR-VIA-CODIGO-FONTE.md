@@ -319,13 +319,18 @@ python3 start_app.py
 | `FELIXO_CLAUDE_PERMISSION_MODE` | Modo de permissão passado ao Claude Code (`default`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions` ou `off`) | `bypassPermissions` |
 | `FELIXO_CODEX_FULL_ACCESS` | Ativa/desativa `--dangerously-bypass-approvals-and-sandbox` e config full access do Codex (`off` para desativar) | ligado |
 | `FELIXO_GEMINI_FULL_ACCESS` | Ativa/desativa `--yolo` no Gemini (`off` para desativar) | ligado |
-| `FELIXO_SHELL` | Shell override para execução de comandos | `$SHELL` ou padrão do SO |
 | `FELIXO_NODE_BIN` | Diretório do Node.js override | auto-detectado |
 | `FELIXO_NODE_SEARCH_PATHS` | Diretórios extras para buscar Node/npm | vazio |
 | `FELIXO_PRODUCTION_BRANCH` | Branch usada pelo `--update` explícito | `production` |
 | `FELIXO_AUTO_UPDATE` | Controla o update silencioso da branch atual (`off`, `0`, `false` ou `no` desabilita) | ligado |
 | `FELIXO_UPDATE_PRERELEASE` | Aceita pre-releases | `0` |
 | `FELIXO_UPDATE_CHANNEL` | Canal de update | vazio |
+
+Não há variável para escolher o shell dos terminais do canvas. Ele segue o sistema:
+`$SHELL` ou `/bin/bash` no Linux, `$SHELL` ou `/bin/zsh` no macOS e, no Windows,
+PowerShell 7, depois Windows PowerShell, depois `cmd.exe`. A antiga `FELIXO_SHELL`
+só era lida por um módulo que nenhum código de produção usava, e foi removida junto
+com ele.
 
 ---
 

@@ -471,7 +471,7 @@ disputa artificial entre handles ConPTY sem reduzir a cobertura dos três SOs.
 
 Exemplos:
 - `cli-detector.cjs` → `cli-detector.test.cjs`
-- `shell-adapter.cjs` → `shell-adapter.test.cjs`
+- `platform/index.cjs` → `platform/index.test.cjs` (regras de shell dos adaptadores de plataforma)
 
 Para o launcher, rode na raiz do repositório:
 
@@ -502,6 +502,39 @@ GPU no Windows. Em CI Linux sem display, Xvfb continua sendo o fallback do
 ambiente. A skill [`.claude/skills/rodar-app/`](../../.claude/skills/rodar-app/SKILL.md)
 aponta para esse fluxo e preserva o driver legado somente para casos de teclado
 ou clipboard físico que CDP não representa.
+
+Dicas que valem para qualquer verificação com `felixo devtools`:
+
+- **CLIs falsas.** `FELIXO_CLI_PATHS=<pasta> felixo devtools launch` põe uma pasta
+  na frente do `PATH` do app. Uma `claude` ou `openia` falsa ali, que siga o contrato
+  real, deixa criar agentes ou gerar imagem sem abrir a CLI de verdade nem gastar
+  créditos.
+- **Shell em vez de agente.** "Criar → Agente" abre a última escolha salva, que por
+  padrão é a CLI Claude, mesmo no perfil isolado. Para abrir um shell local, grave
+  antes `localStorage['felixo:last-agent-launch-preferences'] =
+  '{"agentValue":"__shell__"}'` e recarregue.
+- **Estados raros.** O processo principal pode emitir eventos pelo
+  `felixo devtools main`. Por exemplo, o aviso de falha da instalação das CLIs, que
+  só aparece no app instalado:
+  `mainWindow.webContents.send('clis:setup-status', { state: 'error', … })`.
+- **Diálogos.** `window.confirm` trava o renderer. Troque-o por uma função no `eval`
+  antes de clicar num botão que confirma. O seletor nativo de pastas no Linux pode
+  ser dirigido num Xvfb próprio, sem DBus (`DBUS_SESSION_BUS_ADDRESS=disabled:`,
+  `GTK_USE_PORTAL=0`), com `xdotool`.
+- **Capturas.** A captura da janela invisível pode devolver o quadro anterior.
+  Espere dois `requestAnimationFrame` ou descarte a primeira captura.
+- **IPC longo.** `click` e `press` que disparam um IPC demorado só retornam
+  quando ele resolve, mesmo com o app respondendo. Nesse caso, rode o comando em
+  segundo plano.
+
+### Função que só tinha atalho de teclado
+
+Quando uma função só existe como atalho, ela ganha um item no menu da janela
+(`electron/windows/app-menu.cjs`). O item reusa a mesma função do handler de
+teclado e deixa o acelerador só exibido (`registerAccelerator: false`); a tecla
+continua tratada no `before-input-event`. Os roles prontos do Electron não são
+usados, porque podem ter outro comportamento. É o caso de
+`zoomIn`/`zoomOut`/`resetZoom`, que não têm limite e agem no `webContents` focado.
 
 ---
 
