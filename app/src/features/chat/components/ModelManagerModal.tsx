@@ -6,10 +6,12 @@ import {
   FilePlus,
   FolderOpen,
   KeyRound,
+  Loader2,
   LogIn,
   LogOut,
   Plus,
   RefreshCw,
+  Stethoscope,
   Terminal,
   Trash2,
   X,
@@ -30,6 +32,13 @@ import {
 } from '../services/official-cli-account'
 import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
 import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
+import { indexCliDiagnoses, shouldOfferCliInstall } from '../../setup/cli-diagnosis'
+import {
+  CliDiagnosisFooter,
+  CliDiagnosisLine,
+  CliDiagnosisList,
+} from '../../setup/CliDiagnosisView'
+import { useCliDiagnosis } from '../../setup/useCliDiagnosis'
 
 type ModelManagerModalProps = {
   isOpen: boolean
@@ -99,18 +108,22 @@ export function ModelManagerModal({
   >({})
   const [pendingSwitch, setPendingSwitch] =
     useState<PendingAccountSwitch | null>(null)
+  const cliDiagnosis = useCliDiagnosis()
+  const { reset: resetCliDiagnosis } = cliDiagnosis
 
   /**
-   * Fecha a tela descartando a confirmação pendente.
+   * Fecha a tela descartando a confirmação pendente e o diagnóstico.
    *
    * Uma confirmação de logout não sobrevive ao fechamento: reabrir o
    * gerenciador não deve ressuscitar um "confirmar" que a pessoa deixou para
-   * trás.
+   * trás. O diagnóstico é uma fotografia do momento em que foi pedido e, pelo
+   * mesmo motivo, não volta com a tela.
    */
   const closeManager = useCallback(() => {
     setPendingSwitch(null)
+    resetCliDiagnosis()
     onClose()
-  }, [onClose])
+  }, [onClose, resetCliDiagnosis])
 
   const loadOfficialCatalog = useCallback(async () => {
     if (!window.felixo?.cli?.listOfficial) {
@@ -165,6 +178,21 @@ export function ModelManagerModal({
     return null
   }
 
+  const cliDiagnosesById = indexCliDiagnoses(cliDiagnosis.state.report)
+
+  /**
+   * Refaz a detecção e, se o diagnóstico estiver na tela, ele também: um
+   * diagnóstico de antes da instalação ao lado da detecção de depois diria
+   * duas coisas diferentes sobre a mesma CLI.
+   */
+  async function refreshOfficialDetection() {
+    if (cliDiagnosis.active) {
+      cliDiagnosis.run()
+    }
+
+    await loadOfficialCatalog()
+  }
+
   async function installOfficialCli(cli: OfficialCliCatalogItem) {
     if (!cli.isLauncher && getMissingOfficialModels(cli.models, models).length === 0) {
       setStatus(`${cli.name} já está importada. Instalação não foi iniciada.`)
@@ -206,7 +234,7 @@ export function ModelManagerModal({
         setStatus(
           `${cli.name} instalado, mas o comando ainda não apareceu no PATH.`,
         )
-        await loadOfficialCatalog()
+        await refreshOfficialDetection()
         return
       }
 
@@ -225,7 +253,7 @@ export function ModelManagerModal({
         importOfficialModels(result.models ?? cli.models)
         setStatus(`${cli.name} instalado e importado.${notaPep668}`)
       }
-      await loadOfficialCatalog()
+      await refreshOfficialDetection()
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : `Falha ao instalar ${cli.name}.`,
@@ -590,20 +618,38 @@ export function ModelManagerModal({
                 <Terminal size={14} aria-hidden="true" />
                 CLIs oficiais
               </span>
-              <button
-                type="button"
-                title="Atualizar detecção"
-                onClick={() => void loadOfficialCatalog()}
-                disabled={isLoadingOfficialClis}
-                className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <RefreshCw
-                  size={14}
-                  aria-hidden="true"
-                  className={isLoadingOfficialClis ? 'animate-spin' : ''}
-                />
-                <span className="sr-only">Atualizar detecção</span>
-              </button>
+              <div className="flex items-center gap-1">
+                {cliDiagnosis.available && (
+                  <button
+                    type="button"
+                    title="Diagnosticar CLIs: explica por que uma CLI não aparece, sem instalar nada"
+                    onClick={cliDiagnosis.run}
+                    disabled={cliDiagnosis.state.running}
+                    className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {cliDiagnosis.state.running ? (
+                      <Loader2 size={14} aria-hidden="true" className="animate-spin" />
+                    ) : (
+                      <Stethoscope size={14} aria-hidden="true" />
+                    )}
+                    <span className="sr-only">Diagnosticar CLIs</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  title="Atualizar detecção"
+                  onClick={() => void refreshOfficialDetection()}
+                  disabled={isLoadingOfficialClis}
+                  className="felixo-btn-icon flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/8 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={14}
+                    aria-hidden="true"
+                    className={isLoadingOfficialClis ? 'animate-spin' : ''}
+                  />
+                  <span className="sr-only">Atualizar detecção</span>
+                </button>
+              </div>
             </div>
 
             {pendingSwitch && (
@@ -661,14 +707,25 @@ export function ModelManagerModal({
 
             <div className="space-y-2 rounded-2xl border border-white/8 bg-black/10 p-2">
               {officialClis.length === 0 ? (
-                <p className="px-2 py-4 text-center text-xs text-zinc-500">
-                  Nenhuma CLI oficial detectada ainda.
-                </p>
+                // Sem a lista de CLIs (a detecção falhou) o diagnóstico não
+                // tem cartão onde entrar, mas continua sendo a explicação.
+                cliDiagnosis.state.report ? (
+                  <CliDiagnosisList diagnoses={cliDiagnosis.state.report.diagnoses} />
+                ) : (
+                  <p className="px-2 py-4 text-center text-xs text-zinc-500">
+                    Nenhuma CLI oficial detectada ainda.
+                  </p>
+                )
               ) : (
                 officialClis.map((cli) => {
                   const missingModels = getMissingOfficialModels(cli.models, models)
                   const isImported = !cli.isLauncher && missingModels.length === 0
                   const isAnyOfficialCliBusy = busyOfficialCliId !== null
+                  const diagnosis = cliDiagnosesById[cli.id]
+                  const offerInstall = shouldOfferCliInstall({
+                    detected: cli.detected,
+                    diagnosis,
+                  })
 
                   return (
                     <div
@@ -707,6 +764,7 @@ export function ModelManagerModal({
                               )}
                             </p>
                           )}
+                          {diagnosis && <CliDiagnosisLine diagnosis={diagnosis} />}
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1">
@@ -740,7 +798,7 @@ export function ModelManagerModal({
                                   : 'Importar CLI oficial'}
                               </span>
                             </button>
-                          ) : (
+                          ) : offerInstall ? (
                             <button
                               type="button"
                               title={
@@ -757,7 +815,7 @@ export function ModelManagerModal({
                                 Instalar {cli.name}
                               </span>
                             </button>
-                          )}
+                          ) : null}
 
                           {!cli.isLauncher && <button
                             type="button"
@@ -810,6 +868,12 @@ export function ModelManagerModal({
                 })
               )}
             </div>
+
+            {cliDiagnosis.active && (
+              <div className="mt-2 space-y-2">
+                <CliDiagnosisFooter state={cliDiagnosis.state} />
+              </div>
+            )}
           </div>
 
           <form className="space-y-3 rounded-2xl border border-white/8 bg-black/10 p-3" onSubmit={handleSubmit}>
