@@ -3,9 +3,10 @@ import { useState, type SyntheticEvent } from 'react'
 import { FelixoSelect } from '../components/FelixoSelect'
 import { isSoftwareRenderer, readActiveGpuRenderer } from './active-gpu-renderer'
 import {
-  GPU_PREFERENCE_OPTIONS,
   describeAppliedGpu,
+  describeGpuChoiceLimit,
   describeGpuFallback,
+  gpuPreferenceOptions,
   isGpuPreference,
   shouldShowGpuChoice,
   type GpuFallback,
@@ -75,6 +76,7 @@ export function GpuPreferenceFieldView({
 }: GpuPreferenceFieldViewProps) {
   const handleToggle = (event: SyntheticEvent<HTMLDetailsElement>) => onToggle(event.currentTarget.open)
   const unavailable = !status.supported
+  const limit = describeGpuChoiceLimit(status)
 
   return (
     <details className="mt-3 rounded-xl border border-white/8 bg-black/10 p-2.5" open={open} onToggle={handleToggle}>
@@ -83,7 +85,7 @@ export function GpuPreferenceFieldView({
         Opções avançadas: placa de vídeo
       </summary>
       <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-        Este computador tem mais de uma placa de vídeo. A escolha vale a partir
+        {status.multipleGpus ? 'Este computador tem mais de uma placa de vídeo. ' : ''}A escolha vale a partir
         da próxima abertura do Felixo. A dedicada costuma deixar a interface
         mais fluida, mas gasta mais bateria; se ela não iniciar bem, o app volta
         sozinho para Automático e avisa.
@@ -91,11 +93,12 @@ export function GpuPreferenceFieldView({
       {unavailable && status.unsupportedReason && (
         <p className="mt-2 text-[11px] leading-relaxed text-(--color-warning)">{status.unsupportedReason}</p>
       )}
+      {!unavailable && limit && <p className="mt-2 text-[11px] leading-relaxed text-(--color-warning)">{limit}</p>}
       <div className="mt-2 block text-xs text-zinc-400">
         Placa de vídeo
         <FelixoSelect
           value={selected}
-          options={GPU_PREFERENCE_OPTIONS}
+          options={gpuPreferenceOptions(status)}
           onChange={(value) => {
             if (isGpuPreference(value)) onSelect(value)
           }}
@@ -134,8 +137,9 @@ export function GpuPreferenceFieldView({
 }
 
 /**
- * Escolha de placa de vídeo nas Configurações: só aparece com duas placas ou
- * mais. O aviso de volta automática fica fora do recolhido, para não passar
+ * Escolha de placa de vídeo nas Configurações: aparece com duas placas ou
+ * mais, ou com uma escolha salva para desfazer (ver `shouldShowGpuChoice`). O
+ * aviso de volta automática fica fora do recolhido, para não passar
  * despercebido.
  */
 export function GpuPreferenceField() {

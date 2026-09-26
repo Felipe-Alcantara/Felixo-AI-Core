@@ -365,8 +365,11 @@ remover. Antes elas ficavam gravadas, mas não eram desenhadas.
 
 Com duas placas de vídeo ou mais, **Configurações → Renderização e recuperação →
 Opções avançadas: placa de vídeo** oferece Automático (o padrão, sem mudança),
-Integrada ou Dedicada (experimental). A escolha fica em `gpu-preference.json`, no
-perfil, e é aplicada antes do `app.whenReady()` do próximo início:
+Integrada ou Dedicada (experimental). Com uma escolha salva que não é Automático,
+o campo aparece mesmo sem duas placas nesta abertura (modo compatível, eGPU
+desconectada), só com Automático habilitado, para dar para desfazer. A escolha
+fica em `gpu-preference.json`, no perfil, e é aplicada antes do
+`app.whenReady()` do próximo início:
 
 - **Linux**: Dedicada liga o ANGLE sobre Vulkan (`--use-angle=vulkan` e as
   features `Vulkan`, `VulkanFromANGLE` e `DefaultANGLEVulkan`, conferidas no

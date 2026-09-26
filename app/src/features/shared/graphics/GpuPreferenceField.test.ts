@@ -82,6 +82,17 @@ describe('opção de placa de vídeo nas Configurações', () => {
     expect(html).toMatch(/role="combobox"[^>]*disabled=""|disabled=""[^>]*role="combobox"/)
   })
 
+  it('com a escolha salva e sem duas placas explica que só dá para voltar para Automático', () => {
+    const html = render({
+      status: { ...STATUS, preference: 'dedicada', devices: [STATUS.devices[1]], multipleGpus: false },
+      selected: 'dedicada',
+    })
+    expect(html).not.toContain('Este computador tem mais de uma placa de vídeo')
+    expect(html).toContain('só dá para voltar para Automático')
+    // O seletor continua ligado: Automático é uma opção válida.
+    expect(html).not.toMatch(/role="combobox"[^>]*disabled=""|disabled=""[^>]*role="combobox"/)
+  })
+
   it('o aviso de volta automática tem papel de status e o botão Entendi', () => {
     const html = renderToStaticMarkup(
       createElement(GpuFallbackAlert, {

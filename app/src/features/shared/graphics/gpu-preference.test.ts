@@ -3,7 +3,9 @@ import { isSoftwareRenderer, readActiveGpuRenderer } from './active-gpu-renderer
 import {
   GPU_PREFERENCE_OPTIONS,
   describeAppliedGpu,
+  describeGpuChoiceLimit,
   describeGpuFallback,
+  gpuPreferenceOptions,
   isGpuPreference,
   shouldShowGpuChoice,
   type GpuPreferenceStatus,
@@ -40,6 +42,43 @@ describe('preferência de placa de vídeo', () => {
     expect(shouldShowGpuChoice(BASE_STATUS)).toBe(true)
     expect(shouldShowGpuChoice({ ...BASE_STATUS, devices: [BASE_STATUS.devices[0]], multipleGpus: false })).toBe(false)
     expect(shouldShowGpuChoice(null)).toBe(false)
+    expect(gpuPreferenceOptions(BASE_STATUS).map((option) => option.disabled ?? false)).toEqual([false, false, false])
+    expect(describeGpuChoiceLimit(BASE_STATUS)).toBeNull()
+  })
+
+  it('com uma escolha salva, mostra o campo mesmo sem duas placas, só para voltar para Automático', () => {
+    // Ex.: Dedicada salva no Linux e a dedicada desligada no MUX, ou uma eGPU
+    // desconectada: sem o campo, não haveria como desfazer pela tela.
+    const singleGpu: GpuPreferenceStatus = {
+      ...BASE_STATUS,
+      preference: 'dedicada',
+      applied: 'dedicada',
+      devices: [BASE_STATUS.devices[1]],
+      multipleGpus: false,
+    }
+    expect(shouldShowGpuChoice(singleGpu)).toBe(true)
+    expect(gpuPreferenceOptions(singleGpu).map((option) => [option.value, option.disabled ?? false])).toEqual([
+      ['auto', false],
+      ['integrada', true],
+      ['dedicada', true],
+    ])
+    expect(describeGpuChoiceLimit(singleGpu)).toBe(
+      'Nesta abertura o Felixo não encontrou duas placas de vídeo, então só dá para voltar para Automático.',
+    )
+
+    // No modo compatível o getGPUInfo é recusado e a lista de placas vem vazia.
+    const compatible: GpuPreferenceStatus = {
+      ...singleGpu,
+      applied: 'auto',
+      notApplied: 'software-rendering',
+      devices: [],
+    }
+    expect(shouldShowGpuChoice(compatible)).toBe(true)
+    expect(gpuPreferenceOptions(compatible).filter((option) => !option.disabled).map((option) => option.value)).toEqual(['auto'])
+    expect(describeGpuChoiceLimit(compatible)).toMatch(/modo compatível.*não lê as placas.*voltar para Automático/)
+
+    // No Automático e sem duas placas, continua escondido.
+    expect(shouldShowGpuChoice({ ...compatible, preference: 'auto' })).toBe(false)
   })
 
   it('separa o que vale nesta abertura do que vale na próxima', () => {

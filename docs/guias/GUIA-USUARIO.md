@@ -231,7 +231,10 @@ placa que está desenhando o app agora ("Em uso agora") e o que vale nesta
 abertura e na próxima. Com uma placa só, a opção não aparece (o adaptador de
 vídeo por software que o Windows sempre lista, e a NPU de alguns processadores,
 não contam como placa); no modo compatível (sem GPU), ela fica salva mas não
-tem efeito.
+tem efeito. Se você já tinha escolhido Integrada ou Dedicada e o Felixo não vê
+mais duas placas (por exemplo, no modo compatível ou com a placa externa
+desconectada), a opção continua aparecendo, só com **Automático** disponível,
+para você poder desfazer a escolha.
 
 **Volta automática.** Quando a escolha muda o jeito como o app liga a placa (a
 Dedicada em qualquer sistema; a Integrada no Windows e no macOS), cada abertura

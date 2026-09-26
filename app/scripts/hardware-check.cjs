@@ -36,6 +36,9 @@
  *   pessoa abre o app de novo enquanto o AppImage relançado ainda monta; a
  *   abertura precisa ficar no Automático sem mexer no pedido nem na escolha,
  *   sem aviso e sem relançar.
+ * - `escolha-salva-compativel`: Dedicada salva e o app no modo compatível
+ *   (sem GPU, o app não lê as placas); a opção precisa aparecer com só
+ *   Automático habilitado, explicar o motivo e deixar voltar para Automático.
  * - `sugestao-cpu`: numa máquina com até 4 CPUs lógicas, a sugestão aparece
  *   sem ligar o modo; "Agora não" some e continua dispensada depois de
  *   recarregar; num perfil novo, "Ligar Modo Performance" liga o modo.
@@ -68,6 +71,7 @@ const ALL_SCENARIOS = [
   'integrada-prime-run',
   'relancamento-perdido',
   'relancamento-em-andamento',
+  'escolha-salva-compativel',
   'sugestao-cpu',
 ]
 const OPTION_LABEL = { auto: 'Automático', integrada: 'Integrada', dedicada: 'Dedicada (experimental)' }
@@ -204,7 +208,8 @@ async function launchApp(options, profile, { env = {}, args = [] } = {}) {
     FELIXO_USER_DATA_DIR: profile,
     FELIXO_DEVTOOLS_HEADLESS: '1',
     FELIXO_DEVTOOLS_MOCK_PTY: '1',
-    FELIXO_GRAPHICS_MODE: 'hardware',
+    // A automação só usa a GPU com pedido explícito; um cenário pode pedir o modo compatível.
+    FELIXO_GRAPHICS_MODE: env.FELIXO_GRAPHICS_MODE ?? 'hardware',
   })
   const child = spawn(launch.command, launch.args, {
     cwd: options.appDir,
@@ -630,6 +635,40 @@ async function relaunchInProgressScenario(options) {
   }
 }
 
+async function savedChoiceCompatibleScenario(options) {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-salva-compativel-'))
+  try {
+    fs.writeFileSync(path.join(profile, 'gpu-preference.json'), `${JSON.stringify({ preference: 'dedicada' })}\n`)
+    const result = await withApp(options, profile, { env: { FELIXO_GRAPHICS_MODE: 'software' } }, async ({ page }) => {
+      await openGpuOption(page)
+      const app = await appGpuStatus(page)
+      const limite = await page.evaluate(() => document.body.innerText.includes('só dá para voltar para Automático'))
+      await page.evaluate(() => document.querySelector('[role="combobox"][aria-label="Placa de vídeo"]').click())
+      await page.waitForSelector('[role="option"]')
+      const opcoes = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="option"]')].map((node) => ({
+          rotulo: node.querySelector('.felixo-select-option-label')?.textContent ?? '',
+          desligada: node.getAttribute('aria-disabled') === 'true',
+        })),
+      )
+      await capture(options, page, 'placa-escolha-salva-compativel')
+      await page.evaluate(() => document.querySelector('[role="combobox"][aria-label="Placa de vídeo"]').click())
+      await chooseAndSave(page, 'auto')
+      return { app, limite, opcoes, arquivo: readPreferenceFile(profile) }
+    })
+    result.cenario = 'escolha-salva-compativel'
+    result.falhas = []
+    if (result.app.notApplied !== 'software-rendering') result.falhas.push(`notApplied=${result.app.notApplied}`)
+    if (!result.limite) result.falhas.push('a tela não explicou que só dá para voltar para Automático')
+    const enabled = result.opcoes.filter((option) => !option.desligada).map((option) => option.rotulo)
+    if (JSON.stringify(enabled) !== JSON.stringify(['Automático'])) result.falhas.push(`opções habilitadas: ${enabled.join(', ')}`)
+    if (result.arquivo?.preference !== 'auto') result.falhas.push('não deu para voltar para Automático')
+    return result
+  } finally {
+    fs.rmSync(profile, { recursive: true, force: true })
+  }
+}
+
 async function clickButtonByText(page, text) {
   await page.evaluate((label) => {
     const button = [...document.querySelectorAll('button')].find((node) => node.textContent.trim() === label)
@@ -698,6 +737,7 @@ async function run(options) {
     else if (scenario === 'integrada-prime-run') result = await primeRunScenario(options)
     else if (scenario === 'relancamento-perdido') result = await lostRelaunchScenario(options)
     else if (scenario === 'relancamento-em-andamento') result = await relaunchInProgressScenario(options)
+    else if (scenario === 'escolha-salva-compativel') result = await savedChoiceCompatibleScenario(options)
     else if (scenario === 'sugestao-cpu') result = await cpuSuggestionScenario(options)
     else result = await preferenceScenario(options, scenario)
     results.push(result)

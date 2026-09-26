@@ -73,9 +73,37 @@ export function isGpuPreference(value: string): value is GpuPreference {
 /**
  * A escolha só faz sentido com duas placas ou mais. Com uma só, a opção nem
  * aparece; sem mecanismo no sistema, aparece desligada e com o motivo.
+ *
+ * Exceção: com uma escolha salva que não é Automático, o campo aparece mesmo
+ * sem duas placas (a dedicada desligada no MUX, uma eGPU desconectada, o modo
+ * compatível, em que o app não lê as placas), para a pessoa poder voltar para
+ * Automático pela tela. No Linux a Dedicada salva continua valendo com uma
+ * placa só.
  */
 export function shouldShowGpuChoice(status: GpuPreferenceStatus | null | undefined): boolean {
-  return Boolean(status?.multipleGpus)
+  if (!status) return false
+  return status.multipleGpus || status.preference !== 'auto'
+}
+
+/**
+ * Por que só Automático pode ser escolhido nesta abertura, ou `null` quando as
+ * três opções valem.
+ */
+export function describeGpuChoiceLimit(status: GpuPreferenceStatus): string | null {
+  if (status.multipleGpus) return null
+  if (status.notApplied === 'software-rendering') {
+    return 'No modo compatível (sem GPU) o Felixo não lê as placas de vídeo e a escolha salva não tem efeito; só dá para voltar para Automático.'
+  }
+  return 'Nesta abertura o Felixo não encontrou duas placas de vídeo, então só dá para voltar para Automático.'
+}
+
+/** As opções do seletor, com as que não valem nesta abertura desligadas e o motivo na descrição. */
+export function gpuPreferenceOptions(status: GpuPreferenceStatus): FelixoSelectOption[] {
+  const limit = describeGpuChoiceLimit(status)
+  if (!limit) return GPU_PREFERENCE_OPTIONS
+  return GPU_PREFERENCE_OPTIONS.map((option) =>
+    option.value === 'auto' ? option : { ...option, disabled: true, description: 'Indisponível nesta abertura.' },
+  )
 }
 
 /** Texto do aviso de volta automática para Automático, em linguagem de quem usa. */
