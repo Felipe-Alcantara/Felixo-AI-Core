@@ -18,6 +18,7 @@ const {
   readGpuPreferenceState,
 } = require('../core/gpu-preference.cjs')
 const { confirmGpuStart, evaluateGpuStartHealth, revertGpuPreference } = require('../core/gpu-start-guard.cjs')
+const { DEFAULT_GPU_INFO_TIMEOUT_MS } = require('../core/gpu-info-watcher.cjs')
 
 /** Motivos do `child-process-gone` que apontam para a GPU, e não para memória ou para quem matou o processo. */
 const GPU_FAILURE_EXIT_REASONS = Object.freeze(['crashed', 'launch-failed', 'abnormal-exit'])
@@ -36,6 +37,9 @@ function normalizeDevices(gpuInfo) {
  * @param {import('electron').IpcMain} options.ipcMain
  * @param {string} options.userDataPath
  * @param {ReturnType<typeof import('../core/gpu-start-guard.cjs').prepareGpuStart>} options.gpuStart
+ * @param {ReturnType<typeof import('../core/gpu-info-watcher.cjs').createGpuInfoWatcher>} options.gpuInfoWatcher -
+ *   Criado antes do whenReady: diz quando o status da GPU passa a valer.
+ * @param {number} [options.gpuInfoTimeoutMs]
  * @param {string} [options.platformName]
  * @param {() => (import('electron').BrowserWindow | null | undefined)} options.getMainWindow
  * @param {(entry: object) => void} [options.log]
@@ -45,6 +49,8 @@ function createGpuPreferenceSession({
   ipcMain,
   userDataPath,
   gpuStart,
+  gpuInfoWatcher,
+  gpuInfoTimeoutMs = DEFAULT_GPU_INFO_TIMEOUT_MS,
   platformName = process.platform,
   getMainWindow,
   log = () => {},
@@ -55,6 +61,7 @@ function createGpuPreferenceSession({
   // Só quem mudou a GPU neste início tem o que confirmar ou reverter.
   const watchesHealth = appliedPreference !== 'auto' && Boolean(gpuStart.guarded)
   let sessionOutcome = gpuStart.guarded ? 'pending' : 'not-guarded'
+  let windowLoaded = false
   let devicesPromise = null
 
   function readDevices() {
@@ -107,12 +114,11 @@ function createGpuPreferenceSession({
   }
 
   /**
-   * Janela carregada: é o "app pronto + janela carregada" do marcador. O
-   * `getGPUInfo` antes do status espera a coleta da GPU terminar.
+   * Fecha o início pendente com o status da GPU. Só roda com a janela
+   * carregada e com a GPU já tendo respondido (`gpu-info-update`): antes
+   * disso o status é o padrão `disabled_software` e mentiria.
    */
-  async function confirmStart() {
-    if (!watchesHealth || sessionOutcome !== 'pending') return sessionOutcome
-    await app.getGPUInfo('basic').catch(() => null)
+  function settlePendingStart() {
     const outcome = confirmGpuStart({
       userDataPath,
       appliedPreference,
@@ -132,11 +138,31 @@ function createGpuPreferenceSession({
       })
       void notifyRenderer()
     }
+  }
+
+  /**
+   * Janela carregada: é o "app pronto + janela carregada" do marcador. Se a
+   * GPU não responder no prazo, o marcador fica, e o próximo início trata
+   * como não confirmado — um `gpu-info-update` tardio ainda confirma.
+   */
+  async function confirmStart() {
+    if (!watchesHealth || sessionOutcome !== 'pending') return sessionOutcome
+    windowLoaded = true
+    const ready = await gpuInfoWatcher.wait(gpuInfoTimeoutMs)
+    if (!ready) {
+      log({ level: 'warn', scope: 'graphics:gpu-preference', message: 'gpu-info-timeout', details: { preference: appliedPreference, timeoutMs: gpuInfoTimeoutMs } })
+      return sessionOutcome
+    }
+    if (sessionOutcome === 'pending') settlePendingStart()
     return sessionOutcome
   }
 
   function onGpuInfoUpdate() {
     if (!watchesHealth || sessionOutcome === 'reverted') return
+    if (sessionOutcome === 'pending') {
+      if (windowLoaded) settlePendingStart()
+      return
+    }
     const verdict = evaluateGpuStartHealth({ featureStatus: app.getGPUFeatureStatus(), expectVulkan })
     if (verdict.healthy === false) revert(verdict.reason, verdict.detail)
   }

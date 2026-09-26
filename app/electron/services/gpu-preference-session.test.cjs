@@ -7,6 +7,7 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 
+const { createGpuInfoWatcher } = require('../core/gpu-info-watcher.cjs')
 const { persistGpuPreference, readGpuPreferenceState } = require('../core/gpu-preference.cjs')
 const { prepareGpuStart } = require('../core/gpu-start-guard.cjs')
 const { CHANGE_CHANNEL, createGpuPreferenceSession, normalizeDevices } = require('./gpu-preference-session.cjs')
@@ -23,13 +24,22 @@ test.after(() => {
   for (const profile of profiles) fs.rmSync(profile, { recursive: true, force: true })
 })
 
-function setup({ preference = 'dedicada', featureStatus = { gpu_compositing: 'enabled', vulkan: 'enabled_on' }, gpuInfo = TWO_GPUS } = {}) {
+function setup({
+  preference = 'dedicada',
+  featureStatus = { gpu_compositing: 'enabled', vulkan: 'enabled_on' },
+  gpuInfo = TWO_GPUS,
+  gpuInfoReady = true,
+  gpuInfoTimeoutMs = 1_000,
+} = {}) {
   const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-gpu-session-'))
   profiles.push(userDataPath)
   persistGpuPreference({ userDataPath, preference })
   const gpuStart = prepareGpuStart({ userDataPath, platformName: 'linux', environment: {} })
 
   const app = new EventEmitter()
+  // Criado antes do "whenReady", como no main.cjs.
+  const gpuInfoWatcher = createGpuInfoWatcher(app)
+  if (gpuInfoReady) app.emit('gpu-info-update')
   app.status = featureStatus
   app.getGPUFeatureStatus = () => app.status
   app.getGPUInfo = async () => gpuInfo
@@ -45,6 +55,8 @@ function setup({ preference = 'dedicada', featureStatus = { gpu_compositing: 'en
     ipcMain,
     userDataPath,
     gpuStart,
+    gpuInfoWatcher,
+    gpuInfoTimeoutMs,
     platformName: 'linux',
     getMainWindow: () => window,
     log: (entry) => logs.push(entry),
@@ -68,6 +80,33 @@ test('janela carregada com a GPU saudável confirma o início e apaga o marcador
   assert.equal((await session.describe()).sessionOutcome, 'healthy')
   assert.equal(readGpuPreferenceState(userDataPath).pendingStart, null)
   assert.equal(readGpuPreferenceState(userDataPath).preference, 'dedicada')
+})
+
+test('janela que carrega antes de a GPU responder não reverte por um status que ainda não vale', async () => {
+  // Medido em 26/09/2026: o did-finish-load pode chegar antes do
+  // gpu-info-update, com o status ainda no padrão `disabled_software`.
+  const { app, session, userDataPath, webContents } = setup({ featureStatus: { gpu_compositing: 'disabled_software' }, gpuInfoReady: false })
+
+  webContents.emit('did-finish-load')
+  await flush()
+  assert.equal(readGpuPreferenceState(userDataPath).preference, 'dedicada')
+  assert.equal((await session.describe()).sessionOutcome, 'pending')
+
+  app.status = { gpu_compositing: 'enabled', vulkan: 'enabled_on' }
+  app.emit('gpu-info-update')
+  await flush()
+
+  assert.equal((await session.describe()).sessionOutcome, 'healthy')
+  assert.deepEqual(readGpuPreferenceState(userDataPath), { preference: 'dedicada', pendingStart: null, fallback: null })
+})
+
+test('GPU que nunca responde deixa o marcador para o próximo início decidir', async () => {
+  const { session, userDataPath, webContents } = setup({ featureStatus: { gpu_compositing: 'disabled_software' }, gpuInfoReady: false, gpuInfoTimeoutMs: 20 })
+  webContents.emit('did-finish-load')
+  await new Promise((resolve) => setTimeout(resolve, 60))
+  await flush()
+  assert.equal((await session.describe()).sessionOutcome, 'pending')
+  assert.equal(readGpuPreferenceState(userDataPath).pendingStart.preference, 'dedicada')
 })
 
 test('GPU desligada ao carregar volta para Automático e avisa a interface', async () => {

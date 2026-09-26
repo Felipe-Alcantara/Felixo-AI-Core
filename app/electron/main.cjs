@@ -119,6 +119,7 @@ const {
 } = require('./core/graphics-recommendation.cjs')
 const { applyGpuLaunchPlan } = require('./core/gpu-preference.cjs')
 const { prepareGpuStart } = require('./core/gpu-start-guard.cjs')
+const { createGpuInfoWatcher } = require('./core/gpu-info-watcher.cjs')
 const { createGpuPreferenceSession } = require('./services/gpu-preference-session.cjs')
 const { getAutoStartStatus, setAutoStartEnabled } = require('./core/autostart.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
@@ -240,6 +241,9 @@ if (relaunchingForGpu) {
   app.relaunch()
   app.exit(0)
 }
+// Antes do whenReady, para não perder o primeiro `gpu-info-update`: só depois
+// dele `app.getGPUFeatureStatus()` deixa de ser o padrão `disabled_software`.
+const gpuInfoWatcher = createGpuInfoWatcher(app)
 
 function graphicsStatus() {
   return {
@@ -385,6 +389,7 @@ app.whenReady().then(async () => {
     ipcMain,
     userDataPath: app.getPath('userData'),
     gpuStart,
+    gpuInfoWatcher,
     getMainWindow,
     log: logQaEvent,
   })
