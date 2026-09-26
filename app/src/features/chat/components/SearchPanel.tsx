@@ -2,15 +2,24 @@ import { useEffect } from 'react'
 import { Search, X } from 'lucide-react'
 import type { ChatSession } from '../types'
 import { highlight, useSearchInputFocus, useSearchQuery } from '../../search/SearchControls'
+import { DeleteSessionButton } from './DeleteSessionButton'
 
 type SearchPanelProps = {
   sessions: ChatSession[]
   isOpen: boolean
   onClose: () => void
   onSelectSession: (session: ChatSession) => void
+  /** A busca é onde aparecem as conversas além das cinco de "Recentes". */
+  onDeleteSession: (session: ChatSession) => void
 }
 
-export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: SearchPanelProps) {
+export function SearchPanel({
+  sessions,
+  isOpen,
+  onClose,
+  onSelectSession,
+  onDeleteSession,
+}: SearchPanelProps) {
   const [query, setQuery] = useSearchQuery()
   const inputRef = useSearchInputFocus()
 
@@ -101,24 +110,26 @@ export function SearchPanel({ sessions, isOpen, onClose, onSelectSession }: Sear
             const trimmedSnippet = snippet.length > 80 ? snippet.slice(0, 80) + '…' : snippet
 
             return (
-              <button
-                key={session.id}
-                type="button"
-                onClick={() => {
-                  onSelectSession(session)
-                  closePanel()
-                }}
-                className="felixo-btn flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-white/5"
-              >
-                <span className="text-[12px] font-medium text-zinc-300">
-                  {highlight(session.title, query)}
-                </span>
-                {trimmedSnippet && (
-                  <span className="text-[11px] text-zinc-600 leading-relaxed">
-                    {highlight(trimmedSnippet, query)}
+              <div key={session.id} className="felixo-session-row pr-2 hover:bg-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectSession(session)
+                    closePanel()
+                  }}
+                  className="felixo-btn flex min-w-0 flex-1 flex-col gap-0.5 px-4 py-2.5 text-left"
+                >
+                  <span className="text-[12px] font-medium text-zinc-300">
+                    {highlight(session.title, query)}
                   </span>
-                )}
-              </button>
+                  {trimmedSnippet && (
+                    <span className="text-[11px] text-zinc-600 leading-relaxed">
+                      {highlight(trimmedSnippet, query)}
+                    </span>
+                  )}
+                </button>
+                <DeleteSessionButton session={session} onDelete={onDeleteSession} />
+              </div>
             )
           })
         )}

@@ -22,6 +22,7 @@ import { CliMark } from '../../shared/brand/CliMark'
 import { cliVendor } from '../../shared/brand/cli-vendor'
 import { SidebarSection } from '../../shared/components/SidebarSection'
 import type { ChatSession, Model, Project } from '../types'
+import { DeleteSessionButton } from './DeleteSessionButton'
 import { SearchPanel } from './SearchPanel'
 
 const MIN_WIDTH = 160
@@ -71,6 +72,8 @@ type AppSidebarProps = {
   onOpenAgentUsage: () => void
   onToggleSidebar: () => void
   onSelectSession: (session: ChatSession) => void
+  /** Pede a exclusão; quem confirma e arquiva no backend é o ChatWorkspace. */
+  onDeleteSession: (session: ChatSession) => void
   onToggleProject: (project: Project) => void
   onOpenModelSettingsFor: (modelId: string) => void
   onRemoveModel: (model: Model) => void
@@ -108,6 +111,7 @@ export function AppSidebar({
   onOpenAgentUsage,
   onToggleSidebar,
   onSelectSession,
+  onDeleteSession,
   onToggleProject,
   onOpenModelSettingsFor,
   onRemoveModel,
@@ -283,18 +287,20 @@ export function AppSidebar({
             }
           >
             {sessions.slice(0, 5).map((session) => (
-              <button
-                key={session.id}
-                type="button"
-                onClick={() => onSelectSession(session)}
-                title={session.title}
-                className="felixo-btn felixo-sidebar-session"
-              >
-                <span className="felixo-sidebar-session-title">{session.title}</span>
-                <span className="felixo-sidebar-session-time">
-                  {formatSessionDate(session.updatedAt)}
-                </span>
-              </button>
+              <div key={session.id} className="felixo-session-row felixo-sidebar-session-row">
+                <button
+                  type="button"
+                  onClick={() => onSelectSession(session)}
+                  title={session.title}
+                  className="felixo-btn felixo-sidebar-session"
+                >
+                  <span className="felixo-sidebar-session-title">{session.title}</span>
+                  <span className="felixo-sidebar-session-time">
+                    {formatSessionDate(session.updatedAt)}
+                  </span>
+                </button>
+                <DeleteSessionButton session={session} onDelete={onDeleteSession} />
+              </div>
             ))}
           </SidebarSection>
         )}
@@ -381,6 +387,7 @@ export function AppSidebar({
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onSelectSession={onSelectSession}
+        onDeleteSession={onDeleteSession}
       />
 
       {/* Drag handle */}

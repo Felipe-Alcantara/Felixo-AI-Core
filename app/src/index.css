@@ -3737,7 +3737,10 @@
   background: var(--f-core-white);
 }
 
-.felixo-sidebar-model-remove {
+/* Lixeira de linha (modelo, conversa): some sem hover para a lista não virar
+   uma coluna de lixeiras, e o foco por teclado a mostra. */
+.felixo-sidebar-model-remove,
+.felixo-session-remove {
   display: flex;
   width: 1.6rem;
   height: 1.6rem;
@@ -3752,18 +3755,39 @@
 }
 
 .felixo-sidebar-model:hover .felixo-sidebar-model-remove,
-.felixo-sidebar-model-remove:focus-visible {
+.felixo-sidebar-model-remove:focus-visible,
+.felixo-session-row:hover .felixo-session-remove,
+.felixo-session-remove:focus-visible {
   opacity: 1;
 }
 
-.felixo-sidebar-model-remove:hover {
+.felixo-sidebar-model-remove:hover,
+.felixo-session-remove:hover {
   color: var(--color-error);
+}
+
+/* Linha de conversa — em "Recentes" e na busca —: abrir de um lado, excluir
+   do outro, dois botões irmãos para um clique não disparar o outro. */
+.felixo-session-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.felixo-sidebar-session-row {
+  border-radius: var(--f-core-radius-xs);
+  transition: background-color 140ms var(--f-core-ease);
+}
+
+.felixo-sidebar-session-row:hover {
+  background: rgba(255, 255, 255, 0.045);
 }
 
 /* Sessões: título e horário na mesma linha, sem card. */
 .felixo-sidebar-session {
   display: flex;
-  width: 100%;
+  min-width: 0;
+  flex: 1;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.6rem;
@@ -3772,11 +3796,10 @@
   color: var(--f-core-secondary);
   font-size: 0.75rem;
   text-align: left;
-  transition: background-color 140ms var(--f-core-ease), color 140ms var(--f-core-ease);
+  transition: color 140ms var(--f-core-ease);
 }
 
-.felixo-sidebar-session:hover {
-  background: rgba(255, 255, 255, 0.045);
+.felixo-sidebar-session-row:hover .felixo-sidebar-session {
   color: var(--f-core-white-soft);
 }
 

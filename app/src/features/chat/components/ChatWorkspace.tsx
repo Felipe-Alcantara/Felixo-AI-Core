@@ -35,6 +35,7 @@ import type { ExportFormat } from '../services/chat-export'
 import {
   createChatSessionFromMessages,
   createChatSessionId,
+  deleteChatSessionFromBackend,
   loadChatSessionsFromBackend,
   saveChatSessionToBackend,
 } from '../services/chat-history-storage'
@@ -164,6 +165,11 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   const conversationModelIdRef = useRef<ModelId | null>(null)
   const messagesRef = useRef(messages)
   const sessionsRef = useRef(sessions)
+  // Conversas excluídas nesta tela. Salvar reativa a conversa no backend
+  // (`chats:save` limpa o `archived_at`), então nenhum salvamento atrasado — o
+  // debounce de 500ms, um streaming ainda chegando, a resposta de um save já em
+  // voo — pode reescrever uma conversa que a pessoa acabou de excluir.
+  const deletedChatSessionIdsRef = useRef<Set<string>>(new Set())
   const chatHistoryLoadedRef = useRef(false)
   const orchestratorSettingsLoadedRef = useRef(false)
   const orchestratorSettingsUserEditedRef = useRef(false)
@@ -573,9 +579,14 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   }
 
   function resetChat() {
+    persistCurrentSession(messagesRef.current)
+    clearConversation()
+  }
+
+  /** Volta a tela para um chat novo sem salvar a conversa que estava aberta. */
+  function clearConversation() {
     const backendThreadIds = collectKnownBackendThreadIds()
 
-    persistCurrentSession(messagesRef.current)
     setInput('')
     setContextAttachments([])
     stopStreaming()
@@ -598,6 +609,11 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
 
   function persistCurrentSession(messagesToPersist: ChatMessage[]) {
     const chatSessionId = ensureActiveChatSessionId()
+
+    if (deletedChatSessionIdsRef.current.has(chatSessionId)) {
+      return
+    }
+
     const existingSession = sessionsRef.current.find(
       (session) => session.id === chatSessionId,
     )
@@ -631,6 +647,10 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   }
 
   function upsertChatSession(session: ChatSession) {
+    if (deletedChatSessionIdsRef.current.has(session.id)) {
+      return
+    }
+
     setSessions((currentSessions) => {
       const nextSessions = [
         session,
@@ -656,6 +676,41 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
     resetConversationThread()
     activeChatSessionIdRef.current = session.id
     setMessages(session.messages.map((message) => ({ ...message, isStreaming: false })))
+  }
+
+  /**
+   * Exclui uma conversa do histórico. O backend arquiva (`archived_at`) em vez
+   * de apagar as linhas; para a tela, ela sai da lista e, se estava aberta, a
+   * tela volta para um chat novo — sem salvar, senão o save a reativaria.
+   */
+  async function deleteSession(session: ChatSession) {
+    if (!window.confirm(`Excluir a conversa "${session.title}"?`)) {
+      return
+    }
+
+    // Marca antes de esperar o backend: um save atrasado da conversa aberta
+    // que dispare durante a espera não pode desfazer a exclusão.
+    deletedChatSessionIdsRef.current.add(session.id)
+    const result = await deleteChatSessionFromBackend(session.id)
+    const isOpen = activeChatSessionIdRef.current === session.id
+
+    if (result.status === 'failed') {
+      deletedChatSessionIdsRef.current.delete(session.id)
+      // O save que a marca segurou durante a espera não volta sozinho.
+      if (isOpen) {
+        saveCurrentSession()
+      }
+      window.alert(result.message)
+      return
+    }
+
+    setSessions((currentSessions) =>
+      currentSessions.filter((item) => item.id !== session.id),
+    )
+
+    if (isOpen) {
+      clearConversation()
+    }
   }
 
   function addContextAttachments(attachments: ContextAttachment[]) {
@@ -1241,6 +1296,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         onOpenAgentUsage={() => setIsAgentUsageOpen(true)}
         onToggleSidebar={() => setIsSidebarOpen(false)}
         onSelectSession={loadSession}
+        onDeleteSession={(session) => void deleteSession(session)}
         onToggleProject={toggleProject}
         onOpenModelSettingsFor={openModelSettingsFor}
         onRemoveModel={removeModel}
