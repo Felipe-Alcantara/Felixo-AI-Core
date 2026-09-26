@@ -397,42 +397,20 @@ test('native image picker grants a supported image and returns canonical MIME me
   ])
 })
 
-test('registered generated-image IPC emits only the sanitized artifact', async (t) => {
-  const rootDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'felixo-generated-ipc-'),
-  )
+// Imagens geradas só nascem no main (serviço de imagem → saveGeneratedImage),
+// que avisa o canvas sozinho. Um canal de escrita aberto ao renderer, sem
+// nenhum chamador, só alargava a superfície da ponte de IPC.
+test('registered image IPC keeps generated-image writes out of the renderer', () => {
   const handlers = new Map()
-  const events = []
   const ipcMain = {
     handle(channel, handler) {
       handlers.set(channel, handler)
     },
   }
-  t.after(() => fs.rm(rootDir, { recursive: true, force: true }))
 
-  registerFileAttachmentIpcHandlers(
-    { userData: rootDir },
-    {
-      ipcMain,
-      getMainWindow: () => ({
-        isDestroyed: () => false,
-        webContents: { send: (...event) => events.push(event) },
-      }),
-    },
-  )
+  registerFileAttachmentIpcHandlers({ userData: os.tmpdir() }, { ipcMain })
 
-  const result = await handlers.get('files:save-generated-image')(null, {
-    name: 'from-ipc.png',
-    type: 'image/png',
-    data: new Uint8Array([7, 8]).buffer,
-    prompt: 'safe prompt',
-    key: 'private-key',
-  })
-
-  assert.equal(result.ok, true)
-  assert.deepEqual(events.map(([channel]) => channel), ['canvas:image-generated'])
-  assert.equal(events[0][1].path, result.artifact.path)
-  assert.equal(events[0][1].key, undefined)
+  assert.equal(handlers.has('files:save-generated-image'), false)
   assert.equal(typeof handlers.get('files:pick-image'), 'function')
   assert.equal(typeof handlers.get('files:open-image'), 'function')
   assert.equal(typeof handlers.get('files:save-image-copy'), 'function')

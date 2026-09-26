@@ -965,17 +965,6 @@ declare global {
           type?: string
         }) => Promise<ReadImageAttachmentResult>
         pickImage: () => Promise<PickImageResult>
-        saveGeneratedImage: (params: {
-          name?: string
-          type: string
-          data: ArrayBuffer
-          prompt?: string
-          model?: string
-          createdAt?: string
-          cost?: number
-          requestId?: string
-          temporary?: boolean
-        }) => Promise<SaveGeneratedImageResult>
         openImage: (params: { path: string }) => Promise<CliInvokeResult>
         saveImageCopy: (params: {
           path: string

@@ -353,8 +353,6 @@ contextBridge.exposeInMainWorld('felixo', {
     readImageAttachment: (params) =>
       ipcRenderer.invoke('files:read-image-attachment', params),
     pickImage: () => ipcRenderer.invoke('files:pick-image'),
-    saveGeneratedImage: (params) =>
-      ipcRenderer.invoke('files:save-generated-image', params),
     openImage: (params) => ipcRenderer.invoke('files:open-image', params),
     saveImageCopy: (params) => ipcRenderer.invoke('files:save-image-copy', params),
     duplicateImage: (params) => ipcRenderer.invoke('files:duplicate-image', params),
