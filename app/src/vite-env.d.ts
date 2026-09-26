@@ -671,7 +671,14 @@ declare global {
           skills: CanvasSkill[],
         ) => Promise<CliInvokeResult & { skills?: CanvasSkill[] }>
         listAvailableSkills: () => Promise<
-          CliInvokeResult & { skills?: CanvasSkill[]; communityEnabled?: boolean }
+          CliInvokeResult & {
+            skills?: CanvasSkill[]
+            communityEnabled?: boolean
+            /** Skills do sistema tiradas da lista dos agentes, como gravadas. */
+            hiddenBuiltinIds?: string[]
+            /** As ocultas com nome e origem, para o painel poder restaurar. */
+            hiddenSkills?: CanvasSkill[]
+          }
         >
         setSkillsSettings: (params: {
           communityEnabled?: boolean
