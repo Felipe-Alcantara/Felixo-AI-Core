@@ -651,9 +651,11 @@ faz a matriz falhar.
 escolha de placa de vídeo e a sugestão do Modo Performance: abre o app com um
 perfil temporário, escolhe a placa pela tela, reabre e lê a GPU em uso pelo CDP
 (`SystemInfo.getInfo`); também simula um início que travou, uma GPU que sobe
-desligada e o ambiente do `prime-run`. Passe `--expect-integrada=0x8086
---expect-dedicada=0x10de` (vendorIds da máquina) para exigir a GPU certa em cada
-cenário; sem eles, só relata.
+desligada, o ambiente do `prime-run` e um relançamento que não voltou. Passe
+`--expect-integrada=0x8086 --expect-dedicada=0x10de` (vendorIds da máquina) para
+exigir a GPU certa em cada cenário; sem eles, só relata. Com
+`--app-image=<arquivo.AppImage>` os cenários rodam no pacote AppImage em vez de
+`electron .`.
 
 `npm run typecheck` usa o cache incremental do `tsc -b` (TypeScript 7) sem
 relaxar a verificação. Para uma auditoria limpa dos dois projetos TypeScript,

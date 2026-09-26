@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const path = require('node:path')
 const test = require('node:test')
 
 const { ALL_SCENARIOS, parseArgs, sameGpu } = require('./hardware-check.cjs')
@@ -17,6 +18,15 @@ test('recusa cenário, vendorId ou argumento desconhecido', () => {
   assert.throws(() => parseArgs(['--scenarios=turbo']), /--scenarios aceita/)
   assert.throws(() => parseArgs(['--expect-dedicada=nvidia']), /vendorId/)
   assert.throws(() => parseArgs(['--rodadas=3']), /Argumento desconhecido/)
+  assert.throws(() => parseArgs(['--app-image=']), /caminho do \.AppImage/)
+})
+
+test('roda os cenários de relançamento também no pacote AppImage', () => {
+  const options = parseArgs(['--scenarios=integrada-prime-run,relancamento-perdido', '--app-image=release/Felixo.AppImage'])
+  assert.deepEqual(options.scenarios, ['integrada-prime-run', 'relancamento-perdido'])
+  assert.equal(options.appImage, path.resolve('release/Felixo.AppImage'))
+  assert.equal(parseArgs([]).appImage, '')
+  assert.ok(ALL_SCENARIOS.includes('relancamento-perdido'))
 })
 
 test('a GPU da tela e a do CDP batem por fornecedor e dispositivo, sem a versão do driver', () => {

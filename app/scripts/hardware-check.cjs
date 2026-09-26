@@ -25,7 +25,12 @@
  *   `--disable-gpu-compositing` (a GPU "sobe desligada") e confere a volta
  *   para Automático nesta sessão, com aviso.
  * - `integrada-prime-run`: Integrada com as variáveis que o `prime-run`
- *   exporta; o app precisa relançar com o ambiente limpo e subir na integrada.
+ *   exporta; o app precisa relançar com o ambiente limpo, subir na integrada
+ *   e o processo relançado apagar o pedido de relançamento.
+ * - `relancamento-perdido`: o perfil guarda um pedido de relançamento que
+ *   nenhum processo relançado assumiu (o que sobrava quando o relançamento
+ *   falhava no AppImage); a abertura pelo `prime-run` precisa voltar para
+ *   Automático, avisar e não relançar de novo.
  * - `sugestao-cpu`: numa máquina com até 4 CPUs lógicas, a sugestão aparece
  *   sem ligar o modo; "Agora não" some e continua dispensada depois de
  *   recarregar; num perfil novo, "Ligar Modo Performance" liga o modo.
@@ -38,6 +43,9 @@
  *   node scripts/hardware-check.cjs --expect-integrada=0x8086 --expect-dedicada=0x10de --out=gpu.json
  * Sem `--expect-*`, só relata o que encontrou. `--screenshots=<pasta>` guarda
  * uma captura da tela em cada cenário, para revisar o visual.
+ * `--app-image=<arquivo.AppImage>` roda os cenários no pacote AppImage (de
+ * `electron-builder --linux AppImage`) em vez de `electron .`: o
+ * relançamento só falhava empacotado assim.
  */
 
 const fs = require('node:fs')
@@ -46,7 +54,16 @@ const path = require('node:path')
 const net = require('node:net')
 const { spawn } = require('node:child_process')
 
-const ALL_SCENARIOS = ['auto', 'integrada', 'dedicada', 'pendente', 'gpu-desligada', 'integrada-prime-run', 'sugestao-cpu']
+const ALL_SCENARIOS = [
+  'auto',
+  'integrada',
+  'dedicada',
+  'pendente',
+  'gpu-desligada',
+  'integrada-prime-run',
+  'relancamento-perdido',
+  'sugestao-cpu',
+]
 const OPTION_LABEL = { auto: 'Automático', integrada: 'Integrada', dedicada: 'Dedicada (experimental)' }
 const PRIME_RUN_ENV = { __NV_PRIME_RENDER_OFFLOAD: '1', __GLX_VENDOR_LIBRARY_NAME: 'nvidia', __VK_LAYER_NV_optimus: 'NVIDIA_only' }
 const DEFAULT_TIMEOUT_MS = 60_000
@@ -60,6 +77,7 @@ function parseVendor(value, name) {
 function parseArgs(argv) {
   const options = {
     appDir: path.resolve(__dirname, '..'),
+    appImage: '',
     scenarios: [...ALL_SCENARIOS],
     expectIntegrada: null,
     expectDedicada: null,
@@ -94,6 +112,10 @@ function parseArgs(argv) {
         break
       case 'app-dir':
         options.appDir = path.resolve(value)
+        break
+      case 'app-image':
+        if (!value) throw new Error('--app-image precisa do caminho do .AppImage.')
+        options.appImage = path.resolve(value)
         break
       default:
         throw new Error(`Argumento desconhecido: ${argument}`)
@@ -147,11 +169,26 @@ function processesUsingProfile(profile) {
   return pids
 }
 
-async function launchApp(options, profile, { env = {}, args = [] } = {}) {
+/**
+ * O que executar: o `.AppImage` pedido em `--app-image` ou o Electron do
+ * projeto sobre o `dist` de produção.
+ */
+function resolveLaunchCommand(options, args) {
+  const sandbox = process.platform === 'linux' ? ['--no-sandbox'] : []
+  if (options.appImage) {
+    if (!fs.existsSync(options.appImage)) throw new Error(`AppImage não encontrado: ${options.appImage}.`)
+    return { command: options.appImage, args: [...sandbox, ...args] }
+  }
   const indexPath = path.join(options.appDir, 'dist', 'index.html')
   if (!fs.existsSync(indexPath)) {
     throw new Error(`Build do renderer ausente: ${indexPath}. Rode \`npx vite build\` em ${options.appDir}.`)
   }
+  const electronBinary = require(require.resolve('electron', { paths: [options.appDir] }))
+  return { command: electronBinary, args: ['.', ...sandbox, ...args] }
+}
+
+async function launchApp(options, profile, { env = {}, args = [] } = {}) {
+  const launch = resolveLaunchCommand(options, args)
   const port = await freePort()
   const childEnv = { ...process.env, ...env }
   delete childEnv.VITE_DEV_SERVER_URL
@@ -163,8 +200,7 @@ async function launchApp(options, profile, { env = {}, args = [] } = {}) {
     FELIXO_DEVTOOLS_MOCK_PTY: '1',
     FELIXO_GRAPHICS_MODE: 'hardware',
   })
-  const electronBinary = require(require.resolve('electron', { paths: [options.appDir] }))
-  const child = spawn(electronBinary, ['.', ...(process.platform === 'linux' ? ['--no-sandbox'] : []), ...args], {
+  const child = spawn(launch.command, launch.args, {
     cwd: options.appDir,
     env: childEnv,
     detached: process.platform !== 'win32',
@@ -468,26 +504,81 @@ async function disabledGpuScenario(options) {
   }
 }
 
+/**
+ * As variáveis de GPU com que cada processo do app nasceu (`/proc/<pid>/environ`
+ * é o ambiente do `exec`), sem repetir: mostra se houve relançamento limpo.
+ */
+function gpuEnvironmentsOfProcesses(profile) {
+  const environments = processesUsingProfile(profile).map((pid) => {
+    try {
+      return fs
+        .readFileSync(`/proc/${pid}/environ`, 'utf8')
+        .split('\0')
+        .filter((line) => /^(__NV|__GLX|__VK|FELIXO_GPU_ENV)/.test(line))
+        .join(' ')
+    } catch {
+      return ''
+    }
+  })
+  return [...new Set(environments)]
+}
+
 async function primeRunScenario(options) {
   if (process.platform !== 'linux') return { cenario: 'integrada-prime-run', pulado: 'só no Linux', falhas: [] }
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-prime-run-'))
   try {
     fs.writeFileSync(path.join(profile, 'gpu-preference.json'), `${JSON.stringify({ preference: 'integrada' })}\n`)
-    const result = await withApp(options, profile, { env: PRIME_RUN_ENV }, async ({ browser, page }) => {
-      const pids = processesUsingProfile(profile)
-      const ambientes = pids.map((pid) => {
-        try {
-          return fs.readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').filter((line) => /^(__NV|__GLX|__VK|FELIXO_GPU_ENV)/.test(line))
-        } catch {
-          return []
-        }
-      })
-      return { cdp: await readCdpGpu(browser), app: await appGpuStatus(page), ambientesDosProcessos: [...new Set(ambientes.map((lines) => lines.join(' ')))] }
-    })
+    const result = await withApp(options, profile, { env: PRIME_RUN_ENV }, async ({ browser, page }) => ({
+      cdp: await readCdpGpu(browser),
+      app: await appGpuStatus(page),
+      arquivo: readPreferenceFile(profile),
+      ambientesDosProcessos: gpuEnvironmentsOfProcesses(profile),
+    }))
     result.cenario = 'integrada-prime-run'
     result.falhas = []
     if (result.cdp.featureStatus.gpu_compositing !== 'enabled') result.falhas.push(`gpu_compositing=${result.cdp.featureStatus.gpu_compositing}`)
+    if (result.app.applied !== 'integrada') result.falhas.push(`o app aplicou ${result.app.applied}`)
+    // O processo relançado assume o pedido e o apaga; sobrando, a próxima abertura voltaria para Automático.
+    if (result.arquivo?.pendingRelaunch !== null) result.falhas.push('o pedido de relançamento ficou no perfil')
+    if (result.arquivo?.preference !== 'integrada' || result.arquivo?.fallback) result.falhas.push('a escolha não ficou na Integrada')
+    if (!result.ambientesDosProcessos.includes('FELIXO_GPU_ENV_SANITIZED=1')) result.falhas.push('nenhum processo relançado com o ambiente limpo')
     expectVendor(result, options.expectIntegrada, 'integrada-prime-run')
+    return result
+  } finally {
+    fs.rmSync(profile, { recursive: true, force: true })
+  }
+}
+
+async function lostRelaunchScenario(options) {
+  if (process.platform !== 'linux') return { cenario: 'relancamento-perdido', pulado: 'só no Linux', falhas: [] }
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-relancamento-'))
+  try {
+    const startedAt = new Date().toISOString()
+    fs.writeFileSync(
+      path.join(profile, 'gpu-preference.json'),
+      `${JSON.stringify({ preference: 'integrada', pendingStart: null, pendingRelaunch: { preference: 'integrada', startedAt }, fallback: null }, null, 2)}\n`,
+    )
+    const result = await withApp(options, profile, { env: PRIME_RUN_ENV }, async ({ browser, page }) => {
+      const arquivoAntesDeReconhecer = readPreferenceFile(profile)
+      await page.waitForFunction(() => document.body.innerText.includes('Placa de vídeo voltou para Automático'))
+      await capture(options, page, 'placa-relancamento-perdido-aviso')
+      return {
+        cdp: await readCdpGpu(browser),
+        app: await appGpuStatus(page),
+        arquivoAntesDeReconhecer,
+        avisos: await visibleNotices(page),
+        ambientesDosProcessos: gpuEnvironmentsOfProcesses(profile),
+      }
+    })
+    result.cenario = 'relancamento-perdido'
+    result.falhas = []
+    if (result.arquivoAntesDeReconhecer?.preference !== 'auto') result.falhas.push('a preferência não voltou para auto')
+    if (result.arquivoAntesDeReconhecer?.fallback?.reason !== 'relaunch-failed') result.falhas.push('sem aviso de relançamento perdido')
+    if (result.arquivoAntesDeReconhecer?.pendingRelaunch !== null) result.falhas.push('o pedido de relançamento ficou no perfil')
+    if (result.app.applied !== 'auto') result.falhas.push(`o app aplicou ${result.app.applied}`)
+    if (!result.avisos.voltouParaAutomatico) result.falhas.push('a tela não avisou')
+    // Sem laço: esta abertura não relança de novo.
+    if (result.ambientesDosProcessos.includes('FELIXO_GPU_ENV_SANITIZED=1')) result.falhas.push('relançou de novo')
     return result
   } finally {
     fs.rmSync(profile, { recursive: true, force: true })
@@ -560,6 +651,7 @@ async function run(options) {
     if (scenario === 'pendente') result = await pendingScenario(options)
     else if (scenario === 'gpu-desligada') result = await disabledGpuScenario(options)
     else if (scenario === 'integrada-prime-run') result = await primeRunScenario(options)
+    else if (scenario === 'relancamento-perdido') result = await lostRelaunchScenario(options)
     else if (scenario === 'sugestao-cpu') result = await cpuSuggestionScenario(options)
     else result = await preferenceScenario(options, scenario)
     results.push(result)
@@ -568,7 +660,12 @@ async function run(options) {
         `(vendor ${vendorHex(result.cdp?.activeVendorId) ?? '-'}) ${result.falhas.length ? `FALHOU: ${result.falhas.join('; ')}` : 'ok'}`,
     )
   }
-  const report = { geradoEm: new Date().toISOString(), plataforma: `${process.platform}-${process.arch}`, resultados: results }
+  const report = {
+    geradoEm: new Date().toISOString(),
+    plataforma: `${process.platform}-${process.arch}`,
+    pacote: options.appImage ? `AppImage ${path.basename(options.appImage)}` : 'electron . (dist)',
+    resultados: results,
+  }
   if (options.out) {
     fs.mkdirSync(path.dirname(options.out), { recursive: true })
     fs.writeFileSync(options.out, `${JSON.stringify(report, null, 2)}\n`)
