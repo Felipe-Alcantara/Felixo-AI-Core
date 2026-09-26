@@ -90,6 +90,8 @@ const {
 const {
   registerOrchestratorSettingsIpcHandlers,
 } = require('./services/orchestrator-settings-ipc-handlers.cjs')
+const { registerOnboardingIpcHandlers } = require('./services/onboarding-ipc-handlers.cjs')
+const { resolveOnboardingAutomation } = require('./core/onboarding-automation.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
@@ -646,6 +648,15 @@ app.whenReady().then(async () => {
     isPackaged: app.isPackaged,
   })
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
+  // Tutorial do canvas: estado no SQLite com compare-and-set. A instância de
+  // automação (com porta de depuração) não abre nem grava nada sozinha, salvo
+  // FELIXO_DEVTOOLS_ONBOARDING=1 (mesmo molde do hardware:get-profile).
+  registerOnboardingIpcHandlers({
+    ipcMain,
+    database: storageDatabase,
+    getAppVersion: resolveRuntimeAppVersion,
+    automation: resolveOnboardingAutomation({ env: process.env, devtoolsPort }),
+  })
   agentUsageWatching = registerAgentUsageIpcHandlers({
     service: agentUsageService,
     getMainWindow,

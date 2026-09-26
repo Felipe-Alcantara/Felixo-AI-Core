@@ -4844,3 +4844,32 @@ Registro gravado às 15:01. Arquivos novos em `app/src/features/onboarding/`: `o
   schema 1, então não existe versão menor para migrar dentro do próprio `normalize`).
 
 **Validação.** `npx vitest run src/features/onboarding`: 74 testes ok; `npm run typecheck` ok; `eslint` da pasta ok.
+
+## 2026-09-26 — Tutorial do canvas: estado no SQLite, IPC e política de automação (commit 4 do plano)
+
+Registro gravado às 15:04.
+
+**O que ficou pronto.**
+- `electron/services/storage/onboarding-state-repository.cjs`: leitura tolerante (JSON inválido ou envelope sem
+  revisão vira `corrupted: true`, revisão 0) e `compareAndSetOnboardingState` com `BEGIN IMMEDIATE`, um SELECT e um
+  UPSERT na chave `onboarding.state`, envelope `{ revision, value }`.
+- `electron/services/onboarding-ipc-handlers.cjs`: canais `onboarding:read` (com `appVersion` e `automation`) e
+  `onboarding:write` (valida objeto simples, `schemaVersion` inteiro ≥ 1, `expectedRevision` inteiro ≥ 0 e no máximo
+  64 KiB em bytes UTF-8). `ipcMain`, banco, versão, política e relógio são injetados.
+- `electron/core/onboarding-automation.cjs`: `autoOpen` falso com porta de depuração válida, salvo
+  `FELIXO_DEVTOOLS_ONBOARDING=1`; sem porta é sempre produto.
+- Registro no `main.cjs` logo depois de `registerOrchestratorSettingsIpcHandlers`, ponte `onboarding` no
+  `preload.cjs` (sempre presente, não só no devtools) e tipos `OnboardingReadResult`/`OnboardingWriteResult` no
+  `vite-env.d.ts`.
+
+**Detalhes de implementação que o plano não fixava.**
+- O `ROLLBACK` só roda se o `BEGIN IMMEDIATE` desta função deu certo. Com uma transação de outro módulo aberta na
+  mesma conexão, o `BEGIN` falha e um `ROLLBACK` incondicional desfaria o trabalho alheio (há teste para isso).
+- A escrita grava a forma JSON do valor recebido (o que a leitura devolve), nunca o objeto clonado pelo IPC.
+- A porta conta como válida só entre 1 e 65535, a mesma condição com que o `main.cjs` liga o CDP.
+- O processo filho do N-mp fica em `electron/__fixtures__/onboarding-cas-worker.cjs`, a pasta de fixtures que o
+  `electron/` já usa; sem `.test` no nome, o runner não o executa como teste.
+
+**Validação.** `node --test` dos quatro arquivos novos: 21/21 (N-repo, N-mp com 20 rodadas entre dois processos
+node reais, N-ipc com o contrato do preload e do `vite-env.d.ts`, N-auto); `npm run typecheck` ok;
+`node --check` de `main.cjs` e `preload.cjs` ok.

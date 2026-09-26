@@ -63,6 +63,12 @@ contextBridge.exposeInMainWorld('felixo', {
   hardware: {
     getProfile: () => ipcRenderer.invoke('hardware:get-profile'),
   },
+  // Estado do tutorial do canvas: o main é a única autoridade (SQLite com
+  // compare-and-set), e a leitura traz a política de automação decidida lá.
+  onboarding: {
+    read: () => ipcRenderer.invoke('onboarding:read'),
+    write: (request) => ipcRenderer.invoke('onboarding:write', request),
+  },
   autostart: {
     getConfig: () => ipcRenderer.invoke('autostart:get-config'),
     setEnabled: (enabled) => ipcRenderer.invoke('autostart:set-enabled', enabled),

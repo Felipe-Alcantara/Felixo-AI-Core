@@ -317,6 +317,31 @@ type OfficialCliSwitchAccountResult = OfficialCliLoginResult & {
   loggedOut?: boolean
 }
 
+/** Política de automação do tutorial, decidida no main (`electron/core/onboarding-automation.cjs`). */
+type OnboardingAutomation = {
+  autoOpen: boolean
+  reason: 'produto' | 'devtools' | 'devtools-opt-in'
+}
+
+/** Leitura do estado do tutorial; linha corrompida vem com `corrupted: true`, revisão 0 e `value: null`. */
+type OnboardingReadResult =
+  | {
+      ok: true
+      revision: number
+      value: unknown
+      corrupted: boolean
+      /** Versão do app: só contexto gravado, nunca decide nada. */
+      appVersion: string | null
+      automation: OnboardingAutomation
+    }
+  | { ok: false; message: string }
+
+/** Compare-and-set: `applied: false` traz o valor atual para o evento ser reaplicado sobre ele. */
+type OnboardingWriteResult =
+  | { ok: true; applied: true; revision: number }
+  | { ok: true; applied: false; revision: number; value: unknown; corrupted: boolean }
+  | { ok: false; message: string }
+
 declare global {
   interface Window {
     felixo?: {
@@ -386,6 +411,11 @@ declare global {
       hardware?: {
         /** CPUs lógicas e se a máquina está na classe em que o Modo Performance foi medido. */
         getProfile: () => Promise<HardwareProfile>
+      }
+      /** Estado do tutorial do canvas no SQLite do main (`electron/services/onboarding-ipc-handlers.cjs`). */
+      onboarding?: {
+        read(): Promise<OnboardingReadResult>
+        write(request: { expectedRevision: number; value: unknown }): Promise<OnboardingWriteResult>
       }
       autostart?: {
         getConfig: () => Promise<{
