@@ -77,8 +77,11 @@ describe('preferência de placa de vídeo', () => {
     expect(gpuPreferenceOptions(compatible).filter((option) => !option.disabled).map((option) => option.value)).toEqual(['auto'])
     expect(describeGpuChoiceLimit(compatible)).toMatch(/modo compatível.*não lê as placas.*voltar para Automático/)
 
-    // No Automático e sem duas placas, continua escondido.
+    // No Automático e sem duas placas, continua escondido...
     expect(shouldShowGpuChoice({ ...compatible, preference: 'auto' })).toBe(false)
+    // ...menos logo depois de a pessoa salvar Automático por ele: o campo fica
+    // com a confirmação em vez de sumir no clique.
+    expect(shouldShowGpuChoice({ ...compatible, preference: 'auto' }, { justSaved: true })).toBe(true)
   })
 
   it('no macOS com placa NVIDIA desliga só a Dedicada, com o motivo', () => {

@@ -148,6 +148,7 @@ export function GpuPreferenceField() {
   const [saving, setSaving] = useState(false)
   const [acknowledging, setAcknowledging] = useState(false)
   const [message, setMessage] = useState('')
+  const [justSaved, setJustSaved] = useState(false)
   const [open, setOpen] = useState(false)
   const [renderer, setRenderer] = useState<string | null | undefined>(undefined)
 
@@ -165,7 +166,10 @@ export function GpuPreferenceField() {
     setSaving(true)
     const result = await saveGpuPreference(selected)
     setMessage(result.message)
-    if (result.ok) setDraft(null)
+    if (result.ok) {
+      setDraft(null)
+      setJustSaved(true)
+    }
     setSaving(false)
   }
 
@@ -182,7 +186,7 @@ export function GpuPreferenceField() {
           <GpuFallbackAlert fallback={status.fallback} onAcknowledge={() => void acknowledge()} busy={acknowledging} />
         </div>
       )}
-      {shouldShowGpuChoice(status) && (
+      {shouldShowGpuChoice(status, { justSaved }) && (
         <GpuPreferenceFieldView
           status={status}
           selected={selected}

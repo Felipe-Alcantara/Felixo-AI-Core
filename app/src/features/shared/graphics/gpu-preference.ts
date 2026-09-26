@@ -93,11 +93,15 @@ export function isGpuPreference(value: string): value is GpuPreference {
  * sem duas placas (a dedicada desligada no MUX, uma eGPU desconectada, o modo
  * compatível, em que o app não lê as placas), para a pessoa poder voltar para
  * Automático pela tela. No Linux a Dedicada salva continua valendo com uma
- * placa só.
+ * placa só. Depois de a pessoa salvar (`justSaved`), o campo continua na tela
+ * com a confirmação, mesmo que a escolha nova seja Automático.
  */
-export function shouldShowGpuChoice(status: GpuPreferenceStatus | null | undefined): boolean {
+export function shouldShowGpuChoice(
+  status: GpuPreferenceStatus | null | undefined,
+  { justSaved = false }: { justSaved?: boolean } = {},
+): boolean {
   if (!status) return false
-  return status.multipleGpus || status.preference !== 'auto'
+  return status.multipleGpus || status.preference !== 'auto' || justSaved
 }
 
 /**

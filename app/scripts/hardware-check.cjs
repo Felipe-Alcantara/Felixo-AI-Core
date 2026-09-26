@@ -643,6 +643,7 @@ async function savedChoiceCompatibleScenario(options) {
       await openGpuOption(page)
       const app = await appGpuStatus(page)
       const limite = await page.evaluate(() => document.body.innerText.includes('só dá para voltar para Automático'))
+      // chooseAndSave abre o seletor, escolhe e salva; antes, lê as opções com ele aberto.
       await page.evaluate(() => document.querySelector('[role="combobox"][aria-label="Placa de vídeo"]').click())
       await page.waitForSelector('[role="option"]')
       const opcoes = await page.evaluate(() =>
@@ -651,9 +652,11 @@ async function savedChoiceCompatibleScenario(options) {
           desligada: node.getAttribute('aria-disabled') === 'true',
         })),
       )
-      await capture(options, page, 'placa-escolha-salva-compativel')
       await page.evaluate(() => document.querySelector('[role="combobox"][aria-label="Placa de vídeo"]').click())
+      await page.waitForSelector('[role="option"]', { state: 'detached' })
       await chooseAndSave(page, 'auto')
+      // Depois de salvar Automático o campo continua, com a confirmação.
+      await capture(options, page, 'placa-escolha-salva-compativel')
       return { app, limite, opcoes, arquivo: readPreferenceFile(profile) }
     })
     result.cenario = 'escolha-salva-compativel'
