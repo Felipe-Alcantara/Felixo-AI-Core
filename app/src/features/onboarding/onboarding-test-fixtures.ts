@@ -213,3 +213,113 @@ export function mutateValue(random: () => number, base: unknown, depth = 0): unk
   }
   return base
 }
+
+// ---------------------------------------------------------------------------
+// Backend falso da store: um "disco" com revisão e compare-and-set em memória,
+// com leitura e escrita que o teste pode segurar (latência controlada).
+// ---------------------------------------------------------------------------
+
+export type FakeDisk = {
+  revision: number
+  json: string | null
+  corrupted: boolean
+  reads: number
+  writes: Array<{ expectedRevision: number; value: unknown; applied: boolean }>
+}
+
+export function createDisk(initial: { value?: unknown; corrupted?: boolean } = {}): FakeDisk {
+  const hasValue = initial.value !== undefined && initial.value !== null
+  return {
+    revision: hasValue ? 1 : 0,
+    json: hasValue ? JSON.stringify(initial.value) : null,
+    corrupted: initial.corrupted === true,
+    reads: 0,
+    writes: [],
+  }
+}
+
+export function diskValue(disk: FakeDisk): Record<string, unknown> | null {
+  return disk.json === null ? null : (JSON.parse(disk.json) as Record<string, unknown>)
+}
+
+/** Outra janela ou processo grava direto no disco (sem passar pela store sob teste). */
+export function externalWrite(disk: FakeDisk, mutate: (value: Record<string, unknown> | null) => unknown) {
+  disk.revision++
+  disk.json = JSON.stringify(mutate(diskValue(disk)))
+  disk.corrupted = false
+}
+
+export type Deferred = { promise: Promise<void>; resolve: () => void }
+
+export function deferred(): Deferred {
+  let resolve: () => void = () => {}
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+export type FakeBackendOptions = {
+  automation?: { autoOpen: boolean; reason: 'produto' | 'devtools' | 'devtools-opt-in' }
+  appVersion?: string | null
+  read?: 'ok' | 'falha' | 'excecao' | 'pendurada'
+  readGate?: Deferred
+  writeGate?: () => Promise<void>
+  writeFails?: boolean
+}
+
+export function fakeBackend(disk: FakeDisk, options: FakeBackendOptions = {}) {
+  const automation = options.automation ?? { autoOpen: true, reason: 'produto' as const }
+  return {
+    async read() {
+      disk.reads++
+      if (options.readGate) await options.readGate.promise
+      if (options.read === 'falha') return { ok: false as const, message: 'banco travado' }
+      if (options.read === 'excecao') throw new Error('ipc caiu')
+      if (options.read === 'pendurada') return new Promise<never>(() => {})
+      return {
+        ok: true as const,
+        revision: disk.corrupted ? 0 : disk.revision,
+        value: disk.corrupted ? null : diskValue(disk),
+        corrupted: disk.corrupted,
+        appVersion: options.appVersion === undefined ? '0.1.0' : options.appVersion,
+        automation: { ...automation },
+      }
+    },
+    async write(request: { expectedRevision: number; value: unknown }) {
+      if (options.writeGate) await options.writeGate()
+      const value: unknown = JSON.parse(JSON.stringify(request.value))
+      if (options.writeFails) {
+        disk.writes.push({ expectedRevision: request.expectedRevision, value, applied: false })
+        return { ok: false as const, message: 'disco cheio' }
+      }
+      const revision = disk.corrupted ? 0 : disk.revision
+      if (revision !== request.expectedRevision) {
+        disk.writes.push({ expectedRevision: request.expectedRevision, value, applied: false })
+        return {
+          ok: true as const,
+          applied: false as const,
+          revision,
+          value: disk.corrupted ? null : diskValue(disk),
+          corrupted: disk.corrupted,
+        }
+      }
+      disk.revision = revision + 1
+      disk.json = JSON.stringify(value)
+      disk.corrupted = false
+      disk.writes.push({ expectedRevision: request.expectedRevision, value, applied: true })
+      return { ok: true as const, applied: true as const, revision: disk.revision }
+    },
+  }
+}
+
+/** sessionStorage em memória; compartilhar a instância simula o reload da mesma janela. */
+export function memoryStorage(initial: Record<string, string> = {}) {
+  const data = new Map(Object.entries(initial))
+  return {
+    data,
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => void data.set(key, value),
+    removeItem: (key: string) => void data.delete(key),
+  }
+}

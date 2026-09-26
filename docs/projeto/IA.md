@@ -4873,3 +4873,40 @@ Registro gravado às 15:04.
 **Validação.** `node --test` dos quatro arquivos novos: 21/21 (N-repo, N-mp com 20 rodadas entre dois processos
 node reais, N-ipc com o contrato do preload e do `vite-env.d.ts`, N-auto); `npm run typecheck` ok;
 `node --check` de `main.cjs` e `preload.cjs` ok.
+
+## 2026-09-26 — Tutorial do canvas: store, sinais de boot e retomada por sessão (commit 5 do plano)
+
+Registro gravado às 15:19.
+
+**O que ficou pronto.**
+- `onboarding-store.ts`: `createOnboardingStore(deps)` e o singleton `onboardingStore`, com
+  `useOnboardingSnapshot()` sobre `useSyncExternalStore` (snapshot de servidor constante). Leitura com prazo de
+  4 s, decisão automática uma vez por store depois da leitura e da hidratação, reivindicações pessimistas,
+  abrir/pular/concluir otimistas numa fila de escrita, conflito resolvido reaplicando o mesmo evento, retomada
+  por `sessionStorage` sem escrita, gatilhos de capability e de canvas, reset e falha de render isolada.
+- `onboarding-boot-signals.ts` (chunk de entrada, sem React): foto das chaves `felixo*` e marcador de primeiro
+  boot; chamado em `main.tsx` antes do `createRoot`.
+- `onboarding-devtools.ts`: falha forçada lida só com `window.felixo.devtools`.
+- Testes U-store (35 casos), U-prop (500 sequências de 40 eventos com dependências espiãs e uma sonda em
+  `fetch`) e U-boot. O U-prop foi conferido com duas mutações de propósito (pular rebaixando `concluido`;
+  novidade com `autoOpen` falso): as duas reprovaram, e o código voltou ao original.
+
+**Desvios e acréscimos ao plano, com motivo.**
+- `session` é um getter (`() => storage`), como no `openia-image-store`: acessar `window.sessionStorage` pode
+  lançar, e o getter deixa cada acesso protegido.
+- Dependência `log` (QA Logger, escopo `renderer:onboarding`) para a recuperação e as falhas de escrita que o
+  plano manda registrar. O U-prop confere que a store só chama as dependências de I/O previstas mais leituras
+  puras (relógio, locale, sinais, falha forçada, `schedule`, `log`).
+- API além do plano: `canvasUnmounted()` (o portão "só com o CanvasView montado" precisa saber quando o canvas
+  sai), `focusBeforeOpen()` (o elemento focado é capturado pela store no instante da abertura, antes de o chunk
+  preguiçoso carregar e o menu da Ajuda fechar) e `settled()` (testes e smoke esperam leitura, avaliação e
+  escritas terminarem).
+- `TourSession.falhaForcada`: a falha forçada é lida a cada abertura, e a camada só consulta o snapshot, sem ler
+  `sessionStorage` no render.
+- Rótulos de `decisao` além da lista do plano: `sem-ponte`, `retomada`, `recuperado`, `anunciado`, `carregando`,
+  `suprimido:recuperaria` e `suprimido:anunciaria`.
+- Se a pessoa abre um tour pela Ajuda antes de a leitura terminar e a decisão automática é anunciar uma
+  novidade, a store espera o tour fechar em vez de gastar o anúncio sem mostrar o aviso (teste dedicado).
+
+**Validação (gates completos em `app/`).** `npm run lint` ok; `npm run build` ok; `npm test` 1811/1811;
+`npm run test:frontend` 1458 ok e 1 pulado (152 arquivos).
