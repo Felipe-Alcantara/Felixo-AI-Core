@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react'
 
+import type { ResolveMarkdownRelativeLink } from './MarkdownLink'
+
 const MarkdownContent = lazy(() =>
   import('./MarkdownContent').then(({ MarkdownContent: component }) => ({
     default: component,
@@ -9,6 +11,7 @@ const MarkdownContent = lazy(() =>
 type DeferredMarkdownContentProps = {
   content: string
   baseDir?: string
+  resolveRelativeLink?: ResolveMarkdownRelativeLink
 }
 
 /**
@@ -19,6 +22,7 @@ type DeferredMarkdownContentProps = {
 export function DeferredMarkdownContent({
   content,
   baseDir,
+  resolveRelativeLink,
 }: DeferredMarkdownContentProps) {
   return (
     <Suspense
@@ -28,7 +32,11 @@ export function DeferredMarkdownContent({
         </span>
       }
     >
-      <MarkdownContent content={content} baseDir={baseDir} />
+      <MarkdownContent
+        content={content}
+        baseDir={baseDir}
+        resolveRelativeLink={resolveRelativeLink}
+      />
     </Suspense>
   )
 }

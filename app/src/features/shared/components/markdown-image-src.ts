@@ -60,6 +60,25 @@ export function sanitizeMarkdownUrl(value: string, key: string): string {
   return isSafeRemoteUrl(normalizedValue) ? normalizedValue : ''
 }
 
+/**
+ * Link relativo a outro arquivo do mesmo conjunto de documentos
+ * (`OUTRO.md`, `../docs/GUIA.md#secao`). `sanitizeMarkdownUrl` o descarta
+ * porque, sozinho, ele só apontaria para a origem do próprio renderer; quem
+ * sabe a que conjunto o documento pertence decide para onde ele leva.
+ *
+ * Fica de fora tudo que já é destino por si: esquema (`https:`, `file:`,
+ * `C:\`), host (`//exemplo.com`), âncora (`#secao`) e query solta.
+ */
+export function isRelativeMarkdownLink(value: string): boolean {
+  const normalizedValue = value.trim()
+
+  if (!normalizedValue || hasUrlControl(normalizedValue)) return false
+  if (/^(?:#|\?|\/\/|\\)/.test(normalizedValue)) return false
+  if (isWindowsAbsolute(normalizedValue)) return false
+
+  return !hasUrlScheme(normalizedValue)
+}
+
 function isSafeMarkdownLink(value: string): boolean {
   if (value.startsWith('#')) return true
   return (

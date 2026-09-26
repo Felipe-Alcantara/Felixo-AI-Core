@@ -24,7 +24,16 @@ import {
   MAX_MARKDOWN_CONTENT_CHARS,
   prepareMarkdownContent,
 } from './markdown-content-safety'
-import { resolveMarkdownImageSrc, sanitizeMarkdownUrl } from './markdown-image-src'
+import {
+  MARKDOWN_ANCHOR_ATTRIBUTE,
+  markdownHeadingSlug,
+} from './markdown-heading-anchor'
+import {
+  isRelativeMarkdownLink,
+  resolveMarkdownImageSrc,
+  sanitizeMarkdownUrl,
+} from './markdown-image-src'
+import { MarkdownLink, type ResolveMarkdownRelativeLink } from './MarkdownLink'
 
 type MarkdownContentProps = {
   content: string
@@ -35,6 +44,14 @@ type MarkdownContentProps = {
    * sempre, correto para markdown sem arquivo por trás (ex.: chat).
    */
   baseDir?: string
+  /**
+   * Destino, dentro da tela, dos links relativos do documento (ex.: os guias
+   * do System Design citando uns aos outros). Sem ele, link relativo vira
+   * texto: fora de um conjunto de documentos, ele não leva a lugar nenhum.
+   * Precisa ser estável (`useMemo`/`useCallback`): uma identidade nova refaz
+   * os componentes do Markdown.
+   */
+  resolveRelativeLink?: ResolveMarkdownRelativeLink
 }
 
 const highlightLanguageAliases: Record<string, string> = {
@@ -153,30 +170,59 @@ hljs.registerLanguage('xml', xmlLanguage)
 /**
  * Uma fábrica, não um objeto fixo: `img` e `pre` (que pode renderizar outro
  * `MarkdownContent` aninhado) precisam do `baseDir` atual para resolver
- * imagem com caminho relativo. `react-markdown` só repassa pra cada
- * componente o que o próprio Markdown escreveu — nenhum jeito de injetar um
- * prop extra por fora — então `baseDir` entra por closure.
+ * imagem com caminho relativo, e `a` precisa do resolvedor de links
+ * relativos. `react-markdown` só repassa pra cada componente o que o próprio
+ * Markdown escreveu — nenhum jeito de injetar um prop extra por fora — então
+ * os dois entram por closure.
  */
-function createMarkdownComponents(baseDir: string | undefined): Components {
+function createMarkdownComponents(
+  baseDir: string | undefined,
+  resolveRelativeLink: ResolveMarkdownRelativeLink | undefined,
+): Components {
   return {
     h1({ children }) {
-      return <h1 className="text-base font-semibold text-zinc-50">{children}</h1>
+      return (
+        <h1 className="text-base font-semibold text-zinc-50" {...headingAnchor(children)}>
+          {children}
+        </h1>
+      )
     },
     h2({ children }) {
-      return <h2 className="text-sm font-semibold text-zinc-100">{children}</h2>
+      return (
+        <h2 className="text-sm font-semibold text-zinc-100" {...headingAnchor(children)}>
+          {children}
+        </h2>
+      )
     },
     h3({ children }) {
-      return <h3 className="text-[13px] font-semibold text-zinc-100">{children}</h3>
+      return (
+        <h3 className="text-[13px] font-semibold text-zinc-100" {...headingAnchor(children)}>
+          {children}
+        </h3>
+      )
     },
     h4({ children }) {
-      return <h4 className="text-[13px] font-semibold text-zinc-100">{children}</h4>
+      return (
+        <h4 className="text-[13px] font-semibold text-zinc-100" {...headingAnchor(children)}>
+          {children}
+        </h4>
+      )
     },
     h5({ children }) {
-      return <h5 className="text-[12px] font-semibold text-zinc-200">{children}</h5>
+      return (
+        <h5 className="text-[12px] font-semibold text-zinc-200" {...headingAnchor(children)}>
+          {children}
+        </h5>
+      )
     },
     h6({ children }) {
       return (
-        <h6 className="text-[11px] font-semibold uppercase text-zinc-300">{children}</h6>
+        <h6
+          className="text-[11px] font-semibold uppercase text-zinc-300"
+          {...headingAnchor(children)}
+        >
+          {children}
+        </h6>
       )
     },
     p({ children }) {
@@ -193,14 +239,9 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
     },
     a({ children, href }) {
       return (
-        <a
-          className="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)"
-          href={href}
-          rel="noreferrer"
-          target="_blank"
-        >
+        <MarkdownLink href={href} resolveRelativeLink={resolveRelativeLink}>
           {children}
-        </a>
+        </MarkdownLink>
       )
     },
     blockquote({ children }) {
@@ -314,7 +355,11 @@ function createMarkdownComponents(baseDir: string | undefined): Components {
             <CodeBlock code={recoveredMarkdown.code} language={language} />
             {/* baseDir explícito: sem isso, o `<MarkdownContent>` aninhado
               nasceria sem saber a pasta do arquivo. */}
-            <MarkdownContent baseDir={baseDir} content={recoveredMarkdown.markdown} />
+            <MarkdownContent
+              baseDir={baseDir}
+              content={recoveredMarkdown.markdown}
+              resolveRelativeLink={resolveRelativeLink}
+            />
           </>
         )
       }
@@ -409,9 +454,12 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   )
 }
 
-export function MarkdownContent({ content, baseDir }: MarkdownContentProps) {
+export function MarkdownContent({ content, baseDir, resolveRelativeLink }: MarkdownContentProps) {
   const normalizedContent = normalizeMarkdownContent(content)
-  const components = useMemo(() => createMarkdownComponents(baseDir), [baseDir])
+  const components = useMemo(
+    () => createMarkdownComponents(baseDir, resolveRelativeLink),
+    [baseDir, resolveRelativeLink],
+  )
 
   return (
     <div className="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100">
@@ -422,7 +470,9 @@ export function MarkdownContent({ content, baseDir }: MarkdownContentProps) {
           [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
         ]}
         remarkPlugins={[remarkGfm]}
-        urlTransform={sanitizeMarkdownUrl}
+        urlTransform={
+          resolveRelativeLink ? sanitizeMarkdownUrlKeepingRelativeLinks : sanitizeMarkdownUrl
+        }
       >
         {normalizedContent.text}
       </ReactMarkdown>
@@ -437,6 +487,21 @@ export function MarkdownContent({ content, baseDir }: MarkdownContentProps) {
       )}
     </div>
   )
+}
+
+/**
+ * A política de sempre, exceto que link relativo chega intacto ao componente
+ * `a`, onde o resolvedor decide se ele tem destino. Nunca vira `href` de
+ * verdade: `MarkdownLink` o troca por botão ou texto.
+ */
+function sanitizeMarkdownUrlKeepingRelativeLinks(value: string, key: string): string {
+  if (key === 'href' && isRelativeMarkdownLink(value)) return value.trim()
+  return sanitizeMarkdownUrl(value, key)
+}
+
+/** Marca o título como destino de `[texto](#slug)` (ver `markdown-heading-anchor`). */
+function headingAnchor(children: ReactNode) {
+  return { [MARKDOWN_ANCHOR_ATTRIBUTE]: markdownHeadingSlug(getPlainText(children)) }
 }
 
 function normalizeMarkdownContent(content: string) {
