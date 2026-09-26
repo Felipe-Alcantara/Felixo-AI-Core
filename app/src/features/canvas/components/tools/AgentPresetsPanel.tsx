@@ -135,7 +135,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
       {(message || error) && (
         <p
           role="status"
-          className={`mb-3 rounded p-2 text-xs ${
+          className={`mb-3 rounded-sm p-2 text-xs ${
             message?.tone === 'ok' && !error
               ? 'bg-emerald-500/10 text-emerald-400'
               : 'bg-red-500/10 text-red-400'

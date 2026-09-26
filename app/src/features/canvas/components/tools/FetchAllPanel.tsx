@@ -344,7 +344,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
 
       {scope && (
         <div
-          className={`mb-3 rounded border p-2.5 ${
+          className={`mb-3 rounded-sm border p-2.5 ${
             scope.requiresConfirmation
               ? 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)]'
               : 'border-white/10 bg-zinc-800/60'
@@ -419,7 +419,7 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
                 type="button"
                 onClick={confirmScope}
                 disabled={busy || !scope.available.length}
-                className={`mt-2 w-full rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+                className={`mt-2 w-full rounded-sm px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
                   scopeConfirmed
                     ? 'bg-white/4 text-(--f-core-white) ring-1 ring-white/25 hover:bg-white/16'
                     : 'bg-(--color-warning) text-zinc-950 hover:bg-[color-mix(in_srgb,var(--color-warning)_24%,transparent)]'

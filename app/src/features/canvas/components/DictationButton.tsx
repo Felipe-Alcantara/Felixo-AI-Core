@@ -31,7 +31,7 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
         aria-label={title}
         title={title}
         data-dictation-state={state.phase}
-        className={`felixo-btn-icon flex items-center gap-1.5 rounded px-2 py-1 text-xs ${
+        className={`felixo-btn-icon flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs ${
           recording ? 'bg-red-500/20 text-red-200' : 'text-(--f-core-white-soft) hover:bg-white/10'
         } disabled:opacity-60`}
       >

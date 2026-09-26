@@ -355,7 +355,7 @@ function FilterTab({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`felixo-btn rounded px-2 py-1 text-[11px] transition-colors ${
+      className={`felixo-btn rounded-sm px-2 py-1 text-[11px] transition-colors ${
         active ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
       }`}
     >

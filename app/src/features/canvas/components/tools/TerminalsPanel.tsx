@@ -501,7 +501,7 @@ export function TerminalsPanel({
           title="Enviar mensagens diferentes para vários terminais"
           aria-label="Alternar modo de enviar mensagens em massa"
           aria-pressed={composeMode}
-          className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
+          className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 ${
             composeMode ? 'text-(--f-core-active)' : 'text-zinc-400'
           }`}
         >
@@ -680,7 +680,7 @@ function ElementRow({
     <li
       data-element-row
       style={{ transform: translateY ? `translateY(${translateY}px)` : undefined }}
-      className={`rounded ${
+      className={`rounded-sm ${
         dragging
           ? // No transition on the dragged row: it must track the pointer
             // 1:1, while the rows making room animate into place.
@@ -706,7 +706,7 @@ function ElementRow({
           type="button"
           onClick={onSelect}
           title={elementTitle(node)}
-          className={`felixo-btn flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-white/5 ${
+          className={`felixo-btn flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/5 ${
             active ? 'felixo-inspector-row-active bg-white/10' : ''
           }`}
         >

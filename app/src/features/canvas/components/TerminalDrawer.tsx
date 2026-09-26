@@ -562,7 +562,7 @@ export function TerminalDrawer({
           {!collapsed && <button
             type="button"
             onClick={togglePinned}
-            className={`felixo-btn-icon rounded p-1 hover:bg-white/10 ${
+            className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 ${
               pinned ? 'text-(--f-core-white-soft) hover:text-(--f-core-white-soft)' : 'text-zinc-400 hover:text-zinc-100'
             }`}
             aria-label={pinned ? 'Desafixar terminal' : 'Fixar terminal'}

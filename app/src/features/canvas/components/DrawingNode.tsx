@@ -153,7 +153,7 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
               onClick={() => setPenWidth(width)}
               aria-label={`Espessura ${width}px`}
               title={`Espessura ${width}px`}
-              className={`felixo-btn-icon flex h-4 w-4 items-center justify-center rounded p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 ${
+              className={`felixo-btn-icon flex h-4 w-4 items-center justify-center rounded-sm p-0.5 opacity-70 hover:bg-white/10 hover:opacity-100 ${
                 penWidth === width ? 'bg-white/20 opacity-100' : ''
               }`}
             >
