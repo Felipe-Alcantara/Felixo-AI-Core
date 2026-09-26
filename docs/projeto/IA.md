@@ -4409,3 +4409,99 @@ por baixo do inspector.
   - o seletor nativo dirigido num Xvfb sem DBus;
   - CLIs falsas via `FELIXO_CLI_PATHS`;
   - o aviso de falha simulado por `devtools main`.
+
+## 2026-09-26 — Funções sem acesso sobre o Tailwind 4: rebase e classes na sintaxe nova
+
+**Task.** A branch `feat/ui-funcoes-sem-acesso` (PR #94, 38 commits) foi escrita sobre o Tailwind 3, e a `main`
+recebeu o Tailwind 4.3.3 (PR #93, cc34310) logo depois. O trabalho foi rebasear sobre a `main`, passar para a
+sintaxe do v4 as classes que o PR acrescentou e provar que toda classe usada nos arquivos do PR gera CSS. Registro
+gravado em 26/09/2026, 06:06.
+
+**Rebase (38 commits, conflito em 8 arquivos).** Em cada um ficaram a função nova do PR e a sintaxe do v4:
+- `FetchAllPanel.tsx`: a lista "Raízes configuradas" da `main` deu lugar ao `FetchAllScanRoots` do PR.
+- `SearchPanel.tsx`: a linha virou `div.felixo-session-row` com a lixeira; o `hover:bg-white/[0.05]` do PR entrou
+  como `hover:bg-white/5`.
+- `ModelManagerModal.tsx`: o botão "Diagnosticar CLIs" ao lado de "Atualizar detecção", com `hover:bg-white/8`.
+- `CliSetupNotice.tsx`: "Tentar de novo / Depois" passou para `CliSetupFailureActions`.
+- `TerminalDrawer.tsx` (dois commits): primeiro o `title` e o `data-*` do duplo clique sobre a classe da `main`;
+  depois a alça passa a `felixo-resize-handle felixo-resize-handle--left`, sem utility.
+- `SkillsPanel.tsx`: a lista com ocultar/restaurar.
+- `MarkdownContent.tsx`: o `<a>` virou `MarkdownLink`.
+- `IA.md`: as duas entradas, a do Tailwind 4 antes desta série.
+
+Quando o lado do PR reescrevia a linha inteira, entrou o texto do PR e a troca de sintaxe foi para o commit de
+conversão, para não conflitar de novo nos commits seguintes.
+
+**Conversão (25 linhas em 7 arquivos).** Um script de sessão leu só as linhas adicionadas
+(`git diff origin/main...HEAD`), extraiu os literais de string e passou cada token pelo design system do próprio
+v4 (`candidatesToCss`, `canonicalizeCandidates`) e pela tabela de renomes do guia. Cada troca foi revisada à mão,
+só dentro de lista de classe. As trocas:
+- Renomes que mantêm o visual do v3: `rounded-sm` → `rounded-xs` (1), `outline-none` → `outline-hidden` (2) e
+  `focus-visible:outline` → `focus-visible:outline-solid` (1).
+- Grafia canônica, com o mesmo CSS: `rounded` → `rounded-sm` (11), `text-[var(--x)]` → `text-(--x)`,
+  `text-[var(--color-error)]` → `text-theme-error`, `/[0.08]` → `/8`, `/[0.06]` → `/6` e `break-words` →
+  `wrap-break-word`.
+- "Tentar de novo" voltou a `bg-(--f-core-white)/90`, a forma da `main`. O `color-mix` do PR só existia porque o
+  v3 descartava essa classe.
+
+Não foram trocados dois falsos positivos: `!hasUrlScheme(...)` (negação em JS) e o comentário do teste que cita a
+forma do v3. O PR não tem `shadow`, `blur`, `ring` sem largura, `flex-shrink`/`flex-grow` nem `!` prefixado.
+
+**Cascata.** Todo o CSS que o PR põe no `index.css` são classes próprias sem camada, como manda a regra da `main`.
+O PR não usa `@apply` nem seletor com utility. A análise estática cruzou cada utility das linhas novas com as regras
+próprias do mesmo elemento. Nenhuma utility com variante (`hover:`, `focus-visible:`, `disabled:`) disputa
+propriedade com regra própria, então nenhuma precisou de `!`.
+
+**Prova contra o CSS do build.** `npx vite build` e depois todos os tokens de classe dos 44 `.ts/.tsx` do PR (sem
+testes), tirados de `className`/`*ClassName`, `cn()` e das constantes que essas expressões citam. Cada token foi
+conferido como seletor em `dist/assets/index-*.css`, com o escape do `CSS.escape`. O resultado final: 499
+tokens, 486 com seletor. Os 13 restantes não são classe ou são ganchos:
+- Valores de JS que a heurística das constantes pegou: `\n`, `info`, `neutral`, `pan`, `select`, `status` e
+  `syncing`.
+- `contains-task-list` e `task-list-item`: classes do remark-gfm que o código lê com `className?.includes`.
+- `hljs` e `language-*`: a convenção do highlight.js.
+- `nopan` e `nowheel`: ganchos do React Flow.
+
+A prova achou três defeitos, corrigidos em commits próprios:
+- Três classes `felixo-*` sem regra nem leitor foram removidas: `felixo-statusbar-selection`, criada neste PR, e
+  `felixo-shell` e `felixo-chat-sidebar`, da `main`, que nunca tiveram CSS (conferido com `git log -S`).
+- `border-theme-error/30`, `border-theme-error/40` e `bg-theme-error/[0.06]` do gerenciador de modelos nunca
+  geraram CSS. É a pendência que a entrada do Tailwind 4 registrou. Ganharam `@utility` na família
+  `theme-error`, e `/[0.06]` passou a `/6`.
+
+**Guarda do aviso das CLIs.** `setup-tailwind-classes.test.ts` procurava `bg-[var(--x)]/N`, que o v4 gera. Agora o
+teste compila o `index.css` com o `compile` do `tailwindcss` e exige que toda classe das listas dos `.tsx` da pasta
+saia no CSS. Conferido que falha: com `shadow-inset` enxertado, acusa "CliDiagnosisView.tsx: shadow-inset". O
+limite é que um literal só conta como lista quando ao menos metade dos tokens gera CSS. O v4.3.3 ainda gera
+`flex-shrink-*`, `decoration-slice` e `overflow-ellipsis`, então a guarda não os pega; por isso os renomes do guia
+passam pela revisão do diff.
+
+**Validação.** `npm ci` (Tailwind 4.3.3 e `@tailwindcss/vite` 4.3.3 no `node_modules`), `npm run lint` sem
+problemas, `npm run build` ok, `npm test` 1691/1691 e `npm run test:frontend` com 140 arquivos, 1306 testes ok e 1
+pulado. No app real (`felixo devtools`, perfil isolado, dev server deste worktree, sob o `flock`), o roteiro de
+integração da série foi repetido: 59 checagens, 0 falhas, mais uma captura do zoom pelo menu Exibir. As capturas `tw4-*.png` foram comparadas com as `integracao-*.png`
+(Tailwind 3), do mesmo roteiro e na mesma janela 1320×710: a lista de Recentes do chat saiu idêntica pixel a pixel. Nas outras
+oito, de 0,58% a 1,84% dos pixels diferem, e a diferença é só deslocamento vertical de 1 a 4 px de texto (a altura de
+linha proporcional do v4 na barra lateral e nas listas do gerenciador de modelos). Não há diferença de cor, borda,
+raio ou fundo nos elementos do PR: "Remover" da barra de estado, popover "Gerar imagem", "Tentar de novo" (branco a
+90%), ícones de ocultar skill, raiz do Fetch All, grip da alça da gaveta, guia do System Design e botão
+"Diagnosticar CLIs".
+
+**Mudanças visuais esperadas.** São as da entrada do Tailwind 4: altura de linha proporcional (itens da barra
+lateral ~1 px mais altos no topo), paleta em OKLCH. A única mudança de propósito é no gerenciador de modelos. O
+aviso "Trocar a conta de…" passa a ter borda vermelha a 30% e fundo vermelho a 6%, e "Desconectar e abrir login"
+borda vermelha a 40%. No v4 eles pintavam `currentColor`.
+
+**Não verificado / riscos.**
+- O aviso de troca de conta do gerenciador não foi capturado, porque exige o fluxo de login de uma CLI oficial. A
+  correção foi conferida no CSS gerado: os seletores existem, com `color-mix` e fallback.
+- `hover:bg-theme-error/20` em `AgentConfigFields.tsx`, arquivo que este PR não toca, também não gera CSS; ficou
+  fora do escopo.
+- Os scripts de análise (linhas adicionadas, cascata e prova contra o `dist`) são de sessão e ficaram fora do
+  repositório.
+- Windows e macOS só serão cobertos pela CI.
+
+**Ideias para quem quiser contribuir.**
+- Levar a prova contra o `dist` para um `npm run` que rode sobre todo o `src`.
+- Pôr `--color-theme-error` no `@theme` para que `bg-theme-error/N` funcione em qualquer degrau, sem uma `@utility`
+  por valor.
