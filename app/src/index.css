@@ -1,121 +1,235 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS 4, pelo plugin @tailwindcss/vite (vite.config.ts). O que era o
+   tailwind.config.js (fontes e sombras extras) vive agora no @theme abaixo.
 
-:root {
-  /* Felixo AI Core — aliases semânticos sobre os tokens oficiais do Brand Kit.
-     O arquivo fonte é `features/shared/brand/felixo-brand-tokens.css`; esta
-     camada mantém os nomes históricos do frontend sem criar uma paleta rival. */
-  --f-core-black-deep: var(--felixo-black);
-  --f-core-black-surface: var(--felixo-surface);
-  --f-core-graphite: var(--felixo-surface-2);
-  --f-core-structural: var(--felixo-border);
-  --f-core-secondary: var(--felixo-text-muted);
-  --f-core-muted: var(--felixo-text-subtle);
-  --f-core-white-soft: var(--felixo-white);
-  --f-core-white: var(--felixo-white);
-  --f-core-active: var(--felixo-white);
-  --f-core-font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  --f-core-selection-glow: 0 0 0 1px rgba(255, 255, 255, 0.14),
-    0 0 18px rgba(255, 255, 255, 0.065), 0 12px 28px rgba(0, 0, 0, 0.28);
-  --f-core-radius-xs: var(--felixo-radius-sm);
-  --f-core-radius-sm: var(--felixo-radius-md);
-  --f-core-radius-md: var(--felixo-radius-lg);
-  --f-core-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  /* Hairline / icon / route: as três espessuras da marca. */
-  --f-core-stroke-hairline: 1px;
-  --f-core-stroke-icon: 1.5px;
-  --f-core-stroke-route: 2px;
-  /* Distributed Route: shared geometry, spacing and motion vocabulary. */
-  --f-space-1: 4px;
-  --f-space-2: 8px;
-  --f-space-3: 12px;
-  --f-space-4: 16px;
-  --f-space-6: 24px;
-  --f-motion-fast: 160ms;
-  --f-motion-reveal: 240ms;
-  --f-node-border: color-mix(in srgb, var(--f-core-white) 12%, transparent);
-  --f-node-selected: color-mix(in srgb, var(--f-core-white) 38%, transparent);
-  --f-surface-hover: color-mix(in srgb, var(--f-core-white) 5%, transparent);
-  --f-edge-idle: color-mix(in srgb, var(--f-core-white) 22%, transparent);
-  --f-edge-focus: color-mix(in srgb, var(--f-core-white) 60%, transparent);
-  --f-port-hit: 14px;
-  --f-port-dot: 4px;
+   source('.') limita a varredura de classes a src/, como o `content` do v3
+   (os .ts/.tsx de src/; o index.html não usa classes). Sem isso o v4 varreria
+   app/ inteiro (electron/, scripts/, resources/...) e geraria utilities a
+   partir de palavras soltas desses arquivos. */
+@import 'tailwindcss' source('.');
 
-  /* Felixo Controls — one contract for closed fields and portaled menus. */
-  --control-height: 38px;
-  --control-bg: #111214;
-  --control-bg-hover: #151618;
-  --control-bg-focus: #151618;
-  --control-border: rgba(255, 255, 255, 0.07);
-  --control-border-focus: rgba(255, 255, 255, 0.28);
-  --control-radius: 8px;
-  --control-text: #f1f1ee;
-  --control-placeholder: #8d8d89;
-  --control-disabled: #a2a29e;
-  --popover-bg: #101112;
-  --popover-border: rgba(255, 255, 255, 0.08);
-  --popover-shadow: 0 16px 50px rgba(0, 0, 0, 0.4);
-  --popover-radius: 10px;
-  --option-hover: rgba(255, 255, 255, 0.06);
-  --option-selected: rgba(255, 255, 255, 0.095);
+@theme {
+  --font-sans: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
-  /* Escada de superfícies do workspace.
-     Antes eram três degraus (deep / surface / graphite) e o resultado lia como
-     "tudo preto". Agora são seis, com passos pequenos e desiguais: a diferença
-     é para ser SENTIDA como profundidade, não contada como tons de cinza. O
-     canvas é o mais fundo — é onde o espaço aparece; cada camada de chrome
-     sobe um degrau em direção à luz. */
-  --f-surface-canvas: #060607;
-  --f-surface-sidebar: #08080a;
-  --f-surface-header: #0a0a0c;
-  --f-surface-panel: #0c0c0e;
-  --f-surface-control: #121214;
-  --f-surface-floating: #151517;
+  --shadow-shell: 0 22px 70px rgba(0, 0, 0, 0.42);
+  --shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.2);
+}
 
-  --color-app-bg: var(--f-surface-canvas);
-  --color-main-bg: var(--f-surface-canvas);
-  --color-panel: var(--f-surface-panel);
-  --color-sidebar: var(--f-surface-sidebar);
-  --color-input: var(--f-core-black-deep);
-  --color-composer: var(--f-surface-control);
-  --color-status-bg: var(--f-surface-header);
-  --color-border: rgba(247, 247, 244, 0.09);
-  /* "Em UI, luz indica atividade" (04_Assets/USAGE.md, regra 5): o estado
-     ativo é luz, não cor. O verde-água anterior saiu por isso. */
-  --color-accent: var(--f-core-white);
-  /* Sinal funcional, não decoração: erro e sucesso continuam existindo porque
-     comunicam risco e conclusão, mas dessaturados para não competir com a
-     marca monocromática. */
-  --color-error: #e2b4b4;
-  --color-success: #b6cfbd;
-  /* Atenção: o único âmbar que sobra no produto. Existe porque "aguardando
-     aprovação" é o estado que pede ação humana — na escala de cinza ele se
-     confundiria com "trabalhando" e a pessoa perderia o agente parado. */
-  --color-warning: #d9c39a;
-  --spacing-base: 0.5rem;
-  --radius-base: var(--f-core-radius-sm);
-  --shadow-base: 0 8px 24px rgba(0, 0, 0, 0.45);
-  /* Button interaction timings. Press is snappier than release so a click
-     feels immediate; both stay short enough not to delay repeated clicks.
-     These deliberately stay fast — direct manipulation must never lag the
-     pointer, however slow the surrounding panel choreography is. */
-  --felixo-press-duration: 90ms;
-  --felixo-release-duration: 180ms;
-  --felixo-press-scale: 0.96;
-  --felixo-press-scale-icon: 0.9;
-  color: var(--f-core-white-soft);
-  background: var(--f-core-black-deep);
-  font-family: var(--f-core-font-sans);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Categorias de notificação: usadas pela borda do nó e pelo item do painel. */
-  --felixo-notify-needs-response: #e0a93b;
-  --felixo-notify-finished: #4cbf8b;
-  --felixo-notify-failed: #e26d8a;
+/* Cascata no Tailwind 4 — decisão registrada em docs/projeto/ARQUITETURA.md
+   ("Tailwind 4 e a cascata do CSS próprio").
+
+   O v4 emite tudo em camadas nativas (theme, base, components, utilities) e
+   CSS fora de camada vence QUALQUER camada, seja qual for a especificidade. No
+   v3 não havia camadas: este arquivo inteiro vinha depois das utilities e a
+   disputa era só especificidade + ordem. Para manter o mesmo resultado:
+
+   - regras de elemento e variáveis globais (:root, *, body, button, select,
+     textarea...) ficam em @layer base: no v3 qualquer classe as vencia por
+     especificidade, e fora de camada no v4 elas passariam a vencer as
+     utilities (ex.: `font: inherit` apagaria text-xs/font-mono em botões);
+   - as classes próprias (.felixo-*, overrides de .react-flow__* etc.)
+     continuam SEM camada, como no v3: vencem utilities da mesma
+     especificidade (o que o código já assume, ex. `top` da sidebar) e seguem
+     disputando só especificidade/ordem com o CSS das bibliotecas (React Flow,
+     Excalidraw, xterm), que também é sem camada. */
+@layer base {
+  :root {
+    /* Felixo AI Core — aliases semânticos sobre os tokens oficiais do Brand Kit.
+       O arquivo fonte é `features/shared/brand/felixo-brand-tokens.css`; esta
+       camada mantém os nomes históricos do frontend sem criar uma paleta rival. */
+    --f-core-black-deep: var(--felixo-black);
+    --f-core-black-surface: var(--felixo-surface);
+    --f-core-graphite: var(--felixo-surface-2);
+    --f-core-structural: var(--felixo-border);
+    --f-core-secondary: var(--felixo-text-muted);
+    --f-core-muted: var(--felixo-text-subtle);
+    --f-core-white-soft: var(--felixo-white);
+    --f-core-white: var(--felixo-white);
+    --f-core-active: var(--felixo-white);
+    --f-core-font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
+    --f-core-selection-glow: 0 0 0 1px rgba(255, 255, 255, 0.14),
+      0 0 18px rgba(255, 255, 255, 0.065), 0 12px 28px rgba(0, 0, 0, 0.28);
+    --f-core-radius-xs: var(--felixo-radius-sm);
+    --f-core-radius-sm: var(--felixo-radius-md);
+    --f-core-radius-md: var(--felixo-radius-lg);
+    --f-core-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* Hairline / icon / route: as três espessuras da marca. */
+    --f-core-stroke-hairline: 1px;
+    --f-core-stroke-icon: 1.5px;
+    --f-core-stroke-route: 2px;
+    /* Distributed Route: shared geometry, spacing and motion vocabulary. */
+    --f-space-1: 4px;
+    --f-space-2: 8px;
+    --f-space-3: 12px;
+    --f-space-4: 16px;
+    --f-space-6: 24px;
+    --f-motion-fast: 160ms;
+    --f-motion-reveal: 240ms;
+    --f-node-border: color-mix(in srgb, var(--f-core-white) 12%, transparent);
+    --f-node-selected: color-mix(in srgb, var(--f-core-white) 38%, transparent);
+    --f-surface-hover: color-mix(in srgb, var(--f-core-white) 5%, transparent);
+    --f-edge-idle: color-mix(in srgb, var(--f-core-white) 22%, transparent);
+    --f-edge-focus: color-mix(in srgb, var(--f-core-white) 60%, transparent);
+    --f-port-hit: 14px;
+    --f-port-dot: 4px;
+
+    /* Felixo Controls — one contract for closed fields and portaled menus. */
+    --control-height: 38px;
+    --control-bg: #111214;
+    --control-bg-hover: #151618;
+    --control-bg-focus: #151618;
+    --control-border: rgba(255, 255, 255, 0.07);
+    --control-border-focus: rgba(255, 255, 255, 0.28);
+    --control-radius: 8px;
+    --control-text: #f1f1ee;
+    --control-placeholder: #8d8d89;
+    --control-disabled: #a2a29e;
+    --popover-bg: #101112;
+    --popover-border: rgba(255, 255, 255, 0.08);
+    --popover-shadow: 0 16px 50px rgba(0, 0, 0, 0.4);
+    --popover-radius: 10px;
+    --option-hover: rgba(255, 255, 255, 0.06);
+    --option-selected: rgba(255, 255, 255, 0.095);
+
+    /* Escada de superfícies do workspace.
+       Antes eram três degraus (deep / surface / graphite) e o resultado lia como
+       "tudo preto". Agora são seis, com passos pequenos e desiguais: a diferença
+       é para ser SENTIDA como profundidade, não contada como tons de cinza. O
+       canvas é o mais fundo — é onde o espaço aparece; cada camada de chrome
+       sobe um degrau em direção à luz. */
+    --f-surface-canvas: #060607;
+    --f-surface-sidebar: #08080a;
+    --f-surface-header: #0a0a0c;
+    --f-surface-panel: #0c0c0e;
+    --f-surface-control: #121214;
+    --f-surface-floating: #151517;
+
+    --color-app-bg: var(--f-surface-canvas);
+    --color-main-bg: var(--f-surface-canvas);
+    --color-panel: var(--f-surface-panel);
+    --color-sidebar: var(--f-surface-sidebar);
+    --color-input: var(--f-core-black-deep);
+    --color-composer: var(--f-surface-control);
+    --color-status-bg: var(--f-surface-header);
+    --color-border: rgba(247, 247, 244, 0.09);
+    /* "Em UI, luz indica atividade" (04_Assets/USAGE.md, regra 5): o estado
+       ativo é luz, não cor. O verde-água anterior saiu por isso. */
+    --color-accent: var(--f-core-white);
+    /* Sinal funcional, não decoração: erro e sucesso continuam existindo porque
+       comunicam risco e conclusão, mas dessaturados para não competir com a
+       marca monocromática. */
+    --color-error: #e2b4b4;
+    --color-success: #b6cfbd;
+    /* Atenção: o único âmbar que sobra no produto. Existe porque "aguardando
+       aprovação" é o estado que pede ação humana — na escala de cinza ele se
+       confundiria com "trabalhando" e a pessoa perderia o agente parado. */
+    --color-warning: #d9c39a;
+    --spacing-base: 0.5rem;
+    --radius-base: var(--f-core-radius-sm);
+    --shadow-base: 0 8px 24px rgba(0, 0, 0, 0.45);
+    /* Button interaction timings. Press is snappier than release so a click
+       feels immediate; both stay short enough not to delay repeated clicks.
+       These deliberately stay fast — direct manipulation must never lag the
+       pointer, however slow the surrounding panel choreography is. */
+    --felixo-press-duration: 90ms;
+    --felixo-release-duration: 180ms;
+    --felixo-press-scale: 0.96;
+    --felixo-press-scale-icon: 0.9;
+    color: var(--f-core-white-soft);
+    background: var(--f-core-black-deep);
+    font-family: var(--f-core-font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Categorias de notificação: usadas pela borda do nó e pelo item do painel. */
+    --felixo-notify-needs-response: #e0a93b;
+    --felixo-notify-finished: #4cbf8b;
+    --felixo-notify-failed: #e26d8a;
+  }
+
+  :root[data-theme='high_contrast'] {
+    --color-app-bg: #050505;
+    --color-main-bg: #020617;
+    --color-panel: #0b1120;
+    --color-sidebar: #080808;
+    --color-input: #020617;
+    --color-composer: #0f172a;
+    --color-status-bg: #07111f;
+    --color-border: rgba(125, 211, 252, 0.24);
+    --color-accent: #67e8f9;
+    --color-error: #f87171;
+    --color-success: #4ade80;
+    --spacing-base: 0.5rem;
+    --radius-base: 0.75rem;
+    --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.48);
+    --felixo-notify-needs-response: #fbbf24;
+    --felixo-notify-finished: #4ade80;
+    --felixo-notify-failed: #f87171;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    min-width: 320px;
+    margin: 0;
+    overflow: hidden;
+    background: var(--color-main-bg);
+    letter-spacing: -0.011em;
+  }
+
+  button,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  textarea {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+
+  select {
+    color: var(--f-core-white-soft);
+    color-scheme: dark;
+  }
+
+  select option {
+    color: var(--f-core-white-soft);
+    background: var(--f-core-graphite);
+  }
+
+  textarea::-webkit-scrollbar,
+  section::-webkit-scrollbar,
+  div::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  textarea::-webkit-scrollbar-thumb,
+  section::-webkit-scrollbar-thumb,
+  div::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  ::selection {
+    color: var(--f-core-black-deep);
+    background: var(--color-accent);
+  }
 }
 
 /* Feedback local: o arquivo ainda não foi lido nem enviado; apenas o alvo
@@ -126,107 +240,77 @@
   background: rgba(6, 78, 59, 0.22);
 }
 
-:root[data-theme='high_contrast'] {
-  --color-app-bg: #050505;
-  --color-main-bg: #020617;
-  --color-panel: #0b1120;
-  --color-sidebar: #080808;
-  --color-input: #020617;
-  --color-composer: #0f172a;
-  --color-status-bg: #07111f;
-  --color-border: rgba(125, 211, 252, 0.24);
-  --color-accent: #67e8f9;
-  --color-error: #f87171;
-  --color-success: #4ade80;
-  --spacing-base: 0.5rem;
-  --radius-base: 0.75rem;
-  --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.48);
-  --felixo-notify-needs-response: #fbbf24;
-  --felixo-notify-finished: #4ade80;
-  --felixo-notify-failed: #f87171;
+/* Tokens de tema como utilities de verdade (aceitam variantes: hover:, disabled:...). */
+@utility text-theme-error {
+  color: var(--color-error);
 }
 
-* {
-  box-sizing: border-box;
+@utility text-theme-success {
+  color: var(--color-success);
 }
 
-html,
-body,
-#root {
-  min-height: 100%;
+@utility bg-theme-error {
+  background-color: var(--color-error);
 }
 
-body {
-  min-width: 320px;
-  margin: 0;
-  overflow: hidden;
-  background: var(--color-main-bg);
-  letter-spacing: -0.011em;
+@utility bg-theme-success {
+  background-color: var(--color-success);
 }
 
-button,
-select,
-textarea {
-  font: inherit;
+@utility border-theme-error {
+  border-color: var(--color-error);
 }
 
-button {
-  cursor: pointer;
+@utility border-theme-success {
+  border-color: var(--color-success);
 }
 
-textarea {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+@utility bg-theme-error/10 {
+  background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
 
-select {
-  color: var(--f-core-white-soft);
-  color-scheme: dark;
+@utility bg-theme-error/15 {
+  background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
 }
 
-select option {
-  color: var(--f-core-white-soft);
-  background: var(--f-core-graphite);
+@utility bg-theme-success/10 {
+  background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
 }
 
-textarea::-webkit-scrollbar,
-section::-webkit-scrollbar,
-div::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+@utility border-theme-error/20 {
+  border-color: color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
-textarea::-webkit-scrollbar-thumb,
-section::-webkit-scrollbar-thumb,
-div::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+@utility border-theme-error/50 {
+  border-color: color-mix(in srgb, var(--color-error) 50%, transparent);
 }
 
-::selection {
-  color: var(--f-core-black-deep);
-  background: var(--color-accent);
+@utility border-theme-error/60 {
+  border-color: color-mix(in srgb, var(--color-error) 60%, transparent);
 }
 
-@layer utilities {
-  .text-theme-error { color: var(--color-error); }
-  .text-theme-success { color: var(--color-success); }
-  .bg-theme-error { background-color: var(--color-error); }
-  .bg-theme-success { background-color: var(--color-success); }
-  .border-theme-error { border-color: var(--color-error); }
-  .border-theme-success { border-color: var(--color-success); }
-  .bg-theme-error\/10 { background-color: color-mix(in srgb, var(--color-error) 10%, transparent); }
-  .bg-theme-error\/15 { background-color: color-mix(in srgb, var(--color-error) 15%, transparent); }
-  .bg-theme-success\/10 { background-color: color-mix(in srgb, var(--color-success) 10%, transparent); }
-  .border-theme-error\/20 { border-color: color-mix(in srgb, var(--color-error) 20%, transparent); }
-  .border-theme-error\/50 { border-color: color-mix(in srgb, var(--color-error) 50%, transparent); }
-  .border-theme-error\/60 { border-color: color-mix(in srgb, var(--color-error) 60%, transparent); }
-  .border-theme-success\/20 { border-color: color-mix(in srgb, var(--color-success) 20%, transparent); }
-  .border-theme-success\/50 { border-color: color-mix(in srgb, var(--color-success) 50%, transparent); }
-  .rounded-theme { border-radius: var(--radius-base); }
-  .shadow-theme { box-shadow: var(--shadow-base); }
-  .gap-theme { gap: var(--spacing-base); }
-  .p-theme { padding: var(--spacing-base); }
+@utility border-theme-success/20 {
+  border-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+}
+
+@utility border-theme-success/50 {
+  border-color: color-mix(in srgb, var(--color-success) 50%, transparent);
+}
+
+@utility rounded-theme {
+  border-radius: var(--radius-base);
+}
+
+@utility shadow-theme {
+  box-shadow: var(--shadow-base);
+}
+
+@utility gap-theme {
+  gap: var(--spacing-base);
+}
+
+@utility p-theme {
+  padding: var(--spacing-base);
 }
 
 @layer components {
@@ -3003,12 +3087,14 @@ div::-webkit-scrollbar-thumb {
    suas ações; apenas começam abaixo desta faixa para que o app leia como uma
    janela única, em vez de três caixas empilhadas.
    --------------------------------------------------------------------------- */
-:root {
-  --felixo-topbar-height: 3rem;
-  --felixo-statusbar-height: 1.875rem;
-  /* Padrão = SIDEBAR_WIDTH (canvas-surfaces.ts). O CanvasView sobrescreve na
-     raiz do canvas com a largura arrastada, em px. */
-  --felixo-sidebar-width: 18rem;
+@layer base {
+  :root {
+    --felixo-topbar-height: 3rem;
+    --felixo-statusbar-height: 1.875rem;
+    /* Padrão = SIDEBAR_WIDTH (canvas-surfaces.ts). O CanvasView sobrescreve na
+       raiz do canvas com a largura arrastada, em px. */
+    --felixo-sidebar-width: 18rem;
+  }
 }
 
 .felixo-canvas-topbar {
@@ -3193,17 +3279,19 @@ div::-webkit-scrollbar-thumb {
    hierarchy, focus and selection, with a very small amount of ambient light
    so selected objects feel present without becoming neon.
    --------------------------------------------------------------------------- */
-body {
-  font-family: var(--f-core-font-sans);
-  font-weight: 400;
-  letter-spacing: -0.012em;
-}
+@layer base {
+  body {
+    font-family: var(--f-core-font-sans);
+    font-weight: 400;
+    letter-spacing: -0.012em;
+  }
 
-button,
-input,
-textarea,
-select {
-  font-family: inherit;
+  button,
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
 }
 
 .felixo-canvas-topbar,
