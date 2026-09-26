@@ -40,6 +40,20 @@ test('ignores non-zoom shortcuts', () => {
   )
 })
 
+test('Ctrl+_ (Ctrl+Shift+-) chega ao terminal em vez de virar zoom', () => {
+  // No terminal, Ctrl+_ envia 0x1F: é o "desfazer" do readline, do emacs e de
+  // CLIs de agente. Tratado como zoom, ele era engolido pelo before-input-event
+  // e nunca chegava ao xterm. Diminuir zoom continua no Ctrl+- sem Shift.
+  assert.equal(
+    getZoomAction({ type: 'keyDown', control: true, shift: true, key: '_' }),
+    null,
+  )
+  assert.equal(
+    getZoomAction({ type: 'keyDown', meta: true, shift: true, key: '_' }),
+    null,
+  )
+})
+
 test('clamps zoom level to supported bounds', () => {
   assert.equal(clampZoomLevel(4), 3)
   assert.equal(clampZoomLevel(-4), -3)
