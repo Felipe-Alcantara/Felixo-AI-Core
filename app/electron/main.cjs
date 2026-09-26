@@ -117,9 +117,7 @@ const {
   evaluateGpuAfterReady,
   readGraphicsRecommendation,
 } = require('./core/graphics-recommendation.cjs')
-const { GPU_ENV_SANITIZED_FLAG, applyGpuLaunchPlan } = require('./core/gpu-preference.cjs')
-const { abandonGpuRelaunch, prepareGpuStart } = require('./core/gpu-start-guard.cjs')
-const { relaunchApp } = require('./core/app-relaunch.cjs')
+const { startGpuPreference } = require('./core/gpu-launch.cjs')
 const { createGpuInfoWatcher } = require('./core/gpu-info-watcher.cjs')
 const { createGpuPreferenceSession } = require('./services/gpu-preference-session.cjs')
 const { describeHardwareProfile } = require('./core/hardware-profile.cjs')
@@ -221,45 +219,17 @@ if (useSoftwareRendering) {
 // Placa de vídeo (Automático / Integrada / Dedicada), decidida aqui pelo mesmo
 // motivo: o processo de GPU só lê a linha de comando quando é lançado. Um
 // início anterior com a escolha que não terminou saudável volta para
-// Automático antes de aplicar (ver `electron/core/gpu-start-guard.cjs`).
-let gpuStart = isReleaseSmoke
-  ? prepareGpuStart({ userDataPath: '' })
-  : prepareGpuStart({
-      userDataPath: app.getPath('userData'),
-      environment: process.env,
-      softwareRendering: useSoftwareRendering,
-      isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
-    })
-const gpuLaunch = applyGpuLaunchPlan(gpuStart.plan, {
-  commandLine: app.commandLine,
+// Automático antes de aplicar (ver `electron/core/gpu-start-guard.cjs`). Quando
+// o plano pede um relançamento com o ambiente limpo e ele começa, o
+// `app.exit(0)` lá dentro encerra este processo na hora (medido em 26/09/2026
+// no Electron 41.10.7): nada abaixo roda, nem o whenReady.
+const { gpuStart, gpuLaunch } = startGpuPreference({
+  app,
+  userDataPath: isReleaseSmoke ? '' : app.getPath('userData'),
   environment: process.env,
+  softwareRendering: useSoftwareRendering,
+  isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
 })
-// Integrada com variáveis herdadas que mandam o GL para a NVIDIA (ex.: o
-// `prime-run`): elas já estão no zygote do Chromium, criado antes deste
-// arquivo, então só um processo novo, com o ambiente limpo, sobe na integrada.
-// O relançado leva `FELIXO_GPU_ENV_SANITIZED` e nunca relança de novo; o
-// pedido gravado por `prepareGpuStart` cobre o relançado que não nasce.
-if (gpuStart.relaunch) {
-  const relaunch = relaunchApp({ app })
-  if (relaunch.ok) {
-    // Encerra na hora: nada depois desta linha roda, nem o whenReady (medido
-    // em 26/09/2026 no Electron 41.10.7).
-    app.exit(0)
-  } else {
-    // Sem processo novo, fechar deixaria a pessoa sem app: segue aqui, no
-    // Automático, com o aviso.
-    delete process.env[GPU_ENV_SANITIZED_FLAG]
-    gpuStart = abandonGpuRelaunch({
-      userDataPath: app.getPath('userData'),
-      start: gpuStart,
-      detail: `${relaunch.method}: ${relaunch.detail}`,
-    })
-  }
-} else {
-  // A marca é só do processo relançado: os terminais e os apps abertos a
-  // partir daqui não a herdam.
-  delete process.env[GPU_ENV_SANITIZED_FLAG]
-}
 // Antes do whenReady, para não perder o primeiro `gpu-info-update`: só depois
 // dele `app.getGPUFeatureStatus()` deixa de ser o padrão `disabled_software`.
 const gpuInfoWatcher = createGpuInfoWatcher(app)
