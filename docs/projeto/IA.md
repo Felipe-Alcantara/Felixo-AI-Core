@@ -3974,3 +3974,27 @@ do **último dado recebido**. Ela desiste só quando nada chega por 2 s, e o tet
 `settleDeadline`. Dois testes com um PTY falso cobrem os dois lados: a saída que chega depois do filho sair é
 esperada (falha com a regra antiga), e sem mais saída a bancada desiste rápido, sem ir até o teto. A bancada
 real `--counts=1,20` completou no Linux. A confirmação no Windows depende das próximas runs.
+
+## 2026-09-26 — Flake do PTY no Windows: a causa é a desmontagem da fase anterior
+
+Depois de duas correções (`7b6907a` e `c4e0fb0`) que não acabaram com o flake, rodei um experimento no
+Windows do CI, numa branch descartável `exp/conpty-dll` que não vai para a main. Ele usou a própria
+`benchmarkNativePtys`, com rodadas intercaladas, cada uma num processo próprio:
+
+| Condição (count=20, 2.000 linhas por sessão) | Rodadas com perda |
+| --- | ---: |
+| Isolado, Node puro, ConPTY do sistema / `conpty.dll` | 0/8 · 0/8 |
+| Isolado, processo principal do Electron, sistema / dll | 0/8 · 0/8 |
+| Sequência 1→5→10→20 como a bancada, sem pausa entre fases | **1/8** (sessões 4 e 5 em 1.154/1.155) |
+| A mesma sequência esperando os PTYs anteriores morrerem + 3 s | 0/8 |
+
+Nem o Electron nem o tipo de ConPTY causam a perda sozinhos. O que corta a saída de sessões novas é abrir 20
+PTYs logo depois de matar os da fase anterior, enquanto o node-pty ainda desmonta os antigos (os
+`AttachConsole failed` do log vêm dessa desmontagem). Na bancada completa, que ainda tem o renderer aberto, a
+taxa chegou a ~50%. Agora, depois do `kill`, cada fase espera os PTYs saírem de fato (teto de 15 s) e mais 3 s
+antes da próxima (`waitForProcessesToExit`, com dois testes). No Linux, a bancada com `--counts=1,5,20`
+passou.
+
+**Risco de produto (hipótese, não medida no app):** o app também roda o node-pty no processo principal do
+Electron. Fechar muitos terminais e abrir muitos logo em seguida no Windows pode fazer as sessões novas
+perderem saída. Fica registrado na task do flake para ser medido no app real.

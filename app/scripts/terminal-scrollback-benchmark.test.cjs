@@ -251,6 +251,8 @@ const NATIVE_OPTIONS = {
   nativeDrainMs: 600,
   timeoutMs: 10_000,
   sampleIntervalMs: 5_000,
+  teardownTimeoutMs: 1_000,
+  teardownSettleMs: 0,
   lineWidth: 40,
   longPromptChars: 0,
   longEvery: 2_000,
@@ -281,4 +283,21 @@ test('o dreno do PTY nativo desiste quando a saída para de chegar', async () =>
   assert.deepEqual(result.linesBySession, [1])
   assert.equal(result.timedOut, true)
   assert.ok(Date.now() - startedAt < 5_000, 'não espera até o teto quando nada mais chega')
+})
+
+test('a desmontagem espera os PTYs da fase saírem antes de liberar a próxima', async () => {
+  // Regressão: a fase count=20 abria 20 PTYs enquanto os da fase anterior
+  // ainda morriam, e sessões novas perdiam saída no Windows.
+  const { spawn } = require('node:child_process')
+  const filho = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 400)'], { stdio: 'ignore' })
+  await new Promise((resolve) => filho.once('spawn', resolve))
+  const inicio = Date.now()
+  const vivos = await benchmark.waitForProcessesToExit([filho.pid], { timeoutMs: 5_000, pollMs: 20 })
+  assert.deepEqual(vivos, [])
+  assert.ok(Date.now() - inicio >= 250, 'esperou o processo sair')
+})
+
+test('a desmontagem desiste no teto e devolve quem continua vivo', async () => {
+  const vivos = await benchmark.waitForProcessesToExit([111, 222], { timeoutMs: 120, pollMs: 20, isAlive: (pid) => pid === 222 })
+  assert.deepEqual(vivos, [222])
 })

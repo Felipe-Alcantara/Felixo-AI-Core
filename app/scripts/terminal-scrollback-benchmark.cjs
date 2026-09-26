@@ -40,6 +40,10 @@ const DEFAULT_LONG_PROMPT_CHARS = 4_096
 const DEFAULT_LONG_EVERY = 2_000
 const DEFAULT_NATIVE_HOLD_MS = 5_000
 const DEFAULT_NATIVE_DRAIN_MS = 2_000
+// Isolamento entre fases nativas: espera os PTYs da fase morrerem de fato
+// (até o teto) e depois mais um respiro, antes da próxima fase abrir os seus.
+const NATIVE_TEARDOWN_TIMEOUT_MS = 15_000
+const NATIVE_TEARDOWN_SETTLE_MS = 3_000
 const DEFAULT_SAMPLE_INTERVAL_MS = 250
 const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_COUNT = 20
@@ -472,6 +476,20 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/**
+ * Espera os processos terminarem de fato, até `timeoutMs`. Devolve os PIDs
+ * que continuavam vivos no fim (lista vazia = todos saíram).
+ */
+async function waitForProcessesToExit(pids, { timeoutMs, pollMs = 100, isAlive = isProcessAlive } = {}) {
+  const deadline = Date.now() + timeoutMs
+  let alive = pids.filter((pid) => isAlive(pid))
+  while (alive.length > 0 && Date.now() < deadline) {
+    await sleep(pollMs)
+    alive = alive.filter((pid) => isAlive(pid))
+  }
+  return alive
+}
+
 async function benchmarkNativePtys({ spawnPty, count, ...options }) {
   const activeCount = Math.max(1, Math.ceil(count / 2))
   const ptys = []
@@ -607,6 +625,18 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
     }
   }
   console.log(`[benchmark] native count=${count} cleanup requested`)
+  // Medido no Windows (branch exp/conpty-dll, run 36221548376, Electron): a
+  // sequência 1→5→10→20 SEM esperar a desmontagem da fase anterior perdeu
+  // saída em 1/8 rodadas (sessões paradas em 1.154/1.155 de 2.000 linhas);
+  // esperando os PTYs morrerem e mais 3 s, 0/8. Isolado, o count=20 não
+  // perdeu nada em 32 rodadas (Node e Electron, ConPTY do sistema e dll).
+  // Matar dezenas de PTYs e abrir outros 20 logo em seguida é o que corta a
+  // saída das sessões novas; a próxima fase só começa depois disso.
+  const stillAlive = await waitForProcessesToExit(ptyPids, { timeoutMs: options.teardownTimeoutMs ?? NATIVE_TEARDOWN_TIMEOUT_MS })
+  if (stillAlive.length > 0) {
+    console.warn(`[benchmark] native count=${count}: ${stillAlive.length} PTY(s) ainda vivos após o teto de desmontagem`)
+  }
+  await sleep(options.teardownSettleMs ?? NATIVE_TEARDOWN_SETTLE_MS)
 
   return {
     phase: 'native-pty',
@@ -955,6 +985,7 @@ module.exports = {
   MAX_SCROLLBACK,
   benchmarkNativePtys,
   buildEmitterCode,
+  waitForProcessesToExit,
   parseArgs,
   parsePolicies,
   percentile,
