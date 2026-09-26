@@ -147,6 +147,7 @@ import {
   type CanvasBounds,
 } from '../services/node-geometry'
 import { edgeHandlesBetween } from '../services/edge-handle-routing'
+import { summarizeCanvasSelection } from '../services/canvas-selection'
 import {
   agentLabelOf,
   announceFileNodeToTerminalNode,
@@ -202,6 +203,12 @@ type FlowPositionMapper = {
     options?: { duration?: number },
   ) => void
   getNodes?: () => Node[]
+  /** O que a tecla Delete chama: dispara onNodesChange/onEdgesChange com
+   *  `remove` e leva junto as conexões dos blocos removidos. */
+  deleteElements?: (params: {
+    nodes?: Array<{ id: string }>
+    edges?: Array<{ id: string }>
+  }) => Promise<unknown>
   // `getNodesBounds` is generic over the node union supplied to React Flow;
   // `never[]` keeps this local mapper assignable to any concrete instance.
   getNodesBounds?: (nodes: never[]) => {
@@ -1832,6 +1839,21 @@ function CanvasInner({
     [setEdges],
   )
 
+  // Seleção lida do próprio estado (campo `selected`), para a barra de status.
+  const selection = useMemo(() => summarizeCanvasSelection(nodes, edges), [nodes, edges])
+
+  // "Remover" da barra de status: o mesmo deleteElements que a tecla
+  // Delete/Backspace chama, então passa por onEdgesChange → deleteCanvasEdge
+  // e onNodesChange → removeNode, e os blocos levam junto as suas conexões.
+  const removeSelection = useCallback(() => {
+    const { nodeIds, edgeIds } = summarizeCanvasSelection(nodesRef.current, edgesRef.current)
+    if (nodeIds.length === 0 && edgeIds.length === 0) return
+    void flowInstanceRef.current?.deleteElements?.({
+      nodes: nodeIds.map((id) => ({ id })),
+      edges: edgeIds.map((id) => ({ id })),
+    })
+  }, [])
+
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((current) => {
@@ -2763,6 +2785,9 @@ function CanvasInner({
           nodeCount={nodes.length}
           edgeCount={edges.length}
           hydrated={hydrated && edgesHydrated}
+          selectionLabel={selection.label}
+          onRemoveSelection={removeSelection}
+          removeDisabled={canvasLocked}
         />
       </div>
 
