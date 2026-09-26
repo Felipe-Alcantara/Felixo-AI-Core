@@ -1,3 +1,5 @@
+import type { SystemDesignDocumentSummary } from './types'
+
 type SystemDesignBridge = NonNullable<NonNullable<Window['felixo']>['systemDesign']>
 
 /** Só o que a leitura de um guia precisa da ponte do Electron. */
@@ -20,6 +22,20 @@ export const DOCUMENT_READER_UNAVAILABLE_MESSAGE =
 
 const DOCUMENT_NOT_FOUND_MESSAGE =
   'Documento não encontrado no cache local. Sincronize e tente de novo.'
+
+/**
+ * Identidade do conteúdo de um guia na prévia: caminho + commit de onde veio.
+ *
+ * Toda sincronização regrava `updatedAt`, mesmo quando o repositório não
+ * mudou; com o sha, sincronizar sem commit novo não relê nem re-renderiza o
+ * guia aberto (o de ~50 KB custa mais de um segundo na thread principal numa
+ * máquina modesta). `updatedAt` fica de reserva para documento sem sha.
+ */
+export function systemDesignDocumentRevision(
+  doc: Pick<SystemDesignDocumentSummary, 'path' | 'sourceSha' | 'updatedAt'>,
+): string {
+  return `${doc.path}@${doc.sourceSha ?? doc.updatedAt}`
+}
 
 /**
  * Lê um guia do cache local (o índice só traz o resumo, sem o conteúdo).

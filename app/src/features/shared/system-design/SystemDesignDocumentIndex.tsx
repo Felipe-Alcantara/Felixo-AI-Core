@@ -1,9 +1,10 @@
-import { useEffect, useId, useState } from 'react'
+import { memo, useEffect, useId, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
 import { DeferredMarkdownContent } from '../components/DeferredMarkdownContent'
 import {
   LOADING_DOCUMENT,
+  systemDesignDocumentRevision,
   type SystemDesignDocumentReadState,
 } from './system-design-document'
 import type { SystemDesignDocumentSummary } from './types'
@@ -86,10 +87,10 @@ export function SystemDesignDocumentItem({
         </span>
       </button>
       {expanded ? (
-        // A chave inclui `updatedAt`: uma nova sincronização regrava o guia, e
-        // a prévia aberta relê o conteúdo em vez de continuar com o antigo.
+        // A chave muda quando uma sincronização traz outro commit: a prévia
+        // aberta relê o guia em vez de continuar mostrando o conteúdo antigo.
         <SystemDesignDocumentPreview
-          key={`${doc.path}@${doc.updatedAt}`}
+          key={systemDesignDocumentRevision(doc)}
           id={contentId}
           documentPath={doc.path}
           readDocument={readDocument}
@@ -105,7 +106,13 @@ type SystemDesignDocumentPreviewProps = {
   readDocument: ReadSystemDesignDocument
 }
 
-function SystemDesignDocumentPreview({
+/**
+ * `memo` porque a seção re-renderiza a cada mudança do próprio estado
+ * (sincronizando, config nova, índice relido) e o Markdown não é memoizado:
+ * sem isto, cada "Sincronizar agora" analisava o guia aberto de novo, três
+ * vezes, cada uma bloqueando a thread principal. As props aqui são estáveis.
+ */
+const SystemDesignDocumentPreview = memo(function SystemDesignDocumentPreview({
   id,
   documentPath,
   readDocument,
@@ -120,7 +127,7 @@ function SystemDesignDocumentPreview({
       onRetry={retry}
     />
   )
-}
+})
 
 type SystemDesignDocumentContentProps = {
   id: string

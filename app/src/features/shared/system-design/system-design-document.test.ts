@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   DOCUMENT_READER_UNAVAILABLE_MESSAGE,
   readSystemDesignDocument,
+  systemDesignDocumentRevision,
   type SystemDesignDocumentReader,
 } from './system-design-document'
 import type { SystemDesignDocument } from './types'
@@ -23,6 +24,34 @@ function readerReturning(
 ): SystemDesignDocumentReader {
   return { getDocument: vi.fn(async () => result) }
 }
+
+describe('systemDesignDocumentRevision', () => {
+  const guia = { path: 'core/GUIA.md', updatedAt: '2026-09-21T10:00:00.000Z' }
+
+  it('sincronizar de novo o mesmo commit não muda a revisão, mesmo com updatedAt novo', () => {
+    expect(systemDesignDocumentRevision({ ...guia, sourceSha: 'abc' })).toBe(
+      systemDesignDocumentRevision({ ...guia, sourceSha: 'abc', updatedAt: '2026-09-22T08:00:00.000Z' }),
+    )
+  })
+
+  it('commit novo muda a revisão, para a prévia aberta reler o guia', () => {
+    expect(systemDesignDocumentRevision({ ...guia, sourceSha: 'abc' })).not.toBe(
+      systemDesignDocumentRevision({ ...guia, sourceSha: 'def' }),
+    )
+  })
+
+  it('sem sha, a revisão segue o updatedAt', () => {
+    expect(systemDesignDocumentRevision(guia)).not.toBe(
+      systemDesignDocumentRevision({ ...guia, updatedAt: '2026-09-22T08:00:00.000Z' }),
+    )
+  })
+
+  it('guias diferentes no mesmo commit têm revisões diferentes', () => {
+    expect(systemDesignDocumentRevision({ ...guia, sourceSha: 'abc' })).not.toBe(
+      systemDesignDocumentRevision({ ...guia, path: 'core/OUTRO.md', sourceSha: 'abc' }),
+    )
+  })
+})
 
 describe('readSystemDesignDocument', () => {
   it('pede o guia pelo caminho e devolve o conteúdo pronto para a prévia', async () => {
