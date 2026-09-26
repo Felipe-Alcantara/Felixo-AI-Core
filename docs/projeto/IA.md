@@ -4785,3 +4785,29 @@ número de CPUs" e "Placa de vídeo: correções da revisão" e não as reescrev
 - Medir o custo do `getGPUInfo('basic')` numa máquina Windows, com e sem NPU.
 - Um lançador intermediário que feche os fds herdados antes de reabrir o `.AppImage`.
 - Avisar quando o renderizador do WebGL não é da placa pedida (Linux com duas dedicadas ou sem Vulkan).
+
+## 2026-09-26 — Tutorial do canvas, Ajuda e novidades: plano aprovado
+
+**Task.** Tutorial inicial não bloqueante no canvas, um lugar para reabri-lo (Ajuda) e um aviso discreto de
+capability nova, tudo com estado versionado. O plano completo, com decisões, alternativas descartadas, riscos
+e o mapa aceite → teste (T1.a–T3.d), está em [`PLANO-TUTORIAL-CANVAS.md`](PLANO-TUTORIAL-CANVAS.md). Branch
+`feat/tutorial-canvas`, a partir de `f42eb661` (#95). Registro gravado às 14:50.
+
+**Decisões centrais (detalhe e motivo no plano).**
+- Quem já usa o app não recebe o tutorial automático; os sinais de uso anterior são lidos em `main.tsx`,
+  antes de o tema e o Modo Performance gravarem no mount, com um marcador de primeiro boot que cobre um
+  primeiro boot interrompido.
+- Uma única autoridade de estado: o SQLite do main (`settings['onboarding.state']`), com compare-and-set em
+  `BEGIN IMMEDIATE`. Sem espelho no localStorage e sem função de mesclagem: num conflito, o mesmo evento é
+  reaplicado sobre o estado mais novo.
+- Novidade detectada por identidade (id do catálogo fora de `knownFeatures`), nunca por versão do app,
+  hash ou comparação de arquivo. O catálogo tem um livro de versões (`CATALOG_HISTORY`) conferido em teste.
+- A política de automação é decidida no main (molde do `hardware:get-profile`): a instância do
+  `felixo devtools` não abre nada nem grava nada sozinha, salvo `FELIXO_DEVTOOLS_ONBOARDING=1`.
+- O tour não é modal, não escurece a tela, não anima, nunca clica nem expande nada e não cria agente.
+
+**Divergências registradas.** Do GUIA-ONBOARDING-E-AJUDA (sem overlay bloqueante, sem `animate-ping`, sem
+`hasSeen` booleano) e do "modais prendem foco" do System Design (o tour é `aria-modal="false"`, sem trap).
+
+**Estado.** Só o plano neste passo; o código entra nos commits seguintes, na ordem da seção "Ordem de
+commits" do plano.

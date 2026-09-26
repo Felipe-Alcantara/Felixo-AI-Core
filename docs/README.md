@@ -15,6 +15,7 @@ compatibilidade com histórico legado.
 | [projeto/IA.md](projeto/IA.md) | **Contexto operacional versionado** — objetivo, stack, decisões, testes e histórico de evolução para retomada por IA (segue o template de contexto do padrão de qualidade). |
 | [projeto/ARQUITETURA.md](projeto/ARQUITETURA.md) | Arquitetura vigente do canvas, terminais, providers, persistência e fronteiras do modo legado. |
 | [projeto/ROADMAP.md](projeto/ROADMAP.md) | Direção e próximos passos. |
+| [projeto/PLANO-TUTORIAL-CANVAS.md](projeto/PLANO-TUTORIAL-CANVAS.md) | Plano do tutorial do canvas, da Ajuda e das novidades: estado versionado no SQLite, gatilhos, UX acessível, automação e mapa de testes por aceite. |
 | [projeto/POLITICA-VERSIONAMENTO.md](projeto/POLITICA-VERSIONAMENTO.md) | Política de branches e commits do projeto. |
 | [projeto/RODAR-VIA-CODIGO-FONTE.md](projeto/RODAR-VIA-CODIGO-FONTE.md) | Como rodar o app a partir do código-fonte. |
 | [design/BRAND-SYSTEM.md](design/BRAND-SYSTEM.md) | Tokens e princípios visuais do Felixo AI Core. |
