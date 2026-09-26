@@ -41,7 +41,8 @@ const DEFAULT_ROUNDS = 3
 const MAX_ROUNDS = 10
 const DEFAULT_DURATION_MS = 6_000
 const DEFAULT_NODES = 48
-const MAX_NODES = 200
+// A task de hardware pede o canvas com 1.000 blocos, um uso pesado real.
+const MAX_NODES = 1_000
 const DEFAULT_LAUNCH_TIMEOUT_MS = 60_000
 const JANK_FRAME_MS = 25
 const PERFORMANCE_MODE_STORAGE_KEY = 'felixo-ai-core.performance-mode'

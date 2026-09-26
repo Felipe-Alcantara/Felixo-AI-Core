@@ -17,7 +17,8 @@ test('argumentos inválidos falham com mensagem que diz o formato certo', () => 
   assert.throws(() => bench.parseArgs(['--gpu=nvidia']), /padrao, integrada ou dedicada/)
   assert.throws(() => bench.parseArgs(['--render=cpu']), /gpu ou software/)
   assert.throws(() => bench.parseArgs(['--rounds=0']), /entre 1 e 10/)
-  assert.throws(() => bench.parseArgs(['--nodes=1000']), /entre 4 e 200/)
+  assert.throws(() => bench.parseArgs(['--nodes=1001']), /entre 4 e 1000/)
+  assert.equal(bench.parseArgs(['--nodes=1000']).nodes, 1000)
   assert.throws(() => bench.parseArgs(['--desconhecido']), /Argumento desconhecido/)
 })
 
