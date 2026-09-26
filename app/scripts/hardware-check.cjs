@@ -27,10 +27,15 @@
  * - `integrada-prime-run`: Integrada com as variáveis que o `prime-run`
  *   exporta; o app precisa relançar com o ambiente limpo, subir na integrada
  *   e o processo relançado apagar o pedido de relançamento.
- * - `relancamento-perdido`: o perfil guarda um pedido de relançamento que
- *   nenhum processo relançado assumiu (o que sobrava quando o relançamento
- *   falhava no AppImage); a abertura pelo `prime-run` precisa voltar para
- *   Automático, avisar e não relançar de novo.
+ * - `relancamento-perdido`: o perfil guarda um pedido de relançamento antigo
+ *   (10 min, sem pid) que nenhum processo relançado assumiu (o que sobrava
+ *   quando o relançamento falhava no AppImage); a abertura pelo `prime-run`
+ *   precisa voltar para Automático, avisar e não relançar de novo.
+ * - `relancamento-em-andamento`: o pedido de relançamento tem o pid de um
+ *   processo vivo (o deste script) e passou do prazo curto, como quando a
+ *   pessoa abre o app de novo enquanto o AppImage relançado ainda monta; a
+ *   abertura precisa ficar no Automático sem mexer no pedido nem na escolha,
+ *   sem aviso e sem relançar.
  * - `sugestao-cpu`: numa máquina com até 4 CPUs lógicas, a sugestão aparece
  *   sem ligar o modo; "Agora não" some e continua dispensada depois de
  *   recarregar; num perfil novo, "Ligar Modo Performance" liga o modo.
@@ -62,6 +67,7 @@ const ALL_SCENARIOS = [
   'gpu-desligada',
   'integrada-prime-run',
   'relancamento-perdido',
+  'relancamento-em-andamento',
   'sugestao-cpu',
 ]
 const OPTION_LABEL = { auto: 'Automático', integrada: 'Integrada', dedicada: 'Dedicada (experimental)' }
@@ -553,7 +559,8 @@ async function lostRelaunchScenario(options) {
   if (process.platform !== 'linux') return { cenario: 'relancamento-perdido', pulado: 'só no Linux', falhas: [] }
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-relancamento-'))
   try {
-    const startedAt = new Date().toISOString()
+    // Antigo e sem pid: passou do prazo em que o relançado ainda podia nascer.
+    const startedAt = new Date(Date.now() - 10 * 60_000).toISOString()
     fs.writeFileSync(
       path.join(profile, 'gpu-preference.json'),
       `${JSON.stringify({ preference: 'integrada', pendingStart: null, pendingRelaunch: { preference: 'integrada', startedAt }, fallback: null }, null, 2)}\n`,
@@ -578,6 +585,44 @@ async function lostRelaunchScenario(options) {
     if (result.app.applied !== 'auto') result.falhas.push(`o app aplicou ${result.app.applied}`)
     if (!result.avisos.voltouParaAutomatico) result.falhas.push('a tela não avisou')
     // Sem laço: esta abertura não relança de novo.
+    if (result.ambientesDosProcessos.includes('FELIXO_GPU_ENV_SANITIZED=1')) result.falhas.push('relançou de novo')
+    return result
+  } finally {
+    fs.rmSync(profile, { recursive: true, force: true })
+  }
+}
+
+async function relaunchInProgressScenario(options) {
+  if (process.platform !== 'linux') return { cenario: 'relancamento-em-andamento', pulado: 'só no Linux', falhas: [] }
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-em-andamento-'))
+  try {
+    // Passou do prazo curto, mas o pid (o deste script) está vivo.
+    const seeded = {
+      preference: 'integrada',
+      pendingStart: null,
+      pendingRelaunch: { preference: 'integrada', startedAt: new Date(Date.now() - 90_000).toISOString(), pid: process.pid },
+      fallback: null,
+    }
+    fs.writeFileSync(path.join(profile, 'gpu-preference.json'), `${JSON.stringify(seeded, null, 2)}\n`)
+    const result = await withApp(options, profile, { env: PRIME_RUN_ENV }, async ({ browser, page }) => {
+      const app = await appGpuStatus(page)
+      // Dá tempo para um aviso aparecer, se fosse aparecer.
+      await page.waitForTimeout(2_000)
+      await capture(options, page, 'placa-relancamento-em-andamento')
+      return {
+        cdp: await readCdpGpu(browser),
+        app,
+        arquivo: readPreferenceFile(profile),
+        avisos: await visibleNotices(page),
+        ambientesDosProcessos: gpuEnvironmentsOfProcesses(profile),
+      }
+    })
+    result.cenario = 'relancamento-em-andamento'
+    result.falhas = []
+    if (JSON.stringify(result.arquivo) !== JSON.stringify(seeded)) result.falhas.push('a abertura mexeu no pedido ou na escolha')
+    if (result.app.applied !== 'auto') result.falhas.push(`o app aplicou ${result.app.applied}`)
+    if (result.app.notApplied !== 'relaunch-in-progress') result.falhas.push(`notApplied=${result.app.notApplied}`)
+    if (result.avisos.voltouParaAutomatico) result.falhas.push('avisou volta para Automático')
     if (result.ambientesDosProcessos.includes('FELIXO_GPU_ENV_SANITIZED=1')) result.falhas.push('relançou de novo')
     return result
   } finally {
@@ -652,6 +697,7 @@ async function run(options) {
     else if (scenario === 'gpu-desligada') result = await disabledGpuScenario(options)
     else if (scenario === 'integrada-prime-run') result = await primeRunScenario(options)
     else if (scenario === 'relancamento-perdido') result = await lostRelaunchScenario(options)
+    else if (scenario === 'relancamento-em-andamento') result = await relaunchInProgressScenario(options)
     else if (scenario === 'sugestao-cpu') result = await cpuSuggestionScenario(options)
     else result = await preferenceScenario(options, scenario)
     results.push(result)

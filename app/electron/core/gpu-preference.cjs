@@ -268,6 +268,16 @@ function normalizePendingStart(value) {
   return { preference, startedAt: normalizeTimestamp(value.startedAt) }
 }
 
+/**
+ * O pedido de relançamento é um início pendente com o pid do processo
+ * relançado, quando se sabe (no AppImage, o do `.AppImage` reaberto).
+ */
+function normalizePendingRelaunch(value) {
+  const pending = normalizePendingStart(value)
+  if (!pending) return null
+  return Number.isInteger(value.pid) && value.pid > 0 ? { ...pending, pid: value.pid } : pending
+}
+
 function normalizeFallback(value) {
   if (!value || typeof value !== 'object') return null
   const from = normalizeGpuPreference(value.from)
@@ -286,13 +296,14 @@ function normalizeFallback(value) {
  *
  * - `pendingStart`: início que trocou a GPU e ainda não foi confirmado.
  * - `pendingRelaunch`: o app saiu para reabrir com o ambiente limpo; o
- *   processo relançado apaga, e uma abertura comum que o encontra sabe que
- *   o relançado nunca nasceu.
+ *   processo relançado apaga. Uma abertura comum que o encontra decide pelo
+ *   `pid` e pelo `startedAt` se o relançado ainda está nascendo ou se nunca
+ *   nasceu (ver `gpu-start-guard.cjs`).
  *
  * @returns {{
  *   preference: 'auto' | 'integrada' | 'dedicada',
  *   pendingStart: { preference: 'integrada' | 'dedicada', startedAt: string | null } | null,
- *   pendingRelaunch: { preference: 'integrada' | 'dedicada', startedAt: string | null } | null,
+ *   pendingRelaunch: { preference: 'integrada' | 'dedicada', startedAt: string | null, pid?: number } | null,
  *   fallback: { from: 'integrada' | 'dedicada', reason: string, at: string | null, detail: string | null } | null,
  * }}
  */
@@ -305,7 +316,7 @@ function readGpuPreferenceState(userDataPath, fileSystem = fs) {
     return {
       preference: normalizeGpuPreference(payload?.preference) ?? 'auto',
       pendingStart: normalizePendingStart(payload?.pendingStart),
-      pendingRelaunch: normalizePendingStart(payload?.pendingRelaunch),
+      pendingRelaunch: normalizePendingRelaunch(payload?.pendingRelaunch),
       fallback: normalizeFallback(payload?.fallback),
     }
   } catch {
@@ -323,7 +334,7 @@ function writeGpuPreferenceState(userDataPath, state, fileSystem = fs) {
   const normalized = {
     preference: normalizeGpuPreference(state?.preference) ?? 'auto',
     pendingStart: normalizePendingStart(state?.pendingStart),
-    pendingRelaunch: normalizePendingStart(state?.pendingRelaunch),
+    pendingRelaunch: normalizePendingRelaunch(state?.pendingRelaunch),
     fallback: normalizeFallback(state?.fallback),
   }
   fileSystem.mkdirSync(path.dirname(filePath), { recursive: true })

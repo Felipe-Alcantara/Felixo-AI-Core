@@ -377,8 +377,10 @@ perfil, e é aplicada antes do `app.whenReady()` do próximo início:
   ambiente e relança uma vez. No AppImage o `app.relaunch()` não traz o app de
   volta (o binário está na montagem que some quando ele sai), então o app abre de
   novo o próprio `.AppImage` (`electron/core/app-relaunch.cjs`). Antes de sair ele
-  grava um pedido de relançamento, que o processo relançado apaga; uma abertura
-  que ainda o encontra volta para Automático, com aviso, em vez de relançar em
+  grava um pedido de relançamento (com o pid do relançado, quando há), que o
+  processo relançado apaga. Uma abertura que ainda o encontra com o relançado
+  nascendo (pedido com menos de 30 s ou pid vivo) fica no Automático sem mexer em
+  nada; passado isso, volta para Automático, com aviso, em vez de relançar em
   laço.
 - **Windows e macOS**: `force_high_performance_gpu` / `force_low_power_gpu`,
   documentados pelo Electron 41 e usados pelo Chromium só nesses sistemas. Eles só

@@ -8,10 +8,12 @@ const test = require('node:test')
 
 const { GPU_PREFERENCE_FILE, persistGpuPreference, readGpuPreferenceState } = require('./gpu-preference.cjs')
 const {
+  RELAUNCH_GRACE_MS,
   abandonGpuRelaunch,
   confirmGpuStart,
   evaluateGpuStartHealth,
   prepareGpuStart,
+  recordGpuRelaunchChild,
   revertGpuPreference,
 } = require('./gpu-start-guard.cjs')
 
@@ -23,6 +25,9 @@ const PRIME_RUN_ENV = Object.freeze({
   __VK_LAYER_NV_optimus: 'NVIDIA_only',
 })
 const clock = () => '2026-09-26T12:00:00.000Z'
+/** Relógio `ms` milissegundos depois de `clock`. */
+const after = (ms) => () => new Date(Date.parse(clock()) + ms).toISOString()
+const noProcessAlive = () => false
 
 const profiles = []
 test.after(() => {
@@ -47,6 +52,7 @@ function prepare(profile, overrides = {}) {
     platformName: 'linux',
     environment: {},
     now: clock,
+    isProcessAlive: noProcessAlive,
     ...overrides,
   })
 }
@@ -142,13 +148,14 @@ test('Integrada com ambiente do prime-run grava o pedido de relançamento antes 
   assert.deepEqual(state.pendingRelaunch, { preference: 'integrada', startedAt: clock() })
 })
 
-test('relançado que nunca nasceu: a abertura seguinte volta para Automático, avisa e não relança de novo', () => {
+test('relançado que nunca nasceu: passado o prazo, a abertura seguinte volta para Automático, avisa e não relança de novo', () => {
   // Medido em 26/09/2026: no AppImage o app.relaunch() antes do whenReady não
   // traz o app de volta, e cada abertura parte do mesmo ambiente, sem a marca.
   const profile = profileWith('integrada')
   assert.equal(prepare(profile, { environment: { ...PRIME_RUN_ENV } }).relaunch, true)
 
-  const next = prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  const later = after(RELAUNCH_GRACE_MS + 1_000)
+  const next = prepare(profile, { environment: { ...PRIME_RUN_ENV }, now: later })
   assert.equal(next.relaunch, false)
   assert.equal(next.requested, 'auto')
   assert.equal(next.applied, 'auto')
@@ -157,13 +164,80 @@ test('relançado que nunca nasceu: a abertura seguinte volta para Automático, a
     preference: 'auto',
     pendingStart: null,
     pendingRelaunch: null,
-    fallback: { from: 'integrada', reason: 'relaunch-failed', at: clock(), detail: `relançamento de ${clock()}` },
+    fallback: { from: 'integrada', reason: 'relaunch-failed', at: later(), detail: `relançamento de ${clock()}` },
   })
 
   // Sem laço: a terceira abertura segue no Automático, sem relançar.
-  const third = prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  const third = prepare(profile, { environment: { ...PRIME_RUN_ENV }, now: later })
   assert.equal(third.relaunch, false)
   assert.equal(third.applied, 'auto')
+})
+
+test('abertura durante o relançamento (relançado ainda nascendo) não reverte nem grava nada', () => {
+  // A pessoa clica de novo no ícone enquanto o AppImage relançado ainda monta:
+  // nenhuma janela apareceu, e essa abertura não tem a marca.
+  const profile = profileWith('integrada')
+  assert.equal(prepare(profile, { environment: { ...PRIME_RUN_ENV } }).relaunch, true)
+  recordGpuRelaunchChild({ userDataPath: profile, pid: 4242 })
+  const pending = readGpuPreferenceState(profile)
+  assert.deepEqual(pending.pendingRelaunch, { preference: 'integrada', startedAt: clock(), pid: 4242 })
+
+  const alive = (pid) => pid === 4242
+  const second = prepare(profile, { environment: { ...PRIME_RUN_ENV }, now: after(2_000), isProcessAlive: alive })
+  assert.equal(second.relaunch, false)
+  assert.equal(second.requested, 'integrada')
+  assert.equal(second.applied, 'auto')
+  assert.equal(second.plan, null)
+  assert.equal(second.notApplied, 'relaunch-in-progress')
+  assert.equal(second.revertedFromPreviousStart, null)
+  assert.deepEqual(readGpuPreferenceState(profile), pending)
+
+  // O relançado nasce depois e assume o pedido, como sempre.
+  const relaunched = prepare(profile, { environment: { FELIXO_GPU_ENV_SANITIZED: '1' }, now: after(3_000) })
+  assert.equal(relaunched.applied, 'integrada')
+  assert.deepEqual(readGpuPreferenceState(profile), { preference: 'integrada', pendingStart: null, pendingRelaunch: null, fallback: null })
+})
+
+test('relançamento em andamento: vale o prazo curto sem pid, e o pid vivo depois dele', () => {
+  // Sem pid (app.relaunch() fora do AppImage não o devolve): só o prazo conta.
+  const withoutPid = profileWith('integrada')
+  prepare(withoutPid, { environment: { ...PRIME_RUN_ENV } })
+  assert.equal(
+    prepare(withoutPid, { environment: { ...PRIME_RUN_ENV }, now: after(RELAUNCH_GRACE_MS - 1_000) }).notApplied,
+    'relaunch-in-progress',
+  )
+  assert.equal(readGpuPreferenceState(withoutPid).preference, 'integrada')
+
+  // Com o pid do relançado ainda vivo, mesmo depois do prazo (AppImage lento).
+  const slow = profileWith('integrada')
+  prepare(slow, { environment: { ...PRIME_RUN_ENV } })
+  recordGpuRelaunchChild({ userDataPath: slow, pid: 4242 })
+  const later = prepare(slow, { environment: { ...PRIME_RUN_ENV }, now: after(90_000), isProcessAlive: () => true })
+  assert.equal(later.notApplied, 'relaunch-in-progress')
+  assert.equal(readGpuPreferenceState(slow).fallback, null)
+
+  // Passado o prazo e com o pid morto, o relançado não nasceu: volta.
+  const dead = prepare(slow, { environment: { ...PRIME_RUN_ENV }, now: after(90_000) })
+  assert.equal(dead.revertedFromPreviousStart.reason, 'relaunch-failed')
+  assert.equal(readGpuPreferenceState(slow).preference, 'auto')
+})
+
+test('um pid reaproveitado por outro processo não prende a escolha para sempre', () => {
+  const profile = profileWith('integrada')
+  prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  recordGpuRelaunchChild({ userDataPath: profile, pid: 4242 })
+  const muchLater = prepare(profile, { environment: { ...PRIME_RUN_ENV }, now: after(60 * 60_000), isProcessAlive: () => true })
+  assert.equal(muchLater.revertedFromPreviousStart.reason, 'relaunch-failed')
+})
+
+test('o pid só é anotado num pedido que ainda existe', () => {
+  const profile = profileWith('integrada')
+  prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  // O relançado já nasceu e apagou o pedido antes de o pai anotar o pid.
+  prepare(profile, { environment: { FELIXO_GPU_ENV_SANITIZED: '1' } })
+  assert.equal(recordGpuRelaunchChild({ userDataPath: profile, pid: 4242 }), false)
+  assert.equal(readGpuPreferenceState(profile).pendingRelaunch, null)
+  assert.equal(recordGpuRelaunchChild({ userDataPath: profile, pid: undefined }), false)
 })
 
 test('o processo relançado assume o pedido e o apaga; a próxima abertura relança de novo sem voltar', () => {

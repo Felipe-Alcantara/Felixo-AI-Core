@@ -70,7 +70,10 @@ function resolveRunningAppImage({ environment, execPath, platformName, isPackage
  * @param {string} [options.execPath]
  * @param {string} [options.platformName]
  * @param {typeof spawn} [options.spawnProcess]
- * @returns {{ ok: boolean, method: 'appimage' | 'app-relaunch', detail: string | null }}
+ * @returns {{ ok: boolean, method: 'appimage' | 'app-relaunch', detail: string | null, pid: number | null }}
+ *   `pid` é o do `.AppImage` reaberto, que vira o processo do app relançado
+ *   (o runtime do AppImage executa o `AppRun`, e ele o Electron, no mesmo
+ *   processo); o relauncher do `app.relaunch()` não expõe o pid.
  */
 function relaunchApp({
   app,
@@ -100,12 +103,12 @@ function relaunchApp({
       child.on('error', () => {})
       // Sem pid o processo não nasceu (o Node emite o erro no próximo tick).
       if (!Number.isInteger(child.pid) || child.pid <= 0) {
-        return { ok: false, method: 'appimage', detail: `o ${path.basename(appImage)} não abriu` }
+        return { ok: false, method: 'appimage', detail: `o ${path.basename(appImage)} não abriu`, pid: null }
       }
       child.unref()
-      return { ok: true, method: 'appimage', detail: null }
+      return { ok: true, method: 'appimage', detail: null, pid: child.pid }
     } catch (error) {
-      return { ok: false, method: 'appimage', detail: describeError(error) }
+      return { ok: false, method: 'appimage', detail: describeError(error), pid: null }
     }
   }
 
@@ -115,10 +118,10 @@ function relaunchApp({
     // relauncher não sobe.
     const result = app.relaunch()
     return result === false
-      ? { ok: false, method: 'app-relaunch', detail: 'app.relaunch() não conseguiu iniciar o relauncher' }
-      : { ok: true, method: 'app-relaunch', detail: null }
+      ? { ok: false, method: 'app-relaunch', detail: 'app.relaunch() não conseguiu iniciar o relauncher', pid: null }
+      : { ok: true, method: 'app-relaunch', detail: null, pid: null }
   } catch (error) {
-    return { ok: false, method: 'app-relaunch', detail: describeError(error) }
+    return { ok: false, method: 'app-relaunch', detail: describeError(error), pid: null }
   }
 }
 

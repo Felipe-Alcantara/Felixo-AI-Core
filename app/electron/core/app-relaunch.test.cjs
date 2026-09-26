@@ -58,7 +58,8 @@ test('no AppImage reabre o próprio .AppImage, destacado, com os mesmos argument
     spawnProcess,
   })
 
-  assert.deepEqual(result, { ok: true, method: 'appimage', detail: null })
+  // O pid do .AppImage reaberto: ele vira o processo do app relançado.
+  assert.deepEqual(result, { ok: true, method: 'appimage', detail: null, pid: 4242 })
   assert.equal(app.calls.length, 0, 'app.relaunch() não traz o app de volta no AppImage')
   assert.equal(calls.length, 1)
   assert.equal(calls[0].command, APPIMAGE_ENV.APPIMAGE)
@@ -87,7 +88,7 @@ test('.AppImage que não abre (sem pid ou exceção) é relançamento falho, sem
   assert.match(withoutPid.detail, /Felixo-AI-Core-x64\.AppImage não abriu/)
 
   const thrown = relaunchApp({ ...options, spawnProcess: fakeSpawn({ throwError: new Error('EACCES') }).spawnProcess })
-  assert.deepEqual(thrown, { ok: false, method: 'appimage', detail: 'EACCES' })
+  assert.deepEqual(thrown, { ok: false, method: 'appimage', detail: 'EACCES', pid: null })
   assert.equal(app.calls.length, 0)
 })
 
@@ -96,7 +97,8 @@ test('fora do AppImage usa o app.relaunch(); false ou exceção viram falha', ()
   const { calls, spawnProcess } = fakeSpawn()
 
   const app = fakeApp()
-  assert.deepEqual(relaunchApp({ app, ...unpacked, spawnProcess }), { ok: true, method: 'app-relaunch', detail: null })
+  // O relauncher do Electron não expõe o pid do processo novo.
+  assert.deepEqual(relaunchApp({ app, ...unpacked, spawnProcess }), { ok: true, method: 'app-relaunch', detail: null, pid: null })
   assert.equal(app.calls.length, 1)
   assert.equal(calls.length, 0)
 
@@ -105,7 +107,7 @@ test('fora do AppImage usa o app.relaunch(); false ou exceção viram falha', ()
   assert.equal(relaunchApp({ app: fakeApp({ relaunchResult: false }), ...unpacked, spawnProcess }).ok, false)
 
   const throwing = { isPackaged: true, relaunch: () => { throw new Error('boom') } }
-  assert.deepEqual(relaunchApp({ app: throwing, ...unpacked, spawnProcess }), { ok: false, method: 'app-relaunch', detail: 'boom' })
+  assert.deepEqual(relaunchApp({ app: throwing, ...unpacked, spawnProcess }), { ok: false, method: 'app-relaunch', detail: 'boom', pid: null })
 })
 
 test('só é AppImage o executável que roda dentro do APPDIR, empacotado e no Linux', () => {

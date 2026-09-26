@@ -385,15 +385,29 @@ app.whenReady().then(async () => {
   gpuSession.register()
   // "App pronto + janela carregada + GPU saudável" apaga o marcador do início.
   gpuSession.watchWindow(mainWindow)
-  if (gpuStart.revertedFromPreviousStart || gpuStart.relaunchFailure || gpuLaunch.switches.length > 0 || gpuLaunch.unsetEnv.length > 0) {
+  const relaunchInProgress = gpuStart.notApplied === 'relaunch-in-progress'
+  if (
+    gpuStart.revertedFromPreviousStart ||
+    gpuStart.relaunchFailure ||
+    relaunchInProgress ||
+    gpuLaunch.switches.length > 0 ||
+    gpuLaunch.unsetEnv.length > 0
+  ) {
     const reverted = Boolean(gpuStart.revertedFromPreviousStart || gpuStart.relaunchFailure)
     logQaEvent({
       level: reverted ? 'warn' : 'info',
       scope: 'graphics:gpu-preference',
-      message: gpuStart.relaunchFailure ? 'relaunch-failed' : reverted ? 'reverted-before-start' : 'applied',
+      message: gpuStart.relaunchFailure
+        ? 'relaunch-failed'
+        : reverted
+          ? 'reverted-before-start'
+          : relaunchInProgress
+            ? 'relaunch-in-progress'
+            : 'applied',
       details: {
         requested: gpuStart.requested,
         applied: gpuStart.applied,
+        notApplied: gpuStart.notApplied,
         switches: gpuLaunch.switches,
         unsetEnv: gpuLaunch.unsetEnv,
         restoredEnv: gpuLaunch.restoredEnv ?? [],

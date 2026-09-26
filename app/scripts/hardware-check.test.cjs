@@ -27,6 +27,7 @@ test('roda os cenários de relançamento também no pacote AppImage', () => {
   assert.equal(options.appImage, path.resolve('release/Felixo.AppImage'))
   assert.equal(parseArgs([]).appImage, '')
   assert.ok(ALL_SCENARIOS.includes('relancamento-perdido'))
+  assert.ok(ALL_SCENARIOS.includes('relancamento-em-andamento'))
 })
 
 test('a GPU da tela e a do CDP batem por fornecedor e dispositivo, sem a versão do driver', () => {

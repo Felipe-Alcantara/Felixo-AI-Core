@@ -14,11 +14,17 @@
  *
  * O relançamento com o ambiente limpo (Integrada no Linux com variáveis que
  * forçam a dedicada) tem a sua própria rede: antes de sair, o app grava
- * `pendingRelaunch`; o processo relançado, que nasce com
- * `FELIXO_GPU_ENV_SANITIZED=1`, o apaga. Uma abertura SEM essa marca que ainda
- * encontra o pedido sabe que o relançado nunca nasceu (medido em 26/09/2026:
- * no AppImage, o `app.relaunch()` antes do `whenReady` não traz o app de
- * volta) e volta para Automático em vez de relançar de novo.
+ * `pendingRelaunch` (e, depois do spawn, o pid do relançado); o processo
+ * relançado, que nasce com `FELIXO_GPU_ENV_SANITIZED=1`, o apaga. Uma
+ * abertura SEM essa marca que ainda encontra o pedido:
+ * - com o relançado ainda nascendo (pedido com menos de `RELAUNCH_GRACE_MS`
+ *   ou pid vivo), é a pessoa abrindo o app de novo enquanto nenhuma janela
+ *   apareceu: segue no Automático sem gravar nada, e o relançado assume o
+ *   pedido quando nascer;
+ * - passado o prazo e com o pid morto, sabe que o relançado nunca nasceu
+ *   (medido em 26/09/2026: no AppImage, o `app.relaunch()` antes do
+ *   `whenReady` não traz o app de volta) e volta para Automático em vez de
+ *   relançar de novo.
  */
 
 const fs = require('node:fs')
@@ -31,8 +37,53 @@ const {
 } = require('./gpu-preference.cjs')
 const { isIncompatibleFeatureStatus } = require('./graphics-signal.cjs')
 
+/**
+ * Quanto tempo, depois do pedido, o relançado pode levar para nascer sem o
+ * pid dele: é o caso do `app.relaunch()` fora do AppImage, que não devolve
+ * pid. Medido em 26/09/2026: o relançado chega ao `main.cjs` em menos de 1 s
+ * desempacotado e em cerca de 2 s no AppImage (montagem + subida do Electron).
+ */
+const RELAUNCH_GRACE_MS = 30_000
+/**
+ * Até quando um pid vivo ainda conta como o relançado nascendo. Sem esse teto,
+ * um pid reaproveitado por outro processo prenderia a escolha enquanto ele
+ * vivesse; um relançado de verdade apaga o pedido muito antes.
+ */
+const RELAUNCH_PID_MAX_AGE_MS = 5 * 60_000
+
 function defaultNow() {
   return new Date().toISOString()
+}
+
+/** `kill(pid, 0)`: existe e é nosso, ou existe e é de outro usuário (EPERM). */
+function defaultIsProcessAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === 'EPERM'
+  }
+}
+
+/**
+ * O relançado que o pedido descreve ainda pode estar nascendo?
+ *
+ * @param {{ startedAt: string | null, pid?: number } | null} pendingRelaunch
+ * @param {{ nowMs: number, isProcessAlive: (pid: number) => boolean }} context
+ */
+function isGpuRelaunchInProgress(pendingRelaunch, { nowMs, isProcessAlive }) {
+  if (!pendingRelaunch) return false
+  const startedMs = pendingRelaunch.startedAt ? Date.parse(pendingRelaunch.startedAt) : Number.NaN
+  // Relógio que voltou no tempo (idade negativa) não prova nada: só o pid vale.
+  const ageMs = Number.isFinite(startedMs) && Number.isFinite(nowMs) && nowMs >= startedMs ? nowMs - startedMs : null
+  if (ageMs !== null && ageMs < RELAUNCH_GRACE_MS) return true
+  if (!Number.isInteger(pendingRelaunch.pid)) return false
+  if (ageMs !== null && ageMs >= RELAUNCH_PID_MAX_AGE_MS) return false
+  try {
+    return Boolean(isProcessAlive(pendingRelaunch.pid))
+  } catch {
+    return false
+  }
 }
 
 function planChangesGpu(plan) {
@@ -50,6 +101,7 @@ function planChangesGpu(plan) {
  *   para escolher; a preferência fica salva e não se aplica.
  * @param {boolean} [options.isDevelopment]
  * @param {() => string} [options.now]
+ * @param {(pid: number) => boolean} [options.isProcessAlive] - Injetável para teste.
  * @param {typeof fs} [options.fileSystem]
  * @returns {{
  *   requested: 'auto' | 'integrada' | 'dedicada',
@@ -57,7 +109,7 @@ function planChangesGpu(plan) {
  *   plan: ReturnType<typeof buildGpuLaunchPlan> | null,
  *   guarded: boolean,
  *   relaunch: boolean,
- *   notApplied: 'software-rendering' | 'unsupported-platform' | 'profile-unwritable' | null,
+ *   notApplied: 'software-rendering' | 'unsupported-platform' | 'profile-unwritable' | 'relaunch-in-progress' | null,
  *   revertedFromPreviousStart: object | null,
  *   relaunchFailure: string | null,
  * }}
@@ -88,6 +140,7 @@ function decideGpuStart({
   softwareRendering = false,
   isDevelopment = false,
   now = defaultNow,
+  isProcessAlive = defaultIsProcessAlive,
   fileSystem = fs,
 } = {}) {
   let state = readGpuPreferenceState(userDataPath, fileSystem)
@@ -118,6 +171,19 @@ function decideGpuStart({
     if (environment[GPU_ENV_SANITIZED_FLAG] === '1') {
       // Este é o processo relançado: o relançamento deu certo.
       state = writeGpuPreferenceState(userDataPath, { ...state, pendingRelaunch: null }, fileSystem)
+    } else if (isGpuRelaunchInProgress(state.pendingRelaunch, { nowMs: Date.parse(now()), isProcessAlive })) {
+      // Outra abertura enquanto o relançado ainda nasce: não mexe no pedido nem
+      // na escolha (o relançado os assume) e não aplica nada de GPU aqui.
+      return {
+        requested: state.preference,
+        applied: 'auto',
+        plan: null,
+        guarded: false,
+        relaunch: false,
+        notApplied: 'relaunch-in-progress',
+        revertedFromPreviousStart,
+        relaunchFailure: null,
+      }
     } else {
       const failed = state.pendingRelaunch.preference
       revertedFromPreviousStart = {
@@ -264,6 +330,26 @@ function abandonGpuRelaunch({ userDataPath, start, detail = null, now = defaultN
 }
 
 /**
+ * Anota no pedido de relançamento o pid do processo relançado, logo depois do
+ * spawn. Só mexe num pedido que ainda existe: se o relançado já nasceu e o
+ * apagou, não o recria.
+ *
+ * @returns {boolean} Se o pid foi gravado.
+ */
+function recordGpuRelaunchChild({ userDataPath, pid, fileSystem = fs } = {}) {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    const current = readGpuPreferenceState(userDataPath, fileSystem)
+    if (!current.pendingRelaunch) return false
+    writeGpuPreferenceState(userDataPath, { ...current, pendingRelaunch: { ...current.pendingRelaunch, pid } }, fileSystem)
+    return true
+  } catch {
+    // Sem o pid, o prazo curto ainda cobre a abertura durante o relançamento.
+    return false
+  }
+}
+
+/**
  * Fecha o início guardado: com a GPU saudável, apaga o marcador; sem ela,
  * volta para Automático. Se não der para avaliar, deixa o marcador — o
  * próximo início trata como não confirmado, que é o lado seguro.
@@ -297,9 +383,13 @@ function confirmGpuStart({
 }
 
 module.exports = {
+  RELAUNCH_GRACE_MS,
+  RELAUNCH_PID_MAX_AGE_MS,
   abandonGpuRelaunch,
   confirmGpuStart,
   evaluateGpuStartHealth,
+  isGpuRelaunchInProgress,
   prepareGpuStart,
+  recordGpuRelaunchChild,
   revertGpuPreference,
 }

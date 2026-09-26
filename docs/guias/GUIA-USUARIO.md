@@ -247,7 +247,9 @@ Como cada sistema escolhe a placa:
   gráfico padrão; se o app foi aberto com variáveis que mandam o vídeo para a
   placa dedicada (como o `prime-run` ou o "abrir com a placa de vídeo dedicada"
   do ambiente gráfico), o Felixo fecha e reabre sozinho uma vez, com essas
-  variáveis limpas (no AppImage e no `.deb`). Se a reabertura não acontecer, a
+  variáveis limpas (no AppImage e no `.deb`). Se você abrir o Felixo de novo
+  enquanto ele ainda reabre (nenhuma janela apareceu), essa abertura fica no
+  Automático e não muda a sua escolha. Se a reabertura não acontecer, a
   próxima vez que você abrir o Felixo a escolha volta para **Automático**, com
   o aviso, e ele não tenta reabrir de novo; para usar a Integrada nesse caso,
   abra o Felixo sem essas variáveis.

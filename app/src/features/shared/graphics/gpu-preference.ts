@@ -25,7 +25,11 @@ export type GpuPreferenceStatus = {
   preference: GpuPreference
   /** O que esta abertura aplicou de fato. */
   applied: GpuPreference
-  notApplied: 'software-rendering' | 'unsupported-platform' | 'profile-unwritable' | null
+  /**
+   * Por que esta abertura não aplicou a escolha salva. `relaunch-in-progress`:
+   * ela aconteceu enquanto outra reabria o app com o ambiente limpo.
+   */
+  notApplied: 'software-rendering' | 'unsupported-platform' | 'profile-unwritable' | 'relaunch-in-progress' | null
   sessionOutcome: 'not-guarded' | 'pending' | 'healthy' | 'reverted'
   supported: boolean
   unsupportedReason: string | null
@@ -99,6 +103,9 @@ export function describeAppliedGpu(status: GpuPreferenceStatus): string {
   }
   if (status.notApplied === 'profile-unwritable') {
     return 'Nesta abertura o app não conseguiu gravar no perfil e ficou no Automático, por segurança.'
+  }
+  if (status.notApplied === 'relaunch-in-progress') {
+    return `Esta abertura aconteceu enquanto o Felixo reabria para usar a ${gpuPreferenceLabel(status.preference)}, então ficou no Automático, sem mudar a escolha.`
   }
   const applied = `Nesta abertura: ${gpuPreferenceLabel(status.applied)}.`
   return status.preference === status.applied

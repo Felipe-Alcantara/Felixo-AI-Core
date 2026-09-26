@@ -16,7 +16,7 @@
  */
 
 const { GPU_ENV_SANITIZED_FLAG, applyGpuLaunchPlan, restoreGpuLaunchEnv } = require('./gpu-preference.cjs')
-const { abandonGpuRelaunch, prepareGpuStart } = require('./gpu-start-guard.cjs')
+const { abandonGpuRelaunch, prepareGpuStart, recordGpuRelaunchChild } = require('./gpu-start-guard.cjs')
 const { relaunchApp } = require('./app-relaunch.cjs')
 
 /**
@@ -70,6 +70,9 @@ function startGpuPreference({
   // não nasce.
   const outcome = relaunch({ app, environment })
   if (outcome.ok) {
+    // Com o pid, uma abertura enquanto o relançado ainda nasce não confunde o
+    // relançamento em andamento com um que falhou.
+    recordGpuRelaunchChild({ userDataPath, pid: outcome.pid })
     app.exit(0)
     return { gpuStart, gpuLaunch, exiting: true }
   }

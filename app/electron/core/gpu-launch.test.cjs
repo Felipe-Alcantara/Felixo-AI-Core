@@ -83,6 +83,23 @@ test('Integrada com o prime-run: o ambiente é limpo e marcado ANTES de relança
   assert.deepEqual(result.gpuLaunch.unsetEnv, Object.keys(PRIME_RUN_ENV))
 })
 
+test('o pid do relançado vai para o pedido antes de o processo sair', () => {
+  const environment = { ...PRIME_RUN_ENV }
+  const { events, result, userDataPath } = start({
+    preference: 'integrada',
+    environment,
+    relaunchResult: { ok: true, method: 'appimage', detail: null, pid: 4242 },
+  })
+  assert.equal(result.exiting, true)
+  assert.deepEqual(events, ['relaunch', 'exit 0'])
+  // Uma abertura enquanto ele nasce reconhece o relançamento em andamento por ele.
+  assert.deepEqual(readGpuPreferenceState(userDataPath).pendingRelaunch, {
+    preference: 'integrada',
+    startedAt: clock(),
+    pid: 4242,
+  })
+})
+
 test('fora do relançamento a marca sai do process.env: terminais e apps abertos pelo Felixo não a herdam', () => {
   // O processo relançado nasce com a marca; depois de decidir, ela sai.
   const relaunched = { FELIXO_GPU_ENV_SANITIZED: '1', HOME: '/home/pessoa' }

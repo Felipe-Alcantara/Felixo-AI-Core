@@ -48,6 +48,12 @@ describe('preferência de placa de vídeo', () => {
     expect(describeAppliedGpu({ ...BASE_STATUS, preference: 'dedicada', notApplied: 'software-rendering' })).toMatch(/modo compatível/)
   })
 
+  it('explica a abertura feita enquanto outra reabria o app para aplicar a escolha', () => {
+    expect(describeAppliedGpu({ ...BASE_STATUS, preference: 'integrada', notApplied: 'relaunch-in-progress' })).toBe(
+      'Esta abertura aconteceu enquanto o Felixo reabria para usar a Integrada, então ficou no Automático, sem mudar a escolha.',
+    )
+  })
+
   it('explica cada volta automática em linguagem de quem usa', () => {
     const at = '2026-09-26T12:00:00.000Z'
     expect(describeGpuFallback({ from: 'dedicada', reason: 'previous-start-unfinished', at, detail: null })).toMatch(
