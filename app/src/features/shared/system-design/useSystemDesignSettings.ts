@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { readSystemDesignDocument } from './system-design-document'
 import { announceSystemDesignConfig, subscribeSystemDesignConfig } from './system-design-events'
 import type {
   SystemDesignConfig,
@@ -188,6 +189,14 @@ export function useSystemDesignSettings() {
     }
   }, [])
 
+  // O índice só traz o resumo de cada guia; o conteúdo é lido do cache local
+  // quando a pessoa abre um item. Identidade estável: a prévia relê quando ela muda.
+  const readDocument = useCallback(
+    (documentPath: string) =>
+      readSystemDesignDocument(window.felixo?.systemDesign, documentPath),
+    [],
+  )
+
   useEffect(() => {
     syncRef.current = sync
   }, [sync])
@@ -218,5 +227,6 @@ export function useSystemDesignSettings() {
     updateConfig,
     resetCache,
     refreshDocuments,
+    readDocument,
   }
 }

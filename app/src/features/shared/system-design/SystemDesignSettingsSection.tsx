@@ -5,6 +5,7 @@ import {
   describeSystemDesignStatus,
   type SystemDesignStatusTone,
 } from './system-design-presentation'
+import { SystemDesignDocumentIndex } from './SystemDesignDocumentIndex'
 import { useSystemDesignSettings } from './useSystemDesignSettings'
 import { FelixoToggle } from '../components/FelixoToggle'
 
@@ -15,7 +16,7 @@ const TONE_CLASS: Record<SystemDesignStatusTone, string> = {
 }
 
 export function SystemDesignSettingsSection() {
-  const { state, sync, updateConfig, resetCache } = useSystemDesignSettings()
+  const { state, sync, updateConfig, resetCache, readDocument } = useSystemDesignSettings()
   const { config, documents, loaded, syncing, error } = state
 
   const lastSyncLabel = config.lastSyncedAt
@@ -156,22 +157,7 @@ export function SystemDesignSettingsSection() {
       </div>
 
       {documents.length > 0 ? (
-        <details className="mt-3 text-[11px] text-zinc-300">
-          <summary className="cursor-pointer text-zinc-400 hover:text-zinc-200">
-            Ver índice ({documents.length} documento
-            {documents.length === 1 ? '' : 's'})
-          </summary>
-          <ul className="mt-1 space-y-0.5">
-            {documents.map((doc) => (
-              <li key={doc.path}>
-                <span className="font-mono text-zinc-500">{doc.path}</span>
-                {doc.title && doc.title !== doc.path ? (
-                  <span className="text-zinc-300"> — {doc.title}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <SystemDesignDocumentIndex documents={documents} readDocument={readDocument} />
       ) : null}
     </section>
   )
