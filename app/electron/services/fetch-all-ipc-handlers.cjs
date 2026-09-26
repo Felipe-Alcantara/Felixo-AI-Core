@@ -7,7 +7,7 @@
  * nunca uma exceção atravessando o IPC.
  */
 
-const { ipcMain } = require('electron')
+const { ipcMain, dialog } = require('electron')
 const { createFetchAllService } = require('./fetch-all-service.cjs')
 const { criarRepositorioDePedidos } = require('./fetch-all/agent-requests.cjs')
 const { observeAgentRequests } = require('./agent-request-watcher.cjs')
@@ -23,10 +23,11 @@ const REQUESTS_CHANNEL = 'fetch-all:agent-requests'
  *
  * @param {() => import('electron').BrowserWindow | undefined} getMainWindow
  * @param {{ config: string, cache: string, reports: string, agentRequests: string }} appPaths
- * @param {{ createService?: typeof createFetchAllService, createRequests?: typeof criarRepositorioDePedidos }} [dependencias]
+ * @param {{ createService?: typeof createFetchAllService, createRequests?: typeof criarRepositorioDePedidos, dialog?: Pick<import('electron').Dialog, 'showOpenDialog'> }} [dependencias]
  * @returns {object} O serviço, para os testes e o encerramento do app.
  */
 function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {}) {
+  const folderDialog = dependencias.dialog ?? dialog
   const service = (dependencias.createService ?? createFetchAllService)({
     appPaths,
     sendEvent: (event) => {
@@ -68,6 +69,27 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {})
     guard('Falha ao salvar as configurações do Fetch All.', async () => ({
       settings: await service.saveSettings(params?.settings),
     })),
+  )
+
+  // Canal próprio em vez de `projects:pick-folder`: aquele também concede à
+  // pasta o acesso de projeto, e escolher onde varrer não é abrir um projeto.
+  // Aqui só voltam os caminhos; quem grava é `save-settings`, que já valida e
+  // normaliza a lista.
+  ipcMain.handle('fetch-all:pick-roots', () =>
+    guard('Não foi possível abrir o seletor de pastas.', async () => {
+      const window = getMainWindow?.()
+      const options = {
+        title: 'Escolher pastas para o Fetch All varrer',
+        buttonLabel: 'Adicionar',
+        properties: ['openDirectory', 'multiSelections'],
+      }
+      const result =
+        window && !window.isDestroyed()
+          ? await folderDialog.showOpenDialog(window, options)
+          : await folderDialog.showOpenDialog(options)
+
+      return { paths: result.canceled ? [] : result.filePaths.map(readPath).filter(Boolean) }
+    }),
   )
 
   ipcMain.handle('fetch-all:get-scope', () =>

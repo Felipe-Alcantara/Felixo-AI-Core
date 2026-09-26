@@ -1179,6 +1179,12 @@ declare global {
           message?: string
           settings?: FetchAllSettings
         }>
+        /** Seletor nativo de pastas; cancelar devolve `paths` vazio. Não grava nada. */
+        pickRoots: () => Promise<{
+          ok: boolean
+          message?: string
+          paths?: string[]
+        }>
         getScope: () => Promise<{
           ok: boolean
           message?: string
