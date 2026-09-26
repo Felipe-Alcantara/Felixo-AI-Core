@@ -239,11 +239,11 @@ const gpuLaunch = applyGpuLaunchPlan(gpuStart.plan, {
 // arquivo, então só um processo novo, com o ambiente limpo, sobe na integrada.
 // O relançado leva `FELIXO_GPU_ENV_SANITIZED` e nunca relança de novo; o
 // pedido gravado por `prepareGpuStart` cobre o relançado que não nasce.
-let relaunchingForGpu = false
 if (gpuStart.relaunch) {
   const relaunch = relaunchApp({ app })
   if (relaunch.ok) {
-    relaunchingForGpu = true
+    // Encerra na hora: nada depois desta linha roda, nem o whenReady (medido
+    // em 26/09/2026 no Electron 41.10.7).
     app.exit(0)
   } else {
     // Sem processo novo, fechar deixaria a pessoa sem app: segue aqui, no
@@ -313,9 +313,6 @@ function resolveRuntimeAppVersion() {
 }
 
 app.whenReady().then(async () => {
-  // O processo que pediu o relançamento só está saindo.
-  if (relaunchingForGpu) return
-
   if (isReleaseSmoke) {
     try {
       await runPackagedReleaseSmoke({ app })
