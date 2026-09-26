@@ -4928,3 +4928,34 @@ Registro gravado às 15:33.
 Ajuda, o único que a usa. A âncora `rail-ajuda` também nasce com o botão.
 
 **Validação.** `npm run lint` e `npm run build` ok.
+
+## 2026-09-26 — Tutorial do canvas: posicionamento, alvo e foco puros (commit 7 do plano)
+
+Registro gravado às 15:40.
+
+**O que ficou pronto.** `app/src/features/onboarding/onboarding-layout.ts`, sem DOM de verdade (DOM e medidas
+injetados): `resolveStepTarget` (cadeia de alvos com `[inert]`/`aria-hidden`/`hidden`, `visibility`,
+`opacity`, retângulo vazio, 50% na janela e na sidebar rolável, `elementFromPoint` no centro e
+`needsReveal` abaixo da dobra), `computeCardPlacement` (folha em viewport compacto; lados na ordem preferido,
+baixo, cima, esquerda; desvio de `[data-felixo-tour-avoid]`), `computeRingRect`, `computeSidebarReveal`,
+`canStealFocus`, `decideFocusOnOpen`, `resolveReturnFocus`, `hasOpenModal` e
+`ancestorCreatesContainingBlock`.
+
+**Decisões que o plano não fixava.**
+- A matriz do U-layout reprovou o primeiro desenho em 720×500 com o card 2× mais alto e o `NoticeToast`: nenhum
+  lado cabia inteiro e a folha cobria o aviso, embora houvesse espaço. O posicionamento ganhou uma segunda passada:
+  ao lado do alvo (direita/esquerda), com a altura limitada à faixa livre da coluna mais próxima do alvo (janela
+  menos obstáculos, pelo menos 160 px) e o corpo rolando.
+- Depois de esquerda, a ordem de lados ainda tenta a direita (relevante para o inspector, cujo preferido é a
+  esquerda).
+- `canStealFocus` é lista de permissão (`null`, `body`, `html` e a região do canvas); a lista do plano (campos,
+  xterm, gaveta, webview, diálogos, menus) fica documentada em `FOCUS_OWNERS_SELECTOR` e testada. Um botão que a
+  pessoa focou também não perde o foco para a abertura automática.
+- As superfícies do próprio tour (`[data-felixo-onboarding]`) nunca contam como oclusão do alvo.
+- O teto do card ancorado é o espaço daquele lado, não a altura medida, para arredondamento de subpixel nunca cortar
+  o rodapé.
+
+**Validação.** U-layout: 493 casos (matriz de 6 viewports × 9 alvos × 4 conjuntos de obstáculos × 2 alturas de
+card, só asserts relacionais, mais casos nomeados de alvo, foco, modal e containing block). Conferido com duas
+mutações de propósito (ignorar obstáculos; ignorar oclusão), que reprovaram 52 e 2 casos; o código voltou ao
+original. `npm run lint` e `npm run build` ok.
