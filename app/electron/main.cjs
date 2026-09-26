@@ -319,6 +319,9 @@ app.whenReady().then(async () => {
     evaluateGpuAfterReady({
       userDataPath: app.getPath('userData'),
       getGPUFeatureStatus: () => app.getGPUFeatureStatus(),
+      // No whenReady o status ainda é o padrão `disabled_software`: sem esta
+      // espera, toda abertura podia recomendar o modo compatível à toa.
+      waitForGpuInfo: () => gpuInfoWatcher.wait(),
       alreadyUsingSoftwareRendering: useSoftwareRendering,
     }).catch(() => {})
   }

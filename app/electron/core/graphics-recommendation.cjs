@@ -123,6 +123,10 @@ function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
  * @param {string} options.userDataPath
  * @param {() => (Record<string, string> | Promise<Record<string, string>>)} [options.getGPUFeatureStatus] -
  *   Tipicamente `() => app.getGPUFeatureStatus()`; injetável pra teste.
+ * @param {() => Promise<boolean>} [options.waitForGpuInfo] - Espera o
+ *   `gpu-info-update` (ver `gpu-info-watcher.cjs`). Antes dele o status é o
+ *   padrão `disabled_software` (medido em 26/09/2026) e viraria uma
+ *   recomendação falsa; sem resposta no prazo, não avalia.
  * @param {boolean} [options.alreadyUsingSoftwareRendering] - Se a sessão já
  *   está em software (manual ou heurística de memória) — nesse caso não há
  *   nada a recomendar, e uma recomendação antiga (de antes da troca) é limpa.
@@ -133,6 +137,7 @@ function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
 async function evaluateGpuAfterReady({
   userDataPath,
   getGPUFeatureStatus,
+  waitForGpuInfo,
   alreadyUsingSoftwareRendering = false,
   now = () => new Date().toISOString(),
   fileSystem = fs,
@@ -143,6 +148,10 @@ async function evaluateGpuAfterReady({
   }
 
   if (typeof getGPUFeatureStatus !== 'function') {
+    return { evaluated: false, recommended: false }
+  }
+
+  if (typeof waitForGpuInfo === 'function' && !(await waitForGpuInfo())) {
     return { evaluated: false, recommended: false }
   }
 
