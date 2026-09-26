@@ -27,6 +27,7 @@ import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
+  getDefaultDrawerWidth,
   getDrawerMaxWidth,
   readCollapsedPreference,
   readPinnedPreference,
@@ -75,7 +76,6 @@ type TerminalDrawerProps = {
 }
 
 const MIN_WIDTH = DRAWER_MIN_WIDTH
-const DEFAULT_WIDTH = 720
 
 /**
  * Right-side drawer that hosts the live, interactive terminal for the expanded
@@ -104,21 +104,15 @@ export function TerminalDrawer({
   const containerRef = useRef<HTMLDivElement>(null)
   const collapsedTriggerRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
-  const [width, setWidth] = useState(() =>
-    (() => {
-      const maxWidth = getDrawerMaxWidth(window.innerWidth)
-      return readWidthPreference(
-        localStorage,
-        clampDrawerWidth(
-          Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.45))),
-          window.innerWidth,
-          MIN_WIDTH,
-        ),
-        Math.min(MIN_WIDTH, maxWidth),
-        maxWidth,
-      )
-    })(),
-  )
+  const [width, setWidth] = useState(() => {
+    const maxWidth = getDrawerMaxWidth(window.innerWidth)
+    return readWidthPreference(
+      localStorage,
+      getDefaultDrawerWidth(window.innerWidth, MIN_WIDTH),
+      Math.min(MIN_WIDTH, maxWidth),
+      maxWidth,
+    )
+  })
   const draggingRef = useRef(false)
   const latestResizeClientXRef = useRef<number | null>(null)
   const resizeFrameRef = useRef<number | null>(null)
@@ -375,12 +369,7 @@ export function TerminalDrawer({
   }, [])
 
   const resetDrawerWidth = useCallback(() => {
-    const suggested = clampDrawerWidth(
-      Math.min(DEFAULT_WIDTH, Math.floor(window.innerWidth * 0.45)),
-      window.innerWidth,
-      MIN_WIDTH,
-    )
-    updateDrawerWidth(suggested)
+    updateDrawerWidth(getDefaultDrawerWidth(window.innerWidth, MIN_WIDTH))
   }, [updateDrawerWidth])
 
   const onResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
