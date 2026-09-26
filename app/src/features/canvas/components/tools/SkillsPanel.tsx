@@ -296,7 +296,9 @@ export function SkillsPanel({
           lê o arquivo só quando a tarefa combinar. As de terceiros apontam para a
           fonte original — nada é baixado. O ícone de olho tira uma skill da lista.
         </p>
-        <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto">
+        {/* O respiro interno (compensado na margem) deixa o anel de foco dos
+            botões inteiro: a rolagem da lista cortava o contorno. */}
+        <ul className="-mx-1 mt-1 flex max-h-40 flex-col gap-1 overflow-y-auto p-1">
           {sistema.map((item) => (
             <li key={item.id} className="flex items-center gap-1.5 text-[11px]">
               <span className="truncate text-zinc-300" title={item.description}>
