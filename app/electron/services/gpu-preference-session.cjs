@@ -19,17 +19,11 @@ const {
 } = require('../core/gpu-preference.cjs')
 const { confirmGpuStart, evaluateGpuStartHealth, revertGpuPreference } = require('../core/gpu-start-guard.cjs')
 const { DEFAULT_GPU_INFO_TIMEOUT_MS } = require('../core/gpu-info-watcher.cjs')
+const { describeGpuDevices } = require('../core/gpu-devices.cjs')
 
 /** Motivos do `child-process-gone` que apontam para a GPU, e não para memória ou para quem matou o processo. */
 const GPU_FAILURE_EXIT_REASONS = Object.freeze(['crashed', 'launch-failed', 'abnormal-exit'])
 const CHANGE_CHANNEL = 'graphics:gpu-preference-changed'
-
-function normalizeDevices(gpuInfo) {
-  const devices = Array.isArray(gpuInfo?.gpuDevice) ? gpuInfo.gpuDevice : []
-  return devices
-    .filter((device) => Number.isInteger(device?.vendorId) && Number.isInteger(device?.deviceId))
-    .map((device) => ({ vendorId: device.vendorId, deviceId: device.deviceId }))
-}
 
 /**
  * @param {object} options
@@ -69,18 +63,20 @@ function createGpuPreferenceSession({
       // `getGPUInfo('basic')` lista as placas de forma confiável, mas no Linux
       // o `active` e o renderer vêm da coleta do navegador, antes do processo
       // de GPU (medido em 26/09/2026: sempre a NVIDIA como ativa). Por isso só
-      // a contagem e os ids saem daqui; a GPU em uso a interface lê pelo WebGL.
+      // as placas e se há escolha saem daqui (sem o WARP do Windows nem outros
+      // renderizadores por software: ver `core/gpu-devices.cjs`); a GPU em uso
+      // a interface lê pelo WebGL.
       devicesPromise = Promise.resolve()
         .then(() => app.getGPUInfo('basic'))
-        .then(normalizeDevices)
-        .catch(() => [])
+        .then((gpuInfo) => describeGpuDevices(gpuInfo, platformName))
+        .catch(() => ({ devices: [], multipleGpus: false }))
     }
     return devicesPromise
   }
 
   async function describe() {
     const state = readGpuPreferenceState(userDataPath)
-    const devices = await readDevices()
+    const { devices, multipleGpus } = await readDevices()
     return {
       preference: state.preference,
       applied: appliedPreference,
@@ -90,7 +86,7 @@ function createGpuPreferenceSession({
       unsupportedReason: support.reason,
       fallback: state.fallback,
       devices,
-      multipleGpus: devices.length >= 2,
+      multipleGpus,
     }
   }
 
@@ -213,5 +209,4 @@ module.exports = {
   CHANGE_CHANNEL,
   GPU_FAILURE_EXIT_REASONS,
   createGpuPreferenceSession,
-  normalizeDevices,
 }

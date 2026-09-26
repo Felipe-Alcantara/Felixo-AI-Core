@@ -10,7 +10,7 @@ const test = require('node:test')
 const { createGpuInfoWatcher } = require('../core/gpu-info-watcher.cjs')
 const { persistGpuPreference, readGpuPreferenceState } = require('../core/gpu-preference.cjs')
 const { prepareGpuStart } = require('../core/gpu-start-guard.cjs')
-const { CHANGE_CHANNEL, createGpuPreferenceSession, normalizeDevices } = require('./gpu-preference-session.cjs')
+const { CHANGE_CHANNEL, createGpuPreferenceSession } = require('./gpu-preference-session.cjs')
 
 const TWO_GPUS = Object.freeze({
   gpuDevice: [
@@ -30,11 +30,12 @@ function setup({
   gpuInfo = TWO_GPUS,
   gpuInfoReady = true,
   gpuInfoTimeoutMs = 1_000,
+  platformName = 'linux',
 } = {}) {
   const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-gpu-session-'))
   profiles.push(userDataPath)
   persistGpuPreference({ userDataPath, preference })
-  const gpuStart = prepareGpuStart({ userDataPath, platformName: 'linux', environment: {} })
+  const gpuStart = prepareGpuStart({ userDataPath, platformName, environment: {} })
 
   const app = new EventEmitter()
   // Criado antes do "whenReady", como no main.cjs.
@@ -57,7 +58,7 @@ function setup({
     gpuStart,
     gpuInfoWatcher,
     gpuInfoTimeoutMs,
-    platformName: 'linux',
+    platformName,
     getMainWindow: () => window,
     log: (entry) => logs.push(entry),
   })
@@ -187,9 +188,36 @@ test('aviso reconhecido pela IPC some do estado', async () => {
   assert.equal((await session.describe()).fallback, null)
 })
 
-test('placas sem id válido são ignoradas; uma placa só não mostra a escolha', async () => {
-  assert.deepEqual(normalizeDevices({ gpuDevice: [{ vendorId: 1, deviceId: 2 }, { vendorId: 'x' }] }), [{ vendorId: 1, deviceId: 2 }])
-  assert.deepEqual(normalizeDevices(null), [])
+test('uma placa só não mostra a escolha', async () => {
   const { session } = setup({ gpuInfo: { gpuDevice: [{ vendorId: 0x106b, deviceId: 1 }] } })
   assert.equal((await session.describe()).multipleGpus, false)
+})
+
+test('Windows com uma placa e o WARP que o sistema sempre lista não mostra a escolha', async () => {
+  // Formato do Windows 8+: o "Microsoft Basic Render Driver" (0x1414:0x8c)
+  // entra no gpuDevice ao lado da placa real, e às vezes uma NPU também.
+  const gpuDevice = [
+    { vendorId: 0x8086, deviceId: 0x3e9b, gpuPreference: 0 },
+    { vendorId: 0x1414, deviceId: 0x8c, gpuPreference: 0 },
+    { vendorId: 0x8086, deviceId: 0x7d1d, gpuPreference: 0 },
+  ]
+  const { session } = setup({ platformName: 'win32', gpuInfo: { gpuDevice } })
+  const status = await session.describe()
+  assert.equal(status.multipleGpus, false)
+  assert.equal(status.devices.some((device) => device.vendorId === 0x1414), false)
+})
+
+test('Windows com integrada e dedicada marcadas pelo Chromium mostra a escolha', async () => {
+  const gpuDevice = [
+    { vendorId: 0x10de, deviceId: 0x1f91, gpuPreference: 3 },
+    { vendorId: 0x8086, deviceId: 0x3e9b, gpuPreference: 2 },
+    { vendorId: 0x1414, deviceId: 0x8c, gpuPreference: 0 },
+  ]
+  const { session } = setup({ platformName: 'win32', gpuInfo: { gpuDevice } })
+  const status = await session.describe()
+  assert.equal(status.multipleGpus, true)
+  assert.deepEqual(status.devices, [
+    { vendorId: 0x10de, deviceId: 0x1f91 },
+    { vendorId: 0x8086, deviceId: 0x3e9b },
+  ])
 })

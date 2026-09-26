@@ -381,7 +381,14 @@ perfil, e é aplicada antes do `app.whenReady()` do próximo início:
   que ainda o encontra volta para Automático, com aviso, em vez de relançar em
   laço.
 - **Windows e macOS**: `force_high_performance_gpu` / `force_low_power_gpu`,
-  documentados pelo Electron 41 e usados pelo Chromium só nesses sistemas.
+  documentados pelo Electron 41 e usados pelo Chromium só nesses sistemas. Eles só
+  têm efeito quando o Chromium marca uma placa de baixo consumo e outra de alto
+  desempenho (`gpuPreference` no `app.getGPUInfo('basic')`), e é só aí que a opção
+  aparece.
+- **Quais placas contam** (`electron/core/gpu-devices.cjs`): saem os
+  renderizadores por software, pelo critério do próprio Chromium, inclusive o
+  "Microsoft Basic Render Driver" (WARP) que o Windows 8+ sempre lista; as NPUs
+  que o Windows põe na mesma lista nunca recebem a marca de consumo.
 - **Rede de segurança**: todo início que troca a GPU grava um marcador pendente,
   apagado quando a janela carrega e a GPU responde ligada (`gpu-info-update` +
   `gpu_compositing`, e Vulkan na Dedicada do Linux). Início anterior não
