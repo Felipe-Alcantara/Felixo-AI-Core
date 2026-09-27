@@ -163,6 +163,8 @@ import {
 } from '../services/terminal-handoff'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import { HandoffDialog } from './HandoffDialog'
+import { OnboardingMount } from '../../onboarding/OnboardingMount'
+import { WATCHES_CANVAS_NODE_TYPES, nodeTypesKeyOf } from '../../onboarding/onboarding-canvas-triggers'
 import {
   arrangeNodesAsMatrix,
   countArrangeableNodes,
@@ -2483,6 +2485,12 @@ function CanvasInner({
     expandedNodeData?.agentSession,
   )
   const arrangeableCount = countArrangeableNodes(nodes)
+  // Tipos de bloco presentes, só quando o catálogo do tutorial tem gatilho de
+  // canvas (o v1 não tem): sem isso, arrastar um bloco nem monta a chave.
+  const onboardingNodeTypesKey = useMemo(
+    () => (WATCHES_CANVAS_NODE_TYPES ? nodeTypesKeyOf(nodes.map((node) => node.type)) : null),
+    [nodes],
+  )
 
   return (
     <div
@@ -2575,6 +2583,12 @@ function CanvasInner({
         isBusy={isBusy}
         isClearing={isClearing}
         onOpenChat={onOpenChat}
+      />
+      {/* Host do tutorial logo depois da sidebar: Tab vai sidebar → tour → canvas. */}
+      <OnboardingMount
+        hydrated={hydrated && edgesHydrated}
+        nodeCount={nodes.length}
+        nodeTypesKey={onboardingNodeTypesKey}
       />
 
       {activeTool === 'notifications' && (

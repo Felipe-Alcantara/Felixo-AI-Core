@@ -31,6 +31,15 @@ felixo devtools quit
 
 Execute `felixo devtools --help` para a referência da sintaxe. Mantenha a sessão aberta entre comandos; cada comando se conecta por CDP, executa uma ação e se desconecta.
 
+## Tutorial do canvas na sessão isolada
+
+Todo perfil isolado é um primeiro boot, mas o tutorial do canvas vem **suprimido** por padrão nesta instância: nada abre nem é gravado sozinho, e a decisão fica exposta em `data-felixo-onboarding-decisao` (`felixo devtools eval "document.querySelector('[data-felixo-onboarding=anuncio]').dataset.felixoOnboardingDecisao"` devolve `suprimido:abriria-inicial`). Assim capturas e cliques não esbarram no card.
+
+- Para ver o primeiro uso de verdade: `FELIXO_DEVTOOLS_ONBOARDING=1 felixo devtools launch --visible` (o CLI repassa o ambiente).
+- Abrir pela interface funciona sempre: `felixo devtools click "[data-felixo-help-trigger]"` abre a Ajuda.
+- `felixo devtools press Tab`, `press Escape` e `eval "document.activeElement?.outerHTML"` servem para inspecionar o foco.
+- `felixo devtools main "ipcProbe.snapshot()"` conta as invocações IPC por canal desde o boot (só nesta instância).
+
 ## Segurança do perfil
 
 O padrão é sempre isolado. `felixo devtools launch --real-profile` só deve ser usado com consentimento explícito, para validar dados reais, e é recusado se os arquivos `Singleton*` indicarem outra instância usando o perfil. O comando `quit` nunca remove um perfil real.

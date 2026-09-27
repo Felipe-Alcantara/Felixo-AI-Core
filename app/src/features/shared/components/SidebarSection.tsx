@@ -18,6 +18,12 @@ type SidebarSectionProps = {
    * Fica fora do botão de título, senão abrir o modal também alternaria o grupo.
    */
   action?: ReactNode
+  /**
+   * Âncora estável do tutorial do canvas, aplicada como `data-felixo-tour-anchor`
+   * no botão de título. Só marca o cabeçalho: o tutorial nunca abre nem fecha o
+   * grupo. A sidebar do chat não passa esta prop.
+   */
+  anchorId?: string
 }
 
 /**
@@ -32,6 +38,7 @@ export function SidebarSection({
   storageKey,
   count,
   action,
+  anchorId,
 }: SidebarSectionProps) {
   const [open, setOpen] = usePersistedFlag(storageKey, defaultOpen)
 
@@ -43,6 +50,7 @@ export function SidebarSection({
           onClick={() => setOpen((current) => !current)}
           className="felixo-sidebar-section-heading"
           aria-expanded={open}
+          data-felixo-tour-anchor={anchorId}
         >
           <span>
             {title}

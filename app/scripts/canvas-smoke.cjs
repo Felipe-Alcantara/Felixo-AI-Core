@@ -5,6 +5,9 @@
  * ativado antes do Electron iniciar, por isso nenhum CLI real e executado.
  * O fluxo cobre mount/hidratacao, todos os tipos persistidos, hit testing,
  * foco/Tab/Escape, arrasto pequeno, conexao, gaveta, URL invalida e reload.
+ * Os cenarios do tutorial do canvas ficam em `canvas-smoke-onboarding.cjs`:
+ * a sessao A (esta) com a abertura automatica suprimida, e uma sessao B com
+ * perfil novo e `FELIXO_DEVTOOLS_ONBOARDING=1` para o primeiro uso de verdade.
  */
 
 const path = require('node:path')
@@ -12,11 +15,12 @@ const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
 const { diagnosticarMontagem } = require('./canvas-smoke-diagnostics.cjs')
-const { esperarAte } = require('./canvas-smoke-wait.cjs')
+const { esperarAte, waitForViewport: esperarViewport } = require('./canvas-smoke-wait.cjs')
 const {
   DEFAULT_JITTER_THRESHOLD,
   measureStableGeometry,
 } = require('./canvas-smoke-visual.cjs')
+const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPerfil } = require('./canvas-smoke-onboarding.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -31,6 +35,15 @@ const HYDRATION_TIMEOUT_MS =
 // da última mostrou o painel de busca ABERTO, só que depois do teto — lentidão do
 // runner (o painel é um chunk carregado sob demanda), não painel quebrado.
 const INTERACTION_TIMEOUT_MS = process.platform === 'win32' ? 20_000 : 5_000
+// O tutorial carrega um chunk preguiçoso na primeira abertura (o Vite compila
+// sob demanda): a espera é por condição, então o teto maior só pesa na falha.
+const ONBOARDING_TIMEOUT_MS = Math.max(INTERACTION_TIMEOUT_MS, 15_000)
+// Variáveis da sessão B: o tutorial com o comportamento de produto (abre e
+// grava sozinho) e os avisos de hardware ligados, num perfil novo.
+const ONBOARDING_SESSION_ENV = {
+  FELIXO_DEVTOOLS_ONBOARDING: '1',
+  FELIXO_DEVTOOLS_HARDWARE_NOTICES: '1',
+}
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
 const VISUAL_THEMES = ['dark', 'high_contrast']
@@ -154,12 +167,9 @@ function writeVisualReport(error = null) {
   return output
 }
 
-async function waitForViewport(page, viewport) {
-  await page.waitForFunction(
-    ({ width, height }) => window.innerWidth === width && window.innerHeight === height,
-    viewport,
-    { timeout: INTERACTION_TIMEOUT_MS },
-  )
+/** Espera do smoke por um resize: prazo de interação e o tamanho lido na falha. */
+function waitForViewport(page, viewport) {
+  return esperarViewport(page, viewport, { timeoutMs: INTERACTION_TIMEOUT_MS })
 }
 
 async function recordVisualEvidence(page, label, selectors, details = {}, options = {}) {
@@ -205,9 +215,15 @@ function runCli(args) {
   })
 }
 
-async function withDevtoolsSession(action) {
-  const previousMockPty = process.env.FELIXO_DEVTOOLS_MOCK_PTY
-  process.env.FELIXO_DEVTOOLS_MOCK_PTY = '1'
+/**
+ * Sobe uma sessão DevTools isolada com o PTY fake e as variáveis extras de
+ * `env` (a sessão B do tutorial liga `FELIXO_DEVTOOLS_ONBOARDING`), e devolve
+ * o ambiente do processo como estava ao terminar.
+ */
+async function withDevtoolsSession(action, { env = {} } = {}) {
+  const sessionEnv = { FELIXO_DEVTOOLS_MOCK_PTY: '1', ...env }
+  const previousEnv = Object.fromEntries(Object.keys(sessionEnv).map((key) => [key, process.env[key]]))
+  Object.assign(process.env, sessionEnv)
   // The geometry sampler needs real animation frames. A hidden Electron window
   // throttles requestAnimationFrame to background cadence and makes the visual
   // test wait on frames that are no longer being produced at display rate.
@@ -234,8 +250,10 @@ async function withDevtoolsSession(action) {
         }
       }
     }
-    if (previousMockPty === undefined) delete process.env.FELIXO_DEVTOOLS_MOCK_PTY
-    else process.env.FELIXO_DEVTOOLS_MOCK_PTY = previousMockPty
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
   }
 }
 
@@ -1020,44 +1038,81 @@ async function checarDimensoesDeAcessibilidadeAdicionais(page) {
   }
 }
 
+function cenariosDoTutorial(page) {
+  return criarCenariosDoTutorial({
+    page,
+    esperarAte,
+    measureStableGeometry,
+    recordVisualEvidence,
+    checarMontagem,
+    checarLandmarksVisiveis,
+    // SB7: a ponte recusa estado inválido; a linha do perfil isolado é danificada no disco.
+    corromperEstado: () => corromperEstadoNoPerfil(readState()),
+    // SA3: a pergunta de um agente (AgentQuestionDialog real) chega por cima do tour.
+    registrarPerguntaDoAgente: (pedido) => registrarPerguntaNoPerfil(readState(), pedido),
+    timeoutMs: ONBOARDING_TIMEOUT_MS,
+  })
+}
+
+/**
+ * Conecta na sessão aberta, roda os cenários e guarda uma captura se algo
+ * falhar. O nome começa com `canvas-smoke-failure` para o CI anexar a captura
+ * das duas sessões com o mesmo glob.
+ */
+async function comPaginaDaSessao(failureName, action) {
+  const { browser, page } = await connect(readState())
+  try {
+    await action(page)
+  } catch (error) {
+    const output = path.join(APP_DIR, 'build', `${failureName}-${process.platform}.png`)
+    try {
+      fs.mkdirSync(path.dirname(output), { recursive: true })
+      await page.screenshot({ path: output })
+      console.error(`[canvas-smoke] captura de falha salva em ${output}`)
+    } catch (screenshotError) {
+      console.error(`[canvas-smoke] nao foi possivel capturar a falha: ${screenshotError.message}`)
+    }
+    throw error
+  } finally {
+    await browser.close()
+  }
+}
+
 async function main() {
   fs.rmSync(visualOutputPath(''), { recursive: true, force: true })
-  await withDevtoolsSession(async () => {
-    const state = readState()
-    const { browser, page } = await connect(state)
-    try {
-      await checarMontagem(page)
-      await checarLandmarksVisiveis(page)
-      await checarNavegacaoPorTab(page)
-      await checarFocoAoAbrirFerramenta(page)
-      await prepararFixture(page)
-      await checarOclusaoDoFixture(page)
-      await checarAuditoriaDeAcessibilidade(page)
-      await checarInteracoes(page)
-      await checarReloadSemDuplicacao(page)
-      await checarPainelNosDoisEixos(page)
-      await checarViewportMinimo(page)
-      await checarZoomVisual(page)
-      await checarMatrizVisual(page)
-      await checarElementosAbertosEmViewportsCriticos(page)
-      await checarDimensoesDeAcessibilidadeAdicionais(page)
-    } catch (error) {
-      const output = path.join(APP_DIR, 'build', `canvas-smoke-failure-${process.platform}.png`)
-      try {
-        require('node:fs').mkdirSync(path.dirname(output), { recursive: true })
-        await page.screenshot({ path: output })
-        console.error(`[canvas-smoke] captura de falha salva em ${output}`)
-      } catch (screenshotError) {
-        console.error(`[canvas-smoke] nao foi possivel capturar a falha: ${screenshotError.message}`)
-      }
-      throw error
-    } finally {
-      await browser.close()
-    }
-  })
+  // Sessão A: o smoke de sempre, com o tutorial suprimido na automação (SA0
+  // logo depois da montagem, SA1–SA10 no fim, sobre a fixture).
+  await withDevtoolsSession(() => comPaginaDaSessao('canvas-smoke-failure', async (page) => {
+    const tutorial = cenariosDoTutorial(page)
+    await checarMontagem(page)
+    await tutorial.sa0()
+    await checarLandmarksVisiveis(page)
+    await checarNavegacaoPorTab(page)
+    await checarFocoAoAbrirFerramenta(page)
+    await prepararFixture(page)
+    await checarOclusaoDoFixture(page)
+    await checarAuditoriaDeAcessibilidade(page)
+    await checarInteracoes(page)
+    await checarReloadSemDuplicacao(page)
+    await checarPainelNosDoisEixos(page)
+    await checarViewportMinimo(page)
+    await checarZoomVisual(page)
+    await checarMatrizVisual(page)
+    await checarElementosAbertosEmViewportsCriticos(page)
+    await checarDimensoesDeAcessibilidadeAdicionais(page)
+    await selectVisualTheme(page, 'dark')
+    await tutorial.sessaoA()
+  }))
+  // Sessão B: perfil novo e canvas vazio, com o tutorial abrindo e gravando
+  // sozinho (o primeiro uso de verdade) e os avisos de hardware ligados.
+  await withDevtoolsSession(
+    () => comPaginaDaSessao('canvas-smoke-failure-onboarding', (page) => cenariosDoTutorial(page).sessaoB()),
+    { env: ONBOARDING_SESSION_ENV },
+  )
   const report = writeVisualReport()
   console.log('[canvas-visual] relatório e capturas: ' + report)
   console.log('[canvas-smoke] fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale): ok')
+  console.log('[canvas-smoke] tutorial do canvas: sessão A (SA0–SA10, abertura suprimida) e sessão B (SB1–SB8, primeiro uso real): ok')
 }
 
 main().catch((error) => {

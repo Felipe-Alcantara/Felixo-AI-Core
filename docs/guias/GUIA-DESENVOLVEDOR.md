@@ -184,6 +184,8 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 | `npm run release:smoke` | app/ | Valida o artefato instalado no SO atual |
 | `npm run publish:github` | app/ | Publica uma release pelo electron-builder; usar apenas no fluxo de release |
 | `npm run benchmark:terminal-output -- --check` | app/ | Compara retenção/renderização dos Logs da CLI no renderer Electron |
+| `npm run test:canvas-smoke` | app/ | Smoke real do canvas via CDP, com PTY fake, incluindo os cenários do tutorial (sessões A e B) |
+| `npm run benchmark:ui-render -- --onboarding` | app/ | Mede FPS e custo de estilo/paint com o tutorial aberto (manual, na máquina de referência) |
 
 ---
 
@@ -526,6 +528,64 @@ Dicas que valem para qualquer verificação com `felixo devtools`:
 - **IPC longo.** `click` e `press` que disparam um IPC demorado só retornam
   quando ele resolve, mesmo com o app respondendo. Nesse caso, rode o comando em
   segundo plano.
+- **Tutorial do canvas.** Todo perfil isolado é um primeiro boot, mas na instância
+  de automação o tutorial não abre nem grava nada sozinho: a decisão fica em
+  `data-felixo-onboarding-decisao` (`suprimido:abriria-inicial`). Para ver o primeiro
+  uso de verdade, rode `FELIXO_DEVTOOLS_ONBOARDING=1 felixo devtools launch --visible`
+  (o CLI repassa o ambiente). Com `FELIXO_DEVTOOLS_HARDWARE_NOTICES=1` junto, a
+  sugestão do Modo Performance aparece ao lado do tour em máquina com até 4 CPUs.
+  Estados se semeiam pela própria ponte:
+  `felixo devtools eval "window.felixo.onboarding.read()"` e
+  `window.felixo.onboarding.write({ expectedRevision, value })`.
+  `sessionStorage['felixo:onboarding:falha'] = 'render'` força uma falha de render do
+  tutorial (só nesta instância) para conferir que o canvas continua de pé.
+- **Sonda IPC.** `felixo devtools main "ipcProbe.snapshot()"` devolve quantas vezes
+  cada canal IPC foi invocado desde o boot. Duas fotos antes e depois de uma ação
+  mostram se ela chamou PTY, CLI ou rede.
+
+### Tutorial do canvas: anunciar uma função nova
+
+O tutorial e as novidades vêm de um catálogo versionado
+(`app/src/features/onboarding/onboarding-catalog.ts`). "Novo" é detectado pelo id
+da entrada, nunca pela versão do app. Para anunciar uma função:
+
+1. Acrescente a entrada em `ONBOARDING_FEATURES` e o tour curto dela em
+   `ONBOARDING_TOURS` (passos só destacam; nenhum passo aciona o alvo).
+2. Marque o alvo no código com `data-felixo-tour-anchor` e registre a âncora em
+   `ONBOARDING_ANCHORS`. Toda cadeia de alvos termina numa âncora sempre visível.
+3. Escreva os textos em `onboarding-messages.ts` (pt-BR completo, título até 32 e
+   corpo até 240 caracteres). O corpo cita o nome acessível real do alvo.
+4. Suba `ONBOARDING_CATALOG_REVISION` e acrescente a revisão nova em
+   `CATALOG_HISTORY`, listando todos os ids vigentes.
+5. Nunca remova nem renomeie um id; uma entrada aposentada ganha `retired: true`.
+   Mudar o roteiro de um tour sobe o `version` dele, o que não reabre nada (a Ajuda
+   mostra "Atualizado").
+6. Gatilho de canvas (a novidade aparece quando um tipo de bloco chega ao canvas):
+   ponha o tipo em `CANVAS_TRIGGER_NODE_TYPES`
+   (`onboarding-canvas-triggers.ts`). O canvas lê essa lista sem carregar o catálogo,
+   que fica no chunk preguiçoso da store; sem o tipo na lista, o build reprova.
+
+O chunk do canvas só tem o procurador da store (`onboarding-store-proxy.ts`). A
+store, o estado e o catálogo vêm num chunk preguiçoso baixado quando o canvas monta,
+e a interface do tour num outro, baixado só com tour, aviso ou menu Ajuda na tela.
+Um import estático de `onboarding-store`, `onboarding-state` ou `onboarding-catalog`
+a partir do canvas os traz de volta para o startup, e o `onboarding-boundaries.test.ts`
+reprova.
+
+Uma ferramenta nova em `CanvasTool` reprova o build até ser declarada em
+`CANVAS_TOOL_FEATURES` (base ou novidade). O `onboarding-catalog.test.ts` confere
+ids, âncoras, textos, rótulos e o livro de versões; o smoke do canvas confere os
+rótulos contra a interface real. As decisões e as alternativas descartadas estão
+em [`PLANO-TUTORIAL-CANVAS.md`](../projeto/PLANO-TUTORIAL-CANVAS.md).
+
+O smoke (`npm run test:canvas-smoke`) roda os cenários do tutorial em duas sessões
+(`scripts/canvas-smoke-onboarding.cjs`): a sessão A com a abertura automática
+suprimida (percurso pela Ajuda com as sondas de IPC, rede, DOM e localStorage,
+teclado, Esc em camadas, leitor de tela, viewport e zoom, fonte e idioma, contraste,
+alvos invisíveis, retomada, chat e falha isolada) e a sessão B com
+`FELIXO_DEVTOOLS_ONBOARDING=1` num perfil novo (primeiro uso, restart, update com e
+sem novidade, downgrade, estado corrompido e redefinição). Os asserts são
+relacionais (`canvas-smoke-onboarding-geometry.cjs`), sem coordenada fixa.
 
 ### Função que só tinha atalho de teclado
 

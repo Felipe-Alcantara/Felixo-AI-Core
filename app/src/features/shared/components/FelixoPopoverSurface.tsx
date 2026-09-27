@@ -8,6 +8,8 @@ type Props = PropsWithChildren<{
   role?: string
   id?: string
   ariaLabel?: string
+  /** Idioma do conteúdo, quando difere do documento (menu Ajuda do tutorial). */
+  lang?: string
   placement?: 'top' | 'bottom'
 }>
 
@@ -20,6 +22,7 @@ export function FelixoPopoverSurface({
   role,
   id,
   ariaLabel,
+  lang,
   placement = 'bottom',
 }: Props) {
   if (typeof document === 'undefined') return null
@@ -30,6 +33,7 @@ export function FelixoPopoverSurface({
       id={id}
       role={role}
       aria-label={ariaLabel}
+      lang={lang}
       data-placement={placement}
       data-felixo-popover-surface="true"
       className={`felixo-popover-surface ${className}`.trim()}

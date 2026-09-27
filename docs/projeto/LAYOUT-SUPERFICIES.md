@@ -82,6 +82,49 @@ fora porque é bloqueante.
 flyouts da barra (`toolbar-flyout.ts`), `TerminalMenu`. Não redimensionam; o risco aqui
 não é tamanho, é ficar fora da tela em janela estreita.
 
+## Overlays do tutorial (não reservam largura)
+
+O tutorial do canvas (26/09/2026) não entra na disputa de largura: card, anel,
+aviso de novidade e menu Ajuda são `position: fixed` por cima do layout, fora de
+`splitHorizontalSpace` e de `useCanvasSurfaces`. Nenhum deles empurra o canvas, a
+gaveta ou o inspector. A posição é calculada por `computeCardPlacement`
+(`onboarding-layout.ts`, puro) e escrita pela ref, sem re-render por quadro.
+
+| Superfície | Tamanho | Posição | Observação |
+|---|---|---|---|
+| Card do tour | `min(22rem, 100vw − 24px)`; altura até o espaço do lado escolhido | Ancorado ao lado do alvo (preferido do passo, depois baixo, cima, esquerda), a 10 px dele e a 12 px da borda | Nunca cruza o alvo. Viewport compacto (largura < 480 ou altura < 360 CSS px) vira **folha** de largura cheia na borda oposta ao alvo, com altura `max(160, 60%)`; o corpo rola e o rodapé fica visível. Quando nenhuma borda recebe a folha sem cobrir o alvo (zoom alto na janela mínima, ≈ 416×289, com o alvo no meio da altura), a folha vai para a **coluna ao lado do alvo** (no mínimo 160 px de largura, no máximo a do card), na faixa livre mais próxima dele. Só um alvo maior que meia janela (a região do canvas) pode ficar sob o card |
+| Anel | O retângulo do alvo, contido na janela | Sobre o alvo | `outline` de 2 px com 2 px de folga, `pointer-events: none` |
+| Aviso de novidade | `min(18rem, 100vw − 24px)` | Ancorado à direita da Ajuda, pelo mesmo cálculo | Sem timer e sem foco automático |
+| Menu Ajuda | Conteúdo, com `max-height` da janela − 16 px | À direita do botão Ajuda, contido na janela | `FelixoPopoverSurface` (portal) |
+
+**Obstáculos.** O card e o aviso desviam de `[data-felixo-tour-avoid]` (a caixa do
+toast das CLIs, no canto inferior direito, e a do `NoticeToast`, embaixo no centro)
+e de `[data-canvas-layout-warning]` sempre que há lado livre. Na folha, a borda sem
+obstáculo vence; com as duas ocupadas, a altura encolhe até o piso de 160 px; sem
+isso, vale a coluna ao lado do alvo; e só então o card cobre o obstáculo
+(limitação declarada: card em z 55 sobre o aviso em z 50) até a pessoa avançar ou
+pular. O alvo pequeno nunca é o preço: cobrir o obstáculo vem antes. A última
+limitação declarada é uma janela sem coluna de 160 px de nenhum lado do alvo e sem
+160 px acima ou abaixo dele; aí a folha cobre o alvo.
+
+**Escala de z.** statusbar e topbar (18) < dock e painéis (20/30) < sidebar (26) <
+overlay `isBusy`, toast das CLIs, `NoticeToast` e menu de cor (50) < anel (54) <
+card e aviso (55) < `AgentQuestionDialog` e `HandoffDialog` (60) <
+`WebviewProfileMenu` (70) < `FelixoSelect` e menu Ajuda (1000). Os tokens
+`--felixo-z-onboarding-ring` e `--felixo-z-onboarding` ficam em `index.css`.
+Enquanto um diálogo modal (z 60) está aberto, o card e o aviso ficam `inert`, no
+mesmo passo e no mesmo lugar, e voltam quando ele fecha: o overlay os cobre, então
+nem o foco nem o teclado podem ficar neles. A posição congela (`placementFrozen`)
+porque o fundo do diálogo cobre todos os alvos, e o teste do centro jogaria o card
+no alvo reserva, com outro texto, por baixo do diálogo. O foco que era deles espera num elemento invisível
+com `nokey`, irmão do card (`OnboardingFocusHold`), e nunca no body: no body o
+React Flow trata Delete e Backspace como teclas do canvas e apagaria o bloco
+selecionado por baixo do diálogo.
+
+**Rail.** A Ajuda é o sexto botão do grupo de cima (≈ 271 px dentro de ≈ 289 px na
+altura mínima). Um botão novo acima dela exige refazer essa conta, senão o alvo do
+último passo é recortado.
+
 ## Decisões (podem ser revistas)
 
 **Gaveta do terminal: sem eixo vertical.** Ela é uma coluna encostada na direita, de

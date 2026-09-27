@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compile } from 'tailwindcss'
 import { describe, expect, it } from 'vitest'
@@ -11,15 +11,21 @@ import { describe, expect, it } from 'vitest'
  * `bg-[var(--x)]/90` não gerava CSS, e o texto escuro do botão ficava sobre o
  * fundo escuro do aviso. O Tailwind 4 gera essa forma (a canônica é
  * `bg-(--x)/90`), então a guarda deixou de caçar um padrão e passou a compilar:
- * toda classe das listas de classe dos .tsx desta pasta precisa sair no CSS —
- * utility do Tailwind ou classe própria (`felixo-*`) do index.css.
+ * toda classe das listas de classe dos .tsx desta pasta (e da do tutorial do
+ * canvas, que também só usa classes próprias) precisa sair no CSS — utility do
+ * Tailwind ou classe própria (`felixo-*`) do index.css.
  */
 const directory = dirname(fileURLToPath(import.meta.url))
+const scannedDirectories = [directory, join(directory, '../onboarding')]
 const indexCssPath = join(directory, '../../index.css')
 const resolveModule = createRequire(import.meta.url).resolve
 
-/** Marcadores do Tailwind que só existem dentro do seletor de outra classe. */
-const MARKER_CLASSES = new Set(['group', 'peer'])
+/**
+ * Marcadores que não geram CSS de propósito: `group`/`peer` só existem dentro do
+ * seletor de outra classe, e `nokey` é lido pelo React Flow em JS (o foco num
+ * elemento com ela não apaga blocos com Delete/Backspace).
+ */
+const MARKER_CLASSES = new Set(['group', 'peer', 'nokey'])
 
 async function compileAppCss() {
   return compile(readFileSync(indexCssPath, 'utf8'), {
@@ -61,10 +67,15 @@ function hasSelector(css: string, className: string) {
 describe('classes Tailwind da preparação das CLIs', () => {
   it('toda classe usada nos componentes gera CSS', async () => {
     const compiler = await compileAppCss()
-    const files = readdirSync(directory).filter((file) => file.endsWith('.tsx'))
-    const listsByFile = files.map((file) => ({
-      file,
-      lists: stringLiterals(readFileSync(join(directory, file), 'utf8')).map((literal) =>
+    const files = scannedDirectories.flatMap((folder) =>
+      readdirSync(folder)
+        .filter((file) => file.endsWith('.tsx'))
+        .map((file) => join(folder, file)),
+    )
+    const listsByFile = files.map((path) => ({
+      // Caminho relativo a features/, com `/` em qualquer sistema (Windows usa `\\`).
+      file: relative(join(directory, '..'), path).split(sep).join('/'),
+      lists: stringLiterals(readFileSync(path, 'utf8')).map((literal) =>
         literal.split(/\s+/).filter(Boolean),
       ),
     }))
@@ -81,7 +92,9 @@ describe('classes Tailwind da preparação das CLIs', () => {
     )
 
     expect(offenders).toEqual([])
-    // A guarda só vale se enxergar as listas de verdade: o botão do aviso.
+    // A guarda só vale se enxergar as listas de verdade: o botão do aviso e o card do tutorial.
     expect(hasSelector(css, 'bg-(--f-core-white)/90')).toBe(true)
+    expect(listsByFile.some(({ file }) => file.includes('onboarding/'))).toBe(true)
+    expect(hasSelector(css, 'felixo-onboarding-card')).toBe(true)
   })
 })

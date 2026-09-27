@@ -104,6 +104,36 @@ a ser a composição (9 a 18 s de composição numa janela de 6 s). Isso confirm
 modo é necessário mas não suficiente; o próximo ganho precisa vir de virtualização ou de menos camadas por
 nó, não de decoração.
 
+#### Tutorial do canvas aberto (26/09/2026)
+
+Medido com `npm run benchmark:ui-render -- --gpu=integrada --onboarding`, que abre o tutorial pela Ajuda antes
+de cada rodada e o mantém aberto durante toda a interação (anel, card e os observadores de posição ligados),
+comparado com a mesma execução sem a flag. Mesmo notebook de referência (Intel HD 520, ANGLE/GL), 48 blocos,
+6 s de interação, Modo Performance alternado dentro de cada execução e aquecimento descartado. As execuções
+foram intercaladas em dois pares (sem, com, sem, com; 4 rodadas cada) para a carga da máquina não favorecer um
+lado. A tabela mostra a média das medianas dos dois pares.
+
+| Tutorial | Modo | FPS | Quadro p95 | Estilo por quadro | Paint por quadro |
+| --- | --- | ---: | ---: | ---: | ---: |
+| fechado | normal | 16,2 | 192,7 ms | 5,00 ms | 8,14 ms |
+| aberto | normal | 15,8 | 195,8 ms | 6,11 ms | 8,28 ms |
+| fechado | Performance | 21,4 | 142,1 ms | 1,24 ms | 6,67 ms |
+| aberto | Performance | 22,1 | 144,3 ms | 1,35 ms | 6,35 ms |
+
+- **O tour aberto não tem custo mensurável.** As diferenças de FPS (−0,4 no normal, +0,75 no Performance) são
+  menores que a variação entre os dois pares de uma mesma condição (de 1,4 a 3,1 FPS). O estilo por quadro com
+  o tour aberto no modo normal subiu 1,1 ms na média, mas só num dos pares (+2,3 ms; no outro, −0,1 ms): está no
+  ruído.
+- **O Modo Performance continua valendo com o tour aberto:** +40% de FPS e estilo por quadro 78% menor (sem o
+  tour, +32% e 75%). O card, o anel e o aviso não têm animação nem transição em nenhum modo.
+- **Os números absolutos não são comparáveis com a tabela anterior:** a máquina estava carregada durante esta
+  medição (load average entre 8 e 11, com outras sessões e o app real abertos), por isso o FPS ficou abaixo dos
+  39,5/48,5 medidos de manhã. A comparação válida é "tour fechado × aberto" na mesma condição. Repetir com a
+  máquina ociosa daria os números absolutos; fica como convite para quem quiser atualizar esta tabela.
+- A primeira medição com a flag foi descartada: o card do passo 1 cobre parte da sidebar, os cliques reais nos
+  grupos cobertos caíam no card, e a rodada com o tour fazia menos trabalho (e parecia mais rápida). Com a flag,
+  um grupo coberto é acionado pelo DOM, como o teclado faria; sem a flag, a interação é a mesma de antes.
+
 #### Placa de vídeo (26/09/2026)
 
 Com a GPU dedicada (ANGLE sobre Vulkan), a mesma bancada mediu +15% de FPS no

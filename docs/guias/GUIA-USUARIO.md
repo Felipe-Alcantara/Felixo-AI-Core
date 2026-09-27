@@ -198,7 +198,7 @@ Abra **Ferramentas → Orquestrador** para ajustar:
 
 ### Felixo
 
-Abra **Ferramentas → Configurações** para ajustar:
+Abra **Configurações** (a engrenagem no pé da faixa de ícones do canvas) para ajustar:
 
 - memórias globais do orquestrador;
 - tema visual;
@@ -264,7 +264,7 @@ Como cada sistema escolhe a placa:
 
 ### Felixo System Design
 
-Em **Ferramentas → Configurações**, o bloco **Felixo System Design** sincroniza
+Em **Configurações** (a engrenagem no pé da faixa de ícones do canvas), o bloco **Felixo System Design** sincroniza
 o repositório de padrões e mostra o índice usado pelos agentes. A sincronização
 de repositórios privados usa a autenticação segura já configurada no Git
 (credential helper, Keychain do macOS, Credential Manager do Windows ou
@@ -397,10 +397,16 @@ Ao arrastar uma conexão entre dois blocos de agentes, ambos recebem uma instru�
 
 ### Ferramentas do canvas
 
-O menu **Ferramentas** (canto superior esquerdo do canvas) reúne painéis que flutuam sobre o quadro sem escondê-lo: Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git, Fetch All e Configurações. Escolher uma ferramenta fecha o menu e abre o painel correspondente. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, as notificações continuam acessíveis ao lado do botão de expansão.
+A seção **Ferramentas** da barra lateral do canvas (fechada por padrão; clique no título para abrir) reúne painéis que flutuam sobre o quadro sem escondê-lo, em três grupos:
+
+- **Workspace:** Projetos, Notas, Modelos, Prompts, Skills e Source Control;
+- **Operação:** Fetch All, Tarefas Notion, Limites e uso, Orquestrador, QA Logger, Pedidos de escrita e Presets de agente;
+- **Transferência:** Exportar canvas e Importar canvas.
+
+Escolher uma ferramenta abre o painel correspondente. **Buscar**, **Notificações**, **Ajuda** e **Configurações** não ficam nessa seção: são botões da faixa de ícones à esquerda da barra, onde também estão **Chat** e um atalho para **Projetos**. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, a faixa de ícones continua visível, com as notificações e o botão **Expandir sidebar**.
 
 - **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas, editáveis ali mesmo e também legíveis pelo modo de chat legado.
-- **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
+- **Source Control** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
 - **Skills** lista, em **Skills do sistema**, as skills que todo agente novo recebe. O ícone de olho cortado ao lado de **Ativar** ("Não enviar aos agentes") tira uma skill dessa lista. O recolhível **Ocultas (N)**, logo abaixo, mostra as que foram tiradas, e o X de cada uma a devolve. A escolha vale para os próximos agentes, sem reiniciar o app, e continua valendo nas próximas sessões. Uma skill oculta também sai dos presets que a citam.
 - **Fetch All** mostra primeiro o escopo efetivo, as raízes configuradas, o motivo da escolha e o custo esperado. As pastas-raiz se escolhem no próprio cartão **Escopo da varredura**: **Adicionar pasta** abre o seletor do sistema (dá para escolher uma ou várias pastas), e o X ao lado de cada raiz a tira da lista. Cada linha mostra o nome da pasta e o caminho completo. Não é preciso editar `fetch-all-settings.json` à mão. Prefira escolher as pastas onde ficam os seus repositórios, porque varrer os discos inteiros é bem mais caro, sobretudo numa máquina modesta. Com pelo menos uma raiz, a varredura fica só nelas e não pede confirmação. Quando nenhuma foi configurada, os discos locais aparecem apenas como alternativa ("Ou varra todos os discos locais") e a interface exige uma confirmação explícita antes de iniciar uma varredura ampla. Sem essa confirmação, nenhuma varredura recursiva começa — em particular, a configuração vazia nunca dispara `/` silenciosamente. Pull (sempre `--ff-only`), push e o commit automático dos repositórios cuja única pendência é commitar acontecem num segundo passo, depois de você revisar o plano e confirmar — e o estado de cada repositório é conferido de novo imediatamente antes de qualquer escrita. Cada passada gera um relatório em Markdown na pasta de relatórios do app. A varredura **rápida** reaproveita a lista da última varredura completa somente se raízes, exclusões, ignorados, montagens e discos detectados forem os mesmos (é mais rápida, mas não encontra repositórios novos), e o ícone ao lado de um repositório passa a **ignorar** aquela pasta nas próximas varreduras — a lista de ignoradas fica no rodapé do painel.
 - Se uma execução confirmada falhar, o painel mostra o diagnóstico, mantém o pedido pendente e preserva o plano para uma nova revisão; o pedido só sai da fila depois que `resultado.ok` confirma a execução.
@@ -441,6 +447,74 @@ notificações ou diálogos com retorno ao controle que os abriu. Botões, campo
 separadores do canvas têm rótulos para leitores de tela. Ao recarregar o app,
 os nós e as conexões persistidos voltam uma única vez; a validação automatizada
 usa um PTY fake para não executar comandos externos.
+
+### Tutorial e Ajuda
+
+Na primeira vez que o app abre num computador, com o canvas vazio, um tutorial
+curto aparece sozinho ao lado da barra lateral, depois que o canvas termina de
+carregar. São seis passos: **Projeto**, **Agente**, **Contexto**, **Terminais**,
+**Ferramentas** e **Onde rever**. Cada passo destaca um controle de verdade com um
+contorno e explica para que ele serve.
+
+- O tutorial só mostra. Ele não clica, não abre seção nem painel e não cria nada:
+  não abre agente, não roda comando e não gasta crédito.
+- Ele não bloqueia o canvas: dá para continuar trabalhando com ele aberto, sem
+  escurecer a tela. **Pular tutorial**, **Voltar**, **Próximo** e **Concluir** ficam
+  no rodapé do card, e `Esc` com o foco no card fecha o tutorial. Se um diálogo
+  estiver aberto por cima (a pergunta de um agente, por exemplo), o card fica
+  inativo até ele fechar: sai do `Tab`, não responde a teclas nem a cliques e
+  continua no mesmo passo, e o teclado é do diálogo. Quando o diálogo fecha, o
+  foco volta ao botão do card onde estava, a não ser que você o tenha levado para
+  outro lugar.
+- Pelo teclado: no primeiro uso o foco entra no card, a não ser que você já esteja
+  digitando em outro lugar. `Tab` percorre os botões e segue para o canvas, e
+  `Shift+Tab` volta para a barra lateral; nada prende o foco. Um leitor de tela
+  ouve o nome e o texto do passo, e a troca de passo é anunciada.
+- Com a barra lateral recolhida ou uma seção fechada, o passo aponta para o botão
+  que a abre (o menu do canvas) e diz o que abrir. Quando você abre, o destaque vai
+  para o controle certo. O tutorial nunca abre nada por você.
+- Dá para rolar a barra lateral com o tutorial aberto, com a roda do mouse ou com
+  `Tab`: ele não puxa a rolagem de volta. O destaque acompanha o controle e some se
+  ele sair de vista; no passo seguinte, o tutorial rola até o controle novo.
+- Em janela pequena (ou com zoom alto), o card vira uma folha na borda da janela, ou
+  numa coluna ao lado do controle destacado quando a borda o cobriria, e o texto rola
+  por dentro; os botões e o controle destacado ficam sempre visíveis.
+- Recarregar a janela no meio do tutorial retoma no mesmo passo, sem puxar o foco.
+  Ir ao chat e voltar também. Fechar o app e abrir de novo não reabre nada: o
+  tutorial aparece como "Interrompido" na Ajuda.
+- Quem já usava o app antes desta versão não recebe o tutorial automático; ele fica
+  disponível na Ajuda. No lugar dele aparece uma vez um aviso pequeno ao lado da
+  Ajuda ("Novidade: Ajuda"), com **Ver** e **Agora não**. O aviso não tira o foco de
+  onde você está digitando e não some sozinho: fica até você responder, abrir a
+  Ajuda ou apertar `Esc` com o foco nele.
+
+**Ajuda** é o botão com o ponto de interrogação na barra de ícones da esquerda,
+logo abaixo de Notificações. Ela reúne:
+
+- **Tutorial do canvas**, com o estado (Não visto, Em andamento, Interrompido no
+  passo n, Pulado, Concluído em uma data ou Atualizado) e a ação que faz sentido:
+  Iniciar, Continuar do passo n, Rever ou Recomeçar.
+- **Novidades**: funções novas que ganharam um tour curto. Uma novidade que você
+  ainda não viu aparece como "Novo" e deixa um ponto no botão Ajuda.
+- **Redefinir tutoriais**, que pede confirmação na própria tela e abre o tutorial do
+  começo. As novidades que já foram anunciadas não voltam a aparecer.
+
+Pelo teclado, o foco entra no menu ao abrir e `Tab` percorre as ações. `Tab`
+depois da última, `Shift+Tab` antes da primeira ou `Esc` fecham o menu, e o foco
+volta ao botão Ajuda.
+
+Quando o progresso não pode ser salvo (por exemplo, abrindo uma versão mais antiga
+do app depois de usar uma mais nova), a Ajuda avisa "O progresso não será salvo
+nesta sessão." O tutorial funciona normalmente naquela sessão e nada do que a
+versão mais nova gravou é apagado.
+
+O progresso fica no banco local (`database/felixo.sqlite`, na chave
+`onboarding.state`). Reinstalar o app por cima, inclusive pelo instalador do
+Windows, preserva a pasta de dados, então o tutorial não reabre. Só um perfil novo
+(a pasta de dados apagada à mão ou outro usuário do sistema) conta como primeiro
+uso. Várias janelas, ou duas instâncias do app abertas ao mesmo tempo, nunca
+mostram o tutorial automático duas vezes. Os textos existem só em português por
+enquanto.
 
 ### Zoom da janela
 
@@ -532,7 +606,8 @@ Verifique se o instalador veio da página oficial de Releases, se o antivírus n
 
 **A janela abre preta ou a interface não termina de carregar.**
 
-Abra **Ferramentas > Configurações > Renderização e recuperação**. O modo
+Abra **Configurações > Renderização e recuperação** (a engrenagem no pé da faixa
+de ícones do canvas). O modo
 **Automático** preserva a aceleração da GPU e ativa o fallback de software
 automaticamente em Windows com pouca memória. Se o driver antigo continuar
 causando a tela preta, escolha **Modo compatível (sem GPU)** e clique em

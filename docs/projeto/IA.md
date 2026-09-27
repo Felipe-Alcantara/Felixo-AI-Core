@@ -4785,3 +4785,685 @@ número de CPUs" e "Placa de vídeo: correções da revisão" e não as reescrev
 - Medir o custo do `getGPUInfo('basic')` numa máquina Windows, com e sem NPU.
 - Um lançador intermediário que feche os fds herdados antes de reabrir o `.AppImage`.
 - Avisar quando o renderizador do WebGL não é da placa pedida (Linux com duas dedicadas ou sem Vulkan).
+
+## 2026-09-26 — Tutorial do canvas, Ajuda e novidades: plano aprovado
+
+**Task.** Tutorial inicial não bloqueante no canvas, um lugar para reabri-lo (Ajuda) e um aviso discreto de
+capability nova, tudo com estado versionado. O plano completo, com decisões, alternativas descartadas, riscos
+e o mapa aceite → teste (T1.a–T3.d), está em [`PLANO-TUTORIAL-CANVAS.md`](PLANO-TUTORIAL-CANVAS.md). Branch
+`feat/tutorial-canvas`, a partir de `f42eb661` (#95). Registro gravado às 14:50.
+
+**Decisões centrais (detalhe e motivo no plano).**
+- Quem já usa o app não recebe o tutorial automático; os sinais de uso anterior são lidos em `main.tsx`,
+  antes de o tema e o Modo Performance gravarem no mount, com um marcador de primeiro boot que cobre um
+  primeiro boot interrompido.
+- Uma única autoridade de estado: o SQLite do main (`settings['onboarding.state']`), com compare-and-set em
+  `BEGIN IMMEDIATE`. Sem espelho no localStorage e sem função de mesclagem: num conflito, o mesmo evento é
+  reaplicado sobre o estado mais novo.
+- Novidade detectada por identidade (id do catálogo fora de `knownFeatures`), nunca por versão do app,
+  hash ou comparação de arquivo. O catálogo tem um livro de versões (`CATALOG_HISTORY`) conferido em teste.
+- A política de automação é decidida no main (molde do `hardware:get-profile`): a instância do
+  `felixo devtools` não abre nada nem grava nada sozinha, salvo `FELIXO_DEVTOOLS_ONBOARDING=1`.
+- O tour não é modal, não escurece a tela, não anima, nunca clica nem expande nada e não cria agente.
+
+**Divergências registradas.** Do GUIA-ONBOARDING-E-AJUDA (sem overlay bloqueante, sem `animate-ping`, sem
+`hasSeen` booleano) e do "modais prendem foco" do System Design (o tour é `aria-modal="false"`, sem trap).
+
+**Estado.** Só o plano neste passo; o código entra nos commits seguintes, na ordem da seção "Ordem de
+commits" do plano.
+
+## 2026-09-26 — Tutorial do canvas: catálogo, textos e state machine (commit 3 do plano)
+
+Registro gravado às 15:01. Arquivos novos em `app/src/features/onboarding/`: `onboarding-catalog.ts`,
+`onboarding-messages.ts`, `onboarding-state.ts`, os testes U-cat, U-msg e U-state e
+`onboarding-test-fixtures.ts` (catálogos de fixture, PRNG semeado e geradores de fuzz, usados só pelos testes).
+
+**O que ficou pronto.**
+- Catálogo v1 com o tour `inicial` (6 passos), o mini-tour `novidade-ajuda`, a feature `feature.ajuda`
+  (`anunciarParaQuemJaUsa: true`), o livro de versões `CATALOG_HISTORY` e a guarda de compilação
+  `CANVAS_TOOL_FEATURES satisfies Record<CanvasTool, 'base' | FeatureId>`.
+- Textos pt-BR completos (passos, card, região live, aviso e Ajuda), plural por `Intl.PluralRules`, pseudo-locale
+  `en-XA` gerado do pt-BR e resolução de locale tudo ou nada por card.
+- State machine pura: `normalizeOnboardingState` (nunca lança; fuzz de 500 valores, metade mutações de um estado
+  válido), `applyOnboardingEvent` (devolve o mesmo objeto num no-op), `decideAutomaticOpening`, gatilho de canvas
+  ao vivo, `describeHelpEntries`, retomada por sessão e serialização que preserva extras e ids desconhecidos.
+
+**Desvios do plano, com motivo.**
+- `MessageKey` é derivado do próprio `PT_BR` (`satisfies Record<string, Message>`), em vez de uma união separada
+  mais `satisfies Record<MessageKey, Message>`. A garantia é a mesma (pt-BR completo por construção) sem manter
+  duas listas de ~60 chaves em sincronia.
+- Os nomes das ferramentas do passo 5 ("Notas" e "Prompts") estão escritos no texto pt-BR, e o U-cat confere
+  que são exatamente `TOOL_LABELS[citaFerramentas[i]]`. Formatar a partir de `TOOL_LABELS` em tempo de execução
+  exigiria importar o módulo do canvas no chunk das mensagens, e o próprio plano só permite `TOOL_LABELS` no
+  teste do catálogo.
+- Passo com `requires` fica oculto também com a capability `desconhecido` (o plano cita só `indisponivel`):
+  o tutorial nunca descreve o que pode não existir neste ambiente.
+- `resolveOnboardingLocale` só casa um pseudo-locale (`-XA`/`-XB`) pelo nome exato; sem isso, `en-US` cairia
+  em `en-XA` pelo idioma.
+- O teste de migração v1→v2 exercita `migrateRaw` com uma tabela de fixture (a normalização atual só conhece o
+  schema 1, então não existe versão menor para migrar dentro do próprio `normalize`).
+
+**Validação.** `npx vitest run src/features/onboarding`: 74 testes ok; `npm run typecheck` ok; `eslint` da pasta ok.
+
+## 2026-09-26 — Tutorial do canvas: estado no SQLite, IPC e política de automação (commit 4 do plano)
+
+Registro gravado às 15:04.
+
+**O que ficou pronto.**
+- `electron/services/storage/onboarding-state-repository.cjs`: leitura tolerante (JSON inválido ou envelope sem
+  revisão vira `corrupted: true`, revisão 0) e `compareAndSetOnboardingState` com `BEGIN IMMEDIATE`, um SELECT e um
+  UPSERT na chave `onboarding.state`, envelope `{ revision, value }`.
+- `electron/services/onboarding-ipc-handlers.cjs`: canais `onboarding:read` (com `appVersion` e `automation`) e
+  `onboarding:write` (valida objeto simples, `schemaVersion` inteiro ≥ 1, `expectedRevision` inteiro ≥ 0 e no máximo
+  64 KiB em bytes UTF-8). `ipcMain`, banco, versão, política e relógio são injetados.
+- `electron/core/onboarding-automation.cjs`: `autoOpen` falso com porta de depuração válida, salvo
+  `FELIXO_DEVTOOLS_ONBOARDING=1`; sem porta é sempre produto.
+- Registro no `main.cjs` logo depois de `registerOrchestratorSettingsIpcHandlers`, ponte `onboarding` no
+  `preload.cjs` (sempre presente, não só no devtools) e tipos `OnboardingReadResult`/`OnboardingWriteResult` no
+  `vite-env.d.ts`.
+
+**Detalhes de implementação que o plano não fixava.**
+- O `ROLLBACK` só roda se o `BEGIN IMMEDIATE` desta função deu certo. Com uma transação de outro módulo aberta na
+  mesma conexão, o `BEGIN` falha e um `ROLLBACK` incondicional desfaria o trabalho alheio (há teste para isso).
+- A escrita grava a forma JSON do valor recebido (o que a leitura devolve), nunca o objeto clonado pelo IPC.
+- A porta conta como válida só entre 1 e 65535, a mesma condição com que o `main.cjs` liga o CDP.
+- O processo filho do N-mp fica em `electron/__fixtures__/onboarding-cas-worker.cjs`, a pasta de fixtures que o
+  `electron/` já usa; sem `.test` no nome, o runner não o executa como teste.
+
+**Validação.** `node --test` dos quatro arquivos novos: 21/21 (N-repo, N-mp com 20 rodadas entre dois processos
+node reais, N-ipc com o contrato do preload e do `vite-env.d.ts`, N-auto); `npm run typecheck` ok;
+`node --check` de `main.cjs` e `preload.cjs` ok.
+
+## 2026-09-26 — Tutorial do canvas: store, sinais de boot e retomada por sessão (commit 5 do plano)
+
+Registro gravado às 15:19.
+
+**O que ficou pronto.**
+- `onboarding-store.ts`: `createOnboardingStore(deps)` e o singleton `onboardingStore`, com
+  `useOnboardingSnapshot()` sobre `useSyncExternalStore` (snapshot de servidor constante). Leitura com prazo de
+  4 s, decisão automática uma vez por store depois da leitura e da hidratação, reivindicações pessimistas,
+  abrir/pular/concluir otimistas numa fila de escrita, conflito resolvido reaplicando o mesmo evento, retomada
+  por `sessionStorage` sem escrita, gatilhos de capability e de canvas, reset e falha de render isolada.
+- `onboarding-boot-signals.ts` (chunk de entrada, sem React): foto das chaves `felixo*` e marcador de primeiro
+  boot; chamado em `main.tsx` antes do `createRoot`.
+- `onboarding-devtools.ts`: falha forçada lida só com `window.felixo.devtools`.
+- Testes U-store (35 casos), U-prop (500 sequências de 40 eventos com dependências espiãs e uma sonda em
+  `fetch`) e U-boot. O U-prop foi conferido com duas mutações de propósito (pular rebaixando `concluido`;
+  novidade com `autoOpen` falso): as duas reprovaram, e o código voltou ao original.
+
+**Desvios e acréscimos ao plano, com motivo.**
+- `session` é um getter (`() => storage`), como no `openia-image-store`: acessar `window.sessionStorage` pode
+  lançar, e o getter deixa cada acesso protegido.
+- Dependência `log` (QA Logger, escopo `renderer:onboarding`) para a recuperação e as falhas de escrita que o
+  plano manda registrar. O U-prop confere que a store só chama as dependências de I/O previstas mais leituras
+  puras (relógio, locale, sinais, falha forçada, `schedule`, `log`).
+- API além do plano: `canvasUnmounted()` (o portão "só com o CanvasView montado" precisa saber quando o canvas
+  sai), `focusBeforeOpen()` (o elemento focado é capturado pela store no instante da abertura, antes de o chunk
+  preguiçoso carregar e o menu da Ajuda fechar) e `settled()` (testes e smoke esperam leitura, avaliação e
+  escritas terminarem).
+- `TourSession.falhaForcada`: a falha forçada é lida a cada abertura, e a camada só consulta o snapshot, sem ler
+  `sessionStorage` no render.
+- Rótulos de `decisao` além da lista do plano: `sem-ponte`, `retomada`, `recuperado`, `anunciado`, `carregando`,
+  `suprimido:recuperaria` e `suprimido:anunciaria`.
+- Se a pessoa abre um tour pela Ajuda antes de a leitura terminar e a decisão automática é anunciar uma
+  novidade, a store espera o tour fechar em vez de gastar o anúncio sem mostrar o aviso (teste dedicado).
+
+**Validação (gates completos em `app/`).** `npm run lint` ok; `npm run build` ok; `npm test` 1811/1811;
+`npm run test:frontend` 1458 ok e 1 pulado (152 arquivos).
+
+## 2026-09-26 — Tutorial do canvas: âncoras estáveis e obstáculos de posicionamento (commit 6 do plano)
+
+Registro gravado às 15:33.
+
+**O que ficou pronto.** Só atributos, sem mudança de comportamento:
+- `data-felixo-tour-anchor`: `rail-menu` (toggle do menu do canvas) e `rail-projetos` no rail, pela prop opcional
+  `tourAnchor` do `ActivityRailButton`; `secao-criar` e `secao-ferramentas` no botão de título do
+  `SidebarSection` (prop opcional `anchorId`, que a sidebar do chat não passa); `criar-bloco` no gatilho do
+  "Novo bloco"; `criar-agente` na moldura `.felixo-sidebar-agent-trigger`, nunca nas metades (a metade "Agente"
+  lança a CLI); `inspector-elementos` na linha do cabeçalho "Elementos" e `inspector-puck` no puck.
+- `data-felixo-tour-avoid` no cartão do `CliSetupToast` e na caixa `role="status"` do `NoticeToast` dos
+  HardwareNotices, não no wrapper `inset-x-0` de largura total.
+
+**Desvio.** A prop `controls` do `ActivityRailButton` (`aria-controls`) fica para o commit 9, junto do botão
+Ajuda, o único que a usa. A âncora `rail-ajuda` também nasce com o botão.
+
+**Validação.** `npm run lint` e `npm run build` ok.
+
+## 2026-09-26 — Tutorial do canvas: posicionamento, alvo e foco puros (commit 7 do plano)
+
+Registro gravado às 15:40.
+
+**O que ficou pronto.** `app/src/features/onboarding/onboarding-layout.ts`, sem DOM de verdade (DOM e medidas
+injetados): `resolveStepTarget` (cadeia de alvos com `[inert]`/`aria-hidden`/`hidden`, `visibility`,
+`opacity`, retângulo vazio, 50% na janela e na sidebar rolável, `elementFromPoint` no centro e
+`needsReveal` abaixo da dobra), `computeCardPlacement` (folha em viewport compacto; lados na ordem preferido,
+baixo, cima, esquerda; desvio de `[data-felixo-tour-avoid]`), `computeRingRect`, `computeSidebarReveal`,
+`canStealFocus`, `decideFocusOnOpen`, `resolveReturnFocus`, `hasOpenModal` e
+`ancestorCreatesContainingBlock`.
+
+**Decisões que o plano não fixava.**
+- A matriz do U-layout reprovou o primeiro desenho em 720×500 com o card 2× mais alto e o `NoticeToast`: nenhum
+  lado cabia inteiro e a folha cobria o aviso, embora houvesse espaço. O posicionamento ganhou uma segunda passada:
+  ao lado do alvo (direita/esquerda), com a altura limitada à faixa livre da coluna mais próxima do alvo (janela
+  menos obstáculos, pelo menos 160 px) e o corpo rolando.
+- Depois de esquerda, a ordem de lados ainda tenta a direita (relevante para o inspector, cujo preferido é a
+  esquerda).
+- `canStealFocus` é lista de permissão (`null`, `body`, `html` e a região do canvas); a lista do plano (campos,
+  xterm, gaveta, webview, diálogos, menus) fica documentada em `FOCUS_OWNERS_SELECTOR` e testada. Um botão que a
+  pessoa focou também não perde o foco para a abertura automática.
+- As superfícies do próprio tour (`[data-felixo-onboarding]`) nunca contam como oclusão do alvo.
+- O teto do card ancorado é o espaço daquele lado, não a altura medida, para arredondamento de subpixel nunca cortar
+  o rodapé.
+
+**Validação.** U-layout: 493 casos (matriz de 6 viewports × 9 alvos × 4 conjuntos de obstáculos × 2 alturas de
+card, só asserts relacionais, mais casos nomeados de alvo, foco, modal e containing block). Conferido com duas
+mutações de propósito (ignorar obstáculos; ignorar oclusão), que reprovaram 52 e 2 casos; o código voltou ao
+original. `npm run lint` e `npm run build` ok.
+
+## 2026-09-26 — Tutorial do canvas: tutorial não bloqueante no canvas (commit 8 do plano)
+
+Registro gravado às 15:52.
+
+**O que ficou pronto.**
+- `OnboardingMount` (eager), logo depois do `<CanvasToolbar/>` dentro de `[data-felixo-region="canvas"]`: região
+  live sempre montada e vazia, com `data-felixo-onboarding-decisao`; `canvasReady`, `canvasUnmounted` e
+  `canvasNodeTypes`; a camada entra só por `lazy(import('./onboarding-ui-entry'))` dentro do
+  `OnboardingErrorBoundary`.
+- Chunk preguiçoso único `onboarding-ui-entry` (22,4 kB, 8,1 kB gzip no build): mensagens, layout,
+  `onboarding-ui-model.ts` (textos prontos do card, do aviso e dos anúncios), `OnboardingTourLayer` (casca:
+  medição, observadores, posição pela ref, Esc, foco), `OnboardingTourCard` e `OnboardingNotice`
+  (apresentacionais). "Tutorial do canvas" só aparece nesse chunk.
+- CSS: tokens `--felixo-z-onboarding-ring: 54` e `--felixo-z-onboarding: 55`, classes `.felixo-onboarding-*` sem
+  animação nem transição, tamanhos em rem, foco visível na própria classe, alto contraste e forced-colors. As
+  classes do card, do anel e do aviso também entram nos blocos de reduced motion e de Modo Performance.
+- `CanvasView`: `nodeTypesKey` só é montada quando o catálogo tem gatilho de canvas (o v1 não tem).
+
+**Desvios e acréscimos, com motivo.**
+- Store: `TourSession` ganhou `titulo` e `lang`, o aviso ganhou `titulo` e `lang`, e o anúncio ganhou `lang`
+  (`announce(texto, lang)`). O `lang` do documento é capturado na abertura, como a falha forçada, para a camada
+  não ler o DOM no render; o anúncio leva o idioma do catálogo usado.
+- `reportFailure(error, componentStack)`: o boundary passa a pilha de componentes e a store registra um único erro no
+  QA Logger (escopo `renderer:onboarding`). O boundary não loga de novo, para a falha não aparecer duplicada.
+- `onboarding-ui-model.ts` é um arquivo a mais que o plano: separa a formatação dos textos (pura, testada no U-ui)
+  da casca e dos componentes.
+- O anel e o card ficam invisíveis por CSS até a camada escrever `data-visivel`/`data-modo` pela ref, em vez de
+  estilo inline (o U-ui confere que a marcação não tem `style` com posição).
+- `nokey` entrou na lista de marcadores do `setup-tailwind-classes.test.ts` (é lido pelo React Flow em JS), que agora
+  varre também `features/onboarding`, com caminho relativo portátil entre sistemas.
+- `nodeTypesKeyOf` em `onboarding-state.ts`, o inverso de `parseNodeTypesKey`, para o `CanvasView` montar a chave.
+
+**Validação.**
+- U-ui (card por passo × pt-BR/en-XA, contador, Voltar com `aria-disabled`, Concluir, ids de labelledby e
+  describedby, sem coordenadas, aviso sem `autofocus`, anúncios), U-bound (sonda estática de importações, rede,
+  processo e ponte; Mount só por lazy; métodos do boundary com store falsa e real) e U-css (conferido com três
+  mutações de propósito, que reprovaram; o CSS voltou ao original).
+- `npx vitest run src/features/onboarding src/features/setup`: 690/690. `npm run lint` e `npm run build` ok.
+- App real (`felixo devtools`, perfil isolado, sob o lock): com a abertura suprimida, a decisão exposta é
+  `suprimido:abriria-inicial`, sem card, e as 8 âncoras existem. Com sessão de retomada no passo 2 e reload, o card
+  aparece ancorado à direita da moldura "Agente" (anel no alvo), sem mover o foco, e a região live diz "Tutorial
+  retomado no passo 2 de 6: Agente."; Próximo troca o texto e anuncia "Passo 3 de 6: Contexto"; o passo 4 fica à
+  esquerda do cabeçalho "Elementos"; Esc no card fecha, limpa a sessão, anuncia "Tutorial fechado. Reabra em Ajuda."
+  e devolve o foco à região do canvas (a Ajuda ainda não existe neste commit).
+
+## 2026-09-26 — Tutorial do canvas: Ajuda no rail (commit 9 do plano)
+
+Registro gravado às 16:13.
+
+**O que ficou pronto.**
+- Botão "Ajuda" (`CircleHelp`) no grupo superior do rail, depois de Notificações: `aria-expanded`,
+  `aria-controls`, `data-felixo-help-trigger`, âncora `rail-ajuda`, ponto estático de novidade e
+  `aria-label="Ajuda (1 novidade)"` com plural pela contagem. Abrir a Ajuda dispensa o aviso de novidade.
+- `OnboardingHelpMenu` (chunk preguiçoso, o mesmo do tour): `FelixoPopoverSurface` com `role="group"`, `nokey` e
+  `lang`; tutorial do canvas com estado e ação (Iniciar, Continuar do passo n, Rever, Recomeçar), novidades (vazio,
+  "Novo" com Ver, "Indisponível nesta versão"), "Redefinir tutoriais" com confirmação na própria tela (nunca
+  `window.confirm`) e a linha "O progresso não será salvo nesta sessão." sem persistência. Esc com o foco no menu e
+  clique fora fecham e devolvem o foco ao botão; abrir um tour fecha o menu e abre no quadro seguinte, com o foco já
+  no botão Ajuda (é para lá que ele volta no fim).
+
+**Desvios e acréscimos, com motivo.**
+- `onboarding-help-label.ts` (eager): o rótulo do botão existe antes de qualquer tour e não pode puxar o catálogo de
+  textos do chunk preguiçoso; `onboarding-messages.ts` reusa as mesmas constantes, sem texto duplicado. O botão fica
+  sempre em pt-BR, como o resto do rail.
+- `useOnboardingNovelties()` na store: a barra lateral só re-renderiza quando a contagem de novidades muda.
+- `HelpEntry.passoId`: "Continuar do passo n" reabre exatamente no passo salvo.
+- `FelixoPopoverSurface` ganhou a prop opcional `lang` (o menu precisa declarar o idioma do conteúdo).
+- `describeHelpMenu` em `onboarding-ui-model.ts` e `OnboardingHelpMenuContent` apresentacional, para o U-ui testar
+  todos os estados sem portal.
+- Clique fora só devolve o foco ao botão se ele não foi para outro controle (um clique no terminal não é desfeito).
+- U-cat confere que toda âncora do catálogo está marcada no código do canvas e que `criar-agente` fica na moldura.
+- **Bug achado na verificação no app real e corrigido no commit 8 (amend, antes de qualquer push):** o aviso de
+  novidade nunca era posicionado (ficava invisível). `onPlaced?.(placeSurface(...))` não avalia o argumento quando
+  `onPlaced` não existe, e o aviso não passa esse callback. A medição agora roda antes da chamada opcional.
+
+**Validação.**
+- `npx vitest run src/features/onboarding src/features/setup`: 708/708. `npm run lint` e `npm run build` ok (chunk
+  `onboarding-ui-entry` com 29,5 kB, 9,8 kB gzip).
+- App real (`felixo devtools`, perfil isolado, sob o lock), abertura suprimida: Ajuda com nome "Ajuda"; Enter abre o
+  menu com o foco em "Iniciar" e `aria-controls` igual ao id do menu; Esc fecha e devolve o foco ao botão; Iniciar
+  abre o tour com o foco no card; Tab percorre Pular → Voltar → Próximo e sai do card; Shift+Tab em Pular volta à
+  sidebar; Enter em Voltar no passo 1 não faz nada; Enter em Próximo até o passo 6 mantém o foco no mesmo botão e a
+  região live anuncia cada passo; Concluir anuncia a conclusão e devolve o foco à Ajuda; `read()` mostra o inicial
+  concluído (as ações da pessoa gravam mesmo com a automação suprimida). O menu mostra "Concluído em 26/09/2026" e
+  Rever; Redefinir pede confirmação com o foco em Cancelar; confirmar abre o inicial com foco e preserva
+  `knownFeatures`.
+- App real com `FELIXO_DEVTOOLS_ONBOARDING=1` e `FELIXO_DEVTOOLS_HARDWARE_NOTICES=1`: o primeiro uso abre sozinho
+  (decisão `aberto`, um card, foco no card, marcador removido, revisão 1) sem cruzar o `NoticeToast`; com o estado
+  semeado (inicial concluído, `knownFeatures` vazio) e reload, o aviso "Novidade: Ajuda" aparece ao lado da Ajuda
+  sem tirar o foco do body, a região live diz "Novidade em Ajuda: Ajuda.", o botão vira "Ajuda (1 novidade)" com o
+  ponto, e "Ver" abre o mini-tour com o foco no card, com o inicial ainda concluído.
+
+## 2026-09-26 — Tutorial do canvas: sonda de invocações IPC na automação (commit 10 do plano)
+
+Registro gravado às 16:23.
+
+**O que ficou pronto.**
+- `electron/core/ipc-invoke-probe.cjs`: `installIpcInvokeProbe(ipcMain)` envolve `handle` e `on` e conta as
+  invocações por canal, sem mudar retorno, exceção nem `this`. `snapshot()` devolve uma cópia congelada, com os
+  canais em ordem alfabética.
+- `main.cjs` instala a sonda logo depois de calcular `devtoolsPort`, só com porta válida (1 a 65535) e antes do
+  primeiro `ipcMain.handle`. O `devtools:main-eval` recebe `ipcProbe` apenas com `snapshot()`; o app normal
+  nunca a instala.
+
+**Acréscimos, com motivo.**
+- `handleOnce` e `once` não precisam de envoltório próprio: o Electron e o EventEmitter do Node os implementam
+  sobre `handle` e `on` da própria instância, então passam pela sonda (há teste). O listener contado guarda o
+  original em `.listener`, para `removeListener(canal, original)` continuar funcionando.
+- `uninstall()` existe só para os testes devolverem os métodos originais.
+
+**Validação.**
+- N-probe (`electron/core/ipc-invoke-probe.test.cjs`): 9/9. Três mutações de propósito (engolir a exceção do handler,
+  snapshot mutável, tirar o `.listener`) reprovaram 2, 2 e 1 casos; o código voltou ao original.
+- App real (`felixo devtools`, perfil isolado, sob o lock): `felixo devtools main "ipcProbe.snapshot()"` lista os
+  canais do boot; depois de um `onboarding.read()` pelo renderer, `onboarding:read` sobe de 1 para 2 e
+  `devtools:main-eval` conta a própria leitura. O snapshot é congelado e o objeto exposto só tem `snapshot`.
+
+## 2026-09-26 — Tutorial do canvas: cenários no canvas-smoke (commit 11 do plano)
+
+Registro gravado às 18:01.
+
+**O que ficou pronto.**
+- `scripts/canvas-smoke-onboarding.cjs`: os cenários do tutorial, com a página e os helpers injetados pelo
+  `canvas-smoke.cjs`. Sessão A (a de sempre, abertura suprimida): SA0 logo depois da montagem e SA1–SA10 no fim,
+  sobre a fixture. Sessão B (nova, `FELIXO_DEVTOOLS_ONBOARDING=1` e `FELIXO_DEVTOOLS_HARDWARE_NOTICES=1`, perfil
+  novo e canvas vazio): SB1–SB8.
+- Sondas em volta dos percursos completos (SA1 e SB2): `ipcProbe.snapshot()` antes e depois (nenhum canal de
+  PTY, CLI, rede, crédito, git, arquivo, voz, webview, preset ou escrita no canvas; canais vistos contidos numa
+  janela ociosa de controle com a mesma duração, mais `onboarding:*`), requisições para fora da origem do app,
+  contagem de blocos, terminais, gavetas e webviews, e diff do localStorage (só a remoção do marcador de primeiro
+  boot é permitida).
+- `scripts/canvas-smoke-onboarding-geometry.cjs` com N-geo: `rectInside`, `contains`, `intersects`, `inflate`,
+  `clipToViewport`, `contrastRatio` (WCAG, com composição de alfa), `flattenLayers`, `containingBlockReason`,
+  `diffChannels`, `forbiddenChannels`, `channelsOutside`, `diffStorage`, `storageViolations` e
+  `externalRequests`, todos com casos que precisam reprovar. A lista de canais proibidos é conferida contra os
+  canais reais do `preload.cjs`.
+- `withDevtoolsSession(action, { env })` define e restaura variáveis extras. As capturas de falha das duas
+  sessões começam com `canvas-smoke-failure`, o glob que o CI já anexa.
+- `ui-render-performance.cjs --onboarding`: abre o tour pela Ajuda antes de cada rodada (e do aquecimento) e
+  confere que ele continua aberto no fim. Uso manual.
+
+**Bugs de produto achados pelo smoke (corrigidos antes de qualquer push).**
+- **Laço de troca de alvo (SA8).** Com a sidebar recolhida no passo 2 (alvo "menu do canvas"), abrir a sidebar
+  fazia o alvo alternar entre `rail-menu` e `criar-agente` dentro do mesmo quadro, até o React parar com
+  "Maximum update depth exceeded" e o boundary derrubar o tour. Causa: o teste de alvo aceitava o alvo quando o
+  próprio card estava por cima dele; ancorado no menu, o card cobria a moldura "Agente" e a fazia passar;
+  ancorado na moldura, o card saía de cima e ela era rejeitada. Correção: o `elementFromPoint` da camada olha
+  através do card e do aviso (`pointer-events: none` só durante a leitura), então a escolha do alvo não depende
+  de onde o card está. Entrou como fixup no commit 8 (camada do tour).
+- **Alvo preso no fallback depois de um deslocamento (SA3).** Abrir a gaveta do terminal rola o contêiner do
+  shell (`overflow: hidden`) uns 438 px de lado por um instante, pelo foco que vai para o terminal. Nesse
+  instante a moldura "Agente" sai da tela e o tour cai, com razão, no menu do canvas; mas quando o shell volta,
+  nada disparava um novo cálculo (os alvos só mudaram de lugar, não de tamanho), e o card ficava no menu por
+  cima da sidebar, cobrindo a metade "Agente". Visto no smoke completo, de forma intermitente; o diagnóstico
+  anexado à falha mostrou a moldura visível, sem nada por cima e sem ancestral rolado, ou seja, só faltava
+  recalcular. Correção em duas partes, fixup no commit 8: (1) a camada escuta `scroll` em captura no documento
+  e recalcula quando a rolagem move um candidato (a do xterm é ignorada), no lugar da escuta que existia só no
+  `.felixo-sidebar-scroll`; (2) enquanto o tour aponta uma alternativa ao alvo preferido, a posição é
+  conferida de novo a cada 500 ms, porque um contêiner pode voltar ao lugar (ou um overlay sair) sem disparar
+  evento nenhum. No alvo preferido não há verificação periódica. O SA3 agora exige que o anel volte para a
+  moldura depois de fechar a gaveta, e a falha de espera por âncora passou a anexar o diagnóstico do alvo.
+- **Volta do chat puxava o foco (SA9).** Um tour aberto pela Ajuda (foco "mover") voltava do chat com o foco no
+  card: a camada remonta antes de o canvas hidratar, e o `canvasReady`, que trocava o foco para "manter", chegava
+  tarde. Correção: `canvasUnmounted()` já marca o tour aberto com foco "manter". O teste da store passou a exigir
+  isso logo depois de desmontar. Entrou como fixup no commit 5 (store).
+- As correções do laço e do foco foram conferidas ao contrário: sem elas, o SA8 e o SA9 reprovam. A do
+  deslocamento não dá para reverter de forma determinística (depende de outro observador disparar ou não), então
+  a conferência foi medir a posição da moldura e a âncora com a gaveta aberta e fechada: sem a correção a
+  âncora podia ficar no menu; com ela, volta sempre para a moldura.
+- Achado à parte, fora deste PR: o deslocamento lateral do shell ao abrir a gaveta do terminal é visível e vale
+  investigar por conta própria.
+
+**Desvios, com motivo.**
+- SB7 "forma inválida": a ponte recusa `schemaVersion: 0` (contrato do commit 4: inteiro ≥ 1), então o estado
+  inválido chega como num arquivo danificado: `corromperEstadoNoPerfil` trunca o JSON da linha
+  `onboarding.state` direto no SQLite do perfil isolado (recusa perfil real). O SB7 também confere que a ponte
+  recusa o `schemaVersion: 0`. Não há gancho de escrita no `main-eval`.
+- SA1 tira o bloco Excalidraw da fixture antes das sondas. Achado à parte: com o canvas parado, esse bloco
+  regrava a si mesmo cerca de uma vez por segundo (`canvas:save` com a cena igual; só o `updatedAt` muda), o
+  que tornava impossível provar "zero escritas no canvas" durante o percurso. Fica registrado como pendência
+  fora deste PR.
+- As sondas esperam o app parar de gravar sozinho antes de abrir a janela (uma amostra de 1,5 s sem canal
+  proibido): o smoke chega ao SA1 vindo de 320×720, e o canvas regrava posição e tamanho com atraso depois do
+  resize.
+- SA2: o Shift+Tab em Pular cai no último controle da sidebar, que hoje é "Limpar" (ordem do documento). A regra
+  "o foco nunca passa por Agente nem Limpar" vale para o foco depois de cada ação do tour (abrir, Tab dentro do
+  card, Voltar, Próximo, Esc); as saídas do card com Tab/Shift+Tab conferem só que o foco saiu para o lugar
+  certo.
+- SA3: o gatilho do terminal da fixture é acionado pelo teclado (foco + Enter), porque dependendo do
+  enquadramento a dock cobre o bloco.
+- SA5: o zoom +3 é aplicado numa janela de 720×500 (≈ 417×289 CSS px, o caso compacto citado no plano), depois
+  de 1280×800, 375×667 e 320×720. Em 417×289 a folha cobre o alvo do passo 1, o que o plano permite no modo
+  folha.
+- SA9: a ida ao chat vem antes do reload, para cobrir o tour aberto pela Ajuda (foco "mover"); depois do reload o
+  tour já volta como retomada.
+- SB1: a convivência com o `NoticeToast` depende do perfil de hardware que o próprio app devolve
+  (`lowCpu && suggestPerformanceMode`), e não de contar CPUs no script; sem a sugestão, o cenário registra que
+  pulou e por quê. O clique no aviso é feito no fim do SB2, porque clicar antes tiraria o foco do card no meio do
+  percurso só por teclado.
+- `ui-render-performance`: a interação que abre e fecha grupos da sidebar passou a excluir o botão Ajuda (que
+  também tem `aria-expanded`). Sem isso, a sequência de cliques mudaria só por existir um botão a mais, e os
+  números deixariam de ser comparáveis com as medições anteriores.
+- `ui-render-performance --onboarding`: a primeira medição com o tour aberto deu MAIS FPS que sem ele, porque o
+  card do passo 1 cobre parte da sidebar e os cliques reais nos grupos cobertos caíam no card (a rodada fazia
+  menos trabalho). Com a flag, um grupo coberto pelo tour é acionado pelo DOM (o mesmo handler, como o teclado
+  faria); sem a flag, nada muda. O `isCoveredByTour` tem teste.
+
+**Validação.**
+- N-geo (`scripts/canvas-smoke-onboarding-geometry.test.cjs`): 15/15, com casos que precisam reprovar em cada
+  helper. `ui-render-performance.test.cjs`: 13/13 (flag `--onboarding` e o seletor sem o botão Ajuda).
+  `npx vitest run src/features/onboarding`: 683/683. `npm run lint` dos arquivos tocados e `npm run build`: ok.
+- `npm run test:canvas-smoke` completo, sob o lock, perfil isolado: exit 0 em 9 min 23 s nesta máquina
+  (17:50–18:00), com as duas sessões e todos os cenários (SA0–SA10 e SB1–SB8). Destaques: sondas do SA1 com
+  delta `{"devtools:main-eval":1,"onboarding:write":2}` e 8 requisições, todas locais; SB2 com
+  `{"devtools:main-eval":1,"onboarding:write":1}`; contraste em alto contraste de 21:1 no texto e 14,1:1 no anel;
+  convivência com o `NoticeToast` conferida (4 CPUs lógicas). As quatro execuções anteriores reprovaram e
+  levaram às correções acima: as escritas do Excalidraw no SA1 e o alvo preso no SA3 três vezes (sem correção,
+  só com a escuta de rolagem e na rodada que anexou o diagnóstico).
+- Conferências ao contrário: sem a correção da store, o SA9 reprova ("voltar do chat puxou o foco para o
+  tour"); antes da correção do teste de alvo, o SA8 reprovava com "Maximum update depth exceeded".
+
+## 2026-09-26 — Tutorial do canvas: documentação, checklist e medição no HD 520 (commit 12 do plano)
+
+Registro gravado às 18:17.
+
+**O que mudou na documentação.**
+- `GUIA-USUARIO.md`: seção "Tutorial e Ajuda" (o que o tutorial faz e não faz, teclado, sidebar recolhida,
+  janela pequena, retomada, chat, aviso para quem já usava, o menu Ajuda, somente leitura, onde o progresso fica
+  e que reinstalar preserva o estado). A frase "menu Ferramentas (canto superior esquerdo)" virou a seção
+  Ferramentas da barra lateral, fechada por padrão.
+- `ARQUITETURA.md`: seção do tutorial (camadas e chunks, persistência com compare-and-set, canais IPC, política
+  de automação, convivência e recálculo) e a sonda IPC no DevTools isolado.
+- `LAYOUT-SUPERFICIES.md`: card, anel, aviso e menu Ajuda como overlays que não reservam largura (fora de
+  `splitHorizontalSpace`), tamanhos, modo folha, obstáculos, escala de z e a conta do rail.
+- `GUIA-DESENVOLVEDOR.md`: `FELIXO_DEVTOOLS_ONBOARDING`, falha forçada, sonda IPC, semear estados pela ponte,
+  como anunciar uma função nova no catálogo e os cenários do smoke; comandos `test:canvas-smoke` e
+  `benchmark:ui-render -- --onboarding` na tabela.
+- `MOTION.md`: o tour não anima em nenhum modo; o "empty state" que entrava em 200 ms não existe no canvas (a
+  orientação do primeiro uso é o tutorial).
+- `README.md`: a capacidade na lista do status atual, com link para o guia.
+- `RELEASE_CHECKLIST.md`: seção 9 com o que a automação NÃO cobre (leitor de tela real, janela visível com
+  input real, pergunta de agente real por cima do tour, dois processos no mesmo perfil no Windows e no macOS,
+  janela recriada no macOS, reinstalação real pelo NSIS, escala de fonte do sistema, primeiro boot do pacote numa
+  máquina com até 4 CPUs, custo no hardware de referência e tradução real).
+- `.claude/skills/rodar-app/SKILL.md`: o tutorial vem suprimido no perfil isolado e como ligar ou inspecionar.
+- `PLANO-TUTORIAL-CANVAS.md`: `Status: concluido.`
+
+**Medição no notebook de referência (i5-6200U, Intel HD 520, ANGLE/GL).** `ui-render-performance` com 48 blocos,
+Modo Performance alternado em cada execução, em pares intercalados sem e com `--onboarding` (4 rodadas cada).
+Média das medianas dos dois pares:
+
+| Tutorial | Modo | FPS | Quadro p95 | Estilo por quadro |
+| --- | --- | ---: | ---: | ---: |
+| fechado | normal | 16,2 | 192,7 ms | 5,00 ms |
+| aberto | normal | 15,8 | 195,8 ms | 6,11 ms |
+| fechado | Performance | 21,4 | 142,1 ms | 1,24 ms |
+| aberto | Performance | 22,1 | 144,3 ms | 1,35 ms |
+
+O tour aberto não tem custo mensurável (as diferenças ficam abaixo da variação entre pares de uma mesma
+condição), e o Modo Performance continua dando +40% de FPS com ele aberto. A máquina estava carregada (load
+average entre 8 e 11, com outras sessões e o app real abertos), então os valores absolutos ficaram abaixo dos
+da manhã e não devem ser comparados com eles. Detalhes em `POLITICA-PERFORMANCE.md`, "Tutorial do canvas
+aberto".
+
+**Pendências que ficam fora deste PR (viram tasks próprias).**
+- O bloco Excalidraw regrava a si mesmo cerca de uma vez por segundo com o canvas parado (`canvas:save` com a
+  cena igual), o que custa I/O no SQLite o tempo todo.
+- Abrir a gaveta do terminal rola o contêiner do shell de lado (uns 438 px) por um instante, pelo foco que vai
+  para o terminal.
+- O passo "`timeout-minutes: 10`" do smoke no CI: a sessão B e os cenários da sessão A somam alguns minutos ao
+  smoke (9 min 23 s no total nesta máquina); convém rever o teto no workflow, que este PR não toca.
+
+## 2026-09-26 — Tutorial do canvas: os dois bloqueantes da revisão adversarial
+
+Registro gravado às 21:21.
+
+A revisão adversarial do PR apontou dois bloqueantes. Os dois foram reproduzidos no app real (felixo devtools sob o
+lock, perfil isolado, sessões encerradas) antes de qualquer mudança, com um roteiro próprio que mede o card, o alvo
+e a sidebar em cada passo. No código anterior o roteiro registrou 22 falhas; depois das correções, nenhuma.
+
+**1. Folha por cima do alvo no zoom alto da janela mínima (T2.c).** Confirmado, e maior do que o relato. O revisor
+viu só o passo 1; o roteiro achou mais passos cobertos pelo mesmo motivo:
+- 800×500 com zoom +3 (463×289 CSS px): passos 1 (Projetos, 87% coberto) e 2 (moldura Agente, 100%);
+- 720×500 com zoom +3 (416×289): passos 1, 2, 3 (Novo bloco, 78%) e 6 (Ajuda, 18%);
+- 800×500 com zoom +2,5 (507×317): passos 1, 2 e 3;
+- 720×500 com zoom +2 (500×347): passos 1 (32%) e 3 (6%).
+
+A causa: com o alvo no meio de uma janela baixa, a folha de largura cheia não cabe em nenhuma borda sem cruzá-lo, a
+faixa acima ou abaixo dele tem menos de 160 px, e o último recurso de `sheetPlacement` ficava com `edges[0]` por
+cima dele. A matriz do U-layout já tinha o caso 417×289 com o alvo do rail, mas só conferia "não cruza o alvo" no
+modo ancorado, e o SA5 só conferia card e botões dentro da janela. O registro do commit 11 dizia que isso era
+permitido no modo folha: estava errado. O plano só deixa cobrir um alvo maior que meia janela.
+
+Correção (`fix(onboarding): folha em coluna ao lado do alvo quando nenhuma borda cabe`): antes de cobrir qualquer
+coisa, a folha tenta a coluna ao lado do alvo (à direita do rail e da sidebar, à esquerda do inspector), com no
+mínimo 160 px de largura e a altura da faixa livre mais próxima dele; o corpo rola e o rodapé fica visível. Cobrir
+um aviso vem antes de cobrir o alvo. O U-layout passou a exigir "não cruza o alvo" em qualquer modo para alvo menor
+que meia janela, com as medidas do app como casos nomeados. O SA5 ganhou o assert relacional `coversSmallTarget`
+(com N-geo) em toda medida e percorre os seis passos com zoom +3 em 720×500 e +2,5 em 800×500.
+
+**2. Rolagem da sidebar presa no alvo (T1.d e foco visível).** Confirmado. Em 1100×478 e 1280×710, com Ferramentas
+aberta e o tour nos passos 2, 3 e 5, a rolagem até o fim voltava no quadro seguinte (709 → 28, 65 ou 385; 477 → 28,
+65 ou 385), e o `Tab` deixava de 5 a 12 controles focados fora de vista. A causa: todo recálculo disparado por
+rolagem podia "revelar" o alvo de novo.
+
+Correção (`fix(onboarding): a rolagem da sidebar é da pessoa depois que ela rola`): o `SidebarScrollGate`
+(`onboarding-layout.ts`, puro) deixa o tour rolar a sidebar até o alvo só enquanto a pessoa não rolou naquele
+passo. O eco da rolagem do próprio tour é reconhecido pelo valor escrito. Depois que a pessoa rola, o alvo fica
+recortado ou fora de vista, e o anel mostra só a parte dele que aparece na sidebar (some quando nada aparece). O
+SA8 confere a rolagem, o alvo mantido, o anel dentro da sidebar, oito `Tab` com o foco à vista e o passo 3
+voltando a trazer Novo bloco para a vista.
+
+**Desvios do plano, com motivo.**
+- **Folha em coluna.** O plano define a folha como "largura cheia menos margens, na borda oposta ao alvo". Numa
+  janela de 416×289 isso não existe sem cobrir o alvo. Alternativa descartada: baixar o piso de 160 px da folha. A
+  faixa abaixo da moldura Agente tem 121 px, o que cabe cabeçalho e rodapé do card sem nenhuma linha do corpo. A
+  coluna é o único espaço útil. Limitação declarada que sobra: uma janela sem coluna de 160 px dos dois lados do
+  alvo e sem 160 px acima ou abaixo dele. Nenhum zoom da janela mínima testado chega lá (até +3).
+- **Revelar o alvo.** O plano diz que `computeSidebarReveal` ajusta o `scrollTop`, sem restrição, e que o recálculo
+  também escuta a rolagem da sidebar. Agora a rolagem da sidebar ainda recalcula (o anel acompanha), mas só rola
+  enquanto a pessoa não rolou no passo. Alternativas descartadas:
+  - revelar só quando o `trackKey` muda, como o revisor sugeriu: a troca de alvo também pode vir de uma rolagem
+    (o alvo coberto cai na alternativa e volta ao ser descoberto), e revelar nela devolveria a sidebar do mesmo
+    jeito;
+  - cair na alternativa da cadeia quando a pessoa rola o alvo para fora: as variantes dizem "Abra a seção Criar..."
+    com a seção aberta, o que mentiria.
+- **Esperas mais curtas no smoke.** A janela invisível da automação desenha poucos quadros por segundo (medi cerca de
+  1 por segundo numa sessão isolada com a máquina carregada), e a espera padrão por geometria estável é de 16
+  quadros. As conferências novas depois de trocar de passo ou apertar `Tab` usam `QUADROS_CURTOS` (2 + 3 quadros);
+  o card é posto no mesmo quadro da troca, e a reação do tour vem no seguinte. A troca de zoom continua com a espera
+  completa. Isolados, o SA5 caiu de 392 s para 214 s e o SA8 de 377 s para 223 s.
+
+**Validação.**
+- Testes que falham antes: sem a correção 1, o U-layout reprova em 15 casos (8 da matriz em 417×289 e 7 nomeados).
+  Sem a correção 2, reprova em 8 (portão e recorte). O SA5 isolado reprova em `rail-projetos` a 416×289 e o SA8 em
+  "o tour desfez a rolagem da sidebar feita pela pessoa" (587 voltou a 28). Os dois smokes rodaram com os arquivos
+  de produção do HEAD anterior no lugar e os cenários novos.
+- Sem laço de layout: com o card parado, nenhuma mutação de estilo em 8 s, tanto ancorado (1280×800) quanto na
+  coluna (416×289).
+- Cada commit novo conferido sozinho (tsc, vitest de onboarding e setup, eslint e N-geo): 716 e 724 testes.
+- Em `app/`: `npm run build` ok; `npm run lint` sem erro nem aviso; `npm test` 1839/1839;
+  `npm run test:frontend` 2035 testes e 1 ignorado; N-geo com o Node 22.22.3 (`node --test`) 16/16; U-layout com o
+  Node 22 509/509.
+- `npm run test:canvas-smoke` completo sob o lock: exit 0 em 12 min 11 s (21:09–21:21, load average de 8 a 19). O
+  SA5 levou 16 s e o SA8 45 s dentro do smoke.
+
+## 2026-09-26 — Tutorial do canvas: estabilização do smoke, corte do bundle e verificação
+
+Registro gravado às 22:32 (-03).
+
+- **Smoke SA8** (`166384b0`):
+  - o primeiro redimensionamento do SA8, logo depois do reload do SA7, estourava o prazo de 5 s com a máquina carregada: 2 de 3 execuções completas falharam com load entre 12 e 20;
+  - a espera do resize no tutorial agora usa `ONBOARDING_TIMEOUT_MS`, e a falha informa o tamanho pedido e o lido;
+  - nenhuma asserção mudou: o corpo do `sa8()` ficou idêntico nos três commits, conferido por um verificador.
+- **Bundle** (`8f211814`):
+  - o chunk do CanvasView, carregado no startup, tinha crescido 10,1 kB gzip com o tutorial, contra os 3–4 KiB do plano;
+  - aplicada a mitigação do plano: o canvas fica só com um procurador da store (`onboarding-store-proxy`, 4,7 kB crus), e a store, o estado e o catálogo vêm em chunk preguiçoso;
+  - medido pelo build: CanvasView de 324,46/98,92 para 302,64/91,44 kB (cru/gzip), ou seja, +2,62 kB gzip sobre a main; store 21,93/7,49, catálogo 2,51/0,69 e interface 32,01/10,58 kB;
+  - a decisão automática sai 18 ms mais tarde na mediana sem ponte (da hidratação à decisão, p50 de 22 para 40 ms). No app real, com a ponte, o ruído da máquina é maior que essa diferença.
+- **Guia** (`8e81e777`): a seção Ferramentas do GUIA-USUARIO passou a usar os rótulos reais da interface.
+- **Verificação adversarial** do corte do bundle e do SA8 (2 lentes), sem nenhum bloqueante:
+  - 716 testes do onboarding e 1031 do canvas;
+  - 14 mutações do procurador, das quais 11 foram pegas pelos testes (as 2 sobreviventes e as bordas de robustez ficaram na task de não bloqueantes);
+  - app real com a ponte, cobrindo primeiro boot, retomada, usuário antigo e chunk ausente (o canvas segue de pé).
+- **CI do PR #96** em `8e81e777`: 21 checks verdes nos 4 SOs; o smoke com os cenários do tutorial leva de 104 a 146 s por runner. O benchmark do terminal (`renderer-xterm count=1`) reprovou uma vez em `166384b0` por ruído e passou ao rodar de novo; o mesmo cenário já tinha acusado ruído no PR #95 (task aberta).
+- **Otimização do processo**, pedida pelo Felipe:
+  - a CI dos 4 SOs passou a validar em paralelo, no lugar das repetições locais do smoke (~12 min cada nesta máquina);
+  - os ajustes de uso rodaram num segundo worktree ao mesmo tempo que a estabilização.
+
+## 2026-09-26 — Tutorial do canvas: três ajustes de uso da revisão
+
+Registro gravado às 22:33.
+
+A revisão de uso apontou três problemas não bloqueantes, todos medidos no app real (felixo devtools, perfil isolado).
+Cada um virou um commit com teste que reprova no código anterior.
+
+**1. Pergunta de agente por cima do tour** (`fix(onboarding): o tour cede a um diálogo modal aberto por cima dele`).
+O AgentQuestionDialog não pega o foco e escuta o teclado na janela. Aberto por cima do tour, o overlay cobria o card,
+mas o foco continuava nele: o Enter no Próximo avançava o tour por baixo do modal, sem anúncio, e o Esc de quem achava
+estar no tour dispensava a pergunta do agente. Agora, enquanto houver `[aria-modal="true"]` na tela, o card e o aviso
+ficam `inert` no mesmo passo. O foco que estava no tour vai para o body, e as teclas passam a ser do diálogo. Quando o
+diálogo fecha, o foco volta ao controle do tour que o tinha, só se ninguém o pôs em outro lugar. As regras são puras
+(`nextModalYield` e `resolveFocusAfterModal`).
+- Nenhum evento avisa que um diálogo montou, e o plano proíbe observar mutações no body. A conferência é um
+  `querySelector` a cada 250 ms, só com o tour ou o aviso na tela, mais uma a cada troca de foco. Alternativas
+  descartadas: `MutationObserver` só nos pais atuais dos diálogos (quebra calado se um diálogo mudar de lugar) e
+  mudar o AgentQuestionDialog para avisar o tour (é de outra feature, e não foi preciso).
+- Nos até 250 ms entre o diálogo abrir e o card ficar inerte, os botões do card consultam o modal na hora e não fazem
+  nada. O Esc nesse intervalo continua indo para o diálogo, como o plano já previa.
+
+**2. Menu Ajuda pelo teclado** (`fix(onboarding): Tab para fora do menu Ajuda fecha o menu e volta ao botão`). O
+menu é um portal no fim do body. O Tab no último item levava o foco ao topo do app com o menu aberto, e o Shift+Tab no
+primeiro caía no "Dispensar" do NoticeToast. Escolhido o padrão que o app já usa para menu em portal, o do
+FelixoSelect: o Tab fecha o menu e o foco fica no gatilho. O Tab entre os botões do menu segue normal; só o que sairia
+dele fecha e devolve o foco ao botão Ajuda. Setas ficaram de fora, porque o menu é um grupo de botões com texto de
+estado, não uma lista de opções. O `aria-controls` do botão continua apontando o menu mesmo fechado, como no
+FelixoSelect e no botão Organizar. A regra é pura (`helpMenuKeyAction`, com o `tabTrapTarget` do HandoffDialog).
+
+**3. Texto do passo 6** (`fix(onboarding): o último passo afirma só o que o tutorial garante`). "Nada foi criado e
+nenhum agente foi aberto" ficava falso quando a pessoa criava um agente com o tour aberto, o que o T1.d permite. O
+texto passou a ser "O tutorial não criou nada nem abriu agentes.", no catálogo pt-BR. A versão do tour não subiu: é
+correção de texto de um roteiro que ainda não saiu, e subir marcaria "Atualizado" sem nada novo. A tabela do plano
+guarda o rascunho antigo; o texto em vigor é o do catálogo. O guia do usuário também passou a dizer o que o tutorial
+não faz, em vez de como o app está.
+
+**Validação.**
+- Testes que falham antes: 9 do item 1 (7 no U-layout e 2 no U-ui, o `inert` do card e do aviso), 6 do item 2
+  (U-layout) e 1 do item 3 (U-msg).
+- Smoke: o SA3 grava uma pergunta de verdade na fila de pedidos do perfil isolado e confere o card inerte, o foco fora
+  dele, o Enter sem avançar, o Tab sem entrar no card, a tecla da opção indo para o diálogo, o foco de volta ao Próximo
+  e, com o foco levado para fora, nada puxado de volta. O SA2 percorre o menu Ajuda com Tab até sair e confere o menu
+  fechado com o foco na Ajuda, e faz o mesmo com Shift+Tab no primeiro controle e com Esc.
+- Só esses dois cenários rodaram, isolados, sob o lock do devtools, com o Vite servido deste worktree (conferido pelo
+  diretório do processo). Com as correções, o SA2 passou em 6 s e o SA3 em 49 s. Com os arquivos de produção
+  anteriores e os cenários novos, o SA2 reprovou em "Tab no menu Ajuda levou o foco para fora com o menu aberto" (o
+  foco foi para a região do canvas, no topo do app, como o revisor mediu) e o SA3 em "o card ceder à pergunta do
+  agente". O `test:canvas-smoke` completo fica para o CI dos quatro sistemas.
+- Em `app/`: `npm run build` ok (CanvasView 324,49 kB, antes 324,46; o chunk do tutorial é preguiçoso); `npm run
+  lint` sem erro; `npm test` 1843/1843; `npm run test:frontend` 2051 testes e 1 ignorado; os testes do tutorial
+  também com o Node 22.22.3 (vitest), 715/715. Nenhum teste novo é `node:test`.
+
+**Limitações que sobram.**
+- O AgentQuestionDialog continua sem puxar o foco e sem prender o Tab. Isso é da feature dele e não mudou; com o card
+  inerte, o foco fica no body até a pessoa responder ou dispensar.
+- Um diálogo modal que não use `aria-modal="true"` não é reconhecido. Hoje os dois do canvas usam.
+
+## 2026-09-26 — Tutorial do canvas: o foco cedido a um diálogo não fica no body
+
+Registro gravado às 23:13.
+
+A verificação de uso achou um bloqueante no item 1 do registro anterior. Ali está escrito que o foco que estava no tour
+vai para o body, "e as teclas passam a ser do diálogo". Não passavam todas: o body conta como canvas para o React Flow
+(`deleteKeyCode` Delete e Backspace) e para o atalho `q` (`isCanvasFocused`). Com um bloco selecionado e a pergunta de
+um agente por cima do tour, Delete ou Backspace apagavam o terminal por baixo do modal, sem desfazer (a sessão do PTY é
+solta e o nó sai do disco), e `q` trocava o modo seleção/pan. Antes do item 1 o foco ficava num botão do card, que tem
+`nokey`, e essas teclas não faziam nada.
+
+**Correção** (`fix(onboarding): o foco cedido a um diálogo espera num ponto neutro, não no body`). Ao ceder, o foco que
+era do tour vai para um ponto de espera (`OnboardingFocusHold`) antes de o card ficar inerte: um div invisível, irmão
+do card e do aviso, com `nokey` e `tabIndex=-1`, sem papel, nome nem texto. Quando o diálogo fecha, o foco volta ao
+controle do tour; a espera não conta como foco levado para outro lugar. As regras são puras: `focusHoldOnYield` e o
+`hold` de `resolveFocusAfterModal`.
+- Descartado: não tornar o card inert. Ele voltaria à ordem de Tab e à árvore de acessibilidade por baixo do modal.
+  Mexer no AgentQuestionDialog continua fora (é de outra feature).
+
+**Smoke.** O SA3 seleciona o bloco da fixture pelo teclado do React Flow (Enter no bloco focado), abre uma pergunta de
+verdade com o foco no Próximo e aperta Delete, Backspace e `q`. Também corrigi uma instabilidade do próprio SA3
+(`fix(smoke): SA3 espera o foco assentar depois de criar o agente`). Na primeira rodada, o TerminalMenu devolveu o foco
+ao botão Agente num quadro depois de criar o terminal, e isso aconteceu depois de o smoke focar o Próximo. O Enter sob a
+pergunta abriu um segundo agente, e a conferência reprovou em "o foco voltar ao Próximo". A linha do tempo do foco
+mostrou a ordem.
+
+**Validação.**
+- Testes que falham antes: 5 dos 6 novos (3 no U-layout e os 2 do U-ui, que nem carregam sem o componente); o sexto é
+  guarda e passa nos dois.
+- Reprodução: SA3 isolado sob o lock, com o Vite deste worktree, com o código anterior e o cenário novo (23:02–23:03).
+  Reprovou em "Delete apagou o bloco selecionado por baixo da pergunta", com o foco no BODY e o bloco fora do DOM e do
+  disco. Com a correção (23:07–23:08), SA2 em 6,8 s e SA3 em 77,5 s, exit 0: o bloco fica, o modo não muda, o foco
+  está na espera e volta ao Próximo quando a pergunta fecha.
+- Em `app/`: `npm run build` ok (CanvasView 324,49 kB, igual; `onboarding-ui-entry` 34,14 kB); `npm run lint` sem
+  erro; `npm test` 1843/1843; `npm run test:frontend` 2057 testes e 1 ignorado; os testes do tutorial com o Node
+  22.22.3, 721/721.
+
+**Limitações que sobram.**
+- O AgentQuestionDialog continua sem puxar o foco e sem prender o Tab. Da espera, o Tab leva ao canvas, e um bloco
+  focado ali ainda recebe Delete por baixo do diálogo, como sem o tour (o verificador mediu isso sem o tutorial aberto).
+- Se o tour fechar por fora (store) com o foco na espera e o diálogo aberto, a espera desmonta e o foco cai no body.
+  Nenhum caminho da interface fecha o tour com o diálogo aberto e o foco na espera: os botões do card não agem sob o
+  modal, e para chegar à Ajuda o foco precisa sair da espera.
+
+## 2026-09-26 — Tutorial do canvas: a posição do card congela sob um diálogo modal
+
+Registro gravado às 23:35.
+
+A CI do PR #96 no `0f0a8f15` reprovou o SA3 no Ubuntu (Validate ubuntu-latest, run 36288181228): durante a medição de
+estabilidade depois do Enter sob a pergunta de um agente, o card foi de `left` 294 a 58. A captura mostrou o card no
+alvo reserva do passo 2 (menu do canvas), com outro texto ("Abra o menu do canvas para ver Criar e o botão Agente."),
+por baixo da pergunta. Nos outros três sistemas o SA3 passou: o reposicionamento só acontece se algum observador
+dispara com o diálogo aberto.
+
+**Causa.** O AgentQuestionDialog tem um fundo `fixed inset-0 z-60`. A resolução do alvo (`evaluateTarget`) confere o
+centro de cada alvo com `elementFromPoint`, e com o diálogo aberto o centro de todos cai no fundo: cada alvo da cadeia
+é rejeitado e o card cai no último, que é usado sem esse teste. O tour cedia o foco e o teclado ao diálogo, mas não a
+posição.
+
+**Correção.**
+- `placementFrozen` (pura, em `onboarding-layout.ts`): com um diálogo modal aberto, o que já foi posicionado fica onde
+  está. A primeira posição sai mesmo assim, para o card nunca ficar sem lugar.
+- `useSurfacePlacement` confere o diálogo no próprio posicionamento (o tour percebe o diálogo até `MODAL_CHECK_MS`
+  depois) e recebe `frozen` (o estado cedido) nas dependências: quando o diálogo fecha, os observadores são refeitos e o
+  card é reposicionado na hora. Vale para o card e para o aviso de novidade.
+- O `useYieldToModal` passou a ser chamado antes do `useSurfacePlacement`, para o estado cedido chegar ao
+  posicionamento. O efeito de abertura continua declarado depois do posicionamento.
+- Descartado: fazer o teste do centro olhar através do fundo do diálogo. Seria preciso reconhecer o fundo de cada
+  diálogo, e o card continuaria se mexendo por baixo de um modal sem motivo.
+
+**Validação.**
+- O SA3 ganhou `conferirCardParadoSobAPergunta`: com a pergunta aberta, dispara um `resize` e exige o mesmo alvo, o
+  mesmo texto e a mesma posição. Sem a correção reprovou de forma determinística às 23:27 (isolado sob o lock, Vite
+  deste worktree): `{"antes":{"ancora":"criar-agente","left":294,"top":54},"depois":{"ancora":"rail-menu","left":58,"top":12}}`,
+  igual à CI.
+- `onboarding-layout.test.ts`: 4 testes novos. Um documenta a causa (com o fundo cobrindo tudo, `resolveStepTarget`
+  cai no reserva), e três cobrem `placementFrozen`.
+- Em `app/`: `npm run lint` sem erro; `npm run build` ok (CanvasView 302,67/91,44 kB, igual; `onboarding-ui-entry`
+  34,33/11,20 kB); `npm test` 1843/1843; `npm run test:frontend` 2078 testes e 1 ignorado.
+- Com a correção, SA2 e SA3 isolados sob o lock (23:34–23:36, exit 0): SA2 em 7,6 s e SA3 em 72,3 s. O card fica no
+  mesmo alvo e no mesmo lugar com a pergunta aberta, e as conferências do foco cedido continuam passando.

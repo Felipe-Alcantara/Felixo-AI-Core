@@ -23,6 +23,12 @@
  * `--render=software` mede o modo compatível (rasterização por software), o
  * mesmo que o app usa no Windows com pouca memória; o padrão é a GPU.
  *
+ * `--onboarding` abre o tutorial do canvas pela Ajuda antes de cada rodada e o
+ * mantém aberto durante a interação (anel, card e os observadores de posição
+ * ligados), para medir o custo do tour aberto. Uso manual, na máquina modesta
+ * de referência, fora do CI. Sem a flag, o tour fica fechado e os números são
+ * comparáveis com as medições anteriores ao tutorial.
+ *
  * Uso (Linux; a janela precisa estar visível, senão o rAF é estrangulado):
  *   npx vite build
  *   node scripts/ui-render-performance.cjs --gpu=integrada --rounds=3 --out=ui-intel.json
@@ -48,6 +54,14 @@ const DEFAULT_LAUNCH_TIMEOUT_MS = 60_000
 const JANK_FRAME_MS = 25
 const PERFORMANCE_MODE_STORAGE_KEY = 'felixo-ai-core.performance-mode'
 const MODES = ['off', 'on']
+// Grupos da sidebar que a interação abre e fecha. O botão Ajuda também tem
+// `aria-expanded` (abre um menu), mas não é grupo: fica de fora para a
+// sequência de cliques ser a mesma de antes do tutorial existir.
+const SIDEBAR_GROUPS_SELECTOR = '[data-felixo-region="sidebar"] button[aria-expanded]:not([data-felixo-help-trigger])'
+// Retomada do tutorial por sessão: limpa antes de cada reload, para toda rodada
+// abrir o tour pela Ajuda do mesmo jeito.
+const ONBOARDING_SESSION_KEY = 'felixo:onboarding:sessao'
+const ONBOARDING_CARD_SELECTOR = '[data-felixo-onboarding="card"][data-modo]'
 
 // Eventos do tracing que somam o custo de uma troca de CSS no renderer.
 const TRACE_BUCKETS = {
@@ -79,6 +93,7 @@ function parseArgs(argv) {
     appDir: path.resolve(__dirname, '..'),
     out: null,
     launchTimeoutMs: DEFAULT_LAUNCH_TIMEOUT_MS,
+    onboarding: false,
   }
   for (const argument of argv) {
     const [rawKey, ...rest] = argument.split('=')
@@ -121,6 +136,10 @@ function parseArgs(argv) {
       case '--out':
         if (!value) throw new Error('--out precisa de um caminho.')
         options.out = path.resolve(value)
+        break
+      case '--onboarding':
+        if (value) throw new Error('--onboarding não recebe valor.')
+        options.onboarding = true
         break
       case '--launch-timeout-ms':
         options.launchTimeoutMs = parseBoundedInteger(value, DEFAULT_LAUNCH_TIMEOUT_MS, 5_000, 300_000, 'launch-timeout-ms')
@@ -507,8 +526,23 @@ async function collectTrace(cdp, action) {
   return { events, actionResult }
 }
 
-/** A interação medida: a MESMA sequência em todas as rodadas. */
-async function interact(page, durationMs) {
+/**
+ * O grupo está debaixo do card do tutorial? O card fica ao lado da barra de
+ * ícones e cobre parte da sidebar; um clique real ali cairia no card e o grupo
+ * não abriria, e a rodada com o tour faria MENOS trabalho que a sem ele.
+ */
+function isCoveredByTour(element) {
+  const rect = element.getBoundingClientRect()
+  const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+  return Boolean(hit && !element.contains(hit) && hit.closest('[data-felixo-onboarding]'))
+}
+
+/**
+ * A interação medida: a MESMA sequência em todas as rodadas. Com `tour`, um grupo
+ * coberto pelo card é acionado pelo DOM (o mesmo handler, como o teclado faria),
+ * para o trabalho de abrir e fechar grupos ser o mesmo com e sem o tutorial.
+ */
+async function interact(page, durationMs, { tour = false } = {}) {
   await page.evaluate(() => {
     window.__felixoUiRender = { intervals: [], longTasks: [], running: true }
     const state = window.__felixoUiRender
@@ -532,7 +566,7 @@ async function interact(page, durationMs) {
   const pane = await page.locator('.react-flow__pane').boundingBox()
   const centerX = pane ? pane.x + pane.width / 2 : 600
   const centerY = pane ? pane.y + pane.height / 2 : 400
-  const headings = page.locator('[data-felixo-region="sidebar"] button[aria-expanded]')
+  const headings = page.locator(SIDEBAR_GROUPS_SELECTOR)
   const startedAt = Date.now()
   let step = 0
   while (Date.now() - startedAt < durationMs) {
@@ -548,7 +582,12 @@ async function interact(page, durationMs) {
       await page.mouse.up({ button: 'middle' })
     } else if (phase < 6) {
       const count = await headings.count()
-      if (count > 0) await headings.nth(step % count).click({ timeout: 2_000 }).catch(() => {})
+      if (count > 0) {
+        const heading = headings.nth(step % count)
+        const covered = tour && (await heading.evaluate(isCoveredByTour).catch(() => false))
+        if (covered) await heading.evaluate((element) => element.click()).catch(() => {})
+        else await heading.click({ timeout: 2_000 }).catch(() => {})
+      }
     } else {
       const node = page.locator('.react-flow__node').nth(step % 6)
       const box = await node.boundingBox().catch(() => null)
@@ -569,8 +608,36 @@ async function interact(page, durationMs) {
   })
 }
 
-async function measureRun(page, cdp, { mode, round, durationMs }) {
-  const { events, actionResult } = await collectTrace(cdp, () => interact(page, durationMs))
+/**
+ * Abre o tutorial do canvas pela Ajuda (a primeira ação do tutorial no menu) e
+ * espera o card posicionado. A abertura fica fora da medição.
+ */
+async function openOnboardingTour(page, timeoutMs) {
+  await page.locator('[data-felixo-help-trigger]').click({ timeout: timeoutMs })
+  await page.locator('.felixo-onboarding-help-menu[data-posicionado]').waitFor({ state: 'visible', timeout: timeoutMs })
+  await page
+    .locator('.felixo-onboarding-help-menu .felixo-onboarding-help__section [data-felixo-onboarding-action]')
+    .first()
+    .click({ timeout: timeoutMs })
+  await page.locator(ONBOARDING_CARD_SELECTOR).waitFor({ state: 'visible', timeout: timeoutMs })
+}
+
+/** Recarrega no modo pedido e, com `--onboarding`, abre o tour antes de medir. */
+async function prepareRound(page, { mode, nodeIds, options }) {
+  await page.evaluate(
+    ({ key, value, sessionKey, resetTour }) => {
+      window.localStorage.setItem(key, value)
+      if (resetTour) window.sessionStorage.removeItem(sessionKey)
+    },
+    { key: PERFORMANCE_MODE_STORAGE_KEY, value: mode, sessionKey: ONBOARDING_SESSION_KEY, resetTour: options.onboarding },
+  )
+  await page.reload()
+  await waitHydrated(page, nodeIds, options.launchTimeoutMs)
+  if (options.onboarding) await openOnboardingTour(page, options.launchTimeoutMs)
+}
+
+async function measureRun(page, cdp, { mode, round, durationMs, tour = false }) {
+  const { events, actionResult } = await collectTrace(cdp, () => interact(page, durationMs, { tour }))
   const rendererPid = rendererPidFromTrace(events)
   const frames = frameStats(actionResult.intervals, durationMs)
   const trace = summarizeTrace(events, rendererPid)
@@ -609,7 +676,7 @@ async function run(options) {
     const page = await findAppPage(browser, options.launchTimeoutMs)
     await page.waitForFunction(() => document.querySelector('[data-felixo-hydrated="true"]') !== null, null, { timeout: options.launchTimeoutMs })
     const aberturaMs = Number((performance.now() - launchStartedAt).toFixed(1))
-    console.log(`[ui-render] abertura até o canvas hidratado: ${aberturaMs} ms`)
+    console.log(`[ui-render] abertura até o canvas hidratado: ${aberturaMs} ms${options.onboarding ? ' (rodadas com o tutorial aberto)' : ''}`)
     await populateCanvas(page, nodes, edges)
     const gpu = await readGpuInfo(browser)
     console.log(`[ui-render] GPU: ${gpu.renderer ?? 'desconhecida'} (${gpu.vendor ?? 's/ fornecedor'})`)
@@ -622,24 +689,25 @@ async function run(options) {
     // ela é do modo `off`, inflava o ganho aparente do Modo Performance. Uma
     // passada completa da interação, fora do relatório, tira esse viés.
     for (let pass = 0; pass < options.warmup; pass += 1) {
-      await page.evaluate(({ key }) => window.localStorage.setItem(key, 'off'), { key: PERFORMANCE_MODE_STORAGE_KEY })
-      await page.reload()
-      await waitHydrated(page, nodeIds, options.launchTimeoutMs)
+      await prepareRound(page, { mode: 'off', nodeIds, options })
       await page.waitForTimeout(1_500)
-      await interact(page, options.durationMs)
+      await interact(page, options.durationMs, { tour: options.onboarding })
       console.log(`[ui-render] aquecimento ${pass + 1}/${options.warmup} descartado`)
     }
     const runs = []
     for (const { round, mode } of roundOrder(options.rounds)) {
-      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, value), { key: PERFORMANCE_MODE_STORAGE_KEY, value: mode })
-      await page.reload()
-      await waitHydrated(page, nodeIds, options.launchTimeoutMs)
+      await prepareRound(page, { mode, nodeIds, options })
       const applied = await page.evaluate(() => document.documentElement.getAttribute('data-performance-mode'))
       if ((applied === 'on') !== (mode === 'on')) {
         throw new Error(`[ui-render] o app não aplicou o modo ${mode} (data-performance-mode=${applied}).`)
       }
       await page.waitForTimeout(1_500)
-      const measured = await measureRun(page, cdp, { mode, round, durationMs: options.durationMs })
+      const measured = await measureRun(page, cdp, { mode, round, durationMs: options.durationMs, tour: options.onboarding })
+      if (options.onboarding) {
+        // A interação nunca fecha o tour (ele não é modal); se fechou, a rodada não mediu o que diz.
+        measured.tutorialAberto = (await page.locator(ONBOARDING_CARD_SELECTOR).count()) === 1
+        if (!measured.tutorialAberto) throw new Error(`[ui-render] o tutorial fechou durante a rodada ${round} (${mode}).`)
+      }
       runs.push(measured)
       console.log(
         `[ui-render] rodada ${round} modo=${mode}: fps=${measured.frames.fps} p95=${measured.frames.p95Ms}ms >25ms=${measured.frames.acimaDe25Ms} ` +
@@ -655,7 +723,7 @@ async function run(options) {
       render: options.render,
       angle: options.angle,
       gpu,
-      config: { rounds: options.rounds, warmup: options.warmup, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length },
+      config: { rounds: options.rounds, warmup: options.warmup, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length, onboarding: options.onboarding },
       aberturaMs,
       runs,
       summary: summarizeRuns(runs),
@@ -683,6 +751,8 @@ if (require.main === module) {
 
 module.exports = {
   PERFORMANCE_MODE_STORAGE_KEY,
+  isCoveredByTour,
+  SIDEBAR_GROUPS_SELECTOR,
   assertRequestedGpu,
   buildFixtureEdges,
   buildFixtureNodes,

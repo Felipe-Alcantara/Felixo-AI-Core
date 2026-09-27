@@ -9,11 +9,21 @@ import { RendererRecoveryBoundary } from './RendererRecoveryBoundary'
 import { LazyCanvasConnectionPerformanceHarness } from './features/canvas/benchmarks/CanvasConnectionPerformanceHarnessLoader'
 import { LazyTerminalOutputPerformanceHarness } from './features/chat/benchmarks/TerminalOutputPerformanceHarnessLoader'
 import { installRendererErrorReporting } from './renderer-error-reporting'
+import { captureOnboardingBootSignals } from './features/onboarding/onboarding-boot-signals'
 
 // Espelho renderer dos handlers globais do main (`global-error-handlers.cjs`):
 // sem isto, um erro fora de um componente React (listener de DOM, timer,
 // promise solta) não chegava nem ao console, nem ao QA Logger.
 installRendererErrorReporting()
+
+// Sinais de uso anterior do tutorial do canvas: a foto das chaves `felixo*` tem
+// de sair antes do primeiro render, porque o tema e o Modo Performance gravam as
+// deles já no mount (ver onboarding-boot-signals.ts).
+try {
+  captureOnboardingBootSignals(window.localStorage)
+} catch {
+  // Sem localStorage vale o padrão conservador: o tutorial não abre sozinho.
+}
 
 const benchmark = new URLSearchParams(window.location.search).get('benchmark')
 
