@@ -499,6 +499,10 @@ logo abaixo de Notificações. Ela reúne:
 - **Redefinir tutoriais**, que pede confirmação na própria tela e abre o tutorial do
   começo. As novidades que já foram anunciadas não voltam a aparecer.
 
+Pelo teclado, o foco entra no menu ao abrir e `Tab` percorre as ações. `Tab`
+depois da última, `Shift+Tab` antes da primeira ou `Esc` fecham o menu, e o foco
+volta ao botão Ajuda.
+
 Quando o progresso não pode ser salvo (por exemplo, abrindo uma versão mais antiga
 do app depois de usar uma mais nova), a Ajuda avisa "O progresso não será salvo
 nesta sessão." O tutorial funciona normalmente naquela sessão e nada do que a

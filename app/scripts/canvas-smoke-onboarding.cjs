@@ -793,9 +793,67 @@ function criarCenariosDoTutorial(deps) {
     log('SA1 percurso pela Ajuda: ok (6 passos, alvos visíveis, sem cruzar alvo, avisos nem Chat)')
   }
 
-  /** SA2: teclado, sem focus trap. */
+  /**
+   * Menu Ajuda pelo teclado. O menu é um portal no fim do body: o Tab que sairia
+   * dele fecha o menu e devolve o foco ao botão Ajuda (o padrão do FelixoSelect),
+   * em vez de levar o foco ao topo do app, ou ao aviso ao lado, com o menu aberto.
+   */
+  async function conferirTecladoDoMenuAjuda(cenario) {
+    const lerMenu = () =>
+      page.evaluate(() => {
+        const menu = document.querySelector('.felixo-onboarding-help-menu')
+        const active = document.activeElement
+        return {
+          aberto: Boolean(menu),
+          focoNoMenu: Boolean(menu && active && menu.contains(active)),
+          acao: active?.getAttribute?.('data-felixo-onboarding-action') ?? null,
+          texto: (active?.textContent ?? '').trim().slice(0, 40),
+          botoes: menu ? menu.querySelectorAll('button:not([disabled])').length : 0,
+        }
+      })
+    const abrirPeloTeclado = async (etapa) => {
+      await page.locator(SEL.ajuda).focus()
+      await page.keyboard.press('Enter')
+      await esperar(cenario, `o menu Ajuda abrir pelo teclado (${etapa})`, (selector) => document.querySelector(selector) !== null, SEL.menuAjuda)
+      await esperar(cenario, `o foco entrar no menu (${etapa})`, () => Boolean(document.activeElement?.closest('.felixo-onboarding-help-menu')))
+      return lerMenu()
+    }
+    const fechouNaAjuda = (etapa) =>
+      esperar(
+        cenario,
+        `${etapa} fechar o menu e devolver o foco à Ajuda`,
+        () => !document.querySelector('.felixo-onboarding-help-menu') && Boolean(document.activeElement?.hasAttribute('data-felixo-help-trigger')),
+      )
+
+    // O Tab percorre os controles do menu e, depois do último, fecha e volta à Ajuda.
+    const aberto = await abrirPeloTeclado('Tab')
+    const percorridos = [aberto.acao]
+    for (let index = 0; index < aberto.botoes; index += 1) {
+      await page.keyboard.press('Tab')
+      const atual = await lerMenu()
+      if (!atual.aberto) break
+      exigir(atual.focoNoMenu, cenario, 'Tab no menu Ajuda levou o foco para fora com o menu aberto', atual)
+      percorridos.push(atual.acao)
+    }
+    await fechouNaAjuda('Tab depois do último controle')
+    exigir(percorridos.length === aberto.botoes, cenario, 'o Tab não passou por todos os controles do menu Ajuda', { percorridos, botoes: aberto.botoes })
+
+    // Shift+Tab no primeiro controle: fecha e volta à Ajuda.
+    await abrirPeloTeclado('Shift+Tab')
+    await page.keyboard.press('Shift+Tab')
+    await fechouNaAjuda('Shift+Tab no primeiro controle')
+
+    // Esc com o foco no menu: fecha e volta à Ajuda.
+    await abrirPeloTeclado('Esc')
+    await page.keyboard.press('Escape')
+    await fechouNaAjuda('Esc no menu')
+    return percorridos
+  }
+
+  /** SA2: teclado, sem focus trap (menu Ajuda e card). */
   async function sa2() {
     const cenario = 'SA2'
+    const menu = await conferirTecladoDoMenuAjuda(cenario)
     // O foco depois de cada ação do tour (abrir, Tab dentro do card, Voltar,
     // Próximo, Esc) nunca pode cair na metade "Agente" nem em "Limpar". Sair do
     // card com Tab/Shift+Tab é a ordem sequencial do documento, não ação do tour:
@@ -871,7 +929,7 @@ function criarCenariosDoTutorial(deps) {
     await amostrar()
     const perigosos = amostras.filter((item) => item.metadeAgente || item.limpar)
     exigir(perigosos.length === 0, cenario, 'o foco passou pela metade "Agente" ou por "Limpar"', perigosos)
-    log('SA2 teclado: ok (Pular → Voltar → Próximo, sem trap, Esc devolve o foco à Ajuda)')
+    log(`SA2 teclado: ok (menu Ajuda ${menu.join(' → ')} e Tab, Shift+Tab ou Esc para fora devolvem o foco à Ajuda; Pular → Voltar → Próximo, sem trap, Esc devolve o foco à Ajuda)`)
   }
 
   /** SA3: Esc em camadas e o tutorial não bloqueia o agente. */

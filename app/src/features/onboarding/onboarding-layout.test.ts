@@ -20,6 +20,7 @@ import {
   decideFocusOnOpen,
   enterSidebarScrollStep,
   hasOpenModal,
+  helpMenuKeyAction,
   inflateRect,
   isCompactViewport,
   nextModalYield,
@@ -732,6 +733,57 @@ describe('diálogo modal por cima do tour (nextModalYield e resolveFocusAfterMod
     const outroCard = { ...card, isConnected: false }
     expect(resolveFocusAfterModal({ saved: proximo, current: body, surface: outroCard })).toBeNull()
     expect(resolveFocusAfterModal({ saved: proximo, current: body, surface: null })).toBeNull()
+  })
+})
+
+describe('menu Ajuda pelo teclado (portal no fim do body)', () => {
+  const [iniciar, rever, redefinir] = ['iniciar', 'rever', 'redefinir']
+  const focusables = [iniciar, rever, redefinir]
+  const key = (overrides: Partial<Parameters<typeof helpMenuKeyAction<string>>[0]>) =>
+    helpMenuKeyAction<string>({
+      key: 'Tab',
+      shiftKey: false,
+      defaultPrevented: false,
+      inScope: true,
+      focusables,
+      active: rever,
+      ...overrides,
+    })
+
+  it('Tab no último controle fecha o menu (o foco volta à Ajuda, não ao topo do app)', () => {
+    expect(key({ active: redefinir })).toBe('tab')
+  })
+
+  it('Shift+Tab no primeiro controle fecha o menu (não cai no aviso ao lado)', () => {
+    expect(key({ active: iniciar, shiftKey: true })).toBe('tab')
+  })
+
+  it('entre os controles o Tab e o Shift+Tab seguem normais', () => {
+    expect(key({ active: iniciar })).toBeNull()
+    expect(key({ active: rever })).toBeNull()
+    expect(key({ active: rever, shiftKey: true })).toBeNull()
+    expect(key({ active: redefinir, shiftKey: true })).toBeNull()
+  })
+
+  it('Esc com o foco no menu ou no botão fecha; fora do escopo, não', () => {
+    expect(key({ key: 'Escape' })).toBe('escape')
+    expect(key({ key: 'Escape', active: null })).toBe('escape')
+    expect(key({ key: 'Escape', inScope: false })).toBeNull()
+    expect(key({ active: redefinir, inScope: false })).toBeNull()
+  })
+
+  it('tecla já tratada, foco fora dos controles e outras teclas não fecham', () => {
+    expect(key({ key: 'Escape', defaultPrevented: true })).toBeNull()
+    expect(key({ active: redefinir, defaultPrevented: true })).toBeNull()
+    expect(key({ active: 'botao-ajuda' })).toBeNull()
+    expect(key({ active: null })).toBeNull()
+    expect(key({ key: 'ArrowDown', active: redefinir })).toBeNull()
+    expect(key({ key: 'Enter', active: redefinir })).toBeNull()
+  })
+
+  it('com um controle só, Tab e Shift+Tab saem do menu', () => {
+    expect(key({ focusables: [redefinir], active: redefinir })).toBe('tab')
+    expect(key({ focusables: [redefinir], active: redefinir, shiftKey: true })).toBe('tab')
   })
 })
 

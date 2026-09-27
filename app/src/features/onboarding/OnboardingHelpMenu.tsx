@@ -1,10 +1,12 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type Ref, type RefObject } from 'react'
+import { getFocusableElements } from '../canvas/services/keyboard-focus'
 import { FelixoPopoverSurface } from '../shared/components/FelixoPopoverSurface'
+import { helpMenuKeyAction } from './onboarding-layout'
 import type { OnboardingStore } from './onboarding-store'
 import { onboardingStore, useOnboardingSnapshot } from './onboarding-store-proxy'
 import { describeHelpMenu, type HelpActionModel, type HelpMenuModel } from './onboarding-ui-model'
 
-export type HelpMenuCloseReason = 'escape' | 'fora' | 'acao'
+export type HelpMenuCloseReason = 'escape' | 'tab' | 'fora' | 'acao'
 
 type ContentProps = {
   model: HelpMenuModel
@@ -147,9 +149,10 @@ const VIEWPORT_GAP = 8
 /**
  * Menu Ajuda (chunk preguiçoso): `FelixoPopoverSurface` ao lado do botão do rail,
  * com `role="group"`, `nokey` e o `lang` do catálogo usado. Esc com o foco no
- * menu e clique fora fecham e devolvem o foco ao botão. Abrir um tour fecha o
- * menu primeiro e abre no quadro seguinte, com o foco já de volta no botão
- * Ajuda: é para lá que ele volta quando o tour terminar.
+ * menu, Tab para fora dele (`helpMenuKeyAction`) e clique fora fecham e devolvem
+ * o foco ao botão. Abrir um tour fecha o menu primeiro e abre no quadro seguinte,
+ * com o foco já de volta no botão Ajuda: é para lá que ele volta quando o tour
+ * terminar.
  */
 export function OnboardingHelpMenu({ id, triggerRef, onClose, store = onboardingStore }: Props) {
   const snapshot = useOnboardingSnapshot(store)
@@ -197,10 +200,19 @@ export function OnboardingHelpMenu({ id, triggerRef, onClose, store = onboarding
       target instanceof Node &&
       (Boolean(surfaceRef.current?.contains(target)) || Boolean(triggerRef.current?.contains(target)))
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || !inside(event.target)) return
+      const surface = surfaceRef.current
+      const action = helpMenuKeyAction({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        defaultPrevented: event.defaultPrevented,
+        inScope: inside(event.target),
+        focusables: event.key === 'Tab' && surface ? getFocusableElements(surface) : [],
+        active: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+      })
+      if (!action) return
       event.preventDefault()
       event.stopPropagation()
-      onClose('escape')
+      onClose(action)
     }
     const onMouseDown = (event: MouseEvent) => {
       if (!inside(event.target)) onClose('fora')

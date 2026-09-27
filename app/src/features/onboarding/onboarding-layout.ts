@@ -1,3 +1,4 @@
+import { tabTrapTarget } from '../canvas/services/keyboard-focus'
 import { ONBOARDING_ANCHORS, type AnchorId, type CardSide, type StepTarget } from './onboarding-catalog'
 
 /**
@@ -16,6 +17,7 @@ import { ONBOARDING_ANCHORS, type AnchorId, type CardSide, type StepTarget } fro
  *   quando o tour pode mover o foco e para onde ele volta.
  * - `nextModalYield` e `resolveFocusAfterModal`: o tour cede a um diálogo modal
  *   aberto por cima dele e, quando o diálogo fecha, devolve o foco que era seu.
+ * - `helpMenuKeyAction`: o Esc e o Tab que sairia do menu Ajuda fecham o menu.
  * - `ancestorCreatesContainingBlock`: a condição de que o host na árvore
  *   depende (nenhum ancestral cria containing block para o `position: fixed`).
  */
@@ -806,6 +808,37 @@ export function resolveFocusAfterModal<T>(input: { saved: unknown; current: unkn
   if (!isReturnable(surface)) return null
   if (surface.contains?.(input.saved) && isReturnable(input.saved)) return input.saved as T
   return input.surface
+}
+
+// ---------------------------------------------------------------------------
+// Menu Ajuda pelo teclado
+// ---------------------------------------------------------------------------
+
+/**
+ * O que uma tecla faz com o menu Ajuda aberto (puro, testável sem DOM).
+ *
+ * O menu é um portal no fim do body: sem isto, o Tab no último controle levava o
+ * foco ao topo do app, e o Shift+Tab no primeiro a um aviso qualquer, com o menu
+ * ainda aberto. Segue o padrão de menu em portal do app, o do FelixoSelect: o Tab
+ * que sairia do menu (depois do último controle, ou Shift+Tab antes do primeiro)
+ * fecha o menu e o foco fica no gatilho, o botão Ajuda. Entre os controles o Tab
+ * segue normal; setas não, porque o menu é um grupo de botões com texto de estado,
+ * não uma lista de opções. O Esc com o foco no menu ou no botão também fecha.
+ */
+export function helpMenuKeyAction<T>(input: {
+  key: string
+  shiftKey: boolean
+  defaultPrevented: boolean
+  /** O alvo da tecla está no menu ou no botão Ajuda. */
+  inScope: boolean
+  /** Os controles focáveis do menu, na ordem de Tab. */
+  focusables: readonly T[]
+  active: T | null
+}): 'escape' | 'tab' | null {
+  if (input.defaultPrevented || !input.inScope) return null
+  if (input.key === 'Escape') return 'escape'
+  if (input.key !== 'Tab' || input.active === null || !input.focusables.includes(input.active)) return null
+  return tabTrapTarget(input.focusables, input.active, input.shiftKey) === null ? null : 'tab'
 }
 
 // ---------------------------------------------------------------------------

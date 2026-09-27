@@ -466,8 +466,10 @@ function useHelpMenu() {
   const close = useCallback((reason: HelpMenuCloseReason) => {
     setOpen(false)
     const trigger = triggerRef.current
-    if (reason === 'acao') {
-      // Antes de o tour abrir (no quadro seguinte): é para cá que o foco volta depois.
+    if (reason === 'acao' || reason === 'tab') {
+      // Ação: antes de o tour abrir (no quadro seguinte), é para cá que o foco volta
+      // depois. Tab para fora do menu (portal no fim do body): o foco fica no gatilho,
+      // como no FelixoSelect, em vez de cair no topo do app com o menu aberto.
       trigger?.focus({ preventScroll: true })
       return
     }
