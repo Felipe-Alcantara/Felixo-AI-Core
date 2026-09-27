@@ -1006,6 +1006,13 @@ function criarCenariosDoTutorial(deps) {
       await page.getByRole('button', { name: 'Fechar terminal' }).click()
       await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout })
     }
+    // O "Agente" (ou a gaveta fechada) devolve o foco um quadro depois, e até lá ele
+    // fica no body. Sem esperar, esse foco chegava depois do Próximo focado abaixo, e
+    // o Enter sob a pergunta abria um segundo agente em vez de cair no tour cedido.
+    await esperar(cenario, 'o foco assentar depois de criar o agente', () => {
+      const active = document.activeElement
+      return Boolean(active && active !== document.body && !active.closest('[data-canvas-terminal-drawer]'))
+    })
     await conferirPerguntaSobreOTour(cenario)
     await fecharTourSeAberto(cenario)
     log('SA3 Esc em camadas: ok (flyout, Busca, HandoffDialog e pergunta do agente donos do teclado; Agente cria terminal com o tour aberto)')
