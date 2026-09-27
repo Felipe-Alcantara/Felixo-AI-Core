@@ -552,7 +552,7 @@ Os textos são rascunho, com orçamento de título até 32 e corpo até 240 cara
 | 3 | contexto | `criar-bloco` → `secao-criar` → `rail-menu` | Novo bloco / Criar / menu do canvas | **Contexto.** "Novo bloco cria um arquivo .md no canvas. Ligue o bloco a um agente para ele ler e editar esse contexto." Variantes iguais às do passo 2. |
 | 4 | terminal | `inspector-elementos` → `inspector-puck` → `canvas` | Elementos / elementos / canvas | **Terminais.** "Cada agente é um terminal de verdade. Em Elementos você acompanha os terminais do canvas. Para um terminal comum, escolha Nenhum (shell) ao configurar o agente." Variantes: "Elementos está recolhido neste botão. Abra para ver os terminais." / "Os terminais aparecem como blocos aqui no canvas." |
 | 5 | ferramentas | `secao-ferramentas` (cabeçalho; a seção continua fechada) → `rail-menu` | Ferramentas / menu do canvas | **Ferramentas.** "Ferramentas reúne os painéis de apoio, como {ferramentaA} e {ferramentaB}. Abra a seção quando precisar." Os nomes vêm de `TOOL_LABELS[citaFerramentas[i]]`. |
-| 6 | ajuda | `rail-ajuda` | Ajuda | **Onde rever.** "Pronto. Para rever este tutorial ou ver novidades, use Ajuda nesta barra. Nada foi criado e nenhum agente foi aberto." Botão principal: Concluir. |
+| 6 | ajuda | `rail-ajuda` | Ajuda | **Onde rever.** "Pronto. Para rever este tutorial ou ver novidades, use Ajuda nesta barra. O tutorial não criou nada nem abriu agentes." Botão principal: Concluir. (O rascunho dizia "Nada foi criado e nenhum agente foi aberto", o que fica falso quando a pessoa cria um agente durante o tour, T1.d.) |
 
 Mini-tour `novidade-ajuda`: um passo em `rail-ajuda`, com "Novidade: a Ajuda reúne o tutorial do canvas e as novidades. Reabra o tutorial quando quiser."
 
