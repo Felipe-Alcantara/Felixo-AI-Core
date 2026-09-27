@@ -5328,3 +5328,60 @@ Registro gravado às 22:32 (-03).
 - **Otimização do processo**, pedida pelo Felipe:
   - a CI dos 4 SOs passou a validar em paralelo, no lugar das repetições locais do smoke (~12 min cada nesta máquina);
   - os ajustes de uso rodaram num segundo worktree ao mesmo tempo que a estabilização.
+
+## 2026-09-26 — Tutorial do canvas: três ajustes de uso da revisão
+
+Registro gravado às 22:33.
+
+A revisão de uso apontou três problemas não bloqueantes, todos medidos no app real (felixo devtools, perfil isolado).
+Cada um virou um commit com teste que reprova no código anterior.
+
+**1. Pergunta de agente por cima do tour** (`fix(onboarding): o tour cede a um diálogo modal aberto por cima dele`).
+O AgentQuestionDialog não pega o foco e escuta o teclado na janela. Aberto por cima do tour, o overlay cobria o card,
+mas o foco continuava nele: o Enter no Próximo avançava o tour por baixo do modal, sem anúncio, e o Esc de quem achava
+estar no tour dispensava a pergunta do agente. Agora, enquanto houver `[aria-modal="true"]` na tela, o card e o aviso
+ficam `inert` no mesmo passo. O foco que estava no tour vai para o body, e as teclas passam a ser do diálogo. Quando o
+diálogo fecha, o foco volta ao controle do tour que o tinha, só se ninguém o pôs em outro lugar. As regras são puras
+(`nextModalYield` e `resolveFocusAfterModal`).
+- Nenhum evento avisa que um diálogo montou, e o plano proíbe observar mutações no body. A conferência é um
+  `querySelector` a cada 250 ms, só com o tour ou o aviso na tela, mais uma a cada troca de foco. Alternativas
+  descartadas: `MutationObserver` só nos pais atuais dos diálogos (quebra calado se um diálogo mudar de lugar) e
+  mudar o AgentQuestionDialog para avisar o tour (é de outra feature, e não foi preciso).
+- Nos até 250 ms entre o diálogo abrir e o card ficar inerte, os botões do card consultam o modal na hora e não fazem
+  nada. O Esc nesse intervalo continua indo para o diálogo, como o plano já previa.
+
+**2. Menu Ajuda pelo teclado** (`fix(onboarding): Tab para fora do menu Ajuda fecha o menu e volta ao botão`). O
+menu é um portal no fim do body. O Tab no último item levava o foco ao topo do app com o menu aberto, e o Shift+Tab no
+primeiro caía no "Dispensar" do NoticeToast. Escolhido o padrão que o app já usa para menu em portal, o do
+FelixoSelect: o Tab fecha o menu e o foco fica no gatilho. O Tab entre os botões do menu segue normal; só o que sairia
+dele fecha e devolve o foco ao botão Ajuda. Setas ficaram de fora, porque o menu é um grupo de botões com texto de
+estado, não uma lista de opções. O `aria-controls` do botão continua apontando o menu mesmo fechado, como no
+FelixoSelect e no botão Organizar. A regra é pura (`helpMenuKeyAction`, com o `tabTrapTarget` do HandoffDialog).
+
+**3. Texto do passo 6** (`fix(onboarding): o último passo afirma só o que o tutorial garante`). "Nada foi criado e
+nenhum agente foi aberto" ficava falso quando a pessoa criava um agente com o tour aberto, o que o T1.d permite. O
+texto passou a ser "O tutorial não criou nada nem abriu agentes.", no catálogo pt-BR. A versão do tour não subiu: é
+correção de texto de um roteiro que ainda não saiu, e subir marcaria "Atualizado" sem nada novo. A tabela do plano
+guarda o rascunho antigo; o texto em vigor é o do catálogo. O guia do usuário também passou a dizer o que o tutorial
+não faz, em vez de como o app está.
+
+**Validação.**
+- Testes que falham antes: 9 do item 1 (7 no U-layout e 2 no U-ui, o `inert` do card e do aviso), 6 do item 2
+  (U-layout) e 1 do item 3 (U-msg).
+- Smoke: o SA3 grava uma pergunta de verdade na fila de pedidos do perfil isolado e confere o card inerte, o foco fora
+  dele, o Enter sem avançar, o Tab sem entrar no card, a tecla da opção indo para o diálogo, o foco de volta ao Próximo
+  e, com o foco levado para fora, nada puxado de volta. O SA2 percorre o menu Ajuda com Tab até sair e confere o menu
+  fechado com o foco na Ajuda, e faz o mesmo com Shift+Tab no primeiro controle e com Esc.
+- Só esses dois cenários rodaram, isolados, sob o lock do devtools, com o Vite servido deste worktree (conferido pelo
+  diretório do processo). Com as correções, o SA2 passou em 6 s e o SA3 em 49 s. Com os arquivos de produção
+  anteriores e os cenários novos, o SA2 reprovou em "Tab no menu Ajuda levou o foco para fora com o menu aberto" (o
+  foco foi para a região do canvas, no topo do app, como o revisor mediu) e o SA3 em "o card ceder à pergunta do
+  agente". O `test:canvas-smoke` completo fica para o CI dos quatro sistemas.
+- Em `app/`: `npm run build` ok (CanvasView 324,49 kB, antes 324,46; o chunk do tutorial é preguiçoso); `npm run
+  lint` sem erro; `npm test` 1843/1843; `npm run test:frontend` 2051 testes e 1 ignorado; os testes do tutorial
+  também com o Node 22.22.3 (vitest), 715/715. Nenhum teste novo é `node:test`.
+
+**Limitações que sobram.**
+- O AgentQuestionDialog continua sem puxar o foco e sem prender o Tab. Isso é da feature dele e não mudou; com o card
+  inerte, o foco fica no body até a pessoa responder ou dispensar.
+- Um diálogo modal que não use `aria-modal="true"` não é reconhecido. Hoje os dois do canvas usam.
