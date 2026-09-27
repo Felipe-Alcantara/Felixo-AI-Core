@@ -5305,3 +5305,26 @@ voltando a trazer Novo bloco para a vista.
   Node 22 509/509.
 - `npm run test:canvas-smoke` completo sob o lock: exit 0 em 12 min 11 s (21:09–21:21, load average de 8 a 19). O
   SA5 levou 16 s e o SA8 45 s dentro do smoke.
+
+## 2026-09-26 — Tutorial do canvas: estabilização do smoke, corte do bundle e verificação
+
+Registro gravado às 22:32 (-03).
+
+- **Smoke SA8** (`166384b0`):
+  - o primeiro redimensionamento do SA8, logo depois do reload do SA7, estourava o prazo de 5 s com a máquina carregada: 2 de 3 execuções completas falharam com load entre 12 e 20;
+  - a espera do resize no tutorial agora usa `ONBOARDING_TIMEOUT_MS`, e a falha informa o tamanho pedido e o lido;
+  - nenhuma asserção mudou: o corpo do `sa8()` ficou idêntico nos três commits, conferido por um verificador.
+- **Bundle** (`8f211814`):
+  - o chunk do CanvasView, carregado no startup, tinha crescido 10,1 kB gzip com o tutorial, contra os 3–4 KiB do plano;
+  - aplicada a mitigação do plano: o canvas fica só com um procurador da store (`onboarding-store-proxy`, 4,7 kB crus), e a store, o estado e o catálogo vêm em chunk preguiçoso;
+  - medido pelo build: CanvasView de 324,46/98,92 para 302,64/91,44 kB (cru/gzip), ou seja, +2,62 kB gzip sobre a main; store 21,93/7,49, catálogo 2,51/0,69 e interface 32,01/10,58 kB;
+  - a decisão automática sai 18 ms mais tarde na mediana sem ponte (da hidratação à decisão, p50 de 22 para 40 ms). No app real, com a ponte, o ruído da máquina é maior que essa diferença.
+- **Guia** (`8e81e777`): a seção Ferramentas do GUIA-USUARIO passou a usar os rótulos reais da interface.
+- **Verificação adversarial** do corte do bundle e do SA8 (2 lentes), sem nenhum bloqueante:
+  - 716 testes do onboarding e 1031 do canvas;
+  - 14 mutações do procurador, das quais 11 foram pegas pelos testes (as 2 sobreviventes e as bordas de robustez ficaram na task de não bloqueantes);
+  - app real com a ponte, cobrindo primeiro boot, retomada, usuário antigo e chunk ausente (o canvas segue de pé).
+- **CI do PR #96** em `8e81e777`: 21 checks verdes nos 4 SOs; o smoke com os cenários do tutorial leva de 104 a 146 s por runner. O benchmark do terminal (`renderer-xterm count=1`) reprovou uma vez em `166384b0` por ruído e passou ao rodar de novo; o mesmo cenário já tinha acusado ruído no PR #95 (task aberta).
+- **Otimização do processo**, pedida pelo Felipe:
+  - a CI dos 4 SOs passou a validar em paralelo, no lugar das repetições locais do smoke (~12 min cada nesta máquina);
+  - os ajustes de uso rodaram num segundo worktree ao mesmo tempo que a estabilização.
