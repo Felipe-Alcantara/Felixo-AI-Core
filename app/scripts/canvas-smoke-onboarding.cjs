@@ -1053,6 +1053,7 @@ function criarCenariosDoTutorial(deps) {
     await focarProximo()
     deps.registrarPerguntaDoAgente({ pergunta: 'Smoke do tutorial: qual opção?', opcoes: ['Primeira', 'Segunda'] })
     await cedeu()
+    await conferirCardParadoSobAPergunta(cenario)
     await page.keyboard.press('Enter')
     await measureStableGeometry(page, `${cenario} Enter sob a pergunta`, [SEL.cartao], QUADROS_CURTOS)
     const depoisDoEnter = await cartao()
@@ -1083,6 +1084,42 @@ function criarCenariosDoTutorial(deps) {
     exigir((await cartao())?.passo === passo, cenario, 'a pergunta mudou o passo do tour', await cartao())
 
     await conferirTeclasDoCanvasSobAPergunta(cenario, { cedeu, retomou, focarProximo })
+  }
+
+  /**
+   * O fundo da pergunta (`fixed inset-0`) cobre todos os alvos, e o teste do centro
+   * (`elementFromPoint`) rejeitava cada um: qualquer reposicionamento sob a pergunta
+   * levava o card ao alvo reserva, com outro texto, e ele voltava quando a pergunta
+   * fechava (no CI, o SA3 pegou o card indo de left 294 a 58). Um resize força o
+   * reposicionamento na hora: o card tem de ficar no mesmo alvo e no mesmo lugar.
+   */
+  async function conferirCardParadoSobAPergunta(cenario) {
+    const ler = () =>
+      page.evaluate(() => {
+        const card = document.querySelector('[data-felixo-onboarding="card"]')
+        const rect = card?.getBoundingClientRect()
+        return rect
+          ? { ancora: card.dataset.ancora ?? null, left: Math.round(rect.left), top: Math.round(rect.top), corpo: card.querySelector('.felixo-onboarding-card__body')?.textContent ?? '' }
+          : null
+      })
+    const antes = await ler()
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          window.dispatchEvent(new Event('resize'))
+          // Um quadro para o reposicionamento agendado, outro para o render da troca de alvo.
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)))
+        }),
+    )
+    const depois = await ler()
+    const parado =
+      antes !== null &&
+      depois !== null &&
+      depois.ancora === antes.ancora &&
+      depois.corpo === antes.corpo &&
+      depois.left === antes.left &&
+      depois.top === antes.top
+    exigir(parado, cenario, 'o card trocou de alvo ou de lugar por baixo da pergunta', { antes, depois })
   }
 
   /**

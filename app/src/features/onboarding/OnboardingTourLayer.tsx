@@ -16,6 +16,7 @@ import {
   nextModalYield,
   noteSidebarScrollEvent,
   noteTourSidebarScroll,
+  placementFrozen,
   resolveFocusAfterModal,
   resolveReturnFocus,
   resolveStepTarget,
@@ -219,16 +220,25 @@ type PlacementOptions = {
    * volta a poder rolar a sidebar até o alvo; dentro do passo, só até a pessoa rolar.
    */
   revealKey: string
+  /**
+   * O tour cedeu a um diálogo modal: a posição congela (`placementFrozen`). Quando
+   * o diálogo fecha, os observadores são refeitos e o card volta a ser posicionado
+   * na hora, sem esperar outro evento.
+   */
+  frozen: boolean
   onPlaced?: (resolution: TargetResolution | null) => void
 }
 
-function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, revealKey, onPlaced }: PlacementOptions) {
+function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, revealKey, frozen, onPlaced }: PlacementOptions) {
   const scrollGate = useRef<SidebarScrollGate>(SIDEBAR_SCROLL_GATE_INITIAL)
 
   /** Posiciona e diz se ficou numa alternativa (ou sem alvo) em vez do alvo preferido. */
   const layout = useEffectEvent((): boolean => {
     const surface = surfaceRef.current
     if (!surface) return false
+    // Conferido aqui, e não só pelo `frozen`: o tour percebe o diálogo até um
+    // quarto de segundo depois de ele abrir (MODAL_CHECK_MS).
+    if (placementFrozen({ modalAberto: hasOpenModal(document), posicionado: surface.dataset.modo !== undefined })) return false
     scrollGate.current = enterSidebarScrollStep(scrollGate.current, revealKey)
     // Fora da chamada opcional: `onPlaced?.(placeSurface(...))` nem avaliaria o
     // argumento sem `onPlaced`, e o aviso (que não passa callback) nunca era posicionado.
@@ -311,7 +321,7 @@ function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, revealKey
       document.removeEventListener('transitionend', onChromeMotionEnd, true)
       document.removeEventListener('animationend', onChromeMotionEnd, true)
     }
-  }, [surfaceRef, trackKey])
+  }, [surfaceRef, trackKey, frozen])
 }
 
 /**
@@ -325,7 +335,8 @@ const MODAL_CHECK_MS = 250
 /**
  * O tour cede a um diálogo modal (AgentQuestionDialog, HandoffDialog): enquanto
  * houver `[aria-modal="true"]` na tela, a superfície fica `inert` (fora do Tab e
- * da árvore de acessibilidade, sem clique nem tecla) e continua no mesmo passo.
+ * da árvore de acessibilidade, sem clique nem tecla) e continua no mesmo passo e
+ * no mesmo lugar (a posição congela, `placementFrozen`).
  * O AgentQuestionDialog não pega o foco e escuta o teclado na janela: sem isto o
  * foco ficava num card coberto pelo overlay, o Enter avançava o tour por baixo e
  * o Esc de quem achava estar no tour dispensava a pergunta do agente.
@@ -431,12 +442,14 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
     store.announce(texto, lang)
   }
 
+  const cedido = useYieldToModal(cardRef, holdRef)
   useSurfacePlacement({
     surfaceRef: cardRef,
     ringRef,
     targets: step?.targets ?? [],
     trackKey: `${tour.instancia}:${tour.stepIndex}:${tour.ancora ?? ''}`,
     revealKey: `${tour.instancia}:${tour.stepIndex}`,
+    frozen: cedido,
     onPlaced: (resolution) => {
       const body = bodyRef.current
       // O corpo só entra na ordem de Tab quando transborda (para rolar pelo teclado).
@@ -447,7 +460,6 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
       if (resolution && resolution.anchor !== tour.ancora) store.retarget(resolution.anchor)
     },
   })
-  const cedido = useYieldToModal(cardRef, holdRef)
 
   // Abertura: depois do posicionamento (efeito declarado antes), para o card já estar visível.
   const onOpened = useEffectEvent(() => {
@@ -539,13 +551,14 @@ function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: Notice
   const announced = useRef<string | null>(null)
   const model = describeNotice(aviso)
 
+  const cedido = useYieldToModal(noticeRef, holdRef)
   useSurfacePlacement({
     surfaceRef: noticeRef,
     targets: NOTICE_TARGETS,
     trackKey: aviso.featureId,
     revealKey: aviso.featureId,
+    frozen: cedido,
   })
-  const cedido = useYieldToModal(noticeRef, holdRef)
 
   const onShown = useEffectEvent(() => {
     if (announced.current === aviso.featureId) return

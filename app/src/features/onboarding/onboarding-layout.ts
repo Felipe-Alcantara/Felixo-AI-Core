@@ -767,6 +767,18 @@ export function hasOpenModal(root: { querySelector(selector: string): unknown } 
   return Boolean(root && root.querySelector('[aria-modal="true"]'))
 }
 
+/**
+ * O card (ou o aviso) fica onde está enquanto um diálogo modal o cobre. O fundo
+ * do diálogo (`fixed inset-0` no AgentQuestionDialog) fica por cima de todos os
+ * alvos, e o teste do centro (`elementFromPoint`) rejeitaria cada um: qualquer
+ * reposicionamento levaria o card ao alvo reserva por baixo do diálogo, com
+ * outro texto, e ele voltaria quando o diálogo fechasse. A primeira posição sai
+ * mesmo assim, para o card nunca ficar sem lugar.
+ */
+export function placementFrozen(input: { modalAberto: boolean; posicionado: boolean }): boolean {
+  return input.modalAberto && input.posicionado
+}
+
 // ---------------------------------------------------------------------------
 // Diálogo modal por cima do tour
 // ---------------------------------------------------------------------------

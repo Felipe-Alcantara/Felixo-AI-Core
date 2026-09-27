@@ -27,6 +27,7 @@ import {
   nextModalYield,
   noteSidebarScrollEvent,
   noteTourSidebarScroll,
+  placementFrozen,
   rectsIntersect,
   resolveFocusAfterModal,
   resolveReturnFocus,
@@ -854,5 +855,34 @@ describe('hasOpenModal e ancestorCreatesContainingBlock', () => {
 
   it('will-change de opacidade e contain de tamanho não prendem o fixed', () => {
     expect(containingBlockReason({ willChange: 'opacity', contain: 'size' })).toBeNull()
+  })
+})
+
+describe('placementFrozen (diálogo modal por cima do tour)', () => {
+  it('o fundo de um diálogo modal cobre todos os alvos: sem congelar, o card cairia no reserva', () => {
+    // O AgentQuestionDialog tem um fundo `fixed inset-0`: o centro de qualquer alvo cai nele.
+    const fundo = fakeNode({ rect: { left: 0, top: 0, width: VIEWPORT.width, height: VIEWPORT.height } })
+    const env = createEnv(
+      {
+        'criar-agente': fakeNode({ rect: rects.agente }),
+        'secao-criar': fakeNode({ rect: rects.secao }),
+        'rail-menu': fakeNode({ rect: rects.menu }),
+      },
+      { elementFromPoint: () => fundo },
+    )
+    expect(resolveStepTarget({ targets: CHAIN }, env)).toMatchObject({ anchor: 'rail-menu', fallback: true })
+  })
+
+  it('com o diálogo aberto, o que já está posicionado fica onde está', () => {
+    expect(placementFrozen({ modalAberto: true, posicionado: true })).toBe(true)
+  })
+
+  it('sem diálogo, o posicionamento segue normal', () => {
+    expect(placementFrozen({ modalAberto: false, posicionado: true })).toBe(false)
+    expect(placementFrozen({ modalAberto: false, posicionado: false })).toBe(false)
+  })
+
+  it('a primeira posição sai mesmo com o diálogo aberto (o card nunca fica sem lugar)', () => {
+    expect(placementFrozen({ modalAberto: true, posicionado: false })).toBe(false)
   })
 })

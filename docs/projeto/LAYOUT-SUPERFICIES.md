@@ -113,8 +113,10 @@ card e aviso (55) < `AgentQuestionDialog` e `HandoffDialog` (60) <
 `WebviewProfileMenu` (70) < `FelixoSelect` e menu Ajuda (1000). Os tokens
 `--felixo-z-onboarding-ring` e `--felixo-z-onboarding` ficam em `index.css`.
 Enquanto um diálogo modal (z 60) está aberto, o card e o aviso ficam `inert`, no
-mesmo passo, e voltam quando ele fecha: o overlay os cobre, então nem o foco nem
-o teclado podem ficar neles. O foco que era deles espera num elemento invisível
+mesmo passo e no mesmo lugar, e voltam quando ele fecha: o overlay os cobre, então
+nem o foco nem o teclado podem ficar neles. A posição congela (`placementFrozen`)
+porque o fundo do diálogo cobre todos os alvos, e o teste do centro jogaria o card
+no alvo reserva, com outro texto, por baixo do diálogo. O foco que era deles espera num elemento invisível
 com `nokey`, irmão do card (`OnboardingFocusHold`), e nunca no body: no body o
 React Flow trata Delete e Backspace como teclas do canvas e apagaria o bloco
 selecionado por baixo do diálogo.
