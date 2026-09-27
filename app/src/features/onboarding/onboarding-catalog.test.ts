@@ -17,7 +17,9 @@ import {
   type StepDef,
   type TourDef,
 } from './onboarding-catalog'
+import { CANVAS_TRIGGER_NODE_TYPES, WATCHES_CANVAS_NODE_TYPES } from './onboarding-canvas-triggers'
 import { PT_BR, formatOnboardingMessage, type MessageKey } from './onboarding-messages'
+import { hasCanvasTriggers } from './onboarding-state'
 
 const canvasDirectory = fileURLToPath(new URL('../canvas/components/', import.meta.url))
 
@@ -191,6 +193,15 @@ describe('catálogo do tutorial: features e livro de versões', () => {
       const current: readonly string[] = [...CATALOG_HISTORY[index].tours, ...CATALOG_HISTORY[index].features]
       for (const id of previous) expect(current).toContain(id)
     }
+  })
+
+  it('CANVAS_TRIGGER_NODE_TYPES é exatamente a lista de tipos dos gatilhos de canvas do catálogo', () => {
+    const tipos = defaultOnboardingCatalog.features.flatMap((feature) =>
+      !feature.retired && feature.trigger.tipo === 'canvas' ? [feature.trigger.nodeType] : [],
+    )
+    expect([...CANVAS_TRIGGER_NODE_TYPES].sort()).toEqual([...new Set(tipos)].sort())
+    // O canvas decide sem o catálogo o mesmo que a store decide com ele.
+    expect(WATCHES_CANVAS_NODE_TYPES).toBe(hasCanvasTriggers(defaultOnboardingCatalog))
   })
 
   it('CANVAS_TOOL_FEATURES cobre toda ferramenta do canvas, e toda feature citada existe', () => {

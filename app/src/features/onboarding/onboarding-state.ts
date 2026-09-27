@@ -795,17 +795,6 @@ export type CanvasObservation = {
 
 export const EMPTY_CANVAS_OBSERVATION: CanvasObservation = Object.freeze({ base: null, pendentes: [] })
 
-/** Lista ordenada e sem repetição a partir da chave `"file,terminal"` que o canvas envia. */
-export function parseNodeTypesKey(key: string): string[] {
-  return [...new Set(key.split(',').map((item) => item.trim()).filter(Boolean))].sort()
-}
-
-/** Chave ordenada e sem repetição dos tipos presentes: o formato que o canvas envia e `parseNodeTypesKey` lê. */
-export function nodeTypesKeyOf(types: Iterable<string | null | undefined>): string {
-  const present = [...types].filter((type): type is string => typeof type === 'string' && type.trim().length > 0)
-  return [...new Set(present.map((type) => type.trim()))].sort().join(',')
-}
-
 export function hasCanvasTriggers(catalog: OnboardingCatalog = defaultOnboardingCatalog): boolean {
   return activeFeatures(catalog).some((feature) => feature.trigger.tipo === 'canvas')
 }

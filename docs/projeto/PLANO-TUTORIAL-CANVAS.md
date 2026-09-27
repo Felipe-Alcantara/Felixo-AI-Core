@@ -193,8 +193,10 @@ Os caminhos são relativos a `app/`.
 ### Fronteiras e orçamento de bundle
 
 - **Chunk de entrada:** só `src/features/onboarding/onboarding-boot-signals.ts` (menos de 0,5 KiB, sem React).
-- **Chunk do canvas (eager):** estado puro, catálogo (só chaves de mensagem), store, `OnboardingMount` e `OnboardingErrorBoundary`. Estimativa de 3–4 KiB gzip, conferida com `npm run benchmark:bundle:check`.
-- **Chunk lazy (um só):** mensagens, layout, camada do tour, card, anel, aviso e menu Ajuda. Só é importado com tour ou aviso ativo ou com o menu Ajuda aberto.
+- **Chunk do canvas (eager):** só o procurador da store (`onboarding-store-proxy.ts`, com os hooks), `onboarding-canvas-triggers.ts`, `onboarding-help-label.ts`, `OnboardingMount` e `OnboardingErrorBoundary` (4,7 kB crus). Estimativa de 3–4 KiB gzip, conferida com `npm run benchmark:bundle:check`.
+- **Chunk lazy da store:** estado puro (decisão automática, Ajuda, eventos), store (a autoridade) e catálogo (só chaves de mensagem; o Rolldown o separa num chunk de 2,5 kB porque a interface também o usa). Começa a baixar quando o canvas monta; a leitura do estado começa no `canvasReady`, como antes, e a store recebe essa mesma leitura.
+- **Chunk lazy da interface (um só):** mensagens, layout, camada do tour, card, anel, aviso e menu Ajuda. Só é importado com tour ou aviso ativo ou com o menu Ajuda aberto, e sempre depois de a store estar ligada (`loadOnboardingUi`).
+- **Medido (26/09/2026, `npm run build`, kB do Vite):** chunk `CanvasView` na `main` 295,89 kB crus e 88,82 kB gzip; com o tutorial todo eager, 324,46 e 98,92 (+10,1 kB gzip); com a divisão acima, 302,64 e 91,44 (+2,62 kB gzip, dentro da estimativa). Store 21,93/7,49, catálogo 2,51/0,69 e interface 32,01/10,58. Detalhes e a medição da decisão em `docs/projeto/IA.md`.
 - **Importações permitidas em `features/onboarding`:**
   - o tipo `CanvasTool` e `TOOL_LABELS` (só no teste do catálogo);
   - `FelixoPopoverSurface`, apenas no menu Ajuda;
@@ -211,11 +213,13 @@ Os caminhos são relativos a `app/`.
 | `onboarding-state.ts` | Schema v1, `normalizeOnboardingState` (nunca lança), `MIGRATIONS`, `createBaselineState`, `decideAutomaticOpening`, `applyOnboardingEvent` (puro; devolve o mesmo objeto num no-op), `describeHelpEntries`, `serializeOnboardingState` (preserva extras e ids desconhecidos). |
 | `onboarding-boot-signals.ts` | `captureOnboardingBootSignals(storage)` → `{ chavesFelixo, marcadorPrimeiroBoot }`, `getOnboardingBootSignals()` e `clearFirstBootMarker(storage)`. Chamado em `main.tsx` antes do `createRoot`. |
 | `onboarding-devtools.ts` | `readDevtoolsFault(win)` → `'render' \| null`. Lê `sessionStorage['felixo:onboarding:falha']` só quando `window.felixo?.devtools` existe. |
-| `onboarding-store.ts` | `createOnboardingStore(deps)` e o singleton `onboardingStore` (molde de `openia-image-store.ts`). `useOnboardingSnapshot()` com `useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)`, com snapshot de servidor constante. |
+| `onboarding-store.ts` (lazy) | `createOnboardingStore(deps)` e `createWindowOnboardingStore({ read })`, a store da janela, criada uma vez pelo procurador. |
+| `onboarding-store-proxy.ts` (eager) | O singleton `onboardingStore`: procurador que baixa o chunk da store na montagem do canvas, antecipa a leitura no `canvasReady`, guarda as chamadas feitas antes e as repassa na ordem, e espelha o snapshot. `useOnboardingSnapshot()` e `useOnboardingNovelties()` com `useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)`, com snapshot de servidor constante. `loadOnboardingUi()` entrega a interface com a store já ligada. |
+| `onboarding-canvas-triggers.ts` (eager) | `CANVAS_TRIGGER_NODE_TYPES` (o catálogo só aceita gatilho de canvas com tipo da lista), `WATCHES_CANVAS_NODE_TYPES`, `nodeTypesKeyOf` e `parseNodeTypesKey`. |
 | `onboarding-layout.ts` | `resolveStepTarget`, `computeCardPlacement`, `computeRingRect`, `computeSidebarReveal`, `decideFocusOnOpen` (com `canStealFocus`), `resolveReturnFocus`, `hasOpenModal` e `ancestorCreatesContainingBlock`. Tudo puro, com DOM e medidas injetados. |
 | `OnboardingMount.tsx` (eager) | Host na árvore. Região live sempre montada e vazia. `OnboardingErrorBoundary` em volta do `lazy` da camada. Chama `canvasReady(nodeCount)` e `canvasNodeTypes(key)`. |
 | `OnboardingErrorBoundary.tsx` (eager) | Classe no molde do `ToolPanelErrorBoundary`: `getDerivedStateFromError` → fallback `null`, e `componentDidCatch` → `onboardingStore.reportFailure` + `window.felixo?.qaLogger?.log({ level: 'error', scope: 'renderer:onboarding', … })`. O canvas continua de pé. |
-| `onboarding-ui-entry.ts` (lazy) | Reexporta `OnboardingTourLayer` e `OnboardingHelpMenu`. Os dois `lazy()` importam este módulo, então há um chunk só. |
+| `onboarding-ui-entry.ts` (lazy) | Reexporta `OnboardingTourLayer` e `OnboardingHelpMenu`. Os dois `lazy()` chegam a este módulo por `loadOnboardingUi()`, então há um chunk só de interface. |
 | `OnboardingTourLayer.tsx` | Casca: medição, observadores, posição aplicada por ref, teclado e foco. Monta o anel, o card e o aviso. |
 | `OnboardingTourCard.tsx` | Apresentacional puro: textos, ids e estado dos botões por props. Sem portal e sem coordenadas. |
 | `OnboardingNotice.tsx` | Apresentacional do aviso de novidade. |
@@ -235,11 +239,11 @@ Os caminhos são relativos a `app/`.
 - **`src/main.tsx`:** `captureOnboardingBootSignals(window.localStorage)` em `try/catch`, antes do `createRoot`.
 - **`src/features/canvas/components/CanvasView.tsx`:**
   - `<OnboardingMount hydrated={hydrated && edgesHydrated} nodeCount={nodes.length} nodeTypesKey={…} />` logo depois do `<CanvasToolbar/>`, dentro de `[data-felixo-region="canvas"]`;
-  - `nodeTypesKey` é uma string ordenada dos tipos presentes, via `useMemo`, e só é calculada quando o catálogo tem gatilho de canvas.
+  - `nodeTypesKey` é uma string ordenada dos tipos presentes, via `useMemo`, e só é calculada quando o catálogo tem gatilho de canvas (`WATCHES_CANVAS_NODE_TYPES`, lido sem carregar o catálogo).
 - **`src/features/canvas/components/CanvasToolbar.tsx`:**
   - `ActivityRailButton` ganha as props opcionais `tourAnchor`, `expanded` e `controls`;
   - âncoras `rail-menu` (toggle LayoutGrid) e `rail-projetos`;
-  - novo botão "Ajuda" (lucide `CircleHelp`) no grupo superior, depois de Notificações, com `tourAnchor="rail-ajuda"`, `data-felixo-help-trigger`, ponto estático de novidade, estado local `helpOpen` e `lazy(OnboardingHelpMenu)`;
+  - novo botão "Ajuda" (lucide `CircleHelp`) no grupo superior, depois de Notificações, com `tourAnchor="rail-ajuda"`, `data-felixo-help-trigger`, ponto estático de novidade, estado local `helpOpen` e `lazy(OnboardingHelpMenu)` por `loadOnboardingUi()`;
   - `SidebarSection anchorId="secao-criar"` e `anchorId="secao-ferramentas"`;
   - `NamedCreateButton` de "Novo bloco" com `tourAnchor="criar-bloco"`.
 - **`src/features/shared/components/SidebarSection.tsx`:** prop opcional `anchorId`, aplicada como `data-felixo-tour-anchor` no botão de título. O AppSidebar do chat não passa essa prop.
@@ -1026,7 +1030,7 @@ Fora do CI: a flag `ui-render-performance.cjs --onboarding` roda manualmente no 
 - **Aviso da Ajuda para quem já usa:** é uma decisão derivada (a + c). É reversível pela flag `anunciarParaQuemJaUsa` e fica registrada no plano e no GUIA-USUARIO.
 - **i18n:** só pt-BR real. `en-XA` prova expansão, não tradução. O pseudo-locale vai no bundle, alcançável só com `lang` alterado, e fica documentado.
 - **CI:** a sessão B custa cerca de 60–90 s por SO. Os runners Windows e ARM já têm flakes (timeouts de 20 s, clique fora da viewport, reflow de 2 px), então só esperas por condição e frames estáveis. N-mp roda nos três SOs; se ficar instável no Windows, cai para duas conexões e o teste de dois processos fica em Linux e macOS.
-- **Bundle:** a store, o estado e o catálogo entram no chunk do canvas (≈ 3–4 KiB gzip). Se `benchmark:bundle:check` reprovar, `decideAutomaticOpening` e `describeHelpEntries` vão para o chunk lazy, e fica eager só a leitura.
+- **Bundle:** a store, o estado e o catálogo entraram no chunk do canvas e custaram +10,1 kB gzip, contra os 3–4 KiB estimados. A mitigação prevista foi aplicada e foi além: a store inteira, o estado e o catálogo foram para um chunk lazy, e fica eager só o procurador (+2,62 kB gzip sobre a `main`, contando âncoras e botão Ajuda). Custo aceito: a decisão automática sai de 18 a 20 ms mais tarde na mediana (medido sem ponte), porque o chunk da store pode ainda estar chegando no `canvasReady`.
 - **Observadores enquanto o tour está aberto:** custo de rAF e composição do anel no HD 520. Medição manual; não entra no gate.
 - **Tailwind 4 e React Compiler:** uma classe `.felixo-onboarding-*` vence utilities com variante, e setState em effect ou leitura de ref ou relógio no render reprova o lint. Mitigação: U-css e o molde do FelixoSelect, com a escrita de estilo por ref em callback.
 - **Divergências registradas:** do GUIA-ONBOARDING-E-AJUDA (sem overlay bloqueante, sem `animate-ping`, sem FAB, sem `hasSeen` booleano) e do "modais prendem foco" do System Design.

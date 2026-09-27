@@ -20,12 +20,8 @@ import {
   type TargetEnv,
   type TargetResolution,
 } from './onboarding-layout'
-import {
-  useOnboardingSnapshot,
-  type NoticeSession,
-  type OnboardingStore,
-  type TourSession,
-} from './onboarding-store'
+import type { NoticeSession, OnboardingStore, TourSession } from './onboarding-store'
+import { useOnboardingSnapshot } from './onboarding-store-proxy'
 import {
   describeNotice,
   describeNoticeAnnouncement,

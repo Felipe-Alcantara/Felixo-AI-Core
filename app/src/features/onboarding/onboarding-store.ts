@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react'
 import { clearFirstBootMarker, getOnboardingBootSignals } from './onboarding-boot-signals'
+import { parseNodeTypesKey } from './onboarding-canvas-triggers'
 import {
   defaultOnboardingCatalog,
   type AnchorId,
@@ -24,7 +24,6 @@ import {
   hasCanvasTriggers,
   normalizeOnboardingState,
   observeCanvasTypes,
-  parseNodeTypesKey,
   parseSessionRecord,
   serializeOnboardingState,
   serializeSessionRecord,
@@ -43,8 +42,12 @@ import {
 } from './onboarding-state'
 
 /**
- * Store do tutorial, uma por janela (singleton de módulo, no molde do
- * `openia-image-store.ts`).
+ * Store do tutorial, uma por janela, e a autoridade sobre ele.
+ *
+ * Vem num chunk preguiçoso, com a state machine e o catálogo: o chunk do canvas
+ * só tem o procurador (`onboarding-store-proxy.ts`), que cria esta store com
+ * `createWindowOnboardingStore` quando o canvas hidrata, repassa as chamadas e
+ * espelha o snapshot.
  *
  * Orquestra o que a state machine pura não faz: ler o estado pelo IPC, decidir
  * a abertura quando o canvas hidrata, gravar com compare-and-set e reaplicar o
@@ -789,38 +792,32 @@ function browserLocalStorage(): Pick<Storage, 'removeItem'> | null {
   }
 }
 
-/** A store da janela. Sem `window` (testes) ela nasce sem ponte e sem storage. */
-export const onboardingStore = createOnboardingStore({
-  backend: browser?.felixo?.onboarding ?? null,
-  session: browserSession,
-  now: () => Date.now(),
-  bootSignals: getOnboardingBootSignals,
-  clearFirstBootMarker: () => clearFirstBootMarker(browserLocalStorage()),
-  getLocale: () => browser?.document.documentElement.lang || 'pt-BR',
-  getActiveElement: () => browser?.document.activeElement ?? null,
-  readFault: () => readDevtoolsFault(browser),
-  log: (entry) => {
-    void browser?.felixo?.qaLogger?.log({
-      level: entry.level,
-      scope: 'renderer:onboarding',
-      message: entry.message,
-      details: entry.details ?? null,
-    })
-  },
-})
-
-export function useOnboardingSnapshot(store: OnboardingStore = onboardingStore): OnboardingSnapshot {
-  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot)
-}
-
 /**
- * Só a contagem de novidades (badge da Ajuda): a barra lateral re-renderiza
- * quando o número muda, não a cada passo ou anúncio do tour.
+ * A store da janela (ponte, sessionStorage, sinais de boot, falha forçada da
+ * automação e QA Logger). O procurador cria uma só, quando este chunk chega;
+ * `read` é a leitura que ele já começou junto com o download. Sem `window`
+ * (testes) ela nasce sem ponte e sem storage.
  */
-export function useOnboardingNovelties(store: OnboardingStore = onboardingStore): number {
-  return useSyncExternalStore(
-    store.subscribe,
-    () => store.getSnapshot().novidades,
-    () => store.getServerSnapshot().novidades,
-  )
+export function createWindowOnboardingStore(options: { read?: () => Promise<OnboardingReadResult> } = {}): OnboardingStore {
+  const bridge = browser?.felixo?.onboarding ?? null
+  return createOnboardingStore({
+    backend: bridge
+      ? { read: options.read ?? (() => bridge.read()), write: (request) => bridge.write(request) }
+      : null,
+    session: browserSession,
+    now: () => Date.now(),
+    bootSignals: getOnboardingBootSignals,
+    clearFirstBootMarker: () => clearFirstBootMarker(browserLocalStorage()),
+    getLocale: () => browser?.document.documentElement.lang || 'pt-BR',
+    getActiveElement: () => browser?.document.activeElement ?? null,
+    readFault: () => readDevtoolsFault(browser),
+    log: (entry) => {
+      void browser?.felixo?.qaLogger?.log({
+        level: entry.level,
+        scope: 'renderer:onboarding',
+        message: entry.message,
+        details: entry.details ?? null,
+      })
+    },
+  })
 }

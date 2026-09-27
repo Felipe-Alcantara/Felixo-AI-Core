@@ -53,12 +53,12 @@ import type { NewTerminalOptions } from '../services/new-terminal-options'
 import type { AnchorId } from '../../onboarding/onboarding-catalog'
 import { helpButtonLabel } from '../../onboarding/onboarding-help-label'
 import { OnboardingErrorBoundary } from '../../onboarding/OnboardingErrorBoundary'
-import { onboardingStore, useOnboardingNovelties } from '../../onboarding/onboarding-store'
+import { loadOnboardingUi, onboardingStore, useOnboardingNovelties } from '../../onboarding/onboarding-store-proxy'
 import type { HelpMenuCloseReason } from '../../onboarding/OnboardingHelpMenu'
 
-/** O menu Ajuda vem do mesmo chunk preguiçoso do tutorial, só quando é aberto. */
+/** O menu Ajuda vem do chunk preguiçoso da interface do tutorial, só quando é aberto, com a store já ligada. */
 const LazyOnboardingHelpMenu = lazy(() =>
-  import('../../onboarding/onboarding-ui-entry').then((module) => ({ default: module.OnboardingHelpMenu })),
+  loadOnboardingUi().then((module) => ({ default: module.OnboardingHelpMenu })),
 )
 
 /**

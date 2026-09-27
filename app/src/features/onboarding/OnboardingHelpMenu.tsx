@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type Ref, type RefObject } from 'react'
 import { FelixoPopoverSurface } from '../shared/components/FelixoPopoverSurface'
-import { onboardingStore, useOnboardingSnapshot, type OnboardingStore } from './onboarding-store'
+import type { OnboardingStore } from './onboarding-store'
+import { onboardingStore, useOnboardingSnapshot } from './onboarding-store-proxy'
 import { describeHelpMenu, type HelpActionModel, type HelpMenuModel } from './onboarding-ui-model'
 
 export type HelpMenuCloseReason = 'escape' | 'fora' | 'acao'

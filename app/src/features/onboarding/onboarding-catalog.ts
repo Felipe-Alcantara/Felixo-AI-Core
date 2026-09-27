@@ -1,4 +1,5 @@
 import type { CanvasTool } from '../canvas/components/tools/CanvasToolsMenu'
+import type { CanvasTriggerNodeType } from './onboarding-canvas-triggers'
 import type { MessageKey } from './onboarding-messages'
 
 /**
@@ -12,12 +13,15 @@ import type { MessageKey } from './onboarding-messages'
  * nada de novo exista para a pessoa.
  *
  * Os textos ficam só como chaves (`MessageKey`): as mensagens moram no chunk
- * preguiçoso da interface, e este módulo entra no chunk do canvas.
+ * preguiçoso da interface. Este módulo vem no chunk preguiçoso da store (a
+ * interface o reusa); o chunk do canvas não o carrega.
  *
  * Como anunciar uma função nova: acrescente a entrada em `ONBOARDING_FEATURES`
  * (e o tour dela em `ONBOARDING_TOURS`), suba `ONBOARDING_CATALOG_REVISION` e
- * registre a revisão nova em `CATALOG_HISTORY`. Ids nunca são removidos nem
- * renomeados: uma entrada aposentada ganha `retired: true`.
+ * registre a revisão nova em `CATALOG_HISTORY`. Um gatilho de canvas também põe
+ * o tipo do bloco em `CANVAS_TRIGGER_NODE_TYPES` (`onboarding-canvas-triggers.ts`);
+ * sem isso o build reprova. Ids nunca são removidos nem renomeados: uma entrada
+ * aposentada ganha `retired: true`.
  */
 
 /** Onde um passo pode apontar; cada id vira um seletor estável no DOM. */
@@ -213,6 +217,14 @@ export const ONBOARDING_TOURS = {
   },
 } as const satisfies Record<TourId, TourDef & { id: TourId }>
 
+/**
+ * Gatilho aceito no catálogo deste build: um de canvas só com tipo listado em
+ * `CANVAS_TRIGGER_NODE_TYPES`, que é o que o canvas observa sem carregar o catálogo.
+ */
+type BuildFeatureTrigger =
+  | Extract<FeatureTrigger, { tipo: 'capability' }>
+  | { tipo: 'canvas'; nodeType: CanvasTriggerNodeType }
+
 export const ONBOARDING_FEATURES = [
   {
     id: 'feature.ajuda',
@@ -223,7 +235,7 @@ export const ONBOARDING_FEATURES = [
     // descobriria onde reabrir o tutorial (decisão a + c do plano).
     anunciarParaQuemJaUsa: true,
   },
-] as const satisfies ReadonlyArray<FeatureDef & { id: FeatureId; tourId: TourId }>
+] as const satisfies ReadonlyArray<FeatureDef & { id: FeatureId; tourId: TourId; trigger: BuildFeatureTrigger }>
 
 /**
  * Guarda de compilação: toda ferramenta do canvas é "base" (coberta pelo tutorial

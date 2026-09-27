@@ -748,16 +748,22 @@ descartadas, está em [`PLANO-TUTORIAL-CANVAS.md`](PLANO-TUTORIAL-CANVAS.md).
 | Módulo | Papel | Chunk |
 | --- | --- | --- |
 | `onboarding-boot-signals.ts` | Foto das chaves `felixo*` do localStorage e marcador de primeiro boot, tirada em `main.tsx` antes do `createRoot` (o tema e o Modo Performance gravam no mount) | entrada |
-| `onboarding-catalog.ts` | Tours, passos, âncoras, novidades e o livro de versões (`CATALOG_HISTORY`); só chaves de texto | canvas |
-| `onboarding-state.ts` | Schema v1, `normalize` (nunca lança), migrações, decisão automática e eventos puros | canvas |
-| `onboarding-store.ts` | Store singleton com `useSyncExternalStore`, compare-and-set com até 3 tentativas, sessão por janela e anúncios | canvas |
+| `onboarding-store-proxy.ts` | O `onboardingStore` da janela e os hooks (`useSyncExternalStore`): procurador que baixa o chunk da store quando o canvas monta, antecipa a leitura pelo IPC no `canvasReady`, guarda as chamadas feitas antes e as repassa na ordem, e espelha o snapshot da store (o badge da Ajuda lê daqui) | canvas |
+| `onboarding-canvas-triggers.ts` | Tipos de bloco que podem anunciar novidade pelo canvas (o catálogo só aceita gatilho com tipo da lista) e o formato da chave de tipos | canvas |
 | `OnboardingMount.tsx`, `OnboardingErrorBoundary.tsx` | Host na árvore, logo depois da sidebar (Tab: sidebar → tour → canvas), região live sempre montada e o boundary que isola falhas | canvas |
-| `onboarding-ui-entry.ts` e o que ele exporta | Textos (`onboarding-messages.ts`), posicionamento (`onboarding-layout.ts`), camada, card, anel, aviso e menu Ajuda | preguiçoso, um só |
+| `onboarding-catalog.ts` | Tours, passos, âncoras, novidades e o livro de versões (`CATALOG_HISTORY`); só chaves de texto | preguiçoso, da store |
+| `onboarding-state.ts` | Schema v1, `normalize` (nunca lança), migrações, decisão automática, Ajuda e eventos puros | preguiçoso, da store |
+| `onboarding-store.ts` | A store de verdade (a autoridade): leitura, decisão automática, compare-and-set com até 3 tentativas, sessão por janela e anúncios | preguiçoso, da store |
+| `onboarding-ui-entry.ts` e o que ele exporta | Textos (`onboarding-messages.ts`), posicionamento (`onboarding-layout.ts`), camada, card, anel, aviso e menu Ajuda | preguiçoso, da interface |
 
-O chunk preguiçoso só é baixado com tour ou aviso na tela ou com o menu Ajuda
-aberto. Um teste estático (`onboarding-boundaries.test.ts`) proíbe no módulo
-imports de criação de nó, PTY, terminal, chat, rede e ponte fora de `onboarding`,
-`qaLogger` e `devtools`.
+São dois chunks preguiçosos (o catálogo, usado pelos dois, sai num terceiro, de
+2,5 kB). O da store começa a baixar quando o canvas monta, depois do primeiro
+desenho e durante a hidratação; a leitura do estado continua começando quando o
+canvas hidrata, e a store recebe essa mesma leitura. O da interface só é baixado com tour ou aviso na tela ou com o menu Ajuda
+aberto, e sempre depois de a store estar ligada (`loadOnboardingUi`). Um teste
+estático (`onboarding-boundaries.test.ts`) confere essas fronteiras e proíbe no
+módulo imports de criação de nó, PTY, terminal, chat, rede e ponte fora de
+`onboarding`, `qaLogger` e `devtools`.
 
 **Persistência.** O main é a única autoridade: linha `onboarding.state` da tabela
 `settings` do SQLite, no envelope `{ "revision": n, "value": {…} }`.

@@ -9,7 +9,8 @@ import { FIRST_BOOT, memoryStorage } from './onboarding-test-fixtures'
 /**
  * U-bound: o tutorial só destaca e explica. Uma sonda estática garante que
  * nenhum módulo de `features/onboarding` alcança o que cria bloco, PTY, edge,
- * flyout, rede ou crédito, e que a interface só entra por `lazy()`.
+ * flyout, rede ou crédito, que a store e a interface só entram por `import()`
+ * (chunks preguiçosos) e que o chunk do canvas fica só com o procurador.
  */
 
 const directory = dirname(fileURLToPath(import.meta.url))
@@ -42,19 +43,21 @@ const ALLOWED_EXTERNAL = new Map<string, readonly string[] | 'todos'>([
   ['../shared/accessibility/reduced-motion-preference', 'todos'],
 ])
 
-/** Módulos que entram no chunk do canvas (eager): nenhum deles pode puxar a interface. */
+/** Módulos que entram no chunk do canvas (ou no de entrada): nenhum deles pode puxar a store nem a interface. */
 const EAGER_MODULES = [
-  'onboarding-catalog.ts',
-  'onboarding-state.ts',
-  'onboarding-store.ts',
+  'onboarding-store-proxy.ts',
+  'onboarding-canvas-triggers.ts',
   'onboarding-boot-signals.ts',
-  'onboarding-devtools.ts',
   'onboarding-help-label.ts',
   'OnboardingMount.tsx',
   'OnboardingErrorBoundary.tsx',
 ]
 
 const LAZY_ONLY = [
+  './onboarding-store',
+  './onboarding-state',
+  './onboarding-catalog',
+  './onboarding-devtools',
   './onboarding-messages',
   './onboarding-layout',
   './onboarding-ui-model',
@@ -107,7 +110,7 @@ describe('fronteiras do tutorial (sonda estática)', () => {
     expect(offenders).toEqual([])
   })
 
-  it('módulos eager não puxam mensagens, layout nem interface (só por lazy)', () => {
+  it('módulos eager não puxam store, estado, catálogo, mensagens, layout nem interface (só por import())', () => {
     const offenders = files
       .filter(({ file }) => EAGER_MODULES.includes(file))
       .flatMap(({ file, source }) =>
@@ -118,15 +121,34 @@ describe('fronteiras do tutorial (sonda estática)', () => {
     expect(offenders).toEqual([])
   })
 
-  it('o OnboardingMount importa a camada só por lazy(import(...)) do ponto de entrada', () => {
-    const source = readFileSync(join(directory, 'OnboardingMount.tsx'), 'utf8')
-    expect(source).toMatch(/lazy\(\(\) =>\s*import\('\.\/onboarding-ui-entry'\)/)
-    expect(staticImports(source).sort()).toEqual(['./OnboardingErrorBoundary', './onboarding-store', 'react'].sort())
+  it('o procurador alcança a store e a interface só por import() dinâmico', () => {
+    const source = readFileSync(join(directory, 'onboarding-store-proxy.ts'), 'utf8')
+    expect(staticImports(source)).toEqual(['react'])
+    const dynamic = runtimeImports(source).filter((specifier) => !staticImports(source).includes(specifier))
+    expect(dynamic.sort()).toEqual(['./onboarding-store', './onboarding-ui-entry'])
   })
 
-  it('o botão Ajuda carrega o menu só por lazy(import(...)) do mesmo ponto de entrada', () => {
+  it('o OnboardingMount importa a camada só por lazy(loadOnboardingUi()), que liga a store antes', () => {
+    const source = readFileSync(join(directory, 'OnboardingMount.tsx'), 'utf8')
+    expect(source).toMatch(/lazy\(\(\) =>\s*loadOnboardingUi\(\)/)
+    expect(staticImports(source).sort()).toEqual(['./OnboardingErrorBoundary', './onboarding-store-proxy', 'react'].sort())
+  })
+
+  it('o botão Ajuda carrega o menu só por lazy(loadOnboardingUi()), o mesmo ponto de entrada', () => {
     const toolbar = readFileSync(join(canvasDirectory, 'CanvasToolbar.tsx'), 'utf8')
-    expect(toolbar).toMatch(/lazy\(\(\) =>\s*import\('\.\.\/\.\.\/onboarding\/onboarding-ui-entry'\)/)
+    expect(toolbar).toMatch(/lazy\(\(\) =>\s*loadOnboardingUi\(\)/)
+  })
+
+  it('o canvas só importa do tutorial módulos eager (a store e o catálogo não entram no chunk dele)', () => {
+    const eager = EAGER_MODULES.map((file) => `../../onboarding/${file.replace(/\.tsx?$/, '')}`)
+    const offenders = readdirSync(canvasDirectory)
+      .filter((file) => file.endsWith('.tsx'))
+      .flatMap((file) =>
+        staticImports(readFileSync(join(canvasDirectory, file), 'utf8'))
+          .filter((specifier) => specifier.startsWith('../../onboarding/') && !eager.includes(specifier))
+          .map((specifier) => `canvas/${file}: ${specifier}`),
+      )
+    expect(offenders).toEqual([])
   })
 
   it('ninguém importa o ponto de entrada da interface de forma estática', () => {
@@ -196,9 +218,11 @@ describe('OnboardingErrorBoundary', () => {
     expect(logs[0]?.details).toMatchObject({ message: 'render quebrou', componentStack: 'pilha' })
   })
 
-  it('a store da janela manda o log para o QA Logger no escopo renderer:onboarding', () => {
-    const source = readFileSync(join(directory, 'onboarding-store.ts'), 'utf8')
-    expect(source).toContain("scope: 'renderer:onboarding'")
-    expect(source).toMatch(/felixo\?\.qaLogger\?\.log\(/)
+  it('a store da janela e o procurador mandam o log para o QA Logger no escopo renderer:onboarding', () => {
+    for (const file of ['onboarding-store.ts', 'onboarding-store-proxy.ts']) {
+      const source = readFileSync(join(directory, file), 'utf8')
+      expect(source).toContain("scope: 'renderer:onboarding'")
+      expect(source).toMatch(/felixo\?\.qaLogger\?\.log\(/)
+    }
   })
 })

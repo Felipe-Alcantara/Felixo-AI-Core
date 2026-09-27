@@ -560,6 +560,17 @@ da entrada, nunca pela versão do app. Para anunciar uma função:
 5. Nunca remova nem renomeie um id; uma entrada aposentada ganha `retired: true`.
    Mudar o roteiro de um tour sobe o `version` dele, o que não reabre nada (a Ajuda
    mostra "Atualizado").
+6. Gatilho de canvas (a novidade aparece quando um tipo de bloco chega ao canvas):
+   ponha o tipo em `CANVAS_TRIGGER_NODE_TYPES`
+   (`onboarding-canvas-triggers.ts`). O canvas lê essa lista sem carregar o catálogo,
+   que fica no chunk preguiçoso da store; sem o tipo na lista, o build reprova.
+
+O chunk do canvas só tem o procurador da store (`onboarding-store-proxy.ts`). A
+store, o estado e o catálogo vêm num chunk preguiçoso baixado quando o canvas monta,
+e a interface do tour num outro, baixado só com tour, aviso ou menu Ajuda na tela.
+Um import estático de `onboarding-store`, `onboarding-state` ou `onboarding-catalog`
+a partir do canvas os traz de volta para o startup, e o `onboarding-boundaries.test.ts`
+reprova.
 
 Uma ferramenta nova em `CanvasTool` reprova o build até ser declarada em
 `CANVAS_TOOL_FEATURES` (base ou novidade). O `onboarding-catalog.test.ts` confere

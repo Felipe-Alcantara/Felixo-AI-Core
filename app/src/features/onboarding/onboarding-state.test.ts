@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { nodeTypesKeyOf, parseNodeTypesKey } from './onboarding-canvas-triggers'
 import { defaultOnboardingCatalog, type OnboardingCatalog } from './onboarding-catalog'
 import {
   EMPTY_CANVAS_OBSERVATION,
@@ -14,8 +15,6 @@ import {
   migrateRaw,
   normalizeOnboardingState,
   observeCanvasTypes,
-  nodeTypesKeyOf,
-  parseNodeTypesKey,
   parseSessionRecord,
   serializeOnboardingState,
   serializeSessionRecord,

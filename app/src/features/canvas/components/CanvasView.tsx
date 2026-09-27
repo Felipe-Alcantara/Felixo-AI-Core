@@ -164,7 +164,7 @@ import {
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import { HandoffDialog } from './HandoffDialog'
 import { OnboardingMount } from '../../onboarding/OnboardingMount'
-import { hasCanvasTriggers, nodeTypesKeyOf } from '../../onboarding/onboarding-state'
+import { WATCHES_CANVAS_NODE_TYPES, nodeTypesKeyOf } from '../../onboarding/onboarding-canvas-triggers'
 import {
   arrangeNodesAsMatrix,
   countArrangeableNodes,
@@ -276,9 +276,6 @@ type CanvasViewProps = {
 }
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'felixo:canvas-sidebar-collapsed'
-
-/** O catálogo do tutorial só observa os tipos de bloco quando tem gatilho de canvas. */
-const ONBOARDING_WATCHES_NODE_TYPES = hasCanvasTriggers()
 
 /** Lida com storage indisponível (modo privado, testes) como "nunca recolhida". */
 function readSidebarCollapsed(): boolean {
@@ -2491,7 +2488,7 @@ function CanvasInner({
   // Tipos de bloco presentes, só quando o catálogo do tutorial tem gatilho de
   // canvas (o v1 não tem): sem isso, arrastar um bloco nem monta a chave.
   const onboardingNodeTypesKey = useMemo(
-    () => (ONBOARDING_WATCHES_NODE_TYPES ? nodeTypesKeyOf(nodes.map((node) => node.type)) : null),
+    () => (WATCHES_CANVAS_NODE_TYPES ? nodeTypesKeyOf(nodes.map((node) => node.type)) : null),
     [nodes],
   )
 
