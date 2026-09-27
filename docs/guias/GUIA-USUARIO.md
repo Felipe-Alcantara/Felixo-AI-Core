@@ -461,8 +461,11 @@ contorno e explica para que ele serve.
 - Ele não bloqueia o canvas: dá para continuar trabalhando com ele aberto, sem
   escurecer a tela. **Pular tutorial**, **Voltar**, **Próximo** e **Concluir** ficam
   no rodapé do card, e `Esc` com o foco no card fecha o tutorial. Se um diálogo
-  estiver aberto por cima (a pergunta de um agente, por exemplo), o `Esc` é do
-  diálogo.
+  estiver aberto por cima (a pergunta de um agente, por exemplo), o card fica
+  inativo até ele fechar: sai do `Tab`, não responde a teclas nem a cliques e
+  continua no mesmo passo, e o teclado é do diálogo. Quando o diálogo fecha, o
+  foco volta ao botão do card onde estava, a não ser que você o tenha levado para
+  outro lugar.
 - Pelo teclado: no primeiro uso o foco entra no card, a não ser que você já esteja
   digitando em outro lugar. `Tab` percorre os botões e segue para o canvas, e
   `Shift+Tab` volta para a barra lateral; nada prende o foco. Um leitor de tela

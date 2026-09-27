@@ -948,8 +948,70 @@ function criarCenariosDoTutorial(deps) {
       await page.getByRole('button', { name: 'Fechar terminal' }).click()
       await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout })
     }
+    await conferirPerguntaSobreOTour(cenario)
     await fecharTourSeAberto(cenario)
-    log('SA3 Esc em camadas: ok (flyout, Busca e HandoffDialog donos do Esc; Agente cria terminal com o tour aberto)')
+    log('SA3 Esc em camadas: ok (flyout, Busca, HandoffDialog e pergunta do agente donos do teclado; Agente cria terminal com o tour aberto)')
+  }
+
+  /**
+   * AgentQuestionDialog de verdade (pergunta gravada na fila de pedidos do perfil
+   * isolado) por cima do tour. O diálogo não pega o foco e escuta o teclado na
+   * janela; o tour cede: o card fica inerte e o foco sai dele, Enter não avança o
+   * tour por baixo, Tab não volta a ele e as teclas vão para o diálogo. Fechado o
+   * diálogo, o foco volta ao botão do tour, no mesmo passo, só se ninguém o levou
+   * para outro lugar.
+   */
+  async function conferirPerguntaSobreOTour(cenario) {
+    exigir(typeof deps.registrarPerguntaDoAgente === 'function', cenario, 'o smoke não recebeu como gravar uma pergunta de agente')
+    const passo = (await cartao())?.passo
+    const modalAberto = () => page.evaluate(() => document.querySelectorAll('[role="dialog"][aria-modal="true"]').length)
+    const cedeu = () =>
+      esperar(cenario, 'o card ceder à pergunta do agente (inert e sem o foco)', () => {
+        const card = document.querySelector('[data-felixo-onboarding="card"]')
+        return Boolean(document.querySelector('[aria-modal="true"]') && card?.hasAttribute('inert') && !card.contains(document.activeElement))
+      })
+    const retomou = () =>
+      esperar(cenario, 'o card voltar depois da pergunta', () => {
+        const card = document.querySelector('[data-felixo-onboarding="card"]')
+        return !document.querySelector('[aria-modal="true"]') && Boolean(card) && !card.hasAttribute('inert')
+      })
+    const focarProximo = async () => {
+      await page.evaluate((selector) => document.querySelector(selector)?.focus(), `${SEL.cartao} ${acao('proximo')}`)
+      exigir((await foco()).acao === 'proximo', cenario, 'o foco não entrou no Próximo do card', await foco())
+    }
+
+    // 1) Foco no Próximo, como quem avança pelo teclado; a pergunta chega por cima.
+    await focarProximo()
+    deps.registrarPerguntaDoAgente({ pergunta: 'Smoke do tutorial: qual opção?', opcoes: ['Primeira', 'Segunda'] })
+    await cedeu()
+    await page.keyboard.press('Enter')
+    await measureStableGeometry(page, `${cenario} Enter sob a pergunta`, [SEL.cartao], QUADROS_CURTOS)
+    const depoisDoEnter = await cartao()
+    exigir(depoisDoEnter?.passo === passo && (await modalAberto()) === 1, cenario, 'Enter avançou o tour por baixo da pergunta', depoisDoEnter)
+    // A tecla da opção é do diálogo; o foco volta ao Próximo e o tour segue no mesmo passo.
+    await page.keyboard.press('2')
+    await retomou()
+    await esperar(cenario, 'o foco voltar ao Próximo do card', () =>
+      document.activeElement?.getAttribute('data-felixo-onboarding-action') === 'proximo',
+    )
+    exigir((await cartao())?.passo === passo, cenario, 'a pergunta mudou o passo do tour', await cartao())
+
+    // 2) Tab com a pergunta aberta nunca entra no card; o foco levado para fora fica lá.
+    await focarProximo()
+    deps.registrarPerguntaDoAgente({ pergunta: 'Smoke do tutorial: outra?', opcoes: ['A', 'B'] })
+    await cedeu()
+    for (let index = 0; index < 3; index += 1) {
+      await page.keyboard.press('Tab')
+      const atual = await foco()
+      exigir(!atual.noCartao, cenario, 'Tab entrou no card inerte', atual)
+    }
+    const levado = await foco()
+    await page.keyboard.press('Escape')
+    await retomou()
+    await measureStableGeometry(page, `${cenario} depois da pergunta`, [SEL.cartao], QUADROS_CURTOS)
+    const final = await foco()
+    exigir(!final.noCartao, cenario, 'o tour puxou de volta o foco que a pessoa levou para fora', { levado, final })
+    exigir((await cartao())?.passo === passo, cenario, 'a pergunta mudou o passo do tour', await cartao())
   }
 
   /** SA4: o que o leitor de tela recebe (árvore de acessibilidade real) e a região live. */
@@ -1693,11 +1755,26 @@ function corromperEstadoNoPerfil(sessionState) {
   }
 }
 
+/**
+ * Grava uma pergunta de agente (a mesma de `felixo perguntar`) na fila de pedidos
+ * de um perfil ISOLADO: o main vê o arquivo novo e o AgentQuestionDialog abre,
+ * como numa sessão real. Nenhum agente é aberto.
+ */
+function registrarPerguntaNoPerfil(sessionState, { pergunta, opcoes }) {
+  if (!sessionState?.userData || sessionState.realProfile) {
+    throw new Error('[canvas-smoke:tutorial] gravar uma pergunta de agente só é permitido num perfil isolado do felixo devtools.')
+  }
+  const { criarRepositorioDePedidos } = require('../electron/services/fetch-all/agent-requests.cjs')
+  const pedidos = criarRepositorioDePedidos({ pasta: path.join(sessionState.userData, 'agent-requests') })
+  return pedidos.registrar('perguntar', { pergunta, opcoes, origem: 'canvas-smoke' })
+}
+
 module.exports = {
   ALVO_PRIMARIO,
   PASSOS_INICIAL,
   ROTULO_DA_ANCORA,
   corromperEstadoNoPerfil,
   criarCenariosDoTutorial,
+  registrarPerguntaNoPerfil,
   seletorDaAncora,
 }

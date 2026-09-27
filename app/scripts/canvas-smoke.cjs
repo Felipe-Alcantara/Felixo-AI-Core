@@ -20,7 +20,7 @@ const {
   DEFAULT_JITTER_THRESHOLD,
   measureStableGeometry,
 } = require('./canvas-smoke-visual.cjs')
-const { corromperEstadoNoPerfil, criarCenariosDoTutorial } = require('./canvas-smoke-onboarding.cjs')
+const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPerfil } = require('./canvas-smoke-onboarding.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -1048,6 +1048,8 @@ function cenariosDoTutorial(page) {
     checarLandmarksVisiveis,
     // SB7: a ponte recusa estado inválido; a linha do perfil isolado é danificada no disco.
     corromperEstado: () => corromperEstadoNoPerfil(readState()),
+    // SA3: a pergunta de um agente (AgentQuestionDialog real) chega por cima do tour.
+    registrarPerguntaDoAgente: (pedido) => registrarPerguntaNoPerfil(readState(), pedido),
     timeoutMs: ONBOARDING_TIMEOUT_MS,
   })
 }

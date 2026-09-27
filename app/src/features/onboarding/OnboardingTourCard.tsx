@@ -9,6 +9,11 @@ type Props = {
   onBack?: () => void
   onNext?: () => void
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void
+  /**
+   * Um diálogo modal está por cima: o card inteiro fica `inert` (fora do Tab e da
+   * árvore de acessibilidade, sem clique nem tecla), no mesmo passo.
+   */
+  inert?: boolean
 }
 
 /** Clicar no tour não é "clique fora" para flyouts que a pessoa abriu (molde do `FelixoPopoverSurface`). */
@@ -25,7 +30,7 @@ const stopAtBoundary = (event: SyntheticEvent) => event.stopPropagation()
  * com Delete/Backspace enquanto o foco está aqui. Sem X nem atalhos de letra ou
  * número (1–4 são do AgentQuestionDialog).
  */
-export function OnboardingTourCard({ model, cardRef, bodyRef, onSkip, onBack, onNext, onKeyDown }: Props) {
+export function OnboardingTourCard({ model, cardRef, bodyRef, onSkip, onBack, onNext, onKeyDown, inert = false }: Props) {
   const id = useId()
   const ids = { tour: `${id}-tour`, title: `${id}-titulo`, counter: `${id}-contador`, body: `${id}-corpo` }
 
@@ -38,6 +43,7 @@ export function OnboardingTourCard({ model, cardRef, bodyRef, onSkip, onBack, on
       aria-describedby={`${ids.counter} ${ids.body}`}
       lang={model.lang}
       tabIndex={-1}
+      inert={inert}
       className="felixo-onboarding-card nokey"
       data-felixo-popover-surface="true"
       data-felixo-onboarding="card"

@@ -111,6 +111,19 @@ describe('card do tutorial (por passo × locale)', () => {
     expect(html).not.toContain('Próximo')
   })
 
+  it('com um diálogo modal por cima, o card fica inerte no mesmo passo (fora do Tab e sem teclas)', () => {
+    const model = describeTourCard(tourAt(2))
+    if (!model) throw new Error('passo inexistente')
+    const cedido = renderToStaticMarkup(createElement(OnboardingTourCard, { model, inert: true }))
+    // O `inert` fica na raiz do card: vale para ele e para os três botões.
+    expect(cedido).toMatch(/^<div[^>]*\sinert=""/)
+    expect(attribute(cedido, 'data-passo')).toBe(INITIAL_STEPS[2].id)
+    expect(cedido).toContain('Passo 3 de 6')
+    const livre = renderToStaticMarkup(createElement(OnboardingTourCard, { model, inert: false }))
+    expect(livre).not.toMatch(/\sinert/)
+    expect(renderCard(tourAt(2))).not.toMatch(/\sinert/)
+  })
+
   it('o título do tour e o do passo rotulam o diálogo', () => {
     const html = renderCard(tourAt(1))
     expect(html).toContain('Tutorial do canvas')
@@ -175,6 +188,12 @@ describe('aviso de novidade', () => {
     const actions = [...html.matchAll(/data-felixo-onboarding-action="([^"]+)"/g)].map((match) => match[1])
     expect(actions).toEqual(['ver', 'agora-nao'])
     expect(html).not.toMatch(/style="/)
+  })
+
+  it('com um diálogo modal por cima, o aviso fica inerte', () => {
+    const model = describeNotice(aviso)
+    expect(renderToStaticMarkup(createElement(OnboardingNotice, { model, inert: true }))).toMatch(/^<div[^>]*\sinert=""/)
+    expect(renderToStaticMarkup(createElement(OnboardingNotice, { model }))).not.toMatch(/\sinert/)
   })
 
   it('em en-XA o aviso inteiro troca de idioma', () => {

@@ -7,6 +7,8 @@ type Props = {
   onView?: () => void
   onDismiss?: () => void
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void
+  /** Um diálogo modal está por cima: o aviso fica `inert` até ele fechar. */
+  inert?: boolean
 }
 
 const stopAtBoundary = (event: SyntheticEvent) => event.stopPropagation()
@@ -17,7 +19,7 @@ const stopAtBoundary = (event: SyntheticEvent) => event.stopPropagation()
  * Ajuda ou Esc com o foco nele. Assim Enter e Espaço continuam indo para o
  * terminal enquanto a pessoa digita.
  */
-export function OnboardingNotice({ model, noticeRef, onView, onDismiss, onKeyDown }: Props) {
+export function OnboardingNotice({ model, noticeRef, onView, onDismiss, onKeyDown, inert = false }: Props) {
   const titleId = `${useId()}-titulo`
 
   return (
@@ -27,6 +29,7 @@ export function OnboardingNotice({ model, noticeRef, onView, onDismiss, onKeyDow
       aria-label={model.rotulo}
       aria-describedby={titleId}
       lang={model.lang}
+      inert={inert}
       className="felixo-onboarding-notice nokey"
       data-felixo-popover-surface="true"
       data-felixo-onboarding="aviso"

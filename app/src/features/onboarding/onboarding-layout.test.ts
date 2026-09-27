@@ -4,6 +4,7 @@ import {
   FOCUS_OWNERS_SELECTOR,
   HIDDEN_ANCESTOR_SELECTOR,
   LAYOUT_MARGIN,
+  NOT_YIELDED,
   OWN_SURFACE_SELECTOR,
   SHEET_MIN_COLUMN_WIDTH,
   SHEET_MIN_HEIGHT,
@@ -21,9 +22,11 @@ import {
   hasOpenModal,
   inflateRect,
   isCompactViewport,
+  nextModalYield,
   noteSidebarScrollEvent,
   noteTourSidebarScroll,
   rectsIntersect,
+  resolveFocusAfterModal,
   resolveReturnFocus,
   resolveStepTarget,
   type CardPlacement,
@@ -678,6 +681,57 @@ describe('resolveReturnFocus', () => {
     expect(resolveReturnFocus({ focusWasInside: false, current: body, saved, helpTrigger: help, canvas })).toBeNull()
     const elsewhere = focusNode('INPUT', 'input')
     expect(resolveReturnFocus({ focusWasInside: true, current: elsewhere, saved, helpTrigger: help, canvas })).toBeNull()
+  })
+})
+
+describe('diálogo modal por cima do tour (nextModalYield e resolveFocusAfterModal)', () => {
+  const body = focusNode('BODY')
+  const proximo = focusNode('BUTTON')
+  const card = { ...focusNode('DIV', '[role="dialog"]'), contains: (node: unknown) => node === card || node === proximo }
+  const terminal = focusNode('TEXTAREA', '.xterm-helper-textarea')
+
+  it('cede quando o modal abre e guarda o controle do tour que tinha o foco', () => {
+    const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: proximo, superficie: card })
+    expect(cedeu).toEqual({ cedido: true, foco: proximo })
+    expect(nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: card, superficie: card }).foco).toBe(card)
+  })
+
+  it('foco fora do tour não é guardado: fechar o diálogo não o puxa para o card', () => {
+    const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: terminal, superficie: card })
+    expect(cedeu).toEqual({ cedido: true, foco: null })
+    expect(nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: null, superficie: card }).foco).toBeNull()
+    expect(resolveFocusAfterModal({ saved: cedeu.foco, current: body, surface: card })).toBeNull()
+  })
+
+  it('sem mudança devolve o mesmo estado (a conferência periódica não re-renderiza)', () => {
+    expect(nextModalYield(NOT_YIELDED, { modalAberto: false, ativo: proximo, superficie: card })).toBe(NOT_YIELDED)
+    const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: proximo, superficie: card })
+    // Com o modal ainda aberto, o foco que passou para outro lugar não troca o que foi guardado.
+    expect(nextModalYield(cedeu, { modalAberto: true, ativo: terminal, superficie: card })).toBe(cedeu)
+  })
+
+  it('retoma quando o modal fecha', () => {
+    const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: proximo, superficie: card })
+    expect(nextModalYield(cedeu, { modalAberto: false, ativo: body, superficie: card })).toEqual(NOT_YIELDED)
+  })
+
+  it('o foco volta ao mesmo botão quando ninguém o pôs em outro lugar', () => {
+    expect(resolveFocusAfterModal({ saved: proximo, current: body, surface: card })).toBe(proximo)
+    expect(resolveFocusAfterModal({ saved: proximo, current: null, surface: card })).toBe(proximo)
+    expect(resolveFocusAfterModal({ saved: card, current: body, surface: card })).toBe(card)
+  })
+
+  it('o foco que o diálogo devolveu (ou que a pessoa levou) fica onde está', () => {
+    expect(resolveFocusAfterModal({ saved: proximo, current: terminal, surface: card })).toBeNull()
+    expect(resolveFocusAfterModal({ saved: proximo, current: focusNode('BUTTON'), surface: card })).toBeNull()
+  })
+
+  it('controle que saiu do card → o próprio card; card desmontado → nada', () => {
+    const saiu = focusNode('BUTTON', undefined, { isConnected: false })
+    expect(resolveFocusAfterModal({ saved: saiu, current: body, surface: card })).toBe(card)
+    const outroCard = { ...card, isConnected: false }
+    expect(resolveFocusAfterModal({ saved: proximo, current: body, surface: outroCard })).toBeNull()
+    expect(resolveFocusAfterModal({ saved: proximo, current: body, surface: null })).toBeNull()
   })
 })
 

@@ -14,6 +14,8 @@ import { ONBOARDING_ANCHORS, type AnchorId, type CardSide, type StepTarget } fro
  *   da sidebar (nunca `scrollIntoView`, que arrasta o shell inteiro).
  * - `canStealFocus`, `decideFocusOnOpen`, `resolveReturnFocus` e `hasOpenModal`:
  *   quando o tour pode mover o foco e para onde ele volta.
+ * - `nextModalYield` e `resolveFocusAfterModal`: o tour cede a um diálogo modal
+ *   aberto por cima dele e, quando o diálogo fecha, devolve o foco que era seu.
  * - `ancestorCreatesContainingBlock`: a condição de que o host na árvore
  *   depende (nenhum ancestral cria containing block para o `position: fixed`).
  */
@@ -760,6 +762,50 @@ export function resolveReturnFocus<T>(input: {
 /** Há um diálogo modal aberto (AgentQuestionDialog, HandoffDialog)? Então o Esc e os anúncios são dele. */
 export function hasOpenModal(root: { querySelector(selector: string): unknown } | null | undefined): boolean {
   return Boolean(root && root.querySelector('[aria-modal="true"]'))
+}
+
+// ---------------------------------------------------------------------------
+// Diálogo modal por cima do tour
+// ---------------------------------------------------------------------------
+
+/**
+ * O tour cedeu a um diálogo modal? E qual controle do tour (o card, o aviso ou
+ * um botão deles) tinha o foco quando cedeu, para voltar a ele quando o diálogo
+ * fechar. Foco que estava fora do tour não é guardado: não é do tour.
+ */
+export type ModalYield = { readonly cedido: boolean; readonly foco: unknown }
+
+export const NOT_YIELDED: ModalYield = Object.freeze({ cedido: false, foco: null })
+
+/**
+ * Cede quando um diálogo modal abre e retoma quando ele fecha. Sem mudança
+ * devolve o mesmo objeto, então conferir a cada poucos instantes não
+ * re-renderiza nada.
+ */
+export function nextModalYield<N>(
+  state: ModalYield,
+  input: { modalAberto: boolean; ativo: N | null; superficie: { contains(node: N | null): boolean } | null },
+): ModalYield {
+  if (input.modalAberto === state.cedido) return state
+  if (!input.modalAberto) return NOT_YIELDED
+  const focoNoTour = input.ativo !== null && input.superficie !== null && input.superficie.contains(input.ativo)
+  return { cedido: true, foco: focoNoTour ? input.ativo : null }
+}
+
+/**
+ * Para onde o foco volta quando fecha o diálogo que cobriu o tour. Só volta se
+ * estava no tour quando ele cedeu e se ninguém o pôs em outro lugar desde
+ * então (`current` ainda é `body`, `html` ou nada). O foco que o diálogo
+ * devolveu, ou que a pessoa levou para outro controle, fica onde está. O
+ * destino é o mesmo controle, se ainda estiver no card; senão, o próprio card.
+ */
+export function resolveFocusAfterModal<T>(input: { saved: unknown; current: unknown; surface: T | null }): T | null {
+  if (input.saved === null || input.saved === undefined) return null
+  if (input.current !== null && input.current !== undefined && !isDocumentRoot(input.current)) return null
+  const surface = input.surface as (FocusNode & { contains?: (node: unknown) => boolean }) | null
+  if (!isReturnable(surface)) return null
+  if (surface.contains?.(input.saved) && isReturnable(input.saved)) return input.saved as T
+  return input.surface
 }
 
 // ---------------------------------------------------------------------------

@@ -112,6 +112,9 @@ overlay `isBusy`, toast das CLIs, `NoticeToast` e menu de cor (50) < anel (54) <
 card e aviso (55) < `AgentQuestionDialog` e `HandoffDialog` (60) <
 `WebviewProfileMenu` (70) < `FelixoSelect` e menu Ajuda (1000). Os tokens
 `--felixo-z-onboarding-ring` e `--felixo-z-onboarding` ficam em `index.css`.
+Enquanto um diálogo modal (z 60) está aberto, o card e o aviso ficam `inert`, no
+mesmo passo, e voltam quando ele fecha: o overlay os cobre, então nem o foco nem
+o teclado podem ficar neles.
 
 **Rail.** A Ajuda é o sexto botão do grupo de cima (≈ 271 px dentro de ≈ 289 px na
 altura mínima). Um botão novo acima dela exige refazer essa conta, senão o alvo do

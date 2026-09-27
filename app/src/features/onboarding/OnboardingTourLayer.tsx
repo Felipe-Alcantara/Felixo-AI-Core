@@ -1,7 +1,8 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { ONBOARDING_ANCHORS, type StepTarget } from './onboarding-catalog'
 import {
   LAYOUT_MARGIN,
+  NOT_YIELDED,
   SIDEBAR_SCROLL_GATE_INITIAL,
   canRevealInSidebar,
   computeCardPlacement,
@@ -11,11 +12,14 @@ import {
   enterSidebarScrollStep,
   hasOpenModal,
   isCompactViewport,
+  nextModalYield,
   noteSidebarScrollEvent,
   noteTourSidebarScroll,
+  resolveFocusAfterModal,
   resolveReturnFocus,
   resolveStepTarget,
   toRect,
+  type ModalYield,
   type SidebarScrollGate,
   type TargetEnv,
   type TargetResolution,
@@ -57,6 +61,10 @@ import { OnboardingTourCard } from './OnboardingTourCard'
  * só destaca (anel) e explica (card). E rola a sidebar só até a pessoa rolar:
  * a partir daí, naquele passo, a rolagem é dela (`SidebarScrollGate`), o alvo
  * pode ficar recortado ou fora de vista e o anel mostra só a parte visível.
+ *
+ * Um diálogo modal por cima (a pergunta de um agente, a passagem de
+ * responsabilidade) deixa o card e o aviso inertes até fechar, no mesmo passo
+ * (`useYieldToModal`).
  */
 
 const SIDEBAR_SCROLL_SELECTOR = '.felixo-sidebar-scroll'
@@ -305,6 +313,77 @@ function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, revealKey
 }
 
 /**
+ * Com que frequência o tour confere se um diálogo modal abriu ou fechou. Nenhum
+ * evento avisa que um diálogo montou, e observar mutações no body está fora de
+ * questão (a saída do xterm muta o DOM sem parar); um `querySelector` a cada
+ * quarto de segundo, só com o tour ou o aviso na tela, custa quase nada.
+ */
+const MODAL_CHECK_MS = 250
+
+/**
+ * O tour cede a um diálogo modal (AgentQuestionDialog, HandoffDialog): enquanto
+ * houver `[aria-modal="true"]` na tela, a superfície fica `inert` (fora do Tab e
+ * da árvore de acessibilidade, sem clique nem tecla) e continua no mesmo passo.
+ * O AgentQuestionDialog não pega o foco e escuta o teclado na janela: sem isto o
+ * foco ficava num card coberto pelo overlay, o Enter avançava o tour por baixo e
+ * o Esc de quem achava estar no tour dispensava a pergunta do agente.
+ *
+ * Confere a cada `MODAL_CHECK_MS` e a cada troca de foco (o HandoffDialog puxa o
+ * foco ao abrir). Ao ceder, o foco que estava no tour vai para o body, onde
+ * nenhuma tecla aciona nada. Quando o diálogo fecha, ele volta ao controle do
+ * tour que o tinha, num quadro depois (o diálogo devolve o foco antes), e só se
+ * ninguém o pôs em outro lugar (`resolveFocusAfterModal`).
+ */
+function useYieldToModal(surfaceRef: RefObject<HTMLDivElement | null>): boolean {
+  const [cedido, setCedido] = useState(false)
+  const yieldState = useRef<ModalYield>(NOT_YIELDED)
+  const focusToReturn = useRef<unknown>(null)
+
+  const check = useEffectEvent(() => {
+    const previous = yieldState.current
+    const next = nextModalYield(previous, {
+      modalAberto: hasOpenModal(document),
+      ativo: document.activeElement,
+      superficie: surfaceRef.current,
+    })
+    if (next === previous) return
+    yieldState.current = next
+    if (next.foco instanceof HTMLElement) next.foco.blur()
+    focusToReturn.current = next.cedido ? null : previous.foco
+    setCedido(next.cedido)
+  })
+
+  useLayoutEffect(() => {
+    const run = () => check()
+    run()
+    const timer = window.setInterval(run, MODAL_CHECK_MS)
+    document.addEventListener('focusin', run, true)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('focusin', run, true)
+    }
+  }, [])
+
+  // Depois do commit que tirou o `inert`: o card já pode receber o foco.
+  useEffect(() => {
+    const saved = focusToReturn.current
+    if (cedido || saved === null) return undefined
+    focusToReturn.current = null
+    const frame = window.requestAnimationFrame(() => {
+      const target = resolveFocusAfterModal<HTMLElement>({
+        saved,
+        current: document.activeElement,
+        surface: surfaceRef.current,
+      })
+      target?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [cedido, surfaceRef])
+
+  return cedido
+}
+
+/**
  * Devolve o foco num rAF, só se ele estava no card (ou aviso) ao fechar e ninguém o
  * levou para outro lugar: o salvo na abertura, a Ajuda ou a região do canvas.
  */
@@ -357,6 +436,7 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
       if (resolution && resolution.anchor !== tour.ancora) store.retarget(resolution.anchor)
     },
   })
+  const cedido = useYieldToModal(cardRef)
 
   // Abertura: depois do posicionamento (efeito declarado antes), para o card já estar visível.
   const onOpened = useEffectEvent(() => {
@@ -370,12 +450,13 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
       activeElement: document.activeElement,
       canvasRegion: document.querySelector(CANVAS_REGION_SELECTOR),
     })
+    // Com um diálogo modal por cima, o foco é dele (o card está inerte).
+    if (hasOpenModal(document)) return
     if (move) {
       // O leitor de tela lê nome e descrição do diálogo; não há anúncio extra.
       card.focus({ preventScroll: true })
       return
     }
-    if (hasOpenModal(document)) return
     if (tour.trigger === 'retomada') announce('retomado')
     else if (tour.foco === 'mover') announce('aberto-sem-foco')
   })
@@ -406,6 +487,20 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
     close('esc')
   }
 
+  // Nos instantes entre o diálogo abrir e o card ficar inerte, um Enter num botão
+  // do card ainda chegaria aqui: sob um modal, os botões não fazem nada.
+  const skip = () => {
+    if (!hasOpenModal(document)) close('botao')
+  }
+  const back = () => {
+    if (!hasOpenModal(document)) store.back()
+  }
+  const next = () => {
+    if (hasOpenModal(document)) return
+    if (model?.isLast) close('concluir')
+    else store.next()
+  }
+
   return (
     <>
       <div ref={ringRef} className="felixo-onboarding-ring" aria-hidden="true" data-felixo-onboarding="anel" />
@@ -414,10 +509,11 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
           model={model}
           cardRef={cardRef}
           bodyRef={bodyRef}
-          onSkip={() => close('botao')}
-          onBack={() => store.back()}
-          onNext={() => (model.isLast ? close('concluir') : store.next())}
+          onSkip={skip}
+          onBack={back}
+          onNext={next}
           onKeyDown={onKeyDown}
+          inert={cedido}
         />
       )}
       {tour.falhaForcada && <ForcedRenderFailure />}
@@ -436,6 +532,7 @@ function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: Notice
     trackKey: aviso.featureId,
     revealKey: aviso.featureId,
   })
+  const cedido = useYieldToModal(noticeRef)
 
   const onShown = useEffectEvent(() => {
     if (announced.current === aviso.featureId) return
@@ -447,6 +544,7 @@ function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: Notice
   useEffect(() => onShown(), [aviso.featureId])
 
   const dismiss = () => {
+    if (hasOpenModal(document)) return
     const focusWasInside = Boolean(noticeRef.current?.contains(document.activeElement))
     const saved = store.focusBeforeOpen()
     store.dismissNotice()
@@ -464,9 +562,12 @@ function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: Notice
     <OnboardingNotice
       model={model}
       noticeRef={noticeRef}
-      onView={() => store.viewNotice()}
+      onView={() => {
+        if (!hasOpenModal(document)) store.viewNotice()
+      }}
       onDismiss={dismiss}
       onKeyDown={onKeyDown}
+      inert={cedido}
     />
   )
 }
