@@ -90,6 +90,18 @@ describe('mensagens do tutorial: pseudo-locale en-XA', () => {
   })
 })
 
+describe('mensagens do tutorial: o que os passos afirmam', () => {
+  it('o passo final só afirma o que o tutorial garante, não o estado do app', () => {
+    // A pessoa pode criar um agente com o tour aberto (T1.d): "nada foi criado" ficaria falso.
+    const corpo = formatOnboardingMessage('pt-BR', 'passo.ajuda.corpo')
+    expect(corpo).toContain('O tutorial não criou nada nem abriu agentes.')
+    expect(corpo).toContain('Ajuda')
+    for (const key of Object.keys(PT_BR).filter((item) => item.startsWith('passo.')) as MessageKey[]) {
+      expect(formatOnboardingMessage('pt-BR', key), key).not.toMatch(/nada foi criado|nenhum agente foi aberto/i)
+    }
+  })
+})
+
 describe('mensagens do tutorial: orçamento de texto (T3.b)', () => {
   const tours = Object.values(defaultOnboardingCatalog.tours)
 

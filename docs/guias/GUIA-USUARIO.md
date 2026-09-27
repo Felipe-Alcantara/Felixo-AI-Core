@@ -457,7 +457,7 @@ carregar. São seis passos: **Projeto**, **Agente**, **Contexto**, **Terminais**
 contorno e explica para que ele serve.
 
 - O tutorial só mostra. Ele não clica, não abre seção nem painel e não cria nada:
-  nenhum agente é aberto, nenhum comando roda e nenhum crédito é gasto.
+  não abre agente, não roda comando e não gasta crédito.
 - Ele não bloqueia o canvas: dá para continuar trabalhando com ele aberto, sem
   escurecer a tela. **Pular tutorial**, **Voltar**, **Próximo** e **Concluir** ficam
   no rodapé do card, e `Esc` com o foco no card fecha o tutorial. Se um diálogo

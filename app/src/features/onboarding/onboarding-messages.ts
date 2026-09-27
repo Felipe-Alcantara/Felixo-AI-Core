@@ -53,7 +53,7 @@ export const PT_BR = {
     'Abra o menu do canvas para ver Ferramentas, com painéis de apoio como Notas e Prompts.',
   'passo.ajuda.titulo': 'Onde rever',
   'passo.ajuda.corpo':
-    'Pronto. Para rever este tutorial ou ver novidades, use Ajuda nesta barra. Nada foi criado e nenhum agente foi aberto.',
+    'Pronto. Para rever este tutorial ou ver novidades, use Ajuda nesta barra. O tutorial não criou nada nem abriu agentes.',
 
   // Mini-tour da novidade "Ajuda"
   'passo.ajuda-novidade.titulo': 'Ajuda',
