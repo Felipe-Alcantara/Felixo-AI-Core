@@ -5231,3 +5231,77 @@ aberto".
   para o terminal.
 - O passo "`timeout-minutes: 10`" do smoke no CI: a sessão B e os cenários da sessão A somam alguns minutos ao
   smoke (9 min 23 s no total nesta máquina); convém rever o teto no workflow, que este PR não toca.
+
+## 2026-09-26 — Tutorial do canvas: os dois bloqueantes da revisão adversarial
+
+Registro gravado às 21:21.
+
+A revisão adversarial do PR apontou dois bloqueantes. Os dois foram reproduzidos no app real (felixo devtools sob o
+lock, perfil isolado, sessões encerradas) antes de qualquer mudança, com um roteiro próprio que mede o card, o alvo
+e a sidebar em cada passo. No código anterior o roteiro registrou 22 falhas; depois das correções, nenhuma.
+
+**1. Folha por cima do alvo no zoom alto da janela mínima (T2.c).** Confirmado, e maior do que o relato. O revisor
+viu só o passo 1; o roteiro achou mais passos cobertos pelo mesmo motivo:
+- 800×500 com zoom +3 (463×289 CSS px): passos 1 (Projetos, 87% coberto) e 2 (moldura Agente, 100%);
+- 720×500 com zoom +3 (416×289): passos 1, 2, 3 (Novo bloco, 78%) e 6 (Ajuda, 18%);
+- 800×500 com zoom +2,5 (507×317): passos 1, 2 e 3;
+- 720×500 com zoom +2 (500×347): passos 1 (32%) e 3 (6%).
+
+A causa: com o alvo no meio de uma janela baixa, a folha de largura cheia não cabe em nenhuma borda sem cruzá-lo, a
+faixa acima ou abaixo dele tem menos de 160 px, e o último recurso de `sheetPlacement` ficava com `edges[0]` por
+cima dele. A matriz do U-layout já tinha o caso 417×289 com o alvo do rail, mas só conferia "não cruza o alvo" no
+modo ancorado, e o SA5 só conferia card e botões dentro da janela. O registro do commit 11 dizia que isso era
+permitido no modo folha: estava errado. O plano só deixa cobrir um alvo maior que meia janela.
+
+Correção (`fix(onboarding): folha em coluna ao lado do alvo quando nenhuma borda cabe`): antes de cobrir qualquer
+coisa, a folha tenta a coluna ao lado do alvo (à direita do rail e da sidebar, à esquerda do inspector), com no
+mínimo 160 px de largura e a altura da faixa livre mais próxima dele; o corpo rola e o rodapé fica visível. Cobrir
+um aviso vem antes de cobrir o alvo. O U-layout passou a exigir "não cruza o alvo" em qualquer modo para alvo menor
+que meia janela, com as medidas do app como casos nomeados. O SA5 ganhou o assert relacional `coversSmallTarget`
+(com N-geo) em toda medida e percorre os seis passos com zoom +3 em 720×500 e +2,5 em 800×500.
+
+**2. Rolagem da sidebar presa no alvo (T1.d e foco visível).** Confirmado. Em 1100×478 e 1280×710, com Ferramentas
+aberta e o tour nos passos 2, 3 e 5, a rolagem até o fim voltava no quadro seguinte (709 → 28, 65 ou 385; 477 → 28,
+65 ou 385), e o `Tab` deixava de 5 a 12 controles focados fora de vista. A causa: todo recálculo disparado por
+rolagem podia "revelar" o alvo de novo.
+
+Correção (`fix(onboarding): a rolagem da sidebar é da pessoa depois que ela rola`): o `SidebarScrollGate`
+(`onboarding-layout.ts`, puro) deixa o tour rolar a sidebar até o alvo só enquanto a pessoa não rolou naquele
+passo. O eco da rolagem do próprio tour é reconhecido pelo valor escrito. Depois que a pessoa rola, o alvo fica
+recortado ou fora de vista, e o anel mostra só a parte dele que aparece na sidebar (some quando nada aparece). O
+SA8 confere a rolagem, o alvo mantido, o anel dentro da sidebar, oito `Tab` com o foco à vista e o passo 3
+voltando a trazer Novo bloco para a vista.
+
+**Desvios do plano, com motivo.**
+- **Folha em coluna.** O plano define a folha como "largura cheia menos margens, na borda oposta ao alvo". Numa
+  janela de 416×289 isso não existe sem cobrir o alvo. Alternativa descartada: baixar o piso de 160 px da folha. A
+  faixa abaixo da moldura Agente tem 121 px, o que cabe cabeçalho e rodapé do card sem nenhuma linha do corpo. A
+  coluna é o único espaço útil. Limitação declarada que sobra: uma janela sem coluna de 160 px dos dois lados do
+  alvo e sem 160 px acima ou abaixo dele. Nenhum zoom da janela mínima testado chega lá (até +3).
+- **Revelar o alvo.** O plano diz que `computeSidebarReveal` ajusta o `scrollTop`, sem restrição, e que o recálculo
+  também escuta a rolagem da sidebar. Agora a rolagem da sidebar ainda recalcula (o anel acompanha), mas só rola
+  enquanto a pessoa não rolou no passo. Alternativas descartadas:
+  - revelar só quando o `trackKey` muda, como o revisor sugeriu: a troca de alvo também pode vir de uma rolagem
+    (o alvo coberto cai na alternativa e volta ao ser descoberto), e revelar nela devolveria a sidebar do mesmo
+    jeito;
+  - cair na alternativa da cadeia quando a pessoa rola o alvo para fora: as variantes dizem "Abra a seção Criar..."
+    com a seção aberta, o que mentiria.
+- **Esperas mais curtas no smoke.** A janela invisível da automação desenha poucos quadros por segundo (medi cerca de
+  1 por segundo numa sessão isolada com a máquina carregada), e a espera padrão por geometria estável é de 16
+  quadros. As conferências novas depois de trocar de passo ou apertar `Tab` usam `QUADROS_CURTOS` (2 + 3 quadros);
+  o card é posto no mesmo quadro da troca, e a reação do tour vem no seguinte. A troca de zoom continua com a espera
+  completa. Isolados, o SA5 caiu de 392 s para 214 s e o SA8 de 377 s para 223 s.
+
+**Validação.**
+- Testes que falham antes: sem a correção 1, o U-layout reprova em 15 casos (8 da matriz em 417×289 e 7 nomeados).
+  Sem a correção 2, reprova em 8 (portão e recorte). O SA5 isolado reprova em `rail-projetos` a 416×289 e o SA8 em
+  "o tour desfez a rolagem da sidebar feita pela pessoa" (587 voltou a 28). Os dois smokes rodaram com os arquivos
+  de produção do HEAD anterior no lugar e os cenários novos.
+- Sem laço de layout: com o card parado, nenhuma mutação de estilo em 8 s, tanto ancorado (1280×800) quanto na
+  coluna (416×289).
+- Cada commit novo conferido sozinho (tsc, vitest de onboarding e setup, eslint e N-geo): 716 e 724 testes.
+- Em `app/`: `npm run build` ok; `npm run lint` sem erro nem aviso; `npm test` 1839/1839;
+  `npm run test:frontend` 2035 testes e 1 ignorado; N-geo com o Node 22.22.3 (`node --test`) 16/16; U-layout com o
+  Node 22 509/509.
+- `npm run test:canvas-smoke` completo sob o lock: exit 0 em 12 min 11 s (21:09–21:21, load average de 8 a 19). O
+  SA5 levou 16 s e o SA8 45 s dentro do smoke.
