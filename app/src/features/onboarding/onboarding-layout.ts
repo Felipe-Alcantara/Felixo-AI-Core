@@ -15,8 +15,9 @@ import { ONBOARDING_ANCHORS, type AnchorId, type CardSide, type StepTarget } fro
  *   da sidebar (nunca `scrollIntoView`, que arrasta o shell inteiro).
  * - `canStealFocus`, `decideFocusOnOpen`, `resolveReturnFocus` e `hasOpenModal`:
  *   quando o tour pode mover o foco e para onde ele volta.
- * - `nextModalYield` e `resolveFocusAfterModal`: o tour cede a um diálogo modal
- *   aberto por cima dele e, quando o diálogo fecha, devolve o foco que era seu.
+ * - `nextModalYield`, `focusHoldOnYield` e `resolveFocusAfterModal`: o tour cede
+ *   a um diálogo modal aberto por cima dele, guarda o foco num ponto de espera
+ *   neutro e, quando o diálogo fecha, devolve o foco que era seu.
  * - `helpMenuKeyAction`: o Esc e o Tab que sairia do menu Ajuda fecham o menu.
  * - `ancestorCreatesContainingBlock`: a condição de que o host na árvore
  *   depende (nenhum ancestral cria containing block para o `position: fixed`).
@@ -795,15 +796,34 @@ export function nextModalYield<N>(
 }
 
 /**
+ * Para onde vai o foco que era do tour quando ele cede: para o ponto de espera
+ * (`hold`), um elemento com `nokey` fora do card e do aviso, que ficam `inert`.
+ * Nunca para o body: lá o React Flow trata Delete e Backspace como teclas do
+ * canvas e apaga o bloco selecionado por baixo do diálogo (sem desfazer,
+ * soltando a sessão do terminal), e `q` troca o modo seleção/pan. Foco que não
+ * era do tour fica onde está (`null`).
+ */
+export function focusHoldOnYield<T>(yielded: ModalYield, hold: T | null): T | null {
+  return yielded.cedido && yielded.foco !== null ? hold : null
+}
+
+/**
  * Para onde o foco volta quando fecha o diálogo que cobriu o tour. Só volta se
  * estava no tour quando ele cedeu e se ninguém o pôs em outro lugar desde
- * então (`current` ainda é `body`, `html` ou nada). O foco que o diálogo
- * devolveu, ou que a pessoa levou para outro controle, fica onde está. O
- * destino é o mesmo controle, se ainda estiver no card; senão, o próprio card.
+ * então (`current` ainda é o ponto de espera, `body`, `html` ou nada). O foco
+ * que o diálogo devolveu, ou que a pessoa levou para outro controle, fica onde
+ * está. O destino é o mesmo controle, se ainda estiver no card; senão, o
+ * próprio card.
  */
-export function resolveFocusAfterModal<T>(input: { saved: unknown; current: unknown; surface: T | null }): T | null {
+export function resolveFocusAfterModal<T>(input: {
+  saved: unknown
+  current: unknown
+  surface: T | null
+  hold?: unknown
+}): T | null {
   if (input.saved === null || input.saved === undefined) return null
-  if (input.current !== null && input.current !== undefined && !isDocumentRoot(input.current)) return null
+  const waited = input.hold !== undefined && input.hold !== null && input.current === input.hold
+  if (!waited && input.current !== null && input.current !== undefined && !isDocumentRoot(input.current)) return null
   const surface = input.surface as (FocusNode & { contains?: (node: unknown) => boolean }) | null
   if (!isReturnable(surface)) return null
   if (surface.contains?.(input.saved) && isReturnable(input.saved)) return input.saved as T

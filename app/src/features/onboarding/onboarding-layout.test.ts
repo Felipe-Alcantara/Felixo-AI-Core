@@ -19,6 +19,7 @@ import {
   containingBlockReason,
   decideFocusOnOpen,
   enterSidebarScrollStep,
+  focusHoldOnYield,
   hasOpenModal,
   helpMenuKeyAction,
   inflateRect,
@@ -733,6 +734,36 @@ describe('diálogo modal por cima do tour (nextModalYield e resolveFocusAfterMod
     const outroCard = { ...card, isConnected: false }
     expect(resolveFocusAfterModal({ saved: proximo, current: body, surface: outroCard })).toBeNull()
     expect(resolveFocusAfterModal({ saved: proximo, current: body, surface: null })).toBeNull()
+  })
+
+  // No body, o React Flow trata Delete e Backspace como teclas do canvas: com um
+  // bloco selecionado, o foco cedido ao body apagava o bloco por baixo do diálogo.
+  const espera = focusNode('DIV', '.nokey')
+
+  it('ao ceder, o foco que era do tour vai para o ponto de espera, nunca para o body', () => {
+    const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: proximo, superficie: card })
+    expect(focusHoldOnYield(cedeu, espera)).toBe(espera)
+    const doCard = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: card, superficie: card })
+    expect(focusHoldOnYield(doCard, espera)).toBe(espera)
+  })
+
+  it('foco que não era do tour, ou tour que não cedeu, fica onde está', () => {
+    const noTerminal = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: terminal, superficie: card })
+    expect(focusHoldOnYield(noTerminal, espera)).toBeNull()
+    expect(focusHoldOnYield(NOT_YIELDED, espera)).toBeNull()
+  })
+
+  it('o foco que esperou volta ao mesmo botão: a espera não conta como "levado para outro lugar"', () => {
+    expect(resolveFocusAfterModal({ saved: proximo, current: espera, surface: card, hold: espera })).toBe(proximo)
+    const saiu = focusNode('BUTTON', undefined, { isConnected: false })
+    expect(resolveFocusAfterModal({ saved: saiu, current: espera, surface: card, hold: espera })).toBe(card)
+  })
+
+  it('saindo da espera (Tab, clique), o foco fica onde a pessoa o levou', () => {
+    expect(resolveFocusAfterModal({ saved: proximo, current: terminal, surface: card, hold: espera })).toBeNull()
+    expect(resolveFocusAfterModal({ saved: proximo, current: focusNode('BUTTON'), surface: card, hold: espera })).toBeNull()
+    // Sem ponto de espera informado, um elemento qualquer continua sendo "levado".
+    expect(resolveFocusAfterModal({ saved: proximo, current: espera, surface: card })).toBeNull()
   })
 })
 

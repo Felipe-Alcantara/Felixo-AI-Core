@@ -14,6 +14,7 @@ import {
   describeTourCard,
   stepTargetFor,
 } from './onboarding-ui-model'
+import { OnboardingFocusHold } from './OnboardingFocusHold'
 import { OnboardingHelpMenuContent } from './OnboardingHelpMenu'
 import { OnboardingNotice } from './OnboardingNotice'
 import { OnboardingTourCard } from './OnboardingTourCard'
@@ -200,6 +201,23 @@ describe('aviso de novidade', () => {
     const model = describeNotice({ ...aviso, lang: 'en-XA' })
     expect(model.lang).toBe('en-XA')
     expect(model.titulo.startsWith('[')).toBe(true)
+  })
+})
+
+describe('ponto de espera do foco (diálogo modal por cima do tour)', () => {
+  const html = renderToStaticMarkup(createElement(OnboardingFocusHold))
+
+  it('com `nokey`: o React Flow não apaga o bloco selecionado com Delete/Backspace', () => {
+    expect(attribute(html, 'class')?.split(/\s+/)).toContain('nokey')
+    expect(attribute(html, 'data-felixo-onboarding')).toBe('espera')
+  })
+
+  it('recebe foco só por código (fora do Tab), invisível e sem nada a anunciar', () => {
+    expect(attribute(html, 'tabindex')).toBe('-1')
+    expect(attribute(html, 'class')?.split(/\s+/)).toContain('sr-only')
+    // Focável, então nunca aria-hidden; sem papel, nome nem texto por cima do diálogo.
+    expect(html).not.toMatch(/aria-hidden|role=|aria-label|inert/)
+    expect(html).toMatch(/^<div[^>]*><\/div>$/)
   })
 })
 

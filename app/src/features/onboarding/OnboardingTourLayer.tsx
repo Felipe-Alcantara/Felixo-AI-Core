@@ -10,6 +10,7 @@ import {
   computeSidebarReveal,
   decideFocusOnOpen,
   enterSidebarScrollStep,
+  focusHoldOnYield,
   hasOpenModal,
   isCompactViewport,
   nextModalYield,
@@ -33,6 +34,7 @@ import {
   describeTourCard,
   type TourAnnouncementKind,
 } from './onboarding-ui-model'
+import { OnboardingFocusHold } from './OnboardingFocusHold'
 import { OnboardingNotice } from './OnboardingNotice'
 import { OnboardingTourCard } from './OnboardingTourCard'
 
@@ -63,8 +65,8 @@ import { OnboardingTourCard } from './OnboardingTourCard'
  * pode ficar recortado ou fora de vista e o anel mostra só a parte visível.
  *
  * Um diálogo modal por cima (a pergunta de um agente, a passagem de
- * responsabilidade) deixa o card e o aviso inertes até fechar, no mesmo passo
- * (`useYieldToModal`).
+ * responsabilidade) deixa o card e o aviso inertes até fechar, no mesmo passo,
+ * com o foco que era deles num ponto de espera neutro (`useYieldToModal`).
  */
 
 const SIDEBAR_SCROLL_SELECTOR = '.felixo-sidebar-scroll'
@@ -329,12 +331,18 @@ const MODAL_CHECK_MS = 250
  * o Esc de quem achava estar no tour dispensava a pergunta do agente.
  *
  * Confere a cada `MODAL_CHECK_MS` e a cada troca de foco (o HandoffDialog puxa o
- * foco ao abrir). Ao ceder, o foco que estava no tour vai para o body, onde
- * nenhuma tecla aciona nada. Quando o diálogo fecha, ele volta ao controle do
- * tour que o tinha, num quadro depois (o diálogo devolve o foco antes), e só se
- * ninguém o pôs em outro lugar (`resolveFocusAfterModal`).
+ * foco ao abrir). Ao ceder, o foco que estava no tour vai para o ponto de espera
+ * (`OnboardingFocusHold`, com `nokey`), antes de a superfície ficar inerte. Nunca
+ * para o body: lá Delete e Backspace apagavam o bloco selecionado por baixo do
+ * diálogo e `q` trocava o modo do canvas (`focusHoldOnYield`). Quando o diálogo
+ * fecha, o foco volta ao controle do tour que o tinha, num quadro depois (o
+ * diálogo devolve o foco antes), e só se ninguém o tirou da espera
+ * (`resolveFocusAfterModal`).
  */
-function useYieldToModal(surfaceRef: RefObject<HTMLDivElement | null>): boolean {
+function useYieldToModal(
+  surfaceRef: RefObject<HTMLDivElement | null>,
+  holdRef: RefObject<HTMLDivElement | null>,
+): boolean {
   const [cedido, setCedido] = useState(false)
   const yieldState = useRef<ModalYield>(NOT_YIELDED)
   const focusToReturn = useRef<unknown>(null)
@@ -347,8 +355,9 @@ function useYieldToModal(surfaceRef: RefObject<HTMLDivElement | null>): boolean 
       superficie: surfaceRef.current,
     })
     if (next === previous) return
+    // Antes de focar: o `focusin` da espera chama esta conferência de novo e acha o estado já cedido.
     yieldState.current = next
-    if (next.foco instanceof HTMLElement) next.foco.blur()
+    focusHoldOnYield(next, holdRef.current)?.focus({ preventScroll: true })
     focusToReturn.current = next.cedido ? null : previous.foco
     setCedido(next.cedido)
   })
@@ -374,11 +383,12 @@ function useYieldToModal(surfaceRef: RefObject<HTMLDivElement | null>): boolean 
         saved,
         current: document.activeElement,
         surface: surfaceRef.current,
+        hold: holdRef.current,
       })
       target?.focus({ preventScroll: true })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [cedido, surfaceRef])
+  }, [cedido, surfaceRef, holdRef])
 
   return cedido
 }
@@ -410,6 +420,7 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
   const cardRef = useRef<HTMLDivElement>(null)
   const ringRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const holdRef = useRef<HTMLDivElement>(null)
   const openedInstance = useRef<number | null>(null)
   const shownStep = useRef<{ instancia: number; stepIndex: number } | null>(null)
   const model = describeTourCard(tour)
@@ -436,7 +447,7 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
       if (resolution && resolution.anchor !== tour.ancora) store.retarget(resolution.anchor)
     },
   })
-  const cedido = useYieldToModal(cardRef)
+  const cedido = useYieldToModal(cardRef, holdRef)
 
   // Abertura: depois do posicionamento (efeito declarado antes), para o card já estar visível.
   const onOpened = useEffectEvent(() => {
@@ -503,6 +514,7 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
 
   return (
     <>
+      <OnboardingFocusHold holdRef={holdRef} />
       <div ref={ringRef} className="felixo-onboarding-ring" aria-hidden="true" data-felixo-onboarding="anel" />
       {model && (
         <OnboardingTourCard
@@ -523,6 +535,7 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
 
 function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: NoticeSession }) {
   const noticeRef = useRef<HTMLDivElement>(null)
+  const holdRef = useRef<HTMLDivElement>(null)
   const announced = useRef<string | null>(null)
   const model = describeNotice(aviso)
 
@@ -532,7 +545,7 @@ function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: Notice
     trackKey: aviso.featureId,
     revealKey: aviso.featureId,
   })
-  const cedido = useYieldToModal(noticeRef)
+  const cedido = useYieldToModal(noticeRef, holdRef)
 
   const onShown = useEffectEvent(() => {
     if (announced.current === aviso.featureId) return
@@ -559,16 +572,19 @@ function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: Notice
   }
 
   return (
-    <OnboardingNotice
-      model={model}
-      noticeRef={noticeRef}
-      onView={() => {
-        if (!hasOpenModal(document)) store.viewNotice()
-      }}
-      onDismiss={dismiss}
-      onKeyDown={onKeyDown}
-      inert={cedido}
-    />
+    <>
+      <OnboardingFocusHold holdRef={holdRef} />
+      <OnboardingNotice
+        model={model}
+        noticeRef={noticeRef}
+        onView={() => {
+          if (!hasOpenModal(document)) store.viewNotice()
+        }}
+        onDismiss={dismiss}
+        onKeyDown={onKeyDown}
+        inert={cedido}
+      />
+    </>
   )
 }
 

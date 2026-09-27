@@ -147,6 +147,9 @@ function lerFoco() {
     ehCartao: active?.getAttribute?.('data-felixo-onboarding') === 'card',
     noCartao: Boolean(active?.closest?.('[data-felixo-onboarding="card"]')),
     noAviso: Boolean(active?.closest?.('[data-felixo-onboarding="aviso"]')),
+    // Onde o foco do tour espera enquanto um diálogo modal está por cima.
+    naEspera: active?.getAttribute?.('data-felixo-onboarding') === 'espera',
+    nokey: Boolean(active?.closest?.('.nokey')),
     ajuda: Boolean(active?.hasAttribute?.('data-felixo-help-trigger')),
     naSidebar: Boolean(active?.closest?.('[data-felixo-region="sidebar"]')),
     noCanvas: Boolean(active?.closest?.('[data-felixo-region="canvas"]')),
@@ -1015,14 +1018,15 @@ function criarCenariosDoTutorial(deps) {
     })
     await conferirPerguntaSobreOTour(cenario)
     await fecharTourSeAberto(cenario)
-    log('SA3 Esc em camadas: ok (flyout, Busca, HandoffDialog e pergunta do agente donos do teclado; Agente cria terminal com o tour aberto)')
+    log('SA3 Esc em camadas: ok (flyout, Busca, HandoffDialog e pergunta do agente donos do teclado; Delete, Backspace e q sob a pergunta não agem no canvas; Agente cria terminal com o tour aberto)')
   }
 
   /**
    * AgentQuestionDialog de verdade (pergunta gravada na fila de pedidos do perfil
    * isolado) por cima do tour. O diálogo não pega o foco e escuta o teclado na
-   * janela; o tour cede: o card fica inerte e o foco sai dele, Enter não avança o
-   * tour por baixo, Tab não volta a ele e as teclas vão para o diálogo. Fechado o
+   * janela; o tour cede: o card fica inerte e o foco sai dele para um ponto de
+   * espera neutro, Enter não avança o tour por baixo, Tab não volta a ele, as
+   * teclas vão para o diálogo e as do canvas não agem por baixo dele. Fechado o
    * diálogo, o foco volta ao botão do tour, no mesmo passo, só se ninguém o levou
    * para outro lugar.
    */
@@ -1077,6 +1081,80 @@ function criarCenariosDoTutorial(deps) {
     const final = await foco()
     exigir(!final.noCartao, cenario, 'o tour puxou de volta o foco que a pessoa levou para fora', { levado, final })
     exigir((await cartao())?.passo === passo, cenario, 'a pergunta mudou o passo do tour', await cartao())
+
+    await conferirTeclasDoCanvasSobAPergunta(cenario, { cedeu, retomou, focarProximo })
+  }
+
+  /**
+   * As teclas do canvas com o foco cedido. No body, o React Flow tratava Delete e
+   * Backspace como teclas do canvas e apagava o bloco selecionado por baixo da
+   * pergunta (sem desfazer, soltando a sessão do terminal), e `q` trocava o modo
+   * seleção/pan. O foco que era do tour espera num ponto neutro (`nokey`, fora do
+   * card) e volta ao Próximo quando a pergunta fecha.
+   */
+  async function conferirTeclasDoCanvasSobAPergunta(cenario, { cedeu, retomou, focarProximo }) {
+    const alvo = 'fixture-terminal'
+    const lerCanvas = () =>
+      page.evaluate(async (id) => {
+        const node = document.querySelector(`.react-flow__node[data-id="${id}"]`)
+        const lista = await window.felixo.canvas.list()
+        return {
+          noDom: Boolean(node),
+          noDisco: (lista.nodes ?? []).some((item) => item.id === id),
+          selecionado: Boolean(node?.classList.contains('selected')),
+          pan: document.querySelector('.react-flow')?.classList.contains('cursor-grab') ?? null,
+        }
+      }, alvo)
+    const noBloco = () =>
+      page.evaluate((id) => {
+        const node = document.querySelector(`.react-flow__node[data-id="${id}"]`)
+        node?.focus({ preventScroll: true })
+        return document.activeElement === node
+      }, alvo)
+    // Seleção pelo teclado do React Flow (Enter no bloco focado seleciona, Esc desfaz):
+    // sem depender de onde o card, a dock ou a gaveta caem na tela.
+    await page.evaluate(() => {
+      document
+        .querySelector('.felixo-zoom-pill button[aria-label="Enquadrar todos os blocos"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    })
+    await esperar(cenario, 'o bloco da fixture na tela', (id) => document.querySelector(`.react-flow__node[data-id="${id}"]`) !== null, alvo)
+    exigir(await noBloco(), cenario, 'o foco não entrou no bloco da fixture')
+    await page.keyboard.press('Enter')
+    await esperar(cenario, 'o bloco da fixture ficar selecionado', (id) =>
+      Boolean(document.querySelector(`.react-flow__node[data-id="${id}"]`)?.classList.contains('selected')), alvo)
+    const antes = await lerCanvas()
+    exigir(antes.noDom && antes.noDisco && antes.selecionado && antes.pan === false, cenario, 'o bloco da fixture não está pronto', antes)
+
+    await focarProximo()
+    deps.registrarPerguntaDoAgente({ pergunta: 'Smoke do tutorial: e o bloco selecionado?', opcoes: ['A', 'B'] })
+    await cedeu()
+    for (const tecla of ['Delete', 'Backspace', 'q']) {
+      await page.keyboard.press(tecla)
+      await measureStableGeometry(page, `${cenario} ${tecla} sob a pergunta`, [SEL.cartao], QUADROS_CURTOS)
+      const depois = await lerCanvas()
+      const evidencia = { tecla, foco: await foco(), antes, depois }
+      exigir(depois.noDom && depois.noDisco, cenario, `${tecla} apagou o bloco selecionado por baixo da pergunta`, evidencia)
+      exigir(depois.pan === antes.pan, cenario, `${tecla} trocou o modo do canvas por baixo da pergunta`, evidencia)
+    }
+    const esperando = await foco()
+    exigir(esperando.naEspera && esperando.nokey && !esperando.noCartao, cenario, 'o foco cedido não ficou no ponto de espera do tour', esperando)
+    exigir(
+      (await page.evaluate(() => document.querySelectorAll('[role="dialog"][aria-modal="true"]').length)) === 1,
+      cenario,
+      'a pergunta fechou com as teclas do canvas',
+    )
+
+    // Esc é da pergunta; o foco volta ao Próximo (a espera não conta como "levado").
+    await page.keyboard.press('Escape')
+    await retomou()
+    await esperar(cenario, 'o foco voltar ao Próximo depois da espera', () =>
+      document.activeElement?.getAttribute('data-felixo-onboarding-action') === 'proximo',
+    )
+    exigir(await noBloco(), cenario, 'o foco não voltou ao bloco da fixture')
+    await page.keyboard.press('Escape')
+    await esperar(cenario, 'o bloco da fixture deixar de estar selecionado', (id) =>
+      !document.querySelector(`.react-flow__node[data-id="${id}"]`)?.classList.contains('selected'), alvo)
   }
 
   /** SA4: o que o leitor de tela recebe (árvore de acessibilidade real) e a região live. */

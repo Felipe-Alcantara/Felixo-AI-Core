@@ -114,7 +114,10 @@ card e aviso (55) < `AgentQuestionDialog` e `HandoffDialog` (60) <
 `--felixo-z-onboarding-ring` e `--felixo-z-onboarding` ficam em `index.css`.
 Enquanto um diálogo modal (z 60) está aberto, o card e o aviso ficam `inert`, no
 mesmo passo, e voltam quando ele fecha: o overlay os cobre, então nem o foco nem
-o teclado podem ficar neles.
+o teclado podem ficar neles. O foco que era deles espera num elemento invisível
+com `nokey`, irmão do card (`OnboardingFocusHold`), e nunca no body: no body o
+React Flow trata Delete e Backspace como teclas do canvas e apagaria o bloco
+selecionado por baixo do diálogo.
 
 **Rail.** A Ajuda é o sexto botão do grupo de cima (≈ 271 px dentro de ≈ 289 px na
 altura mínima). Um botão novo acima dela exige refazer essa conta, senão o alvo do

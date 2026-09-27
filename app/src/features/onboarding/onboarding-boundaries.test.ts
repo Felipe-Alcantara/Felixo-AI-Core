@@ -66,6 +66,7 @@ const LAZY_ONLY = [
   './OnboardingTourCard',
   './OnboardingNotice',
   './OnboardingHelpMenu',
+  './OnboardingFocusHold',
 ]
 
 describe('fronteiras do tutorial (sonda estática)', () => {
