@@ -198,7 +198,7 @@ Abra **Ferramentas → Orquestrador** para ajustar:
 
 ### Felixo
 
-Abra **Ferramentas → Configurações** para ajustar:
+Abra **Configurações** (a engrenagem no pé da faixa de ícones do canvas) para ajustar:
 
 - memórias globais do orquestrador;
 - tema visual;
@@ -264,7 +264,7 @@ Como cada sistema escolhe a placa:
 
 ### Felixo System Design
 
-Em **Ferramentas → Configurações**, o bloco **Felixo System Design** sincroniza
+Em **Configurações** (a engrenagem no pé da faixa de ícones do canvas), o bloco **Felixo System Design** sincroniza
 o repositório de padrões e mostra o índice usado pelos agentes. A sincronização
 de repositórios privados usa a autenticação segura já configurada no Git
 (credential helper, Keychain do macOS, Credential Manager do Windows ou
@@ -397,10 +397,16 @@ Ao arrastar uma conexão entre dois blocos de agentes, ambos recebem uma instru�
 
 ### Ferramentas do canvas
 
-A seção **Ferramentas** da barra lateral do canvas (fechada por padrão; clique no título para abrir) reúne painéis que flutuam sobre o quadro sem escondê-lo, como Pesquisar, Projetos, Notas, Modelos, Prompts, Skills, Git, Fetch All e Configurações. Escolher uma ferramenta abre o painel correspondente. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, as notificações continuam acessíveis ao lado do botão de expansão.
+A seção **Ferramentas** da barra lateral do canvas (fechada por padrão; clique no título para abrir) reúne painéis que flutuam sobre o quadro sem escondê-lo, em três grupos:
+
+- **Workspace:** Projetos, Notas, Modelos, Prompts, Skills e Source Control;
+- **Operação:** Fetch All, Tarefas Notion, Limites e uso, Orquestrador, QA Logger, Pedidos de escrita e Presets de agente;
+- **Transferência:** Exportar canvas e Importar canvas.
+
+Escolher uma ferramenta abre o painel correspondente. **Buscar**, **Notificações**, **Ajuda** e **Configurações** não ficam nessa seção: são botões da faixa de ícones à esquerda da barra, onde também estão **Chat** e um atalho para **Projetos**. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, a faixa de ícones continua visível, com as notificações e o botão **Expandir sidebar**.
 
 - **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas, editáveis ali mesmo e também legíveis pelo modo de chat legado.
-- **Git** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
+- **Source Control** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
 - **Skills** lista, em **Skills do sistema**, as skills que todo agente novo recebe. O ícone de olho cortado ao lado de **Ativar** ("Não enviar aos agentes") tira uma skill dessa lista. O recolhível **Ocultas (N)**, logo abaixo, mostra as que foram tiradas, e o X de cada uma a devolve. A escolha vale para os próximos agentes, sem reiniciar o app, e continua valendo nas próximas sessões. Uma skill oculta também sai dos presets que a citam.
 - **Fetch All** mostra primeiro o escopo efetivo, as raízes configuradas, o motivo da escolha e o custo esperado. As pastas-raiz se escolhem no próprio cartão **Escopo da varredura**: **Adicionar pasta** abre o seletor do sistema (dá para escolher uma ou várias pastas), e o X ao lado de cada raiz a tira da lista. Cada linha mostra o nome da pasta e o caminho completo. Não é preciso editar `fetch-all-settings.json` à mão. Prefira escolher as pastas onde ficam os seus repositórios, porque varrer os discos inteiros é bem mais caro, sobretudo numa máquina modesta. Com pelo menos uma raiz, a varredura fica só nelas e não pede confirmação. Quando nenhuma foi configurada, os discos locais aparecem apenas como alternativa ("Ou varra todos os discos locais") e a interface exige uma confirmação explícita antes de iniciar uma varredura ampla. Sem essa confirmação, nenhuma varredura recursiva começa — em particular, a configuração vazia nunca dispara `/` silenciosamente. Pull (sempre `--ff-only`), push e o commit automático dos repositórios cuja única pendência é commitar acontecem num segundo passo, depois de você revisar o plano e confirmar — e o estado de cada repositório é conferido de novo imediatamente antes de qualquer escrita. Cada passada gera um relatório em Markdown na pasta de relatórios do app. A varredura **rápida** reaproveita a lista da última varredura completa somente se raízes, exclusões, ignorados, montagens e discos detectados forem os mesmos (é mais rápida, mas não encontra repositórios novos), e o ícone ao lado de um repositório passa a **ignorar** aquela pasta nas próximas varreduras — a lista de ignoradas fica no rodapé do painel.
 - Se uma execução confirmada falhar, o painel mostra o diagnóstico, mantém o pedido pendente e preserva o plano para uma nova revisão; o pedido só sai da fila depois que `resultado.ok` confirma a execução.
@@ -593,7 +599,8 @@ Verifique se o instalador veio da página oficial de Releases, se o antivírus n
 
 **A janela abre preta ou a interface não termina de carregar.**
 
-Abra **Ferramentas > Configurações > Renderização e recuperação**. O modo
+Abra **Configurações > Renderização e recuperação** (a engrenagem no pé da faixa
+de ícones do canvas). O modo
 **Automático** preserva a aceleração da GPU e ativa o fallback de software
 automaticamente em Windows com pouca memória. Se o driver antigo continuar
 causando a tela preta, escolha **Modo compatível (sem GPU)** e clique em
