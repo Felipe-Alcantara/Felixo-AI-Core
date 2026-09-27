@@ -5429,3 +5429,41 @@ mostrou a ordem.
 - Se o tour fechar por fora (store) com o foco na espera e o diálogo aberto, a espera desmonta e o foco cai no body.
   Nenhum caminho da interface fecha o tour com o diálogo aberto e o foco na espera: os botões do card não agem sob o
   modal, e para chegar à Ajuda o foco precisa sair da espera.
+
+## 2026-09-26 — Tutorial do canvas: a posição do card congela sob um diálogo modal
+
+Registro gravado às 23:35.
+
+A CI do PR #96 no `0f0a8f15` reprovou o SA3 no Ubuntu (Validate ubuntu-latest, run 36288181228): durante a medição de
+estabilidade depois do Enter sob a pergunta de um agente, o card foi de `left` 294 a 58. A captura mostrou o card no
+alvo reserva do passo 2 (menu do canvas), com outro texto ("Abra o menu do canvas para ver Criar e o botão Agente."),
+por baixo da pergunta. Nos outros três sistemas o SA3 passou: o reposicionamento só acontece se algum observador
+dispara com o diálogo aberto.
+
+**Causa.** O AgentQuestionDialog tem um fundo `fixed inset-0 z-60`. A resolução do alvo (`evaluateTarget`) confere o
+centro de cada alvo com `elementFromPoint`, e com o diálogo aberto o centro de todos cai no fundo: cada alvo da cadeia
+é rejeitado e o card cai no último, que é usado sem esse teste. O tour cedia o foco e o teclado ao diálogo, mas não a
+posição.
+
+**Correção.**
+- `placementFrozen` (pura, em `onboarding-layout.ts`): com um diálogo modal aberto, o que já foi posicionado fica onde
+  está. A primeira posição sai mesmo assim, para o card nunca ficar sem lugar.
+- `useSurfacePlacement` confere o diálogo no próprio posicionamento (o tour percebe o diálogo até `MODAL_CHECK_MS`
+  depois) e recebe `frozen` (o estado cedido) nas dependências: quando o diálogo fecha, os observadores são refeitos e o
+  card é reposicionado na hora. Vale para o card e para o aviso de novidade.
+- O `useYieldToModal` passou a ser chamado antes do `useSurfacePlacement`, para o estado cedido chegar ao
+  posicionamento. O efeito de abertura continua declarado depois do posicionamento.
+- Descartado: fazer o teste do centro olhar através do fundo do diálogo. Seria preciso reconhecer o fundo de cada
+  diálogo, e o card continuaria se mexendo por baixo de um modal sem motivo.
+
+**Validação.**
+- O SA3 ganhou `conferirCardParadoSobAPergunta`: com a pergunta aberta, dispara um `resize` e exige o mesmo alvo, o
+  mesmo texto e a mesma posição. Sem a correção reprovou de forma determinística às 23:27 (isolado sob o lock, Vite
+  deste worktree): `{"antes":{"ancora":"criar-agente","left":294,"top":54},"depois":{"ancora":"rail-menu","left":58,"top":12}}`,
+  igual à CI.
+- `onboarding-layout.test.ts`: 4 testes novos. Um documenta a causa (com o fundo cobrindo tudo, `resolveStepTarget`
+  cai no reserva), e três cobrem `placementFrozen`.
+- Em `app/`: `npm run lint` sem erro; `npm run build` ok (CanvasView 302,67/91,44 kB, igual; `onboarding-ui-entry`
+  34,33/11,20 kB); `npm test` 1843/1843; `npm run test:frontend` 2078 testes e 1 ignorado.
+- Com a correção, SA2 e SA3 isolados sob o lock (23:34–23:36, exit 0): SA2 em 7,6 s e SA3 em 72,3 s. O card fica no
+  mesmo alvo e no mesmo lugar com a pergunta aberta, e as conferências do foco cedido continuam passando.
