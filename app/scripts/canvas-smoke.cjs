@@ -15,7 +15,7 @@ const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
 const { diagnosticarMontagem } = require('./canvas-smoke-diagnostics.cjs')
-const { esperarAte } = require('./canvas-smoke-wait.cjs')
+const { esperarAte, waitForViewport: esperarViewport } = require('./canvas-smoke-wait.cjs')
 const {
   DEFAULT_JITTER_THRESHOLD,
   measureStableGeometry,
@@ -167,12 +167,9 @@ function writeVisualReport(error = null) {
   return output
 }
 
-async function waitForViewport(page, viewport) {
-  await page.waitForFunction(
-    ({ width, height }) => window.innerWidth === width && window.innerHeight === height,
-    viewport,
-    { timeout: INTERACTION_TIMEOUT_MS },
-  )
+/** Espera do smoke por um resize: prazo de interação e o tamanho lido na falha. */
+function waitForViewport(page, viewport) {
+  return esperarViewport(page, viewport, { timeoutMs: INTERACTION_TIMEOUT_MS })
 }
 
 async function recordVisualEvidence(page, label, selectors, details = {}, options = {}) {
@@ -1049,7 +1046,6 @@ function cenariosDoTutorial(page) {
     recordVisualEvidence,
     checarMontagem,
     checarLandmarksVisiveis,
-    waitForViewport,
     // SB7: a ponte recusa estado inválido; a linha do perfil isolado é danificada no disco.
     corromperEstado: () => corromperEstadoNoPerfil(readState()),
     timeoutMs: ONBOARDING_TIMEOUT_MS,

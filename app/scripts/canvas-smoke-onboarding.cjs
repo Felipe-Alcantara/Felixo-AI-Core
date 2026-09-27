@@ -41,6 +41,7 @@ const {
   rectInside,
   storageViolations,
 } = require('./canvas-smoke-onboarding-geometry.cjs')
+const { definirViewport: definirViewportDaPagina } = require('./canvas-smoke-wait.cjs')
 
 const SEL = Object.freeze({
   cartao: '[data-felixo-onboarding="card"]',
@@ -477,14 +478,13 @@ function lerBordaDoCartao() {
  *   recordVisualEvidence: Function,
  *   checarMontagem: Function,
  *   checarLandmarksVisiveis: Function,
- *   waitForViewport: Function,
  *   corromperEstado?: () => void,
  *   timeoutMs: number,
  *   log?: (message: string) => void,
  * }} deps
  */
 function criarCenariosDoTutorial(deps) {
-  const { page, esperarAte, measureStableGeometry, recordVisualEvidence, checarMontagem, checarLandmarksVisiveis, waitForViewport } = deps
+  const { page, esperarAte, measureStableGeometry, recordVisualEvidence, checarMontagem, checarLandmarksVisiveis } = deps
   const timeout = deps.timeoutMs
   const log = deps.log ?? ((message) => console.log(`[canvas-smoke:tutorial] ${message}`))
 
@@ -558,10 +558,13 @@ function criarCenariosDoTutorial(deps) {
     await checarMontagem(page)
   }
 
-  async function definirViewport(viewport) {
-    await page.setViewportSize(viewport)
-    await waitForViewport(page, viewport)
-  }
+  /**
+   * Resize com o prazo do tutorial, como toda espera daqui. Logo depois de um reload
+   * com a fixture o renderer passa segundos montando os blocos pesados, e o prazo de
+   * interação do smoke (5 s no Linux) estourava no primeiro resize do SA8 com o
+   * tamanho certo na tela. A falha traz o tamanho pedido e o lido.
+   */
+  const definirViewport = (viewport) => definirViewportDaPagina(page, viewport, { timeoutMs: timeout })
 
   // --- Ajuda --------------------------------------------------------------------
 
