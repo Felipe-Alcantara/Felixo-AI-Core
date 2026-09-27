@@ -5385,3 +5385,47 @@ não faz, em vez de como o app está.
 - O AgentQuestionDialog continua sem puxar o foco e sem prender o Tab. Isso é da feature dele e não mudou; com o card
   inerte, o foco fica no body até a pessoa responder ou dispensar.
 - Um diálogo modal que não use `aria-modal="true"` não é reconhecido. Hoje os dois do canvas usam.
+
+## 2026-09-26 — Tutorial do canvas: o foco cedido a um diálogo não fica no body
+
+Registro gravado às 23:13.
+
+A verificação de uso achou um bloqueante no item 1 do registro anterior. Ali está escrito que o foco que estava no tour
+vai para o body, "e as teclas passam a ser do diálogo". Não passavam todas: o body conta como canvas para o React Flow
+(`deleteKeyCode` Delete e Backspace) e para o atalho `q` (`isCanvasFocused`). Com um bloco selecionado e a pergunta de
+um agente por cima do tour, Delete ou Backspace apagavam o terminal por baixo do modal, sem desfazer (a sessão do PTY é
+solta e o nó sai do disco), e `q` trocava o modo seleção/pan. Antes do item 1 o foco ficava num botão do card, que tem
+`nokey`, e essas teclas não faziam nada.
+
+**Correção** (`fix(onboarding): o foco cedido a um diálogo espera num ponto neutro, não no body`). Ao ceder, o foco que
+era do tour vai para um ponto de espera (`OnboardingFocusHold`) antes de o card ficar inerte: um div invisível, irmão
+do card e do aviso, com `nokey` e `tabIndex=-1`, sem papel, nome nem texto. Quando o diálogo fecha, o foco volta ao
+controle do tour; a espera não conta como foco levado para outro lugar. As regras são puras: `focusHoldOnYield` e o
+`hold` de `resolveFocusAfterModal`.
+- Descartado: não tornar o card inert. Ele voltaria à ordem de Tab e à árvore de acessibilidade por baixo do modal.
+  Mexer no AgentQuestionDialog continua fora (é de outra feature).
+
+**Smoke.** O SA3 seleciona o bloco da fixture pelo teclado do React Flow (Enter no bloco focado), abre uma pergunta de
+verdade com o foco no Próximo e aperta Delete, Backspace e `q`. Também corrigi uma instabilidade do próprio SA3
+(`fix(smoke): SA3 espera o foco assentar depois de criar o agente`). Na primeira rodada, o TerminalMenu devolveu o foco
+ao botão Agente num quadro depois de criar o terminal, e isso aconteceu depois de o smoke focar o Próximo. O Enter sob a
+pergunta abriu um segundo agente, e a conferência reprovou em "o foco voltar ao Próximo". A linha do tempo do foco
+mostrou a ordem.
+
+**Validação.**
+- Testes que falham antes: 5 dos 6 novos (3 no U-layout e os 2 do U-ui, que nem carregam sem o componente); o sexto é
+  guarda e passa nos dois.
+- Reprodução: SA3 isolado sob o lock, com o Vite deste worktree, com o código anterior e o cenário novo (23:02–23:03).
+  Reprovou em "Delete apagou o bloco selecionado por baixo da pergunta", com o foco no BODY e o bloco fora do DOM e do
+  disco. Com a correção (23:07–23:08), SA2 em 6,8 s e SA3 em 77,5 s, exit 0: o bloco fica, o modo não muda, o foco
+  está na espera e volta ao Próximo quando a pergunta fecha.
+- Em `app/`: `npm run build` ok (CanvasView 324,49 kB, igual; `onboarding-ui-entry` 34,14 kB); `npm run lint` sem
+  erro; `npm test` 1843/1843; `npm run test:frontend` 2057 testes e 1 ignorado; os testes do tutorial com o Node
+  22.22.3, 721/721.
+
+**Limitações que sobram.**
+- O AgentQuestionDialog continua sem puxar o foco e sem prender o Tab. Da espera, o Tab leva ao canvas, e um bloco
+  focado ali ainda recebe Delete por baixo do diálogo, como sem o tour (o verificador mediu isso sem o tutorial aberto).
+- Se o tour fechar por fora (store) com o foco na espera e o diálogo aberto, a espera desmonta e o foco cai no body.
+  Nenhum caminho da interface fecha o tour com o diálogo aberto e o foco na espera: os botões do card não agem sob o
+  modal, e para chegar à Ajuda o foco precisa sair da espera.
