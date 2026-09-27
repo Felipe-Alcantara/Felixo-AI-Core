@@ -464,6 +464,9 @@ contorno e explica para que ele serve.
 - Com a barra lateral recolhida ou uma seção fechada, o passo aponta para o botão
   que a abre (o menu do canvas) e diz o que abrir. Quando você abre, o destaque vai
   para o controle certo. O tutorial nunca abre nada por você.
+- Dá para rolar a barra lateral com o tutorial aberto, com a roda do mouse ou com
+  `Tab`: ele não puxa a rolagem de volta. O destaque acompanha o controle e some se
+  ele sair de vista; no passo seguinte, o tutorial rola até o controle novo.
 - Em janela pequena (ou com zoom alto), o card vira uma folha na borda da janela, ou
   numa coluna ao lado do controle destacado quando a borda o cobriria, e o texto rola
   por dentro; os botões e o controle destacado ficam sempre visíveis.

@@ -802,6 +802,17 @@ alternativa ao alvo preferido (o menu do canvas com a sidebar recolhida, por
 exemplo), a posição também é conferida a cada 500 ms: o que cobriu ou deslocou o
 alvo pode sumir sem disparar evento nenhum.
 
+**Rolagem da sidebar.** Para mostrar um alvo abaixo da dobra, o tour rola só o
+`.felixo-sidebar-scroll`, de forma instantânea, e só até a pessoa rolar: da
+primeira rolagem dela naquele passo (roda do mouse, barra, teclado ou o foco levado
+por `Tab`) em diante, o tour não mexe mais na rolagem até o passo seguinte
+(`SidebarScrollGate`, em `onboarding-layout.ts`). O eco da rolagem do próprio tour
+é reconhecido pelo valor escrito. O alvo pode então ficar recortado ou fora de
+vista, e o anel mostra só a parte dele que aparece na sidebar (some quando nada
+aparece). Sem essa regra, cada rolagem da pessoa disparava um recálculo que
+devolvia a sidebar para o alvo, e o `Tab` focava controles que o tour tirava de
+vista.
+
 ## Providers e contas
 
 Os providers entram por adapters e pelo registry de Terminal Adapters. A

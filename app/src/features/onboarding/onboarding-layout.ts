@@ -431,12 +431,20 @@ export function computeCardPlacement(input: PlacementInput): CardPlacement {
   return anchoredPlacement(input, input.target) ?? sheetPlacement(input)
 }
 
-/** Retângulo do anel: o próprio alvo, contido na janela por 2 px para o contorno não sumir na borda. */
-export function computeRingRect(target: Rect, viewport: Viewport): Rect {
-  const left = clamp(target.left, RING_INSET, viewport.width - RING_INSET)
-  const top = clamp(target.top, RING_INSET, viewport.height - RING_INSET)
-  const rightEdge = clamp(right(target), RING_INSET, viewport.width - RING_INSET)
-  const bottomEdge = clamp(bottom(target), RING_INSET, viewport.height - RING_INSET)
+/**
+ * Retângulo do anel: o próprio alvo, contido na janela por 2 px para o contorno
+ * não sumir na borda. Um alvo dentro da sidebar rolável chega com `clip`, a
+ * área visível dela: depois que a pessoa rola o alvo para fora, o anel mostra só
+ * a parte que ainda aparece e some (`null`) quando nada aparece, em vez de ficar
+ * desenhado por cima do cabeçalho da sidebar ou do rodapé.
+ */
+export function computeRingRect(target: Rect, viewport: Viewport, clip: Rect | null = null): Rect | null {
+  const visible = clip ? intersection(target, clip) : target
+  if (!visible) return null
+  const left = clamp(visible.left, RING_INSET, viewport.width - RING_INSET)
+  const top = clamp(visible.top, RING_INSET, viewport.height - RING_INSET)
+  const rightEdge = clamp(right(visible), RING_INSET, viewport.width - RING_INSET)
+  const bottomEdge = clamp(bottom(visible), RING_INSET, viewport.height - RING_INSET)
   return { top, left, width: Math.max(0, rightEdge - left), height: Math.max(0, bottomEdge - top) }
 }
 
@@ -461,6 +469,66 @@ export function computeSidebarReveal(input: {
     return Math.max(0, scrollTop + limited)
   }
   return Math.max(0, scrollTop - (container.top - target.top) - margin)
+}
+
+// ---------------------------------------------------------------------------
+// Quem manda na rolagem da sidebar durante um passo
+// ---------------------------------------------------------------------------
+
+/**
+ * O tour revela o alvo (rola só o `.felixo-sidebar-scroll`, de forma
+ * instantânea) enquanto a pessoa não rolou a sidebar naquele passo. Da primeira
+ * rolagem dela em diante (roda do mouse, barra, teclado ou o foco levado por
+ * Tab), o tour não mexe mais na rolagem até o próximo passo: o alvo pode ficar
+ * recortado ou fora de vista, e o anel mostra só a parte visível. Sem isso, cada
+ * rolagem disparava um novo cálculo que devolvia a sidebar para o alvo, a
+ * sidebar abaixo dele ficava inalcançável e o Tab focava controles que o tour
+ * tirava de vista (WCAG 2.4.11).
+ *
+ * A rolagem do próprio tour também dispara `scroll`. Ela é reconhecida pelo
+ * valor que o tour escreveu (`ownScrollTop`, já limitado pelo navegador), que
+ * atravessa a troca de passo: um evento atrasado do passo anterior não conta
+ * como da pessoa no passo novo.
+ */
+export type SidebarScrollGate = {
+  /** Passo a que o estado se refere (instância e índice), nunca o alvo. */
+  readonly step: string
+  /** A pessoa rolou a sidebar neste passo: o tour não rola mais. */
+  readonly personScrolled: boolean
+  /** `scrollTop` que o tour escreveu e cujo evento `scroll` ainda não chegou. */
+  readonly ownScrollTop: number | null
+}
+
+export const SIDEBAR_SCROLL_GATE_INITIAL: SidebarScrollGate = Object.freeze({
+  step: '',
+  personScrolled: false,
+  ownScrollTop: null,
+})
+
+/** Diferença de `scrollTop` (px CSS, fracionário com zoom) que ainda é "o valor que o tour escreveu". */
+const OWN_SCROLL_TOLERANCE = 1
+
+/** Passo novo devolve a rolagem ao tour; o mesmo passo (outro alvo, outro quadro) não muda nada. */
+export function enterSidebarScrollStep(gate: SidebarScrollGate, step: string): SidebarScrollGate {
+  return gate.step === step ? gate : { step, personScrolled: false, ownScrollTop: gate.ownScrollTop }
+}
+
+export function canRevealInSidebar(gate: SidebarScrollGate): boolean {
+  return !gate.personScrolled
+}
+
+/** O tour acabou de escrever este `scrollTop` (lido de volta do contêiner). */
+export function noteTourSidebarScroll(gate: SidebarScrollGate, scrollTop: number): SidebarScrollGate {
+  return { ...gate, ownScrollTop: scrollTop }
+}
+
+/** Evento `scroll` do contêiner: é o eco da rolagem do tour ou uma rolagem da pessoa. */
+export function noteSidebarScrollEvent(gate: SidebarScrollGate, scrollTop: number): SidebarScrollGate {
+  if (gate.ownScrollTop !== null && Math.abs(scrollTop - gate.ownScrollTop) <= OWN_SCROLL_TOLERANCE) {
+    return { ...gate, ownScrollTop: null }
+  }
+  if (gate.personScrolled && gate.ownScrollTop === null) return gate
+  return { ...gate, personScrolled: true, ownScrollTop: null }
 }
 
 // ---------------------------------------------------------------------------
@@ -490,7 +558,16 @@ export type TargetResolution = {
   target: StepTarget
   element: TargetNode
   rect: Rect
-  /** O alvo existe, mas está fora da área visível da sidebar: a camada rola o contêiner e resolve de novo. */
+  /**
+   * Área visível da sidebar rolável (contêiner ∩ janela) quando o alvo mora
+   * dentro dela; `null` fora dela. O anel é recortado por ela.
+   */
+  clip: Rect | null
+  /**
+   * O alvo existe, mas está fora da área visível da sidebar. A camada rola o
+   * contêiner e resolve de novo, a não ser que a pessoa já tenha rolado a
+   * sidebar neste passo (`SidebarScrollGate`): aí o alvo fica como está.
+   */
   needsReveal: boolean
   /** Nenhum alvo passou: o último da cadeia (sempre visível) foi usado assim mesmo. */
   fallback: boolean
@@ -500,7 +577,23 @@ function hasClosest(value: unknown): value is { closest(selector: string): unkno
   return typeof value === 'object' && value !== null && typeof (value as { closest?: unknown }).closest === 'function'
 }
 
-type Evaluation = { status: 'ok' | 'revelar'; element: TargetNode; rect: Rect } | { status: 'rejeitado' }
+const EMPTY_RECT: Rect = Object.freeze({ top: 0, left: 0, width: 0, height: 0 })
+
+/** O contêiner rolável da sidebar, quando o elemento mora dentro dele. */
+function sidebarBox(element: TargetNode, env: TargetEnv): Rect | null {
+  const container = env.scrollContainer
+  if (!container || container === element || !container.contains(element)) return null
+  return toRect(container.getBoundingClientRect())
+}
+
+/** Área visível da sidebar (contêiner ∩ janela; vazia se ele estiver fora da janela). */
+function visiblePart(box: Rect, viewport: Viewport): Rect {
+  return intersection(box, viewportRect(viewport)) ?? EMPTY_RECT
+}
+
+type Evaluation =
+  | { status: 'ok' | 'revelar'; element: TargetNode; rect: Rect; clip: Rect | null }
+  | { status: 'rejeitado' }
 
 function evaluateTarget(target: StepTarget, env: TargetEnv): Evaluation {
   const element = env.query(ONBOARDING_ANCHORS[target.anchor])
@@ -513,24 +606,20 @@ function evaluateTarget(target: StepTarget, env: TargetEnv): Evaluation {
   if (rect.width <= 0 || rect.height <= 0) return { status: 'rejeitado' }
 
   const screen = viewportRect(env.viewport)
-  let visibleBox = screen
-  const container = env.scrollContainer
-  if (container && container !== element && container.contains(element)) {
-    const box = toRect(container.getBoundingClientRect())
-    if (visibleFraction(rect, box) < MIN_VISIBLE_FRACTION) {
-      // Abaixo (ou acima) da dobra da sidebar: rolar só o contêiner resolve.
-      return visibleFraction(box, screen) > 0 ? { status: 'revelar', element, rect } : { status: 'rejeitado' }
-    }
-    visibleBox = intersection(box, screen) ?? screen
+  const box = sidebarBox(element, env)
+  const clip = box ? visiblePart(box, env.viewport) : null
+  if (box && clip && visibleFraction(rect, box) < MIN_VISIBLE_FRACTION) {
+    // Abaixo (ou acima) da dobra da sidebar: rolar só o contêiner resolve.
+    return visibleFraction(box, screen) > 0 ? { status: 'revelar', element, rect, clip } : { status: 'rejeitado' }
   }
   if (visibleFraction(rect, screen) < MIN_VISIBLE_FRACTION) return { status: 'rejeitado' }
 
-  const shown = intersection(rect, visibleBox) ?? rect
+  const shown = intersection(rect, clip ?? screen) ?? rect
   const hit = env.elementFromPoint(shown.left + shown.width / 2, shown.top + shown.height / 2)
   const onTarget = hit === element || (hit !== null && hit !== undefined && element.contains(hit))
   const ownSurface = hasClosest(hit) && hit.closest(OWN_SURFACE_SELECTOR) !== null
   if (!onTarget && !ownSurface) return { status: 'rejeitado' }
-  return { status: 'ok', element, rect }
+  return { status: 'ok', element, rect, clip }
 }
 
 /**
@@ -553,6 +642,7 @@ export function resolveStepTarget(
       target,
       element: result.element,
       rect: result.rect,
+      clip: result.clip,
       needsReveal: result.status === 'revelar',
       fallback: false,
     }
@@ -563,7 +653,9 @@ export function resolveStepTarget(
   if (!element || !element.isConnected || element.closest(HIDDEN_ANCESTOR_SELECTOR)) return null
   const rect = toRect(element.getBoundingClientRect())
   if (rect.width <= 0 || rect.height <= 0) return null
-  return { anchor: last.anchor, target: last, element, rect, needsReveal: false, fallback: true }
+  const box = sidebarBox(element, env)
+  const clip = box ? visiblePart(box, env.viewport) : null
+  return { anchor: last.anchor, target: last, element, rect, clip, needsReveal: false, fallback: true }
 }
 
 // ---------------------------------------------------------------------------

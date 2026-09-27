@@ -329,6 +329,28 @@ function medirAlvoDoCartao() {
   }
 }
 
+/** Rolagem da sidebar, controle focado nela e anel, medidos no mesmo quadro. */
+function lerSidebarComTour() {
+  const rectOf = (rect) => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height })
+  const scroller = document.querySelector('.felixo-sidebar-scroll')
+  if (!scroller) return null
+  const active = document.activeElement
+  const ring = document.querySelector('[data-felixo-onboarding="anel"]')
+  const card = document.querySelector('[data-felixo-onboarding="card"]')
+  return {
+    scrollTop: scroller.scrollTop,
+    maximo: scroller.scrollHeight - scroller.clientHeight,
+    sidebar: rectOf(scroller.getBoundingClientRect()),
+    foco:
+      active && scroller.contains(active)
+        ? { rect: rectOf(active.getBoundingClientRect()), nome: (active.getAttribute('aria-label') || active.textContent || '').trim().slice(0, 40) }
+        : null,
+    anel: ring && ring.dataset.visivel === 'true' ? rectOf(ring.getBoundingClientRect()) : null,
+    passo: card?.dataset.passo ?? null,
+    ancora: card?.dataset.ancora ?? null,
+  }
+}
+
 /** Movimento: nenhuma animação nem transição no card e no anel. */
 function lerMovimento() {
   return ['[data-felixo-onboarding="card"]', '[data-felixo-onboarding="anel"]'].map((selector) => {
@@ -1217,13 +1239,79 @@ function criarCenariosDoTutorial(deps) {
       await page.locator(seletorDaAncora('secao-criar')).click()
       await esperarPasso(cenario, 'agente', 'criar-agente')
       await ferramentasFechada('fim do SA8')
+      await conferirRolagemDaPessoa()
       await fecharTourSeAberto(cenario)
       exigir(erros.length === 0, cenario, 'erro de página durante a troca de alvo', erros)
     } finally {
       page.off('pageerror', onPageError)
       await fecharTourSeAberto(cenario).catch(() => {})
+      await definirViewport(VIEWPORT_PADRAO).catch(() => {})
     }
-    log('SA8 alvos invisíveis: ok (variantes no menu do canvas, puck, migração ao expandir, Criar recolhida sem erro)')
+    log('SA8 alvos invisíveis: ok (variantes no menu do canvas, puck, migração ao expandir, Criar recolhida sem erro, rolagem e Tab da pessoa respeitados)')
+
+    /**
+     * A pessoa rola a sidebar com o tour aberto no passo 2 (T1.d; foco visível,
+     * WCAG 2.4.11): o tour não desfaz a rolagem nem troca de alvo, o anel não sai
+     * da área visível da sidebar, o Tab deixa cada controle focado à vista e, no
+     * passo seguinte, o tour volta a trazer o alvo novo para a vista.
+     */
+    async function conferirRolagemDaPessoa() {
+      const ferramentas = seletorDaAncora('secao-ferramentas')
+      // Janela mais baixa e Ferramentas aberta pela pessoa: a sidebar passa a rolar.
+      await definirViewport({ width: 1280, height: 600 })
+      await page.locator(ferramentas).click()
+      await esperar(cenario, 'a seção Ferramentas abrir', (selector) => document.querySelector(selector)?.getAttribute('aria-expanded') === 'true', ferramentas)
+      try {
+        await esperarPasso(cenario, 'agente', 'criar-agente')
+        const pedido = await page.evaluate(() => {
+          const scroller = document.querySelector('.felixo-sidebar-scroll')
+          scroller.scrollTop = scroller.scrollHeight
+          return scroller.scrollTop
+        })
+        await measureStableGeometry(page, `${cenario} rolagem da pessoa`, [SEL.cartao])
+        const rolada = await page.evaluate(lerSidebarComTour)
+        exigir(rolada.maximo > 0 && pedido > 0, cenario, 'a sidebar não rola nesta janela (pré-condição do cenário)', rolada)
+        exigir(Math.abs(rolada.scrollTop - pedido) <= 1, cenario, 'o tour desfez a rolagem da sidebar feita pela pessoa', { pedido, rolada })
+        exigir(rolada.ancora === 'criar-agente', cenario, 'o tour trocou de alvo porque a pessoa rolou', rolada)
+        exigir(!rolada.anel || contains(rolada.sidebar, rolada.anel, 0.5), cenario, 'o anel saiu da área visível da sidebar', rolada)
+
+        // Tab de verdade a partir do cabeçalho de Ferramentas: cada controle focado fica à
+        // vista (antes, o tour devolvia a sidebar para o alvo no quadro seguinte).
+        await page.locator(ferramentas).focus()
+        for (let tecla = 0; tecla < 8; tecla += 1) {
+          await page.keyboard.press('Tab')
+          await measureStableGeometry(page, `${cenario} Tab ${tecla + 1} na sidebar`, [SEL.cartao], QUADROS_CURTOS)
+          const medida = await page.evaluate(lerSidebarComTour)
+          if (!medida.foco) break
+          exigir(contains(medida.sidebar, medida.foco.rect, 1), cenario, `o controle focado por Tab ficou fora de vista na sidebar (${medida.foco.nome})`, medida)
+        }
+
+        // Passo novo: o tour volta a poder rolar e traz o alvo novo para a vista.
+        const alvoDoProximo = seletorDaAncora('criar-bloco')
+        // Dois quadros depois da rolagem: o evento `scroll` dela chega ainda no passo 2.
+        const escondido = await page.evaluate(async (selector) => {
+          const scroller = document.querySelector('.felixo-sidebar-scroll')
+          scroller.scrollTop = scroller.scrollHeight
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+          const box = scroller.getBoundingClientRect()
+          const rect = document.querySelector(selector).getBoundingClientRect()
+          return rect.bottom <= box.top || rect.top >= box.bottom
+        }, alvoDoProximo)
+        exigir(escondido, cenario, 'Novo bloco já estava à vista antes do passo 3 (pré-condição do cenário)')
+        await clicarNoTour(cenario, 'proximo')
+        await esperarPasso(cenario, 'contexto', 'criar-bloco')
+        await measureStableGeometry(page, `${cenario} passo seguinte revela o alvo`, [SEL.cartao, SEL.anel])
+        const revelado = await page.evaluate(medirPasso, alvoDoProximo)
+        const sidebar = await page.evaluate(lerSidebarComTour)
+        exigir(revelado.alvo && contains(sidebar.sidebar, revelado.alvo.rect, 1), cenario, 'no passo seguinte o tour não trouxe Novo bloco para a vista', { alvo: revelado.alvo, sidebar })
+        exigir(revelado.alvo.atingido, cenario, 'Novo bloco revelado mas coberto', revelado.alvo)
+        exigir(revelado.anel && contains(revelado.anel.rect, revelado.alvo.rect, 2), cenario, 'o anel não contém Novo bloco depois de revelado', { anel: revelado.anel, alvo: revelado.alvo })
+      } finally {
+        await page.locator(ferramentas).click()
+        await esperar(cenario, 'a seção Ferramentas fechar', (selector) => document.querySelector(selector)?.getAttribute('aria-expanded') === 'false', ferramentas)
+        await definirViewport(VIEWPORT_PADRAO)
+      }
+    }
   }
 
   /** SA9: ida ao chat e volta, retomada por sessão, conclusão sem reabrir. */

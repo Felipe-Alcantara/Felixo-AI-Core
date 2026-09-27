@@ -2,15 +2,21 @@ import { useEffect, useEffectEvent, useLayoutEffect, useRef, type KeyboardEvent,
 import { ONBOARDING_ANCHORS, type StepTarget } from './onboarding-catalog'
 import {
   LAYOUT_MARGIN,
+  SIDEBAR_SCROLL_GATE_INITIAL,
+  canRevealInSidebar,
   computeCardPlacement,
   computeRingRect,
   computeSidebarReveal,
   decideFocusOnOpen,
+  enterSidebarScrollStep,
   hasOpenModal,
   isCompactViewport,
+  noteSidebarScrollEvent,
+  noteTourSidebarScroll,
   resolveReturnFocus,
   resolveStepTarget,
   toRect,
+  type SidebarScrollGate,
   type TargetEnv,
   type TargetResolution,
 } from './onboarding-layout'
@@ -52,7 +58,9 @@ import { OnboardingTourCard } from './OnboardingTourCard'
  * dock, onde a saída do xterm muta o DOM sem parar.
  *
  * O tour nunca clica, foca, expande nem rola nada além do contêiner da sidebar:
- * só destaca (anel) e explica (card).
+ * só destaca (anel) e explica (card). E rola a sidebar só até a pessoa rolar:
+ * a partir daí, naquele passo, a rolagem é dela (`SidebarScrollGate`), o alvo
+ * pode ficar recortado ou fora de vista e o anel mostra só a parte visível.
  */
 
 const SIDEBAR_SCROLL_SELECTOR = '.felixo-sidebar-scroll'
@@ -118,19 +126,36 @@ function readObstacles() {
   ).filter((rect) => rect.width > 0 && rect.height > 0)
 }
 
+/**
+ * Se o tour ainda pode rolar a sidebar neste passo (a pessoa não rolou) e o que
+ * ele escreveu, para o evento `scroll` desse valor não contar como da pessoa.
+ */
+type SidebarReveal = { allowed: boolean; onTourScroll: (scrollTop: number) => void }
+
 /** Resolve o alvo e escreve a posição do card (ou aviso) e do anel direto no DOM. */
-function placeSurface(surface: HTMLElement, ring: HTMLElement | null, targets: readonly StepTarget[]) {
+function placeSurface(
+  surface: HTMLElement,
+  ring: HTMLElement | null,
+  targets: readonly StepTarget[],
+  reveal: SidebarReveal,
+) {
   let env = domTargetEnv()
   let resolution = resolveStepTarget({ targets }, env)
   const scroller = env.scrollContainer as HTMLElement | null
-  if (resolution?.needsReveal && scroller) {
+  // Depois que a pessoa rola a sidebar, o alvo fica recortado ou fora de vista
+  // (o anel mostra só a parte visível) em vez de a rolagem dela ser desfeita.
+  if (resolution?.needsReveal && scroller && reveal.allowed) {
     const next = computeSidebarReveal({
       target: resolution.rect,
       container: toRect(scroller.getBoundingClientRect()),
       scrollTop: scroller.scrollTop,
     })
     // Instantâneo e só neste contêiner: nunca scrollIntoView (arrasta o shell).
-    if (next !== null) scroller.scrollTop = next
+    if (next !== null && Math.abs(next - scroller.scrollTop) > 0.5) {
+      scroller.scrollTop = next
+      // Lido de volta: o navegador limita ao máximo rolável.
+      reveal.onTourScroll(scroller.scrollTop)
+    }
     env = domTargetEnv()
     resolution = resolveStepTarget({ targets }, env)
   }
@@ -163,8 +188,8 @@ function placeSurface(surface: HTMLElement, ring: HTMLElement | null, targets: r
   surface.dataset.lado = placement.side
 
   if (ring) {
-    if (resolution) {
-      const rect = computeRingRect(resolution.rect, viewport)
+    const rect = resolution ? computeRingRect(resolution.rect, viewport, resolution.clip) : null
+    if (rect) {
       ring.style.top = `${rect.top}px`
       ring.style.left = `${rect.left}px`
       ring.style.width = `${rect.width}px`
@@ -183,17 +208,30 @@ type PlacementOptions = {
   targets: readonly StepTarget[]
   /** Muda quando o que se observa muda (instância, passo, alvo): os observadores são refeitos. */
   trackKey: string
+  /**
+   * O passo mostrado (instância e índice, nunca o alvo). A cada passo novo o tour
+   * volta a poder rolar a sidebar até o alvo; dentro do passo, só até a pessoa rolar.
+   */
+  revealKey: string
   onPlaced?: (resolution: TargetResolution | null) => void
 }
 
-function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, onPlaced }: PlacementOptions) {
+function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, revealKey, onPlaced }: PlacementOptions) {
+  const scrollGate = useRef<SidebarScrollGate>(SIDEBAR_SCROLL_GATE_INITIAL)
+
   /** Posiciona e diz se ficou numa alternativa (ou sem alvo) em vez do alvo preferido. */
   const layout = useEffectEvent((): boolean => {
     const surface = surfaceRef.current
     if (!surface) return false
+    scrollGate.current = enterSidebarScrollStep(scrollGate.current, revealKey)
     // Fora da chamada opcional: `onPlaced?.(placeSurface(...))` nem avaliaria o
     // argumento sem `onPlaced`, e o aviso (que não passa callback) nunca era posicionado.
-    const resolution = placeSurface(surface, ringRef?.current ?? null, targets)
+    const resolution = placeSurface(surface, ringRef?.current ?? null, targets, {
+      allowed: canRevealInSidebar(scrollGate.current),
+      onTourScroll: (scrollTop) => {
+        scrollGate.current = noteTourSidebarScroll(scrollGate.current, scrollTop)
+      },
+    })
     onPlaced?.(resolution)
     return targets.length > 0 && resolution?.anchor !== targets[0].anchor
   })
@@ -241,10 +279,14 @@ function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, onPlaced 
     // Abrir a gaveta do terminal rola o shell (sem barra de rolagem) de lado por um
     // instante: o alvo muda de lugar sem mudar de tamanho, e nenhum observador
     // acima dispara. Só rolagens que movem um candidato contam (a do xterm, não).
-    const scroller = document.querySelector(SIDEBAR_SCROLL_SELECTOR)
+    // A rolagem da sidebar também diz quem a fez: o eco da do tour ou a da pessoa,
+    // que tira do tour o direito de rolar até o fim do passo.
     const onScroll = (event: Event) => {
       const target = event.target
-      if (target === document || target === scroller) schedule()
+      if (target instanceof Element && target.matches(SIDEBAR_SCROLL_SELECTOR)) {
+        scrollGate.current = noteSidebarScrollEvent(scrollGate.current, target.scrollTop)
+        schedule()
+      } else if (target === document) schedule()
       else if (target instanceof Node && elements.some((element) => target.contains(element))) schedule()
     }
     window.addEventListener('resize', schedule)
@@ -308,6 +350,7 @@ function TourSurface({ store, tour }: { store: OnboardingStore; tour: TourSessio
     ringRef,
     targets: step?.targets ?? [],
     trackKey: `${tour.instancia}:${tour.stepIndex}:${tour.ancora ?? ''}`,
+    revealKey: `${tour.instancia}:${tour.stepIndex}`,
     onPlaced: (resolution) => {
       const body = bodyRef.current
       // O corpo só entra na ordem de Tab quando transborda (para rolar pelo teclado).
@@ -391,7 +434,12 @@ function NoticeSurface({ store, aviso }: { store: OnboardingStore; aviso: Notice
   const announced = useRef<string | null>(null)
   const model = describeNotice(aviso)
 
-  useSurfacePlacement({ surfaceRef: noticeRef, targets: NOTICE_TARGETS, trackKey: aviso.featureId })
+  useSurfacePlacement({
+    surfaceRef: noticeRef,
+    targets: NOTICE_TARGETS,
+    trackKey: aviso.featureId,
+    revealKey: aviso.featureId,
+  })
 
   const onShown = useEffectEvent(() => {
     if (announced.current === aviso.featureId) return

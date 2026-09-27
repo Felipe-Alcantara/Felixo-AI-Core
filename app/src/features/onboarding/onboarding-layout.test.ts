@@ -7,17 +7,22 @@ import {
   OWN_SURFACE_SELECTOR,
   SHEET_MIN_COLUMN_WIDTH,
   SHEET_MIN_HEIGHT,
+  SIDEBAR_SCROLL_GATE_INITIAL,
   TARGET_INFLATE,
   ancestorCreatesContainingBlock,
+  canRevealInSidebar,
   canStealFocus,
   computeCardPlacement,
   computeRingRect,
   computeSidebarReveal,
   containingBlockReason,
   decideFocusOnOpen,
+  enterSidebarScrollStep,
   hasOpenModal,
   inflateRect,
   isCompactViewport,
+  noteSidebarScrollEvent,
+  noteTourSidebarScroll,
   rectsIntersect,
   resolveReturnFocus,
   resolveStepTarget,
@@ -315,6 +320,7 @@ describe('computeRingRect e computeSidebarReveal', () => {
       { left: 1276, top: 796, width: 4, height: 4 },
     ]) {
       const ring = computeRingRect(target, viewport)
+      if (!ring) throw new Error('anel ausente para um alvo na janela')
       expect(ring.left).toBeLessThanOrEqual(target.left + 2)
       expect(ring.top).toBeLessThanOrEqual(target.top + 2)
       expect(ring.left + ring.width).toBeGreaterThanOrEqual(target.left + target.width - 2)
@@ -322,6 +328,17 @@ describe('computeRingRect e computeSidebarReveal', () => {
       expect(ring.left).toBeGreaterThanOrEqual(0)
       expect(ring.left + ring.width).toBeLessThanOrEqual(viewport.width)
     }
+  })
+
+  it('alvo que a pessoa rolou para fora da sidebar: o anel mostra só a parte visível e some sem nada à vista', () => {
+    const viewport = { width: 1280, height: 600 }
+    const sidebar = { left: 52, top: 100, width: 250, height: 400 }
+    const metade = computeRingRect({ left: 60, top: 480, width: 200, height: 40 }, viewport, sidebar)
+    expect(metade).toEqual({ left: 60, top: 480, width: 200, height: 20 })
+    expect(computeRingRect({ left: 60, top: 40, width: 200, height: 30 }, viewport, sidebar)).toBeNull()
+    expect(computeRingRect({ left: 60, top: 700, width: 200, height: 30 }, viewport, sidebar)).toBeNull()
+    // Sem recorte (alvo fora da sidebar), o anel é o de sempre.
+    expect(computeRingRect({ left: 8, top: 140, width: 38, height: 38 }, viewport, null)).toEqual({ left: 8, top: 140, width: 38, height: 38 })
   })
 
   it('não rola quando o alvo já está inteiro na sidebar', () => {
@@ -342,6 +359,53 @@ describe('computeRingRect e computeSidebarReveal', () => {
   it('rola para cima sem passar de zero', () => {
     const container = { left: 52, top: 100, width: 250, height: 400 }
     expect(computeSidebarReveal({ target: { left: 60, top: 60, width: 200, height: 30 }, container, scrollTop: 20 })).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Dono da rolagem da sidebar: o tour revela o alvo até a pessoa rolar
+// ---------------------------------------------------------------------------
+
+describe('SidebarScrollGate (a rolagem da pessoa vence a do tour)', () => {
+  const noPasso = (step: string) => enterSidebarScrollStep(SIDEBAR_SCROLL_GATE_INITIAL, step)
+
+  it('passo novo: o tour pode revelar o alvo', () => {
+    expect(canRevealInSidebar(noPasso('1:1'))).toBe(true)
+  })
+
+  it('o evento da rolagem do próprio tour não conta como da pessoa', () => {
+    let gate = noteTourSidebarScroll(noPasso('1:1'), 28)
+    gate = noteSidebarScrollEvent(gate, 28.4)
+    expect(canRevealInSidebar(gate)).toBe(true)
+    expect(gate.ownScrollTop).toBeNull()
+  })
+
+  it('depois que a pessoa rola (roda, barra ou foco do Tab), o tour não rola mais naquele passo', () => {
+    // Reprodução da revisão: a pessoa rola até o fim (709) e o tour devolvia para 28.
+    let gate = noteSidebarScrollEvent(noteSidebarScrollEvent(noteTourSidebarScroll(noPasso('1:1'), 28), 28), 709)
+    expect(canRevealInSidebar(gate)).toBe(false)
+    // Outro alvo no mesmo passo (retarget) continua sem rolar.
+    gate = enterSidebarScrollStep(gate, '1:1')
+    expect(canRevealInSidebar(gate)).toBe(false)
+  })
+
+  it('a pessoa rolou antes de o evento do tour chegar: vale a da pessoa', () => {
+    const gate = noteSidebarScrollEvent(noteTourSidebarScroll(noPasso('1:1'), 28), 300)
+    expect(canRevealInSidebar(gate)).toBe(false)
+  })
+
+  it('no passo seguinte o tour volta a poder revelar, e o evento atrasado do anterior não fecha o novo', () => {
+    let gate = noteSidebarScrollEvent(noPasso('1:1'), 709)
+    gate = noteTourSidebarScroll(enterSidebarScrollStep(gate, '1:2'), 65)
+    expect(canRevealInSidebar(gate)).toBe(true)
+    gate = enterSidebarScrollStep(gate, '1:3')
+    gate = noteSidebarScrollEvent(gate, 65)
+    expect(canRevealInSidebar(gate)).toBe(true)
+  })
+
+  it('mesmo passo de novo não mexe no estado', () => {
+    const gate = noteSidebarScrollEvent(noPasso('2:1'), 10)
+    expect(enterSidebarScrollStep(gate, '2:1')).toBe(gate)
   })
 })
 
@@ -485,6 +549,20 @@ describe('resolveStepTarget (cadeia de alvos)', () => {
     container.children.push(agente)
     const env = createEnv({ 'criar-agente': agente }, { scrollContainer: container })
     expect(resolveStepTarget({ targets: CHAIN }, env)).toMatchObject({ anchor: 'criar-agente', needsReveal: true })
+  })
+
+  it('alvo dentro da sidebar traz o recorte da área visível dela (o anel não sai da sidebar)', () => {
+    const agente = fakeNode({ rect: { left: 64, top: 480, width: 230, height: 34 } })
+    const container = fakeNode({ rect: { left: 52, top: 100, width: 260, height: 400 } })
+    container.children.push(agente)
+    const env = createEnv({ 'criar-agente': agente, 'rail-menu': fakeNode({ rect: rects.menu }) }, { scrollContainer: container })
+    expect(resolveStepTarget({ targets: CHAIN }, env)).toMatchObject({
+      anchor: 'criar-agente',
+      clip: { left: 52, top: 100, width: 260, height: 400 },
+    })
+    // O menu do canvas fica fora da sidebar: sem recorte.
+    const menuOnly = createEnv({ 'rail-menu': fakeNode({ rect: rects.menu }) }, { scrollContainer: container })
+    expect(resolveStepTarget({ targets: CHAIN }, menuOnly)).toMatchObject({ anchor: 'rail-menu', clip: null })
   })
 
   it('nada resolvível: usa o último da cadeia (sempre visível) marcado como fallback', () => {
