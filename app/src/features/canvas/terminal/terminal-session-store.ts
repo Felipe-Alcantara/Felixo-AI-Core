@@ -364,6 +364,10 @@ type Session = {
   paintedOutput: boolean
   pendingWrites: number
   pendingExit?: { exitCode: number; signal?: number }
+  /** Já existe uma microtarefa agendada para ler a tela depois desta fatia. */
+  outputFlushQueued: boolean
+  /** Avança a cada `finishExit`: invalida a leitura agendada antes do exit. */
+  outputFlushGeneration: number
   command?: string
   /** Printable keystrokes typed since the last submit, to capture the prompt. */
   inputBuffer: string
@@ -457,8 +461,18 @@ type Session = {
   launchOptions: SessionOptions
 }
 
-function countLineFeeds(data: string): number {
-  return (String(data).match(/\n/g) ?? []).length
+/**
+ * Conta quebras de linha sem alocar: roda em todo pedaço de saída de todo
+ * terminal, e o `match(/\n/g)` anterior criava um array por pedaço só para
+ * ler o tamanho dele.
+ */
+export function countLineFeeds(data: string): number {
+  const text = String(data)
+  let count = 0
+  for (let index = text.indexOf('\n'); index !== -1; index = text.indexOf('\n', index + 1)) {
+    count += 1
+  }
+  return count
 }
 
 function readScrollbackStatus(
@@ -638,6 +652,8 @@ export class TerminalSessionStore {
       outputLineCount: 0,
       paintedOutput: false,
       pendingWrites: 0,
+      outputFlushQueued: false,
+      outputFlushGeneration: 0,
       command: options.command,
       inputBuffer: '',
       pendingPromptInsertions: [],
@@ -701,10 +717,6 @@ export class TerminalSessionStore {
             return
           }
 
-          // Publish the rollover marker only when its state changes. Retaining
-          // metadata must not turn every PTY chunk into a React render.
-          this.syncScrollbackStatus(session)
-
           if (session.pendingWrites === 0 && session.pendingExit) {
             const pendingExit = session.pendingExit
             session.pendingExit = undefined
@@ -712,7 +724,7 @@ export class TerminalSessionStore {
             return
           }
 
-          this.onOutput(session)
+          this.scheduleOutputFlush(session)
         })
       }
     })
@@ -1668,6 +1680,41 @@ export class TerminalSessionStore {
     }
   }
 
+  /**
+   * Lê a tela uma vez por fatia de parse, não uma vez por pedaço.
+   *
+   * O xterm chama o callback de `write` em sequência, sincronamente, para cada
+   * pedaço que processa numa mesma fatia (até 12 ms; sob carga, dezenas de
+   * pedaços). A assinatura da tela e o marcador de scrollback só importam no
+   * estado em que a fatia deixa o terminal, então calcular os dois numa
+   * microtarefa — que roda assim que a fatia termina, sem espera nenhuma —
+   * dá o mesmo resultado sem ler as linhas visíveis a cada pedaço. Com 20
+   * terminais transmitindo, era isso que ocupava o renderer (a mesma thread
+   * do canvas e do teclado) entre um quadro e outro.
+   */
+  private scheduleOutputFlush(session: Session): void {
+    if (session.outputFlushQueued) {
+      return
+    }
+
+    session.outputFlushQueued = true
+    const generation = session.outputFlushGeneration
+    queueMicrotask(() => {
+      session.outputFlushQueued = false
+      // Um exit processado nesta mesma fatia já publicou o estado final (e o
+      // marcador de scrollback): a leitura agendada antes dele não pode
+      // devolver a sessão para 'working'.
+      if (session.disposed || session.outputFlushGeneration !== generation) {
+        return
+      }
+
+      // Publish the rollover marker only when its state changes. Retaining
+      // metadata must not turn every PTY chunk into a React render.
+      this.syncScrollbackStatus(session)
+      this.onOutput(session)
+    })
+  }
+
   private onOutput(session: Session): void {
     // Agent CLIs animate a spinner/timer while idle, emitting bytes every frame.
     // Treat output as real "work" only when the buffer changes beyond that
@@ -1696,6 +1743,7 @@ export class TerminalSessionStore {
     session: Session,
     event: { exitCode: number; signal?: number },
   ): void {
+    session.outputFlushGeneration += 1
     this.clearInitialTextTimer(session)
     this.clearContextRetryTimer(session)
     // Once the process is gone, keeping its private bootstrap/handoff files
