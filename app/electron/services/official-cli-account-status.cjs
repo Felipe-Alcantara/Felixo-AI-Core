@@ -19,10 +19,11 @@
  *
  * O valor mascarado é o resto da linha, não só a primeira palavra: em
  * `Authorization: Bearer <token>` o segredo está depois de um prefixo, e parar
- * no primeiro espaço deixaria o token exposto.
+ * no primeiro espaço deixaria o token exposto. O rótulo pode vir entre aspas,
+ * como numa resposta JSON (`"api_key":"…"`).
  */
 const LABELED_SECRET_PATTERN =
-  /\b(api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|id[-_ ]?token|client[-_ ]?secret|secret|token|password|senha|cookie|authorization)\b(\s*[:=]\s*)[^\n]+/gi
+  /\b(api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|id[-_ ]?token|client[-_ ]?secret|secret|token|password|senha|cookie|authorization)\b(["']?\s*[:=]\s*)[^\n]+/gi
 
 /**
  * Formatos autoexplicativos: valem mesmo sem rótulo, porque uma chave colada
@@ -32,6 +33,10 @@ const SECRET_PATTERNS = [
   /\bBearer\s+\S+/gi,
   /\bsk-[A-Za-z0-9_-]{8,}/g,
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
+  // Chave de API do Google (Gemini) e tokens do GitHub.
+  /\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])/g,
+  /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
 ]
 
 const REDACTED = '[oculto]'

@@ -36,6 +36,19 @@ describe('redactSecrets', () => {
     assert.equal(redactSecrets(`token do usuário ${jwt}`), 'token do usuário [oculto]')
   })
 
+  it('mascara chave do Google sem rótulo, rótulo entre aspas em JSON e token do GitHub', () => {
+    // Montados em tempo de execução para o arquivo não carregar nada com cara de chave.
+    const google = `AIza${'S'.repeat(35)}`
+    const github = `ghp_${'x'.repeat(36)}`
+    const githubPat = `github_pat_${'Y'.repeat(22)}_${'z'.repeat(59)}`
+
+    assert.equal(redactSecrets(`falhou com key=${google} na chamada`), 'falhou com key=[oculto] na chamada')
+    assert.equal(redactSecrets(`{"api_key":"${github}","modelo":"x"}`), '{"api_key":[oculto]')
+    assert.equal(redactSecrets(`{'token': '${google}'}`), "{'token': [oculto]")
+    assert.equal(redactSecrets(`remote com ${github} e ${githubPat} no log`), 'remote com [oculto] e [oculto] no log')
+    assert.equal(redactSecrets('{"tokens": 5, "keyboard": "abnt"}'), '{"tokens": 5, "keyboard": "abnt"}')
+  })
+
   it('não altera texto sem segredo', () => {
     assert.equal(redactSecrets('Logged in using ChatGPT'), 'Logged in using ChatGPT')
   })
