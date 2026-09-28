@@ -40,6 +40,8 @@ function vigiaOk() {
     scans: 10,
     prefilterHits: 10,
     overheadPct: { p50: 2, p95: 8, blocks: 5 },
+    atual: { usPerChunk: { p50: 0.4, p95: 0.6 } },
+    atualVigia: { usPerChunk: { p50: 0.41, p95: 0.62 } },
     scanMs: { p50: 0.2, p95: 0.4, count: 5 },
     scanRawMs: { p50: 0.2, p95: 0.5 },
   })
@@ -93,10 +95,38 @@ test('o --check da vigia reprova custo extra, varredura lenta, CPU, detecção f
     return vigia
   }
   assert.match(
-    benchmark.validateWatcher(comSpinner({ overheadPct: { p50: benchmark.MAX_WATCHER_OVERHEAD_PCT + 0.1 } })).join(),
+    benchmark.validateWatcher(
+      comSpinner({
+        overheadPct: { p50: benchmark.MAX_WATCHER_OVERHEAD_PCT + 0.1 },
+        atualVigia: { usPerChunk: { p50: 0.4 + benchmark.MIN_WATCHER_OVERHEAD_US + 0.01 } },
+      }),
+    ).join(),
     /custo extra/,
   )
   assert.match(benchmark.validateWatcher(comSpinner({ overheadPct: { p50: null } })).join(), /custo extra/)
+  // Piso absoluto: acima de 10% mas com menos de 0,5 µs por pedaço (o caso do
+  // CI no PR #97: +14,6% = 0,124 µs) passa; acima dos dois, reprova.
+  assert.deepEqual(
+    benchmark.validateWatcher(
+      comSpinner({
+        overheadPct: { p50: 14.646 },
+        atual: { usPerChunk: { p50: 0.354 } },
+        atualVigia: { usPerChunk: { p50: 0.478 } },
+      }),
+    ),
+    [],
+  )
+  assert.match(
+    benchmark.validateWatcher(
+      comSpinner({
+        overheadPct: { p50: 40 },
+        atual: { usPerChunk: { p50: 0.4 } },
+        atualVigia: { usPerChunk: { p50: 0.4 + benchmark.MIN_WATCHER_OVERHEAD_US + 0.1 } },
+      }),
+    ).join(),
+    /custo extra/,
+  )
+  assert.match(benchmark.validateWatcher(comSpinner({ atual: null })).join(), /custo extra/)
   assert.match(
     benchmark.validateWatcher(comPiorCaso({ scanMs: { p95: benchmark.MAX_WATCHER_SCAN_P95_MS + 0.01 } })).join(),
     /varredura do pior caso/,

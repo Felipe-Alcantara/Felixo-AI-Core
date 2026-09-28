@@ -6854,3 +6854,13 @@ Registro gravado às 15:43. Completa o marcador "Validação final: registrada a
 - o Openia sem crédito por medição;
 - as propostas de prévia que se acumulam;
 - os testes `classicScreen` e `openia-image-service`, que dependem do ambiente.
+
+## 2026-09-28 — Cadeia de contas: duas falhas da primeira CI do PR #97
+
+Registro gravado às 15:51.
+
+- **Validate nos 4 sistemas:** um teste de descoberta de sessão foi cancelado no Node 22. A promessa esperada dependia de um timer `unref`, e os 30 testes seguintes do arquivo caíram junto. Localmente usamos o Node 25, onde passava. O teste agora segura o processo com um timer que tem ref (precedente do PR #95). No Node 22.22.3, a suíte inteira passa: 2166 de 2166.
+- **Bancada da vigia (ubuntu-latest):** o custo extra por pedaço deu p50 +14,6%, acima do teto de 10%. Em valor absoluto, são 0,478 contra 0,354 µs por pedaço, ou seja, 0,124 µs, cerca de 0,025% de um núcleo com 20 sessões. A CPU medida da vigia foi 0,915% (teto de 5%), e a varredura p95 de 0,183 ms (teto de 1 ms).
+  - **Correção:** o `--check` passou a exigir, como o gate de regressão do terminal já exige, que o custo passe do limiar percentual **e** de um piso absoluto de 0,5 µs por pedaço. Esse piso equivale a 0,1% de um núcleo com 20 sessões a 100 pedaços/s.
+  - **Motivo:** abaixo de ~1 µs a VM do CI mede ruído, porque a base sem vigia oscila entre 0,35 e 0,56 µs de uma rodada para outra. O teto relativo continua o mesmo, e uma regressão real (uma regex por pedaço, por exemplo) soma vários µs e reprova.
+- O macOS reprovou de novo no `renderer-xterm count=1` (+81,4%). É o ruído conhecido, que já tem task.
