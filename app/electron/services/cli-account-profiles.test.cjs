@@ -7,6 +7,7 @@ const path = require('node:path')
 const {
   CREDENCIAIS_HERDADAS,
   applyProfileEnv,
+  buildAccountProcessEnv,
   buildProfileEnv,
   getInheritedCredentialNames,
   getMirrorEntries,
@@ -205,4 +206,45 @@ test('no Windows o nome não diferencia maiúscula; fora dele, só o nome exato 
 test('provedor desconhecido não tira nada', () => {
   assert.deepEqual(getInheritedCredentialNames('outro'), [])
   assert.deepEqual(applyProfileEnv({ OPENAI_API_KEY: 'x' }, { providerId: 'outro' }, 'linux'), { OPENAI_API_KEY: 'x' })
+})
+
+test('perfil com conta própria também sai sem o que troca a forma de autenticar ou quem cobra', () => {
+  // Nomes conferidos no Claude Code 2.1.283 e no Gemini CLI 0.57.0 instalados.
+  // Com qualquer um deles herdado, a CLI ignora a pasta de login do perfil e a
+  // conta escolhida deixa de ser quem paga.
+  const claudeNames = [
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_VERTEX',
+    'CLAUDE_CODE_USE_FOUNDRY',
+    'CLAUDE_CODE_USE_ANTHROPIC_AWS',
+    'ANTHROPIC_FOUNDRY_API_KEY',
+    'ANTHROPIC_FOUNDRY_AUTH_TOKEN',
+    'ANTHROPIC_AWS_API_KEY',
+    'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR',
+    'CLAUDE_CODE_OAUTH_REFRESH_TOKEN',
+    'CLAUDE_CODE_SESSION_ACCESS_TOKEN',
+    'ANTHROPIC_IDENTITY_TOKEN',
+    'ANTHROPIC_IDENTITY_TOKEN_FILE',
+  ]
+  const geminiNames = ['GOOGLE_GENAI_USE_GCA', 'GOOGLE_CLOUD_ACCESS_TOKEN', 'GEMINI_CLI_USE_COMPUTE_ADC']
+  const base = { PATH: '/usr/bin' }
+  for (const nome of [...claudeNames, ...geminiNames]) base[nome] = 'herdado'
+
+  const claude = applyProfileEnv(base, { providerId: 'claude', profileEnv: { CLAUDE_CONFIG_DIR: '/p' } }, 'linux')
+  for (const nome of claudeNames) assert.equal(Object.hasOwn(claude, nome), false, nome)
+
+  const gemini = applyProfileEnv(base, { providerId: 'gemini', profileEnv: { HOME: '/p' } }, 'linux')
+  for (const nome of geminiNames) assert.equal(Object.hasOwn(gemini, nome), false, nome)
+  assert.equal(gemini.CLAUDE_CODE_USE_BEDROCK, 'herdado', 'cada provedor tira só o que é dele')
+})
+
+test('processo auxiliar de conta: com perfil tira as herdadas; login do sistema fica intacto', () => {
+  const base = { PATH: '/usr/bin', ANTHROPIC_API_KEY: 'x', CLAUDE_CODE_USE_VERTEX: '1' }
+
+  assert.deepEqual(
+    buildAccountProcessEnv(base, { providerId: 'claude', profileEnv: { CLAUDE_CONFIG_DIR: '/p' } }, 'linux'),
+    { PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/p' },
+  )
+  assert.deepEqual(buildAccountProcessEnv(base, { providerId: 'claude', profileEnv: {} }, 'linux'), base)
+  assert.deepEqual(buildAccountProcessEnv(base, { providerId: 'claude' }, 'linux'), base)
 })

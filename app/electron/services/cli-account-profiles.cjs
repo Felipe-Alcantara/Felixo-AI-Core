@@ -59,6 +59,19 @@ const CREDENCIAIS_HERDADAS = Object.freeze({
     'ANTHROPIC_AUTH_TOKEN',
     'CLAUDE_CODE_OAUTH_TOKEN',
     'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR',
+    'CLAUDE_CODE_OAUTH_REFRESH_TOKEN',
+    'CLAUDE_CODE_SESSION_ACCESS_TOKEN',
+    'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR',
+    'ANTHROPIC_IDENTITY_TOKEN',
+    'ANTHROPIC_IDENTITY_TOKEN_FILE',
+    // Trocam o provedor de nuvem que cobra (Bedrock, Vertex, Foundry, AWS).
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_VERTEX',
+    'CLAUDE_CODE_USE_FOUNDRY',
+    'CLAUDE_CODE_USE_ANTHROPIC_AWS',
+    'ANTHROPIC_FOUNDRY_API_KEY',
+    'ANTHROPIC_FOUNDRY_AUTH_TOKEN',
+    'ANTHROPIC_AWS_API_KEY',
   ]),
   codex: Object.freeze(['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN']),
   gemini: Object.freeze([
@@ -66,6 +79,9 @@ const CREDENCIAIS_HERDADAS = Object.freeze({
     'GOOGLE_API_KEY',
     'GOOGLE_APPLICATION_CREDENTIALS',
     'GOOGLE_GENAI_USE_VERTEXAI',
+    'GOOGLE_GENAI_USE_GCA',
+    'GOOGLE_CLOUD_ACCESS_TOKEN',
+    'GEMINI_CLI_USE_COMPUTE_ADC',
   ]),
   openia: Object.freeze([]),
 })
@@ -179,6 +195,25 @@ function applyProfileEnv(baseEnv, { providerId, profileEnv = {} }, platformName 
 }
 
 /**
+ * Ambiente de um processo auxiliar de uma conta (status, uso ao vivo, créditos)
+ * a partir do ambiente do app. Com perfil (`profileEnv` com alguma variável),
+ * é o `applyProfileEnv`: a checagem precisa ver a conta como o terminal dela a
+ * vê, sem as credenciais herdadas. Sem perfil é o login do sistema, e o
+ * ambiente da pessoa segue intacto, como antes.
+ *
+ * @param {Record<string, string | undefined>} baseEnv
+ * @param {{ providerId: string, profileEnv?: Record<string, string> }} profile
+ * @param {string} [platformName]
+ * @returns {Record<string, string | undefined>}
+ */
+function buildAccountProcessEnv(baseEnv, { providerId, profileEnv = {} }, platformName = process.platform) {
+  if (!profileEnv || Object.keys(profileEnv).length === 0) {
+    return { ...(baseEnv ?? {}) }
+  }
+  return applyProfileEnv(baseEnv, { providerId, profileEnv }, platformName)
+}
+
+/**
  * Arquivos da home real que devem existir dentro de um perfil `env-home`.
  *
  * Trocar HOME faz o git perder `user.name`, o ssh perder as chaves e o npm
@@ -195,6 +230,7 @@ module.exports = {
   ISOLATION,
   PROFILES_DIRNAME,
   applyProfileEnv,
+  buildAccountProcessEnv,
   buildProfileEnv,
   getInheritedCredentialNames,
   getIsolation,

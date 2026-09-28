@@ -7,6 +7,7 @@ const {
   runBufferedCommand,
 } = require('./official-cli-service.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
+const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
 const {
   getAgentUsageSource,
   listAgentUsageSources,
@@ -520,7 +521,7 @@ async function collectProviderSnapshot({
     probeOptions,
     env: targetAccountId
       ? createProfileCommandEnv({ providerId, profileEnv })
-      : createCommandEnv(profileEnv),
+      : createCommandEnv(providerId, profileEnv),
   })
 
   if (!source.auth) {
@@ -803,7 +804,7 @@ async function runUsageCommand({ source, providerId, runCommand, profileEnv = {}
       command: source.usage.command,
       args: [...(source.usage.args ?? [])],
       cwd: os.homedir(),
-      env: createCommandEnv(profileEnv),
+      env: createCommandEnv(providerId, profileEnv),
       timeoutMs: COMMAND_TIMEOUT_MS,
     })
   } catch {
@@ -833,7 +834,7 @@ async function runLiveUsageCommand({
       command: source.usage.command,
       args: [...(source.usage.args ?? [])],
       cwd: os.homedir(),
-      env: createCommandEnv(profileEnv),
+      env: createCommandEnv(providerId, profileEnv),
       timeoutMs: COMMAND_TIMEOUT_MS,
     })
   } catch {
@@ -888,8 +889,13 @@ function resolveLiveQuery(queryLiveUsage, liveQueryName) {
     : null
 }
 
-function createCommandEnv(profileEnv = {}) {
-  return createCliEnv({ ...process.env, ...profileEnv })
+/**
+ * Conta com perfil: sem as credenciais que o app herdou (com
+ * `ANTHROPIC_API_KEY` ou `CLAUDE_CODE_USE_BEDROCK` no ambiente, o status
+ * leria outra conta, não a do perfil). Login do sistema: o ambiente da pessoa.
+ */
+function createCommandEnv(providerId, profileEnv = {}) {
+  return createCliEnv(buildAccountProcessEnv(process.env, { providerId, profileEnv }))
 }
 
 /**
