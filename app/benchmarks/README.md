@@ -17,11 +17,11 @@ e não muda depois, para nunca apagar histórico existente silenciosamente.
 O terminal avisa no cartão e na gaveta quando o histórico visual passa de 80%
 da capacidade (linhas visíveis + scrollback, contadas em linhas visuais do
 buffer normal) e de novo quando chega nela. O replay do processo principal
-(até 200.000 caracteres, cerca de 1.700 linhas de 120 colunas) só é reaplicado
-quando o renderer se reconecta e é menor que o histórico visual: não serve para
-recuperar linhas descartadas, e reabrir a gaveta não reaplica nada. As ações
-Copiar e Handoff continuam deliberadamente limitadas ao trecho visual
-atualmente disponível.
+(até 200.000 caracteres) só é reaplicado quando o terminal é recriado
+(recarregar a janela ou voltar do Chat) — reabrir a gaveta não reaplica nada.
+Com linhas longas ele tem menos linhas que o histórico visual (cerca de 1.700
+de 120 colunas); com linhas curtas pode ter mais. As ações Copiar e Handoff
+continuam deliberadamente limitadas ao trecho visual atualmente disponível.
 
 ## Como executar
 

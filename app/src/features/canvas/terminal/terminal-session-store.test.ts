@@ -312,6 +312,47 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     expect(harness.store.getTranscript(SESSION_ID).text).not.toContain('linha-00000')
   })
 
+  it('o descarte continua marcado quando a gaveta abre e o terminal ganha linhas', async () => {
+    harness = createHarness('', 'claude', true, false, 10)
+    harness.feed(`${Array.from({ length: 5_100 }, (_, index) => `output-${index}`).join('\r\n')}\r\n`)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback?.historyTruncated).toBe(true)
+
+    // O `fit()` da gaveta só age com o xterm aberto no DOM; aqui redimensionamos
+    // o xterm da sessão direto, que é o efeito dele: mais linhas, capacidade
+    // maior (24 + 5.000 → 45 + 5.000) e as linhas perdidas continuam perdidas.
+    const sessions = (harness.store as unknown as {
+      sessions: Map<string, { terminal: { resize: (cols: number, rows: number) => void } }>
+    }).sessions
+    sessions.get(SESSION_ID)?.terminal.resize(160, 45)
+    harness.feed('mais uma linha depois de abrir a gaveta\r\n')
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
+      historyTruncated: true,
+      nearLimit: false,
+    })
+    expect(harness.store.getTranscript(SESSION_ID).text).not.toMatch(/^output-0$/m)
+  })
+
+  it('o aviso de perto do limite continua quando a CLI entra na tela alternativa', async () => {
+    harness = createHarness('', 'claude', true, false, 10)
+    harness.feed(`${Array.from({ length: 4_500 }, (_, index) => `output-${index}`).join('\r\n')}\r\n`)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback?.nearLimit).toBe(true)
+
+    // O histórico continua no buffer normal; o alternativo tem só a tela (24
+    // linhas). Medir o buffer ativo apagaria o aviso aqui.
+    harness.feed('\x1b[?1049h')
+    harness.feed(`${Array.from({ length: 100 }, (_, index) => `repintura-${index}`).join('\r\n')}\r\n`)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
+      historyTruncated: false,
+      nearLimit: true,
+    })
+  })
+
   it('saída na tela alternativa não entra no histórico e não acende aviso', async () => {
     harness = createHarness('', 'claude', true, false, 10)
     harness.feed('antes da tela cheia\r\n\x1b[?1049h')

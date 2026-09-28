@@ -33,7 +33,7 @@ describe('política de scrollback do terminal', () => {
     expect(terminalScrollbackForSessionCount(Number.NaN)).toBe(TERMINAL_SCROLLBACK)
   })
 
-  it('avisa antes de descartar, avisa no descarte e não promete recuperação que não existe', () => {
+  it('avisa antes de descartar, avisa no descarte e só afirma o que vale em todos os casos', () => {
     const base = {
       limit: TERMINAL_ADAPTIVE_SCROLLBACK,
       retainedRows: 0,
@@ -47,17 +47,22 @@ describe('política de scrollback do terminal', () => {
 
     const perto = terminalScrollbackNotice({ ...base, nearLimit: true })
     expect(perto).toContain('perto do limite de 5.000 linhas')
-    expect(perto).toContain('antes')
+    expect(perto).toContain('últimos 200.000 caracteres')
 
     const cheio = terminalScrollbackNotice({ ...base, historyTruncated: true })
     expect(cheio).toContain('no limite de 5.000 linhas')
-    expect(cheio).toContain('não consegue trazê-las de volta')
+    expect(cheio).toContain('recarregar a janela ou voltar do Chat')
+    expect(cheio).toContain('Copiar e Handoff não trazem de volta o que já saiu')
 
-    // Reabrir a gaveta não reaplica nada e fechar o bloco mata o processo: o
-    // texto antigo mandava "fechar e reabrir" como se isso recuperasse algo.
     for (const texto of [perto, cheio]) {
+      // Reabrir a gaveta não reaplica nada e fechar o bloco mata o processo: o
+      // texto antigo mandava "fechar e reabrir" como se isso recuperasse algo.
       expect(texto).not.toMatch(/reabr/i)
-      expect(texto).not.toMatch(/replay/i)
+      // Com linhas curtas o replay pode trazer linhas de volta: nada de "perda
+      // definitiva". E com tela alternativa o Handoff leva só a tela do app:
+      // nada de recomendar Copiar/Handoff como forma de salvar o começo.
+      expect(texto).not.toMatch(/não consegue|irrecuper|para sempre/i)
+      expect(texto).not.toMatch(/faça o Handoff|copie/i)
     }
     expect(formatTerminalScrollbackLines(TERMINAL_REPLAY_BUFFER_CHARS)).toBe('200.000')
   })
@@ -78,6 +83,13 @@ describe('describeTerminalScrollbackUsage', () => {
       .toBe(false)
     expect(describeTerminalScrollbackUsage({ retainedRows: limiar, rows: 24, limit: 5_000 }).nearLimit)
       .toBe(true)
+  })
+
+  it('descarte já visto continua descarte mesmo que a capacidade cresça (terminal ganhou linhas)', () => {
+    expect(describeTerminalScrollbackUsage({ retainedRows: 5_024, rows: 45, limit: 5_000 }))
+      .toEqual({ historyTruncated: false, nearLimit: true })
+    expect(describeTerminalScrollbackUsage({ retainedRows: 5_024, rows: 45, limit: 5_000, alreadyTruncated: true }))
+      .toEqual({ historyTruncated: true, nearLimit: false })
   })
 
   it('sem scrollback configurado, ou com entrada hostil, não acende nada', () => {

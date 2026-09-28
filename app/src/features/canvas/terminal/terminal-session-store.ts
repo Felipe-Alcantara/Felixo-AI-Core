@@ -479,6 +479,7 @@ export function countLineFeeds(data: string): number {
 function readScrollbackStatus(
   terminal: Terminal,
   outputLines: number,
+  previous?: TerminalScrollbackStatus,
 ): TerminalScrollbackStatus {
   const limit = Math.max(0, Math.floor(Number(terminal.options.scrollback) || 0))
   // O histórico mora no buffer normal: a tela alternativa (apps de tela cheia,
@@ -490,7 +491,12 @@ function readScrollbackStatus(
     retainedRows,
     outputLines,
     limit,
-    ...describeTerminalScrollbackUsage({ retainedRows, rows: terminal.rows, limit }),
+    ...describeTerminalScrollbackUsage({
+      retainedRows,
+      rows: terminal.rows,
+      limit,
+      alreadyTruncated: previous?.limit === limit && previous.historyTruncated,
+    }),
     replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
   }
 }
@@ -1793,7 +1799,7 @@ export class TerminalSessionStore {
       activity: silentEarlyExit ? 'error' : 'exited',
       exitCode: event.exitCode,
       message,
-      scrollback: readScrollbackStatus(session.terminal, session.outputLineCount),
+      scrollback: readScrollbackStatus(session.terminal, session.outputLineCount, session.snapshot.scrollback),
     })
   }
 
@@ -1837,7 +1843,7 @@ export class TerminalSessionStore {
         const activity = looksLikeApprovalPrompt(viewport) ? 'waiting_approval' : 'idle'
         this.update(session, {
           activity,
-          scrollback: readScrollbackStatus(session.terminal, session.outputLineCount),
+          scrollback: readScrollbackStatus(session.terminal, session.outputLineCount, session.snapshot.scrollback),
         })
       } else {
         this.scheduleIdleCheck(session)
@@ -2402,7 +2408,7 @@ export class TerminalSessionStore {
    * transitions and not one update per output chunk.
    */
   private syncScrollbackStatus(session: Session): void {
-    const next = readScrollbackStatus(session.terminal, session.outputLineCount)
+    const next = readScrollbackStatus(session.terminal, session.outputLineCount, session.snapshot.scrollback)
     const previous = session.snapshot.scrollback
     if (
       previous &&

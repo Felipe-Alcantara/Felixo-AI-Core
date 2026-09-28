@@ -77,6 +77,13 @@ export function describeTerminalScrollbackUsage(input: {
   retainedRows: number
   rows: number
   limit: number
+  /**
+   * A sessão já chegou à capacidade antes. Linha descartada não volta: se a
+   * gaveta abrir e o `fit()` aumentar as linhas do xterm, a capacidade cresce
+   * e a contagem sozinha diria "ainda cabe" — o aviso sumiria com o começo da
+   * sessão já perdido.
+   */
+  alreadyTruncated?: boolean
 }): { historyTruncated: boolean; nearLimit: boolean } {
   const limit = Math.max(0, Math.floor(Number(input.limit) || 0))
   if (limit === 0) {
@@ -85,7 +92,7 @@ export function describeTerminalScrollbackUsage(input: {
 
   const retainedRows = Math.max(0, Math.floor(Number(input.retainedRows) || 0))
   const capacity = Math.max(0, Math.floor(Number(input.rows) || 0)) + limit
-  const historyTruncated = retainedRows >= capacity
+  const historyTruncated = input.alreadyTruncated === true || retainedRows >= capacity
   return {
     historyTruncated,
     nearLimit: !historyTruncated && retainedRows >= Math.ceil(capacity * TERMINAL_SCROLLBACK_WARNING_RATIO),
@@ -100,25 +107,29 @@ export function formatTerminalScrollbackLines(value: number): string {
  * Texto ao lado do terminal quando o histórico visual está perto do limite ou
  * já chegou nele.
  *
- * Não promete recuperação que não existe: o replay que o processo principal
- * guarda (200.000 caracteres, cerca de 1.700 linhas de 120 colunas) só é
- * reaplicado quando o renderer se reconecta, e é MENOR que o histórico visual —
- * reabrir a gaveta não reaplica nada e fechar o bloco encerra o processo. O
- * que a pessoa pode fazer é agir antes: copiar ou passar a sessão adiante
- * enquanto o começo ainda está na tela.
+ * Só afirma o que vale em todos os casos. O que o app guarda além da tela é o
+ * replay do processo principal (os últimos `replayLimitChars` caracteres), e ele
+ * só volta a aparecer quando o terminal é recriado — recarregar a janela ou
+ * voltar do Chat —, não ao reabrir a gaveta. Com linhas longas esse replay tem
+ * menos linhas que o histórico visual (cerca de 1.700 de 120 colunas); com
+ * linhas curtas pode ter mais. Por isso o texto não promete recuperação nem
+ * afirma perda definitiva, e não recomenda Copiar/Handoff como salvação: Copiar
+ * leva a seleção ou a tela, e com um app na tela alternativa o Handoff leva só a
+ * tela do app.
  */
 export function terminalScrollbackNotice(
   status: TerminalScrollbackStatus | undefined,
 ): string | undefined {
   if (!status) return undefined
   const limit = formatTerminalScrollbackLines(status.limit)
+  const replay = formatTerminalScrollbackLines(status.replayLimitChars)
 
   if (status.historyTruncated) {
-    return `Histórico visual no limite de ${limit} linhas: as linhas mais antigas estão saindo da tela e o app não consegue trazê-las de volta. Copiar e Handoff levam só o que ainda está no terminal.`
+    return `Histórico visual no limite de ${limit} linhas: as linhas mais antigas estão saindo da tela. Além dela, o app guarda só os últimos ${replay} caracteres da saída, reaplicados quando o terminal é recriado (recarregar a janela ou voltar do Chat); Copiar e Handoff não trazem de volta o que já saiu.`
   }
 
   if (status.nearLimit) {
-    return `Histórico visual perto do limite de ${limit} linhas. Ao chegar nele, as linhas mais antigas saem da tela e o app não consegue trazê-las de volta; se precisar do começo desta sessão, copie ou faça o Handoff antes.`
+    return `Histórico visual perto do limite de ${limit} linhas: ao chegar nele, as linhas mais antigas saem da tela. Além dela, o app guarda só os últimos ${replay} caracteres da saída.`
   }
 
   return undefined
