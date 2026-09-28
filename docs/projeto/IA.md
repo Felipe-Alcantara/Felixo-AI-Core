@@ -5467,3 +5467,84 @@ posição.
   34,33/11,20 kB); `npm test` 1843/1843; `npm run test:frontend` 2078 testes e 1 ignorado.
 - Com a correção, SA2 e SA3 isolados sob o lock (23:34–23:36, exit 0): SA2 em 7,6 s e SA3 em 72,3 s. O card fica no
   mesmo alvo e no mesmo lugar com a pergunta aberta, e as conferências do foco cedido continuam passando.
+
+## 2026-09-28 — Cadeia de contas: Resumo de Decisão
+
+Registro gravado às 13:47. Task "Contas — definir política de cadeia, elegibilidade e ordem de fallback", na
+branch `feat/cadeia-contas`, a partir de `origin/main` `116f0569`. A regra está em
+[`POLITICA-CONTAS.md`](POLITICA-CONTAS.md) e o plano (camadas, dados, máquina de estados, commits e testes) em
+[`PLANO-CADEIA-CONTAS.md`](PLANO-CADEIA-CONTAS.md).
+
+CONTEXTO: o app já guardava várias contas por CLI, cada uma com a própria pasta de login, mas quando uma conta
+batia o limite de uso nada ajudava a seguir em outra. Trocar de conta pode mudar quem paga, então a cadeia é uma
+decisão de produto antes de ser código. A investigação (5 frentes em paralelo: contas, limites, renderer,
+histórico e custo) achou defeitos que a cadeia precisava ver resolvidos antes:
+- queda silenciosa para o Login do sistema quando a lista de contas falhava;
+- reanexar um bloco a uma sessão viva sem comparar a conta;
+- terminal de conta própria herdando chaves de API do ambiente do app;
+- descoberta de sessão do Claude ignorando o `CLAUDE_CONFIG_DIR` do perfil;
+- relançamento do Codex reenviando o texto de passagem;
+- motivo de disponibilidade cru no log QA;
+- dois classificadores de falha (main e renderer) com precedência invertida e "429" solto virando limite.
+
+As decisões foram pedidas ao dono em 28/09/2026, pelo AskUserQuestion, em duas rodadas de 4 perguntas.
+
+ALTERNATIVAS (a recomendação dada e a resposta do dono):
+
+| # | Pergunta | Recomendação | Decisão do dono |
+| --- | --- | --- | --- |
+| 1 | Quando a troca precisa de confirmação | sempre | **Sempre**: toda troca mostra origem, destino e motivo |
+| 2 | Cadeia só no mesmo provedor ou cruzando provedores | mesmo provedor | **Qualquer provedor** (Codex, Claude, Gemini e Openia/OpenRouter), inclusive trocar de provedor |
+| 3 | Padrão e ordem | desligada, ordem manual | resposta livre ("várias opções"), detalhada nas perguntas 5 e 6 |
+| 4 | Terminal aberto que bate o limite | bloco novo com contexto, depois da confirmação | **Igual**: o antigo fica parado e intacto |
+| 5 | Quais estratégias | — | **Ordem manual, Rodízio, Mais quota primeiro e Assinatura antes de uso**, com a nota "uma conta com 50% de limite mas com 20X é maior que uma 100% com 1X" |
+| 6 | Padrão ao instalar e ao atualizar | desligada; ao ligar, ordem manual | **Igual** |
+| 7 | O orquestrador do chat também pede confirmação | task própria | **Sim, já** |
+| 8 | O que esta task entrega | política + base no código | **Tudo agora** |
+
+Recomendações que o dono não seguiu: escopo só no mesmo provedor (2), orquestrador numa task própria (7) e
+entrega só da política com a base (8). Com o escopo maior, o plano conta com: confirmação obrigatória com o custo
+explícito (tamanho do contexto e quem paga), cadeia desligada por padrão e commits pequenos, cada um verde, com as
+mudanças de comportamento marcadas.
+
+Descartado pelo dono, sem reabrir: troca automática sem confirmação, teto de gasto pré-autorizado, migração de
+sessão viva e relançar o mesmo bloco em outra conta.
+
+Alternativas técnicas descartadas no plano, cada uma conferida no código ou no pacote instalado:
+- guardar a cadeia no `cli-accounts.json`: sem escrita atômica nem lock, e leitura corrompida virava lista vazia.
+  Ficou o SQLite, com `BEGIN IMMEDIATE` e compare-and-set (precedente: o estado do tutorial);
+- detectar no renderer: a detecção fica no `onData` do PTY no processo principal, com custo O(1) por pedaço e
+  leitura adiada da cauda do replay;
+- reaproveitar o `NETWORK_FAILURE_PATTERN` (`cli-diagnostics.cjs`): largo demais para a saída de um agente
+  ("proxy", "network");
+- índice único na posição dos membros: reordenar com UPDATEs em sequência colide no meio da transação;
+- ler o multiplicador "20x" da CLI: nenhuma CLI instalada o publica (`claude auth status --json` não traz o
+  `rateLimitTier`). Vale a declaração da pessoa;
+- filtrar as credenciais herdadas no `buildEnv`: o `node-pty` serializa `undefined` como o texto `"undefined"`, por
+  isso o filtro ficou na junção do spawn (`applyProfileEnv`);
+- timer novo para o prazo das decisões do orquestrador: usa a varredura de 60 s que já existia.
+
+O plano saiu de 3 propostas independentes, julgadas por 2 juízes. Venceu a de ângulo "risco", com os enxertos dos
+juízes.
+
+DECISÃO:
+- as 8 decisões acima, mais três derivadas do aceite: só é apta a conta com login conferido pela própria CLI,
+  naquela conta, há no máximo 15 min; a quota só pesa com medição atual (valor antigo nunca prova nada); o Gemini
+  fica fora até ter checagem de login;
+- "Mais quota" compara capacidade absoluta: `menor restante% entre as janelas × multiplicador`;
+- interpretações adotadas sem reabrir decisão: todo bloco nasce fixo (`pinned`), inclusive os antigos, e só é
+  `chain` o aberto com "Automática (cadeia)" ou criado como continuação confirmada; o Login do sistema pode ser
+  origem de aviso, nunca membro nem destino; vale a decisão 6 contra a task irmã que pedia pausar ou encerrar o
+  processo antigo: o app nunca escreve no terminal antigo nem o encerra;
+- princípios fail-closed P1–P9 (trava no serviço, processo vivo não troca de conta, elegibilidade conservadora,
+  classe errada nunca troca, nada reenviado sem prova, decisão só no SQLite com compare-and-set, segredo não sai,
+  caminho quente barato e sem laço), cada um com teste.
+
+VALIDAÇÃO: cada commit de correção traz um teste que falha antes (a saída está na mensagem do commit), e as
+mudanças de comportamento são marcadas. Os commits 1–14 do plano (política, vocabulário das CLIs, taxonomia, leitor
+de reset, adaptador do orquestrador, classe no evento do chat, redação do log QA, migração 017 com repositório
+compare-and-set, registro de contas atômico, isolamento de credenciais, conta na sessão do PTY, retomada por conta,
+relançamento do Codex e queda silenciosa) estão na branch; os SHAs estão na entrada de 28/09 do `IA.md` da raiz.
+Validação final: registrada ao fim da branch (suíte completa, vitest, lint, build, bancada do caminho de saída com
+Modo Performance ligado e desligado, smoke de ponta a ponta nos 4 sistemas e verificação manual no Linux com duas
+contas Codex reais).

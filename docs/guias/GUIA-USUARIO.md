@@ -1,7 +1,7 @@
 # Guia do Usuário Final - Felixo AI Core
 
 Status: concluido.
-Última revisão: 2026-08-31.
+Última revisão: 2026-09-28.
 
 Este guia é para quem quer instalar e usar o Felixo AI Core como aplicativo
 desktop. O Felixo centraliza CLIs de IA instaladas no seu computador, como
@@ -158,6 +158,185 @@ git --version
 ```
 
 Se o comando funcionar no terminal, mas não no app, reinicie o Felixo. Em instalações fora do `PATH` padrão, defina `FELIXO_CLI_PATHS` com uma ou mais pastas extras onde os executáveis ficam instalados.
+
+### Cadeia de contas: seguir em outra conta com a sua confirmação
+
+Com mais de uma conta cadastrada (duas do Codex, ou uma do Claude e uma do
+Codex, por exemplo), a **cadeia de contas** ajuda a continuar um trabalho em
+outra conta quando a atual bate o limite de uso, perde o login ou fica sem
+crédito. Ela vem **desligada** e nunca troca de conta sozinha: toda troca mostra
+de qual conta sai, para qual vai e por quê, e só acontece depois que você
+confirma. A regra completa está na
+[Política de Contas](../projeto/POLITICA-CONTAS.md).
+
+**Como ligar.**
+
+1. Abra **Ferramentas → Limites e uso** e escolha a aba **Cadeia**.
+2. Ligue **Cadeia de contas**. Ela começa na estratégia **Ordem manual**, com
+   todas as contas **desabilitadas**: habilite as que podem receber uma troca.
+   Nenhuma conta passa a ser usada sem uma ação sua.
+3. Ordene a lista pelos botões **↑** e **↓** (ou Alt+↑/↓ na linha focada). A
+   lista pode misturar provedores.
+4. Se quiser, declare em cada conta a **cobrança** (Assinatura ou Uso) e o
+   **multiplicador** do plano, de 1 a 100 (20 para um plano "20x", por exemplo).
+   Sem declaração, o multiplicador vale 1 e aparece como "não declarado".
+
+As contas do Gemini aparecem travadas, com o motivo "Fora da cadeia até o app
+conferir o login do Gemini". O **Login do sistema** nunca entra na cadeia nem
+recebe uma troca, porque a identidade dele muda por fora do app.
+
+**Quando uma conta está apta.** Uma conta só recebe uma troca quando está
+habilitada, fora de espera, sem uma janela de uso zerada numa medição recente e
+com o login **conferido pela própria CLI, naquela conta, nos últimos 15
+minutos**. O botão **Conferir agora** faz essa checagem. Ela é local: prova que a
+credencial existe na pasta da conta, não que o servidor vai aceitá-la. O app
+nunca confere login em segundo plano. Numa proposta, ele confere no máximo 3
+contas, com no máximo 2 CLIs rodando ao mesmo tempo.
+
+**Estratégias.** Todas escolhem só entre as contas aptas. O empate fica com a
+ordem manual.
+
+| Estratégia | Qual conta vem primeiro |
+| --- | --- |
+| **Ordem manual** (padrão ao ligar) | A primeira apta na ordem da lista |
+| **Rodízio** | A primeira apta depois da última que de fato recebeu uma troca. Recusar ou uma abertura que falhou não gastam a vez |
+| **Mais quota primeiro** | A de maior capacidade, com `capacidade = restante% × multiplicador`. O restante% é o da janela mais apertada (5 h com 90% e semanal com 5% dá 5%). Assim, 50% num plano 20x (1.000) vem antes de 100% num plano 1x (100). Contas sem medição recente vão depois de todas as medidas, na ordem manual |
+| **Assinatura antes de uso** | Primeiro as de assinatura, depois as de cobrança desconhecida, por último as de cobrança por uso. Cobrança desconhecida nunca é tratada como assinatura |
+
+"Mais quota" usa só as medições feitas nos últimos 15 minutos. O diálogo de troca
+tem o botão **Medir agora**. Comparar capacidade entre provedores diferentes é
+uma aproximação, por isso o diálogo mostra os números e a fonte, e a decisão é
+sua.
+
+**Quando uma conta bate o limite.**
+
+- O bloco mostra uma faixa, por exemplo "Limite da conta Pessoal às 14:32 · em
+  espera até 16:40", com **Ver opções** e **Não era limite**. O painel
+  **Notificações** ganha um item fixo com as propostas pendentes. Nenhuma janela
+  abre sozinha, então um Enter digitado em outro terminal não confirma nada.
+- A conta entra **em espera** até o horário de volta: o que a CLI imprimiu, o de
+  uma medição recente ou, sem nenhum dos dois, uma estimativa (5 h no Claude,
+  15 min nos demais). Reiniciar o app não tira a conta da espera. **Não era
+  limite** libera a espera e silencia aquele aviso.
+- **Ver opções** abre **Trocar de conta?**. O diálogo mostra a conta de origem, o
+  horário da detecção, a linha que a CLI imprimiu (com segredos mascarados), até
+  quando a conta fica em espera e de onde veio esse horário. Mostra também as
+  contas aptas na ordem da estratégia, com a primeira marcada como
+  **Recomendada** e o motivo da posição, as contas que estão fora e por quê, e o
+  custo: o tamanho do contexto que será enviado e quem paga (a assinatura da
+  conta de destino ou créditos por uso).
+- O foco começa na opção recomendada, e Enter sobre ela não confirma. Os botões
+  são **Abrir bloco novo em ‹destino›**, **Agora não** (também com Esc), **Não era
+  limite** e **Fixar este bloco na conta atual**.
+- Num bloco no **Login do sistema**, o app só avisa: não há conta própria para
+  pôr em espera nem para trocar.
+
+**O bloco novo leva o contexto.** Confirmar abre um bloco **novo** na conta de
+destino, com o histórico do terminal antigo como ponto de partida, com segredos
+mascarados e uma única vez. O último pedido não é redigitado: o agente é
+orientado a conferir o estado real do repositório antes de refazer qualquer
+ação. A caixa **Pedir para o agente continuar assim que abrir** vem marcada;
+desmarcada, o contexto chega sem ser enviado. Se a troca muda de provedor, o
+diálogo avisa que a retomada nativa não vale entre provedores e que o histórico
+irá para o outro provedor.
+
+O terminal antigo fica **parado e intacto**. O app não escreve nele, não o pausa
+e não o fecha. A faixa dele passa a apontar para o bloco que continuou o
+trabalho, e só você o fecha. Dois cuidados:
+
+- Se o terminal antigo ainda estiver produzindo saída, a confirmação pede um
+  segundo "abrir mesmo assim".
+- O Claude pode estar programado para continuar sozinho na conta antiga
+  ("continuing automatically at …"). O diálogo avisa, porque isso poria dois
+  agentes no mesmo trabalho. Se não quiser isso, pressione Esc no terminal antigo
+  ou feche-o; o botão **Ir para o terminal antigo** só leva o foco até ele.
+
+**Bloco fixo e bloco na cadeia.** O campo **Conta** de cada bloco tem um modo:
+
+- **Fixa** é o padrão. Um bloco aberto com uma conta escolhida à mão continua
+  nela, inclusive os blocos que já existiam antes da atualização. Quando bate o
+  limite, recebe o aviso e a conta entra em espera, mas **nunca** recebe uma
+  proposta de troca. A faixa oferece **Passar responsabilidade…**, com o motivo
+  já preenchido, para você escolher o próximo agente e a próxima conta.
+- **Cadeia** vale para o bloco aberto com **Automática (cadeia)** e para o bloco
+  criado como continuação confirmada.
+- O selo do bloco mostra "Pessoal · fixa", "Pessoal · cadeia" ou "Login do
+  sistema". Nos detalhes do terminal, **Fixar nesta conta** e **Voltar para a
+  cadeia** mudam o modo a qualquer momento. Desligar a cadeia faz todos os
+  blocos pararem de receber propostas. Nada disso muda um processo que já está
+  rodando.
+
+**Automática (cadeia).** Com a cadeia ligada, o campo **Conta** ganha essa opção
+nos provedores com checagem de login. Antes de abrir, a tela mostra qual conta
+será usada (por exemplo, "A cadeia vai usar: Trabalho, primeira apta na ordem
+manual"), e o clique em **Abrir** é a confirmação. Um bloco novo só considera
+contas do mesmo provedor do agente escolhido. Sem conta apta, a abertura é
+recusada com os motivos: ela **nunca** cai no Login do sistema.
+
+**Falhas que não são limite.** Queda de rede, servidor sobrecarregado e tempo
+esgotado mostram um aviso curto ("trocar de conta não resolve"), sem espera e
+sem proposta. O limite de um **modelo** do Codex ("usage limit for ‹modelo›")
+pede troca de modelo, não de conta. Um caso ambíguo (um 403, por exemplo)
+pergunta: **Tratar como limite?**
+
+**Registro de trocas.** A aba **Trocas** do painel **Limites e uso** lista as
+últimas 50 trocas, avisos e decisões, com data e hora, origem → destino, motivo e
+estado, e o botão **Ir para o bloco**. O registro nunca guarda o histórico do
+terminal, chaves ou caminhos de perfil.
+
+**O que o app nunca faz sozinho.**
+
+- Trocar de conta sem a sua confirmação.
+- Trocar a conta de um terminal que já está rodando.
+- Escrever, pausar ou fechar o terminal antigo.
+- Reenviar o último pedido ao bloco novo.
+- Abrir um bloco no Login do sistema porque a lista de contas falhou.
+- Conferir login ou medir uso em segundo plano.
+
+**Mudanças que você pode notar ao atualizar.**
+
+- **Credenciais herdadas.** Um terminal com conta própria não herda mais as
+  chaves de API do ambiente do app: saem `ANTHROPIC_API_KEY`,
+  `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN` e
+  `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR` (Claude); `OPENAI_API_KEY`,
+  `CODEX_API_KEY` e `CODEX_ACCESS_TOKEN` (Codex); `GEMINI_API_KEY`,
+  `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS` e
+  `GOOGLE_GENAI_USE_VERTEXAI` (Gemini). Antes, uma chave de API no ambiente fazia,
+  por exemplo, o Claude de uma conta de assinatura cobrar por uso, e a conta
+  escolhida deixava de ser quem paga. Se você usava um perfil de conta junto com
+  uma chave de API de propósito, abra o terminal no **Login do sistema**, que
+  continua igual, ou faça o login por chave dentro da própria CLI naquele perfil.
+  A aba **Cadeia** mostra só os **nomes** dessas variáveis quando estão no
+  ambiente do app, nunca os valores.
+- **Troca silenciosa corrigida.** Antes, se a lista de contas falhasse ou a conta
+  salva tivesse sido removida, o configurador abria o bloco no Login do sistema
+  sem avisar. Agora aparece "Não foi possível carregar as contas; o bloco não vai
+  abrir no login do sistema por engano." (com **Tentar de novo**) ou "A conta
+  salva "‹nome›" não existe mais. Escolha outra conta ou o login do sistema.", e
+  a abertura fica bloqueada até você escolher.
+- **Retomada na mesma conta.** Uma conversa só é retomada na conta em que foi
+  aberta. Se o bloco estiver em outra conta, vale o aviso de `/resume` manual.
+- **Codex reiniciado após se atualizar.** O texto de uma passagem de
+  responsabilidade não é reenviado, para o agente não recomeçar a tarefa nem
+  cobrar de novo. O bloco avisa e sugere `/resume` ou reenviar à mão.
+- **Sessão viva de outra conta.** Se a interface recarregar e o bloco apontar
+  para uma conta diferente da do processo que está rodando, o app recusa
+  reanexar ("A sessão viva deste bloco está em outra conta") e oferece reiniciar
+  o terminal na conta do bloco.
+- **Remover conta com terminal aberto** pede confirmação e lista os blocos
+  afetados. A conta sai também da cadeia, e o registro de trocas continua com o
+  nome dela.
+
+**O orquestrador do chat também pede confirmação.** Quando o orquestrador
+precisaria trocar de família de provedor (de Claude para Codex, por exemplo), no
+fallback, no último recurso ou no meio de uma tarefa, a conversa mostra um card
+com de → para (provedor e modelo), o motivo, a regra, o prazo e o custo ("muda de
+provedor e de conta de cobrança; roda no login do sistema do destino"), com
+**Trocar para ‹provedor›** e **Não trocar**. Enquanto isso, a linha de status diz
+"Aguardando sua confirmação…". Sem resposta em 10 minutos, vale como recusa: a
+tarefa falha com uma mensagem clara e nenhum provedor é trocado. Trocas dentro da
+mesma família (outro modelo, ou Codex → Codex App Server) seguem sem pergunta. O
+orquestrador continua no Login do sistema e não usa as contas da cadeia.
 
 ## 4. Configuração dentro do app
 
@@ -597,6 +776,24 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 - No Windows, o SmartScreen pode exibir um alerta enquanto a distribuição não tiver assinatura, mas o app abre após confirmar.
 - Ambientes corporativos com antivírus, bloqueio de shell ou políticas rígidas podem impedir automações locais.
 - O painel Code atual é read-only; ações Git com escrita ainda dependem de política de confirmação.
+- **Cadeia de contas:**
+  - a detecção usa as frases de falha conhecidas das versões instaladas de cada
+    CLI. Uma versão nova, uma quebra de linha num bloco estreito ou a repintura
+    do terminal podem esconder a mensagem. O efeito é o app **não** detectar,
+    nunca trocar por engano; nesse caso, use **Passar responsabilidade** à mão;
+  - o Gemini fica fora da cadeia até o app ter uma checagem de login para ele;
+  - no Openia, a falta de crédito não é detectada no terminal, só pela medição
+    de créditos do painel;
+  - a checagem de login é local: a credencial existe na pasta da conta, mas o
+    servidor ainda pode recusá-la. Uma falha de login ou de cobrança logo
+    depois da troca fica registrada e põe a conta de destino em espera;
+  - a cadeia reage a uma falha; ela não troca de conta antes do limite;
+  - "Mais quota primeiro" só compara contas com medição recente, e comparar
+    capacidade entre provedores é uma aproximação;
+  - o Claude pode continuar sozinho na conta antiga depois do reset. O app avisa,
+    mas não cancela essa continuação por você;
+  - a **Passar responsabilidade** feita à mão ainda não mascara segredos no
+    histórico enviado; só a continuação confirmada pela cadeia mascara.
 
 ## 7. Solução de problemas
 
