@@ -6810,3 +6810,47 @@ duas contas Codex reais.
 - Nota de ambiente: um teste de tela do PTY ("classicScreen") falha quando o processo herda
   `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`, o que acontece ao rodar a suíte de dentro do Claude Code. Sem a variável,
   passa. Não tem relação com a cadeia.
+
+## 2026-09-28 — Cadeia de contas: validação final da branch feat/cadeia-contas
+
+Registro gravado às 15:43. Completa o marcador "Validação final: registrada ao fim da branch" da entrada anterior.
+
+**Como a branch foi feita.** Para caber no prazo, a implementação dos commits 15–30 rodou em trilhas paralelas, cada uma num worktree próprio: elegibilidade e política, vigia do terminal, serviço, orquestrador, remoção de conta, interface, documentação, PTY roteirizado, integração do processo principal e matriz de falhas. Os commits foram trazidos para a branch em ordem, com os conflitos resolvidos à mão e conferidos pelos testes de cada arquivo. Houve quatro rodadas de verificação adversarial:
+- uma sobre os commits 1–14;
+- quatro lentes sobre a branch integrada: custo e ticket, fiação e regressão com a cadeia desligada, interface e acessibilidade, política e orquestrador.
+
+**Achados corrigidos antes do PR**, todos com teste que falhava antes:
+- Faltavam no vocabulário as mensagens principais de limite do Claude ("You've hit your session/weekly limit").
+- O filtro de credenciais não cobria as variáveis que trocam quem cobra (Bedrock/Vertex/Foundry e tokens de sessão do Claude, GCA e ADC do Gemini) nem os spawns do painel.
+- Uma frase de limite citada num diff ou num teste disparava a detecção. Agora ela vale só no começo da linha.
+- Um arquivo de chaves ilegível era regravado por cima.
+- A redação não mascarava chave do Google, rótulo entre aspas nem token do GitHub.
+- O diálogo trocava em silêncio a conta escolhida pela recomendada. Isso cobraria outra conta.
+- Delete com o diálogo aberto apagava o bloco de origem por baixo, porque faltava `.nokey`.
+- O foco caía no body depois da recusa.
+- A lista da cadeia anunciava uma reordenação recusada.
+- Um bloco da cadeia não reabria sem ticket na mesma conta.
+- Uma espera vencida pelo prazo liberava a conta sem nova checagem de login.
+- O serviço e a política conversavam por contratos diferentes. A porta `account-chain-port.cjs` faz a tradução.
+- O aviso "limit has reset" não chegava ao serviço.
+- O `transcriptChars` do renderer era descartado.
+
+**Validação no HEAD final** (93e2ef0a, em `app/`):
+- `npm run lint`: 0 erros e 0 avisos.
+- `npm run build`: ok.
+- Suíte node (`scripts/run-node-unit-tests.cjs`, com `env -u CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` e stdin fechado): 2166 de 2166.
+- `npx vitest run`: 169 arquivos, 2251 testes e 1 pulado.
+- Matriz de falhas injetadas: 18 de 18, sobre as peças reais (porta, pty:spawn com ticket e manager).
+- Smoke real (`npm run test:canvas-smoke`, sob lock, perfil isolado, antes da última rodada de correções): sessões A, B e C passaram. A sessão C, da cadeia de ponta a ponta com a CLI roteirizada, cobriu os passos C1–C13 em 140–192 s. O total levou 18,8 min nesta máquina de 2c/4t, carregada pelas trilhas paralelas. A medida no runner fica com a CI do PR.
+- Bancada da vigia (`pty-output-path-benchmark`, parâmetros do CI, com carga média de 14 a 19): custo extra por pedaço de p50 +8,1% no fluxo spinner (teto de 10%); varredura p95 de 0,109 ms no spinner e 0,714 ms no pior caso (teto de 1 ms); CPU com 20 sessões em 3,57% de um núcleo (teto de 5%). `--check` com exit 0. Os números oficiais com a máquina livre, e com o Modo Performance ligado e desligado, ficam como pendência.
+- Regressão com a cadeia desligada, que é o padrão, conferida por sonda sobre a fiação real: nenhuma checagem de login, nenhuma proposta e nenhum diálogo. No Login do sistema e em bloco fixo, só aviso.
+
+**O que ficou de fora, com task aberta:**
+- a validação com contas reais;
+- a medição oficial da bancada;
+- o tempo do smoke na CI;
+- as decisões de produto levantadas pelas trilhas: fila com "Automática", permissões na continuação entre provedores, aviso depois de "Agora não" e se o stop do chat encerra o run;
+- a segunda instância no mesmo perfil;
+- o Openia sem crédito por medição;
+- as propostas de prévia que se acumulam;
+- os testes `classicScreen` e `openia-image-service`, que dependem do ambiente.
