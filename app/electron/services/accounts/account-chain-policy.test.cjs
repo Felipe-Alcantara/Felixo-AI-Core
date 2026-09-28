@@ -6,6 +6,12 @@ process.env.TZ = 'UTC'
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+
+const { createStorageDatabase } = require('../storage/sqlite-database.cjs')
+const { createAccountChainRepository } = require('../storage/account-chain-repository.cjs')
 
 const {
   ELIGIBILITY_REASONS,
@@ -126,6 +132,54 @@ test('espera vencida só deixa de bloquear com checagem de login depois do venci
   // Cobrança só sai pela liberação do serviço ("Já recarreguei" + checagem).
   const billing = { failureClass: 'billing', detectedAt: iso(NOW - 10 * MIN), untilAt: null }
   assert.equal(cooldownBlocks(billing, loggedIn(), NOW), true)
+})
+
+test('espera vencida pela varredura (vencimento) ainda exige checagem de login depois do fim, no repositório real', (t) => {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-account-chain-policy-'))
+  const database = createStorageDatabase({ databaseDir })
+  t.after(() => {
+    database.close()
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  })
+  const repository = createAccountChainRepository(database)
+  const at = (hhmm) => Date.parse(`2026-09-28T${hhmm}:00.000Z`)
+  const login = (hhmm) =>
+    repository.recordLoginCheck({ accountId: 'conta-a', providerId: 'codex', status: 'logged_in', checkedAt: iso(at(hhmm)), source: 'checagem' })
+
+  // Login conferido ANTES do limite, ainda dentro dos 15 min de validade.
+  login('12:00')
+  repository.upsertCooldown({
+    accountId: 'conta-a',
+    providerId: 'codex',
+    failureClass: 'limit',
+    detectedAt: iso(at('12:01')),
+    untilAt: iso(at('12:05')),
+    untilSource: 'texto',
+  })
+  assert.equal(cooldownBlocks(repository.getCooldown('conta-a'), repository.getLoginCheck('conta-a'), at('12:06')), true)
+
+  // A varredura grava released_at = until_at e released_by = 'vencimento'.
+  assert.equal(repository.releaseExpiredCooldowns(iso(at('12:06'))), 1)
+  const swept = repository.getCooldown('conta-a')
+  assert.equal(swept.releasedBy, 'vencimento')
+  // A mesma situação continua "em espera" depois da varredura.
+  assert.equal(cooldownBlocks(swept, repository.getLoginCheck('conta-a'), at('12:06')), true)
+  const eligibility = evaluateEligibility(
+    baseInput({
+      member: { accountId: 'conta-a', providerId: 'codex', enabled: true },
+      cooldown: swept,
+      loginCheck: repository.getLoginCheck('conta-a'),
+      nowMs: at('12:06'),
+    }),
+  )
+  assert.equal(eligibility.reason, 'em-espera')
+
+  // Só uma checagem OK depois do fim da espera devolve a conta.
+  login('12:07')
+  assert.equal(cooldownBlocks(swept, repository.getLoginCheck('conta-a'), at('12:08')), false)
+
+  // Liberação de outro tipo ("Não era limite") solta na hora, como antes.
+  assert.equal(cooldownBlocks({ ...swept, releasedBy: 'nao_era_limite' }, null, at('12:06')), false)
 })
 
 test('janela esgotada só conta em medição atual e até o reset dela', () => {

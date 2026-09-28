@@ -259,8 +259,10 @@ function resolveBilling({ declared = null, detected = null } = {}) {
 /**
  * Se a espera da conta ainda a bloqueia.
  *
- * - liberada (`releasedAt`): não bloqueia;
- * - `limit` com `untilAt` no futuro: bloqueia; vencida, só deixa de bloquear
+ * - liberada (`releasedAt`) por checagem, "Não era limite" ou recarga: não
+ *   bloqueia;
+ * - `limit` com `untilAt` no futuro: bloqueia; vencida — inclusive a que a
+ *   varredura marcou com `releasedBy: 'vencimento'` —, só deixa de bloquear
  *   com checagem de login `logged_in` DEPOIS do vencimento ("precisa
  *   conferir": nunca volta a apta sozinha);
  * - `auth`: bloqueia até uma checagem `logged_in` depois da detecção;
@@ -268,7 +270,10 @@ function resolveBilling({ declared = null, detected = null } = {}) {
  *   ou créditos atuais do Openia > 0).
  */
 function cooldownBlocks(cooldown, loginCheck, nowMs) {
-  if (!cooldown || cooldown.releasedAt) return false
+  if (!cooldown) return false
+  // O vencimento só registra que o prazo passou; a conta ainda precisa de
+  // login conferido depois dele (cai no ramo `limit` abaixo).
+  if (cooldown.releasedAt && cooldown.releasedBy !== 'vencimento') return false
   const loggedInAfter = (instantMs) => {
     if (loginCheck?.status !== 'logged_in') return false
     const checkedMs = parseInstant(loginCheck.checkedAt)

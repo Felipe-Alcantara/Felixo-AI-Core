@@ -118,7 +118,12 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
   }
 
   function cooldown(row, nowMs = now()) {
-    if (!row || row.releasedAt) return null
+    if (!row) return null
+    // Vencida pela varredura continua à mostra enquanto pede checagem de
+    // login (`needsCheck`); qualquer outra liberação some da tela.
+    if (row.releasedAt && !(row.releasedBy === 'vencimento' && policy.cooldownBlocks(row, repository.getLoginCheck(row.accountId), nowMs))) {
+      return null
+    }
     const untilMs = row.untilAt ? Date.parse(row.untilAt) : null
     const expired = untilMs !== null && Number.isFinite(untilMs) && untilMs <= nowMs
     return {

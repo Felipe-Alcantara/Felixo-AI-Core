@@ -1261,7 +1261,9 @@ function createAccountChainService({
         eligible: entry.eligibility.eligible,
         reason: entry.eligibility.reason,
         loginCheck: publicLoginCheck(entry.loginCheck),
-        cooldown: entry.cooldown && !entry.cooldown.releasedAt ? entry.cooldown : null,
+        // Vencida pela varredura ainda aparece enquanto é ela que barra a conta.
+        cooldown:
+          entry.cooldown && (!entry.cooldown.releasedAt || entry.eligibility.reason === 'em-espera') ? entry.cooldown : null,
       }
     })
     return {
