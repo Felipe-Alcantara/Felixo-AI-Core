@@ -93,6 +93,7 @@ const {
 const { registerOnboardingIpcHandlers } = require('./services/onboarding-ipc-handlers.cjs')
 const { resolveOnboardingAutomation } = require('./core/onboarding-automation.cjs')
 const { installIpcInvokeProbe } = require('./core/ipc-invoke-probe.cjs')
+const { loadDevtoolsFakeCliPty } = require('./core/devtools-fake-cli-pty-guard.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
@@ -172,6 +173,12 @@ const ipcProbe =
   Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535
     ? installIpcInvokeProbe(ipcMain)
     : null
+
+// PTY roteirizado no lugar do node-pty, só na instância de automação que pediu
+// (FELIXO_DEVTOOLS_FAKE_CLI_PTY=1, mesma guarda do hardware:get-profile): o
+// smoke da cadeia de contas passa pelo onData real do main sem abrir CLI
+// nenhuma. O app normal recebe null aqui e nunca carrega o módulo.
+const devtoolsFakeCliPty = loadDevtoolsFakeCliPty({ env: process.env, devtoolsPort })
 
 // O Chromium só aceita a porta de depuração antes de ficar pronto. A flag é
 // exclusiva da instância que o `felixo devtools` criou; o app normal não abre
@@ -564,6 +571,7 @@ app.whenReady().then(async () => {
     validateAccount: (accountId, providerId) =>
       cliAccounts.validateAccount(accountId, providerId),
     manager: new PtyProcessManager({
+      spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
       validateAccount: (accountId, providerId) =>
         cliAccounts.validateAccount(accountId, providerId),
       buildAccountEnv: (accountId, providerId) =>
