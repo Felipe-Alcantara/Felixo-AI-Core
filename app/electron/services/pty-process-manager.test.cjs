@@ -7,6 +7,7 @@ const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
   MAX_REPLAY_BUFFER_CHARS,
+  PTY_SESSION_ACCOUNT_MISMATCH,
   isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,
@@ -671,6 +672,106 @@ test('reuseExisting reattaches without spawning or replaying the initial process
   assert.deepEqual(firstOutput, ['history before HMR\r\n'])
   assert.deepEqual(secondOutput, ['history before HMR\r\n'])
   assert.deepEqual(fakePty.kills, [])
+})
+
+test('a sessão guarda conta, provedor e modo, e a lista de sessões vivas os expõe', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
+
+  try {
+    manager.spawn('canvas:cadeia', { command: 'codex', accountId: ' conta-trabalho ', providerId: 'codex', accountMode: 'chain' })
+    manager.spawn('canvas:fixa', { command: 'claude', accountId: 'conta-max' })
+    manager.spawn('canvas:sistema', { command: 'codex', accountMode: 'chain' })
+    manager.spawn('canvas:modo-estranho', { command: 'codex', accountId: 'conta-x', accountMode: 'automatica' })
+    manager.spawn('canvas:shell', {})
+
+    const porId = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    const conta = (id) => {
+      const { accountId, providerId, accountMode } = porId.get(id)
+      return { accountId, providerId, accountMode }
+    }
+    assert.deepEqual(conta('canvas:cadeia'), { accountId: 'conta-trabalho', providerId: 'codex', accountMode: 'chain' })
+    // Bloco antigo, sem o campo novo: nasce fixo na conta escolhida.
+    assert.deepEqual(conta('canvas:fixa'), { accountId: 'conta-max', providerId: 'claude', accountMode: 'pinned' })
+    // Login do sistema não é membro da cadeia, mesmo que peçam.
+    assert.deepEqual(conta('canvas:sistema'), { accountId: null, providerId: 'codex', accountMode: 'pinned' })
+    assert.equal(conta('canvas:modo-estranho').accountMode, 'pinned')
+    assert.deepEqual(conta('canvas:shell'), { accountId: null, providerId: null, accountMode: 'pinned' })
+    // Nada de caminho de perfil nem ambiente na lista.
+    assert.doesNotMatch(JSON.stringify([...porId.values()]), /CODEX_HOME|cli-profiles|env/)
+
+    fakePty.emitExit({ exitCode: 0 })
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('reanexar a sessão viva em outra conta é recusado; na mesma conta reanexa', () => {
+  const { fakePty, spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+  const originalOutput = []
+  const reattachedOutput = []
+
+  try {
+    manager.spawn('canvas:bloco', {
+      command: 'codex',
+      accountId: 'conta-pessoal',
+      onData: (data) => originalOutput.push(data),
+    })
+    fakePty.emitData('trabalho na conta pessoal\r\n')
+
+    for (const outraConta of ['conta-trabalho', undefined, '']) {
+      assert.throws(
+        () =>
+          manager.spawn('canvas:bloco', {
+            command: 'codex',
+            accountId: outraConta,
+            reuseExisting: true,
+            onData: (data) => reattachedOutput.push(data),
+          }),
+        (error) => {
+          assert.equal(error.code, PTY_SESSION_ACCOUNT_MISMATCH)
+          assert.match(error.message, /outra conta/)
+          return true
+        },
+      )
+    }
+
+    // Nada nasceu, nada morreu, e o renderer antigo continua recebendo a saída.
+    assert.equal(calls.length, 1)
+    assert.deepEqual(fakePty.kills, [])
+    assert.deepEqual(reattachedOutput, [])
+    fakePty.emitData('ainda na conta pessoal\r\n')
+    assert.deepEqual(originalOutput, ['trabalho na conta pessoal\r\n', 'ainda na conta pessoal\r\n'])
+
+    manager.spawn('canvas:bloco', {
+      command: 'codex',
+      accountId: 'conta-pessoal',
+      reuseExisting: true,
+      onData: (data) => reattachedOutput.push(data),
+    })
+    assert.equal(calls.length, 1)
+    assert.equal(reattachedOutput.length, 1, 'a mesma conta reanexa com o replay')
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('sessão do login do sistema também não reanexa numa conta própria', () => {
+  const { spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+
+  try {
+    manager.spawn('canvas:sistema', { command: 'claude' })
+    assert.throws(
+      () => manager.spawn('canvas:sistema', { command: 'claude', accountId: 'conta-max', reuseExisting: true }),
+      { code: PTY_SESSION_ACCOUNT_MISMATCH },
+    )
+    manager.spawn('canvas:sistema', { command: 'claude', reuseExisting: true })
+    assert.equal(calls.length, 1)
+  } finally {
+    manager.killAll({ force: true })
+  }
 })
 
 test('reattach depois de mais saída que o limite reenvia exatamente a cauda, na ordem', () => {

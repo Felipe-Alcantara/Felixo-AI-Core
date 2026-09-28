@@ -164,6 +164,40 @@ test('pty:spawn rejects provider metadata incompatible with the command', () => 
   assert.equal(manager.calls.some((call) => call.method === 'spawn'), false)
 })
 
+test('pty:spawn repassa o modo de conta e recusa modo fora do contrato ou cadeia sem conta', () => {
+  const { manager, invoke } = setup({ validateAccount: () => ({ ok: true }) })
+
+  assert.equal(invoke('pty:spawn', { sessionId: 'fixa', command: 'codex', accountId: 'conta-a' }).ok, true)
+  assert.equal(
+    invoke('pty:spawn', { sessionId: 'cadeia', command: 'codex', accountId: 'conta-a', accountMode: 'chain' }).ok,
+    true,
+  )
+  const spawns = manager.calls.filter((call) => call.method === 'spawn')
+  assert.equal(spawns[0].options.accountMode, undefined, 'ausente fica para o gerenciador decidir (fixa)')
+  assert.equal(spawns[1].options.accountMode, 'chain')
+
+  const invalido = invoke('pty:spawn', { sessionId: 'x', command: 'codex', accountId: 'conta-a', accountMode: 'automatica' })
+  assert.deepEqual(invalido, { ok: false, message: 'Modo de conta do terminal inválido.' })
+  const semConta = invoke('pty:spawn', { sessionId: 'y', command: 'codex', accountMode: 'chain' })
+  assert.equal(semConta.ok, false)
+  assert.match(semConta.message, /precisa de uma conta/)
+  assert.equal(manager.calls.filter((call) => call.method === 'spawn').length, 2)
+})
+
+test('pty:spawn devolve o código quando a sessão viva é de outra conta', () => {
+  const { manager, invoke } = setup({ validateAccount: () => ({ ok: true }) })
+  manager.spawn = () => {
+    throw Object.assign(new Error('A sessão viva deste bloco está em outra conta.'), {
+      code: 'PTY_SESSION_ACCOUNT_MISMATCH',
+    })
+  }
+
+  assert.deepEqual(
+    invoke('pty:spawn', { sessionId: 'canvas:b', command: 'codex', accountId: 'conta-b', reuseExisting: true }),
+    { ok: false, message: 'A sessão viva deste bloco está em outra conta.', code: 'PTY_SESSION_ACCOUNT_MISMATCH' },
+  )
+})
+
 test('pty:write forwards input to the manager', async () => {
   const { manager, invoke } = setup()
 

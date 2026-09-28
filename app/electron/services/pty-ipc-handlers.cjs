@@ -11,7 +11,11 @@
 
 const { ipcMain } = require('electron')
 const { toErrorResult } = require('./ipc-result.cjs')
-const { PtyProcessManager } = require('./pty-process-manager.cjs')
+const {
+  PTY_ACCOUNT_MODES,
+  PTY_SESSION_ACCOUNT_MISMATCH,
+  PtyProcessManager,
+} = require('./pty-process-manager.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 
 /**
@@ -46,6 +50,11 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         return accountValidation
       }
 
+      const accountMode = parseAccountMode(params.accountMode, params.accountId)
+      if (!accountMode.ok) {
+        return accountMode
+      }
+
       const reused = Boolean(params.reuseExisting && manager.has?.(sessionId))
 
       manager.spawn(sessionId, {
@@ -64,6 +73,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         // sistema, que é o comportamento de antes desta feature.
         accountId: typeof params.accountId === 'string' ? params.accountId : undefined,
         providerId: accountValidation.providerId,
+        // Fixa (padrão) ou da cadeia de contas; só o enum atravessa.
+        accountMode: accountMode.value,
         onData: (data) => send('pty:data', { sessionId, data }),
         onExit: (event) =>
           send('pty:exit', {
@@ -76,7 +87,10 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
 
       return { ok: true, sessionId, ...(reused ? { reused: true } : {}) }
     } catch (error) {
-      return toErrorResult(error, 'Nao foi possivel iniciar o terminal.')
+      const result = toErrorResult(error, 'Nao foi possivel iniciar o terminal.')
+      // O código deixa o renderer distinguir "a sessão viva é de outra conta"
+      // de uma falha qualquer de spawn.
+      return error?.code === PTY_SESSION_ACCOUNT_MISMATCH ? { ...result, code: error.code } : result
     }
   })
 
@@ -123,6 +137,31 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   return { manager, dispose }
 }
 
+/**
+ * Valida o formato do modo de conta pedido pelo renderer. Ausente vale
+ * `pinned` (decidido no gerenciador); `chain` sem conta não existe, porque o
+ * login do sistema não é membro da cadeia.
+ *
+ * @param {unknown} mode
+ * @param {unknown} accountId
+ * @returns {{ ok: true, value: 'pinned' | 'chain' | undefined } | { ok: false, message: string }}
+ */
+function parseAccountMode(mode, accountId) {
+  if (mode === undefined || mode === null) {
+    return { ok: true, value: undefined }
+  }
+
+  if (!PTY_ACCOUNT_MODES.includes(mode)) {
+    return { ok: false, message: 'Modo de conta do terminal inválido.' }
+  }
+
+  if (mode === 'chain' && !(typeof accountId === 'string' && accountId.trim())) {
+    return { ok: false, message: 'Um bloco da cadeia de contas precisa de uma conta.' }
+  }
+
+  return { ok: true, value: mode }
+}
+
 function requireSessionId(sessionId) {
   if (typeof sessionId !== 'string' || sessionId.trim() === '') {
     throw new Error('sessionId is required.')
@@ -132,6 +171,7 @@ function requireSessionId(sessionId) {
 }
 
 module.exports = {
+  parseAccountMode,
   registerPtyIpcHandlers,
   requireSessionId,
   // Reexportado a partir de ./ipc-result.cjs para não quebrar quem já importa

@@ -510,7 +510,16 @@ declare global {
           accountId?: string
           /** Provider of the CLI; validated against the account in the main process. */
           providerId?: string
-        }) => Promise<CliInvokeResult & { sessionId?: string; reused?: boolean }>
+          /** Fixa (padrão) ou da cadeia de contas; `chain` exige conta. */
+          accountMode?: 'pinned' | 'chain'
+        }) => Promise<
+          CliInvokeResult & {
+            sessionId?: string
+            reused?: boolean
+            /** `PTY_SESSION_ACCOUNT_MISMATCH`: a sessão viva deste bloco nasceu em outra conta. */
+            code?: string
+          }
+        >
         write: (params: {
           sessionId: string
           data: string

@@ -307,6 +307,21 @@ describe('listOfficialCliAccountSessions', () => {
     assert.equal(result.sessions[1].elementId, null)
   })
 
+  it('terminal com conta própria não é afetado pela troca do login do sistema', () => {
+    const result = listOfficialCliAccountSessions('codex', {
+      listSessions: () => [
+        { sessionId: 'canvas:sistema', command: 'codex', cwd: '/p', startedAt: 1, accountId: null },
+        { sessionId: 'canvas:perfil', command: 'codex', cwd: '/p', startedAt: 2, accountId: 'conta-trabalho' },
+      ],
+      platformName: 'linux',
+    })
+
+    assert.deepEqual(
+      result.sessions.map((session) => session.sessionId),
+      ['canvas:sistema'],
+    )
+  })
+
   it('não confunde o shell padrão com a CLI', () => {
     const result = listOfficialCliAccountSessions('codex', {
       listSessions: () => [

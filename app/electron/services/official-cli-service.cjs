@@ -228,7 +228,7 @@ async function getOfficialCliAccountStatus(
  *
  * @param {string} id
  * @param {object} [dependencies]
- * @param {() => Array<{ sessionId: string, command: string | null, cwd?: string, startedAt?: number }>} [dependencies.listSessions]
+ * @param {() => Array<{ sessionId: string, command: string | null, cwd?: string, startedAt?: number, accountId?: string | null }>} [dependencies.listSessions]
  * @param {string} [dependencies.platformName]
  */
 function listOfficialCliAccountSessions(
@@ -247,6 +247,10 @@ function listOfficialCliAccountSessions(
     ),
   )
   const sessions = listSessions()
+    // Terminal com conta própria lê a credencial da pasta do perfil: sair ou
+    // trocar o login do sistema não o afeta, e listá-lo aqui faria a pessoa
+    // reiniciar à toa um terminal que não corria risco.
+    .filter((session) => !session.accountId)
     .filter((session) => aliases.has(commandBasename(session.command)))
     .map((session) => ({
       sessionId: session.sessionId,

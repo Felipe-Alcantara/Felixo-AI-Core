@@ -48,6 +48,13 @@ const SHELL_STARTUP_RECOVERY_WINDOW_MS = 3000
 const MAX_REPLAY_BUFFER_CHARS = 200_000
 const AGENT_SESSION_DISCOVERY_WINDOW_MS = 15_000
 const AGENT_SESSION_DISCOVERY_INTERVAL_MS = 250
+/**
+ * Modo da conta do bloco. `pinned` (fixa) é o padrão, inclusive de bloco
+ * antigo sem o campo: só vira `chain` o bloco aberto pela cadeia de contas.
+ */
+const PTY_ACCOUNT_MODES = Object.freeze(['pinned', 'chain'])
+const DEFAULT_PTY_ACCOUNT_MODE = 'pinned'
+const PTY_SESSION_ACCOUNT_MISMATCH = 'PTY_SESSION_ACCOUNT_MISMATCH'
 
 /**
  * @typedef {object} PtyHandle
@@ -110,6 +117,9 @@ class PtyProcessManager {
    * @param {boolean} [options.keepShellOpen] - Leave an interactive shell behind
    *   once the command exits, for "run this file" sessions where the command is
    *   the whole job and its output must remain readable.
+   * @param {string} [options.accountId] - Conta própria do terminal; ausente = login do sistema.
+   * @param {string} [options.providerId] - Provedor já validado contra a conta.
+   * @param {'pinned' | 'chain'} [options.accountMode] - Modo da conta do bloco; ausente = `pinned`.
    * @param {boolean} [isFallbackRetry] - Internal: true when this call is a
    *   recovery retry after an early exit or Windows PTY backend error. Callers
    *   should never pass this themselves.
@@ -135,9 +145,18 @@ class PtyProcessManager {
       throw new Error(accountValidation.message)
     }
 
+    const accountId = normalizeSessionAccountId(options.accountId)
+
     if (!isFallbackRetry && options.reuseExisting) {
       const existing = this.sessions.get(sessionId)
       if (existing) {
+        // Processo vivo nunca troca de conta: o ambiente da conta só entra no
+        // spawn. Reanexar um bloco cuja conta mudou (recarga depois de trocar
+        // a conta no configurador) entregaria à pessoa um terminal que ainda
+        // cobra da conta antiga, com a nova escrita no card.
+        if ((existing.accountId ?? null) !== accountId) {
+          throw createAccountMismatchError()
+        }
         this.attach(sessionId, options)
         return existing.ptyProcess
       }
@@ -154,7 +173,7 @@ class PtyProcessManager {
     // do app (senão a CLI cobraria pela chave, não pela conta escolhida). Sem
     // conta escolhida o objeto vem vazio e nada muda: é o login do sistema.
     const accountEnv = this.buildAccountEnv(options.accountId, accountValidation.providerId)
-    const env = hasSelectedAccount(options.accountId)
+    const env = accountId
       ? applyProfileEnv(
           createCliEnv(),
           { providerId: accountValidation.providerId, profileEnv: accountEnv },
@@ -292,6 +311,12 @@ class PtyProcessManager {
       discoveryTimer: null,
       agentSession: null,
       filaDeEscrita: null,
+      // Conta com que o processo nasceu. Não muda depois do spawn: é o que o
+      // reattach confere e o que a cadeia de contas lê para saber de quem é
+      // cada terminal vivo. Sem conta = login do sistema.
+      accountId,
+      providerId: accountValidation.providerId ?? null,
+      accountMode: accountId ? normalizeAccountMode(options.accountMode) : DEFAULT_PTY_ACCOUNT_MODE,
     }
 
     // Escrita grande vai fatiada e em ordem: o ConPTY do Windows descarta em
@@ -508,7 +533,11 @@ class PtyProcessManager {
    * saber "esta sessão é do Codex?", e é o comando pedido que responde isso de
    * forma estável entre plataformas.
    *
-   * @returns {Array<{ sessionId: string, command: string | null, args: string[], cwd: string, startedAt: number }>}
+   * A conta, o provedor e o modo vão junto: a troca do login do sistema só
+   * afeta terminal sem conta própria, e a cadeia precisa saber de quem é cada
+   * terminal vivo. Nunca sai caminho de perfil nem ambiente.
+   *
+   * @returns {Array<{ sessionId: string, command: string | null, args: string[], cwd: string, startedAt: number, accountId: string | null, providerId: string | null, accountMode: 'pinned' | 'chain' }>}
    */
   listarSessoesVivas() {
     const sessoes = []
@@ -524,6 +553,9 @@ class PtyProcessManager {
         args: [...(entry.args ?? [])],
         cwd: entry.cwd ?? '',
         startedAt: entry.spawnedAt,
+        accountId: entry.accountId ?? null,
+        providerId: entry.providerId ?? null,
+        accountMode: entry.accountMode ?? DEFAULT_PTY_ACCOUNT_MODE,
       })
     }
 
@@ -1005,6 +1037,23 @@ function hasSelectedAccount(accountId) {
   return typeof accountId === 'string' && accountId.trim() !== ''
 }
 
+/** Conta como a sessão a guarda: id aparado, ou `null` no login do sistema. */
+function normalizeSessionAccountId(accountId) {
+  return hasSelectedAccount(accountId) ? accountId.trim() : null
+}
+
+function normalizeAccountMode(mode) {
+  return PTY_ACCOUNT_MODES.includes(mode) ? mode : DEFAULT_PTY_ACCOUNT_MODE
+}
+
+function createAccountMismatchError() {
+  const error = new Error(
+    'A sessão viva deste bloco está em outra conta. Reinicie o terminal para abri-lo na conta do bloco.',
+  )
+  error.code = PTY_SESSION_ACCOUNT_MISMATCH
+  return error
+}
+
 /**
  * Clamp a terminal dimension to a sane positive integer.
  *
@@ -1150,6 +1199,8 @@ function isClaudeCommandName(command) {
 module.exports = {
   PtyProcessManager,
   MAX_REPLAY_BUFFER_CHARS,
+  PTY_ACCOUNT_MODES,
+  PTY_SESSION_ACCOUNT_MISMATCH,
   isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,
