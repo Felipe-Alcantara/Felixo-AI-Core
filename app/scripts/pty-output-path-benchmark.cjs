@@ -111,9 +111,23 @@ function chunkFor(session, index) {
   return `${SPINNER_CHUNK}${session}:${index}\r\n`
 }
 
+/**
+ * Pedaços que enchem a cauda antes de medir, do tamanho dos pedaços reais —
+ * não um bloco único de 200.000: assim o buffer atual já está no regime de
+ * descarte (cada pedaço novo tira o mais antigo) desde o primeiro pedaço
+ * medido, mesmo nas rodadas curtas do CI.
+ */
+function prefillChunks(session) {
+  const size = chunkFor(session, 0).length
+  const count = Math.ceil(MAX_REPLAY_BUFFER_CHARS / size) + 1
+  return Array.from({ length: count }, (_, index) => chunkFor(session, -1 - index))
+}
+
 /** A estratégia anterior, exatamente como estava em pty-process-manager.cjs:301. */
 function runPrevious({ sessions, chunks }) {
-  const buffers = Array.from({ length: sessions }, () => 'y'.repeat(MAX_REPLAY_BUFFER_CHARS))
+  const buffers = Array.from({ length: sessions }, (_, session) =>
+    prefillChunks(session).join('').slice(-MAX_REPLAY_BUFFER_CHARS),
+  )
   const delivered = []
   const onData = (data) => delivered.push(data.length)
 
@@ -166,8 +180,10 @@ function runCurrent({ sessions, chunks }) {
   for (const id of ids) {
     manager.spawn(id, { command: 'bash', onData: () => { delivered += 1 } })
   }
-  // Cauda cheia antes de medir, como na estratégia anterior.
-  for (const pty of ptys) pty.emitData('y'.repeat(MAX_REPLAY_BUFFER_CHARS))
+  // Cauda cheia antes de medir, com os mesmos pedaços da estratégia anterior.
+  ptys.forEach((pty, session) => {
+    for (const chunk of prefillChunks(session)) pty.emitData(chunk)
+  })
   delivered = 0
 
   const startedAt = performance.now()
