@@ -52,6 +52,7 @@ import {
 import {
   INITIAL_NODE_MOUNT_LATCH,
   reduceNodeMountLatch,
+  rectsIntersect,
   shouldKeepCanvasNodesMounted,
 } from '../services/node-mount-latch'
 import { CanvasToolbar } from './CanvasToolbar'
@@ -690,8 +691,48 @@ function CanvasInner({
     expandedTerminalIdRef.current = null
     drawerCloseGenerationRef.current += 1
     const generation = drawerCloseGenerationRef.current
-    dispatchNodeMountLatch({ type: 'drawer-closed', generation, restoringFocus: focusWasInside })
-    if (!focusWasInside) return
+    dispatchNodeMountLatch({ type: 'drawer-closed', generation })
+    // Only turn virtualization back on once the drawer-less layout has
+    // settled: in the same batch React Flow would still compute the visible
+    // nodes with the old container width, unmounting and remounting the cards
+    // under the drawer's strip (a webview there would reload).
+    const settleAfterLayout = () =>
+      window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(() =>
+          dispatchNodeMountLatch({ type: 'settled', generation }),
+        ),
+      )
+    if (!focusWasInside) {
+      settleAfterLayout()
+      return
+    }
+
+    const isOutsideVisibleArea = (element: Element) => {
+      const container = flowContainerRef.current
+      return Boolean(
+        container &&
+          !rectsIntersect(element.getBoundingClientRect(), container.getBoundingClientRect()),
+      )
+    }
+    // Focus parked in a node outside the visible area keeps every node mounted
+    // until it leaves that node; releasing earlier would unmount the card with
+    // the focus inside (it would drop to <body>). Tab to another control of an
+    // off-screen card hands the hold over to the new element.
+    const holdWhileFocusInHiddenNode = (element: HTMLElement) => {
+      element.addEventListener(
+        'focusout',
+        (event) => {
+          const next = event.relatedTarget
+          const nextNode = next instanceof HTMLElement ? next.closest('.react-flow__node') : null
+          if (next instanceof HTMLElement && nextNode && isOutsideVisibleArea(nextNode)) {
+            holdWhileFocusInHiddenNode(next)
+            return
+          }
+          dispatchNodeMountLatch({ type: 'restored-focus-left', generation })
+        },
+        { once: true },
+      )
+    }
 
     const restoreFocus = (attempt: number) => {
       const remembered = terminalFocusReturnRef.current
@@ -704,17 +745,12 @@ function CanvasInner({
       if (target) {
         target.focus({ preventScroll: true })
         terminalFocusReturnRef.current = target
-        // Focus parked on a card trigger keeps every node mounted until it
-        // moves on; releasing earlier could unmount the card under the focus.
-        if (target.closest('.react-flow__node') && document.activeElement === target) {
+        const node = target.closest('.react-flow__node')
+        if (node && document.activeElement === target && isOutsideVisibleArea(node)) {
           dispatchNodeMountLatch({ type: 'focus-restored-to-node', generation })
-          target.addEventListener(
-            'focusout',
-            () => dispatchNodeMountLatch({ type: 'restored-focus-left', generation }),
-            { once: true },
-          )
+          holdWhileFocusInHiddenNode(target)
         } else {
-          dispatchNodeMountLatch({ type: 'focus-restore-done', generation })
+          settleAfterLayout()
         }
         return
       }
@@ -726,7 +762,7 @@ function CanvasInner({
         return
       }
       flowContainerRef.current?.focus({ preventScroll: true })
-      dispatchNodeMountLatch({ type: 'focus-restore-done', generation })
+      settleAfterLayout()
     }
     window.requestAnimationFrame(() => restoreFocus(0))
   }, [expandedTerminalId])
@@ -849,13 +885,12 @@ function CanvasInner({
     onReset: () => {
       setExpandedTerminalId(null)
       expandedTerminalIdRef.current = null
-      // Limpar/importar descarta os blocos: não há gatilho para devolver foco.
+      // Limpar/importar descarta os blocos: não há gatilho para devolver foco
+      // nem cartão na faixa da gaveta para preservar — solta na hora.
       drawerCloseGenerationRef.current += 1
-      dispatchNodeMountLatch({
-        type: 'drawer-closed',
-        generation: drawerCloseGenerationRef.current,
-        restoringFocus: false,
-      })
+      const generation = drawerCloseGenerationRef.current
+      dispatchNodeMountLatch({ type: 'drawer-closed', generation })
+      dispatchNodeMountLatch({ type: 'settled', generation })
       setActiveTool(null)
     },
   })
