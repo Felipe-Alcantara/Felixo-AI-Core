@@ -689,6 +689,14 @@ jobs:
           path: app/package-manager-operational-${{ matrix.os }}.json
           if-no-files-found: ignore
 
+      # Custo por pedaço de saída no processo principal com 20 terminais e a
+      # cauda de replay cheia: compara a estratégia anterior (concat+slice de
+      # 200k por pedaço) com o PtyProcessManager atual e exige a mesma cauda
+      # no attach e ganho de pelo menos 10×. Node puro, sem Electron nem PTY.
+      - name: Benchmark PTY output path
+        timeout-minutes: 5
+        run: npm run benchmark:pty-output:check -- --chunks=500 --iterations=3
+
       # O scrollback adaptativo só pode ser habilitado depois de medir a
       # combinação real Electron + xterm + PTY nos três runners. O check usa
       # 1/5/10/20 sessões, confirma identidade/attach/resume e compara 10/20
