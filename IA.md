@@ -6657,3 +6657,78 @@ escala com o número de terminais está fora do React, no caminho que todo peda�
 - O gate local tem 2 falhas anteriores a este trabalho e específicas desta máquina Windows
   (`app-relaunch.test.cjs`: EPERM ao criar symlink sem Modo Desenvolvedor; timeout de 5 s em
   `SystemDesignDocumentIndex.test.ts` com a máquina carregada). CI de `6e7cc04` verde.
+
+## Fechamento de trabalho — 2026-09-28: Performance — aviso de histórico honesto, virtualização do canvas destravada e bancada do caminho de saída (fatia 1, parte 2)
+
+### Contexto
+
+Continuação da mesma task ("Performance — limitar renderização, logs e scrollback em alta concorrência").
+A investigação terminou com 37 lacunas, 36 confirmadas por 2 céticos cada (a única refutada: comparação
+rasa em `useSessionMetadata`, que não economiza render nenhum com o React 19). Esta parte trata as que
+atendem diretamente os itens 4 e 5 do pedido ("evitar recalcular itens invisíveis", "avisar antes de
+descartar dados visuais") e o aceite "benchmark mostra ganho".
+
+### O que foi feito
+
+- `717f05d` — `describeTerminalScrollbackUsage` mede as linhas VISUAIS do buffer normal contra a
+  capacidade real do xterm (`rows + scrollback`). A contagem anterior (`\n` recebidos > limite) errava nos
+  dois sentidos: 3.000 linhas de 120 caracteres em 80 colunas já descartam o começo com limite de 5.000 e
+  não avisavam; 5.001 linhas curtas cabem (capacidade 5.024) e acusavam descarte; saída na tela
+  alternativa (Claude Code, por padrão) nunca entra no histórico e acendia aviso. Novo nível "perto do
+  limite" aos 80%. O texto deixa de mandar "fechar e reabrir para reaplicar o replay" (reabrir a gaveta não
+  reaplica nada, o X encerra o processo, e o replay de 200.000 caracteres é menor que o histórico visual).
+  Seção do Modo Performance, `POLITICA-PERFORMANCE.md` e `benchmarks/README.md` corrigidos.
+- `1cae4d5` — `keepCanvasNodesMounted` ia para `true` na primeira abertura da gaveta e nunca voltava:
+  `onlyRenderVisibleElements` ficava desligado até recarregar a janela. `node-mount-latch.ts` (redutor puro)
+  mantém a trava só com a gaveta aberta, enquanto o foco é devolvido e enquanto o foco devolvido está no
+  gatilho do cartão (`focusout {once}` solta), com geração por fechamento. Caminhos de handoff e de
+  limpar/importar também despacham.
+- `c1e2059` — `benchmark:pty-output` (Node puro, `PtyProcessManager` real com PTY falso): compara, no mesmo
+  fluxo, a estratégia anterior do replay com a atual, confere a cauda no attach e exige ganho ≥ 10×. Passo
+  novo no job Benchmarks do CI.
+
+### Validação
+
+- Histórico visual: testes com o xterm real conferem cada estado contra o próprio buffer (primeira linha
+  presente ou não). A contagem antiga reprova os 3 testes novos (mutação). Suíte do terminal 289/289.
+- Virtualização, no app real (`felixo devtools`, 40 notas espalhadas + 1 terminal falso, zoom aproximado):
+  blocos no DOM 2 antes de abrir → 41 com a gaveta aberta → 41 com o foco devolvido ao gatilho → 2 depois
+  que o foco sai. Com o `CanvasView.tsx` anterior o último passo fica em 41. `canvas-smoke` completo no
+  Windows passou duas vezes (inclui a devolução de foco ao gatilho e todos os cenários do tutorial).
+- Bancada: 20 terminais × 2.000 pedaços, anterior 136,4 µs/pedaço × atual 0,254 (537×); tamanho do CI
+  (500 pedaços, 3 rodadas, ~4,5 s) 132,5 × 0,21 (631×); mesma cauda no attach.
+- Gate local: `npm test` 1.844/1.847 (1 falha de ambiente já conhecida, `app-relaunch.test.cjs` EPERM de
+  symlink; 2 pulados); `npm run test:frontend` 2.100/2.101; `tsc -b` e `eslint .` limpos.
+- CI do push anterior (`00d77a0`, run 36380644430): 1ª tentativa falhou só no smoke do tutorial no Windows
+  (SA1, "o app não parou de gravar sozinho") — o smoke usa o `MockTerminalSessionStore`, que estas mudanças
+  não tocam; o re-run passou sem alteração de código e o mesmo SA1 passou 2 vezes localmente.
+
+### Revisão adversarial das mudanças (4 revisores, 2 verificadores por achado)
+
+8 achados confirmados, 1 disputado, 4 rejeitados. Correções:
+
+- `557b48d` — o aviso de histórico voltava atrás quando a gaveta abria e o `fit()` aumentava o xterm
+  (capacidade maior, reflow juntando linhas quebradas): o descarte agora fica marcado por sessão. O texto
+  deixou de recomendar Handoff/Copiar (com tela alternativa o Handoff leva só a tela do app) e de afirmar
+  perda definitiva (com linhas curtas o replay de 200.000 caracteres tem mais linhas que 5.024 e é
+  reaplicado quando o terminal é recriado). Teste novo cobre `buffer.normal` (nenhum pegava a troca).
+- `b831eba` — o teste da coalescência congelava `performance.now` e não distinguia "por fatia" de "só
+  quando a fila esvazia"; o teste novo fatia o parse de verdade.
+- `2a02ff4` — duas regressões que `1cae4d5` introduziria: soltar a trava no mesmo lote do fechamento
+  remontava os cartões da faixa da gaveta (um webview recarregaria), e Tab dentro de um cartão fora da
+  tela derrubava o foco no `body`. Agora a trava assenta dois quadros e segue o foco em bloco fora da área.
+  Verificado com a janela visível: 0 blocos remontados; foco continua no cartão depois do Tab.
+- `2402432` — a bancada pré-enche a cauda com pedaços reais, então o regime de descarte é medido também
+  nas rodadas curtas do CI.
+- Não corrigido (virou item de tarefa): a ligação da trava no `CanvasView` só tem verificação ao vivo, sem
+  cenário automatizado no `canvas-smoke`.
+
+### NÃO verificado / limitações
+
+- Os ganhos do renderer (roteador e coalescência) têm prova estrutural por teste, não medição de tempo no
+  app real com 20 terminais: nenhuma bancada existente roda o store real com terminais transmitindo.
+- Não feitos nesta fatia (viraram tarefas): agrupar `pty:data` no processo principal e controle de fluxo;
+  arquivo em disco com "carregar mais"; Handoff/Copiar com tela alternativa; varreduras das telas de aceite;
+  recálculo por quadro de arrasto no canvas; bancadas do estado real e latência de input; logs do chat
+  legado/orquestrador; store órfão ao trocar para o Chat; teste de symlink no Windows; retenção de
+  `agent_usage_samples`.
