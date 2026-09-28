@@ -122,21 +122,34 @@ export function useAccountContinuation({
    * é a resposta do main; depois dela, se o foco se perdeu, volta ao bloco.
    */
   const closeDialog = useCallback(
-    (restoreFocus: boolean, sourceNodeId: string | null = null, settled?: Promise<unknown>) => {
+    (
+      restoreFocus: 'trigger' | 'source' | false,
+      sourceNodeId: string | null = null,
+      settled?: Promise<unknown>,
+    ) => {
       const trigger = triggerRef.current
       triggerRef.current = null
       setDialog(null)
       if (!restoreFocus) return
       // O alvo estável é o botão de expandir do bloco de origem; sem ele, o
       // próprio nó (focável). Nunca o `body`.
+      const source = () => {
+        if (!sourceNodeId) return null
+        const expand = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
+        ).find((element) => element.dataset.terminalExpandTrigger === sourceNodeId)
+        return expand ?? document.querySelector<HTMLElement>(canvasNodeSelector(sourceNodeId))
+      }
+      // Responder (recusar, fixar, "não era limite") encerra a proposta, e a
+      // faixa que abriu o diálogo sai junto — em algum momento depois da
+      // resposta do main, que pode chegar antes da faixa sumir. Por isso a
+      // resposta vai direto ao bloco de origem; fechar sem responder volta a
+      // quem abriu. Depois da resposta, se o foco se perdeu, volta ao bloco.
       const restore = () =>
-        focusReturnTarget(trigger, () => {
-          if (!sourceNodeId) return null
-          const expand = Array.from(
-            document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
-          ).find((element) => element.dataset.terminalExpandTrigger === sourceNodeId)
-          return expand ?? document.querySelector<HTMLElement>(canvasNodeSelector(sourceNodeId))
-        })?.focus()
+        (restoreFocus === 'source'
+          ? source() ?? (trigger?.isConnected ? trigger : null)
+          : focusReturnTarget(trigger, source)
+        )?.focus()
       window.requestAnimationFrame(restore)
       const afterMain = () =>
         window.requestAnimationFrame(() => {
@@ -354,12 +367,12 @@ export function useAccountContinuation({
           onLater: () => {
             const settled = decline(dialog.proposalId, 'later')
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
-            closeDialog(true, dialog.sourceNodeId, settled)
+            closeDialog('source', dialog.sourceNodeId, settled)
           },
           onNotALimit: () => {
             const settled = decline(dialog.proposalId, 'not-a-limit')
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
-            closeDialog(true, dialog.sourceNodeId, settled)
+            closeDialog('source', dialog.sourceNodeId, settled)
           },
           onPin: () => {
             const sourceNodeId = dialog.sourceNodeId
@@ -369,7 +382,7 @@ export function useAccountContinuation({
                 setBannerError(sourceNodeId, result.message)
               },
             )
-            closeDialog(true, sourceNodeId, settled)
+            closeDialog('source', sourceNodeId, settled)
           },
           onMeasureNow: () => {
             void Promise.resolve(window.felixo?.agentUsage?.refresh())
@@ -382,7 +395,7 @@ export function useAccountContinuation({
             openChainSettings()
           },
           onGoToSource: () => focusNode(dialog.sourceNodeId),
-          onClose: () => closeDialog(true, dialog.sourceNodeId),
+          onClose: () => closeDialog('trigger', dialog.sourceNodeId),
         }
       : null
 
