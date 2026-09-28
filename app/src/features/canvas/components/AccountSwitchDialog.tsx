@@ -115,7 +115,9 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
   }
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
+    // `nokey`: Delete/Backspace com o foco no diálogo não chegam ao React Flow,
+    // que apagaria o bloco selecionado atrás do modal (o terminal antigo).
+    <div className="nokey fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
       <div
         ref={panelRef}
         role="dialog"
