@@ -20,8 +20,16 @@ const EVIDENCE_LEAD_CHARS = 40
 /** Tamanho, em dígitos hexadecimais, da impressão digital de uma evidência. */
 const EVIDENCE_HASH_HEX_CHARS = 32
 
+/**
+ * Um horário de reset lido do texto a mais disto do agora é descartado: nenhum
+ * limite de uso das CLIs dura mais que uma semana, e uma leitura assim é erro
+ * de interpretação (data de outro ano, dia sem mês).
+ */
+const RESET_MAX_AHEAD_MS = 8 * 24 * 60 * 60 * 1000
+
 module.exports = Object.freeze({
   EVIDENCE_HASH_HEX_CHARS,
   EVIDENCE_LEAD_CHARS,
   EVIDENCE_MAX_CHARS,
+  RESET_MAX_AHEAD_MS,
 })
