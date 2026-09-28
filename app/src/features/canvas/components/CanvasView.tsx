@@ -173,7 +173,7 @@ import { AccountSwitchDialog } from './AccountSwitchDialog'
 import { AccountChainActionsContext } from '../hooks/account-chain-actions-context'
 import { useAccountContinuation } from '../hooks/useAccountContinuation'
 import type { ContinuationReason } from '../services/account-switch-dialog'
-import { formatClockTime } from '../services/account-chain-view'
+import { formatClockTime, ptySessionIdForNode } from '../services/account-chain-view'
 import { requestAgentUsageTab } from '../services/agent-usage-panel-tab'
 import { OnboardingMount } from '../../onboarding/OnboardingMount'
 import { WATCHES_CANVAS_NODE_TYPES, nodeTypesKeyOf } from '../../onboarding/onboarding-canvas-triggers'
@@ -3012,7 +3012,7 @@ function CanvasInner({
           }
           projects={projects}
           onAddFolder={addProjectFolder}
-          sourceSessionId={`canvas:${handoff.sourceId}`}
+          sourceSessionId={ptySessionIdForNode(handoff.sourceId)}
           reason={handoff.reason}
           onConfirm={(options) =>
             passResponsibility(handoff.sourceId, handoff.transcript, options, handoff.reason)

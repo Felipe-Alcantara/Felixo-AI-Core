@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { AccountSwitchProposal } from '../../shared/types/account-chain'
 import type { CanvasFlowNode } from './useCanvasPersistence'
 import type { TerminalNodeData } from '../types'
@@ -91,6 +91,13 @@ export function useAccountContinuation({
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [bannerErrors, setBannerErrors] = useState<Readonly<Record<string, string>>>({})
   const busyRef = useRef(false)
+  // Os callbacks do canvas mudam de identidade a cada render (o `focusNode`
+  // depende da lista de blocos). Lidos por ref, eles não recriam as ações do
+  // contexto: senão todo bloco memoizado re-renderizaria a cada arrasto.
+  const canvasRef = useRef({ focusNode, openTerminal, openHandoff })
+  useEffect(() => {
+    canvasRef.current = { focusNode, openTerminal, openHandoff }
+  })
   // Quem abriu o diálogo recebe o foco de volta ao fechar (§8.2).
   const triggerRef = useRef<HTMLElement | null>(null)
   const pending = snapshot.state?.pendingProposals
@@ -186,7 +193,10 @@ export function useAccountContinuation({
           return
         case 'pass-responsibility':
           if (banner.reasonClass) {
-            openHandoff(nodeId, { failureClass: banner.reasonClass, detectedAt: banner.detectedAt })
+            canvasRef.current.openHandoff(nodeId, {
+              failureClass: banner.reasonClass,
+              detectedAt: banner.detectedAt,
+            })
           }
           return
         case 'treat-as-limit':
@@ -212,14 +222,14 @@ export function useAccountContinuation({
           return
         case 'relogin':
           // Só abre o terminal: o login é feito pela pessoa, na própria CLI.
-          openTerminal(nodeId)
+          canvasRef.current.openTerminal(nodeId)
           return
         case 'go-to-successor':
-          if (banner.successorNodeId) focusNode(banner.successorNodeId)
+          if (banner.successorNodeId) canvasRef.current.focusNode(banner.successorNodeId)
           return
       }
     },
-    [decline, focusNode, openHandoff, openProposal, openTerminal, setBannerError, store],
+    [decline, openProposal, setBannerError, store],
   )
 
   const actions = useMemo<AccountChainCanvasActions>(
