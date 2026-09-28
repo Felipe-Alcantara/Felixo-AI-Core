@@ -73,3 +73,28 @@ export function rovingIndex(
   if (key === nextKey) return (current + 1) % count
   return null
 }
+
+/**
+ * Para onde o foco volta ao fechar um diálogo: o gatilho, se ainda estiver na
+ * página; senão, o alvo estável que `fallback` achar (por exemplo, o próprio
+ * bloco do canvas). A faixa que tinha o gatilho some depois de uma recusa ou
+ * de fixar a conta, e o foco não pode cair no `body`. `null` = nada a focar.
+ */
+export function focusReturnTarget<T extends { isConnected: boolean }>(
+  trigger: T | null,
+  fallback: () => T | null,
+): T | null {
+  if (trigger?.isConnected) return trigger
+  const target = fallback()
+  return target?.isConnected ? target : null
+}
+
+/** O foco se perdeu: saiu de todo controle e caiu no `body` (ou em nada). */
+export function focusWasLost<T>(active: T | null, body: T | null): boolean {
+  return active === null || active === body
+}
+
+/** Seletor do bloco do canvas (o nó do React Flow é focável). */
+export function canvasNodeSelector(nodeId: string): string {
+  return `.react-flow__node[data-id="${nodeId.replace(/["\\]/g, '\\$&')}"]`
+}

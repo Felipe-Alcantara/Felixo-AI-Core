@@ -17,7 +17,8 @@ import {
   type ContinuationNodeOptions,
   type TranscriptPreparation,
 } from '../services/account-continuation'
-import { dialogFocusReturnTarget, type ContinuationReason } from '../services/account-switch-dialog'
+import type { ContinuationReason } from '../services/account-switch-dialog'
+import { canvasNodeSelector, focusReturnTarget, focusWasLost } from '../services/keyboard-focus'
 
 type DialogState = {
   proposalId: string
@@ -114,20 +115,37 @@ export function useAccountContinuation({
     })
   }, [])
 
-  const closeDialog = useCallback((restoreFocus: 'trigger' | 'source' | null, sourceNodeId?: string) => {
-    const trigger = triggerRef.current
-    triggerRef.current = null
-    setDialog(null)
-    if (!restoreFocus) return
-    window.requestAnimationFrame(() => {
-      const source = sourceNodeId
-        ? Array.from(document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]')).find(
-            (element) => element.dataset.terminalExpandTrigger === sourceNodeId,
-          ) ?? null
-        : null
-      dialogFocusReturnTarget({ mode: restoreFocus, trigger, source })?.focus()
-    })
-  }, [])
+  /**
+   * Fecha o diálogo e devolve o foco a quem o abriu. Recusar ou fixar faz o
+   * main tirar a proposta, e a faixa (com o botão "Ver opções") some: aí o
+   * foco vai ao próprio bloco, que é focável, e não cai no `body`. `settled`
+   * é a resposta do main; depois dela, se o foco se perdeu, volta ao bloco.
+   */
+  const closeDialog = useCallback(
+    (restoreFocus: boolean, sourceNodeId: string | null = null, settled?: Promise<unknown>) => {
+      const trigger = triggerRef.current
+      triggerRef.current = null
+      setDialog(null)
+      if (!restoreFocus) return
+      // O alvo estável é o botão de expandir do bloco de origem; sem ele, o
+      // próprio nó (focável). Nunca o `body`.
+      const restore = () =>
+        focusReturnTarget(trigger, () => {
+          if (!sourceNodeId) return null
+          const expand = Array.from(
+            document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
+          ).find((element) => element.dataset.terminalExpandTrigger === sourceNodeId)
+          return expand ?? document.querySelector<HTMLElement>(canvasNodeSelector(sourceNodeId))
+        })?.focus()
+      window.requestAnimationFrame(restore)
+      const afterMain = () =>
+        window.requestAnimationFrame(() => {
+          if (focusWasLost(document.activeElement, document.body)) restore()
+        })
+      void settled?.then(afterMain, afterMain)
+    },
+    [],
+  )
 
   /** Abre o diálogo de uma proposta; o histórico é redigido no main já aqui. */
   const openProposal = useCallback(
@@ -334,24 +352,24 @@ export function useAccountContinuation({
           canPin: Boolean(dialogProposal.from.accountId),
           onConfirm: (params) => void confirm(params),
           onLater: () => {
-            void decline(dialog.proposalId, 'later')
+            const settled = decline(dialog.proposalId, 'later')
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
-            closeDialog('source', dialog.sourceNodeId)
+            closeDialog(true, dialog.sourceNodeId, settled)
           },
           onNotALimit: () => {
-            void decline(dialog.proposalId, 'not-a-limit')
+            const settled = decline(dialog.proposalId, 'not-a-limit')
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
-            closeDialog('source', dialog.sourceNodeId)
+            closeDialog(true, dialog.sourceNodeId, settled)
           },
           onPin: () => {
             const sourceNodeId = dialog.sourceNodeId
-            void changeSessionAccountMode(store.bridge, ptySessionIdForNode(sourceNodeId), 'pinned').then(
+            const settled = changeSessionAccountMode(store.bridge, ptySessionIdForNode(sourceNodeId), 'pinned').then(
               (result) => {
                 if (result.persist) updateNodeData(sourceNodeId, { accountMode: 'pinned' })
                 setBannerError(sourceNodeId, result.message)
               },
             )
-            closeDialog('trigger', sourceNodeId)
+            closeDialog(true, sourceNodeId, settled)
           },
           onMeasureNow: () => {
             void Promise.resolve(window.felixo?.agentUsage?.refresh())
@@ -360,11 +378,11 @@ export function useAccountContinuation({
           },
           onCheckLogin: (accountIds) => void store.checkLogin(accountIds),
           onOpenChainSettings: () => {
-            closeDialog(null)
+            closeDialog(false)
             openChainSettings()
           },
           onGoToSource: () => focusNode(dialog.sourceNodeId),
-          onClose: () => closeDialog('trigger', dialog.sourceNodeId),
+          onClose: () => closeDialog(true, dialog.sourceNodeId),
         }
       : null
 

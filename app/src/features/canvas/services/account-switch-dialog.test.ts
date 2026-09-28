@@ -3,7 +3,6 @@ import {
   buildAccountSwitchDialogModel,
   buildContinuationLaunch,
   countLines,
-  dialogFocusReturnTarget,
   formatTranscriptSize,
   initialDialogSelection,
 } from './account-switch-dialog'
@@ -186,29 +185,5 @@ describe('buildContinuationLaunch', () => {
         destinationLabel: 'Router',
       }),
     ).toEqual({ command: 'openia', launchMode: 'launcher', label: 'Claude · continuação (Router)' })
-  })
-})
-
-describe('dialogFocusReturnTarget', () => {
-  const connected = (name: string) => ({ name, isConnected: true })
-  const detached = (name: string) => ({ name, isConnected: false })
-
-  it('"Agora não"/Esc: vai para o bloco de origem, porque a faixa que abriu sai com a proposta', () => {
-    // A recusa é assíncrona: no quadro seguinte a faixa ainda está montada.
-    expect(dialogFocusReturnTarget({ mode: 'source', trigger: connected('faixa'), source: connected('bloco') })?.name).toBe('bloco')
-  })
-
-  it('fechar sem responder volta a quem abriu', () => {
-    expect(dialogFocusReturnTarget({ mode: 'trigger', trigger: connected('faixa'), source: connected('bloco') })?.name).toBe('faixa')
-  })
-
-  it('quem abriu saiu da tela: cai no bloco de origem, nunca no body', () => {
-    expect(dialogFocusReturnTarget({ mode: 'trigger', trigger: detached('faixa'), source: connected('bloco') })?.name).toBe('bloco')
-    expect(dialogFocusReturnTarget({ mode: 'source', trigger: connected('item'), source: null })?.name).toBe('item')
-  })
-
-  it('nada montado: não foca nada', () => {
-    expect(dialogFocusReturnTarget({ mode: 'source', trigger: detached('faixa'), source: detached('bloco') })).toBeNull()
-    expect(dialogFocusReturnTarget({ mode: 'trigger', trigger: null, source: null })).toBeNull()
   })
 })
