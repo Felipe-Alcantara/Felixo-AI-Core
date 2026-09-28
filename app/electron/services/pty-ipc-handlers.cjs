@@ -32,6 +32,7 @@ const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
  * @param {object} [dependencies]
  * @param {PtyProcessManager} [dependencies.manager] - Injectable for tests.
  * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount]
+ * @param {(sessionId: string) => void} [dependencies.onSessionExit] - Avisado quando o processo da sessão sai.
  * @returns {{ manager: PtyProcessManager, dispose: () => void }}
  */
 function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
@@ -85,12 +86,19 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         // Fixa (padrão) ou da cadeia de contas; só o enum atravessa.
         accountMode: accountMode.value,
         onData: (data) => send('pty:data', { sessionId, data }),
-        onExit: (event) =>
+        onExit: (event) => {
           send('pty:exit', {
             sessionId,
             exitCode: event.exitCode,
             signal: event.signal,
-          }),
+          })
+          // A cadeia de contas vence as propostas abertas desta sessão.
+          try {
+            dependencies.onSessionExit?.(sessionId)
+          } catch {
+            // Diagnóstico da cadeia não pode atrapalhar o fim do terminal.
+          }
+        },
         onSession: (reference) => send('pty:session', { ptySessionId: sessionId, ...reference }),
       })
 

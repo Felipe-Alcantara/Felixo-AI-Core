@@ -13,6 +13,7 @@ const {
   getMirrorEntries,
   getProfileDir,
   supportsProfiles,
+  listPresentInheritedCredentialNames,
 } = require('./cli-account-profiles.cjs')
 const { getManagedCliLayout, getOfflineCacheLayout } = require('../core/managed-cli-paths.cjs')
 
@@ -247,4 +248,20 @@ test('processo auxiliar de conta: com perfil tira as herdadas; login do sistema 
   )
   assert.deepEqual(buildAccountProcessEnv(base, { providerId: 'claude', profileEnv: {} }, 'linux'), base)
   assert.deepEqual(buildAccountProcessEnv(base, { providerId: 'claude' }, 'linux'), base)
+})
+
+describe('listPresentInheritedCredentialNames', () => {
+  it('devolve só os nomes das credenciais definidas, nunca o valor', () => {
+    const nomes = listPresentInheritedCredentialNames(
+      { OPENAI_API_KEY: 'sk-segredo', ANTHROPIC_API_KEY: '  ', PATH: '/usr/bin', GEMINI_API_KEY: 'g' },
+      'linux',
+    )
+    assert.deepEqual(nomes, ['OPENAI_API_KEY', 'GEMINI_API_KEY'])
+    assert.equal(JSON.stringify(nomes).includes('sk-segredo'), false)
+  })
+
+  it('no Windows reconhece o nome sem diferenciar maiúscula', () => {
+    assert.deepEqual(listPresentInheritedCredentialNames({ openai_api_key: 'x' }, 'win32'), ['OPENAI_API_KEY'])
+    assert.deepEqual(listPresentInheritedCredentialNames({ openai_api_key: 'x' }, 'linux'), [])
+  })
 })

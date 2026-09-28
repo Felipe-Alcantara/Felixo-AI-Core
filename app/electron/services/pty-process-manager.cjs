@@ -572,7 +572,10 @@ class PtyProcessManager {
    * afeta terminal sem conta própria, e a cadeia precisa saber de quem é cada
    * terminal vivo. Nunca sai caminho de perfil nem ambiente.
    *
-   * @returns {Array<{ sessionId: string, command: string | null, args: string[], cwd: string, startedAt: number, accountId: string | null, providerId: string | null, accountMode: 'pinned' | 'chain' }>}
+   * `lastOutputAt` (ms) diz à cadeia se a origem ainda trabalha, e
+   * `lineageId` liga o bloco à sequência de trocas que o criou.
+   *
+   * @returns {Array<{ sessionId: string, command: string | null, args: string[], cwd: string, startedAt: number, accountId: string | null, providerId: string | null, accountMode: 'pinned' | 'chain', lastOutputAt: number | null, lineageId: string | null }>}
    */
   listarSessoesVivas() {
     const sessoes = []
@@ -591,10 +594,33 @@ class PtyProcessManager {
         accountId: entry.accountId ?? null,
         providerId: entry.providerId ?? null,
         accountMode: entry.accountMode ?? DEFAULT_PTY_ACCOUNT_MODE,
+        lastOutputAt: entry.lastOutputAt ?? null,
+        lineageId: entry.lineageId ?? null,
       })
     }
 
     return sessoes
+  }
+
+  /**
+   * Muda o modo da conta de um terminal vivo (fixar ou pôr na cadeia). A
+   * conta do processo não muda: só quem decide o que fazer numa falha. Sem
+   * conta própria (login do sistema) não há `chain`.
+   *
+   * @param {string} sessionId
+   * @param {'pinned' | 'chain'} mode
+   * @returns {boolean} `true` quando a sessão viva aceitou o modo.
+   */
+  setAccountMode(sessionId, mode) {
+    const entry = this.sessions.get(sessionId)
+    if (!entry || entry.exitEvent || !PTY_ACCOUNT_MODES.includes(mode)) {
+      return false
+    }
+    if (mode === 'chain' && !entry.accountId) {
+      return false
+    }
+    entry.accountMode = mode
+    return true
   }
 
   /** Replaces renderer callbacks and replays output after an HMR/navigation reload. */

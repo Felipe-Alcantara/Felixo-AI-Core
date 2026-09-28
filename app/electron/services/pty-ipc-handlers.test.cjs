@@ -277,3 +277,13 @@ test('pty:write nao espera dreno quando a sessao recusou a escrita', async () =>
   assert.equal(esperou, false)
   assert.deepEqual(resultado, { ok: true, delivered: false })
 })
+
+test('pty:spawn avisa a saída da sessão a quem acompanha a cadeia de contas', () => {
+  handlers.clear()
+  const exited = []
+  const manager = createFakeManager()
+  registerPtyIpcHandlers(() => null, { manager, onSessionExit: (sessionId) => exited.push(sessionId) })
+  const result = handlers.get('pty:spawn')(null, { sessionId: 'canvas:a', command: 'codex' })
+  assert.equal(result.ok, true)
+  assert.deepEqual(exited, ['canvas:a'])
+})

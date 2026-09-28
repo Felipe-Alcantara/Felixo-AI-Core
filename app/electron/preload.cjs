@@ -336,6 +336,38 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('cli-accounts:remove', accountId, options),
     setSecret: (params) => ipcRenderer.invoke('cli-accounts:set-secret', params),
   },
+  // Cadeia de contas: o main decide tudo (elegibilidade, ordem, espera,
+  // proposta, ticket); a interface só lê, confirma e recusa.
+  accountChain: {
+    getState: () => ipcRenderer.invoke('account-chain:get-state'),
+    updateSettings: (params) => ipcRenderer.invoke('account-chain:update-settings', params),
+    updateMembers: (params) => ipcRenderer.invoke('account-chain:update-members', params),
+    checkLogin: (params) => ipcRenderer.invoke('account-chain:check-login', params),
+    previewLaunch: (params) => ipcRenderer.invoke('account-chain:preview-launch', params),
+    confirm: (params) => ipcRenderer.invoke('account-chain:confirm', params),
+    decline: (params) => ipcRenderer.invoke('account-chain:decline', params),
+    resolveAmbiguous: (params) => ipcRenderer.invoke('account-chain:resolve-ambiguous', params),
+    setSessionMode: (params) => ipcRenderer.invoke('account-chain:set-session-mode', params),
+    releaseCooldown: (params) => ipcRenderer.invoke('account-chain:release-cooldown', params),
+    redactTranscript: (params) => ipcRenderer.invoke('account-chain:redact-transcript', params),
+    recordManual: (params) => ipcRenderer.invoke('account-chain:record-manual', params),
+    history: (params) => ipcRenderer.invoke('account-chain:history', params),
+    onChanged: (callback) => {
+      const handler = (_event, state) => callback(state)
+      ipcRenderer.on('account-chain:changed', handler)
+      return () => ipcRenderer.removeListener('account-chain:changed', handler)
+    },
+    onProposal: (callback) => {
+      const handler = (_event, proposalEvent) => callback(proposalEvent)
+      ipcRenderer.on('account-chain:proposal', handler)
+      return () => ipcRenderer.removeListener('account-chain:proposal', handler)
+    },
+    onDetection: (callback) => {
+      const handler = (_event, detection) => callback(detection)
+      ipcRenderer.on('account-chain:detection', handler)
+      return () => ipcRenderer.removeListener('account-chain:detection', handler)
+    },
+  },
   agentUsage: {
     list: () => ipcRenderer.invoke('agent-usage:list'),
     refresh: () => ipcRenderer.invoke('agent-usage:refresh'),

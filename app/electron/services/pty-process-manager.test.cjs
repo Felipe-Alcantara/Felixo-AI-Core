@@ -1494,3 +1494,33 @@ test('vigia: falha dentro da vigia ou do consumidor não derruba o terminal nem 
   assert.deepEqual(recebidos, ['a', 'b'])
   manager.killAll({ force: true })
 })
+
+test('a lista de sessões vivas expõe a última saída e a linhagem; o modo muda só em sessão viva com conta', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  let clock = 1_000
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform, now: () => clock })
+
+  try {
+    manager.spawn('canvas:conta', { command: 'codex', accountId: 'conta-a', providerId: 'codex' })
+    manager.spawn('canvas:sistema', { command: 'codex' })
+    const antes = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    // Sem saída ainda: a cadeia nunca bloqueia por uma origem que não imprimiu nada.
+    assert.equal(antes.get('canvas:conta').lastOutputAt, null)
+    assert.equal(antes.get('canvas:conta').lineageId, null)
+
+    clock = 5_000
+    fakePty.emitData('trabalhando\r\n')
+    const depois = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    assert.equal(depois.get('canvas:conta').lastOutputAt, 5_000)
+
+    assert.equal(manager.setAccountMode('canvas:conta', 'chain'), true)
+    assert.equal(manager.listarSessoesVivas().find((s) => s.sessionId === 'canvas:conta').accountMode, 'chain')
+    assert.equal(manager.setAccountMode('canvas:conta', 'pinned'), true)
+    // Login do sistema não entra na cadeia; modo fora do contrato e sessão inexistente são recusados.
+    assert.equal(manager.setAccountMode('canvas:sistema', 'chain'), false)
+    assert.equal(manager.setAccountMode('canvas:conta', 'automatica'), false)
+    assert.equal(manager.setAccountMode('canvas:nenhuma', 'pinned'), false)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})

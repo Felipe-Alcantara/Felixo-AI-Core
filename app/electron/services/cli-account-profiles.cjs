@@ -165,6 +165,31 @@ function getInheritedCredentialNames(providerId) {
 }
 
 /**
+ * Quais credenciais herdáveis estão definidas no ambiente do app, só pelo
+ * NOME (nunca o valor). A cadeia de contas mostra esse fato para a pessoa
+ * saber que um terminal no Login do sistema cobraria pela chave.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {string} [platformName]
+ * @returns {string[]} Nomes em ordem, sem repetição.
+ */
+function listPresentInheritedCredentialNames(env, platformName = process.platform) {
+  const caseInsensitive = platformName === 'win32'
+  const present = new Set(
+    Object.entries(env ?? {})
+      .filter(([, value]) => typeof value === 'string' && value.trim() !== '')
+      .map(([key]) => (caseInsensitive ? key.toUpperCase() : key)),
+  )
+  const names = []
+  for (const list of Object.values(CREDENCIAIS_HERDADAS)) {
+    for (const name of list) {
+      if (present.has(caseInsensitive ? name.toUpperCase() : name) && !names.includes(name)) names.push(name)
+    }
+  }
+  return names
+}
+
+/**
  * Ambiente de um processo que nasce numa conta com perfil: o ambiente base
  * sem as credenciais herdadas daquele provedor, mais as variáveis do perfil.
  *
@@ -236,5 +261,6 @@ module.exports = {
   getIsolation,
   getMirrorEntries,
   getProfileDir,
+  listPresentInheritedCredentialNames,
   supportsProfiles,
 }
