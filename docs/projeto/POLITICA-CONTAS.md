@@ -11,9 +11,9 @@ Escopo: terminais de agente do canvas (Claude, Codex, Gemini e Openia, com
 conta própria ou no Login do sistema) e o orquestrador do chat. Linux, macOS e
 Windows.
 
-Estado: implementação em andamento na branch `feat/cadeia-contas`, a partir de
-`origin/main` `116f0569`. Enquanto a cadeia estiver desligada (o padrão), nenhum
-bloco troca de conta.
+Estado: implementada na branch `feat/cadeia-contas`, a partir de `origin/main`
+`116f0569`, e será publicada quando essa branch for integrada. Enquanto a
+cadeia estiver desligada (o padrão), nenhum bloco troca de conta.
 
 ## Decisões do dono (fechadas)
 
@@ -97,7 +97,8 @@ A primeira razão que bloqueia decide, nesta ordem. Toda razão tem texto na UI.
 5. Em espera, ou com espera vencida sem checagem posterior.
 6. Esgotada por medição atual (alguma janela em 0%), até o reset dela.
 7. Login não conferido nos últimos 15 minutos.
-8. Deslogada, CLI ausente ou checagem com tempo esgotado.
+8. Deslogada, CLI ausente, checagem com tempo esgotado ou checagem que não
+   confirmou a conta ("A checagem de login não confirmou a conta.").
 9. Identidade diferente da esperada, ou a mesma identidade de outra conta.
 10. É a origem, ou já foi visitada nesta linhagem.
 
@@ -116,7 +117,7 @@ depois pelo identificador da conta.
 | Estratégia | Regra |
 |---|---|
 | Ordem manual (padrão ao ligar) | a primeira apta na ordem |
-| Rodízio | a primeira apta depois do último destino que de fato abriu; recusa e falha de spawn não gastam a vez |
+| Rodízio | a primeira apta depois do último destino que de fato abriu por continuação ou por "Automática (cadeia)"; a passagem manual de responsabilidade não conta, e recusa e falha de spawn não gastam a vez |
 | Mais quota primeiro | maior capacidade primeiro; contas sem medição atual vão depois de todas as medidas |
 | Assinatura antes de uso | assinatura, depois cobrança desconhecida, depois uso |
 
@@ -159,9 +160,14 @@ espera. "Não era limite" libera a espera e silencia aquela evidência.
   contexto que será enviado e quem paga (assinatura da conta de destino ou
   créditos por uso).
 - O foco inicial fica no candidato recomendado, nunca no botão de confirmar.
+- O destino confirmado é sempre o que a pessoa escolheu: se a conta escolhida
+  deixa de estar apta com o diálogo aberto, ele avisa com o motivo e fica sem
+  destino até outra escolha; nunca cai na recomendada.
 - Confirmar gera um ticket de uso único no processo principal; o bloco novo só
   nasce com esse ticket e só na conta confirmada. Confirmar duas vezes devolve o
-  mesmo ticket.
+  mesmo ticket. Depois de nascer, o bloco reabre sem ticket (reinício do app,
+  "Reiniciar", recarregar a janela) como um spawn comum na mesma conta, e mantém
+  a linhagem da troca.
 - Uma proposta vence em 30 minutos; um ticket não usado vence em 2 minutos.
 - "Automática (cadeia)" ao abrir um bloco mostra antes qual conta será usada; o
   clique em Abrir é a confirmação. Sem conta apta, a abertura é recusada, nunca
@@ -202,7 +208,8 @@ credencial presentes no ambiente do app, nunca os valores.
   no novo spawn no meio da tarefa. Codex → Codex App Server é só troca de
   transporte e não pergunta.
 - Sem resposta em 10 minutos, conta como recusa: o job falha com mensagem clara
-  e nenhum provedor é trocado.
+  e nenhum provedor é trocado. Uma resposta que chega depois do prazo também
+  conta como recusa.
 - Um reinício apaga a decisão pendente sem executar nada.
 - O orquestrador continua no Login do sistema e não usa contas da cadeia.
 
