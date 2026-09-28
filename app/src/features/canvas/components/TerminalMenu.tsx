@@ -217,7 +217,8 @@ export function TerminalMenu({
             <button
               type="button"
               onClick={() => void openTerminal()}
-              disabled={launching}
+              disabled={launching || Boolean(config.accountSelectionIssue)}
+              title={config.accountSelectionIssue?.message}
               className="felixo-btn flex-1 rounded-sm felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50"
             >
               Abrir agente
@@ -225,7 +226,7 @@ export function TerminalMenu({
             <button
               type="button"
               onClick={() => void queueCurrent()}
-              disabled={launching}
+              disabled={launching || Boolean(config.accountSelectionIssue)}
               title="Adicionar esta configuração à fila, para iniciar vários terminais de uma vez"
               aria-label="Adicionar à fila de terminais"
               className="felixo-btn-icon flex items-center justify-center rounded-sm bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"

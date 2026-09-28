@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { CliAccount } from '../../shared/types/cli-accounts'
 import {
+  describeAccountSelectionIssue,
+  resolveIssueAfterExplicitChoice,
   resolveOpeniaKeyStatus,
   selectAccountFromList,
   shouldApplyAccountListResult,
@@ -57,10 +59,64 @@ describe('seleção de conta por agente', () => {
     ).toBe(true)
   })
 
-  it('não carrega a conta stale para a lista do novo provedor', () => {
-    expect(selectAccountFromList([codexAccount], 'claude-conta', 'claude-conta')).toBe('')
-    expect(selectAccountFromList([codexAccount], '', 'codex-conta')).toBe('codex-conta')
-    expect(selectAccountFromList([claudeAccount], 'claude-conta', '')).toBe('claude-conta')
+  it('escolhe a conta atual ou a salva quando elas estão na lista', () => {
+    const codex = { ok: true as const, accounts: [codexAccount] }
+    expect(selectAccountFromList(codex, '', 'codex-conta')).toEqual({ status: 'ok', accountId: 'codex-conta' })
+    expect(selectAccountFromList({ ok: true, accounts: [claudeAccount] }, 'claude-conta', '')).toEqual({
+      status: 'ok',
+      accountId: 'claude-conta',
+    })
+    // Na troca de agente a seleção é limpa e a conta salva de outro provedor
+    // não é passada: o novo provedor abre no login do sistema, sem aviso.
+    expect(selectAccountFromList(codex, '', '')).toEqual({ status: 'ok', accountId: '' })
+  })
+
+  it('lista que falha mantém a seleção e bloqueia a abertura, sem cair no login do sistema', () => {
+    const selection = selectAccountFromList(
+      { ok: false, message: 'O registro de contas (cli-accounts.json) está ilegível.' },
+      'codex-conta',
+      'codex-conta',
+    )
+    expect(selection).toEqual({
+      status: 'list-failed',
+      accountId: 'codex-conta',
+      message: 'O registro de contas (cli-accounts.json) está ilegível.',
+    })
+
+    const issue = describeAccountSelectionIssue(selection)
+    expect(issue?.status).toBe('list-failed')
+    expect(issue?.message).toContain('não vai abrir no login do sistema por engano')
+    expect(issue?.message).toContain('ilegível')
+
+    // Antes de a lista chegar a seleção era a conta salva; ela continua.
+    expect(selectAccountFromList({ ok: false }, '', 'codex-conta').accountId).toBe('codex-conta')
+  })
+
+  it('conta salva que sumiu continua escolhida (a preferência não vira "") e avisa pelo nome guardado', () => {
+    const selection = selectAccountFromList({ ok: true, accounts: [codexAccount] }, '', 'conta-removida')
+    expect(selection).toEqual({ status: 'saved-missing', accountId: 'conta-removida' })
+
+    expect(describeAccountSelectionIssue(selection, 'Trabalho')).toEqual({
+      status: 'saved-missing',
+      message: 'A conta salva "Trabalho" não existe mais. Escolha outra conta ou o login do sistema.',
+    })
+    expect(describeAccountSelectionIssue(selection)?.message).toBe(
+      'A conta salva não existe mais. Escolha outra conta ou o login do sistema.',
+    )
+    // A conta escolhida que some depois (removida em outra janela) também avisa.
+    expect(selectAccountFromList({ ok: true, accounts: [] }, 'codex-conta', '').status).toBe('saved-missing')
+    expect(describeAccountSelectionIssue({ status: 'ok', accountId: '' })).toBeNull()
+  })
+
+  it('só uma escolha explícita resolve o aviso; lista ilegível só se resolve com o login do sistema', () => {
+    const ausente = { status: 'saved-missing' as const, message: 'x' }
+    expect(resolveIssueAfterExplicitChoice(ausente, 'codex-conta')).toBeNull()
+    expect(resolveIssueAfterExplicitChoice(ausente, '')).toBeNull()
+
+    const ilegivel = { status: 'list-failed' as const, message: 'y' }
+    expect(resolveIssueAfterExplicitChoice(ilegivel, 'codex-conta')).toBe(ilegivel)
+    expect(resolveIssueAfterExplicitChoice(ilegivel, '')).toBeNull()
+    expect(resolveIssueAfterExplicitChoice(null, 'qualquer')).toBeNull()
   })
 
   it('usa a chave da conta selecionada e nunca herda a chave global', () => {

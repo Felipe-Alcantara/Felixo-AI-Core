@@ -61,6 +61,29 @@ describe('agent launch preferences', () => {
     })
   })
 
+  it('guarda o nome da conta salva junto do id, e só quando existe', () => {
+    const storage = createStorage()
+    const base = {
+      agentValue: 'codex' as const,
+      model: '',
+      effort: '',
+      yolo: false,
+      fast: false,
+      projectId: '',
+      planningFile: '',
+      openiaInterface: 'orchat',
+      openiaModel: '',
+    }
+    saveAgentLaunchPreferences({ ...base, accountId: 'conta-trabalho', accountLabel: 'Trabalho' }, storage)
+    expect(readAgentLaunchPreferences(storage)).toMatchObject({
+      accountId: 'conta-trabalho',
+      accountLabel: 'Trabalho',
+    })
+
+    saveAgentLaunchPreferences({ ...base, accountId: '' }, storage)
+    expect(readAgentLaunchPreferences(storage)).not.toHaveProperty('accountLabel')
+  })
+
   it('discards corrupted or no-longer-supported agent options', () => {
     const storage = createStorage({
       'felixo:last-agent-launch-preferences': JSON.stringify({

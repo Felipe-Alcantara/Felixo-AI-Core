@@ -32,6 +32,11 @@ export type AgentLaunchPreferences = {
    * reescolher a cada terminal.
    */
   accountId: string
+  /**
+   * Nome dado pela pessoa à conta salva, guardado junto do id: se a conta
+   * sumir, o aviso "a conta salva X não existe mais" ainda sabe dizer qual.
+   */
+  accountLabel?: string
 }
 
 type StorageReader = Pick<Storage, 'getItem'>
@@ -110,6 +115,7 @@ function normalizePreferences(
     openiaInterface: stringValue(value.openiaInterface) || fallback.openiaInterface,
     openiaModel: stringValue(value.openiaModel),
     accountId: stringValue(value.accountId),
+    ...(stringValue(value.accountLabel) ? { accountLabel: stringValue(value.accountLabel) } : {}),
   }
 }
 

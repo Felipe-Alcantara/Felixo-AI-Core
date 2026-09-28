@@ -88,7 +88,11 @@ export function HandoffDialog({
     setErro(undefined)
     try {
       if (!(await config.prepareForLaunch())) {
-        setErro(config.openiaError ?? 'Configure o agente antes de continuar.')
+        setErro(
+          config.accountSelectionIssue?.message ??
+            config.openiaError ??
+            'Configure o agente antes de continuar.',
+        )
         return
       }
       const opcoes = config.buildOptions()
@@ -182,7 +186,8 @@ export function HandoffDialog({
           <button
             type="button"
             onClick={() => void confirmar()}
-            disabled={busy}
+            disabled={busy || Boolean(config.accountSelectionIssue)}
+            title={config.accountSelectionIssue?.message}
             className="felixo-btn rounded-sm felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50"
           >
             {busy ? 'Passando…' : 'Passar responsabilidade'}

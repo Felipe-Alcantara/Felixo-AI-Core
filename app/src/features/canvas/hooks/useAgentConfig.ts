@@ -29,8 +29,12 @@ import {
 } from '../services/openia-launch-config'
 import {
   resolveOpeniaKeyStatus,
+  describeAccountSelectionIssue,
+  resolveIssueAfterExplicitChoice,
   selectAccountFromList,
   shouldApplyAccountListResult,
+  type AccountListing,
+  type AccountSelectionIssue,
 } from '../services/agent-account-selection'
 
 export type AgentConfigProject = { id: string; name: string; path: string }
@@ -70,8 +74,19 @@ export function useAgentConfig(
   const [accountId, setAccountIdState] = useState(inicial.accountId)
   // A preferência é lida uma vez, na montagem: guardá-la em ref deixa o efeito
   // com a lista de dependências certa sem reagir a uma leitura que não muda.
-  const contaSalvaRef = useRef(inicial.accountId)
+  // O provedor vai junto: a conta salva de outro provedor não está "ausente",
+  // só não se aplica.
+  const contaSalvaRef = useRef({
+    providerId: inicial.agentValue === SHELL_AGENT_VALUE ? '' : inicial.agentValue,
+    accountId: inicial.accountId,
+    label: inicial.accountLabel ?? '',
+  })
   const [accounts, setAccounts] = useState<CliAccount[]>([])
+  // Conta que não pode abrir (lista ilegível ou conta salva que sumiu). Com
+  // ele a abertura fica bloqueada até uma escolha explícita ou uma nova carga.
+  const [accountSelectionIssue, setAccountSelectionIssueState] =
+    useState<AccountSelectionIssue | null>(null)
+  const accountSelectionIssueRef = useRef<AccountSelectionIssue | null>(null)
   const [model, setModel] = useState(inicial.model)
   const [effort, setEffort] = useState(inicial.effort)
   const [yolo, setYolo] = useState(inicial.yolo)
@@ -204,19 +219,99 @@ export function useAgentConfig(
     providerIdRef.current = providerId
   }, [providerId])
 
-  const setAccountId = useCallback((value: SetStateAction<string>) => {
-    if (typeof value !== 'function') {
+  const setAccountSelectionIssue = useCallback((issue: AccountSelectionIssue | null) => {
+    accountSelectionIssueRef.current = issue
+    setAccountSelectionIssueState(issue)
+  }, [])
+
+  /**
+   * Escolha explícita da conta (o campo, criar ou remover conta). Só ela
+   * resolve o aviso de conta ausente; a carga da lista usa
+   * `aplicarListagem`, que nunca troca a seleção para o login do sistema.
+   */
+  const setAccountId = useCallback(
+    (value: SetStateAction<string>) => {
       // A seleção do campo e o clique em abrir podem acontecer em eventos
       // consecutivos antes de a renderização que contém o novo state. O ref
-      // evita que esse intervalo use a conta anterior.
-      accountIdRef.current = value
-    }
-    setAccountIdState((atual) => {
-      const proxima = typeof value === 'function' ? value(atual) : value
+      // evita que esse intervalo use a conta anterior, e é a base da forma
+      // funcional porque acompanha toda escrita no state.
+      const proxima = typeof value === 'function' ? value(accountIdRef.current) : value
       accountIdRef.current = proxima
-      return proxima
-    })
-  }, [])
+      setAccountIdState(proxima)
+      setAccountSelectionIssue(
+        resolveIssueAfterExplicitChoice(accountSelectionIssueRef.current, proxima),
+      )
+    },
+    [setAccountSelectionIssue],
+  )
+
+  /**
+   * Aplica a listagem ao campo. Lista ilegível mantém a seleção; conta que
+   * sumiu continua escolhida (o campo mostra "Selecionar…"). Nos dois casos o
+   * aviso bloqueia a abertura: nunca cai no login do sistema em silêncio, e
+   * como a seleção não muda, a preferência salva também não vira ''.
+   */
+  const aplicarListagem = useCallback(
+    (provedor: string, listing: AccountListing) => {
+      if (listing.ok) {
+        setAccounts([...listing.accounts])
+      }
+      const salva = contaSalvaRef.current.providerId === provedor ? contaSalvaRef.current : null
+      const selection = selectAccountFromList(listing, accountIdRef.current, salva?.accountId ?? '')
+      accountIdRef.current = selection.accountId
+      setAccountIdState(selection.accountId)
+      setAccountSelectionIssue(
+        describeAccountSelectionIssue(
+          selection,
+          salva && selection.accountId === salva.accountId ? salva.label : '',
+        ),
+      )
+    },
+    [setAccountSelectionIssue],
+  )
+
+  /** Lista as contas do provedor; só a resposta mais recente do provedor atual vale. */
+  const listarContasDoProvedor = useCallback(
+    (provedor: string) => {
+      const requestId = ++accountListRequestRef.current
+      const bridge = window.felixo?.cliAccounts
+      // Sem a ponte (versão sem contas) nada muda, como antes: o processo
+      // principal ainda confere a conta no nascimento do terminal.
+      if (!bridge) return
+
+      const aindaVale = () =>
+        shouldApplyAccountListResult({
+          requestProviderId: provedor,
+          currentProviderId: providerIdRef.current,
+          requestId,
+          latestRequestId: accountListRequestRef.current,
+        })
+
+      void bridge.list(provedor).then(
+        (resultado) => {
+          if (!aindaVale()) return
+          aplicarListagem(
+            provedor,
+            resultado?.ok
+              ? { ok: true, accounts: resultado.accounts ?? [] }
+              : { ok: false, message: resultado?.message },
+          )
+        },
+        () => {
+          if (!aindaVale()) return
+          aplicarListagem(provedor, { ok: false })
+        },
+      )
+    },
+    [aplicarListagem],
+  )
+
+  /** "Tentar de novo" do aviso de lista ilegível. */
+  const retryAccountList = useCallback(() => {
+    if (providerIdRef.current) {
+      listarContasDoProvedor(providerIdRef.current)
+    }
+  }, [listarContasDoProvedor])
 
   const carregarContas = useCallback(async () => {
     if (!providerId) {
@@ -357,11 +452,14 @@ export function useAgentConfig(
       }
 
       const provedorDaOperacao = providerId
-      const lista = await carregarContas()
+      await carregarContas()
       if (providerIdRef.current !== provedorDaOperacao) {
         return { ok: true, message: null }
       }
-      setAccountId((atual) => (lista.some((c) => c.id === atual) ? atual : ''))
+      // Só a conta removida sai da seleção. Decidir pela lista recarregada
+      // faria uma falha de listagem derrubar outra conta para o login do
+      // sistema sem ninguém escolher isso.
+      setAccountId((atual) => (atual === id ? '' : atual))
       return { ok: true, message: null }
     },
     [carregarContas, providerId, setAccountId],
@@ -369,9 +467,9 @@ export function useAgentConfig(
 
   useEffect(() => {
     const provedor = providerId
-    const requestId = ++accountListRequestRef.current
 
     if (!provedor) {
+      accountListRequestRef.current += 1
       // O timeout tira o setState do corpo do efeito: sem ele o lint acusa
       // renderização em cascata, e com razão.
       const limpar = window.setTimeout(() => {
@@ -382,31 +480,14 @@ export function useAgentConfig(
       return () => window.clearTimeout(limpar)
     }
 
-    void window.felixo?.cliAccounts?.list(provedor).then((resultado) => {
-      if (
-        !shouldApplyAccountListResult({
-          requestProviderId: provedor,
-          currentProviderId: providerIdRef.current,
-          requestId,
-          latestRequestId: accountListRequestRef.current,
-        })
-      ) {
-        return
-      }
-
-      const lista = resultado?.ok ? (resultado.accounts ?? []) : []
-      setAccounts(lista)
-      setAccountId((atual) =>
-        selectAccountFromList(lista, atual, contaSalvaRef.current),
-      )
-    })
+    listarContasDoProvedor(provedor)
 
     return () => {
       // O token é a guarda principal; o cleanup ainda invalida imediatamente
       // uma resposta que esteja prestes a continuar a cadeia de microtasks.
       accountListRequestRef.current += 1
     }
-  }, [providerId, setAccountId])
+  }, [listarContasDoProvedor, providerId, setAccountId])
 
   const changeAgent = useCallback((valor: AgentLaunchPreferences['agentValue']) => {
     // Limpa antes de a nova lista chegar. Assim nenhum clique no mesmo ciclo
@@ -417,13 +498,15 @@ export function useAgentConfig(
     accountIdRef.current = ''
     setAccounts([])
     setAccountIdState('')
+    // O aviso era do provedor anterior; a lista do novo decide de novo.
+    setAccountSelectionIssue(null)
     setAgentValue(valor)
     setModel('')
     setEffort('')
     setFast(false)
     // Um preset descreve uma CLI: trocar de agente sai do preset.
     setActivePreset((atual) => (atual && atual.agentId === valor ? atual : null))
-  }, [])
+  }, [setAccountSelectionIssue])
 
   const refreshOpenia = useCallback(() => {
     void Promise.all([loadOpenia(true), carregarContas()]).then(([, lista]) => {
@@ -484,6 +567,8 @@ export function useAgentConfig(
 
   /** Garante que a configuração da interface já foi feita antes de criar o node. */
   const prepareForLaunch = useCallback(async (): Promise<boolean> => {
+    // Conta que não pode ser conferida nunca abre, nem cai no login do sistema.
+    if (accountSelectionIssueRef.current) return false
     if (!agent?.isLauncher) return true
 
     let interfaces = openiaInterfaces
@@ -633,6 +718,12 @@ export function useAgentConfig(
   )
 
   const savePreferences = useCallback(() => {
+    const conta = accountIdRef.current
+    // O nome acompanha o id para o aviso de conta ausente. Se a conta já não
+    // está na lista, fica o nome guardado antes (nunca some junto com ela).
+    const accountLabel =
+      accounts.find((item) => item.id === conta)?.label ??
+      (conta && conta === contaSalvaRef.current.accountId ? contaSalvaRef.current.label : '')
     saveAgentLaunchPreferences({
       agentValue,
       model,
@@ -643,9 +734,11 @@ export function useAgentConfig(
       planningFile,
       openiaInterface: openiaInterfaceRef.current,
       openiaModel: openiaModelRef.current,
-      accountId: accountIdRef.current,
+      accountId: conta,
+      ...(accountLabel ? { accountLabel } : {}),
     })
   }, [
+    accounts,
     agentValue,
     effort,
     fast,
@@ -807,6 +900,8 @@ export function useAgentConfig(
     accountId,
     setAccountId,
     accounts,
+    accountSelectionIssue,
+    retryAccountList,
     createAccount,
     removeAccount,
     prepareForLaunch,

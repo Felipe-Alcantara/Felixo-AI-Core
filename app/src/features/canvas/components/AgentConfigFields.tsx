@@ -432,6 +432,9 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
   const contaAtual = config.accounts.find((item) => item.id === config.accountId)
   // Só o Openia guarda chave; os outros logam pela própria CLI no terminal.
   const pedeChave = config.agentValue === 'openia'
+  const problemaDeConta = config.accountSelectionIssue
+  // Com a lista ilegível nada pode ser criado nem conferido.
+  const listaIlegivel = problemaDeConta?.status === 'list-failed'
 
   async function criar() {
     setSalvando(true)
@@ -521,6 +524,7 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
           ]}
           menuLabel="Contas disponíveis"
           aria-label="Conta"
+          invalid={Boolean(problemaDeConta)}
           className="min-w-0 flex-1"
         />
 
@@ -539,7 +543,25 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
         )}
       </div>
 
-      {config.accounts.length > 0 && !contaAtual && !criando && (
+      {problemaDeConta && (
+        <div
+          role="alert"
+          className="-mt-2 mb-3 flex items-start gap-2 text-[11px] leading-snug text-theme-error"
+        >
+          <p className="min-w-0 flex-1">{problemaDeConta.message}</p>
+          {listaIlegivel && (
+            <button
+              type="button"
+              onClick={() => config.retryAccountList()}
+              className="felixo-btn shrink-0 rounded-sm bg-theme-error/10 px-2 py-1 text-[11px] text-theme-error hover:bg-theme-error/20"
+            >
+              Tentar de novo
+            </button>
+          )}
+        </div>
+      )}
+
+      {config.accounts.length > 0 && !contaAtual && !criando && !problemaDeConta && (
         <p className="-mt-2 mb-3 text-[11px] leading-snug text-zinc-600">
           Selecione um perfil para abrir nele ou removê-lo.
         </p>
@@ -582,7 +604,8 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
           <div className="flex gap-2">
             <button
               type="button"
-              disabled={!nome.trim() || salvando}
+              disabled={!nome.trim() || salvando || listaIlegivel}
+              title={listaIlegivel ? problemaDeConta?.message : undefined}
               onClick={() => void criar()}
               className="felixo-btn flex-1 rounded-sm bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600 disabled:opacity-40"
             >
