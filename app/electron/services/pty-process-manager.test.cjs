@@ -792,7 +792,17 @@ test('a descoberta de conversa recebe as pastas do perfil da conta e a referênc
       onSession: (reference) => referencias.get('sistema')(reference),
     })
 
-    const [referenciaConta, referenciaSistema] = await Promise.all([daConta, doSistema])
+    // A descoberta roda num timer `unref` (não segura o app aberto). No Node 22,
+    // com só esse timer pendente, o laço de eventos termina e o teste é
+    // cancelado; um timer com ref mantém o processo vivo durante a espera.
+    const segura = setInterval(() => {}, 1_000)
+    let referenciaConta
+    let referenciaSistema
+    try {
+      ;[referenciaConta, referenciaSistema] = await Promise.all([daConta, doSistema])
+    } finally {
+      clearInterval(segura)
+    }
     const pedidoConta = pedidos.find((pedido) => pedido.env?.CODEX_HOME === '/perfis/codex/trabalho')
     assert.ok(pedidoConta, `a descoberta não recebeu a pasta do perfil: ${JSON.stringify(pedidos.map((p) => p.env))}`)
     assert.equal(Object.hasOwn(pedidoConta.env, 'PATH'), false, 'só as pastas de histórico vão para a descoberta')
