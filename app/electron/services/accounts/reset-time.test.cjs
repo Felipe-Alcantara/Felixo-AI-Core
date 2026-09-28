@@ -118,6 +118,21 @@ test('leitura no passado ou a mais de 8 dias é descartada', () => {
   assert.equal(parseResetFromText(`limit|${Math.floor(NOW / 1000) - 60}`, { nowMs: NOW }), null)
 })
 
+test('data sem ano que ficaria no passado é do ano seguinte (virada de ano)', () => {
+  // Antes: em 30/12, "Jan 2" era lido como 2 de janeiro do ano corrente, no
+  // passado, e a leitura dava null (caía na espera padrão).
+  const newYear = parseResetFromText("You've hit your weekly limit · resets Jan 2, 9am (UTC)", {
+    nowMs: Date.parse('2026-12-30T12:00:00Z'),
+  })
+  assert.equal(newYear?.resetAt, '2027-01-02T09:00:00.000Z')
+
+  // Com o ano impresso, nada muda; e uma data sem ano só um pouco no passado
+  // (aviso velho) continua descartada: o ano seguinte passa da janela.
+  assert.equal(parseResetFromText('try again at Jan 2, 2026 9:00 AM', { nowMs: Date.parse('2026-12-30T12:00:00Z') }), null)
+  assert.equal(parseResetFromText('resets Sep 27, 9am (UTC)', { nowMs: NOW }), null)
+  assert.equal(parseResetFromText('resets Oct 2, 9am (UTC)', { nowMs: NOW })?.resetAt, '2026-10-02T09:00:00.000Z')
+})
+
 test('fuso inválido cai no fuso de reserva, marcado como local', () => {
   const invalid = parseResetFromText('resets 4:40pm (Marte/Olimpo)', { nowMs: NOW })
   assert.equal(invalid.resetAt, '2026-09-28T16:40:00.000Z')

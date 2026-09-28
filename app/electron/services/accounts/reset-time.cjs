@@ -194,6 +194,8 @@ function parseResetFromText(text, options = {}) {
  * @param {string | null} [timeZone]
  * @returns {string | null}
  */
+const HALF_YEAR_MS = 183 * 24 * 60 * 60 * 1000
+
 function parseClaudeReset(value, nowMs, timeZone = null) {
   const text = String(value).replace(/\s+/g, ' ').trim()
   const dateMatch = text.match(
@@ -237,17 +239,19 @@ function parseClaudeReset(value, nowMs, timeZone = null) {
     target = shiftCalendarDay(target, 1)
   }
 
-  const timestamp = timeZone
-    ? zonedDateToTimestamp(target, timeZone)
-    : new Date(
-        target.year,
-        target.month,
-        target.day,
-        target.hour,
-        target.minute,
-        0,
-        0,
-      ).getTime()
+  const toTimestamp = (parts) => (timeZone
+    ? zonedDateToTimestamp(parts, timeZone)
+    : new Date(parts.year, parts.month, parts.day, parts.hour, parts.minute, 0, 0).getTime())
+
+  let timestamp = toTimestamp(target)
+  // Data sem ano que cairia meses no passado é do ano seguinte (virada de
+  // ano): em 30/12, "Jan 2" é o 2 de janeiro que vem. Um aviso só um pouco
+  // velho ("Sep 27" em 28/09) continua no passado, como antes — virar o ano
+  // aí mostraria um reset a um ano daqui.
+  if (dateMatch && !dateMatch[3] && Number.isFinite(timestamp) && Number(nowMs) - timestamp > HALF_YEAR_MS) {
+    target = { ...target, year: target.year + 1 }
+    timestamp = toTimestamp(target)
+  }
 
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null
 }
