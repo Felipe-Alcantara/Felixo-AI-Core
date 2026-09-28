@@ -6607,3 +6607,53 @@ entram só os scripts e testes que ela usa.
   a medição local.
 - A escolha do `pty.node` no Windows real não foi executada nesta máquina Linux: a cobertura vem
   dos testes com árvore sintética (`platform`/`arch` injetados) e da reprodução do erro antigo.
+
+## Fechamento de trabalho — 2026-09-28: Performance — custo por pedaço de saída do terminal em alta concorrência (fatia 1, parte 1)
+
+### Contexto
+
+Task "Felixo AI Core/Performance — limitar renderização, logs e scrollback em alta concorrência"
+(Esforço: Dias). Investigação com 6 leitores paralelos e 2 céticos por lacuna, no `main` `6e7cc04`.
+O React já não re-renderiza a cada pedaço de saída (o store só publica snapshot em transições, e
+`computePreview` só roda em `update()`), e a pintura do xterm já é agrupada por frame. O custo que
+escala com o número de terminais está fora do React, no caminho que todo pedaço percorre:
+
+- Processo principal: `pty-process-manager.cjs:301` recopiava a cauda de 200.000 caracteres do
+  replay a cada `onData` (`${buffer}${pedaço}`.slice(-200000)): 170–187 µs por pedaço com o buffer
+  cheio, medido nesta máquina; o mesmo processo encaminha as teclas para o PTY.
+- Renderer: o store assinava `pty:data` uma vez por terminal (cada `pty.onData` do preload é um
+  `ipcRenderer.on`), então cada pedaço acordava N callbacks, N-1 descartados.
+- Renderer: o callback de `terminal.write` rodava `computeSignature` (todas as linhas visíveis,
+  `translateToString` + 2 regex por linha) a cada pedaço, e o xterm chama esses callbacks em
+  sequência dentro da mesma fatia de parse (até 12 ms, dezenas de pedaços sob carga).
+
+### O que foi feito
+
+- `e88a3f4` — `pty-replay-buffer.cjs`: lista de pedaços que só junta na leitura; mesmo contrato
+  (últimos 200.000 caracteres, mesmo ponto de corte). `MAX_REPLAY_BUFFER_CHARS` exportado e amarrado
+  por teste a `TERMINAL_REPLAY_BUFFER_CHARS`.
+- `6de3d72` — `pty-event-router.ts`: um ouvinte `pty:data` por ponte, despacho por `sessionId`.
+- `94c6038` — leitura da tela (assinatura + marcador de scrollback) uma vez por fatia, numa
+  microtarefa; um exit na mesma fatia invalida a leitura agendada por geração. `countLineFeeds` sem
+  alocação.
+
+### Validação
+
+- Micro-bancada do replay (20 sessões × 2.000 pedaços, buffer cheio): 6.683–7.464 ms na lógica antiga
+  × 2–5 ms na lista de pedaços. No teste: 20.000 pedaços em 3,9 ms; com a lógica antiga, 3.021 ms.
+- Propriedade contra o concat+slice antigo como oráculo (200 sequências com pares UTF-16), attach
+  depois de 3.000 pedaços, 20 terminais → 1 ouvinte, rajada de 200 pedaços → no máximo 5 leituras da
+  tela, exit na mesma fatia continua `exited`. Mutações (lógica antiga do replay, 1 ouvinte por
+  sessão, leitura por pedaço, sem a guarda de geração) reprovam o teste correspondente.
+- `node --test` pty: 54/54; `vitest` do terminal: 283/283; `tsc -b` e eslint limpos.
+
+### NÃO verificado / limitações
+
+- Nenhuma medição no app real com 20 terminais ainda; a bancada existente (`benchmark:terminal`) usa
+  node-pty e xterm crus e não passa pelo store, pelo IPC nem pelo replay.
+- As varreduras das telas de aceite (12.000 caracteres por pedaço, pela vida da sessão) não foram
+  mexidas: parar pelo sinal `initialTextSent` seria errado, porque o fallback por tempo marca esse
+  sinal sem o REPL ter aparecido, e uma tela de confiança tardia ficaria sem resposta.
+- O gate local tem 2 falhas anteriores a este trabalho e específicas desta máquina Windows
+  (`app-relaunch.test.cjs`: EPERM ao criar symlink sem Modo Desenvolvedor; timeout de 5 s em
+  `SystemDesignDocumentIndex.test.ts` com a máquina carregada). CI de `6e7cc04` verde.
