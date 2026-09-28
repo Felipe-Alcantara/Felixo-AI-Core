@@ -75,12 +75,16 @@ import {
   readInputLineState,
 } from './terminal-screen-state'
 import type { SendTextInput } from './terminal-session-api'
+import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
 import { loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
 import {
   TERMINAL_REPLAY_BUFFER_CHARS,
   terminalScrollbackForSessionCount,
   type TerminalScrollbackStatus,
 } from './terminal-scrollback'
+
+type PtyBridge = NonNullable<NonNullable<Window['felixo']>['pty']>
+type PtyDataEvent = Parameters<Parameters<PtyBridge['onData']>[0]>[0]
 
 /**
  * Activity derived from the output stream:
@@ -522,6 +526,12 @@ export class TerminalSessionStore {
   private snapshots: Record<string, SessionSnapshot> = {}
   /** Survives `remove()`, so a restart's fresh session gets a new generation. */
   private generations = new Map<string, number>()
+  /**
+   * Um ouvinte `pty:data` por ponte, não um por sessão — ver
+   * `pty-event-router.ts`. Indexado pela própria ponte para continuar certo
+   * se `window.felixo.pty` for trocado (testes, recarga do preload).
+   */
+  private ptyDataRouters = new WeakMap<object, PtyEventRouter<PtyDataEvent>>()
 
   /**
    * Ends an exited/errored session and immediately re-creates it with the
@@ -676,7 +686,7 @@ export class TerminalSessionStore {
       return
     }
 
-    session.offData = pty.onData((event) => {
+    session.offData = this.routePtyData(pty, session.ptySessionId, (event) => {
       if (event.sessionId === session.ptySessionId) {
         session.receivedOutput ||= event.data.length > 0
         session.outputLineCount += countLineFeeds(event.data)
@@ -1605,6 +1615,19 @@ export class TerminalSessionStore {
         this.listeners.delete(id)
       }
     }
+  }
+
+  private routePtyData(
+    pty: PtyBridge,
+    ptySessionId: string,
+    handler: (event: PtyDataEvent) => void,
+  ): () => void {
+    let router = this.ptyDataRouters.get(pty)
+    if (!router) {
+      router = createPtyEventRouter<PtyDataEvent>((listener) => pty.onData(listener))
+      this.ptyDataRouters.set(pty, router)
+    }
+    return router.route(ptySessionId, handler)
   }
 
   /** Permanently ends a session and frees its resources. */
