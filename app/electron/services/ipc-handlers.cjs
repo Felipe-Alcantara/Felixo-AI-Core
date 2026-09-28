@@ -256,7 +256,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
         message: 'Modelo sem CLI compatível configurada.',
         sessionId: streamSessionId,
         threadId,
-      })
+      }, cliType)
       return { ok: false, message: 'Modelo sem CLI compatível configurada.' }
     }
 
@@ -494,7 +494,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
           ...cliEvent,
           sessionId: streamSessionId,
           threadId,
-        })
+        }, cliType)
       })
       const flushStdout = () => stdoutReader.flush()
       const stdoutGuard = createJsonlOutputGuard(
@@ -532,7 +532,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
             message: createNonJsonStdoutMessage(command, output),
             sessionId: streamSessionId,
             threadId,
-          })
+          }, cliType)
           cliManager.kill(threadId)
         },
       )
@@ -671,7 +671,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
         handleOrchestrationPromise(orchestrationResult.promise)
 
         if (!orchestrationResult.handled) {
-          sendCliEvent(targetWebContents, doneEvent)
+          sendCliEvent(targetWebContents, doneEvent, cliType)
         }
       })
 
@@ -714,7 +714,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
         message,
         sessionId: streamSessionId,
         threadId,
-      })
+      }, cliType)
       return { ok: false, message }
     }
 
@@ -745,7 +745,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       handleOrchestrationPromise(orchestrationResult.promise)
 
       if (!orchestrationResult.handled) {
-        sendCliEvent(targetWebContents, cliEvent)
+        sendCliEvent(targetWebContents, cliEvent, cliType)
       }
     }
 
@@ -1066,25 +1066,31 @@ function sendTerminalOutput(webContents, event) {
   webContents.send('cli:terminal-output', event)
 }
 
-function sendCliEvent(webContents, event) {
+/**
+ * @param {string} [cliType] - CLI que produziu o evento. Com ela a taxonomia
+ *   usa as frases do provedor, como o orquestrador; sem ela, só as genéricas.
+ */
+function sendCliEvent(webContents, event, cliType) {
   if (!webContents || webContents.isDestroyed()) {
     return
   }
 
-  webContents.send('cli:stream', withCliFailure(event))
+  webContents.send('cli:stream', withCliFailure(event, cliType))
 }
 
 /**
  * Eventos de erro saem com a classe decidida aqui (`failure`), para o chat
  * não manter um classificador próprio. Os outros eventos passam intactos, e
- * uma classe já anexada não é trocada.
+ * uma classe já anexada não é trocada. A CLI vai junto para o chat e o
+ * orquestrador concordarem nas frases do provedor ("Your access token could
+ * not be refreshed" do Codex é login nos dois).
  */
-function withCliFailure(event) {
+function withCliFailure(event, cliType) {
   if (event?.type !== 'error' || event.failure) {
     return event
   }
 
-  return { ...event, failure: describeCliFailure({ message: event.message }) }
+  return { ...event, failure: describeCliFailure({ message: event.message, cliType }) }
 }
 
 function getTargetWebContents(getMainWindow, fallbackWebContents) {

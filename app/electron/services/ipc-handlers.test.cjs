@@ -22,6 +22,7 @@ const {
 } = require('./ipc-handlers.cjs')
 const {
   createModelAvailabilityRegistry,
+  detectAvailabilityIssue,
 } = require('./orchestrator/model-availability.cjs')
 const {
   createOrchestrationTerminalEvent,
@@ -443,6 +444,26 @@ test('sendCliEvent anexa a classe de falha decidida no processo principal aos ev
   ])
   assert.equal(sent[0].payload.message, 'API Error: 401 Unauthorized — rate limit headers missing')
   assert.equal('failure' in sent[4].payload, false, 'evento que não é erro passa intacto')
+})
+
+test('sendCliEvent passa a CLI para a taxonomia: chat e orquestrador concordam nas frases do provedor', () => {
+  // Antes: withCliFailure chamava describeCliFailure sem cliType, e só as
+  // frases genéricas valiam no chat — "Your access token could not be
+  // refreshed" do Codex dava unknown no chat e no_login no orquestrador.
+  const sent = []
+  const webContents = { isDestroyed: () => false, send: (_channel, payload) => sent.push(payload) }
+  const casos = [
+    ['codex', 'Your access token could not be refreshed. Please log out and sign in again.'],
+    ['claude', "You've hit your session limit · resets 4:40pm (America/Sao_Paulo)"],
+  ]
+
+  for (const [cliType, message] of casos) {
+    sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message }, cliType)
+    const esperado = detectAvailabilityIssue({ message, cliType })
+    assert.ok(esperado, `${cliType}: o orquestrador reconhece a frase`)
+    assert.equal(sent.at(-1).failure.availabilityStatus, esperado.status, cliType)
+  }
+  assert.deepEqual(sent.map((payload) => payload.failure.failureClass), ['auth', 'limit'])
 })
 
 test('sendCliEvent não envia para uma janela destruída', () => {
