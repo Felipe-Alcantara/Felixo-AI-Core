@@ -3,7 +3,7 @@
 // services/node-geometry.ts, as regras de ligação arquivo↔terminal em
 // services/file-terminal-links.ts, e a UI de toolbar/painéis em
 // CanvasToolbar.tsx e CanvasToolPanels.tsx.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react'
 import {
   ReactFlow,
   Background,
@@ -49,6 +49,11 @@ import {
   createNodeDataReuse,
   type NodeDataCacheEntry,
 } from '../services/node-data-cache'
+import {
+  INITIAL_NODE_MOUNT_LATCH,
+  reduceNodeMountLatch,
+  shouldKeepCanvasNodesMounted,
+} from '../services/node-mount-latch'
 import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasTopbar } from './CanvasTopbar'
 import { CanvasStatusBar } from './CanvasStatusBar'
@@ -420,10 +425,20 @@ function CanvasInner({
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
   const expandedTerminalIdRef = useRef<string | null>(null)
   const terminalFocusReturnRef = useRef<HTMLElement | null>(null)
-  // Once a drawer has been opened, keep node triggers mounted so closing it
-  // can return focus even if safe-area recentering pans a card outside the
-  // virtualization window.
-  const [keepCanvasNodesMounted, setKeepCanvasNodesMounted] = useState(false)
+  // While a drawer is open — and until focus has returned to the card's trigger
+  // and left it again — keep node triggers mounted so closing the drawer can
+  // return focus even if safe-area recentering panned the card outside the
+  // virtualization window. The latch used to stay on for the rest of the
+  // session after the first drawer; see `node-mount-latch.ts`.
+  const [nodeMountLatch, dispatchNodeMountLatch] = useReducer(
+    reduceNodeMountLatch,
+    INITIAL_NODE_MOUNT_LATCH,
+  )
+  // `expandedTerminalId` também conta como "gaveta aberta": qualquer caminho
+  // que abra a gaveta sem passar por `openTerminal` continua protegido.
+  const keepCanvasNodesMounted =
+    expandedTerminalId !== null || shouldKeepCanvasNodesMounted(nodeMountLatch)
+  const drawerCloseGenerationRef = useRef(0)
   const [detailsTerminalId, setDetailsTerminalId] = useState<string | null>(null)
   // Passagem de responsabilidade em andamento: o histórico é capturado no
   // momento do clique, e não quando o usuário confirma — do contrário o agente
@@ -655,7 +670,7 @@ function CanvasInner({
         terminalFocusReturnRef.current = active
       }
       expandedTerminalIdRef.current = nodeId
-      setKeepCanvasNodesMounted(true)
+      dispatchNodeMountLatch({ type: 'drawer-opened' })
       setExpandedTerminalId(nodeId)
       acknowledgeNodeNotifications(nodeId)
       setNotificationHistory((current) =>
@@ -673,6 +688,9 @@ function CanvasInner({
       Boolean(active.closest('[data-canvas-terminal-drawer]'))
     setExpandedTerminalId(null)
     expandedTerminalIdRef.current = null
+    drawerCloseGenerationRef.current += 1
+    const generation = drawerCloseGenerationRef.current
+    dispatchNodeMountLatch({ type: 'drawer-closed', generation, restoringFocus: focusWasInside })
     if (!focusWasInside) return
 
     const restoreFocus = (attempt: number) => {
@@ -686,6 +704,18 @@ function CanvasInner({
       if (target) {
         target.focus({ preventScroll: true })
         terminalFocusReturnRef.current = target
+        // Focus parked on a card trigger keeps every node mounted until it
+        // moves on; releasing earlier could unmount the card under the focus.
+        if (target.closest('.react-flow__node') && document.activeElement === target) {
+          dispatchNodeMountLatch({ type: 'focus-restored-to-node', generation })
+          target.addEventListener(
+            'focusout',
+            () => dispatchNodeMountLatch({ type: 'restored-focus-left', generation }),
+            { once: true },
+          )
+        } else {
+          dispatchNodeMountLatch({ type: 'focus-restore-done', generation })
+        }
         return
       }
       // onlyRenderVisibleElements can temporarily unmount the terminal while
@@ -696,6 +726,7 @@ function CanvasInner({
         return
       }
       flowContainerRef.current?.focus({ preventScroll: true })
+      dispatchNodeMountLatch({ type: 'focus-restore-done', generation })
     }
     window.requestAnimationFrame(() => restoreFocus(0))
   }, [expandedTerminalId])
@@ -817,6 +848,14 @@ function CanvasInner({
     setEdges,
     onReset: () => {
       setExpandedTerminalId(null)
+      expandedTerminalIdRef.current = null
+      // Limpar/importar descarta os blocos: não há gatilho para devolver foco.
+      drawerCloseGenerationRef.current += 1
+      dispatchNodeMountLatch({
+        type: 'drawer-closed',
+        generation: drawerCloseGenerationRef.current,
+        restoringFocus: false,
+      })
       setActiveTool(null)
     },
   })
@@ -2245,6 +2284,8 @@ function CanvasInner({
         newEdges.forEach((edge) => void saveCanvasEdge(edge))
       }
 
+      expandedTerminalIdRef.current = newId
+      dispatchNodeMountLatch({ type: 'drawer-opened' })
       setExpandedTerminalId(newId)
       return { ok: true }
     },
