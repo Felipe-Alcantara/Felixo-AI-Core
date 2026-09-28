@@ -19,6 +19,7 @@
 
 const os = require('node:os')
 const { criarFilaDeEscrita } = require('./pty-write-queue.cjs')
+const { createReplayBuffer } = require('./pty-replay-buffer.cjs')
 const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
@@ -276,7 +277,7 @@ class PtyProcessManager {
       requestedCommand: options.command ? requestedCommand : null,
       args: [...args],
       cwd,
-      outputBuffer: '',
+      outputBuffer: createReplayBuffer(MAX_REPLAY_BUFFER_CHARS),
       exitEvent: null,
       onData: options.onData,
       onExit: options.onExit,
@@ -298,7 +299,7 @@ class PtyProcessManager {
     this.scheduleAgentSessionDiscovery(sessionId, options)
 
     ptyProcess.onData((data) => {
-      entry.outputBuffer = `${entry.outputBuffer}${String(data)}`.slice(-MAX_REPLAY_BUFFER_CHARS)
+      entry.outputBuffer.append(String(data))
       try {
         // ConPTY can start a default shell successfully and only then report
         // an invalid path. Only handle the platform's own startup text here:
@@ -415,7 +416,7 @@ class PtyProcessManager {
           // interpreter, a bad path. Replaying it into the new session turns an
           // unactionable "the terminal opened somewhere else" report into one
           // that names the actual error.
-          this.replayFailureOutput(options, entry.outputBuffer, event.exitCode)
+          this.replayFailureOutput(options, entry.outputBuffer.toString(), event.exitCode)
           this.reportLayer(
             options,
             'shell de emergência',
@@ -540,9 +541,10 @@ class PtyProcessManager {
       this.scheduleAgentSessionDiscovery(sessionId, options)
     }
 
-    if (entry.outputBuffer) {
+    const replay = entry.outputBuffer.toString()
+    if (replay) {
       try {
-        entry.onData?.(entry.outputBuffer)
+        entry.onData?.(replay)
       } catch {
         // A renderer callback must not affect the retained PTY session.
       }
@@ -1135,6 +1137,7 @@ function isClaudeCommandName(command) {
 
 module.exports = {
   PtyProcessManager,
+  MAX_REPLAY_BUFFER_CHARS,
   isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,

@@ -6,6 +6,7 @@ const path = require('node:path')
 const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
+  MAX_REPLAY_BUFFER_CHARS,
   isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,
@@ -669,6 +670,47 @@ test('reuseExisting reattaches without spawning or replaying the initial process
   assert.deepEqual(firstOutput, ['history before HMR\r\n'])
   assert.deepEqual(secondOutput, ['history before HMR\r\n'])
   assert.deepEqual(fakePty.kills, [])
+})
+
+test('reattach depois de mais saída que o limite reenvia exatamente a cauda, na ordem', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+  const emitted = []
+  const replayed = []
+
+  manager.spawn('canvas:term-long', { command: 'claude', onData: () => {} })
+  // Mais que o limite, em pedaços pequenos como os de uma CLI animando spinner,
+  // com um pedaço grande no meio e caracteres fora do BMP (pares UTF-16).
+  for (let index = 0; index < 3_000; index += 1) {
+    const chunk = index === 1_500
+      ? `bloco-grande-${'z'.repeat(MAX_REPLAY_BUFFER_CHARS / 2)}\r\n`
+      : `linha ${String(index).padStart(5, '0')} ⠋ 😀 ${'x'.repeat(50)}\r\n`
+    emitted.push(chunk)
+    fakePty.emitData(chunk)
+  }
+
+  manager.spawn('canvas:term-long', {
+    command: 'claude',
+    reuseExisting: true,
+    onData: (data) => replayed.push(data),
+  })
+
+  const expected = emitted.join('').slice(-MAX_REPLAY_BUFFER_CHARS)
+  assert.equal(replayed.length, 1)
+  assert.equal(replayed[0].length, MAX_REPLAY_BUFFER_CHARS)
+  assert.equal(replayed[0], expected)
+})
+
+test('o limite do replay no processo principal é o mesmo que o renderer anuncia', () => {
+  // O aviso de histórico do terminal cita TERMINAL_REPLAY_BUFFER_CHARS; se os
+  // dois números divergirem, o aviso promete um replay que o main não guarda.
+  const scrollbackSource = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'features', 'canvas', 'terminal', 'terminal-scrollback.ts'),
+    'utf8',
+  )
+  const match = /TERMINAL_REPLAY_BUFFER_CHARS\s*=\s*([\d_]+)/.exec(scrollbackSource)
+  assert.ok(match, 'TERMINAL_REPLAY_BUFFER_CHARS não encontrado em terminal-scrollback.ts')
+  assert.equal(Number(match[1].replaceAll('_', '')), MAX_REPLAY_BUFFER_CHARS)
 })
 
 test('re-spawning the same id replaces the previous session', () => {
