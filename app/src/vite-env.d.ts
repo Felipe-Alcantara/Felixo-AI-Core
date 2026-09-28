@@ -550,6 +550,8 @@ declare global {
           cwd: string
           capturedAt: number
           source?: string
+          /** Conta própria em que a conversa nasceu; ausente = login do sistema. */
+          accountId?: string
         }) => void) => () => void
       }
       projects?: {

@@ -1696,7 +1696,12 @@ function CanvasInner({
         })
         const resumeAgentSession =
           restoredAgentTerminals.ids.has(node.id) &&
-          canResumeAgentSession(node.data.command, node.data.cwd, node.data.agentSession)
+          canResumeAgentSession(
+            node.data.command,
+            node.data.cwd,
+            node.data.agentSession,
+            node.data.accountId,
+          )
         const isDirectOpenia = isDirectOpeniaLaunch(node.data.command, node.data.args)
         // Left open from a previous run: whatever it was doing may not have
         // finished, so type "/resume" on this (re)spawn instead of the usual
@@ -1721,6 +1726,7 @@ function CanvasInner({
           identity: { agentName: node.data.label, cwd: node.data.cwd },
           cwd: node.data.cwd,
           agentSession: node.data.agentSession,
+          accountId: node.data.accountId,
           resumeAgentSession,
         })
         const terminalIndex = terminalOrder.get(node.id)
@@ -2559,6 +2565,7 @@ function CanvasInner({
     expandedNodeData?.command,
     expandedNodeData?.cwd,
     expandedNodeData?.agentSession,
+    expandedNodeData?.accountId,
   )
   const arrangeableCount = countArrangeableNodes(nodes)
   // Tipos de bloco presentes, só quando o catálogo do tutorial tem gatilho de

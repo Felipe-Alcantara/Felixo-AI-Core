@@ -147,6 +147,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.command,
     nodeData.cwd,
     nodeData.agentSession,
+    nodeData.accountId,
   )
 
   const restart = () => {

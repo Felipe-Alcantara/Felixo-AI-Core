@@ -80,6 +80,29 @@ describe('resolveTerminalInitialText', () => {
     expect(result).toContain('nenhum ID foi usado')
   })
 
+  it('não retoma conversa de outra conta: fallback honesto em vez do ID', () => {
+    const result = resolveTerminalInitialText({
+      isRestoredAgent: true,
+      qualityStandardEnabled: true,
+      qualityStandardPrompt: 'Follow the standard.',
+      hasCommand: true,
+      command: 'codex',
+      cwd: '/repo',
+      accountId: 'conta-pessoal',
+      resumeAgentSession: true,
+      agentSession: {
+        version: 1,
+        provider: 'codex',
+        sessionId: 'codex-session-123',
+        cwd: '/repo',
+        capturedAt: 1,
+        accountId: 'conta-trabalho',
+      },
+    })
+    expect(result).toContain('outra conta')
+    expect(result).toContain('Use /resume')
+  })
+
   it('exibe fallback honesto para Gemini sem enviar UUID à CLI', () => {
     const result = resolveTerminalInitialText({
       isRestoredAgent: true,

@@ -925,12 +925,15 @@ describe('E2E do contexto inicial do Canvas', () => {
       accountId: codexProfile.accountId,
       providerId: codexProfile.providerId,
       resumeAgentSession: true,
+      // O processo principal carimba a conta em que a conversa nasceu; só a
+      // mesma conta retoma.
       agentSession: {
         version: 1,
         provider: 'codex',
         sessionId: codexSession,
         cwd,
         capturedAt: 1,
+        accountId: codexProfile.accountId,
       },
     })
     await waitFor(() => harness?.fakes.has(codexProfile.sessionId) ?? false)
@@ -946,7 +949,8 @@ describe('E2E do contexto inicial do Canvas', () => {
       sessionId: codexSession,
       cwd,
       capturedAt: 1,
-    })).toBe(true)
+      accountId: codexProfile.accountId,
+    }, codexProfile.accountId)).toBe(true)
 
     const fallback = resolveTerminalInitialText({
       isRestoredAgent: true,

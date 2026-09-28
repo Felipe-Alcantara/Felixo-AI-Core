@@ -630,6 +630,7 @@ export class TerminalSessionStore {
           options.args ?? [],
           options.cwd,
           options.agentSession,
+          options.accountId,
         ) ?? options.args ?? []
       : options.args ?? []
 

@@ -305,17 +305,22 @@ export function resolveTerminalInitialText(params: {
   identity?: AgentIdentity
   cwd?: string
   agentSession?: AgentSessionReference
+  /** Conta do bloco; a retomada só vale na conta em que a conversa nasceu. */
+  accountId?: string
   resumeAgentSession?: boolean
 }): string | undefined {
   // "/resume" is an agent CLI slash command — meaningless (and potentially
   // confusing) typed into a plain shell, so hasCommand gates it here too,
   // not just in how the caller builds the restored-terminal set.
   if (params.isRestoredAgent && params.hasCommand) {
-    if (params.resumeAgentSession && canResumeAgentSession(params.command, params.cwd, params.agentSession)) {
+    if (
+      params.resumeAgentSession &&
+      canResumeAgentSession(params.command, params.cwd, params.agentSession, params.accountId)
+    ) {
       return undefined
     }
     if (params.agentSession) {
-      return buildResumeFallbackNotice(params.agentSession, params.cwd)
+      return buildResumeFallbackNotice(params.agentSession, params.cwd, params.accountId)
     }
     return RESUME_INITIAL_TEXT
   }

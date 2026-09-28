@@ -6,6 +6,35 @@ const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,255}$/
 const MAX_FILES = 3000
 
 /**
+ * Variáveis do ambiente do terminal que mudam onde cada CLI grava o
+ * histórico. Um terminal com conta própria grava na pasta do perfil
+ * (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `HOME` do Gemini), então procurar na
+ * pasta do login do sistema nunca achava a conversa, ou achava a de outra
+ * conta aberta no mesmo diretório.
+ */
+const DISCOVERY_ENV_KEYS = Object.freeze(['CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'GEMINI_HOME'])
+
+/**
+ * Só o que a descoberta lê do ambiente com que o terminal nasceu. O resto do
+ * ambiente (chaves de API inclusive) não é guardado junto da sessão.
+ *
+ * @param {Record<string, string | undefined>} env - Ambiente do spawn.
+ * @returns {{ env: Record<string, string>, homeDir: string | undefined }}
+ *   `homeDir` só vem quando o perfil troca a HOME (Gemini); sem ele vale a
+ *   home do sistema.
+ */
+function selectDiscoveryContext(env = {}) {
+  const picked = {}
+  for (const key of DISCOVERY_ENV_KEYS) {
+    if (typeof env[key] === 'string' && env[key]) picked[key] = env[key]
+  }
+  const profileHome = typeof env.FELIXO_PROFILE_HOME === 'string' && env.FELIXO_PROFILE_HOME
+    ? env.FELIXO_PROFILE_HOME
+    : undefined
+  return { env: picked, homeDir: profileHome }
+}
+
+/**
  * Finds only provider-owned session metadata created around this PTY spawn.
  * It never reads prompts, tool output, credentials or the conversation body.
  */
@@ -17,7 +46,7 @@ function discoverAgentSession({ command, cwd, startedAt, now = Date.now(), homeD
     : command === 'gemini'
       ? discoverGeminiSessions({ cwd, startedAt, now, homeDir, env })
       : command === 'claude'
-        ? discoverClaudeSessions({ cwd, startedAt, now, homeDir })
+        ? discoverClaudeSessions({ cwd, startedAt, now, homeDir, env })
       : []
 
   if (candidates.length === 0) return null
@@ -68,13 +97,16 @@ function discoverGeminiSessions({ cwd, startedAt, now, homeDir, env }) {
   })
 }
 
-function discoverClaudeSessions({ cwd, startedAt, now, homeDir }) {
+function discoverClaudeSessions({ cwd, startedAt, now, homeDir, env }) {
   const encodedProject = cwd
     .split(path.sep)
     .join('-')
     .replace(/[^A-Za-z0-9_-]/g, '-')
+  // Mesma regra da CLI (conferida no pacote 2.1.283): `projects/` fica dentro
+  // de CLAUDE_CONFIG_DIR quando ela existe, e só na falta dela em ~/.claude.
+  const root = env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude')
   const files = collectFiles(
-    path.join(homeDir, '.claude', 'projects', encodedProject),
+    path.join(root, 'projects', encodedProject),
     (name) => name.endsWith('.jsonl'),
   )
   return files.flatMap((file) =>
@@ -195,4 +227,4 @@ function parseJson(value) {
   }
 }
 
-module.exports = { discoverAgentSession }
+module.exports = { DISCOVERY_ENV_KEYS, discoverAgentSession, selectDiscoveryContext }

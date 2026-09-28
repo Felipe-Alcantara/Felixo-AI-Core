@@ -24,7 +24,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
-const { discoverAgentSession } = require('./agent-session-discovery.cjs')
+const { discoverAgentSession, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
@@ -317,6 +317,9 @@ class PtyProcessManager {
       accountId,
       providerId: accountValidation.providerId ?? null,
       accountMode: accountId ? normalizeAccountMode(options.accountMode) : DEFAULT_PTY_ACCOUNT_MODE,
+      // Onde a CLI deste terminal grava o histórico (pasta do perfil da conta,
+      // ou a do login do sistema). Só as variáveis de pasta, nunca o ambiente.
+      agentSessionContext: selectDiscoveryContext(env),
     }
 
     // Escrita grande vai fatiada e em ordem: o ConPTY do Windows descarta em
@@ -756,14 +759,18 @@ class PtyProcessManager {
           cwd: current.cwd,
           startedAt: current.spawnedAt,
           now: this.now(),
+          env: current.agentSessionContext?.env,
+          homeDir: current.agentSessionContext?.homeDir,
         })
       } catch {
         reference = null
       }
 
       if (reference?.sessionId) {
-        current.agentSession = reference
-        current.onSession?.(reference)
+        // A conversa pertence à conta em que o processo nasceu: retomá-la em
+        // outra conta abriria o histórico de uma pessoa na cobrança de outra.
+        current.agentSession = current.accountId ? { ...reference, accountId: current.accountId } : reference
+        current.onSession?.(current.agentSession)
         return
       }
 

@@ -757,6 +757,51 @@ test('reanexar a sessão viva em outra conta é recusado; na mesma conta reanexa
   }
 })
 
+test('a descoberta de conversa recebe as pastas do perfil da conta e a referência leva a conta', async () => {
+  const { spawnPty } = createFakePty()
+  const pedidos = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    buildAccountEnv: (accountId) => (accountId === 'conta-trabalho' ? { CODEX_HOME: '/perfis/codex/trabalho' } : {}),
+    discoverAgentSession: (request) => {
+      pedidos.push(request)
+      return { version: 1, provider: 'codex', sessionId: `sessao-${pedidos.length}-abcdef`, cwd: request.cwd, capturedAt: 1 }
+    },
+  })
+  const referencias = new Map()
+  const recebida = (id) =>
+    new Promise((resolve) => {
+      referencias.set(id, resolve)
+    })
+  const daConta = recebida('conta')
+  const doSistema = recebida('sistema')
+
+  try {
+    manager.spawn('canvas:conta', {
+      command: 'codex',
+      cwd: process.cwd(),
+      accountId: 'conta-trabalho',
+      onSession: (reference) => referencias.get('conta')(reference),
+    })
+    manager.spawn('canvas:sistema', {
+      command: 'codex',
+      cwd: process.cwd(),
+      onSession: (reference) => referencias.get('sistema')(reference),
+    })
+
+    const [referenciaConta, referenciaSistema] = await Promise.all([daConta, doSistema])
+    const pedidoConta = pedidos.find((pedido) => pedido.env?.CODEX_HOME === '/perfis/codex/trabalho')
+    assert.ok(pedidoConta, `a descoberta não recebeu a pasta do perfil: ${JSON.stringify(pedidos.map((p) => p.env))}`)
+    assert.equal(Object.hasOwn(pedidoConta.env, 'PATH'), false, 'só as pastas de histórico vão para a descoberta')
+    assert.equal(referenciaConta.accountId, 'conta-trabalho')
+    assert.equal(Object.hasOwn(referenciaSistema, 'accountId'), false, 'login do sistema não tem conta')
+    assert.deepEqual(manager.listarSessoesVivas().length, 2)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
 test('sessão do login do sistema também não reanexa numa conta própria', () => {
   const { spawnPty, calls } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })
