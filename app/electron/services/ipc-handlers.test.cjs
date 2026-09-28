@@ -10,6 +10,7 @@ const {
   createToolLoopLimitMessage,
   createToolLoopProgressState,
   getPersistentCloseLogLevel,
+  recordModelAvailabilityEvent,
   resolveOrchestrationSpawnModel,
   sendCliEvent,
   spawnOrchestrationAgent,
@@ -22,6 +23,7 @@ const {
 const {
   createOrchestrationTerminalEvent,
 } = require('./terminal-event-formatter.cjs')
+const qaLogger = require('./qa-logger.cjs')
 
 test('ipc handlers use spawn args when native resume is disabled', () => {
   const adapter = {
@@ -445,4 +447,54 @@ test('sendCliEvent não envia para uma janela destruída', () => {
   sendCliEvent({ isDestroyed: () => true, send: () => { sends += 1 } }, { type: 'error', message: 'x' })
   sendCliEvent(null, { type: 'error', message: 'x' })
   assert.equal(sends, 0)
+})
+
+test('o motivo de disponibilidade sai redigido no log QA e no evento de terminal', (t) => {
+  const qaEntries = []
+  qaLogger.__setDiskStoreForTests(null)
+  qaLogger.__setMainWindowGetterForTests(() => ({
+    isDestroyed: () => false,
+    webContents: {
+      isDestroyed: () => false,
+      send: (channel, payload) => {
+        if (channel === 'qa-logger:entry') qaEntries.push(payload)
+      },
+    },
+  }))
+  t.after(() => qaLogger.__setMainWindowGetterForTests(null))
+
+  const terminalEvents = []
+  const targetWebContents = {
+    isDestroyed: () => false,
+    send: (channel, payload) => {
+      if (channel === 'cli:terminal-output') terminalEvents.push(payload)
+    },
+  }
+
+  const sentinels = [
+    'Authorization: Bearer SENTINELA-bearer-0123456789',
+    'sk-ant-api03-SENTINELA0123456789',
+    'sk-or-v1-SENTINELA0123456789abcdef',
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJTRU5USU5FTEEifQ.U0VOVElORUxBLWFzc2luYXR1cmE',
+  ]
+
+  const issue = recordModelAvailabilityEvent({
+    cliEvent: {
+      type: 'error',
+      message: `API Error: 401 Unauthorized ${sentinels.join(' ')}`,
+    },
+    cliType: 'claude',
+    model: { id: 'claude-redacao', name: 'Claude', cliType: 'claude' },
+    targetWebContents,
+    threadId: 'thread-redacao',
+  })
+
+  assert.equal(issue.status, 'no_login')
+  const availabilityLog = qaEntries.find((entry) => entry.scope === 'model:availability')
+  assert.ok(availabilityLog, 'o evento de disponibilidade vai para o log QA')
+  assert.equal(terminalEvents.length, 1)
+
+  const emitted = JSON.stringify({ issue, availabilityLog, terminalEvents })
+  assert.doesNotMatch(emitted, /SENTINELA|U0VOVElORUxB/, 'nenhum segredo sai do processo principal')
+  assert.match(availabilityLog.details.reason, /\[oculto\]/)
 })

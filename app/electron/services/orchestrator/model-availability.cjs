@@ -5,6 +5,7 @@ const {
 } = require('../accounts/account-chain-constants.cjs')
 const { classifyFailure } = require('../accounts/failure-taxonomy.cjs')
 const { parseResetFromText } = require('../accounts/reset-time.cjs')
+const { redactSecrets } = require('../official-cli-account-status.cjs')
 
 function createModelAvailabilityRegistry(options = {}) {
   const entries = new Map()
@@ -357,8 +358,15 @@ function parseResetInfo(message, nowMs, options = {}) {
   return reset ? { expiresAt: reset.resetAtMs, label: reset.label } : null
 }
 
+/**
+ * Prévia do erro que vira o motivo de disponibilidade. O motivo sai deste
+ * processo por vários caminhos — log QA (buffer e painel ao vivo), eventos de
+ * terminal (gravados em disco durante a sessão) e eventos do orquestrador —,
+ * então a redação acontece aqui, na origem, e antes do corte: cortar primeiro
+ * poderia deixar metade de um segredo sem máscara.
+ */
 function createTextPreview(value, maxLength = 240) {
-  const text = String(value ?? '').replace(/\s+/g, ' ').trim()
+  const text = redactSecrets(value).replace(/\s+/g, ' ').trim()
 
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
 }

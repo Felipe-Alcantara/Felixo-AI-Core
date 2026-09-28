@@ -1149,6 +1149,7 @@ module.exports = {
   createToolLoopProgressState,
   getAdapterSpawnArgs,
   getPersistentCloseLogLevel,
+  recordModelAvailabilityEvent,
   registerCliIpcHandlers,
   resolveOrchestrationSpawnModel,
   sendCliEvent,

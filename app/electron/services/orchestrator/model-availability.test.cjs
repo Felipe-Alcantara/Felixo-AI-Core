@@ -330,3 +330,21 @@ test('servidor, rede e tempo esgotado nunca mudam a disponibilidade', () => {
     assert.equal(issueFor(message, 'claude'), null, message)
   }
 })
+
+test('o motivo guardado e emitido pelo registro sai redigido', () => {
+  const registry = createModelAvailabilityRegistry({ now: () => NOW_UTC })
+  const events = []
+  registry.subscribe((event) => events.push(event))
+  const model = { id: 'codex-redacao', name: 'Codex', cliType: 'codex' }
+
+  const entry = registry.recordError({
+    model,
+    cliType: 'codex',
+    message: 'unexpected status 429 Too Many Requests: Authorization: Bearer SENTINELA-0123456789 key sk-proj-SENTINELA0123456789',
+  })
+
+  const emitted = JSON.stringify({ entry, events, snapshot: registry.getSnapshot() })
+  assert.equal(entry.status, 'limit_reached')
+  assert.doesNotMatch(emitted, /SENTINELA/)
+  assert.match(entry.reason, /\[oculto\]/)
+})
