@@ -5,7 +5,10 @@ const { describe, it } = test
 const assert = require('node:assert/strict')
 const path = require('node:path')
 const {
+  CREDENCIAIS_HERDADAS,
+  applyProfileEnv,
   buildProfileEnv,
+  getInheritedCredentialNames,
   getMirrorEntries,
   getProfileDir,
   supportsProfiles,
@@ -146,4 +149,60 @@ test('só as CLIs medidas aceitam conta por terminal', () => {
   assert.equal(supportsProfiles('gemini'), true)
   assert.equal(supportsProfiles('openia'), true)
   assert.equal(supportsProfiles('inexistente'), false)
+})
+
+test('perfil com conta própria sai sem as credenciais herdadas do provedor; o resto do ambiente fica', () => {
+  const base = Object.freeze({
+    PATH: '/usr/bin',
+    OPENAI_API_KEY: 'sk-sentinela-openai',
+    CODEX_API_KEY: 'sk-sentinela-codex',
+    CODEX_ACCESS_TOKEN: 'eyJ.sentinela',
+    ANTHROPIC_API_KEY: 'sk-ant-sentinela',
+  })
+
+  const codex = applyProfileEnv(base, { providerId: 'codex', profileEnv: { CODEX_HOME: '/perfis/trabalho' } }, 'linux')
+  assert.deepEqual(codex, {
+    PATH: '/usr/bin',
+    ANTHROPIC_API_KEY: 'sk-ant-sentinela',
+    CODEX_HOME: '/perfis/trabalho',
+  })
+  assert.equal(base.OPENAI_API_KEY, 'sk-sentinela-openai', 'o ambiente base não pode ser alterado')
+
+  const claude = applyProfileEnv(
+    { ...base, ANTHROPIC_AUTH_TOKEN: 't', CLAUDE_CODE_OAUTH_TOKEN: 'o', CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR: '3' },
+    { providerId: 'claude', profileEnv: { CLAUDE_CONFIG_DIR: '/perfis/claude' } },
+    'linux',
+  )
+  assert.equal(claude.CLAUDE_CONFIG_DIR, '/perfis/claude')
+  for (const nome of CREDENCIAIS_HERDADAS.claude) assert.equal(Object.hasOwn(claude, nome), false, nome)
+  assert.equal(claude.OPENAI_API_KEY, 'sk-sentinela-openai')
+})
+
+test('Gemini tira as chaves do Google; Openia não tira nada e a chave do perfil vence', () => {
+  const gemini = applyProfileEnv(
+    { GEMINI_API_KEY: 'g', GOOGLE_API_KEY: 'k', GOOGLE_APPLICATION_CREDENTIALS: '/c.json', GOOGLE_GENAI_USE_VERTEXAI: 'true', HOME: '/home/pessoa' },
+    { providerId: 'gemini', profileEnv: { HOME: '/perfis/gemini' } },
+    'linux',
+  )
+  assert.deepEqual(gemini, { HOME: '/perfis/gemini' })
+
+  assert.deepEqual(getInheritedCredentialNames('openia'), [])
+  const openia = applyProfileEnv(
+    { OPENROUTER_API_KEY: 'sk-or-da-pessoa', OPENAI_API_KEY: 'sk-x' },
+    { providerId: 'openia', profileEnv: { OPENROUTER_API_KEY: 'sk-or-da-conta' } },
+    'linux',
+  )
+  assert.deepEqual(openia, { OPENROUTER_API_KEY: 'sk-or-da-conta', OPENAI_API_KEY: 'sk-x' })
+})
+
+test('no Windows o nome não diferencia maiúscula; fora dele, só o nome exato sai', () => {
+  const base = { openai_api_key: 'sk-minusculo', Codex_Api_Key: 'sk-misto', Path: 'C:\\Windows' }
+
+  assert.deepEqual(applyProfileEnv(base, { providerId: 'codex', profileEnv: {} }, 'win32'), { Path: 'C:\\Windows' })
+  assert.deepEqual(applyProfileEnv(base, { providerId: 'codex', profileEnv: {} }, 'linux'), base)
+})
+
+test('provedor desconhecido não tira nada', () => {
+  assert.deepEqual(getInheritedCredentialNames('outro'), [])
+  assert.deepEqual(applyProfileEnv({ OPENAI_API_KEY: 'x' }, { providerId: 'outro' }, 'linux'), { OPENAI_API_KEY: 'x' })
 })

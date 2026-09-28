@@ -39,6 +39,37 @@ const ISOLATION = Object.freeze({
   openia: { kind: 'env-secret', variable: 'OPENROUTER_API_KEY' },
 })
 
+/**
+ * Credenciais do ambiente do app que a CLI leria ANTES da pasta do perfil.
+ *
+ * Um perfil isola a pasta de login, mas não o que vem herdado do processo
+ * principal: com `OPENAI_API_KEY` no ambiente, o Codex de uma conta ChatGPT
+ * passa a cobrar pela chave, e com `ANTHROPIC_API_KEY` o Claude de uma conta
+ * Max passa a cobrar por uso. Por isso um terminal com conta própria nasce
+ * sem estas variáveis. O login do sistema (sem conta) não muda: continua com
+ * o ambiente da pessoa, como antes.
+ *
+ * Os nomes foram conferidos nos pacotes instalados (Claude Code 2.1.283,
+ * Codex 0.156.1, Gemini CLI 0.57.0). O Openia não entra: o perfil dele já
+ * sobrescreve a própria chave (`OPENROUTER_API_KEY`).
+ */
+const CREDENCIAIS_HERDADAS = Object.freeze({
+  claude: Object.freeze([
+    'ANTHROPIC_API_KEY',
+    'ANTHROPIC_AUTH_TOKEN',
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR',
+  ]),
+  codex: Object.freeze(['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN']),
+  gemini: Object.freeze([
+    'GEMINI_API_KEY',
+    'GOOGLE_API_KEY',
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    'GOOGLE_GENAI_USE_VERTEXAI',
+  ]),
+  openia: Object.freeze([]),
+})
+
 function getIsolation(providerId) {
   return ISOLATION[providerId] ?? null
 }
@@ -112,6 +143,41 @@ function buildProfileEnv({ providerId, profileDir, secret, homeDir }) {
   }
 }
 
+/** Nomes das credenciais herdadas que um perfil do provedor remove. */
+function getInheritedCredentialNames(providerId) {
+  return [...(CREDENCIAIS_HERDADAS[providerId] ?? [])]
+}
+
+/**
+ * Ambiente de um processo que nasce numa conta com perfil: o ambiente base
+ * sem as credenciais herdadas daquele provedor, mais as variáveis do perfil.
+ *
+ * Remover precisa acontecer aqui, na junção, e não devolvendo `undefined` no
+ * objeto do perfil: o node-pty serializa o valor como o texto "undefined".
+ * No Windows o nome de variável não diferencia maiúscula (`openai_api_key` é
+ * a mesma variável para a CLI), então a comparação também não diferencia.
+ *
+ * @param {Record<string, string | undefined>} baseEnv - Ambiente já montado (PATH do app etc.).
+ * @param {{ providerId: string, profileEnv?: Record<string, string> }} profile
+ * @param {string} [platformName] - `process.platform` por padrão.
+ * @returns {Record<string, string | undefined>} Objeto novo; `baseEnv` não é alterado.
+ */
+function applyProfileEnv(baseEnv, { providerId, profileEnv = {} }, platformName = process.platform) {
+  const caseInsensitive = platformName === 'win32'
+  const removed = new Set(
+    getInheritedCredentialNames(providerId).map((name) => (caseInsensitive ? name.toUpperCase() : name)),
+  )
+  const env = {}
+
+  for (const [key, value] of Object.entries(baseEnv ?? {})) {
+    if (!removed.has(caseInsensitive ? key.toUpperCase() : key)) {
+      env[key] = value
+    }
+  }
+
+  return { ...env, ...profileEnv }
+}
+
 /**
  * Arquivos da home real que devem existir dentro de um perfil `env-home`.
  *
@@ -125,9 +191,12 @@ function getMirrorEntries(providerId) {
 }
 
 module.exports = {
+  CREDENCIAIS_HERDADAS,
   ISOLATION,
   PROFILES_DIRNAME,
+  applyProfileEnv,
   buildProfileEnv,
+  getInheritedCredentialNames,
   getIsolation,
   getMirrorEntries,
   getProfileDir,

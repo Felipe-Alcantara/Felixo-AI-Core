@@ -16,6 +16,7 @@ const {
   resolveWorkingDirectory,
   resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
+const { createCliAccountStore } = require('./cli-account-store.cjs')
 
 /**
  * Cria um diretório real acima do MAX_PATH clássico. No Windows,
@@ -1039,6 +1040,66 @@ test('o terminal nasce na conta escolhida, e sem conta segue o login do sistema'
     ])
   } finally {
     manager.killAll({ force: true })
+  }
+})
+
+test('terminal com conta própria não herda chave de API do ambiente do app; o login do sistema fica igual', () => {
+  // Com a chave no ambiente, o Codex de uma conta ChatGPT cobraria pela chave
+  // (e o Claude Max, por uso): a conta escolhida deixaria de ser quem paga.
+  const sentinelas = {
+    OPENAI_API_KEY: 'sk-sentinela-openai',
+    CODEX_API_KEY: 'sk-sentinela-codex',
+    CODEX_ACCESS_TOKEN: 'eyJsentinela.codex',
+    ANTHROPIC_API_KEY: 'sk-ant-sentinela',
+    CLAUDE_CODE_OAUTH_TOKEN: 'sentinela-oauth',
+  }
+  const anteriores = Object.fromEntries(Object.keys(sentinelas).map((nome) => [nome, process.env[nome]]))
+  Object.assign(process.env, sentinelas)
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-credenciais-'))
+
+  try {
+    // A loja real de contas, montada como no processo principal.
+    const store = createCliAccountStore({ userData: path.join(raiz, 'userData'), homeDir: path.join(raiz, 'home') })
+    const codex = store.create({ providerId: 'codex', label: 'trabalho' })
+    const claude = store.create({ providerId: 'claude', label: 'max' })
+    const { spawnPty, calls } = createFakePty()
+    const manager = new PtyProcessManager({
+      spawnPty,
+      platform: fakePosixPlatform,
+      validateAccount: (accountId, providerId) => store.validateAccount(accountId, providerId),
+      buildAccountEnv: (accountId, providerId) => store.buildEnv(accountId, providerId),
+    })
+
+    try {
+      manager.spawn('com-conta-codex', { command: 'codex', accountId: codex.id })
+      manager.spawn('com-conta-claude', { command: 'claude', accountId: claude.id })
+      manager.spawn('login-do-sistema', { command: 'codex' })
+
+      const [envCodex, envClaude, envSistema] = calls.map((call) => call.options.env)
+      assert.match(envCodex.CODEX_HOME, new RegExp(codex.id))
+      for (const nome of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN']) {
+        assert.equal(Object.hasOwn(envCodex, nome), false, `${nome} vazou para o terminal da conta Codex`)
+      }
+      assert.match(envClaude.CLAUDE_CONFIG_DIR, new RegExp(claude.id))
+      for (const nome of ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']) {
+        assert.equal(Object.hasOwn(envClaude, nome), false, `${nome} vazou para o terminal da conta Claude`)
+      }
+      // Nenhum valor virou o texto "undefined" (o node-pty serializa assim).
+      assert.ok(!Object.values(envCodex).includes(undefined) && !Object.values(envClaude).includes(undefined))
+
+      for (const [nome, valor] of Object.entries(sentinelas)) {
+        assert.equal(envSistema[nome], valor, `o login do sistema perdeu ${nome}`)
+      }
+      assert.ok(envCodex.PATH && envSistema.PATH)
+    } finally {
+      manager.killAll({ force: true })
+    }
+  } finally {
+    for (const [nome, valor] of Object.entries(anteriores)) {
+      if (valor === undefined) delete process.env[nome]
+      else process.env[nome] = valor
+    }
+    fs.rmSync(raiz, { recursive: true, force: true })
   }
 })
 

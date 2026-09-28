@@ -395,6 +395,11 @@ function createCliAccountStore({
   /**
    * Ambiente do terminal para a conta escolhida. O segredo sai daqui direto
    * para o processo filho, sem passar pelo renderer nem por log.
+   *
+   * Devolve só as variáveis do perfil. Quem junta com o ambiente base usa
+   * `applyProfileEnv` (cli-account-profiles.cjs), que também tira as chaves
+   * de API herdadas do app: espalhar este objeto por cima do `process.env`
+   * deixaria a CLI cobrar pela chave, não pela conta.
    */
   function buildEnv(accountId, expectedProviderId) {
     const hasAccount = accountId !== undefined && accountId !== null && accountId !== ''

@@ -26,6 +26,7 @@ const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { discoverAgentSession } = require('./agent-session-discovery.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
+const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 
 const DEFAULT_COLS = 80
@@ -148,12 +149,18 @@ class PtyProcessManager {
 
     const spawnPty = this.resolveSpawnPty()
     // A conta escolhida entra por variável de ambiente, depois do PATH: é o
-    // que faz duas contas do mesmo provedor conviverem sem logout. Sem conta
-    // escolhida o objeto vem vazio e nada muda.
-    const env = {
-      ...createCliEnv(),
-      ...this.buildAccountEnv(options.accountId, accountValidation.providerId),
-    }
+    // que faz duas contas do mesmo provedor conviverem sem logout. Com conta
+    // própria o terminal também deixa de herdar as chaves de API do ambiente
+    // do app (senão a CLI cobraria pela chave, não pela conta escolhida). Sem
+    // conta escolhida o objeto vem vazio e nada muda: é o login do sistema.
+    const accountEnv = this.buildAccountEnv(options.accountId, accountValidation.providerId)
+    const env = hasSelectedAccount(options.accountId)
+      ? applyProfileEnv(
+          createCliEnv(),
+          { providerId: accountValidation.providerId, profileEnv: accountEnv },
+          this.platform.name,
+        )
+      : { ...createCliEnv(), ...accountEnv }
     // Rolagem no Claude Code: sem alternate screen o xterm guarda scrollback.
     if (options.classicScreen === true && isClaudeCommandName(options.command)) {
       env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'
@@ -991,6 +998,11 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
   }
 
   return { command, args }
+}
+
+/** Mesma regra de "tem conta" da validação: string não vazia. */
+function hasSelectedAccount(accountId) {
+  return typeof accountId === 'string' && accountId.trim() !== ''
 }
 
 /**
