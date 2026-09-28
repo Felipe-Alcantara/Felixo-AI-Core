@@ -11,6 +11,12 @@
  * The two managers intentionally coexist: the pipe-based path keeps powering
  * structured orchestration, while this path powers human-driven terminal nodes.
  *
+ * Exceção medida (28/09/2026): terminal de agente com vigia injetada
+ * (`createOutputWatcher`) tem a cauda de replay lida, fora do `onData`, pela
+ * vigia de falha por conta (`accounts/account-output-watcher.cjs`). Os bytes
+ * entregues ao renderer continuam intocados e saem antes da vigia; o custo
+ * por pedaço é medido em `scripts/pty-output-path-benchmark.cjs`.
+ *
  * `node-pty` is a native addon compiled against a specific ABI. To keep this
  * module loadable under both the test runner (Node) and the app (Electron), the
  * binding is required lazily and can be replaced with an injected factory in
@@ -82,8 +88,10 @@ class PtyProcessManager {
    * @param {(options: object) => object | null} [dependencies.discoverAgentSession] - Provider history resolver.
    * @param {(accountId: string, providerId?: string) => Record<string, string>} [dependencies.buildAccountEnv] - Ambiente da conta escolhida.
    * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount] - Confere a conta antes de montar o ambiente.
+   * @param {((options: object) => import('./accounts/account-output-watcher.cjs').AccountOutputWatcher | null) | null} [dependencies.createOutputWatcher] - Fábrica da vigia de falha por conta; sem ela nenhum terminal é vigiado.
+   * @param {((detection: object) => void) | null} [dependencies.onOutputFailure] - Recebe cada detecção da vigia, com a sessão, a conta e o modo.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -95,6 +103,10 @@ class PtyProcessManager {
     this.buildAccountEnv = buildAccountEnv ?? (() => ({}))
     this.validateAccount = validateAccount
     this.discoverAgentSession = discover
+    // Vigia de falha por conta: só existe com a fábrica e um consumidor. Sem
+    // eles (testes antigos, bancada `atual`) o onData fica como era.
+    this.createOutputWatcher = typeof createOutputWatcher === 'function' ? createOutputWatcher : null
+    this.onOutputFailure = typeof onOutputFailure === 'function' ? onOutputFailure : null
   }
 
   /**
@@ -320,7 +332,13 @@ class PtyProcessManager {
       // Onde a CLI deste terminal grava o histórico (pasta do perfil da conta,
       // ou a do login do sistema). Só as variáveis de pasta, nunca o ambiente.
       agentSessionContext: selectDiscoveryContext(env),
+      // Horário do último pedaço de saída; `null` = ainda não imprimiu nada.
+      // A cadeia de contas pergunta por ele antes de abrir a continuação de um
+      // terminal que ainda está trabalhando.
+      lastOutputAt: null,
+      watcher: null,
     }
+    entry.watcher = this.createSessionOutputWatcher(sessionId, entry, options)
 
     // Escrita grande vai fatiada e em ordem: o ConPTY do Windows descarta em
     // silêncio o excedente de uma escrita única grande, e era isso que cortava
@@ -335,6 +353,7 @@ class PtyProcessManager {
 
     ptyProcess.onData((data) => {
       entry.outputBuffer.append(String(data))
+      entry.lastOutputAt = this.now()
       try {
         // ConPTY can start a default shell successfully and only then report
         // an invalid path. Only handle the platform's own startup text here:
@@ -369,6 +388,15 @@ class PtyProcessManager {
       } catch {
         // A renderer callback must not bring down the PTY process.
       }
+      // Depois do renderer, nunca antes: a vigia não atrasa o pedaço que a
+      // pessoa vê. Por pedaço ela só marca "há texto novo" (O(1)).
+      if (entry.watcher !== null) {
+        try {
+          entry.watcher.push(entry.lastOutputAt)
+        } catch {
+          // A vigia é segurança de custo, não pode derrubar o terminal.
+        }
+      }
     })
 
     ptyProcess.onExit((event) => {
@@ -380,6 +408,10 @@ class PtyProcessManager {
       if (!isCurrentAttempt) {
         return
       }
+
+      // A última mensagem antes de sair costuma ser o motivo ("Not logged
+      // in", o aviso de limite): varre já, sem esperar o debounce, e desliga.
+      this.finishSessionOutputWatcher(entry, { flush: true })
 
       const exitedEarly =
         isCurrentAttempt &&
@@ -730,8 +762,65 @@ class PtyProcessManager {
       clearTimeout(entry.discoveryTimer)
     }
     entry.filaDeEscrita?.descartar()
+    this.finishSessionOutputWatcher(entry, { flush: false })
 
     this.sessions.delete(sessionId)
+  }
+
+  /**
+   * Cria a vigia de falha por conta de um terminal de agente. Shell (sem
+   * comando), comando sem provedor conhecido e provedor sem frase para vigiar
+   * (Openia) ficam sem vigia e não pagam nada além de um `if` por pedaço.
+   *
+   * A vigia vale também para o login do sistema (sem conta): lá a detecção
+   * só vira aviso; quem decide é o consumidor.
+   *
+   * @returns {import('./accounts/account-output-watcher.cjs').AccountOutputWatcher | null}
+   */
+  createSessionOutputWatcher(sessionId, entry, options) {
+    if (!this.createOutputWatcher || !this.onOutputFailure || !options.command || !entry.providerId) {
+      return null
+    }
+
+    try {
+      return this.createOutputWatcher({
+        providerId: entry.providerId,
+        readTail: (count) => entry.outputBuffer.tail(count),
+        now: this.now,
+        logger: this.logger,
+        // Conta e modo são lidos na hora da detecção: o modo do bloco pode
+        // mudar depois do spawn (fixar ou pôr na cadeia).
+        onDetection: (detection) => this.onOutputFailure?.({
+          ...detection,
+          sessionId,
+          accountId: entry.accountId ?? null,
+          providerId: entry.providerId,
+          accountMode: entry.accountMode ?? DEFAULT_PTY_ACCOUNT_MODE,
+          // A linhagem só existe em bloco aberto pela cadeia (entra com o ticket).
+          lineageId: entry.lineageId ?? null,
+        }),
+      }) ?? null
+    } catch (error) {
+      this.logger?.warn?.('[pty] vigia de contas indisponível para este terminal:', error instanceof Error ? error.message : error)
+      return null
+    }
+  }
+
+  /** Desliga a vigia da entrada; com `flush`, varre antes o que ainda não foi lido. */
+  finishSessionOutputWatcher(entry, { flush }) {
+    const watcher = entry.watcher
+    if (!watcher) return
+    entry.watcher = null
+    try {
+      if (flush) watcher.flush()
+    } catch {
+      // A última varredura é o melhor esforço; a saída do processo segue.
+    }
+    try {
+      watcher.dispose()
+    } catch {
+      // Idem.
+    }
   }
 
   /**

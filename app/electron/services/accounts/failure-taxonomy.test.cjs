@@ -274,3 +274,30 @@ test('no terminal, provedor sem frase (Openia) nunca detecta nada', () => {
   const result = classifyFailure({ text: 'Credit balance is too low\nrate limit exceeded', origin: 'pty', providerId: 'openia' })
   assert.equal(result.failureClass, 'unknown')
 })
+
+test('a normalização que só colapsa quando precisa dá o mesmo resultado que o colapso em toda linha', () => {
+  // O oráculo é a versão anterior: `replace(/\s+/g, ' ').trim()` em toda linha.
+  const antiga = (text) =>
+    String(text ?? '')
+      .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, ' ')
+      .replace(/\u001b\[[0-?]*[ -/]*([@-~])/g, (_sequence, final) => ('ABEFHf'.includes(final) ? '\n' : ' '))
+      .replace(/\u001b[@-Z\\-_]/g, ' ')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u009b]/g, ' ')
+      .split('\n')
+      .map((line) => line.replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+
+  const alfabeto = ['a', 'Z', ' ', '  ', '\t', ' ', ' ', '\r', '\n', '\r\n', '\x1b[2K', '\x1b[3;1H', '\x1b]0;t\x07', '·', '’', '\f', '\v', '⠋']
+  let state = 7
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+    return state / 2 ** 32
+  }
+  for (let caso = 0; caso < 500; caso += 1) {
+    let text = ''
+    const length = Math.floor(random() * 60)
+    for (let index = 0; index < length; index += 1) text += alfabeto[Math.floor(random() * alfabeto.length)]
+    assert.deepEqual(normalizeTerminalText(text), antiga(text), JSON.stringify(text))
+  }
+})

@@ -23,6 +23,27 @@ const EVIDENCE_LEAD_CHARS = 40
 const EVIDENCE_HASH_HEX_CHARS = 32
 
 /**
+ * Vigia de falha por conta no terminal (`account-output-watcher.cjs`). Por
+ * pedaço de saída ela só marca "há texto novo"; a varredura fica adiada até
+ * `OUTPUT_WATCHER_DEBOUNCE_MS` de silêncio, nunca mais que
+ * `OUTPUT_WATCHER_MAX_WAIT_MS` depois do primeiro pedaço não lido, e lê só os
+ * últimos `OUTPUT_WATCHER_TAIL_CHARS` caracteres, dos quais a taxonomia vê as
+ * últimas `OUTPUT_WATCHER_MAX_LINES` linhas. Os tetos de custo medidos pela
+ * bancada `scripts/pty-output-path-benchmark.cjs` valem para estes números.
+ */
+const OUTPUT_WATCHER_DEBOUNCE_MS = 400
+const OUTPUT_WATCHER_MAX_WAIT_MS = 2_000
+const OUTPUT_WATCHER_TAIL_CHARS = 4_096
+const OUTPUT_WATCHER_MAX_LINES = 40
+
+/**
+ * Quantas impressões digitais de evidência cada sessão lembra (as mais
+ * recentes): a mesma evidência nunca gera uma segunda detecção, mesmo com a
+ * TUI redesenhando o aviso dezenas de vezes.
+ */
+const OUTPUT_WATCHER_SEEN_EVIDENCE_MAX = 32
+
+/**
  * Um horário de reset lido do texto a mais disto do agora é descartado: nenhum
  * limite de uso das CLIs dura mais que uma semana, e uma leitura assim é erro
  * de interpretação (data de outro ano, dia sem mês).
@@ -182,6 +203,11 @@ module.exports = Object.freeze({
   MIN_PLAN_MULTIPLIER,
   NO_LOGIN_RETRY_MS,
   OPEN_SWITCH_EVENT_STATES,
+  OUTPUT_WATCHER_DEBOUNCE_MS,
+  OUTPUT_WATCHER_MAX_LINES,
+  OUTPUT_WATCHER_MAX_WAIT_MS,
+  OUTPUT_WATCHER_SEEN_EVIDENCE_MAX,
+  OUTPUT_WATCHER_TAIL_CHARS,
   RESET_MAX_AHEAD_MS,
   SWITCH_EVENTS_RETENTION,
   SWITCH_EVENT_KINDS,

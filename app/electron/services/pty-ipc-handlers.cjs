@@ -7,6 +7,15 @@
  * `pty:exit`. Keystrokes, resizes and lifecycle come back through invokable
  * `pty:*` channels. This path is deliberately separate from the JSONL `cli:*`
  * orchestration path — here we never parse output, we just move bytes.
+ *
+ * Nota (28/09/2026) — exceção medida: o processo principal passou a LER a
+ * saída dos terminais de agente, para a vigia de falha por conta
+ * (`accounts/account-output-watcher.cjs`, criada pelo `PtyProcessManager`)
+ * reconhecer limite, login e crédito da CLI. Os bytes continuam indo ao
+ * renderer sem mudança e antes da vigia; por pedaço ela só marca "há texto
+ * novo", e a leitura é uma varredura adiada da cauda de 4 KiB. O custo por
+ * pedaço e o da varredura têm teto no `--check` de
+ * `scripts/pty-output-path-benchmark.cjs` (variante `atual+vigia`).
  */
 
 const { ipcMain } = require('electron')

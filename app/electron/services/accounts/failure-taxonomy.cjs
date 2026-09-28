@@ -78,6 +78,20 @@ const LINE_BREAKING_CSI = new Set(['A', 'B', 'E', 'F', 'H', 'f'])
 const CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u009b]/g
 
 /**
+ * A linha tem espaço repetido ou espaço que não é o simples (tab, NBSP)? Só
+ * então colapsar muda alguma coisa. A vigia do terminal normaliza até 4 KiB
+ * de saída por varredura, e o colapso por regex em toda linha era a maior
+ * parte desse custo.
+ */
+const NEEDS_SPACE_COLLAPSE = /\s\s|[^\S ]/
+
+/** `trim` e `\s` usam o mesmo conjunto de espaços: aparar antes dá o mesmo resultado. */
+function collapseSpaces(line) {
+  const trimmed = line.trim()
+  return NEEDS_SPACE_COLLAPSE.test(trimmed) ? trimmed.replace(/\s+/g, ' ') : trimmed
+}
+
+/**
  * Normaliza a saída de terminal em linhas legíveis: tira escapes e controles,
  * trata CR como quebra (redesenho), colapsa espaços e descarta linhas vazias.
  *
@@ -92,7 +106,7 @@ function normalizeTerminalText(text) {
     .replace(/\r\n?/g, '\n')
     .replace(CONTROL_PATTERN, ' ')
     .split('\n')
-    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .map(collapseSpaces)
     .filter(Boolean)
 }
 
@@ -312,20 +326,17 @@ function classifyFailure(input = {}) {
 
   lines.forEach((line, lineIndex) => {
     const matchLine = toMatchForm(line)
-    if (exclusions.some((regex) => regex.test(matchLine))) return
-
+    let lineNotice = null
     for (const rule of provider?.notices ?? []) {
-      if (rule.regex.test(matchLine)) notice = rule.notice
+      if (rule.regex.test(matchLine)) lineNotice = rule.notice
     }
 
-    if (provider) {
-      candidates.push(...collectCandidates(matchLine, provider.include, origin, lineIndex, line))
-    }
+    const lineCandidates = provider ? collectCandidates(matchLine, provider.include, origin, lineIndex, line) : []
     if (origin === 'fluxo') {
-      candidates.push(...collectCandidates(matchLine, COMPILED_GENERIC, origin, lineIndex, line))
-      candidates.push(...collectStatusCandidates(matchLine, lineIndex, line))
+      lineCandidates.push(...collectCandidates(matchLine, COMPILED_GENERIC, origin, lineIndex, line))
+      lineCandidates.push(...collectStatusCandidates(matchLine, lineIndex, line))
       if (APP_TIMEOUT_PATTERN.test(matchLine)) {
-        candidates.push({
+        lineCandidates.push({
           failureClass: 'timeout',
           scope: 'account',
           ambiguous: false,
@@ -336,6 +347,15 @@ function classifyFailure(input = {}) {
         })
       }
     }
+
+    // A exclusão anula a linha inteira. Conferida só quando a linha trouxe
+    // algo: o resultado é o mesmo de conferir antes, e a linha comum (quase
+    // todas, no terminal) não paga as regex de exclusão.
+    if (lineNotice === null && lineCandidates.length === 0) return
+    if (exclusions.some((regex) => regex.test(matchLine))) return
+
+    if (lineNotice !== null) notice = lineNotice
+    candidates.push(...lineCandidates)
   })
 
   if (input?.signal?.timedOut === true) {

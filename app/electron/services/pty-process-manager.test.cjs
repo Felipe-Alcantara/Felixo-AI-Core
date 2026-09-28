@@ -18,6 +18,8 @@ const {
   resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
 const { createCliAccountStore } = require('./cli-account-store.cjs')
+const { createAccountOutputWatcher } = require('./accounts/account-output-watcher.cjs')
+const { OUTPUT_WATCHER_DEBOUNCE_MS } = require('./accounts/account-chain-constants.cjs')
 
 /**
  * Cria um diretório real acima do MAX_PATH clássico. No Windows,
@@ -1288,4 +1290,207 @@ test('classicScreen: só o Claude Code recebe CLAUDE_CODE_DISABLE_ALTERNATE_SCRE
 test('isClaudeCommandName reconhece só o executável do Claude Code', () => {
   for (const c of ['claude', 'claude.exe', 'C:\\a\\claude.cmd', '/usr/bin/claude']) assert.equal(isClaudeCommandName(c), true, c)
   for (const c of ['codex', 'bash', 'claude-helper', 'myclaude', '', undefined, 3]) assert.equal(isClaudeCommandName(c), false, String(c))
+})
+
+/**
+ * Manager com a vigia real de falha por conta, relógio fixo e agendador
+ * manual: os testes disparam os timers quando querem.
+ */
+function criarManagerComVigia(extra = {}) {
+  const { fakePty, spawnPty, calls } = createFakePty()
+  const timers = []
+  const detections = []
+  const created = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    discoverAgentSession: () => null,
+    now: () => 5_000,
+    createOutputWatcher: (options) => {
+      created.push(options.providerId)
+      return createAccountOutputWatcher({
+        ...options,
+        now: () => 5_000 + OUTPUT_WATCHER_DEBOUNCE_MS,
+        setTimer: (callback) => {
+          const timer = { callback, active: true }
+          timers.push(timer)
+          return timer
+        },
+        clearTimer: (timer) => {
+          timer.active = false
+        },
+      })
+    },
+    onOutputFailure: (detection) => detections.push(detection),
+    ...extra,
+  })
+  const fireTimers = () => {
+    for (const timer of timers.filter((item) => item.active)) {
+      timer.active = false
+      timer.callback()
+    }
+  }
+  return { manager, fakePty, calls, timers, detections, created, fireTimers }
+}
+
+const LIMITE_CODEX = '■ You’ve hit your usage limit. Upgrade to Plus to continue using Codex, or try again at 8:04 PM.\r\n'
+
+test('vigia: a detecção sai com a sessão, a conta, o provedor e o modo do bloco', () => {
+  const { manager, fakePty, detections, fireTimers } = criarManagerComVigia()
+  try {
+    manager.spawn('canvas:cadeia', { command: 'codex', accountId: 'conta-a', providerId: 'codex', accountMode: 'chain' })
+    fakePty.emitData('trabalhando...\r\n')
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+
+    assert.equal(detections.length, 1)
+    const [detection] = detections
+    assert.equal(detection.kind, 'failure')
+    assert.equal(detection.sessionId, 'canvas:cadeia')
+    assert.equal(detection.accountId, 'conta-a')
+    assert.equal(detection.providerId, 'codex')
+    assert.equal(detection.accountMode, 'chain')
+    assert.equal(detection.lineageId, null)
+    assert.equal(detection.failure.failureClass, 'limit')
+    assert.equal(detection.failure.scope, 'account')
+    // O horário do último pedaço fica na entrada para a cadeia saber se a
+    // origem ainda está produzindo saída.
+    assert.equal(manager.sessions.get('canvas:cadeia').lastOutputAt, 5_000)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('vigia: o login do sistema também é vigiado (só aviso); shell, Openia e manager sem consumidor não têm vigia', () => {
+  const { manager, fakePty, detections, created, fireTimers } = criarManagerComVigia()
+  try {
+    manager.spawn('canvas:sistema', { command: 'codex' })
+    manager.spawn('canvas:shell', {})
+    manager.spawn('canvas:openia', { command: 'openia' })
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+
+    // O PTY falso é o mesmo para as três sessões; só a do Codex tem vigia.
+    assert.deepEqual(created, ['codex', 'openia'])
+    assert.equal(detections.length, 1)
+    assert.equal(detections[0].sessionId, 'canvas:sistema')
+    assert.equal(detections[0].accountId, null)
+    assert.equal(detections[0].accountMode, 'pinned')
+  } finally {
+    manager.killAll({ force: true })
+  }
+
+  let criadas = 0
+  const semConsumidor = new PtyProcessManager({
+    spawnPty: createFakePty().spawnPty,
+    platform: fakePosixPlatform,
+    discoverAgentSession: () => null,
+    createOutputWatcher: () => {
+      criadas += 1
+      return null
+    },
+  })
+  semConsumidor.spawn('canvas:x', { command: 'codex' })
+  semConsumidor.killAll({ force: true })
+  assert.equal(criadas, 0)
+})
+
+test('vigia: os bytes entregues ao renderer são idênticos com e sem vigia, na mesma ordem', () => {
+  const pedacos = [
+    '\x1b[2K\r⠋ Thinking… ',
+    'ç😀\r\n',
+    LIMITE_CODEX,
+    '\x1b[?1049h\x1b[H\x1b[2J',
+    'Not logged in\r\n',
+    '',
+    'fim',
+  ]
+  const entregar = (manager, fakePty) => {
+    const recebidos = []
+    manager.spawn('canvas:bytes', { command: 'codex', onData: (data) => recebidos.push(data) })
+    for (const pedaco of pedacos) fakePty.emitData(pedaco)
+    manager.killAll({ force: true })
+    return recebidos
+  }
+
+  const semVigia = createFakePty()
+  const comVigia = criarManagerComVigia()
+  const esperado = entregar(
+    new PtyProcessManager({ spawnPty: semVigia.spawnPty, platform: fakePosixPlatform, discoverAgentSession: () => null }),
+    semVigia.fakePty,
+  )
+  const obtido = entregar(comVigia.manager, comVigia.fakePty)
+
+  assert.deepEqual(obtido, pedacos)
+  assert.deepEqual(obtido, esperado)
+})
+
+test('vigia: o replay do attach não realimenta a vigia', () => {
+  const { manager, fakePty, detections, timers, fireTimers } = criarManagerComVigia()
+  try {
+    manager.spawn('canvas:replay', { command: 'codex' })
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+    assert.equal(detections.length, 1)
+    const armados = timers.length
+
+    let replay = ''
+    manager.spawn('canvas:replay', { command: 'codex', reuseExisting: true, onData: (data) => { replay += data } })
+    assert.equal(replay, LIMITE_CODEX)
+    assert.equal(timers.length, armados, 'o replay armou a vigia')
+    fireTimers()
+    assert.equal(detections.length, 1)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('vigia: a saída do processo varre na hora a última mensagem e desliga a vigia; o kill forçado só desliga', () => {
+  const { manager, fakePty, detections, timers } = criarManagerComVigia()
+  manager.spawn('canvas:sai', { command: 'codex' })
+  fakePty.emitData('Not logged in\r\n')
+  assert.equal(timers.filter((timer) => timer.active).length, 1)
+
+  fakePty.emitExit({ exitCode: 1 })
+
+  assert.equal(detections.length, 1, 'a última mensagem se perdeu na saída')
+  assert.equal(detections[0].failure.failureClass, 'auth')
+  assert.equal(timers.filter((timer) => timer.active).length, 0, 'timer ficou armado depois da saída')
+  manager.killAll({ force: true })
+
+  const outro = criarManagerComVigia()
+  outro.manager.spawn('canvas:morto', { command: 'codex' })
+  outro.fakePty.emitData(LIMITE_CODEX)
+  outro.manager.kill('canvas:morto', { force: true })
+  assert.equal(outro.timers.filter((timer) => timer.active).length, 0)
+  assert.deepEqual(outro.detections, [])
+})
+
+test('vigia: falha dentro da vigia ou do consumidor não derruba o terminal nem a entrega', () => {
+  const { spawnPty, fakePty } = createFakePty()
+  const recebidos = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    discoverAgentSession: () => null,
+    createOutputWatcher: () => ({
+      push() {
+        throw new Error('vigia quebrada')
+      },
+      flush() {
+        throw new Error('vigia quebrada')
+      },
+      dispose() {
+        throw new Error('vigia quebrada')
+      },
+    }),
+    onOutputFailure: () => {},
+  })
+  manager.spawn('canvas:robusto', { command: 'claude', onData: (data) => recebidos.push(data) })
+
+  assert.doesNotThrow(() => fakePty.emitData('a'))
+  assert.doesNotThrow(() => fakePty.emitData('b'))
+  assert.doesNotThrow(() => fakePty.emitExit({ exitCode: 0 }))
+  assert.deepEqual(recebidos, ['a', 'b'])
+  manager.killAll({ force: true })
 })
