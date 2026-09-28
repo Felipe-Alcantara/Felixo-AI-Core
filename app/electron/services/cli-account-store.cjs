@@ -40,12 +40,21 @@ const {
 const STORE_FILE = 'cli-accounts.json'
 const SECRETS_FILE = 'cli-account-secrets.bin'
 const STORE_UNREADABLE_CODE = 'CLI_ACCOUNTS_STORE_UNREADABLE'
+const SECRETS_UNREADABLE_CODE = 'CLI_ACCOUNT_SECRETS_UNREADABLE'
 
 function createStoreUnreadableError() {
   const error = new Error(
     `O registro de contas (${STORE_FILE}) está ilegível. Nada foi alterado para não apagar as contas cadastradas; restaure ou corrija o arquivo e tente de novo.`,
   )
   error.code = STORE_UNREADABLE_CODE
+  return error
+}
+
+function createSecretsUnreadableError() {
+  const error = new Error(
+    `O arquivo de chaves das contas (${SECRETS_FILE}) está ilegível — por exemplo, depois de trocar o chaveiro do sistema. Nada foi gravado para não apagar as chaves das outras contas; restaure o arquivo ou o chaveiro e tente de novo.`,
+  )
+  error.code = SECRETS_UNREADABLE_CODE
   return error
 }
 
@@ -300,6 +309,14 @@ function createCliAccountStore({
       return { removed: false, requiresConfirmation: true, sessions }
     }
 
+    // Só conta do Openia tem chave. Com o arquivo de chaves ilegível, recusa
+    // antes de mexer em qualquer coisa: esquecer a chave regravaria o arquivo
+    // sem as das outras contas.
+    const hasSecret = account.providerId === 'openia' && Boolean(safeStorage)
+    if (hasSecret) {
+      loadSecretsForWrite()
+    }
+
     try {
       fileSystem.rmSync(getProfileDir(userData, account.providerId, account.id), {
         recursive: true,
@@ -315,7 +332,9 @@ function createCliAccountStore({
       }
     }
 
-    forgetSecret(account.id)
+    if (hasSecret) {
+      forgetSecret(account.id)
+    }
     writeStore(accounts.filter((item) => item.id !== accountId))
 
     return { removed: true, sessions, chainCleaned: forgetInChain(account.id) }
@@ -366,15 +385,50 @@ function createCliAccountStore({
 
   // --- Segredo do Openia -------------------------------------------------
 
+  /**
+   * Lê as chaves para GRAVAR. Arquivo ausente é o mapa vazio; qualquer outra
+   * falha (não decifra, JSON quebrado, formato inesperado) lança
+   * `CLI_ACCOUNT_SECRETS_UNREADABLE`. Tratar o ilegível como vazio fazia a
+   * próxima gravação regravar o arquivo só com a chave nova, apagando as das
+   * outras contas — a mesma proteção que o registro já tem.
+   */
+  function loadSecretsForWrite() {
+    let encrypted
+    try {
+      encrypted = fileSystem.readFileSync(secretsPath)
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        return {}
+      }
+      throw createSecretsUnreadableError()
+    }
+
+    let parsed
+    try {
+      parsed = JSON.parse(safeStorage.decryptString(encrypted))
+    } catch {
+      throw createSecretsUnreadableError()
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw createSecretsUnreadableError()
+    }
+
+    return parsed
+  }
+
+  /**
+   * Lê as chaves para exibir ou montar o ambiente: ilegível conta como "sem
+   * chave" (a conta aparece sem chave configurada e o terminal recusa abrir),
+   * sem derrubar a lista. Nunca serve de base para uma gravação.
+   */
   function readSecrets() {
     if (!safeStorage) {
       return {}
     }
 
     try {
-      const encrypted = fileSystem.readFileSync(secretsPath)
-      const parsed = JSON.parse(safeStorage.decryptString(encrypted))
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+      return loadSecretsForWrite()
     } catch {
       return {}
     }
@@ -449,7 +503,7 @@ function createCliAccountStore({
       throw new Error('Informe a chave da conta.')
     }
 
-    writeSecrets({ ...readSecrets(), [account.id]: secret.trim() })
+    writeSecrets({ ...loadSecretsForWrite(), [account.id]: secret.trim() })
   }
 
   function forgetSecret(accountId) {
@@ -457,7 +511,7 @@ function createCliAccountStore({
       return
     }
 
-    const secrets = readSecrets()
+    const secrets = loadSecretsForWrite()
 
     if (!(accountId in secrets)) {
       return

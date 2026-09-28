@@ -711,3 +711,38 @@ test('remover a conta tira membro, espera e checagem da cadeia no SQLite e mant�
     fs.rmSync(databaseDir, { recursive: true, force: true })
   }
 })
+
+test('arquivo de chaves ilegível não é regravado: gravar, esquecer e remover conta do Openia recusam', () => {
+  // Antes: readSecrets devolvia {} em silêncio, e setSecret(C) regravava o
+  // arquivo só com C — as chaves de A e B sumiam.
+  const env = createEnvironment()
+
+  try {
+    const a = env.store.create({ providerId: 'openia', label: 'a' })
+    const b = env.store.create({ providerId: 'openia', label: 'b' })
+    const c = env.store.create({ providerId: 'openia', label: 'c' })
+    const codex = env.store.create({ providerId: 'codex', label: 'codex' })
+    env.store.setSecret(a.id, 'chave-a')
+    env.store.setSecret(b.id, 'chave-b')
+
+    const secretsPath = path.join(env.userData, 'config', 'cli-account-secrets.bin')
+    const ilegivel = Buffer.from('cifrado-por-outro-chaveiro\u0000\u0001', 'utf8')
+    fs.writeFileSync(secretsPath, ilegivel)
+
+    assert.throws(() => env.store.setSecret(c.id, 'chave-c'), (error) => {
+      assert.equal(error.code, 'CLI_ACCOUNT_SECRETS_UNREADABLE')
+      assert.match(error.message, /ilegível/)
+      return true
+    })
+    assert.throws(() => env.store.forgetSecret(a.id), { code: 'CLI_ACCOUNT_SECRETS_UNREADABLE' })
+    assert.throws(() => env.store.remove(b.id, { confirmed: true }), { code: 'CLI_ACCOUNT_SECRETS_UNREADABLE' })
+    assert.deepEqual(fs.readFileSync(secretsPath), ilegivel, 'o arquivo de chaves foi regravado')
+    assert.ok(env.store.list().some((conta) => conta.id === b.id), 'a conta do Openia sumiu sem apagar a chave')
+
+    // Uma conta sem chave (Codex) continua removível, e a lista segue legível.
+    assert.equal(env.store.remove(codex.id, { confirmed: true }).removed, true)
+    assert.equal(env.store.list().find((conta) => conta.id === a.id)?.secretConfigured, false)
+  } finally {
+    env.cleanup()
+  }
+})
