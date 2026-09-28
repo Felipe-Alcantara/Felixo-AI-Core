@@ -5,10 +5,13 @@
  *
  * Tudo aqui é módulo REAL, ligado como o processo principal liga: o
  * `PtyProcessManager` (com `spawnPty` falso, que só conta processos), a vigia
- * de saída com agendador manual, a taxonomia, o serviço da cadeia, a política
- * pura (pelo adaptador do contrato, em `__fixtures__`) e o repositório da
- * migration 017 num SQLite de arquivo temporário. Os pedaços de saída são
- * injetados no PTY falso; nenhuma CLI real roda.
+ * de saída com agendador manual, a taxonomia, o serviço da cadeia com a porta
+ * real da política e dos fatos da conta (`account-chain-port.cjs`, como o
+ * `account-chain-runtime.cjs` liga), o `pty:spawn` real com `chainTicket`
+ * (`pty-ipc-handlers.cjs`, com o `ipcMain` do Electron trocado por um
+ * registro), o `setAccountMode`/`lastOutputAt`/`lineageId` reais do manager e
+ * o repositório da migration 017 num SQLite de arquivo temporário. Os pedaços
+ * de saída são injetados no PTY falso; nenhuma CLI real roda.
  *
  * O que a matriz prova (decisões 1 e 6 do dono):
  * - nenhuma classe de falha abre processo sem `confirm` + ticket;
@@ -20,8 +23,8 @@
  * - saída parcial nunca vira troca;
  * - segredo nunca chega a banco, push, log QA ou retorno.
  *
- * O que o main ainda vai ligar (trilhas de IPC e do `pty:spawn` com ticket)
- * aparece aqui como o menor dublê possível e está marcado como tal.
+ * Fora daqui ficam só a checagem de login (o resultado é gravado no
+ * repositório como a checagem real grava) e a janela do Electron.
  */
 
 const test = require('node:test')
@@ -29,7 +32,19 @@ const assert = require('node:assert/strict')
 const { fork } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
+const Module = require('node:module')
 const path = require('node:path')
+
+// O `pty:spawn` real registra no `ipcMain`: um registro no lugar do Electron
+// deixa a matriz chamar o handler como o renderer chama.
+const ipcHandlers = new Map()
+const originalLoad = Module._load
+Module._load = function patchedLoad(request, parent, isMain) {
+  if (request === 'electron') return { ipcMain: { handle: (channel, listener) => ipcHandlers.set(channel, listener) } }
+  return originalLoad.call(this, request, parent, isMain)
+}
+const { CHAIN_TICKET_REFUSED, registerPtyIpcHandlers } = require('../pty-ipc-handlers.cjs')
+Module._load = originalLoad
 
 const { PtyProcessManager } = require('../pty-process-manager.cjs')
 const { createStorageDatabase } = require('../storage/sqlite-database.cjs')
@@ -37,8 +52,9 @@ const { createAccountChainRepository } = require('../storage/account-chain-repos
 const { createAccountOutputWatcher } = require('./account-output-watcher.cjs')
 const { classifyFailure } = require('./failure-taxonomy.cjs')
 const { createAccountChainService } = require('./account-chain-service.cjs')
-const { OUTPUT_WATCHER_DEBOUNCE_MS, TICKET_TTL_MS } = require('./account-chain-constants.cjs')
-const { FAULT_ACCOUNTS, createChainPolicyAdapter } = require('../../__fixtures__/account-chain-faults-worker.cjs')
+const { createAccountDescriber, createChainPolicyPort } = require('./account-chain-port.cjs')
+const { OUTPUT_WATCHER_DEBOUNCE_MS, SOURCE_ACTIVE_QUIET_MS, TICKET_TTL_MS } = require('./account-chain-constants.cjs')
+const { FAULT_ACCOUNTS, listFaultAccounts } = require('../../__fixtures__/account-chain-faults-worker.cjs')
 
 const WORKER = path.join(__dirname, '../../__fixtures__/account-chain-faults-worker.cjs')
 const START_MS = Date.parse('2026-09-28T12:00:00.000Z')
@@ -100,11 +116,16 @@ function montarCadeia({ databaseDir = null, hooks = {} } = {}) {
   const retornos = []
   const loginResults = new Map()
   let proximoPty = null
+  let falharProximoSpawn = false
   let service = null
 
   const manager = new PtyProcessManager({
     spawnPty: (file, args) => {
       spawnCalls.push({ file, args })
+      if (falharProximoSpawn) {
+        falharProximoSpawn = false
+        throw new Error('spawn falhou')
+      }
       return proximoPty
     },
     platform: POSIX,
@@ -144,24 +165,32 @@ function montarCadeia({ databaseDir = null, hooks = {} } = {}) {
 
   service = createAccountChainService({
     repository,
-    policy: createChainPolicyAdapter(),
+    policy: createChainPolicyPort({ repository }),
     async checkLogin(accountId) {
       const status = loginResults.get(accountId)
       if (status) registrarLogin(accountId, status)
     },
-    describeAccount: (accountId) => (FAULT_ACCOUNTS[accountId] ? { ...FAULT_ACCOUNTS[accountId], measurement: null } : null),
-    listAccounts: () => Object.entries(FAULT_ACCOUNTS).map(([id, account]) => ({ id, ...account })),
+    describeAccount: createAccountDescriber({ listAccounts: listFaultAccounts }),
+    listAccounts: listFaultAccounts,
     listLiveSessions: () => manager.listarSessoesVivas(),
-    // Dublê do canal de modo (trilha de IPC): muda o modo na entrada viva.
-    setSessionAccountMode(sessionId, mode) {
-      const entry = manager.sessions.get(sessionId)
-      if (!entry) return false
-      entry.accountMode = mode
-      return true
-    },
+    setSessionAccountMode: (sessionId, mode) => manager.setAccountMode(sessionId, mode),
     emit: (channel, payload) => emitted.push({ channel, payload }),
     log: (entry) => logged.push(entry),
     now: () => clock.ms,
+  })
+
+  // Como o main liga: o `pty:spawn` pede o ticket ao serviço e avisa o fim.
+  const ticketResults = []
+  registerPtyIpcHandlers(() => null, {
+    manager,
+    chainTickets: {
+      begin(input) {
+        const result = service.beginTicketSpawn(input)
+        ticketResults.push(result)
+        return result
+      },
+      finish: (input) => service.finishTicketSpawn(input),
+    },
   })
 
   const env = {
@@ -246,18 +275,38 @@ function montarCadeia({ databaseDir = null, hooks = {} } = {}) {
       return { failure, outcome }
     },
     /**
-     * Dublê do `pty:spawn` com `chainTicket` (trilha do spawn com ticket): o
-     * serviço autoriza, o manager abre o bloco novo com a linhagem e o serviço
-     * registra o fim. Nada abre processo sem passar por aqui.
+     * Abre o bloco novo pelo `pty:spawn` real com `chainTicket`, como o
+     * renderer abre depois do `confirm`. Devolve o que o serviço respondeu ao
+     * ticket (`ok`, `code`, `alreadySpawned`, `lineageId`) e, em `spawn`, o
+     * que o IPC devolveu. Recusa do serviço tem de virar
+     * `CHAIN_TICKET_REFUSED` sem processo novo.
      */
-    abrirComTicket({ ticket, accountId, sessionId }) {
-      const inicio = service.beginTicketSpawn({ ticket, accountId, sessionId })
-      retornos.push(inicio)
-      if (!inicio.ok || inicio.alreadySpawned) return inicio
-      env.abrir(sessionId, { accountId, accountMode: 'chain' })
-      manager.sessions.get(sessionId).lineageId = inicio.lineageId
-      retornos.push(service.finishTicketSpawn({ ticket, sessionId, ok: true }))
-      return inicio
+    abrirComTicket({ ticket, accountId, sessionId, falhar = false, reuseExisting = false }) {
+      const processosAntes = spawnCalls.length
+      const { providerId } = FAULT_ACCOUNTS[accountId]
+      proximoPty = criarPtyFalso()
+      falharProximoSpawn = falhar
+      ticketResults.length = 0
+      const spawn = ipcHandlers.get('pty:spawn')(null, {
+        sessionId,
+        command: providerId,
+        accountId,
+        providerId,
+        accountMode: 'chain',
+        chainTicket: ticket,
+        reuseExisting,
+      })
+      falharProximoSpawn = false
+      const inicio = ticketResults[0] ?? { ok: false, code: 'NOT_CALLED' }
+      if (!inicio.ok) {
+        assert.equal(spawn.ok, false)
+        assert.equal(spawn.code, CHAIN_TICKET_REFUSED)
+        assert.equal(spawnCalls.length, processosAntes, 'ticket recusado abriu processo')
+      }
+      if (spawn.ok && !spawn.reused) ptys.set(sessionId, proximoPty)
+      const resultado = { ...inicio, spawn }
+      retornos.push(resultado)
+      return resultado
     },
     eventos() {
       return repository.listSwitchEvents()
@@ -298,6 +347,8 @@ async function propor(env, sessionId = 'origem', texto = LIMITE_CODEX) {
   env.escrever(sessionId, texto)
   const [outcome] = await env.assentar()
   assert.equal(outcome?.action, 'proposed', JSON.stringify(outcome))
+  // A pessoa lê o cartão: a origem para de escrever antes do `confirm`.
+  env.avancar(SOURCE_ACTIVE_QUIET_MS)
   return outcome.event
 }
 
@@ -523,8 +574,10 @@ test('ticket de uso único: confirm duplo e IPC repetido dão 1 ticket e 1 proce
     assert.deepEqual([aberto.ok, aberto.alreadySpawned], [true, false])
     assert.equal(env.spawnCalls.length, 2)
 
-    // Reload do mesmo bloco: spawn comum, sem processo novo pela cadeia.
-    assert.equal(env.abrirComTicket({ ticket: primeiro.ticket, accountId: 'conta-b', sessionId: 'novo' }).alreadySpawned, true)
+    // Reload do mesmo bloco (o renderer reanexa com `reuseExisting`): o ticket
+    // já gasto por esta sessão vira spawn comum e reaproveita o processo vivo.
+    const recarregado = env.abrirComTicket({ ticket: primeiro.ticket, accountId: 'conta-b', sessionId: 'novo', reuseExisting: true })
+    assert.deepEqual([recarregado.alreadySpawned, recarregado.spawn.ok, recarregado.spawn.reused], [true, true, true])
     assert.equal(env.abrirComTicket({ ticket: primeiro.ticket, accountId: 'conta-b', sessionId: 'outro' }).code, 'TICKET_USED')
     assert.equal(env.spawnCalls.length, 2, 'o ticket abriu mais de um processo')
 
@@ -541,14 +594,17 @@ test('spawn do destino que falha fica spawn_failed e não tem nova tentativa', a
     env.abrir('origem')
     const proposta = await propor(env)
     const { ticket } = await env.service.confirm({ proposalId: proposta.id, destinationAccountId: 'conta-b' })
-    assert.equal(env.service.beginTicketSpawn({ ticket, accountId: 'conta-b', sessionId: 'novo' }).ok, true)
-    assert.deepEqual(env.service.finishTicketSpawn({ ticket, sessionId: 'novo', ok: false }), { ok: true, state: 'spawn_failed' })
+    // O `pty:spawn` real aceita o ticket, o processo não sobe e o fim é gravado como falha.
+    const falho = env.abrirComTicket({ ticket, accountId: 'conta-b', sessionId: 'novo', falhar: true })
+    assert.equal(falho.ok, true)
+    assert.equal(falho.spawn.ok, false)
+    assert.equal(env.repository.getSwitchEvent(proposta.id).state, 'spawn_failed')
 
     assert.equal(env.abrirComTicket({ ticket, accountId: 'conta-b', sessionId: 'novo' }).code, 'TICKET_NOT_CONFIRMED')
     // A mesma evidência não reabre proposta; só evidência nova, e ela ainda pede confirmação.
     env.escrever('origem', LIMITE_CODEX)
     assert.deepEqual((await env.assentar()).map((item) => item.action), [])
-    assert.equal(env.spawnCalls.length, 1)
+    assert.equal(env.spawnCalls.length, 2, 'só a origem e a tentativa que falhou')
   })
 })
 
@@ -798,6 +854,7 @@ async function percorrerComSegredos(env, sentinelas) {
   const ambiguo = await env.falhaDeFluxo('outra', { text: `HTTP 403 Forbidden Authorization ${segredos}`, accountId: 'conta-c' })
   env.retornos.push(env.service.getState())
   env.retornos.push(await env.service.resolveAmbiguous({ detectionId: ambiguo.outcome.detectionId, treatAs: 'limit' }))
+  env.avancar(SOURCE_ACTIVE_QUIET_MS)
   const confirmado = await env.service.confirm({ proposalId: limite.event.id, destinationAccountId: 'conta-b' })
   env.retornos.push(confirmado)
   env.abrirComTicket({ ticket: confirmado.ticket, accountId: 'conta-b', sessionId: 'novo' })
@@ -824,9 +881,9 @@ test('segredo na saída (sk-, sk-or-, eyJ…, Bearer) não chega a banco, push, 
 
 test(
   'segredo sem rótulo de outros provedores (AIza…, ghp_…) também não sai',
-  { todo: 'redactSecrets não cobre chave do Google (AIza…) nem token do GitHub (ghp_…) sem rótulo' },
   async () => {
-    const extras = ['AIzaSyDSENTINELA0123456789abcdefghijk', 'ghp_SENTINELA0123456789abcdefghijABCDEF']
+    // Chave do Google no formato real: `AIza` + 35 caracteres.
+    const extras = ['AIzaSyDSENTINELA0123456789abcdefghijklm', 'ghp_SENTINELA0123456789abcdefghijABCDEF']
     await comCadeia(async (env) => {
       await percorrerComSegredos(env, extras)
       assertSemSentinela(despejarBanco(env), 'banco', extras)
@@ -837,7 +894,6 @@ test(
 
 test(
   'origem ainda escrevendo pede a segunda confirmação (SOURCE_ACTIVE) com as sessões vivas do manager',
-  { todo: 'listarSessoesVivas não expõe lastOutputAt; o serviço nunca vê a origem ativa' },
   async () => {
     await comCadeia(async (env) => {
       env.ligarCadeia()
@@ -849,16 +905,35 @@ test(
   },
 )
 
-test(
-  'aviso "Your usage limit has reset" da vigia chega ao serviço como aviso, não como detecção inválida',
-  { todo: 'a vigia entrega { kind: "notice" } sem `failure`, e normalizeDetection descarta' },
-  async () => {
-    await comCadeia(async (env) => {
-      env.ligarCadeia()
-      env.abrir('origem', { accountId: 'conta-d' })
-      env.escrever('origem', 'Your usage limit has reset · press enter to continue\r\n')
-      const decididos = await env.assentar()
-      assert.notDeepEqual(decididos.map((item) => item.action), ['invalid'])
-    })
-  },
-)
+test('aviso "Your usage limit has reset" da vigia sem troca feita não vira detecção inválida nem troca', { todo: 'a vigia entrega { kind: "notice" } sem `failure`, e normalizeDetection descarta' }, async () => {
+  await comCadeia(async (env) => {
+    env.ligarCadeia()
+    env.abrir('origem', { accountId: 'conta-d' })
+    env.escrever('origem', 'Your usage limit has reset · press enter to continue\r\n')
+    const decididos = await env.assentar()
+    assert.deepEqual(decididos.map((item) => item.action), ['ignored'])
+    assert.equal(env.logged.some((entry) => entry.transition === 'detection-invalid'), false)
+    assertSemTrocaSozinha(env, 1)
+  })
+})
+
+test('aviso "Your usage limit has reset" na origem que já trocou chega ao serviço como source_resumed, sem escrever em nada', { todo: 'a vigia entrega { kind: "notice" } sem `failure`, e normalizeDetection descarta' }, async () => {
+  await comCadeia(async (env) => {
+    env.ligarCadeia()
+    env.abrir('origem', { accountId: 'conta-d' })
+    const proposta = await propor(env, 'origem', LIMITE_CLAUDE)
+    const confirmado = await env.service.confirm({ proposalId: proposta.id, destinationAccountId: 'conta-e' })
+    assert.equal(confirmado.ok, true, JSON.stringify(confirmado))
+    assert.equal(env.abrirComTicket({ ticket: confirmado.ticket, accountId: 'conta-e', sessionId: 'novo' }).spawn.ok, true)
+    const processos = env.spawnCalls.length
+
+    env.escrever('origem', 'Your usage limit has reset · press enter to continue\r\n')
+    const decididos = await env.assentar()
+    assert.deepEqual(decididos.map((item) => item.action), ['source_resumed'])
+    const aviso = env.deteccoes().at(-1)
+    assert.equal(aviso.action, 'source_resumed')
+    assert.equal(aviso.sessionId, 'origem')
+    assert.equal(env.spawnCalls.length, processos, 'o aviso não abre processo')
+    assert.equal(env.eventos().filter((event) => event.state === 'proposed').length, 0)
+  })
+})

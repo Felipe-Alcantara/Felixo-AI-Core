@@ -2,11 +2,12 @@
 
 /**
  * Processo filho da matriz de falhas da cadeia de contas
- * (`services/accounts/account-chain-faults.test.cjs`), e o adaptador do
- * contrato de política que a matriz usa nos dois lados.
+ * (`services/accounts/account-chain-faults.test.cjs`) e as contas que a
+ * matriz usa nos dois lados.
  *
  * Como filho, abre o MESMO arquivo SQLite que o outro filho, monta o SERVIÇO
- * real da cadeia (com a política real) e obedece ao pai por mensagem:
+ * real da cadeia com a porta real da política (`account-chain-port.cjs`,
+ * como o `account-chain-runtime.cjs` liga) e obedece ao pai por mensagem:
  * - `confirmar`: `service.confirm` da proposta indicada;
  * - `gastar`: `service.beginTicketSpawn` do ticket, para a sessão nova deste
  *   filho.
@@ -15,47 +16,6 @@
  */
 
 const path = require('node:path')
-
-const policy = require(path.join(__dirname, '../services/accounts/account-chain-policy.cjs'))
-
-/**
- * Traduz o contrato que o serviço chama (`settings`, `account`,
- * `lastDestinationAccountId`, `evidence`, `measurement`) para as assinaturas
- * da política pura (`chainEnabled`, `accountStatus`, `lastSpawnedAccountId`,
- * `resetText`, `sample`). Sem esta tradução a política real recusa tudo
- * (`chainEnabled` ausente = cadeia desligada), então a matriz a usa para
- * provar a regra de verdade, não um dublê.
- */
-function createChainPolicyAdapter(real = policy) {
-  return {
-    evaluateEligibility({ nowMs, settings, member, account, cooldown, loginCheck, sourceAccountId, visitedAccountIds }) {
-      return real.evaluateEligibility({
-        chainEnabled: settings?.enabled === true,
-        member,
-        accountStatus: account ? account.accountStatus ?? 'ok' : 'removed',
-        cooldown,
-        loginCheck,
-        sample: account?.measurement ?? null,
-        nowMs,
-        sourceAccountId,
-        visitedAccountIds,
-      })
-    },
-    rankCandidates({ strategy, candidates, lastDestinationAccountId }) {
-      return real.rankCandidates({ strategy, candidates, members: candidates, lastSpawnedAccountId: lastDestinationAccountId })
-    },
-    resolveCooldownEnd({ providerId, failureClass, evidence, measurement, nowMs }) {
-      return real.resolveCooldownEnd({
-        providerId,
-        failureClass,
-        detectedAtMs: nowMs,
-        nowMs,
-        sample: measurement ?? null,
-        resetText: evidence ?? null,
-      })
-    },
-  }
-}
 
 /** Contas da matriz: três do Codex, duas do Claude e uma do Gemini. */
 const FAULT_ACCOUNTS = Object.freeze({
@@ -67,10 +27,16 @@ const FAULT_ACCOUNTS = Object.freeze({
   'conta-g': { providerId: 'gemini', label: 'Gemini G' },
 })
 
+/** As contas como o registro de contas lista (`cliAccounts.list()`). */
+function listFaultAccounts() {
+  return Object.entries(FAULT_ACCOUNTS).map(([id, account]) => ({ id, ...account }))
+}
+
 function runWorker() {
   const { createStorageDatabase } = require(path.join(__dirname, '../services/storage/sqlite-database.cjs'))
   const { createAccountChainRepository } = require(path.join(__dirname, '../services/storage/account-chain-repository.cjs'))
   const { createAccountChainService } = require(path.join(__dirname, '../services/accounts/account-chain-service.cjs'))
+  const { createAccountDescriber, createChainPolicyPort } = require(path.join(__dirname, '../services/accounts/account-chain-port.cjs'))
 
   const [databaseDir, workerName, sessionCount] = process.argv.slice(2)
   const database = createStorageDatabase({ databaseDir })
@@ -84,10 +50,10 @@ function runWorker() {
   }))
   const service = createAccountChainService({
     repository,
-    policy: createChainPolicyAdapter(),
+    policy: createChainPolicyPort({ repository }),
     checkLogin: async () => {},
-    describeAccount: (accountId) => (FAULT_ACCOUNTS[accountId] ? { ...FAULT_ACCOUNTS[accountId], measurement: null } : null),
-    listAccounts: () => Object.entries(FAULT_ACCOUNTS).map(([id, account]) => ({ id, ...account })),
+    describeAccount: createAccountDescriber({ listAccounts: listFaultAccounts }),
+    listAccounts: listFaultAccounts,
     listLiveSessions: () => liveSessions,
   })
 
@@ -121,4 +87,4 @@ function runWorker() {
 
 if (require.main === module) runWorker()
 
-module.exports = { FAULT_ACCOUNTS, createChainPolicyAdapter }
+module.exports = { FAULT_ACCOUNTS, listFaultAccounts }
