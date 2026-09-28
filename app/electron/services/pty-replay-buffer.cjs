@@ -52,9 +52,39 @@ function createReplayBuffer(maxChars) {
     return tail
   }
 
+  /**
+   * Os últimos `count` caracteres, sem compactar nem mudar o estado: é o que
+   * `toString().slice(-count)` devolveria, lendo só os pedaços do fim.
+   *
+   * Quem lê a cauda com frequência (a vigia de falha por conta varre 4 KiB a
+   * cada poucas centenas de ms) não pode pagar a junção dos 200.000
+   * caracteres a cada leitura, nem trocar a lista de pedaços por baixo do
+   * `append` do `onData`.
+   *
+   * @param {number} count
+   * @returns {string}
+   */
+  function tail(count) {
+    const wanted = Math.min(Math.max(0, Math.floor(Number(count) || 0)), limit, total)
+    if (wanted === 0) {
+      return ''
+    }
+
+    let start = chunks.length - 1
+    let size = chunks[start].length
+    while (size < wanted && start > 0) {
+      start -= 1
+      size += chunks[start].length
+    }
+
+    const joined = start === chunks.length - 1 ? chunks[start] : chunks.slice(start).join('')
+    return joined.length > wanted ? joined.slice(-wanted) : joined
+  }
+
   return {
     append,
     toString,
+    tail,
     /** Tamanho que `toString()` devolveria agora, sem juntar os pedaços. */
     get length() {
       return Math.min(total, limit)
