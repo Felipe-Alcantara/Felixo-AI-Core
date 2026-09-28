@@ -22,10 +22,48 @@ const {
  * é guardada cifrada pelo `safeStorage` do Electron e — decisão explícita —
  * é o único segredo que este app armazena. Se o sistema não oferecer
  * criptografia real, a gravação é recusada em vez de salvar em texto.
+ *
+ * O registro é gravado por arquivo temporário + rename: um app fechado no meio
+ * da escrita nunca deixa JSON pela metade. E ausente não é o mesmo que
+ * ilegível: sem o arquivo a lista é vazia, mas um arquivo que não dá para ler
+ * vira erro tipado (`CLI_ACCOUNTS_STORE_UNREADABLE`). Tratar os dois como
+ * "nenhuma conta" fazia a próxima criação sobrescrever o registro inteiro e a
+ * interface cair no login do sistema sem avisar.
  */
 
 const STORE_FILE = 'cli-accounts.json'
 const SECRETS_FILE = 'cli-account-secrets.bin'
+const STORE_UNREADABLE_CODE = 'CLI_ACCOUNTS_STORE_UNREADABLE'
+
+function createStoreUnreadableError() {
+  const error = new Error(
+    `O registro de contas (${STORE_FILE}) está ilegível. Nada foi alterado para não apagar as contas cadastradas; restaure ou corrija o arquivo e tente de novo.`,
+  )
+  error.code = STORE_UNREADABLE_CODE
+  return error
+}
+
+/**
+ * Grava por arquivo temporário + rename, no mesmo diretório (o rename só é
+ * atômico dentro do mesmo volume). Se a gravação falhar, o arquivo anterior
+ * fica intacto e o temporário é apagado.
+ */
+function writeFileAtomically(fileSystem, filePath, content, encoding) {
+  fileSystem.mkdirSync(path.dirname(filePath), { recursive: true })
+  const temporaryPath = `${filePath}.${process.pid}.tmp`
+
+  try {
+    fileSystem.writeFileSync(temporaryPath, content, encoding)
+    fileSystem.renameSync(temporaryPath, filePath)
+  } catch (error) {
+    try {
+      fileSystem.rmSync(temporaryPath, { force: true })
+    } catch {
+      // Melhor esforço: o erro que importa é o da gravação.
+    }
+    throw error
+  }
+}
 
 function createCliAccountStore({
   userData,
@@ -40,18 +78,39 @@ function createCliAccountStore({
   const storePath = path.join(userData, 'config', STORE_FILE)
   const secretsPath = path.join(userData, 'config', SECRETS_FILE)
 
+  /**
+   * Lê o registro. Arquivo ausente é a lista vazia de quem nunca criou conta;
+   * qualquer outra falha (JSON quebrado, formato inesperado, sem permissão)
+   * lança `CLI_ACCOUNTS_STORE_UNREADABLE`, para ninguém gravar por cima.
+   */
   function readStore() {
+    let raw
     try {
-      const parsed = JSON.parse(fileSystem.readFileSync(storePath, 'utf8'))
-      return Array.isArray(parsed?.accounts) ? parsed.accounts : []
-    } catch {
-      return []
+      raw = fileSystem.readFileSync(storePath, 'utf8')
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        return []
+      }
+      throw createStoreUnreadableError()
     }
+
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      throw createStoreUnreadableError()
+    }
+
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.accounts)) {
+      throw createStoreUnreadableError()
+    }
+
+    return parsed.accounts
   }
 
   function writeStore(accounts) {
-    fileSystem.mkdirSync(path.dirname(storePath), { recursive: true })
-    fileSystem.writeFileSync(
+    writeFileAtomically(
+      fileSystem,
       storePath,
       `${JSON.stringify({ accounts }, null, 2)}\n`,
       'utf8',
@@ -88,7 +147,16 @@ function createCliAccountStore({
       return { ok: false, message: 'O identificador do provedor é inválido.' }
     }
 
-    const account = findAccount(accountId.trim())
+    let account
+    try {
+      account = findAccount(accountId.trim())
+    } catch (error) {
+      if (error?.code === STORE_UNREADABLE_CODE) {
+        return { ok: false, message: error.message }
+      }
+      throw error
+    }
+
     if (!account) {
       return { ok: false, message: 'A conta selecionada não existe mais.' }
     }
@@ -126,6 +194,8 @@ function createCliAccountStore({
       throw new Error('Informe um nome para a conta.')
     }
 
+    // Lido antes de criar a pasta: com o registro ilegível, nada é criado.
+    const accounts = readStore()
     const account = {
       id: randomUUID(),
       providerId,
@@ -138,7 +208,7 @@ function createCliAccountStore({
 
     try {
       mirrorHomeEntries(providerId, profileDir)
-      writeStore([...readStore(), account])
+      writeStore([...accounts, account])
     } catch (error) {
       // Sem registro a pasta nunca seria achada nem apagada por `remove` — e no
       // Gemini ela já guarda cópia de .ssh. Desfaz o que foi criado; se nem a
@@ -256,8 +326,9 @@ function createCliAccountStore({
   }
 
   function writeSecrets(secrets) {
-    fileSystem.mkdirSync(path.dirname(secretsPath), { recursive: true })
-    fileSystem.writeFileSync(secretsPath, safeStorage.encryptString(JSON.stringify(secrets)))
+    // Mesma escrita atômica do registro: um arquivo cifrado pela metade não
+    // decifra, e a próxima chave gravada apagaria a das outras contas.
+    writeFileAtomically(fileSystem, secretsPath, safeStorage.encryptString(JSON.stringify(secrets)))
   }
 
   /**
@@ -326,11 +397,18 @@ function createCliAccountStore({
    * para o processo filho, sem passar pelo renderer nem por log.
    */
   function buildEnv(accountId, expectedProviderId) {
-    const account = findAccount(accountId)
     const hasAccount = accountId !== undefined && accountId !== null && accountId !== ''
 
+    // O login do sistema não depende do registro: um arquivo ilegível não pode
+    // impedir o terminal sem conta de abrir.
+    if (!hasAccount) {
+      return {}
+    }
+
+    const account = findAccount(accountId)
+
     if (!account) {
-      if (hasAccount && expectedProviderId) {
+      if (expectedProviderId) {
         throw new Error('A conta selecionada não existe mais.')
       }
       return {}
@@ -390,5 +468,6 @@ function createCliAccountStore({
 }
 
 module.exports = {
+  STORE_UNREADABLE_CODE,
   createCliAccountStore,
 }

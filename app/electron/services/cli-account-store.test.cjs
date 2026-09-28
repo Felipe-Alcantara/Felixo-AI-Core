@@ -350,7 +350,7 @@ test('criar a conta que falha ao gravar o registro não deixa pasta de perfil ó
   const fileSystem = {
     ...fs,
     writeFileSync(caminho, ...resto) {
-      if (falhar && String(caminho).endsWith('cli-accounts.json')) {
+      if (falhar && String(caminho).includes('cli-accounts.json')) {
         const erro = new Error('ENOSPC: no space left on device')
         erro.code = 'ENOSPC'
         throw erro
@@ -381,7 +381,7 @@ test('se a limpeza do perfil também falhar, o erro que sobe continua sendo o da
   const fileSystem = {
     ...fs,
     writeFileSync(caminho, ...resto) {
-      if (String(caminho).endsWith('cli-accounts.json')) throw Object.assign(new Error('ENOSPC original'), { code: 'ENOSPC' })
+      if (String(caminho).includes('cli-accounts.json')) throw Object.assign(new Error('ENOSPC original'), { code: 'ENOSPC' })
       return fs.writeFileSync(caminho, ...resto)
     },
     rmSync() {
@@ -392,6 +392,90 @@ test('se a limpeza do perfil também falhar, o erro que sobe continua sendo o da
 
   try {
     assert.throws(() => env.store.create({ providerId: 'codex', label: 'x' }), /ENOSPC original/)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('falha no meio da gravação preserva o registro anterior (escrita atômica)', () => {
+  let falhar = false
+  const fileSystem = {
+    ...fs,
+    // Simula o disco enchendo no meio: grava um pedaço e então falha.
+    writeFileSync(caminho, dados, ...resto) {
+      if (falhar && String(caminho).includes('cli-accounts.json')) {
+        fs.writeFileSync(caminho, String(dados).slice(0, 12), ...resto)
+        throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
+      }
+      return fs.writeFileSync(caminho, dados, ...resto)
+    },
+  }
+  const env = createEnvironment({ fileSystem })
+
+  try {
+    const pessoal = env.store.create({ providerId: 'codex', label: 'pessoal' })
+    const antes = fs.readFileSync(env.store.storePath, 'utf8')
+
+    falhar = true
+    assert.throws(() => env.store.create({ providerId: 'codex', label: 'trabalho' }), /ENOSPC/)
+
+    assert.equal(fs.readFileSync(env.store.storePath, 'utf8'), antes, 'o registro anterior foi truncado')
+    assert.deepEqual(env.store.list('codex'), [pessoal], 'a conta que já existia sumiu')
+    assert.deepEqual(
+      fs.readdirSync(path.dirname(env.store.storePath)).filter((nome) => nome.endsWith('.tmp')),
+      [],
+      'o arquivo temporário ficou para trás',
+    )
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('registro corrompido não é sobrescrito: criar e remover recusam, a barreira explica e o login do sistema segue', () => {
+  const env = createEnvironment()
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+    const corrompido = '{"accounts": [{"id": "' + conta.id + '", "providerId": "codex"'
+    fs.writeFileSync(env.store.storePath, corrompido, 'utf8')
+    const perfis = path.join(env.userData, 'cli-profiles', 'codex')
+    const pastasAntes = fs.readdirSync(perfis).sort()
+
+    const ilegivel = (error) => {
+      assert.equal(error.code, 'CLI_ACCOUNTS_STORE_UNREADABLE')
+      assert.match(error.message, /ilegível/)
+      return true
+    }
+    assert.throws(() => env.store.create({ providerId: 'codex', label: 'trabalho' }), ilegivel)
+    assert.throws(() => env.store.remove(conta.id), ilegivel)
+    assert.throws(() => env.store.list(), ilegivel, 'lista vazia faria a interface cair no login do sistema')
+    assert.throws(() => env.store.buildEnv(conta.id, 'codex'), ilegivel)
+
+    const barreira = env.store.validateAccount(conta.id, 'codex')
+    assert.equal(barreira.ok, false)
+    assert.match(barreira.message, /ilegível/)
+
+    // O terminal sem conta não depende do registro.
+    assert.deepEqual(env.store.buildEnv(undefined, 'codex'), {})
+    assert.deepEqual(env.store.buildEnv('', 'claude'), {})
+
+    assert.equal(fs.readFileSync(env.store.storePath, 'utf8'), corrompido, 'o arquivo corrompido foi sobrescrito')
+    assert.deepEqual(fs.readdirSync(perfis).sort(), pastasAntes, 'a pasta de login foi criada ou apagada')
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('formato inesperado também é ilegível; arquivo ausente é lista vazia', () => {
+  const env = createEnvironment()
+
+  try {
+    assert.deepEqual(env.store.list(), [])
+    fs.mkdirSync(path.dirname(env.store.storePath), { recursive: true })
+    fs.writeFileSync(env.store.storePath, '{"contas": []}', 'utf8')
+    assert.throws(() => env.store.list(), { code: 'CLI_ACCOUNTS_STORE_UNREADABLE' })
+    fs.writeFileSync(env.store.storePath, '', 'utf8')
+    assert.throws(() => env.store.list(), { code: 'CLI_ACCOUNTS_STORE_UNREADABLE' })
   } finally {
     env.cleanup()
   }
