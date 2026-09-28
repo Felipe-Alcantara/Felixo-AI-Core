@@ -301,3 +301,30 @@ test('a normalização que só colapsa quando precisa dá o mesmo resultado que 
     assert.deepEqual(normalizeTerminalText(text), antiga(text), JSON.stringify(text))
   }
 })
+
+test('a mensagem principal de limite do Claude vale no terminal e no fluxo; aviso de aproximação não', () => {
+  const cases = [
+    ["You've hit your session limit · resets 4:40pm (America/Sao_Paulo)", 'limit', 'account'],
+    ["You've hit your weekly limit · resets Oct 2, 9am (America/Sao_Paulo)", 'limit', 'account'],
+    ["You've hit your Opus limit · resets Oct 2, 9am (America/Sao_Paulo)", 'limit', 'model'],
+    ["You've hit your team's shared budget · raise it at claude.ai/admin-settings/usage", 'billing', 'account'],
+    ["You're out of usage credits. /model to switch models.", 'billing', 'account'],
+  ]
+  for (const [text, failureClass, scope] of cases) {
+    for (const origin of ['pty', 'fluxo']) {
+      const result = classifyFailure({ text, origin, providerId: 'claude' })
+      assert.equal(result.failureClass, failureClass, `${text} (${origin})`)
+      assert.equal(result.scope, scope, `${text} (${origin})`)
+    }
+  }
+
+  for (const text of [
+    "You've hit your fast limit",
+    "You've used 90% of your weekly limit · resets Oct 2, 9am (America/Sao_Paulo)",
+    "You're close to your usage credit limit",
+  ]) {
+    for (const origin of ['pty', 'fluxo']) {
+      assert.equal(classifyFailure({ text, origin, providerId: 'claude' }).failureClass, 'unknown', `${text} (${origin})`)
+    }
+  }
+})

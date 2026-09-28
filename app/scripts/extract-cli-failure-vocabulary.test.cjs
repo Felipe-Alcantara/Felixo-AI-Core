@@ -151,6 +151,40 @@ test('a leitura do provedor grava versão, arquivos relativos e presença por fr
   })
 })
 
+test('frase composta só conta como presente com o molde e a entrada da tabela no pacote', () => {
+  withTempDir((dir) => {
+    const base = path.join(dir, 'node_modules')
+    const binary = path.join(base, 'claude.exe')
+    fs.mkdirSync(base, { recursive: true })
+    const vocabulary = tinyVocabulary()
+    vocabulary.providers.claude.phrases = [{
+      id: 'claude.limit.hit-session-limit',
+      kind: 'include',
+      failureClass: 'limit',
+      scope: 'account',
+      terminal: true,
+      literals: ["You've hit your", 'session limit'],
+      sourceLiterals: ["`You've hit your ${", 'five_hour:"session limit"'],
+      example: "You've hit your session limit · resets 4:40pm (America/Sao_Paulo)",
+      inPackage: true,
+    }]
+    const scan = () => extractor.scanProvider('claude', vocabulary.providers.claude, {
+      locators: { claude: () => ({ base, version: '2.1.283', files: [binary] }) },
+    }).phrasesInPackage['claude.limit.hit-session-limit']
+
+    // Os trechos soltos existem, mas sem o molde e sem a tabela a frase não é montada.
+    fs.writeFileSync(binary, "You've hit your plan · for higher session limits every month")
+    assert.equal(scan(), false)
+
+    fs.writeFileSync(binary, 'return`You\'ve hit your ${e}${n}${g}`}var bfe={five_hour:"session limit",seven_day:"weekly limit"}')
+    assert.equal(scan(), true)
+
+    assert.deepEqual(extractor.validateVocabulary(vocabulary), [], 'o molde não precisa estar no exemplo')
+    vocabulary.providers.claude.phrases[0].sourceLiterals = ['']
+    assert.match(extractor.validateVocabulary(vocabulary).join(), /sourceLiterals/)
+  })
+})
+
 test('provedor sem pacote fica como estava e não conta como divergência', () => {
   const vocabulary = tinyVocabulary()
   const result = extractor.scanProvider('claude', vocabulary.providers.claude, {

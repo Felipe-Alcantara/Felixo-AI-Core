@@ -16,6 +16,12 @@
  * binários são lidos em pedaços com sobreposição, para caber na memória de uma
  * máquina modesta (o binário do Codex passa de 280 MB).
  *
+ * Uma frase composta pela CLI em tempo de execução (o Claude monta
+ * `You've hit your ${nome}${sufixo}` com o nome tirado de uma tabela de
+ * janelas) não está inteira no pacote. Para ela, `sourceLiterals` guarda os
+ * trechos do código que a montam — o molde e a entrada da tabela —, e a frase
+ * só conta como presente com todos eles achados.
+ *
  * As frases e as classes são curadas à mão na fixture; o script não inventa
  * classe. Ele atualiza `version`, `scannedFiles` e `inPackage`.
  *
@@ -339,6 +345,11 @@ function toPortableRelative(base, file) {
   return path.relative(base, file).split(path.sep).join('/')
 }
 
+/** Tudo o que precisa estar no pacote: os trechos da linha e os do código que a monta. */
+function packageLiteralsOf(phrase) {
+  return [...phrase.literals, ...(phrase.sourceLiterals ?? [])]
+}
+
 /**
  * Lê o pacote de um provedor e diz quais frases da fixture estão nele.
  *
@@ -355,11 +366,11 @@ function scanProvider(providerId, provider, options = {}) {
   const located = typeof locate === 'function' ? locate(options) : null
   if (!located) return { providerId, status: 'ausente' }
 
-  const literals = provider.phrases.flatMap((phrase) => phrase.literals)
+  const literals = provider.phrases.flatMap(packageLiteralsOf)
   const found = scanFilesForLiterals(located.files, literals, options)
   const phrasesInPackage = {}
   for (const phrase of provider.phrases) {
-    phrasesInPackage[phrase.id] = phrase.literals.every((literal) => found.has(literal))
+    phrasesInPackage[phrase.id] = packageLiteralsOf(phrase).every((literal) => found.has(literal))
   }
 
   return {
@@ -472,6 +483,11 @@ function validateVocabulary(vocabulary) {
         phrase.literals.some((literal) => typeof literal !== 'string' || !literal.trim())) {
         problems.push(`${label}: literals deve ter ao menos um trecho`)
         continue
+      }
+      if (phrase.sourceLiterals !== undefined && (!Array.isArray(phrase.sourceLiterals) ||
+        phrase.sourceLiterals.length === 0 ||
+        phrase.sourceLiterals.some((literal) => typeof literal !== 'string' || !literal.trim()))) {
+        problems.push(`${label}: sourceLiterals, quando existe, deve ter ao menos um trecho`)
       }
       if (typeof phrase.example !== 'string' || !phrase.example.trim()) {
         problems.push(`${label}: example ausente`)

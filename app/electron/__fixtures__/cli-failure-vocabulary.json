@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Vocabulário de falha das CLIs de agente, conferido nos pacotes instalados só por leitura de arquivo (nenhuma CLI é executada). É o oráculo dos testes da taxonomia de falhas (accounts/failure-taxonomy.cjs). Depois de atualizar uma CLI, confira com `node scripts/extract-cli-failure-vocabulary.cjs` e grave com `--write`. Campos: `literals` são os trechos procurados no pacote; `example` é uma linha como a CLI a imprime; `terminal` diz se a frase vale no terminal interativo (origem pty) ou só na saída de erro one-shot (origem fluxo); `inPackage` e `version` são gravados pelo script.",
+  "description": "Vocabulário de falha das CLIs de agente, conferido nos pacotes instalados só por leitura de arquivo (nenhuma CLI é executada). É o oráculo dos testes da taxonomia de falhas (accounts/failure-taxonomy.cjs). Depois de atualizar uma CLI, confira com `node scripts/extract-cli-failure-vocabulary.cjs` e grave com `--write`. Campos: `literals` são os trechos procurados no pacote; `example` é uma linha como a CLI a imprime; `terminal` diz se a frase vale no terminal interativo (origem pty) ou só na saída de erro one-shot (origem fluxo); `sourceLiterals` são trechos do código do pacote que montam uma frase composta (o molde `You've hit your ${…}` e a entrada da tabela de nomes de limite), procurados no pacote mas ausentes da linha impressa; `inPackage` e `version` são gravados pelo script.",
   "providers": {
     "claude": {
       "package": "@anthropic-ai/claude-code",
@@ -228,6 +228,255 @@
           "inPackage": true
         },
         {
+          "id": "claude.limit.hit-session-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "session limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "five_hour:\"session limit\""
+          ],
+          "example": "You've hit your session limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true,
+          "note": "Mensagem principal do limite de 5 horas (status 'rejected'): o binário monta `You've hit your ${nome}${sufixo}` com o nome tirado da tabela de janelas."
+        },
+        {
+          "id": "claude.limit.hit-weekly-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "weekly limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day:\"weekly limit\""
+          ],
+          "example": "You've hit your weekly limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-usage-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "usage limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "(\"usage limit\","
+          ],
+          "example": "You've hit your usage limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "(\"limit\","
+          ],
+          "example": "You've hit your limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-opus-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "Opus limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day_opus:\"Opus limit\""
+          ],
+          "example": "You've hit your Opus limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true,
+          "note": "Limite semanal de um modelo: fica no modelo, como o limite por modelo do Codex."
+        },
+        {
+          "id": "claude.limit.hit-sonnet-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "Sonnet limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day_sonnet:\"Sonnet limit\""
+          ],
+          "example": "You've hit your Sonnet limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-fable-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "Fable limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day_overage_included:\"Fable limit\""
+          ],
+          "example": "You've hit your Fable limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-usage-credit-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "usage credit limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "overage:\"usage credit limit\""
+          ],
+          "example": "You've hit your usage credit limit · resets Nov 1 (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-org-monthly-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "org's monthly spend limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "\"org's monthly spend limit\""
+          ],
+          "example": "You've hit your org's monthly spend limit · visit claude.ai/admin-settings/usage to raise it",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-org-monthly-usage-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "org's monthly usage limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "\"org's monthly usage limit\""
+          ],
+          "example": "You've hit your org's monthly usage limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-individual-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "individual spend limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "\"individual spend limit\""
+          ],
+          "example": "You've hit your individual spend limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-monthly-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your monthly spend limit"
+          ],
+          "example": "You've hit your monthly spend limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-channel-monthly-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your channel's monthly spend limit"
+          ],
+          "example": "You've hit your channel's monthly spend limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-team-shared-budget",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your team's shared budget"
+          ],
+          "example": "You've hit your team's shared budget · ask your admin to raise it at claude.ai/admin-settings/usage",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.out-of-usage-credits",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You're out of usage credits"
+          ],
+          "example": "You're out of usage credits. /model to switch models.",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.org-out-of-usage",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your org is out of usage · add funds to continue"
+          ],
+          "example": "Your org is out of usage · add funds to continue",
+          "inPackage": true
+        },
+        {
           "id": "claude.exclude.wrapping-up",
           "kind": "exclude",
           "terminal": true,
@@ -319,6 +568,41 @@
           "example": "Upgrade to Max 20x for higher session limits every month",
           "inPackage": true,
           "note": "Oferta de upgrade: aparece para quem NÃO tem o plano, então nunca serve de limite nem de multiplicador."
+        },
+        {
+          "id": "claude.exclude.hit-fast-limit",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "You've hit your fast limit"
+          ],
+          "example": "You've hit your fast limit",
+          "inPackage": true,
+          "note": "Modo rápido: não é limite da conta."
+        },
+        {
+          "id": "claude.exclude.used-percent",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "You've used "
+          ],
+          "sourceLiterals": [
+            "\"You've used\",\"You're close to\""
+          ],
+          "example": "You've used 90% of your session limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true,
+          "note": "Aviso de aproximação: a própria CLI separa 'You've used' e 'You're close to' da lista de mensagens de limite."
+        },
+        {
+          "id": "claude.exclude.close-to",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "You're close to your "
+          ],
+          "example": "You're close to your usage credit limit",
+          "inPackage": true
         },
         {
           "id": "claude.observed.grace-stopped",

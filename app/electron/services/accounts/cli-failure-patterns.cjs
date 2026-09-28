@@ -31,6 +31,25 @@ const PROVIDER_PATTERNS = Object.freeze({
       { phrase: 'Usage limit reached · continuing automatically', failureClass: 'limit', scope: 'account' },
       { phrase: 'Usage limit reached · continuing shortly', failureClass: 'limit', scope: 'account' },
       { phrase: 'Usage limit reached again after you continued', failureClass: 'limit', scope: 'account' },
+      // Mensagem principal do limite (status "rejected"): o binário monta
+      // `You've hit your ${nome}${sufixo}`, com o nome tirado da tabela de
+      // janelas. O limite semanal de um modelo fica no modelo.
+      { phrase: "You've hit your session limit", failureClass: 'limit', scope: 'account' },
+      { phrase: "You've hit your weekly limit", failureClass: 'limit', scope: 'account' },
+      { phrase: "You've hit your usage limit", failureClass: 'limit', scope: 'account' },
+      { phrase: "You've hit your limit", failureClass: 'limit', scope: 'account' },
+      { phrase: "You've hit your Opus limit", failureClass: 'limit', scope: 'model' },
+      { phrase: "You've hit your Sonnet limit", failureClass: 'limit', scope: 'model' },
+      { phrase: "You've hit your Fable limit", failureClass: 'limit', scope: 'model' },
+      { phrase: "You've hit your usage credit limit", failureClass: 'billing', scope: 'account' },
+      { phrase: "You've hit your monthly spend limit", failureClass: 'billing', scope: 'account' },
+      { phrase: "You've hit your org's monthly spend limit", failureClass: 'billing', scope: 'account' },
+      { phrase: "You've hit your org's monthly usage limit", failureClass: 'billing', scope: 'account' },
+      { phrase: "You've hit your individual spend limit", failureClass: 'billing', scope: 'account' },
+      { phrase: "You've hit your channel's monthly spend limit", failureClass: 'billing', scope: 'account' },
+      { phrase: "You've hit your team's shared budget", failureClass: 'billing', scope: 'account' },
+      { phrase: "You're out of usage credits", failureClass: 'billing', scope: 'account' },
+      { phrase: 'Your org is out of usage', failureClass: 'billing', scope: 'account' },
       { phrase: "You're out of extra usage", failureClass: 'billing', scope: 'account' },
       { phrase: 'Credit balance is too low', failureClass: 'billing', scope: 'account' },
       { phrase: "Your seat type doesn't include usage credits", failureClass: 'billing', scope: 'account' },
@@ -55,6 +74,10 @@ const PROVIDER_PATTERNS = Object.freeze({
       'Concurrent subagent limit',
       'Approaching your 5-hour usage limit',
       'Upgrade to Max',
+      "You've hit your fast limit",
+      // Avisos de aproximação: a própria CLI os separa das mensagens de limite.
+      "You've used",
+      "You're close to",
     ]),
     notices: Object.freeze([
       { phrase: 'Your usage limit has reset · press enter to continue', notice: 'limit_reset' },

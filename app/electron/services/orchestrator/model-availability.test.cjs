@@ -348,3 +348,28 @@ test('o motivo guardado e emitido pelo registro sai redigido', () => {
   assert.doesNotMatch(emitted, /SENTINELA/)
   assert.match(entry.reason, /\[oculto\]/)
 })
+
+test('a mensagem principal de limite do Claude ("You\'ve hit your …") vira limit_reached até o reset impresso', () => {
+  // Antes: null — o orquestrador só percebia o limite pelo banner de
+  // continuação automática, que o Claude Code só mostra em uma fase.
+  const session = issueFor("You've hit your session limit · resets 4:40pm (America/Sao_Paulo)", 'claude')
+  assert.equal(session.status, 'limit_reached')
+  assert.equal(session.scope, 'cli')
+  assert.equal(new Date(session.expiresAt).toISOString(), '2026-09-28T19:40:00.000Z')
+
+  const weekly = issueFor("You've hit your weekly limit · resets Oct 2, 9am (America/Sao_Paulo)", 'claude')
+  assert.equal(weekly.status, 'limit_reached')
+  assert.equal(weekly.scope, 'cli')
+  assert.equal(new Date(weekly.expiresAt).toISOString(), '2026-10-02T12:00:00.000Z')
+
+  const opus = issueFor("You've hit your Opus limit · resets Oct 2, 9am (America/Sao_Paulo)", 'claude')
+  assert.equal(opus.status, 'limit_reached')
+  assert.equal(opus.scope, 'model', 'o limite semanal de um modelo fica no modelo')
+
+  const credit = issueFor("You've hit your org's monthly spend limit · visit claude.ai/admin-settings/usage to raise it", 'claude')
+  assert.equal(credit.status, 'limit_reached')
+  assert.match(credit.reason, /^Sem crédito: /)
+
+  assert.equal(issueFor("You've used 90% of your session limit · resets 4:40pm (America/Sao_Paulo)", 'claude'), null)
+  assert.equal(issueFor("You've hit your fast limit", 'claude'), null)
+})
