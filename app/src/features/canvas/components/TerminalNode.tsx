@@ -36,6 +36,8 @@ import {
   resolvePromptDisplayLabel,
   toPromptInsertionMetadata,
 } from '../../shared/types/prompt-insertion'
+import { useCliAccountLabel } from '../hooks/useAccountChain'
+import { accountChipLabel } from '../services/account-chain-view'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
@@ -87,6 +89,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       keepShellOpen: nodeData.keepShellOpen,
       accountId: nodeData.accountId,
       providerId: nodeData.providerId,
+      accountMode: nodeData.accountMode,
+      chainTicket: nodeData.chainTicket,
       agentSession: nodeData.agentSession,
       resumeAgentSession: nodeData.resumeAgentSession,
       terminalCount: nodeData.terminalCount,
@@ -108,6 +112,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.keepShellOpen,
     nodeData.accountId,
     nodeData.providerId,
+    nodeData.accountMode,
+    nodeData.chainTicket,
     nodeData.agentSession,
     nodeData.resumeAgentSession,
     nodeData.terminalCount,
@@ -140,6 +146,17 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   )
   const repository = repositoryLabel(nodeData.cwd)
   const provider = providerIdentity(nodeData.command)
+  const accountLabel = useCliAccountLabel(nodeData.accountId)
+  // Hoje nenhuma outra UI mostra em que conta o bloco roda; o selo diz a conta
+  // e o modo (fixa/cadeia) sem abrir nada.
+  const accountChip =
+    provider.id === 'terminal'
+      ? null
+      : accountChipLabel({
+          accountId: nodeData.accountId,
+          accountLabel,
+          accountMode: nodeData.accountMode,
+        })
   const configuredModel = configuredAgentModel(nodeData.command, nodeData.args)
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
@@ -167,6 +184,8 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       keepShellOpen: nodeData.keepShellOpen,
       accountId: nodeData.accountId,
       providerId: nodeData.providerId,
+      // Reiniciar é spawn comum na mesma conta: nunca leva ticket da cadeia.
+      accountMode: nodeData.accountMode,
       agentSession: nodeData.agentSession,
       resumeAgentSession: canResume,
       terminalCount: nodeData.terminalCount,
@@ -232,6 +251,11 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         {typeof nodeData.terminalIndex === 'number' && <span className="felixo-node-index">#{nodeData.terminalIndex}</span>}
         <span className="felixo-node-context-name">{repository || provider.label}</span>
         {configuredModel && <span className="felixo-node-model" title={`Modelo configurado na criação: ${configuredModel}`}>{configuredModel}</span>}
+        {accountChip && (
+          <span className="felixo-node-account" title={accountChip.title}>
+            {accountChip.text}
+          </span>
+        )}
       </div>
 
       <button

@@ -3,8 +3,11 @@ import {
   CHAIN_CONFLICT_MESSAGE,
   CHAIN_UNAVAILABLE_MESSAGE,
   applyProposalEvent,
+  changeSessionAccountMode,
+  confirmChainLaunch,
   createAccountChainStore,
   getAccountChainBridge,
+  previewChainLaunch,
 } from './account-chain-client'
 import {
   createFakeBridge,
@@ -147,5 +150,81 @@ describe('applyProposalEvent', () => {
     const next = applyProposalEvent(state, { type: 'opened', proposal: makeProposal({ recommendedAccountId: 'conta-c' }) })
     expect(next.pendingProposals).toHaveLength(1)
     expect(next.pendingProposals[0].recommendedAccountId).toBe('conta-c')
+  })
+})
+
+describe('changeSessionAccountMode', () => {
+  it('fixar grava mesmo sem o serviço; voltar para a cadeia não', async () => {
+    expect(await changeSessionAccountMode(null, 'canvas:b', 'pinned')).toEqual({ persist: true, message: null })
+    expect(await changeSessionAccountMode(null, 'canvas:b', 'chain')).toEqual({
+      persist: false,
+      message: CHAIN_UNAVAILABLE_MESSAGE,
+    })
+  })
+
+  it('manda a sessão e o modo; recusa do main só grava quando é fixar', async () => {
+    const bridge = createFakeBridge({ setSessionMode: () => ({ ok: false, message: 'sessão encerrada' }) })
+    expect(await changeSessionAccountMode(bridge, 'canvas:b', 'chain')).toEqual({
+      persist: false,
+      message: 'sessão encerrada',
+    })
+    expect(await changeSessionAccountMode(bridge, 'canvas:b', 'pinned')).toEqual({
+      persist: true,
+      message: 'sessão encerrada',
+    })
+    expect(bridge.calls.map((call) => call.params)).toEqual([
+      { sessionId: 'canvas:b', mode: 'chain' },
+      { sessionId: 'canvas:b', mode: 'pinned' },
+    ])
+  })
+})
+
+describe('Automática (cadeia): prévia e confirmação', () => {
+  it('prévia pronta diz a conta; sem conta apta recusa com os motivos', async () => {
+    const pronta = await previewChainLaunch(createFakeBridge(), 'codex')
+    expect(pronta).toMatchObject({ status: 'ready' })
+    const recusada = await previewChainLaunch(
+      createFakeBridge({
+        previewLaunch: () => ({
+          ok: false,
+          code: 'NO_CANDIDATE',
+          reasons: [{ accountId: 'a', providerId: 'codex', label: 'Pessoal', reason: 'em-espera', reasonText: null }],
+        }),
+      }),
+      'codex',
+    )
+    expect(recusada).toEqual({
+      status: 'refused',
+      message: 'Nenhuma conta apta agora; o bloco não vai abrir no Login do sistema. Pessoal (Codex): em espera',
+    })
+    expect(await previewChainLaunch(null, 'codex')).toEqual({ status: 'refused', message: CHAIN_UNAVAILABLE_MESSAGE })
+  })
+
+  it('confirma o destino mostrado e devolve o ticket', async () => {
+    const bridge = createFakeBridge()
+    const result = await confirmChainLaunch(bridge, makeProposal({ kind: 'launch' }))
+    expect(bridge.calls[0]).toEqual({
+      method: 'confirm',
+      params: { proposalId: 'proposta-1', destinationAccountId: 'conta-b' },
+    })
+    expect(result).toEqual({
+      ok: true,
+      launch: { ticket: 'proposta-1', accountId: 'conta-b', providerId: 'codex', label: 'Trabalho', proposalId: 'proposta-1' },
+    })
+  })
+
+  it('destino que mudou nunca é aceito sozinho: devolve a nova prévia e o motivo', async () => {
+    const nova = makeProposal({ kind: 'launch', recommendedAccountId: 'conta-c' })
+    const result = await confirmChainLaunch(
+      createFakeBridge({ confirm: () => ({ ok: false, code: 'SUPERSEDED', proposal: nova }) }),
+      makeProposal({ kind: 'launch' }),
+    )
+    expect(result).toMatchObject({ ok: false, preview: { status: 'ready', summary: expect.stringContaining('Reserva') } })
+  })
+
+  it('sem destino recomendado não chama o main', async () => {
+    const bridge = createFakeBridge()
+    expect(await confirmChainLaunch(bridge, makeProposal({ recommendedAccountId: null }))).toMatchObject({ ok: false })
+    expect(bridge.calls).toEqual([])
   })
 })

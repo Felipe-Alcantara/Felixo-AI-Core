@@ -13,6 +13,8 @@
 import type {
   AccountBillingClass,
   AccountCapacity,
+  AccountChainConfirmErrorCode,
+  AccountChainExclusion,
   AccountChainMember,
   AccountChainMemberUpdate,
   AccountChainProviderId,
@@ -25,8 +27,10 @@ import type {
   AccountLoginCheck,
   AccountMode,
   AccountMultiplierSource,
+  AccountSwitchCandidate,
   AccountSwitchHistoryEntry,
   AccountSwitchKind,
+  AccountSwitchProposal,
   AccountSwitchState,
 } from '../../shared/types/account-chain'
 import { formatRelativeTime } from '../components/notification-time'
@@ -477,4 +481,78 @@ export function accountChipLabel(params: {
     text: `${label} · fixa`,
     title: `Conta ${label}, fixa neste bloco. Se bater o limite, você recebe um aviso; nada troca sozinho.`,
   }
+}
+
+/**
+ * Por que a conta está nesta posição (§7.1), para o "Recomendada" e para a
+ * prévia de "Automática (cadeia)".
+ */
+export function explainCandidateRank(
+  strategy: AccountChainStrategy,
+  candidate: Pick<
+    AccountSwitchCandidate,
+    'capacity' | 'multiplier' | 'billingDeclared' | 'billingDetected'
+  >,
+  index: number,
+  options: TimeOptions = {},
+): string {
+  const ordinal = `${index + 1}ª`
+  switch (strategy) {
+    case 'round_robin':
+      return index === 0 ? 'próxima do rodízio' : `${ordinal} no rodízio`
+    case 'most_capacity':
+      return candidate.capacity.value === null
+        ? 'sem medição atual, não comparada'
+        : `${index === 0 ? 'maior capacidade' : 'capacidade'}: ${formatCapacity(candidate.capacity, candidate.multiplier, options)}`
+    case 'subscription_first': {
+      const billing = candidate.billingDeclared ?? candidate.billingDetected
+      const conflicting =
+        candidate.billingDeclared !== null &&
+        candidate.billingDetected !== null &&
+        candidate.billingDeclared !== candidate.billingDetected
+      if (!conflicting && billing === 'assinatura') return 'assinatura primeiro'
+      if (!conflicting && billing === 'uso') return 'cobrança por uso fica por último'
+      return 'cobrança desconhecida, depois das assinaturas'
+    }
+    default:
+      return `${ordinal} apta na ordem manual`
+  }
+}
+
+function candidateName(candidate: { label: string; providerId: string }): string {
+  return `${candidate.label.trim() || 'conta sem nome'} (${providerLabel(candidate.providerId)})`
+}
+
+/** "A cadeia vai usar: Trabalho (Codex) · 1ª apta na ordem manual." */
+export function chainLaunchSummary(proposal: AccountSwitchProposal): string | null {
+  const index = proposal.candidates.findIndex(
+    (candidate) => candidate.accountId === proposal.recommendedAccountId,
+  )
+  if (index < 0) return null
+  const candidate = proposal.candidates[index]
+  return `A cadeia vai usar: ${candidateName(candidate)} · ${explainCandidateRank(proposal.strategy, candidate, index)}.`
+}
+
+/** Motivos de "nenhuma conta apta", um por conta. */
+export function exclusionsText(reasons: readonly AccountChainExclusion[]): string {
+  if (reasons.length === 0) return 'Nenhuma conta deste provedor está habilitada na cadeia.'
+  return reasons
+    .map((reason) => `${candidateName(reason)}: ${ineligibilityText(reason.reason, reason.reasonText)}`)
+    .join('; ')
+}
+
+const CONFIRM_ERROR_TEXT: Record<AccountChainConfirmErrorCode, string> = {
+  SUPERSEDED: 'A conta recomendada mudou desde que a lista foi montada. Confira a nova lista e confirme de novo.',
+  EXPIRED: 'A proposta expirou. Nada foi aberto.',
+  SOURCE_ACTIVE: 'O terminal antigo ainda está produzindo saída.',
+  NOT_ELIGIBLE: 'A conta escolhida deixou de estar apta. Confira a lista atualizada.',
+  NOT_PENDING: 'Esta proposta já foi decidida em outro lugar. Nada foi aberto.',
+}
+
+/** Texto de uma recusa do `confirm`; código desconhecido cai numa frase genérica. */
+export function confirmErrorText(code: string | undefined, message?: string): string {
+  if (code && code in CONFIRM_ERROR_TEXT) {
+    return CONFIRM_ERROR_TEXT[code as AccountChainConfirmErrorCode]
+  }
+  return message?.trim() || 'Não foi possível confirmar a troca. Nada foi aberto.'
 }

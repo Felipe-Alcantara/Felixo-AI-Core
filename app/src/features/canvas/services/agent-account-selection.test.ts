@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CliAccount } from '../../shared/types/cli-accounts'
 import {
   describeAccountSelectionIssue,
+  describeChainSelectionIssue,
   resolveIssueAfterExplicitChoice,
   resolveOpeniaKeyStatus,
   selectAccountFromList,
@@ -38,6 +39,57 @@ const openiaAccountWithoutKey: CliAccount = {
   createdAt: '2026-08-31T00:00:00.000Z',
   secretConfigured: false,
 }
+
+describe('Automática (cadeia) no campo Conta', () => {
+  it('não é tratada como conta sumida nem cai no login do sistema', () => {
+    expect(selectAccountFromList({ ok: true, accounts: [codexAccount] }, '', '@cadeia')).toEqual({
+      status: 'ok',
+      accountId: '@cadeia',
+    })
+    expect(selectAccountFromList({ ok: true, accounts: [] }, '@cadeia', '')).toEqual({
+      status: 'ok',
+      accountId: '@cadeia',
+    })
+  })
+
+  it('com a lista ilegível continua bloqueando', () => {
+    expect(selectAccountFromList({ ok: false }, '@cadeia', '').status).toBe('list-failed')
+  })
+
+  const pronta = {
+    chainStatus: 'ready' as const,
+    enabled: true,
+    providerHasLoginCheck: true,
+    preview: { status: 'ready' as const },
+  }
+
+  it('só abre com a cadeia pronta, ligada, provedor conferível e prévia com conta', () => {
+    expect(describeChainSelectionIssue('@cadeia', pronta)).toBeNull()
+    expect(describeChainSelectionIssue('@cadeia', { ...pronta, preview: { status: 'pending' } })).toBeNull()
+  })
+
+  it('qualquer impedimento bloqueia com o motivo, nunca cai no login do sistema', () => {
+    const casos = [
+      { ...pronta, chainStatus: 'loading' as const },
+      { ...pronta, chainStatus: 'unavailable' as const },
+      { ...pronta, enabled: false },
+      { ...pronta, providerHasLoginCheck: false },
+      { ...pronta, preview: { status: 'refused' as const, message: 'Nenhuma conta apta agora.' } },
+    ]
+    for (const caso of casos) {
+      expect(describeChainSelectionIssue('@cadeia', caso)?.status).toBe('chain-blocked')
+    }
+    expect(
+      describeChainSelectionIssue('@cadeia', { ...pronta, preview: { status: 'refused', message: 'Nenhuma conta apta agora.' } })
+        ?.message,
+    ).toBe('Nenhuma conta apta agora.')
+  })
+
+  it('conta escolhida à mão não passa pela cadeia', () => {
+    expect(describeChainSelectionIssue('codex-conta', { ...pronta, enabled: false })).toBeNull()
+    expect(describeChainSelectionIssue('', { ...pronta, chainStatus: 'unavailable' })).toBeNull()
+  })
+})
 
 describe('seleção de conta por agente', () => {
   it('ignora a resposta antiga quando a troca de agente já iniciou outra carga', () => {

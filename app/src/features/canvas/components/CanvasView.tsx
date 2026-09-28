@@ -2253,6 +2253,10 @@ function CanvasInner({
         ...(options.cwd ? { cwd: options.cwd } : {}),
         ...(options.accountId ? { accountId: options.accountId } : {}),
         ...(options.providerId ? { providerId: options.providerId } : {}),
+        // Só a cadeia marca `chain`; ausente o bloco é fixo (decisão 5).
+        ...(options.accountMode === 'chain' ? { accountMode: 'chain' as const } : {}),
+        ...(options.chainTicket ? { chainTicket: options.chainTicket } : {}),
+        ...(options.chainOrigin ? { chainOrigin: options.chainOrigin } : {}),
         ...(options.launchMode ? { launchMode: options.launchMode } : {}),
         ...(options.preset?.color ? { frameColor: options.preset.color } : {}),
         ...(initialText && !options.handoffText ? { initialText } : {}),
@@ -2559,6 +2563,7 @@ function CanvasInner({
         handoffText?: string
         accountId?: string
         providerId?: string
+        accountMode?: 'pinned' | 'chain'
         agentSession?: AgentSessionReference
         terminalCount?: number
       }
@@ -2777,6 +2782,8 @@ function CanvasInner({
             onClose={() => setDetailsTerminalId(null)}
             toolsMenuOpen={sidebarCollapsed}
             onClearAgentSession={() => updateNodeData(detailsNode.id, { agentSession: undefined })}
+            onAccountModeChange={(accountMode) => updateNodeData(detailsNode.id, { accountMode })}
+            onFocusNode={focusNode}
           />
         ) : null
       })()}
@@ -2913,6 +2920,7 @@ function CanvasInner({
             sourceLabel: expandedTitle,
             accountId: expandedNodeData?.accountId,
             providerId: expandedNodeData?.providerId,
+            accountMode: expandedNodeData?.accountMode,
             agentSession: expandedNodeData?.agentSession,
             resumeAgentSession: expandedCanResumeAgentSession,
             terminalCount: expandedNodeData?.terminalCount,

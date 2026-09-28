@@ -16,13 +16,19 @@ import type {
   AccountChainDetection,
   AccountChainMember,
   AccountChainMutationResult,
+  AccountChainProviderId,
   AccountChainProposalEvent,
   AccountChainReleaseReason,
   AccountChainSettingsUpdate,
   AccountChainState,
   AccountSwitchProposal,
 } from '../../shared/types/account-chain'
-import { toMemberUpdates } from './account-chain-view'
+import {
+  chainLaunchSummary,
+  confirmErrorText,
+  exclusionsText,
+  toMemberUpdates,
+} from './account-chain-view'
 
 export type AccountChainStatus = 'loading' | 'unavailable' | 'ready' | 'error'
 
@@ -292,4 +298,139 @@ export function getSharedAccountChainStore(): AccountChainStore {
     sharedStore = createAccountChainStore(getAccountChainBridge())
   }
   return sharedStore
+}
+
+/**
+ * Prévia de "Automática (cadeia)" ao abrir um bloco (§8.5): o main cria uma
+ * proposta `launch` e diz qual conta usaria. Nunca cai no Login do sistema —
+ * sem conta apta a abertura é recusada com os motivos.
+ */
+export type ChainLaunchPreview =
+  | { status: 'ready'; proposal: AccountSwitchProposal; summary: string }
+  | { status: 'refused'; message: string }
+
+export async function previewChainLaunch(
+  bridge: AccountChainBridge | null,
+  providerId: AccountChainProviderId,
+): Promise<ChainLaunchPreview> {
+  if (!bridge) return { status: 'refused', message: CHAIN_UNAVAILABLE_MESSAGE }
+  try {
+    const result = await bridge.previewLaunch({ providerId })
+    if (result.ok) {
+      const summary = chainLaunchSummary(result.proposal)
+      return summary
+        ? { status: 'ready', proposal: result.proposal, summary }
+        : { status: 'refused', message: 'A cadeia não indicou nenhuma conta apta.' }
+    }
+    if ('reasons' in result && result.code === 'CHAIN_DISABLED') {
+      return { status: 'refused', message: 'A cadeia está desligada. Escolha uma conta.' }
+    }
+    if ('reasons' in result) {
+      return {
+        status: 'refused',
+        message: `Nenhuma conta apta agora; o bloco não vai abrir no Login do sistema. ${exclusionsText(result.reasons)}`,
+      }
+    }
+    return { status: 'refused', message: result.message ?? 'A cadeia não respondeu à prévia.' }
+  } catch {
+    return { status: 'refused', message: MAIN_UNREACHABLE_MESSAGE }
+  }
+}
+
+/** Conta decidida pelo `confirm`, com o ticket de uso único para o spawn. */
+export type ChainLaunchTicket = {
+  ticket: string
+  accountId: string
+  providerId: AccountChainProviderId
+  label: string | null
+  proposalId: string
+}
+
+export type ChainLaunchConfirmation =
+  | { ok: true; launch: ChainLaunchTicket }
+  | {
+      ok: false
+      message: string
+      /** A proposta recalculada pelo main (destino mudou): a UI mostra e pede de novo. */
+      preview?: ChainLaunchPreview
+    }
+
+/**
+ * O clique em Abrir é a confirmação: `confirm` com o destino que a prévia
+ * mostrou. Se o main recusar, nada abre e a pessoa vê por quê; um destino
+ * novo nunca é aceito sem ela ver.
+ */
+export async function confirmChainLaunch(
+  bridge: AccountChainBridge | null,
+  proposal: AccountSwitchProposal,
+): Promise<ChainLaunchConfirmation> {
+  if (!bridge) return { ok: false, message: CHAIN_UNAVAILABLE_MESSAGE }
+  const destinationAccountId = proposal.recommendedAccountId
+  if (!destinationAccountId) {
+    return { ok: false, message: 'Nenhuma conta apta agora; o bloco não vai abrir.' }
+  }
+  try {
+    const result = await bridge.confirm({ proposalId: proposal.id, destinationAccountId })
+    if (result.ok) {
+      return {
+        ok: true,
+        launch: {
+          ticket: result.ticket,
+          accountId: result.destination.accountId,
+          providerId: result.destination.providerId,
+          label: result.destination.label,
+          proposalId: proposal.id,
+        },
+      }
+    }
+    const message = confirmErrorText(result.code, result.message)
+    if ('proposal' in result && result.proposal) {
+      const summary = chainLaunchSummary(result.proposal)
+      return {
+        ok: false,
+        message,
+        preview: summary
+          ? { status: 'ready', proposal: result.proposal, summary }
+          : { status: 'refused', message: 'Nenhuma conta apta agora; o bloco não vai abrir.' },
+      }
+    }
+    return { ok: false, message }
+  } catch {
+    return { ok: false, message: MAIN_UNREACHABLE_MESSAGE }
+  }
+}
+
+export type AccountModeChange = {
+  /** Gravar o modo no bloco? Fixar sempre grava (é o lado seguro). */
+  persist: boolean
+  message: string | null
+}
+
+/**
+ * [Fixar nesta conta] / [Voltar para a cadeia] no painel de detalhes. O main
+ * fica sabendo pela sessão viva (fixar expira as propostas abertas dela); o
+ * bloco grava o modo para o próximo spawn. Voltar para a cadeia só grava se o
+ * main aceitou — sem ele, nada de cadeia; fixar grava mesmo com o main fora,
+ * porque ficar fixo nunca troca nada.
+ */
+export async function changeSessionAccountMode(
+  bridge: AccountChainBridge | null,
+  sessionId: string,
+  mode: 'pinned' | 'chain',
+): Promise<AccountModeChange> {
+  if (!bridge) {
+    return mode === 'pinned'
+      ? { persist: true, message: null }
+      : { persist: false, message: CHAIN_UNAVAILABLE_MESSAGE }
+  }
+  try {
+    const result = await bridge.setSessionMode({ sessionId, mode })
+    if (result.ok) return { persist: true, message: null }
+    return {
+      persist: mode === 'pinned',
+      message: result.message ?? 'O processo principal recusou a mudança de modo.',
+    }
+  } catch {
+    return { persist: mode === 'pinned', message: MAIN_UNREACHABLE_MESSAGE }
+  }
 }

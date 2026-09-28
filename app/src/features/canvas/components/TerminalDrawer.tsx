@@ -54,6 +54,8 @@ type TerminalDrawerProps = {
     accountId?: string
     /** Provedor da conta; acompanha o restart até a validação do PTY. */
     providerId?: string
+    /** Modo da conta do bloco; o restart nunca leva ticket da cadeia. */
+    accountMode?: 'pinned' | 'chain'
     agentSession?: AgentSessionReference
     resumeAgentSession?: boolean
     /** Render-time total used only when this drawer creates a fresh xterm. */

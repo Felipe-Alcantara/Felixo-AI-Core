@@ -369,6 +369,7 @@ export type AccountChainPreviewLaunchResult =
       reasons: AccountChainExclusion[]
       message?: string
     }
+  | AccountChainFailure
 
 /** Códigos de recusa do `confirm` (§4.1, revalidações no main). */
 export type AccountChainConfirmErrorCode =

@@ -1,4 +1,5 @@
 import type { CliAccount } from '../../shared/types/cli-accounts'
+import { CHAIN_ACCOUNT_VALUE } from './agent-launch-preferences'
 
 /**
  * Identifica uma resposta de listagem que ainda pertence à configuração
@@ -60,6 +61,12 @@ export function selectAccountFromList(
     return { status: 'ok', accountId: '' }
   }
 
+  // "Automática (cadeia)" não é uma conta da lista: quem decide se ela vale
+  // (cadeia ligada, conta apta) é o main, na prévia da abertura.
+  if (wanted === CHAIN_ACCOUNT_VALUE) {
+    return { status: 'ok', accountId: wanted }
+  }
+
   return listing.accounts.some((account) => account.id === wanted)
     ? { status: 'ok', accountId: wanted }
     : { status: 'saved-missing', accountId: wanted }
@@ -67,8 +74,48 @@ export function selectAccountFromList(
 
 /** Problema de conta que bloqueia a abertura, com o texto que a interface mostra. */
 export type AccountSelectionIssue = {
-  status: 'saved-missing' | 'list-failed'
+  /** `chain-blocked`: "Automática (cadeia)" escolhida, mas a cadeia não pode abrir agora. */
+  status: 'saved-missing' | 'list-failed' | 'chain-blocked'
   message: string
+}
+
+/** O que o campo Conta sabe da cadeia para decidir se "Automática" pode abrir. */
+export type ChainSelectionContext = {
+  chainStatus: 'loading' | 'unavailable' | 'ready' | 'error'
+  enabled: boolean
+  /** Há conta deste provedor que a cadeia consegue conferir (não travada). */
+  providerHasLoginCheck: boolean
+  /** Prévia do main; `pending` enquanto ela não chegou. */
+  preview: { status: 'pending' } | { status: 'ready' } | { status: 'refused'; message: string }
+}
+
+/**
+ * Bloqueio de "Automática (cadeia)". Qualquer coisa que impeça a cadeia de
+ * escolher uma conta bloqueia a abertura com o motivo: cair no Login do
+ * sistema em silêncio seria a mesma queda que a seleção de conta já recusa.
+ */
+export function describeChainSelectionIssue(
+  accountId: string,
+  context: ChainSelectionContext,
+): AccountSelectionIssue | null {
+  if (accountId !== CHAIN_ACCOUNT_VALUE) return null
+  const blocked = (message: string): AccountSelectionIssue => ({ status: 'chain-blocked', message })
+  if (context.chainStatus === 'loading') {
+    return blocked('A cadeia de contas ainda está carregando.')
+  }
+  if (context.chainStatus !== 'ready') {
+    return blocked(
+      'A cadeia de contas não está disponível; escolha uma conta. O bloco não vai abrir no Login do sistema.',
+    )
+  }
+  if (!context.enabled) {
+    return blocked('A cadeia está desligada. Escolha uma conta ou ligue a cadeia em Limites e uso.')
+  }
+  if (!context.providerHasLoginCheck) {
+    return blocked('A cadeia não confere o login deste provedor. Escolha uma conta.')
+  }
+  if (context.preview.status === 'refused') return blocked(context.preview.message)
+  return null
 }
 
 /**

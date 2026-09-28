@@ -11,11 +11,21 @@ import {
   type EffortLevel,
 } from '../services/agent-launch-options'
 import {
+  CHAIN_ACCOUNT_VALUE,
   readAgentLaunchPreferences,
   saveAgentLaunchPreferences,
   SHELL_AGENT_VALUE,
   type AgentLaunchPreferences,
 } from '../services/agent-launch-preferences'
+import { useAccountChain } from './useAccountChain'
+import {
+  confirmChainLaunch,
+  getAccountChainBridge,
+  previewChainLaunch,
+  type ChainLaunchPreview,
+  type ChainLaunchTicket,
+} from '../services/account-chain-client'
+import type { AccountChainProviderId } from '../../shared/types/account-chain'
 import { useAgentModelCatalog } from './useAgentModelCatalog'
 import { useAgentPresets } from './useAgentPresets'
 import type { AgentPreset, AgentPresetAgentId } from '../services/agent-preset'
@@ -34,6 +44,7 @@ import {
 import {
   resolveOpeniaKeyStatus,
   describeAccountSelectionIssue,
+  describeChainSelectionIssue,
   resolveIssueAfterExplicitChoice,
   selectAccountFromList,
   selectionAfterAccountRemoved,
@@ -223,6 +234,81 @@ export function useAgentConfig(
   useEffect(() => {
     providerIdRef.current = providerId
   }, [providerId])
+
+  // "Automática (cadeia)": o main escolhe a conta e a abertura confirma. A
+  // prévia é pedida uma vez por provedor (e de novo depois de cada abertura
+  // ou recusa); cada pedido cria uma proposta `launch` no main.
+  const { snapshot: chainSnapshot } = useAccountChain()
+  const chainState = chainSnapshot.state
+  const chainEnabled = chainState?.settings.enabled === true
+  const providerHasChainCheck = Boolean(
+    providerId &&
+      chainState?.members.some((member) => member.providerId === providerId && !member.locked),
+  )
+  const chainLaunchAvailable = chainEnabled && providerHasChainCheck
+  const isChainSelection = accountId === CHAIN_ACCOUNT_VALUE
+  const [chainPreviewNonce, setChainPreviewNonce] = useState(0)
+  const chainPreviewKey = `${providerId}:${chainPreviewNonce}`
+  const [chainPreviewEntry, setChainPreviewEntry] = useState<{
+    key: string
+    preview: ChainLaunchPreview
+  } | null>(null)
+  const chainPreview =
+    chainPreviewEntry && chainPreviewEntry.key === chainPreviewKey ? chainPreviewEntry.preview : null
+  const [chainLaunchError, setChainLaunchError] = useState<string | undefined>()
+  const chainLaunchRef = useRef<ChainLaunchTicket | null>(null)
+
+  useEffect(() => {
+    if (!isChainSelection || !chainLaunchAvailable || !providerId) return
+    let cancelled = false
+    void previewChainLaunch(getAccountChainBridge(), providerId as AccountChainProviderId).then(
+      (preview) => {
+        if (!cancelled) setChainPreviewEntry({ key: chainPreviewKey, preview })
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [chainLaunchAvailable, chainPreviewKey, isChainSelection, providerId])
+
+  const chainSelectionIssue = describeChainSelectionIssue(accountId, {
+    chainStatus: chainSnapshot.status,
+    enabled: chainEnabled,
+    providerHasLoginCheck: providerHasChainCheck,
+    preview: chainPreview
+      ? chainPreview.status === 'ready'
+        ? { status: 'ready' }
+        : chainPreview
+      : { status: 'pending' },
+  })
+
+  const refreshChainPreview = useCallback(() => {
+    setChainLaunchError(undefined)
+    setChainPreviewNonce((value) => value + 1)
+  }, [])
+
+  /** Abrir com "Automática (cadeia)" é a confirmação: `confirm` e ticket. */
+  const confirmarCadeia = useCallback(async (): Promise<boolean> => {
+    chainLaunchRef.current = null
+    setChainLaunchError(undefined)
+    if (chainSelectionIssue) return false
+    if (!chainPreview || chainPreview.status !== 'ready') {
+      setChainLaunchError('A cadeia ainda está escolhendo a conta. Tente de novo em instantes.')
+      return false
+    }
+    const result = await confirmChainLaunch(getAccountChainBridge(), chainPreview.proposal)
+    if (result.ok) {
+      chainLaunchRef.current = result.launch
+      return true
+    }
+    setChainLaunchError(result.message)
+    if (result.preview) {
+      setChainPreviewEntry({ key: chainPreviewKey, preview: result.preview })
+    } else {
+      setChainPreviewNonce((value) => value + 1)
+    }
+    return false
+  }, [chainPreview, chainPreviewKey, chainSelectionIssue])
 
   const setAccountSelectionIssue = useCallback((issue: AccountSelectionIssue | null) => {
     accountSelectionIssueRef.current = issue
@@ -595,7 +681,8 @@ export function useAgentConfig(
   const prepareForLaunch = useCallback(async (): Promise<boolean> => {
     // Conta que não pode ser conferida nunca abre, nem cai no login do sistema.
     if (accountSelectionIssueRef.current) return false
-    if (!agent?.isLauncher) return true
+    const viaCadeia = accountIdRef.current === CHAIN_ACCOUNT_VALUE
+    if (!agent?.isLauncher) return viaCadeia ? confirmarCadeia() : true
 
     let interfaces = openiaInterfaces
     let models = openiaModels
@@ -631,6 +718,12 @@ export function useAgentConfig(
     if (models.length > 0 && !models.some((item) => item.id === openiaModelRef.current)) {
       openiaModelRef.current = ''
       setOpeniaModelState('')
+    }
+
+    // Pela cadeia, a chave é da conta que o main escolher: a elegibilidade
+    // dele já exclui conta Openia sem chave ('sem-chave').
+    if (viaCadeia) {
+      return confirmarCadeia()
     }
 
     if (openiaKeyDraft.trim()) {
@@ -675,7 +768,7 @@ export function useAgentConfig(
     }
     setOpeniaError('Configure a chave do OpenRouter na interface antes de abrir o Openia.')
     return false
-  }, [agent, carregarContas, loadOpenia, openiaInterfaces, openiaKeyDraft, openiaModels, projectId, projects, saveOpeniaKey])
+  }, [agent, carregarContas, confirmarCadeia, loadOpenia, openiaInterfaces, openiaKeyDraft, openiaModels, projectId, projects, saveOpeniaKey])
 
   const changeModel = useCallback(
     (valor: string) => {
@@ -807,8 +900,20 @@ export function useAgentConfig(
     }
 
     // A conta escolhida acompanha o terminal desde o nascimento: é ela que
-    // decide em qual login a CLI abre.
-    const conta = accountIdRef.current || undefined
+    // decide em qual login a CLI abre. Pela cadeia, vale a conta confirmada,
+    // com o ticket de uso único; o ticket é consumido aqui para que uma
+    // segunda abertura peça uma prévia e uma confirmação próprias. Sem ticket,
+    // o valor especial segue adiante e o main o recusa — nunca vira Login do
+    // sistema.
+    const cadeia = chainLaunchRef.current
+    if (cadeia) {
+      chainLaunchRef.current = null
+      setChainPreviewNonce((value) => value + 1)
+    }
+    const conta = cadeia ? cadeia.accountId : accountIdRef.current || undefined
+    const modoDaConta = cadeia
+      ? { accountMode: 'chain' as const, chainTicket: cadeia.ticket }
+      : {}
 
     const choices = {
       agentId: agent.id,
@@ -830,6 +935,7 @@ export function useAgentConfig(
       return {
         accountId: conta,
         providerId: agent.id,
+        ...modoDaConta,
         command: agent.command,
         args: launcherArgs ?? undefined,
         cwd: project?.path,
@@ -855,6 +961,7 @@ export function useAgentConfig(
     return {
       accountId: conta,
       providerId: agent.id,
+      ...modoDaConta,
       command: agent.command,
       args: buildAgentArgs(choices) ?? undefined,
       cwd: project?.path,
@@ -926,7 +1033,13 @@ export function useAgentConfig(
     accountId,
     setAccountId,
     accounts,
-    accountSelectionIssue,
+    // O bloqueio da cadeia entra no mesmo aviso: os botões de abrir já
+    // respeitam `accountSelectionIssue` em todo lugar que usa este hook.
+    accountSelectionIssue: accountSelectionIssue ?? chainSelectionIssue,
+    chainLaunchAvailable,
+    chainPreview,
+    chainLaunchError,
+    refreshChainPreview,
     retryAccountList,
     createAccount,
     removeAccount,

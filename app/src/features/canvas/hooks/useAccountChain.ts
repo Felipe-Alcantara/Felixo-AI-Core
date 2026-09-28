@@ -4,6 +4,7 @@ import {
   type AccountChainSnapshot,
   type AccountChainStore,
 } from '../services/account-chain-client'
+import { getSharedCliAccountLabelStore } from '../services/cli-account-labels'
 
 /**
  * Estado da cadeia de contas para quem está montado.
@@ -34,4 +35,14 @@ export function useClockTick(intervalMs = 30_000): number {
     return () => window.clearInterval(intervalId)
   }, [intervalMs])
   return nowMs
+}
+
+/** Nome da conta de um bloco, a partir da lista do main (`null` se desconhecido). */
+export function useCliAccountLabel(accountId: string | undefined): string | null {
+  const labels = getSharedCliAccountLabelStore()
+  useEffect(() => {
+    labels.request(accountId)
+  }, [labels, accountId])
+  const map = useSyncExternalStore(labels.subscribe, labels.getLabels, labels.getLabels)
+  return accountId ? (map.get(accountId) ?? null) : null
 }

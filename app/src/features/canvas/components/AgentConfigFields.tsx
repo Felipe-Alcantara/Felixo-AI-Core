@@ -1,6 +1,10 @@
 import { useId, useRef, useState } from 'react'
-import { FilePlus2, FolderOpen, FolderPlus, RotateCw, TerminalSquare, Trash2, UserRound } from 'lucide-react'
-import { SHELL_AGENT_VALUE, type AgentLaunchPreferences } from '../services/agent-launch-preferences'
+import { FilePlus2, FolderOpen, FolderPlus, Link2, RotateCw, TerminalSquare, Trash2, UserRound } from 'lucide-react'
+import {
+  CHAIN_ACCOUNT_VALUE,
+  SHELL_AGENT_VALUE,
+  type AgentLaunchPreferences,
+} from '../services/agent-launch-preferences'
 import { ADD_FOLDER_VALUE, type AgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 import { ProviderMark } from '../../shared/brand/ProviderMark'
 import { providerIdentity } from '../../shared/brand/provider-identity'
@@ -435,6 +439,11 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
   const problemaDeConta = config.accountSelectionIssue
   // Com a lista ilegível nada pode ser criado nem conferido.
   const listaIlegivel = problemaDeConta?.status === 'list-failed'
+  const viaCadeia = config.accountId === CHAIN_ACCOUNT_VALUE
+  // A opção só aparece com a cadeia ligada e um provedor que ela confere; se
+  // já estava escolhida (preferência salva), continua visível para o aviso
+  // explicar por que não abre.
+  const mostraCadeia = config.chainLaunchAvailable || viaCadeia
 
   async function criar() {
     setSalvando(true)
@@ -503,6 +512,16 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
               description: 'Sessão atual do computador',
               icon: <UserRound size={15} strokeWidth={1.5} />,
             },
+            ...(mostraCadeia
+              ? [
+                  {
+                    value: CHAIN_ACCOUNT_VALUE,
+                    label: 'Automática (cadeia)',
+                    description: 'A cadeia escolhe a conta apta; abrir confirma',
+                    icon: <Link2 size={15} strokeWidth={1.5} />,
+                  },
+                ]
+              : []),
             ...config.accounts.map((conta) => ({
               value: conta.id,
               label: conta.label,
@@ -555,7 +574,34 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
         </div>
       )}
 
-      {config.accounts.length > 0 && !contaAtual && !criando && !problemaDeConta && (
+      {viaCadeia && !problemaDeConta && (
+        <div
+          role="status"
+          aria-busy={!config.chainPreview}
+          className="-mt-2 mb-3 flex items-start gap-2 text-[11px] leading-snug text-zinc-400"
+        >
+          <p className="min-w-0 flex-1">
+            {config.chainPreview?.status === 'ready'
+              ? `${config.chainPreview.summary} Abrir confirma essa conta.`
+              : 'A cadeia está escolhendo a conta…'}
+          </p>
+          <button
+            type="button"
+            onClick={() => config.refreshChainPreview()}
+            className="felixo-btn shrink-0 rounded-sm bg-white/6 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/12"
+          >
+            Recalcular
+          </button>
+        </div>
+      )}
+
+      {viaCadeia && config.chainLaunchError && (
+        <p role="alert" className="-mt-2 mb-3 text-[11px] leading-snug text-theme-error">
+          {config.chainLaunchError}
+        </p>
+      )}
+
+      {config.accounts.length > 0 && !contaAtual && !criando && !problemaDeConta && !viaCadeia && (
         <p className="-mt-2 mb-3 text-[11px] leading-snug text-zinc-600">
           Selecione um perfil para abrir nele ou removê-lo.
         </p>

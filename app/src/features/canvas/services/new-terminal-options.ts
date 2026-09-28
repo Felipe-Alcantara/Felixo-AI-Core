@@ -6,7 +6,7 @@
  * um deles a partir do outro só para pegar o tipo criaria dependência entre
  * componentes que não têm nada a ver um com o outro.
  */
-import type { FrameColor } from '../types'
+import type { FrameColor, TerminalChainOrigin } from '../types'
 
 /** O que um preset de agente acrescenta ao terminal que nasce dele. */
 export type NewTerminalPreset = {
@@ -38,6 +38,12 @@ export type NewTerminalOptions = {
   accountId?: string
   /** Provedor da CLI; acompanha a conta até o boundary principal para validação. */
   providerId?: string
+  /** Ausente = fixa. `chain` só com "Automática (cadeia)" ou continuação confirmada. */
+  accountMode?: 'pinned' | 'chain'
+  /** Ticket de uso único devolvido pelo `confirm` da cadeia; nunca persistido. */
+  chainTicket?: string
+  /** Continuação da cadeia: de qual bloco e troca este nasce. */
+  chainOrigin?: TerminalChainOrigin
   /** Preset de agente de onde o terminal nasce (contexto, skills e cor). */
   preset?: NewTerminalPreset
 }

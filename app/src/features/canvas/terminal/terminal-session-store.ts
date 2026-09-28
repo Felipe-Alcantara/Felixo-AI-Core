@@ -255,6 +255,14 @@ type SessionOptions = {
   accountId?: string
   /** Provedor da CLI, para impedir ambiente de outra conta no boundary do PTY. */
   providerId?: string
+  /** Fixa (padrão) ou da cadeia de contas; o main confere e lista por sessão. */
+  accountMode?: 'pinned' | 'chain'
+  /**
+   * Ticket de uso único da cadeia (só no primeiro spawn do bloco criado pela
+   * cadeia). Sai das opções guardadas assim que o spawn é aceito: um
+   * relançamento ou reinício é spawn comum na mesma conta, nunca uma troca.
+   */
+  chainTicket?: string
   /** Restored timestamp; omitted on restart so a fresh clock is created. */
   startedAt?: number
   /** Cria um bloco Página Web quando a pessoa abre um link do terminal. */
@@ -885,6 +893,8 @@ export class TerminalSessionStore {
         classicScreen: shouldUseClassicScreen(options.command, loadClaudeTerminalScroll()),
         accountId: options.accountId,
         providerId: options.providerId,
+        ...(options.accountMode ? { accountMode: options.accountMode } : {}),
+        ...(options.chainTicket ? { chainTicket: options.chainTicket } : {}),
       })
       .then((result) => {
         if (session.disposed) {
@@ -898,6 +908,9 @@ export class TerminalSessionStore {
         // sempre, e o spawn bem-sucedido era marcado como erro, o que ainda
         // impedia `scheduleInitialText` de enviar o texto inicial.
         if (result?.ok) {
+          if (session.launchOptions.chainTicket) {
+            session.launchOptions = { ...session.launchOptions, chainTicket: undefined }
+          }
           if (result.reused) {
             // The PTY already contains the original agent turn. Replaying the
             // initial instruction here would submit a duplicate task after a

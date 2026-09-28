@@ -8,6 +8,13 @@ import {
 /** Sentinel used by the launcher when the user explicitly selects a plain shell. */
 export const SHELL_AGENT_VALUE = '__shell__'
 
+/**
+ * Valor especial do campo Conta: "Automática (cadeia)". Só vale com a cadeia
+ * ligada e um provedor com checagem de login; o main escolhe a conta e a
+ * abertura confirma. Nunca cai no Login do sistema.
+ */
+export const CHAIN_ACCOUNT_VALUE = '@cadeia'
+
 const STORAGE_KEY = 'felixo:last-agent-launch-preferences'
 const LEGACY_AGENT_STORAGE_KEY = 'felixo:last-agent'
 

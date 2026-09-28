@@ -40,6 +40,10 @@ export type SessionOptions = {
   keepShellOpen?: boolean
   accountId?: string
   providerId?: string
+  /** Fixa (padrão) ou da cadeia de contas. */
+  accountMode?: 'pinned' | 'chain'
+  /** Ticket de uso único da cadeia; só no primeiro spawn do bloco. */
+  chainTicket?: string
   startedAt?: number
   onOpenWebpage?: (url: string) => void
   agentSession?: AgentSessionReference

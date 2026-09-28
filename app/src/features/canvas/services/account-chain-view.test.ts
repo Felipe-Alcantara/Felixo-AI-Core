@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   accountChipLabel,
+  chainLaunchSummary,
+  confirmErrorText,
+  exclusionsText,
+  explainCandidateRank,
   failureClassLabel,
   formatAgo,
   formatBilling,
@@ -20,7 +24,7 @@ import {
   toHistoryRow,
   toMemberUpdates,
 } from './account-chain-view'
-import { makeMember, makeState } from './__fixtures__/account-chain-fixtures'
+import { makeCandidate, makeMember, makeProposal, makeState } from './__fixtures__/account-chain-fixtures'
 import type { AccountSwitchHistoryEntry } from '../../shared/types/account-chain'
 
 const SP = { timeZone: 'America/Sao_Paulo' }
@@ -335,5 +339,46 @@ describe('accountChipLabel', () => {
       accountChipLabel({ accountId: 'conta-a', accountLabel: 'Pessoal', accountMode: 'chain' }).text,
     ).toBe('Pessoal · cadeia')
     expect(accountChipLabel({ accountId: '', accountMode: 'chain' }).text).toBe('Login do sistema')
+  })
+})
+
+describe('prévia e recomendação', () => {
+  it('explica a posição conforme a estratégia', () => {
+    const candidate = makeCandidate({
+      capacity: { value: 1000, remainingPercent: 50, measuredAt: null, lastMeasuredAt: null, comparable: true },
+      multiplier: 20,
+    })
+    expect(explainCandidateRank('manual', candidate, 0)).toBe('1ª apta na ordem manual')
+    expect(explainCandidateRank('round_robin', candidate, 0)).toBe('próxima do rodízio')
+    expect(explainCandidateRank('most_capacity', candidate, 0)).toBe('maior capacidade: 1000 = 50% × 20x')
+    expect(
+      explainCandidateRank('most_capacity', makeCandidate(), 1),
+    ).toBe('sem medição atual, não comparada')
+    expect(explainCandidateRank('subscription_first', makeCandidate({ billingDeclared: 'assinatura', billingDetected: 'uso' }), 0)).toBe(
+      'cobrança desconhecida, depois das assinaturas',
+    )
+  })
+
+  it('a prévia da Automática diz qual conta e por quê', () => {
+    expect(chainLaunchSummary(makeProposal({ kind: 'launch' }))).toBe(
+      'A cadeia vai usar: Trabalho (Codex) · 1ª apta na ordem manual.',
+    )
+    expect(chainLaunchSummary(makeProposal({ recommendedAccountId: null }))).toBeNull()
+  })
+
+  it('nenhuma conta apta lista o motivo de cada uma', () => {
+    expect(
+      exclusionsText([
+        { accountId: 'a', providerId: 'codex', label: 'Pessoal', reason: 'em-espera', reasonText: null },
+        { accountId: 'b', providerId: 'codex', label: 'Trabalho', reason: 'login-nao-conferido', reasonText: null },
+      ]),
+    ).toBe('Pessoal (Codex): em espera; Trabalho (Codex): login não conferido há pouco')
+    expect(exclusionsText([])).toMatch(/Nenhuma conta/)
+  })
+
+  it('recusa do confirm vira texto que diz que nada foi aberto', () => {
+    expect(confirmErrorText('EXPIRED')).toMatch(/Nada foi aberto/)
+    expect(confirmErrorText('NOT_PENDING')).toMatch(/Nada foi aberto/)
+    expect(confirmErrorText('OUTRO', 'falhou no main')).toBe('falhou no main')
   })
 })

@@ -97,11 +97,18 @@ type Harness = {
    */
   resolveSpawn: () => void
   /** Opções de autenticação recebidas pela ponte, na ordem dos spawns. */
-  spawnRequests: Array<{ accountId?: string; providerId?: string }>
+  spawnRequests: SpawnRequest[]
   /** Nomes dos arquivos de contexto "criados" pela ponte, na ordem de escrita. */
   contextFileNames: string[]
   /** sessionId de cada chamada a `contextFiles.release`, na ordem em que ocorreram. */
   releaseCalls: string[]
+}
+
+type SpawnRequest = {
+  accountId?: string
+  providerId?: string
+  accountMode?: 'pinned' | 'chain'
+  chainTicket?: string
 }
 
 const SESSION_ID = 'terminal-1'
@@ -113,7 +120,13 @@ function createHarness(
   contextFilesAvailable = true,
   deferSpawn = false,
   terminalCount = 1,
-  extraOptions: { initialTextIsHandoff?: boolean } = {},
+  extraOptions: {
+    initialTextIsHandoff?: boolean
+    accountId?: string
+    providerId?: string
+    accountMode?: 'pinned' | 'chain'
+    chainTicket?: string
+  } = {},
 ): Harness {
   const writes: string[] = []
   const contextBodies: string[] = []
@@ -121,7 +134,7 @@ function createHarness(
   const exitListeners = new Set<(event: { sessionId: string; exitCode: number; signal?: number }) => void>()
   const sessionListeners = new Set<(event: object) => void>()
   const spawnArgs: string[] = []
-  const spawnRequests: Array<{ accountId?: string; providerId?: string }> = []
+  const spawnRequests: SpawnRequest[] = []
   const contextFileNames: string[] = []
   const releaseCalls: string[] = []
 
@@ -155,9 +168,11 @@ function createHarness(
           args,
           accountId,
           providerId,
-        }: { args?: string[]; accountId?: string; providerId?: string }) => {
+          accountMode,
+          chainTicket,
+        }: { args?: string[] } & SpawnRequest) => {
           spawnArgs.splice(0, spawnArgs.length, ...(args ?? []))
-          spawnRequests.push({ accountId, providerId })
+          spawnRequests.push({ accountId, providerId, accountMode, chainTicket })
           await spawnGate
           return spawnResult
         },
@@ -978,6 +993,27 @@ describe('TerminalSessionStore: relançamento automático do Codex depois do aut
     expect(harness.spawnRequests).toHaveLength(2)
     expect(harness.contextBodies, 'a passagem foi entregue de novo ao Codex relançado').toEqual([HANDOFF])
     expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('não foi reenviado')
+  })
+
+  it('o ticket da cadeia vai só no primeiro spawn; o relançamento é spawn comum na mesma conta', async () => {
+    harness = createHarness(HANDOFF, 'codex', true, false, 1, {
+      initialTextIsHandoff: true,
+      accountId: 'conta-b',
+      providerId: 'codex',
+      accountMode: 'chain',
+      chainTicket: 'ticket-1',
+    })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnRequests).toEqual([
+      { accountId: 'conta-b', providerId: 'codex', accountMode: 'chain', chainTicket: 'ticket-1' },
+      { accountId: 'conta-b', providerId: 'codex', accountMode: 'chain', chainTicket: undefined },
+    ])
+    expect(harness.spawnRequests[1]).not.toHaveProperty('chainTicket', 'ticket-1')
   })
 
   it('sem passagem, a instrução de largada volta a ser entregue, como antes', async () => {

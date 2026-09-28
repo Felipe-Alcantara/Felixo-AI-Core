@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CHAIN_ACCOUNT_VALUE,
   readAgentLaunchPreferences,
   saveAgentLaunchPreferences,
 } from './agent-launch-preferences'
@@ -81,6 +82,27 @@ describe('agent launch preferences', () => {
     })
 
     saveAgentLaunchPreferences({ ...base, accountId: '' }, storage)
+    expect(readAgentLaunchPreferences(storage)).not.toHaveProperty('accountLabel')
+  })
+
+  it('lembra "Automática (cadeia)" como o valor especial, sem nome de conta', () => {
+    const storage = createStorage()
+    saveAgentLaunchPreferences(
+      {
+        agentValue: 'codex',
+        model: '',
+        effort: '',
+        yolo: false,
+        fast: false,
+        projectId: '',
+        planningFile: '',
+        openiaInterface: 'orchat',
+        openiaModel: '',
+        accountId: CHAIN_ACCOUNT_VALUE,
+      },
+      storage,
+    )
+    expect(readAgentLaunchPreferences(storage).accountId).toBe('@cadeia')
     expect(readAgentLaunchPreferences(storage)).not.toHaveProperty('accountLabel')
   })
 
