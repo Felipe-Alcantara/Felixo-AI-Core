@@ -47,6 +47,8 @@ type TerminalDrawerProps = {
     args?: string[]
     cwd?: string
     initialText?: string
+    /** O `initialText` é uma passagem: um relançamento automático não o reenvia. */
+    initialTextIsHandoff?: boolean
     sourceLabel?: string
     /** Conta cujo ambiente deve continuar valendo quando o drawer reiniciar. */
     accountId?: string

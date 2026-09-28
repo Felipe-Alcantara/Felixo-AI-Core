@@ -33,6 +33,8 @@ export type SessionOptions = {
   args?: string[]
   cwd?: string
   initialText?: string
+  /** O `initialText` é uma passagem: o relançamento automático nunca o reenvia. */
+  initialTextIsHandoff?: boolean
   sourceLabel?: string
   fallbackCommand?: string
   keepShellOpen?: boolean

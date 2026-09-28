@@ -194,6 +194,7 @@ export function toPersistedNode(node: CanvasFlowNode): PersistedCanvasNode {
 const TRANSIENT_DATA_KEYS = new Set<string>([
   'initialTextReady',
   'handoffText',
+  'initialTextIsHandoff',
   'resumeAgentSession',
 ])
 

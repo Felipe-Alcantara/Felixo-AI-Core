@@ -113,6 +113,11 @@ export type TerminalNodeData = {
   initialText?: string
   /** One-shot in-memory prompt used by responsibility handoff; never persisted. */
   handoffText?: string
+  /**
+   * Render-time flag (never persisted): the `initialText` handed to the
+   * session carries a handoff, so an automatic relaunch must not resend it.
+   */
+  initialTextIsHandoff?: boolean
   /** Render-time flag: waits for canvas connections/path resolution before spawning. */
   initialTextReady?: boolean
   /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */

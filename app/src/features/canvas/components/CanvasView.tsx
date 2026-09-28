@@ -1751,6 +1751,9 @@ function CanvasInner({
                 : fallbackInitialText
                   ? { initialText: fallbackInitialText }
                   : {}),
+              // A passagem vira o texto inicial deste bloco; a sessão precisa
+              // saber disso para nunca reenviá-la num relançamento automático.
+              initialTextIsHandoff: !resumeAgentSession && Boolean(node.data.handoffText),
               initialTextReady,
               resumeAgentSession,
               terminalIndex,
@@ -2905,6 +2908,8 @@ function CanvasInner({
             initialText: expandedCanResumeAgentSession
               ? undefined
               : expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
+            initialTextIsHandoff:
+              !expandedCanResumeAgentSession && Boolean(expandedNodeData?.handoffText),
             sourceLabel: expandedTitle,
             accountId: expandedNodeData?.accountId,
             providerId: expandedNodeData?.providerId,

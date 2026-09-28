@@ -99,11 +99,14 @@ describe('canvas persistence boundaries', () => {
         command: 'codex',
         initialText: 'standing instruction',
         handoffText: 'terminal output that may contain a secret',
+        initialTextIsHandoff: true,
       },
     })
 
     expect(persisted.data.initialText).toBe('standing instruction')
     expect(persisted.data.handoffText).toBeUndefined()
+    // Derivado da passagem a cada render; gravado, sobreviveria à passagem.
+    expect(persisted.data).not.toHaveProperty('initialTextIsHandoff')
   })
 
   it('persiste identidade da inserção sem guardar o corpo do prompt', () => {

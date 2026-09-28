@@ -88,6 +88,8 @@ type Harness = {
   /** Entrega bytes da CLI para o terminal do store, como a ponte faria. */
   feed: (data: string) => void
   feedSession: (reference: object) => void
+  /** Encerra o processo, como a ponte faria com `pty:exit`. */
+  emitExit: (event: { exitCode: number; signal?: number }) => void
   spawnArgs: string[]
   /**
    * Resolve a promise do `pty:spawn`. Só existe quando a bancada foi criada com
@@ -111,10 +113,12 @@ function createHarness(
   contextFilesAvailable = true,
   deferSpawn = false,
   terminalCount = 1,
+  extraOptions: { initialTextIsHandoff?: boolean } = {},
 ): Harness {
   const writes: string[] = []
   const contextBodies: string[] = []
   const dataListeners = new Set<(event: { sessionId: string; data: string }) => void>()
+  const exitListeners = new Set<(event: { sessionId: string; exitCode: number; signal?: number }) => void>()
   const sessionListeners = new Set<(event: object) => void>()
   const spawnArgs: string[] = []
   const spawnRequests: Array<{ accountId?: string; providerId?: string }> = []
@@ -139,7 +143,10 @@ function createHarness(
           dataListeners.add(listener)
           return () => dataListeners.delete(listener)
         },
-        onExit: () => () => {},
+        onExit: (listener: (event: { sessionId: string; exitCode: number; signal?: number }) => void) => {
+          exitListeners.add(listener)
+          return () => exitListeners.delete(listener)
+        },
         onSession: (listener: (event: object) => void) => {
           sessionListeners.add(listener)
           return () => sessionListeners.delete(listener)
@@ -189,6 +196,7 @@ function createHarness(
     cwd: '/tmp',
     initialText,
     terminalCount,
+    ...extraOptions,
   })
 
   return {
@@ -206,6 +214,9 @@ function createHarness(
     },
     feedSession: (reference: object) => {
       for (const listener of sessionListeners) listener(reference)
+    },
+    emitExit: (event) => {
+      for (const listener of [...exitListeners]) listener({ sessionId: PTY_SESSION_ID, ...event })
     },
     resolveSpawn: () => releaseSpawn(),
   }
@@ -929,6 +940,61 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
  * bem-sucedido era tratado como falha — o card mostrava "Falha ao iniciar o
  * terminal." com a CLI viva atrás, e o texto inicial nunca era enviado.
  */
+describe('TerminalSessionStore: relançamento automático do Codex depois do auto-update', () => {
+  let harness: Harness | undefined
+  const HANDOFF = 'Continue o trabalho do agente anterior: refatore o módulo de pagamentos.'
+  const UPDATE_BANNER = '🎉Update ran successfully! Please restart Codex.'
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  async function relaunchAfterUpdate(current: Harness): Promise<void> {
+    current.feed(`\r\n${UPDATE_BANNER}\r\n`)
+    current.emitExit({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+    current.feed(BOOT_ESCAPES)
+    current.feed(CODEX_READY_PROMPT)
+    // Bem mais que o prazo de emergência da entrega: se o texto fosse sair,
+    // já teria saído.
+    await vi.advanceTimersByTimeAsync(15_000)
+  }
+
+  it('não reenvia o texto de passagem e diz no bloco o que fazer', async () => {
+    harness = createHarness(HANDOFF, 'codex', true, false, 1, { initialTextIsHandoff: true })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(harness.contextBodies).toEqual([HANDOFF])
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnRequests).toHaveLength(2)
+    expect(harness.contextBodies, 'a passagem foi entregue de novo ao Codex relançado').toEqual([HANDOFF])
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('não foi reenviado')
+  })
+
+  it('sem passagem, a instrução de largada volta a ser entregue, como antes', async () => {
+    harness = createHarness(CONTEXT, 'codex')
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnRequests).toHaveLength(2)
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT, DELIVERED_QUALITY_CONTEXT])
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toBeUndefined()
+  })
+})
+
 describe('TerminalSessionStore: saída antes da resposta do spawn', () => {
   let harness: Harness | undefined
 
