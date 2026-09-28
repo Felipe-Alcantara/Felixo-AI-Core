@@ -25,6 +25,11 @@
  *
  * Em qualquer origem, uma exclusão do provedor na mesma linha anula a linha
  * ("Usage limit reached · wrapping up" é tolerância, não limite).
+ *
+ * No terminal a frase do provedor só vale no começo da linha (depois só de
+ * espaços e glifos da TUI) ou depois de uma abertura de linha da própria CLI:
+ * o agente que cita a mensagem num diff, num teste ou no código não põe a
+ * conta em espera.
  */
 
 const crypto = require('node:crypto')
@@ -137,37 +142,74 @@ function escapeRegExp(text) {
  * @param {{ anchor?: 'line' }} [options]
  * @returns {RegExp}
  */
-function compilePhrase(phrase, options = {}) {
+/**
+ * Espaços e glifos com que a TUI das CLIs abre uma linha de aviso: setas,
+ * símbolos técnicos (⎿ ⏺), desenho de caixa (│), blocos e formas (■ ●),
+ * símbolos e dingbats (⚠ ✕ ❯), marcadores (• ›). Aspas, sinais de diff e
+ * pontuação de código ficam de fora de propósito.
+ */
+const TUI_LINE_LEAD = '[\\s\\u2022\\u203a\\u2190-\\u21ff\\u2300-\\u23ff\\u2500-\\u27bf\\u2b00-\\u2bff]*'
+
+function compilePhraseBody(phrase) {
   const normalized = toMatchForm(String(phrase).replace(/\s+/g, ' ').trim())
   const body = [...normalized]
     .map((char) => (char === ' ' ? '\\s+' : escapeRegExp(char)))
     .join('')
     .replace(/(?:\\s\+)?·(?:\\s\+)?/g, '\\s*·\\s*')
+  return {
+    body,
+    start: /^[a-z0-9]/.test(normalized) ? '(?<![a-z0-9])' : '',
+    end: /[a-z0-9]$/.test(normalized) ? '(?![a-z0-9])' : '',
+  }
+}
+
+function compilePhrase(phrase, options = {}) {
+  const { body, start, end } = compilePhraseBody(phrase)
 
   if (options.anchor === 'line') {
     return new RegExp(`^[^a-z0-9]*${body}[^a-z0-9]*$`)
   }
 
-  const start = /^[a-z0-9]/.test(normalized) ? '(?<![a-z0-9])' : ''
-  const end = /[a-z0-9]$/.test(normalized) ? '(?![a-z0-9])' : ''
   return new RegExp(`${start}${body}${end}`)
 }
 
-function compileRule(rule) {
+/**
+ * A mesma frase para a origem `pty`: no começo da linha (depois só de glifos
+ * da TUI) ou depois de uma abertura de linha da própria CLI.
+ *
+ * @param {string} phrase
+ * @param {readonly string[]} linePrefixes
+ * @returns {RegExp}
+ */
+function compileTerminalPhrase(phrase, linePrefixes = []) {
+  const { body, start, end } = compilePhraseBody(phrase)
+  const alternatives = [`${body}${end}`]
+  for (const prefix of linePrefixes) {
+    alternatives.push(`${compilePhraseBody(prefix).body}.*${start}${body}${end}`)
+  }
+  return new RegExp(`^${TUI_LINE_LEAD}(?:${alternatives.join('|')})`)
+}
+
+function compileRule(rule, linePrefixes) {
+  const regex = compilePhrase(rule.phrase, { anchor: rule.anchor })
   return {
     ...rule,
-    regex: compilePhrase(rule.phrase, { anchor: rule.anchor }),
+    regex,
+    terminalRegex: rule.anchor === 'line' || !linePrefixes ? regex : compileTerminalPhrase(rule.phrase, linePrefixes),
     alsoRequiresRegex: rule.alsoRequires ? compilePhrase(rule.alsoRequires) : null,
     terminal: rule.terminal !== false,
   }
 }
 
 const COMPILED_PROVIDERS = Object.freeze(Object.fromEntries(
-  Object.entries(PROVIDER_PATTERNS).map(([providerId, patterns]) => [providerId, Object.freeze({
-    include: patterns.include.map((rule) => compileRule(rule)),
-    exclude: patterns.exclude.map((phrase) => compilePhrase(phrase)),
-    notices: patterns.notices.map((rule) => ({ ...rule, regex: compilePhrase(rule.phrase) })),
-  })]),
+  Object.entries(PROVIDER_PATTERNS).map(([providerId, patterns]) => {
+    const linePrefixes = patterns.terminalLinePrefixes ?? []
+    return [providerId, Object.freeze({
+      include: patterns.include.map((rule) => compileRule(rule, linePrefixes)),
+      exclude: patterns.exclude.map((phrase) => compilePhrase(phrase)),
+      notices: patterns.notices.map((rule) => compileRule(rule, linePrefixes)),
+    })]
+  }),
 ))
 
 const COMPILED_GENERIC = GENERIC_PATTERNS.map((rule) => compileRule({ scope: 'account', ...rule, terminal: false }))
@@ -205,11 +247,17 @@ function hasTerminalPatterns(providerId) {
   return Boolean(compiled?.include.some((rule) => rule.terminal))
 }
 
+/** Regex da regra na origem: no terminal, a ancorada no começo da linha. */
+function ruleRegexFor(rule, origin) {
+  return origin === 'pty' ? rule.terminalRegex ?? rule.regex : rule.regex
+}
+
 function collectCandidates(matchLine, rules, origin, lineIndex, line) {
   const candidates = []
   for (const rule of rules) {
     if (origin === 'pty' && !rule.terminal) continue
-    if (!rule.regex.test(matchLine)) continue
+    const regex = ruleRegexFor(rule, origin)
+    if (!regex.test(matchLine)) continue
     if (rule.alsoRequiresRegex && !rule.alsoRequiresRegex.test(matchLine)) continue
     candidates.push({
       failureClass: rule.failureClass,
@@ -218,7 +266,7 @@ function collectCandidates(matchLine, rules, origin, lineIndex, line) {
       capacity: rule.capacity === true,
       lineIndex,
       line,
-      regex: rule.regex,
+      regex,
     })
   }
   return candidates
@@ -328,7 +376,7 @@ function classifyFailure(input = {}) {
     const matchLine = toMatchForm(line)
     let lineNotice = null
     for (const rule of provider?.notices ?? []) {
-      if (rule.regex.test(matchLine)) lineNotice = rule.notice
+      if (ruleRegexFor(rule, origin).test(matchLine)) lineNotice = rule.notice
     }
 
     const lineCandidates = provider ? collectCandidates(matchLine, provider.include, origin, lineIndex, line) : []

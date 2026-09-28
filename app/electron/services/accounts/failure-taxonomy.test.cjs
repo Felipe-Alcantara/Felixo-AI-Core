@@ -217,7 +217,8 @@ test('a evidência sai redigida e limitada', () => {
   }
 
   const long = `${'x'.repeat(500)} Usage limit reached · continuing automatically at 4:40pm · esc to cancel ${'y'.repeat(500)}`
-  const result = classifyFailure({ text: long, origin: 'pty', providerId: 'claude' })
+  // Na origem fluxo a frase vale no meio da linha; no terminal, só no começo.
+  const result = classifyFailure({ text: long, origin: 'fluxo', providerId: 'claude' })
   assert.equal(result.failureClass, 'limit')
   assert.ok(result.evidence.length <= EVIDENCE_MAX_CHARS, `evidência com ${result.evidence.length} caracteres`)
   assert.match(result.evidence, /Usage limit reached · continuing automatically at 4:40pm/)
@@ -327,4 +328,38 @@ test('a mensagem principal de limite do Claude vale no terminal e no fluxo; avis
       assert.equal(classifyFailure({ text, origin, providerId: 'claude' }).failureClass, 'unknown', `${text} (${origin})`)
     }
   }
+})
+
+test('no terminal, a frase citada pelo agente num diff, teste ou código não é falha da conta', () => {
+  // Antes: as três sondas davam limit — a frase casava em qualquer ponto da linha.
+  const quoted = [
+    ['claude', 'The error message "Usage limit reached · continuing automatically" should be displayed'],
+    ['codex', 'assert.equal(msg, "You’ve hit your usage limit.")'],
+    ['gemini', 'I will handle RESOURCE_EXHAUSTED and Quota exceeded errors'],
+    ['claude', "+  \"You've hit your session limit · resets 4:40pm (America/Sao_Paulo)\","],
+    ['claude', "const aviso = 'Your usage limit has reset · press enter to continue'"],
+  ]
+  for (const [providerId, text] of quoted) {
+    const result = classifyFailure({ text, origin: 'pty', providerId })
+    assert.equal(result.failureClass, 'unknown', `${providerId}: ${text}`)
+    assert.equal(result.notice, null, `${providerId}: ${text}`)
+  }
+
+  // A mesma frase impressa pela TUI, no começo da linha ou depois dos glifos dela, vale.
+  const printed = [
+    ['claude', 'Usage limit reached · continuing automatically at 4:40pm · esc to cancel'],
+    ['claude', "  ⎿  You've hit your session limit · resets 4:40pm (America/Sao_Paulo)"],
+    ['claude', "│ ● You've hit your weekly limit · resets Oct 2, 9am (America/Sao_Paulo) │"],
+    ['codex', '■ You’ve hit your usage limit. Try again at 8:04 PM.'],
+    ['gemini', "✕ [API Error: 429 RESOURCE_EXHAUSTED: Quota exceeded for quota metric 'Gemini 2.5 Pro Requests']"],
+  ]
+  for (const [providerId, text] of printed) {
+    assert.equal(classifyFailure({ text, origin: 'pty', providerId }).failureClass, 'limit', `${providerId}: ${text}`)
+  }
+
+  // Na origem fluxo (erro one-shot) a frase continua valendo no meio da linha.
+  assert.equal(
+    classifyFailure({ text: 'Error: You’ve hit your usage limit. Try again later.', origin: 'fluxo', providerId: 'codex' }).failureClass,
+    'limit',
+  )
 })

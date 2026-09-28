@@ -23,6 +23,13 @@
  * - `capacity: true` — falta de capacidade do servidor, não da conta: o
  *   orquestrador ainda tenta outro modelo, e a conta nunca entra em espera.
  * - `ambiguous: true` — pode ser login ou permissão; a pessoa escolhe.
+ *
+ * No terminal (origem `pty`) a frase do provedor só vale no começo da linha,
+ * depois só de espaços e glifos da TUI (■ ⎿ ✕ │ ● ⚠…): é assim que a CLI a
+ * imprime. Um agente que CITA a mensagem num diff, num teste ou no código
+ * tem aspas, código ou texto antes dela. `terminalLinePrefixes` são aberturas
+ * de linha da própria CLI depois das quais a frase pode vir no meio (o Gemini
+ * embrulha o erro em "[API Error: …]").
  */
 
 const PROVIDER_PATTERNS = Object.freeze({
@@ -126,6 +133,7 @@ const PROVIDER_PATTERNS = Object.freeze({
     ]),
     exclude: Object.freeze([]),
     notices: Object.freeze([]),
+    terminalLinePrefixes: Object.freeze(['[API Error:']),
   }),
   // Sem frase própria de limite ou de crédito no pacote: sem detecção no
   // terminal (fail-closed). A falta de crédito aparece pela medição.
