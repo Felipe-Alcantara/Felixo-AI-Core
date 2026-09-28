@@ -384,6 +384,8 @@ export type AccountChainConfirmParams = {
   destinationAccountId: string
   /** Segunda confirmação explícita: "o terminal antigo ainda produz saída; abrir mesmo assim". */
   acknowledgeSourceActive?: boolean
+  /** Tamanho do contexto redigido que vai para o bloco novo (só o número, para o registro). */
+  transcriptChars?: number
 }
 
 export type AccountChainConfirmResult =

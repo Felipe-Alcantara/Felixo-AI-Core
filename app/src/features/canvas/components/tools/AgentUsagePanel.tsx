@@ -4,6 +4,10 @@ import { CanvasPanel } from './CanvasPanel'
 import { AccountChainSection } from './AccountChainSection'
 import { AccountSwitchHistory } from './AccountSwitchHistory'
 import { rovingIndex } from '../../services/keyboard-focus'
+import {
+  consumeRequestedAgentUsageTab,
+  type AgentUsagePanelTab,
+} from '../../services/agent-usage-panel-tab'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { AgentUsageResetCreditsView } from '../../../shared/agent-usage/AgentUsageResetCredits'
 import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
@@ -41,7 +45,7 @@ type AgentUsagePanelProps = {
   existingNodeIds?: ReadonlySet<string>
 }
 
-type UsageTab = 'uso' | 'cadeia' | 'trocas'
+type UsageTab = AgentUsagePanelTab
 
 const USAGE_TABS: ReadonlyArray<{ id: UsageTab; label: string }> = [
   { id: 'uso', label: 'Uso agora' },
@@ -86,7 +90,7 @@ export function AgentUsagePanel({
   onFocusNode,
   existingNodeIds,
 }: AgentUsagePanelProps) {
-  const [tab, setTab] = useState<UsageTab>('uso')
+  const [tab, setTab] = useState<UsageTab>(() => consumeRequestedAgentUsageTab() ?? 'uso')
   const tabsId = useId()
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [dashboard, setDashboard] = useState<AgentUsageDashboard>({ ok: true })

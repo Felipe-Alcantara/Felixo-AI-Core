@@ -169,6 +169,12 @@ import {
 } from '../services/terminal-handoff'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import { HandoffDialog } from './HandoffDialog'
+import { AccountSwitchDialog } from './AccountSwitchDialog'
+import { AccountChainActionsContext } from '../hooks/account-chain-actions-context'
+import { useAccountContinuation } from '../hooks/useAccountContinuation'
+import type { ContinuationReason } from '../services/account-switch-dialog'
+import { formatClockTime } from '../services/account-chain-view'
+import { requestAgentUsageTab } from '../services/agent-usage-panel-tab'
 import { OnboardingMount } from '../../onboarding/OnboardingMount'
 import { WATCHES_CANVAS_NODE_TYPES, nodeTypesKeyOf } from '../../onboarding/onboarding-canvas-triggers'
 import {
@@ -445,9 +451,13 @@ function CanvasInner({
   // momento do clique, e não quando o usuário confirma — do contrário o agente
   // de origem continuaria escrevendo enquanto o diálogo está aberto e o
   // destino receberia um histórico diferente do que estava na tela.
-  const [handoff, setHandoff] = useState<{ sourceId: string; transcript: string } | null>(
-    null,
-  )
+  // `reason` só existe quando a passagem veio de uma detecção da cadeia (faixa
+  // "Passar responsabilidade…" de um bloco fixo ou do Login do sistema).
+  const [handoff, setHandoff] = useState<{
+    sourceId: string
+    transcript: string
+    reason?: ContinuationReason
+  } | null>(null)
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
   const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select')
   // Lido pela topbar e pela status bar — sem isto os dois mostravam "100%"
@@ -2198,7 +2208,7 @@ function CanvasInner({
   }, [openTextFileNode])
 
   const buildTerminalNodeData = useCallback(
-    (options: NewTerminalOptions & { handoffText?: string }) => {
+    (options: NewTerminalOptions & { handoffText?: string; handoffAutoSubmit?: boolean }) => {
       // Agent terminals get the standing quality-standard instruction (if on)
       // plus their canvas identity (name, cwd, multi-agent setting); a plain
       // shell does not (there's no agent to read it).
@@ -2227,8 +2237,12 @@ function CanvasInner({
             planningInstruction,
           )
         : undefined
+      // Na continuação da cadeia a pessoa pode desmarcar "pedir para o agente
+      // continuar": aí o contexto vai sem submissão, esperando por ela.
       const handoffInstruction = handoffSections
-        ? toSubmittedTerminalText(handoffSections)
+        ? options.handoffAutoSubmit === false
+          ? handoffSections
+          : toSubmittedTerminalText(handoffSections)
         : undefined
       const initialText = isContextAwareCommand
         ? handoffInstruction ?? composeTerminalInitialText(
@@ -2279,35 +2293,26 @@ function CanvasInner({
    * agente, qualquer modelo, qualquer direção —, e não mais de um rodízio fixo
    * entre as CLIs conhecidas, que na prática só fazia Claude → Codex.
    */
-  const passResponsibility = useCallback(
-    async (
+  /**
+   * Cria o bloco que continua o trabalho de `sourceId`: herda os links de
+   * arquivo do canvas e abre na gaveta. Compartilhado entre a passagem manual
+   * e a continuação confirmada da cadeia (`useAccountContinuation`).
+   */
+  const createContinuationNode = useCallback(
+    (
       sourceId: string,
-      transcript: string,
-      options: NewTerminalOptions,
-    ): Promise<{ ok: boolean; message?: string }> => {
+      options: NewTerminalOptions & { handoffText: string; handoffAutoSubmit?: boolean },
+    ): string | null => {
       const source = nodesRef.current.find((node) => node.id === sourceId)
       if (!source || source.type !== 'terminal') {
-        return { ok: false, message: 'O terminal de origem não está mais disponível.' }
+        return null
       }
 
-      const sourceData = source.data
-      const targetLabel = options.label
-      const handoffText = buildTerminalHandoffPrompt({
-        sourceLabel: sourceData.label,
-        sourceCommand: sourceData.command,
-        // O diretório do destino é o que o usuário escolheu; só cai no do
-        // agente de origem quando ele não escolheu projeto nenhum.
-        cwd: options.cwd ?? sourceData.cwd,
-        targetLabel,
-        transcript,
-      })
       const newId = addNode(
         'terminal',
         buildTerminalNodeData({
           ...options,
-          cwd: options.cwd ?? sourceData.cwd,
-          label: targetLabel,
-          handoffText,
+          cwd: options.cwd ?? source.data.cwd,
         }),
       )
 
@@ -2335,10 +2340,72 @@ function CanvasInner({
       expandedTerminalIdRef.current = newId
       dispatchNodeMountLatch({ type: 'drawer-opened' })
       setExpandedTerminalId(newId)
-      return { ok: true }
+      return newId
     },
     [addNode, buildTerminalNodeData, setEdges],
   )
+
+  /**
+   * Cria o agente escolhido no diálogo já sabendo o que o anterior estava
+   * fazendo. O destino vem da configuração que o usuário montou — qualquer
+   * agente, qualquer modelo, qualquer direção —, e não mais de um rodízio fixo
+   * entre as CLIs conhecidas, que na prática só fazia Claude → Codex.
+   */
+  const passResponsibility = useCallback(
+    async (
+      sourceId: string,
+      transcript: string,
+      options: NewTerminalOptions,
+      reason?: ContinuationReason,
+    ): Promise<{ ok: boolean; message?: string }> => {
+      const source = nodesRef.current.find((node) => node.id === sourceId)
+      if (!source || source.type !== 'terminal') {
+        return { ok: false, message: 'O terminal de origem não está mais disponível.' }
+      }
+
+      const sourceData = source.data
+      const handoffText = buildTerminalHandoffPrompt({
+        sourceLabel: sourceData.label,
+        sourceCommand: sourceData.command,
+        // O diretório do destino é o que o usuário escolheu; só cai no do
+        // agente de origem quando ele não escolheu projeto nenhum.
+        cwd: options.cwd ?? sourceData.cwd,
+        targetLabel: options.label,
+        transcript,
+        // Motivo só quando a passagem nasceu de uma detecção confirmada.
+        ...(reason && reason.detectedAt
+          ? {
+              reason: {
+                failureClass: reason.failureClass,
+                detectedAtLabel: formatClockTime(reason.detectedAt),
+              },
+            }
+          : {}),
+      })
+      const newId = createContinuationNode(sourceId, { ...options, handoffText })
+      return newId
+        ? { ok: true }
+        : { ok: false, message: 'O terminal de origem não está mais disponível.' }
+    },
+    [createContinuationNode],
+  )
+
+  // Cadeia de contas: faixas dos blocos, item fixo das notificações e o
+  // diálogo "Trocar de conta?". A lógica mora no hook, não aqui.
+  const accountContinuation = useAccountContinuation({
+    nodesRef,
+    sessions: store,
+    createContinuationNode,
+    updateNodeData,
+    focusNode,
+    openTerminal,
+    openHandoff: (sourceId, reason) =>
+      setHandoff({ sourceId, transcript: store.getTranscript(sourceId).text, reason }),
+    openChainSettings: () => {
+      requestAgentUsageTab('cadeia')
+      setActiveTool('agentUsage')
+    },
+  })
 
   // Starts several terminals at once (e.g. a whole agent setup) instead of
   // one `addNode` call per config: those go through the same `nodes` state
@@ -2700,6 +2767,8 @@ function CanvasInner({
             nodes={nodes}
             notifications={notificationHistory}
             updateItem={updateNotificationItem}
+            chainItems={accountContinuation.pendingGroups}
+            onViewChainOptions={accountContinuation.openProposal}
             soundEnabled={notificationSoundEnabled}
             onSoundEnabledChange={setNotificationSoundEnabled}
             volume={notificationVolume}
@@ -2796,6 +2865,7 @@ function CanvasInner({
         onReorder={reorderNodes}
       />
 
+        <AccountChainActionsContext.Provider value={accountContinuation.actions}>
         <ReactFlow
           key={canvasRevision}
           nodes={orderedNodes}
@@ -2881,6 +2951,7 @@ function CanvasInner({
             />
           )}
         </ReactFlow>
+        </AccountChainActionsContext.Provider>
         <AgentQuestionDialog />
         {colorMenu && (
           <NodeColorMenu
@@ -2941,11 +3012,16 @@ function CanvasInner({
           }
           projects={projects}
           onAddFolder={addProjectFolder}
+          sourceSessionId={`canvas:${handoff.sourceId}`}
+          reason={handoff.reason}
           onConfirm={(options) =>
-            passResponsibility(handoff.sourceId, handoff.transcript, options)
+            passResponsibility(handoff.sourceId, handoff.transcript, options, handoff.reason)
           }
           onClose={closeHandoff}
         />
+      )}
+      {accountContinuation.dialog && (
+        <AccountSwitchDialog binding={accountContinuation.dialog} />
       )}
       {/* Cuida do proprio estado: o avanco da instalacao nao precisa passar
           pelo canvas para chegar na tela. */}

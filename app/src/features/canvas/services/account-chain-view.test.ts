@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   accountChipLabel,
+  buildTerminalChainBanners,
+  groupPendingProposals,
   chainLaunchSummary,
   confirmErrorText,
   exclusionsText,
@@ -24,7 +26,7 @@ import {
   toHistoryRow,
   toMemberUpdates,
 } from './account-chain-view'
-import { makeCandidate, makeMember, makeProposal, makeState } from './__fixtures__/account-chain-fixtures'
+import { makeCandidate, makeDetection, makeMember, makeProposal, makeState } from './__fixtures__/account-chain-fixtures'
 import type { AccountSwitchHistoryEntry } from '../../shared/types/account-chain'
 
 const SP = { timeZone: 'America/Sao_Paulo' }
@@ -380,5 +382,99 @@ describe('prévia e recomendação', () => {
     expect(confirmErrorText('EXPIRED')).toMatch(/Nada foi aberto/)
     expect(confirmErrorText('NOT_PENDING')).toMatch(/Nada foi aberto/)
     expect(confirmErrorText('OUTRO', 'falhou no main')).toBe('falhou no main')
+  })
+})
+
+describe('faixas do bloco', () => {
+  it('proposta aberta: motivo, horário, espera e Ver opções / Não era limite', () => {
+    const [banner] = buildTerminalChainBanners({
+      proposal: makeProposal(),
+      detection: makeDetection(),
+      successor: null,
+      timeOptions: SP,
+    })
+    expect(banner.text).toBe(
+      'Limite de uso da conta Pessoal às 14:32 · em espera até 16:40 · fonte: horário impresso pela CLI · a cadeia tem uma proposta de troca',
+    )
+    expect(banner.actions).toEqual(['view-options', 'not-a-limit'])
+  })
+
+  it('bloco fixo: aviso e Passar responsabilidade, nunca proposta', () => {
+    const [banner] = buildTerminalChainBanners({
+      proposal: null,
+      detection: makeDetection({ outcome: 'noticed', accountMode: 'pinned', proposalId: null }),
+      successor: null,
+      timeOptions: SP,
+    })
+    expect(banner.text).toMatch(/bloco fixo: nada troca sozinho$/)
+    expect(banner.actions).not.toContain('view-options')
+    expect(banner.actions).toContain('pass-responsibility')
+  })
+
+  it('Login do sistema só avisa; rede nunca vira limite', () => {
+    const [sistema] = buildTerminalChainBanners({
+      proposal: null,
+      detection: makeDetection({ outcome: 'noticed', accountId: null, accountLabel: null, proposalId: null }),
+      successor: null,
+      timeOptions: SP,
+    })
+    expect(sistema.text).toContain('no Login do sistema')
+    expect(sistema.text).toContain('Login do sistema: só aviso')
+    const [rede] = buildTerminalChainBanners({
+      proposal: null,
+      detection: makeDetection({ outcome: 'informational', failureClass: 'network' }),
+      successor: null,
+      timeOptions: SP,
+    })
+    expect(rede.text).toBe('Falha de rede às 14:32; trocar de conta não resolve.')
+    expect(rede.text).not.toMatch(/limite/i)
+    expect(rede.actions).toEqual(['dismiss'])
+  })
+
+  it('ambíguo pergunta; perda de login oferece refazer o login no próprio terminal', () => {
+    const [ambiguo] = buildTerminalChainBanners({
+      proposal: null,
+      detection: makeDetection({ outcome: 'ambiguous', ambiguous: true, proposalId: null }),
+      successor: null,
+    })
+    expect(ambiguo.actions).toEqual(['treat-as-limit', 'ignore'])
+    const [auth] = buildTerminalChainBanners({
+      proposal: null,
+      detection: makeDetection({ outcome: 'noticed', failureClass: 'auth', proposalId: null }),
+      successor: null,
+    })
+    expect(auth.actions[0]).toBe('relogin')
+  })
+
+  it('bloco antigo mostra "continuado em" e só foca o novo', () => {
+    const banners = buildTerminalChainBanners({
+      proposal: null,
+      detection: null,
+      successor: { nodeId: 'bloco-2', label: 'Codex · continuação (Trabalho)', at: '2026-09-28T17:33:00.000Z', reasonClass: 'limit' },
+      timeOptions: SP,
+    })
+    expect(banners).toHaveLength(1)
+    expect(banners[0].text).toBe('Parado por limite de uso · continuado em Codex · continuação (Trabalho) às 14:33')
+    expect(banners[0].actions).toEqual(['go-to-successor'])
+  })
+})
+
+describe('groupPendingProposals', () => {
+  it('agrupa pela mesma detecção da mesma conta e ignora a abertura em curso', () => {
+    const groups = groupPendingProposals([
+      makeProposal({ id: 'p1', proposedAt: '2026-09-28T17:32:07.000Z' }),
+      makeProposal({ id: 'p2', sourceSessionId: 'canvas:bloco-2', proposedAt: '2026-09-28T17:32:06.000Z' }),
+      makeProposal({ id: 'p3', incidentKey: 'outra', from: { ...makeProposal().from, label: 'Trabalho' } }),
+      makeProposal({ id: 'lancamento', kind: 'launch', incidentKey: null }),
+    ])
+    expect(groups).toEqual([
+      {
+        key: 'conta-a|2026-09-28T17:32:05.000Z',
+        proposalIds: ['p2', 'p1'],
+        firstProposalId: 'p2',
+        text: 'Conta Pessoal (Codex) bateu o limite em 2 blocos',
+      },
+      { key: 'outra', proposalIds: ['p3'], firstProposalId: 'p3', text: 'Conta Trabalho (Codex) bateu o limite em 1 bloco' },
+    ])
   })
 })

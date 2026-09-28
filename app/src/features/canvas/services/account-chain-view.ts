@@ -14,6 +14,7 @@ import type {
   AccountBillingClass,
   AccountCapacity,
   AccountChainConfirmErrorCode,
+  AccountChainDetection,
   AccountChainExclusion,
   AccountChainMember,
   AccountChainMemberUpdate,
@@ -555,4 +556,221 @@ export function confirmErrorText(code: string | undefined, message?: string): st
     return CONFIRM_ERROR_TEXT[code as AccountChainConfirmErrorCode]
   }
   return message?.trim() || 'Não foi possível confirmar a troca. Nada foi aberto.'
+}
+
+// ---------------------------------------------------------------------------
+// Faixas do bloco e item fixo das notificações
+// ---------------------------------------------------------------------------
+
+export type TerminalChainBannerAction =
+  | 'view-options'
+  | 'not-a-limit'
+  | 'pass-responsibility'
+  | 'treat-as-limit'
+  | 'ignore'
+  | 'dismiss'
+  | 'relogin'
+  | 'go-to-successor'
+
+export type TerminalChainBanner = {
+  key: string
+  tone: 'warning' | 'info'
+  text: string
+  actions: TerminalChainBannerAction[]
+  proposalId: string | null
+  detectionId: string | null
+  accountId: string | null
+  reasonClass: AccountFailureClass | null
+  detectedAt: string | null
+  successorNodeId: string | null
+}
+
+function capitalizeFirst(text: string): string {
+  return text ? `${text[0].toUpperCase()}${text.slice(1)}` : text
+}
+
+function whereText(accountId: string | null, label: string | null): string {
+  return accountId ? `da conta ${label?.trim() || 'sem nome'}` : 'no Login do sistema'
+}
+
+/**
+ * Faixas de um bloco (§8.1, §9.2), fora do botão da prévia: a proposta aberta,
+ * a última detecção e o "continuado em". Nenhuma delas abre diálogo sozinha.
+ */
+export function buildTerminalChainBanners(params: {
+  detection: AccountChainDetection | null
+  proposal: AccountSwitchProposal | null
+  successor: {
+    nodeId: string
+    label: string
+    at: string | null
+    reasonClass: AccountFailureClass | null
+  } | null
+  timeOptions?: TimeOptions
+}): TerminalChainBanner[] {
+  const time = params.timeOptions ?? {}
+  const banners: TerminalChainBanner[] = []
+  const { detection, proposal } = params
+
+  if (proposal) {
+    const cooldown = formatCooldown(proposal.cooldown, time)
+    banners.push({
+      key: `proposta:${proposal.id}`,
+      tone: 'warning',
+      text: [
+        `${capitalizeFirst(failureClassLabel(proposal.failureClass))} ${whereText(proposal.from.accountId, proposal.from.label)} às ${formatClockTime(proposal.detectedAt, time)}`,
+        cooldown,
+        'a cadeia tem uma proposta de troca',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      actions: proposal.failureClass === 'limit' ? ['view-options', 'not-a-limit'] : ['view-options'],
+      proposalId: proposal.id,
+      detectionId: null,
+      accountId: proposal.from.accountId,
+      reasonClass: proposal.failureClass,
+      detectedAt: proposal.detectedAt,
+      successorNodeId: null,
+    })
+  } else if (detection) {
+    banners.push(detectionBanner(detection, time))
+  }
+
+  if (params.successor) {
+    const at = params.successor.at ? ` às ${formatClockTime(params.successor.at, time)}` : ''
+    const why = params.successor.reasonClass
+      ? ` por ${failureClassLabel(params.successor.reasonClass)}`
+      : ''
+    banners.push({
+      key: `sucessor:${params.successor.nodeId}`,
+      tone: 'info',
+      text: `Parado${why} · continuado em ${params.successor.label.trim() || 'outro bloco'}${at}`,
+      actions: ['go-to-successor'],
+      proposalId: null,
+      detectionId: null,
+      accountId: null,
+      reasonClass: null,
+      detectedAt: null,
+      successorNodeId: params.successor.nodeId,
+    })
+  }
+
+  return banners
+}
+
+function detectionBanner(detection: AccountChainDetection, time: TimeOptions): TerminalChainBanner {
+  const at = formatClockTime(detection.detectedAt, time)
+  const where = whereText(detection.accountId, detection.accountLabel)
+  const base = {
+    key: `deteccao:${detection.id}`,
+    proposalId: detection.proposalId,
+    detectionId: detection.id,
+    accountId: detection.accountId,
+    reasonClass: detection.failureClass,
+    detectedAt: detection.detectedAt,
+    successorNodeId: null,
+  }
+
+  if (detection.outcome === 'ambiguous') {
+    return {
+      ...base,
+      tone: 'warning',
+      text: `Possível limite ${where} às ${at}. Tratar como limite?`,
+      actions: ['treat-as-limit', 'ignore'],
+    }
+  }
+  if (detection.outcome === 'source_resumed') {
+    return {
+      ...base,
+      tone: 'info',
+      text: 'Este terminal voltou a trabalhar na conta antiga; há outro bloco continuando o mesmo trabalho.',
+      actions: ['dismiss'],
+    }
+  }
+  if (detection.outcome === 'informational') {
+    return {
+      ...base,
+      tone: 'info',
+      text:
+        detection.failureClass === 'limit' && detection.scope === 'model'
+          ? `Limite do modelo nesta conta às ${at}; trocar de modelo resolve.`
+          : `${capitalizeFirst(failureClassLabel(detection.failureClass))} às ${at}; trocar de conta não resolve.`,
+      actions: ['dismiss'],
+    }
+  }
+
+  const cooldown = formatCooldown(detection.cooldown, time)
+  const context =
+    detection.outcome === 'no_candidate'
+      ? `nenhuma conta apta: ${exclusionsText(detection.exclusions)}`
+      : !detection.accountId
+        ? 'Login do sistema: só aviso'
+        : detection.accountMode === 'chain'
+          ? 'a cadeia não propôs troca'
+          : 'bloco fixo: nada troca sozinho'
+  const prefix = detection.postSwitchFailure ? 'A conta de destino falhou logo após a troca. ' : ''
+  const text = `${prefix}${capitalizeFirst(failureClassLabel(detection.failureClass))} ${where} às ${at}${cooldown ? ` · ${cooldown}` : ''} · ${context}`
+  const actions: TerminalChainBannerAction[] = []
+  if (detection.failureClass === 'auth') actions.push('relogin')
+  actions.push('pass-responsibility')
+  if (detection.failureClass === 'limit' && detection.accountId && detection.cooldown) {
+    actions.push('not-a-limit')
+  }
+  actions.push('dismiss')
+  return { ...base, tone: 'warning', text, actions }
+}
+
+export type PendingProposalGroup = {
+  key: string
+  proposalIds: string[]
+  /** Proposta aberta ao clicar em "Ver opções" (a mais antiga do grupo). */
+  firstProposalId: string
+  text: string
+}
+
+/**
+ * Item fixo das notificações (§8.1): propostas pendentes agrupadas pela
+ * mesma detecção da mesma conta — "Conta Pessoal (Codex) bateu o limite em 3
+ * blocos". Propostas `launch` são da abertura em curso e não entram.
+ */
+export function groupPendingProposals(
+  proposals: readonly AccountSwitchProposal[],
+): PendingProposalGroup[] {
+  const groups = new Map<string, AccountSwitchProposal[]>()
+  for (const proposal of proposals) {
+    if (proposal.kind !== 'continuation' || proposal.state !== 'proposed') continue
+    const key = proposal.incidentKey ?? proposal.id
+    groups.set(key, [...(groups.get(key) ?? []), proposal])
+  }
+  return [...groups.entries()].map(([key, items]) => {
+    const sorted = [...items].sort((a, b) => a.proposedAt.localeCompare(b.proposedAt))
+    const first = sorted[0]
+    const who = first.from.accountId
+      ? `Conta ${first.from.label?.trim() || 'sem nome'} (${providerLabel(first.from.providerId)})`
+      : `Login do sistema (${providerLabel(first.from.providerId)})`
+    const what =
+      first.failureClass === 'billing'
+        ? 'ficou sem crédito'
+        : first.failureClass === 'auth'
+          ? 'perdeu o login'
+          : 'bateu o limite'
+    const where = sorted.length === 1 ? 'em 1 bloco' : `em ${sorted.length} blocos`
+    return {
+      key,
+      proposalIds: sorted.map((item) => item.id),
+      firstProposalId: first.id,
+      text: `${who} ${what} ${where}`,
+    }
+  })
+}
+
+export const BANNER_ACTION_LABELS: Record<TerminalChainBannerAction, string> = {
+  'view-options': 'Ver opções',
+  'not-a-limit': 'Não era limite',
+  'pass-responsibility': 'Passar responsabilidade…',
+  'treat-as-limit': 'Sim, tratar como limite',
+  ignore: 'Ignorar',
+  dismiss: 'Dispensar',
+  relogin: 'Refazer login neste terminal',
+  'go-to-successor': 'Ir para o bloco novo',
 }

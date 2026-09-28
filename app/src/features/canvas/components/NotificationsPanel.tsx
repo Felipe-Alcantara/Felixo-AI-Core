@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowRightLeft,
   ArrowUpCircle,
   Check,
   CheckCheck,
@@ -22,6 +23,7 @@ import {
 } from '../terminal/notification-category'
 import type { CanvasNodeData } from '../types'
 import type { UpdatePresentation } from '../../updates/update-presentation'
+import type { PendingProposalGroup } from '../services/account-chain-view'
 
 /** Atualização pendente a mostrar como um item fixo no topo da lista, no
  *  lugar do antigo aviso flutuante no canto da tela. */
@@ -35,6 +37,10 @@ type NotificationsPanelProps = {
   nodes: Node<CanvasNodeData>[]
   notifications: CanvasNotification[]
   updateItem: UpdateNotificationItem | null
+  /** Propostas de troca de conta pendentes, agrupadas por conta e detecção. */
+  chainItems?: readonly PendingProposalGroup[]
+  /** Abre o diálogo "Trocar de conta?"; só por clique, nunca sozinho. */
+  onViewChainOptions?: (proposalId: string, trigger: HTMLElement | null) => void
   soundEnabled: boolean
   volume: number
   onClose: () => void
@@ -62,6 +68,8 @@ export function NotificationsPanel({
   nodes,
   notifications,
   updateItem,
+  chainItems = [],
+  onViewChainOptions,
   soundEnabled,
   volume,
   onFocusNode,
@@ -189,11 +197,15 @@ export function NotificationsPanel({
         )}
       </div>
 
+      {chainItems.map((group) => (
+        <ChainProposalRow key={group.key} group={group} onView={onViewChainOptions} />
+      ))}
+
       {showUpdateItem && updateItem && (
         <UpdateNotificationRow item={updateItem} />
       )}
 
-      {visibleItems.length === 0 && !showUpdateItem ? (
+      {visibleItems.length === 0 && !showUpdateItem && chainItems.length === 0 ? (
         <div className="flex items-center gap-2 px-1 py-5 text-xs text-zinc-500">
           <CheckCircle2 size={15} className="text-(--f-core-white-soft)" />
           {filter === 'unread'
@@ -336,6 +348,41 @@ function UpdateNotificationRow({ item }: { item: UpdateNotificationItem }) {
         >
           <X size={13} />
         </button>
+      </div>
+    </div>
+  )
+}
+
+/** Item fixo das propostas de troca pendentes: o lugar persistente delas. */
+function ChainProposalRow({
+  group,
+  onView,
+}: {
+  group: PendingProposalGroup
+  onView?: (proposalId: string, trigger: HTMLElement | null) => void
+}) {
+  return (
+    <div
+      role="status"
+      className="rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-2.5 py-2"
+    >
+      <div className="flex items-start gap-2">
+        <ArrowRightLeft size={15} className="mt-0.5 shrink-0 text-(--color-warning)" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-zinc-100">{group.text}</p>
+          <p className="mt-0.5 text-xs text-zinc-400">
+            A cadeia tem uma proposta de troca. Nada troca sem a sua confirmação.
+          </p>
+          {onView && (
+            <button
+              type="button"
+              onClick={(event) => onView(group.firstProposalId, event.currentTarget)}
+              className="felixo-btn mt-2 rounded-md bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-(--f-core-active)"
+            >
+              Ver opções
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

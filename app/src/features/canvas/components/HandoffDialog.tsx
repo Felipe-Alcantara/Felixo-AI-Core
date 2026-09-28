@@ -6,6 +6,10 @@ import { AgentConfigFields } from './AgentConfigFields'
 import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
 import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
 import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
+import type { ContinuationReason } from '../services/account-switch-dialog'
+import { failureClassLabel, formatClockTime } from '../services/account-chain-view'
+import { getAccountChainBridge } from '../services/account-chain-client'
+import type { AccountChainProviderId } from '../../shared/types/account-chain'
 
 type Props = {
   /** Nome do agente que está passando o trabalho, só para o texto do diálogo. */
@@ -15,6 +19,13 @@ type Props = {
   /** Cria o agente escolhido já com o histórico do anterior como contexto. */
   onConfirm: (options: NewTerminalOptions) => Promise<{ ok: boolean; message?: string }>
   onClose: () => void
+  /** Sessão PTY do bloco de origem, para o registro da passagem. */
+  sourceSessionId?: string
+  /**
+   * Motivo pré-preenchido quando a passagem nasce de uma detecção (bloco fixo,
+   * Login do sistema ou cadeia desligada): vai ao prompt e ao registro.
+   */
+  reason?: ContinuationReason
 }
 
 /**
@@ -31,6 +42,8 @@ export function HandoffDialog({
   onAddFolder,
   onConfirm,
   onClose,
+  sourceSessionId,
+  reason,
 }: Props) {
   const dialogSize = useResizableDialog<HTMLDivElement>('handoff')
   // A passagem de responsabilidade tem uma configuração própria e temporária;
@@ -108,6 +121,19 @@ export function HandoffDialog({
         setErro(resultado.message ?? 'Não foi possível passar a responsabilidade.')
         return
       }
+      // A passagem por causa de uma detecção entra no registro de trocas com
+      // motivo e horário. Sem ticket: a escolha foi da pessoa, pelo fluxo de
+      // sempre. Falhar ao registrar não desfaz o bloco já criado.
+      if (reason && sourceSessionId && opcoes.providerId) {
+        void getAccountChainBridge()
+          ?.recordManual({
+            sourceSessionId,
+            toAccountId: opcoes.accountId ?? null,
+            toProviderId: opcoes.providerId as AccountChainProviderId,
+            reasonClass: reason.failureClass,
+          })
+          .catch(() => undefined)
+      }
       config.savePreferences()
       onClose()
     } catch (error) {
@@ -148,6 +174,13 @@ export function HandoffDialog({
               O novo agente recebe o histórico de <strong>{sourceLabel}</strong> como contexto e
               continua o trabalho.
             </p>
+            {reason && (
+              <p className="mt-1 text-xs text-(--color-warning)">
+                Motivo: {failureClassLabel(reason.failureClass)}
+                {reason.detectedAt ? ` detectado às ${formatClockTime(reason.detectedAt)}` : ''}. A
+                passagem fica no registro de trocas com motivo e horário.
+              </p>
+            )}
           </div>
           <button
             type="button"

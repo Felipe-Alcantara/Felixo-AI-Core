@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTerminalHandoffPrompt,
+  describeHandoffReason,
   prepareHandoffTranscript,
 } from './terminal-handoff'
 
@@ -36,6 +37,30 @@ describe('terminal handoff', () => {
 
     expect(prompt).not.toContain('limite de uso')
     expect(prompt).toContain('entender o que estava sendo feito')
+  })
+
+  it('com motivo confirmado diz por que parou, sem nomear a conta, e não pede para refazer às cegas', () => {
+    const prompt = buildTerminalHandoffPrompt({
+      sourceLabel: 'Agente A',
+      targetLabel: 'Agente B',
+      transcript: 'conta Pessoal: trabalho em andamento',
+      reason: { failureClass: 'limit', detectedAtLabel: '14:32' },
+    })
+
+    expect(prompt).toContain(
+      'O terminal anterior parou porque a conta usada atingiu o limite de uso (detectado pelo app às 14:32). A continuação foi confirmada pela pessoa.',
+    )
+    expect(prompt).toContain('confirme o estado real do repositório antes de refazer qualquer ação')
+    const reasonLine = prompt.split('\n').find((line) => line.startsWith('O terminal anterior parou'))
+    expect(reasonLine).not.toContain('Pessoal')
+  })
+
+  it('sem motivo, o texto de hoje não muda', () => {
+    const semMotivo = buildTerminalHandoffPrompt({ targetLabel: 'B', transcript: 'x' })
+    expect(semMotivo).not.toContain('O terminal anterior parou')
+    expect(describeHandoffReason({ failureClass: 'billing', detectedAtLabel: '09:05' })).toContain(
+      'ficou sem crédito',
+    )
   })
 
   it('marks the pasted output as untrusted context', () => {
