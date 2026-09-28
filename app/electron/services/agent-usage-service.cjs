@@ -23,6 +23,7 @@ const {
   parseAgentUsage,
 } = require('./agent-usage-report.cjs')
 const { runLocalProbe } = require('./agent-usage-local-probes.cjs')
+const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const {
   createAgentUsageRepository,
 } = require('./storage/agent-usage-repository.cjs')
@@ -507,9 +508,20 @@ async function collectProviderSnapshot({
     }
   }
 
-  // Leitura de arquivo que a CLI já escreveu: não custa processo nem rede, e é
-  // o único caminho de quota em fontes que não respondem número por comando.
-  const local = source.localProbe ? probe(source.localProbe, probeOptions) : null
+  // A conta com login próprio confere o login com o mesmo ambiente com que o
+  // terminal dela nasce (sem as chaves de API herdadas do app): senão o painel
+  // diria "logado" por causa de uma chave do ambiente que o terminal não vê,
+  // e a cadeia de contas reaproveitaria essa amostra como prova de login.
+  const { local, result, safeOutput, auth } = await checkAccountAuth({
+    providerId,
+    source,
+    runCommand,
+    probe,
+    probeOptions,
+    env: targetAccountId
+      ? createProfileCommandEnv({ providerId, profileEnv })
+      : createCommandEnv(profileEnv),
+  })
 
   if (!source.auth) {
     return {
@@ -519,36 +531,11 @@ async function collectProviderSnapshot({
       collectedAt,
       measuredAt: local?.collectedAt ?? null,
       commandOk: true,
-      auth: mergeAuthIdentity(providerId, { authStatus: 'unknown' }, local),
+      auth,
       metrics: local?.metrics ?? [],
       queryFailed: false,
     }
   }
-
-  let result
-  try {
-    result = await runCommand({
-      command: source.auth.command,
-      args: [...source.auth.args],
-      cwd: os.homedir(),
-      env: createCommandEnv(profileEnv),
-      timeoutMs: COMMAND_TIMEOUT_MS,
-    })
-  } catch {
-    result = { ok: false }
-  }
-
-  // A saída é reduzida antes de qualquer parser. O snapshot nunca retorna a
-  // saída crua para outro módulo que não seja o parser de campos permitidos.
-  const safeOutput = redactOutput(
-    `${result?.stdout ?? ''}\n${result?.stderr ?? ''}`,
-  )
-
-  const auth = mergeAuthIdentity(
-    providerId,
-    parseAgentAuth(providerId, safeOutput),
-    local,
-  )
 
   // Uma fonte ao vivo nunca mistura arquivo/statusline antigo com a rodada
   // atual: se a consulta falhar, o sample vira erro e o painel pode mostrar
@@ -687,6 +674,98 @@ async function collectProviderSnapshot({
   }
 }
 
+/**
+ * Checagem de login de uma conta: o comando de auth da fonte (`codex login
+ * status`, `claude auth status --json`, `openia key status --json`) e o probe
+ * local de identidade, que só lê arquivo. Não roda a consulta ao vivo de uso,
+ * que é cara (o `/status` do Claude abre um PTY).
+ *
+ * É o pedaço que o painel e a elegibilidade da cadeia de contas compartilham:
+ * os dois leem o login do mesmo jeito, então uma amostra recente do painel
+ * vale como checagem.
+ *
+ * - O stdout é interpretado mesmo com `ok: false`: `claude auth status` sai
+ *   com código 1 quando não há login e imprime o JSON mesmo assim.
+ * - A saída é redigida antes de qualquer parser; `safeOutput` nunca sai do
+ *   processo principal.
+ * - Fonte sem comando de auth (hoje o Gemini) não roda nada: `result` vem
+ *   `null` e o login fica `unknown`.
+ *
+ * @returns {Promise<{ source: object | null, local: object | null, result: object | null, safeOutput: string, auth: object, durationMs: number }>}
+ */
+async function checkAccountAuth({
+  providerId,
+  source = getAgentUsageSource(providerId),
+  runCommand = runBufferedCommand,
+  probe = runLocalProbe,
+  probeOptions,
+  env = createCommandEnv(),
+  timeoutMs = COMMAND_TIMEOUT_MS,
+  clock = () => Date.now(),
+}) {
+  const startedAt = clock()
+
+  if (!source) {
+    return {
+      source: null,
+      local: null,
+      result: null,
+      safeOutput: '',
+      auth: { authStatus: 'unknown' },
+      durationMs: 0,
+    }
+  }
+
+  // Leitura de arquivo que a CLI já escreveu: não custa processo nem rede, e é
+  // o único caminho de quota em fontes que não respondem número por comando.
+  const local = source.localProbe ? probe(source.localProbe, probeOptions) : null
+
+  if (!source.auth) {
+    return {
+      source,
+      local,
+      result: null,
+      safeOutput: '',
+      auth: mergeAuthIdentity(providerId, { authStatus: 'unknown' }, local),
+      durationMs: Math.max(0, clock() - startedAt),
+    }
+  }
+
+  let result
+  try {
+    result = await runCommand({
+      command: source.auth.command,
+      args: [...source.auth.args],
+      cwd: os.homedir(),
+      env,
+      timeoutMs,
+    })
+  } catch {
+    result = { ok: false }
+  }
+
+  // A saída é reduzida antes de qualquer parser. O snapshot nunca retorna a
+  // saída crua para outro módulo que não seja o parser de campos permitidos.
+  const safeOutput = redactOutput(
+    `${result?.stdout ?? ''}\n${result?.stderr ?? ''}`,
+  )
+
+  const auth = mergeAuthIdentity(
+    providerId,
+    parseAgentAuth(providerId, safeOutput),
+    local,
+  )
+
+  return {
+    source,
+    local,
+    result: result ?? { ok: false },
+    safeOutput,
+    auth,
+    durationMs: Math.max(0, clock() - startedAt),
+  }
+}
+
 function mergeStatusDetails({ liveDetails, resetCreditsResult }) {
   const details =
     liveDetails && typeof liveDetails === 'object' && !Array.isArray(liveDetails)
@@ -811,6 +890,15 @@ function resolveLiveQuery(queryLiveUsage, liveQueryName) {
 
 function createCommandEnv(profileEnv = {}) {
   return createCliEnv({ ...process.env, ...profileEnv })
+}
+
+/**
+ * Ambiente de um comando que roda NA conta com perfil: o mesmo que o terminal
+ * dela recebe no spawn (`pty-process-manager.cjs`), sem as credenciais de API
+ * herdadas do app. Assim o que é conferido é o que será lançado.
+ */
+function createProfileCommandEnv({ providerId, profileEnv = {} }, platformName = process.platform) {
+  return applyProfileEnv(createCliEnv(), { providerId, profileEnv }, platformName)
 }
 
 function saveProviderSamples({
@@ -988,6 +1076,9 @@ function createSampleBase({
       method: snapshot.auth.method,
       plan: snapshot.auth.plan,
       organization: snapshot.auth.organization,
+      // Só o nome da fonte de chave (Claude), nunca a chave: é o que a cadeia
+      // de contas usa para avisar que a conta pode estar cobrando por uso.
+      apiKeySource: snapshot.auth.apiKeySource ?? undefined,
       identityMatched: resolution.kind === 'matched',
       identityAmbiguous: resolution.kind === 'ambiguous',
       limitation: snapshot.source.usage.limitation,
@@ -1329,6 +1420,8 @@ module.exports = {
   STALE_AFTER_MS,
   createAgentUsageService,
   buildDashboard,
+  checkAccountAuth,
   collectProviderSnapshot,
+  createProfileCommandEnv,
   resolveObservedIdentity,
 }

@@ -44,6 +44,26 @@ const DEFAULT_LIMIT_COOLDOWN_MS = 15 * 60 * 1000
  */
 const NO_LOGIN_RETRY_MS = 30 * 60 * 1000
 
+/**
+ * Por quanto tempo uma checagem de login (ou uma amostra do painel com login
+ * conferido) prova que a conta está logada. É a mesma janela em que o painel
+ * considera uma medição atual (`STALE_AFTER_MS` em `agent-usage-service.cjs`;
+ * um teste confere que os dois não se separam).
+ */
+const ELIGIBILITY_TTL_MS = 15 * 60 * 1000
+
+/**
+ * Checagens de login são processos de CLI; na máquina de referência (2c/4t)
+ * mais de duas ao mesmo tempo disputam CPU com os terminais abertos.
+ */
+const LOGIN_CHECK_MAX_CONCURRENCY = 2
+
+/**
+ * Teto de checagens de login rodadas para montar uma proposta: a busca é
+ * preguiçosa (para na primeira conta apta) e nunca varre a lista inteira.
+ */
+const LOGIN_CHECKS_PER_PROPOSAL_MAX = 3
+
 /** Estratégias de escolha do destino; `manual` é a de quem liga a cadeia. */
 const CHAIN_STRATEGIES = Object.freeze(['manual', 'round_robin', 'most_capacity', 'subscription_first'])
 const DEFAULT_CHAIN_STRATEGY = 'manual'
@@ -149,8 +169,11 @@ module.exports = Object.freeze({
   DEFAULT_MAX_HOPS_PER_LINEAGE,
   EVIDENCE_HASH_HEX_CHARS,
   EVIDENCE_LEAD_CHARS,
+  ELIGIBILITY_TTL_MS,
   EVIDENCE_MAX_CHARS,
   IDENTITY_STATUSES,
+  LOGIN_CHECKS_PER_PROPOSAL_MAX,
+  LOGIN_CHECK_MAX_CONCURRENCY,
   LOGIN_CHECK_SOURCES,
   LOGIN_CHECK_STATUSES,
   MAX_MAX_HOPS_PER_LINEAGE,
