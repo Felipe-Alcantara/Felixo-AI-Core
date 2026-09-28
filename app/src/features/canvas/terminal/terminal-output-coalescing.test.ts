@@ -88,6 +88,38 @@ describe('TerminalSessionStore: leitura da tela coalescida por fatia de parse', 
     store.clear()
   })
 
+  it('com o parse fatiado pelo tempo, lê a tela em cada fatia — inclusive com a fila ainda cheia', async () => {
+    // O relógio falso padrão também congela `performance.now`, e aí o xterm
+    // processa a rajada inteira numa fatia só: o teste acima não distingue "uma
+    // leitura por fatia" de "uma leitura só quando a fila esvazia". Aqui o
+    // `performance.now` avança 1 ms por chamada, o xterm corta a cada ~12 ms
+    // (WRITE_TIMEOUT_MS) e a fila só esvazia no fim — quem lê só no fim leria
+    // uma vez.
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    let clock = 0
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => (clock += 1))
+    try {
+      const bridge = installBridge()
+      const store = new TerminalSessionStore()
+      store.ensure('t4', { command: 'bash', cwd: '/tmp' })
+      await vi.advanceTimersByTimeAsync(20)
+      signatureCalls.count = 0
+
+      for (let index = 0; index < 200; index += 1) {
+        bridge.emitData('canvas:t4', `linha ${index} da resposta do agente\r\n`)
+      }
+      await vi.advanceTimersByTimeAsync(200)
+
+      expect(store.getTranscript('t4').text).toContain('linha 199 da resposta do agente')
+      expect(signatureCalls.count).toBeGreaterThan(1)
+      expect(signatureCalls.count).toBeLessThan(200)
+      store.clear()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it('um exit processado na mesma fatia continua exit: a leitura agendada não devolve para working', async () => {
     const bridge = installBridge()
     const store = new TerminalSessionStore()
