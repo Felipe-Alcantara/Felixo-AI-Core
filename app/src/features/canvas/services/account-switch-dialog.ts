@@ -103,6 +103,25 @@ function identityText(candidate: AccountSwitchCandidate): string {
 }
 
 /** "3,2 KB, 48 linhas": fato do texto que vai, não estimativa de tokens. */
+/**
+ * Para onde o foco volta quando o diálogo "Trocar de conta?" fecha.
+ *
+ * - `source`: a resposta encerra a proposta ("Agora não", Esc, "Não era
+ *   limite"), e a faixa ou o item de notificação que abriu o diálogo sai junto
+ *   com ela. O foco vai para o bloco de origem, que continua na tela.
+ * - `trigger`: volta a quem abriu; se ele já saiu da tela, cai no bloco de
+ *   origem, e nunca no `<body>`.
+ */
+export function dialogFocusReturnTarget<T extends { isConnected: boolean }>(params: {
+  mode: 'trigger' | 'source'
+  trigger: T | null
+  source: T | null
+}): T | null {
+  const source = params.source?.isConnected ? params.source : null
+  if (params.mode === 'source') return source ?? (params.trigger?.isConnected ? params.trigger : null)
+  return params.trigger?.isConnected ? params.trigger : source
+}
+
 export function formatTranscriptSize(chars: number, lines: number): string {
   const kb = chars / 1024
   const size = kb < 0.1 ? `${chars} caracteres` : `${kb.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KB`

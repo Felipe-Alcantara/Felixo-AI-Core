@@ -17,7 +17,7 @@ import {
   type ContinuationNodeOptions,
   type TranscriptPreparation,
 } from '../services/account-continuation'
-import type { ContinuationReason } from '../services/account-switch-dialog'
+import { dialogFocusReturnTarget, type ContinuationReason } from '../services/account-switch-dialog'
 
 type DialogState = {
   proposalId: string
@@ -114,15 +114,19 @@ export function useAccountContinuation({
     })
   }, [])
 
-  const closeDialog = useCallback((restoreFocus: boolean) => {
+  const closeDialog = useCallback((restoreFocus: 'trigger' | 'source' | null, sourceNodeId?: string) => {
     const trigger = triggerRef.current
     triggerRef.current = null
     setDialog(null)
-    if (restoreFocus && trigger) {
-      window.requestAnimationFrame(() => {
-        if (trigger.isConnected) trigger.focus()
-      })
-    }
+    if (!restoreFocus) return
+    window.requestAnimationFrame(() => {
+      const source = sourceNodeId
+        ? Array.from(document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]')).find(
+            (element) => element.dataset.terminalExpandTrigger === sourceNodeId,
+          ) ?? null
+        : null
+      dialogFocusReturnTarget({ mode: restoreFocus, trigger, source })?.focus()
+    })
   }, [])
 
   /** Abre o diálogo de uma proposta; o histórico é redigido no main já aqui. */
@@ -332,12 +336,12 @@ export function useAccountContinuation({
           onLater: () => {
             void decline(dialog.proposalId, 'later')
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
-            closeDialog(true)
+            closeDialog('source', dialog.sourceNodeId)
           },
           onNotALimit: () => {
             void decline(dialog.proposalId, 'not-a-limit')
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
-            closeDialog(true)
+            closeDialog('source', dialog.sourceNodeId)
           },
           onPin: () => {
             const sourceNodeId = dialog.sourceNodeId
@@ -347,7 +351,7 @@ export function useAccountContinuation({
                 setBannerError(sourceNodeId, result.message)
               },
             )
-            closeDialog(true)
+            closeDialog('trigger', sourceNodeId)
           },
           onMeasureNow: () => {
             void Promise.resolve(window.felixo?.agentUsage?.refresh())
@@ -356,11 +360,11 @@ export function useAccountContinuation({
           },
           onCheckLogin: (accountIds) => void store.checkLogin(accountIds),
           onOpenChainSettings: () => {
-            closeDialog(false)
+            closeDialog(null)
             openChainSettings()
           },
           onGoToSource: () => focusNode(dialog.sourceNodeId),
-          onClose: () => closeDialog(true),
+          onClose: () => closeDialog('trigger', dialog.sourceNodeId),
         }
       : null
 
