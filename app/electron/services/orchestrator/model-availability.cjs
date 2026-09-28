@@ -1,5 +1,10 @@
-const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000
-const CLAUDE_USAGE_LIMIT_COOLDOWN_MS = 5 * 60 * 60 * 1000
+const {
+  CLAUDE_LIMIT_COOLDOWN_MS,
+  DEFAULT_LIMIT_COOLDOWN_MS,
+  NO_LOGIN_RETRY_MS,
+} = require('../accounts/account-chain-constants.cjs')
+const { classifyFailure } = require('../accounts/failure-taxonomy.cjs')
+const { parseResetFromText } = require('../accounts/reset-time.cjs')
 
 function createModelAvailabilityRegistry(options = {}) {
   const entries = new Map()
@@ -172,6 +177,22 @@ function createModelAvailabilityRegistry(options = {}) {
   }
 }
 
+/**
+ * Adaptador da taxonomia única (`accounts/failure-taxonomy.cjs`) para o
+ * registro de disponibilidade do orquestrador. A assinatura e o formato do
+ * resultado continuam os de antes; a decisão de classe é da taxonomia, na
+ * origem `fluxo` (erro de execução one-shot):
+ *
+ * - limite → `limit_reached`, com o escopo da regra de sempre, mas o limite
+ *   de um modelo (Codex "usage limit for ‹modelo›") fica no modelo;
+ * - cobrança → `limit_reached` de CLI inteira, motivo "Sem crédito";
+ * - login → `no_login` com prazo (`NO_LOGIN_RETRY_MS`), para a CLI não ficar
+ *   fora até reiniciar o app; 403 (ambíguo) não muda nada;
+ * - capacidade do servidor → `limit_reached` só do modelo, motivo
+ *   "Capacidade do servidor": preserva a troca de modelo;
+ * - servidor, rede, tempo, cancelado e desconhecido → `null`. Um "429"
+ *   solto ("line 429") deixou de ser limite.
+ */
 function detectAvailabilityIssue({ message, cliType, nowMs = Date.now() } = {}) {
   const text = String(message ?? '').trim()
 
@@ -179,31 +200,51 @@ function detectAvailabilityIssue({ message, cliType, nowMs = Date.now() } = {}) 
     return null
   }
 
-  const normalizedText = text.toLowerCase()
+  const failure = classifyFailure({ text, origin: 'fluxo', providerId: cliType })
 
-  if (isAuthError(normalizedText)) {
-    return {
-      status: 'no_login',
-      scope: 'cli',
-      reason: `Autenticacao indisponivel: ${createTextPreview(text)}`,
-    }
+  if (failure.failureClass === 'auth') {
+    return failure.ambiguous
+      ? null
+      : {
+          status: 'no_login',
+          scope: 'cli',
+          reason: `Autenticacao indisponivel: ${createTextPreview(text)}`,
+          expiresAt: nowMs + NO_LOGIN_RETRY_MS,
+        }
   }
 
-  if (!isLimitError(normalizedText)) {
-    return null
+  if (failure.failureClass === 'billing') {
+    return createLimitIssue({ text, cliType, nowMs, scope: 'cli', reason: `Sem crédito: ${createTextPreview(text)}` })
   }
 
-  const resetInfo = parseResetInfo(text, nowMs)
-  const cooldownMs = resetInfo
-    ? Math.max(resetInfo.expiresAt - nowMs, 0)
-    : cliType === 'claude'
-      ? CLAUDE_USAGE_LIMIT_COOLDOWN_MS
-      : DEFAULT_RATE_LIMIT_COOLDOWN_MS
+  if (failure.failureClass === 'limit') {
+    const scope = failure.scope === 'model'
+      ? 'model'
+      : shouldTreatLimitAsCliWide(text.toLowerCase(), cliType) ? 'cli' : 'model'
+    return createLimitIssue({ text, cliType, nowMs, scope, reason: `Limite detectado pela CLI: ${createTextPreview(text)}` })
+  }
+
+  if (failure.failureClass === 'provider' && failure.capacity) {
+    return createLimitIssue({
+      text,
+      cliType,
+      nowMs,
+      scope: 'model',
+      reason: `Capacidade do servidor: ${createTextPreview(text)}`,
+    })
+  }
+
+  return null
+}
+
+function createLimitIssue({ text, cliType, nowMs, scope, reason }) {
+  const resetInfo = parseResetInfo(text, nowMs, { cliType })
+  const cooldownMs = cliType === 'claude' ? CLAUDE_LIMIT_COOLDOWN_MS : DEFAULT_LIMIT_COOLDOWN_MS
 
   return {
     status: 'limit_reached',
-    scope: shouldTreatLimitAsCliWide(normalizedText, cliType) ? 'cli' : 'model',
-    reason: `Limite detectado pela CLI: ${createTextPreview(text)}`,
+    scope,
+    reason,
     resetLabel: resetInfo?.label,
     expiresAt: resetInfo?.expiresAt ?? nowMs + cooldownMs,
   }
@@ -252,31 +293,6 @@ function getAvailabilityPriority(status) {
   return 3
 }
 
-function isLimitError(normalizedText) {
-  return (
-    normalizedText.includes('out of extra usage') ||
-    normalizedText.includes('usage limit') ||
-    normalizedText.includes('rate limit') ||
-    normalizedText.includes('too many requests') ||
-    normalizedText.includes('quota exceeded') ||
-    normalizedText.includes('exceeded your current quota') ||
-    normalizedText.includes('resource exhausted') ||
-    /\b429\b/.test(normalizedText)
-  )
-}
-
-function isAuthError(normalizedText) {
-  return (
-    normalizedText.includes('not logged in') ||
-    normalizedText.includes('please login') ||
-    normalizedText.includes('please log in') ||
-    normalizedText.includes('authentication failed') ||
-    normalizedText.includes('unauthorized') ||
-    normalizedText.includes('invalid api key') ||
-    /\b401\b/.test(normalizedText)
-  )
-}
-
 function shouldTreatLimitAsCliWide(normalizedText, cliType) {
   return (
     cliType === 'claude' ||
@@ -287,117 +303,36 @@ function shouldTreatLimitAsCliWide(normalizedText, cliType) {
   )
 }
 
-// A CLI da Claude sempre anuncia o horário de reset neste fuso ("resets 4:40pm
-// (America/Sao_Paulo)"), então o cálculo tem que fixar esse fuso — nunca o do
-// processo Node. `Date#setHours` opera no fuso local do processo, o que
-// funcionava por acidente em quem desenvolve em UTC-3 e quebrava em qualquer
-// CI rodando em UTC, com o horário de reset saindo 3h adiantado.
+// Fuso de reserva para um horário de reset do Claude impresso SEM fuso
+// ("resets 4:40pm"). Quando a CLI imprime o fuso entre parênteses, ele vence
+// (`reset-time.cjs`). A reserva fixa existe porque o cálculo antigo usava
+// Date#setHours no fuso do processo e quebrava em qualquer CI em UTC; vale só
+// para o Claude (e para quem chama sem dizer a CLI, como antes). As demais
+// CLIs imprimem no fuso da máquina, que é o fuso local.
+//
+// Limitação registrada: o Claude Code 2.1.283 formata "continuing
+// automatically at ‹hora›" no fuso local da máquina, sem imprimir o fuso; fora
+// de America/Sao_Paulo esta reserva erra pela diferença de fuso. Quem chama
+// `parseResetFromText` sem reserva (o caso do terminal) lê no fuso local.
 const RESET_TIME_ZONE = 'America/Sao_Paulo'
 
 /**
- * Timestamp da próxima ocorrência de `hour:minute` no fuso `timeZone`, a
- * partir de `nowMs`. Rola para o dia seguinte quando o horário já passou hoje.
+ * Horário de reset impresso na mensagem, no formato do registro:
+ * `{ expiresAt, label }`, ou null. Delega ao leitor único
+ * (`accounts/reset-time.cjs`).
  *
- * Calcula por tentativa e ajuste em vez de aritmética de offset: o deslocamento
- * de um fuso varia com horário de verão, e `Intl.DateTimeFormat` já sabe disso
- * — replicar essa tabela à mão seria reintroduzir o mesmo tipo de bug.
+ * @param {string} message
+ * @param {number} nowMs
+ * @param {{ cliType?: string }} [options]
  */
-function nextOccurrenceInTimeZone(nowMs, hour, minute, timeZone) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
+function parseResetInfo(message, nowMs, options = {}) {
+  const cliType = options.cliType
+  const reset = parseResetFromText(message, {
+    nowMs,
+    fallbackTimeZone: cliType && cliType !== 'claude' ? undefined : RESET_TIME_ZONE,
   })
 
-  // Chuta meia-noite UTC do dia civil atual NO FUSO ALVO como partida — no
-  // pior caso (fuso maior que -12h) o alvo cai no dia seguinte, e o loop
-  // abaixo corrige.
-  const partes = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(nowMs)
-  const ano = Number(partes.find((p) => p.type === 'year').value)
-  const mes = Number(partes.find((p) => p.type === 'month').value)
-  const dia = Number(partes.find((p) => p.type === 'day').value)
-
-  for (let deltaDias = 0; deltaDias < 3; deltaDias += 1) {
-    // Ponto de partida em UTC; ajustado abaixo até bater a hora local alvo.
-    let candidato = Date.UTC(ano, mes - 1, dia + deltaDias, hour, minute)
-
-    for (let tentativa = 0; tentativa < 4; tentativa += 1) {
-      const [horaLocal, minutoLocal] = formatter
-        .formatToParts(candidato)
-        .filter((parte) => parte.type === 'hour' || parte.type === 'minute')
-        .map((parte) => Number(parte.value))
-
-      const diffMinutos = (hour - horaLocal) * 60 + (minute - minutoLocal)
-      if (diffMinutos === 0) {
-        break
-      }
-      candidato += diffMinutos * 60_000
-    }
-
-    if (candidato > nowMs) {
-      return candidato
-    }
-  }
-
-  // Não deveria ser alcançável (o loop de deltaDias cobre folga suficiente),
-  // mas nunca devolver algo no passado é mais seguro que lançar aqui.
-  return nowMs
-}
-
-function parseResetInfo(message, nowMs) {
-  const match = String(message).match(
-    // O "at" opcional cobre o formato que a CLI da Claude emite de fato
-    // ("...will reset at 3pm"); sem ele o horário não era reconhecido e a UI
-    // perdia o "Reset previsto".
-    /\bresets?(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i,
-  )
-
-  if (!match) {
-    return null
-  }
-
-  const hourValue = Number.parseInt(match[1], 10)
-  const minuteValue = match[2] ? Number.parseInt(match[2], 10) : 0
-  const meridiem = match[3]?.toLowerCase().replaceAll('.', '')
-
-  if (
-    !Number.isInteger(hourValue) ||
-    hourValue < 0 ||
-    hourValue > 23 ||
-    !Number.isInteger(minuteValue) ||
-    minuteValue < 0 ||
-    minuteValue > 59
-  ) {
-    return null
-  }
-
-  let hour = hourValue
-
-  if (meridiem === 'pm' && hour < 12) {
-    hour += 12
-  }
-
-  if (meridiem === 'am' && hour === 12) {
-    hour = 0
-  }
-
-  const expiresAt = nextOccurrenceInTimeZone(nowMs, hour, minuteValue, RESET_TIME_ZONE)
-
-  return {
-    expiresAt,
-    // Apara a pontuação final da frase: "...reset at 3pm." não deve virar
-    // o rótulo "3pm.".
-    label: match[0]
-      .replace(/^resets?(?:\s+at)?\s+/i, '')
-      .replace(/[.,;:]+$/, '')
-      .trim(),
-  }
+  return reset ? { expiresAt: reset.resetAtMs, label: reset.label } : null
 }
 
 function createTextPreview(value, maxLength = 240) {

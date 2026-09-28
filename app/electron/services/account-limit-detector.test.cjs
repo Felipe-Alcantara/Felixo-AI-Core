@@ -85,3 +85,29 @@ test('não confunde texto comum que apenas contém "limite" fora do vocabulário
     null,
   )
 })
+
+test('delega à taxonomia: 429 solto não é limite e perda de login tem prazo', () => {
+  const now = Date.parse('2026-09-28T12:00:00.000Z')
+
+  assert.equal(
+    detectAccountLimitIssue({ accountId: 'conta-1', providerId: 'codex', text: 'Error: failed to parse line 429', now: () => now }),
+    null,
+  )
+
+  const auth = detectAccountLimitIssue({
+    accountId: 'conta-1',
+    providerId: 'codex',
+    text: 'Error: Unauthorized (401) — please login again',
+    now: () => now,
+  })
+  assert.equal(auth.status, 'no_login')
+  assert.equal(auth.expiresAt, now + 30 * 60 * 1000)
+
+  const model = detectAccountLimitIssue({
+    accountId: 'conta-1',
+    providerId: 'codex',
+    text: 'You’ve hit your usage limit for gpt-5.5-codex. Switch to another model now.',
+    now: () => now,
+  })
+  assert.equal(model.scope, 'model', 'limite de um modelo não é limite da conta')
+})

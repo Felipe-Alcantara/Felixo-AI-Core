@@ -3,25 +3,19 @@
 const { detectAvailabilityIssue } = require('./orchestrator/model-availability.cjs')
 
 /**
- * Detecta, na saída de uma sessão interativa de terminal, se a CONTA que a
- * está rodando bateu num limite ou perdeu a sessão — o sinal que uma futura
- * troca de conta por limite precisa para agir. Ver a task "Contas —
- * implementar troca por limite sem duplicar prompt, processo ou débito":
- * nenhuma peça de detecção existia para o terminal interativo antes desta
- * função; só o orquestrador (execução em lote de vários modelos) já
- * detectava limite/autenticação na própria saída da CLI.
+ * Detecta, num texto de erro de uma CLI, se a CONTA que a está rodando bateu
+ * num limite, ficou sem crédito ou perdeu a sessão — o sinal que a cadeia de
+ * contas precisa para agir (ver `docs/projeto/POLITICA-CONTAS.md`).
  *
- * Reaproveita o classificador já testado do orquestrador
- * (`detectAvailabilityIssue`, em `orchestrator/model-availability.cjs`) em
- * vez de duplicar os regexes de "rate limit"/"usage limit"/401/429 — o
- * vocabulário de erro de uma CLI não muda por ela estar rodando dentro do
- * orquestrador ou dentro de um terminal interativo; só o texto observado (e
- * o que se faz a seguir) muda.
+ * Fachada: mantém a API de antes e delega ao adaptador do orquestrador
+ * (`detectAvailabilityIssue`), que por sua vez delega à taxonomia única
+ * (`accounts/failure-taxonomy.cjs`) na origem `fluxo` (erro de execução). O
+ * vocabulário de erro de uma CLI não muda por ela estar no orquestrador ou
+ * num terminal; o que muda é o que se lê: a saída contínua de um terminal
+ * interativo usa a origem `pty` da taxonomia, que só aceita as frases do
+ * provedor da sessão.
  *
- * Esta função só DETECTA — não decide nem executa nenhuma troca de conta,
- * não pausa processo, não define idempotency key. Essas partes (o grosso do
- * "O que fazer" da task original) continuam em aberto; ver o registro da
- * task para o que falta.
+ * Esta função só DETECTA — não decide nem executa troca de conta.
  */
 function detectAccountLimitIssue({
   accountId,
