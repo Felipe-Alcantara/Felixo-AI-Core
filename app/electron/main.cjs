@@ -637,6 +637,11 @@ app.whenReady().then(async () => {
     validateAccount: (accountId, providerId) =>
       cliAccounts.validateAccount(accountId, providerId),
     onSessionExit: (sessionId) => accountChain.service.onSessionExit(sessionId),
+    // Bloco da cadeia só nasce com o ticket confirmado, uma vez, na conta confirmada.
+    chainTickets: {
+      begin: (request) => accountChain.service.beginTicketSpawn(request),
+      finish: (request) => accountChain.service.finishTicketSpawn(request),
+    },
     manager: new PtyProcessManager({
       spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
       validateAccount: (accountId, providerId) =>

@@ -256,6 +256,8 @@ test('contrato: o preload expõe exatamente a AccountChainBridge e o main liga s
     'accountChain.service.onSessionExit(sessionId)',
     'createOutputWatcher: createAccountOutputWatcher',
     'accountChain.service.onOutputFailure(detection)',
+    'accountChain.service.beginTicketSpawn(request)',
+    'accountChain.service.finishTicketSpawn(request)',
   ]) {
     assert.ok(main.includes(wiring), `main.cjs sem ${wiring}`)
   }

@@ -1524,3 +1524,18 @@ test('a lista de sessões vivas expõe a última saída e a linhagem; o modo mud
     manager.killAll({ force: true })
   }
 })
+
+test('a linhagem da cadeia fica na sessão só com conta própria e sai na lista de sessões vivas', () => {
+  const { spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
+
+  try {
+    manager.spawn('canvas:continuacao', { command: 'codex', accountId: 'conta-b', providerId: 'codex', accountMode: 'chain', lineageId: 'linhagem-1' })
+    manager.spawn('canvas:sistema', { command: 'codex', lineageId: 'linhagem-2' })
+    const porId = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    assert.equal(porId.get('canvas:continuacao').lineageId, 'linhagem-1')
+    assert.equal(porId.get('canvas:sistema').lineageId, null)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})

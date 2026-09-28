@@ -132,6 +132,7 @@ class PtyProcessManager {
    * @param {string} [options.accountId] - Conta própria do terminal; ausente = login do sistema.
    * @param {string} [options.providerId] - Provedor já validado contra a conta.
    * @param {'pinned' | 'chain'} [options.accountMode] - Modo da conta do bloco; ausente = `pinned`.
+   * @param {string} [options.lineageId] - Linhagem da cadeia, devolvida pelo ticket confirmado.
    * @param {boolean} [isFallbackRetry] - Internal: true when this call is a
    *   recovery retry after an early exit or Windows PTY backend error. Callers
    *   should never pass this themselves.
@@ -329,6 +330,9 @@ class PtyProcessManager {
       accountId,
       providerId: accountValidation.providerId ?? null,
       accountMode: accountId ? normalizeAccountMode(options.accountMode) : DEFAULT_PTY_ACCOUNT_MODE,
+      // Sequência de trocas da cadeia que criou este bloco (entra com o
+      // ticket confirmado); `null` em todo bloco aberto à mão.
+      lineageId: accountId && typeof options.lineageId === 'string' && options.lineageId ? options.lineageId : null,
       // Onde a CLI deste terminal grava o histórico (pasta do perfil da conta,
       // ou a do login do sistema). Só as variáveis de pasta, nunca o ambiente.
       agentSessionContext: selectDiscoveryContext(env),

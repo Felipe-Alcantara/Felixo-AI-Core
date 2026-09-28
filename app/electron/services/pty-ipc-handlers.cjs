@@ -27,12 +27,38 @@ const {
 } = require('./pty-process-manager.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 
+/** Código do `pty:spawn` quando o ticket da cadeia não vale (contrato `account-chain.ts`). */
+const CHAIN_TICKET_REFUSED = 'CHAIN_TICKET_REFUSED'
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Motivo pt-BR de cada recusa do serviço da cadeia (`beginTicketSpawn`). */
+const CHAIN_TICKET_MESSAGES = Object.freeze({
+  MISSING: 'Um bloco da cadeia de contas só abre com a troca confirmada.',
+  TICKET_INVALID: 'O ticket da cadeia de contas é inválido.',
+  TICKET_NOT_FOUND: 'O ticket da cadeia de contas não existe.',
+  TICKET_EXPIRED: 'A confirmação da troca venceu; confirme de novo.',
+  TICKET_NOT_CONFIRMED: 'A troca de conta ainda não foi confirmada.',
+  TICKET_ACCOUNT_MISMATCH: 'A troca foi confirmada para outra conta.',
+  TICKET_USED: 'Esta troca já abriu outro bloco.',
+  TICKET_IN_USE: 'Esta troca já está abrindo outro bloco.',
+  UNAVAILABLE: 'A cadeia de contas não está disponível para abrir este bloco.',
+})
+
+function refuseChainTicket(reason) {
+  return {
+    ok: false,
+    code: CHAIN_TICKET_REFUSED,
+    message: CHAIN_TICKET_MESSAGES[reason] ?? CHAIN_TICKET_MESSAGES.TICKET_INVALID,
+  }
+}
+
 /**
  * @param {() => (import('electron').BrowserWindow | null)} getMainWindow
  * @param {object} [dependencies]
  * @param {PtyProcessManager} [dependencies.manager] - Injectable for tests.
  * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount]
  * @param {(sessionId: string) => void} [dependencies.onSessionExit] - Avisado quando o processo da sessão sai.
+ * @param {{ begin: Function, finish: Function } | null} [dependencies.chainTickets] - `beginTicketSpawn`/`finishTicketSpawn` do serviço da cadeia.
  * @returns {{ manager: PtyProcessManager, dispose: () => void }}
  */
 function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
@@ -65,42 +91,23 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         return accountMode
       }
 
+      // Bloco da cadeia só nasce com o ticket que o `confirm` devolveu (§4.1):
+      // uso único, só para a conta confirmada. Sem ticket é recusado; bloco
+      // fixo sem ticket segue como sempre.
+      const ticket = beginChainTicket(params, sessionId, accountMode.value)
+      if (!ticket.ok) {
+        return ticket
+      }
+
       const reused = Boolean(params.reuseExisting && manager.has?.(sessionId))
 
-      manager.spawn(sessionId, {
-        command: params.command,
-        args: params.args,
-        cwd: params.cwd,
-        cols: params.cols,
-        rows: params.rows,
-        reuseExisting: Boolean(params.reuseExisting),
-        fallbackCommand: params.fallbackCommand,
-        keepShellOpen: Boolean(params.keepShellOpen),
-        // Só um booleano atravessa: o processo principal decide qual variável
-        // isso vira, e só para o Claude Code (nunca ambiente arbitrário).
-        classicScreen: params.classicScreen === true,
-        // Conta escolhida no configurador do agente; ausente = login do
-        // sistema, que é o comportamento de antes desta feature.
-        accountId: typeof params.accountId === 'string' ? params.accountId : undefined,
-        providerId: accountValidation.providerId,
-        // Fixa (padrão) ou da cadeia de contas; só o enum atravessa.
-        accountMode: accountMode.value,
-        onData: (data) => send('pty:data', { sessionId, data }),
-        onExit: (event) => {
-          send('pty:exit', {
-            sessionId,
-            exitCode: event.exitCode,
-            signal: event.signal,
-          })
-          // A cadeia de contas vence as propostas abertas desta sessão.
-          try {
-            dependencies.onSessionExit?.(sessionId)
-          } catch {
-            // Diagnóstico da cadeia não pode atrapalhar o fim do terminal.
-          }
-        },
-        onSession: (reference) => send('pty:session', { ptySessionId: sessionId, ...reference }),
-      })
+      try {
+        spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId)
+      } catch (error) {
+        finishChainTicket(ticket, sessionId, false)
+        throw error
+      }
+      finishChainTicket(ticket, sessionId, true)
 
       return { ok: true, sessionId, ...(reused ? { reused: true } : {}) }
     } catch (error) {
@@ -110,6 +117,81 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       return error?.code === PTY_SESSION_ACCOUNT_MISMATCH ? { ...result, code: error.code } : result
     }
   })
+
+  function beginChainTicket(params, sessionId, mode) {
+    const hasTicket = params.chainTicket !== undefined && params.chainTicket !== null
+    if (!hasTicket) {
+      return mode === 'chain' ? refuseChainTicket('MISSING') : { ok: true, ticket: null, lineageId: null }
+    }
+    if (typeof params.chainTicket !== 'string' || !UUID_PATTERN.test(params.chainTicket) || mode !== 'chain') {
+      return refuseChainTicket('TICKET_INVALID')
+    }
+    const tickets = dependencies.chainTickets
+    if (!tickets) {
+      return refuseChainTicket('UNAVAILABLE')
+    }
+    const result = tickets.begin({ ticket: params.chainTicket, accountId: params.accountId, sessionId })
+    if (!result?.ok) {
+      return refuseChainTicket(result?.code)
+    }
+    return {
+      ok: true,
+      ticket: params.chainTicket,
+      // Ticket já usado por esta mesma sessão (reload, reinício): spawn comum.
+      pending: result.alreadySpawned !== true,
+      lineageId: typeof result.lineageId === 'string' ? result.lineageId : null,
+    }
+  }
+
+  function finishChainTicket(ticket, sessionId, ok) {
+    if (!ticket.ticket || !ticket.pending) {
+      return
+    }
+    try {
+      dependencies.chainTickets.finish({ ticket: ticket.ticket, sessionId, ok })
+    } catch {
+      // O registro é da cadeia; o terminal já nasceu (ou já falhou) de todo jeito.
+    }
+  }
+
+  function spawnSession(sessionId, params, accountValidation, accountMode, lineageId) {
+    manager.spawn(sessionId, {
+      command: params.command,
+      args: params.args,
+      cwd: params.cwd,
+      cols: params.cols,
+      rows: params.rows,
+      reuseExisting: Boolean(params.reuseExisting),
+      fallbackCommand: params.fallbackCommand,
+      keepShellOpen: Boolean(params.keepShellOpen),
+      // Só um booleano atravessa: o processo principal decide qual variável
+      // isso vira, e só para o Claude Code (nunca ambiente arbitrário).
+      classicScreen: params.classicScreen === true,
+      // Conta escolhida no configurador do agente; ausente = login do
+      // sistema, que é o comportamento de antes desta feature.
+      accountId: typeof params.accountId === 'string' ? params.accountId : undefined,
+      providerId: accountValidation.providerId,
+      // Fixa (padrão) ou da cadeia de contas; só o enum atravessa.
+      accountMode: accountMode.value,
+      onData: (data) => send('pty:data', { sessionId, data }),
+      onExit: (event) => {
+        send('pty:exit', {
+          sessionId,
+          exitCode: event.exitCode,
+          signal: event.signal,
+        })
+        // A cadeia de contas vence as propostas abertas desta sessão.
+        try {
+          dependencies.onSessionExit?.(sessionId)
+        } catch {
+          // Diagnóstico da cadeia não pode atrapalhar o fim do terminal.
+        }
+      },
+      onSession: (reference) => send('pty:session', { ptySessionId: sessionId, ...reference }),
+      // Linhagem da cadeia: só o bloco nascido de um ticket confirmado a tem.
+      ...(lineageId ? { lineageId } : {}),
+    })
+  }
 
   ipcMain.handle('pty:write', async (_event, params = {}) => {
     try {
@@ -188,6 +270,7 @@ function requireSessionId(sessionId) {
 }
 
 module.exports = {
+  CHAIN_TICKET_REFUSED,
   parseAccountMode,
   registerPtyIpcHandlers,
   requireSessionId,
